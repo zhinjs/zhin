@@ -1,5 +1,102 @@
 # zhin.js
 
+## 1.4.0
+
+### Minor Changes
+
+- 8bf8dfa: #1250 第 10 批（试用反馈、关键修复与 AI 账号）的公开 API 新增按 minor 发布：Console 协议的功能未启用状态、功能矩阵分类与传输状态文字；Host 端口校验与 owner 判定导出；网关项目标识与插件候选；Agent 运行时的连接测试与 Host 环境变量引用授权；模型请求首响应时限；`zhin ai` 命令与 `--allow-unverified-host`；日志单行转义导出；Host 根配置新增 `firstResponseTimeoutMs`，icqq 新增 `logLevel` 配置（按 commandSuggestion 先例为 minor）。
+- bc31cd3: 聊天角色的引导与种子导入（ADR 0060 P1）：
+
+  - 公共 API：`isOwner(sender, { level })`（默认全局 owner）、`hasChatRole(sender, role, { level })`，以及只读的 `chatRolesToken`（`ChatRoleReader`：`roleOf` / `principalOf` / `holders` / `factsOf` / `subscribe`），插件不再需要自建 `masters` 名单。
+  - 认领码：没有全局 owner 且数据库为关系型时，实例日志与 `zhin status` 给出一次性认领码；在真实平台私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。群聊中发送正确的码会立即作废，连错 5 次轮换，模拟适配器上不接受；审计 `chat-roles.claim` 只记码哈希前 8 位。
+  - 配置中的人员名单（适配器 `master` / `trusted`、`ai.trigger.*`）在导入完成后再次出现不再启动失败：不自动授予，记入迁移记录后从配置移除，等待持有全局 `iam.manage` 的 Console 用户通过新 RPC `chat-roles.imports.list|resolve` 逐条导入或忽略（审计 `chat-roles.import`）。导入只升不降；迁移记录升为版本 2，原版本 1 保存为 `.zhin/chat-roles-migration.v1.json` 供回滚。
+  - 「需要你处理」新增 `chat-roles.no-owner`、`chat-roles.imported`、`chat-roles.import-pending`（仅全局 `iam.manage` 可见）。
+
+- 760e9f5: 聊天身份的「人」模型（ADR 0060 P2）：
+
+  - 角色授予属于「人」：新实例表 `chat_principals`、`chat_identities`（一个平台身份至多属于一个人）、`chat_principal_console_links`（Console 用户与人一对一，缓存 Console 显示名）。全局授予对一个人的全部平台身份生效；低于全局的授予只对该作用范围所属适配器上的身份生效。
+  - `chat_roles` 原地新增 `principal_id` 列：首次启动为已有授予的身份各建一个人并回填（幂等），迁移前全部授予导出到 `.zhin/backups/chat-roles-<时间>.json`；过渡期双写 `adapter` / `user_id` 并保持原行 id，降级到旧版本角色不变（回滚见升级指南）。
+  - 入站消息新增 Runtime 写入的只读 `sender.chatPrincipal`，适配器或插件自带的同名字段被丢弃；`ChatRoleReader.principalOf` / `holders` 返回真实的人，`subscribe` 新增 `merge` / `split` 变化，`factsOf` 返回 `chatPrincipal`。
+  - 新 Console RPC：`chat-principals.list|get|merge|split|rename|link-console|unlink-console|export|import`、`chat-identities.recent|me|bind-code.create`，全部登记到权限表；新权限 `self.chat-identity`（所有内置角色默认带）。归并 / 拆分持有全局角色的人、链接 Console 用户、导出导入需要全局 `iam.manage`。`chat-roles.*` 条目新增 `grantedByName`（授予者显示名的规范字段：已链接的人名优先）与 `principalId`；1.3.0 已发布的 `grantedByDisplayName` 保留并标记为 deprecated，取值始终与 `grantedByName` 相同。
+  - 聊天侧新增 `绑定 <码>`（`bind <code>`）：只接受私聊，群聊中发送的正确码立即作废，模拟适配器不接受；审计 `chat-identities.bind`、`chat-principals.merge|split|rename|link-console|unlink-console`。
+  - 最近发言时间与显示名缓存保留 90 天（供选择器，不参与鉴权）。
+  - CLI：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例；导入只新增或提升）。结果（含跳过的条目）写到 stdout，错误写到 stderr。
+  - 网关：Console 用户被删除或禁用时若实例不在线，在实例重新就绪后补发通知，实例据此删除该用户的链接。
+
+### Patch Changes
+
+- 39db402: AI 账号与 Host 环境变量（#1250）：Console 账号可以引用 Host 环境变量（账号来源 `env://NAME`，或在设置密钥中填写 `${NAME}` / `${NAME:-}`），规则为：仅全局 owner（owner 本就能读写 `.env`），且变量名以 `_API_KEY` 结尾（避免把无关机密发往任意地址）；服务地址不限，自定义中转地址可用（其他 Console 用户与不合规的变量名返回明确中文原因 `reason`）；新增本机命令 `zhin ai account add / rename-env / test`（只经网关控制套接字，写审计，不回显值）及对应实例路由 `POST {base}/agent/inference/cli/account/add`、`/cli/account/rename-env`；新增 `POST /agent/inference/probe` 与 `/account/test` 连通性探测（带 tools 的最小请求，成功时激活凭据）。账号状态新增 `environment`（`env://` 账号无凭据时的环境变量就绪情况）与 `lastCall`（本进程最近一次真实调用结果）。`@zhin.js/host-http` 导出 `isLocalSocketPrincipal`、`isGlobalOwnerPrincipal`、`LOCAL_SOCKET_USER_ID`、`LOCAL_SOCKET_CREDENTIAL_ID`。
+- 603b892: #1250 安全复核修复：配置补丁把敏感字段的值移入 `.env` 需要 `ops.env.write`，否则以 `env-write-required` 拒绝（聊天自助与 Agent 自改同样拒绝），且只更新字段自己的规范变量、绝不覆盖字段仅仅引用的其他变量；CLI 的 `/pub/health` 项目核对在探测失败时按"未验证"处理（默认拒绝，`--allow-unverified-host` 时警告后继续），本机判定覆盖 `0.0.0.0`、`::ffff:127.x`、`*.localhost` 与本机网卡地址，`hostFetch` 不再以明文 HTTP 向非回环地址发送令牌；模型连接测试（`/probe`、`/account/test`）按账号限流（每分钟 6 次，超出返回 429 与 `retryAfterMs`）。
+- 07f9d01: 所有用途支持备用模型（#1250 chat-purpose-no-fallback）：聊天、摘要、旁听、Agent 角色（`purposes.agents`）以及 Adapter / Endpoint / 场景的聊天覆盖都可以写 `{ profile, fallbacks }`。额度用完、余额不足或密钥被拒（单纯的 403 不算）时按顺序换下一个备用模型；同一模型连续 2 次超时后下一次尝试也换（#1270）。只换到能接得住这次请求的模型（输入媒体、上下文窗口、工具循环协议），从当前对话继续、不重放已执行的工具；失败的模型在恢复前跳过（有供应商提示按提示，日配额到太平洋时间午夜，其他固定冷却）。用了备用模型的回合在 trace 中标记「本轮由备用模型回答」，Console 管理视图可读取跳过中的模型与最近切换；配置校验错误指明出错的链路径（如 `purposes.adapters.qq.chat.fallbacks[1]`）。
+- da9dc8a: 聊天角色引导文案（ADR 0060 P0）：需要 zhin 角色的命令被拒绝时，回复说明去哪里获得角色（联系主人 / Console「聊天角色」页），不点名缺哪个角色或谁持有；发言者是群主 / 群管理员时另说明平台身份不等于 zhin 角色。`功能` / `角色` 的拒绝回复同样指向 Console，尚无全局 owner 时提示认领码；Agent 信任档位的限制说明改为「联系主人授予 trusted 角色」。Sandbox 页把模拟的「Master」改称「群主（平台身份）」，并显示服务端解析的 zhin 角色与 Agent 信任档位（入站回显帧新增 `senderChatRole` / `senderTrustLevel`）。ICQQ README 去掉已不读取的 `master`「必填」写法。
+- 5d90159: 聊天身份 P3（ADR 0060）：Sandbox 以我发言、`ai.personalPrincipals` 改读链接。
+
+  - **Sandbox 安全修复**：Console Sandbox 客户端自填的发送者 ID 一律是模拟身份——服务端写成保留 id `~sim:<id>`，不解析任何 zhin 角色，信任档位最低；填 owner 的 id 不再能冒充 owner。以 `~` 开头的发送者 id 不是聊天身份（`isChatIdentity` 为 false），不能持有、被授予或解析角色，也不记入最近发言人。
+  - Sandbox 新增「以我的聊天身份发言」（默认开启）：已登录的 Console 用户按其链接的人在 Sandbox 上的身份发言，角色按该人的授予解析；未登录（引导令牌）与 `--standalone` 一律按模拟身份。新 RPC `chat-identities.simulated.ensure`（`self.chat-identity`）为调用者的人（没有则新建并链接）在模拟适配器上建立身份，不触及真实平台。`ChatRoleReader` 新增可选方法 `consoleSpeaker`。
+  - `ai.personalPrincipals` 首次启动导入为「人 ↔ Console 账号」链接（不授予角色）；`rootId` 与当前目录不一致不再导致启动失败（按别名 + subjectId 导入并告警）；之后个人推理主体只读链接表。`@zhin.js/agent`：`HostInferenceOptions.personalOwners` 可为函数（每次管理租约读取），`resolveInferenceManagementPrincipal` 的 `bindings` 可为函数，且 `full` 范围允许切换到调用者自己的个人推理主体；新增 `personalOwnersOfIdentities` / `chatIdentityOfPersonalOwner`。
+  - 「需要你处理」`chat-roles.imported` 列出 `ai.personalPrincipals` 导入的链接；若被链接的 Console 用户就是当前查看者且尚无全局 owner，提示「是否同时设为全局 owner」。确认已读同时标记该导入。
+  - 聊天 `角色 授予 / 撤销` 可用 `#<人 id 前缀>` 引用一个人（前缀唯一时）。
+
+- 73475bd: 聊天身份安全复核（ADR 0060）：链接一个人等于拿到这个人的全局授予，因此凡是建立或扩大链接的路径，只要目标人持有角色，就必须由全局 `iam.manage` 持有者完成。
+
+  - **绑定码**：
+    - Console 用户未链接、而身份所属的人持有角色时，非全局 `iam.manage` 生成的码不再建立链接（`needs-admin`）。
+    - 机器人回复写明码来自哪个 Console 账号。
+    - 码在兑换时复核创建者当前的全局 `iam.manage`；网关发出任何 `principal-revoked` 时作废该用户未用的码。网关在自定义角色的权限被修改或角色被删除时，也会通知持有该角色的用户。
+  - **`chat-identities.simulated.ensure`**：调用者链接的人持有全局角色时需要全局 `iam.manage`，否则拒绝（403）。
+  - **`ai.personalPrincipals`**：永不自动链接到持有角色的人；首次导入之后新增或修改的条目进入「需要你处理」，经 `chat-roles.imports.resolve` 导入或忽略。`chat-roles.imports.list` 新增 `personalPending`。
+  - **认领码**：
+    - 日志只记哈希前缀，码只由 `zhin status` 给出。
+    - 同一发送者 10 分钟内最多计 2 次错误，之后拒绝且不计数，不能反复让码轮换。
+  - **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
+  - **非全局管理者**：看不到链接、暗示链接的 `linkMethod`、指向 Console 用户的 `createdBy` 与从链接得出的授予者名。
+  - **`chat-principals.import`**：导入的授予记为导入者授予，忽略文件里的 `grantedBy`。
+  - **Sandbox 发言复核**：「以我的聊天身份发言」时，若链接的人持有全局角色而 Console 用户没有全局 `iam.manage`，按模拟身份（无角色）发送，回显 `asMeUnavailable: 'needs-global-iam'`；`ChatRoleReader.consoleSpeaker` 新增可选参数 `{ canManageGlobal }`。
+  - **`ai.personalPrincipals` 首次导入**：没有任何条目的项目也记录首次导入，之后加入的条目等待确认；对待确认链接的「导入」「忽略」「确认已读」均写入审计。
+
+- 39d5b88: 独立 Sandbox 页面（`/sandbox`）在 Console 初始化后不再「看起来能用、发了却没反应」（#1250）：
+
+  - 未连接时禁用输入框、发送按钮和快捷指令，并在输入框上方说明原因：需要有「操作账号」权限的 Console API 令牌（顶栏用户名 →「个人设置」`/account` 签发，粘贴到右上角后重连），初始化之前才可用 `.env` 的 `HTTP_TOKEN`，或者直接用 Console 的「会话 → 沙盒」。连接中途断开时单独提示；未连接时按回车不再清空输入、不再静默丢弃。
+  - 页面右上角的令牌框占位文字改为「Console API 令牌」，不再写 `HTTP_TOKEN（可选）`；`--standalone` 启动时打印的 Sandbox 提示同步改写。
+  - README 与快速开始文档（中英）第 2 / 3 步改为优先在 Console 的「会话 → 沙盒」里发 `/hello`，并说明独立页面在初始化后需要 API 令牌。
+
+- 00ca418: 没装或没启用 AI 时，Console 读取不再显示「暂时无法读取」（#1250）：`GET /api/assistant/jobs` 与 `GET /api/conversations/results` 在功能关闭时返回 200 `{ success: true, data: { status: 'disabled', reason, message, …空列表 } }`，`reason` 为 `agent-not-installed`（未安装 `@zhin.js/agent`）、`agent-disabled`（已安装但 AI 未启用）或 `assistant-disabled`（`assistant.enabled` 为 false），替代原来的 404 `assistant.enabled is false` 与 503 `result_store_unavailable`（存储损坏等真实读取失败仍是 503）。任务写入（`POST /api/assistant/jobs*`）仍返回 404 与旧的 `error: 'assistant.enabled is false'`（兼容旧 CLI），新增 `code: 'unavailable'` 与 `data`（同样的 `ConsoleFeatureDisabled`）。`@zhin.js/console-protocol` 新增 `ConsoleFeatureDisabled`、`ConsoleFeatureDisabledReason`、`consoleFeatureDisabled()`、`isConsoleFeatureDisabled()`；`zhin schedule` / `zhin watch` 识别新形状并打印原因。
+- e690123: 功能矩阵不再只有适配器一行（#1250）：`feature.matrix` 在项目根插件提供了命令 / 组件 / 工具时加一行 `kind: 'root'`、`plugin: ''`、`readOnly: true` 的「本项目」行（始终启用，不可开关），列出 `capabilities: { commands, components, tools }`（如 `hello`、`card`）；其他行新增 `kind: 'plugin' | 'adapter'` 与各自的 `capabilities`，按 根插件 → 插件 → 适配器 排序。`feature.list` 的条目同样带 `kind` 与 `capabilities`（不含根插件行）。`@zhin.js/console-protocol` 新增 `ConsoleFeatureKind`、`ConsoleFeatureCapabilities`，`ConsoleFeatureSummary` / `ConsoleFeatureMatrixRow` 新增可选字段。
+- 817b2bf: `http.port` 校验与默认端口（#1250）：
+
+  - `http.port` / `http.listeners[].port` 只接受 1–65535 的整数，或展开后为该范围整数的 `${VAR}` 引用（`0` 保留原含义：由系统分配空闲端口，供测试与嵌入使用）。Host 配置 Schema 收紧（`integer` + `minimum`/`maximum` + 只允许整串 `${VAR}` 的 `pattern`），`zhin config set`、Console 保存与 `plugin:validate-config` 一致拒绝并给出中文原因（如「字段 port 只接受数值或 ${VAR} 形式的环境变量引用」「字段 port 不能大于 65535」）；`zhin config check` 报 `http.port_invalid` 错误（含引用展开后的值）。
+  - 启动时非法端口直接报错退出，不再悄悄监听默认端口；`${PORT}` 展开得到的数字字符串现在会被正确使用（此前被忽略而回退到默认端口）。
+  - **未配置 `http.port` 时的默认端口从 8086 改为 8068**，与脚手架写入、文档和 Console 链接一致（8086 常被 InfluxDB 等占用）。已在配置中写了端口的项目不受影响；依赖旧默认值的项目请显式写 `http.port: 8086`。
+  - `zhin doctor` 按启动方式解析端口（展开 `.env` 中的 `${VAR}`），检查真实生效的端口；无法解析或非法时报错并给出 `zhin config set http.port 8068 --offline`，不再悄悄检查 8086。
+  - 配置里的端口已损坏且网关未运行时，CLI 配置命令给出离线修复提示，而不是 `Invalid URL`；网关运行时经本地 socket 照常工作。
+  - `@zhin.js/host-http` 新增导出 `DEFAULT_HTTP_PORT`、`parseHttpPort`、`describeInvalidPortValue`、`InvalidHttpPortError`、`ENVIRONMENT_REFERENCE_PATTERN`。
+
+- b2ed753: Endpoint 的传输状态有了可读文字（#1250）：`endpoint.list` / `endpoint.info` 的每行在原始 `transportState` 旁新增 `transportLabel`（如 `open` → `已连接`、`reconnecting` → `重连中`）；「需要你处理」中离线账号的说明改用这段文字（不再显示「连接状态：closed」）。`@zhin.js/console-protocol` 新增 `ConsoleEndpointTransportState` 类型与 `endpointTransportLabel(state, locale)`，`ConsoleEndpointSummary` 新增可选字段 `transportLabel`。
+- Updated dependencies [39db402]
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [603b892]
+- Updated dependencies [da9dc8a]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [5c7f9c5]
+- Updated dependencies [9d3f50b]
+- Updated dependencies [35e5d89]
+- Updated dependencies [809c6ee]
+- Updated dependencies [00ca418]
+- Updated dependencies [e690123]
+- Updated dependencies [817b2bf]
+- Updated dependencies [9cd764a]
+- Updated dependencies [b2ed753]
+  - @zhin.js/host-http@1.4.0
+  - @zhin.js/console-protocol@1.4.0
+  - @zhin.js/logger@1.2.0
+  - @zhin.js/core@1.9.0
+  - @zhin.js/database@1.2.1
+  - @zhin.js/adapter@1.3.1
+  - @zhin.js/harness@1.0.1
+
 ## 1.3.0
 
 ### Minor Changes

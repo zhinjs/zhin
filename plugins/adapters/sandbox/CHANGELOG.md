@@ -1,5 +1,56 @@
 # @zhin.js/adapter-process
 
+## 1.1.35
+
+### Patch Changes
+
+- da9dc8a: 聊天角色引导文案（ADR 0060 P0）：需要 zhin 角色的命令被拒绝时，回复说明去哪里获得角色（联系主人 / Console「聊天角色」页），不点名缺哪个角色或谁持有；发言者是群主 / 群管理员时另说明平台身份不等于 zhin 角色。`功能` / `角色` 的拒绝回复同样指向 Console，尚无全局 owner 时提示认领码；Agent 信任档位的限制说明改为「联系主人授予 trusted 角色」。Sandbox 页把模拟的「Master」改称「群主（平台身份）」，并显示服务端解析的 zhin 角色与 Agent 信任档位（入站回显帧新增 `senderChatRole` / `senderTrustLevel`）。ICQQ README 去掉已不读取的 `master`「必填」写法。
+- 5d90159: 聊天身份 P3（ADR 0060）：Sandbox 以我发言、`ai.personalPrincipals` 改读链接。
+
+  - **Sandbox 安全修复**：Console Sandbox 客户端自填的发送者 ID 一律是模拟身份——服务端写成保留 id `~sim:<id>`，不解析任何 zhin 角色，信任档位最低；填 owner 的 id 不再能冒充 owner。以 `~` 开头的发送者 id 不是聊天身份（`isChatIdentity` 为 false），不能持有、被授予或解析角色，也不记入最近发言人。
+  - Sandbox 新增「以我的聊天身份发言」（默认开启）：已登录的 Console 用户按其链接的人在 Sandbox 上的身份发言，角色按该人的授予解析；未登录（引导令牌）与 `--standalone` 一律按模拟身份。新 RPC `chat-identities.simulated.ensure`（`self.chat-identity`）为调用者的人（没有则新建并链接）在模拟适配器上建立身份，不触及真实平台。`ChatRoleReader` 新增可选方法 `consoleSpeaker`。
+  - `ai.personalPrincipals` 首次启动导入为「人 ↔ Console 账号」链接（不授予角色）；`rootId` 与当前目录不一致不再导致启动失败（按别名 + subjectId 导入并告警）；之后个人推理主体只读链接表。`@zhin.js/agent`：`HostInferenceOptions.personalOwners` 可为函数（每次管理租约读取），`resolveInferenceManagementPrincipal` 的 `bindings` 可为函数，且 `full` 范围允许切换到调用者自己的个人推理主体；新增 `personalOwnersOfIdentities` / `chatIdentityOfPersonalOwner`。
+  - 「需要你处理」`chat-roles.imported` 列出 `ai.personalPrincipals` 导入的链接；若被链接的 Console 用户就是当前查看者且尚无全局 owner，提示「是否同时设为全局 owner」。确认已读同时标记该导入。
+  - 聊天 `角色 授予 / 撤销` 可用 `#<人 id 前缀>` 引用一个人（前缀唯一时）。
+
+- 73475bd: 聊天身份安全复核（ADR 0060）：链接一个人等于拿到这个人的全局授予，因此凡是建立或扩大链接的路径，只要目标人持有角色，就必须由全局 `iam.manage` 持有者完成。
+
+  - **绑定码**：
+    - Console 用户未链接、而身份所属的人持有角色时，非全局 `iam.manage` 生成的码不再建立链接（`needs-admin`）。
+    - 机器人回复写明码来自哪个 Console 账号。
+    - 码在兑换时复核创建者当前的全局 `iam.manage`；网关发出任何 `principal-revoked` 时作废该用户未用的码。网关在自定义角色的权限被修改或角色被删除时，也会通知持有该角色的用户。
+  - **`chat-identities.simulated.ensure`**：调用者链接的人持有全局角色时需要全局 `iam.manage`，否则拒绝（403）。
+  - **`ai.personalPrincipals`**：永不自动链接到持有角色的人；首次导入之后新增或修改的条目进入「需要你处理」，经 `chat-roles.imports.resolve` 导入或忽略。`chat-roles.imports.list` 新增 `personalPending`。
+  - **认领码**：
+    - 日志只记哈希前缀，码只由 `zhin status` 给出。
+    - 同一发送者 10 分钟内最多计 2 次错误，之后拒绝且不计数，不能反复让码轮换。
+  - **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
+  - **非全局管理者**：看不到链接、暗示链接的 `linkMethod`、指向 Console 用户的 `createdBy` 与从链接得出的授予者名。
+  - **`chat-principals.import`**：导入的授予记为导入者授予，忽略文件里的 `grantedBy`。
+  - **Sandbox 发言复核**：「以我的聊天身份发言」时，若链接的人持有全局角色而 Console 用户没有全局 `iam.manage`，按模拟身份（无角色）发送，回显 `asMeUnavailable: 'needs-global-iam'`；`ChatRoleReader.consoleSpeaker` 新增可选参数 `{ canManageGlobal }`。
+  - **`ai.personalPrincipals` 首次导入**：没有任何条目的项目也记录首次导入，之后加入的条目等待确认；对待确认链接的「导入」「忽略」「确认已读」均写入审计。
+
+- e95550b: Sandbox 账号可以在 Console 管理了（#1250）：插件现在提供与其他适配器相同的 Console RPC（`createAdapterConsoleRpc`）——`status` 与 `endpoint-add` / `endpoint-update` / `endpoint-start` / `endpoint-stop` / `endpoint-remove`，不再返回 404「插件未提供该操作」；账号「接入」页可新增、停用、启用和删除 Sandbox 账号（字段 `owner`、`nickname`、`commandPrefix`）。新增插件权限 `sandbox:read`（read）与 `sandbox:write`（operate）。
+- Updated dependencies [39db402]
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [603b892]
+- Updated dependencies [da9dc8a]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [9d3f50b]
+- Updated dependencies [35e5d89]
+- Updated dependencies [809c6ee]
+- Updated dependencies [817b2bf]
+- Updated dependencies [9cd764a]
+- Updated dependencies [b2ed753]
+  - @zhin.js/host-http@1.4.0
+  - @zhin.js/logger@1.2.0
+  - @zhin.js/core@1.9.0
+  - @zhin.js/client@1.2.1
+  - @zhin.js/adapter@1.3.1
+
 ## 1.1.34
 
 ### Patch Changes

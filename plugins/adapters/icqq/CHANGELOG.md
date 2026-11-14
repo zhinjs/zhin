@@ -1,5 +1,32 @@
 # @zhin.js/adapter-icqq
 
+## 1.2.0
+
+### Minor Changes
+
+- 8bf8dfa: #1250 第 10 批（试用反馈、关键修复与 AI 账号）的公开 API 新增按 minor 发布：Console 协议的功能未启用状态、功能矩阵分类与传输状态文字；Host 端口校验与 owner 判定导出；网关项目标识与插件候选；Agent 运行时的连接测试与 Host 环境变量引用授权；模型请求首响应时限；`zhin ai` 命令与 `--allow-unverified-host`；日志单行转义导出；Host 根配置新增 `firstResponseTimeoutMs`，icqq 新增 `logLevel` 配置（按 commandSuggestion 先例为 minor）。
+
+### Patch Changes
+
+- da9dc8a: 聊天角色引导文案（ADR 0060 P0）：需要 zhin 角色的命令被拒绝时，回复说明去哪里获得角色（联系主人 / Console「聊天角色」页），不点名缺哪个角色或谁持有；发言者是群主 / 群管理员时另说明平台身份不等于 zhin 角色。`功能` / `角色` 的拒绝回复同样指向 Console，尚无全局 owner 时提示认领码；Agent 信任档位的限制说明改为「联系主人授予 trusted 角色」。Sandbox 页把模拟的「Master」改称「群主（平台身份）」，并显示服务端解析的 zhin 角色与 Agent 信任档位（入站回显帧新增 `senderChatRole` / `senderTrustLevel`）。ICQQ README 去掉已不读取的 `master`「必填」写法。
+- 35e5d89: 日志里的聊天内容不再能伪造日志行、群聊全文默认不落盘（#1250）：
+
+  - `@zhin.js/logger`：新增 `escapeLogText()`（换行写成 `⏎`，ANSI 等控制字符转义为 `\uXXXX`，保留制表符）与 `LOG_CONTENT_MAX_LENGTH`（300）。记录消息内容用的 `truncatePreview()` 现在总是转义成单行，未指定长度时截断到 300 字（原先不截断）。
+  - ICQQ 适配器：SDK 自己的 log4js 输出改由适配器转写到 Zhin 日志（同一格式，输出不是终端时没有 ANSI 颜色），继续脱敏验证链接和手机号。新增配置项 `logLevel`（`trace`…`mark` / `off`，默认 `warn`，原先写死 `info`），SDK 逐条打印的收发消息原文（`recv from: …`、`succeed to send: …`）一律按 `debug` 处理，默认不写入日志；打开时转义成单行并截断。
+
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [da9dc8a]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [35e5d89]
+- Updated dependencies [809c6ee]
+  - @zhin.js/logger@1.2.0
+  - @zhin.js/core@1.9.0
+  - @zhin.js/adapter@1.3.1
+  - @zhin.js/adapter-onebot-events@0.0.10
+
 ## 1.1.30
 
 ### Patch Changes

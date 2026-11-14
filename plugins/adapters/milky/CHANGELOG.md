@@ -1,5 +1,27 @@
 # @zhin.js/adapter-milky
 
+## 1.1.31
+
+### Patch Changes
+
+- Updated dependencies [39db402]
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [603b892]
+- Updated dependencies [da9dc8a]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [35e5d89]
+- Updated dependencies [809c6ee]
+- Updated dependencies [817b2bf]
+- Updated dependencies [9cd764a]
+- Updated dependencies [b2ed753]
+  - @zhin.js/host-http@1.4.0
+  - @zhin.js/logger@1.2.0
+  - @zhin.js/core@1.9.0
+  - @zhin.js/adapter@1.3.1
+
 ## 1.1.30
 
 ### Patch Changes
