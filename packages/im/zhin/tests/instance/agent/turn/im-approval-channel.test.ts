@@ -194,3 +194,45 @@ describe('approval prompts are marked for the surface', () => {
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'approval' }));
   });
 });
+
+describe('master after external content (#1250)', () => {
+  it('asks the master once instead of the exemption, and ignores anyone else', async () => {
+    const f = setup('boss', conversation('group', 'room'));
+    const memory = { recall: vi.fn(() => true), remember: vi.fn() };
+    const port = createRuntimeApprovalPort({ isMaster: true, interaction: f.interaction, memory });
+    const outcome = port.requestApprovalOutcome(request({ purpose: 'intent', conversationScope: 'group' }));
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    expect(JSON.stringify(f.prompts[0])).not.toContain('始终允许');
+    expect(buttonPayloads(f.prompts[0])).toHaveLength(2);
+    expect(f.reply('mallory', '确认')).toBe(false);
+    expect(f.reply('mallory', '', { segments: [{ type: 'action', data: { payload: buttonPayloads(f.prompts[0])[1] } }] })).toBe(false);
+    expect(f.reply('boss', '确认')).toBe(true);
+    await expect(outcome).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
+    expect(memory.recall).not.toHaveBeenCalled();
+    expect(memory.remember).not.toHaveBeenCalled();
+  });
+
+  it('counts silence as a refusal', async () => {
+    const f = setup('boss');
+    const port = createRuntimeApprovalPort({ isMaster: true, interaction: f.interaction });
+    await expect(port.requestApprovalOutcome(request({ purpose: 'intent', timeoutMs: 30 }))).resolves.toEqual({ status: 'timed_out' });
+  });
+
+  it('refuses without asking when the master did not address the bot in this turn', async () => {
+    const f = setup('boss');
+    const port = createRuntimeApprovalPort({ isMaster: true, interaction: f.interaction, masterPresent: false });
+    await expect(port.requestApprovalOutcome(request({ purpose: 'intent' })))
+      .resolves.toMatchObject({ status: 'unavailable', reason: expect.stringContaining('did not address the bot') });
+    expect(f.prompts).toHaveLength(0);
+  });
+
+  it('keeps the exemption for ordinary authorization requests', async () => {
+    const f = setup('boss');
+    const port = createRuntimeApprovalPort({ isMaster: true, interaction: f.interaction });
+    await expect(port.requestApprovalOutcome(request({ purpose: 'authorization' })))
+      .resolves.toEqual({ status: 'approved', decision: 'approve-always' });
+    await expect(port.requestApprovalOutcome(request()))
+      .resolves.toEqual({ status: 'approved', decision: 'approve-always' });
+    expect(f.prompts).toHaveLength(0);
+  });
+});

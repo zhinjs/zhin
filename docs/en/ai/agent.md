@@ -305,6 +305,7 @@ Write rules:
 
 - A group member (`group_member`) can write only to their own `user` scope or the current `session`, never `global` / `platform`. Without a `scope` their writes default to `user`; owner and trusted members still default to `global`.
 - An existing `user_fact` / `preference` cannot be overwritten from a lower trust level, so a group member cannot change what the owner recorded. Writes from the same or a higher level win, and the old value moves to `history`.
+- **Approval tier (#1250)**: `memory_upsert` has its own approval tier. In a live turn, a write to the **initiator's own `user` memory** runs without approval in every `execApprovalMode` (including `ask`). The `user` scope key always comes from the turn's initiator; `scope_key` or similar model arguments are ignored, so no call reaches another person's personal memory. Writes to `global` / `platform` / `session` (shared with, and possibly written by, other people) keep the ordinary approval (policy `memory-scope`); unattended turns (schedules, background events) need approval for every scope; an unknown `scope` is refused. Owners and trusted members default to `global` when no `scope` is given, so their writes still ask — personal preferences belong in `user` (the tool description says so). A plugin tool with the same name does not get this tier.
 - `task_state` always expires: 24 hours by default, `ttl_hours` at most 168. Bind it to a task with `task_id`; when the host's `isTaskActive` (on `SemanticMemoryRuntime`) reports the task gone, the state is no longer recalled.
 - File memory (`data/memory/**/MEMORY.md`) is unchanged and stays readable; `renderMemoryEntriesMarkdown()` exports structured memory as Markdown.
 
@@ -331,6 +332,24 @@ ai:
 - Hosts and the Console view, edit, and delete memory in any scope through `SemanticMemoryRuntime` `list` / `upsert` / `delete`.
 
 Markdown file memory (`MEMORY.md`) is still injected whole within its character budgets; this release does not change it.
+
+## Approvals and honest results (#1250)
+
+### High-risk actions after external content
+
+Once external content reaches the model in a turn (tool results, web pages, files, sub-agent reports, background group messages), a later high-risk action (shell, sending to another conversation, changing configuration, schedules) is confirmed first, even when the configured policy would allow it. The confirmation names the source chain and is never covered by a remembered grant. Unattended turns (schedules, background events) cannot confirm and are refused (policy `external-content-confirmation`). In a live IM turn the prompt is posted in the same conversation; only the bound person's reply or button counts, anyone else, another conversation or a stale button does not, and a timeout counts as a rejection.
+
+**Owner turns confirm too.** For the global owner, the owner's approval exemption no longer settles this confirmation. Under `execApprovalMode: ask` and `bypass` the owner gets a one-shot prompt: only the owner's own reply in the same conversation counts, the only choices are "allow once" / "reject", nothing is remembered, and silence counts as a rejection. When the owner did not address the bot in this turn (merged, ambient or scene turns) the action is refused with an alternative (for example the Console page for schedules); unattended turns are refused as above. An owner who read no external content sees no extra prompt.
+
+**Risk of `auto`.** Under `execApprovalMode: auto` (the default) the approval reviewer still decides this confirmation; that behaviour is unchanged. The reviewer reads the model-written arguments, so prompt injection in the external content can sway its verdict towards "allow". For high-value instances (bots that run commands, change configuration, message other conversations or manage members) prefer `ask`, or keep `confirmHighRisk: external_content` and let the owner confirm in a private chat; keep `bypass` for local development.
+
+### Tools that did not run are reported as not run
+
+A denied or failed tool reaches the model as 「未执行」 / "NOT EXECUTED" (or "NOT COMPLETED") with the reason; for a tool not declared `readOnly: true` (it may write or change something) the result also tells the model to say it was not done. At the end of the turn, when such a side-effect call was denied or failed, was not followed by a successful call of the same tool, and the final reply says nothing like "not done / failed / cannot / needs approval", the framework appends one line: "（说明：「tool」 这次没有执行成功，相关操作没有生效。）" (English locale: "(Note: … did not run successfully this time; that change was not made.)"). The framework only appends, it never rewrites model text, and it appends nothing once part of the reply has already been streamed. Declare read-only plugin tools `readOnly: true` to avoid false notices.
+
+### Denials from an earlier approval policy
+
+Each denial the model sees ends with the policy it was decided under: `[当时的策略 policy@<fingerprint>: execApprovalMode=…, confirmHighRisk=…, rules=r<revision>]`. The fingerprint covers the approval settings (`execApprovalMode`, `masterShell*`, `execSecurity` / `execPreset` / `execAllowlist`, `network`, `allowedTools` / `disabledTools`, `injectionGuard`, `toolHardGate`) and the revision of the built-in approval rules. When the history of a session still holds a denial from a **different** policy that was not followed by a successful call of that tool, the turn's runtime context gets an `approval-policy-change` note: the policy changed, earlier refusals may no longer apply, retry when the user still wants it. Detection reads only the history, so it works across restarts and config reloads; the note stops once the tool succeeds or is denied again under the current policy.
 
 ## Session profiles
 

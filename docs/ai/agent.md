@@ -343,7 +343,19 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 给模型的拒绝原因区分三种情况：无人值守、此会话没有确认渠道、确认被拒或超时；并提示可在 Console 操作（定时任务：「运维 → 定时任务」页），不要把工具名当作聊天命令推荐给用户。`execApprovalMode: ask`，或 `confirmHighRisk` 未关闭且启用了定时任务 / 助理提醒时，启动日志会提示一次（`approval_channel_conflict`），`zhin doctor` 的「审批渠道」项也会提示。
 
+**主人回合同样要确认（#1250）**：全局 owner（主人）的回合读过外部内容后发起高危动作，主人免审不再直接放行。`execApprovalMode: ask` 与 `bypass` 下，向主人本人发一次性确认：只认主人本人在同一会话里的回复或按钮，只有「允许一次 / 拒绝」，不记住、不沿用已记住的授权，超时按拒绝处理。主人不在场（合流、旁听、场景回合）时直接拒绝，原因写明并给出替代路径（如 Console「运维 → 定时任务」）；无人值守回合按上文规则拒绝。主人没有读过外部内容时行为不变，不会多出确认。
+
+**`auto` 模式的风险**：`execApprovalMode: auto`（默认值）下，这类确认仍由审核 Agent 决定，行为不变。审核 Agent 看到的请求里带着模型生成的参数，外部内容中的提示注入可能影响它的判断，结果可能是放行。对高价值实例（能执行命令、改配置、对外发消息、管理群成员的 Bot）建议使用 `ask`，或保持 `confirmHighRisk: external_content` 并让主人在私聊里确认；`bypass` 只适合本机开发。
+
 `discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。第一方插件的工具如果结果可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`。
+
+### 未执行的工具如实告知（#1250）
+
+工具被拒或执行出错时，模型收到的结果以「未执行」/「未执行成功」开头并写明原因；工具没有声明 `readOnly: true`（即可能写入或产生副作用）时还会要求回复里如实说明没有完成。回合结束时，如果本阶段有这样的写操作被拒或失败、之后没有同一工具的成功调用，而最终回复里没有任何「没有完成 / 失败 / 无法 / 需要审批」之类的说明，框架会在回复末尾追加一行「（说明：「工具名」 这次没有执行成功，相关操作没有生效。）」。框架只追加、不改写模型的文字；回复已经流式发出一部分时不追加（此时依赖工具结果里的要求）。插件的只读工具请声明 `readOnly: true`，避免误报。
+
+### 审批策略变更后的旧拒绝（#1250）
+
+模型看到的每条拒绝末尾带有当时的策略：`[当时的策略 policy@<指纹>: execApprovalMode=…, confirmHighRisk=…, rules=r<版本>]`。指纹覆盖审批相关配置（`execApprovalMode`、`masterShell*`、`execSecurity` / `execPreset` / `execAllowlist`、`network`、`allowedTools` / `disabledTools`、`injectionGuard`、`toolHardGate`）以及框架内置审批规则的版本号。之后的回合如果会话历史里还有在**其他策略**下被拒、且之后没有成功调用过的工具，本回合的运行时上下文会多一条 `approval-policy-change` 说明：策略已变更，之前的拒绝可能不再适用，用户仍需要时直接重试，以本次结果为准。检测只读会话历史，重启或热重载配置后同样生效；同一工具成功一次、或在当前策略下再次被拒后，这条说明不再出现。
 
 ### 出站检查
 
@@ -405,6 +417,7 @@ ai:
 
 - 群成员（`group_member`）只能写自己的 `user` 范围或当前 `session`，不能写 `global` / `platform`；不指定 `scope` 时默认写 `user`。主人和信任成员不指定时仍默认 `global`。
 - 已有的 `user_fact` / `preference` 不能被更低信任级别覆盖，所以群成员改不了主人记下的事实。同级或更高级别写入时以新值为准，旧值进入 `history`。
+- **审批等级（#1250）**：`memory_upsert` 有独立的审批等级，不再一律走普通审批。实时回合里写**发起人自己的 `user` 记忆**直接执行，任何 `execApprovalMode`（包括 `ask`）都不弹审批；`user` 范围的 `scope_key` 永远取自本回合的发起人，模型传的 `scope_key` 等参数一律忽略，所以写不到别人的个人记忆。写 `global` / `platform` / `session`（会话里其他人共享、也可能是别人写的）仍按普通审批（策略名 `memory-scope`）；无人值守回合（定时任务、后台事件）写任何范围都仍需审批；未知 `scope` 直接拒绝。主人和信任成员不指定 `scope` 时默认写 `global`，因此仍需审批——要记个人偏好请让模型写 `user`（工具说明已提示）。同名的插件工具不享受这一等级。
 - `task_state` 一定会过期：默认 24 小时，`ttl_hours` 最多 168 小时；可用 `task_id` 绑定任务，宿主通过 `SemanticMemoryRuntime` 的 `isTaskActive` 告知任务已结束时，这条状态不再被检索到。
 - 文件记忆（`data/memory/**/MEMORY.md`）保持不变，仍可直接阅读；`renderMemoryEntriesMarkdown()` 可把结构化记忆导出为 Markdown。
 

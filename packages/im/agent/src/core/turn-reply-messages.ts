@@ -21,6 +21,10 @@ export const turnReplyMessages = createMessages({
     'zh-CN': '还在处理，已完成 {steps} 步，请稍候…',
     en: 'Still working. Completed {steps} steps; please wait…',
   },
+  unexecuted: {
+    'zh-CN': '（说明：{tools} 这次没有执行成功，相关操作没有生效。）',
+    en: '(Note: {tools} did not run successfully this time; that change was not made.)',
+  },
   exhausted: {
     'zh-CN': '这一轮的处理步数已经用完，任务还没有完成。回复「继续」我会接着处理，或者把需求说得更具体一些再试。',
     en: 'This turn has used all its steps, and the task is not finished yet. Reply "continue" to keep going, or try again with a more specific request.',

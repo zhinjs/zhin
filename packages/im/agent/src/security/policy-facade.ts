@@ -61,6 +61,9 @@ import type { ToolNetworkPolicy } from './network-policy.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { authorizeTurnFileInput } from './turn-file-authority.js';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
+import type { MemoryEntryScope } from '@zhin.js/ai';
+import { memoryWriteApprovalTier, resolveMemoryWriteScope } from '../memory/memory-write-policy.js';
 import { hostWriteImpact, type HostProtectedPaths } from './host-config-paths.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
@@ -251,6 +254,8 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       }
     }
   }
+  const memoryDecision = checkMemoryWriteScope(input, authorizedInput);
+  if (memoryDecision) return memoryDecision;
   if (requiresDeclarativeApproval(input.tool)) {
     return Object.freeze({
       status: 'approval_required',
@@ -261,6 +266,42 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
 }
+
+/** `TurnToolPolicyDecision.policy` of the semantic-memory approval tier (#1250). */
+export const MEMORY_SCOPE_POLICY = 'memory-scope';
+
+/**
+ * Semantic-memory approval tier (#1250). Only the Host's own `memory_upsert` (root-owned) gets it;
+ * a plugin tool with the same name keeps the ordinary declarative approval. A write into the
+ * initiator's own `user` memory runs without approval in an attended turn; global / platform / session
+ * memory is shared with other people (or written by them) and keeps the approval, as does every write
+ * from an unattended turn.
+ */
+function checkMemoryWriteScope(
+  input: TurnToolPolicyInput,
+  authorizedInput: Readonly<Record<string, unknown>>,
+): TurnToolPolicyDecision | undefined {
+  if (input.tool.name !== NATIVE_MEMORY_WRITE_TOOL || input.tool.owner !== rootPluginId()) return undefined;
+  if (input.tool.requiresApproval !== 'on-risk') return undefined;
+  let scope: MemoryEntryScope;
+  try {
+    scope = resolveMemoryWriteScope(authorizedInput.scope, resolveTurnTrustLevel(input.turn));
+  } catch (error) {
+    return Object.freeze({ status: 'denied', policy: MEMORY_SCOPE_POLICY, reason: (error as Error).message });
+  }
+  // An unattended turn (scheduled task, background event) has nobody present who asked for the write.
+  if (memoryWriteApprovalTier(scope) === 'personal' && !input.turn.policy.unattended) {
+    return Object.freeze({ status: 'allowed', input: authorizedInput });
+  }
+  return Object.freeze({
+    status: 'approval_required',
+    policy: MEMORY_SCOPE_POLICY,
+    reason: `writes ${scope} memory, which other people share; only the initiator's own user memory is written without approval`,
+    input: authorizedInput,
+  });
+}
+
+const NATIVE_MEMORY_WRITE_TOOL = 'memory_upsert';
 
 function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
   if (tool.requiresApproval === 'never') return false;

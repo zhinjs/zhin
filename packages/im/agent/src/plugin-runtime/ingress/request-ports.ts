@@ -290,12 +290,27 @@ export function createRuntimeApprovalPort(options: {
   /** Reported when nobody can be asked (instead of the generic reason). */
   readonly unavailableReason?: string;
   readonly memory?: ApprovalDecisionMemory;
+  /**
+   * #1250: the master addressed the bot in this live turn (not merged, ambient, scene or live-room).
+   * A master's "no approval needed" shortcut never settles an `intent` confirmation (a high-risk action
+   * after external content); the master confirms it once here, or it is refused when they are not present.
+   * Defaults to true.
+   */
+  readonly masterPresent?: boolean;
 }): ApprovalDecisionPort & ApprovalOutcomePort {
   const locale = resolveLocale(options.locale);
   const unavailable = options.unavailableReason ?? 'this conversation cannot show an approval prompt';
   const port: ApprovalDecisionPort & ApprovalOutcomePort = {
     available: options.isMaster || options.interaction != null || options.intentInteraction != null,
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
+      if (options.isMaster && input.purpose === 'intent' && !input.humanOnly) {
+        // #1250: prompt injection in external content must not ride on the master's exemption.
+        // One-shot, bound to the master, never remembered; a timeout counts as a rejection.
+        if (options.masterPresent === false || !options.interaction) {
+          return { status: 'unavailable', reason: MASTER_NOT_PRESENT_REASON };
+        }
+        return askOnce(options.interaction, input, locale);
+      }
       if (options.isMaster && !input.humanOnly) return { status: 'approved', decision: 'approve-always' };
       if (!options.interaction) {
         if (input.purpose === 'intent' && !input.humanOnly && options.intentInteraction) {
@@ -360,6 +375,10 @@ export function createRuntimeApprovalPort(options: {
   };
   return Object.freeze(port);
 }
+
+/** Why a master's high-risk action after external content is refused when they did not address the bot. */
+export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot in this turn (merged or background messages), '
+  + 'so nobody can confirm a high-risk action that follows external content';
 
 /** A confirmation of one's own request accepts 确认 / 取消 and yes / no alike, whatever the prompt's language (#1250). */
 const ONCE_REJECT_ALIASES = ['否', '拒绝', '取消', 'n', 'no', 'cancel'];

@@ -37,7 +37,7 @@ The current CLI/Sandbox interactive runtime and its synchronous children have no
 | Which tools | Tools whose `requiresApproval` asks for approval; shell / file policy | Tools that declare `risk: 'dangerous'`, the core list, `toolHardGate.dangerousTools` |
 | Who can allow it | A person, the reviewer Agent, or `bypass`; "allow for this session / always" is possible | Only a fresh human approval of this call, or a card approved in the Console for the same arguments; `bypass`, the reviewer, the owner role and remembered grants do not count |
 | After a denial | The model gets the denial | The call does not run (fail closed); the model only hears "refused, needs human approval, do not retry"; later calls to the same tool or the same dangerous category in this turn are refused without asking again |
-| Unattended turns | Denied by policy | Denied, and a Console approval card is created; once approved, the next call **in the same session with the same arguments** runs once |
+| Unattended turns | Denied by policy (the denial says the turn was unattended; for who can confirm in a live IM turn see [Agent deep dive](./agent.md#high-risk-actions-after-external-content)) | Denied, and a Console approval card is created; once approved, the next call **in the same session with the same arguments** runs once |
 
 The core list is dangerous by category: member governance (kick, mute, set admins, roles, invite), content publishing (group announcements, channel posts, essence / pinned messages, Bilibili comments), funds (red packets, transfers, payments — **disabled by default**; with `allowFunds: true` they still need approval), and identity (bot profile, avatar, signature, unbinding accounts).
 

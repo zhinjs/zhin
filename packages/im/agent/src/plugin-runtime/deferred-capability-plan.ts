@@ -397,6 +397,12 @@ interface MetaCapabilityOptions {
   readonly decision?: AgentDecisionRuntime;
 }
 
+/** Ranked rows first, then keyword rows the ranker did not select; each name once. */
+export function mergeDiscoverRows<T extends { readonly name: string }>(ranked: readonly T[], keyword: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return [...ranked, ...keyword].filter(row => !seen.has(row.name) && (seen.add(row.name), true));
+}
+
 /** Maximum best discover matches auto-loaded for the next model request. */
 export const DISCOVER_SCHEMA_LIMIT = 3;
 
@@ -429,16 +435,18 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         kind === 'tool' ? undefined : rankDecisionCandidates(options.decision, 'skills', query,
           options.skills.map(skill => ({ name: skill.qualifiedName, description: skill.description })), invocation.signal),
       ]) : [];
-      const tools = rankedTools?.applied
+      // #1250: the ranker orders and adds candidates, it never hides keyword hits. An applied ranking
+      // that selects nothing (or only some) used to drop tools whose name matched the query exactly.
+      const tools = mergeDiscoverRows<{ readonly kind: 'tool' | 'skill'; readonly name: string; readonly brief: string }>(rankedTools?.applied
         ? rankedTools.selectedNames.flatMap(name => {
           const item = catalog.find(candidate => candidate.name === name);
           return item ? [{ kind: 'tool' as const, name, brief: item.brief }] : [];
-        }) : fallbackTools;
-      const skills = rankedSkills?.applied
+        }) : [], fallbackTools);
+      const skills = mergeDiscoverRows<{ readonly kind: 'tool' | 'skill'; readonly name: string; readonly brief: string }>(rankedSkills?.applied
         ? rankedSkills.selectedNames.flatMap(name => {
           const skill = options.skills.find(candidate => candidate.qualifiedName === name);
           return skill ? [{ kind: 'skill' as const, name, brief: skill.description }] : [];
-        }) : fallbackSkills;
+        }) : [], fallbackSkills);
       const rows = [...tools, ...skills];
       if (rows.length === 0) return 'No matches.';
       const listing = rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n');

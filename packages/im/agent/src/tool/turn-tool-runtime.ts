@@ -52,9 +52,9 @@ type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
 
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
-  | Readonly<{ status: 'denied'; policy: string; reason: string }>
+  | Readonly<{ status: 'denied'; policy: string; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean }>;
+  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
 
 export interface TurnToolRuntimeOptions {
   /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
@@ -137,7 +137,7 @@ export class TurnToolRuntime {
       } catch (error) {
         if (!(error instanceof UnconfirmedMessageAliasError)) throw error;
         await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: error.message, durationMs: 0 }, causedBy);
-        return Object.freeze({ status: 'failed', error: error.message, retryable: false });
+        return Object.freeze({ status: 'failed', error: error.message, retryable: false, sideEffect: tool.readOnly !== true });
       }
     }
     let actingFor: string | undefined;
@@ -304,7 +304,7 @@ export class TurnToolRuntime {
       }
       const message = error instanceof Error ? error.message : String(error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
-      return Object.freeze({ status: 'failed', error: message, retryable: false });
+      return Object.freeze({ status: 'failed', error: message, retryable: false, sideEffect: tool.readOnly !== true });
     }
   }
 
@@ -370,7 +370,9 @@ export class TurnToolRuntime {
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
     await this.#append({ type: 'tool_denied', toolName, toolUseId, policy, reason }, causedBy);
-    return Object.freeze({ status: 'denied', policy, reason });
+    // #1250: unknown tools changed nothing; a known tool not declared read-only would have written.
+    const tool = this.#tools.get(toolName);
+    return Object.freeze({ status: 'denied', policy, reason, sideEffect: tool !== undefined && tool.readOnly !== true });
   }
 
   async #cancel(toolName: string, toolUseId: string, durationMs: number, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {

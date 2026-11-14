@@ -16,6 +16,7 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { acknowledgesUnexecuted, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
@@ -425,6 +426,21 @@ export async function finalizeTurnReplyAndOutput(params: {
   if (!state.phaseSettled) {
     output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart));
   }
+  // #1250: a side-effect tool that was denied or failed must not be reported as done. Nothing has
+  // been published yet on this path (no settled phase, no streamed prefix), so one honest line can
+  // still be added when the reply itself says nothing about it.
+  let honestTextReply = textReply;
+  if (!state.phaseSettled && !state.replyRun?.offered && !stopped) {
+    const unexecuted = unresolvedSideEffectFailures(finalPhaseToolCalls);
+    const rendered = imReply ? renderAgentOutput(output) : textReply;
+    if (unexecuted.length > 0 && rendered.trim() && !acknowledgesUnexecuted(rendered)) {
+      const notice = turnReplyMessages(input.turnContext.input?.locale, 'unexecuted',
+        { tools: unexecuted.map(call => `「${call.tool}」`).join('、') });
+      output = [...output, { type: 'text', content: notice }];
+      honestTextReply = `${textReply}\n\n${notice}`;
+      logger.info(formatCompact({ op: 'unexecuted_tool_notice', session: sessionId, tools: unexecuted.map(call => call.tool).join(',') }));
+    }
+  }
   // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
   if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
   let progressive: AgentLoopTurnResult['progressive'];
@@ -442,7 +458,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     }
     if (!progressive && state.replyRun.offered) progressive = { run: state.replyRun };
   }
-  const finalReply = imReply ? renderAgentOutput(output) : textReply;
+  const finalReply = imReply ? renderAgentOutput(output) : honestTextReply;
 
   return {
     output,

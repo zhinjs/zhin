@@ -358,6 +358,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           const askApprovalPort = createRuntimeApprovalPort({
             ...imApprovalOptions,
             isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
+            masterPresent: initiatorPresent,
           });
           const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
           const replyPort = createIngressReplyPort({
@@ -439,6 +440,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mode: turnPolicy.shell?.approvalMode
                   ?? service.getAgentConfig()?.execApprovalMode
                   ?? 'auto',
+                masterInitiator: senderRoles.isMaster,
                 auto: createAutoApprovalPort(
                   agent.approvalReviewer,
                   escalatedApprovalPort,
