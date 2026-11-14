@@ -6,6 +6,7 @@ import {
 import { VIEWER, userPrincipal } from './fixtures/principals.js';
 import { authorizeConsoleHttp } from '../src/access-control.js';
 import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '../src/console-plugin-rpc.js';
+import { CONSOLE_SEND_FAILURE_MESSAGES, isConsoleSendFailure } from '@zhin.js/console-protocol';
 
 describe('runtime console RPC', () => {
   it('denies raw configuration to demo before reading secret-bearing storage', async () => {
@@ -259,6 +260,45 @@ describe('runtime console RPC', () => {
       conversation: { kind: 'private', id: '10001', parent: { kind: 'group', id: 'g1' } },
       content: [{ type: 'text', data: { text: 'hi' } }],
     }]);
+  });
+
+  it('endpoint.send_message reports a classified failure reason instead of a generic message (#1250)', async () => {
+    class FakeDeliveryError extends Error {
+      constructor(readonly code: string, message: string, readonly disposition: string, readonly receipt?: unknown) { super(message); }
+    }
+    const send = async (error: unknown, requestId: number) => {
+      const replies = await dispatchRuntimeConsoleRpc({
+        type: 'endpoint.send_message', requestId,
+        data: { adapter: 'sandbox', endpointKey: 'bot', channelId: 'sandbox-user', channelType: 'private', content: 'hi' },
+      }, { authScope: 'full', listPages: async () => [], sendEndpointMessage: async () => { throw error; } });
+      return pickRpcReply({ type: 'endpoint.send_message', requestId }, replies);
+    };
+    const noClient = await send(new FakeDeliveryError('sandbox_delivery_unavailable', 'Outbound delivery failed (sandbox_delivery_unavailable).', 'not_sent',
+      { status: 'failed', failure: { code: 'sandbox_delivery_unavailable', message: 'x' } }), 80);
+    expect(noClient).toMatchObject({
+      error: CONSOLE_SEND_FAILURE_MESSAGES.no_live_client,
+      data: { code: 'sandbox_delivery_unavailable', reason: 'no_live_client', status: 'failed' },
+    });
+    expect(isConsoleSendFailure(noClient?.data)).toBe(true);
+    expect(await send(new Error('endpoint not found'), 81)).toMatchObject({
+      data: { code: 'endpoint_not_found', reason: 'endpoint_not_found' },
+    });
+    expect(await send(new FakeDeliveryError('reply_blocked', 'x', 'rejected', { status: 'rejected' }), 82)).toMatchObject({
+      data: { code: 'reply_blocked', reason: 'policy_rejected', status: 'rejected' },
+    });
+    expect(await send(new FakeDeliveryError('outbound_suppressed', 'x', 'not_sent', { status: 'suppressed' }), 83)).toMatchObject({
+      data: { reason: 'policy_rejected', status: 'suppressed' },
+    });
+    expect(await send(new FakeDeliveryError('endpoint_send_failed', 'x', 'unknown', { status: 'failed', failure: { deliveryUnknown: true } }), 84)).toMatchObject({
+      data: { reason: 'delivery_unknown', status: 'unknown' },
+    });
+    expect(await send(new FakeDeliveryError('endpoint_inactive', 'x', 'not_sent', { status: 'failed', failure: { retryable: true } }), 85)).toMatchObject({
+      data: { reason: 'endpoint_offline', retryable: true },
+    });
+    // An unrelated thrown error keeps the legacy plain `error` string and no `data`.
+    const plain = await send(new Error('boom'), 86);
+    expect(plain).toMatchObject({ error: 'boom' });
+    expect(plain?.data).toBeUndefined();
   });
 
   it('applies the permission map to canonical RPC names', async () => {

@@ -114,6 +114,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
         actor: auditActor(principal),
+        ...(isUserPrincipal(principal) && principal.displayName ? { actorDisplayName: principal.displayName } : {}),
         publishEvent: (type, data) => options.hub.publish(type, data),
       });
       if (chatRolesReply) {

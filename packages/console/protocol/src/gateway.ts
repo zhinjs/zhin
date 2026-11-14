@@ -6,6 +6,8 @@
  * imports this module), so permissions are spelled as literals; tests assert they are known.
  */
 
+import type { ConsoleProcessSample } from './status.js';
+
 export const GATEWAY_PACKAGES_RPC = Object.freeze({
   LIST: 'gateway.packages.list',
   PLAN: 'gateway.packages.plan',
@@ -187,7 +189,16 @@ export interface GatewayInstalledPackage {
   readonly installedVersion: string | null;
   /** Allowlist catalog the package belongs to, if any. */
   readonly catalog?: Exclude<GatewayPackageSource, 'npm' | 'local'>;
+  /**
+   * What the installed package is to Zhin (#1250), from its `package.json#zhin.type`: only `plugin`
+   * packages are plugins (adapters are plugins too). `feature` packages (`@zhin.js/tool`, …) and
+   * `library` packages (no `zhin` manifest: `ai`, `zod`, `@ai-sdk/*`, …) are ordinary dependencies and
+   * must not be listed or counted as plugins. Absent when the package is not installed, or on older gateways.
+   */
+  readonly kind?: GatewayInstalledPackageKind;
 }
+
+export type GatewayInstalledPackageKind = 'plugin' | 'feature' | 'library';
 
 export interface GatewayPackageList {
   readonly packageManager: string;
@@ -311,6 +322,11 @@ export interface GatewayInstanceStatus {
   readonly lastExitSignal: string | null;
   readonly lastFailure?: GatewayInstanceFailure;
   readonly recentRestarts: number;
+  /**
+   * The gateway process itself (`role: 'gateway'`), sampled when answering (#1250). The instance's
+   * own sample is `GET {base}/system/status` → `process` (`role: 'instance'`). Absent on older gateways.
+   */
+  readonly gateway?: ConsoleProcessSample;
 }
 
 export interface GatewayInstanceLogsRequest {

@@ -760,6 +760,12 @@ describe('console REST routes', () => {
     expect(statusBody.success).toBe(true);
     expect(statusBody.data.runtime).toBe('node');
     expect(typeof statusBody.data.uptime).toBe('number');
+    // #1250: the memory block is labeled as the instance process and matches `memory` exactly.
+    const memory = statusBody.data.memory as Record<string, number>;
+    expect(statusBody.data.process).toMatchObject({
+      role: 'instance', pid: statusBody.data.pid,
+      memory: { rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal },
+    });
 
     const stats = await fetch(`http://127.0.0.1:${port}/api/stats`, { headers });
     expect(stats.status).toBe(200);

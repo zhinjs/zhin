@@ -1,7 +1,11 @@
 import {
   CONFIG_PATCH_LIMITS,
+  CONSOLE_SEND_FAILURE_MESSAGES,
   ENDPOINT_RPC,
+  classifyConsoleSendFailure,
   type ConsoleConfigApplicationStatus,
+  type ConsoleSendFailure,
+  type ConsoleSendFailureStatus,
 } from '@zhin.js/console-protocol';
 import type {
   ConversationAddress,
@@ -27,6 +31,37 @@ export function wireConversation(
     kind,
     id: channelId,
     ...(parentKind && parentId ? { parent: { kind: parentKind, id: parentId } } : {}),
+  };
+}
+
+const SEND_FAILURE_STATUSES: ReadonlySet<string> = new Set(['failed', 'rejected', 'unsupported', 'suppressed']);
+
+/**
+ * Structural read of an outbound failure (#1250): Core's `EndpointDeliveryError` carries `code`,
+ * `disposition` and the canonical receipt; host/http must not import Core, so only those fields are
+ * read. `endpoint not found` is the Endpoint directory's plain error. Anything else is unclassified.
+ */
+export function consoleSendFailure(error: unknown): ConsoleSendFailure | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const record = error as Error & { code?: unknown; disposition?: unknown; receipt?: unknown };
+  if (typeof record.code !== 'string' || !record.code) {
+    return error.message === 'endpoint not found'
+      ? { code: 'endpoint_not_found', reason: 'endpoint_not_found', status: 'failed' }
+      : undefined;
+  }
+  const receipt = record.receipt && typeof record.receipt === 'object'
+    ? record.receipt as { status?: unknown; failure?: { retryable?: unknown; deliveryUnknown?: unknown } }
+    : undefined;
+  const status: ConsoleSendFailureStatus = record.disposition === 'unknown' || receipt?.failure?.deliveryUnknown === true
+    ? 'unknown'
+    : typeof receipt?.status === 'string' && SEND_FAILURE_STATUSES.has(receipt.status)
+      ? receipt.status as ConsoleSendFailureStatus
+      : record.disposition === 'rejected' ? 'rejected' : 'failed';
+  return {
+    code: record.code,
+    reason: classifyConsoleSendFailure(record.code, status),
+    status,
+    ...(receipt?.failure?.retryable === true ? { retryable: true } : {}),
   };
 }
 
@@ -555,9 +590,11 @@ export async function dispatchHostResourceConsoleRpc(
         });
         emit({ requestId, data: { messageId: result.messageId } });
       } catch (error) {
+        const failure = consoleSendFailure(error);
         emit({
           requestId,
-          error: error instanceof Error ? error.message : String(error),
+          error: failure ? CONSOLE_SEND_FAILURE_MESSAGES[failure.reason] : error instanceof Error ? error.message : String(error),
+          ...(failure ? { data: failure } : {}),
         });
       }
       return true;
