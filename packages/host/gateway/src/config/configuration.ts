@@ -282,8 +282,9 @@ export class ConsoleConfigurationStore {
       if (mode !== 'scoped') {
         const rejected = projectDeclarationErrors(current.document, paths);
         if (rejected.length > 0) {
+          const declarationWrite = paths.some(path => PROJECT_PATCH_DECLARATION_KEYS.has(path[0]!));
           return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(rejected),
-            missingEnv: Object.freeze([]), message: '插件声明不能通过项目补丁修改，未保存' });
+            missingEnv: Object.freeze([]), message: declarationWrite ? '插件声明不能通过项目补丁修改，未保存' : '没有这个配置项，未保存' });
         }
       }
       const conflict = async (snapshot: typeof current): Promise<ConsoleConfigPatchResult> => Object.freeze({

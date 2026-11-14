@@ -320,6 +320,7 @@ it('an unknown key says there is no such setting and suggests close ones, withou
   await runHuman('set', 'htp.port', '1', '--offline');
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
   const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('没有这个配置项，未保存');
   expect(text).toContain('htp: 没有这个配置项：htp');
   expect(text).toContain('你是不是想写：http');
   expect(text).not.toContain('gateway.plugins.declare');
