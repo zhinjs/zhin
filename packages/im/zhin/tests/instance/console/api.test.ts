@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { createConfigDocument } from '@zhin.js/runtime';
+// Load the Agent runtime once while the file is collected: its cold transform takes ~8 s from
+// source, which ran inside the first Agent test's 10 s budget and timed out under suite load.
+// The tests below still `await import()` it so the Console's lazy loader sees it cached.
+import '@zhin.js/agent/runtime';
 import { createConsoleEventHub, type ConsoleAuditEntry, type HttpHost } from '@zhin.js/host-http';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';

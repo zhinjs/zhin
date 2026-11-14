@@ -11,6 +11,8 @@ description: "zhin 命令行的全部子命令：启动与停止、配置向导�
 npx zhin --help        # 查看全部命令
 ```
 
+命令结果（列表、详情）写到标准输出，不带日志前缀，可以直接管道给其他程序；进度与诊断写到标准错误。全局选项 `--verbose` 让诊断行带上 `[时间][级别] [CLI]` 前缀；`--debug` 在运行中的实例返回内部错误时显示日志关联 id，并从实例日志里找出对应的那一行。
+
 ::: tip 在 Bot 项目外运行
 项目里装了 `@zhin.js/cli`，`npx zhin` 直接用它。在项目外（例如新建独立插件、在插件目录发布），npx 会去 npm 下载名为 `zhin` 的包：
 
@@ -213,7 +215,7 @@ zhin doctor [--fix] [--upgrade-l4]
 zhin doctor --live <host-url> [--json]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 ### dev：联调本地 zhin 源码与独立插件
 
@@ -242,9 +244,11 @@ zhin onboard [--quick] [--flow quickstart|full]
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并改为 `latest`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并升级。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
+
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有条目保留，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
@@ -371,7 +375,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-搜索插件市场，或查看单个插件的详情。
+搜索插件市场，或查看单个插件的详情。详情含作者（`author`，缺省时取 `maintainers`）；插件已安装到当前项目时，还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
 
 ### use-cases：按用途找到配置入口 {#use-cases}
 
@@ -489,6 +493,8 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 
 `scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
+发送失败时显示具体原因（例如 Sandbox 会话没有打开、账号未连接、平台拒绝）。实例内部出错时只显示「实例内部错误」；加 `--debug` 会显示日志关联 id，并从 `zhin logs` 的最近 1000 行里找出那一行。
+
 ### watch：监视运行实例
 
 ```bash
@@ -516,7 +522,7 @@ zhin schedule resume <id>
 | `--prompt` | 必填，到时间后发给 AI 的提示词 |
 | `-l, --label` | 任务名称 |
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
-| `--notify-channel` | `im` / `silent`（默认）/ `log` |
+| `--notify-channel` | `silent`（默认）/ `log`；`im` 需要目标会话，命令行无法指定，会被拒绝——在聊天里让机器人创建这类任务 |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
 ### agent：Agent 诊断

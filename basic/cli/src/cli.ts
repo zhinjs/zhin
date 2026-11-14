@@ -30,6 +30,7 @@ import { pluginCommand } from './commands/plugin.js';
 import { previewCommand } from './commands/preview.js';
 import { consoleCommand } from './commands/console.js';
 import { dbCommand } from './commands/db.js';
+import { setCliFlags } from './utils/cli-flags.js';
 
 // src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -39,7 +40,13 @@ const program = new Command();
 program
   .name('zhin')
   .description('Zhin机器人框架CLI工具')
-  .version(version);
+  .version(version)
+  .option('--verbose', '诊断日志带时间、级别和来源前缀（写到 stderr）')
+  .option('--debug', '实例返回内部错误时显示日志关联 id，并从实例日志中找出对应行')
+  .hook('preAction', (root) => {
+    const { verbose, debug } = root.opts<{ verbose?: boolean; debug?: boolean }>();
+    setCliFlags({ verbose: !!verbose, debug: !!debug });
+  });
 
 // 注册命令
 program.addCommand(startCommand);

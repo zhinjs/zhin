@@ -4,12 +4,12 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。"
     },
     {
       "package": "@zhin.js/gateway",
@@ -24,12 +24,22 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。"
     },
     {
       "package": "@zhin.js/client",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。"
+    },
+    {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增全局 CLI 选项 --verbose / --debug，zhin packages info 新增命令、工具与配置小节。"
+    },
+    {
+      "package": "@zhin.js/scaffold-wizard",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 GATEWAY_NATIVE_BUILD_DEPENDENCIES（allowBuilds 放行的网关原生依赖）。"
     }
   ]
 }

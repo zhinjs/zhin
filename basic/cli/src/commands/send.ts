@@ -8,6 +8,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
+import { reportHostFailure } from '../utils/host-error.js';
 import {
   hostPost,
   listHostEndpoints,
@@ -110,7 +111,7 @@ export const sendCommand = new Command('send')
       content,
     });
     if (!res.ok) {
-      logger.error(res.error || '发送失败');
+      await reportHostFailure(res, '发送失败');
       process.exit(1);
     }
     console.log(chalk.green('已发送'));

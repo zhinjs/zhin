@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -60,7 +61,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     
     logger.info(formatCompact( { cmd: 'install', op: 'detect', type: pluginType }));
     logger.info(formatCompact( { cmd: 'install', op: 'install', package: pluginToInstall }));
-    logger.log('');
+    output.line();
 
     // 构建安装命令
     const installArgs = buildInstallArgs(pluginToInstall, pluginType, options);
@@ -77,14 +78,14 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     }
 
     if (options.dryRun) {
-      logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
-      logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
+      output.line('🧪 dry-run：不会安装依赖，也不会修改配置。');
+      output.line(`将执行: pnpm ${installArgs.join(' ')}`);
       if (shouldEnable && pluginName && enablePreview) {
-        logger.log(`将启用: ${enablePreview.message}`);
-        logger.log(`将声明插件实例: ${packageToInstanceKey(pluginName)} → ${pluginName}（按现有配置协议写入）`);
+        output.line(`将启用: ${enablePreview.message}`);
+        output.line(`将声明插件实例: ${packageToInstanceKey(pluginName)} → ${pluginName}（按现有配置协议写入）`);
         if (enablePreview.patch) {
-          logger.log('');
-          logger.log(enablePreview.patch);
+          output.line();
+          output.line(enablePreview.patch);
         }
       }
       return;
@@ -93,8 +94,8 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     // Through a running gateway the transaction prints its own phases instead (ADR 0054 §6).
     const viaGateway = !options.dryRun && !options.global && Boolean(pluginName) && Boolean(await probeGateway({ root: process.cwd() }));
     if (!viaGateway) {
-      logger.log(`执行命令: pnpm ${installArgs.join(' ')}`);
-      logger.log('');
+      output.line(`执行命令: pnpm ${installArgs.join(' ')}`);
+      output.line();
     }
 
     if (options.global) {
@@ -123,11 +124,11 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       { enable: shouldEnable, saveDev: options.saveDev, source: installArgs.at(-1) },
     );
     logger.success(`✓ 依赖安装完成：${result.state.packageName}@${result.state.version ?? 'unknown'}`);
-    logger.log(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
-    if (!result.state.plugin) logger.log('该包是普通依赖，不会挂载到 Plugin Runtime。');
-    if (result.needsConfiguration) for (const line of configurationHints([result.needsConfiguration])) logger.log(line);
-    if (result.state.status === 'missing-config') logger.log('运行 zhin setup 补齐配置和环境变量，再应用。');
-    if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再用 packages status 检查当前 generation。');
+    output.line(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+    if (!result.state.plugin) output.line('该包是普通依赖，不会挂载到 Plugin Runtime。');
+    if (result.needsConfiguration) for (const line of configurationHints([result.needsConfiguration])) output.line(line);
+    if (result.state.status === 'missing-config') output.line('运行 zhin setup 补齐配置和环境变量，再应用。');
+    if (result.restartRequired) output.line('配置就绪后启动/重启 Host，再用 packages status 检查当前 generation。');
 
   } catch (error: unknown) {
     logger.error(`安装插件失败: ${error instanceof Error ? error.message : String(error)}`);

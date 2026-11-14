@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { withTestUsers } from '../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
+import { CONSOLE_ERROR_ID_PATTERN, CONSOLE_SEND_FAILURE_MESSAGES, isConsoleApiErrorBody } from '@zhin.js/console-protocol';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { registerMessageSendRoutes } from '../../../src/instance/console/message-send-routes.js';
 
 const cleanups: (() => Promise<unknown>)[] = [];
@@ -69,8 +71,50 @@ it('reports an unknown endpoint as 404 and a delivery failure as 502', async () 
   const failed = await start(vi.fn(async () => { throw new Error('platform rejected'); }));
   const response = await failed.post(valid);
   expect(response.status).toBe(502);
-  // The platform's failure detail is logged, not returned.
-  expect(await response.json()).toEqual({ success: false, code: 'internal_error', error: 'Internal error' });
+  // The platform's failure detail is logged, not returned; the body carries a log correlation id.
+  const body = await response.json();
+  expect(body).toEqual({ success: false, code: 'internal_error', error: 'Internal error', errorId: expect.stringMatching(CONSOLE_ERROR_ID_PATTERN) });
+  expect(JSON.stringify(body)).not.toContain('platform rejected');
+});
+
+it('answers an expected delivery failure with a classified code and a Chinese reason (#1250)', async () => {
+  const failed = await start(vi.fn(async () => {
+    throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'no sandbox tab is subscribed to sandbox-user', 'not_sent', {
+      receipt: { status: 'failed', failure: { code: 'sandbox_delivery_unavailable', message: 'x', retryable: false } } as never,
+    });
+  }));
+  const response = await failed.post({ ...valid, adapter: 'sandbox', type: 'private', id: 'sandbox-user' });
+  expect(response.status).toBe(502);
+  const body = await response.json();
+  expect(body).toEqual({
+    success: false,
+    code: 'delivery_failed',
+    error: CONSOLE_SEND_FAILURE_MESSAGES.no_live_client,
+    data: { code: 'sandbox_delivery_unavailable', reason: 'no_live_client', status: 'failed' },
+  });
+  expect(isConsoleApiErrorBody(body)).toBe(true);
+  expect(JSON.stringify(body)).not.toContain('subscribed');
+
+  const missing = await start(vi.fn(async () => { throw new Error('endpoint not found'); }));
+  expect(await (await missing.post(valid)).json()).toMatchObject({
+    code: 'endpoint_not_found', data: { reason: 'endpoint_not_found' }, error: CONSOLE_SEND_FAILURE_MESSAGES.endpoint_not_found,
+  });
+
+  const unknown = await start(vi.fn(async () => { throw new EndpointDeliveryError('delivery_unconfirmed', 'timeout', 'unknown'); }));
+  // An unknown outcome may already be delivered: its own top-level code, never `delivery_failed` (which clients may retry).
+  const unknownResponse = await unknown.post(valid);
+  expect(unknownResponse.status).toBe(502);
+  expect(await unknownResponse.json()).toEqual({
+    success: false,
+    code: 'delivery_unknown',
+    error: CONSOLE_SEND_FAILURE_MESSAGES.delivery_unknown,
+    data: { code: 'delivery_unconfirmed', reason: 'delivery_unknown', status: 'unknown' },
+  });
+});
+
+it('names the invalid argument in a structured 400', async () => {
+  const f = await start();
+  expect(await (await f.post({ ...valid, type: 'guild' })).json()).toMatchObject({ success: false, code: 'invalid_argument', error: expect.stringContaining('参数不合法') });
 });
 
 it('answers 503 when no IM runtime is attached', async () => {

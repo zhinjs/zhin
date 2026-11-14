@@ -222,7 +222,7 @@ describe('Console schema validation', () => {
     }
     expect(await store.validatePluginConfig('plugin', { threshold: 3 })).toMatchObject({ valid: true });
     expect(await store.validatePluginConfig('plugin', { items: 1, nested: 'bad' })).toMatchObject({
-      valid: false, errors: [{path: '$.items', message: '类型应为 list'}, {path: '$.nested', message: '类型应为 object'}],
+      valid: false, errors: [{path: '$.items', message: '字段 items 类型应为 list'}, {path: '$.nested', message: '字段 nested 类型应为 object'}],
     });
   });
 });
