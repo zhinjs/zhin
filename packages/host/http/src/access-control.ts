@@ -228,7 +228,10 @@ export function authorizeConsoleRpc(
       reason: grantsDenialReason(principal.grants, permission!),
     });
   }
-  const missing = rule.kind === 'exact' ? rule.alsoRequires?.find(extra => !grantsAllow(principal.grants, extra, rule.target)) : undefined;
+  // `alsoRequires` is held globally (same semantics as grantsAllowAlsoRequired): find the first missing one for the denial reason.
+  const missing = rule.kind === 'exact' && !grantsAllowAlsoRequired(principal.grants, rule)
+    ? rule.alsoRequires?.find(extra => !grantsAllowAlsoRequired(principal.grants, { ...rule, alsoRequires: [extra] }))
+    : undefined;
   if (missing) {
     return Object.freeze({
       allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission,
