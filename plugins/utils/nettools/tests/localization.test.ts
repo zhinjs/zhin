@@ -1,4 +1,4 @@
-import dnsCommand from '../commands/dns/[name]/[[type]]/index.ts';
+import dnsCommand from '../commands/dns/[name]/index.ts';
 import dnsTool from '../skills/nettools/tools/dns_lookup/index.ts';
 import { NettoolsService } from '../src/service.js';
 import { describeFailure, NettoolsError } from '../src/errors.js';
