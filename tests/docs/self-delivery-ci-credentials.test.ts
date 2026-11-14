@@ -92,23 +92,20 @@ describe('untrusted candidate CI credential isolation', () => {
 
   it('preserves the protected matrix identities and isolated live-database gate', () => {
     const { config } = read('full-validation');
-    expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'database-live-mysql-compat', 'gateway-e2e', 'test', ...PREPARED_JOBS]);
+    expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'gateway-e2e', 'test', ...PREPARED_JOBS]);
     expect(config.jobs['platform-installed'].strategy.matrix.platform).toEqual(['onebot11', 'napcat', 'telegram', 'qq']);
     expect(config.jobs['platform-installed'].strategy['fail-fast']).toBe(true);
     expect(config.jobs['database-live'].permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(config.jobs['database-live'])).not.toMatch(/secrets\.|github\.token|gh run cancel/);
-    // The other MySQL servers (ADR 0059 version-specific paths) run under the same isolation.
-    const compat = config.jobs['database-live-mysql-compat'];
-    expect(compat.permissions).toEqual({ contents: 'read' });
-    expect(JSON.stringify(compat)).not.toMatch(/secrets\.|github\.token|gh run cancel/);
-    expect(compat.strategy.matrix.include.map((entry: { image: string }) => entry.image)).toEqual(['mysql:8.0', 'mariadb:11']);
-    expect(compat.services.mysql.image).toBe('${{ matrix.image }}');
     // The slow gateway suite runs once, credential-free, outside the OS × Node matrix.
     expect(config.jobs['gateway-e2e'].permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(config.jobs['gateway-e2e'])).not.toMatch(/secrets\.|github\.token|gh run cancel|strategy/);
     expect(config.jobs['gateway-e2e'].steps.at(-1).run).toBe('pnpm test:e2e:gateway');
     expect(config.jobs['database-live'].services).toMatchObject({
       mysql: { image: 'mysql:8.4' },
+      // The other supported MySQL servers share the job; their suites run after the main one.
+      mysql80: { image: 'mysql:8.0', ports: ['3307:3306'] },
+      mariadb11: { image: 'mariadb:11', ports: ['3308:3306'] },
       postgres: { image: 'postgres:17' },
       mongodb: { image: 'mongo:7' },
       redis: { image: 'redis:8' },
