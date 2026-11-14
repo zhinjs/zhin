@@ -132,6 +132,7 @@ ai:
 | `toolBudget` | keep | 常用开关，保留 |
 | `injectionGuard` | keep | 常用开关，保留 |
 | `toolHardGate` | keep | 危险工具硬闸（ADR 0036）；始终开启，只能调严，见下文 |
+| `approval` | keep | IM 回合审批的附加规则；目前只有 `adminSelfApprove`（默认 `false`）：开启后，端点层及以上的 zhin `admin` 可在自己的私聊里本人「允许一次」标为可由管理员批准的请求，需主人确认的请求不受影响（见 [Agent 安全策略](./agent.md)） |
 | `usageQuota` | keep | 常用开关，保留 |
 | `schedule` | keep | 常用开关，保留 |
 | `masterShell` | keep | 常用开关，保留 |

@@ -132,6 +132,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `toolBudget` | keep | Common switch, kept |
 | `injectionGuard` | keep | Common switch, kept |
 | `toolHardGate` | keep | Dangerous-tool hard gate (ADR 0036); always on, can only be made stricter, see below |
+| `approval` | keep | Extra rules for IM turn approvals; currently only `adminSelfApprove` (default `false`): when on, a zhin `admin` at endpoint level or above may allow-once requests marked admin-approvable in their own private chat; requests that need the owner are unaffected (see [Agent security](./agent.md)) |
 | `usageQuota` | keep | Common switch, kept |
 | `schedule` | keep | Common switch, kept |
 | `masterShell` | keep | Common switch, kept |
