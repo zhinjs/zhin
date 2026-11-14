@@ -653,6 +653,19 @@ describe('schedule (running Host)', () => {
     ]);
   });
 
+  it('a disabled assistant names the reason for list (200 state) and writes (404 legacy string) (#1250)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const disabled = { status: 'disabled', reason: 'agent-not-installed', message: '未安装 AI 智能体（@zhin.js/agent）：运行 zhin setup --ai' };
+    stubHost(() => ({ status: 200, body: { success: true, data: { ...disabled, jobs: [] } } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'list'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith(`${disabled.message}；无法列出调度任务`);
+    stubHost(() => ({ status: 404, body: { success: false, code: 'unavailable', error: 'assistant.enabled is false', data: disabled } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'pause', 'j1'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith(`${disabled.message}；无法管理调度任务`);
+  });
+
   it('Host 拒绝时退出码为 1', async () => {
     stubHost(() => ({ status: 404, body: { success: false, error: '任务不存在: ghost' } }));
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {

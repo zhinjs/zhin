@@ -3,6 +3,7 @@
  */
 import { Command } from 'commander';
 import { hostGet, listHostEndpoints, loadHostHttpConfig } from '../utils/host-http.js';
+import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
 import {
   jobRowsFromApi,
   renderWatchText,
@@ -84,7 +85,7 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
   }));
 
   let assistant: WatchSnapshot['assistant'];
-  if (jobsRes.status === 404) {
+  if (jobsRes.status === 404 || isConsoleFeatureDisabled(jobsRes.data)) {
     assistant = { enabled: false, jobs: [] };
   } else if (jobsRes.ok && jobsRes.data) {
     assistant = {

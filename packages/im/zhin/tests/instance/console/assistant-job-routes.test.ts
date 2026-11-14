@@ -6,12 +6,13 @@ import {
   registerAssistantJobRoutes,
 } from '../../../src/instance/console/assistant-job-routes.js';
 
-const state = vi.hoisted(() => ({ assistant: undefined as unknown, generation: true }));
+const state = vi.hoisted(() => ({ assistant: undefined as unknown, generation: true, reason: 'agent-not-installed' as string | undefined }));
 vi.mock('../../../src/instance/console/agent-console.js', () => ({
   withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<unknown>) => {
     if (!state.generation) return undefined;
     return run({ assistant: state.assistant });
   },
+  agentConsoleDisabledReason: async () => state.reason,
 }));
 
 const jobs = {
@@ -21,7 +22,7 @@ const jobs = {
   resume: vi.fn(async (id: string) => id === 'known'),
 };
 const cleanups: (() => Promise<unknown>)[] = [];
-beforeEach(() => { state.assistant = { jobs }; state.generation = true; vi.clearAllMocks(); });
+beforeEach(() => { state.assistant = { jobs }; state.generation = true; state.reason = 'agent-not-installed'; vi.clearAllMocks(); });
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
 async function start() {
@@ -102,6 +103,20 @@ it('rejects demo credentials and reports a disabled assistant as 404', async () 
   state.generation = false;
   expect((await post('/remove', { id: 'known' })).status).toBe(404);
   expect(jobs.remove).not.toHaveBeenCalled();
+});
+
+it('names why job writes are unavailable while keeping the legacy error string (#1250)', async () => {
+  const post = await start();
+  state.assistant = null;
+  expect(await (await post('/remove', { id: 'known' })).json()).toEqual({
+    success: false, code: 'unavailable', error: 'assistant.enabled is false',
+    data: { status: 'disabled', reason: 'assistant-disabled', message: expect.stringContaining('assistant.enabled: true') },
+  });
+  state.generation = false;
+  expect((await (await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 } })).json()).data)
+    .toMatchObject({ status: 'disabled', reason: 'agent-not-installed', message: expect.stringContaining('@zhin.js/agent') });
+  state.reason = undefined;
+  expect((await (await post('/pause', { id: 'known' })).json()).data).toMatchObject({ reason: 'agent-disabled' });
 });
 
 it('parseAssistantJobInput builds at/every schedules', () => {

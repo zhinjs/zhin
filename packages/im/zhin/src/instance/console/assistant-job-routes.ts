@@ -2,13 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
-import { withGenerationAgentConsole } from './agent-console.js';
-import type { ConsoleApiErrorCode } from '@zhin.js/console-protocol';
+import { agentConsoleDisabledReason, withGenerationAgentConsole } from './agent-console.js';
+import { consoleFeatureDisabled, type ConsoleApiErrorCode, type ConsoleFeatureDisabledReason } from '@zhin.js/console-protocol';
 import { expectedErrorResponse, internalErrorResponse } from './internal-error.js';
 
 const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
-const DISABLED = 'assistant.enabled is false';
+/** Legacy error string of a disabled assistant; `zhin schedule` (older CLIs too) matches it. */
+export const ASSISTANT_DISABLED_ERROR = 'assistant.enabled is false';
+
+/**
+ * 404 `unavailable` for a job write while the feature is off: the legacy `error` string plus
+ * `data: ConsoleFeatureDisabled` naming why (#1250).
+ */
+export function assistantDisabledWriteResponse(reason: ConsoleFeatureDisabledReason): Response {
+  return expectedErrorResponse(404, 'unavailable', ASSISTANT_DISABLED_ERROR, consoleFeatureDisabled(reason));
+}
 /** Rejected job body: a stable code and a user-facing (Chinese) explanation (#1250). */
 export interface AssistantJobInputError { readonly error: string; readonly code: Extract<ConsoleApiErrorCode, 'invalid_argument' | 'notify_target_missing'> }
 const invalidInput = (error: string): AssistantJobInputError => ({ error, code: 'invalid_argument' });
@@ -97,7 +106,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     const body = await readJsonBody(request);
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant }) => {
       if (!assistant) {
-        return expectedErrorResponse(404, 'unavailable', DISABLED);
+        return assistantDisabledWriteResponse('assistant-disabled');
       }
       try {
         const result = await operation(assistant.jobs, body);
@@ -106,7 +115,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
         return internalErrorResponse(500, 'assistant_job_failed', error);
       }
     });
-    return handled ?? expectedErrorResponse(404, 'unavailable', DISABLED);
+    return handled ?? assistantDisabledWriteResponse(await agentConsoleDisabledReason(snapshots) ?? 'agent-disabled');
   };
 
   http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body) => {
