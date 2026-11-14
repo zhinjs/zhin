@@ -35,6 +35,7 @@ import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/g
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
+import { diagnoseApprovalChannelConfig } from '../utils/approval-config-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
@@ -242,6 +243,8 @@ export const doctorCommand = new Command('doctor')
             results.push({ name: '结构化决策配置', status: 'warn', message: '无法读取 package.json 以检查决策插件绑定', fix: '修复 package.json 后重跑 zhin doctor' });
           }
         }
+        const approvalDiagnosis = diagnoseApprovalChannelConfig(loadedConfig);
+        if (approvalDiagnosis) results.push({ name: '审批渠道', ...approvalDiagnosis });
         let diagnosis: ConsoleConfigDiagnosis = diagnoseConsoleConfig(loadedConfig);
         const canFixConfig = loaded.status === 'loaded' && loaded.writable;
 

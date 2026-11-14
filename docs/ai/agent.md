@@ -328,7 +328,20 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 | 修改配置 | 名称含 config/settings、安装插件等（`get_`/`list_` 等读取类除外），或带 `config` 标签 |
 | 定时任务 | 名称含 schedule/cron/reminder/timer 等（读取类除外），或带 `schedule` 标签 |
 
-审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。没有审批通道的回合（定时任务等无人值守回合）会直接拒绝，策略名为 `external-content-confirmation`。
+审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
+
+**IM 会话里的确认（#1250）**：实时 IM 回合在当前会话里发确认消息（经正常出站链；支持按钮的平台带按钮，纯文本平台按编号或文字回复），写明要执行的动作、关键参数（密钥类字段与令牌打码）和来源链。谁能回答：
+
+| 发起人 | 谁确认 |
+|---|---|
+| 全局 owner（主人） | 主人本人（与之前相同） |
+| 其他人，群聊 / 频道里配置了 Bot 主人 | Bot 主人（与之前相同） |
+| zhin `admin`，且主人无法在此作答（私聊，或未配置主人） | 发起人本人，只能「允许一次 / 拒绝」，不记住、不出现「允许此会话 / 始终允许」；`requiresApproval: 'human'` 的工具仍需主人 |
+| 其他用户，没有能作答的人 | 只对「读取外部内容后的高危动作」请发起人本人确认**意图**；这一确认不等于授权，工具若还需要普通审批，仍按上表处理（通常拒绝） |
+
+只认同一平台用户 ID、同一会话（同一端点、会话、话题）里的回复：「确认 / 同意 / yes」或「取消 / 拒绝 / no」，或按钮回调；别人回复、别的会话、过期按钮都不算，超时按拒绝处理。合流、旁听、直播间与弹幕回合不请发起人确认。每次确认写决策审计 `tool_approval`（`payload.channel: turn_prompt`，`purpose: intent | authorization`；无人可问记 `tool_approval_unavailable`）。
+
+给模型的拒绝原因区分三种情况：无人值守、此会话没有确认渠道、确认被拒或超时；并提示可在 Console 操作（定时任务：「运维 → 定时任务」页），不要把工具名当作聊天命令推荐给用户。`execApprovalMode: ask`，或 `confirmHighRisk` 未关闭且启用了定时任务 / 助理提醒时，启动日志会提示一次（`approval_channel_conflict`），`zhin doctor` 的「审批渠道」项也会提示。
 
 `discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。第一方插件的工具如果结果可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`。
 
