@@ -630,6 +630,8 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
       packages: ['.'],
       catalog: { foo: `${long} ${long}` },
       allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
+      // pnpm projects also list the upgrade targets for pnpm 11's release-age gate (#1250).
+      minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
   });
 

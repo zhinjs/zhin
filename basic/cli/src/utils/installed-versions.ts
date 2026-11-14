@@ -130,7 +130,7 @@ export function syncReleaseAgeExclusions(dir: string, releases: ReadonlyMap<stri
     const list = doc.get('minimumReleaseAgeExclude');
     if (isSeq(list)) for (const entry of added) list.add(doc.createNode(entry));
     else doc.set('minimumReleaseAgeExclude', doc.createNode(added));
-    fs.writeFileSync(path.join(dir, WORKSPACE_FILE), doc.toString());
+    fs.writeFileSync(path.join(dir, WORKSPACE_FILE), doc.toString({ lineWidth: 0 }));
   }
   return added;
 }

@@ -453,6 +453,8 @@ it('a rejected request shows the revision evidence only with --debug (#1250)', a
 
 it('a broken http.port gives an offline repair hint instead of Invalid URL (#1250)', async () => {
   const { errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 'abc' } });
+  // No gateway answers on the local socket: a running one would still serve the repair (see host-http).
+  gateway.running = false;
   const fetch = vi.fn();
   vi.stubGlobal('fetch', fetch);
   await runHuman('get', 'http');
