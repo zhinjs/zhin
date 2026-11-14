@@ -100,6 +100,12 @@ export interface CommandDispatchResult {
    * Undefined when no Permission host / source answered.
    */
   readonly denial?: Readonly<{ permit: string; reason: string }>;
+  /**
+   * `executed` only: the command refused with a `UserFacingError`, whose text is `value`
+   * (the reply). Lets observers tell an expected refusal from a successful run; the status stays
+   * `executed` so existing consumers keep replying as before.
+   */
+  readonly refused?: true;
 }
 
 /** Semantic menu navigation; the IM composition layer supplies platform controls. */
@@ -473,7 +479,7 @@ export class CommandIndex {
       // normal outbound chain; every other failure keeps propagating to the inbound runtime's logs.
       const text = userFacingErrorText(error, locale);
       if (text === undefined) throw error;
-      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text });
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text, refused: true });
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }

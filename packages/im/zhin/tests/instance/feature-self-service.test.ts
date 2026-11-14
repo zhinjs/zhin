@@ -262,9 +262,9 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     await promote(roles);
     const admin = actor();
     expect(featureChatTokens({ segments: [{ type: 'text', data: { text: '设置 repeater greeting "欢迎 {name}" 账号' } }], args: [] }))
-      .toEqual(['设置', 'repeater', 'greeting', '欢迎 {name}', '账号']);
+      .toEqual(['设置', 'repeater', 'greeting', { text: '欢迎 {name}', quoted: true }, '账号']);
     expect(featureChatTokens({ segments: [{ type: 'text', data: { text: '设置 a b \u201C你好 世界\u201D \u300C一 二\u300D \'x y\'' } }], args: [] }))
-      .toEqual(['设置', 'a', 'b', '你好 世界', '一 二', 'x y']);
+      .toEqual(['设置', 'a', 'b', { text: '你好 世界', quoted: true }, { text: '一 二', quoted: true }, { text: 'x y', quoted: true }]);
     expect(await say(admin, '设置 repeater greeting "欢迎 {name}"')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎 {name}' });
     expect(await say(admin, '设置 repeater greeting \u201C欢迎新人 {name}\u201D')).toBe('已保存（会话层），立即生效。');
@@ -275,6 +275,15 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await say(admin, '设置 repeater greeting 欢迎 {name} 账号')).toBe(DENIED);
     expect(await say(admin, '设置 repeater greeting "会话"')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '会话' });
+    // A quoted trailing level word is part of the value, never the level (#1250 review).
+    expect(await say(admin, '设置 repeater greeting 欢迎 "会话"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎 会话' });
+    expect(await say(admin, '设置 repeater greeting 你好 "账号"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '你好 账号' });
+    // Unquoted, the same trailing word is still the level.
+    expect(await say(admin, '设置 repeater greeting 你好 账号')).toBe(DENIED);
+    // A quoted word in a level position elsewhere is not a level either.
+    expect(await say(admin, '关闭 repeater "会话"')).toContain('用法');
     expect(await say(admin, '设置 repeater greeting')).toContain('用法');
   });
 

@@ -6,7 +6,7 @@
 import { isCommandIndex, commandFeatureId } from '@zhin.js/command';
 import { MessageDispatcher, type Message } from '@zhin.js/core/runtime';
 import {
-  disabledFeatureOwners, resolveEndpointFeatureKey,
+  capabilityId, disabledFeatureOwners, resolveEndpointFeatureKey,
   type Locale, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { SandboxWorkspaceScope } from './sandbox-workspace-scope.js';
@@ -20,7 +20,11 @@ export interface SandboxQuickCommands {
   readonly quick: readonly string[];
 }
 
-/** Parameterless everyday commands offered after the menu when a plugin registers them. */
+/**
+ * Parameterless everyday commands offered after the menu when a plugin registers them, by the
+ * command's stable local name (its directory route), not its localized display name: a `ping`
+ * whose Chinese preferred alias is `测试` is still found, and is offered under that alias.
+ */
 const PREFERRED = ['ping', 'status'] as const;
 const MAX_QUICK = 4;
 
@@ -45,7 +49,7 @@ export function sandboxQuickCommands(
     const commands = index.list(locale);
     for (const name of PREFERRED) {
       if (quick.length >= MAX_QUICK) break;
-      const command = commands.find(item => item.name === name);
+      const command = commands.find(item => item.id === capabilityId(item.owner, commandFeatureId, name));
       if (!command || disabled.has(command.owner) || command.permit?.length
         || (command.adapter && command.adapter !== scope.endpoint.adapter)
         || command.parameters.some(parameter => parameter.required)) continue;

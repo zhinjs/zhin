@@ -26,7 +26,7 @@ const conversation = { id: 'room:中文\0%', type: 'private', name: '一个工�
 
 /** Real SQLite, generation AdapterIndex, and authenticated HTTP; no provider or platform sends. */
 async function fixture(options: { filename?: string; unavailable?: boolean;
-  commands?: { prefix?: string; menuKeyword?: string | false; names?: readonly (string | { name: string; permit?: string[]; params?: Record<string, { type: 'string'; optional?: boolean }> })[] } } = {}) {
+  commands?: { prefix?: string; menuKeyword?: string | false; names?: readonly (string | { name: string; permit?: string[]; params?: Record<string, { type: 'string'; optional?: boolean }>; alias?: string[]; preferredAliasI18n?: Record<string, string> })[] } } = {}) {
   const db = createDatabaseHost({ dialect: 'sqlite', filename: options.filename ?? join(directory, 'directory.sqlite') });
   defineWorkspaceConversationTable(db);
   await db.start();
@@ -50,7 +50,9 @@ async function fixture(options: { filename?: string; unavailable?: boolean;
     const command = typeof item === 'string' ? { name: item } : item;
     return createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
       source: `/app/commands/${command.name}/index.ts`,
-      definition: defineCommand({ ...(command.permit ? { permit: command.permit } : {}), ...('params' in command && command.params ? { params: command.params } : {}), execute: () => 'ok' }) });
+      definition: defineCommand({ ...(command.permit ? { permit: command.permit } : {}), ...('params' in command && command.params ? { params: command.params } : {}),
+        ...('alias' in command && command.alias ? { alias: command.alias } : {}),
+        ...('preferredAliasI18n' in command && command.preferredAliasI18n ? { preferredAliasI18n: command.preferredAliasI18n } : {}), execute: () => 'ok' }) });
   });
   const config = new Map<PluginId, unknown>();
   if (options.commands?.prefix !== undefined) config.set(owners[0]!, { commandPrefix: options.commands.prefix });
@@ -210,6 +212,15 @@ describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
     expect((await (await f.commands({ type: 'group', id: 'room' })).json()).data).toEqual({ prefix: '/', menu: '/菜单', quick: ['/菜单', '/status'] });
     const optional = await fixture({ commands: { prefix: '/', names: [{ name: 'ping', params: { target: { type: 'string', optional: true } } }] } });
     expect((await (await optional.commands({ type: 'group', id: 'room' })).json()).data.quick).toEqual(['/菜单', '/ping']);
+  });
+
+  it('finds quick commands by their stable route, not the localized display name (#1250)', async () => {
+    const f = await fixture({ commands: { prefix: '/', names: [{ name: 'ping', alias: ['测试连通'], preferredAliasI18n: { 'zh-CN': '测试连通' } }] } });
+    expect((await (await f.commands({ type: 'group', id: 'room' })).json()).data.quick).toEqual(['/菜单', '/测试连通']);
+    expect((await (await f.commands({ type: 'group', id: 'room', locale: 'en' })).json()).data.quick).toEqual(['/menu', '/ping']);
+    // A command merely displayed as `ping` (another route) is not the everyday `ping`.
+    const other = await fixture({ commands: { prefix: '/', names: [{ name: 'pong', alias: ['ping'], preferredAliasI18n: { 'zh-CN': 'ping', en: 'ping' } }] } });
+    expect((await (await other.commands({ type: 'group', id: 'room' })).json()).data.quick).toEqual(['/菜单']);
   });
 
   it('guards quick commands like the directory: credentials, live binding and a valid scene', async () => {

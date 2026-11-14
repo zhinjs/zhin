@@ -563,6 +563,8 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合、上下文分段开销，以及结束原因。输出开头会单独标出**首个失败步骤**。
 
+**触发消息。** 从 #1250 起，trace 还记录触发这一回合的消息：正文摘录（空白合并、凭据脱敏后截断到 120 个字符）、发送者 id 与发送者名、会话（适配器、Endpoint、会话类型与 id）、消息 id，以及收到时间、等待与排队时长、合流消息数。也就是说 trace 文件里会出现用户发言的片段和身份标识：能读 `data/agent-traces` 目录的人、能运行 `zhin trace` 的人，以及 Console 里有 `agent.view` 权限的账号或 API 令牌（`/api/agent/traces`、`/api/agent/trace-archive/*`）都能看到。不希望留存时缩短 `ZHIN_TRACE_RETENTION_DAYS`。
+
 **保留与脱敏。** 默认保留 7 天，总大小上限 64 MB：启动时和之后每小时清理一次，先删过期的日期文件，再从最旧的一天删起直到低于上限（当天的文件不会因大小被删）。用环境变量 `ZHIN_TRACE_RETENTION_DAYS`、`ZHIN_TRACE_MAX_MB` 调整。trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`，写盘前还会再扫一遍内联凭据（`sk-…`、`Bearer …` 等）和环境变量里的密钥值。旧版的 `data/agent-traces/recent.json` 仍会被读取。
 
 **Console 页面。** Console 的「Agent Trace」页（`/console/agent-trace`）读取同一份数据：会话列表 → 回合列表 → 回合详情（模型/工具调用瀑布图、时间线和原始记录），可以按时间筛选，`?turn=<turnId>` 直接打开某个回合。项目里放一个页面即可启用：

@@ -169,8 +169,26 @@ function describeEntries(entries: readonly ChatRoleEntry[], locale: Locale): str
     : messages(locale, 'none');
 }
 
-/** One parsed argument: text, or a mentioned user id. */
-export type FeatureChatToken = string | Readonly<{ user: string }>;
+/**
+ * One parsed argument: text, quoted text (`"会话"`: always a value, never a keyword such as a
+ * level word), or a mentioned user id.
+ */
+export type FeatureChatToken = string | Readonly<{ text: string; quoted: true }> | Readonly<{ user: string }>;
+
+function isQuoted(token: FeatureChatToken | undefined): boolean {
+  return typeof token === 'object' && 'quoted' in token;
+}
+
+/** Level named by token `index`; a quoted token is never a level word (`null`: not a level). */
+function levelAt(tokens: readonly FeatureChatToken[], index: number): FeatureConfigLevel | null {
+  const token = tokens[index];
+  return isQuoted(token) ? null : levelPicker(token === undefined ? undefined : tokenText(token) ?? '');
+}
+
+/** Text of a text or quoted token; `undefined` for a mention. */
+function tokenText(token: FeatureChatToken): string | undefined {
+  return typeof token === 'string' ? token : 'text' in token ? token.text : undefined;
+}
 
 interface PendingGlobal {
   readonly code: string;
@@ -310,7 +328,7 @@ export async function executeFeatureChat(
     && !deps.roles.store.list().some(entry => entry.adapter === actor.identity.adapter && entry.userId === actor.identity.userId && chatRoleIncludes(entry.role, 'admin'))) {
     return messages(locale, 'denied');
   }
-  const words = input.tokens.map(token => typeof token === 'string' ? token : undefined);
+  const words = input.tokens.map(tokenText);
   const sub = SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
   if (!sub) return messages(locale, 'usage');
   const { mayReferenceEnvironment: _never, ...base } = deps.context;
@@ -397,7 +415,7 @@ export async function executeFeatureChat(
     case 'enable':
     case 'disable': {
       const plugin = words[1];
-      const level = pickLevel(words[2]);
+      const level = levelAt(input.tokens, 2);
       if (!plugin || level === null || words.length > 3) return messages(locale, 'usage');
       const enabled = sub === 'enable';
       const scope = target(level);
@@ -429,10 +447,11 @@ export async function executeFeatureChat(
       return describe(reply, pending.plugin, 'global');
     }
     case 'set': {
-      // `设置 <插件> <字段> <值…> [层级]`: the value is the rest of the text after the field; a trailing
-      // level word is the level only when something precedes it (quote a value ending in a level word).
+      // `设置 <插件> <字段> <值…> [层级]`: the value is the rest of the text after the field. A trailing
+      // unquoted level word is the level when something precedes it; a quoted one (`"会话"`) is always
+      // part of the value, so quote a value that is or ends in a level word.
       const [, plugin, field, ...rest] = words;
-      const levelWord = rest.length > 1 && rest.at(-1) !== undefined && LEVEL_WORDS[rest.at(-1)!.toLowerCase()] ? rest.pop() : undefined;
+      const levelWord = !isQuoted(input.tokens.at(-1)) && rest.length > 1 && rest.at(-1) !== undefined && LEVEL_WORDS[rest.at(-1)!.toLowerCase()] ? rest.pop() : undefined;
       const raw = rest.length && rest.every(word => word !== undefined) ? rest.join(' ') : undefined;
       const level = pickLevel(levelWord);
       if (!plugin || !field || raw === undefined || level === null) return messages(locale, 'usage');
@@ -460,7 +479,7 @@ export async function executeFeatureChat(
     }
     case 'reset': {
       const plugin = words[1];
-      const level = pickLevel(words[2]);
+      const level = levelAt(input.tokens, 2);
       if (!plugin || level === null || level === 'global' || words.length > 3) return messages(locale, 'usage');
       const scope = target(level);
       if ('error' in scope) { audit('reset', level, scopeAt(actor, level), 'denied', { plugin }); return scope.error; }
@@ -533,7 +552,7 @@ export async function executeRoleChat(
   const { locale, actor } = input;
   if (!deps.config.enabled) return messages(locale, 'disabled');
   if (!actor) return messages(locale, 'unknownConversation');
-  const words = input.tokens.map(token => typeof token === 'string' ? token : undefined);
+  const words = input.tokens.map(tokenText);
   const sub = ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
   if (!sub) return messages(locale, 'roleUsage');
   if (sub === 'list') {
@@ -550,10 +569,10 @@ export async function executeRoleChat(
     return lines.join('\n');
   }
   const user = input.tokens[1];
-  const userId = typeof user === 'object' ? user.user : user;
+  const userId = typeof user === 'object' ? ('user' in user ? user.user : user.text) : user;
   if (!userId) return messages(locale, 'userMissing');
   const role = ROLE_WORDS[(words[2] ?? '').toLowerCase()];
-  const level = levelPicker(words[3]);
+  const level = levelAt(input.tokens, 3);
   if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return messages(locale, 'roleUsage');
   const audit = auditor(deps, actor, 'chat-roles.chat');
   if (level === 'conversation' && actor.kind === 'private') return messages(locale, 'privateConversation');
@@ -592,10 +611,11 @@ const QUOTE_PAIRS: Readonly<Record<string, string>> = Object.freeze({
 
 /**
  * Whitespace-separated words; a word starting with a quote runs to its closing quote and keeps the
- * whitespace inside (`"欢迎 {name}"` → `欢迎 {name}`). An unclosed quote keeps the rest of the text.
+ * whitespace inside (`"欢迎 {name}"` → `欢迎 {name}`), marked `quoted` so it is never read as a
+ * keyword. An unclosed quote keeps the rest of the text.
  */
-function splitQuotedWords(text: string): string[] {
-  const words: string[] = [];
+function splitQuotedWords(text: string): FeatureChatToken[] {
+  const words: FeatureChatToken[] = [];
   let index = 0;
   while (index < text.length) {
     while (index < text.length && /\s/u.test(text[index]!)) index++;
@@ -603,7 +623,7 @@ function splitQuotedWords(text: string): string[] {
     const close = QUOTE_PAIRS[text[index]!];
     if (close !== undefined) {
       const end = text.indexOf(close, index + 1);
-      words.push(end === -1 ? text.slice(index + 1) : text.slice(index + 1, end));
+      words.push(Object.freeze({ text: end === -1 ? text.slice(index + 1) : text.slice(index + 1, end), quoted: true as const }));
       index = end === -1 ? text.length : end + 1;
       continue;
     }

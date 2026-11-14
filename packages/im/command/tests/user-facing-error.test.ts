@@ -46,6 +46,10 @@ describe('UserFacingError at command dispatch', () => {
     const index = new CommandIndex(slots, snapshot(slots), {});
     const zh = await index.dispatch({ input: 'rps', source: message('zh-CN') });
     expect(zh).toMatchObject({ matched: true, status: 'executed', command: 'rps', owner: games, value: '请先结束当前对局。' });
+    // The refusal is marked so observers can tell it from a successful run; status stays `executed`.
+    expect(zh.refused).toBe(true);
+    const ok = new CommandIndex([command('ok', defineCommand({ execute: () => 'fine' }))], snapshot([command('ok', defineCommand({ execute: () => 'fine' }))]), {});
+    expect((await ok.dispatch({ input: 'ok', source: message('zh-CN') })).refused).toBeUndefined();
     const en = await index.dispatch({ input: 'rps', source: message('en') });
     expect(en.value).toBe('Finish your current game first.');
   });
