@@ -16,6 +16,7 @@ import {
   bindingScopeCovers,
   consoleRpcPermission,
   grantsAllow,
+  grantsAllowAlsoRequired,
   isConsolePermission,
   parseConsoleBindingScope,
   resolveConsoleHttpPermission,
@@ -56,11 +57,23 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
       kind: 'exact', permission: 'endpoint.manage', target: { kind: 'endpoint', adapter: 'qq', endpoint: 'bot-1' },
     });
     expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } })).toMatchObject({
-      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'adapter', adapter: 'qq' },
+      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'adapter', adapter: 'qq' }, alsoRequires: ['ops.config.write'],
     });
+    // Only the write-back rewrites the configuration file.
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } })).not.toHaveProperty('alsoRequires');
     expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-drift')).toMatchObject({
       kind: 'exact', permission: 'endpoint.view', target: { kind: 'adapter', adapter: 'qq' },
     });
+  });
+
+  it('endpoint-writeback needs ops.config.write globally on top of endpoint.manage (#1250)', () => {
+    const rule = resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } });
+    const accountOperator: ConsoleGrant[] = [{ permissions: ['endpoint.manage'], scope: { kind: 'adapter', key: 'qq' } }];
+    expect(grantsAllowAlsoRequired(accountOperator, rule)).toBe(false);
+    // ops.config.write scoped to the adapter is not enough: configuration writes are global.
+    expect(grantsAllowAlsoRequired([...accountOperator, { permissions: ['ops.config.write'], scope: { kind: 'adapter', key: 'qq' } }], rule)).toBe(false);
+    expect(grantsAllowAlsoRequired([...accountOperator, { permissions: ['ops.config.write'], scope: { kind: 'global' } }], rule)).toBe(true);
+    expect(grantsAllowAlsoRequired(accountOperator, resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } }))).toBe(true);
   });
 
   it('refines config:patch by instanceKey and extracts scope targets from payloads', () => {

@@ -3,6 +3,7 @@ import {
   CONSOLE_WRITE_PERMISSIONS,
   expandPluginPermissions,
   grantsAllow,
+  grantsAllowAlsoRequired,
   isPluginConsoleRpcType,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
@@ -192,7 +193,7 @@ export function pluginRpcWriteAllowed(principal: ConsolePrincipal, rule: Console
   if (principal.kind === 'bootstrap') return principal.open;
   if (!rule) return false;
   const permission = rule.kind === 'exact' ? rule.permission : rule.write;
-  return grantsAllow(principal.grants, permission, rule.target);
+  return grantsAllow(principal.grants, permission, rule.target) && grantsAllowAlsoRequired(principal.grants, rule);
 }
 
 export type ConsoleHttpDecision =

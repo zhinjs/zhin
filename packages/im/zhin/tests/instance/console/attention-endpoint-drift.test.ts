@@ -18,11 +18,13 @@ describe('attention.list: endpoint configuration drift (#1250)', () => {
   it('lists one item per adapter instance with ids and kinds, linking to its accounts page', async () => {
     const list = await collectAttention(sources, { allows: () => true, now: () => NOW });
     const drift = list.items.filter(item => item.kind === 'endpoint.config-drift');
-    expect(drift.map(item => item.subject)).toEqual([{ adapter: 'qq', plugin: 'qq' }, { adapter: 'icqq', plugin: 'icqq' }]);
-    expect(drift[0]).toMatchObject({ severity: 'warning', source: 'endpoint-config', action: { path: '/plugins/qq' } });
-    expect(drift[0]!.detail).toContain('仅在配置文件（未运行）：new');
-    expect(drift[0]!.detail).toContain('已不在配置文件（仍按已保存账号运行）：gone');
-    expect(drift[0]!.detail).toContain('配置不同：main');
+    // Items are sorted like every other attention item (severity, then first seen, then id).
+    expect(drift.map(item => item.subject)).toEqual([{ adapter: 'icqq', plugin: 'icqq' }, { adapter: 'qq', plugin: 'qq' }]);
+    const qq = drift.find(item => item.subject?.plugin === 'qq')!;
+    expect(qq).toMatchObject({ severity: 'warning', source: 'endpoint-config', action: { path: '/plugins/qq' } });
+    expect(qq.detail).toContain('仅在配置文件（未运行）：new');
+    expect(qq.detail).toContain('已不在配置文件（仍按已保存账号运行）：gone');
+    expect(qq.detail).toContain('配置不同：main');
     const offline = list.items.find(item => item.kind === 'endpoint.offline');
     expect(offline?.detail).toContain('auth');
   });

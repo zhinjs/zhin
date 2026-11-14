@@ -1,9 +1,9 @@
 ---
 "@zhin.js/adapter": minor
 "@zhin.js/core": minor
-"@zhin.js/runtime": patch
-"zhin.js": patch
-"@zhin.js/console-protocol": patch
+"@zhin.js/runtime": minor
+"zhin.js": minor
+"@zhin.js/console-protocol": minor
 "@zhin.js/client": patch
 ---
 

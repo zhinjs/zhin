@@ -4,6 +4,7 @@ import {
   CONSOLE_PERMISSIONS,
   grantsAllow,
   parsePluginConsoleRpcType,
+  resolveConsoleRpcPermission,
   type ConsoleGrant,
   type ConsolePluginPermissionLevelResolver,
   type ConsoleRpcPermissionRule,
@@ -133,6 +134,7 @@ export async function dispatchPluginConsoleRpcRequest(
     } else {
       authorize(snapshot, pluginId, method, options.access, pagesOwnedBy);
     }
+    assertAlsoRequired(message, options);
     if (provider) releases.push(...admit(provider));
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
       owner: pluginId, generation: snapshot.generation,
@@ -267,7 +269,25 @@ function authorizePrincipal(
   return operator;
 }
 
-// `import` / `writeback` (#1250) resolve and authorize like the other account methods (`endpoint.manage`).
+/**
+ * Permissions a method needs beyond its own (the catalog rule's `alsoRequires`, held globally):
+ * `endpoint-writeback` rewrites `zhin.config.yml`, so it also needs `ops.config.write` (#1250).
+ * Checked for every caller that is not unrestricted, whatever path admitted the method.
+ */
+function assertAlsoRequired(message: Readonly<Record<string, unknown>>, options: PluginConsoleRpcRequestOptions): void {
+  if (options.access.unrestricted) return;
+  const rules = [options.principal?.rule, resolveConsoleRpcPermission(message.type, message)];
+  const required = new Set(rules.flatMap((rule) => (rule?.kind === 'exact' ? rule.alsoRequires ?? [] : [])));
+  for (const permission of required) {
+    const held = options.principal
+      ? grantsAllow(options.principal.grants, permission, GLOBAL, options.principal.levelOf)
+      : options.access.permissions.includes(permission);
+    if (!held) throw new Failure('forbidden', `缺少权限 ${permission}`);
+  }
+}
+
+// `import` / `writeback` (#1250) resolve and authorize like the other account methods (`endpoint.manage`);
+// `writeback` also needs `ops.config.write` (assertAlsoRequired).
 const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace', 'import', 'writeback']);
 
 interface AccountCall { readonly action: AdapterConsoleMutation | AdapterConsoleConfigAction; readonly input: Readonly<Record<string, unknown>> }

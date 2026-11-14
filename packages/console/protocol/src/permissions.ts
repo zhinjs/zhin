@@ -378,6 +378,15 @@ const ADAPTER_ACCOUNT_METHODS: ReadonlySet<string> = new Set([
   'endpoint-import', 'endpoint-writeback',
 ]);
 
+/**
+ * Adapter account methods that need more than `endpoint.manage`: `endpoint-writeback` rewrites the
+ * project configuration file, so it also needs `ops.config.write` (held globally, like every
+ * configuration write) — an account operator alone may not change `zhin.config.yml` (#1250).
+ */
+const ADAPTER_ACCOUNT_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePermission[]>> = Object.freeze({
+  'endpoint-writeback': Object.freeze([P.OPS_CONFIG_WRITE]),
+});
+
 /** Adapter account reads contributed by `defineAdapterConsoleRpc` (#1250 `endpoint-drift`: ids and paths only). */
 const ADAPTER_ACCOUNT_READ_METHODS: ReadonlySet<string> = new Set(['endpoint-drift']);
 
@@ -392,8 +401,12 @@ export function isPluginConsoleRpcType(type: unknown): type is string {
 }
 
 export type ConsoleRpcPermissionRule =
-  /** Exactly one permission. */
-  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget }>
+  /**
+   * `permission` at `target`; plus every `alsoRequires` permission held globally (an RPC whose
+   * effect reaches beyond its target, e.g. an account write-back that rewrites the configuration
+   * file). Enforcers must check both.
+   */
+  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget; alsoRequires?: readonly ConsolePermission[] }>
   /**
    * Plugin-contributed RPC: `read` admits the call, `write` is required unless the
    * plugin declares the method read-only (decided by the plugin RPC dispatcher).
@@ -439,7 +452,8 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       : id && method !== 'endpoint-add' && method !== 'endpoint-replace'
         ? Object.freeze({ kind: 'endpoint', adapter: alias, endpoint: id })
         : Object.freeze({ kind: 'adapter', adapter: alias });
-    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_MANAGE, target });
+    const alsoRequires = Object.hasOwn(ADAPTER_ACCOUNT_ALSO_REQUIRES, method) ? ADAPTER_ACCOUNT_ALSO_REQUIRES[method] : undefined;
+    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_MANAGE, target, ...(alsoRequires ? { alsoRequires } : {}) });
   }
   if (ADAPTER_ACCOUNT_READ_METHODS.has(method)) {
     const alias = pluginAlias(pluginId);
@@ -447,6 +461,19 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       target: alias ? Object.freeze({ kind: 'adapter', adapter: alias }) : GLOBAL_TARGET });
   }
   return Object.freeze({ kind: 'plugin', read: P.FEATURE_VIEW, write: P.FEATURE_CONFIGURE, target: GLOBAL_TARGET });
+}
+
+/**
+ * Whether the grants satisfy a rule's `alsoRequires` (each held globally). True for rules without
+ * any. Callers check the rule's own permission separately.
+ */
+export function grantsAllowAlsoRequired(
+  grants: readonly ConsoleGrant[],
+  rule: ConsoleRpcPermissionRule | null | undefined,
+  levelOf?: ConsolePluginPermissionLevelResolver,
+): boolean {
+  const also = rule?.kind === 'exact' ? rule.alsoRequires ?? [] : [];
+  return also.every(permission => grantsAllow(grants, permission, GLOBAL_TARGET, levelOf));
 }
 
 /** Static form of {@link resolveConsoleRpcPermission} without a payload. */

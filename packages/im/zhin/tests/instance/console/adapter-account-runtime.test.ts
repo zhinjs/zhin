@@ -433,7 +433,7 @@ describe('adapter account RPC for signed-in principals (ADR 0049 amendment 2026-
 });
 
 describe('adapter account RPC target follows the account the handler selects', () => {
-  async function endpointFixture() {
+  async function endpointFixture(grants: ConsoleGrant[] = [{ role: 'operator', scope: { kind: 'endpoint', key: 'first/acct-a' }, permissions: CONSOLE_BUILTIN_ROLES.operator.permissions }]) {
     const f = await fixture();
     const adapter = f.adapters.get(owner)!;
     const seed = { expectedGeneration: 0, confirmMigration: true, values: { password: 'synthetic' } };
@@ -442,7 +442,6 @@ describe('adapter account RPC target follows the account the handler selects', (
     }
     const entry = (id: string) => adapter.list().find(item => item.endpointId === id)!;
     const levelOf = pluginPermissionLevelResolver(collectPluginPermissionCatalog(f.store.current));
-    const grants: ConsoleGrant[] = [{ role: 'operator', scope: { kind: 'endpoint', key: 'first/acct-a' }, permissions: CONSOLE_BUILTIN_ROLES.operator.permissions }];
     const as = (action: string, data: Record<string, unknown>, top: Record<string, unknown> = {}) => {
       const message = { type: `plugin.${owner}.${action}`, ...top, data: { expectedGeneration: 0, expectedRevision: adapter.revision, ...data } };
       return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions: [], roles: [] },
@@ -486,5 +485,33 @@ describe('adapter account RPC target follows the account the handler selects', (
     // Write-back rewrites the adapter's `endpoints` list: an endpoint binding never suffices.
     expect(await as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 403, body: { code: 'forbidden' } });
     expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
+  });
+
+  it('refuses #1250 write-back to an account operator without ops.config.write (it rewrites zhin.config.yml)', async () => {
+    const adapterOperator: ConsoleGrant = { role: 'operator', scope: { kind: 'adapter', key: 'first' }, permissions: ['endpoint.view', 'endpoint.manage', 'account:read'] };
+    const { as } = await endpointFixture([adapterOperator]);
+    // endpoint.manage on the whole adapter is not enough.
+    expect(await as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 403, body: { code: 'forbidden', error: expect.stringContaining('ops.config.write') } });
+    // The same principal may still import (no configuration file write); refused later only for the missing file port.
+    expect(await as('endpoint-import', { id: 'acct-a' })).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+    // ops.config.write scoped to the adapter does not count: configuration writes are global.
+    const scopedConfig = await endpointFixture([adapterOperator, { scope: { kind: 'adapter', key: 'first' }, permissions: ['ops.config.write'] }]);
+    expect(await scopedConfig.as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    // With a global ops.config.write the call is authorized (then refused by the handler: no configuration file port here).
+    const withConfig = await endpointFixture([adapterOperator, { scope: { kind: 'global' }, permissions: ['ops.config.write'] }]);
+    expect(await withConfig.as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+  });
+
+  it('refuses #1250 write-back to a scoped access token without ops.config.write', async () => {
+    const { f, adapter } = await endpointFixture();
+    const call = (permissions: string[]) => {
+      const message = { type: `plugin.${owner}.endpoint-writeback`, data: { expectedGeneration: 0, expectedRevision: adapter.revision, ids: ['acct-a'] } };
+      return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions, roles: [] },
+        pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never });
+    };
+    const held = ['account:read', 'account:write', 'endpoint.manage'];
+    expect(await call(held)).toMatchObject({ status: 403, body: { code: 'forbidden', error: expect.stringContaining('ops.config.write') } });
+    // The same token with ops.config.write passes authorization (then refused: no configuration file port here).
+    expect(await call([...held, 'ops.config.write'])).toMatchObject({ status: 400, body: { code: 'unsupported' } });
   });
 });
