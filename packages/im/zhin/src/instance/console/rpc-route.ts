@@ -28,6 +28,9 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
+import { dispatchChatRoleImportsConsoleRpc } from './chat-role-imports-rpc.js';
+import { chatGrantorName, dispatchChatPrincipalsConsoleRpc } from './chat-principals-rpc.js';
+import { simulatedAdapterAliases } from '../chat-role-migration.js';
 import { AttentionObservations, AttentionSourceCache, AttentionWarnings, allowsEndpointAccount, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
 import {
@@ -133,6 +136,25 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         return reply(result.status, result.body, noStore);
       }
       const authorizedPrincipal = principal;
+      // ADR 0060 Q12: a linked Console user's cached display name follows their own calls.
+      if (isUserPrincipal(principal)) options.featureStores?.people?.touchConsoleUser(principal.userId, principal.displayName);
+      // ADR 0060 §2 / §7: people behind chat identities; bind codes only for the caller's own link.
+      const chatPrincipalsReply = await dispatchChatPrincipalsConsoleRpc(message, {
+        ...(options.featureStores?.people ? { people: options.featureStores.people } : {}),
+        ...(options.featureStores?.bindCodes ? { codes: options.featureStores.bindCodes } : {}),
+        authorize: request => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE, featureScopeTarget(request.level, request.key)),
+        ...(isUserPrincipal(principal) ? { consoleUser: { userId: principal.userId, displayName: principal.displayName } } : {}),
+        actor: auditActor(principal),
+        publishEvent: (type, data) => options.hub.publish(type, data),
+        simulatedAdapters: () => {
+          const lease = options.snapshots?.acquire();
+          if (!lease) return [];
+          try { return simulatedAdapterAliases(lease.value); } finally { lease.release(); }
+        },
+      });
+      if (chatPrincipalsReply) {
+        return reply(chatPrincipalsReply.status, chatPrincipalsReply.body, noStore);
+      }
       // Scoped bindings count for every scope under them (a conversation counts for its endpoint).
       const featureReply = await dispatchFeatureConsoleRpc(message, createFeatureRpcContext(options, authScope,
         request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
@@ -146,10 +168,23 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }
+      // ADR 0060 §4.2: the configuration import of chat roles needs global `iam.manage`.
+      const chatRoleImportsReply = await dispatchChatRoleImportsConsoleRpc(message, {
+        ...(options.featureStores?.chatRoleImports ? { imports: options.featureStores.chatRoleImports } : {}),
+        ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
+        ...(options.featureStores?.personalPrincipalImports ? { personal: options.featureStores.personalPrincipalImports } : {}),
+        authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
+        actor: auditActor(principal),
+        publishEvent: (type, data) => options.hub.publish(type, data),
+      });
+      if (chatRoleImportsReply) {
+        return reply(chatRoleImportsReply.status, chatRoleImportsReply.body, noStore);
+      }
       // ADR 0056 §3: chat roles; adapter / endpoint-scoped `iam.manage` counts under its scope.
       const chatRolesReply = await dispatchChatRolesConsoleRpc(message, {
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
+        grantorName: grantedBy => chatGrantorName(options.featureStores?.people, grantedBy),
         actor: auditActor(principal),
         ...(isUserPrincipal(principal) && principal.displayName ? { actorDisplayName: principal.displayName } : {}),
         publishEvent: (type, data) => options.hub.publish(type, data),
@@ -165,6 +200,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         warnings: attentionWarnings,
         allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
         allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
+        ...(isUserPrincipal(principal) ? { viewerUserId: principal.userId } : {}),
       });
       if (attentionReply) {
         return reply(attentionReply.status, attentionReply.body, noStore);

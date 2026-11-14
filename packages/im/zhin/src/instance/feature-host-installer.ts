@@ -5,7 +5,8 @@
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
  * when `features.selfService.enabled` is true.
  */
-import { ChatRoleService } from '@zhin.js/core';
+import { ChatRoleService, chatRolesToken, createChatRoleReader, type ChatIdentitySighting, type ChatRoleReader } from '@zhin.js/core';
+import type { GatewayToInstanceMessage } from '@zhin.js/host-http/bridge';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -14,6 +15,11 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
+import { defineChatPrincipalTables } from './chat-principals.js';
+import { ChatPeople } from './chat-people.js';
+import { ChatIdentityBindCodes, installChatIdentityBind } from './chat-identity-bind.js';
+import { ChatOwnerClaim, installChatOwnerClaim } from './chat-owner-claim.js';
+import { ChatRoleImportBook, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
 import {
   defineFeatureOverrideTable, FeatureOverrideStore, readWorkspaceConversationNames,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
@@ -28,8 +34,28 @@ export interface FeatureHostOptions {
    * Runs once after the stores loaded (configuration migration, ADR 0056 §3); `candidate` is the
    * generation being activated (its adapter capability profiles classify the migration targets).
    */
-  readonly afterLoad?: (roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined, overrides: FeatureOverrideStore) => Promise<void>;
+  readonly afterLoad?: (
+    roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined, overrides: FeatureOverrideStore,
+    audit: ChatRoleAudit | undefined,
+  ) => Promise<void>;
+  /**
+   * Project root: enables the claim code file (`zhin status`) and the Console side of the role
+   * migration record (ADR 0060 §3.3 / §4.2). Without it neither is offered.
+   */
+  readonly projectRoot?: string;
+  /**
+   * The gateway control channel (ADR 0054 §3): `principal-revoked` for a deleted / disabled
+   * Console user removes that user's person link (ADR 0060 §2.4). Absent standalone.
+   */
+  readonly gatewayMessages?: Readonly<{ onMessage(listener: (message: GatewayToInstanceMessage) => void): () => void }>;
+  /** ADR 0060 §4.1 (P3): the `ai.personalPrincipals` import record (「需要你处理」 and its acknowledgement). */
+  readonly personalPrincipalImports?: import('./chat-personal-principals.js').PersonalPrincipalImportBook;
 }
+
+/** Console user lifecycle reasons that end a person ↔ Console link (`ConsoleCredentialRevocationReason`). */
+const LINK_ENDING_REASONS: ReadonlySet<string> = new Set(['deleted', 'disabled']);
+/** How often the 90-day display name cache is swept (ADR 0060 Q11). */
+const SIGHTING_SWEEP_MS = 24 * 60 * 60_000;
 
 export interface FeatureHost {
   readonly stores: FeatureStores;
@@ -37,6 +63,14 @@ export interface FeatureHost {
   /** A global owner with an identity on the account's adapter (owner approval address). */
   resolveEndpointOwner(alias: string, endpointId: string): string | undefined;
   readonly selfService: FeatureSelfServiceConfig;
+  /** Read-only chat roles for plugins (`chatRolesToken`, ADR 0060 §6). */
+  readonly reader: ChatRoleReader;
+  /** ADR 0060 §3.3: the first global owner without a Console (open while there is none). */
+  readonly claim: ChatOwnerClaim;
+  /** ADR 0060 §2: people behind chat identities. */
+  readonly people: ChatPeople;
+  /** Inbound sightings (`createSenderEnricher({ observe })`): display name cache, recent speakers. */
+  observe(sighting: ChatIdentitySighting): void;
   /** Root resources: the conversation reader, the load step and (when enabled) the chat commands. */
   install(deps: Readonly<{
     context: Omit<FeatureRpcContext, 'authorize' | 'actor' | 'allowedFields' | 'authScope' | 'stores'>;
@@ -51,9 +85,15 @@ export const RECENT_EVENT_WINDOW = 5_000;
 export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   defineFeatureOverrideTable(options.database);
   defineChatRoleTable(options.database);
+  defineChatPrincipalTables(options.database);
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
   const overrides = new FeatureOverrideStore({ database: options.database });
-  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }) });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({
+    database: options.database,
+    ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+    onMigrated: ({ migrated, backup }) => getLogger('chat-roles').info(`聊天角色：${migrated} 条授予已迁移为「人」模型（ADR 0060）`
+      + (backup ? `；迁移前的数据已导出到 ${backup}` : '')),
+  }) });
   // Owner approvals (tool hard gate, self-changes) grant host-wide authority, so only a global
   // owner with an identity on this adapter is asked (ADR 0056 §2); account-level owners are not.
   const resolveEndpointOwner = (alias: string, _endpointId: string): string | undefined => {
@@ -92,12 +132,45 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       return Object.freeze([...seen.values()]);
     } finally { lease.release(); }
   };
+  let audit: ChatRoleAudit | undefined;
+  const adapterKind = () => {
+    const lease = options.snapshots().acquire();
+    try { return chatRoleMigrationAdapterKinds(lease.value); } finally { lease.release(); }
+  };
+  const chatRoleImports = options.projectRoot
+    ? new ChatRoleImportBook({ projectRoot: options.projectRoot, roles: () => roles, adapterKind, audit: entry => audit?.(entry) })
+    : undefined;
+  const claim = new ChatOwnerClaim({ roles, ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+    logger: getLogger('chat-roles'), audit: () => audit });
+  const people = new ChatPeople({ store: roles.store, audit: () => audit });
+  const bindCodes = new ChatIdentityBindCodes({ people });
+  options.gatewayMessages?.onMessage(message => {
+    if (message.type !== 'principal-revoked' || !LINK_ENDING_REASONS.has(message.payload.reason ?? '')) return;
+    bindCodes.revoke(message.payload.principalId);
+    void people.consoleUserRemoved(message.payload.principalId, message.payload.reason!)
+      .catch(error => getLogger('chat-roles').warn(`Chat principal link not removed: ${(error as Error).message}`));
+  });
+  const reader = createChatRoleReader({
+    roles: () => roles,
+    conversationKey: conversation => {
+      const lease = options.snapshots().acquire();
+      try { return resolveEndpointFeatureKey(lease.value, conversation.endpoint.id, undefined, conversation); }
+      finally { lease.release(); }
+    },
+    subscribe: listener => roles.store.subscribe(listener),
+    // ADR 0060 §5.4: the Sandbox speaks as the person linked to the authenticated Console user.
+    consolePrincipal: consoleUserId => people.store.principals.linkOfConsoleUser(consoleUserId)?.principalId,
+  });
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
-  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames });
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames, claim, people, bindCodes,
+    ...(chatRoleImports ? { chatRoleImports } : {}),
+    ...(options.personalPrincipalImports ? { personalPrincipalImports: options.personalPrincipalImports } : {}) });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
+    if (deps.audit) audit = deps.audit;
     context.resources.provide(featureConversationOverridesToken, overrides.reader);
+    context.resources.provide(chatRolesToken, reader);
     context.handoff.add({
       activateNext: async signal => {
         signal.throwIfAborted();
@@ -106,10 +179,16 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         await roles.store.load();
         let candidate: RuntimeSnapshot | undefined;
         try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
-        await options.afterLoad?.(roles, candidate, overrides);
+        await options.afterLoad?.(roles, candidate, overrides, audit);
         loaded = true;
+        await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
+        const sweep = () => void people.expireSightings().catch(() => undefined);
+        sweep();
+        setInterval(sweep, SIGHTING_SWEEP_MS).unref?.();
       },
     });
+    installChatOwnerClaim({ claim, snapshots: options.snapshots() })(context);
+    installChatIdentityBind({ codes: bindCodes, snapshots: options.snapshots() })(context);
     installFeatureSelfService({
       config: selfService, roles, snapshots: options.snapshots(),
       context: { ...deps.context, stores },
@@ -117,5 +196,6 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       ...(deps.audit ? { audit: deps.audit } : {}),
     })(context);
   };
-  return Object.freeze({ stores, roles, resolveEndpointOwner, selfService, install });
+  const observe = (sighting: ChatIdentitySighting) => { if (loaded) people.observe(sighting); };
+  return Object.freeze({ stores, roles, reader, claim, people, observe, resolveEndpointOwner, selfService, install });
 }

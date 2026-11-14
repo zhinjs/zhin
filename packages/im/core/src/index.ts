@@ -37,6 +37,7 @@ export type { AgentTurnMessage, SyntheticMessageInput } from './built/message-en
 export * from './built/tool-access.js'
 export * from './built/common-adapter-tools.js'
 export * from './built/roles.js'
+export * from './built/chat-role-reader.js'
 export * from './im-session-id.js'
 export * from './built/ai-trigger.js'
 export * from './built/ai-access.js'

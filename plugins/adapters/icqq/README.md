@@ -45,12 +45,15 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # 必填，顶层共享（/approve 与 master 角色）
   autoReconnect: true
   endpoints:
     - id: "${ICQQ_ACCOUNT}" # QQ 号
       # password: "${ICQQ_PASSWORD}"  # 可选；不填则扫码登录
 ```
+
+::: tip 主人不在适配器配置里
+`master` 不再是适配器字段（也不是必填）。「谁是主人」由聊天角色决定（ADR 0056 / ADR 0060）：在 Console「聊天角色」中授予全局 owner，或在新部署中按实例日志 / `zhin status` 给出的认领码私聊机器人发送 `认领 <码>`。旧配置中的 `master` 会在首次启动时迁移为账号层 owner；之后再写入不会自动授予，而是进入 Console「需要你处理」等待确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
+:::
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
@@ -59,7 +62,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338"
   endpoints:
     - id: "${ICQQ_ACCOUNT}"
     - id: "${ICQQ_ACCOUNT_2}"
@@ -239,19 +241,18 @@ console:
 
 ## 掉线通知与重新登录
 
-配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 master 发通知。例如用 QQ 官方机器人实例通知：
+配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 `notify` 指向的会话（通常是部署者自己）发通知。例如用 QQ 官方机器人实例通知：
 
 ```yaml
 qq:
   # ... 已配置好的 QQ 官方机器人
 icqq:
-  master: 123456
   autoReconnect: true   # 默认 true：被踢下线后自动重新登录
   notify:
     adapter: qq
     endpoint: bot-1
     kind: private
-    id: "${QQ_MASTER_OPENID}"   # master 在 QQ 官方机器人里的 openid
+    id: "${QQ_OWNER_OPENID}"   # 接收通知的人在 QQ 官方机器人里的 openid
 ```
 
 `autoReconnect: true` 时，被踢下线会自动重试登录；出现二维码、滑块、设备锁或身份验证时，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
@@ -266,7 +267,7 @@ icqq:
 
 **设备锁**：`icqq login status` 会给出验证链接。用手机 QQ 完成验证后回复 `icqq login confirm`；无法用链接验证时回复 `icqq login code sms`，收到短信后回复 `icqq login code <验证码>`。不回复 `sms` 不会发短信。身份验证需要复制设备信息，请在 Console 完成。等待验证期间不会自动重新登录（否则链接会失效）；5 分钟没有处理，挑战过期，等你重新登录。
 
-命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
+命令只接受全局 owner（聊天角色，ADR 0056）或 `notify.id` 对应账号；两者都没有时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
 ## 故障排查
 

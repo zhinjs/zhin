@@ -10,6 +10,10 @@ export const CHAT_ROLES_RPC = Object.freeze({
   LIST: 'chat-roles.list',
   GRANT: 'chat-roles.grant',
   REVOKE: 'chat-roles.revoke',
+  /** ADR 0060 §4: the configuration import — first import and re-appeared candidates. */
+  IMPORTS_LIST: 'chat-roles.imports.list',
+  /** ADR 0060 §4.2: 「导入」/「忽略」 one candidate, or mark the first import as read. */
+  IMPORTS_RESOLVE: 'chat-roles.imports.resolve',
 } as const);
 
 export type ConsoleChatRolesRpcType = typeof CHAT_ROLES_RPC[keyof typeof CHAT_ROLES_RPC];
@@ -17,12 +21,15 @@ export type ConsoleChatRolesRpcType = typeof CHAT_ROLES_RPC[keyof typeof CHAT_RO
 /**
  * Every `chat-roles.*` RPC needs `iam.manage`; adapter / endpoint bindings count for scopes under
  * them. Granting / revoking `owner` (or replacing / removing an existing owner grant) needs a
- * **global** `iam.manage` binding whatever the target level (ADR 0056 §3).
+ * **global** `iam.manage` binding whatever the target level (ADR 0056 §3). `chat-roles.imports.*`
+ * always need a **global** `iam.manage` binding (ADR 0060 §4.2: imports may carry `owner`).
  */
 export const CHAT_ROLES_RPC_PERMISSIONS: Readonly<Record<ConsoleChatRolesRpcType, 'iam.manage'>> = Object.freeze({
   [CHAT_ROLES_RPC.LIST]: 'iam.manage',
   [CHAT_ROLES_RPC.GRANT]: 'iam.manage',
   [CHAT_ROLES_RPC.REVOKE]: 'iam.manage',
+  [CHAT_ROLES_RPC.IMPORTS_LIST]: 'iam.manage',
+  [CHAT_ROLES_RPC.IMPORTS_RESOLVE]: 'iam.manage',
 });
 
 export function isConsoleChatRolesRpcType(value: unknown): value is ConsoleChatRolesRpcType {
@@ -62,6 +69,13 @@ export interface ConsoleChatRoleEntry {
    * `配置迁移`, `初始化令牌`. Absent otherwise — show `grantedBy` (e.g. a short id) then.
    */
   readonly grantedByDisplayName?: string;
+  /**
+   * ADR 0060 Q12: when `grantedBy` is a Console user linked to a person, that person's name (else
+   * the Console display name cached on the link). Display only; preferred over `grantedByDisplayName`.
+   */
+  readonly grantedByName?: string;
+  /** The person holding the grant (ADR 0060 §2.3); absent on a `redacted` entry. */
+  readonly principalId?: string;
   readonly grantedAt?: number;
 }
 
@@ -100,3 +114,68 @@ export interface ConsoleChatRoleRevokeRequest {
 }
 
 export type ConsoleChatRoleChangeResult = Readonly<{ status: 'saved' | 'unchanged'; entry?: ConsoleChatRoleEntry }>;
+
+/** A configured grant (ADR 0060 §4): where it came from and what it grants. */
+export interface ConsoleChatRoleImportGrant {
+  /** Idempotency key `(source, adapter, userId, level, key)`; the id `chat-roles.imports.resolve` takes. */
+  readonly id: string;
+  /** Configuration path, e.g. `qq.endpoints[0].master`, `ai.trigger.masters`. */
+  readonly source: string;
+  readonly level: Exclude<ConsoleFeatureLevel, 'conversation'>;
+  readonly key: string;
+  readonly adapter: string;
+  readonly userId: string;
+  readonly role: Extract<ConsoleChatRole, 'owner' | 'trusted'>;
+}
+
+/**
+ * Outcome of importing one grant: `written` (new), `upgraded` (a lower stored role was raised),
+ * `kept` (an equal or higher stored role was kept: imports never lower or remove), `memory` (no
+ * relational database: in memory only), `skipped` (see `reason`).
+ */
+export type ConsoleChatRoleImportResult = 'written' | 'upgraded' | 'kept' | 'memory' | 'skipped';
+
+/** `skipped`: a local simulation adapter (clients choose the sender id), or an adapter that was not loaded. */
+export type ConsoleChatRoleImportSkipReason = 'simulated' | 'unknown-adapter';
+
+export interface ConsoleChatRoleImportedGrant extends ConsoleChatRoleImportGrant {
+  readonly result: ConsoleChatRoleImportResult;
+  readonly reason?: ConsoleChatRoleImportSkipReason;
+  readonly at: number;
+}
+
+export interface ConsoleChatRoleImportCandidate extends ConsoleChatRoleImportGrant {
+  /** When the configuration first named it again. */
+  readonly seenAt: number;
+}
+
+/** `chat-roles.imports.list` (no input). */
+export interface ConsoleChatRoleImportsListResult {
+  /** Grants of the first import (automatic, ADR 0060 §4.1). */
+  readonly imported: readonly ConsoleChatRoleImportedGrant[];
+  readonly importedAt?: number;
+  /** Set once a Console user marked the first import as read (`acknowledge`). */
+  readonly acknowledgedAt?: number;
+  /** Re-appeared configured grants: never granted until imported here (ADR 0060 §4.2). */
+  readonly pending: readonly ConsoleChatRoleImportCandidate[];
+  /**
+   * Whether any global `owner` exists. Without one, an imported account-level `owner` may be
+   * promoted with `chat-roles.grant` at `global` (ADR 0060 Q1); never automatic.
+   */
+  readonly hasGlobalOwner: boolean;
+}
+
+export type ConsoleChatRoleImportDecision = 'import' | 'ignore' | 'acknowledge';
+
+/** `chat-roles.imports.resolve`: `import` / `ignore` need `id`; `acknowledge` marks the first import as read. */
+export interface ConsoleChatRoleImportsResolveRequest {
+  readonly decision: ConsoleChatRoleImportDecision;
+  readonly id?: string;
+}
+
+export interface ConsoleChatRoleImportsResolveResult {
+  readonly status: 'imported' | 'ignored' | 'acknowledged' | 'unchanged';
+  /** `imported` only. */
+  readonly result?: ConsoleChatRoleImportResult;
+  readonly reason?: ConsoleChatRoleImportSkipReason;
+}

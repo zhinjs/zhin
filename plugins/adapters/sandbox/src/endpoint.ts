@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js';
+import { hostChatRole, type CapabilityId, type ChatRoleReader } from 'zhin.js';
 import { EndpointDeliveryError, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
@@ -16,6 +16,7 @@ import {
   formatSandboxOutbound,
   parseSandboxWsFrame,
   sandboxInboundConversation,
+  sandboxSimulatedSenderId,
   whenWsOpen,
   type ResolvedSandboxBot,
   type SandboxWsSocket,
@@ -134,6 +135,37 @@ export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
   readonly http: HttpHost;
   readonly defaults: ResolvedSandboxBot;
+  /** Chat roles (`chatRolesToken`, ADR 0060 §6): the sender's zhin role shown on the page. */
+  readonly chatRoles?: ChatRoleReader;
+}
+
+/**
+ * ADR 0060 §5.4 (P0): what the Runtime resolves for this sender — zhin role and the Agent trust
+ * tier it implies (`resolveTurnTrustLevel`: a global owner → `owner`, admin / trusted or a
+ * lower-level owner → `trusted_member`, anyone else over IM → `group_member`). The page shows it
+ * next to the simulated platform standing so 群主 is never mistaken for a zhin role.
+ */
+export function sandboxSenderRoleFacts(reader: ChatRoleReader | undefined, conversation: Parameters<ChatRoleReader['factsOf']>[0], senderId: string):
+  { senderChatRole?: string; senderTrustLevel: 'owner' | 'trusted_member' | 'group_member' } {
+  let facts: ReturnType<ChatRoleReader['factsOf']>;
+  try { facts = reader?.factsOf(conversation, senderId); } catch { facts = undefined; }
+  const host = hostChatRole(facts);
+  return {
+    ...(facts?.chatRole ? { senderChatRole: facts.chatRole } : {}),
+    senderTrustLevel: host === 'owner' ? 'owner' : host ? 'trusted_member' : 'group_member',
+  };
+}
+
+interface SandboxConsoleUser {
+  readonly userId: string;
+  readonly displayName?: string;
+}
+
+/** The signed-in Console user behind a socket (sessions and API tokens); none for the bootstrap principal or standalone. */
+export function sandboxConsoleUser(principal: WsConnection['principal']): SandboxConsoleUser | undefined {
+  if (!principal || (principal.kind !== 'user' && principal.kind !== 'api-token')) return undefined;
+  if (typeof principal.userId !== 'string' || !principal.userId) return undefined;
+  return Object.freeze({ userId: principal.userId, ...(principal.displayName ? { displayName: principal.displayName } : {}) });
 }
 
 /**
@@ -323,6 +355,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     const owner = this.#options.defaults.owner;
     // Every admitted host-authenticated socket carries a Console principal allowed to use it.
     const canExecute = true;
+    // ADR 0060 §5.4: a signed-in Console user may speak as their linked chat identity. The bootstrap
+    // principal and `--standalone` (no gateway) have no user: everything is simulated there.
+    const consoleUser = sandboxConsoleUser(connection.principal);
     const socket = sandboxSocketOf(connection);
     const connectionId = randomUUID();
     const subscription: SandboxConnection = {
@@ -368,13 +403,17 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
           }
           const parsed = frame.message;
           void this.#emitPlatformEvent('message', raw);
-          const senderId = parsed.senderId || owner;
-          const senderName = parsed.senderName || senderId;
           const sceneId = parsed.id || owner;
           const conversation = { ...sandboxInboundConversation(String(this.#options.id), {
             type: parsed.type,
             id: sceneId,
           }), endpoint: this[endpointSpec].identity };
+          const speaker = this.#speaker(parsed.asMe === true, consoleUser, conversation);
+          // The id the page chose (shown as typed); the Runtime only ever sees the speaker's real
+          // identity or the reserved simulated id, never a client-chosen id that could hold a role.
+          const clientSenderId = parsed.senderId || owner;
+          const senderId = speaker.identity ? speaker.identity.userId : sandboxSimulatedSenderId(clientSenderId);
+          const senderName = speaker.identity ? (consoleUser?.displayName || speaker.identity.userId) : (parsed.senderName || clientSenderId);
           this.#logger.debug(formatCompact({
             op: 'sandbox_recv',
             target,
@@ -388,8 +427,12 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
           const messageId = parsed.messageId ?? randomUUID();
           this.#broadcast(this.#subscribers(scene, true), JSON.stringify({
             ...scene, conversation: scene, direction: 'inbound', senderId,
-            ...(parsed.senderName ? { senderName: parsed.senderName } : {}),
+            displaySenderId: speaker.identity ? speaker.identity.userId : clientSenderId,
+            simulated: !speaker.identity,
+            ...(speaker.unavailable ? { asMeUnavailable: speaker.unavailable } : {}),
+            ...(speaker.identity || parsed.senderName ? { senderName } : {}),
             ...(parsed.senderRole ? { senderRole: parsed.senderRole } : {}),
+            ...sandboxSenderRoleFacts(this.#options.chatRoles, conversation, senderId),
             messageId, endpoint: this.#options.defaults.id, content: parsed.content, timestamp: parsed.timestamp,
           }));
           // ADR 0056 §1: the simulated group role is a platform standing (master = 群主). It never
@@ -464,6 +507,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
         endpoint: target,
         workingDirectory: process.cwd(),
         canExecute,
+        // Whether 「以我的聊天身份发言」 can work on this socket (a signed-in Console user).
+        consoleUser: consoleUser !== undefined,
         shellIsolation,
         content: [{
           type: 'text',
@@ -479,6 +524,19 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       });
       whenWsOpen(socket, () => socket.send(readyPayload));
     });
+  }
+
+  /**
+   * ADR 0060 §5.4: the identity a message speaks as. Only on request, only for a signed-in Console
+   * user, and only an identity of the person linked to that user on this adapter (`consoleSpeaker`).
+   */
+  #speaker(asMe: boolean, user: SandboxConsoleUser | undefined, conversation: Parameters<ChatRoleReader['factsOf']>[0]):
+    { readonly identity?: { readonly adapter: string; readonly userId: string }; readonly unavailable?: 'no-console-user' | 'no-identity' } {
+    if (!asMe) return {};
+    if (!user) return { unavailable: 'no-console-user' };
+    let identity: { readonly adapter: string; readonly userId: string } | undefined;
+    try { identity = this.#options.chatRoles?.consoleSpeaker?.(conversation, user.userId); } catch { identity = undefined; }
+    return identity ? { identity } : { unavailable: 'no-identity' };
   }
 
   #ensurePlaceholder(name: string, owner: string): void {

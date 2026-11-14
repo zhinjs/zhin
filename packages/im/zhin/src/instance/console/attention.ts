@@ -14,6 +14,7 @@
  * | `mcp.disconnected` | Agent MCP servers (configured + connected) | `status.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
  * | `schedule.unschedulable` | enabled persistent schedule jobs without a next run | `ops.schedule.read` |
+ * | `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending` | chat role store + migration record (ADR 0060) | global `iam.manage` |
  *
  * Text is localized for the request's `locale` (task catalog pattern); dynamic Host text (issues,
  * error messages, ids) is inserted verbatim, except configuration parse errors, which are reduced to
@@ -180,6 +181,28 @@ export interface AttentionErrorLogs {
   readonly windowHours?: number;
 }
 
+/** Chat role bootstrap state (ADR 0060 §3 / §4). */
+export interface AttentionChatRoles {
+  readonly hasGlobalOwner: boolean;
+  /** A claim code is open (instance log / `zhin status`). */
+  readonly claimOpen: boolean;
+  /** First import not yet marked as read: grants written / raised / skipped. */
+  readonly imported?: {
+    readonly at: number;
+    readonly entries: readonly { readonly source: string; readonly adapter: string; readonly userId: string; readonly role: string; readonly level: string; readonly result: string }[];
+  };
+  /** Re-appeared configured grants waiting for a decision. */
+  readonly pending: readonly { readonly id: string; readonly source: string; readonly adapter: string; readonly userId: string; readonly role: string; readonly seenAt: number }[];
+  /**
+   * ADR 0060 §4.1 (P3): `ai.personalPrincipals` imported as people linked to Console users (no
+   * roles), not yet marked as read.
+   */
+  readonly personal?: {
+    readonly at: number;
+    readonly entries: readonly { readonly consoleUserId: string; readonly adapter: string; readonly userId: string }[];
+  };
+}
+
 /** Every source is optional and only read when the caller may view something it reports. */
 export interface AttentionSources {
   readonly loginTasks?: () => readonly AttentionLoginTask[];
@@ -194,6 +217,8 @@ export interface AttentionSources {
   readonly unschedulableJobs?: () => readonly AttentionUnschedulableJob[] | undefined;
   /** `null` when the log store is not available. */
   readonly errorLogs?: () => Promise<AttentionErrorLogs | null>;
+  /** ADR 0060: chat role bootstrap and configuration import. */
+  readonly chatRoles?: () => Promise<AttentionChatRoles>;
   /**
    * Cheap signal that changes with the project files and the runtime generation; a cached read
    * (see {@link AttentionSourceCache}) older than the current revision is read again.
@@ -205,7 +230,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -439,6 +464,36 @@ const messages = createMessages({
   'schedule.detail.no_next_run': { 'zh-CN': '它已启用，但按当前规则没有下一次运行时间。修改规则或暂停它。', en: 'It is enabled, but its schedule has no next run. Change the schedule or pause it.' },
   'schedule.detail.expired': { 'zh-CN': '它已启用，但单次执行时间已过且没有运行。重新设置时间或删除它。', en: 'It is enabled, but its one-time run is in the past and never ran. Set a new time or delete it.' },
   'schedule.action': { 'zh-CN': '查看定时任务', en: 'Open scheduled tasks' },
+  'roles.noOwner.title': { 'zh-CN': '还没有聊天主人（全局 owner）', en: 'There is no chat owner (global owner) yet' },
+  'roles.noOwner.detail': {
+    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。先「把聊天身份绑定到我」（私聊机器人发送「绑定 <码>」），再在「聊天角色」中把自己设为全局 owner；平台群主不会自动成为 zhin 角色。',
+    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
+  },
+  'roles.noOwner.claim': {
+    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见实例启动日志或 zhin status（一次性，重启轮换）。',
+    en: 'Or send 「claim <code>」 to the bot in a private chat; the code is in the instance log or zhin status (one-time, rotates on restart).',
+  },
+  'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
+  'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
+  'roles.imported.detail': { 'zh-CN': '{entries}。核对后可在「聊天角色」中撤销，并确认已读。', en: '{entries}. Review them, revoke any under Chat roles, then mark this as read.' },
+  'roles.imported.promote': {
+    'zh-CN': '账号层 owner 不等于宿主主人；还没有全局 owner 时，可在「聊天角色」中把其中一位提升为全局 owner。',
+    en: 'An account-level owner is not the host owner; with no global owner yet, you may promote one of them to global owner under Chat roles.',
+  },
+  'roles.imported.personalLine': {
+    'zh-CN': 'ai.personalPrincipals：Console 用户 {user} ↔ {identity}（只链接，不授予角色）',
+    en: 'ai.personalPrincipals: Console user {user} ↔ {identity} (linked only, no role)',
+  },
+  'roles.imported.promoteMe': {
+    'zh-CN': '其中链接到你的 Console 账号的人还没有角色，而这里还没有全局 owner：是否同时把这个人设为全局 owner？请在「我的聊天身份」中确认。',
+    en: 'The person linked to your Console account holds no role and there is no global owner yet: make that person the global owner as well? Confirm under My chat identity.',
+  },
+  'roles.imported.promoteMeAction': { 'zh-CN': '设为全局 owner…', en: 'Make global owner…' },
+  'roles.pending.title': { 'zh-CN': '配置中又出现了 {count} 条人员名单，等待确认', en: '{count} people-list entries reappeared in the configuration and wait for review' },
+  'roles.pending.detail': {
+    'zh-CN': '{entries}。它们没有被自动授予（改配置的人不一定是主人），已从配置文件移除；逐条「导入」或「忽略」。',
+    en: '{entries}. They were not granted automatically (whoever edits the file is not necessarily an owner) and were removed from the file; import or ignore each.',
+  },
 });
 
 const LOGIN_STEPS = new Set(['qrcode', 'sms', 'slider', 'device', 'auth']);
@@ -469,6 +524,10 @@ export const ATTENTION_PATHS = Object.freeze({
   mcp: '/introspection?tab=mcp',
   schedules: '/ops/schedules',
   errorLogs: '/logs?level=error',
+  /** Global scope page, chat roles tab (ADR 0056 §3 / ADR 0060 §7). */
+  chatRoles: '/scope?tab=roles',
+  /** Console 「聊天成员」 page, own identity panel (ADR 0060 §3.1 「设为全局 owner」). */
+  chatIdentityMe: '/chat-members?me=1',
 });
 
 // ---------------------------------------------------------------- configuration problems
@@ -531,6 +590,8 @@ export interface CollectAttentionOptions {
   readonly cache?: AttentionSourceCache;
   /** Logs unavailable sources and failed plugin reads (rate-limited per key). */
   readonly warnings?: AttentionWarnings;
+  /** The signed-in Console user (`user:<id>` without the prefix); items about the viewer's own link use it. */
+  readonly viewerUserId?: string;
 }
 
 const P = CONSOLE_PERMISSIONS;
@@ -849,6 +910,50 @@ export async function collectAttention(sources: AttentionSources, options: Colle
     });
   }
 
+  // ADR 0060: chat role bootstrap and configuration import (global iam.manage only: who holds a
+  // role and who was named in the configuration is not public).
+  if (sources.chatRoles && allows(P.IAM_MANAGE)) {
+    await read('chat-roles', async () => {
+      const state = await sources.chatRoles!();
+      const action = { label: t('roles.action'), path: ATTENTION_PATHS.chatRoles };
+      const drafts: AttentionDraft[] = [];
+      const who = (entry: { adapter: string; userId: string; role: string; source: string }) => `${entry.source}：${entry.adapter}:${entry.userId} → ${entry.role}`;
+      if (!state.hasGlobalOwner) {
+        drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning', state: { claimOpen: state.claimOpen },
+          title: t('roles.noOwner.title'),
+          detail: state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),
+          action });
+      }
+      const personal = state.personal?.entries ?? [];
+      if (state.imported?.entries.length || personal.length) {
+        const entries = state.imported?.entries ?? [];
+        const gap = locale === 'en' ? ' ' : '';
+        const promote = !state.hasGlobalOwner && entries.some(entry => entry.role === 'owner' && entry.level !== 'global');
+        // Q2: the viewer's own Console account was linked by `ai.personalPrincipals` and they hold a
+        // global iam.manage (this item is only listed then): offer to make that person the global owner.
+        const promoteMe = !state.hasGlobalOwner && options.viewerUserId !== undefined
+          && personal.some(entry => entry.consoleUserId === options.viewerUserId);
+        const lines = [
+          ...entries.map(entry => `${who(entry)}（${entry.result}）`),
+          ...personal.map(entry => t('roles.imported.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })),
+        ];
+        const at = Math.min(state.imported?.at ?? Number.POSITIVE_INFINITY, state.personal?.at ?? Number.POSITIVE_INFINITY);
+        drafts.push({ kind: 'chat-roles.imported', severity: 'info',
+          state: { at, count: lines.length, ...(promoteMe ? { promoteMe: true } : {}) },
+          title: t('roles.imported.title', { count: lines.length }),
+          detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,
+          action: promoteMe ? { label: t('roles.imported.promoteMeAction'), path: ATTENTION_PATHS.chatIdentityMe } : action, since: at });
+      }
+      if (state.pending.length) {
+        drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning', state: { ids: state.pending.map(entry => entry.id) },
+          title: t('roles.pending.title', { count: state.pending.length }),
+          detail: t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) }),
+          action, since: Math.min(...state.pending.map(entry => entry.seenAt)) });
+      }
+      return drafts;
+    });
+  }
+
   items.sort(compareAttentionItems);
   return Object.freeze({
     items: Object.freeze(items),
@@ -879,6 +984,7 @@ function formatPath(path: readonly string[]): string {
 
 export interface AttentionRpcContext {
   readonly sources: AttentionSources;
+  readonly viewerUserId?: string;
   readonly allows: AttentionAllows;
   readonly allowsPluginPermission?: (permission: string) => boolean;
   readonly observations?: AttentionObservations;
@@ -906,6 +1012,7 @@ export async function dispatchAttentionConsoleRpc(message: Record<string, unknow
     ...(context.cache ? { cache: context.cache } : {}),
     ...(context.warnings ? { warnings: context.warnings } : {}),
     ...(context.now ? { now: context.now } : {}),
+    ...(context.viewerUserId ? { viewerUserId: context.viewerUserId } : {}),
   });
   return { status: 200, body: { success: true, data, type: ATTENTION_RPC.LIST, requestId: message.requestId } };
 }

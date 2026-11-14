@@ -25,7 +25,7 @@ const logger = getLogger('gateway');
  * optional {@link GatewayConsoleInstancePort} methods (plugin catalog, instance audit,
  * `principal-revoked`) when the transport has them (`IpcInstanceTransport` does).
  */
-export interface GatewayInstanceTransport extends InstanceTransport, GatewayConsoleInstancePort {
+export interface GatewayInstanceTransport extends InstanceTransport, Omit<GatewayConsoleInstancePort, 'ready' | 'onRoutes'> {
   dispose?(): void | Promise<void>;
   /** Told the bound listener addresses after listen (the instance's `HttpHost.address`). */
   setAddresses?(addresses: readonly import('@zhin.js/host-http').HttpHostAddress[]): void;

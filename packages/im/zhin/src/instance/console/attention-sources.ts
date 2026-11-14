@@ -12,8 +12,10 @@ import type {
   AttentionPluginsRead,
   AttentionSources,
   AttentionToolApproval,
+  AttentionChatRoles,
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
+import { hasGlobalOwner } from '../chat-owner-claim.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
@@ -46,7 +48,7 @@ export interface AttentionSourceOptions {
 }
 
 export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
-  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile } = composition;
+  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores } = composition;
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
     if (!snapshots) throw new Error('Runtime snapshots are unavailable');
     const lease = snapshots.acquire();
@@ -151,6 +153,27 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const value = row?.timestamp;
         const latest = value instanceof Date ? value.toISOString() : typeof value === 'string' || typeof value === 'number' ? new Date(value).toISOString() : null;
         return { count, latest, windowHours };
+      },
+    } : {}),
+    ...(featureStores?.roles ? {
+      chatRoles: async (): Promise<AttentionChatRoles> => {
+        const roles = featureStores.roles!;
+        const state = featureStores.chatRoleImports ? await featureStores.chatRoleImports.read() : undefined;
+        const imported = state && state.imported.length && !state.importedAcknowledgedAt ? state.imported : [];
+        // ADR 0060 §4.1 (P3): people linked by `ai.personalPrincipals` (no roles), until marked read.
+        const personalState = featureStores.personalPrincipalImports ? await featureStores.personalPrincipalImports.read() : undefined;
+        const personal = personalState && !personalState.acknowledgedAt
+          ? personalState.entries.filter(entry => entry.status === 'imported' && entry.adapter)
+            .map(entry => ({ consoleUserId: entry.consoleUserId, adapter: entry.adapter!, userId: entry.subjectId, at: entry.at }))
+          : [];
+        return {
+          hasGlobalOwner: hasGlobalOwner(roles),
+          claimOpen: featureStores.claim?.active === true,
+          ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
+          pending: state?.pending ?? [],
+          ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),
+            entries: personal.map(({ consoleUserId, adapter, userId }) => ({ consoleUserId, adapter, userId })) } } : {}),
+        };
       },
     } : {}),
     revision: async () => {

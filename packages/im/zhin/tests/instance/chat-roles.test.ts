@@ -4,10 +4,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from '@zhin.js/host-http';
-import { CHAT_ROLES_RPC, featureScopeTarget } from '@zhin.js/console-protocol';
 import {
   ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
+import { CHAT_ROLES_RPC, featureScopeTarget } from '@zhin.js/console-protocol';
+import { defineChatPrincipalTables } from '../../src/instance/chat-principals.js';
 import { dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 
@@ -44,6 +45,7 @@ describe('chat role storage (ADR 0056)', () => {
     const open = async () => {
       const host = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'bot.db') });
       defineChatRoleTable(host);
+      defineChatPrincipalTables(host);
       await host.start();
       return host;
     };
@@ -161,7 +163,9 @@ describe('chat-roles.* Console RPC', () => {
 
   it('has no mapping RPC: chat-roles.mappings / set-mappings were removed', async () => {
     const { roles } = await service();
-    expect(Object.values(CHAT_ROLES_RPC).sort()).toEqual(['chat-roles.grant', 'chat-roles.list', 'chat-roles.revoke']);
+    expect(Object.values(CHAT_ROLES_RPC).sort()).toEqual(['chat-roles.grant', 'chat-roles.imports.list', 'chat-roles.imports.resolve', 'chat-roles.list', 'chat-roles.revoke']);
+    // ADR 0060: the import RPCs belong to their own dispatcher (global iam.manage).
+    expect(await dispatchChatRolesConsoleRpc({ type: 'chat-roles.imports.list' }, { roles, authorize: () => true })).toBeNull();
     for (const type of ['chat-roles.mappings', 'chat-roles.set-mappings']) {
       expect(await dispatchChatRolesConsoleRpc({ type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }, { roles, authorize: () => true })).toBeNull();
       expect(authorizeConsoleRpc(scoped, { type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }).allowed).toBe(false);
@@ -175,12 +179,12 @@ describe('owner approval address (ADR 0056 §2)', () => {
     const database = { dialect: 'memory', started: false, models: new Map(), define: () => undefined } as never;
     const host = createFeatureHost({ database, hostConfig: {}, snapshots: () => ({ acquire: () => { throw new Error('unused'); } }) as never });
     // `new ChatRoleStore({ database })` refuses writes it cannot persist: seed like the in-memory migration does.
-    host.roles.store.seed([
+    await host.roles.store.seed([
       { level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'account-owner', role: 'owner' },
       { level: 'global', key: '', adapter: 'tg', userId: 'tg-root', role: 'owner' },
     ]);
     expect(host.resolveEndpointOwner('qq', 'bot-1')).toBeUndefined();
-    host.roles.store.seed([{ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' }]);
+    await host.roles.store.seed([{ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' }]);
     expect(host.resolveEndpointOwner('qq', 'bot-1')).toBe('root');
   });
 });
