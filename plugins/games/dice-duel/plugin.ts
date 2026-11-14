@@ -17,6 +17,7 @@ export default defineGamePlugin<SessionService>({
   name: 'dice-duel',
   metadata: {
     displayName: 'Dice Duel',
+    displayNameI18n: { 'zh-CN': '骰子对决', en: 'Dice Duel' },
   },
   game: {
     commandPath: 'dice',

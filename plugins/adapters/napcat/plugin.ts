@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'NapCat Adapter',
+    displayNameI18n: { 'zh-CN': 'NapCat 适配器', en: 'NapCat Adapter' },
   },
   setup(context) {
     return {

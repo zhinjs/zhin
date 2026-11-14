@@ -17,6 +17,7 @@ export default defineGamePlugin<SessionService>({
   name: 'rps',
   metadata: {
     displayName: 'RPS',
+    displayNameI18n: { 'zh-CN': '石头剪刀布', en: 'Rock Paper Scissors' },
   },
   game: {
     commandPath: 'rps',

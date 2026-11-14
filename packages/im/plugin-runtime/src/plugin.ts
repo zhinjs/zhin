@@ -36,6 +36,11 @@ export { pluginVerificationToken, type PluginVerificationHost } from './plugin-v
 
 export interface PluginMetadata {
   readonly displayName?: string;
+  /**
+   * Console-only translations of `displayName`, keyed by interface locale (`zh-CN` / `en`).
+   * The Console falls back to `en`, then `displayName`, then the instance key.
+   */
+  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly icon?: string;
   readonly order?: number;
 }
@@ -272,7 +277,12 @@ export function definePlugin<TConfig = unknown>(
   return Object.freeze({
     ...definition,
     ...(wrappedSetup ? { setup: wrappedSetup } : {}),
-    metadata: definition.metadata ? Object.freeze({ ...definition.metadata }) : undefined,
+    metadata: definition.metadata ? Object.freeze({
+      ...definition.metadata,
+      ...(definition.metadata.displayNameI18n
+        ? { displayNameI18n: Object.freeze({ ...definition.metadata.displayNameI18n }) }
+        : {}),
+    }) : undefined,
     requires: Object.freeze([...(definition.requires ?? [])]),
     ...(definition.capabilityGraph !== undefined
       ? { capabilityGraph: definePluginCapabilityGraph(definition.capabilityGraph) }

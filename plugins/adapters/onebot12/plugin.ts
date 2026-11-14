@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'OneBot 12 Adapter',
+    displayNameI18n: { 'zh-CN': 'OneBot 12 适配器', en: 'OneBot 12 Adapter' },
   },
   setup(context) {
     return {

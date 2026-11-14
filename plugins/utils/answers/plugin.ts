@@ -13,6 +13,7 @@ export default definePlugin<AnswersConfig>({
   name: 'answers',
   metadata: {
     displayName: '答案之书',
+    displayNameI18n: { 'zh-CN': '答案之书', en: 'Book of Answers' },
   },
   setup(context) {
     quizServiceStore.provide(context, new QuizService());

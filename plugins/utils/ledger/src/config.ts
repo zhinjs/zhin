@@ -5,9 +5,9 @@ export const DEFAULT_REPORT_TIME = '22:00';
 
 export const ledgerConfig = Schema.object({
   // ADR 0050 / 0055: timezone and report time drive the shared schedule, so they stay global.
-  timezone: Schema.string().default(DEFAULT_TIMEZONE).description('计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区').i18n({"en": {"description": "IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates."}}).effect('reload').fieldLevels(['global']),
-  reportTime: Schema.string().default(DEFAULT_REPORT_TIME).description('记账日报的发送时间（HH:MM，按 timezone）；只发给用「记账日报 开启」订阅的用户').i18n({"en": {"description": "Daily ledger report time (HH:MM in timezone); sent only to users who explicitly subscribed to daily reports."}}).effect('reload').fieldLevels(['global']),
-  reportWhenEmpty: Schema.boolean().default(false).description('当天没有记账时是否仍发送日报').i18n({"en": {"description": "Send a daily report even when no transactions were recorded that day."}}).effect('reload'),
+  timezone: Schema.string().default(DEFAULT_TIMEZONE).description('计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区').i18n({"zh-CN": {"title": "时区"}, "en": {"title": "Timezone", "description": "IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates."}}).effect('reload').fieldLevels(['global']),
+  reportTime: Schema.string().default(DEFAULT_REPORT_TIME).description('记账日报的发送时间（HH:MM，按 timezone）；只发给用「记账日报 开启」订阅的用户').i18n({"zh-CN": {"title": "日报发送时间"}, "en": {"title": "Daily report time", "description": "Daily ledger report time (HH:MM in timezone); sent only to users who explicitly subscribed to daily reports."}}).effect('reload').fieldLevels(['global']),
+  reportWhenEmpty: Schema.boolean().default(false).description('当天没有记账时是否仍发送日报').i18n({"zh-CN": {"title": "无记账时也发日报"}, "en": {"title": "Report on empty days", "description": "Send a daily report even when no transactions were recorded that day."}}).effect('reload'),
 }).featureLevels(['global', 'adapter', 'endpoint', 'conversation'], { conversationFields: ['reportWhenEmpty'] });
 
 export type LedgerConfig = Schema.Output<typeof ledgerConfig>;

@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Milky Adapter',
+    displayNameI18n: { 'zh-CN': 'Milky 适配器', en: 'Milky Adapter' },
   },
   setup(context) {
     return {

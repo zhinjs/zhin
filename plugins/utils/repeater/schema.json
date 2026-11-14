@@ -6,7 +6,11 @@
       "type": "number",
       "description": "触发复读的最少人数",
       "x-i18n": {
+        "zh-CN": {
+          "title": "触发人数"
+        },
         "en": {
+          "title": "Trigger threshold",
           "description": "Minimum distinct users needed to trigger repetition."
         }
       },
@@ -22,7 +26,11 @@
       "type": "number",
       "description": "同一群冷却时间 (ms)",
       "x-i18n": {
+        "zh-CN": {
+          "title": "冷却时间（毫秒）"
+        },
         "en": {
+          "title": "Cooldown (ms)",
           "description": "Cooldown for the same group, in milliseconds."
         }
       },
@@ -37,7 +45,11 @@
       "type": "number",
       "description": "消息长度上限",
       "x-i18n": {
+        "zh-CN": {
+          "title": "消息长度上限"
+        },
         "en": {
+          "title": "Max message length",
           "description": "Maximum message length."
         }
       },

@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Satori Adapter',
+    displayNameI18n: { 'zh-CN': 'Satori 适配器', en: 'Satori Adapter' },
   },
   setup(context) {
     return {

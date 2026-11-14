@@ -14,6 +14,7 @@ export default definePlugin({
   name: 'game-hub',
   metadata: {
     displayName: 'Game Hub',
+    displayNameI18n: { 'zh-CN': '游戏大厅', en: 'Game Hub' },
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [pluginConsoleRpcToken],

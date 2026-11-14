@@ -8,6 +8,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'QQ Official WebSocket Adapter',
+    displayNameI18n: { 'zh-CN': 'QQ 官方机器人适配器', en: 'QQ Official WebSocket Adapter' },
   },
   setup(context) {
     const state = qqRuntimeStateStore.provide(context, createQqRuntimeState());

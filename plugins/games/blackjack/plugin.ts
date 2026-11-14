@@ -17,6 +17,7 @@ export default defineGamePlugin<SessionService>({
   name: 'blackjack',
   metadata: {
     displayName: 'Blackjack',
+    displayNameI18n: { 'zh-CN': '21 点', en: 'Blackjack' },
   },
   game: {
     commandPath: 'bj',

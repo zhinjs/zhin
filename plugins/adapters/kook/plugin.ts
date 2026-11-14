@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'KOOK WebSocket Adapter',
+    displayNameI18n: { 'zh-CN': 'KOOK 适配器', en: 'KOOK WebSocket Adapter' },
   },
   setup(context) {
     return {

@@ -36,7 +36,7 @@ When `package.json#zhin` declares neither `entry` nor `exports["./zhin"]`, the r
 
 - **The plugin name** is the unscoped package name: `@scope/foo` → `foo`, `foo` → `foo`. Prefixes such as `zhin-plugin-` are not stripped.
 - That name must still match `/^[a-z][a-z0-9-]*$/`. If it does not (for example `zhin.js-foo` contains a `.`), startup fails and tells you to add a `plugin.ts` with an explicit `name`.
-- Put `displayName` and `icon` in `zhin.metadata`.
+- Put `displayName`, `displayNameI18n` and `icon` in `zhin.metadata`.
 - A declared `entry` (or `exports["./zhin"]`) must exist; only omitting both makes an entry-less plugin. A `plugin.ts` on disk without a declared entry is not loaded, and `zhin plugin check` warns about it.
 - Add a `plugin.ts` and declare `zhin.entry` once you need `setup`, inline `config`, `requires` or `capabilityGraph`.
 
@@ -368,6 +368,7 @@ async setup(context) {
 | Field | Purpose |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Name, icon and sort order on the Console plugin card; no runtime effect |
+| `metadata.displayNameI18n` | Name per Console interface locale, such as `{ 'zh-CN': '复读机', en: 'Repeater' }`; see [Language and localization](../configuration/localization.md#plugin-integration) |
 | `requires` | Resource tokens that must exist; startup refuses if any is missing |
 | `capabilityGraph` | Explicitly declares the plugin's capability graph via `definePluginCapabilityGraph({ provides, injects, features })` (provided tokens, injected tokens, and feature-grouped capabilities) for static governance and Console observability |
 
@@ -412,7 +413,7 @@ Database and schedule tokens expose only this plugin's private table names and j
 - The config root must be an object. With no fields you can omit `properties`; `{}` is valid too.
 - `toJsonSchema()` exports standard JSON Schema; `toJSON()` is an internal serialization — they serve different purposes.
 - `.secret()` exports `writeOnly: true` plus an `x-zhin-config.secret` hint and forbids defaults on secrets. It doesn't read environment variables or grant permissions.
-- Descriptions, choices, hidden fields, component types and `.effect('reload')` all live on the same Schema; Console reads them from the runtime.
+- Descriptions, choices, hidden fields, component types and `.effect('reload')` all live on the same Schema; Console reads them from the runtime. Declare the Chinese and English field titles and descriptions shown in the Console with `.i18n({ 'zh-CN': { title }, en: { title, description } })` (`x-i18n` in `schema.json`); see [Language and localization](../configuration/localization.md#plugin-integration).
 - The Console form supports basic nested objects, lists and dictionaries. `union`, `intersect`, `tuple` and `$ref` export standard validation, but full form editing isn't supported yet and Console reports an explicit error.
 - Put union defaults on the union field: `Schema.union([...]).default(...)`. Defaults inside branches can't be disambiguated during validation and are rejected on export; `Schema.const(...)` as a direct option is fine. A default is checked against every structurally matching branch and rejected if any matching branch is a secret; Zhin doesn't infer branches from ranges, steps or choices and rejects conservatively when it can't rule one out.
 - The entry file is loaded during config pre-check (without running `setup`), so keep the entry's top level declarative and put side effects in `setup`. Zhin copies and freezes Schema metadata at pre-check; later builder changes have no effect.

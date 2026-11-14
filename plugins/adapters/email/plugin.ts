@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Email Adapter',
+    displayNameI18n: { 'zh-CN': '邮件适配器', en: 'Email Adapter' },
   },
   setup(context) {
     return {

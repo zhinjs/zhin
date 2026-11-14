@@ -15,6 +15,7 @@ export default defineGamePlugin<SessionService>({
   name: 'dungeon-expedition',
   metadata: {
     displayName: 'Dungeon Expedition',
+    displayNameI18n: { 'zh-CN': '地牢远征', en: 'Dungeon Expedition' },
   },
   game: {
     commandPath: 'dungeon',

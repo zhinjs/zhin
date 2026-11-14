@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Discord Gateway Adapter',
+    displayNameI18n: { 'zh-CN': 'Discord 适配器', en: 'Discord Gateway Adapter' },
   },
   setup(context) {
     return {

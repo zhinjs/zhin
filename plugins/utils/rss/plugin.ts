@@ -57,6 +57,7 @@ export default definePlugin<RssConfig>({
   name: 'rss',
   metadata: {
     displayName: 'RSS',
+    displayNameI18n: { 'zh-CN': 'RSS 订阅', en: 'RSS Feeds' },
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [

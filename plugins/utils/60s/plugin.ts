@@ -9,6 +9,7 @@ export default definePlugin<SixtySConfig>({
   name: 'sixty-s',
   metadata: {
     displayName: '60s API',
+    displayNameI18n: { 'zh-CN': '60 秒 API', en: '60s API' },
   },
   setup(context) {
     sixtySClientStore.provide(

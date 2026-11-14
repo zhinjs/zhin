@@ -11,6 +11,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Bilibili Live Danmaku Adapter (Experimental)',
+    displayNameI18n: { 'zh-CN': '哔哩哔哩直播弹幕适配器（实验性）', en: 'Bilibili Live Danmaku Adapter (Experimental)' },
   },
   setup(context) {
     return {
