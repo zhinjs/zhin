@@ -154,7 +154,8 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     await promote(roles);
     const admin = actor({ standing: 'admin' });
     expect(await run(admin, '关闭 rss')).toBe('已保存（会话层），立即生效。');
-    expect(conversations.get('rss', 'qq/bot-1/group:100')).toMatchObject({ enabled: false, updatedBy: 'chat:qq:u1' });
+    expect(conversations.get('rss', 'qq/bot-1/group:100')).toMatchObject({ enabled: false, updatedBy: 'chat:qq:u1',
+      operator: { source: 'chat', adapter: 'qq', userId: 'u1' } });
     expect(audits.at(-1)).toMatchObject({ actor: 'chat:qq:u1', action: 'feature.chat:disable', target: 'conversation:qq/bot-1/group:100', outcome: 'ok',
       detail: { plugin: 'rss', level: 'conversation' } });
     expect(await run(admin, '关闭 rss 账号')).toBe(DENIED);
@@ -416,5 +417,18 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(resolved).toEqual({ identity: { adapter: 'qq', userId: 'u1' }, conversationKey: 'qq/bot-1/group:100', endpointKey: 'qq/bot-1',
       kind: 'group', context: { conversationKey: 'qq/bot-1/group:100', platform: { standing: 'owner' } } });
     expect(featureChatActor(snapshot(), { conversation: { endpoint: { id: 'qq:bot-1' } }, sender: { id: 'u1' } })).toBeUndefined();
+    // The sender's display name is kept for the override record; a name that only repeats the id is not.
+    expect(featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+      sender: { id: 'u1', name: ' 小明 ' } })?.displayName).toBe('小明');
+    expect(featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+      sender: { id: 'u1', name: 'u1' } })).not.toHaveProperty('displayName');
+  });
+
+  it('records who changed an override from chat and that it came from chat (#1250)', async () => {
+    const { run, conversations, roles } = await harness();
+    await promote(roles);
+    expect(await run({ ...actor(), displayName: '小明' }, '关闭 repeater')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')).toMatchObject({ updatedBy: 'chat:qq:u1',
+      operator: { source: 'chat', adapter: 'qq', userId: 'u1', displayName: '小明' } });
   });
 });

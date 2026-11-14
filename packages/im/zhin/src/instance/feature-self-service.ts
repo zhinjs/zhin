@@ -49,6 +49,8 @@ export interface FeatureChatActor {
   readonly kind: 'group' | 'private' | 'channel';
   /** The sender's platform standing in this message (informational; never a zhin role). */
   readonly context: ChatRoleContext;
+  /** The sender's display name in this message, when the platform reports one (recorded on writes). */
+  readonly displayName?: string;
 }
 
 /** Resolves who sent the command and where; undefined outside a keyed conversation. */
@@ -57,12 +59,16 @@ export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'pro
   // Chat commands act on a conversation; an unkeyable conversation (endpoint-level fallback) has none.
   if (!subject || !parseFeatureConversationKey(subject.context.conversationKey)) return undefined;
   const parsed = parseFeatureResolutionKey(subject.context.conversationKey);
+  const sender = record(message) && record(message.sender) ? message.sender : undefined;
+  const displayName = typeof sender?.name === 'string' && sender.name.trim() && sender.name !== subject.identity.userId
+    ? sender.name.trim() : undefined;
   return Object.freeze({
     identity: subject.identity,
     conversationKey: subject.context.conversationKey,
     endpointKey: `${parsed.adapter}/${parsed.endpointId}`,
     kind: parsed.conversation!.kind,
     context: subject.context,
+    ...(displayName ? { displayName } : {}),
   });
 }
 
@@ -312,6 +318,9 @@ export async function executeFeatureChat(
     ...base,
     authScope: 'chat',
     actor: actorName(actor),
+    // #1250: the Console shows who changed an override and that it came from chat.
+    operator: Object.freeze({ source: 'chat' as const, adapter: actor.identity.adapter, userId: actor.identity.userId,
+      ...(actor.displayName ? { displayName: actor.displayName } : {}) }),
     authorize: request => request.type === 'feature.list' || administers(request.key ?? ''),
     allowedFields: (schema, level) => chatAllowedFields(schema, level),
   };

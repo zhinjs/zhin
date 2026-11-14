@@ -83,11 +83,13 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
       { conversation: conversation, content: 'ask', sender: { id: 'configured-owner' } },
       { generation: 0, reply: (content) => im.send({ requester: root, conversation, content }) },
     ))!
-      .ask({ type: 'confirm', title: 'Allow this operation?', signal: abort.signal });
+      .ask({ type: 'confirm', title: 'Allow this operation?', purpose: 'approval', signal: abort.signal });
     void answer.then(() => { settlements++; }, () => undefined);
     await vi.waitFor(() => expect(first.frames.some(frame => frame.content?.some((segment: any) => segment.type === 'keyboard'))).toBe(true));
     const prompt = first.frames.find(frame => frame.content?.some((segment: any) => segment.type === 'keyboard'))!;
     const keyboard = prompt.content.find((segment: any) => segment.type === 'keyboard');
+    // The approval marker survives the outbound chain onto the Sandbox wire (the page labels only these).
+    expect(keyboard.data.purpose).toBe('approval');
     const payload = keyboard.data.rows[0][0].payload as string;
     expect(payload).toMatch(/^zhin:ask:/u);
     const click = (socket: WebSocket, id: string) => socket.send(JSON.stringify({ type: 'group', id: 'room', messageId: id,
