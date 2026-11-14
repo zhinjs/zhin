@@ -247,16 +247,19 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // IM-only startup graph unless the project actually configures Agent state.
   // ADR 0060 P3: the Agent Host reads personal inference owners from the person ↔ Console links,
   // which the feature host (created below, before anything runs) loads.
-  let chatPeople: import('./chat-people.js').ChatPeople | undefined;
+  const chatPeopleRef: { current?: import('./chat-people.js').ChatPeople } = {};
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
-    chatLinks: () => chatPeople ? {
-      identitiesOf: consoleUserId => {
-        const link = chatPeople!.store.principals.linkOfConsoleUser(consoleUserId);
-        return link ? chatPeople!.store.principals.identitiesOf(link.principalId) : [];
-      },
-      linkedUsers: () => chatPeople!.store.principals.links().map(link => link.consoleUserId),
-    } : undefined,
+    chatLinks: () => {
+      const people = chatPeopleRef.current;
+      return people ? {
+        identitiesOf: consoleUserId => {
+          const link = people.store.principals.linkOfConsoleUser(consoleUserId);
+          return link ? people.store.principals.identitiesOf(link.principalId) : [];
+        },
+        linkedUsers: () => people.store.principals.links().map(link => link.consoleUserId),
+      } : undefined;
+    },
   });
   const personalPrincipalImports = new PersonalPrincipalImportBook({ projectRoot: options.root });
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
@@ -286,7 +289,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
     },
   });
-  chatPeople = featureHost.people;
+  chatPeopleRef.current = featureHost.people;
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
