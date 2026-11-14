@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.1.56
+
+### Patch Changes
+
+- Updated dependencies [f74b4a5]
+- Updated dependencies [a86bdc7]
+- Updated dependencies [ce8edf5]
+  - @zhin.js/plugin-runtime@1.2.1
+
 ## 1.1.55
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/plugin-reminder
 
+## 1.0.17
+
+### Patch Changes
+
+- @zhin.js/page@1.1.19
+- @zhin.js/skill@1.1.18
+- @zhin.js/tool@1.1.20
+
 ## 1.0.16
 
 ### Patch Changes

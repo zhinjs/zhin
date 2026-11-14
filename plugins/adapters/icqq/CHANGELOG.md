@@ -1,5 +1,37 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.29
+
+### Patch Changes
+
+- f69feaf: 设备锁登录不再循环：等待验证期间不自动重新登录（重登会作废正在验证的链接），超过等待时间未处理才按退避重试；收到设备锁时不再自动发送短信，打开链接完成验证后提交 `ok` 继续，需要短信时提交 `sms` 再提交验证码，短信发送失败会重新提示。
+- f2fa3d7: ICQQ 改用登录辅助 v2 的登录流程（ADR 0058 P2）：每次登录一条流程（连接 → 挑战 → 验证中 → 在线 / 失败），声明 `login: { mode: 'interactive', relogin: true, refreshQr: true }` 并实现「重新登录」「刷新二维码」钩子。扫码时自动跟踪扫码状态（已扫码提示、确认后自动继续、过期自动换码两次）；滑块带托管验证码辅助页（`media.captcha`）和手动提取 ticket 的分步说明，NT 登录提交 `ticket,randstr`、旧版只提交 ticket；设备锁提供「我已在手机完成验证」和「改用短信验证码」（6 位验证码、60 秒后可重新发送，发送失败报 `rate_limited` / `unknown` 并留在设备锁）；身份验证提供设备 JSON（敏感，只在活动挑战上）、验证链接二维码和只在 `accounts.qq.com/login/attack` 运行的静态辅助脚本。`system.login.error` 按一张表映射到错误码，验证码错误留在原挑战；需要人处理的失败不再自动重新登录，只有被踢下线、网络错误等不需要验证的失败保留退避重试并记入时间线。QQ 命令 `icqq login confirm / code / status / qr` 按挑战作答（设备锁 `code sms`、短信 `code resend`），`code` 支持带 QQ 号。core：流程挑战的兼容待办 `payload.message` 带上简短说明，`payload.url` 在没有 `media.link` 时取第一个链接块。
+
+  adapter：`AdapterIndex.loginControl` 的登录钩子（重新登录、刷新挑战）在账号启动中（卡在登录挑战上）也能调用，新增 `acquireLogin` 租约；已停止的账号和被替换的旧 incarnation 仍然拒绝。
+
+  验证链接带会话标识：icqq 日志只记录挑战类型和链接主机名；core 的 `withoutLoginMedia`（`endpoint.login.flow` 事件与历史）去掉滑块 / 设备锁 / 身份验证 / link_verify 挑战的 `media.link`、`media.captcha` 和链接块，并标 `linkOmitted: true`（console-protocol 增加该字段）。
+
+  复审修正：NT 滑块答错后重新登录拿新滑块（NT / 旧版格式按挑战记录，不再重新判断）；「ticket 已过期」映射为 `challenge_expired`；`system.receive` 的登录挑战副事件只带 `{ kind, host }`；包装 icqq SDK 日志，去掉链接查询串和手机号（SDK 直接写控制台的终端二维码和 237 分支 `console.log` 无法拦截，已在 README 说明）；自动重新登录 8 次用尽后流程失败并通知；扫码时 SDK 的 `internal.error.qrcode` 转为结果；登录钩子随租约中止；token 不兼容提示删除 token 文件；`icqq login code` 在多账号时不回显参数；短信冷却跨重新登录保留。core：纯字符串等于某个无输入操作的 id 时选择该操作（旧 Console 输入 `sms` 仍可用）。
+
+- b2aae3c: 登录流程事件与历史不再带验证链接：`withoutLoginMedia` 去掉滑块 / 设备锁 / 授权 / 链接验证挑战的 `media.link`、`media.captcha` 与链接块（它们带 sid），标记 `media.linkOmitted: true`，需要时用 `login.flow.get` 读取；二维码挑战不变。icqq 登录辅助日志只记录挑战类型与链接主机名。
+- Updated dependencies [f74b4a5]
+- Updated dependencies [ce8edf5]
+- Updated dependencies [f2fa3d7]
+- Updated dependencies [eba2566]
+- Updated dependencies [ac72706]
+- Updated dependencies [8f237bd]
+- Updated dependencies [b2aae3c]
+- Updated dependencies [3c14aeb]
+  - @zhin.js/core@1.7.0
+  - @zhin.js/adapter@1.1.34
+  - @zhin.js/adapter-onebot-events@0.0.8
+  - @zhin.js/page@1.1.19
+  - @zhin.js/agent-feature@1.1.18
+  - @zhin.js/feature-kit@1.1.17
+  - @zhin.js/permission@1.2.1
+  - @zhin.js/skill@1.1.18
+  - @zhin.js/tool@1.1.20
+
 ## 1.1.28
 
 ### Patch Changes

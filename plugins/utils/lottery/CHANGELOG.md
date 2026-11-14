@@ -1,5 +1,13 @@
 # @zhin.js/plugin-lottery
 
+## 1.1.22
+
+### Patch Changes
+
+- @zhin.js/page@1.1.19
+- @zhin.js/skill@1.1.18
+- @zhin.js/tool@1.1.20
+
 ## 1.1.21
 
 ### Patch Changes

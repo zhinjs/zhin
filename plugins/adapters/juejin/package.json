@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-juejin",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Zhin.js Juejin (掘金) comment adapter for Plugin Runtime (Experimental; whitelisted article comments, review-then-send with a Console approval page)",
   "type": "module",
   "main": "./lib/index.js",

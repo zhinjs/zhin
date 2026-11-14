@@ -1,5 +1,12 @@
 # @zhin.js/plugin-code-runner
 
+## 1.1.20
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.18
+- @zhin.js/tool@1.1.20
+
 ## 1.1.19
 
 ### Patch Changes
