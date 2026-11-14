@@ -1,4 +1,4 @@
-import { formatPluginUseCases, pluginUseCases } from '../../../../packages/host/gateway/src/plugin-management/use-cases.js';
+import { formatPluginUseCases, listPluginUseCases, pluginUseCases } from '../../../../packages/host/gateway/src/plugin-management/use-cases.js';
 import { useCasesCommand } from '../../src/commands/use-cases.js';
 
 it('makes useful tasks discoverable without loading plugins or making mutations', () => {
@@ -39,4 +39,14 @@ it('discovers the RSS administrator path with precise targets and honest baselin
     await useCasesCommand.parseAsync(['rss-subscription'], { from: 'user' });
     expect(log).toHaveBeenCalledExactlyOnceWith(output);
   } finally { log.mockRestore(); }
+});
+
+it('points administrator tasks at the real Console location (no stale "task center")', () => {
+  for (const id of ['rss-subscription', 'reminder']) {
+    expect(formatPluginUseCases(id)).not.toContain('任务中心');
+    expect(formatPluginUseCases(id)).toContain('运维 → 定时任务');
+    const english = JSON.stringify(listPluginUseCases('en').find(item => item.id === id));
+    expect(english).not.toContain('Console Tasks');
+    expect(english).toContain('Operations → Scheduled tasks');
+  }
 });
