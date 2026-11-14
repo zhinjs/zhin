@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0062：每件事只留一条路——重复入口清单与收敛建议
 
-状态：提议（Proposed，2026-11-14）。本 ADR 只给出盘点和建议，每一项「推荐路径」都要所有者逐条拍板，见文末「未决问题」。
+状态：已接受（Accepted，2026-11-14）。所有者决定：总原则 Q0a–Q0c 与 Q1–Q25 **全部按推荐处理**，见文末「决定」；被否决的替代选项保留在同一张表里作为记录。另有一条与 ADR 0061 共同的决定（IM 回合审批接入 `ToolApprovalQueue`），见「决定」表后的说明。
 
 关联：
 - [ADR 0049](./0049-console-rbac.md)（Console 访问控制）
@@ -15,6 +15,7 @@ sidebar: false
 - [ADR 0056](./0056-chat-roles.md)（聊天角色）
 - [ADR 0057](./0057-config-storage.md)（配置与状态存放）
 - [ADR 0059](./0059-gateway-storage-isolation.md)（网关存储隔离）
+- [ADR 0061](./0061-inbound-message-outcomes.md)（每条入站消息都有结局与原因）
 - ADR 0060（聊天身份与角色的唯一事实来源）：在 #1250 批次分支上已接受，尚未合入本分支，所以这里不加链接。
 
 来源：issue zhinjs/zhin#1250 的真实部署反馈（文中的 `代号` 都是该 issue 里的条目代号）。
@@ -60,7 +61,7 @@ sidebar: false
 
 每一项都按同样的格式写：
 - 表格：用户意图、现有入口、事实来源与同步关系、困惑证据；
-- 「推荐」：唯一推荐路径；
+- 「推荐」：唯一推荐路径（已按文末「决定」Q1–Q25 定稿）；
 - 「其余」：其余入口怎么处理，分三种——**删除**、**高级**（保留，但在 UI 和文档里降级，只出现在「高级用法」里）、**种子**（保留为只读导入种子，有差异时显式提示）；
 - 「迁移」和「文档」：需要的迁移与兼容，以及对新用户文档的影响。
 
@@ -132,7 +133,7 @@ sidebar: false
   - 退回 `http.token`：删除。初始化之后它本来就会被拒绝。
   - 没写 `--host` 时退回 HTTP：删除，改为直接报「本项目网关未运行」。
   - `--token-env`：高级。
-- **迁移**：属于行为变更。先在 minor 里打印告警，并在连上后核对对方的项目根目录 / 实例 id；下一个 minor 改为报错（要所有者批准，见 `.changeset/version-policy.json`）。
+- **迁移**：属于行为变更。先在 minor 里打印告警，并在连上后核对对方的项目根目录 / 实例 id；下一个 minor 改为报错（方向已由 Q4 决定；每次 minor 发版仍按 `.changeset/version-policy.json` 由所有者批准）。
 - **文档**：CLI 参考的「操作运行中的 Bot」改成「本机：直接用；远程：`--host` + API 令牌」。
 
 #### 5. 诊断与修复
@@ -220,7 +221,7 @@ sidebar: false
   - `/ops/config`：只保留 Host 段（`http` / `database` / `ai.*` 等），插件段改成只读，加「在功能页编辑」的链接。
   - `/ops/files` 编辑 yml：高级，打开时提示「建议用表单」。
   - `zhin config`：高级，给自动化用。
-  - 聊天 `config set` 和 AI `config_patch`：见 ADR 0057「待定」，本 ADR 推荐聊天只保留 `config get / fields`（只读），`set / unset` 删除；AI 改配置只能走自我变更审批（ADR 0040）。
+  - 聊天 `config set` 和 AI `config_patch`：ADR 0057 留下的「待定」由本 ADR Q9 决定——聊天只保留 `config get / fields`（只读），`set / unset` 删除；AI 改配置只能走自我变更审批（ADR 0040）。
   - `zhin setup` 写插件配置：删除（见第 7 项）。
 - **迁移**：
   - 聊天 `config set` 删除前先弃用一个 minor，回复里提示去 Console。
@@ -257,7 +258,7 @@ sidebar: false
 - **推荐**：普通用户用 Console 插件市场；运维用 `zhin install` / `zhin uninstall <名>` / `zhin update` / `zhin search`。
 - **其余**：
   - `zhin packages install / remove / update / search / info`：npm 插件部分删除。
-  - `packages` 只保留技能包和插件状态（`status` / `verify` / `apply` / `verification-plan`）。是否改名为 `zhin skills` 加 `zhin plugin status`，待定。
+  - `packages` 只保留技能包和插件状态（`status` / `verify` / `apply` / `verification-plan`）。是否改名为 `zhin skills` 加 `zhin plugin status`，按 Q11 的决定另行决定，不在本 ADR 范围。
   - `zhin add`：删除（还容易和 `zhin create` 混淆）。
   - `uninstall plugin | adapter`：合成 `zhin uninstall <名>`，旧写法高级。
   - `setup --adapters --install`：见第 7 项。
@@ -371,7 +372,7 @@ sidebar: false
 - **其余**：
   - `/ops/env`：高级。
   - 手改 `.env`：高级。
-  - yml 字面值：继续告警，下一个 major 改为启动报错（需要所有者决定）。
+  - yml 字面值：继续告警，下一个 major 改为启动报错（Q17 已决定）。
   - CLI 各参数：高级。
 - **文档**：只说「在表单里填，系统会替你放进 `.env`」。
 
@@ -392,7 +393,7 @@ sidebar: false
   - `zhin setup --bootstrap`：删除，交给脚手架生成。
   - `zhin migrate`：不再给不用 AI 的项目生成这些文件。
 - **迁移**：先弃用一个 minor，下一个 major 删除，迁移由 `zhin doctor --fix` 完成。
-- **替代方案**：保留 `SOUL.md` / `BOT.md` / `TOOLS.md` 三个文件，只删掉 profile 和 yml 里的那两处（见未决问题 Q18）。
+- **被否决的替代方案**：保留 `SOUL.md` / `BOT.md` / `TOOLS.md` 三个文件，只删掉 profile 和 yml 里的那两处（见「决定」Q18）。
 - **文档**：AI 页只介绍 `BOT.md`。
 
 ### F. 定时任务
@@ -415,7 +416,7 @@ sidebar: false
   - `zhin schedule`：高级，给自动化用。
   - AI 工具：保留（这是聊天入口的实现方式）。
   - `assistant.profile.yml` 的 `routines`：种子。首次导入数据库之后，以数据库为准；profile 再改时提示差异，并提供「按 profile 对齐」的操作。
-  - `HEARTBEAT.md`：并入 `BOT.md` 的一节，或者改成 routine 的提示词字段（待定）。
+  - `HEARTBEAT.md`：并入 `BOT.md` 的一节，或者改成 routine 的提示词字段。二者都符合 Q18 / Q19 的决定，具体选哪个在阶段 1 的定时任务 PR 中确定。
   - 提醒插件自己的页面：并进 Console 定时任务页，插件页删除（见第 24 项）。
   - `data/schedule-jobs.json`：迁移后改名为 `.migrated`。
 - **迁移**：存储合并要 minor；页面分类走 Console 仓库的 minor；旧文件改名属于 patch。
@@ -480,7 +481,7 @@ sidebar: false
   - 适配器 / 账号 / 会话层的开关写进 `feature_overrides`；
   - 群管理员用「功能 关闭 插话」，Console 用对象页的「功能」页签。
 - **其余**：
-  - `conversations` 白名单：改为种子，首次启动导入成会话级覆盖，之后以数据库为准。也可以保留为全局层，并新增 `excludeConversations`（替代方案）。
+  - `conversations` 白名单：改为种子，首次启动导入成会话级覆盖，之后以数据库为准。（被否决的替代方案：保留为全局层，只新增 `excludeConversations`，见「决定」Q23。）
   - `/features/ai/ambient`：保留，作为插话的说明和全局设置页。
 - **迁移**：属于 `zhin.js`（instance）和 `@zhin.js/agent` 的 minor。
 - **文档**：「让 Bot 在群里插话」只写功能开关。
@@ -539,8 +540,8 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | --- | --- | --- | --- |
 | 0 文档与文案 | 快速开始、路径页、客户手册、AI 总览、配置参考第一段都改成只讲推荐路径；修正 `generated.md` 里 `ai.plan.yml` 的描述和 showcase 的矛盾；README 删掉本地 `/sandbox` 方式；`use-cases` 文案；`packages list` 分组列出；新增注册表和 R2 / R3 检查（warning） | `docs`、`README*`、`@zhin.js/cli`、`@zhin.js/scaffold-wizard`、`packages/im/ai`（plan schema 描述） | patch |
 | 1 弃用告警与 UI 降级 | CLI：`runtime start`、`--no-watch`、`onboard`、`add`、`watch`、`doctor --live`、`packages` 中的 npm 插件子命令、`uninstall adapter`、`health` / `validate`、`config check --fix` 打印告警或转发；`setup` 交互模式给出提示。配置文件名告警。Console：`/ops/config` 插件段只读、适配器页合成一个账号列表、插件开关只保留一处、「插件内部任务」分组、本地 sandbox 页跳转。脚手架不再生成服务文件，pm2 改成 `--with pm2`。group-suite「问答」，旧命令改别名。官方插件命令别名。人设来源告警（`SOUL.md` / `TOOLS.md` / profile / `ai.agent.persona`）。R5 / R6 / R7 检查（warning） | `@zhin.js/cli`、`create-zhin-app`、`@zhin.js/scaffold-wizard`、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`@zhin.js/adapter-sandbox`、`@zhin.js/plugin-group-suite`、其他官方插件、`@zhin.js/console-protocol`、zhinjs/console | minor（CLI、agent、group-suite、console-protocol、Console）；其余 patch |
-| 2 事实来源收口 | ADR 0057 §3：`endpoints` 和 `ai.plan.yml` 导入后移除，并提供导出；`assistant.profile.yml#routines` 变为种子并提示差异；插话纳入功能覆盖；`setup --adapters` 改为经网关账号 RPC；CLI 不再退回 `http.token`、不再跨项目连接；聊天 `config set` 按决定处理；定时任务存储合并；检查脚本在 CI 中改为 error | `zhin.js`（instance）、`@zhin.js/adapter`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/cli`、`@zhin.js/console-protocol`、`@zhin.js/schedule-feature`、`@zhin.js/plugin-reminder`、zhinjs/console | minor（需批准） |
-| 3 删除 | 删除阶段 1 弃用的命令、参数、别名、RPC（`plugin:set-enabled`）、五种备用配置文件名、`ai.agents.*.model` 的迁移识别、`ai.agent.persona`、profile 的人设字段、`SOUL.md` / `TOOLS.md` 回退（如果 Q18 同意）、`zhin setup` 交互模式（如果 Q7 同意）、`runtime build` / `publish` | `@zhin.js/cli` 2.0、`zhin.js` 2.0、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`create-zhin-app` | major |
+| 2 事实来源收口 | ADR 0057 §3：`endpoints` 和 `ai.plan.yml` 导入后移除，并提供导出；`assistant.profile.yml#routines` 变为种子并提示差异；插话纳入功能覆盖；`setup --adapters` 改为经网关账号 RPC；CLI 不再退回 `http.token`、不再跨项目连接；聊天 `config set` 按 Q9 删除（先弃用一个 minor）；定时任务存储合并；检查脚本在 CI 中改为 error | `zhin.js`（instance）、`@zhin.js/adapter`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/cli`、`@zhin.js/console-protocol`、`@zhin.js/schedule-feature`、`@zhin.js/plugin-reminder`、zhinjs/console | minor（需批准） |
+| 3 删除 | 删除阶段 1 弃用的命令、参数、别名、RPC（`plugin:set-enabled`）、五种备用配置文件名、`ai.agents.*.model` 的迁移识别、`ai.agent.persona`、profile 的人设字段、`SOUL.md` / `TOOLS.md` 回退（Q18）、`zhin setup` 交互模式（Q7）、`runtime build` / `publish` | `@zhin.js/cli` 2.0、`zhin.js` 2.0、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`create-zhin-app` | major |
 
 每个阶段都单独开 PR；阶段 1 和阶段 2 可以按领域（运行、插件、账号、AI、定时任务、聊天、Console）拆成多个 PR 并行推进。
 
@@ -560,11 +561,11 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 - **C. 只改文档，不动入口。** 不采用：AI 知识库、`--help` 和旧博客还会继续教旧入口，弃用告警才是用户真正能看到的信号。
 - **D. CLI 优先，Console 只做只读面板。** 不采用：和 ADR 0053（引导在 Console 完成）以及 #1250 的反馈方向（新用户在浏览器里完成操作）相反。
 
-## 未决问题
+## 决定
 
-请所有者逐条回复「同意」或「改为 …」。Q0 是总原则；Q1–Q25 和上面的盘点编号一一对应。
+所有者于 2026-11-14 拍板：Q0a–Q0c 与 Q1–Q25 **全部按推荐处理**。Q0 是总原则；Q1–Q25 和上面的盘点编号一一对应。「被否决的替代选项」一列保留当时提出的其他方案，作为否决记录。
 
-| # | 项 | 推荐 | 替代选项 | 影响 |
+| # | 项 | 决定 | 被否决的替代选项 | 影响 |
 | --- | --- | --- | --- | --- |
 | Q0a | 原则 R2 | 新用户操作只在 Console 和聊天里完成；CLI 面向运维和自动化，不再新增交互式向导 | CLI 和 Console 同等对待，两边都教 | 决定第 7、9、11、16、19 项的取舍和快速开始怎么写 |
 | Q0b | 弃用节奏 | 至少告警一个 minor；`stable` 入口到 major 才删除 | 一律等到 major 才删 / 直接删除不告警 | 阶段 1–3 的发布顺序 |
@@ -582,7 +583,7 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | Q11 | 安装与搜索 | Console 插件市场；CLI 只保留 `install` / `uninstall` / `update` / `search` / `info`；`packages` 只管技能包和状态；删除 `zhin add` | 反过来以 `packages` 为准 | 删除一组重复子命令；`packages` 是否改名为 `zhin skills` 另行决定 |
 | Q12 | 开发命令 | `new` → `create` → `plugin check` → `pub`；`runtime build` / `publish` 合并后删除；页面写法推荐 Blueprint | 保留 `runtime` 组作为高级 | 影响插件作者，走 major |
 | Q13 | 平台账号 | Console「连接管理」是唯一入口，以数据库为准；yml `endpoints` 只做种子并在导入后移除；`setup --adapters` 改为写数据库 | yml 持续可写，启动时提示差异，由用户选择导入或写回（批次中的漂移方案，不移除） | 依赖 ADR 0057 §3 实施 |
-| Q14 | 管理员身份 | 按 ADR 0060 执行 | — | 已由 ADR 0060 决定 |
+| Q14 | 管理员身份 | 按 ADR 0060 执行 | —（无替代选项） | 已由 ADR 0060 决定 |
 | Q15 | 模型绑定 | Console「用途」页；`ai.plan.yml` 只做种子并在导入后移走；major 删除 `ai.agents.*.model` 的识别 | `ai.plan.yml` 保留在根目录，作为显式「预览 → 应用」的输入，不移走 | 文档里约 15 处 |
 | Q16 | 模型账号 | Console 账号页（全局 owner 可以引用 env）；`zhin ai account` 作为高级；`setup --ai` 不再生成 plan | 由 `setup --ai` 继续生成 plan 作为种子 | `setup --ai` 行为变更 |
 | Q17 | 密钥 | 在所在表单里填，自动写进 `.env`；yml 字面值到 major 改为启动报错 | 永远只告警 | major 之后，写了字面值的项目无法启动 |
@@ -594,6 +595,17 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | Q23 | 群插话 | 纳入功能分级覆盖，群管理员用「功能 关闭 插话」；`conversations` 白名单变为种子 | 只加 `excludeConversations`，开关仍是全局配置 | 扩展 ADR 0050 / 0055 的功能定义 |
 | Q24 | 插件页面 | 通用对象只用 Console 内置页；插件页面只放插件自己的领域视图，挂成页签 | 插件页面不受限制 | 部分官方插件页面要改为只读 |
 | Q25 | 用途指南 | 普通用户看文档方案页和 Console 首页的「按用途开始」；`zhin use-cases` 作为高级 | 删除 `zhin use-cases` | 很小 |
+
+### 与 ADR 0061 共同的决定：IM 回合审批接入 `ToolApprovalQueue`
+
+所有者在 PR #1253 的讨论中同意：IM 会话内的工具确认与 Console「需要你处理」里的工具审批**共用同一个 `ToolApprovalQueue`**，任一处批准或拒绝即生效，另一处同步失效。这是 R4（一个意图只对应一个后端操作）在审批上的落实：审批只有一个后端，聊天与 Console 只是它的两个前端。细节与实施阶段见 [ADR 0061](./0061-inbound-message-outcomes.md) §5.1（归入其 P2）。
+
+### 留给实施 PR 的细节
+
+以下两点不在 Q 表内，所有者在对应 PR 中确认，不影响本 ADR 的决定：
+
+- `HEARTBEAT.md` 并入 `BOT.md` 的一节，还是改成 routine 的提示词字段（第 19 项）。
+- `packages` 是否改名为 `zhin skills` 加 `zhin plugin status`（第 11 项、Q11）。
 
 ## 不在本 ADR 范围
 

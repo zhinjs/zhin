@@ -4,9 +4,9 @@ sidebar: false
 
 # ADR 0061：每条入站消息都有结局与原因——消灭静默失败
 
-状态：提议（Proposed，2026-11-14）
+状态：已接受（Accepted，2026-11-14）。所有者决定：「未决问题」全部按推荐处理，见文末「决定」；另增一条与 ADR 0062 共同的决定（IM 回合审批接入 `ToolApprovalQueue`，§5.1）。
 
-关联：ADR 0008（`conversation_events` 是会话事件的权威表）、ADR 0019（安装体积分层：默认安装不含 `@zhin.js/agent`）、ADR 0036（决策审计 `ai_decision_events` 与 Console 决策回放）、ADR 0038（连续输入合流）、ADR 0048（Agent Harness：Mailbox 准入）、ADR 0049（Console 权限映射）、ADR 0050 / 0055（功能开关：被关掉的插件的命令“在这里不存在”）、ADR 0056（聊天角色 `owner` / `admin` / `trusted`）。来源：issue zhinjs/zhin#1250 中“没反应、看不出原因”一类反馈（命令错误被吞、`Internal error`、审批被拒却说成功、模型请求挂起无日志、插话不说话看不出原因、定时任务静默不触发、`unaddressed-message-no-record`、`inbound-media-reject-reason-opaque`、`reminder-confirm-captures-chat` 等）。
+关联：ADR 0008（`conversation_events` 是会话事件的权威表）、ADR 0019（安装体积分层：默认安装不含 `@zhin.js/agent`）、ADR 0036（决策审计 `ai_decision_events` 与 Console 决策回放）、ADR 0038（连续输入合流）、ADR 0048（Agent Harness：Mailbox 准入）、ADR 0049（Console 权限映射）、ADR 0050 / 0055（功能开关：被关掉的插件的命令“在这里不存在”）、ADR 0056（聊天角色 `owner` / `admin` / `trusted`）、[ADR 0062](./0062-one-path-per-task.md)（每件事只留一条路；R4 与本 ADR §5.1 的审批队列共同决定）。来源：issue zhinjs/zhin#1250 中“没反应、看不出原因”一类反馈（命令错误被吞、`Internal error`、审批被拒却说成功、模型请求挂起无日志、插话不说话看不出原因、定时任务静默不触发、`unaddressed-message-no-record`、`inbound-media-reject-reason-opaque`、`reminder-confirm-captures-chat` 等）。
 
 所有者的目标：**每一个“没反应”都要有一句人话原因，在聊天里或决策回放里能查到。**
 
@@ -137,7 +137,7 @@ sidebar: false
 | `cleared` | `clear_command` | 发起人 | 已清空上下文。 / Context cleared. | — |
 | `interaction_consumed` | `prompt_captured`（被等待中的提问当作回答，但发起人不是被问者或内容不像回答）| 发起人 | 刚才在等「{prompt}」的回答，这句被当成了回答。 / I was waiting for an answer to "{prompt}" and took this as it. | 提问方 `{owner}`，提问 `{promptId}`，被问者 `{target}`。 / Prompt `{promptId}` by `{owner}`, asked `{target}`. |
 
-`interaction_consumed` 是 `reminder-confirm-captures-chat` 的结局：提问方必须声明“谁的回答算数”（被问者、任意人），不是被问者的消息不应被吞；在修正之前，至少要能用 `why` 查到“被谁的提问吃掉了”。
+`interaction_consumed` 是 `reminder-confirm-captures-chat` 的结局：P5 起提问方声明“谁的回答算数”（`answeredBy: 'target' | 'anyone'`，默认 `target`），不是被问者的消息不再被吞；同一提问的重复提示最多重发一次（决定 11）。在 P5 之前先记 `interaction_consumed`，至少能用 `why` 查到“被谁的提问吃掉了”。
 
 #### 1.4 被策略过滤（`reply: no`，点名消息为 `throttled`）
 
@@ -168,7 +168,7 @@ sidebar: false
 
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
-| `delivery_failed` | 统一发送失败码（`platform_rejected`、`endpoint_disconnected`、`endpoint_timeout`、`invalid_destination`、`unsupported_media`、`partial_delivery`、`delivery_unconfirmed`……，见 §5.1）| 发起人 | 回复已经生成，但发到平台时失败了（{reason 的人话}）。 / The reply was ready but the platform rejected it ({reason}). | 端点 `{endpoint}`，`deliveryUnknown={unknown}`，可重试 `{retryable}`。 |
+| `delivery_failed` | 统一发送失败码（`platform_rejected`、`endpoint_disconnected`、`endpoint_timeout`、`invalid_destination`、`unsupported_media`、`partial_delivery`、`delivery_unconfirmed`……，见 §5 表中发送失败码一行）| 发起人 | 回复已经生成，但发到平台时失败了（{reason 的人话}）。 / The reply was ready but the platform rejected it ({reason}). | 端点 `{endpoint}`，`deliveryUnknown={unknown}`，可重试 `{retryable}`。 |
 | `internal_error` | `command_threw` / `handler_threw` / `middleware_threw` / `agent_threw` / `inbound_threw` | 发起人（只给错误号）| 处理时出错了，已记录（错误号 {errorId}）。 / Something went wrong; logged as {errorId}. | `{stage}` 抛出 `{errorName}: {message}`（截断 200 字，脱敏），插件 `{owner}`。 |
 | `unrecorded` | `missing_outcome` | 管理员 | 这条消息的处理结果没有记录下来。 / No outcome was recorded. | 最后阶段 `{lastStage}`；这是框架缺陷，请报告。 / Last stage `{lastStage}`; a framework bug. |
 
@@ -228,6 +228,9 @@ sidebar: false
   - `why <序号|消息 ID>`、`why @用户`：只对本会话 `admin` 及以上（ADR 0056）开放，返回管理员模板。
   - `detail`、`errorId`、`turnId` 只在**私聊**或 Console 中给 `owner`；群里一律不给。
   - 每人每 10 秒 1 次；`why` 本身的结局记为 `command_replied`。
+  - **回在哪里**（决定 2）：群里原地回一句发起人模板（短、不含细节）；不主动发起私聊（多数平台机器人不能主动私聊）。
+  - **与控制面的关系**（决定 1）：`why` 绕过 `mention_only`（它本身就是点名）和会话级 `muted_session`；不绕过急停、实例静音与平台禁言——这几种情况下只记录，Console / CLI 可查。
+  - 功能开关 `im.outcomes.chatCommand: false` 只关聊天里的 `why` 与固定短语；Console / CLI 查询始终可用（决定 12）。
 - **自然语句**“刚才怎么没反应 / 你怎么不理我 / why no reply”：Core 只在点名消息中识别一份固定短语表（中英，可配置、可关闭）并走同一查询函数，不调用模型；装了 Agent 时另提供只读工具 `explain_last_outcome`，供模型在对话中回答同类问题。
 - **主动说明**：只对点名消息、且只对 §1 中 `reply: throttled` 的结局，同一会话 60 秒内最多主动说一次；`not_addressed`、`ambient_silent` 永不主动说。
 
@@ -235,7 +238,7 @@ sidebar: false
 
 - 会话页「记录」新增**结局时间线**（每条消息一行：时间、发送者、结局徽标、人话原因；展开为管理员补充、链接到决策回放回合与 trace）。
 - 新 RPC `plugin.root.message-outcomes`（列表、按会话 / 发送者 / 结局 / 时间过滤）与 `plugin.root.message-outcome`（单条），登记到 `CONSOLE_RPC_PERMISSIONS`：列表与人话需要 `status:view`，`detail` / `error_id` 需要 `decisions:read`。
-- 「机器人状态」关注项（`attention.list`）新增“最近 1 小时 `internal_error` / `delivery_failed` / `unrecorded` 计数”。
+- 「机器人状态」关注项（`attention.list`）新增“最近 1 小时 `internal_error` / `delivery_failed` / `unrecorded` 计数”。`internal_error` 不主动推送给 owner，只进关注项；P3 之后再评估是否需要每日摘要（决定 8）。
 - 文档 `docs/console/index.md:133`、`docs/paths/console.md:128` 改为“结局时间线说明每条消息的去向；决策回放说明 Agent 回合内部的每一步”。
 
 #### 3.3 CLI
@@ -287,13 +290,27 @@ sidebar: false
 
 统一后废弃的平行词汇：`RuntimeMessageDiagnostic.route`（由结局派生，保留只读兼容一个小版本）、`InboundSpineStage`（内部类型，换成结局 `stage`）、Agent `halt.handled`（改为带结局）。
 
+#### 5.1 IM 回合审批接入 `ToolApprovalQueue`（与 ADR 0062 共同的决定）
+
+所有者在 PR #1253 的讨论中同意：**IM 回合里的工具审批也接入 `ToolApprovalQueue`**。今天只有危险工具硬闸（G6）的审批卡进队列（`packages/im/agent/src/security/tool-approval-queue.ts`，Console「需要你处理」与审批人私聊 `approve <id>` / `deny <id>` 先到先得，见 `plugin-runtime/host/tool-approval-im-channel.ts`）；普通的 `approval_required` 与来源可疑（provenance）确认走 `turn.ports.approval`（`ApprovalPort`）在会话里直接问，Console 看不到，也无法代为处理（`packages/im/agent/src/tool/turn-tool-runtime.ts`）。
+
+决定：
+
+- IM 会话内的确认与 Console「需要你处理」里的工具审批**共用同一个队列**：`requestApprovalOutcome` 在会话里发确认的同时在 `ToolApprovalQueue` 建一张卡，卡上记录来源会话（`ToolApprovalOrigin`）。
+- **任一处批准或拒绝即生效，另一处同步失效**：会话里先回答，Console 卡片显示“已在聊天中处理”并不可再操作；Console 先处理，会话里的待确认提问被撤回（`interactions` 结算为已处理，之后的回答不再被当作确认吃掉），并在会话里说明结果。
+- 审批权限不变：会话内确认仍按现有 `ApprovalPort` 规则判定谁的回答算数；Console 端按 `CONSOLE_RPC_PERMISSIONS` 中工具审批的现有权限；硬闸卡仍是 humanOnly、一次一卡，群里不能结算硬闸卡。
+- 结局：两处任一结算都写同一条 `tool_approval` 审计，消息结局按 §1.2 取 `approval_denied` / `approval_timeout` / `approval_unavailable`；`approval_unavailable { no_channel }` 只在会话与 Console 都不可达（无人值守且无 Console 审批人）时出现。
+- 这同时是 ADR 0062 R4（一个意图只对应一个后端操作）在审批上的落实：审批只有一个后端（队列），聊天与 Console 都是它的前端。
+
+实施归入 P2（见 §6），属于 `@zhin.js/agent` minor 与 `@zhin.js/console-protocol` / Console 前端的 minor。
+
 ### 6. 分阶段计划
 
 | 阶段 | 内容 | 包与版本级别 |
 | --- | --- | --- |
 | P0 | 本 ADR；`check:silent-catch` 报告模式 + 基线；`allowEmptyCatch: false` 并修 12 处空 `catch` | 根脚本（不发版）；`@zhin.js/database`、`@zhin.js/cli`、`@zhin.js/pagemanager` patch |
 | P1 | Core：`MessageOutcome` 码表与模板、`InboundOutcomeLedger`、`finally` 提交、`internal_error` + `errorId`、Core 侧全部结局（准入、交互态、中间件、处理器、命令、近似命令、发送）；诊断带结局；`reportInboundRejection`，修 14 处 `void emit`；统一发送失败码 | `@zhin.js/core` minor、`@zhin.js/im-contract` minor、`@zhin.js/command` patch、`@zhin.js/logger` minor（`createErrorId`）、`@zhin.js/console-protocol` minor、相关适配器 patch |
-| P2 | Agent：`route` 返回结局；门禁、未进插话群（`not_addressed`）、旁听、合流、`/clear`、`stop`、模型、预算、审批、工具、空输出、陈旧回复、失败话术发送失败；媒体逐项原因（`media_rejected`）；trace `termination.outcome`；修 `agent-runtime.ts:449` 为 warn | `@zhin.js/agent` minor、`@zhin.js/ai` patch |
+| P2 | Agent：`route` 返回结局；门禁、未进插话群（`not_addressed`）、旁听、合流、`/clear`、`stop`、模型、预算、审批、工具、空输出、陈旧回复、失败话术发送失败；媒体逐项原因（`media_rejected`）；trace `termination.outcome`；修 `agent-runtime.ts:449` 为 warn；IM 回合审批接入 `ToolApprovalQueue`，会话与 Console 任一处结算、另一处同步失效（§5.1） | `@zhin.js/agent` minor、`@zhin.js/ai` patch、`@zhin.js/console-protocol` minor、Console 前端 |
 | P3 | 持久化 `im_message_outcomes`、保留期、采样聚合；Console RPC 与权限、结局时间线、关注项；文档修订 | `@zhin.js/core` minor、`zhin.js` minor（`instance/console`）、`@zhin.js/console-protocol` minor、Console 前端 |
 | P4 | 查询入口：`why` 内置命令与固定短语、`explain_last_outcome` 工具、`zhin why`、`zhin trace --message` | `@zhin.js/core` minor、`@zhin.js/agent` minor、`@zhin.js/cli` minor |
 | P5 | 定时任务结局（助手任务、插件 `schedules/`、会话日程），`zhin schedule runs`；交互态声明“谁的回答算数” | `@zhin.js/agent` minor、`@zhin.js/schedule-feature` minor、`@zhin.js/core` minor、`plugins/utils/reminder` patch、`@zhin.js/cli` minor |
@@ -325,20 +342,26 @@ sidebar: false
 
 否决：引入重依赖，面向运维而非聊天用户，也没有人话原因与权限模型；结局表以后可以导出为 span 属性，不冲突。
 
-## 未决问题（需要所有者决定）
+## 决定
 
-1. **`why` 是否绕过 `mention_only` 与会话静音？** 推荐：绕过 `mention_only`（它本身就是点名）、绕过会话级 `muted_session`；不绕过急停、实例静音与平台禁言——这几种情况下只记录，Console / CLI 可查。
-2. **普通用户在群里问 `why`，回在群里还是私聊？** 推荐：群里原地回一句发起人模板（短、不含细节）；私聊不主动发起（多数平台机器人不能主动私聊）。
-3. **保留期默认值**：推荐 7 天（比决策审计短，量更大），可配置。
-4. **点名消息出 `internal_error` 时是否主动回复？** 推荐：是，60 秒限流，只带错误号；非点名消息不回。
-5. **是否存消息预览？** 推荐：不存，按 `message_id` join `conversation_events`；若项目关闭了会话存储，Console 只显示“正文未保存”。
-6. **自然语句识别放在哪？** 推荐：Core 固定短语表（默认开、只对点名消息）+ Agent 工具 `explain_last_outcome`；不为此调用模型做意图识别。
-7. **notice / request / system 事件是否逐条记结局？** 推荐：否，只记处理器抛错与请求的自动处理结果。
-8. **`internal_error` 是否推送给 owner？** 推荐：不推送，进 Console 关注项；P3 之后再看是否需要每日摘要。
-9. **`unrecorded` 在生产中的处理**：推荐 warn + 关注项计数，测试与 e2e 中直接失败。
-10. **静默结局采样阈值**：推荐每会话每分钟 30 行后聚合；点名消息与非静默结局永不采样。
-11. **交互态吞消息（`reminder-confirm-captures-chat`）**：推荐在 P5 让提问方声明 `answeredBy: 'target' | 'anyone'`（默认 `target`），非被问者的消息不再被吞；重复提示改为同一提问最多重发一次。在那之前先记 `interaction_consumed`。
-12. **`why` 是否可被功能开关关掉？** 推荐：可以（`im.outcomes.chatCommand`），但 Console / CLI 查询始终可用。
+所有者于 2026-11-14 拍板：原「未决问题」12 条**全部按推荐处理**。逐条结论如下（正文相应位置已同步）：
+
+1. **`why` 与控制面**：绕过 `mention_only`（它本身就是点名）与会话级 `muted_session`；不绕过急停、实例静音与平台禁言——这几种情况下只记录，Console / CLI 可查（§3.1）。
+2. **群里问 `why` 回在哪里**：群里原地回一句发起人模板（短、不含细节）；不主动发起私聊（§3.1）。
+3. **保留期**：`im.outcomes.retentionDays` 默认 7 天，可配置（§2）。
+4. **点名消息出 `internal_error`**：主动回复，同一会话 60 秒限流，只带错误号；非点名消息不回（§1.6、§3.1）。
+5. **消息预览**：不存；按 `message_id` join `conversation_events`；项目关闭会话存储时 Console 显示“正文未保存”（§2）。
+6. **自然语句识别**：Core 固定短语表（默认开、只对点名消息）+ Agent 只读工具 `explain_last_outcome`；不为此调用模型做意图识别（§3.1）。
+7. **notice / request / system 事件**：不逐条记结局，只记处理器抛错（`internal_error`）与请求的自动处理结果（`request_handled`）（§1.7）。
+8. **`internal_error` 推送给 owner**：不推送，进 Console 关注项；P3 之后再评估每日摘要（§3.2）。
+9. **生产中的 `unrecorded`**：warn + 关注项计数；测试与 e2e 中直接失败（§4）。
+10. **静默结局采样**：每会话每分钟 30 行后聚合（`im.outcomes.quietSampleLimit`）；点名消息与非静默结局永不采样（§2）。
+11. **交互态吞消息（`reminder-confirm-captures-chat`）**：P5 让提问方声明 `answeredBy: 'target' | 'anyone'`（默认 `target`），非被问者的消息不再被吞；同一提问的重复提示最多重发一次；在此之前先记 `interaction_consumed`（§1.3）。
+12. **`why` 可被功能开关关掉**：可以（`im.outcomes.chatCommand`），但 Console / CLI 查询始终可用（§3.1）。
+
+另有一条与 ADR 0062 共同的决定：
+
+13. **IM 回合审批接入 `ToolApprovalQueue`**：IM 会话内确认与 Console「需要你处理」里的工具审批共用同一个队列，任一处批准即生效、另一处同步失效（所有者在 PR #1253 的讨论中同意的推荐）。细节见 §5.1，实施归入 P2。
 
 ## 落盘位置（计划）
 

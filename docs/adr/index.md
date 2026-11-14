@@ -6,7 +6,9 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0058）
+## 现存 ADR 列表（0034–0062）
+
+ADR 0060（聊天身份与角色的唯一事实来源）在另一个批次分支上，合入后在此补登记。
 
 ### 服务插件与平台适配器契约
 
@@ -25,7 +27,7 @@ sidebar: false
 | [ADR 0038](./0038-continuous-input-merge.md) | 连续输入合流——高热群与弹幕 | Implemented | `@zhin.js/agent`（入站合流窗口）、`@zhin.js/harness`（Mailbox 合流策略） |
 | [ADR 0039](./0039-group-ops-rules.md) | 动态群管规则——批准一次的违规阶梯 | Implemented | `@zhin.js/agent`（`group-ops/` 违规阶梯与硬闸审批） |
 | [ADR 0040](./0040-controlled-self-change.md) | 受控自我进化——变更草稿、审批生效与重启回报 | Implemented | `@zhin.js/agent/src/self-change/`、`basic/cli` |
-| [ADR 0061](./0061-inbound-message-outcomes.md) | 每条入站消息都有结局与原因——消灭静默失败：有限结局集合与人话模板、`im_message_outcomes` 一行摘要（链接决策审计与 turn trace）、`why` / Console 结局时间线 / `zhin why`、`finally` 提交与 `check:silent-catch` | 提议（Proposed） | `@zhin.js/core`（`plugin-runtime/im/`）、`@zhin.js/agent`（`plugin-runtime/ingress/`、`media/`、`assistant/timer-scheduler.ts`）、`@zhin.js/im-contract`、`@zhin.js/console-protocol`、`basic/cli`、`scripts/check-silent-catch.mjs` |
+| [ADR 0061](./0061-inbound-message-outcomes.md) | 每条入站消息都有结局与原因——消灭静默失败：有限结局集合与人话模板、`im_message_outcomes` 一行摘要（链接决策审计与 turn trace）、`why` / Console 结局时间线 / `zhin why`、`finally` 提交与 `check:silent-catch`；IM 回合审批与 Console 共用 `ToolApprovalQueue` | Accepted | `@zhin.js/core`（`plugin-runtime/im/`）、`@zhin.js/agent`（`plugin-runtime/ingress/`、`media/`、`assistant/timer-scheduler.ts`）、`@zhin.js/im-contract`、`@zhin.js/console-protocol`、`basic/cli`、`scripts/check-silent-catch.mjs` |
 
 ### 提示词缓存与上下文 Token 预算
 
@@ -59,7 +61,7 @@ sidebar: false
 | [ADR 0057](./0057-config-storage.md) | 配置与状态存放——声明放 `zhin.config.yml`，运行时状态放数据库，密钥放 `.env`（分五步实施，第 1 步：规则、`x-zhin-secret`、明文密钥警告与 `zhin doctor --fix`、`.env` 原子写） | Accepted | `@zhin.js/runtime`（`config-secrets.ts`、`config-file/env-file.ts`）、`@zhin.js/gateway`（`config/literal-secrets.ts`）、`basic/cli`（`zhin doctor`）、`packages/im/zhin/src/instance/start-command.ts` |
 | [ADR 0058](./0058-login-assist-v2.md) | 登录辅助 v2——每个账号一条登录流程，挑战带引导材料，提交后能看到真实结果（P1：模型、描述符、引导块、协议与 RPC、审计、终端） | Accepted | `@zhin.js/core`（`built/login-assist.ts`、`built/login-captcha.ts`）、`@zhin.js/adapter`（`login-capability.ts`）、`@zhin.js/console-protocol`（`login.ts`）、`@zhin.js/host-http`（`console-rpc-extended/login-rpc.ts`）、`packages/im/zhin/src/instance/console/login-assist-*.ts` |
 | [ADR 0059](./0059-gateway-storage-isolation.md) | 网关存储隔离——Console 账号放 `.zhin/gateway.db`，SQLite 实例连接拒绝 `ATTACH`，PostgreSQL / MySQL 原始 SQL 只用受限账号 | Accepted | `@zhin.js/database`（`dialects/sqlite.ts`、`console-credential.ts`）、`@zhin.js/gateway`（`database/gateway-store.ts`、`iam/legacy-import.ts`、`database/console-role.ts`、`http/gateway-console.ts`）、`@zhin.js/core`（`database-host-installer.ts`、`database-config.ts`）、`basic/cli`（`zhin console migrate`、`zhin db console-role`、`zhin doctor`） |
-| [ADR 0062](./0062-one-path-per-task.md) | 每件事只留一条路——重复入口清单（25 项）与收敛建议：数据库为事实来源、文件只做种子，新用户操作只在 Console 与聊天，每页只教一条路 | Proposed | `@zhin.js/cli`、`create-zhin-app`、`zhin.js/instance`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/console-protocol`、官方插件、Console 前端（`zhinjs/console`）、`docs/` |
+| [ADR 0062](./0062-one-path-per-task.md) | 每件事只留一条路——重复入口清单（25 项）与收敛建议：数据库为事实来源、文件只做种子，新用户操作只在 Console 与聊天，每页只教一条路（Q0–Q25 全部按推荐定稿） | Accepted | `@zhin.js/cli`、`create-zhin-app`、`zhin.js/instance`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/console-protocol`、官方插件、Console 前端（`zhinjs/console`）、`docs/` |
 
 ---
 
