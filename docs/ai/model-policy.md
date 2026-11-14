@@ -57,6 +57,34 @@ purposes:
     profile: fast-aux
 ```
 
+## 备用模型（fallbacks）
+
+每个语言用途都可以配置按顺序尝试的备用模型：`chat`、`summary`、`ambient`、`agents.<name>`、`adapters|endpoints.<key>.chat`、`scenes.<key>.chat`，以及原有的 `perception`。写法是 Profile 名字符串，或 `{ profile, fallbacks }`：
+
+```yaml
+purposes:
+  chat:
+    profile: gemini-free          # 主模型
+    fallbacks: [cnb, deepseek]    # 依次尝试
+  summary: { profile: gemini-free, fallbacks: [deepseek] }
+  agents:
+    researcher: { profile: gemini-free, fallbacks: [deepseek] }
+  adapters:
+    qq:
+      chat: { profile: gemini-free, fallbacks: [cnb] }
+  scenes:
+    "github:...":
+      chat: { profile: cnb, fallbacks: [deepseek] }
+```
+
+- **何时切换**：只有主模型以「额度用完」（如 Gemini 免费档日配额）、「余额不足」或「鉴权失败」失败时，才换下一个备用模型继续回答。超时、服务端 5xx、限流和网络错误仍按原来的同模型重试处理，不切换。
+- **不重复执行工具**：切换发生在单次模型请求上，从当前对话继续；本回合已经执行过的工具不会再执行。已经向用户输出了部分文字时不切换。
+- **暂时跳过**：额度用完的模型在恢复前直接跳过——有供应商给出的重置时间就按它；Gemini 等日配额默认到美国太平洋时间午夜；其他配额与余额不足 1 小时，鉴权失败 15 分钟。跳过状态只在内存中，重启后会再试一次。
+- **每层各管各的链**：场景 / Adapter 覆盖了聊天模型，就只用该层写的备用链；摘要、旁听没单独配置时沿用部署聊天及其备用链。生图和六类决策不支持备用链；个人 Session 自选的聊天模型也不带备用链。
+- **能看到**：用了备用模型的回合在 `zhin trace` 中标记「本轮由备用模型回答」（`model_fallbacks`）；Console 用途页可读取当前被跳过的模型和最近的切换记录。
+
+备用 Profile 与主项一样必须是部署（Host）所有的 Profile。设计细节见 [ADR 0047 增补](../adr/0047-ai-provider-subscriptions-and-decision-models.md#增补用途备用模型1250-chat-purpose-no-fallback2026-11)。
+
 ## 个人 Session 与分层选择顺序
 
 同一个人在具体私聊、群或频道中分别拥有独立 Session。切换模型保留聊天历史；恢复继承移除该 Session 的明确选择。群公共事件通过场景上下文引用，不把所有成员合成一个私人会话。
@@ -67,9 +95,9 @@ purposes:
 
 | 层级 | 可选择的用途 |
 | --- | --- |
-| 部署 | 聊天、摘要、旁听语言模型、识图主项与备用链、生图、六类决策、Agent 角色 |
-| Adapter／Endpoint | 聊天、识图 |
-| 场景 | 聊天 |
+| 部署 | 聊天、摘要、旁听语言模型、识图（均可带备用链）、生图、六类决策、Agent 角色（可带备用链） |
+| Adapter／Endpoint | 聊天、识图（均可带备用链） |
+| 场景 | 聊天（可带备用链） |
 | 个人 Session | 聊天 Profile |
 
 摘要省略时继承部署聊天，始终不用个人密钥。旁听 Language Profile 省略时也继承部署聊天，不受个人或场景聊天选择影响；结构化 `decisions.ambient` 单独选择。参数和连接不能作为各层任意覆盖字段。

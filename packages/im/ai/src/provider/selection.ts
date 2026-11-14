@@ -14,10 +14,22 @@ interface SelectedProfile { readonly id: string; readonly source: ProviderSelect
 function selectedProfiles(graph: ProviderGraph, context: ProviderCallContext, purpose: InferencePurpose): readonly SelectedProfile[] {
   const policy = graph.purposes;
   const entry = (id: string | undefined, source: ProviderSelectionSource): SelectedProfile[] => id ? [{ id, source: Object.freeze(source) }] : [];
-  if (purpose === 'summary' || purpose === 'ambient') return entry(policy.defaults[purpose] ?? policy.defaults.chat,
-    { level: 'default', purpose, ...(policy.defaults[purpose] ? {} : { inheritedFrom: 'chat' as const }) });
+  // Primary first, then its ordered fallbacks, all attributed to the layer that chose the primary (#1250).
+  const chain = (id: string | undefined, fallbacks: readonly string[] | undefined, source: ProviderSelectionSource): SelectedProfile[] => {
+    if (!id) return [];
+    const frozen = Object.freeze(source);
+    return [id, ...(fallbacks ?? [])].map(candidate => ({ id: candidate, source: frozen }));
+  };
+  if (purpose === 'summary' || purpose === 'ambient') {
+    const own = policy.defaults[purpose];
+    return own ? chain(own, policy.defaults[`${purpose}Fallbacks`], { level: 'default', purpose })
+      : chain(policy.defaults.chat, policy.defaults.chatFallbacks, { level: 'default', purpose, inheritedFrom: 'chat' });
+  }
   if (purpose === 'image') return entry(policy.defaults.image, { level: 'default', purpose });
-  if (purpose.startsWith('agent:')) return entry(policy.agents?.[purpose.slice(6)], { level: 'agent', name: purpose.slice(6) });
+  if (purpose.startsWith('agent:')) {
+    const name = purpose.slice(6);
+    return chain(policy.agents?.[name], policy.agentFallbacks?.[name], { level: 'agent', name });
+  }
   if (purpose.startsWith('decision:')) {
     const task = purpose.slice(9) as DecisionPurpose;
     return entry(policy.decisions?.[task]?.profile, { level: 'decision', task });
@@ -35,13 +47,19 @@ function selectedProfiles(graph: ProviderGraph, context: ProviderCallContext, pu
       source = { level: layer.level, key: layer.key };
     }
     selected = { ...selected, ...layer.values };
+    // A layer that chooses `chat` also owns its chain: never pair it with an outer layer's fallbacks.
+    if (layer.values.chat !== undefined) selected = { ...selected, chatFallbacks: layer.values.chatFallbacks };
   }
   if (purpose === 'chat') return context.sessionChat
-    ? entry(context.sessionChat.id, { level: 'session' }) : entry(selected.chat, source);
+    ? entry(context.sessionChat.id, { level: 'session' }) : chain(selected.chat, selected.chatFallbacks, source);
   return selected.perception ? [selected.perception.profile, ...(selected.perception.fallbacks ?? [])]
     .map(id => ({ id, source: Object.freeze(source) })) : [];
 }
-/** Explicit configured candidates, preserving the sole approved perception chain. */
+/**
+ * Explicit configured candidates: the selected Profile first, then the ordered fallbacks
+ * its own layer declares (perception and every language purpose, #1250). A session's
+ * explicit chat choice carries no fallbacks.
+ */
 export function providerPurposeSelections(input: Readonly<{
   graph: ProviderGraph; context: ProviderCallContext; purpose: InferencePurpose;
 }>): readonly Readonly<SelectedProfile>[] {

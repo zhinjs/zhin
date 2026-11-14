@@ -117,13 +117,31 @@ function perception(input: unknown): PerceptionSelection {
   return Object.freeze({ profile: text(raw.profile), ...(raw.fallbacks !== undefined
     ? { fallbacks: Object.freeze((raw.fallbacks as unknown[]).map(text)) } : {}) });
 }
+/**
+ * An ordered fallback chain of a language purpose (#1250 chat-purpose-no-fallback):
+ * non-empty, without duplicates, never naming its own primary, and only next to a primary.
+ */
+function fallbackChain(input: unknown, primary: string | undefined): readonly string[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || primary === undefined || input.length === 0) return invalid();
+  const ids = input.map(text);
+  if (new Set(ids).size !== ids.length || ids.includes(primary)) return invalid();
+  return Object.freeze(ids);
+}
+function withFallbacks(raw: Record<string, unknown>, key: string): Record<string, unknown> {
+  const primary = raw[key] !== undefined ? text(raw[key]) : undefined;
+  const fallbacks = fallbackChain(raw[`${key}Fallbacks`], primary);
+  return { ...(primary !== undefined ? { [key]: primary } : {}), ...(fallbacks ? { [`${key}Fallbacks`]: fallbacks } : {}) };
+}
 function scoped(input: unknown, defaults = false): ScopedModelSelection & { summary?: string; image?: string; ambient?: string } {
   const raw = object(input);
-  fields(raw, defaults ? ['chat', 'perception', 'summary', 'image', 'ambient'] : ['chat', 'perception']);
-  return Object.freeze({ ...(raw.chat !== undefined ? { chat: text(raw.chat) } : {}),
+  fields(raw, defaults
+    ? ['chat', 'chatFallbacks', 'perception', 'summary', 'summaryFallbacks', 'image', 'ambient', 'ambientFallbacks']
+    : ['chat', 'chatFallbacks', 'perception']);
+  return Object.freeze({ ...withFallbacks(raw, 'chat'),
     ...(raw.perception !== undefined ? { perception: perception(raw.perception) } : {}),
-    ...(raw.summary !== undefined ? { summary: text(raw.summary) } : {}),
-    ...(raw.ambient !== undefined ? { ambient: text(raw.ambient) } : {}), ...(raw.image !== undefined ? { image: text(raw.image) } : {}) });
+    ...(defaults ? withFallbacks(raw, 'summary') : {}),
+    ...(defaults ? withFallbacks(raw, 'ambient') : {}), ...(raw.image !== undefined ? { image: text(raw.image) } : {}) });
 }
 function decision(input: unknown): DecisionPurposePolicy {
   const raw = object(input);
@@ -144,14 +162,18 @@ function decision(input: unknown): DecisionPurposePolicy {
 }
 function purposes(input: unknown): PurposePolicy {
   const raw = object(input);
-  fields(raw, ['defaults', 'decisions', 'agents', 'adapters', 'endpoints', 'scenes']);
+  fields(raw, ['defaults', 'decisions', 'agents', 'agentFallbacks', 'adapters', 'endpoints', 'scenes']);
   const result: PurposePolicy = { defaults: scoped(raw.defaults, true),
     ...(raw.agents !== undefined ? { agents: dictionary(raw.agents, text) } : {}),
+    ...(raw.agentFallbacks !== undefined ? { agentFallbacks: dictionary(raw.agentFallbacks, (chain, key) => {
+      const agents = raw.agents === undefined ? undefined : object(raw.agents);
+      return fallbackChain(chain, agents && Object.hasOwn(agents, key) ? text(agents[key]) : undefined)!;
+    }) } : {}),
     ...(raw.adapters !== undefined ? { adapters: dictionary(raw.adapters, entry => scoped(entry)) } : {}),
     ...(raw.endpoints !== undefined ? { endpoints: dictionary(raw.endpoints, entry => scoped(entry)) } : {}),
     ...(raw.scenes !== undefined ? { scenes: dictionary(raw.scenes, input => {
-      const value = object(input); fields(value, ['chat']);
-      return Object.freeze({ ...(value.chat !== undefined ? { chat: text(value.chat) } : {}) });
+      const value = object(input); fields(value, ['chat', 'chatFallbacks']);
+      return Object.freeze(withFallbacks(value, 'chat'));
     }) } : {}),
     ...(raw.decisions !== undefined ? { decisions: dictionary(raw.decisions, (entry, key) => {
       if (!DECISION_PURPOSES.includes(key as DecisionPurpose)) return invalid();
@@ -182,13 +204,20 @@ export function normalizeProviderGraph(input: unknown): ProviderGraph {
   };
   const checkScoped = (entry: ScopedModelSelection): void => {
     check(entry.chat, 'language'); check(entry.perception?.profile, 'language');
+    for (const id of entry.chatFallbacks ?? []) check(id, 'language');
     for (const id of entry.perception?.fallbacks ?? []) check(id, 'language');
   };
-  checkScoped(graph.purposes.defaults); check(graph.purposes.defaults.summary, 'language'); check(graph.purposes.defaults.ambient, 'language'); check(graph.purposes.defaults.image, 'image');
+  const defaults = graph.purposes.defaults;
+  checkScoped(defaults); check(defaults.summary, 'language'); check(defaults.ambient, 'language'); check(defaults.image, 'image');
+  for (const id of [...defaults.summaryFallbacks ?? [], ...defaults.ambientFallbacks ?? []]) check(id, 'language');
   for (const entry of Object.values(graph.purposes.adapters ?? {})) checkScoped(entry);
   for (const entry of Object.values(graph.purposes.endpoints ?? {})) checkScoped(entry);
-  for (const entry of Object.values(graph.purposes.scenes ?? {})) check(entry.chat, 'language');
+  for (const entry of Object.values(graph.purposes.scenes ?? {})) {
+    check(entry.chat, 'language');
+    for (const id of entry.chatFallbacks ?? []) check(id, 'language');
+  }
   for (const id of Object.values(graph.purposes.agents ?? {})) check(id, 'language');
+  for (const chain of Object.values(graph.purposes.agentFallbacks ?? {})) for (const id of chain) check(id, 'language');
   for (const entry of Object.values(graph.purposes.decisions ?? {})) check(entry.profile, 'decision');
   return graph;
 }

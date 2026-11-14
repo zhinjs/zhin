@@ -273,69 +273,51 @@
         }
       }
     },
+    "aiPlanLanguagePurpose": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profile"
+          ],
+          "properties": {
+            "profile": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fallbacks": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "aiPlanPurposes": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "chat": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "profile"
-              ],
-              "properties": {
-                "profile": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/aiPlanLanguagePurpose"
         },
         "summary": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "profile"
-              ],
-              "properties": {
-                "profile": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/aiPlanLanguagePurpose"
         },
         "ambient": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "profile"
-              ],
-              "properties": {
-                "profile": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/aiPlanLanguagePurpose"
         },
         "image": {
           "anyOf": [
@@ -705,24 +687,7 @@
         "agents": {
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "profile"
-                ],
-                "properties": {
-                  "profile": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/$defs/aiPlanLanguagePurpose"
           }
         },
         "adapters": {
@@ -734,24 +699,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "chat": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "profile"
-                        ],
-                        "properties": {
-                          "profile": {
-                            "type": "string",
-                            "minLength": 1
-                          }
-                        }
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/$defs/aiPlanLanguagePurpose"
                   },
                   "perception": {
                     "anyOf": [
@@ -797,24 +745,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "chat": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "profile"
-                        ],
-                        "properties": {
-                          "profile": {
-                            "type": "string",
-                            "minLength": 1
-                          }
-                        }
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/$defs/aiPlanLanguagePurpose"
                   },
                   "perception": {
                     "anyOf": [
@@ -860,24 +791,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "chat": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "profile"
-                        ],
-                        "properties": {
-                          "profile": {
-                            "type": "string",
-                            "minLength": 1
-                          }
-                        }
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/$defs/aiPlanLanguagePurpose"
                   }
                 }
               },

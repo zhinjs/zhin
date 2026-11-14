@@ -511,9 +511,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `profiles.<key>.label` | string | no | — | — |
 | `profiles.<key>.parameters` | object | no | — | — |
 | `purposes` | object | no | — | — |
-| `purposes.chat` | object \| null | no | — | — |
-| `purposes.summary` | object \| null | no | — | — |
-| `purposes.ambient` | object \| null | no | — | — |
+| `purposes.chat` | string \| object \| null | no | — | — |
+| `purposes.summary` | string \| object \| null | no | — | — |
+| `purposes.ambient` | string \| object \| null | no | — | — |
 | `purposes.image` | object \| null | no | — | — |
 | `purposes.perception` | object \| null | no | — | — |
 | `purposes.decisions` | object | no | — | — |

@@ -83,6 +83,28 @@ export interface TurnTraceModelSelection {
   readonly source?: string;
 }
 
+/**
+ * One switch of this (sub-)turn to a purpose fallback model (#1250 chat-purpose-no-fallback).
+ * `notice` is the user-facing wording 「本轮由备用模型回答」.
+ */
+export interface TurnTraceModelFallback {
+  /** `chat`, `summary`, `ambient` or `agent:<name>`. */
+  readonly purpose: string;
+  readonly from_profile_id: string;
+  readonly from_account_id: string;
+  readonly from_model: string;
+  readonly to_profile_id: string;
+  readonly to_account_id: string;
+  readonly to_model: string;
+  /** `quota_exhausted`, `billing` or `auth`. */
+  readonly reason: string;
+  /** `selection`: the primary was already being skipped; `request`: a request failed and was re-issued. */
+  readonly phase: 'selection' | 'request';
+  /** Epoch ms when the original model may be tried again. */
+  readonly from_until?: number;
+  readonly notice: string;
+}
+
 export interface TurnTraceBudgetExtension {
   readonly from: number;
   readonly to: number;
@@ -170,6 +192,8 @@ export interface TurnTrace {
   readonly subagent_usage?: TurnTraceUsageTotals;
   /** Model the turn ran on, when the host selected it for this (sub-)turn (#1250). */
   readonly model_selection?: TurnTraceModelSelection;
+  /** Purpose fallbacks used by this (sub-)turn, in order (#1250). Absent when none. */
+  readonly model_fallbacks?: readonly TurnTraceModelFallback[];
   /**
    * The final reply claims a lookup ("查了 / 根据最新 / I checked") but the turn made
    * no tool call: likely made up (#1250 tool-capability-unverified). Flag only.
@@ -198,6 +222,8 @@ export type TurnTraceNote =
   /** How the turn was admitted behind other turns of its session (#725). */
   | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
   | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>
+  /** The turn was answered (from here on) by a purpose fallback model (#1250). */
+  | Readonly<{ kind: 'model_fallback'; fallback: TurnTraceModelFallback }>
   /**
    * Final reply of a turn that does not record `turn_end` (a sub-agent actor turn):
    * checked for a lookup claim without any tool call, like `turn_end` output.
@@ -253,6 +279,7 @@ export class TurnTraceCollector {
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
   #modelSelection: TurnTraceModelSelection | undefined;
+  readonly #modelFallbacks: TurnTraceModelFallback[] = [];
   #claimWithoutToolCall: string | undefined;
   #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
   #trigger: TurnTraceTrigger | undefined;
@@ -391,6 +418,11 @@ export class TurnTraceCollector {
     } else if (note.kind === 'model_selection') {
       this.#modelSelection = Object.freeze({ ...note.selection });
       this.#addTimeline('model_selection', `${note.selection.purpose} → ${note.selection.account_id}/${note.selection.model}`);
+    } else if (note.kind === 'model_fallback') {
+      const fallback = note.fallback;
+      this.#modelFallbacks.push(Object.freeze({ ...fallback }));
+      this.#addTimeline('model_fallback', `${fallback.notice}: ${fallback.purpose} ${fallback.from_account_id}/${fallback.from_model}`
+        + ` → ${fallback.to_account_id}/${fallback.to_model} (${fallback.reason})`);
     } else if (note.kind === 'unexecuted_tool_notice') {
       this.#unexecutedNotice = Object.freeze({ tools: Object.freeze([...note.tools]), delivered: note.delivered });
       this.#addTimeline('unexecuted_tool_notice', `${note.delivered}: ${note.tools.join(', ')}`);
@@ -559,6 +591,7 @@ export class TurnTraceCollector {
       subagents: Object.freeze(subagents),
       ...(subagentUsage ? { subagent_usage: subagentUsage } : {}),
       ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
+      ...(this.#modelFallbacks.length ? { model_fallbacks: Object.freeze([...this.#modelFallbacks]) } : {}),
       ...(this.#claimWithoutToolCall ? { claim_without_tool_call: Object.freeze({ phrase: this.#claimWithoutToolCall }) } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),

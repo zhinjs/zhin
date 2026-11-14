@@ -69,17 +69,32 @@ export interface DecisionPurposePolicy {
   readonly maxCandidates?: number;
   readonly maxSelections?: number;
 }
+/**
+ * Language purposes keep their primary Profile id as a plain string (every existing
+ * reader keeps working) and carry their ordered fallback chain in a sibling
+ * `*Fallbacks` field (#1250 chat-purpose-no-fallback). A fallback is used only when
+ * the selected model fails with a class another account can fix (quota, billing,
+ * authentication); it is never a general account pool.
+ */
 export interface ScopedModelSelection {
   readonly chat?: string;
+  /** Ordered fallbacks of `chat`, set by the same layer as `chat`. */
+  readonly chatFallbacks?: readonly string[];
   readonly perception?: PerceptionSelection;
 }
 export interface PurposePolicy {
-  readonly defaults: ScopedModelSelection & Readonly<{ summary?: string; image?: string; ambient?: string }>;
+  readonly defaults: ScopedModelSelection & Readonly<{
+    summary?: string; summaryFallbacks?: readonly string[];
+    image?: string;
+    ambient?: string; ambientFallbacks?: readonly string[];
+  }>;
   readonly decisions?: Readonly<Partial<Record<DecisionPurpose, DecisionPurposePolicy>>>;
   readonly agents?: Readonly<Record<string, string>>;
+  /** Ordered fallbacks of `agents[key]`; a key without an `agents` entry is invalid. */
+  readonly agentFallbacks?: Readonly<Record<string, readonly string[]>>;
   readonly adapters?: Readonly<Record<string, ScopedModelSelection>>;
   readonly endpoints?: Readonly<Record<string, ScopedModelSelection>>;
-  readonly scenes?: Readonly<Record<string, Readonly<{ chat?: string }>>>;
+  readonly scenes?: Readonly<Record<string, Readonly<{ chat?: string; chatFallbacks?: readonly string[] }>>>;
 }
 export interface ProviderGraph {
   readonly rootId: string;
