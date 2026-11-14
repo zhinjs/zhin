@@ -52,6 +52,12 @@ export interface ProviderErrorClassification {
    * reset time when the provider gives no hint (#1250 chat-purpose-no-fallback).
    */
   readonly quotaWindow?: "day";
+  /**
+   * `auth` only: the credential itself was rejected (HTTP 401, `UNAUTHENTICATED`,
+   * `API_KEY_*` / `invalid_api_key`-style codes). A plain 403 can be a gateway's
+   * content or region refusal and is not marked (#1250 chat-purpose-no-fallback).
+   */
+  readonly credential?: true;
 }
 
 export interface ProviderResilienceConfig {
@@ -394,6 +400,14 @@ function isBillingError(
   return BILLING_MESSAGE_PATTERN.test(message);
 }
 
+/** Error codes naming a rejected credential (`API_KEY_INVALID`, `invalid_api_key`, Anthropic `authentication_error`). */
+function hasCredentialCode(codes: ReadonlySet<string>): boolean {
+  for (const code of codes) {
+    if (/^api[_-]?key[_-]/i.test(code) || /(?:^|_)api[_-]?key$/i.test(code) || code === "authentication_error" || code === "UNAUTHENTICATED") return true;
+  }
+  return false;
+}
+
 /** A 429 naming a per-day window: `requests per day (RPD)` / `tokens per day (TPD)`. */
 const PER_DAY_LIMIT_PATTERN = /\bper day \((?:RPD|TPD)\)/i;
 
@@ -431,7 +445,7 @@ export function classifyProviderError(
       (reason) => reason === "API_KEY_INVALID" || reason === "API_KEY_EXPIRED"
     )
   ) {
-    return { kind: "auth", retryable: false, status };
+    return { kind: "auth", retryable: false, status, credential: true };
   }
   // Gemini answers a server-side deadline with 504 DEADLINE_EXCEEDED: a timeout, not an outage.
   if (google?.status === "DEADLINE_EXCEEDED")
@@ -466,7 +480,12 @@ export function classifyProviderError(
     return { kind: "rate_limit", retryable: true, status, retryAfterMs };
   if (status === 408) return { kind: "timeout", retryable: true, status };
   if (status === 401 || status === 403)
-    return { kind: "auth", retryable: false, status };
+    return {
+      kind: "auth",
+      retryable: false,
+      status,
+      ...(status === 401 || hasCredentialCode(codes) ? { credential: true as const } : {}),
+    };
   if (status !== undefined && status >= 500) {
     return { kind: "server", retryable: true, status, retryAfterMs };
   }
@@ -482,8 +501,8 @@ export function classifyProviderError(
     return { kind: "server", retryable: true, retryAfterMs };
   if (rpcStatus === "DEADLINE_EXCEEDED")
     return { kind: "timeout", retryable: true };
-  if (rpcStatus === "UNAUTHENTICATED" || rpcStatus === "PERMISSION_DENIED")
-    return { kind: "auth", retryable: false };
+  if (rpcStatus === "UNAUTHENTICATED") return { kind: "auth", retryable: false, credential: true };
+  if (rpcStatus === "PERMISSION_DENIED") return { kind: "auth", retryable: false };
 
   const code =
     typeof rec.code === "string" ? rec.code : record(rec.cause)?.code;

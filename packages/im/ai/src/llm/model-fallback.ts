@@ -1,40 +1,58 @@
 /**
- * Purpose fallback models (#1250 chat-purpose-no-fallback).
+ * Purpose fallback models (#1250 chat-purpose-no-fallback, #1270).
  *
  * `provider-resilience` retries one selected model and never changes model or
- * account. This module is the layer above it: when a whole model request fails
- * with a class that another account can fix (quota exhausted, billing / no
- * credit, authentication), the request is re-issued on the next configured
- * fallback of the same purpose.
+ * account. This module is the layer below it (it wraps the selected model's
+ * transport): when a whole model request fails with a class that another
+ * account can fix, the request is re-issued on the next configured fallback of
+ * the same purpose.
  *
  * Rules:
- * - Only `quota_exhausted`, `billing` and `auth` switch. Timeouts, 5xx, rate
- *   limits, network errors, bad requests, content refusals and context overflow
- *   keep their current behaviour (same-model retry in `provider-resilience`,
- *   then the error) and never switch: another account does not fix them, and a
- *   slow primary must not silently move traffic to a paid fallback.
- * - Switching happens per request, inside one turn, from the current transcript.
- *   A failed request produced no tool calls, so nothing is replayed: tool calls
- *   that already ran stay in the transcript as results and the fallback continues
- *   from there. A request that already streamed text to the user (or whose caller
- *   forbids a retry) never switches.
+ * - Switching classes: `quota_exhausted`, `billing`, and `auth` only when the
+ *   credential itself was rejected (401, `UNAUTHENTICATED`, `API_KEY_*`-style
+ *   codes). A plain 403 (often a gateway's content or region refusal) does not
+ *   switch and does not mark the model.
+ * - Timeouts (whole-attempt timeouts and first-response / first-chunk deadlines,
+ *   i.e. anything `classifyProviderError` calls `timeout`) switch only after
+ *   {@link CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts of the same
+ *   account + model within one operation; the next attempt then goes to the
+ *   fallback. A one-off timeout behaves as before (same-model retry).
+ * - 5xx, rate limits, network errors, bad requests, content refusals and
+ *   context overflow never switch.
+ * - Switching happens per request, from the current transcript. A failed
+ *   request produced no tool calls, so nothing is replayed: executed tool calls
+ *   stay in the transcript as results. A request that already streamed text to
+ *   the user (or whose caller forbids another attempt) never switches.
+ * - A fallback is used only when it can serve the request: its declared input
+ *   modalities cover the transcript's media, the estimated context fits its
+ *   `contextWindow`, and the transcript satisfies its tool-loop protocol
+ *   (Anthropic thinking needs signed thinking on the open tool loop, otherwise
+ *   thinking is turned off for that request; Gemini needs `thoughtSignature`
+ *   and Mistral 9-character tool ids, otherwise the fallback is skipped).
+ * - A switched request runs with the fallback's own `maxTokens` and execution
+ *   policy (same-model retries, per-attempt timeout).
  * - A model that failed this way is skipped (per account + model, in memory)
  *   until its reset time: the provider's reset hint when it sent one, otherwise
- *   the next midnight in America/Los_Angeles for a per-day quota (Gemini's daily
- *   free-tier quotas reset then), otherwise a fixed cooldown.
+ *   the next midnight in America/Los_Angeles for a per-day quota, otherwise a
+ *   fixed cooldown.
  */
 import type { LlmCompletionPort, StreamOptions } from "./llm-api-runtime.js";
-import type { Model } from "./types/model.js";
+import type { Model, ModelInputModality } from "./types/model.js";
 import type { Context } from "./types/context.js";
-import type { AssistantMessage } from "./types/agent-message.js";
+import type { AgentMessage, AssistantMessage } from "./types/agent-message.js";
+import type { ContentBlock } from "./types/content-block.js";
 import {
   ProviderRequestError,
   classifyProviderError,
+  createResilientCompletionPort,
+  resolveProviderResilienceConfig,
   type ProviderErrorClassification,
 } from "./provider-resilience.js";
+import { estimateAgentMessagesTokens } from "../compaction/agent-message-tokens.js";
+import { estimateTextTokens } from "../compaction/token-counter.js";
 
-/** Failure classes another account / model can fix; the only ones that switch. */
-export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth";
+/** Failure classes that switch to the next fallback. */
+export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout";
 
 /** User-visible note for a turn answered by a fallback model. */
 export const MODEL_FALLBACK_NOTICE = "本轮由备用模型回答";
@@ -43,27 +61,35 @@ export const MODEL_FALLBACK_NOTICE = "本轮由备用模型回答";
 export const QUOTA_FALLBACK_COOLDOWN_MS = 60 * 60_000;
 /** Cooldown for an account out of credit; credit is added by a person, not a clock. */
 export const BILLING_FALLBACK_COOLDOWN_MS = 60 * 60_000;
-/** Cooldown for an authentication failure; a fixed key is picked up after this. */
+/** Cooldown for a rejected credential; a fixed key is picked up after this. */
 export const AUTH_FALLBACK_COOLDOWN_MS = 15 * 60_000;
+/** Cooldown after repeated timeouts: short, a slow model usually recovers soon. */
+export const TIMEOUT_FALLBACK_COOLDOWN_MS = 5 * 60_000;
+/** Consecutive timeouts of one account + model within one operation before the next attempt switches (#1270). */
+export const CONSECUTIVE_TIMEOUTS_TO_SWITCH = 2;
 /** Provider reset hints longer than this are capped (a broken header must not park a model for weeks). */
 export const MAX_FALLBACK_SKIP_MS = 48 * 60 * 60_000;
 
-const SWITCHING_KINDS = new Set<string>(["quota_exhausted", "billing", "auth"]);
+function classify(error: unknown): ProviderErrorClassification {
+  return error instanceof ProviderRequestError
+    ? { ...classifyProviderError(error.cause), kind: error.kind }
+    : classifyProviderError(error);
+}
 
-/** The switching class of a failed request, or `undefined` when it must not switch. */
+/**
+ * The switching class of a failed request, or `undefined` when it does not switch
+ * by itself (timeouts switch only when repeated, see {@link createFallbackCompletionPort}).
+ */
 export function modelFallbackFailure(
   error: unknown
 ):
-  | (ProviderErrorClassification & { readonly kind: ModelFallbackReason })
+  | (ProviderErrorClassification & { readonly kind: Exclude<ModelFallbackReason, "timeout"> })
   | undefined {
-  const classification =
-    error instanceof ProviderRequestError
-      ? { ...classifyProviderError(error.cause), kind: error.kind }
-      : classifyProviderError(error);
-  return SWITCHING_KINDS.has(classification.kind)
-    ? (classification as ProviderErrorClassification & {
-        readonly kind: ModelFallbackReason;
-      })
+  const classification = classify(error);
+  const switching = classification.kind === "quota_exhausted" || classification.kind === "billing"
+    || (classification.kind === "auth" && classification.credential === true);
+  return switching
+    ? (classification as ProviderErrorClassification & { readonly kind: Exclude<ModelFallbackReason, "timeout"> })
     : undefined;
 }
 
@@ -125,6 +151,7 @@ export function modelFallbackResetAt(
     }
     return now + QUOTA_FALLBACK_COOLDOWN_MS;
   }
+  if (failure.kind === "timeout") return now + TIMEOUT_FALLBACK_COOLDOWN_MS;
   return now + (failure.kind === "billing" ? BILLING_FALLBACK_COOLDOWN_MS : AUTH_FALLBACK_COOLDOWN_MS);
 }
 
@@ -244,6 +271,9 @@ export interface ModelFallbackCandidate {
   resolve(): Promise<Omit<ModelFallbackTarget, "endpoint">>;
 }
 
+/** Why a fallback cannot serve one request; it is passed over, not marked unavailable. */
+export type FallbackUnfitReason = "input" | "context_window" | "transcript";
+
 export interface FallbackCompletionOptions {
   readonly purpose: string;
   /** The model the caller selected; calls must pass this model. */
@@ -254,23 +284,99 @@ export interface FallbackCompletionOptions {
   readonly onFallback?: (event: ModelFallbackEvent) => void;
   /** A fallback that cannot be resolved is skipped; this only reports it. */
   readonly onCandidateError?: (endpoint: ModelFallbackEndpoint, error: unknown) => void;
+  /** A fallback that cannot serve this request is skipped; this only reports it. */
+  readonly onCandidateUnfit?: (endpoint: ModelFallbackEndpoint, reason: FallbackUnfitReason) => void;
+  /** Attribute a fallback's answer (e.g. map its account id to the id usage reports use). */
+  readonly annotate?: (message: AssistantMessage, endpoint: ModelFallbackEndpoint) => AssistantMessage;
 }
 
 function sameModel(a: Model, b: Model): boolean {
   return a === b || (a.id === b.id && a.provider === b.provider && a.api === b.api);
 }
 
+const MEDIA_TYPES = new Set<string>(["image", "audio", "video", "file"]);
+
+/** Input modalities the transcript sends (media in user content, `media` and tool results). */
+export function requiredInputModalities(context: Context): ReadonlySet<ModelInputModality> {
+  const needed = new Set<ModelInputModality>();
+  const scan = (blocks: readonly ContentBlock[] | undefined) => {
+    for (const block of blocks ?? []) if (MEDIA_TYPES.has(block.type)) needed.add(block.type as ModelInputModality);
+  };
+  for (const message of context.messages) {
+    if (message.role !== "user" && message.role !== "toolResult") continue;
+    const content = (message as { content?: unknown }).content;
+    if (Array.isArray(content)) scan(content as ContentBlock[]);
+    scan((message as { media?: ContentBlock[] }).media);
+  }
+  return needed;
+}
+
+/** Estimated prompt size (messages, system prompt, tool names and descriptions); not a billing value. */
+export function estimateRequestTokens(context: Context): number {
+  return estimateAgentMessagesTokens(context.messages as AgentMessage[]) + estimateTextTokens(context.systemPrompt ?? "")
+    + (context.tools ?? []).reduce((sum, tool) => sum + estimateTextTokens(`${tool.name} ${tool.description ?? ""}`), 0);
+}
+
+const MISTRAL_MODEL = /(?:^|[/:._-])(?:mistral|codestral|magistral|devstral|ministral|pixtral)/i;
+const MISTRAL_TOOL_ID = /^[A-Za-z0-9]{9}$/;
+
+/**
+ * Whether the open tool loop (assistant tool calls after the last user message) can be sent
+ * to `target` as is: `ok`; `no-thinking` (Anthropic with thinking needs signed thinking on
+ * every tool-use turn, so send this request without thinking); or `skip` (Gemini needs a
+ * `thoughtSignature` on tool calls, Mistral 9-character tool ids).
+ */
+export function fallbackTranscriptFit(target: Model, context: Context): "ok" | "no-thinking" | "skip" {
+  const messages = context.messages;
+  let start = messages.length;
+  while (start > 0 && messages[start - 1]!.role !== "user") start--;
+  const turns = messages.slice(start).filter((message): message is AssistantMessage => message.role === "assistant")
+    .filter(message => message.content.some(block => block.type === "toolCall"));
+  if (!turns.length) return "ok";
+  const calls = turns.flatMap(message => message.content.filter(block => block.type === "toolCall"));
+  if (MISTRAL_MODEL.test(target.id) && calls.some(call => !MISTRAL_TOOL_ID.test(call.id))) return "skip";
+  if (target.promptFamily === "google" && calls.some(call =>
+    !call.providerOptions?.google?.thoughtSignature && !call.providerOptions?.vertex?.thoughtSignature)) return "skip";
+  if (target.promptFamily === "anthropic" && target.reasoning === true && turns.some(message => !message.content.some(block =>
+    block.type === "thinking" && Boolean(block.providerOptions?.anthropic?.signature || block.providerOptions?.anthropic?.redactedData)))) {
+    return "no-thinking";
+  }
+  return "ok";
+}
+
+/** Whether `target` can serve this request, and with which adjustments. */
+function fitFor(target: Model, context: Context): { readonly ok: true; readonly noThinking: boolean } | { readonly ok: false; readonly reason: FallbackUnfitReason } {
+  const inputs = new Set(target.input ?? ["text"]);
+  for (const modality of requiredInputModalities(context)) if (!inputs.has(modality)) return { ok: false, reason: "input" };
+  if (target.contextWindow > 0 && estimateRequestTokens(context) > target.contextWindow) return { ok: false, reason: "context_window" };
+  const transcript = fallbackTranscriptFit(target, context);
+  if (transcript === "skip") return { ok: false, reason: "transcript" };
+  return { ok: true, noThinking: transcript === "no-thinking" };
+}
+
+function endpointKey(endpoint: ModelFallbackEndpoint): string {
+  return JSON.stringify([endpoint.accountId, endpoint.model]);
+}
+
+interface ActiveTarget extends ModelFallbackTarget {
+  /** Fallbacks run with their own execution policy; the selected model keeps the caller's. */
+  readonly switched: boolean;
+}
+
 /**
  * A completion port over one purpose's ordered candidates. It sits below
- * `provider-resilience` (which still retries each model) and switches only on
- * {@link ModelFallbackReason}. Once switched it stays on the fallback for the
- * rest of the operation.
+ * `provider-resilience` (which still retries the selected model) and switches
+ * only as described in the module comment. Once switched it stays on the
+ * fallback for the rest of the operation.
  */
 export function createFallbackCompletionPort(options: FallbackCompletionOptions): LlmCompletionPort {
   if (options.fallbacks.length === 0) return options.primary.completion;
   const registry = options.registry ?? modelAvailability;
-  let active: ModelFallbackTarget = options.primary;
+  let active: ActiveTarget = { ...options.primary, switched: false };
   let next = 0;
+  const timeouts = new Map<string, number>();
+  /** Set after repeated timeouts when the attempt could not continue (its signal was aborted). */
+  let pending: { readonly from: ModelFallbackEndpoint; readonly until: number } | undefined;
 
   const report = (event: ModelFallbackEvent) => {
     registry.recordFallback(event);
@@ -280,23 +386,53 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
       /* Diagnostics never change the answer. */
     }
   };
+  const quietly = (run: () => void) => {
+    try { run(); } catch { /* Diagnostic only. */ }
+  };
 
-  /** The next configured candidate not currently skipped, resolved; `undefined` when none is left. */
-  const advance = async (): Promise<ModelFallbackTarget | undefined> => {
+  /** The next configured candidate that is not skipped, resolves and can serve `context`. */
+  const advance = async (context: Context): Promise<ActiveTarget | undefined> => {
     while (next < options.fallbacks.length) {
       const candidate = options.fallbacks[next++]!;
       if (registry.unavailable(candidate.endpoint.accountId, candidate.endpoint.model)) continue;
+      let resolved: Omit<ModelFallbackTarget, "endpoint">;
       try {
-        return { endpoint: candidate.endpoint, ...(await candidate.resolve()) };
+        resolved = await candidate.resolve();
       } catch (error) {
-        try {
-          options.onCandidateError?.(candidate.endpoint, error);
-        } catch {
-          /* Diagnostic only. */
-        }
+        quietly(() => options.onCandidateError?.(candidate.endpoint, error));
+        continue;
       }
+      const fit = fitFor(resolved.model, context);
+      if (!fit.ok) {
+        quietly(() => options.onCandidateUnfit?.(candidate.endpoint, fit.reason));
+        // Another request may fit later in the operation; keep it reachable.
+        continue;
+      }
+      return { endpoint: candidate.endpoint, ...resolved, switched: true };
     }
     return undefined;
+  };
+
+  const switchTo = (target: ActiveTarget, from: ModelFallbackEndpoint, reason: ModelFallbackReason, at: number, until: number) => {
+    active = target;
+    report(Object.freeze({ purpose: options.purpose, from, to: target.endpoint, reason, phase: "request",
+      at, fromUntil: until, notice: MODEL_FALLBACK_NOTICE }));
+  };
+
+  /** The fallback's own execution policy and output limit; thinking off when the transcript requires it. */
+  const invoke = (method: keyof LlmCompletionPort, target: ActiveTarget, context: Context, streamOptions: StreamOptions | undefined) => {
+    if (!target.switched) return target.completion[method](target.model, context, streamOptions);
+    const fit = fitFor(target.model, context);
+    const port = createResilientCompletionPort(target.completion, {
+      config: resolveProviderResilienceConfig(target.model.executionPolicy),
+    });
+    const maxTokens = streamOptions?.maxTokens !== undefined && target.model.maxTokens > 0
+      ? Math.min(streamOptions.maxTokens, target.model.maxTokens) : streamOptions?.maxTokens;
+    return port[method](target.model, context, {
+      ...streamOptions,
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(fit.ok && fit.noThinking ? { thinkingLevel: "off" as const } : {}),
+    }).then(message => options.annotate ? options.annotate(message, target.endpoint) : message);
   };
 
   const run =
@@ -304,12 +440,21 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
     async (model: Model, context: Context, streamOptions?: StreamOptions): Promise<AssistantMessage> => {
       // A model other than the selected one is the caller's error; the selected port reports it.
       if (!sameModel(model, options.primary.model)) return options.primary.completion[method](model, context, streamOptions);
+      if (pending && endpointKey(pending.from) === endpointKey(active.endpoint)) {
+        const from = pending;
+        pending = undefined;
+        if (streamOptions?.retryAllowed?.() !== false) {
+          const target = await advance(context);
+          if (target) switchTo(target, from.from, "timeout", registry.now(), from.until);
+        }
+      }
       while (true) {
         const current = active;
         let streamed = false;
         const onTextDelta = streamOptions?.onTextDelta;
+        const signal = streamOptions?.signal;
         try {
-          return await current.completion[method](current.model, context, {
+          const message = await invoke(method, current, context, {
             ...streamOptions,
             ...(onTextDelta
               ? {
@@ -320,10 +465,26 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
                 }
               : {}),
           });
+          timeouts.delete(endpointKey(current.endpoint));
+          return message;
         } catch (error) {
-          if (streamOptions?.signal?.aborted) throw error;
-          const failure = modelFallbackFailure(error);
-          if (!failure) throw error;
+          // An aborted signal is either the caller cancelling (never switches) or the
+          // resilience layer's per-attempt timer (counted as a timeout below).
+          const cause = signal?.aborted ? signal.reason : error;
+          const causeKind = classify(cause).kind;
+          if (signal?.aborted && causeKind !== "timeout") throw error;
+          let failure: Pick<ProviderErrorClassification, "kind" | "retryAfterMs" | "quotaWindow"> & { kind: ModelFallbackReason }
+            | undefined = signal?.aborted ? undefined : modelFallbackFailure(error);
+          if (!failure) {
+            if (causeKind !== "timeout") throw error;
+            const key = endpointKey(current.endpoint);
+            const count = (timeouts.get(key) ?? 0) + 1;
+            timeouts.set(key, count);
+            // A one-off timeout keeps the same-model retry of provider-resilience.
+            if (count < CONSECUTIVE_TIMEOUTS_TO_SWITCH) throw error;
+            timeouts.delete(key);
+            failure = { kind: "timeout" };
+          }
           const now = registry.now();
           const skipped = registry.markUnavailable({
             accountId: current.endpoint.accountId,
@@ -333,21 +494,14 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
           });
           // Text already reached the user, or the caller forbids another attempt: no switch.
           if (streamed || streamOptions?.retryAllowed?.() === false) throw error;
-          const target = await advance();
+          // The attempt's signal is gone (resilience timer): the next attempt switches.
+          if (signal?.aborted) {
+            pending = { from: current.endpoint, until: skipped.until };
+            throw error;
+          }
+          const target = await advance(context);
           if (!target) throw error;
-          active = target;
-          report(
-            Object.freeze({
-              purpose: options.purpose,
-              from: current.endpoint,
-              to: target.endpoint,
-              reason: failure.kind,
-              phase: "request",
-              at: now,
-              fromUntil: skipped.until,
-              notice: MODEL_FALLBACK_NOTICE,
-            })
-          );
+          switchTo(target, current.endpoint, failure.kind, now, skipped.until);
         }
       }
     };

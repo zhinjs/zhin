@@ -119,7 +119,36 @@ export async function resolvePurposeExecution(input: Readonly<{
     purpose, registry, fallbacks: rest, onFallback: input.onFallback,
     primary: { endpoint: endpoint(chosen.binding), model: chosen.model, completion: chosen.completion },
     onCandidateError: (target, error) => logger.warn(`fallback ${target.profileId} for ${purpose} is unusable: ${error instanceof Error ? error.message : String(error)}`),
+    onCandidateUnfit: (target, reason) => logger.info(`fallback ${target.profileId} for ${purpose} skipped for this request: ${reason}`),
+    // Usage and trace report a request's provider as the answering Profile's service id (#1250).
+    annotate: (message, target) => {
+      const serviceId = scope.graph.accounts[target.accountId]?.serviceId;
+      return serviceId && message.provider === target.accountId ? { ...message, provider: serviceId } : message;
+    },
   }) });
+}
+
+/**
+ * The Profile a purpose would answer with right now, without resolving anything: its
+ * primary, or the first configured fallback not being skipped while the primary is.
+ * Used for declarations made before resolution (the summary candidate's binding).
+ */
+export function selectedPurposeProfileId(input: Readonly<{
+  graph: InferenceOperationScope['graph'];
+  context: InferenceOperationScope['context'];
+  purpose: FallbackPurpose;
+  registry?: ModelAvailabilityRegistry;
+}>): string | undefined {
+  const registry = input.registry ?? modelAvailability;
+  const ids = providerPurposeSelections({ graph: input.graph, context: input.context, purpose: input.purpose }).map(entry => entry.id);
+  const available = (id: string) => {
+    const profile = input.graph.profiles[id];
+    const account = profile && input.graph.accounts[profile.accountId];
+    const model = account && input.graph.services[account.serviceId]?.models[profile.model];
+    return Boolean(model) && !registry.unavailable(account!.id, model!.id);
+  };
+  if (!ids.length || ids.length === 1 || available(ids[0]!)) return ids[0];
+  return ids.slice(1).find(available) ?? ids[0];
 }
 
 /** Trace shape of one fallback switch (`TurnTraceModelFallback`). */

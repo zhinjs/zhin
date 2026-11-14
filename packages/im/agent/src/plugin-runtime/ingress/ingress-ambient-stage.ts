@@ -1,4 +1,5 @@
 import { readOperationSession } from '@zhin.js/core';
+import type { ModelAvailabilityRegistry } from '@zhin.js/ai';
 import { providerPurposeSelections, type InferenceOperationScope } from '@zhin.js/ai/provider';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -56,8 +57,10 @@ export function createAmbientEngagementJudge(input: Readonly<{
     input: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
     run: (scope: InferenceOperationScope) => Promise<T>,
   ) => Promise<T>;
+  /** The model runtime's skip state (#1250); defaults to the process-wide registry. */
+  modelAvailability?: ModelAvailabilityRegistry;
 }>): EngagementJudge {
-  const { lease, key, assistantStatus, withInference } = input;
+  const { lease, key, assistantStatus, withInference, modelAvailability } = input;
   return {
     judge: judgeInput => withInference(
       { lease, sessionKey: key, signal: AbortSignal.any([judgeInput.signal, lease.stopSignal]) },
@@ -69,7 +72,8 @@ export function createAmbientEngagementJudge(input: Readonly<{
           const selected = await scope.resolve({ kind: 'language', purpose: 'ambient' });
           // #1250 chat-purpose-no-fallback: an ambient purpose with fallbacks switches to them too.
           if (providerPurposeSelections({ graph: scope.graph, context: scope.context, purpose: 'ambient' }).length > 1) {
-            const execution = await resolvePurposeExecution({ scope, purpose: 'ambient', primary: selected });
+            const execution = await resolvePurposeExecution({ scope, purpose: 'ambient', primary: selected,
+              ...(modelAvailability ? { registry: modelAvailability } : {}) });
             return new LlmEngagementJudge(execution.completion, execution.model);
           }
           return new LlmEngagementJudge(
@@ -156,11 +160,14 @@ export async function considerAmbientEngagement(input: Readonly<{
     finally { operation.release(); }
   }
   const key = `${platform}:${message.conversation.id}`;
+  let modelAvailability: ModelAvailabilityRegistry | undefined;
+  try { modelAvailability = agent.service.getModelRuntime().modelAvailability; } catch { /* Not prepared: process-wide registry. */ }
   const judge = createAmbientEngagementJudge({
     lease,
     key,
     assistantStatus,
     withInference,
+    ...(modelAvailability ? { modelAvailability } : {}),
   });
   const decision = await ambientEngagement.consider({
     key,

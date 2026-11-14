@@ -514,7 +514,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `purposes.chat` | string \| object \| null | no | — | — |
 | `purposes.summary` | string \| object \| null | no | — | — |
 | `purposes.ambient` | string \| object \| null | no | — | — |
-| `purposes.image` | object \| null | no | — | — |
+| `purposes.image` | string \| object \| null | no | — | — |
 | `purposes.perception` | object \| null | no | — | — |
 | `purposes.decisions` | object | no | — | — |
 | `purposes.decisions.skills` | object \| null | no | — | — |

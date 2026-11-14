@@ -3,8 +3,8 @@ import {
   type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
 import { createInvocationCompletion, invocationModel } from './completion.js';
-import { ModelFallbackLog, resolvePurposeExecution } from './purpose-fallback.js';
-import type { ModelFallbackEvent } from '@zhin.js/ai';
+import { ModelFallbackLog, resolvePurposeExecution, selectedPurposeProfileId } from './purpose-fallback.js';
+import { modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent } from '@zhin.js/ai';
 import { getLogger } from '@zhin.js/logger';
 import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionCandidate, type ModelExecutionScope,
   type ModelDelegationAuthority, type ModelContextAcquireInput, type ModelRuntimeServiceOptions, type ModelTurnAcquireInput,
@@ -79,6 +79,9 @@ export class ModelRuntimeService {
   #closed = false;
   constructor(private readonly options: ModelRuntimeServiceOptions) {}
 
+  /** Skip state used by this runtime's purpose fallbacks (#1250). */
+  get modelAvailability(): ModelAvailabilityRegistry { return this.options.modelAvailability ?? modelAvailability; }
+
   #bindingNames(): ReadonlySet<string> {
     return new Set(['zhin', ...(this.options.bindingNames?.() ?? [])]);
   }
@@ -138,7 +141,10 @@ export class ModelRuntimeService {
       };
       let summary: ModelExecutionCandidate | undefined;
       if (scope.graph.purposes.defaults.summary || scope.graph.purposes.defaults.chat) {
-        summary = candidate({ profileId: scope.graph.purposes.defaults.summary ?? scope.graph.purposes.defaults.chat!, resolve: async () =>
+        // The declared binding is the Profile that will answer (a skipped primary's fallback, #1250).
+        const summaryProfileId = selectedPurposeProfileId({ graph: scope.graph, context: scope.context, purpose: 'summary', registry })
+          ?? scope.graph.purposes.defaults.summary ?? scope.graph.purposes.defaults.chat!;
+        summary = candidate({ profileId: summaryProfileId, resolve: async () =>
           resolvePurposeExecution({ scope, purpose: 'summary', primary: await scope.resolve({ kind: 'language', purpose: 'summary' }),
             registry, onFallback: fallbackLog.record }) });
       }

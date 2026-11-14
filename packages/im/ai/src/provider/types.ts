@@ -202,7 +202,13 @@ export type ProviderErrorCode = 'invalid-graph' | 'not-configured' | 'profile-no
   /** A referenced Service's address would move to another scheme / host / port (#1250). */
   | 'service-origin-change';
 export class ProviderError extends Error {
-  constructor(readonly code: ProviderErrorCode) { super(`AI provider: ${code}`); this.name = 'ProviderError'; }
+  /**
+   * @param path Configuration path of the offending value when known, in import-plan
+   * notation (e.g. `purposes.adapters.qq.chat.fallbacks[1]`, #1250).
+   */
+  constructor(readonly code: ProviderErrorCode, readonly path?: string) {
+    super(`AI provider: ${code}${path ? ` at ${path}` : ''}`); this.name = 'ProviderError';
+  }
 }
 
 /** A Host admission denial proven to precede submission; transports must not retry it as network failure. */

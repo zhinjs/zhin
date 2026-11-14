@@ -55,7 +55,9 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
     const scope = await acquire();
     try {
       const answer = await scope.chat.completion.complete(scope.chat.model, context);
-      expect(answer.provider).toBe('cnb');
+      expect(answer.content).toEqual([{ type: 'text', text: 'from cnb' }]);
+      // Usage is attributed to the answering Profile's service.
+      expect(answer.provider).toBe('service');
       expect(answered).toEqual(['cnb']);
       expect(scope.modelFallbacks?.()).toEqual([expect.objectContaining({ purpose: 'chat', reason: 'quota_exhausted', phase: 'request',
         from: expect.objectContaining({ profileId: 'text' }), to: expect.objectContaining({ profileId: 'cnb' }), notice: '本轮由备用模型回答' })]);
@@ -84,7 +86,7 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
     const adapter = await acquire({ adapterKey: 'qq' });
     try {
       // qq: cnb (auth) → deep (quota): nothing left, the last error stands.
-      await expect(adapter.chat.completion.complete(adapter.chat.model, context)).rejects.toMatchObject({ statusCode: 429 });
+      await expect(adapter.chat.completion.complete(adapter.chat.model, context)).rejects.toMatchObject({ kind: 'quota_exhausted' });
       expect(adapter.modelFallbacks?.().map(event => event.to.profileId)).toEqual(['deep']);
     } finally { await adapter.release(); }
     expect(answered).toEqual([]);
@@ -93,14 +95,14 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
     const scene = await ok.acquire({ adapterKey: 'qq', sceneKey: 'github:repo' });
     try {
       expect(scene.chat.binding.profile.id).toBe('deep');
-      expect((await scene.chat.completion.complete(scene.chat.model, context)).provider).toBe('deep');
+      expect((await scene.chat.completion.complete(scene.chat.model, context)).content).toEqual([{ type: 'text', text: 'from deep' }]);
     } finally { await scene.release(); }
 
     const agents = setup({ account: dailyQuota });
     const agent = await agents.acquire({}, 'researcher');
     try {
       expect(agent.purpose).toBe('agent:researcher');
-      expect((await agent.chat.completion.complete(agent.chat.model, context)).provider).toBe('deep');
+      expect((await agent.chat.completion.complete(agent.chat.model, context)).content).toEqual([{ type: 'text', text: 'from deep' }]);
       expect(agent.modelFallbacks?.()[0]).toMatchObject({ purpose: 'agent:researcher', to: { profileId: 'deep' } });
     } finally { await agent.release(); }
   });
@@ -110,8 +112,29 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
     const scope = await acquire();
     try {
       const summary = await scope.summary!.resolve();
-      expect((await summary.completion.complete(summary.model, context)).provider).toBe('deep');
+      expect((await summary.completion.complete(summary.model, context)).content).toEqual([{ type: 'text', text: 'from deep' }]);
       expect(scope.modelFallbacks?.()[0]).toMatchObject({ purpose: 'summary', to: { profileId: 'deep' } });
+    } finally { await scope.release(); }
+  });
+
+  it('declares the summary candidate as the Profile that will answer', async () => {
+    const { acquire, registry } = setup({});
+    registry.markUnavailable({ accountId: 'account', model: 'text', reason: 'quota_exhausted', until: Date.now() + 60_000 });
+    const scope = await acquire();
+    try {
+      expect(scope.summary?.binding.profile.id).toBe('deep');
+      expect((await scope.summary!.resolve()).binding.profile.id).toBe('deep');
+    } finally { await scope.release(); }
+  });
+
+  it('does not switch on a plain 403', async () => {
+    const forbidden = () => Object.assign(new Error('region blocked'), { statusCode: 403 });
+    const { acquire, answered, registry } = setup({ account: forbidden });
+    const scope = await acquire();
+    try {
+      await expect(scope.chat.completion.complete(scope.chat.model, context)).rejects.toMatchObject({ statusCode: 403 });
+      expect(answered).toEqual([]);
+      expect(registry.list()).toEqual([]);
     } finally { await scope.release(); }
   });
 

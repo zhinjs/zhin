@@ -96,7 +96,7 @@ export interface TurnTraceModelFallback {
   readonly to_profile_id: string;
   readonly to_account_id: string;
   readonly to_model: string;
-  /** `quota_exhausted`, `billing` or `auth`. */
+  /** `quota_exhausted`, `billing`, `auth` (rejected credential) or `timeout` (repeated). */
   readonly reason: string;
   /** `selection`: the primary was already being skipped; `request`: a request failed and was re-issued. */
   readonly phase: 'selection' | 'request';

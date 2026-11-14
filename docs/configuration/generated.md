@@ -514,7 +514,7 @@ outline: [2, 3]
 | `purposes.chat` | string \| object \| null | 否 | — | — |
 | `purposes.summary` | string \| object \| null | 否 | — | — |
 | `purposes.ambient` | string \| object \| null | 否 | — | — |
-| `purposes.image` | object \| null | 否 | — | — |
+| `purposes.image` | string \| object \| null | 否 | — | — |
 | `purposes.perception` | object \| null | 否 | — | — |
 | `purposes.decisions` | object | 否 | — | — |
 | `purposes.decisions.skills` | object \| null | 否 | — | — |

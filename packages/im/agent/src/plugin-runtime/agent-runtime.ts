@@ -378,7 +378,16 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       }) : undefined;
       activeTrace = trace;
       // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the turn trace.
-      if (trace) models?.observeModelFallback?.(event => trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) }));
+      // Usage rows record the Profile that actually answered.
+      models?.observeModelFallback?.(event => {
+        if (trace) trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) });
+        const serviceId = models?.graph.accounts[event.to.accountId]?.serviceId;
+        if (serviceId) {
+          selected.provider = serviceId;
+          selected.model = event.to.model;
+          logContext.selectedModel = `${serviceId}/${event.to.model}`;
+        }
+      });
       const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
       const catalog = Object.freeze({
         ...capabilities,

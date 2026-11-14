@@ -87,6 +87,24 @@ describe('purpose fallbacks in the plan and graph (#1250)', () => {
     expect(() => normalizeProviderGraph({ ...graph, purposes: { defaults: { chat: 'text' }, agentFallbacks: { x: ['text'] } } })).toThrow('invalid-graph');
   });
 
+  it('names the offending chain path in validation errors (plan, graph and Profile removal)', async () => {
+    const plan = (purposes: unknown) => reviewer()({ ...document, purposes });
+    await expect(plan({ adapters: { qq: { chat: { profile: 'free', fallbacks: ['cnb', 'missing'] } } } }))
+      .rejects.toMatchObject({ code: 'invalid-plan', path: 'purposes.adapters.qq.chat.fallbacks[1]' });
+    await expect(plan({ agents: { researcher: { profile: 'free', fallbacks: ['free'] } } }))
+      .rejects.toMatchObject({ code: 'invalid-plan', path: 'purposes.agents.researcher.fallbacks[0]' });
+    await expect(plan({ chat: { profile: 'free', fallbacks: ['cnb', 'picture'] } }))
+      .rejects.toMatchObject({ code: 'invalid-graph', path: 'purposes.chat.fallbacks[1]' });
+    await expect(plan({ chat: { profile: 'free', fallbacks: ['cnb'] } })).resolves.toBeDefined();
+    const created = await reviewer()(document);
+    const removal = reviewer(created.graph)({ version: 1, remove: { profiles: [created.bindings.profiles.deep] } }, created.bindings);
+    await expect(removal).rejects.toMatchObject({ code: 'invalid-graph', path: 'purposes.chat.fallbacks[1]' });
+    await expect(removal).rejects.toThrow('purposes.chat.fallbacks[1]');
+    const graph = graphFixture();
+    expect(() => normalizeProviderGraph({ ...graph, purposes: { defaults: { chat: 'text' },
+      scenes: { s: { chat: 'text', chatFallbacks: ['text'] } } } })).toThrow('purposes.scenes.s.chat.fallbacks[0]');
+  });
+
   it('keeps fallback Profiles host-owned like every deployment purpose', async () => {
     const graph = graphFixture();
     const personal = normalizeProviderGraph({ ...graph,

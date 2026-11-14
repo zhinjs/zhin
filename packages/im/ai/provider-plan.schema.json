@@ -322,6 +322,10 @@
         "image": {
           "anyOf": [
             {
+              "type": "string",
+              "minLength": 1
+            },
+            {
               "type": "object",
               "additionalProperties": false,
               "required": [

@@ -1,5 +1,5 @@
 import {
-  AUTH_FALLBACK_COOLDOWN_MS, MODEL_FALLBACK_NOTICE, ModelAvailabilityRegistry, QUOTA_FALLBACK_COOLDOWN_MS,
+  AUTH_FALLBACK_COOLDOWN_MS, CONSECUTIVE_TIMEOUTS_TO_SWITCH, MODEL_FALLBACK_NOTICE, TIMEOUT_FALLBACK_COOLDOWN_MS, fallbackTranscriptFit, ModelAvailabilityRegistry, QUOTA_FALLBACK_COOLDOWN_MS,
   createFallbackCompletionPort, modelFallbackFailure, modelFallbackResetAt, nextPacificMidnight,
   type ModelFallbackEvent,
 } from '../../src/llm/model-fallback.js';
@@ -137,7 +137,8 @@ describe('purpose model fallback (#1250 chat-purpose-no-fallback)', () => {
   it('rethrows the last error when no fallback is left', async () => {
     const exhausted = setup([geminiDaily], [billing], new ModelAvailabilityRegistry({ now: () => 0 }));
     exhausted.registry.markUnavailable({ accountId: 'deepseek-account', model: 'deepseek-chat', reason: 'billing', until: 10 });
-    await expect(exhausted.completion.complete(exhausted.primaryModel, context)).rejects.toBe(billing);
+    // The fallback ran under its own resilience policy, which reports its failure.
+    await expect(exhausted.completion.complete(exhausted.primaryModel, context)).rejects.toMatchObject({ kind: 'billing' });
     expect(exhausted.last.calls).toHaveLength(0);
   });
 
@@ -216,5 +217,176 @@ describe('fallback reset rule (#1250)', () => {
     // A daily quota ignores Gemini's short retryDelay but honours a shorter rolling-window hint.
     expect(modelFallbackResetAt({ kind: 'quota_exhausted', quotaWindow: 'day', retryAfterMs: 86_000 }, Date.UTC(2026, 6, 1, 12)))
       .toBe(Date.UTC(2026, 6, 1, 12) + 86_000);
+  });
+});
+
+describe('review follow-ups (#1250 / #1270)', () => {
+  const forbidden = Object.assign(new Error('blocked by gateway policy'), { statusCode: 403 });
+  const badKey = Object.assign(new Error('bad key'), { statusCode: 400,
+    responseBody: JSON.stringify({ error: { status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } }) });
+  const timeout = () => Object.assign(new Error('Provider request timed out'), { name: 'TimeoutError' });
+
+  function chain(primaryPort: LlmCompletionPort, fallbacks: Array<{ id: string; model: Model; port: LlmCompletionPort }>, registry = new ModelAvailabilityRegistry()) {
+    const primaryModel = model('gemini-flash', 'gemini-account');
+    const events: ModelFallbackEvent[] = [];
+    const completion = createFallbackCompletionPort({ purpose: 'chat', registry, onFallback: event => events.push(event),
+      primary: { endpoint: { profileId: 'free', accountId: 'gemini-account', model: 'gemini-flash' }, model: primaryModel, completion: primaryPort },
+      fallbacks: fallbacks.map(entry => ({ endpoint: { profileId: entry.id, accountId: `${entry.id}-account`, model: entry.model.id },
+        resolve: async () => ({ model: entry.model, completion: entry.port }) })) });
+    return { completion, primaryModel, events, registry };
+  }
+  function recording(name: string) {
+    const calls: Array<{ model: Model; context: Context; options?: Parameters<LlmCompletionPort['complete']>[2] }> = [];
+    const port: LlmCompletionPort = {
+      complete: async (selected, received, options) => { calls.push({ model: selected, context: received, options }); return reply(`${name} answer`, name); },
+      completeSimple: async () => reply('unused', name),
+    };
+    return { port, calls };
+  }
+  const failing = (...errors: unknown[]): LlmCompletionPort => ({
+    complete: async () => { const next = errors.shift(); if (next) throw next; return reply('primary answer', 'gemini'); },
+    completeSimple: async () => reply('unused', 'gemini'),
+  });
+
+  it('switches on a rejected credential but not on a plain 403', async () => {
+    const plain = recording('cnb');
+    const blocked = chain(failing(forbidden), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: plain.port }]);
+    await expect(blocked.completion.complete(blocked.primaryModel, context)).rejects.toBe(forbidden);
+    expect(plain.calls).toHaveLength(0);
+    expect(blocked.registry.list()).toEqual([]);
+    expect(modelFallbackFailure(forbidden)).toBeUndefined();
+
+    for (const error of [unauthorized, badKey]) {
+      const target = recording('cnb');
+      const keyed = chain(failing(error), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+      expect((await keyed.completion.complete(keyed.primaryModel, context)).provider).toBe('cnb');
+      expect(keyed.registry.unavailable('gemini-account', 'gemini-flash')?.reason).toBe('auth');
+    }
+  });
+
+  it('skips fallbacks that cannot take the media or the context, and uses the fallback limits', async () => {
+    const textOnly = recording('text-only');
+    const small = recording('small');
+    const vision = recording('vision');
+    const withImage = { systemPrompt: 'sys', messages: [{ role: 'user', content: [{ type: 'text', text: 'what is this '.repeat(400) },
+      { type: 'image', data: { media: { kind: 'url', url: 'https://example.test/a.png' } } }], timestamp: 1 }] } as unknown as Context;
+    const visionModel = { ...model('vision-model', 'vision-account'), input: ['text', 'image'], contextWindow: 100_000, maxTokens: 512,
+      executionPolicy: { maxRetries: 1 } } as Model;
+    const { completion, primaryModel, events } = chain(failing(geminiDaily), [
+      { id: 'text-only', model: { ...model('text-model', 'text-account'), contextWindow: 100_000 }, port: textOnly.port },
+      { id: 'small', model: { ...model('small-model', 'small-account'), input: ['text', 'image'], contextWindow: 100 }, port: small.port },
+      { id: 'vision', model: visionModel, port: vision.port },
+    ]);
+    const answer = await completion.complete(primaryModel, withImage, { maxTokens: 4_096 });
+    expect(answer.provider).toBe('vision');
+    expect(textOnly.calls).toHaveLength(0);
+    expect(small.calls).toHaveLength(0);
+    expect(vision.calls[0]!.model).toBe(visionModel);
+    expect(vision.calls[0]!.options?.maxTokens).toBe(512);
+    expect(events.map(event => event.to.profileId)).toEqual(['vision']);
+  });
+
+  it('runs a switched request under the fallback’s own retry policy', async () => {
+    let attempts = 0;
+    const flaky: LlmCompletionPort = {
+      complete: async () => { attempts++; if (attempts === 1) throw serverError; return reply('retried', 'cnb'); },
+      completeSimple: async () => reply('unused', 'cnb'),
+    };
+    const { completion, primaryModel } = chain(failing(geminiDaily), [{ id: 'cnb',
+      model: { ...model('cnb-model', 'cnb-account'), executionPolicy: { maxRetries: 1 } }, port: flaky }]);
+    expect((await completion.complete(primaryModel, context)).content).toEqual([{ type: 'text', text: 'retried' }]);
+    expect(attempts).toBe(2);
+  });
+
+  describe('mid tool-loop switch to a strict provider', () => {
+    const toolLoop = (call: Record<string, unknown>) => ({ systemPrompt: 'sys', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'look it up' }], timestamp: 1 },
+      { ...reply('', 'gemini-account'), model: 'gemini-flash', content: [
+        { type: 'thinking', thinking: 'plan', providerOptions: { google: { thoughtSignature: 'sig' } } },
+        { type: 'toolCall', name: 'search', arguments: {}, ...call }], stopReason: 'toolCalls' },
+      { role: 'toolResult', toolCallId: String(call.id), toolName: 'search', content: [{ type: 'text', text: 'found' }], isError: false, timestamp: 2 },
+    ] }) as unknown as Context;
+
+    it('Gemini → Anthropic with thinking: sends the request without thinking instead of failing', async () => {
+      const anthropic = recording('anthropic');
+      const anthropicModel = { ...model('claude-model', 'anthropic-account'), promptFamily: 'anthropic', reasoning: true } as Model;
+      const transcript = toolLoop({ id: 'call_abc', providerOptions: { google: { thoughtSignature: 'sig' } } });
+      expect(fallbackTranscriptFit(anthropicModel, transcript)).toBe('no-thinking');
+      const { completion, primaryModel, events } = chain(failing(geminiDaily), [{ id: 'anthropic', model: anthropicModel, port: anthropic.port }]);
+      expect((await completion.complete(primaryModel, transcript, { thinkingLevel: 'high' })).provider).toBe('anthropic');
+      expect(anthropic.calls[0]!.options?.thinkingLevel).toBe('off');
+      // The executed tool call is sent as history, not run again.
+      expect(anthropic.calls[0]!.context.messages.map(message => message.role)).toEqual(['user', 'assistant', 'toolResult']);
+      expect(events).toHaveLength(1);
+    });
+
+    it('skips Gemini without thought signatures and Mistral with foreign tool ids', async () => {
+      const unsigned = toolLoop({ id: 'call_abc' });
+      const gemini = recording('gemini3');
+      const mistral = recording('mistral');
+      const last = recording('deepseek');
+      const geminiModel = { ...model('gemini-3-pro', 'g3-account'), promptFamily: 'google' } as Model;
+      const mistralModel = { ...model('mistral-large-latest', 'mistral-account'), promptFamily: 'openai-compatible' } as Model;
+      expect(fallbackTranscriptFit(geminiModel, unsigned)).toBe('skip');
+      expect(fallbackTranscriptFit(mistralModel, unsigned)).toBe('skip');
+      expect(fallbackTranscriptFit(mistralModel, toolLoop({ id: 'abcDEF123' }))).toBe('ok');
+      const { completion, primaryModel } = chain(failing(geminiDaily), [
+        { id: 'gemini3', model: geminiModel, port: gemini.port },
+        { id: 'mistral', model: mistralModel, port: mistral.port },
+        { id: 'deepseek', model: model('deepseek-chat', 'deepseek-account'), port: last.port },
+      ]);
+      expect((await completion.complete(primaryModel, unsigned)).provider).toBe('deepseek');
+      expect(gemini.calls).toHaveLength(0);
+      expect(mistral.calls).toHaveLength(0);
+    });
+  });
+
+  describe('consecutive timeouts (#1270)', () => {
+    it('a one-off timeout behaves as before: no switch, no skip', async () => {
+      const target = recording('cnb');
+      const { completion, primaryModel, registry } = chain(failing(timeout()), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+      await expect(completion.complete(primaryModel, context)).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect((await completion.complete(primaryModel, context)).provider).toBe('gemini');
+      expect(target.calls).toHaveLength(0);
+      expect(registry.list()).toEqual([]);
+    });
+
+    it(`switches after ${CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts and skips the model for a short cooldown`, async () => {
+      const target = recording('cnb');
+      const registry = new ModelAvailabilityRegistry({ now: () => 0 });
+      const { completion, primaryModel, events } = chain(failing(timeout(), timeout()), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }], registry);
+      await expect(completion.complete(primaryModel, context)).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect((await completion.complete(primaryModel, context)).provider).toBe('cnb');
+      expect(events[0]).toMatchObject({ reason: 'timeout', phase: 'request' });
+      expect(registry.unavailable('gemini-account', 'gemini-flash')).toMatchObject({ reason: 'timeout', until: TIMEOUT_FALLBACK_COOLDOWN_MS });
+    });
+
+    it('composes with the resilience per-attempt timer: the attempt after the second timeout goes to the fallback', async () => {
+      const target = recording('cnb');
+      let primaryCalls = 0;
+      const hanging: LlmCompletionPort = {
+        complete: (_m, _c, options) => { primaryCalls++; return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal!.reason), { once: true });
+        }); },
+        completeSimple: async () => reply('unused', 'gemini'),
+      };
+      const { completion, primaryModel } = chain(hanging, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+      const resilient = createResilientCompletionPort(completion, { config: { requestTimeoutMs: 20, maxRetries: 2 }, sleep: async () => undefined });
+      expect((await resilient.complete(primaryModel, context)).provider).toBe('cnb');
+      expect(primaryCalls).toBe(2);
+    });
+
+    it('never switches after streamed text, even on repeated timeouts', async () => {
+      const target = recording('cnb');
+      const streaming: LlmCompletionPort = {
+        complete: async (_m, _c, options) => { options?.onTextDelta?.('partial'); throw timeout(); },
+        completeSimple: async () => reply('unused', 'gemini'),
+      };
+      const { completion, primaryModel } = chain(streaming, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+      for (let i = 0; i < 3; i++) {
+        await expect(completion.complete(primaryModel, context, { onTextDelta: () => undefined })).rejects.toMatchObject({ name: 'TimeoutError' });
+      }
+      expect(target.calls).toHaveLength(0);
+    });
   });
 });
