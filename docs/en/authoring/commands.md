@@ -475,7 +475,7 @@ With the Command Feature enabled, the built-in command menu responds out of the 
 | `菜单 rss --page 2` | The second page of the `rss` instance menu |
 | `remind --help` | A command's parameters, options, and usage, without executing it |
 
-Plugin names here are **instance keys**, not npm package names. Start with `菜单` or `help` and follow the child plugin names it returns.
+Plugin names here are **instance keys**, not npm package names. Start with `菜单` or `help` and follow the child plugin names it returns. Only plugins whose subtree has a command you may run are listed: adapters and command-less service plugins are left out (`菜单 <instance key>` still shows them). The root menu is titled with the project's display name (`metadata.displayName`), or plain "Command menu".
 
 You can customize the primary menu keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
 
@@ -539,6 +539,10 @@ Stopping or reconnecting the account cancels the captured signal. Framework repl
 | Right command, missing or wrong params | Replies with the reason and help |
 | No permission | Replies with a refusal, without help |
 | Success | Replies with `execute`'s return value |
+| `execute` throws a `UserFacingError` | Replies with its `format(locale)` (default `message`) through the normal reply chain |
+| `execute` throws anything else | Nothing about the error is sent; it is logged |
+
+Expected, user-caused refusals (such as "there is already a game running in this channel") can throw `UserFacingError` (`import { UserFacingError } from 'zhin.js/command'`), or a subclass overriding `format(locale)` for localization. Its text is sent to the user as is: never put stack traces, internal ids or raw upstream errors in it.
 
 Param errors are reported only when the input is clearly a given command: `remind nope` gets an error, while `reminder 3` or ordinary chat isn't treated as a command. Permission checks run before param validation.
 

@@ -21,7 +21,7 @@ import { ChatIdentityBindCodes, installChatIdentityBind } from './chat-identity-
 import { ChatOwnerClaim, installChatOwnerClaim } from './chat-owner-claim.js';
 import { ChatRoleImportBook, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
 import {
-  defineFeatureOverrideTable, FeatureOverrideStore,
+  defineFeatureOverrideTable, FeatureOverrideStore, readWorkspaceConversationNames,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
 } from './console/module.js';
 import { installFeatureSelfService, readFeatureSelfServiceConfig, type FeatureSelfServiceConfig } from './feature-self-service.js';
@@ -157,7 +157,9 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     },
     subscribe: listener => roles.store.subscribe(listener),
   });
-  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, claim, people, bindCodes,
+  // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
+  const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, keys);
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames, claim, people, bindCodes,
     ...(chatRoleImports ? { chatRoleImports } : {}) });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {

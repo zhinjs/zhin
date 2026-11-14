@@ -7,8 +7,9 @@ import { createHttpHost } from '@zhin.js/host-http/node';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerWorkspaceConversationRoutes } from '../../../src/instance/console/workspace-conversation-routes.js';
-import { defineWorkspaceConversationTable } from '../../../src/instance/console/workspace-conversations.js';
+import { defineWorkspaceConversationTable, readWorkspaceConversationNames } from '../../../src/instance/console/workspace-conversations.js';
 import { sqliteAvailable } from '../sqlite-availability.js';
+import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 
 const cleanups: Array<() => Promise<void>> = [];
 let directory: string;
@@ -24,7 +25,8 @@ const conversation = { id: 'room:中文\0%', type: 'private', name: '一个工�
 } };
 
 /** Real SQLite, generation AdapterIndex, and authenticated HTTP; no provider or platform sends. */
-async function fixture(options: { filename?: string; unavailable?: boolean } = {}) {
+async function fixture(options: { filename?: string; unavailable?: boolean;
+  commands?: { prefix?: string; menuKeyword?: string | false; names?: readonly (string | { name: string; permit?: string[] })[] } } = {}) {
   const db = createDatabaseHost({ dialect: 'sqlite', filename: options.filename ?? join(directory, 'directory.sqlite') });
   defineWorkspaceConversationTable(db);
   await db.start();
@@ -43,14 +45,29 @@ async function fixture(options: { filename?: string; unavailable?: boolean } = {
   const root = rootPluginId(), owners = [childPluginId(root, 'sandbox-one'), childPluginId(root, 'sandbox-two')];
   const slots = owners.map((owner, index) => createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'sandbox', source: '/sandbox/adapters/index.ts',
     definition: defineAdapter({ capabilities: ['inbound', 'outbound'], profile: { default: { delivery: { send: true }, runtime: { sandbox: true } } }, createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(index === 0 ? connections : secondConnections); } }() }) }));
+  const commandSlots = (options.commands?.names ?? []).map(item => {
+    const command = typeof item === 'string' ? { name: item } : item;
+    return createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
+      source: `/app/commands/${command.name}/index.ts`,
+      definition: defineCommand({ ...(command.permit ? { permit: command.permit } : {}), execute: () => 'ok' }) });
+  });
+  const config = new Map<PluginId, unknown>();
+  if (options.commands?.prefix !== undefined) config.set(owners[0]!, { commandPrefix: options.commands.prefix });
+  if (options.commands?.menuKeyword !== undefined) config.set(root, { menuKeyword: options.commands.menuKeyword });
   const base: SnapshotState = { root, tree: new Map<PluginId, PluginNodeSnapshot>([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: owners }],
     ...owners.map(owner => [owner, { id: owner, instanceKey: String(owner), packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }] as const),
-  ]), config: new Map(), resources: new Map(owners.map(owner => [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])),
-  capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
+  ]), config, resources: new Map(owners.map(owner => [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])),
+  capabilities: new Map([...slots, ...commandSlots].map(slot => [slot.id, slot])), projections: new Map() };
   const adapters = await AdapterIndex.create(slots, createSnapshotView(0, base), new AbortController().signal);
   await adapters.activate(new AbortController().signal);
-  const snapshots = new SnapshotStore({ ...base, projections: new Map([[adapterFeatureId, adapters]]) });
+  const projections = new Map<unknown, unknown>([[adapterFeatureId, adapters]]);
+  if (options.commands) {
+    const keyword = options.commands.menuKeyword;
+    projections.set(commandFeatureId, new CommandIndex(commandSlots as never, createSnapshotView(0, { ...base, projections: projections as never }),
+      keyword === false ? undefined : typeof keyword === 'string' ? { keyword } : {}));
+  }
+  const snapshots = new SnapshotStore({ ...base, projections: projections as never });
   const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   registerWorkspaceConversationRoutes({ http, base: '/api', snapshots, databaseHost: options.unavailable ? undefined : db });
   const { port } = await http.listen();
@@ -61,7 +78,10 @@ async function fixture(options: { filename?: string; unavailable?: boolean } = {
   const save = (input: unknown = { connectionId: 'first-page', conversation, expectedRevision: null }, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/conversations/workspaces`, {
     method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input),
   });
-  return { db, snapshots, read, save, connections, endpointId: String(slots[0]!.id) };
+  const commands = (query: Record<string, string> = {}, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/conversations/workspaces/commands?${new URLSearchParams({ connectionId: 'first-page', ...query })}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  return { db, snapshots, read, save, commands, connections, endpointId: String(slots[0]!.id) };
 }
 
 describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
@@ -164,6 +184,43 @@ describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
     const input = Object.keys(invalid).length ? { connectionId: 'first-page', conversation, expectedRevision: null, ...invalid } : {};
     expect((await f.save(input)).status).toBe(400);
     expect((await (await f.read()).json()).data.items).toEqual([]);
+  });
+
+  it('offers quick commands from the command index with the endpoint prefix, never hard-coded ones', async () => {
+    const slash = await fixture({ commands: { prefix: '/', names: ['ping', { name: 'status', permit: ['owner'] }] } });
+    const response = await slash.commands({ type: 'group', id: 'room' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    // Menu first (its real keyword), then only registered, parameterless, unrestricted commands.
+    expect((await response.json()).data).toEqual({ prefix: '/', menu: '/菜单', quick: ['/菜单', '/ping'] });
+    expect((await (await slash.commands({ type: 'group', id: 'room', locale: 'en' })).json()).data.quick).toEqual(['/menu', '/ping']);
+    // No prefix: no leading slash; a configured menu keyword is used as is; nothing that is not registered.
+    const bare = await fixture({ commands: { menuKeyword: '帮助', names: [] } });
+    expect((await (await bare.commands()).json()).data).toEqual({ prefix: '', menu: '帮助', quick: ['帮助'] });
+    const off = await fixture({ commands: { menuKeyword: false, names: [] } });
+    expect((await (await off.commands()).json()).data).toEqual({ prefix: '', quick: [] });
+  });
+
+  it('guards quick commands like the directory: credentials, live binding and a valid scene', async () => {
+    const f = await fixture({ commands: { names: ['ping'] } });
+    expect((await f.commands({}, 'demo')).status).toBe(403);
+    expect((await f.commands({ connectionId: 'unknown' })).status).toBe(503);
+    for (const query of [{ connectionId: '' }, { type: 'room' }, { id: '' }]) expect((await f.commands(query)).status).toBe(400);
+    // Works without the directory store (browser fallback pages still get real commands).
+    const absent = await fixture({ unavailable: true, commands: { names: [] } });
+    expect((await (await absent.commands()).json()).data.quick).toEqual(['菜单']);
+  });
+
+  it('resolves Console-given conversation names for feature keys, leaving ambiguous ones out (#1250)', async () => {
+    const f = await fixture();
+    const group = { ...conversation, id: 'group-6cf34af4', type: 'group', name: '测试群' };
+    expect((await f.save({ connectionId: 'first-page', conversation: group, expectedRevision: null })).status).toBe(200);
+    const key = 'sandbox/sandbox-bot/group:group-6cf34af4';
+    expect(await readWorkspaceConversationNames(f.db, [key, 'sandbox/sandbox-bot/group:unknown', 'not a key'])).toEqual(new Map([[key, '测试群']]));
+    // Another workspace names the same scene differently: no guess.
+    expect((await f.save({ connectionId: 'other-owner', conversation: { ...group, name: '另一个名字' }, expectedRevision: null })).status).toBe(200);
+    expect((await readWorkspaceConversationNames(f.db, [key])).size).toBe(0);
+    expect((await readWorkspaceConversationNames(undefined, [key])).size).toBe(0);
   });
 
   it('reports malformed JSON precisely and preserves existing danger-mode network normalization', async () => {

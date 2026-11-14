@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { decodeStorageIdentity, encodeStorageIdentity, type DatabaseHost, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
+import { decodeStorageIdentity, encodeStorageIdentity, parseFeatureConversationKey, type DatabaseHost, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
 import type { SandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 
 const TABLE = 'console_conversations';
@@ -78,6 +78,38 @@ export async function saveWorkspaceConversation(database: DatabaseHost | undefin
     throw error;
   }
   return item;
+}
+
+/**
+ * Display names the Console gave conversations (Sandbox sessions), keyed by feature conversation
+ * key (#1250). A key is matched by conversation kind and id; when two workspaces name the same
+ * conversation differently the name is ambiguous and left out. Best effort: no store, no names.
+ */
+export async function readWorkspaceConversationNames(database: DatabaseHost | undefined, keys: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  const names = new Map<string, string>();
+  const wanted = new Map<string, string[]>();
+  for (const key of keys) {
+    const ref = parseFeatureConversationKey(key);
+    if (!ref) continue;
+    const scene = `${ref.conversation.kind}\0${ref.conversation.id}`;
+    wanted.set(scene, [...(wanted.get(scene) ?? []), key]);
+  }
+  if (!wanted.size || !database?.started || !['sqlite', 'mysql', 'pg'].includes(database.dialect)) return names;
+  const model = database.models.get(TABLE);
+  if (!model) return names;
+  const found = new Map<string, Set<string>>();
+  for (const row of await model.select('conversation_id', 'conversation_kind', 'name')) {
+    let id: string;
+    try { id = decodeStorageIdentity(String(row.conversation_id)); } catch { continue; }
+    const scene = `${String(row.conversation_kind)}\0${id}`;
+    if (!wanted.has(scene) || typeof row.name !== 'string' || !row.name.trim()) continue;
+    found.set(scene, (found.get(scene) ?? new Set()).add(row.name.trim()));
+  }
+  for (const [scene, candidates] of found) {
+    if (candidates.size !== 1) continue;
+    for (const key of wanted.get(scene)!) names.set(key, [...candidates][0]!);
+  }
+  return names;
 }
 
 function requireStore(database: DatabaseHost | undefined): DatabaseHostModel {

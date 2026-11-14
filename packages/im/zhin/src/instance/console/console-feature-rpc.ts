@@ -26,7 +26,7 @@ import {
   type ConsoleFeatureConversationsResult, type ConsoleFeatureGetResult, type ConsoleFeatureLevel, type ConsoleFeatureListResult,
   type ConsoleFeatureLock, type ConsoleFeatureMatrixCell, type ConsoleFeatureMatrixResult, type ConsoleFeatureMatrixRow,
   type ConsoleFeaturePermission, type ConsoleFeatureRpcType, type ConsoleFeatureSummary, type ConsoleFeatureWarning,
-  type ConsoleFeatureWriteResult,
+  type ConsoleFeatureWriteResult, type ConsoleFeatureOverrideOperator,
 } from '@zhin.js/console-protocol';
 import {
   FEATURE_ENABLED_KEY, FEATURE_OVERRIDES_KEY, featureConversationEntry, parseFeatureConversationKey,
@@ -60,6 +60,8 @@ export interface FeatureStores {
   readonly people?: import('../chat-people.js').ChatPeople;
   /** ADR 0060 §2.4: open bind codes (`chat-identities.bind-code.create`). */
   readonly bindCodes?: import('../chat-identity-bind.js').ChatIdentityBindCodes;
+  /** Display names of conversation keys the instance can resolve (#1250); best effort, missing keys have none. */
+  readonly conversationNames?: (keys: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 }
 
 function conversationDeclaration(schema: JsonSchema | undefined): { conversationFields: readonly string[]; selfServiceFields: readonly string[] } {
@@ -110,6 +112,8 @@ export interface FeatureRpcContext {
   readonly stores?: FeatureStores;
   /** Recorded as `updated_by` (e.g. `user:<id>` or `chat:<alias>:<userId>`). */
   readonly actor?: string;
+  /** Structured writer stored with `actor` (who: chat identity or Console principal; through: chat / console / cli). */
+  readonly operator?: ConsoleFeatureOverrideOperator;
   /**
    * Narrows the fields a caller may write at `level` (in-chat: `selfServiceFields`, or the
    * Plugin's `chatAdminFields` above the conversation level). Undefined: no extra limit.
@@ -178,9 +182,11 @@ export function createFeatureRpcContext(
   authorize?: FeatureRpcAuthorizer,
   actor?: string,
   mayReferenceEnvironment?: () => boolean,
+  operator?: ConsoleFeatureOverrideOperator,
 ): FeatureRpcContext {
   return Object.freeze({
     authScope,
+    ...(operator ? { operator } : {}),
     ...(mayReferenceEnvironment ? { mayReferenceEnvironment } : {}),
     ...(composition.featureStores ? { stores: composition.featureStores } : {}),
     ...(actor ? { actor } : {}),
@@ -513,7 +519,7 @@ function getFeature(state: State, input: Record_, context: FeatureRpcContext): C
     enabled: resolved.enabled && chain.enabled,
     ...(lockedBy ? { lockedBy } : {}),
     ...(ref ? { conversation: Object.freeze({ adapter: ref.adapter, endpointId: ref.endpointId, kind: ref.conversation.kind, id: ref.conversation.id }) } : {}),
-    ...(row ? { updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}) } : {}),
+    ...(row ? { updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}), ...(row.operator ? { operator: row.operator } : {}) } : {}),
     ...(context.stores ? { persistent: context.stores.overrides.persistent } : {}),
   });
 }
@@ -612,6 +618,7 @@ async function writeStored(
   let written: FeatureOverrideEntry | undefined;
   const result = await store.write({
     plugin, key, ...(expectedRevision !== undefined ? { expectedRevision } : {}), ...(context.actor ? { updatedBy: context.actor } : {}),
+    ...(context.operator ? { operator: context.operator } : {}),
     next: current => {
       const entry = edit(structuredClone(featureConversationEntry(current) ?? {}) as Record_);
       const { [FEATURE_ENABLED_KEY]: enabled, ...patch } = entry;
@@ -659,7 +666,8 @@ async function listConversations(state: State, input: Record_, context: FeatureR
     if (plugin !== undefined && row.plugin !== plugin) continue;
     const item = byKey.get(row.key) ?? { overrides: [] };
     item.overrides.push(Object.freeze({ plugin: row.plugin, ...(row.enabled === false ? { enabled: false as const } : {}), fields: Object.freeze(Object.keys(row.patch).sort()),
-      revision: String(row.revision), updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}) }));
+      revision: String(row.revision), updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}),
+      ...(row.operator ? { operator: row.operator } : {}) }));
     item.lastActiveAt = Math.max(item.lastActiveAt ?? 0, row.updatedAt);
     byKey.set(row.key, item);
   }
@@ -675,6 +683,16 @@ async function listConversations(state: State, input: Record_, context: FeatureR
       }
       recentAvailable = true;
     } catch { recentAvailable = false; }
+  }
+  const unnamed = [...byKey].filter(([, item]) => !item.name).map(([key]) => key);
+  if (unnamed.length && stores(context).conversationNames) {
+    try {
+      const names = await stores(context).conversationNames!(unnamed);
+      for (const key of unnamed) {
+        const name = names.get(key);
+        if (name) byKey.get(key)!.name = name;
+      }
+    } catch { /* names are best effort */ }
   }
   const all: ConsoleFeatureConversationSummary[] = [];
   for (const [key, item] of byKey) {
@@ -696,6 +714,15 @@ async function listConversations(state: State, input: Record_, context: FeatureR
     persistent: conversations.persistent });
 }
 
+/** Adds the conversation's display name to `feature.get` when the instance can resolve it (#1250). */
+async function withConversationName(result: ConsoleFeatureGetResult, context: FeatureRpcContext): Promise<ConsoleFeatureGetResult> {
+  const resolve = context.stores?.conversationNames;
+  if (!result.conversation || !result.key || !resolve) return result;
+  let name: string | undefined;
+  try { name = (await resolve([result.key])).get(result.key); } catch { name = undefined; }
+  return name ? Object.freeze({ ...result, conversation: Object.freeze({ ...result.conversation, name }) }) : result;
+}
+
 async function handle(type: ConsoleFeatureRpcType, input: Record_, context: FeatureRpcContext): Promise<unknown> {
   switch (type) {
     case 'feature.list':
@@ -710,7 +737,8 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
       await authorize(context, { type, ...target });
       // Other processes sharing the database: picked up at most every 5 s (ADR 0057 §2).
       if (target.level !== 'global') await context.stores?.overrides.refresh();
-      return readState(context, state => getFeature(state, input, context));
+      const result = await readState(context, state => getFeature(state, input, context)) as ConsoleFeatureGetResult;
+      return withConversationName(result, context);
     }
     case 'feature.set-override': {
       const target = readTarget(input, true);

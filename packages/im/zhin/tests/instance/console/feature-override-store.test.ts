@@ -7,7 +7,7 @@ import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { isGatewayOwnedTable } from '@zhin.js/database';
 import {
   FEATURE_OVERRIDE_TABLE, FeatureOverrideConflictError, FeatureOverrideStorageUnavailableError, FeatureOverrideStore, LEGACY_FEATURE_CONVERSATION_TABLE,
-  defineFeatureOverrideTable, featureOverrideRowId,
+  defineFeatureOverrideTable, featureOverrideRowId, decodeOverrideWriter, encodeOverrideWriter,
 } from '../../../src/instance/console/feature-override-store.js';
 import { CHAT_ROLE_TABLE, defineChatRoleTable } from '../../../src/instance/chat-roles.js';
 import { sqliteAvailable } from '../sqlite-availability.js';
@@ -233,6 +233,49 @@ describe('feature_overrides store', () => {
     await expect(reloaded.write({ plugin: 'repeater', key, next: () => null })).rejects.toBeInstanceOf(FeatureOverrideConflictError);
     expect(reloaded.get('repeater', key)?.revision).toBe(7);
     expect(await reloaded.write({ plugin: 'repeater', key, expectedRevision: 7, next: () => null })).toMatchObject({ status: 'saved' });
+    await second.stop();
+  });
+  it('records the writer (who and through what) and reads pre-#1250 rows without failing', () => {
+    const chat = { source: 'chat' as const, adapter: 'sandbox', userId: 'u1', displayName: '小明' };
+    const encoded = encodeOverrideWriter('chat:sandbox:u1', chat)!;
+    expect(decodeOverrideWriter(encoded)).toEqual({ updatedBy: 'chat:sandbox:u1', operator: chat });
+    // Without a structured operator the column keeps the plain id, exactly as before.
+    expect(encodeOverrideWriter('user:42', undefined)).toBe('user:42');
+    expect(encodeOverrideWriter(undefined, undefined)).toBeNull();
+    // Legacy ids yield what they encode; migrations and unknown ids yield no operator.
+    expect(decodeOverrideWriter('chat:qq:1001')).toEqual({ updatedBy: 'chat:qq:1001', operator: { source: 'chat', adapter: 'qq', userId: '1001' } });
+    expect(decodeOverrideWriter('user:42')).toEqual({ updatedBy: 'user:42', operator: { source: 'console', principalId: '42' } });
+    expect(decodeOverrideWriter('migration:config')).toEqual({ updatedBy: 'migration:config' });
+    expect(decodeOverrideWriter(null)).toEqual({});
+    // Malformed structured values never throw: kept as the plain id.
+    expect(decodeOverrideWriter('{"f":1,')).toEqual({ updatedBy: '{"f":1,' });
+    expect(decodeOverrideWriter('{"f":9,"by":"x"}')).toEqual({ updatedBy: '{"f":9,"by":"x"}' });
+    // Unknown sources and oversized / control-character fields are dropped or bounded.
+    expect(decodeOverrideWriter(JSON.stringify({ f: 1, by: 'user:1', op: { source: 'shell' } }))).toEqual({ updatedBy: 'user:1', operator: { source: 'console', principalId: '1' } });
+    const long = decodeOverrideWriter(encodeOverrideWriter('user:1', { source: 'console', principalId: '1', displayName: `a\u0000${'b'.repeat(200)}` })!);
+    expect(long.operator?.displayName).toHaveLength(64);
+    expect(long.operator?.displayName?.startsWith('a b')).toBe(true);
+  });
+
+  it.skipIf(!sqliteAvailable)('persists the writer in updated_by and restores it on load next to legacy rows', async () => {
+    const db = await sqlite();
+    const first = await db.open();
+    const store = new FeatureOverrideStore({ database: first });
+    await store.load();
+    const operator = { source: 'chat' as const, adapter: 'sandbox', userId: 'u1', displayName: '小明' };
+    const saved = await store.write({ plugin: 'repeater', key, next: () => ({ enabled: false, patch: {} }), updatedBy: 'chat:sandbox:u1', operator });
+    expect(saved).toMatchObject({ status: 'saved', override: { updatedBy: 'chat:sandbox:u1', operator } });
+    // A row written by an older release: plain id in updated_by.
+    await first.models.get(FEATURE_OVERRIDE_TABLE)!.insert({ id: featureOverrideRowId('rss', 'conversation', 'qq/bot-1/group:7'), plugin: 'rss', level: 'conversation',
+      key: 'qq/bot-1/group:7', enabled: 0, patch: '{}', revision: 1, updated_at: 1, updated_by: 'user:9' });
+    await first.stop();
+    const second = await db.open();
+    const reloaded = new FeatureOverrideStore({ database: second });
+    const invalid: string[] = [];
+    await reloaded.load(id => invalid.push(id));
+    expect(invalid).toEqual([]);
+    expect(reloaded.get('repeater', key)).toMatchObject({ updatedBy: 'chat:sandbox:u1', operator });
+    expect(reloaded.get('rss', 'qq/bot-1/group:7')).toMatchObject({ updatedBy: 'user:9', operator: { source: 'console', principalId: '9' } });
     await second.stop();
   });
 });

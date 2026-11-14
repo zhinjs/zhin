@@ -119,9 +119,9 @@ Feature switches are a zhin function: platform group owners / admins do not beco
 
 | Command | Purpose |
 | --- | --- |
-| `feature list` / `功能 列表` | Each plugin's state, source level and lock in this conversation, plus your roles |
+| `feature list [page]` / `功能 列表 [页码]` | State, source level and lock (including `enabled: false` in configuration and global disables) of the plugins that apply here (with commands / middlewares / handlers; adapters, service-only plugins and plugins for other platforms are left out), plus your roles; 15 per page |
 | `feature enable\|disable <plugin> [level]` | Level: `conversation` (default) / `endpoint` / `adapter` / `global` |
-| `feature set <plugin> <field> <value> [level]` | Only the plugin's `selfServiceFields` (widened above the conversation by `chatAdminFields`) |
+| `feature set <plugin> <field> <value> [level]` | Only the plugin's `selfServiceFields` (widened above the conversation by `chatAdminFields`); the value is the rest of the text after the field, quote values with spaces or ending in a level word (`"…"`, `“…”`, `「…」`, …), e.g. `feature set group-suite welcomeMessage "Welcome {name}"` |
 | `feature reset <plugin> [level]` | Removes that level's override (a locked switch is kept) |
 | `feature confirm <code>` | Global enable / disable restarts the instance and must be confirmed within 2 minutes |
 

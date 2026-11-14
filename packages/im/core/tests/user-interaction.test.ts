@@ -37,6 +37,22 @@ describe('UserInteraction module', () => {
     ]);
   });
 
+  it('carries an approval purpose onto the keyboard and leaves ordinary prompts unmarked', () => {
+    const request = {
+      type: 'select' as const,
+      title: '操作确认',
+      description: '删除文件 a.txt',
+      options: [{ label: '拒绝', value: 'reject' }, { label: '允许一次', value: 'approve-once' }],
+    };
+    const approval = renderUserInteraction(projectUserInteraction({ ...request, purpose: 'approval' })) as { type: string; data: Record<string, unknown> }[];
+    expect(approval.find(segment => segment.type === 'keyboard')?.data.purpose).toBe('approval');
+    // Only the keyboard carries it: the markdown body stays the same as an unmarked prompt.
+    const plain = renderUserInteraction(projectUserInteraction(request)) as { type: string; data: Record<string, unknown> }[];
+    expect(approval[0]).toEqual(plain[0]);
+    expect(plain.find(segment => segment.type === 'keyboard')?.data).not.toHaveProperty('purpose');
+    expect(projectUserInteraction({ type: 'confirm', title: '再来一局？' })).not.toHaveProperty('purpose');
+  });
+
   it('projects sequence progress and option descriptions', () => {
     const view = projectUserInteraction({
       type: 'select',

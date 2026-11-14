@@ -22,6 +22,7 @@ import {
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
 import { commandDescription, commandMessages } from './messages.js';
+import { userFacingErrorText } from './user-facing-error.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
 export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
 import { admitCommandExecution, admitDirectCommandExecution } from './execution-runtime.js';
@@ -174,6 +175,8 @@ export interface CommandMenuConfig {
   readonly keyword?: string;
 }
 
+/** Adapter capabilities' feature id; compared as a string so Command stays independent of the adapter package. */
+const ADAPTER_FEATURE = 'zhin.adapter';
 const DEFAULT_MENU_KEYWORDS = new Set(['菜单', '帮助', 'help', 'menu']);
 
 export class CommandIndex {
@@ -425,6 +428,12 @@ export class CommandIndex {
       }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options,
         ...(match.regex ? { match: match.regex } : {}) }));
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
+    } catch (error) {
+      // An expected, sender-caused refusal (UserFacingError) becomes this command's reply through the
+      // normal outbound chain; every other failure keeps propagating to the inbound runtime's logs.
+      const text = userFacingErrorText(error, locale);
+      if (text === undefined) throw error;
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text });
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }
@@ -614,9 +623,16 @@ export class CommandIndex {
     const listable = await Promise.all(this.#commands.map(async (cmd) => (await this.#listable(cmd, source, snapshot)) ? cmd : undefined));
     const available = listable.filter((cmd): cmd is CommandRecord => cmd !== undefined);
     const directCommands = available.filter((cmd) => cmd.slot.owner === targetId);
+    // Navigable children: plugins whose subtree has a command this sender may run here. Adapters
+    // (transports) and command-less service plugins are not menu entries.
+    const adapters = new Set([...snapshot.capabilities.values()].filter(slot => String(slot.feature) === ADAPTER_FEATURE).map(slot => slot.owner));
+    const withCommands = new Set<PluginId>();
+    for (const cmd of available) {
+      for (let id: PluginId | undefined = cmd.slot.owner; id && !withCommands.has(id); id = snapshot.tree.get(id)?.parent) withCommands.add(id);
+    }
     const children = node.children
       .map((childId) => snapshot.tree.get(childId))
-      .filter((child): child is NonNullable<typeof child> => !!child);
+      .filter((child): child is NonNullable<typeof child> => !!child && withCommands.has(child.id) && !adapters.has(child.id));
     const effectiveCommands = targetId === root
       && directCommands.length === 0
       && available.length > 0
@@ -631,8 +647,11 @@ export class CommandIndex {
     const pageCommands = effectiveCommands.slice(offset, offset + MENU_PAGE_SIZE);
     const pageChildren = children.slice(Math.max(0, offset - effectiveCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - effectiveCommands.length));
 
-    const displayKey = pluginKey ?? node.instanceKey;
-    const lines: string[] = [commandMessages(locale, 'menuTitle', { plugin: displayKey })];
+    // The Root's internal instance key ("root") is not a name: use the project's display name, else a plain title.
+    const rootName = targetId === root ? node.metadata?.displayName : undefined;
+    const displayKey = pluginKey ?? (targetId === root ? rootName ?? commandMessages(locale, 'rootMenuName') : node.instanceKey);
+    const lines: string[] = [targetId === root && !rootName
+      ? commandMessages(locale, 'rootMenuTitle') : commandMessages(locale, 'menuTitle', { plugin: displayKey })];
     if (pages > 1) lines.push(commandMessages(locale, 'menuSummary', { page, pages, commands: effectiveCommands.length, plugins: children.length }));
 
     if (pageCommands.length > 0) {
