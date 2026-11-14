@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 captureSubTurnTracing / SubTurnTrace / SubTurnTracing / TurnTraceSave / TurnTraceModelSelection，ModelExecutionScope 新增 purpose，ModelDelegationAuthority 可多次 acquire 并新增可选 agent 字段（后台委派结果送达、子 Agent 用途绑定与子回合 trace）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 captureSubTurnTracing / SubTurnTrace / SubTurnTracing / TurnTraceSave / TurnTraceModelSelection / LOOKUP_CLAIM_PATTERNS / findLookupClaim / claimWithoutToolCall，ModelExecutionScope 新增 purpose，ModelDelegationAuthority 可多次 acquire 并新增可选 agent 字段，TurnTrace 新增 model_selection / claim_without_tool_call（后台委派结果送达、子 Agent 用途绑定、子回合 trace、无工具调用却声称查过的标记）。"
     }
   ]
 }

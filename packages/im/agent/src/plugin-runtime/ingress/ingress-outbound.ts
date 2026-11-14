@@ -445,9 +445,11 @@ export function finalizeIngressTurnSuccess(input: {
   readonly routedAgentName: string | undefined;
   readonly modelPayload: () => Record<string, unknown>;
   readonly sttApplied: boolean;
+  /** Tool calls the turn made; absent when unknown (no lookup-claim check then). */
+  readonly toolCalls?: number;
 }): void {
-  const { audit, outcome, capabilities, routedAgentName, modelPayload, sttApplied } = input;
-  auditModelRun(audit, outcome, { ...modelPayload(), agent: routedAgentName ?? null });
+  const { audit, outcome, capabilities, routedAgentName, modelPayload, sttApplied, toolCalls } = input;
+  auditModelRun(audit, outcome, { ...modelPayload(), agent: routedAgentName ?? null }, toolCalls);
   const elements = completedOutput(outcome);
   const outputText = flattenOutputElements(elements).trim();
   if (!outputText) {

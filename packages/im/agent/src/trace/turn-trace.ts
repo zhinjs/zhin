@@ -12,6 +12,8 @@ import { redactTraceValue } from '../plugin-runtime/agent-trace-runtime.js';
 import type { ContextBudgetReport } from './context-budget.js';
 import { scrubSecrets } from './trace-redaction.js';
 export { scrubSecrets } from './trace-redaction.js';
+import { renderAgentOutput } from '../outbound/agent-output.js';
+import { claimWithoutToolCall } from './lookup-claim.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
 import { captureRequestBody, DEFAULT_TRACE_MAX_BYTES, RequestBodyTooLargeError, type TurnTraceRequest, type TurnTraceRequestStart } from './request-trace.js';
 
@@ -117,6 +119,11 @@ export interface TurnTrace {
   readonly subagents: readonly TurnTrace[];
   /** Model the turn ran on, when the host selected it for this (sub-)turn (#1250). */
   readonly model_selection?: TurnTraceModelSelection;
+  /**
+   * The final reply claims a lookup ("查了 / 根据最新 / I checked") but the turn made
+   * no tool call: likely made up (#1250 tool-capability-unverified). Flag only.
+   */
+  readonly claim_without_tool_call?: Readonly<{ phrase: string }>;
   readonly timeline: readonly TurnTraceTimelineEntry[];
   readonly termination: TurnTraceTermination;
   /** Entries dropped because a bounded list was full. */
@@ -181,6 +188,7 @@ export class TurnTraceCollector {
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
   #modelSelection: TurnTraceModelSelection | undefined;
+  #claimWithoutToolCall: string | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
   #dropped = 0;
@@ -371,9 +379,15 @@ export class TurnTraceCollector {
         this.#addTimeline('tool_cancelled', `${event.toolName}: ${tool.error}`);
         return;
       }
-      case 'turn_end':
+      case 'turn_end': {
+        const phrase = claimWithoutToolCall(renderAgentOutput(event.output), this.#toolCalls.size);
+        if (phrase) {
+          this.#claimWithoutToolCall = phrase;
+          this.#addTimeline('claim_without_tool_call', summarizeText(phrase, 60));
+        }
         this.#finish({ status: 'completed' });
         return;
+      }
       case 'error':
         this.#finish({
           status: 'failed',
@@ -429,6 +443,7 @@ export class TurnTraceCollector {
       }),
       subagents: Object.freeze([...this.#children.values()].map(child => child.snapshot())),
       ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
+      ...(this.#claimWithoutToolCall ? { claim_without_tool_call: Object.freeze({ phrase: this.#claimWithoutToolCall }) } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),
       dropped: this.#dropped,

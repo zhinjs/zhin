@@ -147,6 +147,8 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
   readonly outcome: TurnOutcome;
   readonly capabilities: TurnCapabilities;
   readonly routed: ReturnType<typeof routeSpecialistAgent>;
+  /** Tool calls the turn itself made (sub-agent turns excluded), for the model-run audit. */
+  readonly toolCalls: number;
 }> {
   const {
     message,
@@ -191,6 +193,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
   const service = agent.service;
   const traceRuntime = agent.traceRuntime;
   const binding = service.getBindingRegistry().requireZhinBinding();
+  let toolCalls = 0;
 
   return runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch }, () =>
     withTriggerTimeout(async (timeoutSignal) => {
@@ -447,14 +450,25 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mcpServers: liveDanmaku ? [] : binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
-              observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
+              countToolCalls(observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission), () => { toolCalls += 1; }),
             );
           } finally {
             replyPort.release();
           }
         }),
       );
-      return { outcome, capabilities, routed };
+      return { outcome, capabilities, routed, toolCalls };
     }, resolveTriggerTimeoutMs(trigger)),
   );
+}
+
+/** Counts the turn's own tool calls (the journal feed carries only this turn's facts). */
+function countToolCalls(
+  observe: ReturnType<typeof observeAgentTurnTrace>,
+  onToolCall: () => void,
+): ReturnType<typeof observeAgentTurnTrace> {
+  return (event) => {
+    if (event.type === 'tool_call') onToolCall();
+    return observe(event);
+  };
 }
