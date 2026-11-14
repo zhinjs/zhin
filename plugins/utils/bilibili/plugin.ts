@@ -70,6 +70,7 @@ export default definePlugin<BilibiliConfig>({
         id: 'bilibili/watch',
         cron: config.pollCron,
         description: 'Poll Bilibili live status and UP dynamics',
+        title: '轮询 B 站直播与动态', titleI18n: { en: 'Poll Bilibili live status and dynamics' },
         async execute() {
           // The watcher records and backs off on its own; never fail the job.
           await watcher.tick();

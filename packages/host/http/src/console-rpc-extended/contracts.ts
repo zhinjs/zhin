@@ -160,6 +160,11 @@ export interface ScheduleJobRow {
   id: string;
   cron: string;
   description?: string;
+  /** Host display metadata (`ScheduleJobDisplay` in `@zhin.js/plugin-runtime`). */
+  title?: string;
+  titleI18n?: Readonly<Partial<Record<string, string>>>;
+  kind?: 'plugin-internal' | 'user-task';
+  lastRun?: { startedAt: number; finishedAt: number; status: 'succeeded' | 'failed'; error?: string };
 }
 
 export interface InboxSelection {

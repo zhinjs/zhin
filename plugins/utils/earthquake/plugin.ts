@@ -90,6 +90,7 @@ export default definePlugin<EarthquakeConfig>({
         id: 'earthquake/poll',
         cron: config.pollCron,
         description: 'Poll CENC/USGS earthquake feeds and push subscription alerts',
+        title: '轮询地震速报', titleI18n: { en: 'Poll earthquake feeds' },
         async execute() {
           // poll() never throws; failures are logged and the next tick tries again.
           await service.poll();

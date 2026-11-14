@@ -9,6 +9,9 @@ import { reportServiceToken } from './report-service.js';
 export default defineSchedule({
   cron: '0 0 9 * * *',
   description: 'Daily report',
+  title: '发送日报',                    // Console「定时任务」显示名
+  titleI18n: { en: 'Send daily report' },
+  kind: 'plugin-internal',             // 默认；用户安排的任务用 'user-task'
   async execute(ctx) {
     await ctx.use(reportServiceToken).sendDailyReport();
   },

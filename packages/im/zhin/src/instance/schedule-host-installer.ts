@@ -7,6 +7,8 @@ import {
   rootPluginId,
   type PluginId,
   type ScheduleHost,
+  type ScheduleJobDisplay,
+  type ScheduleJobLastRun,
   type ScheduleJobRegistration,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
@@ -21,7 +23,15 @@ export function resolveScheduleTimezone(
   return environment.TZ || systemTimezone() || 'UTC';
 }
 
-export function createScheduleHost(): ScheduleHost & { stop(): void } {
+function displayOf(job: ScheduleJobDisplay): ScheduleJobDisplay {
+  return {
+    ...(typeof job.title === 'string' && job.title.trim() ? { title: job.title.trim() } : {}),
+    ...(job.titleI18n && typeof job.titleI18n === 'object' ? { titleI18n: Object.freeze({ ...job.titleI18n }) } : {}),
+    kind: job.kind === 'user-task' ? 'user-task' : 'plugin-internal',
+  };
+}
+
+export function createScheduleHost(now: () => number = Date.now): ScheduleHost & { stop(): void } {
   const scheduler = new CalendarScheduler({
     timezone: resolveScheduleTimezone(),
     onError: (error, job) => {
@@ -38,8 +48,11 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
     owner?: PluginId;
     physicalId: string;
     isActive?: () => boolean;
+    display: ScheduleJobDisplay;
   };
   const jobs = new Map<string, Map<string, Registration>>();
+  // Keyed by logical id so a hot-reloaded generation keeps showing the last real outcome.
+  const lastRuns = new Map<string, ScheduleJobLastRun>();
   let sequence = 0;
   const visible = (id: string): Registration | undefined =>
     [...(jobs.get(id)?.values() ?? [])].reverse().find(job => job.isActive?.() !== false);
@@ -49,13 +62,17 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
       const physicalId = `zhin.runtime.schedule.${++sequence}`;
       scheduler.solar(job.cron, async () => {
         if (visible(job.id)?.physicalId !== physicalId) return;
+        const startedAt = now();
         try {
           await job.execute();
+          lastRuns.set(job.id, Object.freeze({ startedAt, finishedAt: now(), status: 'succeeded' }));
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          lastRuns.set(job.id, Object.freeze({ startedAt, finishedAt: now(), status: 'failed', error: message.slice(0, 500) }));
           logger.warn(formatCompact({
             op: 'schedule_execute_failed',
             id: job.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
           }));
         }
       }, '', { id: physicalId });
@@ -66,6 +83,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
         owner: job.owner,
         physicalId,
         isActive: job.isActive,
+        display: displayOf(job),
       });
       jobs.set(job.id, registrations);
       logger.debug(formatCompact({ op: 'schedule_register', id: job.id, cron: job.cron }));
@@ -74,7 +92,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
         // the previous job, and retirement cannot cancel the newly published one.
         scheduler.cancel(physicalId);
         registrations.delete(physicalId);
-        if (registrations.size === 0) jobs.delete(job.id);
+        if (registrations.size === 0) { jobs.delete(job.id); lastRuns.delete(job.id); }
       };
     },
     list() {
@@ -82,11 +100,14 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
         const meta = visible(id);
         if (!meta) return [];
         const snap = scheduler.get(meta.physicalId);
+        const lastRun = lastRuns.get(id);
         return [Object.freeze({
           id,
           cron: meta.cron,
           description: meta.description,
           owner: meta.owner,
+          ...meta.display,
+          ...(lastRun ? { lastRun } : {}),
           // console cron 页字段：expression/running/plugin/nextExecution
           expression: meta.cron,
           running: snap ? !snap.paused && !snap.cancelled : true,
@@ -98,6 +119,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
     stop() {
       scheduler.stop();
       jobs.clear();
+      lastRuns.clear();
     },
   };
 }

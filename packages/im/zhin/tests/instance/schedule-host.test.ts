@@ -40,6 +40,32 @@ describe('ScheduleHost', () => {
     host.stop();
   });
 
+  it('lists title, kind and the last real run of each job (#1250)', async () => {
+    let now = 1_000;
+    const host = createScheduleHost(() => now);
+    let fail = false;
+    const dispose = host.register({
+      id: 'rss/poll_feeds', cron: '* * * * * *', description: 'Poll RSS subscriptions',
+      title: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' },
+      execute: async () => { now += 40; if (fail) throw new Error('feed timeout'); },
+    });
+    const userTask = host.register({ id: 'reminder/poll', cron: '0 0 9 * * *', kind: 'user-task', execute: vi.fn() });
+    try {
+      expect(host.list()[0]).toMatchObject({ title: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' }, kind: 'plugin-internal' });
+      expect(host.list()[0]).not.toHaveProperty('lastRun');
+      expect(host.list()[1]).toMatchObject({ kind: 'user-task' });
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'succeeded', finishedAt: expect.any(Number) }), { timeout: 3_000, interval: 50 });
+      const first = host.list()[0]!.lastRun!;
+      expect(first.finishedAt - first.startedAt).toBe(40);
+      fail = true;
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'failed', error: 'feed timeout' }), { timeout: 3_000, interval: 50 });
+    } finally {
+      dispose(); userTask();
+      host.stop();
+    }
+    expect(host.list()).toEqual([]);
+  });
+
   it('does not let a retired generation cancel its replacement', () => {
     const host = createScheduleHost();
     const disposePrevious = host.register({
