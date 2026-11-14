@@ -84,6 +84,25 @@ export function providerPlanFingerprint(input: unknown): string {
 }
 
 /** Compile an explicit import into one complete graph, without applying it or logging in. */
+/**
+ * True when two Service identities differ only in `baseUrl`, and both addresses
+ * share scheme, host and port (a path fix such as adding `/v1`).
+ */
+function sameOriginAddressChange(before: JsonValue, after: JsonValue): boolean {
+  if (!before || !after || typeof before !== 'object' || typeof after !== 'object' || Array.isArray(before) || Array.isArray(after)) return false;
+  const { baseUrl: previousUrl, ...previousRest } = before as Record<string, JsonValue>;
+  const { baseUrl: nextUrl, ...nextRest } = after as Record<string, JsonValue>;
+  if (providerPlanFingerprint(previousRest) !== providerPlanFingerprint(nextRest)) return false;
+  if (typeof previousUrl !== 'string' || typeof nextUrl !== 'string') return false;
+  try {
+    const a = new URL(previousUrl), b = new URL(nextUrl);
+    return a.protocol === b.protocol && a.hostname.toLowerCase() === b.hostname.toLowerCase() && a.port === b.port
+      && a.username === b.username && a.password === b.password;
+  } catch {
+    return false;
+  }
+}
+
 export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Promise<ReviewedProviderPlan> {
   const graph = normalizeProviderGraph(options.graph);
   const input = record(normalizeProviderJson(options.input));
@@ -148,10 +167,18 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
     const { identity, ...definition } = resolved;
     const candidate: ProviderService = { id, rootId: graph.rootId, ownerId, revision: (previous?.revision ?? 0) + 1,
       ...label(raw.label, previous, alias), ...definition };
-    if (previous && (canonical(previous.driver) !== canonical(candidate.driver)
-      || providerPlanFingerprint(identity ? identity(previous) : previous.options)
-        !== providerPlanFingerprint(identity ? identity(candidate) : candidate.options))) {
-      throw new ProviderError('plan-conflict');
+    if (previous && canonical(previous.driver) !== canonical(candidate.driver)) throw new ProviderError('plan-conflict');
+    if (previous) {
+      const before = identity ? identity(previous) : previous.options;
+      const after = identity ? identity(candidate) : candidate.options;
+      // #1250 service-baseurl-immutable: credentials are bound to accounts, and an account's
+      // key must never be sent to another host. An unreferenced Service has no key to leak; a
+      // referenced one may only change the URL path (same scheme, host and port).
+      if (providerPlanFingerprint(before) !== providerPlanFingerprint(after)
+        && Object.values(graph.accounts).some(account => account.serviceId === id)
+        && !sameOriginAddressChange(before, after)) {
+        throw new ProviderError('service-origin-change');
+      }
     }
     services[id] = retainRevision(previous, candidate);
     if (services[id] !== previous) changes.services[previous ? 'updated' : 'created'].push(id);

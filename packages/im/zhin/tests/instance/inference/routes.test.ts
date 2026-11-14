@@ -153,3 +153,15 @@ it('repairs one selected literal template through the Console key payload, opaqu
     expect(JSON.stringify((await f.call('')).payload)).not.toContain('synthetic-private-default');
   } finally { await f.close(); }
 });
+
+it('#1250 explains a refused host change of a referenced service and suggests copying it as a new service', async () => {
+  const fixture = await setup();
+  try {
+    const moved = await fixture.call('/plan', { plan: { version: 1, services: { shared: { driver: 'fixture', options: { baseUrl: 'https://elsewhere.example/v1' } } } },
+      bindings: { services: { shared: 'service' } } });
+    expect(moved.status).toBe(409);
+    expect(moved.payload.code).toBe('service-origin-change');
+    expect(moved.payload.error).toContain('复制为新服务');
+    expect(moved.payload.error).toContain('/v1');
+  } finally { await fixture.close(); }
+});

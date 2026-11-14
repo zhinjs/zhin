@@ -77,6 +77,15 @@ function revision(value: unknown): number {
     throw new InferenceManagementError('invalid-input');
   return Number(value);
 }
+/** Actionable text for refusals the Console user can resolve; other failures stay generic. */
+const FAILURE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  'service-origin-change':
+    '已有账号在用这个服务，服务地址只能改路径（例如补上 /v1），不能换主机、协议或端口：账号的密钥只会发往原来的主机。'
+    + '要换主机，请用「复制为新服务」新建一个服务，再把账号和用途迁移过去。',
+});
+function failureMessage(code: string): string {
+  return FAILURE_MESSAGES[code] ?? '模型服务操作未完成';
+}
 function failure(error: unknown): { status: number; code: string } {
   if (error instanceof PersonalSessionMigrationRequiredError)
     return { status: 409, code: 'migration-required' };
@@ -91,7 +100,7 @@ function failure(error: unknown): { status: number; code: string } {
       status:
         error.code === 'forbidden'
           ? 403
-          : error.code === 'plan-conflict'
+          : error.code === 'plan-conflict' || error.code === 'service-origin-change'
           ? 409
           : error.code === 'driver-unavailable' || error.code === 'driver-contract-mismatch'
           ? 503
@@ -197,7 +206,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
             success: false,
             code: result.code,
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
-            error: '模型服务操作未完成',
+            error: failureMessage(result.code),
           }));
         } finally {
           request.signal.removeEventListener('abort', abort);
