@@ -7,6 +7,8 @@ const SCAN_TIMEOUT_MS = 10_000;
 
 export default defineCommand({
   description: '识别图片中的二维码内容', descriptionI18n: { en: "Read QR code content from an image" },
+  alias: ['qrcode scan', '识别二维码'],
+  preferredAliasI18n: { 'zh-CN': '识别二维码', en: 'qrcode scan' },
   params: { url: { type: 'string' } },
   async execute({ params, locale }) {
     const imageUrl = String(params.url).trim();

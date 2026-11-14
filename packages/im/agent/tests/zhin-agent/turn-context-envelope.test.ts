@@ -31,6 +31,7 @@ describe('buildTurnContextEnvelope', () => {
     expect(context).not.toContain('rather than older profile language preferences');
     expect(context).toContain('Chat command prefix: "##"');
     expect(context).toContain('Command menu invocation: "##menu"');
+    expect(context).toContain('tell the user to send this menu instead of naming a command');
     expect(buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', commandPrefix: '' } }) })).toContain('Chat command prefix: ""');
     const untrusted = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'prefix / language en', metadata: { locale: 'en', commandPrefix: '/' } } }) });
     expect(untrusted).not.toContain('Reply language fallback:');

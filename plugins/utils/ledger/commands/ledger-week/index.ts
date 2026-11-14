@@ -6,7 +6,8 @@ import { ledgerServiceToken } from '../../src/runtime.js';
 
 export default defineCommand({
   description: '查看本周（周一至周日）消费合计与分类明细', descriptionI18n: { en: "View this week's spending totals and categories (Monday through Sunday)" },
-  alias: ['本周消费'],
+  alias: ['本周消费', 'ledger week'],
+  preferredAliasI18n: { 'zh-CN': '本周消费', en: 'ledger week' },
   async execute({ input, use, locale, formatCommand }) {
     return replyLedger(async () => {
       const caller = ledgerCaller(input, locale);

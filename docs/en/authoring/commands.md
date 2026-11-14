@@ -485,6 +485,15 @@ menuKeyword: help
 
 Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu.
 
+### Similar-command hints
+
+When a private message, an @mention of the Bot or a prefixed message matches no command but its first words closely resemble a registered command name or alias (for example `rss lst`, `RSS-List`, `gues`), the framework replies "No such command. Did you mean: …" through the normal reply pipeline instead of handing the message to the AI. Matching ignores case, spaces, `-` and `_`; by default it accepts one edit for names of at least 5 characters (3 CJK characters), and shorter names only when they are identical after removing separators. After the name the message may carry at most the command's declared arguments plus one word. Only commands the sender may run are listed. When no name is that close but the first word is the whole first word of a multi-word command (for example `qrcode hello` for `qrcode gen` / `qrcode scan`, at least 3 characters), the commands under that word are listed.
+
+```yaml
+commandSuggestion: false            # disable
+# commandSuggestion: { maxDistance: 2, limit: 5 }
+```
+
 With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
 
 Each page contains at most **30 entries**, counting commands and child plugins together. The menu shows totals, the current page and explicit previous/next messages, using the current prefix and keyword. Text fallback uses the same page; it never sends every page at once. Page numbers must be positive integers; out-of-range requests report the actual page count. Long names and descriptions in the image are limited to two lines; command help retains the full declaration.

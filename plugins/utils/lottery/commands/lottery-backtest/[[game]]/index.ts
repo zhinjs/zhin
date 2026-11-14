@@ -14,6 +14,8 @@ import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: '滚动回测与随机基线比较',
+  alias: ['lottery backtest'],
+  preferredAliasI18n: { 'zh-CN': 'lottery backtest', en: 'lottery backtest' },
   descriptionI18n: { en: 'Walk-forward backtest vs random baseline' },
   params: { game: { type: 'string', default: '' } },
   async execute({ params, config, use, locale, formatCommand }) {

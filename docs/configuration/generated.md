@@ -371,6 +371,7 @@ outline: [2, 3]
 | `ai.imageStorage.prefix` | string | 是 | — | Object directory ending in /; must be covered by the bucket lifecycle. |
 | `ai.personalPrincipals` | object | 否 | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
+| `commandSuggestion` | boolean \| object | 否 | — | 未命中但与已注册指令名/别名高度相似的消息（私聊、@机器人或带指令前缀）直接回复「没有这个指令，你是不是想用：…」，不交给 AI；false 关闭。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |
 | `menuStyle.subtitle` | string | 否 | — | 菜单副标题。 |

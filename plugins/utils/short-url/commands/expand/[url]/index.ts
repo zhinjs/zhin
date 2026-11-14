@@ -4,6 +4,8 @@ import { expandUrl, isValidUrl } from '../../../src/short-url-lib.js';
 
 export default defineCommand({
   description: '展开一个短链接，显示原始地址', descriptionI18n: { en: "Expand a short link to its original URL" },
+  alias: ['short expand', '还原短链'],
+  preferredAliasI18n: { 'zh-CN': '还原短链', en: 'short expand' },
   params: { url: { type: 'string' } },
   async execute({ params, locale }) {
     const url = String(params.url ?? '');

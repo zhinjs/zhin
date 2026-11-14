@@ -12,7 +12,10 @@ function normalizeBjAction(raw: string): string {
 }
 
 export default defineCommand({
-  description: 'Blackjack',
+  description: '二十一点：和庄家比点数',
+  descriptionI18n: { en: 'Blackjack: beat the dealer' },
+  alias: ['二十一点'],
+  preferredAliasI18n: { 'zh-CN': '二十一点' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeBjAction(String(params.action ?? ''));
