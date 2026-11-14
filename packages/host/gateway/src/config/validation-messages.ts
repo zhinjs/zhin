@@ -18,6 +18,7 @@ const messages = createMessages({
   enum: { 'zh-CN': '{field}必须是以下值之一：{values}', en: '{field}must be one of: {values}' },
   const: { 'zh-CN': '{field}必须等于 {value}', en: '{field}must equal {value}' },
   pattern: { 'zh-CN': '{field}格式不符合 {pattern}', en: '{field}must match the pattern {pattern}' },
+  environmentReference: { 'zh-CN': '{field}只接受数值或 {reference} 形式的环境变量引用', en: '{field}accepts only a number or a {reference} environment reference' },
   required: { 'zh-CN': '缺少必填字段 {property}', en: 'missing required field {property}' },
   additionalProperties: { 'zh-CN': '不支持的字段 {property}', en: 'unknown field {property}' },
   format: { 'zh-CN': '{field}应为有效的 {format}', en: '{field}must be a valid {format}' },
@@ -26,6 +27,9 @@ const messages = createMessages({
   fallback: { 'zh-CN': '{field}不满足 {keyword} 约束（{detail}）', en: '{field}does not satisfy {keyword} ({detail})' },
   field: { 'zh-CN': '字段 {path} ', en: 'Field {path} ' },
 });
+
+/** Schema `pattern` of a value that may be a string only as one whole `${VAR}` reference. */
+export const ENVIRONMENT_REFERENCE_SCHEMA_PATTERN = '^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$';
 
 const NUMERIC_LIMITS = new Set(['maximum', 'minimum', 'exclusiveMaximum', 'exclusiveMinimum', 'minLength', 'maxLength', 'minItems', 'maxItems']);
 
@@ -54,6 +58,10 @@ export function formatSchemaIssue(issue: SchemaIssue, location: readonly string[
     case 'const':
       return messages(lang, 'const', { field, value: display(params.allowedValue) });
     case 'pattern':
+      // A string allowed only as a whole `${VAR}` reference (e.g. `http.port`): say so plainly.
+      if (String(params.pattern) === ENVIRONMENT_REFERENCE_SCHEMA_PATTERN) {
+        return messages(lang, 'environmentReference', { field, reference: '${VAR}' });
+      }
       return messages(lang, 'pattern', { field, pattern: String(params.pattern) });
     case 'format':
       return messages(lang, 'format', { field, format: String(params.format) });

@@ -219,7 +219,7 @@ http:
 
 The management gateway listens on `http.port`; if the port is taken, `zhin start` fails to start. A restart from the Console restarts only the instance (over the control channel); the gateway and the Console connection stay up.
 
-Runtime falls back to 8086 when no config exists; the current scaffold writes 8068. Always trust project configuration and the startup log.
+Without `http.port` the gateway listens on 8068, the value the scaffold writes. Always trust project configuration and the startup log.
 
 ## Find the page from the symptom
 

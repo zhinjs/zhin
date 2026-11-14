@@ -205,7 +205,8 @@ ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」
 - **滑块提交格式**：NT 登录（SDK 的 `sig.nt_captcha` 指向这个滑块）提交 `ticket,randstr`，缺 randstr 时会提示并留在滑块；旧版 wtlogin 只提交 `ticket`。
 - **验证链接**带会话标识（sid / sig），密保手机号也算敏感信息：
   - Zhin 自己的日志和 `system.receive` 副事件只有挑战类型和链接的主机名（`{ kind, host }`），不含链接、手机号、设备信息和二维码图片；`login.error` 只带错误码和清洗后的说明。
-  - icqq SDK 自己的日志（log4js，`mark` 级别会打印滑块、设备锁、身份验证链接和手机号）经适配器包装：链接只保留到路径（查询串变成 `?…`），手机号变成 `***`。
+  - icqq SDK 自己的日志（原本经 log4js 输出，`mark` 级别会打印滑块、设备锁、身份验证链接和手机号）改由适配器转写到 Zhin 日志（同一格式；输出不是终端时没有颜色）：链接只保留到路径（查询串变成 `?…`），手机号变成 `***`。
+  - SDK 日志级别用 `logLevel` 配置（`trace` / `debug` / `info` / `warn` / `error` / `fatal` / `mark` / `off`，默认 `warn`，可在 `endpoints[]` 里单独设置）。SDK 逐条打印的收发消息原文（`recv from: …`、`succeed to send: …`）一律按 `debug` 处理，默认不会写进日志；开到 `debug` 时，消息中的换行写成 `⏎`、控制字符转义，并截断到 300 字，多行消息不会再拆成多条没有时间戳的日志行。
   - **未覆盖**：SDK 绕过日志直接写到控制台的两处——终端里画出的登录二维码，以及旧版登录 237 分支的 `console.log(proto.toJSON())`（可能包含验证页信息）。这两处不改 SDK 无法拦截；如果控制台输出会被收集，请注意。
   - `endpoint.login.flow` 事件和历史里不含验证链接（`linkOmitted`），Console 用 `login.flow.get` 读取当前链接。
 - **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写 Zhin 的日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。

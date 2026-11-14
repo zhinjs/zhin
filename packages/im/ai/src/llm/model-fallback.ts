@@ -13,8 +13,9 @@
  *   codes). A plain 403 (often a gateway's content or region refusal) does not
  *   switch and does not mark the model.
  * - Timeouts of the provider attempt (the resilience per-attempt timer, first-response /
- *   first-chunk deadlines: anything `classifyProviderError` calls `timeout`, but never a
- *   caller-supplied signal's `TimeoutError`) switch only after
+ *   first-chunk deadlines: anything `classifyProviderError` calls `timeout`, and the
+ *   first-response deadline it calls `no_response`, but never a caller-supplied signal's
+ *   `TimeoutError`) switch only after
  *   {@link CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts of the same account +
  *   model within one operation; the next attempt then goes to the fallback. That switch
  *   is operation-local: one user's huge prompt must not move everyone to a paid
@@ -531,7 +532,10 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
           // `AbortSignal.timeout` (DOMException `TimeoutError`), or the resilience layer's
           // per-attempt timer, which is the provider attempt timing out and is counted below.
           const cause = signal?.aborted ? signal.reason : error;
-          const causeKind = classify(cause).kind;
+          // A first-response deadline (`no_response`) is a provider-attempt timeout here: it counts
+          // toward the consecutive-timeout switch like the whole-request timer.
+          const classified = classify(cause).kind;
+          const causeKind = countsAsTimeout(classified) ? "timeout" : classified;
           if (signal?.aborted && (causeKind !== "timeout" || isCallerTimeout(cause))) throw error;
           const failure = signal?.aborted ? undefined : modelFallbackFailure(error);
           let reason: ModelFallbackReason;
@@ -567,6 +571,11 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
     };
 
   return Object.freeze({ complete: run("complete"), completeSimple: run("completeSimple") });
+}
+
+/** Failure kinds that count toward {@link CONSECUTIVE_TIMEOUTS_TO_SWITCH}. */
+function countsAsTimeout(kind: ProviderErrorClassification["kind"]): boolean {
+  return kind === "timeout" || kind === "no_response";
 }
 
 /** `AbortSignal.timeout()` aborts with a DOMException named `TimeoutError`: the caller's own deadline. */

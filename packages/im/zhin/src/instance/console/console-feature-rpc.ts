@@ -26,7 +26,7 @@ import {
   type ConsoleFeatureConversationsResult, type ConsoleFeatureGetResult, type ConsoleFeatureLevel, type ConsoleFeatureListResult,
   type ConsoleFeatureLock, type ConsoleFeatureMatrixCell, type ConsoleFeatureMatrixResult, type ConsoleFeatureMatrixRow,
   type ConsoleFeaturePermission, type ConsoleFeatureRpcType, type ConsoleFeatureSummary, type ConsoleFeatureWarning,
-  type ConsoleFeatureWriteResult, type ConsoleFeatureOverrideOperator,
+  type ConsoleFeatureWriteResult, type ConsoleFeatureOverrideOperator, type ConsoleFeatureCapabilities,
 } from '@zhin.js/console-protocol';
 import {
   FEATURE_ENABLED_KEY, FEATURE_OVERRIDES_KEY, featureConversationEntry, parseFeatureConversationKey,
@@ -338,6 +338,38 @@ function displayNameI18n(snapshot: RuntimeSnapshot | undefined, plugin: string):
   return translations && Object.keys(translations).length ? { displayNameI18n: Object.freeze({ ...translations }) } : {};
 }
 
+const CAPABILITY_FEATURES = { commands: 'zhin.command', components: 'zhin.component', tools: 'zhin.agent-tool' } as const;
+
+/** Convention capabilities owned directly by `owner` (not its children), by local name (#1250). */
+function capabilitiesOf(snapshot: RuntimeSnapshot | undefined, owner: PluginId | undefined): ConsoleFeatureCapabilities {
+  const collect = (feature: string): readonly string[] => !snapshot || !owner ? Object.freeze([])
+    : Object.freeze([...new Set([...snapshot.capabilities.values()]
+      .filter(slot => slot.owner === owner && String(slot.feature) === feature).map(slot => slot.localName))].sort());
+  return Object.freeze({ commands: collect(CAPABILITY_FEATURES.commands), components: collect(CAPABILITY_FEATURES.components),
+    tools: collect(CAPABILITY_FEATURES.tools) });
+}
+
+/**
+ * The project's root plugin as a matrix row (#1250): its convention commands (`/hello`, `/card`, …)
+ * are features too, but it has no instance alias and cannot be switched off. Shown only when it
+ * contributes something.
+ */
+function rootMatrixRow(state: State, aliases: readonly string[]): ConsoleFeatureMatrixRow | undefined {
+  const snapshot = state.snapshot;
+  if (!snapshot) return undefined;
+  const capabilities = capabilitiesOf(snapshot, snapshot.root);
+  if (capabilities.commands.length + capabilities.components.length + capabilities.tools.length === 0) return undefined;
+  const root = snapshot.tree.get(snapshot.root);
+  const on = Object.freeze({ enabled: true, overridden: false });
+  const translations = root?.metadata?.displayNameI18n;
+  return Object.freeze({
+    plugin: '', displayName: root?.metadata?.displayName ?? (root?.packageName ? `本项目（${root.packageName}）` : '本项目'),
+    ...(translations && Object.keys(translations).length ? { displayNameI18n: Object.freeze({ ...translations }) } : {}),
+    kind: 'root', readOnly: true, capabilities,
+    global: on, adapters: Object.freeze(Object.fromEntries(aliases.map(alias => [alias, on]))),
+  });
+}
+
 function listFeatures(state: State): ConsoleFeatureListResult {
   const adapters = new Set(adapterAliases(state.snapshot));
   const features: ConsoleFeatureSummary[] = [];
@@ -350,6 +382,8 @@ function listFeatures(state: State): ConsoleFeatureListResult {
       hasSchema: businessFields(schema).length > 0, globalEnabled: globallyEnabled(state.document, plugin),
       ...conversationDeclaration(schema),
       ...(adapters.has(plugin) ? { adapter: true } : {}),
+      kind: adapters.has(plugin) ? 'adapter' : 'plugin',
+      capabilities: capabilitiesOf(state.snapshot, nodeOf(state.snapshot, plugin)?.id),
     }));
     for (const child of nodeOf(state.snapshot, plugin)?.children ?? []) {
       const childNode = state.snapshot?.tree.get(child);
@@ -419,8 +453,14 @@ function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixR
     const counts = perPlugin.get(feature.plugin);
     return Object.freeze({ plugin: feature.plugin, displayName: feature.displayName,
       ...(feature.displayNameI18n ? { displayNameI18n: feature.displayNameI18n } : {}), ...(counts ? { conversationOverrides: counts } : {}),
+      ...(feature.kind ? { kind: feature.kind } : {}), ...(feature.capabilities ? { capabilities: feature.capabilities } : {}),
       global: Object.freeze({ enabled: feature.globalEnabled, overridden: false }), adapters: Object.freeze(adapters) });
   });
+  // The root plugin's own commands first, then plugins, then adapters (#1250).
+  const order = { root: 0, plugin: 1, adapter: 2 } as const;
+  const root = rootMatrixRow(state, aliases);
+  if (root) rows.unshift(root);
+  rows.sort((left, right) => order[left.kind ?? 'plugin'] - order[right.kind ?? 'plugin']);
   return Object.freeze({
     revision: state.revision,
     adapters: Object.freeze([...aliases]),

@@ -1,9 +1,13 @@
 import {
+  auditActor,
   HttpBodyError,
+  isGlobalOwnerPrincipal,
+  isLocalSocketPrincipal,
   isUserPrincipal,
   jsonResponse,
   readJsonBody,
   type AuthScope,
+  type ConsoleAuditEntry,
   type ConsolePrincipal,
   type HttpHost,
 } from '@zhin.js/host-http';
@@ -24,10 +28,13 @@ import { HostAccountRuntime } from '@zhin.js/agent/runtime';
 import { InferenceAuthenticationError } from '@zhin.js/agent/runtime';
 import { InferenceStoreError } from '@zhin.js/agent/runtime';
 import {
+  INFERENCE_ENVIRONMENT_REFUSALS,
   InferenceManagementError,
   InferenceApplyRejectedError,
+  type InferenceEnvironmentAuthority,
   type InferenceManagementPrincipal,
   type InferenceManagementService,
+  type InferenceProbeResult,
 } from '@zhin.js/agent/runtime';
 import type { InferenceTargetsReader } from '@zhin.js/agent/runtime';
 import type { InferenceSessionManagement } from '@zhin.js/agent/runtime';
@@ -38,9 +45,53 @@ export interface InferenceManagementLease {
   readonly sessions: InferenceSessionManagement;
   readonly targets?: InferenceTargetsReader;
   readonly authenticationContract: (accountId: string) => Promise<string>;
+  readonly probe?: (input: Readonly<{ profileId: string; signal: AbortSignal }>) => Promise<InferenceProbeResult>;
   release(): void | Promise<void>;
 }
+
+/** Which Host environment variables the Console / CLI caller may reference (#1250). */
+export function inferenceEnvironmentAuthority(principal: ConsolePrincipal | undefined): InferenceEnvironmentAuthority {
+  if (isLocalSocketPrincipal(principal)) return 'local-cli';
+  if (isGlobalOwnerPrincipal(principal)) return 'console-owner';
+  return 'none';
+}
+/** `/probe` and `/account/test` were called too often for one account (#1250). */
+export class ConnectionTestRateLimitedError extends Error {
+  constructor(readonly retryAfterMs: number) {
+    super('Connection test rate limited');
+    this.name = 'ConnectionTestRateLimitedError';
+  }
+}
+
+/** Default connection-test budget per account: 6 per minute. */
+export const CONNECTION_TEST_RATE_LIMIT = Object.freeze({ limit: 6, windowMs: 60_000 });
+
+/**
+ * Sliding-window limiter keyed by account: every connection test is a real (billed) model request,
+ * so one account cannot be probed in a loop through the Console or CLI.
+ */
+export function createConnectionTestLimiter(
+  options: Readonly<{ limit?: number; windowMs?: number; now?: () => number }> = {},
+): (key: string) => void {
+  const limit = options.limit ?? CONNECTION_TEST_RATE_LIMIT.limit;
+  const windowMs = options.windowMs ?? CONNECTION_TEST_RATE_LIMIT.windowMs;
+  const now = options.now ?? Date.now;
+  const calls = new Map<string, number[]>();
+  return (key: string) => {
+    const at = now();
+    for (const [other, times] of calls) {
+      const kept = times.filter(time => at - time < windowMs);
+      if (kept.length) calls.set(other, kept); else calls.delete(other);
+    }
+    const recent = calls.get(key) ?? [];
+    if (recent.length >= limit) throw new ConnectionTestRateLimitedError(Math.max(1, recent[0]! + windowMs - at));
+    calls.set(key, [...recent, at]);
+  };
+}
+
 export interface InferenceRouteOptions {
+  /** Connection-test budget per account (`/probe`, `/account/test`); default {@link CONNECTION_TEST_RATE_LIMIT}. */
+  readonly connectionTestRateLimit?: Readonly<{ limit?: number; windowMs?: number; now?: () => number }>;
   readonly http: HttpHost;
   readonly base: string;
   readonly acquire: () => InferenceManagementLease;
@@ -55,6 +106,8 @@ export interface InferenceRouteOptions {
   readonly owners: (
     input: Readonly<{ scope: AuthScope; principalId?: string }>
   ) => readonly InferenceOwnerView[];
+  /** Console audit sink; entries carry ids and variable names, never values. */
+  readonly audit?: (entry: ConsoleAuditEntry) => void;
 }
 export interface InferenceOwnerView {
   readonly id: string;
@@ -95,6 +148,8 @@ interface RouteFailure {
     path?: string }>;
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
+  /** Why an environment reference was refused (#1250); its text is {@link INFERENCE_ENVIRONMENT_REFUSALS}. */
+  readonly reason?: keyof typeof INFERENCE_ENVIRONMENT_REFUSALS;
 }
 /** Shown when model discovery succeeds with zero models. */
 const DISCOVERY_EMPTY_HINT = '上游模型目录没有返回可用模型：可以直接手动填写模型 ID 继续配置；Codex 订阅还可以在模型服务配置中调整 codexClientVersion（上游按 Codex CLI 版本过滤模型）后重新读取';
@@ -125,6 +180,7 @@ function failure(error: unknown): RouteFailure {
   if (error instanceof HttpBodyError) return { status: error.statusCode, code: 'invalid-input' };
   if (error instanceof InferenceManagementError)
     return {
+      ...(error.reason ? { reason: error.reason } : {}),
       status: {
         'invalid-input': 400,
         forbidden: 403,
@@ -159,6 +215,13 @@ function failure(error: unknown): RouteFailure {
         : '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
     };
   }
+  if (error instanceof ConnectionTestRateLimitedError)
+    return {
+      status: 429,
+      code: 'rate-limited',
+      details: { retryAfterMs: error.retryAfterMs },
+      message: '连接测试过于频繁，请稍后重试',
+    };
   if (error instanceof ProviderDiscoveryError && error.code === 'rate-limited')
     return {
       status: 429,
@@ -205,6 +268,27 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       tags: ['agent', 'inference'],
     }
   );
+  /** Environment-reference operations are audited (ids and variable names only, never values). */
+  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test']);
+  const record = (
+    principal: ConsolePrincipal | undefined,
+    path: string,
+    outcome: ConsoleAuditEntry['outcome'],
+    detail: Readonly<Record<string, unknown>>,
+    target?: string
+  ) => {
+    try {
+      options.audit?.({
+        actor: auditActor(principal),
+        action: `inference${path.replaceAll('/', '.')}`,
+        outcome,
+        ...(target ? { target: target.slice(0, 512) } : {}),
+        detail,
+      });
+    } catch {
+      /* audit never breaks a request */
+    }
+  };
   const register = (
     method: string,
     path: string,
@@ -215,6 +299,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
         request: Request;
         url: URL;
         signal: AbortSignal;
+        consolePrincipal?: ConsolePrincipal;
       }>
     ) => Promise<unknown>
   ) =>
@@ -231,13 +316,16 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
         let lease: InferenceManagementLease | undefined;
         let operationEntered = false;
         try {
-          const principal = options.principal({
-            scope: 'full',
-            ...principalId(context.principal),
-            ...(url.searchParams.has('owner')
-              ? { requestedOwner: url.searchParams.get('owner')! }
-              : {}),
-          });
+          const principal = {
+            ...options.principal({
+              scope: 'full',
+              ...principalId(context.principal),
+              ...(url.searchParams.has('owner')
+                ? { requestedOwner: url.searchParams.get('owner')! }
+                : {}),
+            }),
+            environmentReferences: inferenceEnvironmentAuthority(context.principal),
+          };
           lease = options.acquire();
           operationEntered = true;
           const data = await operation({
@@ -246,6 +334,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
             request,
             url,
             signal: controller.signal,
+            consolePrincipal: context.principal,
           });
           return withNoStore(jsonResponse(200, { success: true, data }));
         } catch (error) {
@@ -253,12 +342,14 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
           const result = failure(rejected ? error.rejection : error);
           const notCommitted =
             path === '/apply' && (!operationEntered || rejected || error instanceof HttpBodyError);
+          if (audited.has(path)) record(context.principal, path, 'denied', { code: result.code, ...(result.reason ? { reason: result.reason } : {}) });
           return withNoStore(jsonResponse(result.status, {
             success: false,
             code: result.code,
             ...(result.details ?? {}),
+            ...(result.reason ? { reason: result.reason } : {}),
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
-            error: result.message ?? failureMessage(result.code),
+            error: result.reason ? INFERENCE_ENVIRONMENT_REFUSALS[result.reason] : result.message ?? failureMessage(result.code),
           }));
         } finally {
           request.signal.removeEventListener('abort', abort);
@@ -368,6 +459,46 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       signal,
     });
     return lease.accounts.status(account);
+  });
+  const limitConnectionTest = createConnectionTestLimiter(options.connectionTestRateLimit);
+  register('POST', '/probe', async ({ lease, principal, request, signal }) => {
+    if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
+    if (!lease.probe) throw new InferenceManagementError('unavailable');
+    const body = object(await readJsonBody(request));
+    const profileId = text(body.profileId);
+    // Counted per account (a profile without one is its own key), shared with /account/test.
+    const accountId = (await lease.management.graph()).profiles[profileId]?.accountId;
+    limitConnectionTest(accountId ? `account:${accountId}` : `profile:${profileId}`);
+    return lease.probe({ profileId, signal });
+  });
+  register('POST', '/account/test', async ({ lease, principal, request, signal, consolePrincipal }) => {
+    const body = object(await readJsonBody(request)),
+      account = await lease.management.account(principal, text(body.accountId));
+    if (!lease.probe) throw new InferenceManagementError('unavailable');
+    const graph = await lease.management.graph();
+    const profiles = Object.values(graph.profiles).filter((profile) => profile.accountId === account.id
+      && profile.ownerId === principal.ownerId && graph.services[account.serviceId]?.models[profile.model]?.kinds.includes('language'));
+    const chat = graph.purposes.defaults.chat;
+    const profile = profiles.find((candidate) => candidate.id === chat) ?? profiles[0];
+    if (!profile) throw new InferenceManagementError('unsupported');
+    limitConnectionTest(`account:${account.id}`);
+    const result = await lease.probe({ profileId: profile.id, signal });
+    record(consolePrincipal, '/account/test', result.status === 'ok' ? 'ok' : 'error', { kind: result.kind ?? 'ok', profile: profile.id }, account.id);
+    return { result, status: await lease.accounts.status(account) };
+  });
+  register('POST', '/cli/account/add', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request));
+    const added = await lease.management.addEnvironmentAccount(principal, body);
+    record(consolePrincipal, '/cli/account/add', added.result.status === 'committed' ? 'ok' : 'error',
+      { service: added.serviceId, createdService: added.createdService, env: String(body.env), status: added.result.status }, added.accountId);
+    return added;
+  });
+  register('POST', '/cli/account/rename-env', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request));
+    const renamed = await lease.management.renameEnvironmentReference(principal, body);
+    record(consolePrincipal, '/cli/account/rename-env', renamed.result.status === 'committed' ? 'ok' : 'error',
+      { from: String(body.from), to: String(body.to), credential: renamed.credential, status: renamed.result.status }, renamed.accountId);
+    return renamed;
   });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),

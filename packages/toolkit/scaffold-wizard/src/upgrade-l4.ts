@@ -73,6 +73,7 @@ export function diagnoseUpgradeToL4(
     fixParts.push(formatAIDependencyFixCommand(
       [...new Set(missingAiDeps)],
       required,
+      cwd,
     ));
   }
   for (const peer of [optionalPeers.speech, optionalPeers.htmlRenderer]) {

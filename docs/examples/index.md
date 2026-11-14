@@ -35,7 +35,7 @@ description: "仓库自带的可运行示例：从一个文件的 Bot 到带 AI 
 pnpm --filter single-file-bot dev
 ```
 
-打开 [Console](https://console.zhin.dev)，API Base 填 `http://127.0.0.1:8086`。本示例没有配置 `http.token`，Host 只监听本机，Console 直接进入初始化向导；创建所有者账号后在 Sandbox 里发送 **`/hello`**。
+打开 [Console](https://console.zhin.dev)，API Base 填 `http://127.0.0.1:8068`。本示例没有配置 `http.token`，Host 只监听本机，Console 直接进入初始化向导；创建所有者账号后在 Sandbox 里发送 **`/hello`**。
 
 ```text
 single-file-bot/
@@ -118,7 +118,7 @@ pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 ```
 
 - 要求 Node.js ≥22.19，凭据读该目录的 `.env`（模板见 `.env.example`）；
-- Console 的 API Base 填 `http://127.0.0.1:8086`，第一次用初始化令牌 `test-bot-dev-token` 创建所有者账号，之后用账号登录；
+- Console 的 API Base 填 `http://127.0.0.1:8068`，第一次用初始化令牌 `test-bot-dev-token` 创建所有者账号，之后用账号登录；
 - 后台运行：`pnpm daemon`（即 `zhin start --mode production --no-watch`，网关在后台运行），`zhin status` / `zhin logs -f` 查看，`pnpm stop` 停止。
 
 ## 下一步

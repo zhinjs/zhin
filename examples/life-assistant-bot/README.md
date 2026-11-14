@@ -30,7 +30,7 @@ cp .env.example .env   # 编辑 HTTP_TOKEN（Console 初始化令牌）
 pnpm dev   # zhin start --foreground --watch source config
 
 # 5. 打开 Remote Console
-#    https://console.zhin.dev → API Base: http://127.0.0.1:8086
+#    https://console.zhin.dev → API Base: http://127.0.0.1:8068
 #    第一次连接：用 .env 中的 HTTP_TOKEN 完成初始化向导，创建所有者账号
 #    （或运行 pnpm exec zhin console init）；之后用账号登录，HTTP_TOKEN 随即失效
 ```

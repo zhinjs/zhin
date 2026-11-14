@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
-import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnabledInConfig, type PackageJsonLike } from './project-deps.js';
+import { findMissingPackageDependencies, findUnresolvedPackageInstalls, formatPnpmAddCommand, isAiEnabledInConfig, type PackageJsonLike } from './project-deps.js';
 
 /**
  * Diagnostic baseline for doctor / config check: any declared version of these packages is accepted
@@ -116,7 +116,7 @@ function resolveStackVersion(packageName: string): string {
   return ZHIN_STACK_VERSIONS[packageName as ZhinStackPackage] ?? 'latest';
 }
 
-/** create-zhin / minimal-bot 默认 Host 端口（避免与常见 8086 占用冲突） */
+/** create-zhin / minimal-bot 默认 Host 端口，与运行时未配置 http.port 时的默认端口（@zhin.js/host-http DEFAULT_HTTP_PORT）一致；避开 InfluxDB 等常用的 8086 */
 export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 
 /** create-zhin 生成项目固定使用的 pnpm 版本。 */
@@ -252,6 +252,8 @@ export interface ZhinStackDiagnosis {
   outdatedInPackageJson: string[];
   incompatibleInstalled: ZhinStackIncompatibility[];
   notInstalled: string[];
+  /** Required packages not declared in package.json but resolvable through the installed zhin.js. */
+  providedByZhin: string[];
 }
 
 export function packagesNeedingZhinStackFix(diagnosis: ZhinStackDiagnosis): string[] {
@@ -276,10 +278,15 @@ export function diagnoseZhinStackDependencies(
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath)
     ? fs.readJsonSync(packageJsonPath) as PackageJsonLike
     : {});
-  const missingFromPackageJson = findMissingPackageDependencies(packageJson, required);
+  // A package zhin.js itself depends on (e.g. @zhin.js/database for a `database:` block) is
+  // available without a direct declaration: not missing when it resolves through zhin.js.
+  const providedByZhin = findMissingPackageDependencies(packageJson, required)
+    .filter((name) => name !== 'zhin.js' && resolvesThroughZhin(cwd, name));
+  const missingFromPackageJson = findMissingPackageDependencies(packageJson, required)
+    .filter((name) => !providedByZhin.includes(name));
   const outdatedInPackageJson = findOutdatedZhinStackInPackageJson(packageJson, required);
   const incompatibleInstalled = findInstalledZhinStackIncompatibilities(cwd, packageJson, config, locale);
-  const declared = Object.keys(required).filter((name) => !missingFromPackageJson.includes(name));
+  const declared = Object.keys(required).filter((name) => !missingFromPackageJson.includes(name) && !providedByZhin.includes(name));
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {
     required,
@@ -287,11 +294,34 @@ export function diagnoseZhinStackDependencies(
     outdatedInPackageJson,
     incompatibleInstalled,
     notInstalled,
+    providedByZhin,
   };
 }
 
-export function formatZhinStackFixCommand(packages: string[], required: Record<string, string>): string {
+export function formatZhinStackFixCommand(packages: string[], required: Record<string, string>, cwd?: string): string {
   if (packages.length === 0) return 'pnpm install';
   const specs = packages.map((name) => `${name}@${required[name] ?? 'latest'}`);
-  return `pnpm add ${specs.join(' ')}`;
+  return formatPnpmAddCommand(specs, cwd);
+}
+
+/**
+ * Whether `packageName` resolves through the project's installed `zhin.js` (one of its own
+ * dependencies, e.g. `@zhin.js/database`). Such a package is available to the runtime without
+ * being declared in the project's package.json, so it is not "missing".
+ */
+export function resolvesThroughZhin(cwd: string, packageName: string): boolean {
+  let zhinDir: string;
+  try {
+    zhinDir = fs.realpathSync(path.join(cwd, 'node_modules', 'zhin.js'));
+  } catch {
+    return false;
+  }
+  try {
+    createRequire(path.join(zhinDir, 'package.json')).resolve(`${packageName}/package.json`);
+    return true;
+  } catch {
+    // Packages without `./package.json` in their exports map: look next to zhin.js (pnpm layout).
+    return fs.existsSync(path.join(zhinDir, 'node_modules', packageName, 'package.json'))
+      || fs.existsSync(path.join(path.dirname(zhinDir), packageName, 'package.json'));
+  }
 }

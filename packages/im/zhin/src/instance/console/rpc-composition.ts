@@ -29,6 +29,14 @@ export interface ConsoleRpcComposition {
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
 }
 
+/**
+ * `environmentWrite`: the caller holds `ops.env.write`, so secret literals of a config write may be
+ * moved into `.env` (#1250). Omitted / false: such a write is refused (`env-write-required`).
+ */
+export interface ConfigWriteAuthority {
+  readonly environmentWrite?: boolean;
+}
+
 export interface ConsoleRpcConfigurationPort {
   readSource(): Promise<import('@zhin.js/console-protocol').ConsoleConfigSource>;
   readDocument(): Promise<Record<string, unknown>>;
@@ -39,10 +47,10 @@ export interface ConsoleRpcConfigurationPort {
     source: string,
     expectedRevision: string,
   ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
-  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
-  patch(request: import('@zhin.js/console-protocol').ConsoleConfigPatchRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigPatchResult>;
+  setKey(pluginName: string, data: unknown, options?: ConfigWriteAuthority): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
+  patch(request: import('@zhin.js/console-protocol').ConsoleConfigPatchRequest, options?: ConfigWriteAuthority): Promise<import('@zhin.js/console-protocol').ConsoleConfigPatchResult>;
   readProject?(request: import('@zhin.js/console-protocol').ConsoleConfigProjectReadRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectRead>;
-  patchProject?(request: Omit<import('@zhin.js/console-protocol').ConsoleConfigPatchRequest, 'instanceKey'>): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectPatchResult>;
+  patchProject?(request: Omit<import('@zhin.js/console-protocol').ConsoleConfigPatchRequest, 'instanceKey'>, options?: ConfigWriteAuthority): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectPatchResult>;
   removeKey(pluginName: string): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   readEnvironmentFile(filename: string): Promise<string>;
   writeEnvironmentFile(filename: string, content: string): Promise<void>;

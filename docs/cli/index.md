@@ -188,11 +188,13 @@ zhin config check [--fix] [--json] [--strict]
 
 `get` / `set` / `unset` / `list` **默认连接运行中的 Host**（`POST {base}/console/request`）：写入先读取配置版本，再用 `config:patch-project` 一次性提交，由 Host 完成 CAS、Schema 校验、保存和按需生效。CLI 不自己读改写文件，也不重试。
 
-- 连接：`--host <url>` 优先，token 只取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）。未给 `--host` 时按配置 `http.host` / `http.port` / `http.base` 推导地址（监听地址 `0.0.0.0` / `::` 会改连 `127.0.0.1` / `[::1]`），此时环境变量未设置才回退到配置 `http.token`。非 loopback 地址携带 token 必须用 HTTPS。
+- 连接：未给 `--host` 时只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行（设置了 `ZHIN_CONSOLE_TOKEN` 时以该令牌的身份）。本项目网关没有运行时命令直接失败并提示「本项目的网关未运行（zhin start 启动，或加 --offline 离线读写配置文件）」，**不会**按配置 `http.port` 去连 `127.0.0.1`——那个端口上可能是另一个项目的网关。确需连接其他地址时显式 `--host <url>`：token 取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）；本机地址（`127.0.0.1` / `localhost` / `[::1]`）会先读对方 `/pub/health` 的项目标识，与当前项目不一致就拒绝，不发送请求和令牌；对方**没有报告**项目标识（旧版网关或 `--standalone` 实例）时同样拒绝并以非零状态退出——升级该网关并用 `zhin start` 启动本项目，或在确认目标无误时加 `--allow-unverified-host`（只给出警告后继续；项目标识不一致时该选项不起作用）。非 loopback 地址携带 token 必须用 HTTPS。`zhin send`、`zhin schedule`、`zhin watch` 与 `zhin packages … --live` 遵循同样的规则（前三个也接受 `--host <url>`；以上命令都接受 `--allow-unverified-host`）。
 - **Host 未运行时直接失败，不会回退到离线写文件。** 需要离线操作时显式加 `--offline`：用与 Host 相同的 `patchProject` 规则（版本检查、插件声明不可改、逐段 Schema 校验）在本地校验后保存；不启动 Runtime、不执行插件 `setup`、CLI 不向 Host 发送任何请求，但加载插件声明时会执行模块顶层代码（模块自身可能访问网络）。离线保存不会让运行中的 Host 生效，需要 `--watch config` 或在 Console 中「应用配置」。
+- 写敏感字段（Schema 标为 secret / writeOnly / password，或 token、密码类键名）时，值写进项目 `.env`，配置里保留或改为 `${VAR}` 引用：沿用该字段原来引用的变量名（如 `${HTTP_TOKEN}`），原来不是引用时按路径生成（`http.token` → `HTTP_TOKEN`，重名时加 `_2`）；`.env.<环境>` 已定义该变量时写到那里。输出只说明写到了哪个变量，从不回显值。确实要明文写进配置文件时加 `--plain`（会打印警告）。Console 保存配置走同一规则。
 - 读取默认按 Schema 打码：`secret` / `writeOnly` / `hidden` / 密码字段、密钥类键名以及未展开的 `${...}` / `env://` 引用都显示为 `[redacted]`；加 `--reveal` 才输出原值。
 - `get` / `list` / `set` / `unset` 加 `--json` 时只输出一行紧凑 JSON，便于脚本处理；不加时只输出可读文本（`config path`、`config check` 的输出格式见各自说明）。
-- 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。
+- 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。其他失败只显示原因；加全局选项 `--debug` 才在 stderr 附上这两项。
+- 写不进去时给出可读原因：没有这个配置项时列出相近的配置项；数组下标越界时说明当前长度与追加办法（读出整个数组、加上新项后整体写回）。配置里的 `http.port` 已损坏而网关未运行时，提示先用 `--offline` 修复。
 
 退出码是公开契约：
 
@@ -248,7 +250,11 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
-声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有条目保留，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+
+pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复），安装后逐个读取 `node_modules` 列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
+
+`zhin migrate` 只补当前脚手架也会创建的目录（`data/`、`plugins/`），不再创建 `src/plugins`；`SOUL.md` / `TOOLS.md` / `AGENTS.md` 只在项目使用 AI（配置启用 AI 或声明了 `@zhin.js/agent`）时补齐，仍是旧中文模板的文件会升级并留 `.bak`。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
@@ -483,12 +489,12 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 
 ## 操作运行中的 Bot
 
-以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin start` 启动并启用 HTTP 服务。请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人）；Console 初始化之后 `http.token` 一律被拒绝，没有设置 API 令牌时这些命令返回 401。
+以下命令操作正在运行的 Bot，需要先在项目目录里用 `zhin start` 启动。默认只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行，不需要令牌；本项目网关没有运行时命令直接报「本项目的网关未运行」，不会按 `http.port` 去连本机端口（那里可能是另一个项目的网关）。要连其他地址时加 `--host <url>`：请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人；Console 初始化之后 `http.token` 一律被拒绝），本机地址会先核对对方 `/pub/health` 报告的项目标识，不是本项目就拒绝；没有报告项目标识（旧版网关或 `--standalone` 实例）时也拒绝，确认目标无误时可加 `--allow-unverified-host` 继续。
 
 ### send：向运行中的 bot 发消息
 
 ```bash
-zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
+zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>] [--host <url>]
 ```
 
 `scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
@@ -498,7 +504,7 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 ### watch：监视运行实例
 
 ```bash
-zhin watch [-i 3] [--once] [--json] [--no-clear]
+zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 ```
 
 在终端里定时刷新状态面板（统计、账号、助手任务）。`--once` 拉取一次后退出，`--json` 适合脚本使用。
@@ -508,7 +514,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear]
 让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin start` 启动并启用 `assistant.enabled`。
 
 ```bash
-zhin schedule list
+zhin schedule list [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "早上好，汇报今日日程" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "检查一下 RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
@@ -539,6 +545,16 @@ zhin agent info [--json]
 | 命令 | 作用 |
 | --- | --- |
 | `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
+
+### ai account：引用 Host 环境变量的模型账号 {#ai-account}
+
+```bash
+zhin ai account add --service <服务 id／名称／内置类型> --env <变量名> [--name <名称>] [--test]
+zhin ai account rename-env <账号> <原变量名> <新变量名> [--reauthorize]
+zhin ai account test <账号 id>
+```
+
+只经本机网关控制套接字执行（需先 `zhin start`），不接受 Console 会话或 `ZHIN_CONSOLE_TOKEN`；只发送变量名，不回显值，写入审计。规则与限制见[账号来源与 Host 环境变量](../ai/providers.md#account-sources)。
 
 ### trace：查看 Agent 回合
 

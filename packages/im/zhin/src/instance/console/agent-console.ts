@@ -187,3 +187,19 @@ type AssistantRuntime = {
     defaultImNotify?(): unknown;
   };
 };
+
+/**
+ * Why the request generation has no Agent Console (#1250): the Agent package is missing, or it is
+ * installed but no Agent runs (AI not enabled). `undefined` when an Agent Console is available.
+ */
+export async function agentConsoleDisabledReason(
+  snapshots: SnapshotReader | undefined,
+): Promise<'agent-not-installed' | 'agent-disabled' | undefined> {
+  if (await getAgentConsoleModule() === null) return 'agent-not-installed';
+  const lease = acquireGenerationAgentConsole(snapshots);
+  try {
+    return lease?.value ? undefined : 'agent-disabled';
+  } finally {
+    lease?.release();
+  }
+}

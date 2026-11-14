@@ -22,6 +22,7 @@ import {
   type LocalGatewayInfoResult,
 } from '@zhin.js/gateway/local';
 import { GatewayPackageService } from '@zhin.js/gateway/packages';
+import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { supervisedNodeArguments } from '@zhin.js/gateway/supervisor';
 import { consoleLink } from '@zhin.js/gateway/server';
 import { isProcessRunning } from './process.js';
@@ -114,13 +115,45 @@ const PHASE_LABELS: Readonly<Record<string, string>> = {
   done: '完成',
 };
 
-/** Prints transaction progress; returns the event printer. */
+/** Prefix of the package manager's own lines, so they read apart from the transaction steps (#1250). */
+export const PACKAGE_MANAGER_LINE_PREFIX = '    │ ';
+
+/**
+ * Prints transaction progress; returns the event printer. Steps are `  · <step>` lines; the
+ * package manager's output is printed verbatim under the step that ran it, each line prefixed with
+ * {@link PACKAGE_MANAGER_LINE_PREFIX}.
+ */
 export function packageEventPrinter(output: Output = processOutput): (event: GatewayPackageEvent) => void {
+  const pending: Record<'stdout' | 'stderr', string> = { stdout: '', stderr: '' };
+  const write = (stream: 'stdout' | 'stderr', text: string) => (stream === 'stderr' ? output.err : output.out)(text);
+  const flush = () => {
+    for (const stream of ['stdout', 'stderr'] as const) {
+      if (pending[stream]) write(stream, `${PACKAGE_MANAGER_LINE_PREFIX}${pending[stream]}\n`);
+      pending[stream] = '';
+    }
+  };
   return (event) => {
+    if (event.type === 'output') {
+      const lines = (pending[event.stream] + event.chunk).split(/\r?\n/u);
+      pending[event.stream] = lines.pop() ?? '';
+      for (const line of lines) write(event.stream, `${PACKAGE_MANAGER_LINE_PREFIX}${line}\n`);
+      return;
+    }
+    flush();
     if (event.type === 'start') output.out(`→ ${event.operation} ${event.packages.map((item) => item.spec).join(' ') || '(全部依赖)'}\n`);
     else if (event.type === 'phase') output.out(`  · ${PHASE_LABELS[event.phase] ?? event.phase}\n`);
-    else if (event.type === 'output') (event.stream === 'stderr' ? output.err : output.out)(event.chunk);
   };
+}
+
+/** The rollback failures of a `rollbackFailed` transaction, the restart reported apart from the restore. */
+function rollbackFailureLines(result: GatewayPackageTransactionResult): string[] {
+  const lines: string[] = [];
+  if (result.rollbackError) lines.push(`  回滚错误（恢复文件 / 重新安装依赖）：${result.rollbackError}`);
+  if (result.restartError) lines.push(`  重新启动实例失败：${result.restartError}（用 zhin logs 查看原因，处理后运行 zhin restart）`);
+  else if (result.instance.before !== 'unmanaged' && result.instance.before !== 'stopped') {
+    lines.push(`  实例已重新启动（${result.instance.after}）`);
+  }
+  return lines;
 }
 
 export function renderTransactionResult(result: GatewayPackageTransactionResult): string[] {
@@ -132,13 +165,13 @@ export function renderTransactionResult(result: GatewayPackageTransactionResult)
       ? `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins（实例 ${result.instance.before} → ${result.instance.after}）`
       : `✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
   }
+  const ignored = result.ignoredBuilds ? [`! ${ignoredBuildsHint(result.ignoredBuilds)}`] : [];
   if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`,
-    ...configurationHints(result.needsConfiguration ?? [])];
-  const lines = [
-    result.status === 'rolledBack'
-      ? `✗ ${result.operation} 失败（阶段 ${result.failedPhase ?? '?'}），已回滚：${result.error ?? ''}`
-      : `✗ ${result.operation} 失败且回滚未完成：${result.error ?? ''}；回滚错误：${result.rollbackError ?? ''}`,
-  ];
+    ...ignored, ...configurationHints(result.needsConfiguration ?? [])];
+  const lines = result.status === 'rolledBack'
+    ? [`✗ ${result.operation} 失败（阶段 ${result.failedPhase ?? '?'}），已回滚：${result.error ?? ''}`]
+    : [`✗ ${result.operation} 失败（阶段 ${result.failedPhase ?? '?'}）且回滚未完成：${result.error ?? ''}`, ...rollbackFailureLines(result)];
+  lines.push(...ignored);
   if (result.logTail?.length) {
     lines.push('实例日志尾部：');
     for (const line of result.logTail.slice(-20)) lines.push(`  ${line}`);

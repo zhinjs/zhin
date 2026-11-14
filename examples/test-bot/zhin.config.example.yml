@@ -7,7 +7,7 @@ log_level: info
 
 http:
   token: ${HTTP_TOKEN:-test-bot-dev-token}
-  port: 8086
+  port: 8068
   corsOrigins:
     - https://console.zhin.dev
 

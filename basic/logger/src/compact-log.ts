@@ -25,10 +25,30 @@ export interface CompactUsage {
   total_tokens: number;
 }
 
-/** 日志字段原文（仅 trim，不截断长度） */
-export function truncatePreview(text: string, max?: number): string {
-  const normalized = text.trim();
-  if (max === undefined || normalized.length <= max) return normalized;
+/** Default cap on user content (chat text, SDK message dumps) written into one log line. */
+export const LOG_CONTENT_MAX_LENGTH = 300;
+
+/** Shown in place of a line break inside logged content. */
+export const LOG_NEWLINE_MARK = '⏎';
+
+/**
+ * User content made safe for one log line (#1250): line breaks become {@link LOG_NEWLINE_MARK}
+ * (a multi-line chat message can no longer start lines that look like log entries of their own),
+ * other control characters — ANSI escapes included — become `\uXXXX`. Tabs stay.
+ */
+export function escapeLogText(text: string): string {
+  return text
+    .replace(/\r\n|\r|\n|\u2028|\u2029/gu, LOG_NEWLINE_MARK)
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/**
+ * User content for a log line: trimmed, {@link escapeLogText escaped} and cut at `max` characters
+ * (default {@link LOG_CONTENT_MAX_LENGTH}; `...` marks the cut).
+ */
+export function truncatePreview(text: string, max: number = LOG_CONTENT_MAX_LENGTH): string {
+  const normalized = escapeLogText(text.trim());
+  if (normalized.length <= max) return normalized;
   return `${normalized.slice(0, max)}...`;
 }
 

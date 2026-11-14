@@ -131,6 +131,7 @@
     "export * from './operation-resources.js';",
     "export * from './personal-network.js';",
     "export * from './principal.js';",
+    "export * from './probe.js';",
     "export * from './repository.js';",
     "export * from './request-access.js';",
     "export * from './session-directory.js';",
@@ -309,6 +310,7 @@
   "gateway/onboarding": [
     "export * from './allowlist.js';",
     "export * from './errors.js';",
+    "export * from './ignored-builds.js';",
     "export * from './install.js';",
     "export * from './package-manager.js';",
     "export * from './service.js';",

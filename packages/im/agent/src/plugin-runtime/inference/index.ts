@@ -26,3 +26,4 @@ export * from './session-state.js';
 export * from './support-metadata.js';
 export * from './targets.js';
 export * from './turn-context.js';
+export * from './probe.js';

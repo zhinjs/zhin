@@ -65,7 +65,7 @@ import {
   installConsoleIam,
   installHostConsoleTerminal,
 } from './console/module.js';
-import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
+import { DEFAULT_HTTP_PORT, installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
@@ -660,7 +660,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
 
   let snapshot: Awaited<ReturnType<typeof host.start>>;
-  let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
+  let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? DEFAULT_HTTP_PORT}`;
   try {
     const address = await httpHost.listen();
     if (address) httpOrigin = address.origin;
@@ -908,6 +908,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),
+        audit: entry => { http.tokenRegistry?.accessProvider?.audit?.(entry); },
         principal: input => agentHost.resolveInferenceManagementPrincipal({ ...input, hostOwnerId: inference.hostOwnerId, bindings: principalBindings }),
         owners: input => {
           if (input.scope === 'full') return [{ id: inference.hostOwnerId, label: '部署模型', kind: 'host' }];
@@ -997,7 +998,7 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
   const startup = getLogger('setup');
   const consoleUrl = createRemoteConsoleUrl(httpOrigin);
   startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required — 见 .env 中的 HTTP_TOKEN)') : ''}`);
-  startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (可在页面顶部直接输入 HTTP_TOKEN 或访问 ?token=<HTTP_TOKEN>)') : ''}`);
+  startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (Console 初始化前可在页面顶部输入 HTTP_TOKEN；初始化后改填 Console API 令牌，或在 Console「会话 → 沙盒」里聊天)') : ''}`);
 }
 
 /**

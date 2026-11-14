@@ -439,6 +439,93 @@ describe('review follow-ups (#1250 / #1270)', () => {
       expect(primaryCalls).toBe(2);
     });
 
+    describe('first-response deadline (no_response) counts as a timeout', () => {
+      /** Hangs (no response headers, no stream event) for the first `hangs` calls, then answers. */
+      function silentThenAnswer(hangs: number) {
+        let calls = 0;
+        const port: LlmCompletionPort = {
+          complete: (_m, _c, options) => {
+            calls++;
+            if (calls > hangs) return Promise.resolve(reply('primary answer', 'gemini'));
+            return new Promise((_resolve, reject) => {
+              options?.signal?.addEventListener('abort', () => reject(options.signal!.reason), { once: true });
+            });
+          },
+          completeSimple: async () => reply('unused', 'gemini'),
+        };
+        return { port, calls: () => calls };
+      }
+      const resilientOver = (completion: LlmCompletionPort) => createResilientCompletionPort(completion, {
+        config: { firstResponseTimeoutMs: 20, requestTimeoutMs: 0, maxRetries: 2 }, sleep: async () => undefined,
+      });
+
+      it(`switches after ${CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive first-response deadlines within one operation`, async () => {
+        const target = recording('cnb');
+        const primary = silentThenAnswer(Infinity);
+        const { completion, primaryModel, events, registry } = chain(primary.port, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+        const resilient = resilientOver(completion);
+        // no_response is never re-asked on the same model: each request is one attempt.
+        await expect(resilient.complete(primaryModel, context)).rejects.toMatchObject({ kind: 'no_response', attempts: 1 });
+        await expect(resilient.complete(primaryModel, context)).rejects.toMatchObject({ kind: 'no_response', attempts: 1 });
+        expect(target.calls).toHaveLength(0);
+        // The next request of the same operation goes to the fallback.
+        expect((await resilient.complete(primaryModel, context)).provider).toBe('cnb');
+        expect(primary.calls()).toBe(2);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({ reason: 'timeout', from: { model: 'gemini-flash' }, to: { model: 'cnb-model' } });
+        // One operation never skips the model for everyone.
+        expect(registry.unavailable('gemini-account', 'gemini-flash')).toBeUndefined();
+      });
+
+      it('a single first-response deadline does not switch', async () => {
+        const target = recording('cnb');
+        const primary = silentThenAnswer(1);
+        const { completion, primaryModel, events, registry } = chain(primary.port, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+        const resilient = resilientOver(completion);
+        await expect(resilient.complete(primaryModel, context)).rejects.toMatchObject({ kind: 'no_response' });
+        expect((await resilient.complete(primaryModel, context)).provider).toBe('gemini');
+        expect(target.calls).toHaveLength(0);
+        expect(events).toEqual([]);
+        expect(registry.list()).toEqual([]);
+      });
+
+      it('a deadline answered by the primary resets the count', async () => {
+        const target = recording('cnb');
+        let calls = 0;
+        const flaky: LlmCompletionPort = {
+          complete: (_m, _c, options) => {
+            calls++;
+            if (calls === 2) return Promise.resolve(reply('primary answer', 'gemini'));
+            return new Promise((_resolve, reject) => {
+              options?.signal?.addEventListener('abort', () => reject(options.signal!.reason), { once: true });
+            });
+          },
+          completeSimple: async () => reply('unused', 'gemini'),
+        };
+        const { completion, primaryModel, events } = chain(flaky, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+        const resilient = resilientOver(completion);
+        await expect(resilient.complete(primaryModel, context)).rejects.toMatchObject({ kind: 'no_response' });
+        expect((await resilient.complete(primaryModel, context)).provider).toBe('gemini');
+        await expect(resilient.complete(primaryModel, context)).rejects.toMatchObject({ kind: 'no_response' });
+        expect(target.calls).toHaveLength(0);
+        expect(events).toEqual([]);
+      });
+
+      it('a caller-supplied AbortSignal.timeout is not counted', async () => {
+        const target = recording('cnb');
+        const primary = silentThenAnswer(Infinity);
+        const { completion, primaryModel, events } = chain(primary.port, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }]);
+        const resilient = createResilientCompletionPort(completion, {
+          config: { firstResponseTimeoutMs: 10_000, requestTimeoutMs: 0, maxRetries: 0 }, sleep: async () => undefined,
+        });
+        for (let i = 0; i < 3; i++) {
+          await expect(resilient.complete(primaryModel, context, { signal: AbortSignal.timeout(5) })).rejects.toBeDefined();
+        }
+        expect(target.calls).toHaveLength(0);
+        expect(events).toEqual([]);
+      });
+    });
+
     it('never switches after streamed text, even on repeated timeouts', async () => {
       const target = recording('cnb');
       const streaming: LlmCompletionPort = {
