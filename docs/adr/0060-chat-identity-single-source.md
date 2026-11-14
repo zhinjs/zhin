@@ -243,7 +243,7 @@ export type ChatScopeRef =
 | 授予对话框 | 适配器改下拉（来自 `endpoint.list` 的别名）；用户改选择器：本作用范围最近发言人（`chat_identities.last_seen_at`）、成员列表（适配器实现 `listGroupMembers` 时，`packages/im/adapter/src/endpoint-management.ts:137`）、已有的人；保留手填作为「高级」 | `iam.manage`（作用域同 ADR 0056） |
 | 新 RPC `chat-identities.recent` | 某作用范围最近发言的身份（含显示名缓存） | `iam.manage`（作用域内） |
 | 新页面「聊天成员」 | 人列表、每人的平台身份、角色绑定（含继承来源）、链接的 Console 用户；归并 / 拆分 / 改名 | 读 `iam.manage`；归并持有全局角色的人需全局 `iam.manage` |
-| 新 RPC `chat-principals.list|get|merge|split|rename|link-console|unlink-console` | 同上 | 同上 |
+| 新 RPC `chat-principals.list\|get\|merge\|split\|rename\|link-console\|unlink-console` | 同上 | 同上 |
 | 「把聊天身份绑定到我」 | 用户菜单与 Sandbox 页入口；`chat-identities.bind-code.create` 生成绑定码、显示倒计时与「已绑定」回执 | 任何已登录用户（新权限 `self.chat-identity`，内置角色默认含；见 Q4） |
 | 「我的聊天身份」 | 显示链接的人、身份与角色 | 同上（只读自己） |
 | 「需要你处理」新增类型 | `chat-roles.no-owner`（警告）、`chat-roles.imported`（信息）、`chat-roles.import-pending`（警告） | `iam.manage` 可见 |
