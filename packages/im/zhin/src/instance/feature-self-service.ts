@@ -84,9 +84,12 @@ const messages = createMessages({
   description: { 'zh-CN': '管理本会话（及有权限的上级）的功能开关与配置', en: 'Manage feature switches and settings for this conversation (and scopes you administer)' },
   roleDescription: { 'zh-CN': '查看与授予 / 撤销聊天角色（owner / admin / trusted）', en: 'List, grant and revoke chat roles (owner / admin / trusted)' },
   disabled: { 'zh-CN': '群内功能自助未开启（features.selfService.enabled）。', en: 'In-chat feature self-service is off (features.selfService.enabled).' },
-  denied: { 'zh-CN': '你在该范围没有 admin 角色。', en: 'You do not hold the admin role at that scope.' },
+  denied: { 'zh-CN': '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You do not hold the admin role at that scope. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
+  // ADR 0060 §5.3: platform standing is not a zhin role; say where roles come from.
+  deniedStanding: { 'zh-CN': '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You are a group owner / admin on the platform, but that is not a zhin role; this scope needs the zhin admin role. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
+  noOwnerHint: { 'zh-CN': '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见实例启动日志或 zhin status）。', en: 'This bot has no owner yet: the deployer can send 「claim <code>」 to it in a private chat (the code is in the instance log or zhin status).' },
   roleDenied: { 'zh-CN': '你在该范围的角色不足以授予或撤销 {role}。', en: 'Your role at that scope cannot grant or revoke {role}.' },
-  ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销。', en: 'Only an owner at a higher level can grant or revoke owner.' },
+  ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。', en: 'Only an owner at a higher level can grant or revoke owner; global owners are granted on the Console "Chat roles" page.' },
   peerDenied: {
     'zh-CN': '对方在该范围已是 {role}，与你同级；只有更高的角色或更高层的 {role} 才能修改或撤销。',
     en: 'That user already holds {role} at that scope, the same as you; only a higher role, or {role} held at a higher level, can change or revoke it.',
@@ -226,6 +229,14 @@ function auditor(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, prefix: 
   };
 }
 
+/** ADR 0060 §5.3: the denial says where roles come from, and tells platform group owners / admins their standing is not a zhin role. */
+function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, locale: Locale): string {
+  const standing = actor.context.platform?.standing;
+  const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
+  const ownerless = !deps.roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+  return ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply;
+}
+
 /** Runs one `功能` / `feature` invocation and returns the reply text. */
 export async function executeFeatureChat(
   input: Readonly<{ tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale }>,
@@ -237,7 +248,7 @@ export async function executeFeatureChat(
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
   if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
     && !deps.roles.store.list().some(entry => entry.adapter === actor.identity.adapter && entry.userId === actor.identity.userId && chatRoleIncludes(entry.role, 'admin'))) {
-    return messages(locale, 'denied');
+    return deniedReply(deps, actor, locale);
   }
   const words = input.tokens.map(token => typeof token === 'string' ? token : undefined);
   const sub = SUBCOMMANDS[(words[0] ?? '').toLowerCase()];

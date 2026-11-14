@@ -94,7 +94,11 @@ function actor(options: { user?: string; key?: string; standing?: 'owner' | 'adm
   };
 }
 
-const DENIED = '你在该范围没有 admin 角色。';
+const DENIED = '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
+/** ADR 0060 §5.3: group owners / admins are told their platform standing is not a zhin role. */
+const DENIED_STANDING = '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
+const NO_OWNER_HINT = '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见实例启动日志或 zhin status）。';
+const OWNER_DENIED = 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。';
 
 /** zhin roles come only from grants: make `user` a conversation admin (ADR 0056 §4, revised 2026-11-12). */
 async function promote(roles: InstanceChatRoleService, user = 'u1', key = 'qq/bot-1/group:100') {
@@ -113,14 +117,16 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
 
   it('refuses senders without zhin admin at the scope; platform group owners / admins get nothing', async () => {
     const { run, conversations } = await harness();
-    expect(await run(actor({ standing: 'member' }), '关闭 rss')).toBe(DENIED);
-    // Platform standing is a separate dimension and never becomes a zhin role.
-    expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(DENIED);
-    expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(DENIED);
+    // No global owner yet: the denial also points at the claim code (ADR 0060 §3.3).
+    expect(await run(actor({ standing: 'member' }), '关闭 rss')).toBe(`${DENIED}\n${NO_OWNER_HINT}`);
+    // Platform standing is a separate dimension and never becomes a zhin role; the reply says so (ADR 0060 §5.3).
+    expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(`${DENIED_STANDING}\n${NO_OWNER_HINT}`);
+    expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(`${DENIED_STANDING}\n${NO_OWNER_HINT}`);
     expect(conversations.list('conversation')).toEqual([]);
-    // trusted is not enough.
+    // trusted is not enough; with a global owner the claim hint is gone.
     const trusted = await harness();
     await trusted.roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 't', role: 'trusted' });
+    await trusted.roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'boss', role: 'owner' });
     expect(await trusted.run(actor({ user: 't' }), '关闭 rss')).toBe(DENIED);
   });
 
@@ -217,7 +223,7 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(alice, '关闭 rss 适配器')).toBe('已保存（适配器层），立即生效。');
     expect(conversations.get('rss', 'qq')).toMatchObject({ level: 'adapter', enabled: false });
     expect(await run(alice, '关闭 rss 全局')).toBe(DENIED);
-    expect(await run(actor({ user: 'alice', key: 'tg/news/group:1' }), '关闭 rss')).toBe(DENIED);
+    expect(await run(actor({ user: 'alice', key: 'tg/news/group:1' }), '关闭 rss')).toBe(`${DENIED}\n${NO_OWNER_HINT}`);
     expect(conversations.list('conversation')).toHaveLength(1);
   });
 
@@ -260,9 +266,9 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     // The stored endpoint owner may grant owner below the endpoint, not at it.
     const owner = actor({ user: 'boss' });
     expect(await role(owner, '授予 frank owner')).toBe('已保存（会话层），立即生效。');
-    expect(await role(owner, '授予 frank owner 账号')).toBe('owner 只能由更高层的 owner 授予或撤销。');
+    expect(await role(owner, '授予 frank owner 账号')).toBe(OWNER_DENIED);
     // A conversation owner cannot grant owner in its own conversation (needs an owner above).
-    expect(await role(actor({ user: 'frank' }), '授予 gina owner')).toBe('owner 只能由更高层的 owner 授予或撤销。');
+    expect(await role(actor({ user: 'frank' }), '授予 gina owner')).toBe(OWNER_DENIED);
     expect(await role(actor({ user: 'frank' }), '授予 gina admin')).toBe('已保存（会话层），立即生效。');
     const tokens = featureChatTokens({ segments: [{ type: 'text', data: { text: '撤销 ' } }, { type: 'at', data: { user_id: 'dave' } }, { type: 'text', data: { text: ' admin' } }], args: [] });
     expect(tokens).toEqual(['撤销', { user: 'dave' }, 'admin']);

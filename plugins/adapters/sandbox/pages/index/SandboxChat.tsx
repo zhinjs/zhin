@@ -61,6 +61,12 @@ export interface SandboxPageProps {
     readonly renderConversationDetails?: (context: { readonly sessionKey: string; readonly canExecute: boolean; readonly connectionId?: string }) => React.ReactNode
 }
 
+/** ADR 0060 §5.4: the simulated role is a platform standing (群主 / 管理员 / 成员), never a zhin role. */
+function platformStandingLabel(role: 'master' | 'admin' | 'member', locale: string): string {
+    if (locale === 'en') return role === 'master' ? 'group owner' : role === 'admin' ? 'group admin' : 'member'
+    return role === 'master' ? '群主' : role === 'admin' ? '群管理员' : '成员'
+}
+
 export default function Sandbox(props: SandboxPageProps = {}) {
     const [locale, setLocale] = useState<SandboxLocale>('zh-CN')
     const localeRef = useRef<SandboxLocale>('zh-CN')
@@ -109,6 +115,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [senderId, setSenderId] = useState('dev-user')
     const [senderName, setSenderName] = useState('Developer')
     const [senderRole, setSenderRole] = useState<'master' | 'admin' | 'member'>('master')
+    // ADR 0060 §5.4: what the server resolved for the last message sent (zhin role + Agent trust tier).
+    const [serverRole, setServerRole] = useState<{ senderId: string; chatRole?: string; trustLevel: string } | null>(null)
     const [showSenderSettings, setShowSenderSettings] = useState(false)
     const [showNewSession, setShowNewSession] = useState(false)
     const [newSessionName, setNewSessionName] = useState('')
@@ -245,6 +253,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
         messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
         senderName?: string; senderRole?: 'master' | 'admin' | 'member';
+        senderChatRole?: string; senderTrustLevel?: string;
         revision?: number; streaming?: boolean;
         conversation?: { type: Channel['type']; id: string };
     }) => {
@@ -310,6 +319,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const channelType: Channel['type'] = data.conversation?.type ?? (data.type === 'group' || data.type === 'channel' ? data.type : 'private')
         const sceneId = data.conversation?.id ?? data.id
         const isInput = data.direction === 'inbound'
+        if (isInput && data.senderId && typeof data.senderTrustLevel === 'string') {
+            setServerRole({ senderId: data.senderId, trustLevel: data.senderTrustLevel, ...(data.senderChatRole ? { chatRole: data.senderChatRole } : {}) })
+        }
         // Interactive choices are transport inputs, not another chat turn or an approval result.
         if (isInput && content.every((segment) => segment.type === 'action')) return
         const channelName = channelType === 'private'
@@ -1036,6 +1048,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 .sandbox-role-badge.is-master { background: rgba(245,158,11,0.18); color: #d97706; }
 .sandbox-role-badge.is-admin { background: rgba(59,130,246,0.18); color: #2563eb; }
 .sandbox-role-badge.is-member { background: rgba(16,185,129,0.16); color: #059669; }
+.sandbox-role-badge.is-zhin { text-transform: none; background: rgba(139,92,246,0.16); color: #7c3aed; }
 .sandbox-role-switcher { display: inline-flex; gap: 4px; }
 .sandbox-role-option { padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); font-size: 12px; cursor: pointer; background: transparent; color: inherit; text-transform: capitalize; }
 .sandbox-role-option.active { font-weight: 600; border-color: currentColor; background: rgba(59,130,246,0.12); }
@@ -1158,7 +1171,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         >
                             <User size={14} />
                             <span>{senderName.trim() || senderId.trim() || 'dev-user'}</span>
-                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)}>{senderRole}</em>
+                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)} title={locale === 'en' ? 'Simulated platform standing (not a zhin role)' : '模拟的平台身份（不是 zhin 角色）'}>{platformStandingLabel(senderRole, locale)}</em>
+                            {serverRole && serverRole.senderId === (senderId.trim() || connectionRef.current.ownerId || 'dev-user') && (
+                                <em className="sandbox-role-badge is-zhin" title={locale === 'en' ? 'Resolved by the server: zhin role · Agent trust tier' : '服务端解析：zhin 角色 · Agent 信任档位'}>
+                                    {`zhin: ${serverRole.chatRole ?? (locale === 'en' ? 'none' : '无')} · ${serverRole.trustLevel}`}
+                                </em>
+                            )}
                         </button>
                         <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
                         <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
@@ -1187,8 +1205,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             />
                         </label>
                         <label>
-                            <span><ShieldCheck size={14} />{locale === 'en' ? 'Sender Role' : '角色权限'}</span>
-                            <div className="sandbox-role-switcher" role="group" aria-label={locale === 'en' ? 'Sender role' : '角色权限'}>
+                            <span><ShieldCheck size={14} />{locale === 'en' ? 'Platform standing (not a zhin role)' : '平台身份（不是 zhin 角色）'}</span>
+                            <div className="sandbox-role-switcher" role="group" aria-label={locale === 'en' ? 'Platform standing' : '平台身份'}>
                                 {(['member', 'admin', 'master'] as const).map((role) => (
                                     <button
                                         key={role}
@@ -1197,13 +1215,13 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                         className={cn("sandbox-role-option", `is-${role}`, senderRole === role && "active")}
                                         onClick={() => setSenderRole(role)}
                                     >
-                                        {role}
+                                        {platformStandingLabel(role, locale)}
                                     </button>
                                 ))}
                             </div>
                         </label>
                         <div className="sandbox-sender-presets">
-                            <button type="button" onClick={() => { setSenderId('dev-user'); setSenderName('Developer'); setSenderRole('master') }}>Master (dev-user)</button>
+                            <button type="button" onClick={() => { setSenderId('dev-user'); setSenderName('Developer'); setSenderRole('master') }}>{locale === 'en' ? 'Group owner (platform standing, dev-user)' : '群主（平台身份，dev-user）'}</button>
                             <button type="button" onClick={() => { setSenderId('admin-user'); setSenderName('Admin'); setSenderRole('admin') }}>Admin (admin-user)</button>
                             <button type="button" onClick={() => { setSenderId('member-user'); setSenderName('Member'); setSenderRole('member') }}>Member (member-user)</button>
                         </div>
