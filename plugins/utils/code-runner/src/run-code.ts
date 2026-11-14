@@ -65,6 +65,13 @@ function supportedList(): string {
   return `${supportedLanguages.join(', ')}（${Object.keys(LANGUAGE_ALIASES).join(', ')}）`;
 }
 
+/** Strips trailing `/` in linear time (an anchored `/\/+$/` backtracks on long `/` runs). */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end -= 1;
+  return value.slice(0, end);
+}
+
 /**
  * Runs `code` on the configured backend. Without a `backend` (endpoint not configured) it returns
  * the localized "not configured" hint and sends no request.
@@ -83,7 +90,7 @@ export async function runCode(
 
   const fileName = SUPPORTED_LANGUAGES[lang]!;
   const glot = backend.provider === 'glot';
-  const url = glot ? `${backend.endpoint.replace(/\/+$/u, '')}/${lang}/latest` : backend.endpoint;
+  const url = glot ? `${trimTrailingSlashes(backend.endpoint)}/${lang}/latest` : backend.endpoint;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (backend.token) headers.Authorization = glot ? `Token ${backend.token}` : backend.token;
   const body = glot

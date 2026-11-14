@@ -107,6 +107,16 @@ describe('@zhin.js/plugin-code-runner', () => {
     expect(result.error).toContain('endpoint');
   });
 
+  it('joins a glot endpoint without trailing slashes, linearly on long runs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ stdout: 'ok', stderr: '', error: '' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await runCode('py', 'print(1)', 5, undefined, { provider: 'glot', endpoint: 'https://glot.io/api/run//' });
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://glot.io/api/run/python/latest');
+    const started = performance.now();
+    await runCode('py', 'print(1)', 5, undefined, { provider: 'glot', endpoint: `https://x${'/'.repeat(100_000)}a` });
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('agent tool reads endpoint from plugin config', async () => {
     vi.stubGlobal('fetch', vi.fn());
     const text = await runCodeTool.execute({ language: 'py', code: 'print(1)' }, { config: {}, locale: 'en' } as never);
