@@ -4,7 +4,7 @@ import { formatResult, languageAliases, MAX_CODE_LENGTH, normalizeLanguage, runC
 
 const aliasList = Object.keys(languageAliases).join(', ');
 
-export default defineCommand<CodeRunnerConfig>({
+export default defineCommand({
   description: '在配置的代码运行后端中运行代码片段', descriptionI18n: { en: "Run a code snippet on the configured code-runner backend" },
   params: {
     language: {
@@ -15,6 +15,6 @@ export default defineCommand<CodeRunnerConfig>({
   },
   options: { timeout: { type: 'integer', alias: 't', default: 30, min: 1, max: 30, description: '请求超时（秒）', descriptionI18n: { en: "Request timeout in seconds" } } },
   async execute({ params, options, locale, config }) {
-    return formatResult(await runCode(params.language, params.code, options.timeout, locale, resolveCodeRunnerBackend(config)), locale);
+    return formatResult(await runCode(params.language, params.code, options.timeout, locale, resolveCodeRunnerBackend(config as Partial<CodeRunnerConfig> | undefined)), locale);
   },
 });
