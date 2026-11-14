@@ -1,6 +1,6 @@
 ---
 "@zhin.js/client": patch
-"@zhin.js/console-contract": patch
+"@zhin.js/console-contract": minor
 "@zhin.js/pagemanager": patch
 "@zhin.js/plugin-group-suite": patch
 "@zhin.js/plugin-rss": patch

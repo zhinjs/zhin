@@ -20,6 +20,21 @@
       "package": "@zhin.js/host-http",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    },
+    {
+      "package": "@zhin.js/client",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出——会话选择器与会话目录（ConversationPicker、ConversationLabel、useConversationDirectory、useSharedConversationDirectory、parseConversationAddress、formatConversationLabel 等）与适配器账号 headless API（AdapterAccountsProvider、useAdapterAccounts、AdapterAccountEditor 及相关类型），AdapterConsolePage 新增 renderRow / hostAccounts。"
+    },
+    {
+      "package": "@zhin.js/console-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：声明式页面契约新增公开导出 pickLocalizedDataValue 与类型 DeclarativeActionResultSpec，取值表达式 `$i18n`，表单字段 date / time / conversation，列类型 conversation，条目 muted / badge，动作 result。"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增插件市场元数据公开导出（PLUGIN_CATEGORIES、PLUGIN_CATEGORY_LABELS、informativeKeywords、packageAuthorName、readPluginMarketplaceMetadata 等），插件 metadata 新增可选 displayNameI18n。"
     }
   ]
 }
