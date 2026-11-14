@@ -1,5 +1,47 @@
 # @zhin.js/plugin-rss
 
+## 1.1.22
+
+### Patch Changes
+
+- e6d7cc1: 配置表单与插件显示名的多语言约定（#1250）：Schema 节点沿用已有的 `x-i18n`（`Schema#i18n()`），按 `zh-CN` / `en` 分别声明字段的 `title`、`description` 与 `enumLabels`；插件 `metadata`（`definePlugin` 或 `package.json#zhin.metadata`）新增可选的 `displayNameI18n: { 'zh-CN'?, en? }`，与 `displayName` 一样只能在一处声明，清单只接受这两个键且值必须是非空字符串。Console 插件列表（`/api/plugins`、插件详情）和 `feature.list` / `feature.matrix` 原样带出 `displayNameI18n`，由 Console 按界面语言选择（当前语言 → `en` → `displayName` → 实例 key）。没有这些字段时行为不变。
+
+  官方插件补齐中英文配置字段标题与说明（group-suite、repeater、roulette、answers、calendar、ledger、reminder、rss、earthquake、bilibili、content-moderation、lottery、nettools、60s、process-monitor、activity-feedback）以及全部官方插件的中英文显示名。
+
+- 9026329: 官方插件指令补中文名与本地化说明，并统一子命令写法（#1250）：游戏指令新增中文别名（猜数字、玩石头剪刀布、游戏大厅 / 游戏列表、玩二十一点、骰子对决、地牢远征、成语接龙、文字冒险、井字游戏、猜谜语、俄罗斯轮盘），中文菜单显示中文名，说明改为中文并附英文 `descriptionI18n`；连字符指令新增空格子命令写法并在菜单中显示（`rss add` / `rss list` …、`lottery today` …、`keyword add` / `stats week` …、`ledger add` …、`repeater status`、`process status`、`game stats` / `game ranking`、`bili draft list` / `bili login status` …、`juejin draft list` …），旧的连字符名称继续可用。`teach-list` 因 `teach <问题> <答案>` 接收自由文本而保留原名。
+
+  过于通用的顶层指令增加带插件名的形式（旧名保留为别名）：二维码 `qrcode gen` / `生成二维码`、`qrcode scan` / `识别二维码`；短链 `生成短链 <url>`、`short expand <url>` / `还原短链 <url>`，菜单显示新形式。未配置指令前缀时日常群聊里的高频词不会被当成指令：不使用单独的「游戏」「二十一点」（也是时间）「石头剪刀布」「短链」「short」作别名。
+
+  **升级注意**：新增的别名与项目里已有的同名指令（或其他插件的别名）冲突时，启动会以 `Duplicate Command route` 失败；可用 `disabledCommands` 停用其中一条，或用 `commandNamespace` 给插件指令加命名空间。
+
+- 70ddaf4: 插件市场元数据（#1250 marketplace-metadata）：`package.json#zhin.metadata` 新增可选的 `descriptionI18n: { 'zh-CN'?, en? }`（本地化描述）与 `category`（`adapter`、`ai`、`admin`、`community`、`entertainment`、`game`、`information`、`moderation`、`service`、`utility` 之一），校验方式与 `displayNameI18n` 相同：只接受这两个语言键、值为非空字符串、分类必须在枚举内。这两个字段只能写在清单里，插件市场才能从发布的 `package.json` 读到。`@zhin.js/plugin-runtime` 导出 `PLUGIN_CATEGORIES`、`PLUGIN_CATEGORY_LABELS`、`informativeKeywords`、`packageAuthorName`、`readPluginMarketplaceMetadata` 等读取工具。
+
+  市场读取侧：`/pub/marketplace/search` 带出 `displayNameI18n` / `descriptionI18n`，分类读声明的 `category`（旧索引的 `util` 等按别名映射），可选 `locale=zh-CN|en` 按语言解析显示名与描述，并按两种语言的名称与描述搜索；`/pub/marketplace/detail/*` 带出发布清单的显示名、描述翻译与分类。作者一律取 `author`（没有时取 `maintainers`），不再显示发布账号——此前 `plugins.json` 生成脚本优先读 `_npmUser`，CI 可信发布的包因此都显示为「GitHub Actions」。keywords 去掉 `zhin`、`zhin.js`、`bot` 等通用词后展示与参与搜索。`zhin search` / `zhin info` 同样显示中文描述、分类和维护者，`zhin info` 不再读不存在的 `zhin.displayName` / `zhin.category`。
+
+  官方插件与适配器：显示名移到 `package.json#zhin.metadata`，补齐中英文描述、分类、3–6 个有信息量的 keywords，author 统一为 `{ name: "lc-cn", url: "https://github.com/zhinjs/zhin" }`（不再发布邮箱）；npm `description` 与英文描述一致。
+
+- b08cff2: 官方插件 Console 页面与命令可用性（#1250 反馈八、九）。
+
+  - `@zhin.js/client` 新增会话选择器与会话显示名：`ConversationPicker`（从机器人账号与最近会话中选择、可搜索、「手动填写（高级）」）、`ConversationLabel`、`useConversationDirectory` / `useSharedConversationDirectory`、`parseConversationAddress`、`formatConversationLabel` 等。数据来自已有的 `endpoint.list` 与 `inbox.recent`，按现有 Console 权限表鉴权（没有 `endpoint.view` 时退回原始 ID 与手动填写）。
+  - 声明式页面（`@zhin.js/console-contract` 与渲染端）新增：表单字段 `type: 'date' | 'time' | 'conversation'`（`conversationKinds`）、列类型 `conversation`、条目 `muted` / `badge`、取值表达式 `$i18n`（按查看者语言取 `{ 'zh-CN', en }`）、动作 `result`（结果紧贴表单内联显示，不再是页顶横幅）。页面构建桩同步支持 `$i18n`。
+  - 群管套件：会话列显示会话名而不是 `["conversation-v1", …]` 键，签到排行显示昵称；问答与关键词按 `teach-list` / `keyword-list` 口径分别统计并合计，持久关键词经插件级索引计入（索引建立前保存的词库在该群下次修改后出现）。持有 `group-suite:read` 的账号可以在页面看到持久关键词的回复内容（与 `teach` 问答表相同）。
+  - RSS：添加订阅用会话选择器选择推送会话并保存精确目标（`target_json`），不再手填平台与目标 ID；订阅列表按会话名显示。旧的 `adapter` / `targetType` / `targetId` 参数仍可用。
+  - 进程监控：区分「本次运行」与「累计（自某日起）」，新增近 24 小时崩溃 / 重启数（状态文件记录带时间戳的事件，旧文件兼容，起点按文件创建时间估算并注明），详情标签全部本地化。
+  - 日历：新建日程使用日期 / 时间选择器（服务端校验 `HH:mm`），删除放到日程列表每一行。
+  - 彩票：显示定时推荐开关；关闭时 Cron 置灰并标注「未启用」。
+  - 内容审核：「检测文本」干跑结果紧贴输入框、本地化显示判定、严重度、命中词、审核源与按当前 `actions` 配置将执行的动作（干跑接口新增可选字段 `hits`、`flaggedSources`、`decisionI18n`、`severityI18n`、`actionsI18n`、`hitsText`、`sourcesText`）。
+  - 成语接龙：帮助与游戏大厅提示中文写法 `接龙 同音` / `接龙 同字`（英文 `pinyin` / `char`），`start_pinyin` / `start_char` 仍可用。
+
+- b56cca9: 定时任务（#1250）：`ScheduleJobRegistration` / `defineSchedule()` 新增可选 `title`、`titleI18n`、`kind`（`plugin-internal` 默认 / `user-task`）；实例 Schedule Host 记录每个任务最近一次实际执行的开始 / 结束时间与成功 / 失败（`lastRun`）。`schedule:list` / `cron:list` 的内存任务行新增可选 `kind`、`title`（按请求 `locale` 解析）、`titleI18n`、`displayName`、`lastExecutedAt`、`lastFinishedAt`、`lastDurationMs`、`lastStatus`、`lastError`，持久任务行新增 `kind: 'user-task'`。官方插件的内部轮询任务补中文标题。
+- Updated dependencies [cca4427]
+- Updated dependencies [b08cff2]
+- Updated dependencies [704c7a4]
+  - @zhin.js/im-contract@1.2.0
+  - @zhin.js/console-contract@1.2.0
+  - @zhin.js/page@1.1.20
+  - @zhin.js/skill@1.1.19
+  - @zhin.js/tool@1.1.21
+
 ## 1.1.21
 
 ### Patch Changes

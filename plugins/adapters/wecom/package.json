@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wecom",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "WeCom adapter: HTTP webhook messaging with message encryption and automatic token refresh.",
   "keywords": [
     "zhin.js",

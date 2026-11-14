@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-kook",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "KOOK adapter: channel and direct messages over the WebSocket gateway by default, with an optional webhook mode.",
   "keywords": [
     "zhin.js",

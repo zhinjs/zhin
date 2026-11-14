@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-juejin",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Juejin comment adapter (experimental): AI-assisted replies to comments on your own Juejin articles, with Console review before sending.",
   "keywords": [
     "zhin.js",

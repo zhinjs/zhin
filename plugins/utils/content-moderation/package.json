@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-content-moderation",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Multi-source scanning of inbound and outbound messages with configurable severity actions.",
   "keywords": [
     "zhin.js",

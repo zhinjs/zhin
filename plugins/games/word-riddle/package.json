@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-word-riddle",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Chinese character riddles and idiom guessing, 10 rounds with hints, skips and combo scoring.",
   "keywords": [
     "zhin.js",

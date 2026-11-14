@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-nettools",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Multi-region ping, RDAP whois, DNS-over-HTTPS lookups and domain price comparison, no API keys.",
   "keywords": [
     "zhin.js",

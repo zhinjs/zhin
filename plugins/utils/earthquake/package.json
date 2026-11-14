@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-earthquake",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "CENC and USGS data merged, with group subscriptions by magnitude and region; no API key needed.",
   "keywords": [
     "zhin.js",

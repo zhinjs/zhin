@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-github",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "GitHub adapter: Issue and PR comment threads as chat channels, GitHub App auth and webhook events.",
   "keywords": [
     "zhin.js",

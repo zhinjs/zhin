@@ -1,5 +1,57 @@
 # @zhin.js/runtime
 
+## 1.3.0
+
+### Minor Changes
+
+- 9026329: 未命中的消息首词与已注册指令名 / 别名高度相似时（私聊、@机器人或带指令前缀；忽略大小写与 `-` / `_` / 空格，默认 1 次编辑且名称至少 5 个字符或 3 个汉字），经正常回复链直接回复「没有这个指令，你是不是想用：X、Y」，不再交给 AI 编造指令名（#1250）。只列出发送者有权使用的指令；根配置 `commandSuggestion: false` 关闭，`{ maxDistance, limit }` 调整。Agent 提示在有指令菜单时引导模型不确定就让用户发送菜单，而不是猜指令名。
+
+  只有带指令前缀的消息才按首词命名空间匹配（`/rss foo` → `rss-list`）；私聊与 @机器人 但未带前缀时，只匹配与指令名本身相近、且简短像指令的消息（不含「是什么 / 怎么 / 吗 / 啥 / ？」等疑问词或问号，名称后只跟指令声明的参数），所以「rss 是什么」「process 太慢了」之类的问题仍交给 AI。
+
+- e0b4e51: 账号（Endpoint）启动不再阻塞实例就绪（#1250）。实例提交 generation 后即就绪；每个账号最多等约 3 秒宽限期，其余在后台继续启动，失败的账号按退避自动重试（5 秒起翻倍，封顶 5 分钟，±20% 抖动，不限次数）。`Endpoint.start()` 合同不变，适配器无需改动。
+
+  行为变化：
+
+  1. 实例 ready 与 `/pub/ready` 返回 200 不再意味着账号在线；需要账号在线才算就绪时用 `http.readiness.endpoints`。网关 `gateway.readyTimeout` 不再覆盖账号登录时间。
+  2. 账号 start 失败不再导致实例启动失败或热重载回滚：改坏账号配置的热重载**会提交**（以前会回滚、旧账号继续在线），旧账号下线，新账号进入 `failed` / `retrying` 并按策略处理。账号停止时清理失败只把该账号标为失败（`endpoint_cleanup_failed`，等待人工处理），不再作为整个 Root 的完整性失败。
+  3. 宽限期内没完成登录的慢账号，热重载从“先上新再下旧”变为“先下旧再上新”；宽限期内完成的不受影响。
+  4. `zhin start --once` 是启动检查：宽限期后最多再等 30 秒，直到每个账号的首次启动尝试有结果；有启用账号处于 `failed` 或 `retrying`（首次尝试已失败）时以非零码退出，`stderr` 以首个失败账号的脱敏报错开头并列出全部失败账号；仍在 `starting` 或等待交互式登录（`awaiting_assist`）的账号不算失败。
+  5. 账号上线前向它发送仍立即失败（`endpoint_inactive`，`not_sent`）。
+  6. 自动重试会产生周期性的 `endpoint_start_failed` 日志（错误类名、错误码、类别与脱敏后的原始报错 `reason`）；配置错误与交互式登录（`login.mode: interactive`，如 ICQQ）不自动重试，等 Console「重新登录」/「启动」，重新登录也会立即唤醒等待中的重试。
+
+  新增：`AdapterEndpointPhase` 的 `failed` / `retrying`，Endpoint 行与 `Adapter.list()` 的 `startAttempt` / `startFailure` / `nextRetryAt`，`Adapter.retryStart()`；core Endpoint 列表把等待登录验证的启动中账号报告为 `awaiting_assist`；需鉴权的 `{api}/system/readiness` 详情新增不参与就绪判断的 `endpoints[]`；Console 协议 `ConsoleEndpointPhase` 新增 `retrying` / `awaiting_assist`，账号页显示「启动中 / 启动失败 / 等待重试」；TTY 启动摘要分 online / starting / failed 列出账号。账号 start 作为 Console 变更执行时，首次尝试失败的执行码由 `endpoint_execution_failed` 改为 `endpoint_start_failed`。
+
+  `AdapterIndex.activate()`（Root generation 交接）按上述规则后台启动；`AdapterIndex.start()` 保留给工具与测试，仍等待每个账号的首次尝试，并以 `Endpoint.start()` 原样抛出的首个错误拒绝（随后停止全部账号，不留后台重试）。
+
+- 7cc703a: 热重载重建范围按受影响的子树分别计算（#1250 `hmr-multi-change-full-rebuild`、`hmr-stale-cross-package-import`）：同一批里改了几个插件（入口、子树内的辅助模块、能力文件混在一起）时，只重建这些插件子树并替换子树外受影响的能力，其他插件 Scope、适配器投影与 Endpoint 原样保留（不重连、不重登）；适配器只在自身源码或配置变化时重建。Root 安装器可以用新的 `watchProjectFiles({ patterns, onChange })`（`RootResourceContext`）声明自己读取的项目文件，只改了这些文件（例如 `SOUL.md` / `AGENTS.md` / `TOOLS.md`、`ai.knowledge` 目录）时不再重建 Root，改为通知声明方重读（Agent Host 已声明，turn 读取最新 bootstrap；`hmr_reload | rebuilt: resource`），未声明的根目录文件仍整棵重建并记 `hmr_full_rebuild` 原因。根插件 tool 等通过包名引用挂载的本地插件模块时，被引用文件变化会让引用方一起重新加载（新代码，所有重载的引用方共享同一个新实例）；未变化的插件包保持原有的共享实例，引用方重载不会重复执行其顶层副作用；依赖索引只沿包名导入进入被监视的目录，不再遍历 workspace 链接的框架源码（启动不再变慢）；引用了普通 workspace 库等无法刷新的依赖方，在 `hmr_reload` 的 `unrefreshed_dependents` 和 warn `hmr_unrefreshed_dependents` 中列出。子树重载因拓扑变化退回整棵重建时也记 `hmr_full_rebuild` 原因；没有归属记录的文件（例如 Feature 包内的文件）仍整棵重建并说明原因；批次中其余部分重载失败时，已声明的项目文件仍会通知声明方。
+
+### Patch Changes
+
+- 5232fd8: IM 审批安全修订（#1250 安全审查）：管理员本人审批改为开关 `ai.agent.approval.adminSelfApprove`，**默认关闭**——关闭时这类回合与之前一样只能由主人批准（或说明无人能批），`execApprovalMode: ask` 默认仍只有主人能批；开启后管理员本人确认只限策略明确标为管理员可批的操作——声明 `tags: ['admin_approvable']`（`ADMIN_APPROVABLE_TOOL_TAG`）的工具（Host 的 `schedule_add` 已声明）与写 `session` 记忆；敏感文件 / 受保护路径（如 `.git/config`）、Shell 命令、写 `global` / `platform` 记忆、未声明的插件工具审批与自动审核 Agent 的升级审批都需要主人，管理员的确认渠道直接返回「需要主人」而不弹提示（`ApprovalRequestInput.requiresOwner` / `adminMayApprove`）。管理员审批人要求端点层或以上的 `admin`（`holdsEndpointAdmin`；会话层 admin、被降级的会话层 owner 不算），且只在管理员自己的私聊里；群聊 / 频道未配置主人时不再退回管理员自批。读过外部内容、合流或旁听回合里写发起人自己的 `user` 记忆也先请发起人确认意图（防记忆投毒）。审批提示的「风险」行与危险工具硬闸提示同样打码，新增识别 `FOO_TOKEN=…` / `export API_KEY=…`、`Authorization: token …`、`X-Api-Key: …`、`--password=…` / `--token …`、URL 中的密码、JWT、AWS / Google 密钥；执行、指纹与授权范围仍用原参数。审批端口按用途报告可用性（`ApprovalPort.intentAvailable`、`isApprovalPortAvailable(port, purpose)`），只能确认意图的端口对硬闸与普通审批直接报不可用。「审批策略已变更」说明只认框架写入的拒绝记录（`ToolResultMessage.deniedUnderPolicy`），工具输出里伪造的策略戳不再触发。
+- e6d7cc1: 配置表单与插件显示名的多语言约定（#1250）：Schema 节点沿用已有的 `x-i18n`（`Schema#i18n()`），按 `zh-CN` / `en` 分别声明字段的 `title`、`description` 与 `enumLabels`；插件 `metadata`（`definePlugin` 或 `package.json#zhin.metadata`）新增可选的 `displayNameI18n: { 'zh-CN'?, en? }`，与 `displayName` 一样只能在一处声明，清单只接受这两个键且值必须是非空字符串。Console 插件列表（`/api/plugins`、插件详情）和 `feature.list` / `feature.matrix` 原样带出 `displayNameI18n`，由 Console 按界面语言选择（当前语言 → `en` → `displayName` → 实例 key）。没有这些字段时行为不变。
+
+  官方插件补齐中英文配置字段标题与说明（group-suite、repeater、roulette、answers、calendar、ledger、reminder、rss、earthquake、bilibili、content-moderation、lottery、nettools、60s、process-monitor、activity-feedback）以及全部官方插件的中英文显示名。
+
+- 0d8da71: 热重载与文件监视（#1250）：`zhin status` 显示实例当前的 generation（网关按实例每次提交后发布的路由表更新，不再停留在启动时的 1）；文件变化事件合并 300 毫秒（`HmrCoordinator` 新选项 `watchDebounceMs`；持续写入时最迟 2 秒也会触发，`watchDebounceMaxWaitMs`），`sed -i`、编辑器原子保存、`git checkout` 等一次改动只触发一次重载，显式 `enqueue` 不受影响（并合并同一路径尚在等待的监视事件，不会重复重载）；被监视的 `package.json` 只有 `scripts`、`description` 等不影响运行时的字段变化时直接忽略（debug 日志 `manifest_change_ignored`），依赖、`pnpm.overrides` / `pnpm.packageExtensions` / `pnpm.peerDependencyRules`、`dependenciesMeta` / `peerDependenciesMeta`、`engines`、`zhin`、`exports` / `main` / `type` 等字段变化仍按原路径处理，已挂载子插件包的 `version` 变化也会重载（插件树记录 `packageVersion`，网关据此判断 schema 漂移与发布状态；根项目自身的 `version` 仍忽略），重载失败时字段比较基线回退，下次仍能识别同一改动，需要重启时先记 `instance_restart | reason: manifest_changed | file | fields`（其他重启原因同样有结构化记录）；`hmr_reload` 新增 `rebuilt`（实际重建范围 root / subtree / capability）与 `rebuilt_plugins`（重新 setup 的插件，含适配器），实际退化为整棵 Root 重建时另记 warn `hmr_full_rebuild` 说明原因。重载范围算法本身不变。
+- 627fb5e: 插件市场元数据不再阻止实例启动（#1250 review）：实例加载包时，`zhin.metadata.category` 不在枚举内、`descriptionI18n` 无效、`displayNameI18n` / `descriptionI18n` 含 `zh-CN` / `en` 以外的语言键，只记一条结构化警告（`manifest_metadata_dropped`，带包名与字段）并丢弃该值；`displayNameI18n` 形状错误、空字符串和未知的 `metadata` 键仍然报错。`zhin plugin check` 与发布流程保持严格校验。`parsePackageJson` 新增可选参数 `{ metadata: 'strict' | 'lenient', onWarning }`（默认 strict），`NodePackageResolver.create` / `RootRuntime` / `RootHost` 新增 `onManifestWarning`。
+
+  `zhin search` 识别文档推荐的 keywords `zhin.js`，以及 `zhinjs`、`zhin-plugin`（不区分大小写）和带 `zhin` 清单字段的搜索结果。
+
+  会话选择器：没有 `endpoint.view` 时可以手动填写适配器、账号 ID（规范 endpoint ID，`\0` 表示分隔符）与会话 ID，并提示缺少的权限；没有 Provider 的 `ConversationLabel` / `useConversationDirectory` 共享同一对进行中的请求，并按连接缓存 10 秒。声明式页面动作带 `result` 时，未设置 `result.tone` 则沿用计算出的语气（如 `passed: false` 为 danger），并在内联结果中显示返回的 `message`（结果本身已渲染 `message` 时不重复）。
+
+- 70ddaf4: 插件市场元数据（#1250 marketplace-metadata）：`package.json#zhin.metadata` 新增可选的 `descriptionI18n: { 'zh-CN'?, en? }`（本地化描述）与 `category`（`adapter`、`ai`、`admin`、`community`、`entertainment`、`game`、`information`、`moderation`、`service`、`utility` 之一），校验方式与 `displayNameI18n` 相同：只接受这两个语言键、值为非空字符串、分类必须在枚举内。这两个字段只能写在清单里，插件市场才能从发布的 `package.json` 读到。`@zhin.js/plugin-runtime` 导出 `PLUGIN_CATEGORIES`、`PLUGIN_CATEGORY_LABELS`、`informativeKeywords`、`packageAuthorName`、`readPluginMarketplaceMetadata` 等读取工具。
+
+  市场读取侧：`/pub/marketplace/search` 带出 `displayNameI18n` / `descriptionI18n`，分类读声明的 `category`（旧索引的 `util` 等按别名映射），可选 `locale=zh-CN|en` 按语言解析显示名与描述，并按两种语言的名称与描述搜索；`/pub/marketplace/detail/*` 带出发布清单的显示名、描述翻译与分类。作者一律取 `author`（没有时取 `maintainers`），不再显示发布账号——此前 `plugins.json` 生成脚本优先读 `_npmUser`，CI 可信发布的包因此都显示为「GitHub Actions」。keywords 去掉 `zhin`、`zhin.js`、`bot` 等通用词后展示与参与搜索。`zhin search` / `zhin info` 同样显示中文描述、分类和维护者，`zhin info` 不再读不存在的 `zhin.displayName` / `zhin.category`。
+
+  官方插件与适配器：显示名移到 `package.json#zhin.metadata`，补齐中英文描述、分类、3–6 个有信息量的 keywords，author 统一为 `{ name: "lc-cn", url: "https://github.com/zhinjs/zhin" }`（不再发布邮箱）；npm `description` 与英文描述一致。
+
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [7cc703a]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/feature-kit@1.1.18
+
 ## 1.2.2
 
 ### Patch Changes

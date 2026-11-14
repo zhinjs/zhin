@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-qrcode",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Generate QR images or decode a QR code from an image.",
   "keywords": [
     "zhin.js",

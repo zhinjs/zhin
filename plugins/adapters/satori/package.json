@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-satori",
-  "version": "1.1.30",
+  "version": "1.1.31",
   "description": "Satori protocol adapter: forward WebSocket client and webhook ingress for Satori-compatible implementations.",
   "keywords": [
     "zhin.js",

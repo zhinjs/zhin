@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-bilibili-live",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Bilibili live danmaku adapter (experimental): reads danmaku in your own live room and replies once per danmaku window.",
   "keywords": [
     "zhin.js",

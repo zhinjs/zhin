@@ -1,5 +1,40 @@
 # @zhin.js/scaffold-wizard
 
+## 1.2.0
+
+### Minor Changes
+
+- 7126d03: CLI 输出与实例错误说明（#1250）：
+
+  - CLI 的命令结果（`zhin packages info`、`zhin search`、`zhin schedule list/add/…` 等）写到 stdout，不再带 `[时间][INFO] [CLI]` 前缀；诊断日志写到 stderr，前缀只在全局 `--verbose` 时出现。**行为变更**：CLI 的日志输出（`logger.info` / `success` / `warn` 等，包括成功与提示行）从 stdout 移到了 stderr——只捕获 stdout 的脚本不会再看到这些成功 / 提示行，需要时请同时捕获 stderr（`2>&1`），或改为解析命令结果本身。`zhin packages info` 正确读取字符串形式的 `author` 与 `maintainers`，并列出已安装包的命令、Agent 工具与配置项（静态读取约定目录与 `schema.json`）。
+  - 实例 HTTP API（`/message/send`、`/assistant/jobs`）区分预期失败与意外异常：预期失败返回 `code`（`delivery_failed`、`delivery_unknown`、`endpoint_not_found`、`notify_target_missing`、`invalid_argument`、`not_found`、`unavailable`）和中文说明，发送失败的 `data` 为 `ConsoleSendFailure`；意外异常仍只返回 `Internal error`，但带日志关联 `errorId`。`zhin send` / `zhin schedule` 显示具体原因，`--debug` 显示 `errorId` 并从实例日志找出对应行。
+    - **行为变更**：这些预期失败的 `error` 文本改为中文说明，且今后可能调整措辞——程序请按 `code`（以及 `data.reason`）判断，不要匹配 `error` 文本。
+    - **新错误码 `delivery_unknown`**（HTTP 502）：`/message/send` 的投递结果未知（平台可能已经收到）时不再归入 `delivery_failed`，而是返回独立的顶层 `code: 'delivery_unknown'`（`data.reason: 'delivery_unknown'`、`data.status: 'unknown'`）。`delivery_failed` 表示确定未发送、可以重试；`delivery_unknown` 不应自动重试，否则可能重复发送。
+    - **行为变更**：`/assistant/jobs` 收到 `notify.channel: im` 时直接以 HTTP 400（`code: 'notify_target_missing'`）拒绝——这个接口无法指定目标会话，以前会接受后在调度时才失败；请在聊天中让机器人创建需要 IM 投递的任务，或改用 `log` / `silent`。CLI 的 `--notify-channel im` 同样被拒绝。
+  - 网关终端区分 node-pty「未安装」与「已安装但原生模块未构建」，后者提示在 `allowBuilds` 放行后 `pnpm rebuild node-pty`（或 `zhin migrate`）。
+  - 脚手架 `knowledge/faq.md` 写明换模型的两个入口（Console「AI 与模型 → 用途」与 `ai.plan.yml`）及实际优先级；`ai.agents.zhin.model` 已不再决定模型。
+  - Introspection 的命令、中间件、组件、工具、Prompt Section 条目带 `owner`、`pluginInstance`、`pluginPackage`（`ConsoleIntrospectionOwner`）。
+  - 决策审计：gate 写出的 `model_skip` 在 payload 中带 `parent`（如 `ambient_decision`），回放可折叠为一条。
+
+### Patch Changes
+
+- 0e998fd: 机器人专用引导文件 `BOT.md`（#1250）：项目根目录有非空的 `BOT.md` 时（只认根目录，`data/BOT.md` 不读），机器人只读 `BOT.md`（与 `SOUL.md`、`TOOLS.md`），不再读任何 `AGENTS.md`，`AGENTS.md` 留给开发者与编码代理；没有 `BOT.md` 时行为不变。新项目生成 `BOT.md`（机器人指令与记忆）和面向开发者的 `AGENTS.md`；`zhin setup --bootstrap` / `zhin doctor --fix` 在已有 `AGENTS.md` 且无 `BOT.md` 时继续用 `AGENTS.md`。修改 `BOT.md` 与修改根 `AGENTS.md` 一样需要审批。新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`。
+
+  `BOT.md` 列入 `DEFAULT_SELF_FILES`：`self` 硬闸、未注入项目根时的按名匹配与隔离 shell 的只读挂载都覆盖它，与 `AGENTS.md` 相同。只读挂载只覆盖已存在的文件；隔离 shell（`workspace-write`）运行后，项目根下新出现的自我文件（`BOT.md`、`AGENTS.md`、根配置等）会被改名为 `<文件名>.quarantined-<时间戳>`，记警告日志并在工具结果里报告。Agent 宿主、`hasBotBootstrapFile()` 与 CLI 都只认项目根目录的非空 `BOT.md`。修改根目录 `BOT.md` 与修改 `SOUL.md` / `AGENTS.md` 一样触发 Root 重建并重新读取。
+
+- 8609906: 网关原生依赖的构建脚本（#1250）：pnpm 10+ 默认跳过依赖的构建脚本（pnpm 11 直接让安装失败），`node-pty` 装上却无法加载，Console 本地终端不可用。`create-zhin-app` 生成的 `pnpm-workspace.yaml` 现在在 `allowBuilds` 中放行 `node-pty`、`ssh2`、`cpu-features`（pnpm 11 不再读取 `package.json` 的 `pnpm` 字段，`onlyBuiltDependencies` 也被忽略）；`zhin migrate` 为声明了 `@zhin.js/gateway` 的 pnpm 项目补齐这些条目（已有条目保留、`false` 不改，空的 `allowBuilds:` 也能补齐，已有的 `onlyBuiltDependencies` 列表同样追加，不重排文件中的长字符串；`--dry-run` 只预览）；项目没有 `pnpm-workspace.yaml` 时，只有确认使用 pnpm 10+（`packageManager` 为 pnpm 10 及以上，或 `pnpm --version` ≥ 10）才会创建它——只含 `allowBuilds` 的该文件会让 pnpm 9 报 `packages field missing or empty`，而 pnpm 9 本来就会运行依赖构建脚本，此时只打印提示；项目位于上级目录的 pnpm workspace 内时（向上查找到文件系统根或用户主目录为止）也不在项目中创建该文件（否则它会变成独立的 workspace 根），而是提示把 `allowBuilds` 条目加到上级的 `pnpm-workspace.yaml`；`zhin doctor` 在项目目录的子进程中加载网关的 `node-pty`，失败时警告并给出修复命令，未安装网关时跳过。
+- Updated dependencies [5232fd8]
+- Updated dependencies [9026329]
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [e0b4e51]
+- Updated dependencies [7cc703a]
+- Updated dependencies [0d8da71]
+- Updated dependencies [627fb5e]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/runtime@1.3.0
+  - @zhin.js/plugin-runtime@1.3.0
+
 ## 1.1.21
 
 ### Patch Changes

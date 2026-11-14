@@ -1,5 +1,90 @@
 # @zhin.js/cli
 
+## 1.4.0
+
+### Minor Changes
+
+- 7126d03: CLI 输出与实例错误说明（#1250）：
+
+  - CLI 的命令结果（`zhin packages info`、`zhin search`、`zhin schedule list/add/…` 等）写到 stdout，不再带 `[时间][INFO] [CLI]` 前缀；诊断日志写到 stderr，前缀只在全局 `--verbose` 时出现。**行为变更**：CLI 的日志输出（`logger.info` / `success` / `warn` 等，包括成功与提示行）从 stdout 移到了 stderr——只捕获 stdout 的脚本不会再看到这些成功 / 提示行，需要时请同时捕获 stderr（`2>&1`），或改为解析命令结果本身。`zhin packages info` 正确读取字符串形式的 `author` 与 `maintainers`，并列出已安装包的命令、Agent 工具与配置项（静态读取约定目录与 `schema.json`）。
+  - 实例 HTTP API（`/message/send`、`/assistant/jobs`）区分预期失败与意外异常：预期失败返回 `code`（`delivery_failed`、`delivery_unknown`、`endpoint_not_found`、`notify_target_missing`、`invalid_argument`、`not_found`、`unavailable`）和中文说明，发送失败的 `data` 为 `ConsoleSendFailure`；意外异常仍只返回 `Internal error`，但带日志关联 `errorId`。`zhin send` / `zhin schedule` 显示具体原因，`--debug` 显示 `errorId` 并从实例日志找出对应行。
+    - **行为变更**：这些预期失败的 `error` 文本改为中文说明，且今后可能调整措辞——程序请按 `code`（以及 `data.reason`）判断，不要匹配 `error` 文本。
+    - **新错误码 `delivery_unknown`**（HTTP 502）：`/message/send` 的投递结果未知（平台可能已经收到）时不再归入 `delivery_failed`，而是返回独立的顶层 `code: 'delivery_unknown'`（`data.reason: 'delivery_unknown'`、`data.status: 'unknown'`）。`delivery_failed` 表示确定未发送、可以重试；`delivery_unknown` 不应自动重试，否则可能重复发送。
+    - **行为变更**：`/assistant/jobs` 收到 `notify.channel: im` 时直接以 HTTP 400（`code: 'notify_target_missing'`）拒绝——这个接口无法指定目标会话，以前会接受后在调度时才失败；请在聊天中让机器人创建需要 IM 投递的任务，或改用 `log` / `silent`。CLI 的 `--notify-channel im` 同样被拒绝。
+  - 网关终端区分 node-pty「未安装」与「已安装但原生模块未构建」，后者提示在 `allowBuilds` 放行后 `pnpm rebuild node-pty`（或 `zhin migrate`）。
+  - 脚手架 `knowledge/faq.md` 写明换模型的两个入口（Console「AI 与模型 → 用途」与 `ai.plan.yml`）及实际优先级；`ai.agents.zhin.model` 已不再决定模型。
+  - Introspection 的命令、中间件、组件、工具、Prompt Section 条目带 `owner`、`pluginInstance`、`pluginPackage`（`ConsoleIntrospectionOwner`）。
+  - 决策审计：gate 写出的 `model_skip` 在 payload 中带 `parent`（如 `ambient_decision`），回放可折叠为一条。
+
+### Patch Changes
+
+- 0e998fd: Agent 性能与 trace 改进（#1250）：
+
+  - 按需加载的工具在会话内只增不减：常驻工具按名称排在最前，已加载工具按首次加载顺序追加；本回合策略较窄、看不到的已加载工具仍保留在会话快照里，下一回合原样回到列表，相邻请求的 `tools` 前缀不变。超出 `maxLoadedPerSession` 时按最早加载淘汰并写日志（`touchToolInSnapshot` / `touchToolsInSnapshot` 新增可选 `onEvict`）。
+  - 子 Agent（`ask` / `follow_up`）回合里工具产出的图片、音频、视频、文件作为结构化附件随回复交回提问方，并入提问方的回复经正常出站链发送，不再依赖子 Agent 正文复述 URL。只收工具产出的媒体（子 Agent 正文里的链接不算），并先用子 Agent 自己收窄后的权限判定每个附件（本地路径须通过它的文件权限）。
+  - `zhin trace` 记录子 Agent 的模型调用与用量（之前显示 0 次），父回合汇总写成「合计（自身 N，子 agent M）」，新增 `subagent_usage` 字段；`ai.usage` 与用量记录同样计入且不重复计。
+  - 同一次模型请求在时间线、`requests`、`model_calls` 与 `ai.usage` 里记录同一个 provider（实际解析出的服务 ID），`zhin trace` 显示服务名。
+  - 每次模型调用记录请求前缀哈希（system + 工具定义，`prefix_hash`）；某服务长期没有缓存命中而相邻请求前缀相同时，Console 用量统计（`promptCacheHints`）、`zhin usage report` 与 `zhin doctor` 提示「该服务可能不支持或未透传 prompt 缓存」并给出前缀相同的比例。
+
+- 0e998fd: 机器人专用引导文件 `BOT.md`（#1250）：项目根目录有非空的 `BOT.md` 时（只认根目录，`data/BOT.md` 不读），机器人只读 `BOT.md`（与 `SOUL.md`、`TOOLS.md`），不再读任何 `AGENTS.md`，`AGENTS.md` 留给开发者与编码代理；没有 `BOT.md` 时行为不变。新项目生成 `BOT.md`（机器人指令与记忆）和面向开发者的 `AGENTS.md`；`zhin setup --bootstrap` / `zhin doctor --fix` 在已有 `AGENTS.md` 且无 `BOT.md` 时继续用 `AGENTS.md`。修改 `BOT.md` 与修改根 `AGENTS.md` 一样需要审批。新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`。
+
+  `BOT.md` 列入 `DEFAULT_SELF_FILES`：`self` 硬闸、未注入项目根时的按名匹配与隔离 shell 的只读挂载都覆盖它，与 `AGENTS.md` 相同。只读挂载只覆盖已存在的文件；隔离 shell（`workspace-write`）运行后，项目根下新出现的自我文件（`BOT.md`、`AGENTS.md`、根配置等）会被改名为 `<文件名>.quarantined-<时间戳>`，记警告日志并在工具结果里报告。Agent 宿主、`hasBotBootstrapFile()` 与 CLI 都只认项目根目录的非空 `BOT.md`。修改根目录 `BOT.md` 与修改 `SOUL.md` / `AGENTS.md` 一样触发 Root 重建并重新读取。
+
+- 8609906: 网关原生依赖的构建脚本（#1250）：pnpm 10+ 默认跳过依赖的构建脚本（pnpm 11 直接让安装失败），`node-pty` 装上却无法加载，Console 本地终端不可用。`create-zhin-app` 生成的 `pnpm-workspace.yaml` 现在在 `allowBuilds` 中放行 `node-pty`、`ssh2`、`cpu-features`（pnpm 11 不再读取 `package.json` 的 `pnpm` 字段，`onlyBuiltDependencies` 也被忽略）；`zhin migrate` 为声明了 `@zhin.js/gateway` 的 pnpm 项目补齐这些条目（已有条目保留、`false` 不改，空的 `allowBuilds:` 也能补齐，已有的 `onlyBuiltDependencies` 列表同样追加，不重排文件中的长字符串；`--dry-run` 只预览）；项目没有 `pnpm-workspace.yaml` 时，只有确认使用 pnpm 10+（`packageManager` 为 pnpm 10 及以上，或 `pnpm --version` ≥ 10）才会创建它——只含 `allowBuilds` 的该文件会让 pnpm 9 报 `packages field missing or empty`，而 pnpm 9 本来就会运行依赖构建脚本，此时只打印提示；项目位于上级目录的 pnpm workspace 内时（向上查找到文件系统根或用户主目录为止）也不在项目中创建该文件（否则它会变成独立的 workspace 根），而是提示把 `allowBuilds` 条目加到上级的 `pnpm-workspace.yaml`；`zhin doctor` 在项目目录的子进程中加载网关的 `node-pty`，失败时警告并给出修复命令，未安装网关时跳过。
+- 3472f3a: `zhin restart --gateway` 遇到前台网关（`zhin start --foreground`）时给出明确说明与替代命令并以退出码 1 结束：在 Linux 上从网关进程的环境变量识别 systemd（`INVOCATION_ID`，单元名取自 cgroup）与 PM2（`pm_id`），分别提示 `systemctl restart <单元>` / `pm2 restart <应用名>`，否则提示经服务管理器重启或按 Ctrl+C 后用原启动参数重新执行 `zhin start --foreground`（#1250）。
+- f863a21: `zhin doctor`（#1250）：「Zhin 包单实例」解析依赖时跳过 pnpm 隐藏提升目录 `node_modules/.pnpm/node_modules`，其中残留的旧版本不再被误报为重复实例；端口被本项目管理网关监听时报 ok，不再建议 kill；Console 已初始化（网关报告，或离线时 `.zhin/console-iam.initialized` 存在）后 `HTTP_TOKEN` 降为提示「初始化后此令牌一律被拒绝，可从 .env 删除」，`--fix` 也不再改写它。`zhin config check` 对 `disable_plugins` 中插件实例配置块里未设置的 `${ENV}` 降为 info。
+- 3914747: `zhin migrate` 不再把 zhin 依赖写成 dist-tag `latest`：按项目 npm 配置（含镜像）用 `npm view` 查询 registry，范围写成 `^x.y.z`，原来是精确版本的保持精确（`--include-pinned` 同样适用），已写成 `latest` 的旧项目也会被改正；dry-run 显示真实版本；查询失败时保留原值并提示；从不降级——现有范围的最低版本已高于 registry 最新版本时（预发布版如 `^6.0.0-beta.3`、镜像同步滞后、`--include-pinned` 下更高的精确版本）保留原值并提示一行；包名不是合法 npm 包名的依赖不会被查询（Windows 上 `npm` 经 shell 运行）。迁移同时把 `package.json#pnpm.overrides` 中的 `@zhin.js/*` 按目标 `zhin.js` 版本的 dependencies 对齐（依赖本身已是 registry 最新版本时也会同步过期的 overrides；不在其依赖中的跟随该包的 registry 版本；`workspace:` / `link:` / `file:` / `$ref` 与选择器键保持不变），避免升级后 overrides 钉住旧版本导致包重复（#1250）。
+- cca4427: IM 渠道审批（#1250）：回合内审批提示按会话决定谁能确认——全局 owner 本人、群聊里的 Bot 主人（与之前相同），开启 `ai.agent.approval.adminSelfApprove`（默认关闭）后，管理员自己的私聊里主人无法作答时，由在场的端点层 zhin `admin` 发起人本人确认标为管理员可批的操作（仅「允许一次 / 拒绝」，不记住；其余仍需主人，见安全修订）；其他用户只能对「读取外部内容后的高危动作」确认自己的意图，这一确认（`scope: 'intent'`）不能代替普通审批。确认消息走原出站链，只认同一平台用户 ID 在同一会话（端点 / 会话 / 话题）里的「确认 / 取消 / yes / no」或按钮回调，他人回复、跨会话、过期按钮无效，超时按拒绝。私聊里非主人且无管理员身份的审批不再空等超时，直接说明原因。给模型的拒绝原因区分无人值守、此会话没有确认渠道、被拒 / 超时，并提示可在 Console 操作（定时任务：「运维 → 定时任务」），不再让模型把工具名当聊天命令推荐。审批提示里的密钥字段与令牌打码（执行仍用原参数）。每次回合内确认写 `tool_approval` 决策审计（`channel: turn_prompt`、`purpose`；新增原因码 `tool_approval_unavailable`）。`ApprovalRequestInput.purpose`、`ApprovalOutcome.scope`、`formatApprovalDenial` 的可选上下文参数、`formatApprovalBlocked`、`resolveImApprover`、`describeApprovalChannelConflicts` 为新增 API。`execApprovalMode: ask`，或 `confirmHighRisk` 未关闭且启用了定时任务 / 助理提醒时，启动日志提示一次配置冲突；`zhin doctor` 新增「审批渠道」检查。`UserInteractionRequest` 新增可选字段 `purpose?: 'approval'`（`UserInteractionPurpose`），审批确认消息带上它。
+- 627fb5e: 插件市场元数据不再阻止实例启动（#1250 review）：实例加载包时，`zhin.metadata.category` 不在枚举内、`descriptionI18n` 无效、`displayNameI18n` / `descriptionI18n` 含 `zh-CN` / `en` 以外的语言键，只记一条结构化警告（`manifest_metadata_dropped`，带包名与字段）并丢弃该值；`displayNameI18n` 形状错误、空字符串和未知的 `metadata` 键仍然报错。`zhin plugin check` 与发布流程保持严格校验。`parsePackageJson` 新增可选参数 `{ metadata: 'strict' | 'lenient', onWarning }`（默认 strict），`NodePackageResolver.create` / `RootRuntime` / `RootHost` 新增 `onManifestWarning`。
+
+  `zhin search` 识别文档推荐的 keywords `zhin.js`，以及 `zhinjs`、`zhin-plugin`（不区分大小写）和带 `zhin` 清单字段的搜索结果。
+
+  会话选择器：没有 `endpoint.view` 时可以手动填写适配器、账号 ID（规范 endpoint ID，`\0` 表示分隔符）与会话 ID，并提示缺少的权限；没有 Provider 的 `ConversationLabel` / `useConversationDirectory` 共享同一对进行中的请求，并按连接缓存 10 秒。声明式页面动作带 `result` 时，未设置 `result.tone` 则沿用计算出的语气（如 `passed: false` 为 danger），并在内联结果中显示返回的 `message`（结果本身已渲染 `message` 时不重复）。
+
+- 70ddaf4: 插件市场元数据（#1250 marketplace-metadata）：`package.json#zhin.metadata` 新增可选的 `descriptionI18n: { 'zh-CN'?, en? }`（本地化描述）与 `category`（`adapter`、`ai`、`admin`、`community`、`entertainment`、`game`、`information`、`moderation`、`service`、`utility` 之一），校验方式与 `displayNameI18n` 相同：只接受这两个语言键、值为非空字符串、分类必须在枚举内。这两个字段只能写在清单里，插件市场才能从发布的 `package.json` 读到。`@zhin.js/plugin-runtime` 导出 `PLUGIN_CATEGORIES`、`PLUGIN_CATEGORY_LABELS`、`informativeKeywords`、`packageAuthorName`、`readPluginMarketplaceMetadata` 等读取工具。
+
+  市场读取侧：`/pub/marketplace/search` 带出 `displayNameI18n` / `descriptionI18n`，分类读声明的 `category`（旧索引的 `util` 等按别名映射），可选 `locale=zh-CN|en` 按语言解析显示名与描述，并按两种语言的名称与描述搜索；`/pub/marketplace/detail/*` 带出发布清单的显示名、描述翻译与分类。作者一律取 `author`（没有时取 `maintainers`），不再显示发布账号——此前 `plugins.json` 生成脚本优先读 `_npmUser`，CI 可信发布的包因此都显示为「GitHub Actions」。keywords 去掉 `zhin`、`zhin.js`、`bot` 等通用词后展示与参与搜索。`zhin search` / `zhin info` 同样显示中文描述、分类和维护者，`zhin info` 不再读不存在的 `zhin.displayName` / `zhin.category`。
+
+  官方插件与适配器：显示名移到 `package.json#zhin.metadata`，补齐中英文描述、分类、3–6 个有信息量的 keywords，author 统一为 `{ name: "lc-cn", url: "https://github.com/zhinjs/zhin" }`（不再发布邮箱）；npm `description` 与英文描述一致。
+
+- f3910f1: 定时任务（#1250）：持久任务现在记录并显示下次运行时间（`state.nextRunAtMs`）——启动时为已启用的任务重新计算（修复升级后为空的旧数据并记 info），每次运行、`resume` 后都会重新计算，`pause` 清空；已启用却算不出下次运行时间的任务记 warn，并作为「需要你处理」的 `schedule.unschedulable` 条目出现。重启时 assistant profile 同步不再清空任务的运行记录（`state`）与创建时间；`routines.heartbeat.enabled: false`（或 profile 不再声明心跳）会把已持久化的 `assistant-profile-heartbeat` 停用，profile 改变任务启用状态时记 info。`zhin schedule list`、`GET /assistant/jobs` 与 Console `schedule:list` 的持久任务返回 `target: { resolved, display?, reason? }`（账号显示名 + 会话；账号已不存在时 `resolved: false`），CLI 以「⚠ 无效」标出，并显示已启用任务的下次运行时间。`zhin schedule add` 新增 `--target <adapter>:<endpoint>:<kind>:<id>`（省略时沿用 `assistant.defaults.notify` / profile `defaults.notify`）；`--notify-channel im` 缺目标或目标账号不存在时，Host 返回 400 与错误码 `schedule_target_required` / `schedule_target_not_found` / `schedule_target_invalid` 和中文说明，不再是 Internal error。数据库迁移完成后 `data/schedule-jobs.json` 改名为 `schedule-jobs.json.migrated`（记 info）；`schedule_list` 工具描述改为真实存储位置。
+- b3ba941: Token 用量（#1250）：`plugin.root.usage-stats` 与 `zhin usage report` 按（服务, 模型）合并行，`services:<id>` 与 `accounts:<id>` 两条记录路径不再拆成两行，并给出「服务名 · 模型」显示名（RPC 行新增可选 `displayName` / `providerLabel` / `providerIds`，顶层新增 `modelLabels`）；读不到服务名时只显示模型名。两个输入总数分别标注口径（`totals.inputBasis: 'reported-all-calls'`，新增 `inputBreakdown`：首次请求估算含 `other` 与对应的真实输入）。日期 / 小时分桶按请求 `timeZone` 或实例时区（`TZ`，否则系统时区）计算，CLI 新增 `--tz`。会话显示 trace 里记录的会话名（`bySession[].displayName`、CLI `display_name`）。`zhin trace` 的模型列不再显示 `services:<uuid>/`。
+- Updated dependencies [0e998fd]
+- Updated dependencies [b3ba941]
+- Updated dependencies [5232fd8]
+- Updated dependencies [8c92bda]
+- Updated dependencies [0e998fd]
+- Updated dependencies [8609906]
+- Updated dependencies [7126d03]
+- Updated dependencies [9026329]
+- Updated dependencies [1d1746e]
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [71aa159]
+- Updated dependencies [ccab2c1]
+- Updated dependencies [b00725c]
+- Updated dependencies [c6b5563]
+- Updated dependencies [f1a9745]
+- Updated dependencies [e0b4e51]
+- Updated dependencies [4f6b8b9]
+- Updated dependencies [7cc703a]
+- Updated dependencies [0d8da71]
+- Updated dependencies [627fb5e]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b08cff2]
+- Updated dependencies [dbdfca3]
+- Updated dependencies [704c7a4]
+- Updated dependencies [b56cca9]
+- Updated dependencies [f3910f1]
+- Updated dependencies [b3ba941]
+- Updated dependencies [19ff36c]
+  - @zhin.js/gateway@1.3.0
+  - @zhin.js/host-http@1.3.0
+  - @zhin.js/runtime@1.3.0
+  - @zhin.js/console-protocol@1.3.0
+  - @zhin.js/scaffold-wizard@1.2.0
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/pagemanager@1.1.28
+
 ## 1.3.0
 
 ### Minor Changes

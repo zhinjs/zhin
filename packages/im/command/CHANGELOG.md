@@ -1,5 +1,28 @@
 # @zhin.js/command
 
+## 1.3.0
+
+### Minor Changes
+
+- 7cd299e: 指令执行中抛出的「面向用户」的拒绝不再被静默吞掉（#1250）：`@zhin.js/command` 新增 `UserFacingError`（及 `isUserFacingError` / `userFacingErrorText`，经 `zhin.js/command` 导出），指令分发把它转成该指令的回复，经正常出站链（`$reply`）发出，按发送者语言调用 `format(locale)`；其他错误照旧抛给入站运行时记录日志，不把错误信息或堆栈回给用户。`GameSessionConflictError` 改为继承 `UserFacingError`，群里已有一局「guess」时发「rps 开始」会收到「你在当前频道已有进行中的「guess」对局…」，不再只在适配器日志里出现 `sandbox_gateway_receive_failed`。
+- 9026329: 未命中的消息首词与已注册指令名 / 别名高度相似时（私聊、@机器人或带指令前缀；忽略大小写与 `-` / `_` / 空格，默认 1 次编辑且名称至少 5 个字符或 3 个汉字），经正常回复链直接回复「没有这个指令，你是不是想用：X、Y」，不再交给 AI 编造指令名（#1250）。只列出发送者有权使用的指令；根配置 `commandSuggestion: false` 关闭，`{ maxDistance, limit }` 调整。Agent 提示在有指令菜单时引导模型不确定就让用户发送菜单，而不是猜指令名。
+
+  只有带指令前缀的消息才按首词命名空间匹配（`/rss foo` → `rss-list`）；私聊与 @机器人 但未带前缀时，只匹配与指令名本身相近、且简短像指令的消息（不含「是什么 / 怎么 / 吗 / 啥 / ？」等疑问词或问号，名称后只跟指令声明的参数），所以「rss 是什么」「process 太慢了」之类的问题仍交给 AI。
+
+### Patch Changes
+
+- 7cd299e: 指令菜单降噪（#1250）：「子插件」只列出子树里有当前发送者可用指令的插件，不再列出适配器（如 icqq、github）和无指令的纯服务插件（仍可用「菜单 <插件名>」直接查看）；根菜单标题不再显示内部实例名「=== root 指令菜单 ===」，改用项目显示名（`metadata.displayName`）或「=== 指令菜单 ===」。会话历史回放带原生按钮的回复时，未渲染的 JSX 不再被序列化成 `[markdown]{"$jsx":"zhin.jsx/1",…}`：Markdown 取原文，按钮（键盘行与 `<button>`）降级为 `[标签]`。
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [7cc703a]
+- Updated dependencies [cca4427]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [704c7a4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/im-contract@1.2.0
+  - @zhin.js/feature-kit@1.1.18
+  - @zhin.js/permission@1.2.2
+
 ## 1.2.2
 
 ### Patch Changes

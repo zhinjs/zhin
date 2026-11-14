@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-dungeon-expedition",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "A 1–4 player turn-based dungeon run that can be resumed and replayed deterministically.",
   "keywords": [
     "zhin.js",

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-suite",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Check-in points, message stats, group Q&A, a persistent phrase bank and member welcomes.",
   "keywords": [
     "zhin.js",

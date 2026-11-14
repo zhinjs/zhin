@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "DingTalk bot adapter: HTTP webhook messaging with signature verification and automatic access-token refresh.",
   "keywords": [
     "zhin.js",

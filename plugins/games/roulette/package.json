@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-roulette",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Group members take turns pulling the trigger; each group can turn on a mute penalty for the loser.",
   "keywords": [
     "zhin.js",

@@ -1,5 +1,17 @@
 # @zhin.js/schedule-feature
 
+## 1.1.18
+
+### Patch Changes
+
+- b56cca9: 定时任务（#1250）：`ScheduleJobRegistration` / `defineSchedule()` 新增可选 `title`、`titleI18n`、`kind`（`plugin-internal` 默认 / `user-task`）；实例 Schedule Host 记录每个任务最近一次实际执行的开始 / 结束时间与成功 / 失败（`lastRun`）。`schedule:list` / `cron:list` 的内存任务行新增可选 `kind`、`title`（按请求 `locale` 解析）、`titleI18n`、`displayName`、`lastExecutedAt`、`lastFinishedAt`、`lastDurationMs`、`lastStatus`、`lastError`，持久任务行新增 `kind: 'user-task'`。官方插件的内部轮询任务补中文标题。
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [7cc703a]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/feature-kit@1.1.18
+
 ## 1.1.17
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/service-activity-feedback",
-  "version": "1.1.31",
+  "version": "1.1.32",
   "description": "Shows typing, reactions or status messages while the AI is thinking or working, based on each platform's capabilities.",
   "keywords": [
     "zhin.js",

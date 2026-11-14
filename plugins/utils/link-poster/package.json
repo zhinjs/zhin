@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-link-poster",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Detects Bilibili, GitHub, Douyin and Xiaohongshu links and renders preview cards.",
   "keywords": [
     "zhin.js",
