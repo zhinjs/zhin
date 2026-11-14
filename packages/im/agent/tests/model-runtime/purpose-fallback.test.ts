@@ -7,7 +7,7 @@ import { normalizeProviderGraph, type ExecutionBinding, type ProviderExecution }
 import { assistant, graphFixture, HOST } from '../../../ai/tests/provider/fixtures.js';
 import { modelRuntimeFixture } from '../helpers/model-runtime.js';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
-import { traceModelFallback } from '../../src/model-runtime/purpose-fallback.js';
+import { traceModelFallback, turnUsageTarget } from '../../src/model-runtime/purpose-fallback.js';
 
 const dailyQuota = () => Object.assign(new Error('quota'), {
   statusCode: 429,
@@ -135,6 +135,21 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
       await expect(scope.chat.completion.complete(scope.chat.model, context)).rejects.toMatchObject({ statusCode: 403 });
       expect(answered).toEqual([]);
       expect(registry.list()).toEqual([]);
+    } finally { await scope.release(); }
+  });
+
+  it('relabels the turn usage row only for a switch of the turn’s own purpose', async () => {
+    const { acquire } = setup({ account: dailyQuota });
+    const scope = await acquire();
+    try {
+      const summary = await scope.summary!.resolve();
+      await summary.completion.complete(summary.model, context);
+      const [summarySwitch] = scope.modelFallbacks?.() ?? [];
+      expect(summarySwitch?.purpose).toBe('summary');
+      expect(turnUsageTarget(scope, summarySwitch!)).toBeUndefined();
+      await scope.chat.completion.complete(scope.chat.model, context);
+      const chatSwitch = scope.modelFallbacks?.().find(event => event.purpose === 'chat');
+      expect(turnUsageTarget(scope, chatSwitch!)).toEqual({ provider: 'service', model: 'text' });
     } finally { await scope.release(); }
   });
 

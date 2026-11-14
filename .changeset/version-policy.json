@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——聊天、摘要、旁听、Agent 角色与 Adapter / 场景覆盖按各自备用链在额度用完 / 余额不足 / 鉴权失败时换用备用模型（不重放已执行工具）；新增导出 resolvePurposeExecution、ModelFallbackLog、traceModelFallback、selectedPurposeProfileId，ModelRuntimeService 新增 modelAvailability 访问器，ModelExecutionScope 新增可选 modelFallbacks / observeModelFallback，ModelRuntimeServiceOptions 新增 modelAvailability，回合 trace 新增 model_fallbacks 与 TurnTraceModelFallback，管理视图 InferenceManagementView 新增只读 modelAvailability。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——聊天、摘要、旁听、Agent 角色与 Adapter / 场景覆盖按各自备用链在额度用完 / 余额不足 / 鉴权失败时换用备用模型（不重放已执行工具）；新增导出 resolvePurposeExecution、ModelFallbackLog、traceModelFallback、selectedPurposeProfileId、turnUsageTarget，ModelRuntimeService 新增 modelAvailability 访问器，ModelExecutionScope 新增可选 modelFallbacks / observeModelFallback，ModelRuntimeServiceOptions 新增 modelAvailability，回合 trace 新增 model_fallbacks 与 TurnTraceModelFallback，管理视图 InferenceManagementView 新增只读 modelAvailability。"
     },
     {
       "package": "@zhin.js/client",
@@ -79,7 +79,7 @@
     {
       "package": "@zhin.js/ai",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——所有语言用途支持备用模型：导入提案的 chat / summary / ambient / agents.<key> / adapters|endpoints.<key>.chat / scenes.<key>.chat 接受 `{ profile, fallbacks }`，配置图新增同级字段 chatFallbacks / summaryFallbacks / ambientFallbacks / agentFallbacks；新增公开导出 createFallbackCompletionPort、ModelAvailabilityRegistry、modelAvailability、modelFallbackFailure、modelFallbackResetAt、nextPacificMidnight、MODEL_FALLBACK_NOTICE、CONSECUTIVE_TIMEOUTS_TO_SWITCH、TIMEOUT_FALLBACK_COOLDOWN_MS、fallbackTranscriptFit、requiredInputModalities、estimateRequestTokens 及相关类型，ProviderErrorClassification 新增可选 quotaWindow / credential，ProviderError 新增可选 path（校验错误指明配置路径）；连续 2 次超时切换备用模型（#1270）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——所有语言用途支持备用模型：导入提案的 chat / summary / ambient / agents.<key> / adapters|endpoints.<key>.chat / scenes.<key>.chat 接受 `{ profile, fallbacks }`，配置图新增同级字段 chatFallbacks / summaryFallbacks / ambientFallbacks / agentFallbacks；新增公开导出 createFallbackCompletionPort、ModelAvailabilityRegistry、modelAvailability、modelFallbackFailure、modelFallbackResetAt、nextPacificMidnight、MODEL_FALLBACK_NOTICE、CONSECUTIVE_TIMEOUTS_TO_SWITCH、TIMEOUT_FALLBACK_COOLDOWN_MS、TIMEOUT_GLOBAL_OPERATIONS、TIMEOUT_GLOBAL_WINDOW_MS、fallbackTranscriptFit、requiredInputModalities、estimateRequestTokens 及相关类型，ProviderErrorClassification 新增可选 quotaWindow / credential，ProviderError 新增可选 path（校验错误指明配置路径）；连续 2 次超时切换备用模型（#1270）。"
     },
     {
       "package": "@zhin.js/plugin-code-runner",

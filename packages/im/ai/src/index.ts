@@ -129,6 +129,8 @@ export {
   ModelAvailabilityRegistry,
   QUOTA_FALLBACK_COOLDOWN_MS,
   TIMEOUT_FALLBACK_COOLDOWN_MS,
+  TIMEOUT_GLOBAL_OPERATIONS,
+  TIMEOUT_GLOBAL_WINDOW_MS,
   createFallbackCompletionPort,
   estimateRequestTokens,
   fallbackTranscriptFit,

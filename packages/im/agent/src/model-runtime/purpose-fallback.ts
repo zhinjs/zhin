@@ -163,3 +163,17 @@ export function traceModelFallback(event: ModelFallbackEvent): Readonly<{
     reason: event.reason, phase: event.phase, ...(event.fromUntil !== undefined ? { from_until: event.fromUntil } : {}),
     notice: event.notice });
 }
+
+/**
+ * The turn usage row's answering model after a switch (#1250): only a switch of the turn's
+ * own purpose (`chat` or `agent:<name>`) counts; a summary-only switch shares the operation's
+ * fallback log but must not relabel the turn.
+ */
+export function turnUsageTarget(
+  models: Readonly<{ purpose?: string; graph: InferenceOperationScope['graph'] }>,
+  event: ModelFallbackEvent,
+): Readonly<{ provider: string; model: string }> | undefined {
+  if (event.purpose !== (models.purpose ?? 'chat')) return undefined;
+  const serviceId = models.graph.accounts[event.to.accountId]?.serviceId;
+  return serviceId ? Object.freeze({ provider: serviceId, model: event.to.model }) : undefined;
+}

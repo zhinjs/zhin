@@ -1,9 +1,10 @@
 import {
-  AUTH_FALLBACK_COOLDOWN_MS, CONSECUTIVE_TIMEOUTS_TO_SWITCH, MODEL_FALLBACK_NOTICE, TIMEOUT_FALLBACK_COOLDOWN_MS, fallbackTranscriptFit, ModelAvailabilityRegistry, QUOTA_FALLBACK_COOLDOWN_MS,
+  AUTH_FALLBACK_COOLDOWN_MS, CONSECUTIVE_TIMEOUTS_TO_SWITCH, MODEL_FALLBACK_NOTICE, TIMEOUT_FALLBACK_COOLDOWN_MS,
+  TIMEOUT_GLOBAL_OPERATIONS, TIMEOUT_GLOBAL_WINDOW_MS, fallbackTranscriptFit, ModelAvailabilityRegistry, QUOTA_FALLBACK_COOLDOWN_MS,
   createFallbackCompletionPort, modelFallbackFailure, modelFallbackResetAt, nextPacificMidnight,
   type ModelFallbackEvent,
 } from '../../src/llm/model-fallback.js';
-import { ProviderRequestError, createResilientCompletionPort } from '../../src/llm/provider-resilience.js';
+import { ProviderRequestError, classifyProviderError, createResilientCompletionPort } from '../../src/llm/provider-resilience.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { LlmCompletionPort } from '../../src/llm/llm-api-runtime.js';
 import type { Model } from '../../src/llm/types/model.js';
@@ -298,6 +299,28 @@ describe('review follow-ups (#1250 / #1270)', () => {
     expect(attempts).toBe(2);
   });
 
+  it('re-checks the context window on every request after a switch', async () => {
+    const roomy = recording('roomy');
+    const small = recording('small');
+    const smallModel = { ...model('small-model', 'small-account'), contextWindow: 200 } as Model;
+    const roomyModel = { ...model('roomy-model', 'roomy-account'), contextWindow: 100_000 } as Model;
+    const { completion, primaryModel, events } = chain(failing(geminiDaily), [
+      { id: 'small', model: smallModel, port: small.port },
+      { id: 'roomy', model: roomyModel, port: roomy.port },
+    ]);
+    const short = { systemPrompt: 'sys', messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 1 }] } as unknown as Context;
+    expect((await completion.complete(primaryModel, short)).provider).toBe('small');
+    const long = { ...short, messages: [{ role: 'user', content: [{ type: 'text', text: 'word '.repeat(2_000) }], timestamp: 1 }] } as unknown as Context;
+    expect((await completion.complete(primaryModel, long)).provider).toBe('roomy');
+    expect(small.calls).toHaveLength(1);
+    expect(events.map(event => [event.reason, event.to.profileId])).toEqual([['quota_exhausted', 'small'], ['context_overflow', 'roomy']]);
+    // Past the last fitting fallback: a clear context_overflow, never a request that would 400.
+    const huge = { ...short, messages: [{ role: 'user', content: [{ type: 'text', text: 'word '.repeat(200_000) }], timestamp: 1 }] } as unknown as Context;
+    const failure = await completion.complete(primaryModel, huge).catch(error => error);
+    expect(classifyProviderError(failure).kind).toBe('context_overflow');
+    expect(roomy.calls).toHaveLength(1);
+  });
+
   describe('mid tool-loop switch to a strict provider', () => {
     const toolLoop = (call: Record<string, unknown>) => ({ systemPrompt: 'sys', messages: [
       { role: 'user', content: [{ type: 'text', text: 'look it up' }], timestamp: 1 },
@@ -351,14 +374,54 @@ describe('review follow-ups (#1250 / #1270)', () => {
       expect(registry.list()).toEqual([]);
     });
 
-    it(`switches after ${CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts and skips the model for a short cooldown`, async () => {
+    it(`switches after ${CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts within the operation only`, async () => {
       const target = recording('cnb');
       const registry = new ModelAvailabilityRegistry({ now: () => 0 });
       const { completion, primaryModel, events } = chain(failing(timeout(), timeout()), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }], registry);
       await expect(completion.complete(primaryModel, context)).rejects.toMatchObject({ name: 'TimeoutError' });
       expect((await completion.complete(primaryModel, context)).provider).toBe('cnb');
       expect(events[0]).toMatchObject({ reason: 'timeout', phase: 'request' });
-      expect(registry.unavailable('gemini-account', 'gemini-flash')).toMatchObject({ reason: 'timeout', until: TIMEOUT_FALLBACK_COOLDOWN_MS });
+      expect(events[0]!.fromUntil).toBeUndefined();
+      // One operation (one user's huge prompt) never skips the model for everyone.
+      expect(registry.unavailable('gemini-account', 'gemini-flash')).toBeUndefined();
+    });
+
+    it(`skips globally once ${TIMEOUT_GLOBAL_OPERATIONS} distinct operations time out within the window`, async () => {
+      let now = 0;
+      const registry = new ModelAvailabilityRegistry({ now: () => now });
+      const operation = () => chain(failing(timeout(), timeout()), [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: recording('cnb').port }], registry);
+      const run = async (op: ReturnType<typeof operation>) => {
+        await op.completion.complete(op.primaryModel, context).catch(() => undefined);
+        return op.completion.complete(op.primaryModel, context);
+      };
+      await run(operation());
+      expect(registry.unavailable('gemini-account', 'gemini-flash')).toBeUndefined();
+      // A second operation, but outside the window: still nothing global.
+      now = TIMEOUT_GLOBAL_WINDOW_MS + 1;
+      await run(operation());
+      expect(registry.unavailable('gemini-account', 'gemini-flash')).toBeUndefined();
+      now += 30_000;
+      const third = operation();
+      await run(third);
+      expect(registry.unavailable('gemini-account', 'gemini-flash')).toMatchObject({ reason: 'timeout', until: now + TIMEOUT_FALLBACK_COOLDOWN_MS });
+    });
+
+    it('does not count a caller-supplied AbortSignal.timeout', async () => {
+      const target = recording('cnb');
+      const registry = new ModelAvailabilityRegistry();
+      const aborting: LlmCompletionPort = {
+        complete: (_m, _c, options) => new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal!.reason), { once: true });
+        }),
+        completeSimple: async () => reply('unused', 'gemini'),
+      };
+      const { completion, primaryModel, events } = chain(aborting, [{ id: 'cnb', model: model('cnb-model', 'cnb-account'), port: target.port }], registry);
+      for (let i = 0; i < 3; i++) {
+        await expect(completion.complete(primaryModel, context, { signal: AbortSignal.timeout(5) })).rejects.toMatchObject({ name: 'TimeoutError' });
+      }
+      expect(target.calls).toHaveLength(0);
+      expect(events).toEqual([]);
+      expect(registry.list()).toEqual([]);
     });
 
     it('composes with the resilience per-attempt timer: the attempt after the second timeout goes to the fallback', async () => {

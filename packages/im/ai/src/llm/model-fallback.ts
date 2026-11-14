@@ -12,11 +12,16 @@
  *   credential itself was rejected (401, `UNAUTHENTICATED`, `API_KEY_*`-style
  *   codes). A plain 403 (often a gateway's content or region refusal) does not
  *   switch and does not mark the model.
- * - Timeouts (whole-attempt timeouts and first-response / first-chunk deadlines,
- *   i.e. anything `classifyProviderError` calls `timeout`) switch only after
- *   {@link CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts of the same
- *   account + model within one operation; the next attempt then goes to the
- *   fallback. A one-off timeout behaves as before (same-model retry).
+ * - Timeouts of the provider attempt (the resilience per-attempt timer, first-response /
+ *   first-chunk deadlines: anything `classifyProviderError` calls `timeout`, but never a
+ *   caller-supplied signal's `TimeoutError`) switch only after
+ *   {@link CONSECUTIVE_TIMEOUTS_TO_SWITCH} consecutive timeouts of the same account +
+ *   model within one operation; the next attempt then goes to the fallback. That switch
+ *   is operation-local: one user's huge prompt must not move everyone to a paid
+ *   fallback. Only when operations of {@link TIMEOUT_GLOBAL_OPERATIONS} distinct
+ *   operations reach that threshold within {@link TIMEOUT_GLOBAL_WINDOW_MS} is the model
+ *   skipped globally ({@link TIMEOUT_FALLBACK_COOLDOWN_MS}). A one-off timeout behaves
+ *   as before (same-model retry).
  * - 5xx, rate limits, network errors, bad requests, content refusals and
  *   context overflow never switch.
  * - Switching happens per request, from the current transcript. A failed
@@ -52,7 +57,8 @@ import { estimateAgentMessagesTokens } from "../compaction/agent-message-tokens.
 import { estimateTextTokens } from "../compaction/token-counter.js";
 
 /** Failure classes that switch to the next fallback. */
-export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout";
+/** `context_overflow`: a fallback in use no longer fits the growing context, so the next one takes over. */
+export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout" | "context_overflow";
 
 /** User-visible note for a turn answered by a fallback model. */
 export const MODEL_FALLBACK_NOTICE = "本轮由备用模型回答";
@@ -67,6 +73,10 @@ export const AUTH_FALLBACK_COOLDOWN_MS = 15 * 60_000;
 export const TIMEOUT_FALLBACK_COOLDOWN_MS = 5 * 60_000;
 /** Consecutive timeouts of one account + model within one operation before the next attempt switches (#1270). */
 export const CONSECUTIVE_TIMEOUTS_TO_SWITCH = 2;
+/** Distinct operations that must hit the timeout threshold before a model is skipped globally. */
+export const TIMEOUT_GLOBAL_OPERATIONS = 2;
+/** Window in which those operations must fall. */
+export const TIMEOUT_GLOBAL_WINDOW_MS = 2 * 60_000;
 /** Provider reset hints longer than this are capped (a broken header must not park a model for weeks). */
 export const MAX_FALLBACK_SKIP_MS = 48 * 60 * 60_000;
 
@@ -193,6 +203,7 @@ export interface ModelFallbackEvent {
 export class ModelAvailabilityRegistry {
   readonly #entries = new Map<string, ModelUnavailability>();
   readonly #recent: ModelFallbackEvent[] = [];
+  readonly #timeouts = new Map<string, Array<{ readonly operation: object; readonly at: number }>>();
   readonly #now: () => number;
   readonly #recentLimit: number;
 
@@ -239,6 +250,22 @@ export class ModelAvailabilityRegistry {
     return Object.freeze([...this.#entries.values()].sort((a, b) => a.until - b.until));
   }
 
+  /**
+   * One operation hit the consecutive-timeout threshold on this account + model. Returns
+   * true when {@link TIMEOUT_GLOBAL_OPERATIONS} distinct operations did so within
+   * {@link TIMEOUT_GLOBAL_WINDOW_MS}: then the caller may skip the model globally.
+   */
+  noteOperationTimeouts(input: Readonly<{ accountId: string; model: string; operation: object }>): boolean {
+    const now = this.#now();
+    const key = JSON.stringify([input.accountId, input.model]);
+    const recent = (this.#timeouts.get(key) ?? []).filter(entry => now - entry.at <= TIMEOUT_GLOBAL_WINDOW_MS);
+    if (!recent.some(entry => entry.operation === input.operation)) recent.push({ operation: input.operation, at: now });
+    this.#timeouts.set(key, recent);
+    if (recent.length < TIMEOUT_GLOBAL_OPERATIONS) return false;
+    this.#timeouts.delete(key);
+    return true;
+  }
+
   recordFallback(event: ModelFallbackEvent): void {
     this.#recent.push(event);
     if (this.#recent.length > this.#recentLimit) this.#recent.splice(0, this.#recent.length - this.#recentLimit);
@@ -251,6 +278,7 @@ export class ModelAvailabilityRegistry {
 
   clear(): void {
     this.#entries.clear();
+    this.#timeouts.clear();
     this.#recent.length = 0;
   }
 }
@@ -372,11 +400,13 @@ interface ActiveTarget extends ModelFallbackTarget {
 export function createFallbackCompletionPort(options: FallbackCompletionOptions): LlmCompletionPort {
   if (options.fallbacks.length === 0) return options.primary.completion;
   const registry = options.registry ?? modelAvailability;
+  /** This port serves one operation; its identity counts distinct operations for global timeout skips. */
+  const operation = {};
   let active: ActiveTarget = { ...options.primary, switched: false };
   let next = 0;
   const timeouts = new Map<string, number>();
   /** Set after repeated timeouts when the attempt could not continue (its signal was aborted). */
-  let pending: { readonly from: ModelFallbackEndpoint; readonly until: number } | undefined;
+  let pending: { readonly from: ModelFallbackEndpoint; readonly until?: number } | undefined;
 
   const report = (event: ModelFallbackEvent) => {
     registry.recordFallback(event);
@@ -405,7 +435,6 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
       const fit = fitFor(resolved.model, context);
       if (!fit.ok) {
         quietly(() => options.onCandidateUnfit?.(candidate.endpoint, fit.reason));
-        // Another request may fit later in the operation; keep it reachable.
         continue;
       }
       return { endpoint: candidate.endpoint, ...resolved, switched: true };
@@ -413,10 +442,31 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
     return undefined;
   };
 
-  const switchTo = (target: ActiveTarget, from: ModelFallbackEndpoint, reason: ModelFallbackReason, at: number, until: number) => {
+  const switchTo = (target: ActiveTarget, from: ModelFallbackEndpoint, reason: ModelFallbackReason, at: number, until?: number) => {
     active = target;
     report(Object.freeze({ purpose: options.purpose, from, to: target.endpoint, reason, phase: "request",
-      at, fromUntil: until, notice: MODEL_FALLBACK_NOTICE }));
+      at, ...(until !== undefined ? { fromUntil: until } : {}), notice: MODEL_FALLBACK_NOTICE }));
+  };
+
+  /**
+   * A fallback in use is re-checked on every request: the transcript grows, and a request that
+   * no longer fits its window must not be sent (it would 400). Compaction still budgets against
+   * the selected (primary) model's window; making it follow the answering fallback is a follow-up.
+   */
+  const ensureFits = async (context: Context): Promise<void> => {
+    while (active.switched) {
+      const fit = fitFor(active.model, context);
+      if (fit.ok) return;
+      const from = active.endpoint;
+      const target = await advance(context);
+      if (!target) {
+        // Worded so `isContextOverflowError` / resilience classify it as `context_overflow`
+        // (no retry; the agent loop compacts and asks once more).
+        throw new Error(`Estimated prompt (~${estimateRequestTokens(context)} tokens) does not fit the context window of `
+          + `fallback ${from.profileId} (${active.model.contextWindow} tokens) or any later fallback`);
+      }
+      switchTo(target, from, "context_overflow", registry.now());
+    }
   };
 
   /** The fallback's own execution policy and output limit; thinking off when the transcript requires it. */
@@ -435,6 +485,14 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
     }).then(message => options.annotate ? options.annotate(message, target.endpoint) : message);
   };
 
+  /** Operation-local timeout switch; a global skip only once several operations time out (see module comment). */
+  const timeoutSkip = (endpoint: ModelFallbackEndpoint): number | undefined => {
+    if (!registry.noteOperationTimeouts({ accountId: endpoint.accountId, model: endpoint.model, operation })) return undefined;
+    const now = registry.now();
+    return registry.markUnavailable({ accountId: endpoint.accountId, model: endpoint.model, reason: "timeout",
+      until: modelFallbackResetAt({ kind: "timeout" }, now) }).until;
+  };
+
   const run =
     (method: keyof LlmCompletionPort) =>
     async (model: Model, context: Context, streamOptions?: StreamOptions): Promise<AssistantMessage> => {
@@ -449,6 +507,7 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
         }
       }
       while (true) {
+        await ensureFits(context);
         const current = active;
         let streamed = false;
         const onTextDelta = streamOptions?.onTextDelta;
@@ -468,14 +527,21 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
           timeouts.delete(endpointKey(current.endpoint));
           return message;
         } catch (error) {
-          // An aborted signal is either the caller cancelling (never switches) or the
-          // resilience layer's per-attempt timer (counted as a timeout below).
+          // An aborted signal is the caller cancelling (never switches), including a caller's own
+          // `AbortSignal.timeout` (DOMException `TimeoutError`), or the resilience layer's
+          // per-attempt timer, which is the provider attempt timing out and is counted below.
           const cause = signal?.aborted ? signal.reason : error;
           const causeKind = classify(cause).kind;
-          if (signal?.aborted && causeKind !== "timeout") throw error;
-          let failure: Pick<ProviderErrorClassification, "kind" | "retryAfterMs" | "quotaWindow"> & { kind: ModelFallbackReason }
-            | undefined = signal?.aborted ? undefined : modelFallbackFailure(error);
-          if (!failure) {
+          if (signal?.aborted && (causeKind !== "timeout" || isCallerTimeout(cause))) throw error;
+          const failure = signal?.aborted ? undefined : modelFallbackFailure(error);
+          let reason: ModelFallbackReason;
+          let until: number | undefined;
+          const now = registry.now();
+          if (failure) {
+            reason = failure.kind;
+            until = registry.markUnavailable({ accountId: current.endpoint.accountId, model: current.endpoint.model,
+              reason: failure.kind, until: modelFallbackResetAt(failure, now) }).until;
+          } else {
             if (causeKind !== "timeout") throw error;
             const key = endpointKey(current.endpoint);
             const count = (timeouts.get(key) ?? 0) + 1;
@@ -483,28 +549,27 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
             // A one-off timeout keeps the same-model retry of provider-resilience.
             if (count < CONSECUTIVE_TIMEOUTS_TO_SWITCH) throw error;
             timeouts.delete(key);
-            failure = { kind: "timeout" };
+            reason = "timeout";
+            until = timeoutSkip(current.endpoint);
           }
-          const now = registry.now();
-          const skipped = registry.markUnavailable({
-            accountId: current.endpoint.accountId,
-            model: current.endpoint.model,
-            reason: failure.kind,
-            until: modelFallbackResetAt(failure, now),
-          });
           // Text already reached the user, or the caller forbids another attempt: no switch.
           if (streamed || streamOptions?.retryAllowed?.() === false) throw error;
           // The attempt's signal is gone (resilience timer): the next attempt switches.
           if (signal?.aborted) {
-            pending = { from: current.endpoint, until: skipped.until };
+            pending = { from: current.endpoint, ...(until !== undefined ? { until } : {}) };
             throw error;
           }
           const target = await advance(context);
           if (!target) throw error;
-          switchTo(target, current.endpoint, failure.kind, now, skipped.until);
+          switchTo(target, current.endpoint, reason, now, until);
         }
       }
     };
 
   return Object.freeze({ complete: run("complete"), completeSimple: run("completeSimple") });
+}
+
+/** `AbortSignal.timeout()` aborts with a DOMException named `TimeoutError`: the caller's own deadline. */
+function isCallerTimeout(reason: unknown): boolean {
+  return typeof DOMException !== "undefined" && reason instanceof DOMException && reason.name === "TimeoutError";
 }
