@@ -202,7 +202,7 @@ describe('Console user lifecycle and grantor names (ADR 0060 §2.4, Q12)', () =>
     expect(chatGrantorName(people, 'user:unknown')).toBeUndefined();
     const listed = await dispatchChatRolesConsoleRpc({ type: 'chat-roles.list', data: { level: 'global' } },
       { roles, authorize: () => true, grantorName: grantedBy => chatGrantorName(people, grantedBy) });
-    expect((listed!.body.data as any).roles[0]).toMatchObject({ grantedBy: 'user:u1', grantedByName: '爱丽丝', principalId: roles.principalOf(qq('alice')).id });
+    expect((listed!.body.data as any).roles[0]).toMatchObject({ grantedBy: 'user:u1', grantedByName: '爱丽丝', grantedByDisplayName: '爱丽丝', principalId: roles.principalOf(qq('alice')).id });
     expect(await people.consoleUserRemoved('u1', 'deleted')).toBe('saved');
     expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
     expect(roles.hasRole(qq('alice'), '', 'owner')).toBe(true);

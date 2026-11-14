@@ -54,13 +54,15 @@ function redactedView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
 }
 
 export function chatRoleView(entry: ChatRoleEntry, grantor?: GrantorNames): ConsoleChatRoleEntry {
-  const grantedByDisplayName = entry.grantedBy ? grantorDisplayName(entry.grantedBy, grantor) : undefined;
-  const grantedByName = entry.grantedBy ? grantor?.grantorName?.(entry.grantedBy) : undefined;
+  // One label, two fields: `grantedByName` is canonical; the deprecated `grantedByDisplayName`
+  // (shipped in 1.3.0) always carries the same value. A linked person's name wins.
+  const grantedByName = entry.grantedBy
+    ? grantor?.grantorName?.(entry.grantedBy) ?? grantorDisplayName(entry.grantedBy, grantor)
+    : undefined;
   return Object.freeze({ level: entry.level, key: entry.key, adapter: entry.adapter, userId: entry.userId, role: entry.role, source: entry.source,
     ...(entry.principalId ? { principalId: entry.principalId } : {}),
     ...(entry.grantedBy ? { grantedBy: entry.grantedBy } : {}),
-    ...(grantedByDisplayName ? { grantedByDisplayName } : {}),
-    ...(grantedByName ? { grantedByName } : {}),
+    ...(grantedByName ? { grantedByName, grantedByDisplayName: grantedByName } : {}),
     ...(entry.grantedAt ? { grantedAt: entry.grantedAt } : {}) });
 }
 

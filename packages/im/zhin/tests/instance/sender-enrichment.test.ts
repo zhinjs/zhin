@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { Message } from '@zhin.js/core/runtime';
-import { createSenderEnricher } from '@zhin.js/core/runtime';
+import { Message, createSenderEnricher } from '@zhin.js/core/runtime';
 import { ChatRoleService } from '@zhin.js/core';
 import { resolveOwnerForRuntimeMessage } from '@zhin.js/agent/runtime';
 import { ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';

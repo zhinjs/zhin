@@ -64,16 +64,18 @@ export interface ConsoleChatRoleEntry {
   /** Audit id of the grantor (`user:<id>`, `api-token:<id>`, `chat:<adapter>:<userId>`, `migration:<source>`, `bootstrap`). */
   readonly grantedBy?: string;
   /**
-   * Readable grantor label when the instance can tell it without reading other accounts (#1250):
-   * the caller's own display name for grants they made, `<adapter> 用户 <id>` for chat grants,
-   * `配置迁移`, `初始化令牌`. Absent otherwise — show `grantedBy` (e.g. a short id) then.
-   */
-  readonly grantedByDisplayName?: string;
-  /**
-   * ADR 0060 Q12: when `grantedBy` is a Console user linked to a person, that person's name (else
-   * the Console display name cached on the link). Display only; preferred over `grantedByDisplayName`.
+   * Readable grantor label (canonical field, ADR 0060 Q12 / #1250): the name of the person linked
+   * to a `grantedBy` Console user; otherwise what the instance can tell without reading other
+   * accounts — the caller's own display name for grants they made, `<adapter> 用户 <id>` for chat
+   * grants, `配置迁移`, `初始化令牌`. Absent otherwise — show `grantedBy` (e.g. a short id) then.
    */
   readonly grantedByName?: string;
+  /**
+   * Same value as {@link ConsoleChatRoleEntry.grantedByName}; kept because 1.3.0 shipped it.
+   *
+   * @deprecated Read `grantedByName` instead.
+   */
+  readonly grantedByDisplayName?: string;
   /** The person holding the grant (ADR 0060 §2.3); absent on a `redacted` entry. */
   readonly principalId?: string;
   readonly grantedAt?: number;

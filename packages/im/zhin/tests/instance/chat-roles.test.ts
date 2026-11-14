@@ -9,7 +9,7 @@ import {
 } from '../../src/instance/chat-roles.js';
 import { CHAT_ROLES_RPC, featureScopeTarget } from '@zhin.js/console-protocol';
 import { defineChatPrincipalTables } from '../../src/instance/chat-principals.js';
-import { dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
+import { chatRoleView, dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 const directories: string[] = [];
@@ -118,6 +118,21 @@ describe('chat-roles.* Console RPC', () => {
     // Another Console account stays unresolved: the instance never reads the gateway's account store.
     expect(byUser.other).toMatchObject({ grantedBy: 'user:someone-else' });
     expect(byUser.other).not.toHaveProperty('grantedByDisplayName');
+    expect(byUser.other).not.toHaveProperty('grantedByName');
+    // The canonical `grantedByName` and the deprecated `grantedByDisplayName` always agree.
+    for (const entry of [byUser.x, byUser.chatty]) expect(entry!.grantedByName).toBe(entry!.grantedByDisplayName);
+  });
+
+  it('gives grantedByName and the deprecated grantedByDisplayName the same value; a linked person wins (ADR 0060 Q12)', () => {
+    const entry = (grantedBy: string) => ({ level: 'global', key: '', adapter: 'qq', userId: 'x', role: 'admin', source: 'grant', grantedBy, grantedAt: 1 }) as never;
+    const names = { actor: 'user:me', actorDisplayName: 'Me', grantorName: (grantedBy: string) => grantedBy === 'user:linked' ? '爱丽丝' : grantedBy === 'user:me' ? '我本人' : undefined };
+    expect(chatRoleView(entry('user:linked'), names)).toMatchObject({ grantedByName: '爱丽丝', grantedByDisplayName: '爱丽丝' });
+    expect(chatRoleView(entry('user:me'), names)).toMatchObject({ grantedByName: '我本人', grantedByDisplayName: '我本人' });
+    expect(chatRoleView(entry('user:me'), { actor: 'user:me', actorDisplayName: 'Me' })).toMatchObject({ grantedByName: 'Me', grantedByDisplayName: 'Me' });
+    expect(chatRoleView(entry('migration:config'), names)).toMatchObject({ grantedByName: '配置迁移', grantedByDisplayName: '配置迁移' });
+    const unknown = chatRoleView(entry('user:stranger'), names);
+    expect(unknown).not.toHaveProperty('grantedByName');
+    expect(unknown).not.toHaveProperty('grantedByDisplayName');
   });
 
   it('needs global iam.manage for anything touching owner; scoped callers see inherited entries redacted', async () => {

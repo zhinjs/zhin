@@ -15,6 +15,7 @@ import {
   CHAT_PRINCIPALS_RPC, type ConsoleChatRolesExport, type ConsoleChatRolesImportResult,
 } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import { hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
 
 /** Where `export` writes without a file argument (also where the instance puts its pre-migration backup). */
@@ -52,6 +53,18 @@ export async function importChatRoles(http: HostHttpConfig, file: string): Promi
   return { ok: true, result: result.data };
 }
 
+/** Result lines of `zhin chat-roles export` (stdout; diagnostics go to stderr through `logger`). */
+export function chatRolesExportLines(data: ConsoleChatRolesExport, file: string): readonly string[] {
+  return [`✓ 已导出 ${data.principals.length} 个人、${data.roles.length} 条角色授予到 ${file}`];
+}
+
+/** Result lines of `zhin chat-roles import`, including the entries the instance skipped. */
+export function chatRolesImportLines(result: ConsoleChatRolesImportResult): readonly string[] {
+  const { principals, identities, roles, consoleLinks, skipped } = result;
+  return [`✓ 已导入：新人 ${principals}、身份 ${identities}、角色 ${roles}、Console 链接 ${consoleLinks}`,
+    ...skipped.map(line => `跳过：${line}`)];
+}
+
 async function requireHost(): Promise<HostHttpConfig> {
   const http = await loadHostHttpConfig();
   if (!http) {
@@ -68,7 +81,7 @@ const exportCommand = new Command('export')
     const target = path.resolve(file ?? defaultChatRolesExportPath(process.cwd()));
     const result = await exportChatRoles(await requireHost(), target);
     if (!result.ok) { logger.error(result.error); process.exit(1); }
-    logger.success(`已导出 ${result.data.principals.length} 个人、${result.data.roles.length} 条角色授予到 ${result.file}`);
+    output.line(...chatRolesExportLines(result.data, result.file));
   });
 
 const importCommand = new Command('import')
@@ -77,9 +90,7 @@ const importCommand = new Command('import')
   .action(async (file: string) => {
     const result = await importChatRoles(await requireHost(), path.resolve(file));
     if (!result.ok) { logger.error(result.error); process.exit(1); }
-    const { principals, identities, roles, consoleLinks, skipped } = result.result;
-    logger.success(`已导入：新人 ${principals}、身份 ${identities}、角色 ${roles}、Console 链接 ${consoleLinks}`);
-    for (const line of skipped) logger.warn(`跳过：${line}`);
+    output.line(...chatRolesImportLines(result.result));
   });
 
 export const chatRolesCommand = new Command('chat-roles')

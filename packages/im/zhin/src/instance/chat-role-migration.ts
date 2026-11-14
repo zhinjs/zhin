@@ -91,7 +91,7 @@ export function readLegacyChatRoleConfig(document: Readonly<Record<string, unkno
   const paths: string[][] = [];
   const skipped: string[] = [];
   const unsupported: string[] = [];
-  let plugins: Readonly<Record<string, unknown>> = {};
+  let plugins: Readonly<Record<string, unknown>>;
   try { plugins = readPluginConfigurationMap(document); } catch { plugins = {}; }
   const adapters: string[] = [];
   const add = (level: LegacyChatRoleGrant['level'], key: string, adapter: string, role: LegacyChatRoleGrant['role'], value: unknown, source: string) => {
