@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-guess-number",
   "version": "1.1.28",
-  "description": "Zhin.js 猜数字 — 1~100 七步之内猜中 (Plugin Runtime)",
+  "description": "Find the secret number from 1 to 100 in seven tries.",
+  "keywords": [
+    "zhin.js",
+    "guess-number",
+    "puzzle",
+    "猜数字"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -79,7 +89,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Guess Number",
+      "displayNameI18n": {
+        "zh-CN": "猜数字",
+        "en": "Guess Number"
+      },
+      "descriptionI18n": {
+        "zh-CN": "在 1~100 之间七步内猜中神秘数字。",
+        "en": "Find the secret number from 1 to 100 in seven tries."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

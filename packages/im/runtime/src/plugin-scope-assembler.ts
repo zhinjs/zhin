@@ -427,7 +427,7 @@ function mergePluginMetadata(
   code: PluginDefinition['metadata'],
   owner: PluginId,
 ): PluginDefinition['metadata'] {
-  for (const key of ['displayName', 'icon'] as const) {
+  for (const key of ['displayName', 'displayNameI18n', 'icon'] as const) {
     if (manifest.metadata?.[key] !== undefined && code?.[key] !== undefined) {
       throw new TypeError(`Plugin ${owner} declares metadata.${key} in both manifest and code`);
     }

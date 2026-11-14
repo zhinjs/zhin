@@ -30,6 +30,8 @@ export type ConsolePluginListItem = {
   readonly manageable: boolean;
   readonly metadata?: NonNullable<PluginNodeSnapshot['metadata']>;
   readonly displayName?: string;
+  /** Console display-name translations (`metadata.displayNameI18n`); the Console picks one by interface locale. */
+  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly icon?: string;
 };
 
@@ -99,11 +101,12 @@ export async function buildManagedPluginList(
   return Object.freeze([...managed, ...loadedByKey.values()]);
 }
 
-function projectMetadata(metadata: PluginNodeSnapshot['metadata']): Pick<ConsolePluginListItem, 'metadata' | 'displayName' | 'icon'> {
+function projectMetadata(metadata: PluginNodeSnapshot['metadata']): Pick<ConsolePluginListItem, 'metadata' | 'displayName' | 'displayNameI18n' | 'icon'> {
   if (!metadata || Object.keys(metadata).length === 0) return {};
   return {
     metadata: Object.freeze({ ...metadata }),
     ...(metadata.displayName === undefined ? {} : { displayName: metadata.displayName }),
+    ...(metadata.displayNameI18n === undefined ? {} : { displayNameI18n: Object.freeze({ ...metadata.displayNameI18n }) }),
     ...(metadata.icon === undefined ? {} : { icon: metadata.icon }),
   };
 }

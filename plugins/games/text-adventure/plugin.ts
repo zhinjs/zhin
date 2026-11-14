@@ -15,9 +15,6 @@ import {
  */
 export default defineGamePlugin<GameServices>({
   name: 'text-adventure',
-  metadata: {
-    displayName: 'Text Adventure',
-  },
   game: {
     commandPath: 'adv',
     titleI18n: { en: 'Text Adventure' },

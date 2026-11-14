@@ -22,9 +22,6 @@ function defineCredentialTable(
 
 export default definePlugin({
   name: 'music',
-  metadata: {
-    displayName: 'Music',
-  },
   setup(context) {
     const db = context.resources.has(databaseHostToken) ? (() => {
       const host = context.resources.use(databaseHostToken);

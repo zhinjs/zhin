@@ -24,7 +24,11 @@
         ]
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "时区"
+        },
         "en": {
+          "title": "Timezone",
           "description": "IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates."
         }
       }
@@ -41,7 +45,11 @@
         ]
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "日报发送时间"
+        },
         "en": {
+          "title": "Daily report time",
           "description": "Daily ledger report time (HH:MM in timezone); sent only to users who explicitly subscribed to daily reports."
         }
       }
@@ -54,7 +62,11 @@
         "effect": "reload"
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "无记账时也发日报"
+        },
         "en": {
+          "title": "Report on empty days",
           "description": "Send a daily report even when no transactions were recorded that day."
         }
       }

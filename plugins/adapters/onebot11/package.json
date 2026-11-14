@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-onebot11",
   "version": "1.1.29",
-  "description": "Zhin.js OneBot 11 adapter for Plugin Runtime (WebSocket client)",
+  "description": "OneBot 11 adapter: forward WebSocket client with reverse WS support, for any OneBot 11 implementation.",
+  "keywords": [
+    "zhin.js",
+    "onebot",
+    "onebot11",
+    "qq"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -33,16 +43,6 @@
     "README.md",
     "CHANGELOG.md",
     "PERMITS.md"
-  ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "onebot",
-    "onebot11",
-    "qq",
-    "chatbot"
   ],
   "license": "MIT",
   "repository": {
@@ -91,11 +91,6 @@
       "optional": true
     }
   },
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org",
@@ -141,6 +136,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "OneBot 11 Adapter",
+      "displayNameI18n": {
+        "zh-CN": "OneBot 11 适配器",
+        "en": "OneBot 11 Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "OneBot 11 标准适配器：正向 WebSocket 客户端，也支持反向 WS，可对接各类 OneBot 11 实现。",
+        "en": "OneBot 11 adapter: forward WebSocket client with reverse WS support, for any OneBot 11 implementation."
+      },
+      "category": "adapter"
+    }
   }
 }

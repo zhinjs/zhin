@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-lark",
   "version": "1.1.29",
-  "description": "Zhin.js Lark/Feishu adapter (HTTP webhook and WebSocket long connection)",
+  "description": "Lark / Feishu adapter: messaging over HTTP webhook or WebSocket long connection, with event decryption and token refresh.",
+  "keywords": [
+    "zhin.js",
+    "lark",
+    "feishu",
+    "飞书"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,21 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "lark",
-    "feishu",
-    "飞书",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -141,6 +136,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Lark/Feishu (飞书) Adapter",
+      "displayNameI18n": {
+        "zh-CN": "飞书适配器",
+        "en": "Lark/Feishu Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "飞书 / Lark 适配器：HTTP Webhook 或 WebSocket 长连接收发消息，支持事件加密与 Token 自动刷新。",
+        "en": "Lark / Feishu adapter: messaging over HTTP webhook or WebSocket long connection, with event decryption and token refresh."
+      },
+      "category": "adapter"
+    }
   }
 }

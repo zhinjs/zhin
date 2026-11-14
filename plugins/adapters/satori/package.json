@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-satori",
   "version": "1.1.30",
-  "description": "Zhin.js Satori adapter for Plugin Runtime (WebSocket client)",
+  "description": "Satori protocol adapter: forward WebSocket client and webhook ingress for Satori-compatible implementations.",
+  "keywords": [
+    "zhin.js",
+    "satori",
+    "websocket",
+    "webhook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -30,14 +40,6 @@
     "lib",
     "README.md",
     "CHANGELOG.md"
-  ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "satori",
-    "chatbot"
   ],
   "license": "MIT",
   "repository": {
@@ -80,11 +82,6 @@
       "optional": true
     }
   },
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "engines": {
     "node": ">=22.19.0"
   },
@@ -118,6 +115,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Satori Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Satori 适配器",
+        "en": "Satori Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "Satori 协议适配器：支持 WebSocket 正向客户端与 Webhook 入站，对接 Satori 兼容实现。",
+        "en": "Satori protocol adapter: forward WebSocket client and webhook ingress for Satori-compatible implementations."
+      },
+      "category": "adapter"
+    }
   }
 }

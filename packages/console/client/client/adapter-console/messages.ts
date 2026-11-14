@@ -4,6 +4,10 @@ import { detectLocale, translate, type PluginUiLocale } from '../ui/locale.js';
 export type AdapterConsoleLocale = PluginUiLocale;
 
 const EN: Record<string, string> = {
+  '立即迁移': 'Migrate now',
+  '已迁移。账号以数据库为准，配置文件中的 endpoints 不再生效。': 'Migrated. The database is now the source of accounts; endpoints in the configuration file no longer apply.',
+  '迁移后账号以数据库为准，配置文件中的 endpoints 不再生效；之后在这里添加、编辑和启停账号。': 'After migration the database is the source of accounts and endpoints in the configuration file no longer apply; add, edit, start and stop accounts here.',
+  '第一次编辑或启停账号时会请求确认迁移。': 'You will be asked to confirm the migration the first time you edit, start or stop an account.',
   '{0}失败': '{0} failed',
   '{0}（账号 {1}）': '{0} (account {1})',
   '{0}：Host 暂时无法响应，请稍后重试。': '{0}: the Host is not responding right now. Try again shortly.',

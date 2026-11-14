@@ -99,6 +99,32 @@ Schema.string().option(['text', 'image'])
 
 JSON Schema exports this as `x-i18n`. Enum labels are keyed by `String(value)`. External strict schema validators must register this display annotation; do not disable strict validation globally.
 
+`x-i18n` holds, per Console interface locale (`zh-CN` / `en`), a field's `title` (the label shown in the form), `description` and `enumLabels`. Without a title the Console shows the schema key (such as `teachCooldownMs`), so plugins meant for administrators should give titles in both languages:
+
+```ts
+teachCooldownMs: Schema.number().default(10_000)
+  .description('同一成员两次教学之间的最短间隔')
+  .i18n({
+    'zh-CN': { title: '教学冷却时间' },
+    en: { title: 'Teach cooldown', description: 'Minimum interval between two teach commands from the same member.' },
+  }),
+```
+
+In a hand-written `schema.json`, put the same `x-i18n` object on the property. The Console picks each text independently in this order: the translation for the current interface locale → the schema's own `title` / `description` → the `en` translation → the field key (titles only). Plugins without `x-i18n` therefore look the same as before, and a Chinese `description` with only an `en` translation still shows Chinese in the Chinese interface. The field key stays beside the title as secondary text so it can be matched with the configuration file. Translations are display-only: keys, defaults, validation and stored values do not change.
+
+Plugin display names can be translated too. Declare `displayNameI18n` in `definePlugin({ metadata })` or `package.json#zhin.metadata` (in one of them only, like `displayName`):
+
+```ts
+metadata: {
+  displayName: 'Repeater',
+  displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' },
+},
+```
+
+The Console plugin list, feature matrix and feature pages choose the name by interface locale, falling back from the current locale → `en` → `displayName` → the instance key. Only the `zh-CN` and `en` keys are accepted, and each value must be a non-empty string.
+
+Plugins published to npm should declare it in `package.json#zhin.metadata`: the plugin market only reads the published `package.json`, never `definePlugin()` code. The market also reads `descriptionI18n` (localized description) and `category` from the same place; see [Plugin delivery · Marketplace metadata](../authoring/plugin-delivery.md#marketplace-metadata).
+
 For immediate protocol responses before normal message dispatch, a signature-verified `Endpoint` may call `await this.resolveLocale(senderId)`. This uses the same personal preferences and project language with the current Endpoint identity. Candidate or retired endpoints return `undefined` without reading user state. Keep the resolved language for that response; do not infer it from request parameters or platform profiles. Normal messages continue to use `Message.locale` without a second lookup.
 
 Plugin business checks may provide `titleI18n` and `effectsI18n`; results may provide `summaryI18n` and `evidenceI18n`, keyed by `zh-CN` / `en`. Translated effects and evidence must match the original arrays item for item with nonempty text. Empty translations cannot hide entries. Console only selects the displayed language; approval remains bound to the original check ID, generation and revision covering the complete translation definitions.

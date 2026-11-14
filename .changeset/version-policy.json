@@ -29,7 +29,7 @@
     {
       "package": "@zhin.js/client",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。所有者已批准（zhinjs/zhin#1250）：新增公开导出——会话选择器与会话目录（ConversationPicker、ConversationLabel、useConversationDirectory、useSharedConversationDirectory、parseConversationAddress、formatConversationLabel 等）与适配器账号 headless API（AdapterAccountsProvider、useAdapterAccounts、AdapterAccountEditor 及相关类型），AdapterConsolePage 新增 renderRow / hostAccounts。"
     },
     {
       "package": "@zhin.js/cli",
@@ -64,12 +64,17 @@
     {
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增根资源上下文契约 `watchProjectFiles({ patterns, onChange })`，Root 安装器可声明读取的项目文件，变化时只通知声明方而不建新 generation。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增根资源上下文契约 `watchProjectFiles({ patterns, onChange })`，Root 安装器可声明读取的项目文件，变化时只通知声明方而不建新 generation。所有者已批准（zhinjs/zhin#1250）：新增插件市场元数据公开导出（PLUGIN_CATEGORIES、PLUGIN_CATEGORY_LABELS、informativeKeywords、packageAuthorName、readPluginMarketplaceMetadata 等），插件 metadata 新增可选 displayNameI18n。"
     },
     {
       "package": "@zhin.js/adapter",
       "type": "minor",
       "reason": "所有者已批准 minor（#1250）：账号启动改为后台监管，Adapter.activate 不再因账号 start 失败或久等而失败；新增 retryStart、启动状态字段与 failed / retrying 阶段。npm 上旧架构已占用 1.2.0–1.2.2，package.json 先置为 1.2.2 由 minor 升至 1.3.0；同一 minor 内含所有者已批准的 endpoint-config-drift（configDrift / importConfigured / writeBackConfigured、EndpointConfigSource）；#1250 评审修复：EndpointConfigSource.resolveReference、EndpointWritebackPlaceholder.reason、Adapter.configurationCredentialFields / startFailureReason、AdapterIndex.startFailureReason"
+    },
+    {
+      "package": "@zhin.js/console-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：声明式页面契约新增公开导出 pickLocalizedDataValue 与类型 DeclarativeActionResultSpec，取值表达式 `$i18n`，表单字段 date / time / conversation，列类型 conversation，条目 muted / badge，动作 result。"
     }
   ]
 }

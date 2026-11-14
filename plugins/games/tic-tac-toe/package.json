@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-tic-tac-toe",
   "version": "1.1.28",
-  "description": "Zhin.js 跨平台井字棋 (Plugin Runtime)",
+  "description": "Two-player tic-tac-toe on any platform, with buttons or 1–9 text moves.",
+  "keywords": [
+    "zhin.js",
+    "tic-tac-toe",
+    "board-game",
+    "井字棋"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -79,7 +89,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Tic Tac Toe",
+      "displayNameI18n": {
+        "zh-CN": "井字棋",
+        "en": "Tic Tac Toe"
+      },
+      "descriptionI18n": {
+        "zh-CN": "跨平台双人井字棋，支持按钮落子与 1–9 文本降级。",
+        "en": "Two-player tic-tac-toe on any platform, with buttons or 1–9 text moves."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

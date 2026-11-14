@@ -55,9 +55,6 @@ function defineRssTables(db: { define: (name: string, schema: Record<string, unk
  */
 export default definePlugin<RssConfig>({
   name: 'rss',
-  metadata: {
-    displayName: 'RSS',
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [
       rssRuntimeStore,

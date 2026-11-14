@@ -30,6 +30,16 @@
   "properties": {
     "keywordReply": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "关键词自动回复",
+          "description": "开启后按词库自动回复匹配的消息（只能在全局修改）"
+        },
+        "en": {
+          "title": "Keyword auto-reply",
+          "description": "Reply automatically to messages that match the keyword list (global only)."
+        }
+      },
       "default": false,
       "x-zhin-config": {
         "levels": [
@@ -39,36 +49,115 @@
     },
     "basePointsMin": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "签到基础积分下限",
+          "description": "每次签到随机获得的基础积分下限"
+        },
+        "en": {
+          "title": "Min check-in points",
+          "description": "Lower bound of the random base points for one check-in."
+        }
+      },
       "default": 10
     },
     "basePointsMax": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "签到基础积分上限",
+          "description": "每次签到随机获得的基础积分上限"
+        },
+        "en": {
+          "title": "Max check-in points",
+          "description": "Upper bound of the random base points for one check-in."
+        }
+      },
       "default": 30
     },
     "streakBonus": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "连签奖励（每天）",
+          "description": "连续签到每多一天额外奖励的积分"
+        },
+        "en": {
+          "title": "Streak bonus per day",
+          "description": "Extra points per consecutive check-in day."
+        }
+      },
       "default": 5
     },
     "streakCap": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "连签奖励上限",
+          "description": "连续签到额外奖励的最高积分"
+        },
+        "en": {
+          "title": "Streak bonus cap",
+          "description": "Maximum extra points from a check-in streak."
+        }
+      },
       "default": 50
     },
     "rankSize": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "排行榜人数",
+          "description": "签到与发言排行榜显示的人数"
+        },
+        "en": {
+          "title": "Leaderboard size",
+          "description": "Number of members shown on check-in and activity leaderboards."
+        }
+      },
       "default": 10
     },
     "teachMaxPerGroup": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "每群问答上限",
+          "description": "每个群最多保存的问答条数"
+        },
+        "en": {
+          "title": "Max teach rules per group",
+          "description": "Maximum question-and-answer rules stored per group."
+        }
+      },
       "default": 200
     },
     "teachCooldownMs": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "教学冷却时间",
+          "description": "同一成员两次教学之间的最短间隔"
+        },
+        "en": {
+          "title": "Teach cooldown",
+          "description": "Minimum interval between two teach commands from the same member."
+        }
+      },
       "default": 3000
     },
     "teachAllowRegex": {
       "type": "boolean",
       "default": false,
       "description": "Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "允许正则问答",
+          "description": "允许成员教学正则表达式规则。默认关闭：正则会对每条入站消息执行；只接受结构安全的表达式，并且只对不超过 200 字的消息尝试匹配。"
+        },
+        "en": {
+          "title": "Allow regex rules"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -77,18 +166,46 @@
     },
     "teachPageSize": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "问答列表每页条数",
+          "description": "teach-list 每页显示的问答条数"
+        },
+        "en": {
+          "title": "Teach list page size",
+          "description": "Rules shown per page by teach-list."
+        }
+      },
       "default": 10
     },
     "welcomeMessage": {
       "type": "string",
       "maxLength": 2000,
       "default": "",
-      "description": "Group welcome text. Empty disables; {name}/{id} refer to the joined member."
+      "description": "Group welcome text. Empty disables; {name}/{id} refer to the joined member.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "入群欢迎语",
+          "description": "新成员入群时发送的文本，留空则关闭；{name} 和 {id} 代表新成员。"
+        },
+        "en": {
+          "title": "Welcome message"
+        }
+      }
     },
     "welcomeConversations": {
       "type": "array",
       "maxItems": 100,
       "description": "Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "欢迎会话名单",
+          "description": "发送欢迎语的精确会话名单。不填写时欢迎所有群；填 [] 则不欢迎任何会话。未填写父容器或话题时只匹配没有它们的会话，不支持通配。"
+        },
+        "en": {
+          "title": "Welcome conversations"
+        }
+      },
       "x-zhin-config": {
         "component": "conversation-scope",
         "levels": [
@@ -106,6 +223,14 @@
         "properties": {
           "endpoint": {
             "type": "object",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "账号"
+              },
+              "en": {
+                "title": "Endpoint"
+              }
+            },
             "additionalProperties": false,
             "required": [
               "adapter",
@@ -114,26 +239,66 @@
             "properties": {
               "adapter": {
                 "type": "string",
+                "x-i18n": {
+                  "zh-CN": {
+                    "title": "适配器"
+                  },
+                  "en": {
+                    "title": "Adapter"
+                  }
+                },
                 "minLength": 1
               },
               "id": {
                 "type": "string",
+                "x-i18n": {
+                  "zh-CN": {
+                    "title": "账号 ID"
+                  },
+                  "en": {
+                    "title": "Endpoint ID"
+                  }
+                },
                 "minLength": 1
               }
             }
           },
           "kind": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "会话类型"
+              },
+              "en": {
+                "title": "Conversation kind"
+              }
+            },
             "enum": [
               "group"
             ]
           },
           "id": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "会话 ID"
+              },
+              "en": {
+                "title": "Conversation ID"
+              }
+            },
             "minLength": 1
           },
           "parent": {
             "type": "object",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "父容器"
+              },
+              "en": {
+                "title": "Parent"
+              }
+            },
             "additionalProperties": false,
             "required": [
               "kind",
@@ -142,6 +307,14 @@
             "properties": {
               "kind": {
                 "type": "string",
+                "x-i18n": {
+                  "zh-CN": {
+                    "title": "父容器类型"
+                  },
+                  "en": {
+                    "title": "Parent kind"
+                  }
+                },
                 "enum": [
                   "private",
                   "group",
@@ -150,12 +323,28 @@
               },
               "id": {
                 "type": "string",
+                "x-i18n": {
+                  "zh-CN": {
+                    "title": "父容器 ID"
+                  },
+                  "en": {
+                    "title": "Parent ID"
+                  }
+                },
                 "minLength": 1
               }
             }
           },
           "threadId": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "话题 ID"
+              },
+              "en": {
+                "title": "Thread ID"
+              }
+            },
             "minLength": 1
           }
         }
@@ -165,6 +354,15 @@
       "type": "boolean",
       "default": false,
       "description": "Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "临时词库",
+          "description": "显式使用不持久化的临时词库。为 false 时，自动回复要求启动时有数据库服务，词库管理在使用时要求持久状态服务。"
+        },
+        "en": {
+          "title": "Volatile keywords"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"

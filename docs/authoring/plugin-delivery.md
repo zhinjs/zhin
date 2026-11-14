@@ -79,6 +79,54 @@ npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --
 
 建议写 `npx @zhin.js/cli`：插件目录里没有安装 `@zhin.js/cli` 时，`npx zhin` 会从 npm 下载名为 `zhin` 的包。从 `zhin@4` 起它就是 `@zhin.js/cli` 的别名；但 npx 缓存或锁定里残留的 `zhin@3.x` 是已停止维护的旧版框架包。Bot 项目里装了 `@zhin.js/cli`，`npx zhin` 直接指向它。
 
+### 插件市场元数据 {#marketplace-metadata}
+
+插件市场（文档站 `plugins.json`、Console 插件市场、`zhin search` / `zhin info`）只读发布到 npm 的 `package.json`，不执行插件代码。下列字段决定市场里怎么展示你的插件：
+
+| 字段 | 写法 | 市场里的用途 |
+| --- | --- | --- |
+| `zhin.metadata.displayName` / `displayNameI18n` | 同 Console；`{ "zh-CN": "...", "en": "..." }` | 卡片标题，按界面语言选择，回退顺序为当前语言 → `en` → `zh-CN` → `displayName` |
+| `zhin.metadata.descriptionI18n` | `{ "zh-CN": "...", "en": "..." }`，非空字符串 | 卡片描述，回退到顶层 `description`；搜索也会匹配两种语言的描述 |
+| `zhin.metadata.category` | 下表中的一个值 | 分类筛选。未声明时按包名与 keywords 推断 |
+| `author` | `{ "name": "...", "url": "..." }` | 作者。市场显示 `author`，没有时显示 `maintainers`，**不**显示发布账号（CI 可信发布时它是「GitHub Actions」） |
+| `keywords` | 3–6 个描述功能的词 | 标签与搜索。`zhin`、`zhin.js`、`zhinjs`、`zhin-plugin`、`bot`、`chatbot`、`plugin` 属于通用词，市场不展示也不参与搜索；保留 `zhin.js` 方便在 npm 按关键词查找 |
+
+`descriptionI18n` 和 `category` 只能写在 `package.json#zhin.metadata`，`definePlugin()` 不接受它们。清单在加载时严格校验：语言键只接受 `zh-CN` / `en`，`category` 必须是下列值之一：
+
+| `category` | 含义 | 例子 |
+| --- | --- | --- |
+| `adapter` | 平台适配器 | Telegram、OneBot 11、飞书 |
+| `ai` | AI 能力与推理服务 | TypeSafe 决策服务 |
+| `admin` | 运维管理 | 进程监控 |
+| `community` | 群组运营 | 群运营套件 |
+| `entertainment` | 娱乐互动 | 点歌、复读机、答案之书 |
+| `game` | 游戏 | 21 点、成语接龙 |
+| `information` | 资讯与订阅推送 | RSS、地震速报、B 站订阅 |
+| `moderation` | 内容安全 | 内容审核 |
+| `service` | 给其他能力用的基础服务 | 活动反馈 |
+| `utility` | 实用工具 | 二维码、短链接、记账、提醒 |
+
+```json
+{
+  "name": "zhin.js-plugin-weather",
+  "description": "Weather forecasts and alerts for any city",
+  "keywords": ["zhin.js", "weather", "forecast", "天气"],
+  "author": { "name": "your-github-name", "url": "https://github.com/your-github-name/zhin.js-plugin-weather" },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "metadata": {
+      "displayName": "Weather",
+      "displayNameI18n": { "zh-CN": "天气", "en": "Weather" },
+      "descriptionI18n": { "zh-CN": "查询城市天气预报与预警", "en": "Weather forecasts and alerts for any city" },
+      "category": "information"
+    }
+  }
+}
+```
+
+本仓库的官方插件还由 `pnpm check:plugin` 检查：必须有两种语言的 `descriptionI18n`、合法的 `category`、`{ name, url }` 形式且不含邮箱的 `author`，以及 3–6 个非通用 keywords。
+
 ## 发布前的完成标准
 
 - 新用户照着 README 能完成安装、最小配置并收到第一条回复。

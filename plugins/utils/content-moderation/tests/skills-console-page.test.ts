@@ -121,9 +121,35 @@ describe('@zhin.js/plugin-content-moderation AI Skill Tools, Console RPC & Page'
     expect(blockRes.decision).toBe('block');
     expect(blockRes.severity).toBe('high');
     expect(blockRes.categories).toContain('local-main:high');
+    // #1250: what matched, who flagged it and what the current `actions` config would do.
+    expect(blockRes.hits).toEqual(['forbiddenword']);
+    expect(blockRes.flaggedSources).toEqual([expect.objectContaining({ sourceId: 'local-main', severity: 'high' })]);
+    expect(blockRes.actions.length).toBeGreaterThan(0);
+    expect(blockRes.decisionI18n).toEqual({ 'zh-CN': '拦截', en: 'Blocked' });
+    expect(blockRes.severityI18n).toEqual({ 'zh-CN': '高', en: 'High' });
+    expect(blockRes.actionsI18n?.['zh-CN']).not.toBe('无');
+    expect(blockRes.hitsText).toBe('forbiddenword');
     expect(engine.pendingReviewsCount).toBe(0);
     expect(engine.groupReviewQueue.pendingCount).toBe(0);
 
     await expect(() => checkAction!.handler({ text: '   ' }, callContext)).rejects.toThrow(/Sample text is required/);
+  });
+
+  it('shows the dry-run verdict inline under the input, localized (#1250)', async () => {
+    const { evaluateDeclarativeValue } = await import('@zhin.js/console-contract');
+    const page = (await import('../pages/index/index.ts')).default as unknown as { spec: {
+      actions: { name: string; result?: { title: unknown; tone: unknown; entries: { label: { zh: string }; value: unknown }[] } }[];
+    } };
+    const result = page.spec.actions.find(action => action.name === 'check-text')!.result!;
+    const answer = {
+      decision: 'block', decisionI18n: { 'zh-CN': '拦截', en: 'Blocked' }, severityI18n: { 'zh-CN': '高', en: 'High' },
+      hitsText: '违禁词', sourcesText: 'local-main（high）', actionsI18n: { 'zh-CN': '回复提醒、撤回消息', en: 'reply with a warning, recall the message' },
+    };
+    expect(evaluateDeclarativeValue(result.title, answer, 'zh-CN')).toBe('拦截');
+    expect(evaluateDeclarativeValue(result.title, answer, 'en')).toBe('Blocked');
+    expect(evaluateDeclarativeValue(result.tone, answer, 'en')).toBe('danger');
+    expect(result.entries.map(entry => entry.label.zh)).toEqual(['严重度', '命中词', '审核源', '按当前 actions 配置将执行']);
+    expect(result.entries.map(entry => evaluateDeclarativeValue(entry.value, answer, 'zh-CN')))
+      .toEqual(['高', '违禁词', 'local-main（high）', '回复提醒、撤回消息']);
   });
 });
