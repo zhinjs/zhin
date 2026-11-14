@@ -25,6 +25,11 @@
       "package": "@zhin.js/agent",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开类型导出 `InferencePreparationFailure`，`InferenceAuthenticationError` 新增 `preparation` 字段与错误码 `client-secret-required` / `preparation-failed`，`InferenceDriverView` 新增 `requiresClientSecret` / `modelSuggestions`，`cleanupFailed` 回调接收告警文本。"
+    },
+    {
+      "package": "@zhin.js/ai",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：npm 上已有旧架构的 `@zhin.js/ai` 1.2.0–1.5.9（latest 仍为 1.1.56），本地版本号先置为 1.5.9，按 minor 升到第一个空闲的 1.6.0（先例见 docs/contributing/publishing.md 的 core 1.5.16→1.6.0）；同时承接 #1250 各批次新增的公开导出，例如 `ProviderDiscoveryError`、`CODEX_DEFAULT_CLIENT_VERSION`、`CodexServiceOptions` / `AntigravityServiceOptions` 与新的服务配置项。"
     }
   ]
 }

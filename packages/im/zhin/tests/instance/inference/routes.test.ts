@@ -185,6 +185,52 @@ it('maps a missing client secret to 428 and a failed driver preparation to 424 w
   } finally { await http.close(); }
 });
 
+it('tells the operator how to set the Google Cloud project id when preparation reports project-required', async () => {
+  const { InferenceAuthenticationError } = await import('@zhin.js/agent/runtime');
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
+  const accounts = { prepareLogin: vi.fn(async () => { throw new InferenceAuthenticationError('preparation-failed',
+    { code: 'project-unavailable', status: 200, reason: 'project-required', step: 'onboard-operation' }); }) };
+  registerInferenceRoutes({ http, base: '/api',
+    acquire: () => ({ management: { account: async () => ({ id: 'account' }) }, accounts, sessions: {}, authenticationContract: async () => '1', release: () => {} }) as never,
+    owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
+    principal: input => resolveInferenceManagementPrincipal({ ...input, hostOwnerId: 'host', bindings: {} }) });
+  const { origin } = await http.listen();
+  try {
+    const response = await fetch(`${origin}/api/agent/inference/login/prepare`, { method: 'POST',
+      headers: { authorization: 'Bearer operator-fixture', 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'account', expectedRevision: 2 }) });
+    expect(response.status).toBe(424);
+    const payload = await response.json();
+    expect(payload).toMatchObject({ success: false, code: 'preparation-failed', preparationCode: 'project-unavailable', reason: 'project-required', step: 'onboard-operation' });
+    expect(payload.error).toContain('projectId');
+    expect(payload.error).toContain('Google Cloud 项目 ID');
+  } finally { await http.close(); }
+});
+
+it('adds a discovery-empty hint when the catalogue answers with zero models, and none otherwise', async () => {
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
+  const discover = vi.fn()
+    .mockResolvedValueOnce({ serviceId: 'service', baseRevision: 1, observations: [] })
+    .mockResolvedValueOnce({ serviceId: 'service', baseRevision: 1, observations: [{ id: 'model' }] });
+  registerInferenceRoutes({ http, base: '/api',
+    acquire: () => ({ management: { discover }, accounts: {}, sessions: {}, authenticationContract: async () => '1', release: () => {} }) as never,
+    owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
+    principal: input => resolveInferenceManagementPrincipal({ ...input, hostOwnerId: 'host', bindings: {} }) });
+  const { origin } = await http.listen();
+  try {
+    const call = async () => {
+      const response = await fetch(`${origin}/api/agent/inference/discover`, { method: 'POST',
+        headers: { authorization: 'Bearer operator-fixture', 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'account' }) });
+      return { status: response.status, payload: await response.json() };
+    };
+    const empty = await call();
+    expect(empty.status).toBe(200);
+    expect(empty.payload).toMatchObject({ success: true, data: { observations: [], emptyHint: { code: 'discovery-empty' } } });
+    expect(empty.payload.data.emptyHint.message).toContain('手动填写模型 ID');
+    const found = await call();
+    expect(found.payload.data).toEqual({ serviceId: 'service', baseRevision: 1, observations: [{ id: 'model' }] });
+  } finally { await http.close(); }
+});
+
 it('maps a rate-limited model discovery to 429 with the sanitized Retry-After delay', async () => {
   const { ProviderDiscoveryError } = await import('@zhin.js/ai/provider');
   const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });

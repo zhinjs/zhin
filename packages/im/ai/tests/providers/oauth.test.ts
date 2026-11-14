@@ -194,6 +194,91 @@ describe('Antigravity Code Assist preparation', () => {
       body: { tierId: 'legacy-tier', metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } });
   });
 
+  const metadata = { ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' };
+  const withProject = (projectId: string) => ({ ...antigravityService, options: { ...antigravityService.options, projectId } });
+
+  it('onboards the current tier once when loadCodeAssist reports a tier but no project, and uses the project it returns', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 2 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/current-1', done: false }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/current-1', done: true, response: { cloudaicompanionProject: { id: 'current-tier-project' } } }));
+    const ready = await oauth.prepare!({ service: antigravityService, signal, fetch, client, credential });
+    expect(ready).toMatchObject({ preparation: { status: 'ready' }, metadata: { projectId: 'current-tier-project' } });
+    const calls = bodies(fetch);
+    expect(calls[2]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', method: 'POST',
+      body: { tierId: 'standard-tier', metadata } });
+    expect(calls[3]).toMatchObject({ url: 'https://cloudcode-pa.googleapis.com/v1internal/operations/current-1', method: 'GET' });
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('reports project-required only after the current-tier onboarding returns no project and none is configured', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
+    const empty = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: {} }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: empty, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', status: 200, reason: 'project-required', step: 'onboard-operation' });
+    expect(empty).toHaveBeenCalledTimes(3);
+    // An upstream refusal of that onboarding still ends as project-required (the remedy is a project id), keeping its status and step.
+    const refused = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ error: { code: 400, status: 'INVALID_ARGUMENT', message: 'PRIVATE' } }, { status: 400 }));
+    let failure: unknown;
+    try { await oauth.prepare!({ service: antigravityService, signal, fetch: refused, client, credential }); } catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'project-unavailable', status: 400, reason: 'project-required', step: 'onboard-user' });
+    expect(JSON.stringify(failure)).not.toContain('PRIVATE');
+    // A transient onboarding failure is reported as such, not as project-required.
+    const unavailable = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ error: { code: 503, status: 'UNAVAILABLE' } }, { status: 503 }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: unavailable, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', status: 503, reason: 'UNAVAILABLE', step: 'onboard-user' });
+  });
+
+  it('sends a configured Google Cloud project like gemini-cli and falls back to it when the current tier yields none', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ error: { code: 400, status: 'FAILED_PRECONDITION' } }, { status: 400 }));
+    const ready = await oauth.prepare!({ service: withProject('my-project-123'), signal, fetch, client, credential });
+    expect(ready).toMatchObject({ preparation: { status: 'ready' }, metadata: { projectId: 'my-project-123' } });
+    const calls = bodies(fetch);
+    expect(calls[1]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', method: 'POST',
+      body: { cloudaicompanionProject: 'my-project-123', metadata: { ...metadata, duetProject: 'my-project-123' } } });
+    expect(calls[2]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', method: 'POST',
+      body: { tierId: 'standard-tier', cloudaicompanionProject: 'my-project-123', metadata: { ...metadata, duetProject: 'my-project-123' } } });
+    // A project the upstream returns still wins over the configured one.
+    const returned = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' }, cloudaicompanionProject: 'managed-project' }));
+    expect((await oauth.prepare!({ service: withProject('my-project-123'), signal, fetch: returned, client, credential })).metadata?.projectId).toBe('managed-project');
+    expect(returned).toHaveBeenCalledTimes(2);
+  });
+
+  it('never names the configured project when onboarding the free tier, whose project is Google-managed', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: {} }));
+    await expect(oauth.prepare!({ service: withProject('my-project-123'), signal, fetch, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', reason: 'project-required', step: 'onboard-operation' });
+    expect(bodies(fetch)[2]?.body).toEqual({ tierId: 'free-tier', metadata });
+    // A non-free default tier names the configured project and falls back to it.
+    const standard = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'standard-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: {} }));
+    expect((await oauth.prepare!({ service: withProject('my-project-123'), signal, fetch: standard, client, credential })).metadata?.projectId).toBe('my-project-123');
+    expect(bodies(standard)[2]?.body).toMatchObject({ tierId: 'standard-tier', cloudaicompanionProject: 'my-project-123' });
+  });
+
   it('falls back to the legacy tier like gemini-cli when no tier is marked default', async () => {
     const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
     const fetch = vi.fn<typeof globalThis.fetch>()

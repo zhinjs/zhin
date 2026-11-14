@@ -1,6 +1,7 @@
 import { anthropicProvider, googleProvider, openAiCompatibleProvider } from '../src/providers/api-key.js';
 import { driverFixture, callContext, prompt } from './providers/fixtures.js';
 import { claudeSubscriptionProvider, codexProvider } from '../src/providers/subscriptions.js';
+import { CODEX_DEFAULT_CLIENT_VERSION } from '../src/providers/index.js';
 
 function service<S>(definition: { id: string; serviceSchema: { parse(value: unknown): S } }, options: unknown = {}) {
   return { id: 'service', rootId: 'root', ownerId: 'host', revision: 1, driver: { id: definition.id, owner: 'root', contractVersion: '1' },
@@ -60,10 +61,21 @@ it('discovers Codex subscription models from the Codex backend catalogue, keepin
   const request = new Request(...fetch.mock.calls[0]);
   const url = new URL(request.url);
   expect(`${url.origin}${url.pathname}`).toBe('https://chatgpt.com/backend-api/codex/models');
-  expect(url.searchParams.get('client_version')).toMatch(/^\d+\.\d+\.\d+/);
+  expect(url.searchParams.get('client_version')).toBe(CODEX_DEFAULT_CLIENT_VERSION);
+  expect(CODEX_DEFAULT_CLIENT_VERSION).toBe('0.167.0');
   expect(request.headers.get('authorization')).toBe('Bearer synthetic-oauth');
   expect(request.headers.get('chatgpt-account-id')).toBe('routing-account');
   expect(codexProvider.targets(service(codexProvider)).discovery).toEqual(['https://chatgpt.com/backend-api/codex/models']);
+});
+
+it('reports the configured Codex CLI version (codexClientVersion) to discovery, never the @zhin.js/ai version', async () => {
+  const fetch = vi.fn(async () => Response.json({ models: [] }));
+  const grantCredentials = { bindRequest: (input: { request: Request }) => input.request,
+    authorize: async () => ({ token: 'synthetic-oauth', headers: {}, revision: '1' }) };
+  const configured = service(codexProvider, { codexClientVersion: '0.170.1' });
+  expect(await codexProvider.discover!({ service: configured, credentials: grantCredentials, fetch, signal })).toEqual([]);
+  expect(new URL(new Request(...fetch.mock.calls[0]).url).searchParams.get('client_version')).toBe('0.170.1');
+  for (const invalid of ['latest', '0.1', '1.2.3&x=1', '', ' ']) expect(() => codexProvider.serviceSchema.parse({ codexClientVersion: invalid })).toThrow();
 });
 
 it('offers Claude subscription model IDs only as labelled suggestions, without discovery', () => {

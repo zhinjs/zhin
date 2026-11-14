@@ -85,6 +85,8 @@ interface RouteFailure {
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
 }
+/** Shown when model discovery succeeds with zero models. */
+const DISCOVERY_EMPTY_HINT = '上游模型目录没有返回可用模型：可以直接手动填写模型 ID 继续配置；Codex 订阅还可以在模型服务配置中调整 codexClientVersion（上游按 Codex CLI 版本过滤模型）后重新读取';
 function failure(error: unknown): RouteFailure {
   if (error instanceof PersonalSessionMigrationRequiredError)
     return { status: 409, code: 'migration-required' };
@@ -137,7 +139,9 @@ function failure(error: unknown): RouteFailure {
         ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }),
         ...(preparation?.step ? { step: preparation.step } : {}),
       },
-      message: '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
+      message: preparation?.reason === 'project-required'
+        ? '账号准备未完成：该账号已开通但上游没有为它分配 Google Cloud 项目。请在该模型服务的配置中填写 Google Cloud 项目 ID（projectId，字符串形式如 my-project-123，不是数字项目编号；即 gemini-cli 的 GOOGLE_CLOUD_PROJECT），保存后重新完成准备'
+        : '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
     };
   }
   if (error instanceof ProviderDiscoveryError && error.code === 'rate-limited')
@@ -310,9 +314,14 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   register('POST', '/profile-schema', async ({ lease, principal, request }) =>
     lease.management.profileSchema(principal, await readJsonBody(request))
   );
-  register('POST', '/discover', async ({ lease, principal, request, signal }) =>
-    lease.management.discover(principal, await readJsonBody(request), signal)
-  );
+  register('POST', '/discover', async ({ lease, principal, request, signal }) => {
+    const discovered = await lease.management.discover(principal, await readJsonBody(request), signal);
+    // An empty catalogue is a successful answer, not an error: the Console shows the hint and lets the
+    // operator enter model ids by hand (e.g. when the upstream filters its catalogue by client version).
+    return discovered.observations.length === 0
+      ? { ...discovered, emptyHint: { code: 'discovery-empty', message: DISCOVERY_EMPTY_HINT } }
+      : discovered;
+  });
   register('POST', '/login/begin', async ({ lease, principal, request, signal }) => {
     const body = object(await readJsonBody(request)),
       account = await lease.management.account(principal, text(body.accountId));

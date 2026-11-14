@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { OAuthAuthentication, OAuthCredential } from '../provider/driver.js';
-import type { FixedServiceOptions } from './schema.js';
+import type { AntigravityServiceOptions, CodexServiceOptions, FixedServiceOptions } from './schema.js';
 import type { JsonObject } from '../provider/types.js';
 import { parseRetryAfterMs } from '../llm/provider-resilience.js';
 
@@ -148,7 +148,7 @@ export function codeOAuth<S>(configuration: OAuthCodeConfiguration): OAuthAuthen
   };
 }
 
-const codexCodeOAuth = codeOAuth<FixedServiceOptions>({
+const codexCodeOAuth = codeOAuth<CodexServiceOptions>({
   authorizeUrl: 'https://auth.openai.com/oauth/authorize', tokenUrl: 'https://auth.openai.com/oauth/token',
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann', scopes: 'openid profile email offline_access',
   redirectUri: 'http://localhost:1455/auth/callback',
@@ -169,7 +169,7 @@ function codexRoutingHints(credential: OAuthCredential): OAuthCredential {
   } catch { return credential; }
 }
 
-export const codexOAuth: OAuthAuthentication<FixedServiceOptions> = {
+export const codexOAuth: OAuthAuthentication<CodexServiceOptions> = {
   ...codexCodeOAuth,
   async complete(input) { return codexRoutingHints(await codexCodeOAuth.complete(input)); },
   async refresh(input) { return codexRoutingHints(await codexCodeOAuth.refresh(input)); },
@@ -182,7 +182,7 @@ export const claudeOAuth = codeOAuth<FixedServiceOptions>({
   encoding: 'json', pkce: true, authorizeParameters: { code: 'true' },
 });
 
-const antigravityCodeOAuth = codeOAuth<FixedServiceOptions>({
+const antigravityCodeOAuth = codeOAuth<AntigravityServiceOptions>({
   authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth', tokenUrl: 'https://oauth2.googleapis.com/token',
   clientId: '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
   requiresClientSecret: true, redirectUri: 'http://localhost:20127/callback',
@@ -235,6 +235,9 @@ const CODE_ASSIST_BASE = 'https://cloudcode-pa.googleapis.com/v1internal';
 const CODE_ASSIST_METADATA = Object.freeze({ ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' });
 /** Tier gemini-cli onboards when `allowedTiers` has no `isDefault` entry (`UserTierId.LEGACY`, code_assist/setup.ts `getOnboardTier`). */
 const CODE_ASSIST_LEGACY_TIER = 'legacy-tier';
+/** `UserTierId.FREE`: uses a Google-managed project; naming a project in its onboardUser request is rejected upstream. */
+const CODE_ASSIST_FREE_TIER = 'free-tier';
+const TRANSIENT_PREPARATION_REASONS: ReadonlySet<string> = new Set(['preparation-timeout', 'onboarding-timeout', 'request-timeout', 'transport']);
 /** Long-running operation names are a single `operations/<id>` segment: no `/`, no dot-only (`.` / `..`) id. */
 const OPERATION_NAME = /^operations\/(?=[A-Za-z0-9_.-]*[A-Za-z0-9])[A-Za-z0-9_-][A-Za-z0-9_.-]{0,255}$/u;
 
@@ -265,7 +268,7 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** Antigravity OAuth with Code Assist project preparation; exported for tests with short polling. */
-export function createAntigravityOAuth(options: AntigravityPreparationOptions = {}): OAuthAuthentication<FixedServiceOptions> {
+export function createAntigravityOAuth(options: AntigravityPreparationOptions = {}): OAuthAuthentication<AntigravityServiceOptions> {
   const pollIntervalMs = options.pollIntervalMs ?? 5_000;
   const maxPollAttempts = options.maxPollAttempts ?? 12;
   const overallTimeoutMs = options.overallTimeoutMs ?? 90_000;
@@ -275,7 +278,7 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
     async complete(input) {
       return { ...await antigravityCodeOAuth.complete(input), preparation: { status: 'required' } };
     },
-    async prepare({ credential, fetch, signal }) {
+    async prepare({ service, credential, fetch, signal }) {
       signal.throwIfAborted();
       // The caller's abort propagates unchanged; our own deadlines become sanitized preparation failures.
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(overallTimeoutMs)]);
@@ -325,28 +328,15 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
         return value as Record<string, unknown>;
       };
 
-      const loaded = await call('load-code-assist', `${CODE_ASSIST_BASE}:loadCodeAssist`, { metadata: CODE_ASSIST_METADATA });
-      let projectId = projectIdOf(loaded.cloudaicompanionProject);
-      if (!projectId) {
-        const ineligible = Array.isArray(loaded.ineligibleTiers) ? loaded.ineligibleTiers : [];
-        const ineligibleReason = ineligible.map(tier => tier && typeof tier === 'object' && 'reasonCode' in tier ? safeReasonCode(tier.reasonCode) : undefined).find(Boolean);
-        // An already-onboarded account without a managed project needs a user-chosen Cloud project, which this driver does not configure.
-        if (loaded.currentTier) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'load-code-assist' });
-        // gemini-cli `validateLoadCodeAssistResponse`: the account must first be verified in a browser
-        // (`ineligibleTiers[].reasonCode === 'VALIDATION_REQUIRED'` with a `validationUrl`); onboarding is not attempted.
-        // The validation URL itself is never surfaced.
-        if (ineligible.some(tier => !!tier && typeof tier === 'object' && (tier as Record<string, unknown>).reasonCode === 'VALIDATION_REQUIRED'
-          && typeof (tier as Record<string, unknown>).validationUrl === 'string' && !!(tier as Record<string, unknown>).validationUrl)) {
-          throw new ProviderPreparationError('project-unavailable', { status: 200, reason: 'validation-required', step: 'load-code-assist' });
-        }
-        const tiers = Array.isArray(loaded.allowedTiers) ? loaded.allowedTiers as unknown[] : [];
-        const tier = tiers.find((item): item is Record<string, unknown> => !!item && typeof item === 'object' && (item as Record<string, unknown>).isDefault === true);
-        // gemini-cli `getOnboardTier`: without an `isDefault` tier it onboards the legacy tier.
-        const tierId = tier ? typeof tier.id === 'string' && tier.id ? tier.id : undefined : CODE_ASSIST_LEGACY_TIER;
-        if (!tierId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'no-default-tier', step: 'load-code-assist' });
-        // No user-chosen Cloud project is configured: the free tier uses a Google-managed project
-        // (naming one there is rejected upstream); other tiers report project-required (or the ineligibility reason) below.
-        const request = { tierId, metadata: CODE_ASSIST_METADATA };
+      // Optional user-chosen Google Cloud project (gemini-cli `GOOGLE_CLOUD_PROJECT`), sent exactly as gemini-cli
+      // code_assist/setup.ts does: top-level `cloudaicompanionProject` plus `metadata.duetProject`.
+      const configuredProject = service.options.projectId;
+      const projectFields = (tierId?: string) => configuredProject && tierId !== CODE_ASSIST_FREE_TIER
+        ? { cloudaicompanionProject: configuredProject, metadata: { ...CODE_ASSIST_METADATA, duetProject: configuredProject } }
+        : { metadata: CODE_ASSIST_METADATA };
+      /** onboardUser plus bounded long-running-operation polling; returns the project the operation reports, if any. */
+      const onboard = async (tierId: string): Promise<string | undefined> => {
+        const request = { tierId, ...projectFields(tierId) };
         let operation = await call('onboard-user', `${CODE_ASSIST_BASE}:onboardUser`, request);
         for (let attempt = 0; operation.done !== true; attempt++) {
           if (attempt >= maxPollAttempts) throw new ProviderPreparationError('project-unavailable', { reason: 'onboarding-timeout', step: 'onboard-operation' });
@@ -364,8 +354,54 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
           throw new ProviderPreparationError('project-unavailable', { reason: googleErrorReason(operation.error) ?? (code === undefined ? 'onboarding-failed' : `rpc-${code}`), step: 'onboard-operation' });
         }
         const response = operation.response && typeof operation.response === 'object' ? operation.response as Record<string, unknown> : {};
-        projectId = projectIdOf(response.cloudaicompanionProject);
-        if (!projectId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'onboard-operation' });
+        return projectIdOf(response.cloudaicompanionProject);
+      };
+
+      const loaded = await call('load-code-assist', `${CODE_ASSIST_BASE}:loadCodeAssist`, projectFields());
+      let projectId = projectIdOf(loaded.cloudaicompanionProject);
+      if (!projectId) {
+        const ineligible = Array.isArray(loaded.ineligibleTiers) ? loaded.ineligibleTiers : [];
+        const ineligibleReason = ineligible.map(tier => tier && typeof tier === 'object' && 'reasonCode' in tier ? safeReasonCode(tier.reasonCode) : undefined).find(Boolean);
+        const currentTier = loaded.currentTier && typeof loaded.currentTier === 'object' ? loaded.currentTier as Record<string, unknown> : undefined;
+        if (currentTier) {
+          // Already on a tier but no managed project (reported in #1250 for accounts that work in the Antigravity app):
+          // try onboarding once more on the current tier, which may provision or return the project.
+          const currentTierId = typeof currentTier.id === 'string' && currentTier.id ? currentTier.id : undefined;
+          let onboardFailure: ProviderPreparationError | undefined;
+          if (currentTierId) {
+            try { projectId = await onboard(currentTierId); } catch (error) {
+              if (!(error instanceof ProviderPreparationError)) throw error;
+              signal.throwIfAborted();
+              onboardFailure = error;
+            }
+          }
+          // gemini-cli: a tiered account without a managed project uses the user-chosen Cloud project.
+          projectId ??= configuredProject;
+          if (!projectId) {
+            // Transient onboarding failures (deadlines, transport, upstream 5xx) are reported as such so a retry is suggested;
+            // an upstream refusal ends as project-required (keeping its HTTP status and step), since a configured project is the remedy.
+            if (onboardFailure && (TRANSIENT_PREPARATION_REASONS.has(onboardFailure.reason ?? '') || (onboardFailure.status ?? 0) >= 500)) throw onboardFailure;
+            throw new ProviderPreparationError('project-unavailable', { status: onboardFailure?.status ?? 200, reason: ineligibleReason ?? 'project-required',
+              step: onboardFailure?.step ?? (currentTierId ? 'onboard-operation' : 'load-code-assist') });
+          }
+        } else {
+          // gemini-cli `validateLoadCodeAssistResponse`: the account must first be verified in a browser
+          // (`ineligibleTiers[].reasonCode === 'VALIDATION_REQUIRED'` with a `validationUrl`); onboarding is not attempted.
+          // The validation URL itself is never surfaced.
+          if (ineligible.some(tier => !!tier && typeof tier === 'object' && (tier as Record<string, unknown>).reasonCode === 'VALIDATION_REQUIRED'
+            && typeof (tier as Record<string, unknown>).validationUrl === 'string' && !!(tier as Record<string, unknown>).validationUrl)) {
+            throw new ProviderPreparationError('project-unavailable', { status: 200, reason: 'validation-required', step: 'load-code-assist' });
+          }
+          const tiers = Array.isArray(loaded.allowedTiers) ? loaded.allowedTiers as unknown[] : [];
+          const tier = tiers.find((item): item is Record<string, unknown> => !!item && typeof item === 'object' && (item as Record<string, unknown>).isDefault === true);
+          // gemini-cli `getOnboardTier`: without an `isDefault` tier it onboards the legacy tier.
+          const tierId = tier ? typeof tier.id === 'string' && tier.id ? tier.id : undefined : CODE_ASSIST_LEGACY_TIER;
+          if (!tierId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'no-default-tier', step: 'load-code-assist' });
+          // The free tier uses a Google-managed project (naming one there is rejected upstream); other tiers
+          // name the configured project, and fall back to it when onboarding reports none (gemini-cli).
+          projectId = await onboard(tierId) ?? (tierId === CODE_ASSIST_FREE_TIER ? undefined : configuredProject);
+          if (!projectId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'onboard-operation' });
+        }
       }
       return { ...credential, subject: identity.id as string, preparation: { status: 'ready' },
         metadata: { ...credential.metadata, projectId } };
@@ -373,4 +409,4 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
   };
 }
 
-export const antigravityOAuth: OAuthAuthentication<FixedServiceOptions> = createAntigravityOAuth();
+export const antigravityOAuth: OAuthAuthentication<AntigravityServiceOptions> = createAntigravityOAuth();
