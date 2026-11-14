@@ -83,26 +83,37 @@ export function providerPlanFingerprint(input: unknown): string {
   return createHash('sha256').update(canonical(normalizeProviderJson(input))).digest('hex');
 }
 
-/** Compile an explicit import into one complete graph, without applying it or logging in. */
 /**
- * True when two Service identities differ only in `baseUrl`, and both addresses
- * share scheme, host and port (a path fix such as adding `/v1`).
+ * How a Service identity changed (#1250 service-baseurl-immutable):
+ * - `path`: only `baseUrl` changed, within the same origin (a path fix such as adding `/v1`);
+ * - `origin`: only `baseUrl` changed, to another scheme, host, port or userinfo;
+ * - `identity`: another identity field changed (issuer, tenant, product, headers, auth scheme, ...).
+ * Origins compare after URL normalization: default ports, IDN (punycode), IPv6
+ * notation and letter case normalize away, and so does one trailing dot of a
+ * DNS name (the same fully-qualified host).
  */
-function sameOriginAddressChange(before: JsonValue, after: JsonValue): boolean {
-  if (!before || !after || typeof before !== 'object' || typeof after !== 'object' || Array.isArray(before) || Array.isArray(after)) return false;
-  const { baseUrl: previousUrl, ...previousRest } = before as Record<string, JsonValue>;
-  const { baseUrl: nextUrl, ...nextRest } = after as Record<string, JsonValue>;
-  if (providerPlanFingerprint(previousRest) !== providerPlanFingerprint(nextRest)) return false;
-  if (typeof previousUrl !== 'string' || typeof nextUrl !== 'string') return false;
-  try {
-    const a = new URL(previousUrl), b = new URL(nextUrl);
-    return a.protocol === b.protocol && a.hostname.toLowerCase() === b.hostname.toLowerCase() && a.port === b.port
-      && a.username === b.username && a.password === b.password;
-  } catch {
-    return false;
-  }
+function classifyServiceIdentityChange(before: JsonValue, after: JsonValue): 'path' | 'origin' | 'identity' {
+  if (!isRecord(before) || !isRecord(after)) return 'identity';
+  const { baseUrl: previousUrl, ...previousRest } = before;
+  const { baseUrl: nextUrl, ...nextRest } = after;
+  if (providerPlanFingerprint(previousRest) !== providerPlanFingerprint(nextRest)) return 'identity';
+  const a = originOf(previousUrl), b = originOf(nextUrl);
+  return a !== undefined && a === b ? 'path' : 'origin';
 }
 
+function isRecord(value: JsonValue): value is Readonly<Record<string, JsonValue>> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function originOf(value: JsonValue | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  let url: URL;
+  try { url = new URL(value); } catch { return undefined; }
+  const host = url.hostname.startsWith('[') ? url.hostname : url.hostname.replace(/\.$/u, '');
+  return JSON.stringify([url.protocol, host.toLowerCase(), url.port, url.username, url.password]);
+}
+
+/** Compile an explicit import into one complete graph, without applying it or logging in. */
 export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Promise<ReviewedProviderPlan> {
   const graph = normalizeProviderGraph(options.graph);
   const input = record(normalizeProviderJson(options.input));
@@ -172,12 +183,15 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
       const before = identity ? identity(previous) : previous.options;
       const after = identity ? identity(candidate) : candidate.options;
       // #1250 service-baseurl-immutable: credentials are bound to accounts, and an account's
-      // key must never be sent to another host. An unreferenced Service has no key to leak; a
-      // referenced one may only change the URL path (same scheme, host and port).
-      if (providerPlanFingerprint(before) !== providerPlanFingerprint(after)
-        && Object.values(graph.accounts).some(account => account.serviceId === id)
-        && !sameOriginAddressChange(before, after)) {
-        throw new ProviderError('service-origin-change');
+      // key must never be sent to another host. Only `baseUrl` may change in place: freely on an
+      // unreferenced Service (no key to leak), within its origin on a referenced one. Any other
+      // identity change (issuer, tenant, product, headers, auth scheme, ...) is a new Service.
+      if (providerPlanFingerprint(before) !== providerPlanFingerprint(after)) {
+        const change = classifyServiceIdentityChange(before, after);
+        if (change === 'identity') throw new ProviderError('plan-conflict');
+        if (change === 'origin' && Object.values(graph.accounts).some(account => account.serviceId === id)) {
+          throw new ProviderError('service-origin-change');
+        }
       }
     }
     services[id] = retainRevision(previous, candidate);

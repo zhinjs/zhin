@@ -57,19 +57,22 @@ function normalizeDefaultBudget(raw?: AgentCollaborationBudget): Partial<BudgetA
 
 export function createCollaborationDirectory(input: CollaborationDirectoryInput): CollaborationDirectory {
   const agents = new Map<string, AgentDescriptor>();
+  const shared = new Set<string>();
   let entryDescriptor: AgentDescriptor | undefined;
   for (const agent of input.agents) {
     if (agent.name === input.entry.name) {
       entryDescriptor ??= agent;
     } else if (!agents.has(agent.name)) {
       agents.set(agent.name, agent);
+    } else {
+      shared.add(agent.name);
     }
   }
   const catalog = only(input.catalogTools);
   const names = [...agents.keys()];
 
   const resolved = new Map<string, CollaborationAgent>();
-  for (const agent of agents.values()) resolved.set(agent.name, agentFor(agent, catalog, names, input.entry.name));
+  for (const agent of agents.values()) resolved.set(agent.name, agentFor(agent, catalog, names, input.entry.name, shared.has(agent.name)));
 
   const entryName = input.entry.name;
   const entryDisallowed = new Set(entryDescriptor?.disallowedTools ?? []);
@@ -156,6 +159,7 @@ function agentFor(
   catalog: NameScope,
   directoryNames: readonly string[],
   entryName: string,
+  bareNameShared: boolean,
 ): CollaborationAgent {
   const disallowed = new Set(agent.disallowedTools ?? []);
   // Without a declared list the agent inherits the whole turn catalog.
@@ -188,5 +192,7 @@ function agentFor(
     model: agent.model,
     maxIterations: agent.maxIterations,
     ...(defaultBudget ? { defaultBudget } : {}),
+    ...(agent.qualifiedName ? { qualifiedName: agent.qualifiedName } : {}),
+    ...(bareNameShared ? { bareNameShared: true } : {}),
   });
 }

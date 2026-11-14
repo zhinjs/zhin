@@ -22,8 +22,8 @@ import {
   type Principal,
 } from '@zhin.js/harness';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
-import { createActorTurnRunner, renderMailBatch } from '../../src/collaboration/actor-turn.js';
-import type { ActorModelSource, CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
+import { actorModelSelection, createActorTurnRunner, renderMailBatch } from '../../src/collaboration/actor-turn.js';
+import type { ActorModelSelection, ActorModelSource, CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
 import type { SubTurnTracing } from '../../src/trace/turn-trace-registry.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
@@ -82,6 +82,7 @@ function setup(options: {
   rootSignal?: AbortSignal;
   models?: ActorModelSource;
   tracing?: SubTurnTracing;
+  rootModel?: ActorModelSelection;
 }) {
   const inputs: CoreInput[] = [];
   const core = {
@@ -127,7 +128,7 @@ function setup(options: {
     directory,
     harness: () => harness,
     createTools,
-    resolveModel: () => ({ modelId: 'm1', modelCandidates: ['m1'] }),
+    resolveModel: () => options.rootModel ?? { modelId: 'm1', modelCandidates: ['m1'] },
     ...(options.models ? { models: options.models } : {}),
     ...(options.tracing ? { tracing: options.tracing } : {}),
   });
@@ -385,11 +386,49 @@ describe('#1250 actor turns own their model operation and trace', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'which model?' } })], new AbortController().signal);
     expect(result).toEqual({ status: 'completed', content: 'answer' });
     expect(acquire).toHaveBeenCalledTimes(1);
-    expect(acquire.mock.calls[0]![0]).toMatchObject({ agent: 'researcher', sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ agent: { name: 'researcher' }, sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
     expect(acquire.mock.calls[0]![0].operationId).toMatch(/^turn-1:actor:researcher:/);
     expect(seen).toBe(researcher.scope);
     expect(ctx.inputs[0]!.modelId).toBe('gemini');
     expect(researcher.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the qualified name and a shared bare name to the purpose lookup', async () => {
+    const researcher = fakeScope('gemini', 'gemini-profile', 'agent:tools__researcher');
+    const acquire = vi.fn<ActorModelSource['acquire']>(async () => researcher.scope);
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL, { qualifiedName: 'tools__researcher', bareNameShared: true })],
+      tools: [],
+      models: { acquire },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    expect(acquire.mock.calls[0]![0].agent).toEqual({ name: 'researcher', qualifiedName: 'tools__researcher', bareNameShared: true });
+  });
+
+  it('keeps the root turn\'s fallback candidates for a sub-turn that falls back to chat', async () => {
+    const chat = fakeScope('deepseek', 'chat-profile', 'chat');
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire: async () => chat.scope },
+      rootModel: { modelId: 'deepseek', modelCandidates: ['deepseek', 'deepseek-backup', 'qwen'] },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    expect(ctx.inputs[0]!.modelId).toBe('deepseek');
+    expect(ctx.inputs[0]!.modelCandidates).toEqual(['deepseek', 'deepseek-backup', 'qwen']);
+  });
+
+  it('selects model candidates from the purpose the sub-turn runs on', () => {
+    const root = { modelId: 'deepseek', modelCandidates: ['deepseek', 'qwen'] };
+    // Own purpose: one profile, no fallbacks; never the root's chain for another model.
+    expect(actorModelSelection(fakeScope('gemini', 'g', 'agent:researcher').scope, root))
+      .toEqual({ modelId: 'gemini', modelCandidates: ['gemini'] });
+    // Chat on another model than the root (root ran a binding purpose): the root's chain does not apply.
+    expect(actorModelSelection(fakeScope('glm', 'c', 'chat').scope, root)).toEqual({ modelId: 'glm', modelCandidates: ['glm'] });
+    expect(actorModelSelection(fakeScope('deepseek', 'c', 'chat').scope, undefined))
+      .toEqual({ modelId: 'deepseek', modelCandidates: ['deepseek'] });
   });
 
   it('keeps the root purpose for the entry actor continuing with results', async () => {
@@ -444,5 +483,19 @@ describe('#1250 actor turns own their model operation and trace', () => {
     expect(saved[0]!.model_calls).toHaveLength(2);
     expect(saved[0]!.model_selection?.profile_id).toBe('gemini-profile');
     expect(rootTrace.snapshot().subagents).toHaveLength(1);
+  });
+
+  it('flags a sub-turn reply that claims a lookup without any tool call', async () => {
+    const { TurnTraceCollector } = await import('../../src/trace/turn-trace.js');
+    const { registerTurnTrace, captureSubTurnTracing } = await import('../../src/trace/turn-trace-registry.js');
+    const rootTrace = new TurnTraceCollector({ turnId: 'turn-1', sessionKey: 'im:icqq:bot:private:owner' });
+    const release = registerTurnTrace(rootTrace);
+    try {
+      const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], tracing: captureSubTurnTracing('turn-1')!,
+        script: reply('我查了一下，明天有雨') });
+      const { root } = await ctx.attach();
+      await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+      expect(rootTrace.snapshot().subagents[0]!.claim_without_tool_call).toEqual({ phrase: '查了一下' });
+    } finally { release(); }
   });
 });

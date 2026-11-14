@@ -17,7 +17,11 @@ describe('lookup claims', () => {
     '最新数据显示气温回升',
     'I checked the forecast: sunny all week.',
     "I've looked it up — it's 25°C.",
+    'I’ve checked: the store opens at 9.',
     'According to the latest data, it will rain.',
+    '根据目前的数据，股价在上涨',
+    '根据当前搜索结果，有三家店',
+    '我搜索了一下，附近有两家',
   ])('recognizes %j', text => {
     expect(findLookupClaim(text)).toBeTruthy();
   });
@@ -29,6 +33,18 @@ describe('lookup claims', () => {
     'Let me check that for you.',
     'I can look it up if you want.',
     '刚卡了一下',
+    '根据目前的情况，我建议先休息',
+    '根据当前你说的，应该是周三',
+    '我没查到相关信息',
+    '我没查过这个',
+    '还未查到结果',
+    '我没有搜到这家店',
+    '我搜了一下记忆，好像是 1998 年',
+    "I didn't check the weather.",
+    "I haven't checked yet.",
+    'I haven’t looked it up.',
+    'I searched my memory and I think it was 1998.',
+    'After a quick search of my memory: 1998.',
   ])('does not flag %j', text => {
     expect(findLookupClaim(text)).toBeUndefined();
   });
@@ -47,6 +63,18 @@ describe('trace flag', () => {
     const snapshot = trace.snapshot();
     expect(snapshot.claim_without_tool_call).toEqual({ phrase: '查了下' });
     expect(snapshot.timeline.some(entry => entry.kind === 'claim_without_tool_call')).toBe(true);
+  });
+
+  it('checks the final reply of a sub-turn, which records no turn_end', () => {
+    const flagged = new TurnTraceCollector({ turnId: 'root:actor:researcher:m1', sessionKey: 's' });
+    flagged.record({ type: 'usage', usage });
+    flagged.note({ kind: 'final_reply', text: 'I checked: it is sunny.' });
+    flagged.finalize({ status: 'completed' });
+    expect(flagged.snapshot().claim_without_tool_call).toEqual({ phrase: 'I checked' });
+    const backed = new TurnTraceCollector({ turnId: 'root:actor:researcher:m2', sessionKey: 's' });
+    backed.record({ type: 'tool_call', toolUseId: 'u1', toolName: 'weather', args: {} } as never);
+    backed.note({ kind: 'final_reply', text: 'I checked: it is sunny.' });
+    expect(backed.snapshot()).not.toHaveProperty('claim_without_tool_call');
   });
 
   it('does not mark the same reply when the turn called a tool', () => {

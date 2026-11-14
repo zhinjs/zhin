@@ -8,15 +8,18 @@
  * that ordinary replies do not match.
  */
 export const LOOKUP_CLAIM_PATTERNS: readonly RegExp[] = Object.freeze([
-  // zh: 查 / 搜 / 检索 + 完成体; 检查了 / 调查过 / 审查了 are not lookups.
-  /(?<![检调审排核抽普复巡盘考侦督])(?:查询|搜索|检索|查|搜)(?:了一?下|了|过|到了?)/u,
-  /根据(?:最新|实时|目前|当前)(?:的)?(?:数据|信息|资料|消息|结果|报道|情况|查询|搜索)?/u,
+  // zh: 查 / 搜 / 检索 + 完成体; 检查了 / 调查过 / 审查了 are not lookups, 没查到 / 未查过 /
+  // 没有搜到 deny one, and 搜了一下记忆 searched the model's own memory.
+  /(?<![检调审排核抽普复巡盘考侦督没未])(?<!没有|没能|并未|从未|从没)(?:查询|搜索|检索|查|搜)(?:了一?下|了|过|到了?)(?![^，。,.!?！？\n]{0,6}(?:记忆|印象|脑海))/u,
+  // 根据最新 / 实时 …; 根据目前 / 当前 only with a data noun (根据目前的情况 is ordinary speech).
+  /根据(?:最新|实时)(?:的)?(?:数据|信息|资料|消息|结果|报道|情况|查询|搜索)?/u,
+  /根据(?:目前|当前)(?:的)?(?:最新)?(?:数据|信息|资料|搜索结果|查询结果|检索结果|报道|统计)/u,
   /(?:最新|实时)(?:数据|信息|资料|消息|结果)(?:显示|表明)/u,
   /(?:看了一?下|翻了一?下)(?:最新|实时)/u,
-  // en
-  /\bI(?:'ve| have)? (?:just )?(?:checked|looked (?:it )?up|searched|queried|fetched|browsed)\b/iu,
+  // en: straight or curly apostrophe; "I searched my memory" is not a lookup.
+  /\bI(?:['’]ve| have)? (?:just )?(?:checked|looked (?:it )?up|searched|queried|fetched|browsed)\b(?! (?:through )?(?:my|our) (?:memory|memories|mind|own knowledge)\b)/iu,
   /\b(?:according to|based on) (?:the )?(?:latest|current|real-time|live|up-to-date) (?:data|info(?:rmation)?|results?|reports?|figures|forecast)\b/iu,
-  /\b(?:after|from) (?:a )?(?:quick )?(?:search|lookup|checking)\b/iu,
+  /\b(?:after|from) (?:a )?(?:quick )?(?:search|lookup|checking)\b(?! (?:of |through )?(?:my|our) (?:memory|memories|mind|own knowledge)\b)/iu,
   /\bthe latest (?:data|figures|reports?) (?:show|shows|indicate|indicates)\b/iu,
 ]);
 

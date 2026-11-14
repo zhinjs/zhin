@@ -44,6 +44,20 @@ describe('non-JSON successful model responses', () => {
     await client.close();
   });
 
+  it('is not retried under the default maxRetries', async () => {
+    let requests = 0;
+    const fixture = driverFixture({ definition: openAiCompatibleProvider,
+      options: { baseUrl: 'https://byesu.example', compat: { appendV1: false } },
+      model: { id: 'configured-model', kinds: ['language'], protocol: 'openai-chat', streaming: false },
+      fetch: async () => { requests++; return html(); },
+    });
+    const client = await fixture.runtime.openOperation({ context: callContext });
+    const error = await client.generate({ request: { context: prompt } }).then(() => undefined, (failure: unknown) => failure);
+    expect(classifyProviderError(error).kind).toBe('non_json_response');
+    expect(requests).toBe(1);
+    await client.close();
+  });
+
   it('keeps ordinary JSON and streaming replies working', async () => {
     const fixture = driverFixture({ definition: openAiCompatibleProvider, options: { baseUrl: 'https://gateway.example/v1' },
       model: { id: 'configured-model', kinds: ['language'], protocol: 'openai-chat', streaming: true },

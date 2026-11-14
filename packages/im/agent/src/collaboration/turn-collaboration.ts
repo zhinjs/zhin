@@ -221,11 +221,34 @@ function retainModelDelegation(): ModelDelegationAuthority | undefined {
   }
 }
 
-function backgroundFailureNotice(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
-    ? 'A background task failed: its result could not be delivered. Please try again.'
-    : '后台任务失败：结果没能发出来，请稍后再试。';
+/** Why the human is told a background task did not reach them. */
+type BackgroundFailure = 'aggregation_failed' | 'delivery_failed' | 'budget_exhausted';
+
+function backgroundFailureNotice(reason: BackgroundFailure, locale: string | undefined): string {
+  const en = locale?.toLowerCase().startsWith('en');
+  switch (reason) {
+    case 'aggregation_failed':
+      return en
+        ? 'A background task failed while putting its result together. Please try again.'
+        : '后台任务失败：汇总结果时出错了，请稍后再试。';
+    case 'budget_exhausted':
+      return en
+        ? 'A background task ran out of its budget before it produced a result. Please try again.'
+        : '后台任务的预算用完了，没能得出结果，请稍后再试。';
+    case 'delivery_failed':
+      return en
+        ? 'A background task finished, but its result could not be delivered. Please try again.'
+        : '后台任务完成了，但结果没能发出来，请稍后再试。';
+  }
 }
+
+/**
+ * What became of one background message: `sent`; `suppressed` (outbound
+ * control withheld it, or nothing was left to send: deliberate, not a
+ * failure); `partial` (some of it may have reached the human: a notice would
+ * contradict what they saw); `failed`.
+ */
+type BackgroundSend = 'sent' | 'suppressed' | 'partial' | 'failed';
 
 /**
  * Speaks to the human after the root turn ended: a proactive message to the
@@ -234,7 +257,7 @@ function backgroundFailureNotice(locale: string | undefined): string {
  * delivery port. Never throws.
  */
 export function createBackgroundTeller(turn: TurnIngress) {
-  const send = async (text: string, signal: AbortSignal): Promise<boolean> => {
+  const send = async (text: string, signal: AbortSignal): Promise<BackgroundSend> => {
     const output: AgentOutputElement[] = [{ type: 'text', content: text }];
     try {
       const delivery = turn.ports.delivery;
@@ -245,46 +268,76 @@ export function createBackgroundTeller(turn: TurnIngress) {
           target: Object.freeze({ conversation: 'origin' }),
           output,
         }, signal);
-        if (outcome.status === 'sent') return true;
-        logger.warn(`collaboration delivery not sent: ${outcome.status}${'code' in outcome ? ` (${outcome.code})` : ''}`);
-        return false;
+        if (outcome.status === 'sent') return 'sent';
+        if (outcome.status === 'suppressed') {
+          logger.debug('collaboration delivery suppressed by outbound control');
+          return 'suppressed';
+        }
+        logger.warn(`collaboration delivery not sent: ${outcome.status} (${outcome.code})`);
+        if (outcome.status === 'failed' && (outcome.deliveryPartial || outcome.deliveryUnknown || outcome.messages?.some(Boolean))) {
+          return 'partial';
+        }
+        return 'failed';
       }
       if (!turn.ports.reply) {
         logger.warn('collaboration delivery failed: the turn has no delivery port');
-        return false;
+        return 'failed';
       }
       await turn.ports.reply.send(output);
-      return true;
+      return 'sent';
     } catch (error) {
       logger.warn(`collaboration delivery failed: ${error instanceof Error ? error.message : String(error)}`);
-      return false;
+      return 'failed';
     }
-  };
-  const notifyFailure = async (signal: AbortSignal): Promise<void> => {
-    await send(backgroundFailureNotice(turn.input.locale), signal);
   };
   return Object.freeze({
     async tell(text: string, signal: AbortSignal): Promise<void> {
       if (turn.policy.unattended) return;
       await send(text, signal);
     },
-    /** Result of the entry actor continuing with delegated results; a failure still tells the human. */
+    /**
+     * Result of the entry actor continuing with delegated results. Any content
+     * it produced (a partial answer of a budget-stopped turn included) is
+     * delivered; a failure tells the human why, unless the actor was stopped
+     * (user stop, hot reload): then nothing more is said.
+     */
     async deliverResult(result: ActorTurnResult, actorSignal: AbortSignal): Promise<void> {
       if (turn.policy.unattended) return;
       // Delivery outlives a cancelled actor turn only briefly; the host bounds it.
       const signal = AbortSignal.any([AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS), ...(actorSignal.aborted ? [] : [actorSignal])]);
       const content = result.content?.trim();
-      if (result.status === 'completed' && content) {
-        if (await send(content, signal)) return;
-        await notifyFailure(AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
-        return;
-      }
+      const notify = async (reason: BackgroundFailure): Promise<void> => {
+        if (actorSignal.aborted) {
+          logger.debug(`background collaboration stopped; not notifying (${reason})`);
+          return;
+        }
+        await send(backgroundFailureNotice(reason, turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
+      };
       if (result.status === 'cancelled') {
         logger.debug(`background collaboration result cancelled: ${content ?? ''}`);
         return;
       }
-      logger.warn(`background collaboration result failed: ${result.status}${content ? ` ${content.slice(0, 200)}` : ''}`);
-      await notifyFailure(signal);
+      if (result.status === 'failed') {
+        logger.warn(`background collaboration result failed${content ? `: ${content.slice(0, 200)}` : ''}`);
+        await notify('aggregation_failed');
+        return;
+      }
+      if (!content) {
+        if (result.status === 'budget_exceeded') {
+          logger.warn('background collaboration ran out of budget without a result');
+          await notify('budget_exhausted');
+        } else {
+          logger.debug('background collaboration completed without content');
+        }
+        return;
+      }
+      if (result.status === 'budget_exceeded') logger.warn('background collaboration ran out of budget; delivering its partial result');
+      const sent = await send(content, signal);
+      if (sent === 'failed') {
+        await notify('delivery_failed');
+      } else if (sent === 'partial') {
+        logger.warn('background collaboration result was only partly delivered; not adding a failure notice');
+      }
     },
   });
 }

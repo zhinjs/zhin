@@ -145,7 +145,11 @@ async function runActorTurn(
   if (options.models) {
     try {
       models = await options.models.acquire({
-        ...(entryActor ? {} : { agent: agent.name }),
+        ...(entryActor ? {} : { agent: Object.freeze({
+          name: agent.name,
+          ...(agent.qualifiedName ? { qualifiedName: agent.qualifiedName } : {}),
+          ...(agent.bareNameShared ? { bareNameShared: true } : {}),
+        }) }),
         operationId: turnId,
         sessionKey,
         signal: AbortSignal.any([signal, rootTurn.signal]),
@@ -180,6 +184,20 @@ interface ActorTurnRun {
   readonly models?: ModelExecutionScope;
 }
 
+/**
+ * Model ids for an actor turn on its own operation. The selected model leads.
+ * A sub-agent purpose (`agent:<key>`) is one profile without fallbacks, so it
+ * carries none; a turn on `chat` (entry actor, or a sub-agent without its own
+ * purpose) keeps the root turn's fallback chain when the root ran the same
+ * chat model, so a delegated turn degrades the way the root turn would.
+ */
+export function actorModelSelection(models: ModelExecutionScope, root: ActorModelSelection | undefined): ActorModelSelection {
+  const modelId = models.chat.model.id;
+  const onChat = (models.purpose ?? 'chat') === 'chat';
+  const inherited = onChat && root?.modelId === modelId ? root.modelCandidates : [];
+  return { modelId, modelCandidates: [...new Set([modelId, ...inherited])] };
+}
+
 function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExecutionScope): void {
   const binding = models.chat.binding;
   const source = binding.source;
@@ -196,7 +214,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
   const { host, rootTurn } = options;
   const { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models } = run;
   const model: ActorModelSelection | undefined = models
-    ? { modelId: models.chat.model.id, modelCandidates: [models.chat.model.id] }
+    ? actorModelSelection(models, options.resolveModel())
     : options.resolveModel();
   if (!model) {
     trace?.close({ status: 'failed', code: 'model_unavailable' });
@@ -377,6 +395,8 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       : turnSignal.aborted
         ? { status: 'cancelled', content: abortReason(turnSignal) }
         : { status: 'completed', content: result.reply.trim() || EMPTY_REPLY_NOTE };
+    // Actor turns record no `turn_end`: their reply is checked for an unbacked lookup claim here.
+    if (outcome.status === 'completed' && result.reply.trim()) trace?.note({ kind: 'final_reply', text: result.reply });
   } catch (error) {
     outcome = budgetStop.signal.aborted
       ? { status: 'budget_exceeded', content: budgetNote('', modelRequests) }

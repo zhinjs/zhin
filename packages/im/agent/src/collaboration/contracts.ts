@@ -16,7 +16,7 @@
  */
 import type { ActorId, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
-import type { ModelExecutionScope } from '../model-runtime/types.js';
+import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 
 /**
  * Host-owned model operations for actor turns (#1250): each actor turn opens
@@ -25,8 +25,8 @@ import type { ModelExecutionScope } from '../model-runtime/types.js';
  */
 export interface ActorModelSource {
   acquire(input: Readonly<{
-    /** Sub-agent name; omitted for the entry actor, which keeps the root turn's purpose. */
-    agent?: string;
+    /** Sub-agent purpose key; omitted for the entry actor, which keeps the root turn's purpose. */
+    agent?: SubAgentModelKey;
     operationId: string;
     sessionKey: string;
     signal: AbortSignal;
@@ -52,6 +52,10 @@ export interface CollaborationAgent {
   readonly maxIterations?: number;
   /** Default collaboration budget from `agents/<name>/agent.json` `collaboration.budget`. */
   readonly defaultBudget?: Partial<BudgetAmounts>;
+  /** Plugin-qualified name (`<plugin>__<agent>`): the canonical `purposes.agents` key. */
+  readonly qualifiedName?: string;
+  /** Another registered sub-agent has the same bare name (only the first one is in the directory). */
+  readonly bareNameShared?: boolean;
 }
 
 export interface CollaborationDirectory {

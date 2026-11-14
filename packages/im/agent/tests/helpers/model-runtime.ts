@@ -10,6 +10,8 @@ export function modelRuntimeFixture(options: Readonly<{
   execution?: ProviderExecution;
   authorize?: Parameters<typeof createInferenceRuntime>[0]['canUseProfile'];
   describeModel?: ProviderDefinition['describeModel'];
+  /** Agent binding names (`ai.agents.<name>`) the service keeps sub-agents off. */
+  bindingNames?: readonly string[];
 }> = {}) {
   const root = rootPluginId();
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
@@ -31,6 +33,7 @@ export function modelRuntimeFixture(options: Readonly<{
       drivers: { acquire: async ({ service }) => { calls.driverAcquires++; return { reference: service.driver, definition, release: () => { calls.releases++; } }; } },
       credentials: () => ({ bindRequest: (input: { request: Request }) => input.request, authorize: async () => ({ headers: {}, revision: '1' }) }),
       fetch: () => async () => { throw new Error('Network prohibited'); }, canUseProfile: options.authorize, resources, generationIdentity: lease.value }),
+    ...(options.bindingNames ? { bindingNames: () => options.bindingNames! } : {}),
   };
   const runtime = new ModelRuntimeService(runtimeOptions);
   const acquire = async (patch: Partial<ProviderCallContext> = {}, bindingName?: string) => {

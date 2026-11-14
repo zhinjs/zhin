@@ -3,8 +3,12 @@ import {
   type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
 import { createInvocationCompletion, invocationModel } from './completion.js';
+import { getLogger } from '@zhin.js/logger';
 import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionCandidate, type ModelExecutionScope,
-  type ModelDelegationAuthority, type ModelContextAcquireInput, type ModelRuntimeServiceOptions, type ModelTurnAcquireInput } from './types.js';
+  type ModelDelegationAuthority, type ModelContextAcquireInput, type ModelRuntimeServiceOptions, type ModelTurnAcquireInput,
+  type SubAgentModelKey } from './types.js';
+
+const logger = getLogger('ai.model-runtime');
 
 async function bundle(input: Readonly<{
   scope: InferenceOperationScope;
@@ -17,16 +21,53 @@ async function bundle(input: Readonly<{
 }
 
 /**
- * `agent:<name>` for a sub-agent whose purpose is configured, else the binding's
- * purpose (`chat` for `zhin`). A sub-agent without its own purpose falls back to
- * chat instead of failing (#1250 agent-purpose-binding-ignored).
+ * Absolute wall-clock cap on one engagement's retained delegation authority.
+ * Delegated work normally ends long before this; the cap only guarantees a
+ * stuck or forgotten engagement cannot pin its generation's inference scope
+ * (and every child operation still open) forever. Past it, the reservation is
+ * released, its open child operations are closed and further `acquire` calls
+ * fail with `invalid-context`. Not configurable on purpose: it is a leak bound,
+ * not a budget (engagement budgets bound the work itself).
  */
-function selectLanguagePurpose(
+export const MAX_DELEGATION_RETENTION_MS = 30 * 60_000;
+
+/**
+ * Purpose for one model operation (#1250 agent-purpose-binding-ignored).
+ *
+ * `purposes.agents` is one key space shared by Agent bindings (`ai.agents.<binding>`,
+ * the legacy migration writes those keys, and binding turns resolve
+ * `agent:<binding>`) and sub-agents. A sub-agent is looked up by its
+ * plugin-qualified name (`<plugin>__<agent>`, the canonical key) first; its bare
+ * name is accepted only when no other sub-agent of the turn shares it and no
+ * binding uses it. A sub-agent never resolves to a binding's purpose: without a
+ * usable key of its own it runs on `chat`.
+ */
+export function selectLanguagePurpose(
   graph: InferenceOperationScope['graph'],
-  input: Readonly<{ bindingName?: string; agent?: string }>,
+  input: Readonly<{ bindingName?: string; agent?: SubAgentModelKey }>,
+  bindingNames: ReadonlySet<string>,
 ): 'chat' | `agent:${string}` {
-  const agent = input.agent?.trim();
-  if (agent && agent !== 'zhin' && graph.purposes.agents?.[agent]) return `agent:${agent}`;
+  const agent = input.agent;
+  if (agent && agent.name !== 'zhin') {
+    const agents = graph.purposes.agents ?? {};
+    const configured = (key: string) => Object.hasOwn(agents, key) && Boolean(agents[key]);
+    const qualified = agent.qualifiedName?.trim();
+    if (qualified && configured(qualified)) {
+      if (!bindingNames.has(qualified)) return `agent:${qualified}`;
+      logger.warn(`sub-agent ${qualified}: purposes.agents.${qualified} belongs to the Agent binding of that name; using chat`);
+    } else if (configured(agent.name)) {
+      if (bindingNames.has(agent.name)) {
+        logger.warn(`sub-agent ${agent.name}: purposes.agents.${agent.name} belongs to the Agent binding of that name; `
+          + `key the sub-agent by its qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
+      } else if (agent.bareNameShared) {
+        logger.warn(`sub-agent ${agent.name}: purposes.agents.${agent.name} is ambiguous (several sub-agents share the name); `
+          + `key it by the qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
+      } else {
+        return `agent:${agent.name}`;
+      }
+    }
+    return 'chat';
+  }
   return !input.bindingName || input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}`;
 }
 
@@ -35,6 +76,10 @@ function selectLanguagePurpose(
 export class ModelRuntimeService {
   #closed = false;
   constructor(private readonly options: ModelRuntimeServiceOptions) {}
+
+  #bindingNames(): ReadonlySet<string> {
+    return new Set(['zhin', ...(this.options.bindingNames?.() ?? [])]);
+  }
 
   async acquireForTurn(input: ModelTurnAcquireInput): Promise<ModelExecutionScope> {
     if (this.#closed) throw new ModelRuntimeError('not-prepared');
@@ -67,7 +112,7 @@ export class ModelRuntimeService {
         : await runtime.openScope({ context, signal: input.signal, snapshot: input.inferenceSnapshot });
     } catch (error) { runtime.retire(); throw error; }
     try {
-      const purpose = selectLanguagePurpose(scope.graph, input);
+      const purpose = selectLanguagePurpose(scope.graph, input, this.#bindingNames());
       const selected = await scope.resolve({ kind: 'language', purpose });
       const chat = await bundle({ scope, binding: selected, purpose });
       const candidate = (options: Readonly<{
@@ -115,6 +160,7 @@ export class ModelRuntimeService {
           const children = new Set<Promise<ModelExecutionScope>>();
           let closed: Promise<void> | undefined;
           const close = (): Promise<void> => closed ??= (async () => {
+            clearTimeout(expiry);
             retained.retirementSignal.removeEventListener('abort', onRetired);
             try {
               await Promise.allSettled([...children].map(async child => (await child).release()));
@@ -122,6 +168,12 @@ export class ModelRuntimeService {
           })();
           // The host bounds the reservation: a retired generation never waits for delegated work.
           const onRetired = () => { void close().catch(() => undefined); };
+          // ...and so does the wall clock: see MAX_DELEGATION_RETENTION_MS.
+          const expiry = setTimeout(() => {
+            logger.warn(`model delegation held for ${MAX_DELEGATION_RETENTION_MS / 60_000} min; releasing it and its open operations`);
+            onRetired();
+          }, MAX_DELEGATION_RETENTION_MS);
+          expiry.unref?.();
           if (retained.retirementSignal.aborted) onRetired();
           else retained.retirementSignal.addEventListener('abort', onRetired, { once: true });
           return Object.freeze({

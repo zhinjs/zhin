@@ -142,7 +142,12 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
   | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
-  | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>;
+  | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>
+  /**
+   * Final reply of a turn that does not record `turn_end` (a sub-agent actor turn):
+   * checked for a lookup claim without any tool call, like `turn_end` output.
+   */
+  | Readonly<{ kind: 'final_reply'; text: string }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -246,6 +251,14 @@ export class TurnTraceCollector {
     return true;
   }
 
+  #checkLookupClaim(reply: string): void {
+    if (this.#claimWithoutToolCall) return;
+    const phrase = claimWithoutToolCall(reply, this.#toolCalls.size);
+    if (!phrase) return;
+    this.#claimWithoutToolCall = phrase;
+    this.#addTimeline('claim_without_tool_call', summarizeText(phrase, 60));
+  }
+
   /** Finds this collector or a nested one by turn id. */
   find(turnId: string): TurnTraceCollector | undefined {
     if (turnId === this.turnId) return this;
@@ -298,6 +311,8 @@ export class TurnTraceCollector {
       if (this.#contextBudget) return;
       this.#contextBudget = note.report;
       this.#addTimeline('context_budget', `~${note.report.total_tokens} tokens (fixed ~${note.report.fixed_tokens})`);
+    } else if (note.kind === 'final_reply') {
+      this.#checkLookupClaim(note.text);
     } else if (note.kind === 'model_selection') {
       this.#modelSelection = Object.freeze({ ...note.selection });
       this.#addTimeline('model_selection', `${note.selection.purpose} → ${note.selection.account_id}/${note.selection.model}`);
@@ -380,11 +395,7 @@ export class TurnTraceCollector {
         return;
       }
       case 'turn_end': {
-        const phrase = claimWithoutToolCall(renderAgentOutput(event.output), this.#toolCalls.size);
-        if (phrase) {
-          this.#claimWithoutToolCall = phrase;
-          this.#addTimeline('claim_without_tool_call', summarizeText(phrase, 60));
-        }
+        this.#checkLookupClaim(renderAgentOutput(event.output));
         this.#finish({ status: 'completed' });
         return;
       }

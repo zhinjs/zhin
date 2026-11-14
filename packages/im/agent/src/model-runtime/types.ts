@@ -41,10 +41,10 @@ export interface ModelDelegationAuthority {
     epoch?: string;
     bindingName?: string;
     /**
-     * Sub-agent name: selects the `agent:<name>` purpose when one is configured,
+     * Sub-agent: selects its `agent:<key>` purpose when one is configured,
      * otherwise the chat purpose (#1250 agent-purpose-binding-ignored).
      */
-    agent?: string;
+    agent?: SubAgentModelKey;
     signal?: AbortSignal;
   }>): Promise<ModelExecutionScope>;
   release(): Promise<void>;
@@ -82,9 +82,20 @@ export interface ModelContextAcquireInput {
   readonly snapshots: SnapshotReader;
   readonly context: ProviderCallContext;
   readonly bindingName?: string;
-  /** See {@link ModelDelegationAuthority.acquire}: configured `agent:<name>` purpose, else chat. */
-  readonly agent?: string;
+  /** See {@link ModelDelegationAuthority.acquire}: configured `agent:<key>` purpose, else chat. */
+  readonly agent?: SubAgentModelKey;
   readonly signal?: AbortSignal;
+}
+/**
+ * How a sub-agent is looked up in `purposes.agents`: `qualifiedName`
+ * (`<plugin>__<agent>`) first; the bare `name` only when no other sub-agent
+ * shares it and no Agent binding uses it.
+ */
+export interface SubAgentModelKey {
+  readonly name: string;
+  readonly qualifiedName?: string;
+  /** Another sub-agent registered for the turn has the same bare name. */
+  readonly bareNameShared?: boolean;
 }
 export interface ModelRuntimeServiceOptions {
   readonly rootId: string;
@@ -92,6 +103,8 @@ export interface ModelRuntimeServiceOptions {
   /** The actual operation lease; candidate setup cannot acquire an older/latest generation. */
   readonly inferenceFactory: (input: Readonly<{ lease: SnapshotLease; snapshots: SnapshotReader }>) => InferenceRuntime;
   readonly context: (input: ModelTurnResolveInput) => ProviderCallContext | Promise<ProviderCallContext>;
+  /** Agent binding names (`ai.agents.<name>`; `zhin` is implied): `purposes.agents` keys a sub-agent never uses. */
+  readonly bindingNames?: () => Iterable<string>;
 }
 export type ModelRuntimeErrorCode = 'not-prepared' | 'invalid-context' | 'unknown-binding';
 export class ModelRuntimeError extends Error {
