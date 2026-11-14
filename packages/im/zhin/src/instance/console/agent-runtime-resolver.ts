@@ -5,6 +5,7 @@ import {
   resolveCurrentAgentIntrospection,
 } from './agent-console.js';
 import { AgentConfigProjection } from './agent-config-projection.js';
+import { projectAgentBindings, projectRecentTurns, type AgentBindingInput, type AgentInsightsSource } from './agent-insights.js';
 import {
   listGenerationCommands,
   listGenerationComponents,
@@ -15,11 +16,25 @@ import {
   previewGenerationComponentDelivery,
 } from './agent-feature-projection.js';
 
+const RECENT_TURNS_LIMIT = 20;
+
+async function providerDisplayOf(insights: AgentInsightsSource | undefined) {
+  try { return await insights?.providerDisplay(); } catch { return undefined; }
+}
+
 function createAgentRuntime(
   projectRoot: string,
   getSnapshot: () => RuntimeSnapshot,
+  insights?: AgentInsightsSource,
 ): ConsoleAgentRuntime {
   const configuration = new AgentConfigProjection(projectRoot);
+  const liveBindings = (): readonly AgentBindingInput[] | undefined => {
+    const live = resolveCurrentAgentConsole(getSnapshot())?.listBindings();
+    if (!live?.length) return undefined;
+    return live.map(binding => ({ name: binding.name, provider: binding.providerAlias, model: binding.model,
+      ...(binding.nickname ? { nickname: binding.nickname } : {}),
+      ...(Array.isArray((binding as { mcpServers?: unknown }).mcpServers) ? { mcpServers: (binding as unknown as { mcpServers: string[] }).mcpServers } : {}) }));
+  };
   return {
     sessionTree: resolveCurrentAgentConsole(getSnapshot())?.sessionTree,
     introspection: {
@@ -28,7 +43,16 @@ function createAgentRuntime(
       components: () => listGenerationComponents(getSnapshot(), projectRoot),
       renderComponent: input => renderGenerationComponent(getSnapshot(), input),
       previewComponentDelivery: input => previewGenerationComponentDelivery(getSnapshot(), input),
-      bindings: () => configuration.listBindings(),
+      // #1250: show what each binding actually runs on (purpose binding), not legacy config fields.
+      bindings: async () => projectAgentBindings(
+        liveBindings() ?? configuration.listBindings() as unknown as readonly AgentBindingInput[],
+        await providerDisplayOf(insights),
+      ),
+      recentTurns: async () => {
+        if (!insights) return [];
+        const [traces, display] = await Promise.all([insights.recentTraces(RECENT_TURNS_LIMIT), providerDisplayOf(insights)]);
+        return projectRecentTurns(traces, display, RECENT_TURNS_LIMIT);
+      },
       tools: () => listGenerationTools(getSnapshot(), projectRoot),
       promptSections: () => listGenerationPromptSections(getSnapshot(), projectRoot),
       mcp: () => mergeMcpServers(configuration, getSnapshot()),
@@ -39,6 +63,7 @@ function createAgentRuntime(
 export function createAgentRuntimeLeaseResolver(
   projectRoot: string,
   snapshots?: SnapshotReader,
+  insights?: AgentInsightsSource,
 ): (() => { value: ConsoleAgentRuntime; release(): void } | null) | undefined {
   if (!snapshots) return undefined;
   return () => {
@@ -49,7 +74,7 @@ export function createAgentRuntimeLeaseResolver(
       return null;
     }
     return {
-      value: createAgentRuntime(projectRoot, () => lease.value),
+      value: createAgentRuntime(projectRoot, () => lease.value, insights),
       release: () => lease.release(),
     };
   };

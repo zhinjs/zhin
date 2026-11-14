@@ -611,6 +611,9 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `-s, --session <pattern>` | Session key substring, or a glob with `*` |
 | `--json` | JSON output |
 | `--cwd <dir>` / `--dir <dir>` | Project root / trace directory |
+| `--tz <zone>` | IANA zone for day boundaries; defaults to the instance zone (`TZ`, else the system zone) |
+
+Each day also lists model usage merged by "service · model": calls recorded under a service's `services:` and `accounts:` ids become one row, with the service name read from the model configuration in the project database (the model alone when it cannot be read). The session column shows the conversation name recorded in the trace (e.g. `qq · 群 Test`) with a short session key. Input tokens are the provider-reported input of every model call (iterations and sub-agents included), a different basis from the first-request segment estimate below.
 
 Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
 

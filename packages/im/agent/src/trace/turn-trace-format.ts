@@ -69,7 +69,9 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     const cache = call.cache_read_tokens ? ` cache=${call.cache_read_tokens}` : '';
     const reasoning = call.reasoning_tokens ? ` reasoning=${call.reasoning_tokens}` : '';
     const cacheWrite = call.cache_write_tokens !== undefined ? ` cache_write=${call.cache_write_tokens}` : '';
-    const model = call.model ? ` model=${call.provider ?? '?'}/${call.model}` : '';
+    // Graph ids (`services:<uuid>` / `accounts:<uuid>`) mean nothing to a reader; show the model alone then.
+    const opaque = !call.provider || /^(services|accounts|profiles):/u.test(call.provider);
+    const model = call.model ? ` model=${opaque ? call.model : `${call.provider}/${call.model}`}` : '';
     lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}`);
   }
 

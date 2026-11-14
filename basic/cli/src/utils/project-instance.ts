@@ -126,6 +126,8 @@ export interface InstanceCliModule {
   formatEngagementList(summaries: readonly never[]): string;
   loadAgentModule(): Promise<AgentModuleView>;
   loadAgentTraceModule(): Promise<AgentTraceModuleView>;
+  /** Present in instances from #1250 on: maps recorded provider ids to service names. */
+  loadProviderDisplay?(root: string): Promise<{ resolveProvider(id: string): { key: string; label: string } | undefined } | undefined>;
   // `zhin migrate inference` drives these modules field by field; their shapes stay owned by the instance.
   loadInferenceMigrationSessionBindings(): Promise<any>;
   loadInferenceMigrationPreview(): Promise<any>;

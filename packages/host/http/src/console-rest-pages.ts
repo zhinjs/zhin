@@ -65,7 +65,10 @@ export interface ConsoleAgentIntrospection {
   commands?(): readonly unknown[];
   middlewares?(): readonly unknown[];
   components?(): readonly unknown[];
-  bindings?(): readonly unknown[];
+  /** Agent bindings with the provider / model they actually run on (may read the provider graph). */
+  bindings?(): readonly unknown[] | Promise<readonly unknown[]>;
+  /** Recent Agent turns from the trace archive, newest first (#1250). */
+  recentTurns?(): readonly unknown[] | Promise<readonly unknown[]>;
   tools?(): readonly unknown[];
   promptSections?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
