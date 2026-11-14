@@ -41,8 +41,12 @@ describe('adapter Console RPC: endpoint-drift / endpoint-import / endpoint-write
     const imported = rpc.methods.get('endpoint-import')!;
     expect(imported.requiredPermissions).toEqual(['demo:write']);
     await expect(imported.handler({ id: 'fresh', expectedRevision: 0 }, call)).rejects.toMatchObject({ code: 'conflict' });
-    await expect(imported.handler({ id: 'nobody' }, call)).rejects.toMatchObject({ code: 'not_found' });
-    const result = await imported.handler({ id: 'fresh', start: true }, call) as Record<string, unknown>;
+    // An import overwrites saved accounts: the caller must name the list revision it looked at.
+    await expect(imported.handler({ id: 'fresh', start: true }, call))
+      .rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('expectedRevision') });
+    expect([...f.repository.state.values()].flatMap(snapshot => snapshot.endpoints).some(record => record.endpointId === 'fresh')).toBe(false);
+    await expect(imported.handler({ id: 'nobody', expectedRevision: f.adapter.revision }, call)).rejects.toMatchObject({ code: 'not_found' });
+    const result = await imported.handler({ id: 'fresh', start: true, expectedRevision: f.adapter.revision }, call) as Record<string, unknown>;
     expect(result).toMatchObject({ saved: true });
     const persisted = [...f.repository.state.values()].flatMap(snapshot => snapshot.endpoints).find(record => record.endpointId === 'fresh');
     expect(persisted).toMatchObject({ desiredEnabled: true, secretRefs: { token: '${FRESH_TOKEN}' }, config: { id: 'fresh', label: 'from-yml' } });

@@ -22,6 +22,15 @@ class StubEndpoint extends EventEmitter implements Endpoint {
 class StubAdapter extends Adapter<StubEndpoint> {
   readonly created: StubEndpoint[] = [];
   failWith?: unknown;
+  identity?: readonly string[];
+  preparing = false;
+  override get configurationIdentityFields(): readonly string[] | undefined { return this.identity; }
+  protected override validateConfiguration(config: Readonly<Record<string, unknown>>): void {
+    if (config.invalid === true) throw new AdapterManagementError('invalid_configuration', 'invalid account configuration');
+  }
+  protected override prepareConfiguration(config: Readonly<Record<string, unknown>>, identity: Readonly<{ instanceId: string }>) {
+    return this.preparing ? { ...config, dataDir: `data/${identity.instanceId}` } : config;
+  }
   protected createEndpoint(config: Record<string, unknown>, _context: EndpointCreationContext): StubEndpoint {
     const failure = this.failWith;
     const endpoint = new StubEndpoint(config, async () => { if (failure) throw failure; });
@@ -275,6 +284,29 @@ describe('Adapter configuration drift, import and write-back', () => {
     expect(record).toMatchObject({ instanceId: 'main', platformUserId: 'u1', config: { id: 'main', url: 'wss://new' },
       secretRefs: { secret: '${MAIN_SECRET}' }, revision: 2 });
     expect(record.config).not.toHaveProperty('secret');
+  });
+
+  it('refuses an import that changes the account identity, and validates / prepares imported configuration', async () => {
+    const { adapter, repository, slot, configFile } = await fixture({
+      saved: [saved('main', { uin: 1, url: 'wss://old' }, { platformUserId: 'u1' })],
+      block: { endpoints: [{ id: 'main', uin: 2, url: 'wss://new' }, { id: 'bad', invalid: true }, { id: 'fresh', url: 'wss://f' }] } });
+    adapter.identity = ['uin'];
+    adapter.preparing = true;
+    // Another platform account under the same id: refused, nothing written (replace it instead).
+    await expect(adapter.importConfigured('main', 1)).rejects.toMatchObject({ code: 'invalid_configuration', message: expect.stringContaining('replace') });
+    expect(repository.compareAndSet).not.toHaveBeenCalled();
+    // validateConfiguration runs on import.
+    await expect(adapter.importConfigured('bad', 1)).rejects.toMatchObject({ code: 'invalid_configuration' });
+    expect(repository.compareAndSet).not.toHaveBeenCalled();
+    // A new account is prepared for its own fresh identity.
+    await adapter.importConfigured('fresh', 1);
+    const fresh = repository.state.get(slot.id)!.endpoints.find(record => record.endpointId === 'fresh')!;
+    expect(fresh.config).toMatchObject({ url: 'wss://f', dataDir: `data/${fresh.instanceId}` });
+    // Same identity: imported over the account, prepared for its existing identity, platform identity kept.
+    configFile.block = { endpoints: [{ id: 'main', uin: 1, url: 'wss://new' }] };
+    await adapter.importConfigured('main', 2);
+    const main = repository.state.get(slot.id)!.endpoints.find(record => record.endpointId === 'main')!;
+    expect(main).toMatchObject({ instanceId: 'main', platformUserId: 'u1', config: { uin: 1, url: 'wss://new', dataDir: 'data/main' } });
   });
 
   it('writes saved accounts back without plaintext and reports placeholders; a moved file is a conflict', async () => {

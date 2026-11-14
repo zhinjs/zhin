@@ -82,11 +82,13 @@ export function prepareConsoleAdapterMutation(spec: AdapterConsoleSpec, call: Pl
 export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall, action: AdapterConsoleMutation,
   input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
   if (action === 'import') {
-    // `expectedGeneration` / `expectedRevision` are optional here: absent means "as currently shown".
-    const current = call.runtime ? ownedConsoleAdapter(spec, call) : undefined;
+    // `expectedGeneration` may be omitted (the current generation); `expectedRevision` may not: an
+    // import overwrites a saved account, so the caller must name the account list it looked at.
+    if (!Object.hasOwn(input, 'expectedRevision')) {
+      throw new PluginConsoleRpcError('invalid_input', '导入需要 expectedRevision（刷新账号清单后使用其中的 revision）');
+    }
     input = { ...input,
-      ...(input.expectedGeneration === undefined && call.runtime ? { expectedGeneration: call.runtime.generation } : {}),
-      ...(!Object.hasOwn(input, 'expectedRevision') && current ? { expectedRevision: current.revision } : {}) };
+      ...(input.expectedGeneration === undefined && call.runtime ? { expectedGeneration: call.runtime.generation } : {}) };
   }
   const { adapter, revision, options } = prepareConsoleAdapterMutation(spec, call, input);
   try {
@@ -207,7 +209,13 @@ export async function consoleConfigWriteback(spec: AdapterConsoleSpec, call: Plu
 export function consoleAccountTarget(adapters: readonly AdapterInstance[], action: AdapterConsoleMutation | AdapterConsoleConfigAction,
   input: PluginConsoleRpcInput): string | undefined {
   if (action === 'add' || action === 'replace' || action === 'writeback') return undefined;
-  if (action === 'import') return typeof input.id === 'string' ? input.id.trim() : undefined;
+  if (action === 'import') {
+    // Importing over a saved account acts on that account; importing a new one adds an account,
+    // which (like `add`) needs the adapter level — an endpoint binding never covers a new account.
+    const id = typeof input.id === 'string' ? input.id.trim() : '';
+    if (!id) return undefined;
+    return adapters.some(adapter => adapter.list().some(entry => entry.endpointId === id)) ? id : undefined;
+  }
   if (typeof input.instanceId === 'string' && input.instanceId) {
     const selected = adapters.flatMap(adapter => adapter.list()).find(entry => entry.instanceId === input.instanceId);
     if (!selected) return undefined;

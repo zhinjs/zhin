@@ -267,7 +267,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   /**
    * Import one `zhin.config.yml` account into the persisted directory (#1250): `${VAR}` values
    * become `secretRefs` (resolved at start, never stored resolved). An account already persisted
-   * under that id takes the file's configuration (identity kept); a new one is added. `start`
+   * under that id takes the file's configuration (identity kept); one whose identity fields
+   * (`configurationIdentityFields` / `configurationIdentityProbeFields`) differ in the file is refused
+   * (`invalid_configuration`: replace it instead). A new one is added. The configuration is prepared
+   * (`prepareConfiguration`) and validated (`validateConfiguration`) like `add` / `update`. `start`
    * also enables and starts it.
    */
   importConfigured(endpointId: string, expectedRevision: number | null,
@@ -282,21 +285,31 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       const seed = configuredEndpointSeeds(document.config, this.descriptor.name, source.resolveIdentifier?.bind(source))
         .find(value => value.endpointId === endpointId);
       if (!seed) throw new AdapterManagementError('not_found', 'The configuration file has no such account');
-      const { config, secretRefs } = splitEnvironmentReferences(seed.config);
-      configuredSelfProfile(config);
+      const split = splitEnvironmentReferences(seed.config);
+      const secretRefs = split.secretRefs;
+      configuredSelfProfile(split.config);
       const existing = [...this.#children.values()].find(child => child.desired.endpointId === endpointId);
       if (existing) {
         const instanceId = existing.desired.instanceId;
+        // Importing over an account keeps its identity (instanceId / canonicalId / platformUserId):
+        // a file entry naming another platform account must go through an explicit replacement.
         const identity = [...(this.configurationIdentityFields ?? []), ...this.configurationIdentityProbeFields];
         const identityChanged = identity.some(field =>
-          !isDeepStrictEqual(readConfigurationPath(existing.desired.config, field), readConfigurationPath(config, field))
+          !isDeepStrictEqual(readConfigurationPath(existing.desired.config, field), readConfigurationPath(split.config, field))
           || existing.desired.secretRefs?.[field] !== secretRefs?.[field]);
+        if (identityChanged) {
+          throw new AdapterManagementError('invalid_configuration',
+            'The configuration file changes this account\'s identity; replace the account (or remove it and import it again) instead of importing over it');
+        }
+        const config = this.prepareConfiguration(structuredClone(split.config) as Config, {
+          instanceId, endpointId, canonicalId: existing.desired.canonicalId,
+        }) as Readonly<Record<string, unknown>>;
+        this.validateConfiguration(config as Config);
         return this.#commit({
           expectedRevision,
           next: () => this.#replace(instanceId, record => {
-            const { platformUserId, secretRefs: _previous, ...rest } = record;
+            const { secretRefs: _previous, ...rest } = record;
             return { ...rest, config, ...(secretRefs ? { secretRefs } : {}),
-              ...(platformUserId !== undefined && !identityChanged ? { platformUserId } : {}),
               desiredEnabled: start === true ? true : record.desiredEnabled, revision: record.revision + 1 };
           }),
           execution: { instanceId, action: start === true ? 'start' : 'update', child: existing, run: async () => {
@@ -309,8 +322,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       const seedId = (seed.singleton ? this.descriptor.id : `${this.descriptor.id}~${endpointId}`) as CapabilityId;
       const taken = this.#children.has(seedId) || this.#canonical.has(seedId);
       const instanceId = taken ? randomUUID() : String(seedId);
-      const record: EndpointDesiredRecord = Object.freeze({ instanceId,
-        canonicalId: (taken ? `${this.descriptor.id}~${instanceId}` : seedId) as CapabilityId,
+      const canonicalId = (taken ? `${this.descriptor.id}~${instanceId}` : seedId) as CapabilityId;
+      const config = this.prepareConfiguration(structuredClone(split.config) as Config, { instanceId, endpointId, canonicalId }) as
+        Readonly<Record<string, unknown>>;
+      this.validateConfiguration(config as Config);
+      const record: EndpointDesiredRecord = Object.freeze({ instanceId, canonicalId,
         endpointId, revision: 1, desiredEnabled: start === true, config, ...(secretRefs ? { secretRefs } : {}) });
       return this.#commit({
         expectedRevision,

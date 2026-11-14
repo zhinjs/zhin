@@ -487,6 +487,17 @@ describe('adapter account RPC target follows the account the handler selects', (
     expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
   });
 
+  it('authorizes the #1250 import of a not-yet-saved account at the adapter level, like endpoint-add', async () => {
+    // A binding on the endpoint the new account would get does not cover creating it.
+    const { f, as } = await endpointFixture([{ role: 'operator', scope: { kind: 'endpoint', key: 'first/acct-new' }, permissions: CONSOLE_BUILTIN_ROLES.operator.permissions }]);
+    const writes = f.repository.compareAndSet.mock.calls.length;
+    expect(await as('endpoint-import', { id: 'acct-new' })).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
+    // Adapter-level endpoint.manage is authorized (then refused by the handler: no configuration file port here).
+    const adapterManager = await endpointFixture([{ role: 'custom', scope: { kind: 'adapter', key: 'first' }, permissions: ['endpoint.view', 'endpoint.manage', 'account:read'] }]);
+    expect(await adapterManager.as('endpoint-import', { id: 'acct-new' })).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+  });
+
   it('refuses #1250 write-back to an account operator without ops.config.write (it rewrites zhin.config.yml)', async () => {
     const adapterOperator: ConsoleGrant = { role: 'operator', scope: { kind: 'adapter', key: 'first' }, permissions: ['endpoint.view', 'endpoint.manage', 'account:read'] };
     const { as } = await endpointFixture([adapterOperator]);
