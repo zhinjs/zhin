@@ -594,7 +594,7 @@ describe('GatewayPackageService enable / disable', () => {
   it('refuses invalid requests and missing permissions before touching the instance', async () => {
     const instance = new FakeInstance('running');
     const subject = await declaredService(instance);
-    await expect(subject.setEnabled({ plugin: 'missing' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('未在配置中声明') });
+    await expect(subject.setEnabled({ plugin: 'missing' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('找不到插件实例 missing') });
     await expect(subject.setEnabled({ plugin: 'http' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('保留配置键') });
     await expect(subject.setEnabled({ plugin: 'bot' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('根插件') });
     await expect(subject.setEnabled({ plugin: 42 }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
