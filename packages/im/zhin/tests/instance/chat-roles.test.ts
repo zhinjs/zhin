@@ -4,11 +4,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from '@zhin.js/host-http';
-import { featureScopeTarget } from '@zhin.js/console-protocol';
+import { CHAT_ROLES_RPC, featureScopeTarget } from '@zhin.js/console-protocol';
 import {
   ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
-import { CHAT_ROLES_RPC } from '@zhin.js/console-protocol';
 import { dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 

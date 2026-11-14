@@ -18,7 +18,7 @@ export const RUNTIME_CONSOLE_RPC_TYPES: ReadonlySet<string> = new Set<string>([
   ...Object.values(PLUGIN_RPC),
   // Project files / environment / schemas / database / process
   'files:tree', 'files:read', 'files:save',
-  'env:list', 'env:get', 'env:save',
+  'env:list', 'env:get', 'env:reveal', 'env:save',
   'schema:get', 'schema:get-all',
   'db:info', 'db:tables', 'db:select', 'db:query', 'db:execute',
   'db:schema:describe', 'db:schema:preview', 'db:schema:apply',
