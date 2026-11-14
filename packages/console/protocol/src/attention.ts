@@ -58,12 +58,14 @@ export type ConsoleAttentionKind =
   /** A configured MCP server is not connected. */
   | 'mcp.disconnected'
   /** The persistent log store holds error entries. */
-  | 'logs.errors';
+  | 'logs.errors'
+  /** An enabled persistent schedule job has no computable next run: it will never fire (#1250). */
+  | 'schedule.unschedulable';
 
 export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.freeze([
   'login.pending', 'endpoint.offline', 'plugin.error', 'plugin.dependencies', 'plugin.config',
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
-  'mcp.disconnected', 'logs.errors',
+  'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
 ]);
 
 /** The object an item is about. Absent fields do not apply. */
@@ -80,6 +82,8 @@ export interface ConsoleAttentionSubject {
   readonly mcpServer?: string;
   readonly approvalId?: string;
   readonly loginTaskId?: string;
+  /** Persistent schedule job id. */
+  readonly scheduleJobId?: string;
 }
 
 export interface ConsoleAttentionAction {

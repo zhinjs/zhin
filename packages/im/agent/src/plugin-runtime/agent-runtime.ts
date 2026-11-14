@@ -333,7 +333,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
-      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot() });
+      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) });
       if (models) {
         mediaPerception = modelPort?.createPerception?.(models, request);
         selected.provider = models.chat.binding.account.id;
@@ -381,7 +381,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const engine = resolveTurnEngine(lease.value);
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
-      outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot() }, decision => runWithAgentTurnConfiguration(
+      outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) }, decision => runWithAgentTurnConfiguration(
         { activeBinding: selection.binding, models, mediaPerception },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({

@@ -8,6 +8,9 @@ import {
   type ScheduleJobRecordCli,
   type JobScheduleCli,
   parseNotifyChannel,
+  withNotifyTarget,
+  targetSummary,
+  nextRunSummary,
   normalizeCronExpression,
 } from '../utils/assistant-jobs.js';
 import {
@@ -91,6 +94,10 @@ const listCommand = new Command('list')
       logger.log(`  ${j.id}${label}  [${status}]`);
       logger.log(`    计划:   ${scheduleSummary(j.schedule)}`);
       logger.log(`    投递:   ${notifySummary(j.notify)}`);
+      const target = targetSummary(j);
+      if (target) logger.log(`    目标:   ${target}`);
+      const next = nextRunSummary(j);
+      if (next) logger.log(`    下次:   ${next}`);
       logger.log(`    内容:   ${j.action.prompt}`);
     }
   });
@@ -101,7 +108,8 @@ const addCommand = new Command('add')
   .option('--prompt <prompt>', '到点触发时发给 AI 的提示词（必填）')
   .option('-l, --label <label>', '可选标签')
   .option('--kind <kind>', 'solar|lunar|workday|freeDay（默认 solar）', 'solar')
-  .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent）', 'silent')
+  .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent；指定 --target 时为 im）')
+  .option('--target <target>', 'im 投递目标 <adapter>:<endpoint>:<kind>:<id>，kind 为 private | group | channel；省略时沿用 assistant / profile 的 defaults.notify')
   .option('--at <iso8601>', '单次执行时间，ISO8601')
   .option('--every <interval>', '固定间隔，如 30m, 1h, 1d')
   .action(async (cronExpression: string | undefined, opts: {
@@ -109,6 +117,7 @@ const addCommand = new Command('add')
     label?: string;
     kind?: string;
     notifyChannel?: string;
+    target?: string;
     at?: string;
     every?: string;
   }) => {
@@ -122,7 +131,7 @@ const addCommand = new Command('add')
 
     let notify;
     try {
-      notify = parseNotifyChannel(opts.notifyChannel ?? 'silent');
+      notify = withNotifyTarget(parseNotifyChannel(opts.notifyChannel ?? (opts.target ? 'im' : 'silent')), opts.target);
     } catch (e) {
       logger.error((e as Error).message);
       process.exit(1);

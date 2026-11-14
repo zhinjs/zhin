@@ -12,6 +12,7 @@
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
  * | `mcp.disconnected` | Agent MCP servers (configured + connected) | `status.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
+ * | `schedule.unschedulable` | enabled persistent schedule jobs without a next run | `ops.schedule.read` |
  *
  * Text is localized for the request's `locale` (task catalog pattern); dynamic Host text (issues,
  * error messages, ids) is inserted verbatim, except configuration parse errors, which are reduced to
@@ -114,6 +115,14 @@ export interface AttentionMcpServer {
   readonly connected: boolean;
 }
 
+export interface AttentionUnschedulableJob {
+  readonly jobId: string;
+  readonly label?: string;
+  /** `invalid_schedule` | `no_next_run` | `expired` */
+  readonly reason: string;
+  readonly since: number;
+}
+
 export interface AttentionErrorLogs {
   readonly count: number;
   /** ISO time of the newest error row. */
@@ -129,6 +138,8 @@ export interface AttentionSources {
   /** `undefined` when the Agent (and its queue) is not running. */
   readonly toolApprovals?: () => readonly AttentionToolApproval[] | undefined;
   readonly mcpServers?: () => readonly AttentionMcpServer[];
+  /** `undefined` when the persistent scheduler (Agent assistant) is not running. */
+  readonly unschedulableJobs?: () => readonly AttentionUnschedulableJob[] | undefined;
   /** `null` when the log store is not available. */
   readonly errorLogs?: () => Promise<AttentionErrorLogs | null>;
   /**
@@ -142,7 +153,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule';
 
 // ---------------------------------------------------------------- shared reads
 
@@ -266,6 +277,11 @@ const messages = createMessages({
   'logs.title': { 'zh-CN': '日志里有 {count} 条错误', en: 'Errors in the logs: {count}' },
   'logs.detail': { 'zh-CN': '持久日志统计；清理日志后重新计数。', en: 'Persistent log count; it restarts after logs are cleaned up.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
+  'schedule.title': { 'zh-CN': '定时任务「{job}」不会再运行', en: 'Scheduled task "{job}" will not run' },
+  'schedule.detail.invalid_schedule': { 'zh-CN': '它已启用，但调度规则无效，算不出下次运行时间。修改规则或暂停它。', en: 'It is enabled, but its schedule is invalid and has no next run. Fix the schedule or pause it.' },
+  'schedule.detail.no_next_run': { 'zh-CN': '它已启用，但按当前规则没有下一次运行时间。修改规则或暂停它。', en: 'It is enabled, but its schedule has no next run. Change the schedule or pause it.' },
+  'schedule.detail.expired': { 'zh-CN': '它已启用，但单次执行时间已过且没有运行。重新设置时间或删除它。', en: 'It is enabled, but its one-time run is in the past and never ran. Set a new time or delete it.' },
+  'schedule.action': { 'zh-CN': '查看定时任务', en: 'Open scheduled tasks' },
 });
 
 const LOGIN_STEPS = new Set(['qrcode', 'sms', 'slider', 'device', 'auth']);
@@ -292,6 +308,7 @@ export const ATTENTION_PATHS = Object.freeze({
   config: '/ops/config',
   toolApprovals: '/ops/schedules?tab=admin',
   mcp: '/introspection?tab=mcp',
+  schedules: '/ops/schedules',
   errorLogs: '/logs?level=error',
 });
 
@@ -575,6 +592,18 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         title: t('mcp.title', { server: server.name }), detail: t('mcp.detail'),
         action: { label: t('mcp.action'), path: ATTENTION_PATHS.mcp },
       })));
+  }
+
+  if (sources.unschedulableJobs && allows(P.OPS_SCHEDULE_READ)) {
+    await read('schedule', () => (sources.unschedulableJobs!() ?? []).map((job): AttentionDraft => {
+      const reason = ['invalid_schedule', 'no_next_run', 'expired'].includes(job.reason) ? job.reason : 'no_next_run';
+      return {
+        kind: 'schedule.unschedulable', severity: 'warning', subject: { scheduleJobId: job.jobId }, state: { reason },
+        title: t('schedule.title', { job: job.label || job.jobId }),
+        detail: t(`schedule.detail.${reason}` as Parameters<typeof messages>[1]),
+        action: { label: t('schedule.action'), path: ATTENTION_PATHS.schedules }, since: job.since,
+      };
+    }));
   }
 
   if (sources.errorLogs && allows(P.STATUS_VIEW)) {

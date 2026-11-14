@@ -70,7 +70,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
   return Object.freeze([
     registration(
       'schedule_list',
-      '列出所有调度任务：内存任务与持久化 schedule-jobs.json',
+      '列出所有调度任务：插件内存任务，以及持久化任务（项目数据库 agent_schedule_jobs 表；无 SQL 数据库时为 data/schedule-jobs.json），含下次运行时间 state.nextRunAtMs',
       schema(),
       async () => {
         const memory = manager.scheduleFeature.getStatus();

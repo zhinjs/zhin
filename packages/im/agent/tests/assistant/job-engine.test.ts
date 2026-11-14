@@ -207,4 +207,63 @@ describe('TimerScheduler', () => {
     expect(execute).toHaveBeenCalledTimes(1);
     engine.unload();
   });
+
+  describe('next run (#1250)', () => {
+    const fridayBeforeNine = new Date('2026-11-13T00:59:00.000Z'); // 08:59 Asia/Shanghai
+    const workdayJob = {
+      id: 'assistant-profile-weatherReport', enabled: true,
+      schedule: { kind: 'workday' as const, cron: '0 0 9 * * *' },
+      action: { kind: 'agent' as const, prompt: 'weather' }, notify: { channel: 'silent' as const },
+      createdAt: 1, updatedAt: 1, state: {}, source: 'profile' as const,
+    };
+    const createEngine = (store: ScheduleJobStore, execute = vi.fn(async () => ({ success: true, responseText: 'ok', durationMs: 1 }))) =>
+      new TimerScheduler({ store, due: { run: (job, opts) => ({ execute } as unknown as TaskExecutor).execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router });
+
+    it('repairs a stored job without nextRunAtMs on load, fires it and records the following run', async () => {
+      vi.setSystemTime(fridayBeforeNine);
+      const store = new ScheduleJobStore({ dataDir });
+      await store.upsertJob(workdayJob);
+      const execute = vi.fn(async () => ({ success: true, responseText: 'ok', durationMs: 1 }));
+      const engine = createEngine(store, execute);
+      await engine.load();
+      expect((await store.getJob(workdayJob.id))?.state.nextRunAtMs).toBe(Date.parse('2026-11-13T01:00:00.000Z'));
+      await vi.advanceTimersByTimeAsync(2 * 60_000);
+      expect(execute).toHaveBeenCalledTimes(1);
+      // Next workday is Monday 2026-11-16 09:00 Asia/Shanghai (written after the run's file IO).
+      await vi.waitFor(async () => expect((await store.getJob(workdayJob.id))?.state).toMatchObject({
+        lastStatus: 'ok', nextRunAtMs: Date.parse('2026-11-16T01:00:00.000Z'),
+      }));
+      expect(engine.listUnschedulable()).toEqual([]);
+      engine.unload();
+    });
+
+    it('pause clears the next run and resume recomputes it', async () => {
+      vi.setSystemTime(fridayBeforeNine);
+      const store = new ScheduleJobStore({ dataDir });
+      const engine = createEngine(store);
+      const added = await engine.addJob(workdayJob);
+      expect(added.state.nextRunAtMs).toBe(Date.parse('2026-11-13T01:00:00.000Z'));
+      expect(await engine.pauseJob(workdayJob.id)).toBe(true);
+      expect((await store.getJob(workdayJob.id))?.state.nextRunAtMs).toBeUndefined();
+      expect(await engine.resumeJob(workdayJob.id)).toBe(true);
+      const resumed = await store.getJob(workdayJob.id);
+      expect(resumed?.enabled).toBe(true);
+      expect(resumed?.state.nextRunAtMs).toBe(Date.parse('2026-11-13T01:00:00.000Z'));
+      engine.unload();
+    });
+
+    it('reports an enabled job whose next run cannot be computed', async () => {
+      vi.setSystemTime(fridayBeforeNine);
+      const store = new ScheduleJobStore({ dataDir });
+      await store.upsertJob({ ...workdayJob, id: 'broken', schedule: { kind: 'solar', cron: 'not a cron' } });
+      await store.upsertJob({ ...workdayJob, id: 'paused', enabled: false, schedule: { kind: 'solar', cron: 'not a cron' } });
+      const engine = createEngine(store);
+      await engine.load();
+      expect(engine.listUnschedulable()).toEqual([expect.objectContaining({ jobId: 'broken', reason: 'invalid_schedule' })]);
+      expect((await store.getJob('broken'))?.state.nextRunAtMs).toBeUndefined();
+      await engine.removeJob('broken');
+      expect(engine.listUnschedulable()).toEqual([]);
+      engine.unload();
+    });
+  });
 });
