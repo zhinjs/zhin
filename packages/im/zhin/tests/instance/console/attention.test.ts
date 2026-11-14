@@ -4,6 +4,8 @@ import {
   ATTENTION_PATHS,
   AttentionObservations,
   AttentionSourceCache,
+  AttentionWarnings,
+  attentionFailureReason,
   collectAttention,
   describeConfigProblem,
   dispatchAttentionConsoleRpc,
@@ -82,7 +84,7 @@ describe('attention.list sources', () => {
     expect(byKind('tool-approval.pending')[0]).toMatchObject({ severity: 'warning', subject: { approvalId: 'appr-1' }, action: { path: '/ops/schedules?tab=admin' } });
     expect(byKind('mcp.disconnected').map(item => item.subject?.mcpServer)).toEqual(['search']);
     expect(byKind('logs.errors')[0]).toMatchObject({ severity: 'info', since: '2026-11-13T07:00:00.000Z', action: { path: '/logs?level=error' } });
-    expect(byKind('logs.errors')[0]!.title).toBe('日志里有 7 条错误');
+    expect(byKind('logs.errors')[0]!.title).toBe('最近 24 小时日志里有 7 条错误');
 
     const severities = list.items.map(item => item.severity);
     expect(severities).toEqual([...severities].sort((a, b) => ['danger', 'warning', 'info'].indexOf(a) - ['danger', 'warning', 'info'].indexOf(b)));
@@ -141,22 +143,51 @@ describe('attention.list sources', () => {
       toolApprovals: everySource().toolApprovals,
     }, { allows: owner });
     expect(list.unavailable).toEqual(['mcp', 'logs']);
+    // Why, per source (same order as `unavailable`).
+    expect(list.unavailableDetails).toEqual([{ source: 'mcp', reason: 'no snapshot' }, { source: 'logs', reason: 'log store unavailable' }]);
     expect(list.items.map(item => item.kind)).toEqual(['tool-approval.pending']);
+  });
+
+  it('gives unavailable sources a sanitized reason and logs it once per source until it changes', async () => {
+    const logged: string[] = [];
+    let clock = NOW;
+    const warnings = new AttentionWarnings(message => logged.push(message), { intervalMs: 60_000, now: () => clock });
+    let message = "EACCES: permission denied, open '/srv/bot/data/logs.db' with token=sk-live-SECRET";
+    const sources: AttentionSources = { errorLogs: async () => { throw new Error(`${message}\n    at stack (/srv/bot/node_modules/x.js:1:1)`); } };
+    const first = await collectAttention(sources, { allows: owner, warnings });
+    expect(first.unavailable).toEqual(['logs']);
+    expect(first.unavailableDetails).toEqual([{ source: 'logs', reason: "EACCES: permission denied, open '…/logs.db' with token=***" }]);
+    expect(JSON.stringify(first)).not.toMatch(/SECRET|\/srv\/bot|node_modules/u);
+    expect(logged).toEqual(["attention.list: source logs unavailable: EACCES: permission denied, open '…/logs.db' with token=***"]);
+    // The same reason again within the interval is not logged again; a new reason or the interval passing is.
+    await collectAttention(sources, { allows: owner, warnings });
+    expect(logged).toHaveLength(1);
+    message = 'database closed';
+    await collectAttention(sources, { allows: owner, warnings });
+    expect(logged).toHaveLength(2);
+    expect(logged[1]).toBe('attention.list: source logs unavailable: database closed');
+    clock += 60_000;
+    await collectAttention(sources, { allows: owner, warnings });
+    expect(logged).toHaveLength(3);
+  });
+
+  it('sanitizes failure reasons: first line, no absolute paths, no credentials', () => {
+    expect(attentionFailureReason(new Error('Cannot find module /home/me/proj/node_modules/foo/index.js\nRequire stack:\n- /home/me/x.js')))
+      .toBe('Cannot find module …/index.js');
+    expect(attentionFailureReason(new Error('ENOENT: no such file, stat C:\\Users\\me\\bot\\zhin.config.yml'))).toBe('ENOENT: no such file, stat …\\zhin.config.yml');
+    expect(attentionFailureReason(new Error('fetch https://user:pa55@example.com/x failed: Authorization: Bearer abc.def'))).toBe('fetch https://***@example.com/x failed: Authorization: Bearer ***');
+    expect(attentionFailureReason(new Error('bad config password: "hunter2" and apiKey=xyz'))).toBe('bad config password: *** and apiKey=***');
+    expect(attentionFailureReason('plain text')).toBe('plain text');
+    expect(attentionFailureReason(undefined)).toBe('unknown error');
+    expect(attentionFailureReason(new Error('x'.repeat(500))).length).toBe(200);
   });
 
   it('keeps a source all or nothing: a read failing midway contributes no items and no observations', async () => {
     const observations = new AttentionObservations();
     let clock = NOW;
-    let failPlugins = false;
     let failConfig = false;
     const sources: AttentionSources = {
-      plugins: async () => ({
-        dependencies: { status: 'failed', error: 'graph' },
-        states: [
-          { status: 'fulfilled', value: plugin({ instanceKey: 'weather', status: 'degraded', issues: ['broken'] }) },
-          ...(failPlugins ? [{ status: 'rejected' as const, reason: new Error('boom') }] : []),
-        ],
-      }),
+      plugins: async () => ({ states: [{ status: 'fulfilled', value: plugin({ instanceKey: 'weather', status: 'degraded', issues: ['broken'] }) }] }),
       configuration: {
         source: async () => ({ applicationError: 'failed' }),
         // The source half succeeds, then the secret scan throws.
@@ -165,19 +196,18 @@ describe('attention.list sources', () => {
     };
     const read = () => collectAttention(sources, { allows: owner, observations, now: () => clock });
     const first = await read();
-    expect(new Set(first.items.map(item => item.kind))).toEqual(new Set(['plugin.dependencies', 'plugin.error', 'config.apply-failed']));
-    expect(observations.size).toBe(3);
+    expect(new Set(first.items.map(item => item.kind))).toEqual(new Set(['plugin.error', 'config.apply-failed']));
+    expect(observations.size).toBe(2);
 
-    failPlugins = true;
     failConfig = true;
     clock += 60_000;
     const partial = await read();
-    expect(partial.unavailable).toEqual(['plugins', 'config']);
-    // Neither the plugin items read before the rejected entry nor the configuration source's own item leak out.
-    expect(partial.items).toEqual([]);
+    expect(partial.unavailable).toEqual(['config']);
+    expect(partial.unavailableDetails).toEqual([{ source: 'config', reason: 'schema' }]);
+    // The configuration source's own item read before the failure does not leak out.
+    expect(partial.items.map(item => item.id)).toEqual(['plugin.error:plugin=weather']);
     // Unavailable reads leave observations untouched: the problems keep their first-seen time.
-    expect(observations.size).toBe(3);
-    failPlugins = false;
+    expect(observations.size).toBe(2);
     failConfig = false;
     clock += 60_000;
     const again = await read();
@@ -188,6 +218,127 @@ describe('attention.list sources', () => {
     await collectAttention({ mcpServers: () => [{ name: 'a', connected: false }, { get name(): string { throw new Error('bad row'); }, connected: false }] },
       { allows: owner, observations: fresh });
     expect(fresh.size).toBe(0);
+  });
+});
+
+describe('attention.list plugin inspect failures', () => {
+  const LEGACY = 'Legacy plugin lifecycle state detected; run zhin migrate instances';
+
+  it('reports a plugin whose inspect failed as its own plugin.error item and keeps every other plugin item', async () => {
+    const observations = new AttentionObservations();
+    const logged: string[] = [];
+    const list = await collectAttention({
+      plugins: async () => ({
+        dependencies: { status: 'failed', error: 'graph' },
+        states: [
+          { status: 'fulfilled', value: plugin({ instanceKey: 'weather', status: 'degraded', issues: ['broken'] }) },
+          { status: 'rejected', instanceKey: 'music', reason: new Error("Cannot read /srv/bot/plugins/music/package.json\n  at x") },
+          { status: 'fulfilled', value: plugin({ instanceKey: 'news', validation: { valid: false, errors: [{ path: 'apiKey', message: 'required' }], missingEnv: [] } }) },
+          { status: 'fulfilled', value: plugin({ instanceKey: 'fine' }) },
+        ],
+      }),
+    }, { allows: owner, observations, now: () => NOW, warnings: new AttentionWarnings(message => logged.push(message)) });
+    expect(list.unavailable).toBeUndefined();
+    expect(list.unavailableDetails).toBeUndefined();
+    expect(list.items.map(item => item.id).sort()).toEqual([
+      'plugin.config:plugin=news', 'plugin.dependencies', 'plugin.error:plugin=music', 'plugin.error:plugin=weather',
+    ]);
+    const music = list.items.find(item => item.id === 'plugin.error:plugin=music')!;
+    expect(music).toEqual(expect.objectContaining({
+      kind: 'plugin.error', severity: 'danger', source: 'plugins', subject: { plugin: 'music' },
+      title: '无法读取插件 music 的状态', detail: '原因：Cannot read …/package.json', action: { label: '查看插件', path: '/plugins/music' },
+    }));
+    expect(JSON.stringify(list)).not.toContain('/srv/bot');
+    expect(observations.size).toBe(4);
+    expect(logged).toEqual(['attention.list: plugin music inspect: Cannot read …/package.json']);
+  });
+
+  it('merges the same failure of every declared plugin (legacy lifecycle state) into one project item with the command to run', async () => {
+    const legacy = () => new Error(LEGACY);
+    const sources: AttentionSources = {
+      plugins: async () => ({ states: ['weather', 'music', 'news'].map(instanceKey => ({ status: 'rejected' as const, instanceKey, reason: legacy() })) }),
+    };
+    const zh = await collectAttention(sources, { allows: owner, now: () => NOW });
+    expect(zh.unavailable).toBeUndefined();
+    expect(zh.items).toHaveLength(1);
+    expect(zh.items[0]).toEqual(expect.objectContaining({
+      id: 'plugin.error', kind: 'plugin.error', severity: 'danger', source: 'plugins',
+      title: '3 个插件的状态都无法读取',
+      detail: `原因：${LEGACY}。运行 \`zhin migrate instances\` 后刷新。`,
+      action: { label: '查看插件', path: '/plugins' },
+    }));
+    expect(zh.items[0]!.subject).toBeUndefined();
+    const en = await collectAttention(sources, { allows: owner, locale: 'en', now: () => NOW });
+    expect(en.items.map(item => [item.title, item.detail])).toEqual([[
+      'Cannot read the state of 3 plugins', `Reason: ${LEGACY}. Run \`zhin migrate instances\`, then refresh.`,
+    ]]);
+  });
+
+  it('keeps one item per plugin when the failures differ, or when not every plugin failed', async () => {
+    const differing = await collectAttention({
+      plugins: async () => ({ states: [
+        { status: 'rejected', instanceKey: 'a', reason: new Error(LEGACY) },
+        { status: 'rejected', instanceKey: 'b', reason: new Error('other') },
+      ] }),
+    }, { allows: owner });
+    expect(differing.items.map(item => [item.id, item.detail]).sort()).toEqual([
+      ['plugin.error:plugin=a', `原因：${LEGACY}。运行 \`zhin migrate instances\` 后刷新。`],
+      ['plugin.error:plugin=b', '原因：other'],
+    ]);
+    const some = await collectAttention({
+      plugins: async () => ({ states: [
+        { status: 'rejected', instanceKey: 'a', reason: new Error(LEGACY) },
+        { status: 'rejected', instanceKey: 'b', reason: new Error(LEGACY) },
+        { status: 'fulfilled', value: plugin({ instanceKey: 'c' }) },
+      ] }),
+    }, { allows: owner });
+    expect(some.items.map(item => item.id).sort()).toEqual(['plugin.error:plugin=a', 'plugin.error:plugin=b']);
+    // A single declared plugin failing is that plugin's item, named.
+    const single = await collectAttention({
+      plugins: async () => ({ states: [{ status: 'rejected', instanceKey: 'solo', reason: new Error(LEGACY) }] }),
+    }, { allows: owner });
+    expect(single.items.map(item => [item.id, item.title])).toEqual([['plugin.error:plugin=solo', '无法读取插件 solo 的状态']]);
+  });
+
+  it('still marks the plugins source unavailable when the read itself fails', async () => {
+    const list = await collectAttention({ plugins: async () => { throw new Error('Runtime snapshots are unavailable'); } }, { allows: owner });
+    expect(list.items).toEqual([]);
+    expect(list.unavailableDetails).toEqual([{ source: 'plugins', reason: 'Runtime snapshots are unavailable' }]);
+  });
+});
+
+describe('attention.list item text', () => {
+  it('describes the connection state in words and keeps the raw state in the revision', async () => {
+    const row = (transportState: string) => ({ adapter: 'qq', name: 'bot', connected: false, phase: 'offline', transportState });
+    const detail = async (transportState: string, locale?: string) =>
+      (await collectAttention({ endpoints: () => [row(transportState)] }, { allows: owner, ...(locale ? { locale } : {}) })).items[0]!;
+    expect((await detail('closed')).detail).toBe('连接状态：已断开。检查凭据、网络和适配器日志，或在「接入」里测试连接。');
+    expect((await detail('closed', 'en')).detail).toMatch(/^Connection: disconnected\. /u);
+    expect((await detail('idle')).detail).toMatch(/^连接状态：未启动。/u);
+    expect((await detail('connecting')).detail).toMatch(/^连接状态：连接中。/u);
+    const unknown = await detail('weird-state');
+    expect(unknown.detail).toMatch(/^连接状态：未知。/u);
+    expect(unknown.detail).not.toContain('weird-state');
+    expect(unknown.revision).not.toBe((await detail('unknown')).revision);
+  });
+
+  it('names where an approval was requested without the internal session key', async () => {
+    const card = { id: 'a1', toolName: 'group_kick', sessionKey: 'personal-session:v1:0123456789abcdef', createdAt: NOW };
+    const details = async (extra: Record<string, unknown>, locale?: string) => {
+      const list = await collectAttention({ toolApprovals: () => [{ ...card, ...extra }] }, { allows: owner, ...(locale ? { locale } : {}) });
+      expect(JSON.stringify(list.items)).not.toContain('personal-session');
+      return list.items[0]!.detail;
+    };
+    expect(await details({})).toBe('来自一个会话；超时无人处理会被拒绝。');
+    expect(await details({}, 'en')).toBe('Requested in a conversation; it is denied if nobody decides in time.');
+    expect(await details({ origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: '123456' } })).toBe('来自icqq / 10001 的群 123456；超时无人处理会被拒绝。');
+    expect(await details({ origin: { platform: 'icqq', endpointKey: '10001', scope: 'private', sceneId: '42' } }, 'en')).toBe('Requested in a private chat (42) on icqq / 10001; it is denied if nobody decides in time.');
+    // A Console trial chat has no IM scope.
+    expect(await details({ origin: { platform: 'console', endpointKey: 'web', sceneId: 'x' } })).toBe('来自一个会话；超时无人处理会被拒绝。');
+    expect(await details({ sessionName: '运维群', origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: '123456' } })).toBe('来自会话「运维群」；超时无人处理会被拒绝。');
+    // The key stays a technical field: a different session is a different state.
+    const revision = async (sessionKey: string) => (await collectAttention({ toolApprovals: () => [{ ...card, sessionKey }] }, { allows: owner })).items[0]!.revision;
+    expect(await revision('s1')).not.toBe(await revision('s2'));
   });
 });
 
@@ -303,9 +454,28 @@ describe('attention.list account identity', () => {
     expect(list.items).toHaveLength(1);
     expect(list.items[0]).toMatchObject({ kind: 'endpoint.offline', subject: { adapter: 'qq-work', endpointKey: 'bot' },
       action: { path: '/scope/qq-work/bot?tab=access' }, title: 'qq-work / bot 离线' });
-    // Neither the adapter type nor the canonical id is an account address.
+    // The adapter type with the account name is not an account address.
     expect((await collectAttention({ endpoints: () => [row] }, { allows: allowsFor(scoped('qq/bot')) })).items).toEqual([]);
-    expect((await collectAttention({ endpoints: () => [row] }, { allows: allowsFor(scoped(`qq-work/${row.id}`)) })).items).toEqual([]);
+  });
+
+  it('still honours bindings written with the canonical id during the transition, for that account only', async () => {
+    const typed = { ...row, adapterType: 'qq' };
+    const other = { id: 'root/qq-work\u0000zhin.adapter\u0000other', adapterType: 'qq', adapter: 'qq-work', name: 'ops', connected: false, phase: 'offline', transportState: 'closed' };
+    const visible = async (key: string) => (await collectAttention({ endpoints: () => [typed, other] }, { allows: allowsFor(scoped(key)) }))
+      .items.map(item => `${item.kind}:${item.subject?.adapter}/${item.subject?.endpointKey}`);
+    // name ≠ canonical id: the new key, the alias + canonical id, and the old `endpoint.adapter/<id>` form all see `bot` …
+    expect(await visible('qq-work/bot')).toEqual(['endpoint.offline:qq-work/bot']);
+    expect(await visible(`qq-work/${row.id}`)).toEqual(['endpoint.offline:qq-work/bot']);
+    expect(await visible(`qq/${row.id}`)).toEqual(['endpoint.offline:qq-work/bot']);
+    // … and only `bot`: unrelated bindings see nothing.
+    expect(await visible('qq-work/main')).toEqual([]);
+    expect(await visible('qq-work/root')).toEqual([]);
+    expect(await visible('other/bot')).toEqual([]);
+    // Login items use the same rule (task captured the canonical id).
+    const task = { id: 't1', adapter: 'qq', endpointKey: 'main', canonicalId: row.id, type: 'qrcode', createdAt: NOW };
+    const login = await collectAttention({ loginTasks: () => [task], endpoints: () => [typed] }, { allows: allowsFor(scoped(`qq-work/${row.id}`)) });
+    expect(login.items.map(item => item.kind)).toEqual(['login.pending']);
+    expect((await collectAttention({ loginTasks: () => [task], endpoints: () => [typed] }, { allows: allowsFor(scoped('qq-work/ops')) })).items).toEqual([]);
   });
 
   it('maps a login task to its account row (canonical id, or adapter + id) and does not also report it offline', async () => {

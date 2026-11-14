@@ -28,7 +28,7 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
-import { AttentionObservations, AttentionSourceCache, dispatchAttentionConsoleRpc } from './attention.js';
+import { AttentionObservations, AttentionSourceCache, AttentionWarnings, allowsEndpointAccount, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
 import {
   CONSOLE_CAPABILITIES_PATH,
@@ -41,6 +41,9 @@ import {
 import { instanceConsoleCapabilities, isInstanceConsoleRpcType } from './rpc-capabilities.js';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
+import { getLogger } from '@zhin.js/logger';
+
+const attentionLogger = getLogger('console');
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -66,6 +69,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   // Raw reads of plugins / config / MCP / logs are shared between requests (15 s or until the
   // project files or the runtime generation change); filtering below stays per principal.
   const attentionCache = new AttentionSourceCache({ ...(attentionSources.revision ? { revision: attentionSources.revision } : {}) });
+  const attentionWarnings = new AttentionWarnings(message => attentionLogger.warn(message));
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
@@ -145,6 +149,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         sources: attentionSources,
         observations: attentionObservations,
         cache: attentionCache,
+        warnings: attentionWarnings,
         allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
         allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
       });
@@ -251,10 +256,17 @@ function scopedEndpointList(principal: ConsolePrincipal, type: unknown, data: un
     endpoints: record.endpoints.filter((entry) => {
       // The account address the Console authorizes and links with: endpoint bindings are written
       // as `<adapter>/<name>` of these rows, and scope pages send `{ adapter, endpointKey: name }`.
-      const item = entry as { adapter?: unknown; name?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
-      const adapter = String(item.adapter ?? item.endpoint?.adapter ?? '');
-      const endpoint = String(item.name ?? item.endpoint?.id ?? '');
-      return principalAllows(principal, 'endpoint.view', { kind: 'endpoint', adapter, endpoint });
+      // Transition: bindings written before as `<endpoint.adapter>/<endpoint.id>` (canonical id)
+      // still match the same row (and only that row) — see `endpointAccountTargets`.
+      const item = entry as { adapter?: unknown; name?: unknown; id?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
+      const text = (value: unknown) => typeof value === 'string' && value ? value : undefined;
+      const adapterType = text(item.endpoint?.adapter);
+      const id = text(item.endpoint?.id) ?? text(item.id);
+      const adapter = text(item.adapter) ?? adapterType ?? '';
+      const name = text(item.name) ?? id ?? '';
+      return allowsEndpointAccount((permission, target) => principalAllows(principal, permission, target), 'endpoint.view', {
+        adapter, name, ...(id ? { id } : {}), ...(adapterType ? { adapterType } : {}),
+      });
     }),
   };
 }
