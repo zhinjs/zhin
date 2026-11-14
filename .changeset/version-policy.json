@@ -20,6 +20,16 @@
       "package": "@zhin.js/host-http",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：IM 回合审批渠道与 Agent 行为改进新增公开 API——根入口新增 formatApprovalBlocked、describeApprovalChannelConflicts 及类型 ApprovalBlockReason / ApprovalDenialContext / ApprovalChannelConflictInput；ApprovalRequestInput.purpose、ApprovalOutcome.scope、formatApprovalDenial 可选上下文参数、createBypassApprovalPort 的 confirmIntent 选项；`@zhin.js/agent/security` 新增 MEMORY_SCOPE_POLICY 与审批策略指纹相关导出。"
+    },
+    {
+      "package": "@zhin.js/im-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：UserInteractionRequest 新增可选字段 purpose 与公开类型导出 UserInteractionPurpose（审批确认消息标记 'approval'）。"
     }
   ]
 }
