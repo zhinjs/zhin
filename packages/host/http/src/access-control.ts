@@ -5,6 +5,7 @@ import {
   CONSOLE_WRITE_PERMISSIONS,
   expandPluginPermissions,
   grantsAllow,
+  grantsAllowAlsoRequired,
   isPluginConsoleRpcType,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
@@ -227,7 +228,10 @@ export function authorizeConsoleRpc(
       reason: grantsDenialReason(principal.grants, permission!),
     });
   }
-  const missing = rule.kind === 'exact' ? rule.alsoRequires?.find(extra => !grantsAllow(principal.grants, extra, rule.target)) : undefined;
+  // `alsoRequires` is held globally (same semantics as grantsAllowAlsoRequired): find the first missing one for the denial reason.
+  const missing = rule.kind === 'exact' && !grantsAllowAlsoRequired(principal.grants, rule)
+    ? rule.alsoRequires?.find(extra => !grantsAllowAlsoRequired(principal.grants, { ...rule, alsoRequires: [extra] }))
+    : undefined;
   if (missing) {
     return Object.freeze({
       allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission,
@@ -260,7 +264,7 @@ export function pluginRpcWriteAllowed(principal: ConsolePrincipal, rule: Console
   if (principal.kind === 'bootstrap') return principal.open;
   if (!rule) return false;
   const permission = rule.kind === 'exact' ? rule.permission : rule.write;
-  return grantsAllow(principal.grants, permission, rule.target);
+  return grantsAllow(principal.grants, permission, rule.target) && grantsAllowAlsoRequired(principal.grants, rule);
 }
 
 export type ConsoleHttpDecision =

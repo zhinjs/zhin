@@ -36,6 +36,7 @@ import {
   CONSOLE_PERMISSIONS,
   CONSOLE_UNKNOWN_RPC_CODE,
   featureScopeTarget,
+  normalizePluginConsoleRpcType,
   type ConsoleDenialReason,
   type ConsoleFeatureOverrideOperator,
 } from '@zhin.js/console-protocol';
@@ -96,7 +97,8 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         const detail = login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions);
         http.tokenRegistry?.accessProvider?.audit?.({
           actor: auditActor(principal),
-          action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
+          // Plugin RPCs are audited under their canonical method, whatever spelling was sent.
+          action: `rpc:${normalizePluginConsoleRpcType(message.type)?.type ?? String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
           detail: outcome === 'denied' && why ? { ...detail, reason: why } : detail,

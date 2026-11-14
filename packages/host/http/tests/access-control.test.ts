@@ -122,6 +122,22 @@ describe('access control decisions', () => {
     expect(authorizeConsoleRpc(adapterOperator, send('tg', 'bot-1')).allowed).toBe(false);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' } }).allowed).toBe(true);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global' } }).allowed).toBe(false);
+    // #1250: endpoint-writeback rewrites zhin.config.yml — endpoint.manage on the adapter is not enough.
+    const writeback = resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } });
+    // An admin bound to the adapter holds endpoint.manage and ops.config.write there, but configuration writes are global.
+    const adapterAdmin = userPrincipal('admin', { kind: 'adapter', key: 'qq' });
+    expect(pluginRpcWriteAllowed(adapterAdmin, writeback)).toBe(false);
+    expect(pluginRpcWriteAllowed(adapterAdmin, resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } }))).toBe(true);
+    expect(pluginRpcWriteAllowed(userPrincipal('admin'), writeback)).toBe(true);
+    expect(pluginRpcWriteAllowed(userPrincipal('owner'), writeback)).toBe(true);
+    // camelCase / `action.` spellings resolve to the same rule: same alsoRequires, same write (audited) classification.
+    for (const type of ['plugin.root/qq.endpointWriteback', 'plugin.root/qq.action.endpointWriteback', 'plugin.root/qq.action.endpoint-writeback']) {
+      const message = { type, data: { ids: ['bot-1'] } };
+      expect(resolveConsoleRpcPermission(type, message), type).toEqual(writeback);
+      expect(pluginRpcWriteAllowed(adapterAdmin, resolveConsoleRpcPermission(type, message)), type).toBe(false);
+      expect(pluginRpcWriteAllowed(userPrincipal('admin'), resolveConsoleRpcPermission(type, message)), type).toBe(true);
+      expect(authorizeConsoleRpc(adapterAdmin, message), type).toMatchObject({ allowed: true, delegated: true, write: true, rule: writeback });
+    }
     // The global switch is plugin lifecycle (plugin.manage): a global operator's feature.toggle is not enough.
     const operator = userPrincipal('operator');
     expect(authorizeConsoleRpc(operator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'adapter', key: 'qq' } }).allowed).toBe(true);
