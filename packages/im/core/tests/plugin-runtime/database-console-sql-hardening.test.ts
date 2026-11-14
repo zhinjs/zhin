@@ -233,6 +233,8 @@ describe('MySQL MODIFY COLUMN keeps what the change does not touch', () => {
     expect(renderMysqlModify(maria({ defaultValue: "'C:\\\\dir'" }), { nullable: false }, host)).toBe("`c` varchar(64) NOT NULL DEFAULT 'C:\\\\dir'");
     expect(renderMysqlModify(maria({ columnType: 'text', dataType: 'text', defaultValue: "'x'" }), { nullable: true }, host)).toBe("`c` text NULL DEFAULT ('x')");
     expect(renderMysqlModify(maria({ defaultValue: 'NULL' }), { nullable: true }, host)).toBe('`c` varchar(64) NULL DEFAULT NULL');
+    // MariaDB reads `NULL` for a nullable column without a declared default too: made NOT NULL, it has none.
+    expect(renderMysqlModify(maria({ defaultValue: 'NULL' }), { nullable: false }, host)).toBe('`c` varchar(64) NOT NULL');
     expect(renderMysqlModify(maria({ columnType: 'int', dataType: 'int', defaultValue: '0' }), { nullable: false }, host)).toBe('`c` int NOT NULL DEFAULT 0');
     expect(renderMysqlModify(maria({ columnType: 'decimal(5,2)', dataType: 'decimal', defaultValue: '1.50' }), { nullable: true }, host)).toBe('`c` decimal(5,2) NULL DEFAULT 1.50');
     expect(renderMysqlModify(maria({ columnType: 'char(36)', dataType: 'char', defaultValue: 'uuid()' }), { nullable: true }, host)).toBe('`c` char(36) NULL DEFAULT (uuid())');

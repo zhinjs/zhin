@@ -108,8 +108,10 @@ const TIMESTAMP_DEFAULT = /^(?:current_timestamp|now|localtime|localtimestamp)(?
  * (`'it''s'`, kept verbatim; TEXT / BLOB / JSON need the expression form), a number or bit
  * literal, the string `NULL` (an explicit `DEFAULT NULL`), or a bare expression.
  */
-function mariadbDefault(value: string, expressionType: boolean): string[] {
-  if (/^NULL$/u.test(value)) return ['DEFAULT NULL'];
+function mariadbDefault(value: string, expressionType: boolean, nullable: boolean): string[] {
+  // A nullable column without a declared default also reads `NULL` (MariaDB's implicit DEFAULT
+  // NULL): a NOT NULL column cannot keep it, and has no default then.
+  if (/^NULL$/u.test(value)) return nullable ? ['DEFAULT NULL'] : [];
   if (/^'(?:[^'\\]|''|\\.)*'$/su.test(value)) return [`DEFAULT ${expressionType ? `(${value})` : value}`];
   if (/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(value) || /^b'[01]*'$/iu.test(value) || /^0x[0-9a-f]+$/iu.test(value)) return [`DEFAULT ${value}`];
   return [TIMESTAMP_DEFAULT.test(value) ? `DEFAULT ${value}` : `DEFAULT (${value})`];
@@ -152,7 +154,7 @@ export function renderMysqlModify(
         parts.push(`DEFAULT ${expressionType ? `(${literal})` : literal}`);
       }
     } else if (current.defaultValue !== null && current.mariadb) {
-      parts.push(...mariadbDefault(current.defaultValue, expressionType));
+      parts.push(...mariadbDefault(current.defaultValue, expressionType, nullable));
     } else if (current.defaultValue !== null) {
       const generated = /\bdefault_generated\b/i.test(current.extra);
       if (generated) {

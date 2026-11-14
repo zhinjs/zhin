@@ -72,8 +72,10 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     try {
       const rows = await this.query<Array<{ v?: unknown }>>('SELECT VERSION() AS v');
       this.serverVersion = String(rows?.[0]?.v ?? '');
-    } catch {
+    } catch (error) {
       this.serverVersion = '';
+      // Unknown server: indexed text keys fall back to utf8mb4_0900_bin, which MariaDB < 11.4 lacks.
+      logger.warn(`MySQL: could not read VERSION() (${error instanceof Error ? error.message : String(error)}); assuming MySQL 8 collations`);
     }
   }
 

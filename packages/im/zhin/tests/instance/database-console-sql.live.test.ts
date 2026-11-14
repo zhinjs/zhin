@@ -148,7 +148,8 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console SQ
     await raw.query(`CREATE TABLE zhin_console_modify (
       id int PRIMARY KEY,
       updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      path varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL DEFAULT 'C:\\\\dir' COMMENT 'win path'
+      path varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL DEFAULT 'C:\\\\dir' COMMENT 'win path',
+      note varchar(32) NULL
     )`);
   });
   afterAll(async () => {
@@ -187,5 +188,12 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console SQ
     expect(String(byName.updated!.extra)).toMatch(/on update CURRENT_TIMESTAMP/i);
     expect(byName.path).toMatchObject({ nullable: 'NO', comment: 'win path', coll: 'utf8mb4_bin' });
     expect(literalDefault(byName.path!.def)).toBe('C:\\dir');
+  });
+
+  it('makes a nullable column without a default NOT NULL (MariaDB reads its default as NULL)', async () => {
+    await host.console!.applySchema!({ kind: 'alter-column', table: 'zhin_console_modify', column: 'note', nullable: false });
+    const rows = await raw.query(`SELECT IS_NULLABLE AS nullable FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = 'zhin_console_modify' AND column_name = 'note'`) as Record<string, unknown>[];
+    expect(rows).toEqual([{ nullable: 'NO' }]);
   });
 });
