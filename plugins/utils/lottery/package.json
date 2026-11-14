@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-lottery",
   "version": "1.1.22",
-  "description": "Multi-game lottery analysis for Zhin.js (Plugin Runtime)",
+  "description": "Draw sync, statistics and scheduled pushes for KL8, SSQ, DLT, 3D and Pick 3/5.",
+  "keywords": [
+    "zhin.js",
+    "lottery",
+    "彩票",
+    "ssq",
+    "dlt"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,22 +43,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "lottery",
-    "caipiao",
-    "kl8",
-    "ssq",
-    "dlt"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -120,6 +115,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Lottery",
+      "displayNameI18n": {
+        "zh-CN": "彩票分析",
+        "en": "Lottery Analysis"
+      },
+      "descriptionI18n": {
+        "zh-CN": "快乐8、双色球、大乐透、福彩3D、排列3/5 的开奖同步、统计与定时推送。",
+        "en": "Draw sync, statistics and scheduled pushes for KL8, SSQ, DLT, 3D and Pick 3/5."
+      },
+      "category": "information"
+    }
   }
 }

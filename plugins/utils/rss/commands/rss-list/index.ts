@@ -7,6 +7,8 @@ import { rssRuntimeToken } from '../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '查看当前会话的所有 RSS 订阅', descriptionI18n: { en: "List this conversation's RSS subscriptions" },
+  alias: ['rss list'],
+  preferredAliasI18n: { 'zh-CN': 'rss list', en: 'rss list' },
   async execute({ config, input, use, locale, formatCommand }) {
     const Subs = getRssSubs(use(rssRuntimeToken).db);
     if (!Subs) return t(locale, 'databaseUnavailable');

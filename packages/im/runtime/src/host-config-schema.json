@@ -1580,6 +1580,23 @@
                 "security": true
               }
             },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "adminSelfApprove": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Let a zhin admin (held at endpoint level or above) approve, once, in their own private chat, the operations a policy marks admin-approvable (tools tagged admin_approvable such as schedule_add, session memory) when the bot owner cannot answer there. Default false: only the bot owner approves. Never covers sensitive files, shell commands, global/platform memory, human-only or dangerous tools, or groups without an owner.",
+                  "x-descriptionZh": "允许端点层或以上的 zhin admin 在自己的私聊里、主人无法作答时，本人一次性批准策略标为管理员可批的操作（标了 admin_approvable 的工具，如 schedule_add；session 记忆）。默认 false：只有主人能批。敏感文件、Shell 命令、global / platform 记忆、仅限人工与危险工具、无主人的群聊始终不在此列。",
+                  "x-zhin-config": {
+                    "security": true
+                  }
+                }
+              },
+              "description": "IM approval options.",
+              "x-descriptionZh": "IM 审批选项。"
+            },
             "toolExecution": {
               "type": "string",
               "enum": [
@@ -3061,6 +3078,40 @@
       ],
       "description": "Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu.",
       "x-descriptionZh": "内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。"
+    },
+    "commandSuggestion": {
+      "description": "Reply \"no such command, did you mean …\" instead of handing a near-miss command (private chat, @mention or prefixed message) to the AI. false disables it.",
+      "x-descriptionZh": "未命中但与已注册指令名/别名高度相似的消息（私聊、@机器人或带指令前缀）直接回复「没有这个指令，你是不是想用：…」，不交给 AI；false 关闭。",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether suggestions are on (default true).",
+              "x-descriptionZh": "是否开启（默认 true）。"
+            },
+            "maxDistance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2,
+              "description": "Largest edit distance still suggested (default 1; one edit needs a name of at least 5 characters, or 3 CJK characters; two edits need 8).",
+              "x-descriptionZh": "仍给出建议的最大编辑距离（默认 1；1 次编辑要求名称至少 5 个字符或 3 个汉字，2 次编辑要求至少 8 个字符）。"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Most commands listed in one reply (default 3).",
+              "x-descriptionZh": "一次回复最多列出的指令数（默认 3）。"
+            }
+          }
+        }
+      ]
     },
     "menuStyle": {
       "type": "object",

@@ -170,3 +170,17 @@ it.each([true, false])('projects the held Driver discovery function without perf
     expect(fetch).not.toHaveBeenCalled();
   } finally { fetch.mockRestore(); await held.release(); await f.close(); }
 });
+
+it('projects the client-secret requirement and labelled model suggestions of a held Driver without invoking it', async () => {
+  const f = await supportFixture({ authoringHints: true }), held = f.host.acquireManagement();
+  try {
+    const view = await held.management.view(f.member);
+    const driver = view.drivers.find(item => item.owner === f.root && item.id === 'same');
+    expect(driver).toMatchObject({ requiresClientSecret: true, modelSuggestions: [{ id: 'suggested-model', label: 'Suggested (suggestion)' }] });
+  } finally { await held.release(); await f.close(); }
+  const plain = await supportFixture(), view = plain.host.acquireManagement();
+  try {
+    const driver = (await view.management.view(plain.member)).drivers.find(item => item.owner === plain.root);
+    expect(driver).not.toHaveProperty('requiresClientSecret'); expect(driver).not.toHaveProperty('modelSuggestions');
+  } finally { await view.release(); await plain.close(); }
+});

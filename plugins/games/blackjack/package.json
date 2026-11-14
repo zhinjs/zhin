@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-blackjack",
   "version": "1.1.28",
-  "description": "Zhin.js 21 点（Blackjack）(Plugin Runtime)",
+  "description": "Blackjack with hit / stand buttons, integrated with the game hub and its stats.",
+  "keywords": [
+    "zhin.js",
+    "blackjack",
+    "card-game",
+    "21点"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -79,7 +89,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Blackjack",
+      "displayNameI18n": {
+        "zh-CN": "21 点",
+        "en": "Blackjack"
+      },
+      "descriptionI18n": {
+        "zh-CN": "按钮式 21 点对局：要牌 / 停牌，接入游戏大厅与战绩统计。",
+        "en": "Blackjack with hit / stand buttons, integrated with the game hub and its stats."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

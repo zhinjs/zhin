@@ -24,7 +24,7 @@ import {
   type SemanticRecallOptions,
 } from '../memory/semantic-recall.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
-import { decideMemoryWrite, defaultMemoryScope, memoryExpiry } from '../memory/memory-write-policy.js';
+import { decideMemoryWrite, memoryExpiry, parseMemoryScope, resolveMemoryWriteScope } from '../memory/memory-write-policy.js';
 import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface NativeSemanticMemoryToolFeature {
@@ -150,7 +150,9 @@ export function createNativeSemanticMemoryToolFeatures(
     })),
     feature('memory_upsert', defineAgentTool({
       description: 'Create or update one durable semantic-memory entry in an authorized scope. '
-        + 'kind: user_fact (stable fact), preference, task_state (temporary, expires), episodic (a past event).',
+        + 'kind: user_fact (stable fact), preference, task_state (temporary, expires), episodic (a past event). '
+        + 'Facts and preferences about the person you are talking to belong in scope "user" (their own memory, no approval needed); '
+        + 'global, platform and session memory is shared and needs approval.',
       inputSchema: Object.freeze({
         type: 'object',
         properties: Object.freeze({
@@ -165,7 +167,9 @@ export function createNativeSemanticMemoryToolFeatures(
         }),
         required: Object.freeze(['key', 'content']),
       }),
+      // #1250: the approval tier is decided per call by the policy facade (memory-scope layer).
       requiresApproval: 'on-risk',
+      readOnly: false,
       execute: (input, context) => upsertMemory(runtime, input, context),
     })),
   ]);
@@ -178,7 +182,7 @@ async function searchMemory(
   resolveDecision?: NativeSearchDecisionResolver,
 ): Promise<string> {
   const query = requiredString(input.query, 'query');
-  const scope = optionalScope(input.scope);
+  const scope = parseMemoryScope(input.scope);
   const limit = typeof input.limit === 'number' ? Math.max(1, Math.min(20, Math.floor(input.limit))) : 5;
   const decision = resolveSearchDecision(resolveDecision, context);
   const candidateLimit = decision ? 20 : limit;
@@ -251,7 +255,7 @@ async function upsertMemory(
   const key = requiredString(input.key, 'key');
   const content = requiredString(input.content, 'content');
   const level = resolveTurnTrustLevel(context);
-  const scope = optionalScope(input.scope) ?? defaultMemoryScope(level);
+  const scope = resolveMemoryWriteScope(input.scope, level);
   const kind = optionalKind(input.kind) ?? 'user_fact';
   const tags = Array.isArray(input.tags) ? input.tags.map(String) : undefined;
   const confidence = typeof input.confidence === 'number' ? input.confidence : 1;
@@ -289,12 +293,6 @@ function scopeKey(scope: MemoryEntryScope, context: ToolExecutionContext): strin
     throw new Error('Platform-scoped semantic memory requires an IM turn origin');
   }
   return context.origin.platform;
-}
-
-function optionalScope(value: unknown): MemoryEntryScope | undefined {
-  if (value === undefined) return undefined;
-  if (value === 'global' || value === 'platform' || value === 'session' || value === 'user') return value;
-  throw new TypeError('scope must be global, platform, session, or user');
 }
 
 function optionalKind(value: unknown): MemoryEntryKind | undefined {

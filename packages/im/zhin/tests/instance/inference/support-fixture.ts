@@ -14,7 +14,7 @@ import { HostInference } from '@zhin.js/agent/runtime';
 
 /** The real management producer with synthetic declarations; no SDK or credential is needed. */
 export async function supportFixture(
-  options: Readonly<{ support?: unknown; discovery?: boolean }> = {}
+  options: Readonly<{ support?: unknown; discovery?: boolean; authoringHints?: boolean }> = {}
 ) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-support-'));
   const root = rootPluginId(),
@@ -43,7 +43,11 @@ export async function supportFixture(
       targets: unavailable,
       ...(discovery ? { discover: unavailable } : {}),
       identity: unavailable,
-      authentication: { methods: ['none'] },
+      authentication: options.authoringHints
+        ? { methods: ['oauth'], oauth: { contractVersion: '1', redirectUri: 'http://localhost:1/cb', requiresClientSecret: true,
+            begin: unavailable, complete: unavailable, refresh: unavailable } }
+        : { methods: ['none'] },
+      ...(options.authoringHints ? { modelSuggestions: [{ id: 'suggested-model', label: 'Suggested (suggestion)' }] } : {}),
       createExecution: unavailable,
     };
     // Models a JavaScript plugin as well: unknown/extra fields cannot cross the public projection.

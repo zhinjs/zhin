@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -133,16 +134,16 @@ export const newCommand = new Command('new')
 
       if (options.standalone) {
         logger.success(`✓ 独立插件包 ${name} 创建成功！`);
-        logger.log('');
-        logger.log('📝 下一步操作：');
-        logger.log(`  cd ${name}`);
-        logger.log('  pnpm test && pnpm typecheck');
-        logger.log('  在 Bot 项目里挂载试用：在插件目录 pnpm pack，在 Bot 项目根执行');
-        logger.log(`    pnpm add -w <插件目录>/${packageName.replace(/^@/, '').replace('/', '-')}-0.1.0.tgz`);
-        logger.log(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
-        logger.log('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
-        logger.log(`  需要热重载：在 Bot 项目根执行 zhin dev link <插件目录>（实例名 ${name}），见 https://zhin.js.org/authoring/local-dev#dev-link-plugin`);
-        logger.log('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（npx @zhin.js/cli 在任何版本下都可靠；npx zhin 要 zhin@4 起才是同一个 CLI）');
+        output.line();
+        output.line('📝 下一步操作：');
+        output.line(`  cd ${name}`);
+        output.line('  pnpm test && pnpm typecheck');
+        output.line('  在 Bot 项目里挂载试用：在插件目录 pnpm pack，在 Bot 项目根执行');
+        output.line(`    pnpm add -w <插件目录>/${packageName.replace(/^@/, '').replace('/', '-')}-0.1.0.tgz`);
+        output.line(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
+        output.line('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
+        output.line(`  需要热重载：在 Bot 项目根执行 zhin dev link <插件目录>（实例名 ${name}），见 https://zhin.js.org/authoring/local-dev#dev-link-plugin`);
+        output.line('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（npx @zhin.js/cli 在任何版本下都可靠；npx zhin 要 zhin@4 起才是同一个 CLI）');
         return;
       }
 
@@ -154,17 +155,17 @@ export const newCommand = new Command('new')
       await addPluginToApp(name, packageName, options.skipInstall);
 
       logger.success(`✓ 插件包 ${name} 创建成功！`);
-      logger.log('');
-      logger.log('📝 下一步操作：');
-      logger.log('  1. 在 app 主配置的 plugins 映射中添加：');
-      logger.log(`     ${name}: "${packageName}"`);
-      logger.log('  2. pnpm dev  # 即 zhin start --foreground（网关 + 实例，热重载）');
-      logger.log('');
-      logger.log('📦 发布到 npm（在项目根）：');
-      logger.log(`  pnpm exec zhin pub ${name}`);
-      logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
-      logger.log('');
-      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
+      output.line();
+      output.line('📝 下一步操作：');
+      output.line('  1. 在 app 主配置的 plugins 映射中添加：');
+      output.line(`     ${name}: "${packageName}"`);
+      output.line('  2. pnpm dev  # 即 zhin start --foreground（网关 + 实例，热重载）');
+      output.line();
+      output.line('📦 发布到 npm（在项目根）：');
+      output.line(`  pnpm exec zhin pub ${name}`);
+      output.line(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
+      output.line();
+      output.line('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -793,12 +794,12 @@ async function addPluginToApp(pluginName: string, packageName: string, skipInsta
     await fs.writeJson(rootPackageJsonPath, packageJson, { spaces: 2 });
 
     logger.success(`✓ 已将 ${packageName} 添加到 app 的 dependencies`);
-    logger.log('  挂载方式：在 app 主配置的 plugins 映射中添加：');
-    logger.log(`    ${pluginName}: "${packageName}"`);
-    logger.log('  （主配置需 configVersion: 2；业务配置写顶层同名块）');
+    output.line('  挂载方式：在 app 主配置的 plugins 映射中添加：');
+    output.line(`    ${pluginName}: "${packageName}"`);
+    output.line('  （主配置需 configVersion: 2；业务配置写顶层同名块）');
 
     if (skipInstall) {
-      logger.log('  已跳过依赖安装，稍后在项目根运行 pnpm install');
+      output.line('  已跳过依赖安装，稍后在项目根运行 pnpm install');
       return;
     }
 

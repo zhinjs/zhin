@@ -8,6 +8,8 @@ import { rssRuntimeToken } from '../../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '手动触发检查 RSS 更新', descriptionI18n: { en: "Check RSS feeds for updates now" },
+  alias: ['rss check'],
+  preferredAliasI18n: { 'zh-CN': 'rss check', en: 'rss check' },
   params: { url: { type: 'string', default: '' } },
   async execute({ params, input, use, locale }) {
     const runtime = use(rssRuntimeToken);

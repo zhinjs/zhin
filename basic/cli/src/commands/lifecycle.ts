@@ -30,6 +30,7 @@ import {
   type Output,
 } from '../utils/gateway.js';
 import { getProcessStatus, stopProcess } from '../utils/process.js';
+import { describeForegroundGatewayRestart, detectProcessManager, readProcessContext } from '../utils/process-manager.js';
 import { runtimeCommand } from './runtime.js';
 
 /**
@@ -129,7 +130,7 @@ export const stopCommand = new Command('stop')
 
 export const restartCommand = new Command('restart')
   .description('重启实例（网关保持运行）；--gateway 重启网关本身')
-  .option('--gateway', '重启网关进程（仅后台网关；沿用原启动参数）')
+  .option('--gateway', '重启网关进程（仅后台网关，沿用原启动参数；前台网关会提示 systemd / PM2 等替代命令并以非 0 退出）')
   .action(async (options: { gateway?: boolean }) => {
     const { root } = target();
     try {
@@ -144,7 +145,11 @@ export const restartCommand = new Command('restart')
         return;
       }
       if (running.gateway.mode !== 'daemon') {
-        throw new Error(`网关在前台运行（pid ${running.gateway.pid}），请在其终端按 Ctrl+C 后重新启动，或由服务管理器重启`);
+        // No in-place re-exec of a foreground gateway: name the command that restarts it (#1250).
+        const manager = detectProcessManager(readProcessContext(running.gateway.pid));
+        process.stderr.write(`zhin: ${describeForegroundGatewayRestart(running.gateway.pid, running.gateway.args, manager)}\n`);
+        process.exitCode = 1;
+        return;
       }
       await withGateway({ root }, (client) => client.request(LOCAL_GATEWAY_RPC.SHUTDOWN, undefined, { timeoutMs: 10_000 }));
       if (!await waitForGatewayExit({ root }, running.gateway.pid)) throw new Error(`网关 ${running.gateway.pid} 在超时内没有退出`);

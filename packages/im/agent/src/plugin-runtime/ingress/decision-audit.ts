@@ -5,6 +5,7 @@
  * 现有日志 `op` 全部保留，审计是额外的一行结构化记录。
  */
 import {
+  DECISION_PARENT_KEY,
   sceneKeyOf,
   speakBlockReasonCode,
   type DecisionActor,
@@ -79,13 +80,13 @@ export function createDecisionAudit(writer: DecisionEventLog | undefined, scope:
 }
 
 /**
- * #995 / #997：会话画像判定 Bot 不能发言 → `speak_gate`（deny）+ `model_skip`（skip），码同源于
+ * #995 / #997：会话画像判定 Bot 不能发言 → `speak_gate`（deny）+ `model_skip`（skip，payload `parent: 'speak_gate'`），码同源于
  * {@link speakBlockReasonCode}；`restricted:` 后缀进 `reason_detail`。
  */
 export function auditCannotSpeak(audit: DecisionAudit, reason: SpeakBlockReason, payload: DecisionPayload = {}): void {
   const { code, detail } = speakBlockReasonCode(reason);
   audit({ kind: 'speak_gate', outcome: 'deny', reasonCode: code, reasonDetail: detail, payload: { ...payload, blocked: reason }, actor: 'policy' });
-  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: code, reasonDetail: detail, payload });
+  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: code, reasonDetail: detail, payload: { ...payload, [DECISION_PARENT_KEY]: 'speak_gate' } });
 }
 
 /** 模型回合结束的一行摘要（不记提示词、不记输出正文）。 */

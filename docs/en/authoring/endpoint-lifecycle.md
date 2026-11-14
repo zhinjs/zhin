@@ -46,7 +46,7 @@ await lifecycle.stop();
 
 Two behaviors to remember:
 
-- **A failed first connection doesn't reconnect automatically.** `start()` throws the error to you and you decide whether to retry; only a connection that **was once open** reconnects after a disconnect.
+- **A failed first connection isn't reconnected by the base.** `start()` throws the error; only a connection that **was once open** reconnects after a disconnect. The framework takes over an error thrown by `start()`: the account enters "start failed" and is retried in the background with backoff on a fresh Endpoint (except configuration errors and interactive logins), without failing instance startup, so the adapter needs no retry code of its own; see [account logins do not hold back readiness](../operations/production.md#account-start). `start()` may wait until login completes; the instance does not wait for it to become ready.
 - **`stop()` is an intentional stop**: safe to call repeatedly, never triggers a reconnect; if called while connecting, `start()` resolves quietly (stopping isn't a failure).
 
 The specification’s `stop` hook calls private platform cleanup: stop the transport lifecycle, then release protocol resources:

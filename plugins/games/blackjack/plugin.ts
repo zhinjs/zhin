@@ -15,9 +15,6 @@ import {
  */
 export default defineGamePlugin<SessionService>({
   name: 'blackjack',
-  metadata: {
-    displayName: 'Blackjack',
-  },
   game: {
     commandPath: 'bj',
     titleI18n: { en: 'Blackjack' },

@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-nettools",
   "version": "0.1.13",
-  "description": "Network tools plugin for Zhin.js — multi-region ping, RDAP whois, DNS-over-HTTPS lookup and domain price comparison (Plugin Runtime)",
+  "description": "Multi-region ping, RDAP whois, DNS-over-HTTPS lookups and domain price comparison, no API keys.",
+  "keywords": [
+    "zhin.js",
+    "ping",
+    "whois",
+    "dns",
+    "domain"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,23 +43,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "ping",
-    "whois",
-    "rdap",
-    "dns",
-    "doh",
-    "domain"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -110,6 +104,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "网络工具",
+      "displayNameI18n": {
+        "zh-CN": "网络工具",
+        "en": "Network Tools"
+      },
+      "descriptionI18n": {
+        "zh-CN": "多地 Ping、RDAP Whois、DoH DNS 查询与域名比价，无需 API Key。",
+        "en": "Multi-region ping, RDAP whois, DNS-over-HTTPS lookups and domain price comparison, no API keys."
+      },
+      "category": "utility"
+    }
   }
 }

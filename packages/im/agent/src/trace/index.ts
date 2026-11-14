@@ -17,6 +17,7 @@ export type {
   TurnTraceTimelineEntry,
   TurnTraceTermination,
   TurnTraceModelSelection,
+  TurnTraceTrigger,
 } from './turn-trace.js';
 export {
   createTracingJournal,

@@ -12,6 +12,10 @@ export interface ToolCallRecord {
   tool: string;
   args?: unknown;
   result: unknown;
+  /** How the call settled; absent on records that predate #1250 (treated as unknown). */
+  status?: 'completed' | 'denied' | 'failed';
+  /** The tool is not declared read-only, so a denial or failure means a write/change did not happen. */
+  sideEffect?: boolean;
 }
 
 const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);

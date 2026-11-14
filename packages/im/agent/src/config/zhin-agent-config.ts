@@ -118,6 +118,14 @@ export interface ZhinAgentConfig {
   network?: { enabled?: boolean; allowedDomains?: string[] };
   execAllowlist?: string[];
   execApprovalMode?: ExecApprovalMode;
+  /** IM approval options (#1250). */
+  approval?: {
+    /**
+     * Let an endpoint-level zhin admin approve, once, in their own private chat, operations a policy marks
+     * admin-approvable when the bot owner cannot answer there. Default false: only the bot owner approves.
+     */
+    adminSelfApprove?: boolean;
+  };
   toolExecution?: 'parallel' | 'sequential' | 'tiered';
   /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   taskExecApprovalMode?: ExecApprovalMode;

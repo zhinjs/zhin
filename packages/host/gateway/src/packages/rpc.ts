@@ -12,6 +12,7 @@ import {
   type GatewayRpcRequest,
   type GatewayRpcResponse,
   type GatewayRpcType,
+  type ConsoleProcessSample,
 } from '@zhin.js/console-protocol';
 import { OnboardingError } from '../onboarding/errors.js';
 import type { InstanceStatus, InstanceStopOptions } from '../supervisor/instance-supervisor.js';
@@ -56,7 +57,8 @@ export async function dispatchGatewayRpc(
 ): Promise<GatewayRpcResponse> {
   try {
     const type = request?.type;
-    if (!isGatewayRpcType(type)) throw new GatewayError('unmapped', `RPC "${String(type ?? '').slice(0, 64)}" 未登记权限`);
+    // zhinjs/zhin#1250: a `gateway.*` type this gateway does not have is not a refusal (not audited).
+    if (!isGatewayRpcType(type)) throw new GatewayError('unknown_rpc', `RPC "${String(type ?? '').slice(0, 64)}" 不存在`);
     if (!principal) throw new GatewayError('forbidden', '未登录');
     const packageMutation = type === GATEWAY_RPC.PLAN || type === GATEWAY_RPC.INSTALL;
     // The bootstrap token reaches plan / install only, where the service limits it to database drivers.
@@ -102,7 +104,10 @@ async function handle(type: GatewayRpcType, data: Readonly<Record<string, unknow
       return packagesOf(deps).setEnabled({ plugin: data.plugin }, type === 'gateway.plugins.enable', {
         principal, ...optionalBoolean(data, 'startInstance'),
       });
-    case 'gateway.instance.status': return instanceStatus(instanceOf(deps).status());
+    case 'gateway.instance.status': {
+      const gateway = sampleGatewayProcess();
+      return Object.freeze({ ...instanceStatus(instanceOf(deps).status()), ...(gateway ? { gateway } : {}) });
+    }
     case 'gateway.instance.logs': {
       const lines = data.lines === undefined ? DEFAULT_LOG_LINES : data.lines;
       if (typeof lines !== 'number' || !Number.isInteger(lines) || lines < 1 || lines > MAX_LOG_LINES) {
@@ -154,6 +159,28 @@ export function instanceStatus(status: InstanceStatus): GatewayInstanceStatus {
     ...(status.lastFailure ? { lastFailure: Object.freeze({ ...status.lastFailure }) } : {}),
     recentRestarts: status.recentRestarts,
   });
+}
+
+/**
+ * The gateway's own process sample (#1250): one `process.memoryUsage()` call, labeled
+ * `role: 'gateway'`, so the Console never mixes it with the instance's numbers.
+ */
+export function sampleGatewayProcess(): ConsoleProcessSample | undefined {
+  try {
+    const memory = process.memoryUsage();
+    return Object.freeze({
+      role: 'gateway' as const,
+      pid: process.pid,
+      uptime: process.uptime(),
+      memory: Object.freeze({
+        rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal,
+        external: memory.external, arrayBuffers: memory.arrayBuffers,
+      }),
+      sampledAt: Date.now(),
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 function record(value: unknown): Readonly<Record<string, unknown>> {

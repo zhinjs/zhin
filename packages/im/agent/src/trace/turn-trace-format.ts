@@ -1,5 +1,5 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
-import type { TurnTrace, TurnTraceToolCall } from './turn-trace.js';
+import type { TurnTrace, TurnTraceToolCall, TurnTraceTrigger } from './turn-trace.js';
 import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
 const STATUS_LABEL: Record<TurnTrace['termination']['status'], string> = {
@@ -52,6 +52,7 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     lines.push(`${indent}  发起人: ${trace.principal.subject_id}${name}  角色: ${trace.principal.roles.join(', ') || '-'}`
       + (trace.principal.trust_level ? `  信任级别: ${trace.principal.trust_level}` : ''));
   }
+  if (trace.trigger) lines.push(...renderTrigger(trace.trigger, indent));
   lines.push(`${indent}  开始: ${new Date(trace.started_at).toLocaleString()}  耗时: ${formatDuration(trace.duration_ms)}`);
   if (termination.code || termination.reason) {
     lines.push(`${indent}  结束原因: ${[termination.code, termination.reason].filter(Boolean).join(' — ')}`);
@@ -98,11 +99,31 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
 
   if (withTimeline && trace.timeline.length > 0) {
     lines.push(`${indent}  时间线:`);
+    const waited = trace.trigger?.wait_before_start_ms;
+    if (waited !== undefined && waited > 0) {
+      lines.push(`${indent}    -${formatDuration(waited).padStart(7)}  ${'received'.padEnd(14)} 收到触发消息`);
+    }
     for (const entry of trace.timeline) {
       lines.push(`${indent}    +${formatDuration(entry.at_ms).padStart(7)}  ${entry.kind.padEnd(14)} ${entry.detail}`.trimEnd());
     }
   }
   if (trace.dropped > 0) lines.push(`${indent}  (有 ${trace.dropped} 条记录因超出上限被省略)`);
+  return lines;
+}
+
+/** Who triggered the turn and how long the message waited before the turn began (#1250). */
+function renderTrigger(trigger: TurnTraceTrigger, indent: string): string[] {
+  const sender = trigger.sender_id
+    ? `  发送者: ${trigger.sender_id}${trigger.sender_name ? ` (${trigger.sender_name})` : ''}` : '';
+  const conversation = trigger.conversation ? `  会话: ${trigger.conversation}` : '';
+  const lines = [`${indent}  触发消息: ${JSON.stringify(trigger.text)}${sender}${conversation}`];
+  if (trigger.wait_before_start_ms !== undefined) {
+    const details = [
+      trigger.merged_messages !== undefined && trigger.merged_messages > 1 ? `合流 ${trigger.merged_messages} 条消息` : undefined,
+      trigger.queued_ms ? `排队等待前一回合 ${formatDuration(trigger.queued_ms)}` : undefined,
+    ].filter(Boolean).join('，');
+    lines.push(`${indent}  收到 → 回合开始: ${formatDuration(trigger.wait_before_start_ms)}${details ? `（${details}）` : ''}`);
+  }
   return lines;
 }
 

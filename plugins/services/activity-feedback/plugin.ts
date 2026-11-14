@@ -35,9 +35,6 @@ const activityFeedbackAdmissionToken = activityFeedbackAdmissionStore;
  */
 export default definePlugin<ActivityFeedbackServiceConfig>({
   name: 'activity-feedback',
-  metadata: {
-    displayName: 'Activity Feedback',
-  },
   setup(context) {
     const serviceConfig = loadActivityFeedbackServiceConfig(context.config.get());
     if (serviceConfig.enabled === false) {

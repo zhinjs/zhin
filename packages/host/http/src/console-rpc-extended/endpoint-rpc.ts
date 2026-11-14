@@ -1,4 +1,5 @@
 import type { ConsoleRpcExtendedCtx, EndpointManagementPort, ExtendedRpcResult } from './contracts.js';
+import type { EndpointManagementCapability } from '@zhin.js/console-protocol';
 import { boolField, numField, strField, withLiveEndpoint } from './rpc-values.js';
 
 export async function listFriends(
@@ -12,7 +13,7 @@ export async function listFriends(
       const friends = [...await management.listFriends()];
       return { data: { friends, count: friends.length } };
     }
-    return { error: `当前适配器（${endpoint.adapter}）不支持好友列表` };
+    return unsupportedList('friends', 'listFriends', endpoint.adapter, '好友列表');
   });
 }
 
@@ -27,7 +28,7 @@ export async function listGroups(
       const groups = [...await management.listGroups()];
       return { data: { groups, count: groups.length } };
     }
-    return { error: `当前适配器（${endpoint.adapter}）不支持群列表` };
+    return unsupportedList('groups', 'listGroups', endpoint.adapter, '群列表');
   });
 }
 
@@ -42,7 +43,7 @@ export async function listChannels(
       const channels = [...await management.listChannels()];
       return { data: { channels, count: channels.length } };
     }
-    return { error: `当前适配器（${endpoint.adapter}）不支持频道列表` };
+    return unsupportedList('channels', 'listChannels', endpoint.adapter, '频道列表');
   });
 }
 
@@ -59,11 +60,34 @@ export async function listGroupMembers(
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const method = management.listGroupMembers;
     if (!method) {
-      return { error: `当前适配器（${adapter}）不支持群成员列表` };
+      return unsupportedList('members', 'listGroupMembers', adapter, '群成员列表');
     }
     const members = [...await method.call(management, { groupId })];
     return { data: { members, count: members.length } };
   });
+}
+
+/**
+ * A read the Adapter does not declare is not a failure (#1250): reply with an empty list plus
+ * `status: 'unsupported'` (`ConsoleEndpointCapabilityUnsupported`) instead of `{ error }`, so the
+ * Console can render "该平台不提供" rather than a red read error. Older clients still see an empty
+ * list with `count: 0`.
+ */
+function unsupportedList(
+  key: 'friends' | 'groups' | 'channels' | 'members',
+  capability: EndpointManagementCapability,
+  adapter: string,
+  label: string,
+): ExtendedRpcResult {
+  return {
+    data: {
+      [key]: [],
+      count: 0,
+      status: 'unsupported',
+      capability,
+      message: `当前适配器（${adapter}）不支持${label}`,
+    },
+  };
 }
 
 // ---------------------------------------------------------------- 群管/好友写操作

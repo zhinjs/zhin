@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/adapter-juejin",
   "version": "0.1.8",
-  "description": "Zhin.js Juejin (掘金) comment adapter for Plugin Runtime (Experimental; whitelisted article comments, review-then-send with a Console approval page)",
+  "description": "Juejin comment adapter (experimental): AI-assisted replies to comments on your own Juejin articles, with Console review before sending.",
+  "keywords": [
+    "zhin.js",
+    "juejin",
+    "掘金",
+    "comments",
+    "review"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,20 +22,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "juejin",
-    "comment",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -115,6 +112,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Juejin Comment Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "掘金评论适配器（实验性）",
+        "en": "Juejin Comment Adapter (Experimental)"
+      },
+      "descriptionI18n": {
+        "zh-CN": "掘金评论适配器（实验性）：AI 辅助回复你自己的掘金文章评论，发送前可在 Console 审批。",
+        "en": "Juejin comment adapter (experimental): AI-assisted replies to comments on your own Juejin articles, with Console review before sending."
+      },
+      "category": "adapter"
+    }
   }
 }

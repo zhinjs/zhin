@@ -1,6 +1,7 @@
 import { providerModelSupports } from '@zhin.js/ai/provider';
 import { z } from 'zod';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
+import { approvalPolicySnapshot, findStaleDenials, formatPolicyChangedNote } from '../security/approval-policy-fingerprint.js';
 import {
   createPromptContextBlock,
   assistantText,
@@ -319,6 +320,12 @@ export async function prepareAgentLoopTurnSetup(
   }
   if (preData) runtimeTail.push(createPromptContextBlock('pre-fetched-data', `Pre-fetched data:\n${preData}`));
   if (networkWithheld) runtimeTail.push({ type: 'text', text: NETWORK_DISABLED_PROMPT_NOTE });
+  // #1250: denials decided under an earlier approval policy no longer speak for the current one.
+  if (hasTools) {
+    const policy = approvalPolicySnapshot(host.config);
+    const stale = findStaleDenials(historyView, policy);
+    if (stale.length) runtimeTail.push(createPromptContextBlock('approval-policy-change', formatPolicyChangedNote(stale, policy)));
+  }
   promptMessages = appendRuntimeContext(promptMessages, runtimeTail);
   const composedPrompt = joinSystemPrompt(promptParts);
   systemPrompt = composedPrompt.text;

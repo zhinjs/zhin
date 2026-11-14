@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-telegram",
   "version": "1.1.29",
-  "description": "Zhin.js Telegram Bot API adapter for Plugin Runtime (long-poll getUpdates)",
+  "description": "Telegram Bot API adapter: private and group messages via long-polling getUpdates, no public URL needed.",
+  "keywords": [
+    "zhin.js",
+    "telegram",
+    "bot-api",
+    "long-polling"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,19 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "telegram",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -136,6 +133,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Telegram Bot API Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Telegram 适配器",
+        "en": "Telegram Bot API Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "Telegram Bot API 适配器：默认长轮询 getUpdates 收发私聊与群组消息，无需公网地址。",
+        "en": "Telegram Bot API adapter: private and group messages via long-polling getUpdates, no public URL needed."
+      },
+      "category": "adapter"
+    }
   }
 }

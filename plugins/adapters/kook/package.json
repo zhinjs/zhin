@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/adapter-kook",
   "version": "1.1.29",
-  "description": "Zhin.js KOOK adapter for Plugin Runtime (WebSocket gateway or Webhook)",
+  "description": "KOOK adapter: channel and direct messages over the WebSocket gateway by default, with an optional webhook mode.",
+  "keywords": [
+    "zhin.js",
+    "kook",
+    "开黑啦",
+    "websocket",
+    "webhook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,20 +22,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "kook",
-    "开黑啦",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -137,6 +134,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "KOOK WebSocket Adapter",
+      "displayNameI18n": {
+        "zh-CN": "KOOK 适配器",
+        "en": "KOOK WebSocket Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "KOOK（开黑啦）适配器：默认 WebSocket Gateway 收发频道与私聊消息，也支持 Webhook。",
+        "en": "KOOK adapter: channel and direct messages over the WebSocket gateway by default, with an optional webhook mode."
+      },
+      "category": "adapter"
+    }
   }
 }

@@ -22,6 +22,14 @@ export const MAX_REASON_DETAIL_CHARS = 200;
 /** `payload` 序列化后的上限（字符）；超出时只保留截断标记。 */
 export const MAX_DECISION_PAYLOAD_CHARS = 4_000;
 
+/**
+ * Payload key on a row written only as the consequence of another decision row in the same turn
+ * (#1250): a gate (`ambient_decision` / `control_gate` / `speak_gate`) that stops a turn also writes a
+ * `model_skip` with `payload.parent` set to the gate's kind. Readers that count `model_skip` are
+ * unaffected; a replay that shows one row per decision folds rows carrying `parent` into that parent.
+ */
+export const DECISION_PARENT_KEY = 'parent';
+
 export const DECISION_EVENT_KINDS = [
   'inbound_wake',
   'speak_gate',
@@ -186,6 +194,8 @@ export const DECISION_REASON_CODES = [
   // Configuration outcome/ownership requires manual verification; neither implies emergency stop.
   'change_config_unconfirmed',
   'change_config_superseded',
+  // #1250：回合内审批（普通审批 / 读取外部内容后的确认）无人可问：无人值守回合，或会话没有审批渠道
+  'tool_approval_unavailable',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 
@@ -352,7 +362,27 @@ const PROMPT_KEYS = new Set([
   'prompt', 'systemprompt', 'system', 'messages', 'instructions', 'rawprompt', 'fullprompt',
 ]);
 
+/** Name fragments that mark an env variable, flag or header as carrying a secret. */
+const SECRET_NAME = '(?:token|secret|password|passwd|pwd|api[-_]?key|private[-_]?key|access[-_]?key|credentials?|cookie|session[-_]?id)';
+
 const SECRET_VALUE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  // `Authorization: token abc`, `Proxy-Authorization: Basic …` — the whole credential.
+  [/\b((?:proxy-)?authorization)\s*([:=])\s*(?:(?:bearer|basic|token|digest)\s+)?[^\s"',;]{4,}/gi, `$1$2 ${REDACTED}`],
+  // `X-Api-Key: …`, `X-Auth-Token: …`
+  [new RegExp(`\\b(x-[a-z0-9-]*(?:${SECRET_NAME}|auth)[a-z0-9-]*)\\s*:\\s*[^\\s"',;]+`, 'gi'), `$1: ${REDACTED}`],
+  // `FOO_TOKEN=…`, `export API_KEY="…"`, `DB_PASSWORD: …` (env / config assignments).
+  // Quoted values keep their quotes: `apiKey = "[redacted]"`.
+  [new RegExp(`\\b([A-Za-z0-9_]*${SECRET_NAME}[A-Za-z0-9_]*\\s*=\\s*)(["'])(?:(?!\\2).)*\\2`, 'gi'), `$1$2${REDACTED}$2`],
+  [new RegExp(`\\b([A-Za-z0-9_]*${SECRET_NAME}[A-Za-z0-9_]*\\s*=\\s*)(?!["'\\[])[^\\s;&|"']+`, 'gi'), `$1${REDACTED}`],
+  // `--password=…`, `--token …`, `--api-key …`
+  [new RegExp(`(--?[A-Za-z0-9-]*${SECRET_NAME}[A-Za-z0-9-]*(?:=|\\s+))(["'])(?:(?!\\2).)*\\2`, 'gi'), `$1$2${REDACTED}$2`],
+  [new RegExp(`(--?[A-Za-z0-9-]*${SECRET_NAME}[A-Za-z0-9-]*(?:=|\\s+))(?!["'\\[])[^\\s"']+`, 'gi'), `$1${REDACTED}`],
+  // `https://user:pass@host` — keep the user, hide the password.
+  [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+):[^\s/@]+@/gi, `$1:${REDACTED}@`],
+  // JWT (`eyJ…`), AWS access key ids, Google API keys.
+  [/\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}/g, REDACTED],
+  [/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, REDACTED],
+  [/\bAIza[0-9A-Za-z_-]{30,}/g, REDACTED],
   [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${REDACTED}`],
   [/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{8,}/g, REDACTED],
   [/\b(?:ghp|gho|ghs|ghu|ghr|github_pat|xox[abpr])_[A-Za-z0-9_]{8,}/g, REDACTED],
@@ -361,6 +391,27 @@ const SECRET_VALUE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 
 function normalizeKey(key: string): string {
   return key.replaceAll('-', '').replaceAll('_', '').toLowerCase();
+}
+
+/** Masks token-shaped text (bearer / API keys / cookies) without truncating; for display surfaces. */
+export function redactSecretText(value: string): string {
+  let text = value;
+  for (const [pattern, replacement] of SECRET_VALUE_PATTERNS) text = text.replace(pattern, replacement);
+  return text;
+}
+
+/**
+ * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
+ * token-shaped text are hidden. Execution, fingerprints and approval scope keys still use the exact arguments.
+ */
+export function redactApprovalDisplay(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return redactSecretText(value);
+  if (depth > 8 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(item => redactApprovalDisplay(item, depth + 1));
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+    key,
+    isSecretLikeKey(key) && item !== undefined && item !== null && item !== '' ? REDACTED : redactApprovalDisplay(item, depth + 1),
+  ]));
 }
 
 function redactString(value: string): string {

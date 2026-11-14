@@ -15,12 +15,26 @@ const messages = createMessages({
   quit: { 'zh-CN': '已放弃成语接龙。', en: 'You quit the idiom chain.' },
 });
 
+/**
+ * The action word shown to players: Chinese `同音` / `同字` in a Chinese conversation, English
+ * `pinyin` / `char` otherwise. The legacy `start_pinyin` / `start_char` stay accepted
+ * (`normalizeChainAction`), they are just no longer advertised.
+ */
+export function chainStartAction(mode: MatchMode, locale?: string): string {
+  const chinese = !locale || locale.startsWith('zh');
+  return mode === 'char' ? (chinese ? '同字' : 'char') : (chinese ? '同音' : 'pinyin');
+}
+
+/** Game hub quick start: what the lobby tells players to send after the chain command. */
+export const CHAIN_QUICK_START = Object.freeze({ 'zh-CN': chainStartAction('pinyin', 'zh-CN'), en: chainStartAction('pinyin', 'en') });
+
 export function getChainHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const locale = message.locale ?? 'zh-CN';
   const command = message.formatCommand?.('chain');
   return [formatGameHelp({ presentation: message, title: { 'zh-CN': '📜 成语接龙（文字接龙 · 四字成语）', en: '📜 Chinese Idiom Chain' }, commandPath: 'chain', actions: ['continue', 'quit'] }),
     messages(locale, 'dictionary', { count: idiomCount() }),
-    ...(command ? [messages(locale, 'pinyin', { command: command + ' start_pinyin' }), messages(locale, 'char', { command: command + ' start_char' })] : []),
+    ...(command ? [messages(locale, 'pinyin', { command: `${command} ${chainStartAction('pinyin', locale)}` }),
+      messages(locale, 'char', { command: `${command} ${chainStartAction('char', locale)}` })] : []),
     messages(locale, 'instructions'),
   ].join('\n');
 }
@@ -45,7 +59,7 @@ export async function runChainCommand(
         );
         if (active.last_idiom) lines.push(promptLine(active.last_idiom, mode, active.locale ?? undefined));
       } else {
-        lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'chain', 'start_pinyin'));
+        lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'chain', chainStartAction('pinyin', message.locale)));
       }
       return lines.join('\n');
     }

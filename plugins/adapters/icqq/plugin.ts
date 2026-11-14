@@ -6,9 +6,6 @@ import { icqqSensitiveExecRule } from './src/sensitive-commands.js';
 export default definePlugin({
   name: 'icqq',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'ICQQ Adapter',
-  },
   setup(context) {
     const disposeExecRule = registerSensitiveExecCommand(icqqSensitiveExecRule);
     return {

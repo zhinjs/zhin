@@ -46,6 +46,7 @@ import {
 } from './inbound-spine.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
+import { suggestCommandReply } from './command-suggestion.js';
 import {
   formatConversationLog,
   previewMessageContent,
@@ -420,6 +421,11 @@ export class InboundRuntime {
               lease.value,
               interactionFactory,
               observe,
+            ),
+            suggestCommand: () => suggestCommandReply(
+              message,
+              lease.value,
+              message.commandPrefix ?? this.#dispatcher.commandEnvironment(message, lease.value).prefix,
             ),
             hasReplied: () => operationReplied,
             findEventHandlerName: (event) =>

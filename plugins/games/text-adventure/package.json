@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-text-adventure",
   "version": "1.1.28",
-  "description": "Zhin.js 交互式文字冒险 (Plugin Runtime)",
+  "description": "An interactive story with 31 areas, 15 items and 15 endings.",
+  "keywords": [
+    "zhin.js",
+    "text-adventure",
+    "interactive-fiction",
+    "文字冒险"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -79,7 +89,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Text Adventure",
+      "displayNameI18n": {
+        "zh-CN": "文字冒险",
+        "en": "Text Adventure"
+      },
+      "descriptionI18n": {
+        "zh-CN": "31 个区域、15 种道具、15 种结局的交互式剧情游戏。",
+        "en": "An interactive story with 31 areas, 15 items and 15 endings."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

@@ -1,3 +1,5 @@
+import { PLUGIN_CATEGORIES, isPluginCategory, type PluginCategory } from '@zhin.js/plugin-runtime';
+
 export interface PackageReference {
   readonly package: string;
   readonly optional?: boolean;
@@ -20,7 +22,16 @@ export interface ZhinPluginManifest {
   readonly entry?: string;
   readonly engine?: string;
   readonly runtime?: 'trusted' | 'isolated';
-  readonly metadata?: Readonly<{ displayName?: string; icon?: string }>;
+  readonly metadata?: Readonly<{
+    displayName?: string;
+    /** Console display-name translations keyed by `zh-CN` / `en`. */
+    displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    /** Plugin-market description translations keyed by `zh-CN` / `en` (manifest only). */
+    descriptionI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    /** Plugin-market category, one of `PLUGIN_CATEGORIES` (manifest only). */
+    category?: PluginCategory;
+    icon?: string;
+  }>;
   /**
    * When true (default), Root plugins receive official Stable Features
    * (`@zhin.js/adapter|command|component`) from the platform/CLI even if they
@@ -70,12 +81,56 @@ export class ManifestValidationError extends Error {
   }
 }
 
-export function parsePackageJson(value: unknown, source: string): PackageJson {
+/**
+ * A manifest problem the Runtime loader tolerates: the offending marketplace-only value is dropped
+ * and the package still loads. `zhin plugin check` / the publish pipeline parse in strict mode,
+ * where the same problem is a validation error.
+ */
+export interface ManifestWarning {
+  readonly code: 'manifest-metadata-dropped';
+  /** Package name from `package.json#name`, when it is readable. */
+  readonly package?: string;
+  /** Manifest field the dropped value belonged to, e.g. `zhin.metadata.category`. */
+  readonly field: string;
+  /** Full source path of the dropped value (file + field). */
+  readonly source: string;
+  readonly message: string;
+}
+
+export interface ParsePackageJsonOptions {
+  /**
+   * `strict` (default): every metadata problem is a {@link ManifestValidationError} — used by
+   * `zhin plugin check` and publishing. `lenient`: problems in marketplace-only fields
+   * (`metadata.category`, `metadata.descriptionI18n`) and unknown locale keys in
+   * `metadata.displayNameI18n` are reported through `onWarning` and the value is dropped, so a
+   * marketplace typo never stops an instance from starting. Fields that affect runtime behaviour
+   * (unknown metadata keys, entry, features, …) stay fatal in both modes.
+   */
+  readonly metadata?: 'strict' | 'lenient';
+  readonly onWarning?: (warning: ManifestWarning) => void;
+}
+
+interface MetadataLeniency {
+  warn(field: string, source: string, message: string): void;
+}
+
+export function parsePackageJson(value: unknown, source: string, options: ParsePackageJsonOptions = {}): PackageJson {
   const issues: string[] = [];
   const record = asRecord(value, source, issues);
   const name = readString(record, 'name', source, issues);
   if (name && !isPackageName(name)) issues.push(`${source}#name is not a valid package name`);
-  const zhin = parseZhinManifest(record.zhin, `${source}#zhin`, issues, record.exports, `${source}#exports`);
+  const leniency: MetadataLeniency | undefined = options.metadata === 'lenient'
+    ? {
+        warn: (field, fieldSource, message) => options.onWarning?.(Object.freeze({
+          code: 'manifest-metadata-dropped' as const,
+          ...(name ? { package: name } : {}),
+          field,
+          source: fieldSource,
+          message,
+        })),
+      }
+    : undefined;
+  const zhin = parseZhinManifest(record.zhin, `${source}#zhin`, issues, record.exports, `${source}#exports`, leniency);
   const version = optionalString(record.version, `${source}#version`, issues);
   const moduleType = optionalModuleType(record.type, `${source}#type`, issues);
   const main = optionalString(record.main, `${source}#main`, issues);
@@ -185,6 +240,7 @@ function parseZhinManifest(
   issues: string[],
   packageExports?: unknown,
   exportsSource = 'exports',
+  leniency?: MetadataLeniency,
 ): ZhinPackageManifest | undefined {
   const record = asRecord(value, source, issues);
   if (record.protocol !== 1) issues.push(`${source}.protocol must be 1`);
@@ -232,7 +288,7 @@ function parseZhinManifest(
     ...(entry !== undefined ? { entry } : {}),
     engine,
     runtime: runtime as 'trusted' | 'isolated' | undefined,
-    metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues),
+    metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues, leniency),
     platformFeatures,
     features: parseReferences(record.features, `${source}.features`, issues, false),
     ...(record.features === undefined ? { featuresOmitted: true as const } : {}),
@@ -240,16 +296,88 @@ function parseZhinManifest(
   });
 }
 
-function parsePluginMetadata(value: unknown, source: string, issues: string[]): ZhinPluginManifest['metadata'] {
+function parsePluginMetadata(
+  value: unknown,
+  source: string,
+  issues: string[],
+  leniency?: MetadataLeniency,
+): ZhinPluginManifest['metadata'] {
   if (value === undefined) return undefined;
   const record = asRecord(value, source, issues);
   for (const key of Object.keys(record)) {
-    if (key !== 'displayName' && key !== 'icon') issues.push(`${source}.${key} is not supported`);
+    if (!PLUGIN_METADATA_KEYS.has(key)) issues.push(`${source}.${key} is not supported`);
   }
+  const displayNameI18n = record.displayNameI18n === undefined
+    ? undefined
+    : parseLocalizedText(record.displayNameI18n, `${source}.displayNameI18n`, issues, leniency
+      // Console display names: a wrong shape stays fatal, an unknown locale is only dropped.
+      ? (locale, message) => leniency.warn('zhin.metadata.displayNameI18n', `${source}.displayNameI18n.${locale}`, message)
+      : undefined);
+  const descriptionI18n = record.descriptionI18n === undefined
+    ? undefined
+    : parseMarketplaceField(leniency, 'zhin.metadata.descriptionI18n', `${source}.descriptionI18n`, issues,
+      (fieldIssues) => parseLocalizedText(record.descriptionI18n, `${source}.descriptionI18n`, fieldIssues));
+  const category = record.category === undefined
+    ? undefined
+    : parseMarketplaceField(leniency, 'zhin.metadata.category', `${source}.category`, issues,
+      (fieldIssues) => parsePluginCategory(record.category, `${source}.category`, fieldIssues));
   return Object.freeze({
     ...(record.displayName !== undefined ? { displayName: readString(record, 'displayName', source, issues) } : {}),
+    ...(displayNameI18n !== undefined && !(leniency && Object.keys(displayNameI18n).length === 0) ? { displayNameI18n } : {}),
+    ...(descriptionI18n !== undefined ? { descriptionI18n } : {}),
+    ...(category !== undefined ? { category } : {}),
     ...(record.icon !== undefined ? { icon: readString(record, 'icon', source, issues) } : {}),
   });
+}
+
+const PLUGIN_METADATA_KEYS = new Set(['displayName', 'displayNameI18n', 'descriptionI18n', 'category', 'icon']);
+
+/**
+ * Parses a marketplace-only metadata field. Strict mode reports its problems as manifest issues;
+ * lenient mode turns each problem into a warning and keeps only the valid part (a localized text
+ * keeps its valid locales; an empty or invalid result is dropped).
+ */
+function parseMarketplaceField<T>(
+  leniency: MetadataLeniency | undefined,
+  field: string,
+  source: string,
+  issues: string[],
+  parse: (fieldIssues: string[]) => T | undefined,
+): T | undefined {
+  if (!leniency) return parse(issues);
+  const fieldIssues: string[] = [];
+  const parsed = parse(fieldIssues);
+  for (const issue of fieldIssues) leniency.warn(field, source, `${issue}; the value is ignored`);
+  if (parsed === undefined) return undefined;
+  if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length === 0) return undefined;
+  return parsed;
+}
+
+function parsePluginCategory(value: unknown, source: string, issues: string[]): PluginCategory | undefined {
+  if (isPluginCategory(value)) return value;
+  issues.push(`${source} must be one of ${PLUGIN_CATEGORIES.join(', ')}`);
+  return undefined;
+}
+
+function parseLocalizedText(
+  value: unknown,
+  source: string,
+  issues: string[],
+  onUnknownLocale?: (locale: string, message: string) => void,
+): Readonly<Partial<Record<'zh-CN' | 'en', string>>> {
+  const record = asRecord(value, source, issues);
+  const result: Partial<Record<'zh-CN' | 'en', string>> = {};
+  for (const key of Object.keys(record)) {
+    if (key !== 'zh-CN' && key !== 'en') {
+      const message = `${source}.${key} is not supported (use zh-CN or en)`;
+      if (onUnknownLocale) onUnknownLocale(key, `${message}; the value is ignored`);
+      else issues.push(message);
+      continue;
+    }
+    const text = readString(record, key, source, issues);
+    if (text !== undefined) result[key] = text;
+  }
+  return Object.freeze(result);
 }
 
 function parseReferences(

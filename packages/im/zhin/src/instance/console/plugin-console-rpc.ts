@@ -1,9 +1,11 @@
-import { adapterFeatureId, consoleAccountTarget, isAdapterIndex, type AdapterConsoleMutation } from '@zhin.js/adapter';
+import { adapterFeatureId, consoleAccountTarget, isAdapterIndex, type AdapterConsoleConfigAction, type AdapterConsoleMutation } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 import {
   CONSOLE_PERMISSIONS,
   grantsAllow,
+  normalizePluginConsoleRpcType,
   parsePluginConsoleRpcType,
+  resolveConsoleRpcPermission,
   type ConsoleGrant,
   type ConsolePluginPermissionLevelResolver,
   type ConsoleRpcPermissionRule,
@@ -94,18 +96,12 @@ export async function dispatchPluginConsoleRpcRequest(
   message: Readonly<Record<string, unknown>>,
   options: PluginConsoleRpcRequestOptions,
 ): Promise<PluginConsoleRpcResult | undefined> {
-  let rawMethodName: string | undefined;
-  let address = parsePluginConsoleRpcType(message.type);
-  if (!address && typeof message.type === 'string' && message.type.startsWith('plugin.')) {
-    const normalizedType = message.type.replace(/\.action\.([a-zA-Z0-9-]+)$/u, '.$1');
-    const lastDot = normalizedType.lastIndexOf('.');
-    if (lastDot > 'plugin.'.length) {
-      rawMethodName = normalizedType.slice(lastDot + 1);
-      const kebabMethod = rawMethodName.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`);
-      address = parsePluginConsoleRpcType(`${normalizedType.slice(0, lastDot + 1)}${kebabMethod}`);
-    }
-  }
-  if (!address) return undefined;
+  // One normalization with the permission catalog (`resolveConsoleRpcPermission`): every spelling
+  // answered here is authorized, `alsoRequires`-checked and audited as its canonical method.
+  const normalized = normalizePluginConsoleRpcType(message.type);
+  const address = normalized ? parsePluginConsoleRpcType(normalized.type) : null;
+  if (!normalized || !address) return undefined;
+  const rawMethodName = normalized.rawMethod !== normalized.method ? normalized.rawMethod : undefined;
   const requestId = message.requestId;
   let lease: SnapshotLease | undefined;
   const releases: Array<() => void> = [];
@@ -129,10 +125,14 @@ export async function dispatchPluginConsoleRpcRequest(
     let operator = options.access.unrestricted;
     if (options.principal && !options.access.unrestricted) {
       const account = accountCall(address.method, message, input);
-      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, pagesOwnedBy, account);
+      // The catalog rule of the canonical address: a forwarded `principal.rule` resolved from a
+      // non-canonical spelling must not demote an account method to the generic plugin rule.
+      const catalogRule = resolveConsoleRpcPermission(normalized.type, message) ?? options.principal.rule ?? null;
+      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, catalogRule, pagesOwnedBy, account);
     } else {
       authorize(snapshot, pluginId, method, options.access, pagesOwnedBy);
     }
+    assertAlsoRequired(normalized.type, message, options);
     if (provider) releases.push(...admit(provider));
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
       owner: pluginId, generation: snapshot.generation,
@@ -233,10 +233,10 @@ function authorizePrincipal(
   pluginId: PluginId,
   method: NormalizedPluginConsoleRpcMethod,
   principal: PluginConsoleRpcPrincipal,
+  rule: ConsoleRpcPermissionRule | null,
   pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
   accountMethod: AccountCall | undefined,
 ): boolean {
-  const rule = principal.rule ?? null;
   const account = accountMethod !== undefined && rule?.kind === 'exact' && rule.permission === P.ENDPOINT_MANAGE;
   const target: ConsoleScopeTarget = account ? accountTarget(snapshot, pluginId, accountMethod) : adapterTarget(snapshot, pluginId);
   const allows = (permission: string) => grantsAllow(principal.grants, permission, target, principal.levelOf);
@@ -267,9 +267,33 @@ function authorizePrincipal(
   return operator;
 }
 
-const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace']);
+/**
+ * Permissions a method needs beyond its own (the catalog rule's `alsoRequires`, held globally):
+ * `endpoint-writeback` rewrites `zhin.config.yml`, so it also needs `ops.config.write` (#1250).
+ * Checked for every caller that is not unrestricted, whatever path admitted the method.
+ */
+function assertAlsoRequired(
+  canonicalType: string,
+  message: Readonly<Record<string, unknown>>,
+  options: PluginConsoleRpcRequestOptions,
+): void {
+  if (options.access.unrestricted) return;
+  // The catalog rule of the canonical address, whatever spelling (camelCase, `action.`) was sent.
+  const rules = [options.principal?.rule, resolveConsoleRpcPermission(canonicalType, message)];
+  const required = new Set(rules.flatMap((rule) => (rule?.kind === 'exact' ? rule.alsoRequires ?? [] : [])));
+  for (const permission of required) {
+    const held = options.principal
+      ? grantsAllow(options.principal.grants, permission, GLOBAL, options.principal.levelOf)
+      : options.access.permissions.includes(permission);
+    if (!held) throw new Failure('forbidden', `缺少权限 ${permission}`);
+  }
+}
 
-interface AccountCall { readonly action: AdapterConsoleMutation; readonly input: Readonly<Record<string, unknown>> }
+// `import` / `writeback` (#1250) resolve and authorize like the other account methods (`endpoint.manage`);
+// `writeback` also needs `ops.config.write` (assertAlsoRequired).
+const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace', 'import', 'writeback']);
+
+interface AccountCall { readonly action: AdapterConsoleMutation | AdapterConsoleConfigAction; readonly input: Readonly<Record<string, unknown>> }
 
 /**
  * `endpoint-<action>` (adapter account methods). Handlers read only `data`, so an `id` /
@@ -281,7 +305,7 @@ function accountCall(method: string, message: Readonly<Record<string, unknown>>,
   for (const key of ['id', 'instanceId']) {
     if (Object.hasOwn(message, key) && message[key] !== input[key]) throw new Failure('invalid_input', `${key} 只能放在 data 里`);
   }
-  return { action: action as AdapterConsoleMutation, input };
+  return { action: action as AdapterConsoleMutation | AdapterConsoleConfigAction, input };
 }
 
 /**

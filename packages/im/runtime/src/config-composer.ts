@@ -27,7 +27,7 @@ export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 /** Host configuration keys consumed by Runtime composition and Host installers. */
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
-const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle', 'locale'] as const;
+const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle', 'commandSuggestion', 'locale'] as const;
 // compose() maps document.plugin through rootOwn and injects these reserved
 // fields into the Root ConfigView. Their owner is the Root Plugin lifecycle,
 // unlike HTTP/database/AI process resources consumed only by Host installers.

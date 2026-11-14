@@ -23,7 +23,11 @@
       ],
       "description": "日历后端；none 时工具返回未启用提示",
       "x-i18n": {
+        "zh-CN": {
+          "title": "日历后端"
+        },
         "en": {
+          "title": "Calendar backend",
           "description": "Calendar backend. Tools report that the calendar is disabled when set to none."
         }
       },
@@ -39,7 +43,11 @@
       "type": "string",
       "description": "解释无偏移时间与展示用的 IANA 时区",
       "x-i18n": {
+        "zh-CN": {
+          "title": "时区"
+        },
         "en": {
+          "title": "Timezone",
           "description": "IANA timezone for interpreting times without offsets and for display."
         }
       },
@@ -53,6 +61,16 @@
     },
     "work_day_start": {
       "type": "string",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "工作日开始时间",
+          "description": "空闲时段计算使用的每日开始时间（HH:MM）"
+        },
+        "en": {
+          "title": "Workday start",
+          "description": "Daily start time used for free-time lookups (HH:MM)."
+        }
+      },
       "default": "09:00",
       "x-zhin-config": {
         "effect": "reload",
@@ -63,6 +81,16 @@
     },
     "work_day_end": {
       "type": "string",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "工作日结束时间",
+          "description": "空闲时段计算使用的每日结束时间（HH:MM）"
+        },
+        "en": {
+          "title": "Workday end",
+          "description": "Daily end time used for free-time lookups (HH:MM)."
+        }
+      },
       "default": "18:00",
       "x-zhin-config": {
         "effect": "reload",
@@ -74,6 +102,15 @@
     "oauth_redirect_base_url": {
       "type": "string",
       "description": "聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "授权回调地址"
+        },
+        "en": {
+          "title": "OAuth redirect base URL",
+          "description": "External base URL for the chat authorization callback (such as https://bot.example.com). Uses the local address of the zhin HTTP Host when empty."
+        }
+      },
       "default": "",
       "x-zhin-config": {
         "effect": "reload",
@@ -85,6 +122,15 @@
     "oauth_callback_path": {
       "type": "string",
       "description": "聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "授权回调路径"
+        },
+        "en": {
+          "title": "OAuth callback path",
+          "description": "Authorization callback route on the zhin HTTP Host. Adjust it when a reverse proxy or tunnel forwards only some paths."
+        }
+      },
       "default": "/calendar/oauth/callback",
       "x-zhin-config": {
         "effect": "reload",
@@ -99,13 +145,25 @@
       "properties": {
         "enabled": {
           "type": "boolean",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用 CalDAV"
+            },
+            "en": {
+              "title": "Enable CalDAV"
+            }
+          },
           "default": false
         },
         "calendar_url": {
           "type": "string",
           "description": "日历 collection URL",
           "x-i18n": {
+            "zh-CN": {
+              "title": "日历地址"
+            },
             "en": {
+              "title": "Calendar URL",
               "description": "Calendar collection URL."
             }
           },
@@ -116,6 +174,14 @@
         },
         "username": {
           "type": "string",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "用户名"
+            },
+            "en": {
+              "title": "Username"
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -123,10 +189,28 @@
         },
         "password": {
           "type": "string",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "密码",
+              "description": "建议写成环境变量引用"
+            },
+            "en": {
+              "title": "Password",
+              "description": "Prefer an environment-variable reference."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
           }
+        }
+      },
+      "x-i18n": {
+        "zh-CN": {
+          "title": "CalDAV"
+        },
+        "en": {
+          "title": "CalDAV"
         }
       },
       "x-zhin-config": {
@@ -141,11 +225,27 @@
       "properties": {
         "enabled": {
           "type": "boolean",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用 Google 日历"
+            },
+            "en": {
+              "title": "Enable Google Calendar"
+            }
+          },
           "default": false
         },
         "client_id": {
           "type": "string",
           "description": "${GOOGLE_CALENDAR_CLIENT_ID}",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "Client ID"
+            },
+            "en": {
+              "title": "Client ID"
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -154,6 +254,14 @@
         "client_secret": {
           "type": "string",
           "description": "${GOOGLE_CALENDAR_CLIENT_SECRET}",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "Client Secret"
+            },
+            "en": {
+              "title": "Client secret"
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -163,7 +271,11 @@
           "type": "string",
           "description": "${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取",
           "x-i18n": {
+            "zh-CN": {
+              "title": "Refresh Token"
+            },
             "en": {
+              "title": "Refresh token",
               "description": "${GOOGLE_CALENDAR_REFRESH_TOKEN}; obtain using the calendar authorization flow."
             }
           },
@@ -176,7 +288,11 @@
           "type": "string",
           "description": "日历 ID，默认 primary；可换成其它日历的 id",
           "x-i18n": {
+            "zh-CN": {
+              "title": "日历 ID"
+            },
             "en": {
+              "title": "Calendar ID",
               "description": "Calendar ID, primary by default; can be set to another calendar ID."
             }
           },
@@ -188,10 +304,27 @@
         "token_file": {
           "type": "string",
           "description": "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json）",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "Token 文件"
+            },
+            "en": {
+              "title": "Token file",
+              "description": "Optional JSON path that persists the rotated refresh_token (such as data/calendar-google-token.json)."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
           }
+        }
+      },
+      "x-i18n": {
+        "zh-CN": {
+          "title": "Google 日历"
+        },
+        "en": {
+          "title": "Google Calendar"
         }
       },
       "x-zhin-config": {
@@ -206,11 +339,27 @@
       "properties": {
         "enabled": {
           "type": "boolean",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用 Microsoft 日历"
+            },
+            "en": {
+              "title": "Enable Microsoft Calendar"
+            }
+          },
           "default": false
         },
         "client_id": {
           "type": "string",
           "description": "${MS_GRAPH_CLIENT_ID}",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "Client ID"
+            },
+            "en": {
+              "title": "Client ID"
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -220,7 +369,11 @@
           "type": "string",
           "description": "可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET}",
           "x-i18n": {
+            "zh-CN": {
+              "title": "Client Secret"
+            },
             "en": {
+              "title": "Client secret",
               "description": "Optional for public clients. ${MS_GRAPH_CLIENT_SECRET}"
             }
           },
@@ -233,7 +386,11 @@
           "type": "string",
           "description": "${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取",
           "x-i18n": {
+            "zh-CN": {
+              "title": "Refresh Token"
+            },
             "en": {
+              "title": "Refresh token",
               "description": "${MS_GRAPH_REFRESH_TOKEN}; obtain using the calendar authorization flow."
             }
           },
@@ -246,7 +403,11 @@
           "type": "string",
           "description": "Azure tenant，默认 common",
           "x-i18n": {
+            "zh-CN": {
+              "title": "租户"
+            },
             "en": {
+              "title": "Tenant",
               "description": "Azure tenant, common by default."
             }
           },
@@ -259,7 +420,11 @@
           "type": "string",
           "description": "留空或 primary/me = 默认日历；否则为 Graph calendar id",
           "x-i18n": {
+            "zh-CN": {
+              "title": "日历 ID"
+            },
             "en": {
+              "title": "Calendar ID",
               "description": "Empty, primary or me selects the default calendar; otherwise a Graph calendar ID."
             }
           },
@@ -271,10 +436,27 @@
         "token_file": {
           "type": "string",
           "description": "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json）",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "Token 文件"
+            },
+            "en": {
+              "title": "Token file",
+              "description": "Optional JSON path that persists the rotated refresh_token (such as data/calendar-ms-token.json)."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
           }
+        }
+      },
+      "x-i18n": {
+        "zh-CN": {
+          "title": "Microsoft 日历"
+        },
+        "en": {
+          "title": "Microsoft Calendar"
         }
       },
       "x-zhin-config": {

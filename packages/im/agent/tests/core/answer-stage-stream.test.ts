@@ -8,6 +8,8 @@ import { PromptController } from '../../src/turn/prompt-controller.js';
 import type { ReplyPhaseLifecycle } from '../../src/core/reply-phase.js';
 import { createInteractiveRun, type InteractiveRun } from '../../src/core/interactive-run.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
+import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
+import { registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 
 vi.mock('../../src/prompt/assembly.js', async importOriginal => ({
   ...await importOriginal<typeof import('../../src/prompt/assembly.js')>(),
@@ -36,7 +38,7 @@ function replyStream() {
 
 type Answer = ReturnType<typeof assistantTextReply>;
 type Step = (context: Context, options?: StreamOptions) => Answer | Promise<Answer>;
-async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreReplyStream; signal?: AbortSignal; retries?: number; maxIterations?: number; replySegments?: import('@zhin.js/core').AiOutboundSegmentProfile; replyPhases?: ReplyPhaseLifecycle; controller?: PromptController; outputSchema?: false | Record<string, unknown>; bot?: boolean; interactiveRun?: InteractiveRun } = {}) {
+async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreReplyStream; signal?: AbortSignal; retries?: number; maxIterations?: number; replySegments?: import('@zhin.js/core').AiOutboundSegmentProfile; replyPhases?: ReplyPhaseLifecycle; controller?: PromptController; outputSchema?: false | Record<string, unknown>; bot?: boolean; interactiveRun?: InteractiveRun; toolOutcome?: unknown; turnId?: string } = {}) {
   const llm = wireMockLlmApi({ models: ['m'] });
   const calls: Context[] = [];
   vi.spyOn(llm.runtime, 'complete').mockImplementation(async (_model, context, opts) => {
@@ -46,7 +48,7 @@ async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreR
     return step(context, opts);
   });
   const persisted: AgentMessage[] = [];
-  const executeTool = vi.fn(async () => ({ status: 'completed' as const, output: 'looked up', durationMs: 1 }));
+  const executeTool = vi.fn(async () => (options.toolOutcome ?? { status: 'completed' as const, output: 'looked up', durationMs: 1 }) as never);
   const tools = options.tools ?? [];
   const host = {
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async (_id: string, messages: AgentMessage[]) => { persisted.push(...messages); } },
@@ -59,7 +61,7 @@ async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreR
   };
   const execute = (initialMessages?: AgentMessage[], promptHooks?: import('../../src/turn/prompt-controller.js').PromptTurnHooks, signal = options.signal) => runAgentLoopTextTurnRun({
     host: host as never, sessionId: 'session', rawContent: 'hello', promptProfile: { kind: 'interactive' },
-    turnContext: { input: { text: 'hello', ...(options.bot ? { contextState: { bot: { id: 'bot', name: 'Bot' } } } : {}) }, origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'person' },
+    turnContext: { ...(options.turnId ? { identity: { turnId: options.turnId } } : {}), input: { text: 'hello', ...(options.bot ? { contextState: { bot: { id: 'bot', name: 'Bot' } } } : {}) }, origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'person' },
       principal: { subjectId: 'person', roles: ['owner'] }, session: { key: 'session' } },
     replyStream: options.stream, replyPhases: options.replyPhases, replySegments: options.replySegments, allTools: tools, resolvedTools: tools, toolExecution: { execute: executeTool } as never,
     interactiveRun: options.interactiveRun,
@@ -469,4 +471,45 @@ it('stops admitted follow-ups at the real quota boundary even when the Host expl
   expect(settled).toBe(1);
   expect(f.result.replyPhaseStopped).toBe(true);
   expect(f.events.filter(event => event.type === 'turn_end')).toHaveLength(1);
+});
+
+describe('unexecuted side-effect notice (#1250 owner review)', () => {
+  const saveMemory: AgentTool = { name: 'memory_save', description: 'Save a preference', parameters: { type: 'object', properties: {} } } as AgentTool;
+  const denied = { status: 'denied' as const, policy: 'memory-scope', reason: 'approval required', sideEffect: true };
+
+  it('appends the line to a non-streamed reply that only sounds like a refusal, and records it on the trace', async () => {
+    const trace = new TurnTraceCollector({ turnId: 'turn-appended', sessionKey: 'session' });
+    const release = registerTurnTrace(trace);
+    try {
+      const f = await run([
+        () => assistantToolCallReply([{ id: 'save', name: 'memory_save', arguments: {} }]),
+        // 「不能」 appears, but the reply admits nothing: the old keyword check skipped the note here.
+        () => assistantTextReply(structured('记住啦，你不能吃香菜')),
+      ], { tools: [saveMemory], toolOutcome: denied, turnId: 'turn-appended' });
+      expect(f.result.reply).toContain('记住啦，你不能吃香菜');
+      expect(f.result.reply).toContain('（记忆操作未执行）');
+      expect(f.result.unexecutedNotice).toMatchObject({ tools: ['memory_save'], delivery: 'appended' });
+      expect(trace.snapshot().unexecuted_tool_notice).toEqual({ tools: ['memory_save'], delivered: 'appended' });
+    } finally {
+      release();
+    }
+  });
+
+  it('hands the line to delivery as a follow-up when the reply was streamed', async () => {
+    const { stream, snapshots, updated } = replyStream();
+    const f = await run([
+      () => assistantToolCallReply([{ id: 'save', name: 'memory_save', arguments: {} }]),
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      async (_context, opts) => {
+        opts?.onTextDelta?.(partial('记住啦'));
+        await updated;
+        return assistantTextReply(structured('记住啦，你不能吃香菜'));
+      },
+    ], { tools: [saveMemory], toolOutcome: denied, stream });
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(f.result.progressive).toBeDefined();
+    expect(f.result.unexecutedNotice).toEqual({ tools: ['memory_save'], text: '（记忆操作未执行）', delivery: 'followup' });
+    // Nothing is appended to an already published answer.
+    expect(f.result.reply).not.toContain('操作未执行');
+  });
 });

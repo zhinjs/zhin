@@ -15,9 +15,6 @@ import {
  */
 export default defineGamePlugin<SessionService>({
   name: 'word-riddle',
-  metadata: {
-    displayName: 'Word Riddle',
-  },
   game: {
     commandPath: 'riddle',
     titleI18n: { en: 'Word Riddle' },

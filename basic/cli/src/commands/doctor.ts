@@ -35,7 +35,9 @@ import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/g
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
+import { diagnoseApprovalChannelConfig } from '../utils/approval-config-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
+import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
@@ -48,10 +50,14 @@ const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 
 interface CheckResult {
   name: string;
-  status: 'ok' | 'warn' | 'error';
+  /** `info`: worth knowing, nothing to fix (not counted as a warning). */
+  status: 'ok' | 'info' | 'warn' | 'error';
   message: string;
   fix?: string;
 }
+
+/** Marker the gateway's IAM service keeps while a Console owner exists (read offline). */
+const CONSOLE_INITIALIZED_MARKER = path.join('.zhin', 'console-iam.initialized');
 
 export const doctorCommand = new Command('doctor')
   .alias('health')
@@ -242,6 +248,8 @@ export const doctorCommand = new Command('doctor')
             results.push({ name: '结构化决策配置', status: 'warn', message: '无法读取 package.json 以检查决策插件绑定', fix: '修复 package.json 后重跑 zhin doctor' });
           }
         }
+        const approvalDiagnosis = diagnoseApprovalChannelConfig(loadedConfig);
+        if (approvalDiagnosis) results.push({ name: '审批渠道', ...approvalDiagnosis });
         let diagnosis: ConsoleConfigDiagnosis = diagnoseConsoleConfig(loadedConfig);
         const canFixConfig = loaded.status === 'loaded' && loaded.writable;
 
@@ -618,6 +626,26 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
+    // 7c. 网关原生依赖 node-pty（Console 终端）：pnpm 10+ 默认跳过其构建脚本（#1250）。
+    // 子进程在项目目录解析网关后加载，不经 CLI 自己的依赖树；项目未安装网关时跳过。
+    if (fs.existsSync(nodeModulesPath)) {
+      const probe = await probeGatewayNativeModule(cwd);
+      if (probe.status === 'ok') {
+        results.push({ name: '终端依赖 node-pty', status: 'ok', message: '可加载（Console 终端可用）' });
+      } else if (probe.status === 'failed') {
+        const pkg = await readProjectPackage().catch(() => ({}));
+        results.push({
+          name: '终端依赖 node-pty',
+          status: 'warn',
+          message: `无法加载（${probe.reason}）：Console 的本地终端不可用，其余功能不受影响。pnpm 10+ 默认跳过原生依赖的构建脚本`,
+          fix: nativeModuleFixCommand(cwd, pkg),
+        });
+      }
+    }
+
+    // 本项目的管理网关（ADR 0054）：端口检查与 HTTP_TOKEN 检查都要知道它是否在运行
+    const gateway = await probeGateway({ root: cwd }).catch(() => undefined);
+
     // 8. 检查端口占用（读取已加载配置的 http.port，默认 8086）
     let httpPort = 8086;
     try {
@@ -633,7 +661,14 @@ export const doctorCommand = new Command('doctor')
     }
     try {
       const { stdout } = await execAsync(`lsof -i:${httpPort} || (ss -lntp | grep :${httpPort}) 2>/dev/null`);
-      if (stdout.trim()) {
+      if (stdout.trim() && gateway?.gateway.ports.includes(httpPort)) {
+        // Held by this project's own gateway: that is the expected listener, not a conflict.
+        results.push({
+          name: `端口 ${httpPort}`,
+          status: 'ok',
+          message: `由本项目的管理网关监听（pid ${gateway.gateway.pid}）`,
+        });
+      } else if (stdout.trim()) {
         results.push({
           name: `端口 ${httpPort}`,
           status: 'warn',
@@ -705,7 +740,17 @@ export const doctorCommand = new Command('doctor')
     let httpTokenSet = Boolean(environmentToken) || fileToken !== undefined;
     let weak = (environmentToken !== undefined && isWeakBootstrapToken(environmentToken))
       || (environmentToken === undefined && fileToken !== undefined && isWeakBootstrapToken(fileToken));
-    if (options.fix && fs.existsSync(envFile) && (!httpTokenSet || (weak && fileToken !== undefined && environmentToken === undefined))) {
+    // Once a Console owner exists the bootstrap token is refused everywhere (ADR 0049): nothing to fix.
+    const consoleInitialized = gateway?.consoleInitialized ?? fs.existsSync(path.join(cwd, CONSOLE_INITIALIZED_MARKER));
+    if (consoleInitialized) {
+      results.push({
+        name: 'HTTP_TOKEN',
+        status: httpTokenSet ? 'info' : 'ok',
+        message: httpTokenSet
+          ? `Console 已初始化：初始化后此令牌一律被拒绝，可从 ${environmentToken !== undefined ? '环境变量' : '.env'} 删除 HTTP_TOKEN`
+          : 'Console 已初始化，无需初始化令牌',
+      });
+    } else if (options.fix && fs.existsSync(envFile) && (!httpTokenSet || (weak && fileToken !== undefined && environmentToken === undefined))) {
       let replacedExisting = false;
       envContent = await updateDotenvFile(envFile, current => {
         // The first assignment (even an empty one) takes the fresh token; later duplicates are dropped.
@@ -718,7 +763,7 @@ export const doctorCommand = new Command('doctor')
       httpTokenSet = true;
       weak = false;
     }
-    results.push({
+    if (!consoleInitialized) results.push({
       name: 'HTTP_TOKEN',
       status: httpTokenSet && !weak ? 'ok' : 'warn',
       message: !httpTokenSet
@@ -768,7 +813,6 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 10d. 管理网关与 Console 初始化状态（ADR 0054）
-    const gateway = await probeGateway({ root: cwd }).catch(() => undefined);
     if (!gateway) {
       results.push({
         name: '管理网关',
@@ -803,8 +847,8 @@ export const doctorCommand = new Command('doctor')
     let hasWarnings = false;
 
     for (const result of results) {
-      const icon = result.status === 'ok' ? '✅' : result.status === 'warn' ? '⚠️' : '❌';
-      const color = result.status === 'ok' ? chalk.green : result.status === 'warn' ? chalk.yellow : chalk.red;
+      const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
+      const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
       
       console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
       

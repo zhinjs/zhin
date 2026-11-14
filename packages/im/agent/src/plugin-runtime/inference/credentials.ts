@@ -94,11 +94,24 @@ export type AuthenticationErrorCode =
   | 'operation-closed'
   | 'not-submitted'
   | 'rejected'
-  | 'not-prepared';
+  | 'not-prepared'
+  /** A confidential OAuth client needs the account's client secret before login can begin. */
+  | 'client-secret-required'
+  /** Driver preparation failed; `preparation` carries the safe driver code and upstream status. */
+  | 'preparation-failed';
+/** Safe diagnostics of a failed driver preparation: codes and HTTP status only, never bodies, URLs or tokens. */
+export interface InferencePreparationFailure {
+  readonly code: string;
+  readonly status?: number;
+  readonly reason?: string;
+  readonly step?: string;
+}
 export class InferenceAuthenticationError extends Error {
-  constructor(readonly code: AuthenticationErrorCode) {
+  readonly preparation?: InferencePreparationFailure;
+  constructor(readonly code: AuthenticationErrorCode, preparation?: InferencePreparationFailure) {
     super(`Inference authentication: ${code}`);
     this.name = 'InferenceAuthenticationError';
+    if (preparation) this.preparation = preparation;
   }
 }
 function object(value: unknown): Record<string, unknown> {

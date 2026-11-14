@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { resolve } from 'node:path';
 import { personalSessionIdentity, type PersonalSessionAddress } from '../../personal-session/index.js';
-import { expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
+import { chatRoleHeldAt, expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import {
   approvalOutcomeToDecision,
@@ -27,6 +27,10 @@ import { capabilityLocalName, type RuntimeSenderRoles } from './request-capabili
 export const approvalMessages = createMessages({
   title: { 'zh-CN': '操作确认', en: 'Confirm operation' },
   humanTip: { 'zh-CN': '仅确认本次操作。', en: 'Confirmation applies to this operation only.' },
+  selfTip: {
+    'zh-CN': '仅确认本次操作，只有发起这次请求的人可以回答；回复「确认」或「取消」，超时视为拒绝。',
+    en: 'Applies to this operation only. Only the person who made this request can answer: reply "yes" or "no"; no answer counts as a rejection.',
+  },
   tip: { 'zh-CN': '长期授权仅限当前 Host 和会话。', en: 'Remembered decisions apply only to this Host and conversation.' },
   reject: { 'zh-CN': '拒绝', en: 'Reject' },
   rejectAlways: { 'zh-CN': '拒绝本次及后续同类操作', en: 'Reject this and future matching operations' },
@@ -225,20 +229,140 @@ export function createRuntimeQuestionPort(
   });
 }
 
+/**
+ * Who answers an IM approval prompt for this turn (#1250). The prompt is a UserInteraction bound to that
+ * person on the turn's own conversation (same Endpoint, conversation and thread), so nobody else's reply,
+ * button press or stale callback settles it.
+ *
+ * - `master`: the sender is the global owner (unchanged).
+ * - `owner`: the endpoint owner, asked in this conversation. Only in a shared conversation (or when the
+ *   owner is the sender): in somebody else's private chat the owner can never answer.
+ * - `initiator`: only with `ai.agent.approval.adminSelfApprove: true` (default off), a zhin `admin` (held at
+ *   endpoint level or above, ADR 0056 §2) who started this live turn
+ *   in their private chat confirms it themselves, and only for requests the policy marks admin-approvable
+ *   (`adminMayApprove`; see {@link createRuntimeApprovalPort}). Never in a group or channel (with no owner
+ *   configured there nobody can approve), and never for merged, ambient, scene or live-room turns, where
+ *   the sender did not address the bot.
+ * - `none`: nobody with authority can be asked here; the port reports a clear reason instead of waiting.
+ */
+export type ImApprover =
+  | Readonly<{ kind: 'master' | 'owner' | 'initiator'; subjectId: string }>
+  | Readonly<{ kind: 'none'; reason: string }>;
+
+export interface ImApproverInput {
+  readonly senderId?: string;
+  readonly isMaster: boolean;
+  /**
+   * The sender holds the zhin `admin` role (or higher) at endpoint level or above (ADR 0056 §2:
+   * `chatRoleHeldAt(sender, 'admin', 'endpoint')`). A conversation-level admin or a demoted
+   * conversation owner does not count; platform standing never counts.
+   */
+  readonly isAdmin: boolean;
+  readonly ownerId?: string;
+  readonly scope?: 'private' | 'group' | 'channel';
+  /** The sender addressed the bot in this live turn (not merged, ambient, scene or live-room). */
+  readonly initiatorPresent: boolean;
+  /**
+   * `ai.agent.approval.adminSelfApprove` (#1250 owner review). Default false: the `initiator` branch is never
+   * used and such turns resolve as before (the owner, or nobody).
+   */
+  readonly adminSelfApprove?: boolean;
+}
+
+/**
+ * #1250 review: whether the sender may act as an `initiator` approver — the zhin `admin` role (or higher) held
+ * at endpoint level or above (ADR 0056 §2). A conversation-level admin, or a conversation owner (who counts as
+ * admin for host trust via `hostChatRole`), does not qualify.
+ */
+export function holdsEndpointAdmin(sender: Parameters<typeof chatRoleHeldAt>[0]): boolean {
+  return chatRoleHeldAt(sender, 'admin', 'endpoint');
+}
+
+export function resolveImApprover(input: ImApproverInput): ImApprover {
+  const senderId = input.senderId?.trim();
+  const ownerId = input.ownerId?.trim() || undefined;
+  if (!senderId) return { kind: 'none', reason: 'the sender of this turn is unknown' };
+  if (input.isMaster) return { kind: 'master', subjectId: senderId };
+  if (ownerId && (ownerId === senderId || input.scope !== 'private')) return { kind: 'owner', subjectId: ownerId };
+  // #1250 review: admin self-approval only in the admin's own private chat; a group without an owner
+  // configured has nobody who can approve, and no admin stands in for the owner there.
+  if (input.adminSelfApprove === true && input.isAdmin && input.initiatorPresent && input.scope === 'private') {
+    return { kind: 'initiator', subjectId: senderId };
+  }
+  return {
+    kind: 'none',
+    reason: ownerId
+      ? 'only the bot owner can approve this, and the owner cannot answer in this private chat'
+      : 'no bot owner is configured for this account, so nobody can approve it here',
+  };
+}
+
 /** IM approvals use UserInteraction; human-only tools also require a fresh answer from masters. */
 export function createRuntimeApprovalPort(options: {
   readonly locale?: Locale;
   readonly isMaster: boolean;
+  /** Bound to the approver with authority (master, owner, or an `initiator` admin). */
   readonly interaction?: UserInteraction;
+  /**
+   * #1250: the approver is the turn's own (non-master) initiator. Only "allow once" / "reject" are offered,
+   * nothing is remembered or recalled. Only requests marked `adminMayApprove` (and not `requiresOwner` or
+   * `humanOnly`) can be approved this way; an `intent` request without the mark is settled as intent only.
+   */
+  readonly selfApproval?: boolean;
+  /**
+   * #1250: bound to the turn's initiator when nobody with authority can be asked. Settles only
+   * `purpose: 'intent'` requests, as `scope: 'intent'`; authorization requests stay unavailable.
+   */
+  readonly intentInteraction?: UserInteraction;
+  /** Reported when nobody can be asked (instead of the generic reason). */
+  readonly unavailableReason?: string;
   readonly memory?: ApprovalDecisionMemory;
+  /**
+   * #1250: the master addressed the bot in this live turn (not merged, ambient, scene or live-room).
+   * A master's "no approval needed" shortcut never settles an `intent` confirmation (a high-risk action
+   * after external content); the master confirms it once here, or it is refused when they are not present.
+   * Defaults to true.
+   */
+  readonly masterPresent?: boolean;
 }): ApprovalDecisionPort & ApprovalOutcomePort {
   const locale = resolveLocale(options.locale);
+  const unavailable = options.unavailableReason ?? 'this conversation cannot show an approval prompt';
+  // #1250 review: availability is per purpose. A port that can only reach the initiator for an intent
+  // confirmation is unavailable to authorization callers (hard gate, tool approval gate), which then fail fast.
+  const available = options.isMaster || options.interaction != null;
   const port: ApprovalDecisionPort & ApprovalOutcomePort = {
-    available: options.isMaster || options.interaction != null,
+    available,
+    intentAvailable: available || options.intentInteraction != null,
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
+      if (options.isMaster && input.purpose === 'intent' && !input.humanOnly) {
+        // #1250: prompt injection in external content must not ride on the master's exemption.
+        // One-shot, bound to the master, never remembered; a timeout counts as a rejection.
+        if (options.masterPresent === false || !options.interaction) {
+          return { status: 'unavailable', reason: MASTER_NOT_PRESENT_REASON };
+        }
+        return askOnce(options.interaction, input, locale);
+      }
       if (options.isMaster && !input.humanOnly) return { status: 'approved', decision: 'approve-always' };
       if (!options.interaction) {
-        return { status: 'unavailable', reason: 'this conversation cannot show an approval prompt' };
+        if (input.purpose === 'intent' && !input.humanOnly && options.intentInteraction) {
+          const outcome = await askOnce(options.intentInteraction, input, locale);
+          return outcome.status === 'approved' ? { ...outcome, scope: 'intent' } : outcome;
+        }
+        return { status: 'unavailable', reason: unavailable };
+      }
+      if (options.selfApproval) {
+        if (input.humanOnly) {
+          return { status: 'unavailable', reason: 'this tool needs fresh approval from the bot owner; the requester cannot approve it' };
+        }
+        // #1250 review: an admin approves only what the policy explicitly marks admin-approvable.
+        if (input.requiresOwner) return { status: 'unavailable', reason: SELF_APPROVAL_NEEDS_OWNER_REASON };
+        if (input.adminMayApprove) return askOnce(options.interaction, input, locale);
+        if (input.purpose === 'intent') {
+          // Like any initiator, the admin may still confirm their own intent; it never stands in for authority.
+          const outcome = await askOnce(options.interaction, input, locale);
+          return outcome.status === 'approved' ? { ...outcome, scope: 'intent' } : outcome;
+        }
+        return { status: 'unavailable', reason: SELF_APPROVAL_NOT_DECLARED_REASON };
       }
       const recalled = input.humanOnly ? undefined : options.memory?.recall(input);
       if (recalled !== undefined) {
@@ -252,6 +376,8 @@ export function createRuntimeApprovalPort(options: {
         // No `default`: a timeout must surface as timed_out, not as a silent rejection.
         const selected = await options.interaction.ask({
           type: 'select',
+          // Presentation marker only: lets a surface (Sandbox Console) label this as an approval.
+          purpose: 'approval',
           title: approvalText(locale, 'title'),
           description: input.question,
           tip: approvalText(locale, input.humanOnly ? 'humanTip' : 'tip'),
@@ -288,6 +414,46 @@ export function createRuntimeApprovalPort(options: {
     },
   };
   return Object.freeze(port);
+}
+
+/** #1250 review: why an admin initiator cannot approve an operation that needs the bot owner. */
+export const SELF_APPROVAL_NEEDS_OWNER_REASON = 'this operation needs approval from the bot owner '
+  + '(sensitive files, shell commands or shared memory); an admin cannot approve it for themselves';
+
+/** #1250 review: why an admin initiator cannot approve an operation that is not declared admin-approvable. */
+export const SELF_APPROVAL_NOT_DECLARED_REASON = 'this operation needs approval from the bot owner; '
+  + 'an admin can only approve operations that are declared admin-approvable';
+
+/** Why a master's high-risk action after external content is refused when they did not address the bot. */
+export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot in this turn (merged or background messages), '
+  + 'so nobody can confirm a high-risk action that follows external content';
+
+/** A confirmation of one's own request accepts 确认 / 取消 and yes / no alike, whatever the prompt's language (#1250). */
+const ONCE_REJECT_ALIASES = ['否', '拒绝', '取消', 'n', 'no', 'cancel'];
+const ONCE_APPROVE_ALIASES = ['同意', '确认', 'y', 'yes', 'confirm'];
+
+/** A one-shot confirmation: "allow once" or "reject", no remembered or shared grants. */
+async function askOnce(interaction: UserInteraction, input: ApprovalRequestInput, locale: Locale): Promise<ApprovalOutcome> {
+  try {
+    const selected = await interaction.ask({
+      type: 'select',
+      purpose: 'approval',
+      title: approvalText(locale, 'title'),
+      description: input.question,
+      tip: approvalText(locale, 'selfTip'),
+      options: [
+        { label: approvalText(locale, 'reject'), value: 'reject', aliases: ONCE_REJECT_ALIASES },
+        { label: approvalText(locale, 'once'), value: 'approve-once', aliases: ONCE_APPROVE_ALIASES },
+      ],
+      ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
+      signal: input.signal,
+    });
+    return selected === 'approve-once'
+      ? { status: 'approved', decision: 'approve-once' }
+      : { status: 'denied', by: 'user' };
+  } catch (error) {
+    return approvalOutcomeFromInteractionError(error);
+  }
 }
 
 function approvalOutcomeFromInteractionError(error: unknown): ApprovalOutcome {

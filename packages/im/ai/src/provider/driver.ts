@@ -76,16 +76,35 @@ export interface OAuthChallenge {
   /** Host-private material, never sent to Console or exported. */
   readonly privateState: JsonObject;
 }
+/** A refused model-catalogue request: upstream HTTP status and, for 429, a bounded Retry-After only — never the response body.
+ * `rejected` (other 4xx, e.g. 401/403), `rate-limited` (429), `unavailable` (5xx and anything else). */
+export class ProviderDiscoveryError extends Error {
+  readonly code: 'rejected' | 'rate-limited' | 'unavailable';
+  readonly status: number;
+  readonly retryAfterMs?: number;
+  constructor(status: number, retryAfterMs?: number) {
+    super(`Provider model discovery rejected (${status})`);
+    this.name = 'ProviderDiscoveryError';
+    this.status = status;
+    this.code = status === 429 ? 'rate-limited' : status >= 400 && status < 500 ? 'rejected' : 'unavailable';
+    if (status === 429 && retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0)
+      this.retryAfterMs = Math.min(Math.round(retryAfterMs), 86_400_000);
+  }
+}
+
 export interface OAuthAuthentication<S = JsonObject> {
   readonly contractVersion: string;
   /** Product callback contract, not a request-body redirect or an HTTP listener. */
   readonly redirectUri: string;
+  /** The OAuth client is confidential: an account-bound client secret must be supplied before `begin`. */
+  readonly requiresClientSecret?: boolean;
   begin(input: OAuthOperationOptions<S> & Readonly<{ redirectUri: string }>): Promise<OAuthChallenge>;
   complete(input: OAuthOperationOptions<S> & Readonly<{
     redirectUri: string; code: string; state: string; challenge: OAuthChallenge;
   }>): Promise<OAuthCredential>;
   refresh(input: OAuthOperationOptions<S> & Readonly<{ credential: OAuthCredential }>): Promise<OAuthCredential>;
-  /** Explicit post-login read-only preparation. Host retains the exchanged bundle
+  /** Explicit post-login preparation (identity/project lookup, and idempotent supplier-side
+   * enrollment where the supplier requires it). Host retains the exchanged bundle
    * if this fails; retrying preparation must not re-exchange the authorization code. */
   prepare?(input: OAuthOperationOptions<S> & Readonly<{ credential: OAuthCredential }>): Promise<OAuthCredential>;
 }
@@ -153,6 +172,9 @@ export interface ProviderDefinition<S = JsonObject, P = JsonObject> {
   models(service: ProviderService<S>): Readonly<Record<string, ModelDefinition>>;
   /** Pure credential-audience identity. Omit only when every option is identity-bearing. */
   identity?(service: ProviderService<S>): JsonValue;
+  /** Unverified authoring hints shown when adding a model to a driver without discovery.
+   * Suggestions only: never admitted models, never proof that the account can use them. */
+  readonly modelSuggestions?: readonly ProviderModelObservation[];
   /** Explicit authenticated management action; observations require a separate reviewed graph edit. */
   discover?(input: ProviderDiscoveryOptions<S>): Promise<readonly ProviderModelObservation[]>;
   /** Pure traits of the already validated protocol, with no credential or SDK handle. */

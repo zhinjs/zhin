@@ -110,12 +110,15 @@ describe('self-change sandbox loader (ADR 0040 §3.3)', () => {
   });
 
   it('kills a hanging load at the timeout and cleans up', async () => {
-    const load = createSelfChangeSandboxLoader({ projectRoot: project, runner, tmpRoot, timeoutMs: 300 });
+    // The timeout also bounds the baseline trial (no draft) that follows a failed one: it must be
+    // long enough for a cold Node child to start under a loaded test run, or the baseline times out
+    // too and the result becomes `skipped` (seen with 300 ms in the full suite).
+    const load = createSelfChangeSandboxLoader({ projectRoot: project, runner, tmpRoot, timeoutMs: 3_000 });
     const result = await load({ pluginRoot: '', writes: [{ path: 'hang', content: '' }], deletes: [] });
     expect(result.status).toBe('failed');
     expect(result.message).toMatch(/did not finish within/u);
     expect(readdirSync(tmpRoot)).toEqual([]);
-  });
+  }, 30_000);
 
   it('skips instead of copying a plugin root over the limit', async () => {
     const load = createSelfChangeSandboxLoader({ projectRoot: project, runner, tmpRoot, maxCopyFiles: 2 });

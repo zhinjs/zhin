@@ -15,7 +15,7 @@ import { icqqLinkHost, icqqSliderSubmission, isNtCaptcha } from '../src/icqq-log
 import { redactIcqqLogText, redactingIcqqLogger } from '../src/sdk-logger.js';
 import { pickIcqqCodeTarget } from '../commands/icqq/login/definition.js';
 import type { IcqqLoginControl } from '../src/icqq-login-control.js';
-import { loginChallengeLogLine } from '../src/endpoint.js';
+import { icqqSystemEventLogLevel, loginChallengeLogLine } from '../src/endpoint.js';
 import definition from '../adapters/icqq/index.js';
 
 const endpointKey = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
@@ -601,6 +601,37 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(lines).not.toContain('sid=abc');
       expect(lines).not.toContain('cap_cd');
       spy.mockRestore(); warn.mockRestore();
+    });
+  });
+
+  describe('system event log levels (#1250)', () => {
+    it('grades system events by meaning: online and challenges are info, only failures warn', () => {
+      expect(icqqSystemEventLogLevel('online')).toBe('info');
+      for (const step of ['qrcode', 'device', 'slider', 'auth']) expect(icqqSystemEventLogLevel(`login.${step}`)).toBe('info');
+      expect(icqqSystemEventLogLevel('login.error')).toBe('warn');
+      for (const type of ['offline', 'offline.network', 'offline.kickoff']) expect(icqqSystemEventLogLevel(type)).toBe('warn');
+    });
+
+    it('a routine login writes no warning', async () => {
+      const s = await setup();
+      const { getAdapterLogger } = await import('@zhin.js/logger');
+      const logger = getAdapterLogger('icqq', '10001');
+      const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      try {
+        s.start(() => {
+          s.client.emit('system.login.slider', { url: SLIDER_URL });
+          s.client.emit('system.online');
+        });
+        await vi.waitFor(() => expect(s.flow()?.state).toBe('online'));
+        await flush();
+        const warnings = warn.mock.calls.map((call) => String(call[0])).join('\n');
+        expect(warnings).not.toContain('system.online');
+        expect(warnings).not.toContain('system.login');
+        const infos = info.mock.calls.map((call) => String(call[0])).join('\n');
+        expect(infos).toContain('system.online');
+        expect(infos).toContain('system.login.slider');
+      } finally { info.mockRestore(); warn.mockRestore(); }
     });
   });
 

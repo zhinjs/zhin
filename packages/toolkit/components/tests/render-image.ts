@@ -1,4 +1,4 @@
-import { afterAll, expect } from 'vitest';
+import { afterAll, beforeAll, expect } from 'vitest';
 import { fork, type ChildProcess } from 'node:child_process';
 import { PNG } from 'pngjs';
 
@@ -9,7 +9,12 @@ type PendingImage = {
   timer: ReturnType<typeof setTimeout>;
 };
 let worker: ChildProcess | undefined;
+let workerReady: Promise<void> | undefined;
 let workerFailure: Error | undefined;
+/** Backstop only: startup (tsx + Chromium launch) is awaited through the worker's ready signal. */
+const STARTUP_BACKSTOP_MS = 60_000;
+/** One capture after the browser is up; startup no longer counts against it. */
+const CAPTURE_TIMEOUT_MS = 8_000;
 let sequence = 0;
 const pending = new Map<number, PendingImage>();
 
@@ -22,9 +27,9 @@ function rejectPending(error: Error): void {
   pending.clear();
 }
 
-function child(): ChildProcess {
+function child(): { active: ChildProcess; ready: Promise<void> } {
   if (workerFailure) throw workerFailure;
-  if (worker) return worker;
+  if (worker && workerReady) return { active: worker, ready: workerReady };
   // Blink can start only once in an OS process. File-isolated Vitest modules
   // still reuse native modules, so own a process and stop it at this file's end.
   worker = fork(new URL('./render-image-worker.mjs', import.meta.url), [], {
@@ -32,20 +37,55 @@ function child(): ChildProcess {
     serialization: 'advanced',
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
   });
-  worker.on('message', (message: { id: number; result: ImageResult; error?: string }) => {
+  const started = worker;
+  let settleReady: { resolve: () => void; reject: (error: Error) => void } | undefined;
+  workerReady = new Promise<void>((resolve, reject) => { settleReady = { resolve, reject }; });
+  // Mark handled: a failure is surfaced through renderImage's await, never as an unhandled rejection.
+  workerReady.catch(() => undefined);
+  const startup = setTimeout(() => {
+    const error = new Error(`Image worker did not start within ${STARTUP_BACKSTOP_MS / 1000} seconds`);
+    settleReady?.reject(error);
+    rejectPending(error);
+    started.kill('SIGKILL');
+  }, STARTUP_BACKSTOP_MS);
+  worker.on('message', (message: { id?: number; ready?: boolean; result?: ImageResult; error?: string }) => {
+    if (message.ready !== undefined) {
+      clearTimeout(startup);
+      if (message.ready) settleReady?.resolve();
+      else {
+        const error = new Error(`Image worker failed to start: ${message.error}`);
+        workerFailure = error;
+        settleReady?.reject(error);
+      }
+      return;
+    }
+    if (message.id === undefined) return;
     const request = pending.get(message.id);
     if (!request) return;
     pending.delete(message.id);
     clearTimeout(request.timer);
     if (message.error) request.reject(new Error(message.error));
-    else request.resolve(message.result);
+    else request.resolve(message.result!);
   });
-  worker.on('error', rejectPending);
+  worker.on('error', (error) => {
+    clearTimeout(startup);
+    settleReady?.reject(error);
+    rejectPending(error);
+  });
   worker.on('exit', (code, signal) => {
-    rejectPending(new Error(`Image worker exited (${signal ?? code})`));
+    clearTimeout(startup);
+    const error = new Error(`Image worker exited (${signal ?? code})`);
+    settleReady?.reject(error);
+    rejectPending(error);
   });
-  return worker;
+  return { active: worker, ready: workerReady };
 }
+
+// Every importer renders: start the worker in a hook with the startup budget, so a test's own
+// timeout only covers its captures (a slow, loaded machine no longer fails the first test).
+beforeAll(async () => {
+  await child().ready;
+}, STARTUP_BACKSTOP_MS + 5_000);
 
 afterAll(async () => {
   if (!worker) return;
@@ -75,13 +115,14 @@ afterAll(async () => {
 
 /** Real Chromium rendering; exact root fills expose geometry without font dependence. */
 export async function renderImage(html: string, width = 240): Promise<PNG> {
-  const active = child();
+  const { active, ready } = child();
+  await ready;
   const result = await new Promise<ImageResult>((resolve, reject) => {
     const id = ++sequence;
     const timer = setTimeout(() => {
-      rejectPending(new Error('Image worker capture exceeded 8 seconds'));
+      rejectPending(new Error(`Image worker capture exceeded ${CAPTURE_TIMEOUT_MS / 1000} seconds`));
       active.kill('SIGKILL');
-    }, 8_000);
+    }, CAPTURE_TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
     active.send({ id, html, width }, error => {
       if (error) rejectPending(error);

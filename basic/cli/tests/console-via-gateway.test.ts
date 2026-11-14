@@ -166,6 +166,11 @@ describe.runIf(process.platform !== 'win32')('zhin console beside a running gate
       expect(response.status).toBe(403);
     }
     expect(await gatewayConsole.iam()!.findUser('mallory')).toBeNull();
+    // The refusal is audited as socket-only, not dropped as an unknown RPC.
+    const audit = await gatewayConsole.iam()!.listAudit({});
+    expect(audit.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: `rpc:${LOCAL_GATEWAY_RPC.CONSOLE_USER_CREATE}`, outcome: 'denied', detail: expect.objectContaining({ reason: 'socket_only' }) }),
+    ]));
   });
 
   it('falls back to the database when no gateway runs', async () => {

@@ -217,6 +217,19 @@ describe('duplicate zhin instance detection', () => {
     expect(dups.get('@zhin.js/core')).toHaveLength(2);
   });
 
+  it('ignores a stale copy in pnpm\'s hidden hoist directory .pnpm/node_modules (#1250)', () => {
+    const core = store('@zhin.js+core@1.2.0', '@zhin.js/core');
+    const staleCore = store('@zhin.js+core@1.1.0', '@zhin.js/core');
+    // The plugin's peer is not linked into its slot: Node would climb past the slot.
+    const plugin = store('plug@1.0.0', 'plug', { peerDependencies: { '@zhin.js/core': '*' } });
+    const hoisted = path.join(project, 'node_modules/.pnpm/node_modules/@zhin.js/core');
+    fs.mkdirSync(path.dirname(hoisted), { recursive: true });
+    fs.symlinkSync(staleCore, hoisted, 'dir');
+    top('@zhin.js/core', core);
+    top('plug', plugin);
+    expect(findDuplicateZhinInstances(project).size).toBe(0);
+  });
+
   it('reports a link:-ed copy outside the project (zhin.js and peers)', () => {
     const npmCopy = store('zhin.js@1.0.0', 'zhin.js');
     const linked = path.join(root, 'checkout/packages/im/zhin');

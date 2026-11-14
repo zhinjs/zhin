@@ -70,6 +70,42 @@ describe('filterSearchResults', () => {
     expect(filtered.map((p) => p.name)).toEqual(['@zhin.js/adapter-telegram']);
   });
 
+  it('按发布清单声明的分类过滤（接受旧别名 util）', () => {
+    const declared = [
+      { name: 'zhin.js-plugin-a', keywords: ['zhin'], zhin: { metadata: { category: 'utility' } } },
+      { name: 'zhin.js-plugin-b', keywords: ['zhin', 'utility'], zhin: { metadata: { category: 'game' } } },
+    ];
+    expect(filterSearchResults(declared, { category: 'util' }).map((p) => p.name)).toEqual(['zhin.js-plugin-a']);
+    expect(filterSearchResults(declared, { category: 'game' }).map((p) => p.name)).toEqual(['zhin.js-plugin-b']);
+  });
+
+  it('关键词搜索匹配本地化名称/描述，不匹配通用 keywords', () => {
+    const packages = [
+      { name: 'zhin.js-plugin-a', keywords: ['zhin', 'bot', 'rss'], zhin: { metadata: { descriptionI18n: { 'zh-CN': '订阅推送' } } } },
+    ];
+    expect(filterSearchResults(packages, { keyword: '订阅' })).toHaveLength(1);
+    expect(filterSearchResults(packages, { keyword: 'rss' })).toHaveLength(1);
+    expect(filterSearchResults(packages, { keyword: 'bot' })).toHaveLength(0);
+  });
+
+  it('接受文档推荐的 zhin.js / zhinjs / zhin-plugin keywords 与带 zhin 清单的包', () => {
+    const packages = [
+      { name: 'community-rss', keywords: ['zhin.js', 'rss'], downloads: '40' },
+      { name: 'community-weather', keywords: ['ZhinJS', 'weather'], downloads: '30' },
+      { name: 'community-dice', keywords: ['zhin-plugin', 'game'], downloads: '20' },
+      { name: 'community-manifest-only', keywords: ['bot'], zhin: { protocol: 1, type: 'plugin' }, downloads: '10' },
+      { name: 'unrelated', keywords: ['zhin.jsx', 'react'], downloads: '999' },
+      { name: 'unrelated-null-manifest', keywords: [], zhin: null, downloads: '998' },
+    ];
+    expect(filterSearchResults(packages, {}).map((p) => p.name)).toEqual([
+      'community-rss',
+      'community-weather',
+      'community-dice',
+      'community-manifest-only',
+    ]);
+    expect(filterSearchResults(packages, { keyword: 'rss' }).map((p) => p.name)).toEqual(['community-rss']);
+  });
+
   it('limit 截断结果', () => {
     const filtered = filterSearchResults(results, { limit: 2 });
     expect(filtered).toHaveLength(2);
