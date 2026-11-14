@@ -2319,7 +2319,13 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/code-runner/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/code-runner/schema.json)
 
-_该 Schema 没有声明字段。_
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `code-runner.provider` | `"piston"` \| `"glot"` | 否 | `"piston"` | 代码运行后端协议：piston（自建 Piston 的 /api/v2/execute）或 glot（glot.io 兼容的 /api/run） |
+| `code-runner.endpoint` | string | 否 | `""` | 代码运行后端地址。piston 填完整执行地址（如 http://127.0.0.1:2000/api/v2/execute）；glot 填 run 前缀（如 https://glot.io/api/run）。留空时命令提示未配置；可写 ${CODE_RUNNER_ENDPOINT} |
+| `code-runner.token` | string | 否 | — | 后端访问令牌（可选），建议写 ${CODE_RUNNER_TOKEN}。piston 作为 Authorization 头原样发送，glot 发送 Authorization: Token &lt;token&gt; |
 
 ### content-moderation
 

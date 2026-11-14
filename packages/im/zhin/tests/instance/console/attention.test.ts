@@ -556,3 +556,25 @@ describe('attention.list shared reads', () => {
     expect((await collectAttention(flaky, { allows: owner, cache: flakyCache })).unavailable).toBeUndefined();
   });
 });
+
+describe('attention.list schedule.unschedulable (#1250)', () => {
+  const unschedulableJobs = () => [{ jobId: 'assistant-profile-weatherReport', label: '天气早报', reason: 'invalid_schedule', since: NOW - 1000 }];
+
+  it('lists an enabled job that will never fire for callers with ops.schedule.read', async () => {
+    const reader: ConsoleGrant[] = [{ scope: { kind: 'global' }, permissions: ['ops.schedule.read'] }];
+    const list = await collectAttention({ unschedulableJobs }, { allows: allowsFor(reader), now: () => NOW });
+    expect(list.items).toEqual([expect.objectContaining({
+      id: attentionItemId('schedule.unschedulable', { scheduleJobId: 'assistant-profile-weatherReport' }),
+      kind: 'schedule.unschedulable', severity: 'warning', title: '定时任务「天气早报」不会再运行',
+      subject: { scheduleJobId: 'assistant-profile-weatherReport' },
+      action: expect.objectContaining({ path: '/ops/schedules' }), since: new Date(NOW - 1000).toISOString(),
+    })]);
+    expect(list.items[0]!.detail).toContain('调度规则无效');
+  });
+
+  it('is hidden without ops.schedule.read and empty when the scheduler is not running', async () => {
+    const viewer: ConsoleGrant[] = [{ scope: { kind: 'global' }, permissions: ['status.view'] }];
+    expect((await collectAttention({ unschedulableJobs }, { allows: allowsFor(viewer) })).items).toEqual([]);
+    expect((await collectAttention({ unschedulableJobs: () => undefined }, { allows: owner })).items).toEqual([]);
+  });
+});

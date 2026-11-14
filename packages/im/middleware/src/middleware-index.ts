@@ -27,6 +27,11 @@ export interface MiddlewareResultPolicy<TResult> {
   stop(owner: PluginId): TResult;
   replace(owner: PluginId, value: unknown, downstream: TResult | undefined): TResult;
   summarize?(result: TResult): InboundDispatchSummary | undefined;
+  /**
+   * A Middleware threw `error`: return the operation's result to answer it (e.g. a sender-facing
+   * refusal turned into this Middleware's reply), or `undefined` to let the error propagate.
+   */
+  refuse?(owner: PluginId, error: unknown, downstream: TResult | undefined): TResult | undefined;
 }
 
 /** @internal Runtime continuation result. */
@@ -204,7 +209,9 @@ export class MiddlewareIndex {
         returned = await definition.handle.call(context, context, next);
       } catch (error) {
         // Drain an admitted child before the owning generation lease can close.
-        await nextTask?.catch(() => undefined);
+        const settled = await nextTask?.catch(() => undefined);
+        const refused = results.refuse?.(record.owner, error, settled);
+        if (refused !== undefined) return refused;
         throw error;
       } finally {
         active = false;

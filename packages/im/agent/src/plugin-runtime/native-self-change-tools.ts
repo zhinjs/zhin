@@ -69,9 +69,9 @@ export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeTool
       name: SELF_CHANGE_DRAFT_TOOL_NAME,
       definition: defineAgentTool<Record<string, unknown>, string>({
         description: 'Draft a change to this bot itself when the user asks you to add/modify a command, handler, tool, skill, '
-          + 'AGENTS.md, or a config field (e.g. "add a /ping command that replies pong"). The change is only STAGED: it is '
+          + 'BOT.md / AGENTS.md (the bot reads the root BOT.md instead of AGENTS.md when it exists), or a config field (e.g. "add a /ping command that replies pong"). The change is only STAGED: it is '
           + 'not live until the host trial-runs it and the owner approves it. Writable: plugin convention dirs '
-          + '(commands/, middlewares/, handlers/, tools/, components/, skills/, agents/), root AGENTS.md, skills/**. '
+          + '(commands/, middlewares/, handlers/, tools/, components/, skills/, agents/), root BOT.md and root AGENTS.md, skills/**. '
           + 'Root config files only via config_patch; lockfiles, node_modules, .env*, .zhin/** and security settings '
           + '(ai.agent.toolHardGate, execApprovalMode, masterShell) are always refused. The host trial-runs the draft right away '
           + '(syntax, default export, forbidden imports, SKILL.md, then loading it in an offline trial runtime and running the plugin\'s own tests in an isolated container); a failed trial closes it and you start a new change. '

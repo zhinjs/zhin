@@ -40,7 +40,7 @@ const classify = (rel: string) => classifyHostPath(join(root, rel), paths);
 describe('classifyHostPath with an injected project root', () => {
   it.each([
     'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'config.yml', 'config.yaml',
-    'package.json', 'schema.json', 'AGENTS.md', 'plugin.ts', '.pnpmfile.cjs', 'assistant.profile.yml',
+    'package.json', 'schema.json', 'AGENTS.md', 'BOT.md', 'bot.md', 'plugin.ts', '.pnpmfile.cjs', 'assistant.profile.yml',
     'skills/demo/SKILL.md', 'skills', '.agents/skills/x/SKILL.md', '.git/hooks/pre-commit',
   ])('B (self): %s', (rel) => {
     expect(classify(rel)).toBe('self');
@@ -56,7 +56,7 @@ describe('classifyHostPath with an injected project root', () => {
   });
 
   it.each([
-    'plugins/x/package.json', 'plugins/x/zhin.config.yml', 'src/schema.json', 'docs/AGENTS.md', 'src/skills/a.ts',
+    'plugins/x/package.json', 'plugins/x/zhin.config.yml', 'src/schema.json', 'docs/AGENTS.md', 'docs/BOT.md', 'src/skills/a.ts',
     'pnpm-workspace.yaml', 'tsconfig.json', 'tsconfig.build.json', 'notes.md', 'data/memory/global/today.md', 'package.json.bak',
     'plugins/x/pnpm-lock.yaml', '.gitignore',
   ])('unmanaged: %s', (rel) => {
@@ -105,6 +105,7 @@ describe('classifyHostPath without an injected root (fail closed)', () => {
     expect(classifyHostPath('/ws/package.json', undefined)).toBe('self');
     expect(classifyHostPath('/ws/plugins/x/package.json', undefined)).toBe('self');
     expect(classifyHostPath('/ws/zhin.config.yml', undefined)).toBe('self');
+    expect(classifyHostPath('/ws/BOT.md', undefined)).toBe('self');
     expect(classifyHostPath('/ws/.git/hooks/post-checkout', undefined)).toBe('self');
     expect(classifyHostPath('/ws/pnpm-lock.yaml', undefined)).toBe('deny');
     expect(classifyHostPath('/ws/node_modules/a/b.js', undefined)).toBe('deny');

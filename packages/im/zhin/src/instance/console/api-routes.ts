@@ -58,6 +58,8 @@ export interface RegisterConsoleRoutesOptions {
   readonly consoleIam?: () => import('@zhin.js/gateway/iam').ConsoleIamService | undefined;
   /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
+  /** Effective provider bindings and recent turns for the Agent workbench (#1250). */
+  readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -84,7 +86,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     fullScope: true,
     projectRoot,
     getEndpoints: im ? () => im.endpoints.list() : undefined,
-    acquireAgentRuntime: createAgentRuntimeLeaseResolver(projectRoot, snapshots),
+    acquireAgentRuntime: createAgentRuntimeLeaseResolver(projectRoot, snapshots, options.agentInsights),
     isKnownConversationSession: databaseHost
       ? (sessionKey) => isKnownConversationSession(databaseHost, sessionKey)
       : undefined,
@@ -143,5 +145,5 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     ...(options.featureStores ? { featureStores: options.featureStores } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
-  registerAgentConsoleRoutes({ http, base, snapshots, projectRoot });
+  registerAgentConsoleRoutes({ http, base, snapshots, projectRoot, ...(im ? { im } : {}) });
 }

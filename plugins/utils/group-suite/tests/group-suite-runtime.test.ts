@@ -166,6 +166,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       input: groupInput as never,
     });
     expect(String(listed)).toContain('你好');
+    expect(String(listed)).toContain('keyword-list');
 
     const reply = await tryTeachReply(
       { ...groupInput, content: '你好' },

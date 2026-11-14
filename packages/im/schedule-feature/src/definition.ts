@@ -1,4 +1,5 @@
 import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type { ScheduleJobKind } from '@zhin.js/plugin-runtime';
 
 /** Operation-scoped owner, configuration and resources; never persist this context. */
 export type ScheduleContext<TConfig = unknown> = CapabilityContext<TConfig>;
@@ -6,6 +7,12 @@ export type ScheduleContext<TConfig = unknown> = CapabilityContext<TConfig>;
 export interface ScheduleDefinition<TConfig = unknown> {
   readonly cron: string;
   readonly description?: string;
+  /** Title shown in Console「定时任务」; prefer the project default language (Chinese for official plugins). */
+  readonly title?: string;
+  /** Per-locale titles, e.g. `{ en: 'Flush message statistics' }`. */
+  readonly titleI18n?: Readonly<Partial<Record<string, string>>>;
+  /** Defaults to `plugin-internal` (background polling / housekeeping). */
+  readonly kind?: ScheduleJobKind;
   execute(context: ScheduleContext<TConfig>): void | Promise<void>;
 }
 
@@ -44,9 +51,23 @@ export function parseScheduleDefinition<TConfig = unknown>(value: unknown): Read
   if (definition.description !== undefined && typeof definition.description !== 'string') {
     throw new TypeError('Schedule definition description must be a string');
   }
+  if (definition.title !== undefined && typeof definition.title !== 'string') {
+    throw new TypeError('Schedule definition title must be a string');
+  }
+  if (definition.kind !== undefined && definition.kind !== 'plugin-internal' && definition.kind !== 'user-task') {
+    throw new TypeError("Schedule definition kind must be 'plugin-internal' or 'user-task'");
+  }
+  const titleI18n = definition.titleI18n;
+  if (titleI18n !== undefined && (!titleI18n || typeof titleI18n !== 'object' || Array.isArray(titleI18n)
+    || Object.values(titleI18n).some(value => value !== undefined && typeof value !== 'string'))) {
+    throw new TypeError('Schedule definition titleI18n must map locales to strings');
+  }
   return Object.freeze({
     cron: definition.cron,
     ...(definition.description === undefined ? {} : { description: definition.description }),
+    ...(definition.title === undefined ? {} : { title: definition.title }),
+    ...(titleI18n === undefined ? {} : { titleI18n: Object.freeze({ ...titleI18n }) }),
+    ...(definition.kind === undefined ? {} : { kind: definition.kind }),
     execute: definition.execute,
   });
 }

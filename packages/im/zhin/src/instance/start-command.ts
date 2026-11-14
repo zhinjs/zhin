@@ -95,6 +95,7 @@ import {
 import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
 import { createBridgedHttpHost, openInstanceControlChannel, type BridgedHttpHost } from '@zhin.js/host-http/bridge';
+import { createProviderDisplayIndex } from './inference/provider-display.js';
 import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
@@ -563,7 +564,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     onRestart: () => requestProcessRestart('console'),
     consoleIam: consoleIamService,
     featureStores: featureHost.stores,
+    ...(agentHost ? { agentInsights: agentHost } : {}),
   });
+  if (agentHost) assistantStatus.bindProviderDisplay(() => agentHost.providerDisplay());
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
     // and starts a fresh instance once this one has exited.
@@ -799,6 +802,10 @@ function reportSelfChangeRecoverError(error: unknown): void {
 
 interface ConfiguredAgentHost {
   close(): Promise<void>;
+  /** Current provider graph as display lookups (#1250); `undefined` when storage is unavailable. */
+  providerDisplay(): Promise<import('./inference/provider-display.js').ProviderDisplayIndex | undefined>;
+  /** Most recent turn traces from the archive, oldest first. */
+  recentTraces(limit: number): Promise<readonly unknown[]>;
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
@@ -882,6 +889,21 @@ async function loadConfiguredAgentHost(options: Readonly<{
   let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
   const configured: ConfiguredAgentHost = {
     close: () => inference.close(),
+    providerDisplay: async () => {
+      try {
+        const graph = await inference.repository.readGraph({ rootId: inference.rootId });
+        return graph ? createProviderDisplayIndex(graph) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    recentTraces: async (limit) => {
+      try {
+        return await turnTraceStore.query({ since: Date.now() - 7 * 86_400_000, limit });
+      } catch {
+        return [];
+      }
+    },
     ambientModels: input => inference.ambientModels(input),
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');

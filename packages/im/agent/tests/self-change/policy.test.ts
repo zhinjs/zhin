@@ -56,6 +56,7 @@ describe('change target whitelist', () => {
     ['./tools/search/index.ts', 'tools/search/index.ts'],
     ['handlers/message/receive.ts', 'handlers/message/receive.ts'],
     ['AGENTS.md', 'AGENTS.md'],
+    ['BOT.md', 'BOT.md'],
     ['skills/weather/SKILL.md', 'skills/weather/SKILL.md'],
     ['plugins/weather/commands/today.ts', 'plugins/weather/commands/today.ts'],
     ['agents\\helper\\agent.json', 'agents/helper/agent.json'],

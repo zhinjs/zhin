@@ -45,6 +45,30 @@ export class ScheduleJobStore {
     });
     this.cache = null;
     this.database = database;
+    await this.retireMigratedFile();
+  }
+
+  /**
+   * `activate` returns only once the database holds the migration marker, written in the same
+   * transaction as the import, so the JSON file is no longer read: rename it to
+   * `schedule-jobs.json.migrated` so nobody edits a file that has no effect (#1250). Idempotent;
+   * a rename failure only logs.
+   */
+  private async retireMigratedFile(): Promise<void> {
+    try {
+      await fs.promises.access(this.filePath);
+    } catch {
+      return;
+    }
+    let target = `${this.filePath}.migrated`;
+    for (let index = 1; fs.existsSync(target); index++) target = `${this.filePath}.migrated.${index}`;
+    try {
+      await fs.promises.rename(this.filePath, target);
+      logger.info(formatCompact({ op: 'schedule_jobs_file_migrated', from: path.basename(this.filePath), to: path.basename(target),
+        store: 'database:agent_schedule_jobs' }));
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'schedule_jobs_file_rename_failed', error: error instanceof Error ? error.message : String(error) }));
+    }
   }
 
   constructor(options: ScheduleJobStoreOptions) {

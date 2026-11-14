@@ -1,6 +1,7 @@
 export type {
   ConsoleRpcExtendedCtx,
   ConsoleScheduleEngine,
+  ConsoleScheduleTarget,
   ConsoleWorkroomKnowledgeControlPort,
   ConsoleWorkroomProfileControlPort,
   ExtendedRpcResult,

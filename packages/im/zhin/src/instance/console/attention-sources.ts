@@ -15,6 +15,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
+import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { agentToolApprovalQueueToken } from './tool-approvals.js';
@@ -130,6 +131,9 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       mcpServers: (): readonly AttentionMcpServer[] => withLease(lease => listMcpServerStatus(projectRoot, lease.value)
         .filter(row => typeof row.name === 'string')
         .map(row => ({ name: row.name as string, connected: row.connected === true }))),
+    } : {}),
+    ...(snapshots ? {
+      unschedulableJobs: () => withLease(lease => resolveCurrentAgentConsole(lease.value)?.assistant?.jobs.unschedulable?.()),
     } : {}),
     ...(databaseHost ? {
       errorLogs: async (): Promise<AttentionErrorLogs | null> => {

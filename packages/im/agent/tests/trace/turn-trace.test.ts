@@ -240,4 +240,15 @@ describe('file store', () => {
     await writeFile(file, '{not json');
     expect(await store.list()).toEqual([]);
   });
+
+  it('shows the model without opaque provider graph ids (#1250)', () => {
+    const trace = collector();
+    trace.record({ type: 'usage', provider: 'services:3f0c9a1e-0000-4000-8000-000000000000', model: 'ag/gemini-3.8-flash', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } } as TurnEvent);
+    trace.record({ type: 'usage', provider: 'openai', model: 'gpt-mini', usage: { promptTokens: 5, completionTokens: 1, totalTokens: 6 } } as TurnEvent);
+    trace.finalize();
+    const text = formatTurnTrace(trace.snapshot());
+    expect(text).toContain('model=ag/gemini-3.8-flash');
+    expect(text).not.toContain('services:3f0c9a1e');
+    expect(text).toContain('model=openai/gpt-mini');
+  });
 });

@@ -142,6 +142,7 @@ export {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
   type ConsoleScheduleEngine,
+  type ConsoleScheduleTarget,
   type ConsoleWorkroomProfileControlPort,
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,

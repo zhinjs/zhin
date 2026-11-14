@@ -163,6 +163,11 @@ describe('access control decisions', () => {
     expect(authorizeConsoleHttp({ kind: 'bootstrap', open: false }, 'GET', '/system/status')).toMatchObject({ allowed: false, code: 'setup_required' });
     expect(authorizeConsoleHttp({ kind: 'bootstrap', open: false }, 'POST', '/auth/setup')).toMatchObject({ allowed: true });
     expect(authorizeConsoleHttp(VIEWER, 'GET', '/unregistered')).toMatchObject({ allowed: false, status: 403 });
+    // #1250: status.view alone reads introspection but not the recent Agent turns (agent.view).
+    const statusOnly = Object.freeze({ ...VIEWER, grants: Object.freeze([{ role: 'status', scope: { kind: 'global' as const }, permissions: ['status.view'] }]) });
+    expect(authorizeConsoleHttp(statusOnly, 'GET', '/introspection/commands')).toMatchObject({ allowed: true });
+    expect(authorizeConsoleHttp(statusOnly, 'GET', '/introspection/recent-turns')).toMatchObject({ allowed: false, status: 403, permission: 'agent.view' });
+    expect(authorizeConsoleHttp(VIEWER, 'GET', '/introspection/recent-turns')).toMatchObject({ allowed: true, permission: 'agent.view' });
     expect(authorizeConsoleWebSocket(VIEWER, '/sandbox')).toBe(false);
     expect(authorizeConsoleWebSocket(userPrincipal('operator'), '/sandbox')).toBe(true);
     // Per-endpoint sandbox sockets inherit the `/sandbox` rule.

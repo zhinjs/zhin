@@ -1,20 +1,51 @@
 import { randomUUID } from 'node:crypto';
-import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { readJsonBody, principalAllows, type ConsolePrincipal, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
 import { withGenerationAgentConsole } from './agent-console.js';
 import type { ConsoleApiErrorCode } from '@zhin.js/console-protocol';
 import { expectedErrorResponse, internalErrorResponse } from './internal-error.js';
+import { describeScheduleTarget, parseScheduleTargetSpec, type ScheduleEndpointLookup } from './schedule-target.js';
 
 const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
 const DISABLED = 'assistant.enabled is false';
 /** Rejected job body: a stable code and a user-facing (Chinese) explanation (#1250). */
-export interface AssistantJobInputError { readonly error: string; readonly code: Extract<ConsoleApiErrorCode, 'invalid_argument' | 'notify_target_missing'> }
+export interface AssistantJobInputError { readonly error: string; readonly code: AssistantJobInputErrorCode }
 const invalidInput = (error: string): AssistantJobInputError => ({ error, code: 'invalid_argument' });
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+/**
+ * Error codes of a rejected job body (`code` of the 400 / 403 response): the shared
+ * {@link ConsoleApiErrorCode}s (`notify_target_missing`: IM delivery with neither an explicit nor a
+ * default target), plus the schedule-target codes of this route.
+ */
+export type AssistantJobInputErrorCode =
+  | Extract<ConsoleApiErrorCode, 'invalid_argument' | 'notify_target_missing'>
+  | 'schedule_target_invalid'
+  | 'schedule_target_not_found'
+  | 'schedule_target_forbidden';
+
+const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
+  + '或在 assistant.defaults.notify / assistant.profile.yml 的 defaults.notify 中配置默认目标';
+
+/** `notify.target`: `<adapter>:<endpoint>:<kind>:<id>` or an IM delivery target object. */
+function parseTarget(value: unknown): { target?: Record<string, unknown> } | { error: string } {
+  if (value === undefined || value === null || value === '') return {};
+  if (typeof value === 'string') {
+    const parsed = parseScheduleTargetSpec(value);
+    return 'error' in parsed ? parsed : { target: parsed.target };
+  }
+  const scene = record(record(value).scene);
+  const text = (field: unknown) => typeof field === 'string' && field.trim() ? field.trim() : undefined;
+  const platform = text(scene.platform), endpointKey = text(scene.endpointKey), sceneId = text(scene.sceneId), kind = text(scene.kind);
+  if (!platform || !endpointKey || !sceneId || !kind) {
+    return { error: 'notify.target.scene 需要 platform、endpointKey、sceneId 与 kind' };
+  }
+  return { target: { channel: 'im', scene: { platform, endpointKey, sceneId, kind } } };
 }
 
 /** Validates the operator job body and rebuilds it from known fields only. */
@@ -29,14 +60,8 @@ export function parseAssistantJobInput(
   if (typeof channel !== 'string' || !NOTIFY_CHANNELS.has(channel)) {
     return invalidInput('投递渠道（notify.channel）只能是 im | silent | log');
   }
-  if (channel === 'im') {
-    // This route only carries the channel; an IM delivery needs a target conversation, which only
-    // a job created from a chat has. Accepting it would fail later inside the scheduler.
-    return {
-      code: 'notify_target_missing',
-      error: '投递渠道 im 需要目标会话，这里无法指定：请在聊天里让机器人创建该任务，或改用 log / silent',
-    };
-  }
+  const target = channel === 'im' ? parseTarget(record(data.notify).target) : {};
+  if ('error' in target) return { error: target.error, code: 'schedule_target_invalid' };
   const input = record(data.schedule);
   let schedule: Record<string, unknown>;
   if (input.kind === 'at') {
@@ -70,10 +95,23 @@ export function parseAssistantJobInput(
       enabled: true,
       schedule,
       action: { kind: 'agent', prompt },
-      notify: { channel },
+      notify: target.target ? { channel, target: target.target } : { channel },
       source: 'manual',
     },
   };
+}
+
+/**
+ * Whether the caller may schedule delivery to `target` (`notify.target`): `endpoint.operate` on its
+ * account. No principal: an in-process / unauthenticated test Host, trusted like the other routes.
+ */
+function mayDeliverTo(principal: ConsolePrincipal | undefined, target: unknown): boolean {
+  if (!principal) return true;
+  const scene = record(record(target).scene);
+  const adapter = typeof scene.platform === 'string' ? scene.platform : '';
+  const endpoint = typeof scene.endpointKey === 'string' ? scene.endpointKey : '';
+  if (!adapter || !endpoint) return false;
+  return principalAllows(principal, 'endpoint.operate', Object.freeze({ kind: 'endpoint', adapter, endpoint }));
 }
 
 /** Write side of `/assistant/jobs`, used by `zhin schedule`; the live scheduler owns persistence. */
@@ -81,26 +119,30 @@ export function registerAssistantJobRoutes(options: Readonly<{
   http: Pick<HttpHost, 'route'>;
   base: string;
   snapshots?: SnapshotReader;
+  /** Checks that a target's account exists (`im.endpoints.get`); absent: not checked. */
+  endpoints?: ScheduleEndpointLookup;
 }>): void {
-  const { http, base, snapshots } = options;
+  const { http, base, snapshots, endpoints } = options;
   const guarded = (
     operation: (
       jobs: {
         add(job: Record<string, unknown>): Promise<Record<string, unknown>>;
+        defaultImNotify?(): unknown;
         remove(id: string): Promise<boolean>;
         pause(id: string): Promise<boolean>;
         resume(id: string): Promise<boolean>;
       },
       body: unknown,
+      principal: ConsolePrincipal | undefined,
     ) => Promise<{ status: number; body: unknown }>,
-  ): Parameters<HttpHost['route']>[2] => async (request) => {
+  ): Parameters<HttpHost['route']>[2] => async (request, context) => {
     const body = await readJsonBody(request);
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant }) => {
       if (!assistant) {
         return expectedErrorResponse(404, 'unavailable', DISABLED);
       }
       try {
-        const result = await operation(assistant.jobs, body);
+        const result = await operation(assistant.jobs, body, context.principal);
         return jsonResponse(result.status, result.body);
       } catch (error) {
         return internalErrorResponse(500, 'assistant_job_failed', error);
@@ -109,10 +151,38 @@ export function registerAssistantJobRoutes(options: Readonly<{
     return handled ?? expectedErrorResponse(404, 'unavailable', DISABLED);
   };
 
-  http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body) => {
+  http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body, principal) => {
     const parsed = parseAssistantJobInput(body);
-    if ('error' in parsed) return { status: 400, body: { success: false, code: parsed.code, error: parsed.error } };
-    return { status: 201, body: { success: true, data: { job: await jobs.add(parsed.job) } } };
+    if ('error' in parsed) {
+      return { status: 400, body: { success: false, error: parsed.error, code: parsed.code } };
+    }
+    const job = parsed.job;
+    const notify = record(job.notify);
+    if (notify.channel === 'im') {
+      // An explicit target delivers to that account on every run: the same `endpoint.operate` the
+      // operator would need to `/message/send` there, on top of `ops.schedule.write`. The instance
+      // default target is the owner's configuration and needs no extra grant.
+      if (notify.target && !mayDeliverTo(principal, notify.target)) {
+        const scene = record(record(notify.target).scene);
+        return { status: 403, body: { success: false, code: 'schedule_target_forbidden',
+          error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` } };
+      }
+      // No explicit target: the instance's default IM target (assistant / profile defaults.notify).
+      const effective = notify.target ? notify : record(jobs.defaultImNotify?.());
+      if (!effective.target) {
+        return { status: 400, body: { success: false, error: TARGET_REQUIRED, code: 'notify_target_missing' } };
+      }
+      const view = describeScheduleTarget(effective, endpoints ?? null);
+      if (!view.resolved) {
+        const scene = record(record(effective.target).scene);
+        return { status: 400, body: { success: false, code: 'schedule_target_not_found',
+          error: view.reason === 'endpoint_not_found'
+            ? `投递目标的账号不存在：${String(scene.platform)} / ${String(scene.endpointKey)}；用 zhin schedule add --target 指定现有账号的会话`
+            : TARGET_REQUIRED } };
+      }
+      job.notify = { channel: 'im', target: effective.target };
+    }
+    return { status: 201, body: { success: true, data: { job: await jobs.add(job) } } };
   }), { summary: 'Add an assistant job', tags: ['assistant'] });
 
   for (const action of ['remove', 'pause', 'resume'] as const) {

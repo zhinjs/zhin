@@ -83,7 +83,7 @@ Console 的账号存在网关自己的 `.zhin/gateway.db` 里，不在项目数�
 | `ops.env.read` / `ops.env.write` | 环境变量文件：读取（只有打码值）/ 保存；逐个显示原文（`env:reveal`）两个都要，并写入审计 |
 | `ops.database.read` / `ops.database.write` | 数据库浏览（按列排序、筛选，查看表结构与结构变更预览）/ 记录增删改 |
 | `ops.database.schema` | SQL 控制台（只读查询与写 SQL）与表结构调整（加/改名/删列、改类型、建表、索引）；默认只有 `owner` 拥有，每条语句（字面量已脱敏）写入审计。见[数据库](./operations.md#database) |
-| `ops.schedule.read` / `ops.schedule.write` | 定时任务 |
+| `ops.schedule.read` / `ops.schedule.write` | 定时任务（指定 IM 投递目标时还需目标账号上的 `endpoint.operate`） |
 | `ops.files.read` / `ops.files.write` | 项目文件（读写配置文件仍需要 `ops.config.*`；`.env` / `.env.*` 不经项目文件读写，改在环境变量页 `/ops/env` 用 `ops.env.*` 管理） |
 | `ops.restart` | 实例起停与重启 |
 | `ops.terminal` | 终端（见[运维](./operations.md#terminal)） |

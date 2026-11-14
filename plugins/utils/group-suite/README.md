@@ -86,11 +86,25 @@ group-suite:
 | `checkin do` / `签到` · `checkin streak` · `checkin rank` | 兼容别名：分别等同 `checkin`、`mypoints`、`rank`，方便从 `checkin <子命令>` 风格的本地签到插件迁移 |
 | `stats` / `stats-week` / `stats-rank` / `mystats` | 消息统计 |
 | `stats-card` | 当日统计 HTML 图卡；没有渲染服务时走统一文本降级 |
-| `teach` / `teach-regex` / `teach-list` / `forget` | 群问答与管理 |
-| `keyword-add <keyword> <reply...>` / `keyword-list` / `keyword-remove <keyword>` | 当前群词库 |
+| `teach` / `teach-regex` / `teach-list` / `forget` | 群问答（整句匹配）与管理，见下方「两套自动回复」 |
+| `keyword-add <keyword> <reply...>` / `keyword-list` / `keyword-remove <keyword>` | 当前群关键词回复（包含匹配），见下方「两套自动回复」 |
 | `welcomeMessage` | 当前群增加成员时欢迎，默认关闭，只在设置非空文本后发送 |
 | `skills/<name>/tools/<tool>/index.ts` | Skill 激活后披露签到查询、排行、统计和群公告 Tool |
 | `pages/index` + `pluginConsoleRpcToken` | Console「群管套件」页面（`group-suite:read`），展示签到记录数、问答词条数、签到排行榜与关键词问答规则 |
+
+### 两套自动回复：teach 问答 与 keyword 关键词回复
+
+本插件有两套**互相独立**的自动回复，数据、开关和匹配方式都不同，互不可见（`teach-list` 看不到关键词，`keyword-list` 看不到问答）。两个 list 命令的末尾都会提示另一套的存在。
+
+| | teach 问答（`teach` / `teach-regex` / `teach-list` / `forget`） | 关键词回复（`keyword-add` / `keyword-list` / `keyword-remove`） |
+|---|---|---|
+| 匹配方式 | **整条消息**与问题完全一致；开启 `teachAllowRegex` 后可用 `teach-regex` 正则匹配，回答可引用 `$1` 等捕获组 | 消息**包含**关键词即回复（子串匹配） |
+| 开关 | 有数据库时始终生效 | 需 `keywordReply: true` |
+| 存储 | 插件自有问答表（插件数据库） | Database Host 会话状态（或显式 `ephemeralKeywords: true` 的临时词库） |
+| 额外能力 | 冷却 `teachCooldownMs`、命中计数、分页 `teachPageSize`、上限 `teachMaxPerGroup` | 一群最多 200 条、整体 < 64 KiB |
+| 适合 | 固定问句的 FAQ（「怎么报名」→ 说明） | 消息里出现某个词就提示（「链接」→ 群规） |
+
+两套都会对同一条消息尝试匹配，任一方回复后不再继续处理该消息；同一条规则只需放在一套里，避免重复维护。是否合并两套由维护者决定，目前保持现状。
 
 持有 `group-suite:read` 的 Console 账号能在页面上看到各群的关键词问答规则，包括持久关键词（`keyword-add`）的回复内容，与 `teach` 问答表的可见范围相同；只授予需要查看这些内容的角色。
 

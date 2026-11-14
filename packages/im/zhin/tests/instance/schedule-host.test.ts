@@ -11,6 +11,7 @@ import type { RootResourceContext } from '@zhin.js/runtime';
 import {
   createScheduleHost,
   installScheduleHost,
+  redactScheduleError,
   resolveScheduleTimezone,
 } from '../../src/instance/schedule-host-installer.js';
 
@@ -38,6 +39,57 @@ describe('ScheduleHost', () => {
     dispose();
     expect(host.list()).toEqual([]);
     host.stop();
+  });
+
+  it('lists title, kind and the last real run of each job (#1250)', async () => {
+    let now = 1_000;
+    const host = createScheduleHost(() => now);
+    let fail = false;
+    const dispose = host.register({
+      id: 'rss/poll_feeds', cron: '* * * * * *', description: 'Poll RSS subscriptions',
+      title: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' },
+      execute: async () => { now += 40; if (fail) throw new Error('feed timeout'); },
+    });
+    const userTask = host.register({ id: 'reminder/poll', cron: '0 0 9 * * *', kind: 'user-task', execute: vi.fn() });
+    try {
+      expect(host.list()[0]).toMatchObject({ title: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' }, kind: 'plugin-internal' });
+      expect(host.list()[0]).not.toHaveProperty('lastRun');
+      expect(host.list()[1]).toMatchObject({ kind: 'user-task' });
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'succeeded', finishedAt: expect.any(Number) }), { timeout: 3_000, interval: 50 });
+      const first = host.list()[0]!.lastRun!;
+      expect(first.finishedAt - first.startedAt).toBe(40);
+      fail = true;
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'failed', error: 'feed timeout' }), { timeout: 3_000, interval: 50 });
+    } finally {
+      dispose(); userTask();
+      host.stop();
+    }
+    expect(host.list()).toEqual([]);
+  });
+
+  it('masks credentials in a failed run before it is kept and listed (#1250)', async () => {
+    const host = createScheduleHost();
+    const dispose = host.register({
+      id: 'rss/poll_secret', cron: '* * * * * *',
+      execute: async () => { throw new Error('GET https://alice:hunter2@feeds.example/rss?access_token=abc123&page=2 failed: 401'); },
+    });
+    try {
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'failed' }), { timeout: 3_000, interval: 50 });
+      const error = host.list()[0]!.lastRun!.error!;
+      expect(error).not.toContain('hunter2');
+      expect(error).not.toContain('abc123');
+      expect(error).toContain('https://[redacted]@feeds.example/rss?access_token=[redacted]&page=2 failed: 401');
+    } finally {
+      dispose();
+      host.stop();
+    }
+  });
+
+  it('redacts URL userinfo, token assignments and bearer / API keys', () => {
+    expect(redactScheduleError('Authorization: Bearer abcdefghijklmnop')).toBe('Authorization: Bearer [redacted]');
+    expect(redactScheduleError('apiKey="sk-ABCDEFGHIJKLMNOP"')).not.toContain('ABCDEFGHIJKLMNOP');
+    expect(redactScheduleError('connect redis://default:pw@cache:6379 refused')).toBe('connect redis://[redacted]@cache:6379 refused');
+    expect(redactScheduleError('feed timeout')).toBe('feed timeout');
   });
 
   it('does not let a retired generation cancel its replacement', () => {

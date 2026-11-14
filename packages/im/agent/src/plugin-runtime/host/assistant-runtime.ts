@@ -157,6 +157,7 @@ export function createAssistantScheduleRuntime(
   };
 
   let assistantRuntime: AssistantRuntimeHandle | null = null;
+  let profileDefaultNotify: ReturnType<typeof parseJobNotify> | undefined;
   let stopped = false;
   let start = async () => { if (!stopped) await timerScheduler.load(); };
   if (assistantCfg.enabled) {
@@ -176,6 +177,12 @@ export function createAssistantScheduleRuntime(
         remove: (id) => timerScheduler.removeJob(id),
         pause: (id) => timerScheduler.pauseJob(id),
         resume: (id) => timerScheduler.resumeJob(id),
+        unschedulable: () => timerScheduler.listUnschedulable(),
+        defaultImNotify: () => {
+          const fallback = defaultNotify?.channel === 'im' ? defaultNotify
+            : profileDefaultNotify?.channel === 'im' ? profileDefaultNotify : undefined;
+          return fallback as Extract<typeof fallback, { channel: 'im' }> | undefined;
+        },
       },
     };
     start = async () => {
@@ -185,6 +192,11 @@ export function createAssistantScheduleRuntime(
         if (profile) {
           for (const err of validateAssistantProfile(profile)) {
             logger.warn(formatCompact({ assistant_profile: err }));
+          }
+          try {
+            profileDefaultNotify = profile.defaults?.notify ? parseJobNotify(profile.defaults.notify) : undefined;
+          } catch {
+            profileDefaultNotify = undefined;
           }
         }
         await syncProfileHeartbeatToStore(store, profile);

@@ -133,6 +133,24 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
+  it('shows the account by name in the preview, never internal adapter / capability IDs (#1250)', async () => {
+    const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const pending = f.receive('/remind create 10分钟后 喝水');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const preview = f.sent.map(item => JSON.stringify(item.payload)).find(text => text.includes('账号'))!;
+      const endpoint = f.conversation.endpoint;
+      const account = /账号：([^\\]*)\\n/u.exec(preview)?.[1];
+      expect(account).not.toContain('/');
+      // The fixture's only account is named after its adapter slot (`first`).
+      expect(account).toBe('first');
+      expect(preview).not.toContain('zhin.adapter');
+      expect(preview).not.toContain(` / ${endpoint.adapter}`);
+      expect(preview).not.toContain('\\u0000');
+      await f.receive('取消'); await pending.catch(() => undefined);
+    } finally { await f.close(); }
+  });
+
   it('asks for missing fields, corrects invalid time and never treats a repeated command as body text', async () => {
     const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {

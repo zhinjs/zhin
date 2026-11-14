@@ -4,6 +4,8 @@
  * Injectable prompt files inspired by OpenClaw's workspace bootstrap design:
  *
  *   AGENTS.md  — persistent memory / instructions (AI read-write)
+ *   BOT.md     — bot-only instructions; when present the bot reads it INSTEAD of AGENTS.md,
+ *                which then stays developer / coding-agent facing (#1250 bootstrap-dev-vs-bot)
  *   SOUL.md    — persona definition (read-only)
  *   TOOLS.md   — tool usage guidelines (read-only)
  *
@@ -32,13 +34,47 @@ export const BOOTSTRAP_FILENAMES = [
   'TOOLS.md',
 ] as const;
 
+/**
+ * 机器人专用 bootstrap 文件（#1250）。存在时机器人只读它，不再读 `AGENTS.md`（`AGENTS.md`
+ * 留给开发者与编码代理）；不存在时沿用 `AGENTS.md` 并按场景过滤。
+ */
+export const BOT_BOOTSTRAP_FILENAME = 'BOT.md' as const;
+
+/** `BOT.md` 存在时的引导文件顺序：SOUL → BOT → TOOLS。 */
+export const BOT_BOOTSTRAP_FILENAMES = [
+  'SOUL.md',
+  'BOT.md',
+  'TOOLS.md',
+] as const;
+
+/**
+ * 机器人读取的引导文件名：`hasBotFile` 时用 `BOT.md` 取代 `AGENTS.md`。
+ * 所有读取工作区引导文件的入口都经过它，热重载监听的文件集合与此一致。
+ */
+export function botBootstrapFilenames(hasBotFile: boolean): readonly BootstrapFileName[] {
+  return hasBotFile ? BOT_BOOTSTRAP_FILENAMES : BOOTSTRAP_FILENAMES;
+}
+
+/**
+ * 项目根目录里是否有非空的 `BOT.md`。只认根目录：`data/BOT.md` 不算（`data/` 下的文件不受
+ * 只读覆盖保护的同等约束，接受它会让写得进 `data/` 的人整体替换机器人的指令，#1250）。
+ */
+export async function hasBotBootstrapFile(workspaceDir?: string): Promise<boolean> {
+  const cwd = workspaceDir || process.cwd();
+  try {
+    return !!(await fs.promises.readFile(path.join(cwd, BOT_BOOTSTRAP_FILENAME), 'utf-8')).trim();
+  } catch {
+    return false;
+  }
+}
+
 /** 可缓存 system §11：仅 SOUL + TOOLS（AGENTS 进 Turn envelope） */
 export const STABLE_BOOTSTRAP_FILENAMES = [
   'SOUL.md',
   'TOOLS.md',
 ] as const;
 
-export type BootstrapFileName = typeof BOOTSTRAP_FILENAMES[number];
+export type BootstrapFileName = typeof BOOTSTRAP_FILENAMES[number] | typeof BOT_BOOTSTRAP_FILENAME;
 
 /** 单文件最大字符数（默认 16KB） */
 const DEFAULT_MAX_CHARS = 16 * 1024;
@@ -93,7 +129,8 @@ export function getDataDir(workspaceDir?: string): string {
 /**
  * 加载工作区引导文件
  *
- * 搜索顺序：项目根目录 → data/ 目录
+ * 搜索顺序：项目根目录 → data/ 目录。`BOT.md` 存在时读它而不读 `AGENTS.md`（#1250）；
+ * `BOT.md` 只从项目根目录读取，从不读 `data/BOT.md`。
  */
 export async function loadBootstrapFiles(
   workspaceDir?: string,
@@ -103,13 +140,14 @@ export async function loadBootstrapFiles(
 
   const result: BootstrapFile[] = [];
 
-  for (const name of BOOTSTRAP_FILENAMES) {
+  for (const name of botBootstrapFilenames(await hasBotBootstrapFile(cwd))) {
     // 优先项目根目录
     const rootPath = path.join(cwd, name);
     const dataPath = path.join(dataDir, name);
 
     let found = false;
-    for (const filePath of [rootPath, dataPath]) {
+    const candidates = name === BOT_BOOTSTRAP_FILENAME ? [rootPath] : [rootPath, dataPath];
+    for (const filePath of candidates) {
       try {
         const content = await readContextFile(filePath);
         result.push({ name, path: filePath, content, missing: false });
@@ -299,11 +337,11 @@ export async function loadToolsGuide(workspaceDir?: string): Promise<string | nu
 }
 
 /**
- * 加载 AGENTS.md 持久化记忆
+ * 加载机器人的持久化指令：`BOT.md`（存在时），否则 AGENTS.md
  */
 export async function loadAgentsMemory(workspaceDir?: string): Promise<string | null> {
   const files = await loadBootstrapFiles(workspaceDir);
-  const agentsFile = files.find(f => f.name === 'AGENTS.md' && !f.missing);
+  const agentsFile = files.find(f => (f.name === 'AGENTS.md' || f.name === BOT_BOOTSTRAP_FILENAME) && !f.missing);
   return agentsFile?.content?.trim() || null;
 }
 

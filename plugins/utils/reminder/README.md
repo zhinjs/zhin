@@ -49,7 +49,7 @@ remind after 600 十分钟后休息
 remind at 2027-01-01T09:00:00+08:00 新年会议
 remind every 3600 喝水
 remind list
-remind cancel <任务 ID>
+remind cancel <序号 | 任务 ID | ≥6 位 ID 前缀>
 ```
 
 延迟是 1 秒至一年；周期是 60 秒至一年；内容是 1–500 字符。时间必须在未来一年内。指令权限经过框架 PermissionHost；插件没有额外权限旁路或取消其他发送者任务的管理员接口。

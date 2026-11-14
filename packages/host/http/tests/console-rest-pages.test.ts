@@ -648,6 +648,28 @@ describe('console-rest-pages introspection', () => {
     });
   });
 
+  it('awaits async bindings and serves recent turns newest first (#1250)', async () => {
+    const runtime = fakeAgentRuntime();
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease({ ...runtime, introspection: {
+      ...runtime.introspection,
+      bindings: async () => [{ name: 'zhin', provider: 'AG 中转', model: 'ag/gemini-3.8-flash', displayName: 'AG 中转 · ag/gemini-3.8-flash', bindingSource: 'purpose' }],
+      recentTurns: async () => [
+        { turnId: 't2', sessionKey: 'personal-session:v1:x', sessionDisplayName: 'qq · 群 测试群', startedAt: 2, status: 'completed' },
+        { turnId: 't1', sessionKey: 'scene-task:v1:y', startedAt: 1, status: 'failed' },
+      ],
+    } }) }));
+    const bindings = await json(await fetch(`${base}/api/introspection/bindings`));
+    expect((bindings.data as { items: unknown[] }).items[0]).toMatchObject({ name: 'zhin', provider: 'AG 中转', displayName: 'AG 中转 · ag/gemini-3.8-flash' });
+    const turns = await json(await fetch(`${base}/api/introspection/recent-turns`));
+    expect(turns.success).toBe(true);
+    expect(turns.data).toMatchObject({ total: 2, pageSize: 20 });
+    expect((turns.data as { items: Array<{ turnId: string }> }).items.map(item => item.turnId)).toEqual(['t2', 't1']);
+    const filtered = await json(await fetch(`${base}/api/introspection/recent-turns?filter=${encodeURIComponent('测试群')}`));
+    expect((filtered.data as { total: number }).total).toBe(1);
+    const empty = await json(await fetch(`${base}/api/introspection/recent-turns`.replace(base, await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) })))));
+    expect((empty.data as { total: number }).total).toBe(0);
+  });
+
   it('exposes prompt section policy without exposing prompt content', async () => {
     const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
     const response = await fetch(`${base}/api/introspection/prompt-sections`);

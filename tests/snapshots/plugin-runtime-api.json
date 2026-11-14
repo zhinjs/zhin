@@ -526,6 +526,7 @@
     "export function loadInferenceMigrationSessionBindings(): Promise<typeof import('../inference/migration-session-bindings.js')>{return import('../inference/migration-session-bindings.js');}",
     "export{createDatabaseHost,renderToSegments,resolveDatabaseConfig}from '@zhin.js/core/runtime';",
     "export{describeEngagement,formatEngagementCollaborationGraph,formatEngagementList,openProjectEngagementJournal,}from './trace.js';",
+    "export{loadProviderDisplay}from './provider-display.js';",
     "export{parseComponentDefinition}from '@zhin.js/component';"
   ]
 }

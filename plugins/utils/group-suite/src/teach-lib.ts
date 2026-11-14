@@ -259,7 +259,8 @@ export async function teachList(
   const allItems = (await QA.select().where(
     { context_type: ctxType, context_id: ctxId },
   )) as Record<string, unknown>[];
-  if (allItems.length === 0) return t(input.locale, 'teachEmpty');
+  const hint = t(input.locale, 'teachOtherSystem');
+  if (allItems.length === 0) return `${t(input.locale, 'teachEmpty')}\n${hint}`;
   const totalPages = Math.ceil(allItems.length / cfg.teachPageSize);
   const pageNum = Math.min(safePage, totalPages);
   const start = (pageNum - 1) * cfg.teachPageSize;
@@ -270,7 +271,7 @@ export async function teachList(
     return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
   });
   const header = t(input.locale, 'teachTitle');
-  return t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length });
+  return `${t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length })}\n${hint}`;
 }
 
 export async function teachForget(

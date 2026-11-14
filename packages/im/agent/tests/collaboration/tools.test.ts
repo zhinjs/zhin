@@ -21,6 +21,8 @@ import {
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { CollaborationAgent, CollaborationDirectory } from '../../src/collaboration/contracts.js';
 import { MAX_AGENT_REPLY_CHARS, createCollaborationTools } from '../../src/collaboration/tools.js';
+import { recordActorAttachments, resolveAttachmentRefs } from '../../src/media/agent-attachments.js';
+import { mergeToolOutboundElements } from '../../src/media/media-tool-bridge.js';
 
 type Behaviour = (mail: Mail, signal: AbortSignal, harness: Harness) => Promise<ActorTurnResult>;
 
@@ -167,6 +169,27 @@ describe('collaboration tools: ask', () => {
     expect(out).toContain('[external_content source="agent_reply"');
     expect(out).toContain('answer to When is LTS?');
     expect(out).toContain('[end external_content]');
+  });
+
+  it('returns media the sub-agent produced as framework attachments the reply sends (#1250)', async () => {
+    const { tools } = await setup([ceiling('zhin'), ceiling('draw')], {
+      draw: async (mail, _signal, harness) => {
+        // What the actor turn runner records for the mail it answered.
+        recordActorAttachments(harness, [mail.id], [{ type: 'image', url: 'https://cdn.example/cat.png' }]);
+        return { status: 'completed', content: 'Done, drew a cat.' };
+      },
+    });
+    const out = await call(tools, 'ask', { agent: 'draw', question: 'draw a cat' });
+    expect(out).toContain('Attachments from agent draw (1)');
+    expect(out).not.toContain('https://cdn.example/cat.png');
+    const media = resolveAttachmentRefs(out);
+    expect(media).toEqual([{ type: 'image', url: 'https://cdn.example/cat.png' }]);
+    // A reference resolves once; a copied or invented one resolves to nothing.
+    expect(resolveAttachmentRefs(out)).toEqual([]);
+    expect(resolveAttachmentRefs('zhin-attachment:00000000-0000-4000-8000-000000000000')).toEqual([]);
+    // The asking turn merges them into its reply like any tool media.
+    const merged = mergeToolOutboundElements([{ type: 'text', content: 'Here is your cat' }], [{ tool: 'ask', result: out, media }]);
+    expect(merged).toContainEqual({ type: 'image', url: 'https://cdn.example/cat.png' });
   });
 
   it('clips long replies', async () => {

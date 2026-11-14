@@ -42,6 +42,7 @@ it('management works with a persistent Database Host while automatic replies are
   const context = { config: resolveGroupSuiteConfig({}), input, params: { keyword: 'hi' }, args: ['hello'], use: () => host };
   expect(await keywordAdd.execute(context as never)).toContain('已添加');
   expect(await keywordList.execute(context as never)).toContain('hello');
+  expect(await keywordList.execute(context as never)).toContain('teach-list');
   // The dictionary row plus the plugin-scope index the Console counts keywords from (#1250).
   expect(rows.size).toBe(2);
   expect([...rows.keys()].filter(key => key.includes('keyword-conversations'))).toHaveLength(1);

@@ -189,7 +189,14 @@ export const traceCommand = new Command('trace')
       process.exitCode = 1;
       return;
     }
-    console.log(options.json
-      ? JSON.stringify(trace, null, 2)
-      : mod.formatTurnTrace(trace, { timeline: options.timeline !== false }));
+    if (options.json) {
+      console.log(JSON.stringify(trace, null, 2));
+      return;
+    }
+    // Service names from the project's inference graph (#1250); a missing graph shows model names.
+    const display = await Promise.resolve(instance?.loadProviderDisplay?.(root)).catch(() => undefined);
+    console.log(mod.formatTurnTrace(trace, {
+      timeline: options.timeline !== false,
+      ...(display ? { providerLabel: (provider: string) => display.resolveProvider(provider)?.label } : {}),
+    }));
   });

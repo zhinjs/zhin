@@ -10,7 +10,11 @@ import {
   computeReadOnlyOverlays,
   missingMountPointDirs,
   overlayDockerArgs,
+  quarantineNewSelfFiles,
   removeMountPointDirs,
+  rootSelfFileNames,
+  selfFileAnchor,
+  snapshotRootSelfFiles,
 } from '../../src/security/sandbox-mounts.js';
 import { buildDockerRunArgs } from '../../src/security/sandbox-docker.js';
 
@@ -50,6 +54,17 @@ describe('computeReadOnlyOverlays', () => {
     expect(t['zhin.config.yml']).toBeUndefined();
     expect(t['yarn.lock']).toBeUndefined();
     expect(t['src/index.ts']).toBeUndefined();
+  });
+
+  it('binds an existing BOT.md read-only from the default self files, like AGENTS.md (#1250)', async () => {
+    touch('BOT.md', 'bot rules\n');
+    touch('AGENTS.md', 'dev rules\n');
+    const paths = await createHostProtectedPaths({ projectRoot: root });
+    const t = targets(computeReadOnlyOverlays(root, toProtectedPathData(paths)));
+    expect(t['BOT.md']).toBe('bind-file');
+    expect(t['AGENTS.md']).toBe('bind-file');
+    // Without injected data the mounted directory stands in for the project root.
+    expect(targets(computeReadOnlyOverlays(root, undefined))['BOT.md']).toBe('bind-file');
   });
 
   it('hides an existing .zhin/ behind an empty read-only tmpfs (gateway.db, keys; ADR 0059 §7)', async () => {
@@ -215,5 +230,47 @@ describe('mount point cleanup', () => {
     expect(fs.existsSync(path.join(root, '.agents/skills'))).toBe(false);
     expect(fs.existsSync(path.join(root, '.agents'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'skills/kept.txt'))).toBe(true);
+  });
+});
+
+describe('self-file quarantine (#1250)', () => {
+  it('moves aside only self files created after the snapshot, never overwriting an earlier quarantine', () => {
+    touch('AGENTS.md');
+    const names = rootSelfFileNames(undefined);
+    const before = snapshotRootSelfFiles(root, names);
+    expect([...before]).toEqual(['AGENTS.md']);
+
+    touch('BOT.md', 'new');
+    touch('zhin.config.yml', 'new config');
+    touch('readme.txt');
+    touch('BOT.md.quarantined-42', 'older quarantine');
+    const moved = quarantineNewSelfFiles(root, names, before, 42);
+    expect(moved.map(entry => entry.name).sort()).toEqual(['BOT.md', 'zhin.config.yml']);
+    expect(moved.find(entry => entry.name === 'BOT.md')?.quarantinedAs).toBe('BOT.md.quarantined-42-1');
+    expect(fs.readFileSync(path.join(root, 'BOT.md.quarantined-42'), 'utf8')).toBe('older quarantine');
+    expect(fs.existsSync(path.join(root, 'BOT.md'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'zhin.config.yml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'AGENTS.md'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'readme.txt'))).toBe(true);
+  });
+
+  it('anchors to the injected project root and includes host-declared root self files', () => {
+    const project = path.join(root, 'project');
+    fs.mkdirSync(path.join(project, 'sub'), { recursive: true });
+    const data = { projectRoot: project, roots: [project.toLowerCase()], selfFiles: ['plugin.ts', 'src/entry.ts'], selfDirs: [], denyFiles: [] };
+    expect(selfFileAnchor(path.join(project, 'sub'), data)).toBe(project);
+    expect(selfFileAnchor(project, undefined)).toBe(project);
+    // Resolved like the overlays: without projectRoot the folded roots[0] is walked case-insensitively.
+    const { projectRoot: _omitted, ...noRoot } = data;
+    expect(selfFileAnchor(project, noRoot)).toBe(project);
+    expect(selfFileAnchor(path.join(root, 'missing'), data)).toBeUndefined();
+    expect(selfFileAnchor(project, { ...data, projectRoot: path.join(root, 'gone') })).toBeUndefined();
+    const names = rootSelfFileNames(data);
+    expect(names.has('plugin.ts')).toBe(true);
+    expect(names.has('bot.md')).toBe(true);
+    expect(names.has('src/entry.ts')).toBe(false);
+    const before = snapshotRootSelfFiles(project, names);
+    fs.writeFileSync(path.join(project, 'plugin.ts'), 'export default 1');
+    expect(quarantineNewSelfFiles(project, names, before, 1).map(entry => entry.name)).toEqual(['plugin.ts']);
   });
 });

@@ -164,7 +164,7 @@ zhin setup --adapters      # 仅配置适配器（添加账号）
 zhin setup --ai            # 仅配置 AI
 zhin setup -y --adapter sandbox --enable-ai --install   # 非交互：只执行参数指定的步骤
 zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
-zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
+zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / BOT.md；已有 AGENTS.md 且无 BOT.md 时沿用 AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 zhin setup --locale en     # 设置项目语言（zh-CN 或 en），可与其他选项组合
 ```
@@ -522,8 +522,11 @@ zhin schedule resume <id>
 | `--prompt` | 必填，到时间后发给 AI 的提示词 |
 | `-l, --label` | 任务名称 |
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
-| `--notify-channel` | `silent`（默认）/ `log`；`im` 需要目标会话，命令行无法指定，会被拒绝——在聊天里让机器人创建这类任务 |
+| `--notify-channel` | `im` / `silent`（默认；给了 `--target` 时为 `im`）/ `log` |
+| `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
+
+`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。
 
 ### agent：Agent 诊断
 
@@ -571,6 +574,8 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 **触发消息。** 从 #1250 起，trace 还记录触发这一回合的消息：正文摘录（空白合并、凭据脱敏后截断到 120 个字符）、发送者 id 与发送者名、会话（适配器、Endpoint、会话类型与 id）、消息 id，以及收到时间、等待与排队时长、合流消息数。也就是说 trace 文件里会出现用户发言的片段和身份标识：能读 `data/agent-traces` 目录的人、能运行 `zhin trace` 的人，以及 Console 里有 `agent.view` 权限的账号或 API 令牌（`/api/agent/traces`、`/api/agent/trace-archive/*`）都能看到。不希望留存时缩短 `ZHIN_TRACE_RETENTION_DAYS`。
 
+子 agent（`ask` / `delegate` 的协作 Agent）的模型调用记在其嵌套回合里，父回合的「模型调用 / tokens」汇总写成「合计（自身 N，子 agent M）」，trace 字段 `subagent_usage` 单列子 agent 部分；`ai.usage` 日志与用量统计各算一次，不重复计。时间线、`requests` 与 `model_calls` 对同一次请求记录同一个 provider（实际解析出的服务 ID），显示时换成服务名（`服务名 · 模型`），读不到服务配置时只显示模型名。
+
 **保留与脱敏。** 默认保留 7 天，总大小上限 64 MB：启动时和之后每小时清理一次，先删过期的日期文件，再从最旧的一天删起直到低于上限（当天的文件不会因大小被删）。用环境变量 `ZHIN_TRACE_RETENTION_DAYS`、`ZHIN_TRACE_MAX_MB` 调整。trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`，写盘前还会再扫一遍内联凭据（`sk-…`、`Bearer …` 等）和环境变量里的密钥值。旧版的 `data/agent-traces/recent.json` 仍会被读取。
 
 **Console 页面。** Console 的「Agent Trace」页（`/console/agent-trace`）读取同一份数据：会话列表 → 回合列表 → 回合详情（模型/工具调用瀑布图、时间线和原始记录），可以按时间筛选，`?turn=<turnId>` 直接打开某个回合。项目里放一个页面即可启用：
@@ -606,8 +611,13 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `-s, --session <pattern>` | 会话键子串，或带 `*` 的通配 |
 | `--json` | 输出 JSON |
 | `--cwd <dir>` / `--dir <dir>` | 项目根目录 / 直接指定 trace 目录 |
+| `--tz <zone>` | 按此 IANA 时区划分日期；默认实例时区（`TZ` 环境变量，否则系统时区） |
+
+每天还会列出按「服务名 · 模型」合并的模型用量：同一服务经 `services:` 与 `accounts:` 两种 ID 记录的调用合为一行，服务名读自项目数据库里的模型配置；读不到时只显示模型名。会话列优先显示 trace 里记录的会话名（如 `qq · 群 测试群`），括号里是会话键的短形式。输入 tokens 是每次模型调用上报的输入之和（含多轮迭代与子 Agent），和下面基于首次请求估算的段占比不是同一口径。
 
 每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
+
+**提示缓存提示。** 每次模型调用都会记录请求前缀哈希（system 提示词 + 工具定义，trace 字段 `prefix_hash`）。某个服务最近连续至少 20 次调用、跨至少 3 个会话都没有缓存命中（`cache_read_tokens` 为 0 或未上报），而同一会话相邻请求的前缀有一半以上相同时，报告末尾会提示「该服务可能不支持或未透传 prompt 缓存」，并给出前缀相同的请求比例作为依据。`zhin doctor` 读最近 7 天的 trace 做同样的检查，Console 用量统计（`usage-stats` RPC 的 `promptCacheHints`）也带这条提示。
 
 ## 退出码
 

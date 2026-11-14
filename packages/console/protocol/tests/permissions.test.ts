@@ -223,6 +223,9 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleHttpPermission('POST', '/plugins')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/config')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/introspectionx')).toBeNull();
+    // #1250: recent Agent turns need agent.view, ahead of the /introspection status.view prefix.
+    expect(resolveConsoleHttpPermission('GET', '/introspection/recent-turns')?.permission).toBe('agent.view');
+    expect(resolveConsoleHttpPermission('GET', '/introspection/commands')?.permission).toBe('status.view');
     expect(resolveConsoleHttpPermission('GET', '/console/terminal/targets')?.permission).toBe('ops.terminal');
     expect(resolveConsoleHttpPermission('POST', '/console/terminal/tickets')?.permission).toBe('ops.terminal');
     // Gateway-owned (ADR 0054 §4, ADR 0053 §4).

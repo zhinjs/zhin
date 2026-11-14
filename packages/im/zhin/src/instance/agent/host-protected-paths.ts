@@ -6,8 +6,8 @@ import { resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 /**
  * #1030 P0: the host-owned half of the agent's protected-path set. The agent package ships the
- * conventional names (root config candidates, `package.json`, `schema.json`, `AGENTS.md`, skills
- * dirs); the host knows what only it can know — the project root, the root plugin entry declared
+ * conventional names (root config candidates, `package.json`, `schema.json`, `AGENTS.md`, `BOT.md`,
+ * skills dirs); the host knows what only it can know — the project root, the root plugin entry declared
  * in `package.json#zhin.entry`, where the plugin lifecycle store lives, and the management
  * gateway's actual control endpoint (`ZHIN_GATEWAY_SOCKET`, set by the gateway — including the
  * `os.tmpdir()` fallback for deep roots): whoever connects there acts as the local owner.

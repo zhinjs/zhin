@@ -57,6 +57,8 @@ import {
   selfChangeStoreToken,
   type SelfChangeImpactPort,
   type AudioTranscriptionPort,
+  botBootstrapFilenames,
+  hasBotBootstrapFile,
   describeApprovalChannelConflicts,
 } from '@zhin.js/agent';
 import {
@@ -87,7 +89,12 @@ import { agentToolApprovalQueueToken } from '../console/tool-approvals.js';
 const logger = getLogger('agent');
 /** #1250: each approval/channel conflict is reported once per process, not on every generation reload. */
 const reportedApprovalConflicts = new Set<string>();
-const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
+/**
+ * Project-root files the bootstrap is read from: SOUL / AGENTS / TOOLS, plus a root `BOT.md`,
+ * which replaces AGENTS.md when non-empty (`botBootstrapFilenames`). Root only: `data/BOT.md` is
+ * not read, so it is not watched either.
+ */
+const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md', 'BOT.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
@@ -325,7 +332,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const ingress = new CapabilityIngress();
     let bootstrap = await loadBootstrap(options.projectRoot);
     const { bootstrapText, contextFiles } = bootstrap;
-    // #1250: an edited SOUL / AGENTS / TOOLS file is re-read in place; it no longer rebuilds the
+    // #1250: an edited SOUL / AGENTS / TOOLS / BOT file is re-read in place; it no longer rebuilds the
     // Root generation (and with it every adapter Endpoint). Turns read the current bootstrap.
     watchProjectFiles?.({
       patterns: BOOTSTRAP_FILES,
@@ -456,6 +463,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 }
 
 
+/**
+ * The bot's workspace bootstrap. Bot-facing files are SOUL.md, AGENTS.md and TOOLS.md, or —
+ * when the project has a `BOT.md` — SOUL.md, BOT.md and TOOLS.md: `AGENTS.md` then stays
+ * developer / coding-agent facing and is not read (#1250 bootstrap-dev-vs-bot).
+ *
+ * All of them — `BOT.md` included — are read from the project root only; a `data/BOT.md` is
+ * ignored, like `hasBotBootstrapFile` ignores it.
+ *
+ * Reload: every bootstrap file, a root `BOT.md` included, is watched through `watchProjectFiles`
+ * and re-read in place (no new Root generation); adding, emptying or removing `BOT.md` switches
+ * between AGENTS.md and BOT.md on the next read.
+ */
 async function loadBootstrap(projectRoot: string): Promise<{
   bootstrapText: string;
   contextFiles: readonly ContextFile[];
@@ -463,21 +482,26 @@ async function loadBootstrap(projectRoot: string): Promise<{
   const parts: string[] = [];
   const contextFiles: ContextFile[] = [];
   let total = 0;
-  for (const name of BOOTSTRAP_FILES) {
-    try {
-      const raw = await readFile(join(projectRoot, name), 'utf8');
-      const body = raw.trim();
-      if (!body) continue;
-      const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
-      parts.push(`## ${name}\n${chunk}`);
-      contextFiles.push({ path: name, content: chunk });
-      total += chunk.length;
-      if (total >= MAX_BOOTSTRAP_CHARS) break;
-    } catch {
-      /* missing bootstrap files are optional */
-    }
+  for (const name of botBootstrapFilenames(await hasBotBootstrapFile(projectRoot))) {
+    const body = await readBootstrapBody(projectRoot, name);
+    if (!body) continue;
+    const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
+    parts.push(`## ${name}\n${chunk}`);
+    contextFiles.push({ path: name, content: chunk });
+    total += chunk.length;
+    if (total >= MAX_BOOTSTRAP_CHARS) break;
   }
   return { bootstrapText: parts.join('\n\n'), contextFiles };
+}
+
+/** A bootstrap file's trimmed text, or `''` when it is missing or empty. */
+async function readBootstrapBody(projectRoot: string, name: string): Promise<string> {
+  try {
+    return (await readFile(join(projectRoot, name), 'utf8')).trim();
+  } catch {
+    /* missing bootstrap files are optional */
+    return '';
+  }
 }
 
 function truncate(value: string, max: number): string {
