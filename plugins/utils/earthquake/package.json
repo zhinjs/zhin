@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-earthquake",
   "version": "0.1.13",
-  "description": "Earthquake query and group alert plugin for Zhin.js — CENC + USGS, magnitude/region subscriptions (Plugin Runtime)",
+  "description": "CENC and USGS data merged, with group subscriptions by magnitude and region; no API key needed.",
+  "keywords": [
+    "zhin.js",
+    "earthquake",
+    "cenc",
+    "usgs",
+    "地震"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,22 +43,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "earthquake",
-    "地震",
-    "cenc",
-    "usgs",
-    "alert"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -110,6 +105,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "地震速报",
+      "displayNameI18n": {
+        "zh-CN": "地震速报",
+        "en": "Earthquake Alerts"
+      },
+      "descriptionI18n": {
+        "zh-CN": "合并中国地震台网与 USGS 数据，按震级和地区订阅群推送，无需 API Key。",
+        "en": "CENC and USGS data merged, with group subscriptions by magnitude and region; no API key needed."
+      },
+      "category": "information"
+    }
   }
 }

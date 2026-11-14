@@ -22,6 +22,14 @@ export const MAX_REASON_DETAIL_CHARS = 200;
 /** `payload` 序列化后的上限（字符）；超出时只保留截断标记。 */
 export const MAX_DECISION_PAYLOAD_CHARS = 4_000;
 
+/**
+ * Payload key on a row written only as the consequence of another decision row in the same turn
+ * (#1250): a gate (`ambient_decision` / `control_gate` / `speak_gate`) that stops a turn also writes a
+ * `model_skip` with `payload.parent` set to the gate's kind. Readers that count `model_skip` are
+ * unaffected; a replay that shows one row per decision folds rows carrying `parent` into that parent.
+ */
+export const DECISION_PARENT_KEY = 'parent';
+
 export const DECISION_EVENT_KINDS = [
   'inbound_wake',
   'speak_gate',

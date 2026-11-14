@@ -46,6 +46,7 @@ describe('control gate helpers', () => {
     auditControlGate(audit, { blocked: true, switch: 'muted', level: 'session', reasonCode: 'control_muted_session', outcome: 'deny' }, { source: 'message' });
     expect(rows(log)).toEqual([['control_gate', 'deny', 'control_muted_session'], ['model_skip', 'skip', 'control_muted_session']]);
     expect(log.recent()[0]).toMatchObject({ actor: 'policy', reasonDetail: 'session:muted', sceneId: 'group:g1' });
+    expect(log.recent()[1]!.payload).toEqual({ source: 'message', parent: 'control_gate' });
   });
 });
 

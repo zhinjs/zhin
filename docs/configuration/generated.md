@@ -373,6 +373,7 @@ outline: [2, 3]
 | `ai.imageStorage.prefix` | string | 是 | — | Object directory ending in /; must be covered by the bucket lifecycle. |
 | `ai.personalPrincipals` | object | 否 | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
+| `commandSuggestion` | boolean \| object | 否 | — | 未命中但与已注册指令名/别名高度相似的消息（私聊、@机器人或带指令前缀）直接回复「没有这个指令，你是不是想用：…」，不交给 AI；false 关闭。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |
 | `menuStyle.subtitle` | string | 否 | — | 菜单副标题。 |
@@ -1672,8 +1673,8 @@ outline: [2, 3]
 | `process-monitor.notifyOnRestart` | boolean | 否 | `true` | 正常重启时通知 |
 | `process-monitor.notifyOnCrash` | boolean | 否 | `true` | 异常崩溃重启时通知 |
 | `process-monitor.notifyChannels` | array&lt;object&gt; | 否 | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
-| `process-monitor.notifyChannels[].type` | string: `"webhook"` | 是 | — | — |
-| `process-monitor.notifyChannels[].target` | string | 是 | — | — |
+| `process-monitor.notifyChannels[].type` | string: `"webhook"` | 是 | — | 目前只支持 webhook |
+| `process-monitor.notifyChannels[].target` | string | 是 | — | Webhook 地址 |
 
 ### blackjack
 
@@ -2246,7 +2247,7 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
+| `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API 服务的基础地址 |
 
 ### answers
 
@@ -2269,15 +2270,15 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `bilibili.pollCron` | string | 否 | `"0 * * * * *"` | 轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s) |
-| `bilibili.jitterMs` | number | 否 | `15000` | 每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms) |
-| `bilibili.requestGapMs` | number | 否 | `1500` | 同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms) |
-| `bilibili.maxBackoffMinutes` | number | 否 | `30` | 接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes) |
-| `bilibili.maxPerChannel` | number | 否 | `20` | 每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation |
-| `bilibili.timeout` | number | 否 | `10000` | 单次 HTTP 请求超时（毫秒） / HTTP timeout (ms) |
-| `bilibili.live` | boolean | 否 | `true` | 是否轮询开播状态 / Poll live status |
-| `bilibili.dynamic` | boolean | 否 | `true` | 是否轮询 UP 主动态 / Poll UP dynamics |
-| `bilibili.cookie` | string | 否 | `""` | 可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE} |
+| `bilibili.pollCron` | string | 否 | `"0 * * * * *"` | 轮询频率（6 段 Cron，默认每 60 秒） |
+| `bilibili.jitterMs` | number | 否 | `15000` | 每轮轮询前的随机延迟上限（毫秒） |
+| `bilibili.requestGapMs` | number | 否 | `1500` | 同一轮内相邻动态请求的间隔（毫秒） |
+| `bilibili.maxBackoffMinutes` | number | 否 | `30` | 接口失败或风控时指数退避的上限（分钟） |
+| `bilibili.maxPerChannel` | number | 否 | `20` | 每个会话最多订阅的 UP 主数量 |
+| `bilibili.timeout` | number | 否 | `10000` | 单次 HTTP 请求超时（毫秒） |
+| `bilibili.live` | boolean | 否 | `true` | 是否轮询开播状态 |
+| `bilibili.dynamic` | boolean | 否 | `true` | 是否轮询 UP 主动态 |
+| `bilibili.cookie` | string | 否 | `""` | 可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用；请写成 ${BILIBILI_COOKIE}，不要把凭据直接写进配置 |
 
 ### calendar
 
@@ -2289,15 +2290,15 @@ _该 Schema 没有声明字段。_
 | --- | --- | --- | --- | --- |
 | `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | 否 | `"none"` | 日历后端；none 时工具返回未启用提示 |
 | `calendar.timezone` | string | 否 | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
-| `calendar.work_day_start` | string | 否 | `"09:00"` | — |
-| `calendar.work_day_end` | string | 否 | `"18:00"` | — |
+| `calendar.work_day_start` | string | 否 | `"09:00"` | 空闲时段计算使用的每日开始时间（HH:MM） |
+| `calendar.work_day_end` | string | 否 | `"18:00"` | 空闲时段计算使用的每日结束时间（HH:MM） |
 | `calendar.oauth_redirect_base_url` | string | 否 | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
 | `calendar.oauth_callback_path` | string | 否 | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
 | `calendar.caldav` | object | 否 | — | — |
 | `calendar.caldav.enabled` | boolean | 否 | `false` | — |
 | `calendar.caldav.calendar_url` | string | 否 | `""` | 日历 collection URL |
 | `calendar.caldav.username` | string | 否 | `""` | — |
-| `calendar.caldav.password` | string | 否 | `""` | — |
+| `calendar.caldav.password` | string | 否 | `""` | 建议写成环境变量引用 |
 | `calendar.google` | object | 否 | — | — |
 | `calendar.google.enabled` | boolean | 否 | `false` | — |
 | `calendar.google.client_id` | string | 否 | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
@@ -2341,8 +2342,8 @@ _该 Schema 没有声明字段。_
 | `content-moderation.inbound.enabled` | boolean | 否 | `true` | — |
 | `content-moderation.inbound.bypass` | array&lt;string&gt; | 否 | `["owner","platform:admin"]` | 满足任一 permit 表达式的发送者跳过入站审查（ADR 0056 §5 内置 DSL，与命令 / 工具同一评估器）。内容审核是平台功能，默认 zhin owner 或平台群主 / 管理员（platform:admin）；[] 表示都审 |
 | `content-moderation.inbound.whitelist` | object | 否 | — | — |
-| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | — |
-| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | — |
+| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | 这些用户发送的消息不审查 |
+| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | 这些会话中的消息不审查 |
 | `content-moderation.outbound` | object | 否 | — | — |
 | `content-moderation.outbound.enabled` | boolean | 否 | `true` | — |
 | `content-moderation.outbound.bypass` | boolean | 否 | `false` | 为 true 时跳过出站审查 |
@@ -2352,19 +2353,19 @@ _该 Schema 没有声明字段。_
 | `content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
 | `content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
 | `content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `content-moderation.sources` | array&lt;object&gt; | 否 | `[]` | — |
+| `content-moderation.sources` | array&lt;object&gt; | 否 | `[]` | 按顺序执行的审查源：本地词库或 HTTP 审查服务 |
 | `content-moderation.sources[].id` | string | 是 | — | — |
-| `content-moderation.sources[].type` | string: `"local"`, `"http"` | 是 | — | — |
+| `content-moderation.sources[].type` | string: `"local"`, `"http"` | 是 | — | local 为本地词库，http 为外部审查服务 |
 | `content-moderation.sources[].enabled` | boolean | 否 | `true` | — |
-| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | 否 | — | — |
+| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | 否 | — | 此审查源失败时的策略，未填写时使用全局设置 |
 | `content-moderation.sources[].includeBuiltin` | boolean | 否 | `true` | 是否合并内置分级违禁词词库 |
 | `content-moderation.sources[].words` | array&lt;string \| object&gt; | 否 | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
 | `content-moderation.sources[].wordFiles` | array&lt;string&gt; | 否 | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
 | `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 未标注分级的自定义词默认 severity |
 | `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 兼容旧字段，等同 defaultSeverity |
-| `content-moderation.sources[].url` | string | 否 | — | — |
-| `content-moderation.sources[].headers` | object | 否 | — | — |
-| `content-moderation.sources[].timeoutMs` | number | 否 | `5000` | — |
+| `content-moderation.sources[].url` | string | 否 | — | HTTP 审查服务的地址 |
+| `content-moderation.sources[].headers` | object | 否 | — | 发送给审查服务的附加请求头 |
+| `content-moderation.sources[].timeoutMs` | number | 否 | `5000` | 单次审查请求的超时 |
 | `content-moderation.sources[].forceUpload` | boolean | 否 | `false` | 强制下载图片后上传，不传 URL |
 
 ### earthquake
@@ -2401,18 +2402,18 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `group-suite.keywordReply` | boolean | 否 | `false` | — |
-| `group-suite.basePointsMin` | number | 否 | `10` | — |
-| `group-suite.basePointsMax` | number | 否 | `30` | — |
-| `group-suite.streakBonus` | number | 否 | `5` | — |
-| `group-suite.streakCap` | number | 否 | `50` | — |
-| `group-suite.rankSize` | number | 否 | `10` | — |
-| `group-suite.teachMaxPerGroup` | number | 否 | `200` | — |
-| `group-suite.teachCooldownMs` | number | 否 | `3000` | — |
-| `group-suite.teachAllowRegex` | boolean | 否 | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
-| `group-suite.teachPageSize` | number | 否 | `10` | — |
-| `group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
-| `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
+| `group-suite.keywordReply` | boolean | 否 | `false` | 开启后按词库自动回复匹配的消息（只能在全局修改） |
+| `group-suite.basePointsMin` | number | 否 | `10` | 每次签到随机获得的基础积分下限 |
+| `group-suite.basePointsMax` | number | 否 | `30` | 每次签到随机获得的基础积分上限 |
+| `group-suite.streakBonus` | number | 否 | `5` | 连续签到每多一天额外奖励的积分 |
+| `group-suite.streakCap` | number | 否 | `50` | 连续签到额外奖励的最高积分 |
+| `group-suite.rankSize` | number | 否 | `10` | 签到与发言排行榜显示的人数 |
+| `group-suite.teachMaxPerGroup` | number | 否 | `200` | 每个群最多保存的问答条数 |
+| `group-suite.teachCooldownMs` | number | 否 | `3000` | 同一成员两次教学之间的最短间隔 |
+| `group-suite.teachAllowRegex` | boolean | 否 | `false` | 允许成员教学正则表达式规则。默认关闭：正则会对每条入站消息执行；只接受结构安全的表达式，并且只对不超过 200 字的消息尝试匹配。 |
+| `group-suite.teachPageSize` | number | 否 | `10` | teach-list 每页显示的问答条数 |
+| `group-suite.welcomeMessage` | string | 否 | `""` | 新成员入群时发送的文本，留空则关闭；{name} 和 {id} 代表新成员。 |
+| `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | 发送欢迎语的精确会话名单。不填写时欢迎所有群；填 [] 则不欢迎任何会话。未填写父容器或话题时只匹配没有它们的会话，不支持通配。 |
 | `group-suite.welcomeConversations[].endpoint` | object | 是 | — | — |
 | `group-suite.welcomeConversations[].endpoint.adapter` | string | 是 | — | — |
 | `group-suite.welcomeConversations[].endpoint.id` | string | 是 | — | — |
@@ -2422,7 +2423,7 @@ _该 Schema 没有声明字段。_
 | `group-suite.welcomeConversations[].parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `group-suite.welcomeConversations[].parent.id` | string | 是 | — | — |
 | `group-suite.welcomeConversations[].threadId` | string | 否 | — | — |
-| `group-suite.ephemeralKeywords` | boolean | 否 | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
+| `group-suite.ephemeralKeywords` | boolean | 否 | `false` | 显式使用不持久化的临时词库。为 false 时，自动回复要求启动时有数据库服务，词库管理在使用时要求持久状态服务。 |
 
 ### ledger
 
@@ -2450,27 +2451,27 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `lottery.pickCount` | number | 否 | `5` | — |
-| `lottery.scheduleCron` | string | 否 | `"0 0 18 * * *"` | — |
-| `lottery.historyLimit` | number | 否 | `500` | — |
-| `lottery.scheduleEnabled` | boolean | 否 | `true` | — |
-| `lottery.backtestEnabled` | boolean | 否 | `true` | — |
-| `lottery.backtestWindow` | number | 否 | `50` | — |
-| `lottery.backtestRandomTrials` | number | 否 | `64` | — |
-| `lottery.backtestMinHistory` | number | 否 | `30` | — |
-| `lottery.backtestAdaptive` | boolean | 否 | `true` | — |
-| `lottery.weightPersistEnabled` | boolean | 否 | `true` | — |
-| `lottery.weightHoldoutFallback` | boolean | 否 | `true` | — |
-| `lottery.games` | array&lt;string&gt; | 否 | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
-| `lottery.pushTargets` | array&lt;object&gt; | 否 | `[]` | OutboundHost push destinations for cron/publish reports |
+| `lottery.pickCount` | number | 否 | `5` | 每组推荐号码的个数 |
+| `lottery.scheduleCron` | string | 否 | `"0 0 18 * * *"` | 定时生成推荐的 6 段 Cron 表达式 |
+| `lottery.historyLimit` | number | 否 | `500` | 分析时读取的最多历史开奖期数 |
+| `lottery.scheduleEnabled` | boolean | 否 | `true` | 按定时推荐时间自动生成并推送推荐 |
+| `lottery.backtestEnabled` | boolean | 否 | `true` | 生成推荐前用历史数据回测模型 |
+| `lottery.backtestWindow` | number | 否 | `50` | 回测抽样的最近期数 |
+| `lottery.backtestRandomTrials` | number | 否 | `64` | 回测时随机基线的模拟次数 |
+| `lottery.backtestMinHistory` | number | 否 | `30` | 历史期数少于此值时不回测 |
+| `lottery.backtestAdaptive` | boolean | 否 | `true` | 回测时逐期调整模型权重 |
+| `lottery.weightPersistEnabled` | boolean | 否 | `true` | 模拟或复盘后把权重写入数据库 |
+| `lottery.weightHoldoutFallback` | boolean | 否 | `true` | 近期 holdout 表现不如随机时，推荐改用默认权重 |
+| `lottery.games` | array&lt;string&gt; | 否 | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | 启用的彩票玩法（快乐8、双色球、大乐透、福彩3D、排列3、排列5） |
+| `lottery.pushTargets` | array&lt;object&gt; | 否 | `[]` | 定时与开奖报告的推送会话 |
 | `lottery.pushTargets[].adapter` | string | 是 | — | — |
 | `lottery.pushTargets[].endpointKey` | string | 否 | — | — |
 | `lottery.pushTargets[].channelType` | string | 否 | `"private"` | — |
 | `lottery.pushTargets[].channelId` | string | 是 | — | — |
 | `lottery.kl8` | object | 否 | — | — |
-| `lottery.kl8.pickCount` | number | 否 | `5` | — |
-| `lottery.kl8.recommendGroups` | number | 否 | `3` | — |
-| `lottery.kl8.groupStrategies` | array&lt;string&gt; | 否 | `["balanced","hot","cold"]` | — |
+| `lottery.kl8.pickCount` | number | 否 | `5` | 快乐8 每组推荐几个号码 |
+| `lottery.kl8.recommendGroups` | number | 否 | `3` | 快乐8 每次推荐的组数 |
+| `lottery.kl8.groupStrategies` | array&lt;string&gt; | 否 | `["balanced","hot","cold"]` | 每组使用的选号策略（均衡、热号、冷号） |
 
 ### music
 
@@ -2486,14 +2487,14 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `nettools.cooldownSeconds` | integer | 否 | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
-| `nettools.requestTimeoutMs` | integer | 否 | `8000` | Per-attempt timeout for each external HTTP request, in milliseconds |
-| `nettools.maxRetries` | integer | 否 | `2` | Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter |
-| `nettools.pingMaxNodes` | integer | 否 | `4` | Number of check-host.net probe nodes used by ping |
-| `nettools.pingPollIntervalMs` | integer | 否 | `2000` | Wait between ping result polls, in milliseconds |
-| `nettools.pingMaxPolls` | integer | 否 | `5` | Maximum number of ping result polls before reporting partial results |
-| `nettools.dohProviders` | array&lt;string: `"cloudflare"`, `"alidns"`, `"google"`&gt; | 否 | `["cloudflare","alidns","google"]` | DNS-over-HTTPS providers in fallback order |
-| `nettools.priceListLimit` | integer | 否 | `8` | Number of registrars shown in a domain price comparison |
+| `nettools.cooldownSeconds` | integer | 否 | `10` | 每个用户的冷却秒数，所有网络工具命令和工具共用；0 表示不限制 |
+| `nettools.requestTimeoutMs` | integer | 否 | `8000` | 每次外部 HTTP 请求的超时 |
+| `nettools.maxRetries` | integer | 否 | `2` | 网络错误、超时、429 与 5xx 的重试次数（指数退避并加入随机抖动） |
+| `nettools.pingMaxNodes` | integer | 否 | `4` | ping 使用的 check-host.net 探测节点数 |
+| `nettools.pingPollIntervalMs` | integer | 否 | `2000` | 两次查询 ping 结果之间的等待时间 |
+| `nettools.pingMaxPolls` | integer | 否 | `5` | 超过此次数仍未完成时返回部分结果 |
+| `nettools.dohProviders` | array&lt;string: `"cloudflare"`, `"alidns"`, `"google"`&gt; | 否 | `["cloudflare","alidns","google"]` | DNS-over-HTTPS 服务，按顺序回退 |
+| `nettools.priceListLimit` | integer | 否 | `8` | 域名比价显示的注册商数量 |
 
 ### qrcode
 
@@ -2537,9 +2538,9 @@ _该 Schema 没有声明字段。_
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `rss.pollCron` | string | 否 | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
-| `rss.maxPerGroup` | number | 否 | `30` | — |
-| `rss.maxItems` | number | 否 | `5` | — |
-| `rss.timeout` | number | 否 | `15000` | — |
+| `rss.maxPerGroup` | number | 否 | `30` | 每个会话最多订阅的 feed 数量 |
+| `rss.maxItems` | number | 否 | `5` | 一次推送最多展示的文章条数，其余只提示数量 |
+| `rss.timeout` | number | 否 | `15000` | 拉取一次 feed 的超时 |
 | `rss.allowPrivateNetwork` | boolean | 否 | `false` | 允许订阅回环/内网地址上的 feed（如自建 RSSHub）。默认拒绝，因为订阅地址来自聊天用户。 |
 
 ### short-url

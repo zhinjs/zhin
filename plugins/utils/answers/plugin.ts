@@ -11,9 +11,6 @@ import { answersConfigStore, quizServiceStore } from './src/runtime.js';
  */
 export default definePlugin<AnswersConfig>({
   name: 'answers',
-  metadata: {
-    displayName: '答案之书',
-  },
   setup(context) {
     quizServiceStore.provide(context, new QuizService());
     // ADR 0050 / 0055: quiz settings may differ per adapter / account / conversation (in place, no reload).

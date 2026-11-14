@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-onebot12",
   "version": "1.1.29",
-  "description": "Zhin.js OneBot 12 adapter for Plugin Runtime (WebSocket client)",
+  "description": "OneBot 12 adapter: forward WebSocket client, plus HTTP webhook and reverse WS.",
+  "keywords": [
+    "zhin.js",
+    "onebot",
+    "onebot12",
+    "websocket"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -30,15 +40,6 @@
     "lib",
     "README.md",
     "CHANGELOG.md"
-  ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "onebot",
-    "onebot12",
-    "chatbot"
   ],
   "license": "MIT",
   "repository": {
@@ -82,11 +83,6 @@
       "optional": true
     }
   },
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org",
@@ -120,6 +116,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "OneBot 12 Adapter",
+      "displayNameI18n": {
+        "zh-CN": "OneBot 12 适配器",
+        "en": "OneBot 12 Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "OneBot 12 标准适配器：正向 WebSocket 客户端，也支持 HTTP Webhook 与反向 WS。",
+        "en": "OneBot 12 adapter: forward WebSocket client, plus HTTP webhook and reverse WS."
+      },
+      "category": "adapter"
+    }
   }
 }

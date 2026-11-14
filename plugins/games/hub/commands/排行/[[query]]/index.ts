@@ -21,8 +21,8 @@ function formatLeaderboard(index: GameIndex, gameId: string, entries: Leaderboar
 }
 
 export default defineCommand({
-  alias: ['game-ranking'],
-  preferredAliasI18n: { en: 'game-ranking' },
+  alias: ['game-ranking', 'game ranking'],
+  preferredAliasI18n: { en: 'game ranking' },
   description: '查看本群某游戏排行榜', descriptionI18n: { en: "View this group's leaderboard for a game" },
   params: { query: { type: 'string', default: '' } },
   async execute({ input, params, project, locale, formatCommand }) {

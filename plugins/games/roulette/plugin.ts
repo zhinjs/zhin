@@ -18,9 +18,6 @@ import {
  */
 export default defineGamePlugin<RouletteServices, RouletteSessionRow, Partial<RouletteConfig>>({
   name: 'roulette',
-  metadata: {
-    displayName: 'Russian Roulette',
-  },
   game: {
     commandPath: 'roulette',
     titleI18n: { en: 'Roulette' },

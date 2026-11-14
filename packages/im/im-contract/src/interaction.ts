@@ -13,10 +13,15 @@ export interface UserInteractionControl {
   readonly signal?: AbortSignal;
 }
 
-/** What a prompt is for, so a surface can present it accordingly (`approval`: an operation confirmation). */
+/**
+ * Why the Host asks. Presentation only: it never changes parsing, timeouts or who may answer.
+ * `approval` marks a human approval of an operation (tool / command authority), so a surface can
+ * show it as "needs your confirmation" instead of an ordinary choice (game card, menu page).
+ */
 export type UserInteractionPurpose = 'approval';
 
 interface UserInteractionRequestBase extends UserInteractionContent, UserInteractionControl {
+  /** Optional semantic marker carried onto the rendered prompt (keyboard segment `data.purpose`). */
   readonly purpose?: UserInteractionPurpose;
 }
 

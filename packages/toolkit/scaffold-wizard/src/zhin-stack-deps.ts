@@ -122,6 +122,15 @@ export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 /** create-zhin 生成项目固定使用的 pnpm 版本。 */
 export const CREATE_BOT_PACKAGE_MANAGER = 'pnpm@11.27.1';
 
+/**
+ * Packages in the `@zhin.js/gateway` dependency tree whose install scripts compile a native addon:
+ * `node-pty` (the gateway's optional dependency, needed by the Console terminal), `ssh2` (optional
+ * dependency; its install script builds an optional crypto binding) and `cpu-features` (optional
+ * dependency of `ssh2`). pnpm 10+ skips dependency build scripts unless a package is allowed, and
+ * pnpm 11 only reads `allowBuilds` in `pnpm-workspace.yaml`.
+ */
+export const GATEWAY_NATIVE_BUILD_DEPENDENCIES: readonly string[] = Object.freeze(['node-pty', 'ssh2', 'cpu-features']);
+
 /** create-zhin 生成项目的 pnpm-workspace.yaml 配置。 */
 export function getCreateBotPnpmWorkspaceConfig(): Record<string, unknown> {
   return {
@@ -129,6 +138,7 @@ export function getCreateBotPnpmWorkspaceConfig(): Record<string, unknown> {
     strictPeerDependencies: false,
     allowBuilds: {
       esbuild: true,
+      ...Object.fromEntries(GATEWAY_NATIVE_BUILD_DEPENDENCIES.map(name => [name, true])),
     },
   };
 }

@@ -1,7 +1,41 @@
-import { getLogger, LogLevel } from '@zhin.js/logger'
+import chalk from 'chalk'
+import {
+  DefaultFormatter,
+  getLogger,
+  LogLevel,
+  parseLogLevel,
+  type LogEntry,
+  type LogFormatter,
+  type LogTransport,
+} from '@zhin.js/logger'
+import { isCliVerbose } from './cli-flags.js'
+
+/**
+ * Diagnostic logging of the CLI (#1250). It writes to **stderr**, so a command's results on stdout
+ * (see `output.ts`) stay clean for reading and piping. Without `--verbose` a line is just the
+ * message (warnings and errors keep a short marker); with `--verbose` (or `ZHIN_CLI_VERBOSE=1`) it
+ * gets the usual `[time][LEVEL] [CLI]` prefix.
+ */
+const verboseFormatter = new DefaultFormatter()
+
+export const cliLogFormatter: LogFormatter = {
+  format(entry: LogEntry): string {
+    if (isCliVerbose()) return verboseFormatter.format(entry)
+    const level = parseLogLevel(entry.level)
+    if (level === LogLevel.ERROR) return `${chalk.red('✖')} ${entry.message}`
+    if (level === LogLevel.WARN) return `${chalk.yellow('⚠')} ${entry.message}`
+    return entry.message
+  },
+}
+
+export const stderrTransport: LogTransport = {
+  write(formatted: string): void {
+    process.stderr.write(`${formatted}\n`)
+  },
+}
 
 // 创建CLI专用的logger
-const cliLogger = getLogger('CLI')
+const cliLogger = getLogger('CLI', { formatter: cliLogFormatter, transports: [stderrTransport] })
 
 // 根据环境变量设置日志级别
 const logLevel = process.env.ZHIN_LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info')
@@ -68,17 +102,6 @@ export const logger = {
     }
   },
   
-  log: (message: string, ...args: any[]) => {
-    if (args.length > 0) {
-      const fullMessage = message + ' ' + args.map(arg => 
-        typeof arg === 'string' ? arg : JSON.stringify(arg)
-      ).join(' ')
-      cliLogger.info(fullMessage)
-    } else {
-      cliLogger.info(message)
-    }
-  },
-
   debug: (message: string, ...args: any[]) => {
     if (args.length > 0) {
       const fullMessage = message + ' ' + args.map(arg => 

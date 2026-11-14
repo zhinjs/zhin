@@ -7,6 +7,8 @@ export class BilibiliLiveAdapter extends Adapter<BilibiliLiveEndpoint, BilibiliL
   constructor(_context: AdapterContext<BilibiliLiveEndpointConfig>) { super(); }
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['sessdata', 'biliJct', 'apiBaseUrl']; }
+  /** Masked in start-failure reasons: the session cookies (the Console marks them secret). */
+  override get configurationCredentialFields(): readonly string[] { return ['sessdata', 'biliJct', 'buvid3']; }
   override get configurationUpdateFields(): readonly string[] {
     return ['roomId', 'sessdata', 'biliJct', 'buvid3', 'sendMode', 'maxLength', 'maxChunks', 'minSendIntervalSec', 'apiBaseUrl', 'liveApiBaseUrl'];
   }

@@ -7,7 +7,10 @@ import {
   type PluginConsoleRpcInput,
   type PluginConsoleRpcJson,
 } from 'zhin.js';
+import { createDeliveryTarget, type DeliveryTarget } from 'zhin.js/plugin-runtime';
+import { subscriptionScope, type ChannelInfo } from './channel.js';
 import { getRssSubs, listAllSubscriptions } from './db-store.js';
+import { subscriptionMigrationScope } from './target-migration.js';
 import { cleanOldSeen, pollAllFeeds } from './poll.js';
 import { rssRuntimeToken, type RssRuntime } from './runtime.js';
 
@@ -27,6 +30,31 @@ function sanitizeFeedUrl(rawUrl: string): string {
   } catch {
     return rawUrl;
   }
+}
+
+/**
+ * The Console page's conversation picker submits the chosen `DeliveryTarget` (as JSON). Thread and
+ * parent-channel addresses are rejected, like the chat command does.
+ */
+export function consoleSubscriptionTarget(raw: unknown): DeliveryTarget {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      throw new PluginConsoleRpcError('invalid_input', '推送会话格式无效，请重新选择');
+    }
+  }
+  let target: DeliveryTarget;
+  try {
+    target = createDeliveryTarget({ conversation: value as DeliveryTarget });
+  } catch {
+    throw new PluginConsoleRpcError('invalid_input', '推送会话格式无效，请重新选择');
+  }
+  if (target.parent !== undefined || target.threadId !== undefined) {
+    throw new PluginConsoleRpcError('invalid_input', '暂不支持线程／父频道寻址的订阅');
+  }
+  return target;
 }
 
 function resolveRssRuntime(call: PluginConsoleRpcCall, fallback?: RssRuntime): RssRuntime {
@@ -55,6 +83,8 @@ export function createRssConsoleRpc(defaultRuntime?: RssRuntime): PluginConsoleR
           subscriptions: allSubscriptions.slice(0, 100).map((sub) => ({
             ...sub,
             url: sanitizeFeedUrl(sub.url),
+            // Rows without an exact target (older Console rows) show their stored address as text.
+            conversation: sub.conversation ?? `${sub.channelType}:${sub.channelId}`,
           })),
         } as unknown as PluginConsoleRpcJson;
       },
@@ -79,6 +109,52 @@ export function createRssConsoleRpc(defaultRuntime?: RssRuntime): PluginConsoleR
             typeof input.title === 'string' && input.title.trim()
               ? input.title.trim()
               : parsedUrl.hostname;
+          const Subs = getRssSubs(runtime.db);
+          if (!Subs) {
+            throw new PluginConsoleRpcError('unavailable', 'RSS 订阅表尚未初始化');
+          }
+          if (input.conversation !== undefined && input.conversation !== '') {
+            const target = consoleSubscriptionTarget(input.conversation);
+            const channel: ChannelInfo = {
+              target,
+              adapterName: target.endpoint.adapter,
+              endpointKey: target.endpoint.id,
+              channelType: target.kind,
+              channelId: target.id,
+              senderId: 'console',
+              senderName: 'Console',
+            };
+            const run = async (): Promise<PluginConsoleRpcJson> => {
+              const existing = await Subs.select().where({ url, ...subscriptionScope(channel) });
+              if (existing.length > 0) {
+                throw new PluginConsoleRpcError('conflict', '该会话已订阅此 RSS 源');
+              }
+              await Subs.insert({
+                url,
+                feed_title: title,
+                ...subscriptionScope(channel),
+                creator_id: 'console',
+                creator_name: 'Console',
+                created_at: new Date().toISOString(),
+                locale: runtime.locale ?? 'zh-CN',
+              });
+              return {
+                ok: true,
+                url,
+                title,
+                conversation: target as unknown as PluginConsoleRpcJson,
+                message: `已添加 RSS 订阅：${title} (${url})`,
+              };
+            };
+            return runtime.migrationScopes
+              ? runtime.migrationScopes.run({
+                  scope: subscriptionMigrationScope({ target, adapterName: channel.adapterName,
+                    endpointKey: channel.endpointKey, channelType: channel.channelType, channelId: channel.channelId }),
+                  run,
+                })
+              : run();
+          }
+          // Legacy manual fields (platform + target id, no account): kept for existing callers.
           const adapter =
             typeof input.adapter === 'string' && input.adapter.trim()
               ? input.adapter.trim()
@@ -88,10 +164,6 @@ export function createRssConsoleRpc(defaultRuntime?: RssRuntime): PluginConsoleR
             typeof input.targetId === 'string' && input.targetId.trim()
               ? input.targetId.trim()
               : 'console';
-          const Subs = getRssSubs(runtime.db);
-          if (!Subs) {
-            throw new PluginConsoleRpcError('unavailable', 'RSS 订阅表尚未初始化');
-          }
           await Subs.insert({
             url,
             feed_title: title,

@@ -376,6 +376,7 @@ export function createRuntimeApprovalPort(options: {
         // No `default`: a timeout must surface as timed_out, not as a silent rejection.
         const selected = await options.interaction.ask({
           type: 'select',
+          // Presentation marker only: lets a surface (Sandbox Console) label this as an approval.
           purpose: 'approval',
           title: approvalText(locale, 'title'),
           description: input.question,

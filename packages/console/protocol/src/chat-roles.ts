@@ -54,7 +54,14 @@ export interface ConsoleChatRoleEntry {
   readonly redacted?: true;
   readonly role: ConsoleChatRole;
   readonly source: ConsoleChatRoleSource;
+  /** Audit id of the grantor (`user:<id>`, `api-token:<id>`, `chat:<adapter>:<userId>`, `migration:<source>`, `bootstrap`). */
   readonly grantedBy?: string;
+  /**
+   * Readable grantor label when the instance can tell it without reading other accounts (#1250):
+   * the caller's own display name for grants they made, `<adapter> 用户 <id>` for chat grants,
+   * `配置迁移`, `初始化令牌`. Absent otherwise — show `grantedBy` (e.g. a short id) then.
+   */
+  readonly grantedByDisplayName?: string;
   readonly grantedAt?: number;
 }
 

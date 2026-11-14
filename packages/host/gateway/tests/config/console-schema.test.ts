@@ -23,6 +23,14 @@ describe('jsonSchemaToConsoleSchema', () => {
     expect(jsonSchemaToConsoleSchema({ type: 'string', enum: ['a'], 'x-zhin-config': { options: [{ label: '选项 A', value: 'a' }] } })).toMatchObject({ options: [{ label: '选项 A', value: 'a' }] });
   });
 
+  it('keeps per-locale field labels for the Console to pick by interface language', () => {
+    const labels = { 'zh-CN': { title: '教学冷却', description: '两次教学的最短间隔' }, en: { title: 'Teach cooldown' } };
+    expect(jsonSchemaToConsoleSchema({ type: 'object', properties: { teachCooldownMs: { type: 'number', 'x-i18n': labels } } }))
+      .toMatchObject({ object: { teachCooldownMs: { key: 'teachCooldownMs', 'x-i18n': labels } } });
+    expect(jsonSchemaToConsoleSchema({ type: 'string', description: 'Mode', 'x-descriptionZh': '模式', 'x-i18n': { 'zh-CN': { title: '模式' } } }))
+      .toMatchObject({ description: '模式', 'x-i18n': { 'zh-CN': { title: '模式' }, en: { description: 'Mode' } } });
+  });
+
   it('passes through canonical Console Schema JSON', () => {
     const input = { type: 'object', object: { name: { type: 'string', key: 'name' } } };
     expect(jsonSchemaToConsoleSchema(input)).toEqual(input);

@@ -29,6 +29,12 @@ const INTROSPECTION_PAGE_SIZES = {
 
 type IntrospectionKind = keyof typeof INTROSPECTION_PAGE_SIZES;
 
+/** Owning plugin of a capability row (`ConsoleIntrospectionOwner`, #1250): searchable by `q`. */
+const OWNER_FIELDS: ReadonlyArray<(item: unknown) => string | undefined> = [
+  (item) => stringProp(item, 'pluginInstance'),
+  (item) => stringProp(item, 'pluginPackage'),
+];
+
 // ---------------------------------------------------------------------------
 // Runtime snapshot introspection
 // ---------------------------------------------------------------------------
@@ -51,6 +57,7 @@ export function registerIntrospectionRoutes(
         (c) => stringProp(c, 'pattern'),
         (c) => stringProp(c, 'desc'),
         (c) => stringProp(c, 'plugin'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -62,6 +69,7 @@ export function registerIntrospectionRoutes(
         (m) => stringProp(m, 'phase'),
         (m) => stringProp(m, 'target'),
         (m) => stringProp(m, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -71,6 +79,7 @@ export function registerIntrospectionRoutes(
         (c) => stringProp(c, 'name'),
         (c) => stringProp(c, 'owner'),
         (c) => stringProp(c, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -101,6 +110,7 @@ export function registerIntrospectionRoutes(
         (t) => stringProp(t, 'name'),
         (t) => stringProp(t, 'source'),
         (t) => stringProp(t, 'description'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -114,6 +124,7 @@ export function registerIntrospectionRoutes(
         (section) => stringProp(section, 'layer'),
         (section) => stringProp(section, 'retention'),
         (section) => stringProp(section, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {

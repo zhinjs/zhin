@@ -13,6 +13,10 @@ interface ReadinessAdapterEndpointDescription {
   readonly connected?: boolean;
   readonly admitted?: boolean;
   readonly transportState?: string;
+  readonly phase?: string;
+  readonly startAttempt?: number;
+  readonly startFailure?: { readonly code: string };
+  readonly nextRetryAt?: number;
 }
 
 interface ReadinessAdapterIndexLike {
@@ -47,11 +51,30 @@ export interface ReadinessCheck {
   readonly remediation?: string;
 }
 
+/**
+ * One account of the committed generation. Informational only: account login never decides
+ * readiness unless `http.readiness.endpoints` requires it (then through `checks`).
+ */
+export interface ReadinessEndpoint {
+  readonly owner: string;
+  /** Stable slot name (the form `http.readiness.endpoints[].name` uses), never a display name. */
+  readonly name: string;
+  readonly phase: string;
+  /** Start attempts of the background start supervision (0 = none pending). */
+  readonly attempt: number;
+  /** Code of the last failed start, while not online. */
+  readonly failure?: string;
+  /** ISO time of the next automatic start retry. */
+  readonly nextRetryAt?: string;
+}
+
 export interface ReadinessReport {
   readonly ready: boolean;
   readonly generation?: number;
   readonly checkedAt: string;
   readonly checks: readonly ReadinessCheck[];
+  /** Account start states, for the authenticated details only (never in `/pub/ready`). */
+  readonly endpoints?: readonly ReadinessEndpoint[];
 }
 
 export interface ReadinessSource {
@@ -109,7 +132,8 @@ export function readReadiness(source: ReadinessSource): ReadinessReport {
         });
       }
     }
-    return { ready: checks.every((check) => check.ready), generation: snapshot.generation, checkedAt, checks };
+    return { ready: checks.every((check) => check.ready), generation: snapshot.generation, checkedAt, checks,
+      endpoints: endpoints.map(readinessEndpoint) };
   } catch {
     // Exception text may contain credentials, SQL or filesystem paths.
     return { ready: false, checkedAt, checks: [{
@@ -119,6 +143,17 @@ export function readReadiness(source: ReadinessSource): ReadinessReport {
   } finally {
     lease?.release();
   }
+}
+
+function readinessEndpoint(row: ReadinessAdapterEndpointDescription): ReadinessEndpoint {
+  return {
+    owner: row.owner,
+    name: String(row.id).split('\0').at(-1) ?? String(row.id),
+    phase: row.phase ?? (row.connected ? 'online' : 'offline'),
+    attempt: row.startAttempt ?? 0,
+    ...(row.startFailure ? { failure: row.startFailure.code } : {}),
+    ...(row.nextRetryAt !== undefined ? { nextRetryAt: new Date(row.nextRetryAt).toISOString() } : {}),
+  };
 }
 
 /** Process routes remain available before first commit and across generation replacement. */

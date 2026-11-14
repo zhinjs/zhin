@@ -1,7 +1,11 @@
 import {
   CONFIG_PATCH_LIMITS,
+  CONSOLE_SEND_FAILURE_MESSAGES,
   ENDPOINT_RPC,
+  classifyConsoleSendFailure,
   type ConsoleConfigApplicationStatus,
+  type ConsoleSendFailure,
+  type ConsoleSendFailureStatus,
 } from '@zhin.js/console-protocol';
 import type {
   ConversationAddress,
@@ -27,6 +31,43 @@ export function wireConversation(
     kind,
     id: channelId,
     ...(parentKind && parentId ? { parent: { kind: parentKind, id: parentId } } : {}),
+  };
+}
+
+const SEND_FAILURE_STATUSES: ReadonlySet<string> = new Set(['failed', 'rejected', 'unsupported', 'suppressed']);
+
+/**
+ * Structural read of an outbound failure (#1250): Core's `EndpointDeliveryError` carries `code`,
+ * `disposition` and the canonical receipt; host/http must not import Core, so only those fields are
+ * read. `endpoint not found` is the Endpoint directory's plain error. An error counts as a send
+ * failure only when its `code` is a known delivery code or it carries a `disposition` / `receipt`;
+ * anything else (a Node `ENOENT`, a database error, …) is unclassified and keeps its own message.
+ */
+export function consoleSendFailure(error: unknown): ConsoleSendFailure | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const record = error as Error & { code?: unknown; disposition?: unknown; receipt?: unknown };
+  if (typeof record.code !== 'string' || !record.code) {
+    return error.message === 'endpoint not found'
+      ? { code: 'endpoint_not_found', reason: 'endpoint_not_found', status: 'failed' }
+      : undefined;
+  }
+  // Every known delivery code maps to a reason other than the catch-all `failed`.
+  const knownCode = classifyConsoleSendFailure(record.code) !== 'failed';
+  const delivery = typeof record.disposition === 'string' || (!!record.receipt && typeof record.receipt === 'object');
+  if (!knownCode && !delivery) return undefined;
+  const receipt = record.receipt && typeof record.receipt === 'object'
+    ? record.receipt as { status?: unknown; failure?: { retryable?: unknown; deliveryUnknown?: unknown } }
+    : undefined;
+  const status: ConsoleSendFailureStatus = record.disposition === 'unknown' || receipt?.failure?.deliveryUnknown === true
+    ? 'unknown'
+    : typeof receipt?.status === 'string' && SEND_FAILURE_STATUSES.has(receipt.status)
+      ? receipt.status as ConsoleSendFailureStatus
+      : record.disposition === 'rejected' ? 'rejected' : 'failed';
+  return {
+    code: record.code,
+    reason: classifyConsoleSendFailure(record.code, status),
+    status,
+    ...(receipt?.failure?.retryable === true ? { retryable: true } : {}),
   };
 }
 
@@ -145,12 +186,12 @@ export async function dispatchHostResourceConsoleRpc(
           emit({ requestId, error: 'filename is required' });
           return true;
         }
-        if (!ctx.readEnvFile) {
+        // Masked only (issue #1250): the file as written is never answered here.
+        if (!ctx.readEnvFileView) {
           emit({ requestId, error: 'Env read is not configured' });
           return true;
         }
-        const content = await ctx.readEnvFile(filename);
-        emit({ requestId, data: { content } });
+        emit({ requestId, data: await ctx.readEnvFileView(filename) });
       } catch (error) {
         emit({
           requestId,
@@ -159,23 +200,70 @@ export async function dispatchHostResourceConsoleRpc(
       }
       return true;
     }
-    case 'env:save': {
+    case 'env:reveal': {
       try {
         const filename = String(message.filename ?? '');
-        const content = message.content;
+        const key = message.key;
         if (!filename) {
           emit({ requestId, error: 'filename is required' });
           return true;
         }
-        if (typeof content !== 'string') {
-          emit({ requestId, error: 'content field is required' });
+        if (typeof key !== 'string' || !key) {
+          emit({ requestId, error: 'key is required' });
           return true;
         }
-        if (!ctx.writeEnvFile) {
+        if (!ctx.revealEnvVariable) {
+          emit({ requestId, error: 'Env reveal is not configured' });
+          return true;
+        }
+        emit({ requestId, data: await ctx.revealEnvVariable(filename, key) });
+      } catch (error) {
+        emit({
+          requestId,
+          error: `Failed to reveal env variable: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+      return true;
+    }
+    case 'env:save': {
+      try {
+        const filename = String(message.filename ?? '');
+        if (!filename) {
+          emit({ requestId, error: 'filename is required' });
+          return true;
+        }
+        const hasChanges = message.changes !== undefined;
+        const hasContent = message.content !== undefined;
+        if (hasChanges && hasContent) {
+          emit({ requestId, error: 'changes 与 content 只能提供一个' });
+          return true;
+        }
+        if (hasChanges) {
+          if (!ctx.updateEnvVariables) {
+            emit({ requestId, error: 'Env write is not configured' });
+            return true;
+          }
+          const { changed } = await ctx.updateEnvVariables(filename, message.changes);
+          emit({ requestId, data: { success: true, message: `环境文件已保存: ${filename}`, changed } });
+          return true;
+        }
+        if (typeof message.content !== 'string') {
+          emit({ requestId, error: 'changes field is required' });
+          return true;
+        }
+        // The whole-file form must be asked for: an older Console sends back what `env:get` showed it.
+        if (message.mode !== 'replace') {
+          emit({
+            requestId,
+            error: '此 Host 只接受逐键保存（changes）；整文件保存需显式声明 mode: "replace"。请升级 Console 后重试',
+          });
+          return true;
+        }
+        if (!ctx.replaceEnvFile) {
           emit({ requestId, error: 'Env write is not configured' });
           return true;
         }
-        await ctx.writeEnvFile(filename, content);
+        await ctx.replaceEnvFile(filename, message.content);
         emit({ requestId, data: { success: true, message: `环境文件已保存: ${filename}` } });
       } catch (error) {
         emit({
@@ -555,9 +643,11 @@ export async function dispatchHostResourceConsoleRpc(
         });
         emit({ requestId, data: { messageId: result.messageId } });
       } catch (error) {
+        const failure = consoleSendFailure(error);
         emit({
           requestId,
-          error: error instanceof Error ? error.message : String(error),
+          error: failure ? CONSOLE_SEND_FAILURE_MESSAGES[failure.reason] : error instanceof Error ? error.message : String(error),
+          ...(failure ? { data: failure } : {}),
         });
       }
       return true;

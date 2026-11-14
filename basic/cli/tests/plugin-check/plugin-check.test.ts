@@ -156,6 +156,18 @@ describe('plugin source checks', () => {
     expect(problems.errors).toEqual([expect.stringContaining('约定目录 middlewares/ 推断出 Feature @zhin.js/middleware')]);
   });
 
+  it('keeps marketplace metadata strict: an invalid category or locale is an error (the instance only warns)', () => {
+    const manifest = scaffoldManifest();
+    (manifest.zhin as Record<string, unknown>).metadata = { category: 'fun', displayNameI18n: { ja: 'デモ' } };
+    const directory = healthyPlugin(manifest);
+    const problems = { errors: [] as string[], warnings: [] as string[] };
+    checkZhinManifest(directory, manifest, problems);
+    expect(problems.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('metadata.category must be one of'),
+      expect.stringContaining('displayNameI18n.ja is not supported'),
+    ]));
+  });
+
   it('still reports an entry declared only through exports["./zhin"] as before', () => {
     const manifest = scaffoldManifest();
     delete (manifest.zhin as Record<string, unknown>).entry;

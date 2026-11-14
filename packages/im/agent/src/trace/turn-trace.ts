@@ -22,6 +22,7 @@ const MAX_TIMELINE_ENTRIES = 300;
 const MAX_SUBAGENTS = 20;
 const ARGS_SUMMARY_LENGTH = 200;
 const TEXT_SUMMARY_LENGTH = 300;
+export const TRIGGER_TEXT_LENGTH = 120;
 
 export type TurnTraceStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'unknown';
 export type TurnTraceToolStatus = 'running' | 'ok' | 'failed' | 'denied' | 'cancelled';
@@ -79,6 +80,29 @@ export interface TurnTraceTimelineEntry {
   readonly detail: string;
 }
 
+/**
+ * The inbound message that started the turn (#1250): redacted, truncated text, who sent it
+ * and where, and how long it waited between arriving and the turn starting (merge window,
+ * queue behind an earlier turn, capability discovery).
+ */
+export interface TurnTraceTrigger {
+  /** Secret-scrubbed text, at most {@link TRIGGER_TEXT_LENGTH} characters. */
+  readonly text: string;
+  readonly sender_id?: string;
+  readonly sender_name?: string;
+  /** `<kind>:<id>` of the conversation. */
+  readonly conversation?: string;
+  readonly message_id?: string;
+  /** Epoch milliseconds the runtime received the message. */
+  readonly received_at?: number;
+  /** `started_at - received_at`: time before the turn's timeline begins. */
+  readonly wait_before_start_ms?: number;
+  /** Messages folded into this turn by a merge window (1 = none). */
+  readonly merged_messages?: number;
+  /** Part of the wait spent queued behind an earlier turn of the session. */
+  readonly queued_ms?: number;
+}
+
 export interface TurnTraceTermination {
   readonly status: TurnTraceStatus;
   readonly code?: string;
@@ -91,6 +115,8 @@ export interface TurnTrace {
   readonly session_key: string;
   readonly principal?: TurnTracePrincipal;
   readonly origin?: ToolInvocationOrigin;
+  /** The message that started the turn (#1250). */
+  readonly trigger?: TurnTraceTrigger;
   readonly requests?: readonly TurnTraceRequest[];
   /** Epoch milliseconds. */
   readonly started_at: number;
@@ -125,7 +151,10 @@ export type TurnTraceNote =
   /** How the turn was admitted behind other turns of its session (#725). */
   | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
   /** #1250: the user was told that side-effect tools did not run (appended, sent as a follow-up, or that failed). */
-  | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>;
+  | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>
+  /** The inbound message that started the turn; recorded once (#1250). */
+  | Readonly<{ kind: 'trigger'; text: string; sender_id?: string; sender_name?: string; conversation?: string;
+      message_id?: string; received_at?: number; merged_messages?: number; queued_ms?: number }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -171,6 +200,7 @@ export class TurnTraceCollector {
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
   #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
+  #trigger: TurnTraceTrigger | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
   #dropped = 0;
@@ -270,6 +300,20 @@ export class TurnTraceCollector {
     } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
+    } else if (note.kind === 'trigger') {
+      if (this.#trigger) return;
+      const waited = note.received_at === undefined ? undefined : Math.max(0, this.#startedAt - note.received_at);
+      this.#trigger = Object.freeze({
+        text: clip(scrubSecrets(note.text.replace(/\s+/gu, ' ').trim()), TRIGGER_TEXT_LENGTH),
+        ...(note.sender_id ? { sender_id: note.sender_id } : {}),
+        ...(note.sender_name ? { sender_name: clip(scrubSecrets(note.sender_name), 60) } : {}),
+        ...(note.conversation ? { conversation: note.conversation } : {}),
+        ...(note.message_id ? { message_id: note.message_id } : {}),
+        ...(note.received_at !== undefined ? { received_at: note.received_at } : {}),
+        ...(waited !== undefined ? { wait_before_start_ms: waited } : {}),
+        ...(note.merged_messages !== undefined ? { merged_messages: note.merged_messages } : {}),
+        ...(note.queued_ms !== undefined ? { queued_ms: note.queued_ms } : {}),
+      });
     } else {
       this.#addTimeline('admission', describeAdmission(note));
     }
@@ -388,6 +432,7 @@ export class TurnTraceCollector {
       session_key: this.sessionKey,
       ...(this.#principal ? { principal: this.#principal } : {}),
       ...(this.#origin ? { origin: this.#origin } : {}),
+      ...(this.#trigger ? { trigger: this.#trigger } : {}),
       ...(this.#requests.size ? { requests: Object.freeze([...this.#requests.values()]) } : {}),
       started_at: this.#startedAt,
       ...(this.#endedAt !== undefined

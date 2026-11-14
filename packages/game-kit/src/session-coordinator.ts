@@ -17,7 +17,8 @@ export interface GameSessionAvailability {
   ): Promise<void>;
 }
 
-export class GameSessionConflictError extends Error {
+/** Sender-facing: command dispatch replies with `format(locale)` when a command lets it propagate. */
+export class GameSessionConflictError extends UserFacingError {
   constructor(
     readonly requestedGameId: string,
     readonly activeGameId: string,
@@ -29,7 +30,7 @@ export class GameSessionConflictError extends Error {
   }
 
   /** Format at the reply boundary; session admission has no current-user locale. */
-  format(locale?: Locale): string {
+  override format(locale?: Locale): string {
     return gameMessages(locale, 'conflict', { active: this.activeGameId, requested: this.requestedGameId });
   }
 }
@@ -67,4 +68,5 @@ export class GameSessionCoordinator implements GameSessionAvailability {
 
 }
 import type { Locale } from '@zhin.js/plugin-runtime';
+import { UserFacingError } from '@zhin.js/core/feature/command';
 import { gameMessages } from './messages.js';

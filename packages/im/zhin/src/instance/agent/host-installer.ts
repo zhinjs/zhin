@@ -23,7 +23,7 @@ import { installAgentPersistence } from '@zhin.js/agent/runtime';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
 import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   createVenueMembershipPort,
@@ -147,7 +147,7 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
-  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -323,7 +323,26 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       error: error instanceof Error ? error.message : String(error),
     })));
     const ingress = new CapabilityIngress();
-    const { bootstrapText, contextFiles } = await loadBootstrap(options.projectRoot);
+    let bootstrap = await loadBootstrap(options.projectRoot);
+    const { bootstrapText, contextFiles } = bootstrap;
+    // #1250: an edited SOUL / AGENTS / TOOLS file is re-read in place; it no longer rebuilds the
+    // Root generation (and with it every adapter Endpoint). Turns read the current bootstrap.
+    watchProjectFiles?.({
+      patterns: BOOTSTRAP_FILES,
+      async onChange({ files }) {
+        bootstrap = await loadBootstrap(options.projectRoot);
+        logger.info(formatCompact({
+          op: 'agent_bootstrap_reloaded',
+          files: files.map((file) => relative(options.projectRoot, file).split('\\').join('/')).join(','),
+          chars: bootstrap.bootstrapText.length,
+        }));
+      },
+    });
+    const knowledgeRoot = knowledgeIndex ? relative(options.projectRoot, knowledgeIndex.root).split('\\').join('/') : undefined;
+    if (knowledgeIndex && knowledgeRoot && !knowledgeRoot.startsWith('..') && !isAbsolute(knowledgeRoot)) {
+      // The knowledge index reads its directory on search; a change only drops its cache.
+      watchProjectFiles?.({ patterns: [`${knowledgeRoot}/**`], onChange: () => knowledgeIndex.invalidate() });
+    }
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
@@ -360,6 +379,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       bootstrapText,
       contextFiles,
+      bootstrap: () => ({ bootstrapContext: bootstrap.bootstrapText, contextFiles: bootstrap.contextFiles }),
     });
 
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);

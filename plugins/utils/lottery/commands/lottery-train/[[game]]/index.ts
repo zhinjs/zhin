@@ -13,6 +13,8 @@ import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: '使用全部历史数据训练权重',
+  alias: ['lottery train'],
+  preferredAliasI18n: { 'zh-CN': 'lottery train', en: 'lottery train' },
   descriptionI18n: { en: 'Full-history weight training' },
   params: { game: { type: 'string', default: '' } },
   async execute({ params, config, use, locale }) {

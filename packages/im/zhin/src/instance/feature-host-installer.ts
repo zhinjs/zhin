@@ -15,7 +15,7 @@ import {
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
 import {
-  defineFeatureOverrideTable, FeatureOverrideStore,
+  defineFeatureOverrideTable, FeatureOverrideStore, readWorkspaceConversationNames,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
 } from './console/module.js';
 import { installFeatureSelfService, readFeatureSelfServiceConfig, type FeatureSelfServiceConfig } from './feature-self-service.js';
@@ -92,7 +92,9 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       return Object.freeze([...seen.values()]);
     } finally { lease.release(); }
   };
-  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations });
+  // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
+  const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
     context.resources.provide(featureConversationOverridesToken, overrides.reader);

@@ -4,6 +4,7 @@ const STATUS: Readonly<Record<GatewayRpcErrorCode, number>> = {
   invalid_input: 400,
   forbidden: 403,
   unmapped: 403,
+  unknown_rpc: 404,
   conflict: 409,
   unavailable: 503,
   internal: 500,

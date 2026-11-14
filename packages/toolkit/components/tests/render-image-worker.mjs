@@ -7,6 +7,11 @@ import { createHtmlRenderer } from '../../html-renderer/src/index.ts';
 const requireRenderer = createRequire(new URL('../../html-renderer/package.json', import.meta.url));
 const cacheDir = await mkdtemp(join(tmpdir(), 'zhin-component-shotium-'));
 const renderer = createHtmlRenderer({ cacheDir });
+// Startup (module graph through tsx, Chromium launch) is load-dependent; do it before announcing
+// readiness so the parent times captures, not startup.
+let startupError;
+try { await renderer.render('<div style="width:8px;height:8px;background:#000"></div>', { width: 8, format: 'png', scale: 1 }); }
+catch (error) { startupError = error.stack ?? String(error); }
 process.on('message', async (request) => {
   if (request.stop) {
     try { await requireRenderer('@pixel.js/shotium').stop(); }
@@ -20,3 +25,4 @@ process.on('message', async (request) => {
     process.send({ id: request.id, error: error.stack ?? String(error) });
   }
 });
+process.send(startupError ? { ready: false, error: startupError } : { ready: true });

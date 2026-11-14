@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ModuleDependencyIndex } from '../src/module-dependency-index.js';
 
@@ -11,6 +11,36 @@ afterEach(async () => {
 });
 
 describe('ModuleDependencyIndex', () => {
+  it('does not traverse a package-name import that resolves outside the followed roots (#1250)', async () => {
+    const workspace = await fixture();
+    const project = join(workspace, 'project');
+    const framework = join(workspace, 'framework');
+    const local = join(project, 'plugins/weather');
+    for (const directory of [join(project, 'tools/lookup'), join(project, 'node_modules/@test'), framework, local]) {
+      await mkdir(directory, { recursive: true });
+    }
+    // Linked like pnpm does: the framework realpaths into sources outside the project.
+    await writeFile(join(framework, 'package.json'), JSON.stringify({ name: '@test/framework', type: 'module', exports: './index.ts' }));
+    await writeFile(join(framework, 'index.ts'), "import './internal.ts';\nexport const core = 1;\n");
+    await writeFile(join(framework, 'internal.ts'), 'export {};\n');
+    await writeFile(join(local, 'package.json'), JSON.stringify({ name: '@test/weather', type: 'module', exports: './wttr.ts' }));
+    await writeFile(join(local, 'wttr.ts'), 'export const forecast = 1;\n');
+    await symlink(framework, join(project, 'node_modules/@test/framework'), 'dir');
+    await symlink(local, join(project, 'node_modules/@test/weather'), 'dir');
+    const entry = join(project, 'tools/lookup/index.ts');
+    await writeFile(entry, "import '@test/framework';\nimport '@test/weather';\nexport default 1;\n");
+
+    const followed = await new ModuleDependencyIndex({
+      followPackageImport: (source) => !relative(project, source).startsWith('..'),
+    }).analyze(entry);
+    expect([...followed.dependencies]).toEqual([join(local, 'wttr.ts')]);
+
+    const unrestricted = await new ModuleDependencyIndex().analyze(entry);
+    expect([...unrestricted.dependencies].sort()).toEqual(
+      [join(framework, 'index.ts'), join(framework, 'internal.ts'), join(local, 'wttr.ts')].sort(),
+    );
+  });
+
   it('resolves package imports with ESM import conditions', async () => {
     const root = await fixture();
     const entry = join(root, 'commands/status/index.ts');

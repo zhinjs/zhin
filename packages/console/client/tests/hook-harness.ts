@@ -57,6 +57,8 @@ export function createHookEnv() {
         if (!Object.is(v, slots[at])) { slots[at] = v; dirty = true; }
       }];
     },
+    /** No providers are mounted by the harness: a context reads its default value. */
+    useContext(context: { _currentValue?: unknown }) { return context._currentValue; },
     useRef(initial: unknown) { const at = cursor++; return slots[at] ?? (slots[at] = { current: initial }); },
     useId() { const at = cursor++; return slots[at] ?? (slots[at] = `zk-id-${at}`); },
     useMemo(fn: () => unknown, deps: unknown[]) {

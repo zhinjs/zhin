@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-discord",
   "version": "1.1.30",
-  "description": "Zhin.js Discord adapter for Plugin Runtime (Gateway WebSocket)",
+  "description": "Discord adapter: direct messages, groups and guild channels over the Gateway WebSocket, no public URL needed.",
+  "keywords": [
+    "zhin.js",
+    "discord",
+    "gateway",
+    "websocket"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,19 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "discord",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -139,6 +136,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Discord Gateway Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Discord 适配器",
+        "en": "Discord Gateway Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "Discord 适配器：通过 Gateway WebSocket 收发私聊、群组与服务器频道消息，无需公网地址。",
+        "en": "Discord adapter: direct messages, groups and guild channels over the Gateway WebSocket, no public URL needed."
+      },
+      "category": "adapter"
+    }
   }
 }

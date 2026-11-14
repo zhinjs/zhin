@@ -19,6 +19,10 @@ const { HostInference } = await import(
     : '@zhin.js/agent/runtime'
 );
 assert.equal(typeof globalThis.gc, 'function');
+// Progress lines let the parent test watch for liveness instead of a total wall-clock budget:
+// transpiling the source graph and the forced full GCs take seconds of CPU on a busy machine.
+const step = (name) => console.log(`native-lifetime-step: ${name}`);
+step('loaded');
 const rootDirectory = await mkdtemp(
   join(process.argv[3] ?? tmpdir(), 'inference-native-lifetime-')
 );
@@ -129,6 +133,7 @@ const host = new HostInference({
   },
 });
 await database.start();
+step('host-started');
 const principal = { ownerId: host.hostOwnerId, hostAdministrator: true };
 let management;
 async function collectGarbage() {
@@ -254,6 +259,7 @@ try {
     const timeout = await mustSettle(next, 'Host SDK stream timeout');
     assert.ok(timeout.error);
     assert.equal(classifyProviderError(timeout.error).kind, 'timeout');
+    step('stream-timeout');
     const stopped = await streamText(scope.client);
     const ending = observe(stopped.next());
     await collectGarbage();
@@ -264,6 +270,7 @@ try {
       authContractVersion: '1',
     });
     assert.ok((await mustSettle(ending, 'Host account disconnect')).error);
+    step('account-disconnect');
   } finally {
     await scope.close();
     runtime.retire();
@@ -280,6 +287,7 @@ try {
   await collectGarbage();
   discoveryController.abort(new Error('synthetic discovery cancelled'));
   assert.ok((await mustSettle(discovery, 'Host discovery response')).error);
+  step('discovery');
   const authAccount = await management.management.account(principal, oauthId);
   const login = await host.accounts.beginLogin({
     account: authAccount,

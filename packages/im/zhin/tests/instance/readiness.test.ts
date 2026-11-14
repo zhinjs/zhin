@@ -75,6 +75,26 @@ describe('runtime readiness', () => {
     expect(readReadiness({ snapshots }).checks.at(-1)?.reason).toBe('endpoint_missing');
   });
 
+  it('lists account start states in the details without letting them decide readiness', () => {
+    const snapshots = store();
+    const projection = {
+      $projection: 'zhin.adapter-index/1',
+      describe: () => [
+        { owner: 'root/primary', id: 'root/primary\0zhin.adapter\0qq~bot', connected: false, admitted: false,
+          transportState: 'stopped', phase: 'retrying', startAttempt: 3,
+          startFailure: { code: 'ECONNREFUSED', at: 0 }, nextRetryAt: Date.UTC(2026, 0, 1) },
+        { owner: 'root/primary', id: 'root/primary\0zhin.adapter\0icqq~main', connected: false, phase: 'starting', startAttempt: 1 },
+      ],
+    };
+    commit(snapshots, { ...state(), projections: new Map([[adapterFeatureId, projection]]) });
+    const report = readReadiness({ snapshots });
+    expect(report.ready).toBe(true);
+    expect(report.endpoints).toEqual([
+      { owner: 'root/primary', name: 'qq~bot', phase: 'retrying', attempt: 3, failure: 'ECONNREFUSED', nextRetryAt: '2026-01-01T00:00:00.000Z' },
+      { owner: 'root/primary', name: 'icqq~main', phase: 'starting', attempt: 1 },
+    ]);
+  });
+
   it('uses the leased generation for policy and agent bindings even if a new generation commits', () => {
     const snapshots = store();
     commit(snapshots, state({ agents: ['old'] }));

@@ -19,9 +19,6 @@ import {
  */
 export default definePlugin<ProcessMonitorConfig>({
   name: 'process-monitor',
-  metadata: {
-    displayName: 'Process Monitor',
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [processMonitorStore, pluginConsoleRpcToken],
     features: {

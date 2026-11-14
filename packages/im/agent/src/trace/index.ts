@@ -16,6 +16,7 @@ export type {
   TurnTraceBudgetExtension,
   TurnTraceTimelineEntry,
   TurnTraceTermination,
+  TurnTraceTrigger,
 } from './turn-trace.js';
 export {
   createTracingJournal,

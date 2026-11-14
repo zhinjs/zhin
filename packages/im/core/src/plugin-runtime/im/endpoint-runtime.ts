@@ -34,6 +34,21 @@ import {
   type MessageRef,
 } from '@zhin.js/im-contract';
 
+/**
+ * Adapter phase plus `awaiting_assist`: the account is starting and its login flow waits for a
+ * person (LoginAssist challenge).
+ */
+export type EndpointRuntimePhase = AdapterEndpointPhase | 'awaiting_assist';
+
+/** Console `lastError` of an account (same shape as the MCP client failure). */
+export interface EndpointRuntimeFailure {
+  readonly category: 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+  /** Redacted, ≤ 200 characters. */
+  readonly message: string;
+  /** Epoch milliseconds. */
+  readonly at: number;
+}
+
 export interface EndpointRuntimeSummary {
   readonly id: string;
   readonly endpoint: ConversationRef['endpoint'];
@@ -45,9 +60,20 @@ export interface EndpointRuntimeSummary {
   readonly transportState: EndpointTransportState | 'unknown';
   readonly eventDiagnostics: AdapterEndpointSummary['eventDiagnostics'];
   readonly status: 'online' | 'offline';
-  readonly phase: AdapterEndpointPhase;
+  readonly phase: EndpointRuntimePhase;
   readonly operations: readonly AdapterOperation[];
   readonly managementCapabilities: readonly EndpointManagementCapability[];
+  /** Start attempts of the background start supervision (0 = none pending). */
+  readonly startAttempt: number;
+  /** Last failed start (code only) while the account is not online. */
+  readonly startFailure?: Readonly<{ code: string; at: number }>;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
+  /**
+   * Classified, redacted reason of the last failed start while the account is not online (#1250);
+   * the Adapter masks credentials before it records the message.
+   */
+  readonly lastError?: EndpointRuntimeFailure;
   /** ADR 0058: an unfinished login flow of this Endpoint waits for a person. */
   readonly pendingLogin: boolean;
   /** ADR 0058: where the unfinished login flow is (1-based step of the timeline). */
@@ -135,9 +161,10 @@ export class EndpointRuntime {
           transportState: row.transportState,
           eventDiagnostics: row.eventDiagnostics,
           status: row.status,
-          phase: row.phase,
+          phase: runtimePhase(flows, row, adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name),
           operations: row.operations,
           managementCapabilities: row.managementCapabilities,
+          ...startFacts(row),
         })), Object.freeze([]));
   }
 
@@ -170,9 +197,10 @@ export class EndpointRuntime {
         transportState: row.transportState,
         eventDiagnostics: row.eventDiagnostics,
         status: row.status,
-        phase: row.phase,
+        phase: runtimePhase(flows, row, adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name),
         operations: row.operations,
         managementCapabilities: row.managementCapabilities,
+        ...startFacts(row),
       });
     }, null);
   }
@@ -501,15 +529,43 @@ function assertSameEndpoint(expected: ConversationRef, actual: ConversationRef):
 }
 
 /** ADR 0058: pending-login facts of one Endpoint row from the latest login flows. */
+function loginFlowOf(
+  flows: readonly LoginFlowSnapshot[],
+  row: { readonly id: CapabilityId | string; readonly name: string },
+  adapter: string,
+): LoginFlowSnapshot | undefined {
+  return flows.find((item) => item.endpointIdentity?.canonicalId === String(row.id))
+    ?? flows.find((item) => !item.endpointIdentity && item.adapter === adapter
+      && (item.endpointKey === row.name || item.endpointKey === String(row.id)));
+}
+
+/** A starting account whose login flow is active waits for a person, not for the platform. */
+function runtimePhase(
+  flows: readonly LoginFlowSnapshot[],
+  row: Pick<AdapterEndpointSummary, 'id' | 'name' | 'phase'>,
+  adapter: string,
+): EndpointRuntimePhase {
+  return row.phase === 'starting' && loginFlowOf(flows, row, adapter)?.state === 'active' ? 'awaiting_assist' : row.phase;
+}
+
+function startFacts(row: AdapterEndpointSummary): Pick<EndpointRuntimeSummary, 'startAttempt' | 'startFailure' | 'nextRetryAt' | 'lastError'> {
+  const failure = row.startFailure;
+  return {
+    startAttempt: row.startAttempt ?? 0,
+    ...(failure ? { startFailure: Object.freeze({ code: failure.code, at: failure.at }) } : {}),
+    ...(failure ? { lastError: Object.freeze({ category: failure.category ?? 'unknown',
+      message: (failure.message ?? failure.code).slice(0, 200), at: failure.at }) } : {}),
+    ...(row.nextRetryAt !== undefined ? { nextRetryAt: row.nextRetryAt } : {}),
+  };
+}
+
 function loginFacts(
   flows: readonly LoginFlowSnapshot[],
   row: { readonly id: CapabilityId | string; readonly name: string },
   adapter: string,
   declaration: AdapterLoginDeclaration | undefined,
 ): Pick<EndpointRuntimeSummary, 'pendingLogin' | 'loginStep' | 'login'> {
-  const flow = flows.find((item) => item.endpointIdentity?.canonicalId === String(row.id))
-    ?? flows.find((item) => !item.endpointIdentity && item.adapter === adapter
-      && (item.endpointKey === row.name || item.endpointKey === String(row.id)));
+  const flow = loginFlowOf(flows, row, adapter);
   const unfinished = !!flow && (flow.state === 'active' || flow.state === 'expired');
   const index = unfinished && flow.currentStep ? flow.steps.findIndex((step) => step.id === flow.currentStep) : -1;
   return {

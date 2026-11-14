@@ -28,7 +28,11 @@
         "usgs"
       ],
       "x-i18n": {
+        "zh-CN": {
+          "title": "数据源"
+        },
         "en": {
+          "title": "Data sources",
           "description": "Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source."
         }
       },
@@ -53,7 +57,11 @@
         "https://ceic.ac.cn/data/data.json"
       ],
       "x-i18n": {
+        "zh-CN": {
+          "title": "CENC 地址"
+        },
         "en": {
+          "title": "CENC URLs",
           "description": "CENC catalog URLs, tried in order (primary followed by mirrors). HTTPS only, up to 5 URLs."
         }
       },
@@ -78,7 +86,11 @@
       ],
       "default": "2.5_day",
       "x-i18n": {
+        "zh-CN": {
+          "title": "USGS 数据源"
+        },
         "en": {
+          "title": "USGS feed",
           "description": "USGS GeoJSON summary feed name (minimum-magnitude_time-range)."
         }
       },
@@ -93,7 +105,11 @@
       "description": "订阅轮询频率（6 段 Cron：秒 分 时 日 月 周）",
       "default": "0 */2 * * * *",
       "x-i18n": {
+        "zh-CN": {
+          "title": "轮询频率"
+        },
         "en": {
+          "title": "Poll schedule",
           "description": "Subscription polling schedule (6-field cron: second, minute, hour, day, month, weekday)."
         }
       },
@@ -108,7 +124,11 @@
       "description": "显示发震时刻使用的 IANA 时区",
       "default": "Asia/Shanghai",
       "x-i18n": {
+        "zh-CN": {
+          "title": "时区"
+        },
         "en": {
+          "title": "Timezone",
           "description": "IANA timezone used to display earthquake times."
         }
       },
@@ -125,7 +145,11 @@
       "minimum": 1000,
       "maximum": 60000,
       "x-i18n": {
+        "zh-CN": {
+          "title": "请求超时（毫秒）"
+        },
         "en": {
+          "title": "Request timeout (ms)",
           "description": "HTTP request timeout in milliseconds."
         }
       },
@@ -143,7 +167,11 @@
       "maximum": 5,
       "multipleOf": 1,
       "x-i18n": {
+        "zh-CN": {
+          "title": "重试次数"
+        },
         "en": {
+          "title": "Max retries",
           "description": "Retries for network errors, timeouts, HTTP 429 and 5xx, excluding the initial request."
         }
       },
@@ -160,7 +188,11 @@
       "minimum": 100,
       "maximum": 10000,
       "x-i18n": {
+        "zh-CN": {
+          "title": "首次重试等待（毫秒）"
+        },
         "en": {
+          "title": "Initial retry delay (ms)",
           "description": "Initial exponential-backoff delay in milliseconds; doubles for each retry with random jitter."
         }
       },
@@ -177,7 +209,11 @@
       "minimum": 1000,
       "maximum": 120000,
       "x-i18n": {
+        "zh-CN": {
+          "title": "最长重试等待（毫秒）"
+        },
         "en": {
+          "title": "Max retry delay (ms)",
           "description": "Maximum backoff or Retry-After wait in milliseconds. Longer server waits abandon this round and cool down the source."
         }
       },
@@ -194,7 +230,11 @@
       "minimum": 0,
       "maximum": 10,
       "x-i18n": {
+        "zh-CN": {
+          "title": "订阅默认最小震级"
+        },
         "en": {
+          "title": "Default subscription magnitude",
           "description": "Minimum magnitude for subscriptions that do not specify one."
         }
       },
@@ -211,7 +251,11 @@
       "minimum": 0,
       "maximum": 10,
       "x-i18n": {
+        "zh-CN": {
+          "title": "查询默认最小震级"
+        },
         "en": {
+          "title": "Default query magnitude",
           "description": "Minimum magnitude for earthquake queries that do not specify one."
         }
       },
@@ -229,7 +273,11 @@
       "maximum": 20,
       "multipleOf": 1,
       "x-i18n": {
+        "zh-CN": {
+          "title": "查询条数"
+        },
         "en": {
+          "title": "Query result count",
           "description": "Default number of earthquake query results."
         }
       },
@@ -246,7 +294,11 @@
       "minimum": 5,
       "maximum": 1440,
       "x-i18n": {
+        "zh-CN": {
+          "title": "最长事件时效（分钟）"
+        },
         "en": {
+          "title": "Max event age (minutes)",
           "description": "Only notify about earthquakes from the last specified number of minutes, avoiding delayed or replayed old events."
         }
       },
@@ -264,7 +316,11 @@
       "maximum": 60,
       "multipleOf": 1,
       "x-i18n": {
+        "zh-CN": {
+          "title": "限流窗口内最多推送数"
+        },
         "en": {
+          "title": "Notifications per window",
           "description": "Maximum notification messages per conversation in one rate-limit window."
         }
       },
@@ -281,7 +337,11 @@
       "minimum": 1,
       "maximum": 1440,
       "x-i18n": {
+        "zh-CN": {
+          "title": "推送限流窗口（分钟）"
+        },
         "en": {
+          "title": "Rate-limit window (minutes)",
           "description": "Notification rate-limit window in minutes."
         }
       },
@@ -299,7 +359,11 @@
       "maximum": 10,
       "multipleOf": 1,
       "x-i18n": {
+        "zh-CN": {
+          "title": "每条消息最多地震数"
+        },
         "en": {
+          "title": "Earthquakes per message",
           "description": "Maximum earthquakes listed in one notification; the remainder is summarized as a count."
         }
       },
@@ -317,7 +381,11 @@
       "maximum": 1000,
       "multipleOf": 1,
       "x-i18n": {
+        "zh-CN": {
+          "title": "订阅总数上限"
+        },
         "en": {
+          "title": "Max subscriptions",
           "description": "Maximum subscriptions across this instance, at most one per conversation."
         }
       },

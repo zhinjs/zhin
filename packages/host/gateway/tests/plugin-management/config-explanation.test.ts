@@ -145,7 +145,19 @@ describe('metadata-only config explanations through the actual Runtime and file 
       await pause.entered;
       if (kind === 'file') await f.save({ count: 8 });
       else if (kind === 'project') { const path = join(f.root, 'package.json'); const pkg = JSON.parse(await readFile(path, 'utf8')); await writeFile(path, JSON.stringify({ ...pkg, version: '1.0.1' })); }
-      else { const previous = f.runtime.snapshot.generation; reloaded = f.runtime.reload(childPluginId(rootPluginId(), 'demo')); await vi.waitFor(() => expect(f.runtime.snapshot.generation).toBeGreaterThan(previous)); }
+      else {
+        // Wait for the reload's commit event rather than polling with vi.waitFor's 1 s budget,
+        // which a real reload can exceed when the suite runs under load.
+        const previous = f.runtime.snapshot.generation;
+        let stop: (() => void) | undefined;
+        const committed = new Promise<void>(done => { stop = f.runtime.onGenerationCommit(({ current }) => { if (current.snapshot.generation > previous) done(); }); });
+        try {
+          reloaded = f.runtime.reload(childPluginId(rootPluginId(), 'demo'));
+          // A reload that settles without committing fails here at once instead of hanging to the test timeout.
+          await Promise.race([committed, reloaded]);
+        } finally { stop?.(); }
+        expect(f.runtime.snapshot.generation, 'reload settled without committing a new generation').toBeGreaterThan(previous);
+      }
       pause.release(); expect(await observed).toBeInstanceOf(Error); expect(String(await observed)).toContain('重新读取文件版本'); await reloaded;
       if (kind === 'generation') expect((await f.explain()).projection).toBe('supported');
     } finally { pause.release(); pause.spy.mockRestore(); await reloaded; }

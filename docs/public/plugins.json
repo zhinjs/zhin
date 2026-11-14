@@ -2,9 +2,17 @@
   "plugins": [
     {
       "name": "@zhin.js/adapter-telegram",
-      "displayName": "telegram",
-      "description": "Zhin.js Telegram Bot API adapter for Plugin Runtime (long-poll getUpdates)",
-      "author": "GitHub Actions",
+      "displayName": "Telegram Bot API Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Telegram 适配器",
+        "en": "Telegram Bot API Adapter"
+      },
+      "description": "Telegram Bot API adapter: private and group messages via long-polling getUpdates, no public URL needed.",
+      "descriptionI18n": {
+        "zh-CN": "Telegram Bot API 适配器：默认长轮询 getUpdates 收发私聊与群组消息，无需公网地址。",
+        "en": "Telegram Bot API adapter: private and group messages via long-polling getUpdates, no public URL needed."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -12,12 +20,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "telegram",
-        "chatbot"
+        "bot-api",
+        "long-polling"
       ],
       "lastUpdate": "2026-11-08T13:04:33.521Z",
       "downloads": {
@@ -40,9 +45,17 @@
     },
     {
       "name": "@zhin.js/adapter-icqq",
-      "displayName": "icqq",
-      "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
-      "author": "GitHub Actions",
+      "displayName": "ICQQ Adapter",
+      "displayNameI18n": {
+        "zh-CN": "ICQQ 适配器",
+        "en": "ICQQ Adapter"
+      },
+      "description": "ICQQ adapter: in-process @icqqjs/icqq client for QQ groups, private chats, temporary sessions and guild channels.",
+      "descriptionI18n": {
+        "zh-CN": "ICQQ 适配器：进程内直连 @icqqjs/icqq，支持 QQ 群聊、私聊、临时会话与频道消息。",
+        "en": "ICQQ adapter: in-process @icqqjs/icqq client for QQ groups, private chats, temporary sessions and guild channels."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -50,14 +63,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "icqq",
         "qq",
-        "tencent",
-        "chatbot"
+        "tencent"
       ],
       "lastUpdate": "2026-11-08T13:03:53.165Z",
       "downloads": {
@@ -82,9 +90,17 @@
     },
     {
       "name": "@zhin.js/adapter-sandbox",
-      "displayName": "sandbox",
-      "description": "Zhin.js Sandbox adapter for Plugin Runtime (WebSocket /sandbox)",
-      "author": "GitHub Actions",
+      "displayName": "Sandbox Adapter",
+      "displayNameI18n": {
+        "zh-CN": "沙盒适配器",
+        "en": "Sandbox Adapter"
+      },
+      "description": "Sandbox adapter: a local chat workspace for the Remote Console, for development and testing without a real platform.",
+      "descriptionI18n": {
+        "zh-CN": "沙盒适配器：为 Remote Console 提供本地会话工作区，用于开发和测试，无需接入真实平台。",
+        "en": "Sandbox adapter: a local chat workspace for the Remote Console, for development and testing without a real platform."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.30",
@@ -92,14 +108,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "sandbox",
-        "test",
-        "development",
-        "local"
+        "testing",
+        "development"
       ],
       "lastUpdate": "2026-11-11T04:12:29.901Z",
       "downloads": {
@@ -123,9 +134,17 @@
     },
     {
       "name": "@zhin.js/adapter-lark",
-      "displayName": "lark",
-      "description": "Zhin.js Lark/Feishu adapter (HTTP webhook and WebSocket long connection)",
-      "author": "GitHub Actions",
+      "displayName": "Lark/Feishu (飞书) Adapter",
+      "displayNameI18n": {
+        "zh-CN": "飞书适配器",
+        "en": "Lark/Feishu Adapter"
+      },
+      "description": "Lark / Feishu adapter: messaging over HTTP webhook or WebSocket long connection, with event decryption and token refresh.",
+      "descriptionI18n": {
+        "zh-CN": "飞书 / Lark 适配器：HTTP Webhook 或 WebSocket 长连接收发消息，支持事件加密与 Token 自动刷新。",
+        "en": "Lark / Feishu adapter: messaging over HTTP webhook or WebSocket long connection, with event decryption and token refresh."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -133,14 +152,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "lark",
         "feishu",
-        "飞书",
-        "chatbot"
+        "飞书"
       ],
       "lastUpdate": "2026-11-08T13:04:15.544Z",
       "downloads": {
@@ -164,9 +178,17 @@
     },
     {
       "name": "@zhin.js/adapter-discord",
-      "displayName": "discord",
-      "description": "Zhin.js Discord adapter for Plugin Runtime (Gateway WebSocket)",
-      "author": "GitHub Actions",
+      "displayName": "Discord Gateway Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Discord 适配器",
+        "en": "Discord Gateway Adapter"
+      },
+      "description": "Discord adapter: direct messages, groups and guild channels over the Gateway WebSocket, no public URL needed.",
+      "descriptionI18n": {
+        "zh-CN": "Discord 适配器：通过 Gateway WebSocket 收发私聊、群组与服务器频道消息，无需公网地址。",
+        "en": "Discord adapter: direct messages, groups and guild channels over the Gateway WebSocket, no public URL needed."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.27",
@@ -174,12 +196,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "discord",
-        "chatbot"
+        "gateway",
+        "websocket"
       ],
       "lastUpdate": "2026-11-11T04:12:29.544Z",
       "downloads": {
@@ -201,9 +220,17 @@
     },
     {
       "name": "@zhin.js/adapter-napcat",
-      "displayName": "napcat",
-      "description": "Zhin.js NapCat adapter for Plugin Runtime (WebSocket client, OneBot11 + NapCat extensions)",
-      "author": "GitHub Actions",
+      "displayName": "NapCat Adapter",
+      "displayNameI18n": {
+        "zh-CN": "NapCat 适配器",
+        "en": "NapCat Adapter"
+      },
+      "description": "NapCatQQ adapter: OneBot 11 plus NapCat extension APIs over forward / reverse WebSocket or HTTP.",
+      "descriptionI18n": {
+        "zh-CN": "NapCatQQ 适配器：OneBot 11 加 NapCat 扩展 API，支持正向 / 反向 WebSocket 与 HTTP。",
+        "en": "NapCatQQ adapter: OneBot 11 plus NapCat extension APIs over forward / reverse WebSocket or HTTP."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -211,16 +238,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "napcat",
-        "napneko",
-        "onebot",
         "onebot11",
-        "qq",
-        "chatbot"
+        "qq"
       ],
       "lastUpdate": "2026-11-08T13:04:14.773Z",
       "downloads": {
@@ -242,9 +262,17 @@
     },
     {
       "name": "@zhin.js/adapter-qq",
-      "displayName": "qq",
-      "description": "Zhin.js QQ Official adapter for Plugin Runtime (WebSocket gateway)",
-      "author": "GitHub Actions",
+      "displayName": "QQ Official WebSocket Adapter",
+      "displayNameI18n": {
+        "zh-CN": "QQ 官方机器人适配器",
+        "en": "QQ Official WebSocket Adapter"
+      },
+      "description": "QQ official bot adapter: private, group and guild channel messages over the WebSocket gateway.",
+      "descriptionI18n": {
+        "zh-CN": "QQ 官方机器人适配器：通过 WebSocket Gateway 收发私聊、群聊与频道消息。",
+        "en": "QQ official bot adapter: private, group and guild channel messages over the WebSocket gateway."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -252,14 +280,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "qq",
-        "tencent",
-        "official",
-        "chatbot"
+        "qq-official",
+        "tencent"
       ],
       "lastUpdate": "2026-11-08T13:04:19.086Z",
       "downloads": {
@@ -282,9 +305,17 @@
     },
     {
       "name": "@zhin.js/adapter-onebot11",
-      "displayName": "onebot11",
-      "description": "Zhin.js OneBot 11 adapter for Plugin Runtime (WebSocket client)",
-      "author": "GitHub Actions",
+      "displayName": "OneBot 11 Adapter",
+      "displayNameI18n": {
+        "zh-CN": "OneBot 11 适配器",
+        "en": "OneBot 11 Adapter"
+      },
+      "description": "OneBot 11 adapter: forward WebSocket client with reverse WS support, for any OneBot 11 implementation.",
+      "descriptionI18n": {
+        "zh-CN": "OneBot 11 标准适配器：正向 WebSocket 客户端，也支持反向 WS，可对接各类 OneBot 11 实现。",
+        "en": "OneBot 11 adapter: forward WebSocket client with reverse WS support, for any OneBot 11 implementation."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -292,14 +323,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "onebot",
         "onebot11",
-        "qq",
-        "chatbot"
+        "qq"
       ],
       "lastUpdate": "2026-11-08T13:05:06.241Z",
       "downloads": {
@@ -321,9 +347,17 @@
     },
     {
       "name": "@zhin.js/adapter-wechat-mp",
-      "displayName": "wechat-mp",
-      "description": "Zhin.js WeChat Official Account adapter for Plugin Runtime (HTTP webhook)",
-      "author": "GitHub Actions",
+      "displayName": "WeChat Official Account Adapter",
+      "displayNameI18n": {
+        "zh-CN": "微信公众号适配器",
+        "en": "WeChat Official Account Adapter"
+      },
+      "description": "WeChat Official Account adapter: HTTP webhook messaging with signature checks and optional AES encryption.",
+      "descriptionI18n": {
+        "zh-CN": "微信公众号适配器：通过 HTTP Webhook 收发消息，支持签名校验与 AES 加解密。",
+        "en": "WeChat Official Account adapter: HTTP webhook messaging with signature checks and optional AES encryption."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -331,16 +365,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "wechat",
-        "weixin",
         "微信",
-        "official-account",
-        "mp",
-        "chatbot"
+        "official-account"
       ],
       "lastUpdate": "2026-11-08T13:04:15.847Z",
       "downloads": {
@@ -362,9 +389,17 @@
     },
     {
       "name": "@zhin.js/adapter-github",
-      "displayName": "github",
-      "description": "Zhin.js GitHub adapter for Plugin Runtime (App auth + webhook)",
-      "author": "GitHub Actions",
+      "displayName": "GitHub Adapter",
+      "displayNameI18n": {
+        "zh-CN": "GitHub 适配器",
+        "en": "GitHub Adapter"
+      },
+      "description": "GitHub adapter: Issue and PR comment threads as chat channels, GitHub App auth and webhook events.",
+      "descriptionI18n": {
+        "zh-CN": "GitHub 适配器：把 Issue / PR 评论区作为聊天通道，GitHub App 认证，Webhook 入站。",
+        "en": "GitHub adapter: Issue and PR comment threads as chat channels, GitHub App auth and webhook events."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -372,15 +407,10 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "github",
-        "issue",
-        "pull-request",
-        "webhook",
-        "chatbot"
+        "issues",
+        "pull-requests",
+        "webhook"
       ],
       "lastUpdate": "2026-11-08T13:04:40.658Z",
       "downloads": {
@@ -405,9 +435,17 @@
     },
     {
       "name": "@zhin.js/adapter-satori",
-      "displayName": "satori",
-      "description": "Zhin.js Satori adapter for Plugin Runtime (WebSocket client)",
-      "author": "GitHub Actions",
+      "displayName": "Satori Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Satori 适配器",
+        "en": "Satori Adapter"
+      },
+      "description": "Satori protocol adapter: forward WebSocket client and webhook ingress for Satori-compatible implementations.",
+      "descriptionI18n": {
+        "zh-CN": "Satori 协议适配器：支持 WebSocket 正向客户端与 Webhook 入站，对接 Satori 兼容实现。",
+        "en": "Satori protocol adapter: forward WebSocket client and webhook ingress for Satori-compatible implementations."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.27",
@@ -415,12 +453,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "satori",
-        "chatbot"
+        "websocket",
+        "webhook"
       ],
       "lastUpdate": "2026-11-11T04:13:49.829Z",
       "downloads": {
@@ -441,9 +476,17 @@
     },
     {
       "name": "@zhin.js/adapter-kook",
-      "displayName": "kook",
-      "description": "Zhin.js KOOK adapter for Plugin Runtime (WebSocket gateway or Webhook)",
-      "author": "GitHub Actions",
+      "displayName": "KOOK WebSocket Adapter",
+      "displayNameI18n": {
+        "zh-CN": "KOOK 适配器",
+        "en": "KOOK WebSocket Adapter"
+      },
+      "description": "KOOK adapter: channel and direct messages over the WebSocket gateway by default, with an optional webhook mode.",
+      "descriptionI18n": {
+        "zh-CN": "KOOK（开黑啦）适配器：默认 WebSocket Gateway 收发频道与私聊消息，也支持 Webhook。",
+        "en": "KOOK adapter: channel and direct messages over the WebSocket gateway by default, with an optional webhook mode."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -451,13 +494,10 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "kook",
         "开黑啦",
-        "chatbot"
+        "websocket",
+        "webhook"
       ],
       "lastUpdate": "2026-11-08T13:03:49.776Z",
       "downloads": {
@@ -479,9 +519,17 @@
     },
     {
       "name": "@zhin.js/adapter-dingtalk",
-      "displayName": "dingtalk",
-      "description": "Zhin.js DingTalk (钉钉) adapter for Plugin Runtime (HTTP webhook)",
-      "author": "GitHub Actions",
+      "displayName": "DingTalk (钉钉) Adapter",
+      "displayNameI18n": {
+        "zh-CN": "钉钉适配器",
+        "en": "DingTalk Adapter"
+      },
+      "description": "DingTalk bot adapter: HTTP webhook messaging with signature verification and automatic access-token refresh.",
+      "descriptionI18n": {
+        "zh-CN": "钉钉机器人适配器：通过 HTTP Webhook 收发消息，签名校验，Access Token 自动刷新。",
+        "en": "DingTalk bot adapter: HTTP webhook messaging with signature verification and automatic access-token refresh."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -489,13 +537,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "dingtalk",
         "钉钉",
-        "chatbot"
+        "webhook"
       ],
       "lastUpdate": "2026-11-08T13:03:27.503Z",
       "downloads": {
@@ -519,9 +563,17 @@
     },
     {
       "name": "@zhin.js/adapter-milky",
-      "displayName": "milky",
-      "description": "Zhin.js Milky adapter for Plugin Runtime (WebSocket client)",
-      "author": "GitHub Actions",
+      "displayName": "Milky Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Milky 适配器",
+        "en": "Milky Adapter"
+      },
+      "description": "Milky protocol adapter: forward WebSocket by default, plus webhook, reverse WS and SSE, for Milky-compatible QQ implementations.",
+      "descriptionI18n": {
+        "zh-CN": "Milky 协议适配器：默认正向 WebSocket，也支持 Webhook、反向 WS 与 SSE，接入兼容 Milky 的 QQ 实现。",
+        "en": "Milky protocol adapter: forward WebSocket by default, plus webhook, reverse WS and SSE, for Milky-compatible QQ implementations."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -529,13 +581,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "milky",
         "qq",
-        "chatbot"
+        "websocket"
       ],
       "lastUpdate": "2026-11-08T13:03:51.771Z",
       "downloads": {
@@ -558,9 +606,17 @@
     },
     {
       "name": "@zhin.js/adapter-onebot12",
-      "displayName": "onebot12",
-      "description": "Zhin.js OneBot 12 adapter for Plugin Runtime (WebSocket client)",
-      "author": "GitHub Actions",
+      "displayName": "OneBot 12 Adapter",
+      "displayNameI18n": {
+        "zh-CN": "OneBot 12 适配器",
+        "en": "OneBot 12 Adapter"
+      },
+      "description": "OneBot 12 adapter: forward WebSocket client, plus HTTP webhook and reverse WS.",
+      "descriptionI18n": {
+        "zh-CN": "OneBot 12 标准适配器：正向 WebSocket 客户端，也支持 HTTP Webhook 与反向 WS。",
+        "en": "OneBot 12 adapter: forward WebSocket client, plus HTTP webhook and reverse WS."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -568,13 +624,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "onebot",
         "onebot12",
-        "chatbot"
+        "websocket"
       ],
       "lastUpdate": "2026-11-08T13:04:15.194Z",
       "downloads": {
@@ -595,9 +647,17 @@
     },
     {
       "name": "@zhin.js/adapter-email",
-      "displayName": "email",
-      "description": "Zhin.js Email adapter for Plugin Runtime (SMTP/IMAP)",
-      "author": "GitHub Actions",
+      "displayName": "Email Adapter",
+      "displayNameI18n": {
+        "zh-CN": "邮件适配器",
+        "en": "Email Adapter"
+      },
+      "description": "Email adapter: sends over SMTP and polls IMAP, turning a mailbox into a chat channel.",
+      "descriptionI18n": {
+        "zh-CN": "邮件适配器：通过 SMTP 发信、IMAP 轮询收信，把邮箱作为聊天通道接入。",
+        "en": "Email adapter: sends over SMTP and polls IMAP, turning a mailbox into a chat channel."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -605,14 +665,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "email",
         "smtp",
-        "imap",
-        "mail"
+        "imap"
       ],
       "lastUpdate": "2026-11-08T13:05:09.220Z",
       "downloads": {
@@ -632,9 +687,17 @@
     },
     {
       "name": "@zhin.js/adapter-weixin-ilink",
-      "displayName": "weixin-ilink",
-      "description": "Zhin.js Weixin iLink (ClawBot) adapter for Plugin Runtime (long-poll)",
-      "author": "GitHub Actions",
+      "displayName": "Weixin iLink Adapter",
+      "displayNameI18n": {
+        "zh-CN": "微信 iLink 适配器",
+        "en": "Weixin iLink Adapter"
+      },
+      "description": "Weixin iLink adapter: personal WeChat through the iLink API (ClawBot), long-polling text and media messages.",
+      "descriptionI18n": {
+        "zh-CN": "微信 iLink 适配器：通过 iLink 接口（ClawBot）接入个人微信，长轮询收发文本与媒体消息。",
+        "en": "Weixin iLink adapter: personal WeChat through the iLink API (ClawBot), long-polling text and media messages."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -642,10 +705,6 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "wechat",
         "weixin",
         "ilink",
@@ -670,9 +729,17 @@
     },
     {
       "name": "@zhin.js/adapter-slack",
-      "displayName": "slack",
-      "description": "Zhin.js Slack adapter for Plugin Runtime (Socket Mode / HTTP Events)",
-      "author": "GitHub Actions",
+      "displayName": "Slack Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Slack 适配器",
+        "en": "Slack Adapter"
+      },
+      "description": "Slack adapter: Socket Mode by default or the HTTP Events API, with Block Kit messages.",
+      "descriptionI18n": {
+        "zh-CN": "Slack 适配器：默认 Socket Mode 长连接，也可经 HTTP Events API 收发消息，支持 Block Kit。",
+        "en": "Slack adapter: Socket Mode by default or the HTTP Events API, with Block Kit messages."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -680,12 +747,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "slack",
-        "chatbot"
+        "socket-mode",
+        "events-api"
       ],
       "lastUpdate": "2026-11-08T13:05:11.849Z",
       "downloads": {
@@ -709,22 +773,27 @@
     },
     {
       "name": "@zhin.js/plugin-qrcode",
-      "displayName": "plugin-qrcode",
-      "description": "QR code generator & reader plugin for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "QR Code",
+      "displayNameI18n": {
+        "zh-CN": "二维码",
+        "en": "QR Code"
+      },
+      "description": "Generate QR images or decode a QR code from an image.",
+      "descriptionI18n": {
+        "zh-CN": "生成二维码图片，或识别图片中的二维码。",
+        "en": "Generate QR images or decode a QR code from an image."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-qrcode",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/qrcode",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "qrcode",
-        "qr"
+        "qr",
+        "二维码"
       ],
       "lastUpdate": "2026-11-08T13:05:28.929Z",
       "downloads": {
@@ -745,9 +814,17 @@
     },
     {
       "name": "@zhin.js/adapter-line",
-      "displayName": "line",
-      "description": "Zhin.js LINE Messaging API adapter for Plugin Runtime (HTTP webhook)",
-      "author": "GitHub Actions",
+      "displayName": "LINE Messaging API Adapter",
+      "displayNameI18n": {
+        "zh-CN": "LINE 适配器",
+        "en": "LINE Messaging API Adapter"
+      },
+      "description": "LINE adapter: private, group and room messages through the Messaging API webhook.",
+      "descriptionI18n": {
+        "zh-CN": "LINE 适配器：通过 Messaging API Webhook 收发私聊、群组与多人聊天消息。",
+        "en": "LINE adapter: private, group and room messages through the Messaging API webhook."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -755,12 +832,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "line",
-        "chatbot"
+        "messaging-api",
+        "webhook"
       ],
       "lastUpdate": "2026-11-08T13:04:29.592Z",
       "downloads": {
@@ -783,9 +857,17 @@
     },
     {
       "name": "@zhin.js/adapter-wecom",
-      "displayName": "wecom",
-      "description": "Zhin.js WeCom (企业微信) adapter for Plugin Runtime (HTTP webhook)",
-      "author": "GitHub Actions",
+      "displayName": "WeCom (企业微信) Adapter",
+      "displayNameI18n": {
+        "zh-CN": "企业微信适配器",
+        "en": "WeCom Adapter"
+      },
+      "description": "WeCom adapter: HTTP webhook messaging with message encryption and automatic token refresh.",
+      "descriptionI18n": {
+        "zh-CN": "企业微信适配器：通过 HTTP Webhook 收发消息，支持消息加解密与 Token 自动刷新。",
+        "en": "WeCom adapter: HTTP webhook messaging with message encryption and automatic token refresh."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "1.1.26",
@@ -793,14 +875,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "wecom",
         "企业微信",
-        "wechat work",
-        "chatbot"
+        "wechat-work"
       ],
       "lastUpdate": "2026-11-08T13:04:39.730Z",
       "downloads": {
@@ -824,9 +901,17 @@
     },
     {
       "name": "@zhin.js/service-activity-feedback",
-      "displayName": "service-activity-feedback",
-      "description": "Activity Feedback 服务插件（Plugin Runtime）",
-      "author": "GitHub Actions",
+      "displayName": "Activity Feedback",
+      "displayNameI18n": {
+        "zh-CN": "活动反馈",
+        "en": "Activity Feedback"
+      },
+      "description": "Shows typing, reactions or status messages while the AI is thinking or working, based on each platform's capabilities.",
+      "descriptionI18n": {
+        "zh-CN": "在 AI 思考和执行时按平台能力显示输入中、表情回应或状态消息。",
+        "en": "Shows typing, reactions or status messages while the AI is thinking or working, based on each platform's capabilities."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "service",
       "version": "1.1.28",
@@ -834,12 +919,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/services/activity-feedback",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "plugin",
-        "service",
-        "activity-feedback",
-        "typing-indicator"
+        "typing-indicator",
+        "reactions",
+        "ai-status"
       ],
       "lastUpdate": "2026-11-08T13:05:06.853Z",
       "downloads": {
@@ -858,16 +940,28 @@
     },
     {
       "name": "@zhin.js/plugin-text-adventure",
-      "displayName": "plugin-text-adventure",
-      "description": "Zhin.js 交互式文字冒险 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Text Adventure",
+      "displayNameI18n": {
+        "zh-CN": "文字冒险",
+        "en": "Text Adventure"
+      },
+      "description": "An interactive story with 31 areas, 15 items and 15 endings.",
+      "descriptionI18n": {
+        "zh-CN": "31 个区域、15 种道具、15 种结局的交互式剧情游戏。",
+        "en": "An interactive story with 31 areas, 15 items and 15 endings."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-text-adventure",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/text-adventure",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "text-adventure",
+        "interactive-fiction",
+        "文字冒险"
+      ],
       "lastUpdate": "2026-11-08T13:04:41.708Z",
       "downloads": {
         "weekly": 843,
@@ -886,16 +980,28 @@
     },
     {
       "name": "@zhin.js/plugin-word-riddle",
-      "displayName": "plugin-word-riddle",
-      "description": "Zhin.js 猜谜 — 字谜与猜成语 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Word Riddle",
+      "displayNameI18n": {
+        "zh-CN": "字谜",
+        "en": "Word Riddle"
+      },
+      "description": "Chinese character riddles and idiom guessing, 10 rounds with hints, skips and combo scoring.",
+      "descriptionI18n": {
+        "zh-CN": "字谜与猜成语，每局 10 题，支持提示、跳过与连击计分。",
+        "en": "Chinese character riddles and idiom guessing, 10 rounds with hints, skips and combo scoring."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-word-riddle",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/word-riddle",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "riddle",
+        "word-game",
+        "猜谜"
+      ],
       "lastUpdate": "2026-11-08T13:04:48.881Z",
       "downloads": {
         "weekly": 810,
@@ -914,16 +1020,28 @@
     },
     {
       "name": "@zhin.js/plugin-idiom-chain",
-      "displayName": "plugin-idiom-chain",
-      "description": "Zhin.js 成语接龙 — 四字成语文字接龙 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Idiom Chain",
+      "displayNameI18n": {
+        "zh-CN": "成语接龙",
+        "en": "Idiom Chain"
+      },
+      "description": "Chinese four-character idiom chaining with same-sound or same-character rules and a built-in dictionary.",
+      "descriptionI18n": {
+        "zh-CN": "四字成语文字接龙，支持同音 / 同字规则，内置词库。",
+        "en": "Chinese four-character idiom chaining with same-sound or same-character rules and a built-in dictionary."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-idiom-chain",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/idiom-chain",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "idiom",
+        "word-chain",
+        "成语接龙"
+      ],
       "lastUpdate": "2026-11-08T13:04:42.404Z",
       "downloads": {
         "weekly": 825,
@@ -942,16 +1060,28 @@
     },
     {
       "name": "@zhin.js/plugin-blackjack",
-      "displayName": "plugin-blackjack",
-      "description": "Zhin.js 21 点（Blackjack）(Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Blackjack",
+      "displayNameI18n": {
+        "zh-CN": "21 点",
+        "en": "Blackjack"
+      },
+      "description": "Blackjack with hit / stand buttons, integrated with the game hub and its stats.",
+      "descriptionI18n": {
+        "zh-CN": "按钮式 21 点对局：要牌 / 停牌，接入游戏大厅与战绩统计。",
+        "en": "Blackjack with hit / stand buttons, integrated with the game hub and its stats."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-blackjack",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/blackjack",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "blackjack",
+        "card-game",
+        "21点"
+      ],
       "lastUpdate": "2026-11-08T13:04:26.757Z",
       "downloads": {
         "weekly": 800,
@@ -970,16 +1100,28 @@
     },
     {
       "name": "@zhin.js/plugin-dice-duel",
-      "displayName": "plugin-dice-duel",
-      "description": "Zhin.js 骰子对决 — 三局两胜比大小 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Dice Duel",
+      "displayNameI18n": {
+        "zh-CN": "骰子对决",
+        "en": "Dice Duel"
+      },
+      "description": "Two players roll dice and compare, best of three.",
+      "descriptionI18n": {
+        "zh-CN": "双方掷骰比大小，三局两胜。",
+        "en": "Two players roll dice and compare, best of three."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-dice-duel",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/dice-duel",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "dice",
+        "duel",
+        "骰子"
+      ],
       "lastUpdate": "2026-11-08T13:04:19.356Z",
       "downloads": {
         "weekly": 830,
@@ -998,16 +1140,29 @@
     },
     {
       "name": "@zhin.js/plugin-game-hub",
-      "displayName": "plugin-game-hub",
-      "description": "Zhin.js 游戏大厅 — 列出已加载的游戏插件 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Game Hub",
+      "displayNameI18n": {
+        "zh-CN": "游戏大厅",
+        "en": "Game Hub"
+      },
+      "description": "Lists the loaded mini-games with quick start, personal stats and leaderboards.",
+      "descriptionI18n": {
+        "zh-CN": "列出已加载的小游戏，提供快捷开局、个人战绩与排行榜。",
+        "en": "Lists the loaded mini-games with quick start, personal stats and leaderboards."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-game-hub",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/hub",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "game-hub",
+        "leaderboard",
+        "stats",
+        "游戏大厅"
+      ],
       "lastUpdate": "2026-11-08T13:04:21.049Z",
       "downloads": {
         "weekly": 847,
@@ -1029,16 +1184,28 @@
     },
     {
       "name": "@zhin.js/plugin-tic-tac-toe",
-      "displayName": "plugin-tic-tac-toe",
-      "description": "Zhin.js 跨平台井字棋 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Tic Tac Toe",
+      "displayNameI18n": {
+        "zh-CN": "井字棋",
+        "en": "Tic Tac Toe"
+      },
+      "description": "Two-player tic-tac-toe on any platform, with buttons or 1–9 text moves.",
+      "descriptionI18n": {
+        "zh-CN": "跨平台双人井字棋，支持按钮落子与 1–9 文本降级。",
+        "en": "Two-player tic-tac-toe on any platform, with buttons or 1–9 text moves."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-tic-tac-toe",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/tic-tac-toe",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "tic-tac-toe",
+        "board-game",
+        "井字棋"
+      ],
       "lastUpdate": "2026-11-08T13:04:44.244Z",
       "downloads": {
         "weekly": 817,
@@ -1057,16 +1224,29 @@
     },
     {
       "name": "@zhin.js/plugin-dungeon-expedition",
-      "displayName": "plugin-dungeon-expedition",
-      "description": "Zhin.js multiplayer deterministic dungeon expedition",
-      "author": "GitHub Actions",
+      "displayName": "Dungeon Expedition",
+      "displayNameI18n": {
+        "zh-CN": "地牢远征",
+        "en": "Dungeon Expedition"
+      },
+      "description": "A 1–4 player turn-based dungeon run that can be resumed and replayed deterministically.",
+      "descriptionI18n": {
+        "zh-CN": "1–4 人回合制地牢冒险，可中断恢复，结果可确定性回放。",
+        "en": "A 1–4 player turn-based dungeon run that can be resumed and replayed deterministically."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-dungeon-expedition",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/dungeon-expedition",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "dungeon",
+        "multiplayer",
+        "roguelike",
+        "地牢"
+      ],
       "lastUpdate": "2026-11-08T13:05:01.146Z",
       "downloads": {
         "weekly": 787,
@@ -1085,16 +1265,28 @@
     },
     {
       "name": "@zhin.js/plugin-guess-number",
-      "displayName": "plugin-guess-number",
-      "description": "Zhin.js 猜数字 — 1~100 七步之内猜中 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Guess Number",
+      "displayNameI18n": {
+        "zh-CN": "猜数字",
+        "en": "Guess Number"
+      },
+      "description": "Find the secret number from 1 to 100 in seven tries.",
+      "descriptionI18n": {
+        "zh-CN": "在 1~100 之间七步内猜中神秘数字。",
+        "en": "Find the secret number from 1 to 100 in seven tries."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-guess-number",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/guess-number",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "guess-number",
+        "puzzle",
+        "猜数字"
+      ],
       "lastUpdate": "2026-11-08T13:04:41.547Z",
       "downloads": {
         "weekly": 822,
@@ -1113,16 +1305,28 @@
     },
     {
       "name": "@zhin.js/plugin-rps",
-      "displayName": "plugin-rps",
-      "description": "Zhin.js 猜拳游戏 — 石头剪刀布三局两胜 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "RPS",
+      "displayNameI18n": {
+        "zh-CN": "石头剪刀布",
+        "en": "Rock Paper Scissors"
+      },
+      "description": "Rock paper scissors, best of three, with game-hub buttons or text commands.",
+      "descriptionI18n": {
+        "zh-CN": "石头剪刀布，三局两胜，支持游戏大厅按钮与文本命令。",
+        "en": "Rock paper scissors, best of three, with game-hub buttons or text commands."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rps",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/rps",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "rock-paper-scissors",
+        "rps",
+        "猜拳"
+      ],
       "lastUpdate": "2026-11-08T13:04:56.378Z",
       "downloads": {
         "weekly": 763,
@@ -1141,16 +1345,28 @@
     },
     {
       "name": "@zhin.js/service-typesafe",
-      "displayName": "service-typesafe",
-      "description": "Optional TypeSafe AI Jev decision provider for Zhin",
-      "author": "GitHub Actions",
+      "displayName": "TypeSafe AI",
+      "displayNameI18n": {
+        "zh-CN": "TypeSafe 决策服务",
+        "en": "TypeSafe AI"
+      },
+      "description": "Connects TypeSafe Choice and Score decision models to the inference runtime.",
+      "descriptionI18n": {
+        "zh-CN": "为推理运行时提供 TypeSafe Choice / Score 决策模型接入。",
+        "en": "Connects TypeSafe Choice and Score decision models to the inference runtime."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "service",
+      "category": "ai",
       "version": "1.0.19",
       "npm": "https://www.npmjs.com/package/@zhin.js/service-typesafe",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/services/typesafe",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "typesafe",
+        "decision-model",
+        "inference"
+      ],
       "lastUpdate": "2026-11-08T06:25:07.284Z",
       "downloads": {
         "weekly": 653,
@@ -1167,30 +1383,28 @@
     },
     {
       "name": "@zhin.js/plugin-60s",
-      "displayName": "plugin-60s",
-      "description": "60s API aggregation plugin for Zhin.js — news, weather, hot searches, utilities (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "60s API",
+      "displayNameI18n": {
+        "zh-CN": "60 秒 API",
+        "en": "60s API"
+      },
+      "description": "Daily news, weather, trending lists, quotes and more — 17 tools for commands and the AI.",
+      "descriptionI18n": {
+        "zh-CN": "新闻早报、天气、各平台热搜、一言等 17 种工具，命令和 AI 都能调用。",
+        "en": "Daily news, weather, trending lists, quotes and more — 17 tools for commands and the AI."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "information",
       "version": "1.1.18",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-60s",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/60s",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "60s",
         "news",
         "weather",
-        "weibo",
-        "zhihu",
-        "douyin",
-        "hot-search",
-        "hitokoto",
-        "api",
-        "chatbot"
+        "hot-search"
       ],
       "lastUpdate": "2026-11-08T06:24:46.926Z",
       "downloads": {
@@ -1210,23 +1424,28 @@
     },
     {
       "name": "@zhin.js/plugin-code-runner",
-      "displayName": "plugin-code-runner",
-      "description": "Sandboxed code execution plugin for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Code Runner",
+      "displayNameI18n": {
+        "zh-CN": "代码运行",
+        "en": "Code Runner"
+      },
+      "description": "Runs JavaScript, Python and other snippets in a sandbox with a timeout.",
+      "descriptionI18n": {
+        "zh-CN": "在沙箱中执行 JavaScript、Python 等代码片段，可设超时。",
+        "en": "Runs JavaScript, Python and other snippets in a sandbox with a timeout."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.1.18",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-code-runner",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/code-runner",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "code-runner",
         "sandbox",
-        "execute"
+        "javascript",
+        "python"
       ],
       "lastUpdate": "2026-11-08T06:24:39.818Z",
       "downloads": {
@@ -1246,23 +1465,27 @@
     },
     {
       "name": "@zhin.js/plugin-answers",
-      "displayName": "plugin-answers",
-      "description": "Zhin.js 答案之书、趣味选择题与交规小测（原创内容，Plugin Runtime）",
-      "author": "GitHub Actions",
+      "displayName": "答案之书",
+      "displayNameI18n": {
+        "zh-CN": "答案之书",
+        "en": "Book of Answers"
+      },
+      "description": "The Book of Answers, fun either-or questions and a driving-theory quiz, all original content.",
+      "descriptionI18n": {
+        "zh-CN": "答案之书、趣味选择题与科目一交规小测，题库原创。",
+        "en": "The Book of Answers, fun either-or questions and a driving-theory quiz, all original content."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "entertainment",
       "version": "0.0.14",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-answers",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/answers",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "fun",
+        "book-of-answers",
         "quiz",
-        "answers"
+        "fun"
       ],
       "lastUpdate": "2026-11-08T13:04:45.162Z",
       "downloads": {
@@ -1282,22 +1505,28 @@
     },
     {
       "name": "@zhin.js/process-monitor",
-      "displayName": "process-monitor",
-      "description": "进程监控与重启通知插件 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Process Monitor",
+      "displayNameI18n": {
+        "zh-CN": "进程监控",
+        "en": "Process Monitor"
+      },
+      "description": "Records starts, restarts and crashes, with a status command and a Console panel for memory and uptime.",
+      "descriptionI18n": {
+        "zh-CN": "记录启动、重启与崩溃次数，提供运行状态命令和 Console 内存 / 运行时长面板。",
+        "en": "Records starts, restarts and crashes, with a status command and a Console panel for memory and uptime."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "feature",
+      "category": "admin",
       "version": "1.1.18",
       "npm": "https://www.npmjs.com/package/@zhin.js/process-monitor",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/features/process-monitor",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "plugin",
-        "monitor",
+        "monitoring",
         "process",
-        "notification"
+        "uptime",
+        "restart"
       ],
       "lastUpdate": "2026-11-08T06:23:02.628Z",
       "downloads": {
@@ -1317,9 +1546,17 @@
     },
     {
       "name": "@zhin.js/plugin-roulette",
-      "displayName": "plugin-roulette",
-      "description": "Zhin.js 俄罗斯轮盘 — 多人轮流开枪，可按群开启禁言惩罚 (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Russian Roulette",
+      "displayNameI18n": {
+        "zh-CN": "俄罗斯轮盘",
+        "en": "Russian Roulette"
+      },
+      "description": "Group members take turns pulling the trigger; each group can turn on a mute penalty for the loser.",
+      "descriptionI18n": {
+        "zh-CN": "群里多人轮流扣扳机，中弹者输，可按群开启输家禁言惩罚。",
+        "en": "Group members take turns pulling the trigger; each group can turn on a mute penalty for the loser."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "game",
       "version": "0.1.14",
@@ -1327,10 +1564,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/games/roulette",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "game",
-        "roulette"
+        "roulette",
+        "party-game",
+        "俄罗斯轮盘"
       ],
       "lastUpdate": "2026-11-08T13:04:50.142Z",
       "downloads": {
@@ -1351,9 +1587,17 @@
     },
     {
       "name": "@zhin.js/adapter-bilibili",
-      "displayName": "bilibili",
-      "description": "Zhin.js Bilibili comment adapter for Plugin Runtime (Experimental; QR login, video / dynamic / article comments, review-then-send with a Console approval page)",
-      "author": "GitHub Actions",
+      "displayName": "Bilibili Comment Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "哔哩哔哩评论适配器（实验性）",
+        "en": "Bilibili Comment Adapter (Experimental)"
+      },
+      "description": "Bilibili comment adapter (experimental): QR login, AI-assisted replies to comments on your own videos, dynamics and articles, with Console review before sending.",
+      "descriptionI18n": {
+        "zh-CN": "B 站评论适配器（实验性）：扫码登录，AI 辅助回复你自己的视频、动态和专栏评论，发送前可在 Console 审批。",
+        "en": "Bilibili comment adapter (experimental): QR login, AI-assisted replies to comments on your own videos, dynamics and articles, with Console review before sending."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "0.1.9",
@@ -1361,13 +1605,10 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "bilibili",
-        "comment",
-        "chatbot"
+        "comments",
+        "qr-login",
+        "review"
       ],
       "lastUpdate": "2026-11-08T13:03:23.566Z",
       "downloads": {
@@ -1389,9 +1630,17 @@
     },
     {
       "name": "@zhin.js/adapter-bilibili-live",
-      "displayName": "bilibili-live",
-      "description": "Zhin.js Bilibili live danmaku adapter for Plugin Runtime (Experimental; danmaku WebSocket, one reply per danmaku window)",
-      "author": "GitHub Actions",
+      "displayName": "Bilibili Live Danmaku Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "哔哩哔哩直播弹幕适配器（实验性）",
+        "en": "Bilibili Live Danmaku Adapter (Experimental)"
+      },
+      "description": "Bilibili live danmaku adapter (experimental): reads danmaku in your own live room and replies once per danmaku window.",
+      "descriptionI18n": {
+        "zh-CN": "B 站直播弹幕适配器（实验性）：在你自己的直播间看弹幕，按弹幕窗口挑一条回复。",
+        "en": "Bilibili live danmaku adapter (experimental): reads danmaku in your own live room and replies once per danmaku window."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "0.1.9",
@@ -1399,14 +1648,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "bilibili",
-        "live",
-        "danmaku",
-        "chatbot"
+        "live-streaming",
+        "danmaku"
       ],
       "lastUpdate": "2026-11-08T13:03:24.992Z",
       "downloads": {
@@ -1426,9 +1670,17 @@
     },
     {
       "name": "@zhin.js/adapter-douyin-live",
-      "displayName": "douyin-live",
-      "description": "Zhin.js Douyin live danmaku adapter for Plugin Runtime (Experimental; unofficial webcast WebSocket, listen-only by default, one reply per danmaku window)",
-      "author": "GitHub Actions",
+      "displayName": "Douyin Live Danmaku Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "抖音直播弹幕适配器（实验性）",
+        "en": "Douyin Live Danmaku Adapter (Experimental)"
+      },
+      "description": "Douyin live danmaku adapter (experimental, unofficial protocol): reads danmaku in your own live room; listen-only by default.",
+      "descriptionI18n": {
+        "zh-CN": "抖音直播弹幕适配器（实验性、非官方协议）：在你自己的直播间读取弹幕，默认只听不说。",
+        "en": "Douyin live danmaku adapter (experimental, unofficial protocol): reads danmaku in your own live room; listen-only by default."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "0.1.5",
@@ -1436,14 +1688,9 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/douyin-live",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "douyin",
-        "live",
-        "danmaku",
-        "chatbot"
+        "live-streaming",
+        "danmaku"
       ],
       "lastUpdate": "2026-11-08T13:03:45.486Z",
       "downloads": {
@@ -1463,9 +1710,17 @@
     },
     {
       "name": "@zhin.js/adapter-juejin",
-      "displayName": "juejin",
-      "description": "Zhin.js Juejin (掘金) comment adapter for Plugin Runtime (Experimental; whitelisted article comments, review-then-send with a Console approval page)",
-      "author": "GitHub Actions",
+      "displayName": "Juejin Comment Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "掘金评论适配器（实验性）",
+        "en": "Juejin Comment Adapter (Experimental)"
+      },
+      "description": "Juejin comment adapter (experimental): AI-assisted replies to comments on your own Juejin articles, with Console review before sending.",
+      "descriptionI18n": {
+        "zh-CN": "掘金评论适配器（实验性）：AI 辅助回复你自己的掘金文章评论，发送前可在 Console 审批。",
+        "en": "Juejin comment adapter (experimental): AI-assisted replies to comments on your own Juejin articles, with Console review before sending."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
       "category": "adapter",
       "version": "0.1.5",
@@ -1473,13 +1728,10 @@
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/adapters/juejin",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
         "juejin",
-        "comment",
-        "chatbot"
+        "掘金",
+        "comments",
+        "review"
       ],
       "lastUpdate": "2026-11-08T13:03:27.205Z",
       "downloads": {
@@ -1501,25 +1753,27 @@
     },
     {
       "name": "@zhin.js/plugin-bilibili",
-      "displayName": "plugin-bilibili",
-      "description": "Bilibili live-start and UP dynamic subscriptions for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "哔哩哔哩订阅",
+      "displayNameI18n": {
+        "zh-CN": "哔哩哔哩订阅",
+        "en": "Bilibili Subscriptions"
+      },
+      "description": "Live-start alerts and new dynamics from UP hosts, pushed to private chats, groups or channels.",
+      "descriptionI18n": {
+        "zh-CN": "订阅 UP 主开播提醒与新动态，推送到私聊、群聊或频道。",
+        "en": "Live-start alerts and new dynamics from UP hosts, pushed to private chats, groups or channels."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "information",
       "version": "0.1.11",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-bilibili",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/bilibili",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "bilibili",
-        "live",
-        "dynamic",
         "subscription",
-        "push"
+        "live-alert"
       ],
       "lastUpdate": "2026-11-08T06:23:48.938Z",
       "downloads": {
@@ -1539,21 +1793,28 @@
     },
     {
       "name": "@zhin.js/plugin-calendar",
-      "displayName": "plugin-calendar",
-      "description": "CalDAV / Google / Microsoft calendar tools for Zhin Agent",
-      "author": "GitHub Actions",
+      "displayName": "日历",
+      "displayNameI18n": {
+        "zh-CN": "日历",
+        "en": "Calendar"
+      },
+      "description": "CalDAV, Google Calendar and Outlook event lookup and creation for the Agent, with authorization done in chat.",
+      "descriptionI18n": {
+        "zh-CN": "为 Agent 提供 CalDAV、Google Calendar 与 Outlook 日程查询和创建，授权在聊天里完成。",
+        "en": "CalDAV, Google Calendar and Outlook event lookup and creation for the Agent, with authorization done in chat."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "0.1.16",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-calendar",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/calendar",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "plugin",
         "calendar",
-        "caldav"
+        "caldav",
+        "google-calendar",
+        "outlook"
       ],
       "lastUpdate": "2026-11-08T13:05:11.347Z",
       "downloads": {
@@ -1576,24 +1837,27 @@
     },
     {
       "name": "@zhin.js/plugin-content-moderation",
-      "displayName": "plugin-content-moderation",
-      "description": "Content moderation plugin for Zhin.js — inbound/outbound multi-source scanning (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Content Moderation",
+      "displayNameI18n": {
+        "zh-CN": "内容审核",
+        "en": "Content Moderation"
+      },
+      "description": "Multi-source scanning of inbound and outbound messages with configurable severity actions.",
+      "descriptionI18n": {
+        "zh-CN": "入站 / 出站多源扫描，按可配置的严重程度执行处置动作。",
+        "en": "Multi-source scanning of inbound and outbound messages with configurable severity actions."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "moderation",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-content-moderation",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/content-moderation",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "moderation",
         "content-safety",
-        "chatbot",
-        "im"
+        "filter"
       ],
       "lastUpdate": "2026-11-08T13:05:29.203Z",
       "downloads": {
@@ -1616,25 +1880,28 @@
     },
     {
       "name": "@zhin.js/plugin-earthquake",
-      "displayName": "plugin-earthquake",
-      "description": "Earthquake query and group alert plugin for Zhin.js — CENC + USGS, magnitude/region subscriptions (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "地震速报",
+      "displayNameI18n": {
+        "zh-CN": "地震速报",
+        "en": "Earthquake Alerts"
+      },
+      "description": "CENC and USGS data merged, with group subscriptions by magnitude and region; no API key needed.",
+      "descriptionI18n": {
+        "zh-CN": "合并中国地震台网与 USGS 数据，按震级和地区订阅群推送，无需 API Key。",
+        "en": "CENC and USGS data merged, with group subscriptions by magnitude and region; no API key needed."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "information",
       "version": "0.1.11",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-earthquake",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/earthquake",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "earthquake",
-        "地震",
         "cenc",
         "usgs",
-        "alert"
+        "地震"
       ],
       "lastUpdate": "2026-11-08T06:26:58.233Z",
       "downloads": {
@@ -1654,24 +1921,28 @@
     },
     {
       "name": "@zhin.js/plugin-group-suite",
-      "displayName": "plugin-group-suite",
-      "description": "Zhin.js 群运营套件：签到、教学、统计、持久词库与群欢迎",
-      "author": "GitHub Actions",
+      "displayName": "Group Suite",
+      "displayNameI18n": {
+        "zh-CN": "群管套件",
+        "en": "Group Suite"
+      },
+      "description": "Check-in points, message stats, group Q&A, a persistent phrase bank and member welcomes.",
+      "descriptionI18n": {
+        "zh-CN": "签到积分、消息统计、群问答、持久词库与新成员欢迎。",
+        "en": "Check-in points, message stats, group Q&A, a persistent phrase bank and member welcomes."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "community",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-group-suite",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "group",
-        "checkin",
-        "stats",
-        "teach"
+        "check-in",
+        "statistics",
+        "welcome"
       ],
       "lastUpdate": "2026-11-08T13:05:09.876Z",
       "downloads": {
@@ -1695,22 +1966,28 @@
     },
     {
       "name": "@zhin.js/plugin-ledger",
-      "displayName": "plugin-ledger",
-      "description": "Personal expense ledger for Zhin.js (Plugin Runtime): per-user entries in integer cents, period and category summaries, group privacy and an opt-in daily report",
-      "author": "GitHub Actions",
+      "displayName": "记账",
+      "displayNameI18n": {
+        "zh-CN": "记账",
+        "en": "Ledger"
+      },
+      "description": "Per-user expense records with daily, weekly and monthly category summaries, amounts hidden in groups, and an opt-in daily report.",
+      "descriptionI18n": {
+        "zh-CN": "按用户记录消费，按日 / 周 / 月汇总分类明细，群聊不显示金额，可订阅每日日报。",
+        "en": "Per-user expense records with daily, weekly and monthly category summaries, amounts hidden in groups, and an opt-in daily report."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.0.5",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-ledger",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/ledger",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "ledger",
-        "expense"
+        "expense",
+        "bookkeeping",
+        "记账"
       ],
       "lastUpdate": "2026-11-08T06:24:07.762Z",
       "downloads": {
@@ -1734,24 +2011,27 @@
     },
     {
       "name": "@zhin.js/plugin-link-poster",
-      "displayName": "plugin-link-poster",
-      "description": "Auto-detect link posters for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Link Poster",
+      "displayNameI18n": {
+        "zh-CN": "链接海报",
+        "en": "Link Poster"
+      },
+      "description": "Detects Bilibili, GitHub, Douyin and Xiaohongshu links and renders preview cards.",
+      "descriptionI18n": {
+        "zh-CN": "自动识别 B 站、GitHub、抖音、小红书链接，生成预览卡片。",
+        "en": "Detects Bilibili, GitHub, Douyin and Xiaohongshu links and renders preview cards."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-link-poster",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/link-poster",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "link-poster",
+        "link-preview",
         "bilibili",
         "github",
-        "douyin",
         "xiaohongshu"
       ],
       "lastUpdate": "2026-11-08T13:04:49.845Z",
@@ -1771,23 +2051,26 @@
     },
     {
       "name": "@zhin.js/plugin-lottery",
-      "displayName": "plugin-lottery",
-      "description": "Multi-game lottery analysis for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Lottery",
+      "displayNameI18n": {
+        "zh-CN": "彩票分析",
+        "en": "Lottery Analysis"
+      },
+      "description": "Draw sync, statistics and scheduled pushes for KL8, SSQ, DLT, 3D and Pick 3/5.",
+      "descriptionI18n": {
+        "zh-CN": "快乐8、双色球、大乐透、福彩3D、排列3/5 的开奖同步、统计与定时推送。",
+        "en": "Draw sync, statistics and scheduled pushes for KL8, SSQ, DLT, 3D and Pick 3/5."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "information",
       "version": "1.1.19",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-lottery",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "lottery",
-        "caipiao",
-        "kl8",
+        "彩票",
         "ssq",
         "dlt"
       ],
@@ -1810,25 +2093,27 @@
     },
     {
       "name": "@zhin.js/plugin-music",
-      "displayName": "plugin-music",
-      "description": "Music search and sharing plugin for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Music",
+      "displayNameI18n": {
+        "zh-CN": "点歌",
+        "en": "Music"
+      },
+      "description": "Search QQ Music and NetEase Cloud Music and share song cards.",
+      "descriptionI18n": {
+        "zh-CN": "搜索 QQ 音乐、网易云音乐并分享歌曲卡片。",
+        "en": "Search QQ Music and NetEase Cloud Music and share song cards."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "entertainment",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-music",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/music",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "music",
         "qq-music",
-        "netease-music",
-        "search",
-        "share"
+        "netease-music"
       ],
       "lastUpdate": "2026-11-08T13:05:21.325Z",
       "downloads": {
@@ -1850,25 +2135,27 @@
     },
     {
       "name": "@zhin.js/plugin-nettools",
-      "displayName": "plugin-nettools",
-      "description": "Network tools plugin for Zhin.js — multi-region ping, RDAP whois, DNS-over-HTTPS lookup and domain price comparison (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "网络工具",
+      "displayNameI18n": {
+        "zh-CN": "网络工具",
+        "en": "Network Tools"
+      },
+      "description": "Multi-region ping, RDAP whois, DNS-over-HTTPS lookups and domain price comparison, no API keys.",
+      "descriptionI18n": {
+        "zh-CN": "多地 Ping、RDAP Whois、DoH DNS 查询与域名比价，无需 API Key。",
+        "en": "Multi-region ping, RDAP whois, DNS-over-HTTPS lookups and domain price comparison, no API keys."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "0.1.11",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-nettools",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/nettools",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "ping",
         "whois",
-        "rdap",
         "dns",
-        "doh",
         "domain"
       ],
       "lastUpdate": "2026-11-08T06:24:30.806Z",
@@ -1889,16 +2176,28 @@
     },
     {
       "name": "@zhin.js/plugin-reminder",
-      "displayName": "plugin-reminder",
-      "description": "Persistent personal reminders for Zhin Plugin Runtime",
-      "author": "GitHub Actions",
+      "displayName": "持久提醒",
+      "displayNameI18n": {
+        "zh-CN": "持久提醒",
+        "en": "Reminders"
+      },
+      "description": "Persistent personal reminders that survive restarts and are delivered to and managed in their original conversation.",
+      "descriptionI18n": {
+        "zh-CN": "个人定时提醒，重启后不丢失，只在创建它的会话里提醒和管理。",
+        "en": "Persistent personal reminders that survive restarts and are delivered to and managed in their original conversation."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.0.15",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-reminder",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
+      "tags": [
+        "reminder",
+        "schedule",
+        "提醒"
+      ],
       "lastUpdate": "2026-11-08T13:06:14.622Z",
       "downloads": {
         "weekly": 0,
@@ -1921,25 +2220,27 @@
     },
     {
       "name": "@zhin.js/plugin-repeater",
-      "displayName": "plugin-repeater",
-      "description": "Repeater plugin for Zhin.js — auto-repeat when group members echo the same content (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Repeater",
+      "displayNameI18n": {
+        "zh-CN": "复读机",
+        "en": "Repeater"
+      },
+      "description": "Echoes a message when several group members repeat it in a row.",
+      "descriptionI18n": {
+        "zh-CN": "群内连续多人发送相同消息时自动跟读。",
+        "en": "Echoes a message when several group members repeat it in a row."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "entertainment",
       "version": "1.1.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-repeater",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/repeater",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "repeater",
         "echo",
-        "parrot",
-        "chatbot",
-        "im"
+        "复读机"
       ],
       "lastUpdate": "2026-11-08T13:05:02.178Z",
       "downloads": {
@@ -1959,25 +2260,28 @@
     },
     {
       "name": "@zhin.js/plugin-rss",
-      "displayName": "plugin-rss",
-      "description": "RSS/Atom feed subscription plugin for Zhin.js (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "RSS",
+      "displayNameI18n": {
+        "zh-CN": "RSS 订阅",
+        "en": "RSS Feeds"
+      },
+      "description": "Subscribe to RSS / Atom feeds and push new items to groups or private chats.",
+      "descriptionI18n": {
+        "zh-CN": "订阅 RSS / Atom 源，定时轮询并把新内容推送到群聊或私聊。",
+        "en": "Subscribe to RSS / Atom feeds and push new items to groups or private chats."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "information",
       "version": "1.1.19",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rss",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/rss",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "rss",
         "atom",
         "feed",
-        "subscription",
-        "push"
+        "subscription"
       ],
       "lastUpdate": "2026-11-08T13:05:46.437Z",
       "downloads": {
@@ -2000,22 +2304,27 @@
     },
     {
       "name": "@zhin.js/plugin-short-url",
-      "displayName": "plugin-short-url",
-      "description": "URL shortener plugin for Zhin.js — shorten & expand URLs (Plugin Runtime)",
-      "author": "GitHub Actions",
+      "displayName": "Short URL",
+      "displayNameI18n": {
+        "zh-CN": "短链接",
+        "en": "Short URL"
+      },
+      "description": "Shorten links and expand them, checking every redirect hop for safety.",
+      "descriptionI18n": {
+        "zh-CN": "生成与还原短链接，还原时逐跳校验地址安全。",
+        "en": "Shorten links and expand them, checking every redirect hop for safety."
+      },
+      "author": "lc-cn",
       "isOfficial": true,
-      "category": "util",
+      "category": "utility",
       "version": "1.1.19",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-short-url",
       "github": "https://github.com/zhinjs/zhin/tree/main/plugins/utils/short-url",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
         "short-url",
-        "url-shortener"
+        "url-shortener",
+        "短链接"
       ],
       "lastUpdate": "2026-11-08T13:05:23.823Z",
       "downloads": {
@@ -2039,11 +2348,18 @@
     "total": 56,
     "official": 56,
     "community": 0,
-    "adapters": 24,
-    "services": 2,
-    "utils": 18,
-    "games": 11,
-    "features": 1
+    "categories": {
+      "adapter": 24,
+      "ai": 1,
+      "admin": 1,
+      "community": 1,
+      "entertainment": 3,
+      "game": 11,
+      "information": 5,
+      "moderation": 1,
+      "service": 1,
+      "utility": 8
+    }
   },
   "updatedAt": "2026-11-12T14:07:14.615Z"
 }

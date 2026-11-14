@@ -2,7 +2,18 @@
   "name": "@zhin.js/adapter-weixin-ilink",
   "version": "1.1.29",
   "type": "module",
-  "description": "Zhin.js Weixin iLink (ClawBot) adapter for Plugin Runtime (long-poll)",
+  "description": "Weixin iLink adapter: personal WeChat through the iLink API (ClawBot), long-polling text and media messages.",
+  "keywords": [
+    "zhin.js",
+    "wechat",
+    "weixin",
+    "ilink",
+    "clawbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
@@ -12,21 +23,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "wechat",
-    "weixin",
-    "ilink",
-    "clawbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -117,6 +113,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Weixin iLink Adapter",
+      "displayNameI18n": {
+        "zh-CN": "微信 iLink 适配器",
+        "en": "Weixin iLink Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "微信 iLink 适配器：通过 iLink 接口（ClawBot）接入个人微信，长轮询收发文本与媒体消息。",
+        "en": "Weixin iLink adapter: personal WeChat through the iLink API (ClawBot), long-polling text and media messages."
+      },
+      "category": "adapter"
+    }
   }
 }

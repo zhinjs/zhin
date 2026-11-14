@@ -8,7 +8,4 @@ import { definePlugin } from 'zhin.js';
  */
 export default definePlugin({
   name: 'douyin-live',
-  metadata: {
-    displayName: 'Douyin Live Danmaku Adapter (Experimental)',
-  },
 });

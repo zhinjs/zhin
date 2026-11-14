@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/process-monitor",
   "version": "1.1.20",
-  "description": "进程监控与重启通知插件 (Plugin Runtime)",
+  "description": "Records starts, restarts and crashes, with a status command and a Console panel for memory and uptime.",
+  "keywords": [
+    "zhin.js",
+    "monitoring",
+    "process",
+    "uptime",
+    "restart"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -31,19 +42,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "plugin",
-    "monitor",
-    "process",
-    "notification"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -101,7 +99,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Process Monitor",
+      "displayNameI18n": {
+        "zh-CN": "进程监控",
+        "en": "Process Monitor"
+      },
+      "descriptionI18n": {
+        "zh-CN": "记录启动、重启与崩溃次数，提供运行状态命令和 Console 内存 / 运行时长面板。",
+        "en": "Records starts, restarts and crashes, with a status command and a Console panel for memory and uptime."
+      },
+      "category": "admin"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

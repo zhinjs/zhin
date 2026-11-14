@@ -9,6 +9,7 @@ import {
   type RssRuntime,
 } from '../src/index.js';
 import { createInMemoryRssDb } from '../src/db-store.js';
+import { decodeTaskTarget } from 'zhin.js/plugin-runtime';
 import RssPage, { meta } from '../pages/index/index.js';
 
 function createCall(runtime?: RssRuntime): PluginConsoleRpcCall {
@@ -84,6 +85,7 @@ describe('RSS Console RPC & Declarative Page', () => {
           channelId: 'g-100',
           creatorName: 'Alice',
           createdAt: '2026-01-01T00:00:00.000Z',
+          conversation: 'group:g-100',
         },
       ],
     });
@@ -129,5 +131,44 @@ describe('RSS Console RPC & Declarative Page', () => {
       requiredPermissions: ['rss:read'],
     });
     expect(typeof RssPage).toBe('function');
+  });
+
+  it('adds a subscription to the conversation chosen in the picker, with an exact target (#1250)', async () => {
+    const db = createInMemoryRssDb();
+    const runtime: RssRuntime = { db, config: resolveRssConfig({}), outbound: null };
+    const add = createRssConsoleRpc().methods.get('addSubscription')!;
+    const conversation = {
+      endpoint: { adapter: 'sandbox', id: 'root/sandbox\u0000zhin.adapter\u0000sandbox~sandbox-bot' },
+      kind: 'group',
+      id: 'g-200',
+    };
+    const result = await add.handler({ url: 'https://example.com/a.xml', title: 'A', conversation: JSON.stringify(conversation) }, createCall(runtime)) as Record<string, unknown>;
+    expect(result).toMatchObject({ ok: true, conversation });
+
+    const [row] = await getRssSubs(db)!.select();
+    expect(row).toMatchObject({ channel_type: 'group', channel_id: 'g-200', creator_name: 'Console' });
+    expect(decodeTaskTarget(JSON.parse(String(row!.target_json)) as Record<string, unknown>)).toEqual(conversation);
+
+    const status = await createRssConsoleRpc().methods.get('status')!.handler({}, createCall(runtime)) as { subscriptions: Record<string, unknown>[] };
+    expect(status.subscriptions[0]!.conversation).toEqual(conversation);
+
+    await expect(add.handler({ url: 'https://example.com/a.xml', conversation }, createCall(runtime)))
+      .rejects.toMatchObject({ code: 'conflict' });
+    await expect(add.handler({ url: 'https://example.com/b.xml', conversation: { ...conversation, threadId: 't-1' } }, createCall(runtime)))
+      .rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(add.handler({ url: 'https://example.com/b.xml', conversation: '{oops' }, createCall(runtime)))
+      .rejects.toMatchObject({ code: 'invalid_input' });
+  });
+
+  it('the page picks the destination with the conversation picker, not free-typed platform / target ids', () => {
+    const spec = (RssPage as unknown as { spec: {
+      actions: readonly { name: string; fields?: readonly { key: string; type?: string; required?: boolean }[] }[];
+      sections: readonly { id?: string; columns?: readonly { key: string; type?: string }[] }[];
+    } }).spec;
+    const fields = spec.actions.find(action => action.name === 'addSubscription')!.fields!;
+    expect(fields.map(field => field.key)).toEqual(['url', 'title', 'conversation']);
+    expect(fields.find(field => field.key === 'conversation')).toMatchObject({ type: 'conversation', required: true });
+    const columns = spec.sections.find(section => section.id === 'subscriptions')!.columns!;
+    expect(columns.find(column => column.key === 'conversation')?.type).toBe('conversation');
   });
 });

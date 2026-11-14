@@ -1,5 +1,7 @@
 export {
   classifyStartup,
+  EVENT_RETENTION_MS,
+  MAX_EVENTS,
   formatUptime,
   ProcessMonitor,
   processMonitorToken,
@@ -11,6 +13,7 @@ export type {
   ProcessMonitorOptions,
   ProcessMonitorStatusSnapshot,
   ProcessState,
+  ProcessStartupEvent,
   ResolvedProcessMonitorConfig,
   StartupReason,
 } from './monitor.js';
