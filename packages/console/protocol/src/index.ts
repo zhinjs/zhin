@@ -402,6 +402,20 @@ export type ConsoleEndpointPhase =
 
 export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
 
+/** Raw transport state an Adapter reports for an Endpoint. */
+export type ConsoleEndpointTransportState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
+
+const ENDPOINT_TRANSPORT_LABELS: Readonly<Record<'zh-CN' | 'en', Readonly<Record<ConsoleEndpointTransportState, string>>>> = Object.freeze({
+  'zh-CN': Object.freeze({ idle: '未连接', connecting: '连接中', open: '已连接', reconnecting: '重连中', closed: '已断开', stopped: '已停用', unknown: '状态未知' }),
+  en: Object.freeze({ idle: 'Not connected', connecting: 'Connecting', open: 'Connected', reconnecting: 'Reconnecting', closed: 'Disconnected', stopped: 'Stopped', unknown: 'Unknown' }),
+});
+
+/** Readable text of an Endpoint transport state (`open` → `已连接`); unknown values map to the unknown label. */
+export function endpointTransportLabel(state: string | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+  const labels = ENDPOINT_TRANSPORT_LABELS[locale] ?? ENDPOINT_TRANSPORT_LABELS['zh-CN'];
+  return labels[(state ?? 'unknown') as ConsoleEndpointTransportState] ?? labels.unknown;
+}
+
 /** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
   /** Canonical target for projection and message correlation, independent of display names. */
@@ -411,7 +425,9 @@ export interface ConsoleEndpointSummary {
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
   readonly admitted?: boolean;
-  readonly transportState?: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
+  readonly transportState?: ConsoleEndpointTransportState;
+  /** Readable (Chinese) text of `transportState`, e.g. `已连接` for `open` (#1250); absent from older Hosts. */
+  readonly transportLabel?: string;
   readonly eventDiagnostics?: Readonly<{ buffered: number; dropped: number; dispatchFailures: number }>;
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;

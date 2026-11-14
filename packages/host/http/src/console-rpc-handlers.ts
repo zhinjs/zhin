@@ -1,6 +1,7 @@
 import {
   CONFIG_PATCH_LIMITS,
   ENDPOINT_RPC,
+  endpointTransportLabel,
   type ConsoleConfigApplicationStatus,
 } from '@zhin.js/console-protocol';
 import type {
@@ -441,7 +442,7 @@ export async function dispatchHostResourceConsoleRpc(
     case 'endpoint.list': {
       try {
         const endpoints = ctx.listEndpoints ? await ctx.listEndpoints() : [];
-        emit({ requestId, data: { endpoints } });
+        emit({ requestId, data: { endpoints: endpoints.map(withTransportLabel) } });
       } catch (error) {
         emit({
           requestId,
@@ -468,7 +469,7 @@ export async function dispatchHostResourceConsoleRpc(
           emit({ requestId, error: 'endpoint not found' });
           return true;
         }
-        emit({ requestId, data: endpoint });
+        emit({ requestId, data: withTransportLabel(endpoint) });
       } catch (error) {
         emit({
           requestId,
@@ -674,3 +675,11 @@ export function configurationSaveMessage(result: { restartRequired: boolean; rev
   return result.restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存';
 }
 
+
+/** Adds the readable `transportLabel` next to the raw `transportState` of an Endpoint row (#1250). */
+function withTransportLabel<T>(endpoint: T): T {
+  if (!endpoint || typeof endpoint !== 'object') return endpoint;
+  const state = (endpoint as { transportState?: unknown }).transportState;
+  if (typeof state !== 'string') return endpoint;
+  return { ...endpoint, transportLabel: endpointTransportLabel(state) };
+}

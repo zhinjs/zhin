@@ -27,6 +27,7 @@ import {
   attentionItemId,
   attentionRevision,
   compareAttentionItems,
+  endpointTransportLabel,
   isConsoleAttentionRpcType,
   type ConsoleAttentionItem,
   type ConsoleAttentionKind,
@@ -473,7 +474,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         subject: { adapter: row.adapter, endpointKey: row.name },
         state: { transportState: row.transportState },
         title: t('endpoint.title', { account: `${row.adapter} / ${row.name}` }),
-        detail: t('endpoint.detail', { state: row.transportState }),
+        detail: t('endpoint.detail', { state: endpointTransportLabel(row.transportState, locale === 'en' ? 'en' : 'zh-CN') }),
         action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(row.adapter, row.name) },
         visible: allows(P.ENDPOINT_VIEW, endpointTarget(row.adapter, row.name)),
       }));
