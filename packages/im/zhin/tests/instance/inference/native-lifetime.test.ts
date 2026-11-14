@@ -12,7 +12,9 @@ it('keeps real Host SDK, disconnect, discovery and OAuth response cancellation a
       'tsx',
       resolve('packages/im/zhin/tests/instance/fixtures/inference-native-lifetime.mjs'),
     ],
-    { cwd: resolve('.'), timeout: 12_000 }
+    // Only a hang guard: the child compiles the instance graph cold with tsx, which alone took
+    // more than 12 s on a loaded run. The behavior is asserted inside the fixture.
+    { cwd: resolve('.'), timeout: 90_000 }
   );
   expect(result.stdout).toContain('host-native-gc-stream-disconnect-discovery-oauth-passed');
-}, 15_000);
+}, 100_000);
