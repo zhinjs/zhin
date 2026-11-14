@@ -1,4 +1,4 @@
-import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
+import { resolveHostCredentialSource, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
 import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { prepareFeatureOverrideMigration } from './feature-override-migration.js';
@@ -741,8 +741,21 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     ...(bridgedHttpHost ? { routes: bridgedHttpHost.routeTable() } : {}),
   });
   if (parsed.once) {
+    // `--once` is a start-up check: it waits (bounded) for every account's first start attempt to
+    // settle, then an enabled account whose start failed (failed, or retrying after a failed
+    // attempt) fails the run. Accounts still starting at the deadline or waiting for an
+    // interactive login are not failures (nothing has failed yet).
+    await waitForFirstStartOutcomes(() => im.endpoints.list(), ONCE_START_SETTLE_MS);
+    const failures = onceStartFailures(im.endpoints.list(), (() => {
+      const lease = host.runtime.snapshots.acquire();
+      try {
+        const adapters = lease.value.projections.get(adapterFeatureId);
+        return isAdapterIndex(adapters) ? (id: string) => adapters.startFailureReason(id as CapabilityId) : () => undefined;
+      } finally { lease.release(); }
+    })());
     await control.stop();
     controlChannel?.close();
+    if (failures.length) throw new AccountStartupError(failures);
     return;
   }
   // ADR 0040 §6：启动完成后接续生效中 / 待校验的自我变更（健康检查、回滚、回报）。
@@ -1018,6 +1031,70 @@ function openBrowser(url: string): void {
       error: error instanceof Error ? error.message : String(error),
     }));
   });
+}
+
+/** One account that failed to start within `zhin start --once`. */
+export interface OnceStartFailure {
+  readonly account: string;
+  readonly phase: 'failed' | 'retrying';
+  readonly category?: string;
+  /** The account's start failure, credentials masked (the `endpoint_start_failed` log text). */
+  readonly reason: string;
+}
+
+/** Upper bound `zhin start --once` waits for first start attempts beyond the activation grace. */
+export const ONCE_START_SETTLE_MS = 30_000;
+
+/**
+ * Resolves once no account is still in its first start attempt (`starting` without a login flow
+ * waiting for a person), or after `timeoutMs`.
+ */
+export async function waitForFirstStartOutcomes(
+  list: () => readonly Readonly<{ phase: string; pendingLogin?: boolean }>[],
+  timeoutMs: number,
+  intervalMs = 100,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (list().some(row => row.phase === 'starting' && !row.pendingLogin) && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, Math.max(0, deadline - Date.now()))));
+  }
+}
+
+/**
+ * Accounts that make `zhin start --once` fail: not online, start phase `failed` or `retrying`
+ * (a start attempt failed; retries would follow in a long-running instance), and no login flow
+ * waiting for a person. `starting` / `awaiting_assist` are not failures.
+ */
+export function onceStartFailures(
+  endpoints: readonly Readonly<{ id: string; name: string; adapter: string; status: string; phase: string; pendingLogin?: boolean;
+    lastError?: Readonly<{ category: string; message: string }>; startFailure?: Readonly<{ code: string }> }>[],
+  reasonOf: (id: string) => string | undefined,
+): readonly OnceStartFailure[] {
+  return endpoints
+    .filter(row => row.status !== 'online' && (row.phase === 'failed' || row.phase === 'retrying') && !row.pendingLogin)
+    .map(row => Object.freeze({
+      account: `${row.adapter}/${row.name}`,
+      phase: row.phase as 'failed' | 'retrying',
+      ...(row.lastError ? { category: row.lastError.category } : {}),
+      reason: reasonOf(row.id) ?? row.lastError?.message ?? row.startFailure?.code ?? 'start failed',
+    }));
+}
+
+/**
+ * `zhin start --once` with failed accounts: the message leads with the first failure (as the CLI
+ * printed a failed start before #1250) and names every failed account.
+ */
+export class AccountStartupError extends Error {
+  readonly failures: readonly OnceStartFailure[];
+  constructor(failures: readonly OnceStartFailure[]) {
+    const [first, ...rest] = failures;
+    const describe = (failure: OnceStartFailure) =>
+      `${failure.account}${failure.category ? ` ${failure.category}` : ''}${failure.phase === 'retrying' ? ', retrying' : ''}`;
+    super(`${first!.reason} [${describe(first!)}]${rest.length
+      ? `; ${rest.length} more account(s) failed to start: ${rest.map(describe).join('; ')}` : ''}`);
+    this.name = 'AccountStartupError';
+    this.failures = Object.freeze([...failures]);
+  }
 }
 
 /** Plugins owning an Endpoint whose profile declares `runtime.sandbox` (ADR 0044). */

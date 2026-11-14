@@ -59,6 +59,8 @@ interface ChildEpoch<E extends AnyEndpoint> {
 interface StartState {
   attempt: number;
   failure?: EndpointStartFailure;
+  /** Last failure's raw message with this account's credentials masked (the warn log text); host-only. */
+  reason?: string;
   phase?: EndpointStartPhase;
   nextRetryAt?: number;
 }
@@ -118,6 +120,12 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   get configurationIdentityFields(): readonly string[] | undefined { return undefined; }
   /** Opaque identity-bearing credential paths; changes require verified read-only identity. */
   get configurationIdentityProbeFields(): readonly string[] { return []; }
+  /**
+   * Credential paths whose values are masked in start-failure reasons (besides credential-like key
+   * names and resolved `${VAR}` references). Defaults to the identity probe fields; platforms with
+   * credentials under other names (e.g. a `buvid3` cookie) list them here.
+   */
+  get configurationCredentialFields(): readonly string[] { return this.configurationIdentityProbeFields; }
   protected identifyConfiguration(_config: Config, _signal: AbortSignal,
     _changedFields: readonly string[]): Promise<string | undefined> { return Promise.resolve(undefined); }
   /** Pure per-account resource configuration; only used for fresh add/replace identities. */
@@ -629,6 +637,16 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   }
 
   /**
+   * @internal Host startup report only (`zhin start --once`): the last start failure of a not-online
+   * account as its raw message with this account's credentials masked — the text the
+   * `endpoint_start_failed` warn log already carries. Never part of metadata, Console or RPC results.
+   */
+  startFailureReason(canonicalId: CapabilityId): string | undefined {
+    const child = this.#canonical.get(canonicalId);
+    return child?.start?.failure ? child.start.reason : undefined;
+  }
+
+  /**
    * Retry a failed or retry-waiting account now (Console relogin / start). Returns false when the
    * account is not in a failed start state, is disabled or the Adapter is closed.
    */
@@ -1117,7 +1135,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
             return;
           }
           attempt += 1;
-          child.start = { attempt, ...(child.start?.failure ? { failure: child.start.failure } : {}) };
+          child.start = { attempt, ...(child.start?.failure ? { failure: child.start.failure } : {}),
+            ...(child.start?.reason ? { reason: child.start.reason } : {}) };
           try {
             // Dispose retires the attempt's epoch itself (reason `inactive`), as for any stop.
             await this.#start(child);
@@ -1130,8 +1149,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
             const category = failureCategory(error, terminal);
             // Stored / returned text is built from the category and code only (raw SDK text may carry
             // credentials); the warn log gets the raw message with this account's credentials masked.
-            const reason = redactFailureMessage(error, [...credentialValues(child.desired.config), ...(child.current?.secrets ?? [])]);
+            const reason = redactFailureMessage(error, [...credentialValues(child.desired.config),
+              ...credentialFieldValues(child.desired.config, this.configurationCredentialFields), ...(child.current?.secrets ?? [])]);
             child.start = { attempt, failure: Object.freeze({ code, at, category, message: failureSummary(category, code) }),
+              ...(reason ? { reason } : {}),
               phase: terminal ? 'failed' : 'retrying', ...(delay !== undefined ? { nextRetryAt: at + delay } : {}) };
             logger.warn(formatCompact({ op: 'endpoint_start_failed', adapter: this.descriptor.name,
               endpoint: child.desired.endpointId, attempt, error: errorName(error), code, category,
@@ -1283,6 +1304,10 @@ function credentialValues(config: Readonly<Record<string, unknown>>): string[] {
   };
   visit(config, '', 0);
   return out;
+}
+/** String values at the Adapter's declared credential paths. */
+function credentialFieldValues(config: Readonly<Record<string, unknown>>, fields: readonly string[]): string[] {
+  return fields.map(field => readConfigurationPath(config, field)).filter((value): value is string => typeof value === 'string' && value.length > 0);
 }
 /**
  * Short operator text from a start error: URL credentials, query strings, the account's credential

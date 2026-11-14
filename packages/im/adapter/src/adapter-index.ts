@@ -397,6 +397,11 @@ export class AdapterIndex {
     })));
   }
 
+  /** @internal See {@link Adapter.startFailureReason}: host startup report only. */
+  startFailureReason(id: CapabilityId): string | undefined {
+    return this.adapterForEndpoint(id)?.startFailureReason(id);
+  }
+
   /** One snapshot-owned selector contract for Core, Console and plugin callers. */
   resolve(adapter: string, endpointKey: string): CapabilityId | undefined {
     const matches = (record: AdapterRecord) => matchesEndpoint(record, {

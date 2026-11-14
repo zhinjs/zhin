@@ -25,6 +25,8 @@ class StubAdapter extends Adapter<StubEndpoint> {
   identity?: readonly string[];
   preparing = false;
   override get configurationIdentityFields(): readonly string[] | undefined { return this.identity; }
+  credentialFields: readonly string[] = [];
+  override get configurationCredentialFields(): readonly string[] { return this.credentialFields; }
   protected override validateConfiguration(config: Readonly<Record<string, unknown>>): void {
     if (config.invalid === true) throw new AdapterManagementError('invalid_configuration', 'invalid account configuration');
   }
@@ -349,5 +351,25 @@ describe('start failure reasons', () => {
     expect(output).toContain('category: auth');
     expect(output).not.toContain(SECRET);
     expect(output).not.toContain('u:p@');
+    // The host startup report (`zhin start --once`) gets the same masked text as the log, never the credential.
+    const reason = root.index.startFailureReason(row.id)!;
+    expect(reason).toContain('401 Unauthorized');
+    expect(reason).not.toContain(SECRET);
+    expect(output).toContain(reason);
+    expect(JSON.stringify(root.index.describe())).not.toContain('401 Unauthorized');
+  });
+
+  it('masks values of the Adapter-declared credential fields whatever their key names', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const cookie = 'cookieval42';
+    const root = await fixture({ saved: [saved('main', { buvid3: cookie })], block: { endpoints: [{ id: 'main' }] } });
+    root.adapter.credentialFields = ['buvid3'];
+    root.adapter.failWith = new Error(`rejected session ${cookie}`);
+    await root.adapter.stop('main', 1);
+    await root.adapter.start('main', 2);
+    const row = root.index.describe().find(entry => entry.id.endsWith('~main'))!;
+    expect(root.index.startFailureReason(row.id)).toBe('rejected session ***');
+    expect(warn.mock.calls.flat().join('\n')).not.toContain(cookie);
   });
 });

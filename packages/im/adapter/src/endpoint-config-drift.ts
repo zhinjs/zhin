@@ -140,7 +140,7 @@ const CREDENTIAL_QUERY_PARAMETER = /^(?:access[-_]?token|token|auth|authorizatio
 function isCredentialUrl(value: string, isSecretKey?: (key: string) => boolean): boolean {
   const match = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?/iu.exec(value.trim());
   if (!match) return false;
-  if (match[1]!.includes('@')) return true;
+  if ((match[1] ?? '').includes('@')) return true;
   for (const pair of (match[3] ?? '').split('&')) {
     const raw = pair.split('=')[0] ?? '';
     let name = raw;
@@ -364,9 +364,9 @@ export interface EndpointWritebackPlaceholder {
 
 /** `${VAR}` names inside a stored value. */
 function referencedVariables(value: unknown): readonly string[] {
-  let text = '';
+  let text: string;
   try { text = typeof value === 'string' ? value : JSON.stringify(value) ?? ''; } catch { return []; }
-  return [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1]!);
+  return [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1] ?? '').filter(Boolean);
 }
 
 /**
