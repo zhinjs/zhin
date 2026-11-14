@@ -1,11 +1,11 @@
 ---
-"@zhin.js/cli": patch
-"zhin.js": patch
-"@zhin.js/console-protocol": patch
+"@zhin.js/cli": minor
+"zhin.js": minor
+"@zhin.js/console-protocol": minor
 "@zhin.js/host-http": patch
 "@zhin.js/gateway": patch
-"@zhin.js/scaffold-wizard": patch
-"@zhin.js/agent": patch
+"@zhin.js/scaffold-wizard": minor
+"@zhin.js/agent": minor
 ---
 
 CLI 输出与实例错误说明（#1250）：
