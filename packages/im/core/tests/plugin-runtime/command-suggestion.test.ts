@@ -7,6 +7,10 @@ const root = rootPluginId();
 const owner = childPluginId(root, 'rss');
 const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'rss-list',
   source: '/p/rss/commands/rss-list/index.ts', definition: defineCommand({ execute: () => 'ok' }) });
+const extra = ['qrcode/gen', 'process/list', 'ledger/add'].map(localName => createCapabilitySlot({
+  owner, feature: commandFeatureId, localName,
+  source: `/p/rss/commands/${localName}/index.ts`, definition: defineCommand({ execute: () => 'ok' }) }));
+const slots = [slot, ...extra];
 
 function snapshot(): RuntimeSnapshot {
   const base: RuntimeSnapshot = {
@@ -17,9 +21,9 @@ function snapshot(): RuntimeSnapshot {
     ]),
     config: new Map([[root, { locale: 'zh-CN' }], [owner, {}]]),
     resources: new Map([[root, new Map()], [owner, new Map()]]),
-    capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    capabilities: new Map(slots.map(entry => [entry.id, entry])), projections: new Map(),
   };
-  (base.projections as Map<unknown, unknown>).set(commandFeatureId, new CommandIndex([slot], base));
+  (base.projections as Map<unknown, unknown>).set(commandFeatureId, new CommandIndex(slots, base));
   return base;
 }
 
@@ -41,5 +45,22 @@ describe('suggestCommandReply (#1250)', () => {
     expect(await suggestCommandReply(message('rss list', 'group'), state, '')).toBeUndefined();
     expect(await suggestCommandReply(message('rss list', 'private'), state, '/')).toBeUndefined();
     expect(await suggestCommandReply(message('今天吃什么', 'private'), state, '')).toBeUndefined();
+  });
+
+  it('leaves natural-language questions without a prefix to the AI (private and @bot)', async () => {
+    const state = snapshot();
+    const questions = ['rss 是什么', 'rss 订阅 怎么弄', 'qrcode 是什么', 'process 太慢了', 'ledger 是啥', 'rss?', 'qrcode 吗'];
+    for (const text of questions) {
+      expect(await suggestCommandReply(message(text, 'private'), state, ''), `private ${text}`).toBeUndefined();
+      expect(await suggestCommandReply(message(`@bot ${text}`, 'group', true), state, ''), `@bot ${text}`).toBeUndefined();
+    }
+    // A bare namespace word without the prefix is not a command attempt either.
+    expect(await suggestCommandReply(message('qrcode hello', 'private'), state, '')).toBeUndefined();
+  });
+
+  it('still suggests namespace matches after an explicit command prefix', async () => {
+    const state = snapshot();
+    expect(await suggestCommandReply(message('/qrcode hello', 'group'), state, '/')).toBe('没有这个指令，你是不是想用：/qrcode gen');
+    expect(await suggestCommandReply(message('/rss 是什么', 'private'), state, '/')).toBe('没有这个指令，你是不是想用：/rss-list');
   });
 });

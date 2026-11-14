@@ -350,9 +350,11 @@ export class CommandIndex {
    * Near-miss names for text that did not route (issue #1250): display names (with
    * `commandPrefix`) of commands the sender may run whose name or alias resembles the
    * start of `text`. Root config `commandSuggestion` tunes or disables it (`false`).
+   * `explicitPrefix` (default: `commandPrefix` is non-empty) says the message carried the
+   * command prefix; without it only short, command-like text is matched (no namespace matches).
    */
-  async suggest(text: string, { source, commandPrefix = '', snapshot: operationSnapshot = this.snapshot, locale: localeOverride }: {
-    readonly source?: unknown; readonly commandPrefix?: string; readonly snapshot?: RuntimeSnapshot; readonly locale?: Locale;
+  async suggest(text: string, { source, commandPrefix = '', explicitPrefix = commandPrefix.length > 0, snapshot: operationSnapshot = this.snapshot, locale: localeOverride }: {
+    readonly source?: unknown; readonly commandPrefix?: string; readonly explicitPrefix?: boolean; readonly snapshot?: RuntimeSnapshot; readonly locale?: Locale;
   } = {}): Promise<readonly string[]> {
     const rootConfig = operationSnapshot.config.get(operationSnapshot.root) as { commandSuggestion?: unknown } | undefined;
     const config = resolveCommandSuggestionConfig(rootConfig?.commandSuggestion);
@@ -362,7 +364,7 @@ export class CommandIndex {
       words: route.segments.filter(segment => !segment.startsWith('$')),
       arity: route.record.parameters.length + Object.keys(route.record.options).length,
     }));
-    const ranked = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER });
+    const ranked = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const names: string[] = [];
     for (const record of ranked) {

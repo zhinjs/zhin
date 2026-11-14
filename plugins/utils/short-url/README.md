@@ -26,7 +26,7 @@ This plugin currently has no configuration fields. The empty, strict schema live
 ## Behaviour
 
 - `shorten` (command, Agent tool and the Console "Create" action) calls the public is.gd API and returns the link it issues. The Console page lists the links created since the process started; is.gd offers no listing, click statistics or deletion, so "Remove From List" only clears the local row.
-- Chat aliases: `short <url>` / `短链 <url>` for `shorten`, `short expand <url>` / `还原短链 <url>` for `expand`; the old names keep working.
+- Chat aliases: `生成短链 <url>` for `shorten`, `short expand <url>` / `还原短链 <url>` for `expand`; the old names keep working.
 - `expand` follows the redirect chain itself. Every hop must be an `http(s)` URL on a public address: loopback, private, link-local, cloud-metadata and internal host names are refused, each request times out after 10 seconds and response bodies are never read.
 
 ## Language / 语言

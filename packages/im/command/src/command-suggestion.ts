@@ -12,9 +12,15 @@
  *   (CJK: {@link MIN_CJK_LENGTH_FOR_ONE_EDIT}), two edits only when configured and only for
  *   names of at least {@link MIN_LENGTH_FOR_TWO_EDITS} characters;
  * - a first word that is the whole leading word of a multi-word name (`qrcode …` for
- *   `qrcode gen`, `rss …` for `rss-list`) also counts, used only when no name is within the edit distance;
+ *   `qrcode gen`, `rss …` for `rss-list`) also counts, used only when no name is within the edit
+ *   distance — and only when the message carried an explicit command prefix
+ *   ({@link CommandSuggestionOptions.explicitPrefix});
  * - after the name, the message may carry at most the command's declared arguments plus one word,
- *   so ordinary sentences that merely start with a similar word stay chat.
+ *   so ordinary sentences that merely start with a similar word stay chat;
+ * - without an explicit prefix (private chat, an @mention) the message is a question for the AI
+ *   as often as a mistyped command, so only a short, command-like message is considered: no
+ *   question words or marks (`是什么`, `怎么`, `吗`, `啥`, `?`, …) and no words beyond the
+ *   command's declared arguments.
  */
 
 /** Root config `commandSuggestion`: `false` disables suggestions; an object tunes them. */
@@ -42,6 +48,25 @@ const MIN_LENGTH_FOR_TWO_EDITS = 8;
 const MAX_INPUT_LENGTH = 64;
 const MIN_NAMESPACE_LENGTH = 3;
 const NAMESPACE_DISTANCE = 3;
+/** Longest unprefixed message still considered a mistyped command. */
+const MAX_IMPLICIT_INPUT_LENGTH = 32;
+/** Question words and marks: an unprefixed message carrying one is a question for the AI. */
+const QUESTION_PATTERN = /[?？]|是什么|是啥|什么|怎么|怎样|如何|为什么|为啥|咋|吗|嘛|呢|啥|么|吧|能不能|可以不|太/u;
+
+export interface CommandSuggestionOptions {
+  /**
+   * The message carried the configured command prefix (`/rss foo`). Without it (private chat,
+   * an @mention) namespace matches are off and only short, command-like text is considered.
+   * Default `false`.
+   */
+  readonly explicitPrefix?: boolean;
+}
+
+/** Whether unprefixed `text` looks like a command rather than a sentence or question. */
+export function looksLikeImplicitCommand(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && trimmed.length <= MAX_IMPLICIT_INPUT_LENGTH && !QUESTION_PATTERN.test(trimmed);
+}
 
 /** Normalize the root config value; unknown shapes fall back to the defaults. */
 export function resolveCommandSuggestionConfig(value: unknown): ResolvedCommandSuggestionConfig {
@@ -108,9 +133,13 @@ export function rankCommandSuggestions<T>(
   text: string,
   candidates: readonly CommandNameCandidate<T>[],
   config: ResolvedCommandSuggestionConfig,
+  { explicitPrefix = false }: CommandSuggestionOptions = {},
 ): readonly T[] {
   const trimmed = text.trim();
   if (!config.enabled || !trimmed || trimmed.length > MAX_INPUT_LENGTH || /[\r\n]/u.test(trimmed)) return [];
+  if (!explicitPrefix && !looksLikeImplicitCommand(trimmed)) return [];
+  // Unprefixed text may carry only the declared arguments after the name; prefixed text one more word.
+  const extraWords = explicitPrefix ? 1 : 0;
   const words = trimmed.split(/\s+/u);
   const best = new Map<T, number>();
   for (const candidate of candidates) {
@@ -121,14 +150,15 @@ export function rankCommandSuggestions<T>(
     let distance = Number.POSITIVE_INFINITY;
     // The name may be typed with its words split differently (`rss list` for `rss-list`).
     for (let taken = 1; taken <= Math.min(words.length, candidate.words.length + 1); taken++) {
-      if (words.length - taken > candidate.arity + 1) continue;
+      if (words.length - taken > candidate.arity + extraWords) continue;
       const head = normalizeCommandName(words.slice(0, taken).join(''));
       if (head) distance = Math.min(distance, commandNameDistance(head, name, allowed));
     }
     if (distance > allowed) {
       // Namespace match (`qrcode hello` for `qrcode gen`, `rss foo` for `rss-list`): the first
-      // word is a whole leading word of a multi-word name; used only without an edit match.
-      if (!namespaceMatches(words, candidate)) continue;
+      // word is a whole leading word of a multi-word name; used only without an edit match and
+      // only after an explicit command prefix (unprefixed `rss 是什么` is a question for the AI).
+      if (!explicitPrefix || !namespaceMatches(words, candidate)) continue;
       distance = NAMESPACE_DISTANCE;
     }
     const previous = best.get(candidate.value);

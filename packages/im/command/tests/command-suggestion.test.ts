@@ -1,7 +1,7 @@
 import { childPluginId, createCapabilitySlot, rootPluginId, type Locale, type RuntimeSnapshot, type CapabilitySlot } from '@zhin.js/plugin-runtime';
 import { CommandIndex, commandFeatureId, defineCommand, type CommandDefinition } from '../src/index.js';
 import {
-  allowedCommandDistance, commandNameDistance, rankCommandSuggestions, resolveCommandSuggestionConfig,
+  allowedCommandDistance, commandNameDistance, looksLikeImplicitCommand, rankCommandSuggestions, resolveCommandSuggestionConfig,
 } from '../src/command-suggestion.js';
 
 const root = rootPluginId();
@@ -96,12 +96,38 @@ describe('command suggestions (#1250)', () => {
       { value: 'rss-list', words: ['rss-list'], arity: 0 },
       { value: 'go', words: ['go', 'home'], arity: 0 },
     ];
-    expect(rankCommandSuggestions('qrcode hello', candidates, config)).toEqual(['qrcode gen', 'qrcode scan']);
-    expect(rankCommandSuggestions('rss foo', candidates, config)).toEqual(['rss-list']);
-    expect(rankCommandSuggestions('qrcode a b c d e', candidates, config)).toEqual([]);
+    const explicit = { explicitPrefix: true };
+    expect(rankCommandSuggestions('qrcode hello', candidates, config, explicit)).toEqual(['qrcode gen', 'qrcode scan']);
+    expect(rankCommandSuggestions('rss foo', candidates, config, explicit)).toEqual(['rss-list']);
+    expect(rankCommandSuggestions('qrcode a b c d e', candidates, config, explicit)).toEqual([]);
     // Namespaces shorter than three characters never match on their own.
-    expect(rankCommandSuggestions('go there', candidates, config)).toEqual([]);
-    expect(rankCommandSuggestions('qrcode hello', candidates, { ...config, enabled: false })).toEqual([]);
+    expect(rankCommandSuggestions('go there', candidates, config, explicit)).toEqual([]);
+    expect(rankCommandSuggestions('qrcode hello', candidates, { ...config, enabled: false }, explicit)).toEqual([]);
+    // Without an explicit command prefix there are no namespace matches at all.
+    expect(rankCommandSuggestions('qrcode hello', candidates, config)).toEqual([]);
+    expect(rankCommandSuggestions('rss foo', candidates, config)).toEqual([]);
+  });
+
+  it('treats unprefixed questions and sentences as chat, not near misses', () => {
+    const config = resolveCommandSuggestionConfig(undefined);
+    const candidates = [
+      { value: 'rss-list', words: ['rss-list'], arity: 0 },
+      { value: 'rss', words: ['rss'], arity: 1 },
+      { value: 'qrcode gen', words: ['qrcode', 'gen'], arity: 2 },
+      { value: 'process list', words: ['process', 'list'], arity: 0 },
+      { value: 'ledger add', words: ['ledger', 'add'], arity: 2 },
+    ];
+    for (const text of ['rss 是什么', 'rss 订阅 怎么弄', 'qrcode 是什么', 'process 太慢了', 'ledger 是啥', 'rss-list?', 'rss-lst 吗',
+      'rss-list 是什么意思呢']) {
+      expect(rankCommandSuggestions(text, candidates, config), text).toEqual([]);
+    }
+    // Unprefixed: only the declared arguments may follow the name (prefixed: one more word).
+    expect(rankCommandSuggestions('rss-lst extra', candidates, config)).toEqual([]);
+    expect(rankCommandSuggestions('rss-lst extra', candidates, config, { explicitPrefix: true })).toEqual(['rss-list']);
+    expect(rankCommandSuggestions('rss-lst', candidates, config)).toEqual(['rss-list']);
+    expect(looksLikeImplicitCommand('rss list')).toBe(true);
+    expect(looksLikeImplicitCommand('rss 怎么弄')).toBe(false);
+    expect(looksLikeImplicitCommand('x'.repeat(40))).toBe(false);
   });
 
   it('can be tuned or disabled by root config commandSuggestion', async () => {

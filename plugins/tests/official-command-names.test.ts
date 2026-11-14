@@ -59,14 +59,18 @@ describe('official plugin command names', () => {
   it('routes Chinese game names and lists games with Chinese names and descriptions', async () => {
     const index = await loadIndex(games);
     const routes: Record<string, string> = {
-      '猜数字': 'guess [action]', '石头剪刀布': 'rps [action]', '游戏': 'games [action]', '游戏列表': 'games [action]',
-      '二十一点': 'bj [action]', '骰子对决': 'dice [action]', '地牢远征': 'dungeon [action]', '成语接龙': 'chain [action]',
+      '猜数字': 'guess [action]', '玩石头剪刀布': 'rps [action]', '游戏大厅': 'games [action]', '游戏列表': 'games [action]',
+      '玩二十一点': 'bj [action]', '骰子对决': 'dice [action]', '地牢远征': 'dungeon [action]', '成语接龙': 'chain [action]',
       '文字冒险': 'adv [action]', '井字游戏': 'ttt [action]', '猜谜语': 'riddle [action]', '俄罗斯轮盘': 'roulette [action]',
       'game stats': '战绩', 'game ranking': '排行 [query]',
       // Old names keep working.
       guess: 'guess [action]', rps: 'rps [action]', games: 'games [action]', 'game-stats': '战绩',
     };
     for (const [input, command] of Object.entries(routes)) expect(await routeOf(index, input), input).toBe(command);
+    // Common everyday words stay chat when no command prefix is configured.
+    for (const input of ['游戏 好玩吗', '游戏', '二十一点 开会', '二十一点', '石头剪刀布 谁输谁请客']) {
+      expect(await routeOf(index, input), input).toBeUndefined();
+    }
     const zh = index.list('zh-CN');
     const guess = zh.find(entry => entry.id.includes('guess'));
     expect(guess).toMatchObject({ name: '猜数字 [action]', description: '猜数字：1~100 之间猜一个整数' });
@@ -107,15 +111,22 @@ describe('official plugin command names', () => {
     const routes: Record<string, string> = {
       'qrcode gen hello': 'gen', '生成二维码 hello': 'gen', 'gen hello': 'gen',
       'qrcode scan https://example.com/a.png': 'scan <url>', '识别二维码 https://example.com/a.png': 'scan <url>', 'scan https://example.com/a.png': 'scan <url>',
-      'short https://example.com/long': 'shorten <url>', '短链 https://example.com/long': 'shorten <url>', 'shorten https://example.com/long': 'shorten <url>',
+      '生成短链 https://example.com/long': 'shorten <url>', 'shorten https://example.com/long': 'shorten <url>',
       'short expand https://t.cn/x': 'expand <url>', '还原短链 https://t.cn/x': 'expand <url>', 'expand https://t.cn/x': 'expand <url>',
     };
     for (const [input, command] of Object.entries(routes)) expect(await routeOf(index, input), input).toBe(command);
-    expect(index.list('zh-CN').map(entry => entry.name).sort()).toEqual(['生成二维码', '短链 <url>', '识别二维码 <url>', '还原短链 <url>'].sort());
-    expect(index.list('en').map(entry => entry.name).sort()).toEqual(['qrcode gen', 'qrcode scan <url>', 'short <url>', 'short expand <url>'].sort());
+    expect(index.list('zh-CN').map(entry => entry.name).sort()).toEqual(['生成二维码', '生成短链 <url>', '识别二维码 <url>', '还原短链 <url>'].sort());
+    expect(index.list('en').map(entry => entry.name).sort()).toEqual(['qrcode gen', 'qrcode scan <url>', 'shorten <url>', 'short expand <url>'].sort());
     // `qrcode <text>` is not a route (it would swallow `qrcode scan …`); it gets a suggestion instead.
     expect(await routeOf(index, 'qrcode hello')).toBeUndefined();
-    expect(await index.suggest('qrcode hello', { locale: 'en' })).toEqual(['qrcode gen', 'qrcode scan <url>']);
+    expect(await index.suggest('qrcode hello', { locale: 'en', explicitPrefix: true })).toEqual(['qrcode gen', 'qrcode scan <url>']);
+    // Without the command prefix a namespace word alone is chat, as is a question.
+    expect(await index.suggest('qrcode hello', { locale: 'en' })).toEqual([]);
+    expect(await index.suggest('qrcode 是什么', { locale: 'zh-CN' })).toEqual([]);
+    // Everyday words are not routes: `short` / `短链` were dropped for `生成短链`.
+    for (const input of ['short 是什么意思', '短链 是什么', 'short https://example.com/long', '短链 https://example.com/long']) {
+      expect(await routeOf(index, input), input).toBeUndefined();
+    }
   });
 
   it('keeps the bilibili adapter and bilibili utility routes collision-free together', async () => {
