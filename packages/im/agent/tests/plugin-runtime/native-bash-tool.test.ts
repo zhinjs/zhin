@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import { Sandbox, type SandboxResult } from '../../src/security/sandbox.js';
 import {
   NativeBashToolFeature,
   SandboxBashExecutionPort,
+  isSelfFileAnchorTainted,
   turnPolicyAllowsShell,
   withoutForbiddenShell,
   type BashExecutionPort,
@@ -224,6 +225,37 @@ describe('SandboxBashExecutionPort self-file quarantine', () => {
     expect(existsSync(join(root, 'notes.txt'))).toBe(true);
     expect(output).toContain('QUARANTINED');
     expect(output).toContain(`BOT.md -> ${moved[0]}`);
+  });
+
+  it('keeps the anchor tainted while a stopped container is unconfirmed: a recreated BOT.md is never treated as pre-existing (#1266)', async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'zhin-bash-quarantine-')));
+    const dir = root;
+    let confirm!: (value: boolean) => void;
+    const containerStopped = new Promise<boolean>(resolve => { confirm = resolve; });
+    vi.spyOn(Sandbox.prototype, 'execute').mockImplementationOnce(async () => {
+      writeFileSync(join(dir, 'BOT.md'), 'first');
+      return { ...ok, success: false, timedOut: true, containerStopConfirmed: false, containerStopped };
+    });
+    const port = new SandboxBashExecutionPort();
+    const request = { command: 'loop', cwd: root, timeoutMs: 10, signal: new AbortController().signal, policy: isolatedPolicy(root) };
+    const first = await port.execute(request);
+    expect(first.quarantined?.map(entry => entry.name)).toEqual(['BOT.md']);
+    expect(first).not.toHaveProperty('containerStopped');
+    expect(isSelfFileAnchorTainted(root)).toBe(true);
+
+    // The surviving container recreates BOT.md between runs.
+    writeFileSync(join(dir, 'BOT.md'), 'second');
+    vi.spyOn(Sandbox.prototype, 'execute').mockResolvedValueOnce(ok);
+    const second = await port.execute(request);
+    expect(second.quarantined?.map(entry => entry.name)).toEqual(['BOT.md']);
+    expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
+
+    // Once the stop is confirmed a final sweep runs and the taint is cleared.
+    writeFileSync(join(dir, 'BOT.md'), 'third');
+    confirm(true);
+    await vi.waitFor(() => expect(isSelfFileAnchorTainted(dir)).toBe(false));
+    expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
+    expect(readdirSync(dir).filter(name => name.startsWith('BOT.md.quarantined-'))).toHaveLength(3);
   });
 
   it('leaves self files alone when they existed before the run, and on read-only turns', async () => {

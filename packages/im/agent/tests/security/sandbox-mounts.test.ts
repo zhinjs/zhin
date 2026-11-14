@@ -260,6 +260,11 @@ describe('self-file quarantine (#1250)', () => {
     const data = { projectRoot: project, roots: [project.toLowerCase()], selfFiles: ['plugin.ts', 'src/entry.ts'], selfDirs: [], denyFiles: [] };
     expect(selfFileAnchor(path.join(project, 'sub'), data)).toBe(project);
     expect(selfFileAnchor(project, undefined)).toBe(project);
+    // Resolved like the overlays: without projectRoot the folded roots[0] is walked case-insensitively.
+    const { projectRoot: _omitted, ...noRoot } = data;
+    expect(selfFileAnchor(project, noRoot)).toBe(project);
+    expect(selfFileAnchor(path.join(root, 'missing'), data)).toBeUndefined();
+    expect(selfFileAnchor(project, { ...data, projectRoot: path.join(root, 'gone') })).toBeUndefined();
     const names = rootSelfFileNames(data);
     expect(names.has('plugin.ts')).toBe(true);
     expect(names.has('bot.md')).toBe(true);

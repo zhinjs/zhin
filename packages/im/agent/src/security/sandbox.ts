@@ -221,6 +221,17 @@ export interface SandboxResult {
   blocked: boolean;
   /** 阻止原因 */
   blockReason?: string;
+  /**
+   * Container runs that were stopped (timeout / cancel) only: whether the container is confirmed
+   * gone. Killing the `docker run` CLI does not stop the container, so until this is `true` the
+   * container may still be writing to the workspace mount.
+   */
+  containerStopConfirmed?: boolean;
+  /**
+   * Set with `containerStopConfirmed: false`: keeps trying to remove the container in the
+   * background and resolves `true` once it is confirmed gone (`false` when it gives up).
+   */
+  containerStopped?: Promise<boolean>;
   /** 资源使用情况 */
   resourceUsage?: {
     cpuTime: number;

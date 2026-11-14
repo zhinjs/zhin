@@ -126,6 +126,22 @@ interface Candidate {
 }
 
 /**
+ * The project root the self-path overlays anchor to: the injected `projectRoot` (realpath), else
+ * the first case-folded root resolved against the filesystem; without data the (realpathed)
+ * mounted directory stands in for it. `undefined` when the injected root does not exist.
+ */
+function resolveProjectAnchor(
+  mount: string,
+  protectedPaths: ToolProtectedPathData | undefined,
+  listing: (dir: string) => string[] | undefined,
+): string | undefined {
+  if (!protectedPaths) return mount;
+  return protectedPaths.projectRoot
+    ? safeRealpath(protectedPaths.projectRoot)
+    : resolveFolded('/', protectedPaths.roots[0] ?? '', listing, new Map()).abs;
+}
+
+/**
  * Overlays for one mounted directory. `protectedPaths` is `undefined` when the host injected
  * nothing: the conventional names are then anchored to the mounted directory itself (fail closed).
  * `mountDir` must be the directory handed to `docker run -v`.
@@ -155,12 +171,7 @@ function computeOverlaySet(
   const defaultDirs = new Map(DEFAULT_SELF_DIRS.map(name => [fold(name), name] as const));
   const lockfiles = LOCKFILE_NAMES.map(fold);
 
-  // Project root: the data says where it is; without data the mounted directory stands in for it.
-  const projectRoot = protectedPaths
-    ? protectedPaths.projectRoot
-      ? safeRealpath(protectedPaths.projectRoot)
-      : resolveFolded('/', protectedPaths.roots[0] ?? '', listing, new Map()).abs
-    : mount;
+  const projectRoot = resolveProjectAnchor(mount, protectedPaths, listing);
   const anchors = new Set<string>();
   if (projectRoot) anchors.add(projectRoot);
 
@@ -362,9 +373,15 @@ export function rootSelfFileNames(protectedPaths?: ToolProtectedPathData): Reado
   return names;
 }
 
-/** The project root the self-file overlays anchor to; the mounted directory stands in without data. */
-export function selfFileAnchor(mountDir: string, protectedPaths?: ToolProtectedPathData): string {
-  return protectedPaths?.projectRoot ?? mountDir;
+/**
+ * The project root the self-file overlays anchor to, resolved exactly like
+ * {@link computeReadOnlyOverlays} does (realpath; `roots[0]` without `projectRoot`; the mounted
+ * directory without data). `undefined` when it cannot be resolved.
+ */
+export function selfFileAnchor(mountDir: string, protectedPaths?: ToolProtectedPathData): string | undefined {
+  const mount = safeRealpath(mountDir);
+  if (!mount) return undefined;
+  return resolveProjectAnchor(mount, protectedPaths, makeListing());
 }
 
 /** Names (original case) of the self files that exist directly under `projectRoot` right now. */

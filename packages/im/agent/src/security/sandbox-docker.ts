@@ -109,6 +109,91 @@ export function ensureImage(
   return check;
 }
 
+/** Result of one docker CLI command: exit code and (bounded) stderr; `null` when it could not run or timed out. */
+export type DockerCommandResult = Readonly<{ code: number | null; stderr: string }> | null;
+
+/**
+ * The docker CLI as `executeInDocker` uses it. Injectable so the stop / confirm protocol can be
+ * tested without Docker.
+ */
+export interface DockerCli {
+  /** Starts `docker run …` (the foreground CLI process). */
+  spawnRun(args: readonly string[]): child_process.ChildProcess;
+  /** Runs a short docker command to completion. */
+  run(args: readonly string[], timeoutMs: number): Promise<DockerCommandResult>;
+}
+
+function runDockerCommand(args: readonly string[], timeoutMs: number): Promise<DockerCommandResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let stderr = '';
+    const finish = (value: DockerCommandResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    let child: child_process.ChildProcess;
+    try {
+      child = child_process.spawn('docker', [...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+    } catch {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(null);
+    }, timeoutMs);
+    child.stderr?.on('data', (chunk) => { if (stderr.length < 4096) stderr += String(chunk); });
+    child.on('error', () => finish(null));
+    child.on('close', code => finish({ code, stderr }));
+  });
+}
+
+const SYSTEM_DOCKER: DockerCli = {
+  spawnRun: args => child_process.spawn('docker', [...args], { stdio: ['pipe', 'pipe', 'pipe'] }),
+  run: runDockerCommand,
+};
+
+const NO_SUCH_CONTAINER = /no such (?:container|object)/iu;
+
+/** Bounds of the stop protocol: the synchronous confirmation, then background retries. */
+export const CONTAINER_STOP_CONFIRM_MS = 10_000;
+export const CONTAINER_STOP_RETRY_MS = 5_000;
+export const CONTAINER_STOP_RETRIES = 24;
+
+/**
+ * Removes the container and confirms it is gone: `docker rm -f` (kill + remove), then
+ * `docker inspect` must answer "no such container". Only that answer counts as confirmation — a
+ * failing or missing docker CLI does not.
+ */
+export async function stopContainer(
+  docker: Pick<DockerCli, 'run'>,
+  containerName: string,
+  timeoutMs: number = CONTAINER_STOP_CONFIRM_MS,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (let attempt = 0; ; attempt += 1) {
+    const left = Math.max(1, deadline - Date.now());
+    await docker.run(['rm', '-f', containerName], left);
+    const inspect = await docker.run(['inspect', '--format', '{{.State.Status}}', containerName], Math.max(1, deadline - Date.now()));
+    if (inspect && inspect.code !== 0 && NO_SUCH_CONTAINER.test(inspect.stderr)) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise(resolve => setTimeout(resolve, Math.min(200 * (attempt + 1), 1_000)));
+  }
+}
+
+/** Keeps retrying {@link stopContainer} in the background; resolves once confirmed or after the last retry. */
+function keepStopping(docker: Pick<DockerCli, 'run'>, containerName: string): Promise<boolean> {
+  return (async () => {
+    for (let retry = 0; retry < CONTAINER_STOP_RETRIES; retry += 1) {
+      await new Promise(resolve => setTimeout(resolve, CONTAINER_STOP_RETRY_MS));
+      if (await stopContainer(docker, containerName)) return true;
+    }
+    return false;
+  })();
+}
+
 /** Unique per-run container name so a timeout or cancel kills exactly this container. */
 export function createSandboxContainerName(): string {
   return `zhin-sandbox-${randomUUID()}`;
@@ -118,13 +203,12 @@ export function buildDockerKillArgs(containerName: string): string[] {
   return ['kill', containerName];
 }
 
-/** Fire-and-forget `docker kill <name>`; the container is `--rm`, so killing it also removes it. */
-function killContainer(containerName: string): void {
-  try {
-    const killer = child_process.spawn('docker', buildDockerKillArgs(containerName), { stdio: 'ignore' });
-    killer.on('error', () => { /* docker gone: nothing left to kill */ });
-    killer.unref();
-  } catch { /* ignore */ }
+/**
+ * Immediate `docker kill <name>` when a stop is requested; {@link stopContainer} then confirms the
+ * container is gone before the run settles.
+ */
+function killContainer(docker: Pick<DockerCli, 'run'>, containerName: string): void {
+  void docker.run(buildDockerKillArgs(containerName), CONTAINER_STOP_CONFIRM_MS).catch(() => null);
 }
 
 /**
@@ -178,13 +262,17 @@ export function buildDockerRunArgs(
 export async function executeInDocker(
   command: string,
   config: Partial<DockerSandboxConfig> = {},
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; docker?: DockerCli; stopConfirmMs?: number } = {},
 ): Promise<SandboxResult> {
   const merged: DockerSandboxConfig = { ...DEFAULT_DOCKER_CONFIG, ...config };
   const startTime = Date.now();
+  const docker = options.docker ?? SYSTEM_DOCKER;
 
   // 确保镜像存在
-  const imageCheck = await ensureImage(merged.dockerImage!);
+  const imageCheck = await ensureImage(
+    merged.dockerImage!,
+    options.docker ? async (args, timeoutMs) => (await docker.run(args, timeoutMs))?.code === 0 : undefined,
+  );
   if (!imageCheck.ok) {
     return {
       success: false,
@@ -215,9 +303,7 @@ export async function executeInDocker(
     let aborted = false;
     const signal = options.signal;
 
-    const child = child_process.spawn('docker', dockerArgs, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const child = docker.spawnRun(dockerArgs);
 
     const stdoutChunks: string[] = [];
     let stdoutLen = 0;
@@ -240,10 +326,14 @@ export async function executeInDocker(
       }
     });
 
-    // Killing the docker CLI does not stop the container; kill it by its unique name.
+    // Killing the docker CLI does not stop the container; kill it by its unique name. The run
+    // only settles once that container is confirmed gone (or the bounded wait gave up): callers
+    // inspect the workspace afterwards, and a live container could still be writing to it.
+    let stopRequested = false;
     const stop = () => {
+      stopRequested = true;
       child.kill('SIGKILL');
-      killContainer(containerName);
+      killContainer(docker, containerName);
     };
     const timer = setTimeout(() => {
       timedOut = true;
@@ -259,16 +349,21 @@ export async function executeInDocker(
     child.on('close', (exitCode) => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      cleanup();
-      resolve({
-        success: exitCode === 0 && !timedOut && !aborted,
-        stdout: stdoutChunks.join('').slice(0, maxOutput),
-        stderr: stderrChunks.join('').slice(0, maxOutput),
-        exitCode,
-        duration: Date.now() - startTime,
-        timedOut,
-        blocked: false,
-      });
+      void (async () => {
+        const confirmed = stopRequested ? await stopContainer(docker, containerName, options.stopConfirmMs) : undefined;
+        cleanup();
+        resolve({
+          success: exitCode === 0 && !timedOut && !aborted,
+          stdout: stdoutChunks.join('').slice(0, maxOutput),
+          stderr: stderrChunks.join('').slice(0, maxOutput),
+          exitCode,
+          duration: Date.now() - startTime,
+          timedOut,
+          blocked: false,
+          ...(confirmed === undefined ? {} : { containerStopConfirmed: confirmed }),
+          ...(confirmed === false ? { containerStopped: keepStopping(docker, containerName) } : {}),
+        });
+      })();
     });
 
     child.on('error', (error) => {

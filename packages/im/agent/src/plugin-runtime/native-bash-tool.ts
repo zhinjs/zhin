@@ -6,7 +6,7 @@ import {
   type ToolInvocationPolicy,
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
-import { Sandbox, type SandboxConfig } from '../security/sandbox.js';
+import { Sandbox, type SandboxConfig, type SandboxResult } from '../security/sandbox.js';
 import { getLogger } from '@zhin.js/logger';
 import {
   computeHiddenOverlays,
@@ -119,12 +119,18 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
         });
     // A writable isolated run can still *create* a self file that had no overlay (a missing file
     // gets none). Snapshot the project root's self files and quarantine any new one afterwards.
-    const watchSelfFiles = !unrestricted && access === 'workspace-write';
-    const anchor = selfFileAnchor(mountDir, filesystem.protectedPaths);
+    // The sandbox settles a stopped (timeout / cancel) run only after the container is confirmed
+    // gone; when that cannot be confirmed the anchor stays tainted (see `taintedAnchors`).
+    const anchor = !unrestricted && access === 'workspace-write'
+      ? selfFileAnchor(mountDir, filesystem.protectedPaths)
+      : undefined;
     const selfNames = rootSelfFileNames(filesystem.protectedPaths);
-    const before = watchSelfFiles ? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
+    const taint = anchor ? taintedAnchors.get(anchor) : undefined;
     let quarantined: QuarantinedSelfFile[] = [];
-    let result: BashExecutionResult;
+    // A container of an earlier run on this anchor may still be alive: sweep against its baseline.
+    if (anchor && taint) quarantined = quarantineAndWarn(anchor, selfNames, taint);
+    const before = anchor ? taint ?? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
+    let result: BashExecutionResult & Partial<Pick<SandboxResult, 'containerStopConfirmed' | 'containerStopped'>> | undefined;
     try {
       result = await sandbox.execute(request.command, {
         cwd: request.cwd,
@@ -133,11 +139,45 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
         signal: request.signal,
       });
     } finally {
-      if (watchSelfFiles) quarantined = quarantineAndWarn(anchor, selfNames, before);
+      if (anchor) {
+        quarantined = [...quarantined, ...quarantineAndWarn(anchor, selfNames, before)];
+        if (result?.containerStopConfirmed === false) taintAnchor(anchor, selfNames, before, result.containerStopped);
+      }
     }
+    const { containerStopConfirmed: _confirmed, containerStopped: _stopped, ...plain } = result;
     request.signal.throwIfAborted();
-    return quarantined.length ? { ...result, quarantined } : result;
+    return quarantined.length ? { ...plain, quarantined } : plain;
   }
+}
+
+/**
+ * Anchors whose last stopped container could not be confirmed gone, with the self-file baseline
+ * taken before that run. While an anchor is tainted every isolated run on it first quarantines
+ * against that baseline and uses it (not a fresh snapshot) as its own "before", so a file the
+ * surviving container recreates is never mistaken for a pre-existing one. The taint is cleared
+ * once the background stop confirms the container is gone and a final sweep ran. Process-local:
+ * a restart drops it (the container is `--rm` and keeps being killed by name until confirmed).
+ */
+const taintedAnchors = new Map<string, ReadonlySet<string>>();
+
+function taintAnchor(
+  anchor: string,
+  names: ReadonlySet<string>,
+  baseline: ReadonlySet<string>,
+  stopped: Promise<boolean> | undefined,
+): void {
+  taintedAnchors.set(anchor, baseline);
+  logger.warn(`Isolated shell container under ${anchor} could not be confirmed stopped; new self files keep being quarantined until it is`);
+  void stopped?.then((confirmed) => {
+    if (!confirmed) return;
+    quarantineAndWarn(anchor, names, baseline);
+    if (taintedAnchors.get(anchor) === baseline) taintedAnchors.delete(anchor);
+  }).catch(() => undefined);
+}
+
+/** Test seam: whether an anchor is tainted by an unconfirmed container stop. */
+export function isSelfFileAnchorTainted(anchor: string): boolean {
+  return taintedAnchors.has(anchor);
 }
 
 function quarantineAndWarn(
