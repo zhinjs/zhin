@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0060：聊天身份与角色的唯一事实来源——人、平台身份与角色绑定
 
-状态：提议（Proposed，2026-11-14）
+状态：已接受（Accepted，2026-11-14）。所有者按「决定」一节（原「未决问题」）中的推荐结论定案；P0、P1 已实施，P2–P4 待实施。
 
 关联：ADR 0049（Console 访问控制）、ADR 0056（聊天角色）、ADR 0057（配置与状态存放：种子导入）、ADR 0059（Console 账号放 `.zhin/gateway.db`）、ADR 0044（能力画像，不按平台名分支）。来源：issue zhinjs/zhin#1250 的部署反馈（`identity-lists-fragmented`、`chat-role-bootstrap`、`sandbox-console-identity-owner`、`role-grant-identity-picker`）。
 
@@ -93,6 +93,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 #### 2.4 与 Console 账号（ADR 0049 / 0059）的链接
 
 - 表 `chat_principal_console_links(principal_id, console_user_id, linked_at, linked_via)`，放在**实例的项目库**。`console_user_id` 是 gateway.db 中 `console_users.id` 的值引用（不同库，无外键）；实例不读 gateway.db（ADR 0059 §1 不变），只使用网关转发来的主体 `user:<id>`。
+- 链接行同时缓存 Console 用户的显示名（`console_display_name`，链接或该用户再次以本人身份操作时刷新），用于授予记录的「授予者」显示（决定 Q12）；它只是显示缓存，不参与鉴权。
 - **允许，但一对一**：一个 Console 用户至多链接一个人，一个人至多链接一个 Console 用户。
 - 链接**不传递权限**：链接不会让 Console 用户获得聊天角色，也不会让聊天 owner 获得 Console 权限。它只用于三件事：
   1. 取代 `ai.personalPrincipals`：Console 用户的个人推理主体 = 其链接的人在各账号上的平台身份（运行时用当前 `rootId` 计算 owner id，不再写进配置）；
@@ -107,7 +108,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 新部署（数据库中没有任何全局 `owner` 绑定时）提供三条路，任一条完成即关闭引导：
 
-1. **Console 绑定（主路径）**：Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
+1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
 3. **认领码（无 Console 时）**：没有全局 owner 时，实例启动日志与 `zhin status` 打印一次性认领码（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
 
@@ -117,7 +118,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 | 来源 | 导入为 | 备注 |
 | --- | --- | --- |
-| 适配器 `master` / `endpoints[i].master` | 账号层 `owner`（与 ADR 0056 迁移一致） | 不自动提升到全局；见未决问题 Q1 |
+| 适配器 `master` / `endpoints[i].master` | 账号层 `owner`（与 ADR 0056 迁移一致） | 不自动提升到全局（决定 Q1） |
 | `ai.trigger.masters` / `trusted` | 全局 `owner` / `trusted`，每个非模拟适配器一个身份，**同一人**（归入一个隐式人） | 跳过 `runtime.sandbox` 与未加载的适配器（沿用现有逻辑） |
 | 适配器 `trusted` | 适配器层 / 账号层 `trusted` | 不变 |
 | `ai.personalPrincipals[user:<id>]` | 为每个键建一个人，挂上其 owner 列表中的平台身份（`adapterId` 经当前快照换算成实例别名；`rootId` 不等于当前目录时**不再失败**，按别名 + subjectId 导入并告警），并链接到 Console 用户 `<id>` | **不授予角色**：这个字段只表达「推理配置归谁」，从未表达管理员身份（见 Q2） |
@@ -130,7 +131,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 ADR 0057 §3 对种子「再次出现」的处理是「已忽略，数据库为准」并提示。本 ADR 对人员字段采用同样做法，取代 ADR 0056 的 `LEGACY_CHAT_ROLE_CONFIG` 启动失败（仅限 `master` / `trusted` / `ai.trigger.*`；`roles` 映射规则与 `features.selfService.*` 旧开关仍报错）：
 
-- 已导入的项目中配置又出现这些字段时：**不自动授予**，启动日志告警，「需要你处理」出现 `chat-roles.import-pending`，列出候选（来源路径、身份、拟授角色）；持有全局 `iam.manage` 的 Console 用户逐条「导入」或「忽略」。处理后由网关配置事务从 yml 删除该字段。
+- 已导入的项目中配置又出现这些字段时：**不自动授予**，启动日志告警，候选（来源路径、身份、拟授角色）先写入迁移记录的 `pendingImports`，再从配置文件移除这些字段（先记后改，同首次导入；适配器 Schema 不接受它们，见「决定」中的补充约定）；「需要你处理」出现 `chat-roles.import-pending`，持有全局 `iam.manage` 的 Console 用户经 `chat-roles.imports.resolve` 逐条「导入」或「忽略」。
 - 理由：首次导入时配置是部署者唯一的表达途径；之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动导入会成为提权路径。
 
 #### 4.3 幂等与冲突
@@ -152,14 +153,14 @@ ADR 0057 §3 对种子「再次出现」的处理是「已忽略，数据库为�
 
 - 第 2 阶段（人模型）引入的 `chat_roles.principal_id` 与新表只**新增**；`adapter` / `user_id` 双写一个版本，降级到旧版本时旧代码按旧列读取，行为与升级前一致（归并信息丢失但角色不丢）。
 - 提供 `zhin chat-roles export` / `import`（JSON，含人、身份、绑定、链接），升级前自动导出到 `.zhin/backups/chat-roles-<时间>.json`。
-- 迁移记录 v2 降级时旧代码读不懂会报 malformed（`chat-role-migration.ts:173-175`）：升级时保留 `chat-roles-migration.json` v1 原文为 `.v1.json`，回滚文档写明换回。
+- 迁移记录 v2 降级时旧代码读不懂会报 malformed（`chat-role-migration.ts:173-175`）：升级时保留 `chat-roles-migration.json` v1 原文为 `.v1.json`，回滚文档（`docs/migrations/chat-roles.md`）写明换回（P1 已实施）。P1 只新增记录字段与「需要你处理」类型，不改 `chat_roles` 表结构。
 
 ### 5. 安全考量
 
 #### 5.1 导入不能提权
 
 - 种子导入只在**首次**自动生效；之后一律经 Console 全局 `iam.manage` 确认（§4.2）。
-- 配置里的 `master` 视为「部署者声明」，可信度等同于写配置的人；因此它导入为**账号层** owner（与 ADR 0056 一致），不自动成为全局 owner。是否提升见 Q1。
+- 配置里的 `master` 视为「部署者声明」，可信度等同于写配置的人；因此它导入为**账号层** owner（与 ADR 0056 一致），不自动成为全局 owner；提升只经 Console 全局 `iam.manage` 确认（决定 Q1）。
 - `personalPrincipals` 不导入任何角色。
 - 认领码只在「尚无全局 owner」时可用，且只输出到日志 / 本地 CLI（持有者已能读宿主文件），不进入聊天、不进入 Console 前端。
 
@@ -246,6 +247,7 @@ export type ChatScopeRef =
 | 「把聊天身份绑定到我」 | 用户菜单与 Sandbox 页入口；`chat-identities.bind-code.create` 生成绑定码、显示倒计时与「已绑定」回执 | 任何已登录用户（新权限 `self.chat-identity`，内置角色默认含；见 Q4） |
 | 「我的聊天身份」 | 显示链接的人、身份与角色 | 同上（只读自己） |
 | 「需要你处理」新增类型 | `chat-roles.no-owner`（警告）、`chat-roles.imported`（信息）、`chat-roles.import-pending`（警告） | `iam.manage` 可见 |
+| 新 RPC `chat-roles.imports.list` / `chat-roles.imports.resolve`（P1） | 读迁移记录中首次导入的条目与待确认候选；逐条「导入」（`import`）/「忽略」（`ignore`）待确认候选，或确认已读首次导入（`acknowledge`）。导入沿用首次导入规则（只升不降、模拟适配器上不授全局），每条写审计 `chat-roles.import` | 全局 `iam.manage` |
 | Sandbox 页 | 默认「以我的聊天身份发言」；自填 id 标「模拟身份，无角色」；徽章显示服务端回报的 zhin 角色与信任档位；预设改名 | `endpoint.operate`（不变） |
 | 个人推理配置页 | 主体来自链接，不再依赖 `ai.personalPrincipals`；恢复 Console 中切换到个人推理主体（`docs/migrations/console-access-control.md:72` 中暂停的能力） | `agent.configure` 或本人 |
 
@@ -253,14 +255,14 @@ export type ChatScopeRef =
 
 ### 8. 分阶段实施
 
-所有包默认只发 patch（`.changeset/version-policy.json`）；需要 minor 的阶段须所有者批准并写入 `approvedNonPatchReleases`（Q6）。
+所有包默认只发 patch（`.changeset/version-policy.json`）；需要 minor 的阶段已获所有者批准（决定 Q6），由所有者写入 `approvedNonPatchReleases`。
 
 | 阶段 | 内容 | 版本级别 |
 | --- | --- | --- |
 | P0 文案与文档 | 拒绝文案指向 Console / 认领（§5.3）；sandbox 预设改名、徽章显示服务端角色；icqq README 去掉 `master` 必填；概念文档写清「五处名单」现状与迁移方向 | patch（core、zhin.js、sandbox、icqq 文档） |
 | P1 引导与种子 | `chat-roles.no-owner` / `imported` / `import-pending` 三类「需要你处理」；认领码；「再次出现」改为待确认导入（取消启动失败）；`isOwner` / `hasChatRole` / `chatRolesToken` | minor：`@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`（新增公共 API 与协议类型）；其余 patch |
-| P2 人模型 | `chat_principals` / `chat_identities` / `chat_principal_console_links`；`chat_roles.principal_id` 与双写；`chat-principals.*` / `chat-identities.*` RPC；绑定码；`sender.chatPrincipal`；导出 / 导入 CLI | minor：`@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`、`@zhin.js/cli`；`@zhin.js/gateway` patch（用户删除时通知实例） |
-| P3 Console 与 personalPrincipals | 授予对话框选择器、「聊天成员」页、绑定到我、Sandbox 以我发言；`personalPrincipals` 导入并改读链接表；Agent 侧 `HostInference` 改为按链接解析 | minor：`@zhin.js/agent`（个人推理主体来源变更）；Console 前端随其仓库发布；其余 patch |
+| P2 人模型 | `chat_principals` / `chat_identities` / `chat_principal_console_links`；`chat_roles.principal_id` 与双写；`chat-principals.*` / `chat-identities.*` RPC；链接表缓存 Console 显示名（Q12）；绑定码；`sender.chatPrincipal`；导出 / 导入 CLI | minor：`@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`、`@zhin.js/cli`；`@zhin.js/gateway` patch（用户删除时通知实例） |
+| P3 Console 与 personalPrincipals | 授予对话框选择器、授予记录显示链接的人名（Q12）、「聊天成员」页、绑定到我、Sandbox 以我发言；`personalPrincipals` 导入并改读链接表；Agent 侧 `HostInference` 改为按链接解析 | minor：`@zhin.js/agent`（个人推理主体来源变更）；Console 前端随其仓库发布；其余 patch |
 | P4 清理 | 删除 `chat_roles.adapter/user_id` 双写列；`ai.personalPrincipals` 从 schema 移除（出现告警忽略）；`check:plugin` 的 `masters` 提示 | patch（行为只告警不失败）；若所有者认为 schema 删除属破坏性则 minor |
 
 ## 备选方案及否决理由
@@ -285,21 +287,31 @@ export type ChatScopeRef =
 
 否决为默认：比 ADR 0056 的迁移语义宽，配置中每个账号的 master 都会获得 exec / 文件写；改为在「需要你处理」中一键提升（Q1）。
 
-## 未决问题（需要所有者决定）
+## 决定（2026-11-14，所有者按推荐定案）
 
-| # | 问题 | 推荐 |
+原「未决问题」Q1–Q11 逐条按推荐结论定案；Q12 为定案时所有者补充的决定。正文已与这些结论对齐。
+
+| # | 问题 | 决定 |
 | --- | --- | --- |
-| Q1 | 适配器 `master` / `owner` 首次导入为账号层还是全局 `owner`？ | **账号层**（维持 ADR 0056）；没有全局 owner 时，`chat-roles.imported` 项提供「提升为全局 owner」按钮（需全局 `iam.manage`）。 |
-| Q2 | `ai.personalPrincipals` 导入时是否同时授予 owner？（issue 方向写的是「导入为 owner 角色」） | **不授予**：该字段只表达推理配置归属；若被链接的 Console 用户本身是全局 Console 所有者，在 `chat-roles.imported` 项中提示「是否同时设为全局 owner」，由人确认。 |
+| Q1 | 适配器 `master` / `owner` 首次导入为账号层还是全局 `owner`？ | **账号层**（维持 ADR 0056）。没有全局 owner 时，`chat-roles.imported` 项提示可「提升为全局 owner」（即对同一身份调用全局 `chat-roles.grant`，需全局 `iam.manage`），不自动提升。 |
+| Q2 | `ai.personalPrincipals` 导入时是否同时授予 owner？ | **不授予**：该字段只表达推理配置归属。若被链接的 Console 用户本身是全局 Console 所有者，`chat-roles.imported` 项提示「是否同时设为全局 owner」，由人确认（P3）。 |
 | Q3 | 一个 Console 用户能否链接多个人 / 一个人能否链接多个 Console 用户？ | **都不允许**（一对一）。多平台归在同一个人下解决「多身份」；共享账号场景用多个 Console 用户。 |
-| Q4 | 自助绑定所需的 Console 权限 | 新增 `self.chat-identity`，所有内置角色（含 `viewer`）默认带；只能操作自己的链接。 |
-| Q5 | 配置中人员字段「再次出现」：待确认导入（本 ADR）还是维持启动失败？ | **待确认导入**，与 ADR 0057 种子一致；启动失败对 README 驱动的部署体验太差。 |
-| Q6 | P1–P3 的 minor 是否批准？ | 批准 `@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`（P1、P2）、`@zhin.js/cli`（P2）、`@zhin.js/agent`（P3）；每阶段单独记入 `approvedNonPatchReleases`。 |
-| Q7 | 认领码（无 Console 的第一位 owner）是否要做？ | **做**，但只在尚无全局 owner 时有效、只打印到日志与 `zhin status`；`--standalone` 同样可用。 |
-| Q8 | 群聊中能否发起 `绑定` / `认领`？ | **不能**，只接受私聊；平台没有私聊（评论型适配器等，能力画像无私聊会话）时只能走 Console 运营者代绑。 |
-| Q9 | `personalSessionOwnerId` 含 `rootId`（绝对路径），项目搬目录后个人推理数据的 owner id 全部改变；是否在本 ADR 内改为稳定的项目 id？ | **另开 ADR**：本 ADR 只保证链接不再因 `rootId` 失效；个人数据的 owner id 稳定化涉及凭据库与会话键迁移，范围不同。 |
+| Q4 | 自助绑定所需的 Console 权限 | 新增 `self.chat-identity`，所有内置角色（含 `viewer`）默认带；只能操作自己的链接（P2 / P3）。 |
+| Q5 | 配置中人员字段「再次出现」：待确认导入还是维持启动失败？ | **待确认导入**（§4.2），与 ADR 0057 种子一致；不再启动失败。 |
+| Q6 | P1–P3 的 minor 是否批准？ | **批准** `@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`（P1、P2）、`@zhin.js/cli`（P2）、`@zhin.js/agent`（P3）；每阶段单独记入 `.changeset/version-policy.json` 的 `approvedNonPatchReleases`（由所有者统一写入）。 |
+| Q7 | 认领码（无 Console 的第一位 owner）是否要做？ | **做**（P1），只在尚无全局 owner 时有效，只打印到实例日志与 `zhin status`；`--standalone` 同样可用。 |
+| Q8 | 群聊中能否发起 `绑定` / `认领`？ | **不能**，只接受私聊；在群聊中提交正确的码会使该码立即作废并轮换（防围观者截码）。平台没有私聊（能力画像无私聊会话）时只能走 Console 授予 / 运营者代绑。 |
+| Q9 | `personalSessionOwnerId` 含 `rootId`，是否在本 ADR 内改为稳定的项目 id？ | **另开 ADR**：本 ADR 只保证链接不再因 `rootId` 失效；个人数据 owner id 稳定化涉及凭据库与会话键迁移。 |
 | Q10 | 低于全局的绑定是否应对同一人的其他平台身份生效？ | **不生效**（§2.3）：作用范围本身就绑定在一个适配器上；跨平台只有全局层。 |
-| Q11 | `chat_identities.last_seen_at` / 显示名缓存是否算个人数据、是否需要保留期？ | 记录最近 90 天，超过清空显示名；只在 `iam.manage` 作用域内可见。 |
+| Q11 | `chat_identities.last_seen_at` / 显示名缓存的保留期 | 记录最近 90 天，超过清空显示名；只在 `iam.manage` 作用域内可见（P2）。 |
+| Q12 | 角色授予记录中「其他 Console 用户」的显示名（反馈 `console-role-grantor-hash`：`grantedBy` 为 `console:user:<id>` 时只能显示 id） | **不单独改网关 IAM**，也不让实例读 gateway.db：由「人 ↔ Console 账号」链接（§2.4）提供显示名——建立链接时在 `chat_principal_console_links` 缓存该 Console 用户的 `displayName`（网关转发的主体自带），该用户之后再以本人身份调用实例时刷新；授予记录的 `grantedBy` 若是已链接的 Console 用户，显示链接的人名（`display_name`，无则缓存的 Console 显示名）。未链接的 Console 用户仍显示 id。随 P2（链接表加列）/ P3（Console 显示）实施。 |
+
+### 实施中补充的约定（P0 / P1）
+
+- **再次出现的字段先记后删**：待确认导入的候选先写入迁移记录（`pendingImports`），再按首次导入相同的「先记后改」从配置文件移除这些字段。原因：适配器配置 Schema 不接受 `master` / `trusted`（`additionalProperties: false`），字段留在文件里会让插件校验失败；值已保存在记录里，「导入」/「忽略」只作用于记录与数据库，不再改 yml。`roles` 映射规则与 `features.selfService.*` 旧开关仍然启动失败。
+- **认领码的本地出口**：`zhin status` 不经网关读取实例内存，而是读实例写入的 `.zhin/chat-owner-claim.json`（文件权限 0600，仅含码、实例 pid 与时间；有全局 owner、认领成功或实例退出时删除）。状态输出只在该文件属于正在运行的实例时（pid 与网关报告的实例 pid 一致，或写于该实例启动之后）显示该码。
+- **认领防暴力尝试**：同一个码累计 5 次错误后作废并轮换（新码只进日志与本地文件）。
+- **`ChatRoleReader.factsOf`**：在 §6 草案之外增加 `factsOf(conversation, userId)`，返回 Runtime 为该发言者写入 `sender` 的同一组事实（身份、`chatRole`、`chatRoleLevels`），供不在消息上下文中的插件（以及 Sandbox 徽章）复用同一解析；P1 中人视图一律是隐式单身份人（`principalOf` 的 `id` 为 `implicit:<alias>:<userId>`，P2 引入 `cp_` id 后显式人的 id 以表为准）。
 
 ## 落盘位置（计划）
 
