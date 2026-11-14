@@ -297,12 +297,12 @@ sidebar: false
 
 - **推荐**：Console 适配器页的「连接管理」（只有这一个账号列表）。数据库是事实来源。
 - **其余**：
-  - yml `endpoints`：种子。导入后从 yml 移除（ADR 0057 §3）；再次出现时，启动日志、「需要你处理」和 `zhin doctor` 都报差异，并给出「导入 / 写回」按钮（批次中：`endpoint-drift` / `endpoint-import` / `endpoint-writeback` RPC）。
+  - yml `endpoints`：种子。`endpoints[i]` 在 `docs/contributing/public-api-surface.md` 中是 `stable`，所以分两步：阶段 2（minor）只做“导入 + 标为已导入（R1 ②）+ 弃用告警”，yml 里的 `endpoints` 仍被读取作种子、不被删除；阶段 3（major）才按 ADR 0057 §3 在导入后从 yml 移除，并把 `public-api-surface` 中的 `endpoints[i]` 改为 `deprecated` → `removed`。两个阶段里，yml 与数据库不一致时，启动日志、「需要你处理」和 `zhin doctor` 都报差异，并给出「导入 / 写回」按钮（批次中：`endpoint-drift` / `endpoint-import` / `endpoint-writeback` RPC）。
   - `zhin setup --adapters`：改为经网关账号 RPC 写入数据库，不再写 yml；交互模式随第 7 项弃用。
   - 导入之后 `zhin config set <adapter>.endpoints`：拒绝，并提示去 Console。
   - Console 适配器页：合成一个账号列表（Console 仓库）。
   - Sandbox 也要支持在 Console 增、停、启、删账号。
-- **迁移**：按 ADR 0057 §3 的步骤（备份到 `.zhin/backups/`，再从 yml 删除），同时提供导出功能，导出的凭据写成 `${VAR}` 占位。
+- **迁移**：阶段 2 导入并告警，同时提供导出功能，导出的凭据写成 `${VAR}` 占位；阶段 3（major）按 ADR 0057 §3 的步骤（备份到 `.zhin/backups/`，再从 yml 删除）。
 - **文档**：「一个适配器登录多个账号」改成 Console 操作；yml 写法挪到「高级：用文件做首次种子」。
 
 #### 14. 谁是管理员（聊天身份）
@@ -451,7 +451,7 @@ sidebar: false
   - zh-CN 下每个面向用户的命令都要有中文别名和中文描述；
   - 回复里出现的词，都能当命令用。
 - **其余**：连字符旧名保留为隐藏别名（不出现在菜单和帮助里）。只针对官方插件，第三方插件靠 `check` 规则和作者文档引导。
-- **迁移**：别名长期保留（成本很低），只是从菜单里隐藏；属于 patch 或 minor。
+- **迁移**：别名长期保留（成本很低），只是从菜单里隐藏；在注册表中登记为 R5 的 `hidden-long-term` 例外（写明 `replacement` 与 `reason`，不写 `removeIn`）；属于 patch 或 minor。
 - **文档**：「编写命令」页给出命名规范。
 
 #### 22. 试聊入口（Sandbox）
@@ -525,7 +525,7 @@ sidebar: false
 | R2 | **面向新用户的操作只在 Console 和聊天里完成；CLI 面向运维和自动化**，因此 CLI 必须非交互、支持 `--json`、有稳定的退出码。交互式 CLI 向导不再新增。 | `check:one-path-docs`：在 `docs/getting-started/`、`docs/paths/`、`docs/customer/`、README 快速开始里，禁止出现登记为「高级 / 删除」的入口写法（例如 `zhin setup`、`zhin config set`、`zhin schedule add`、`8068/sandbox`），除非写在 `::: details 高级用法` 块里 |
 | R3 | **每个文档页只教一条路。** 其他入口只能写在「高级用法」块里，或者链接到参考页。 | 同 R2 的脚本，扫描范围扩大到 `docs/**`（`docs/adr`、`docs/plans`、`docs/cli` 参考页除外） |
 | R4 | **一个意图只对应一个后端操作**（RPC 或服务）。Console、聊天、CLI 都只是它的前端，不能各写各的存储，也不能各自做不同范围的校验。 | 注册表里给每个意图登记规范 RPC。`check:one-path-rpc` 检查 `CONSOLE_RPC_PERMISSIONS` 中标为别名的 RPC（如 `plugin:set-enabled`）都带 `deprecated` 元数据 |
-| R5 | **别名和旧入口必须有期限。** 每个兼容别名、旧命令、旧字段注册时都要写 `deprecatedSince`、`removeIn`、`replacement`，第一次使用时打印一次告警。 | `check:deprecated-aliases`：①CLI 隐藏命令和别名必须出现在注册表里；②当前包版本达到 `removeIn` 时 CI 失败 |
+| R5 | **别名和旧入口必须有期限。** 每个兼容别名、旧命令、旧字段注册时都要写 `deprecatedSince`、`removeIn`、`replacement`，第一次使用时打印一次告警。**唯一例外是“长期隐藏别名”**：保留成本几乎为零、且删除会打断用户肌肉记忆的旧写法（目前只有 Q21 的官方插件连字符旧命令名），登记为 `kind: "hidden-long-term"`，不写 `removeIn`，但必须写 `replacement` 和 `reason`，不出现在菜单、帮助和文档里，使用时不告警。例外只能逐条登记在注册表的显式清单里，不能按模式放行。 | `check:deprecated-aliases`：①CLI 隐藏命令和别名必须出现在注册表里；②除 `hidden-long-term` 外每一项都有 `removeIn`，当前包版本达到 `removeIn` 时 CI 失败；③`hidden-long-term` 项必须有非空 `replacement` 与 `reason`，且其别名不得出现在菜单、`--help` 与 `docs/**`（R3 扫描范围）中 |
 | R6 | **Console 里一个对象只有一个可编辑位置**，其他位置只读，并链接过去。 | Console 仓库新增检查：可编辑的 `PluginConfigForm`、账号编辑器、插件开关，每种在路由树里最多出现一次 |
 | R7 | **聊天命令命名统一**：`<领域> <动作>`；zh-CN 下要有中文别名和描述；官方插件的顶层命令目录不用连字符。 | `check:command-names`：扫描 `plugins/**/commands/*`，有白名单 |
 | R8 | **快速开始就是验收脚本。** README 和快速开始的每一步都要有 e2e 用例覆盖，保证「只走推荐路径」能跑通。 | 在 `tests/e2e-gateway` 里加一条「新用户路径」用例（create → `pnpm dev` → Console 初始化 → Console 沙盒 `/hello`） |
@@ -540,8 +540,8 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | --- | --- | --- | --- |
 | 0 文档与文案 | 快速开始、路径页、客户手册、AI 总览、配置参考第一段都改成只讲推荐路径；修正 `generated.md` 里 `ai.plan.yml` 的描述和 showcase 的矛盾；README 删掉本地 `/sandbox` 方式；`use-cases` 文案；`packages list` 分组列出；新增注册表和 R2 / R3 检查（warning） | `docs`、`README*`、`@zhin.js/cli`、`@zhin.js/scaffold-wizard`、`packages/im/ai`（plan schema 描述） | patch |
 | 1 弃用告警与 UI 降级 | CLI：`runtime start`、`--no-watch`、`onboard`、`add`、`watch`、`doctor --live`、`packages` 中的 npm 插件子命令、`uninstall adapter`、`health` / `validate`、`config check --fix` 打印告警或转发；`setup` 交互模式给出提示。配置文件名告警。Console：`/ops/config` 插件段只读、适配器页合成一个账号列表、插件开关只保留一处、「插件内部任务」分组、本地 sandbox 页跳转。脚手架不再生成服务文件，pm2 改成 `--with pm2`。group-suite「问答」，旧命令改别名。官方插件命令别名。人设来源告警（`SOUL.md` / `TOOLS.md` / profile / `ai.agent.persona`）。R5 / R6 / R7 检查（warning） | `@zhin.js/cli`、`create-zhin-app`、`@zhin.js/scaffold-wizard`、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`@zhin.js/adapter-sandbox`、`@zhin.js/plugin-group-suite`、其他官方插件、`@zhin.js/console-protocol`、zhinjs/console | minor（CLI、agent、group-suite、console-protocol、Console）；其余 patch |
-| 2 事实来源收口 | ADR 0057 §3：`endpoints` 和 `ai.plan.yml` 导入后移除，并提供导出；`assistant.profile.yml#routines` 变为种子并提示差异；插话纳入功能覆盖；`setup --adapters` 改为经网关账号 RPC；CLI 不再退回 `http.token`、不再跨项目连接；聊天 `config set` 按 Q9 删除（先弃用一个 minor）；定时任务存储合并；检查脚本在 CI 中改为 error | `zhin.js`（instance）、`@zhin.js/adapter`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/cli`、`@zhin.js/console-protocol`、`@zhin.js/schedule-feature`、`@zhin.js/plugin-reminder`、zhinjs/console | minor（需批准） |
-| 3 删除 | 删除阶段 1 弃用的命令、参数、别名、RPC（`plugin:set-enabled`）、五种备用配置文件名、`ai.agents.*.model` 的迁移识别、`ai.agent.persona`、profile 的人设字段、`SOUL.md` / `TOOLS.md` 回退（Q18）、`zhin setup` 交互模式（Q7）、`runtime build` / `publish` | `@zhin.js/cli` 2.0、`zhin.js` 2.0、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`create-zhin-app` | major |
+| 2 事实来源收口 | ADR 0057 §3：`ai.plan.yml` 导入后移除，并提供导出；yml `endpoints`（`public-api-surface` 中为 `stable`）只做种子导入、标为已导入并打弃用告警，提供导出，不删除（删除在阶段 3）；`assistant.profile.yml#routines` 变为种子并提示差异；插话纳入功能覆盖；`setup --adapters` 改为经网关账号 RPC；CLI 不再退回 `http.token`、不再跨项目连接；聊天 `config set` 按 Q9 删除（先弃用一个 minor）；定时任务存储合并；检查脚本在 CI 中改为 error | `zhin.js`（instance）、`@zhin.js/adapter`、`@zhin.js/agent`、`@zhin.js/gateway`、`@zhin.js/cli`、`@zhin.js/console-protocol`、`@zhin.js/schedule-feature`、`@zhin.js/plugin-reminder`、zhinjs/console | minor（需批准） |
+| 3 删除 | 删除阶段 1 弃用的命令、参数、别名（R5 的 `hidden-long-term` 例外除外）、RPC（`plugin:set-enabled`）；yml `endpoints` 导入后从文件移除（ADR 0057 §3，`public-api-surface` 改为 `removed`）；删除五种备用配置文件名、`ai.agents.*.model` 的迁移识别、`ai.agent.persona`、profile 的人设字段、`SOUL.md` / `TOOLS.md` 回退（Q18）、`zhin setup` 交互模式（Q7）、`runtime build` / `publish` | `@zhin.js/cli` 2.0、`zhin.js` 2.0、`@zhin.js/adapter`、`@zhin.js/plugin-runtime`、`@zhin.js/agent`、`create-zhin-app` | major |
 
 每个阶段都单独开 PR；阶段 1 和阶段 2 可以按领域（运行、插件、账号、AI、定时任务、聊天、Console）拆成多个 PR 并行推进。
 
@@ -582,7 +582,7 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | Q10 | 插件启停 | 只用 `feature.set-enabled`（全局）；删除 `plugin:set-enabled`；插件详情页开关改为只读 | 保留两个 RPC 名 | 旧版 Console 兼容需要一个版本周期 |
 | Q11 | 安装与搜索 | Console 插件市场；CLI 只保留 `install` / `uninstall` / `update` / `search` / `info`；`packages` 只管技能包和状态；删除 `zhin add` | 反过来以 `packages` 为准 | 删除一组重复子命令；`packages` 是否改名为 `zhin skills` 另行决定 |
 | Q12 | 开发命令 | `new` → `create` → `plugin check` → `pub`；`runtime build` / `publish` 合并后删除；页面写法推荐 Blueprint | 保留 `runtime` 组作为高级 | 影响插件作者，走 major |
-| Q13 | 平台账号 | Console「连接管理」是唯一入口，以数据库为准；yml `endpoints` 只做种子并在导入后移除；`setup --adapters` 改为写数据库 | yml 持续可写，启动时提示差异，由用户选择导入或写回（批次中的漂移方案，不移除） | 依赖 ADR 0057 §3 实施 |
+| Q13 | 平台账号 | Console「连接管理」是唯一入口，以数据库为准；yml `endpoints` 只做种子：阶段 2（minor）导入并弃用告警，因其在 `public-api-surface` 中为 `stable`，导入后从 yml 移除放到阶段 3（major）；`setup --adapters` 改为写数据库 | yml 持续可写，启动时提示差异，由用户选择导入或写回（批次中的漂移方案，不移除） | 依赖 ADR 0057 §3 实施 |
 | Q14 | 管理员身份 | 按 ADR 0060 执行 | —（无替代选项） | 已由 ADR 0060 决定 |
 | Q15 | 模型绑定 | Console「用途」页；`ai.plan.yml` 只做种子并在导入后移走；major 删除 `ai.agents.*.model` 的识别 | `ai.plan.yml` 保留在根目录，作为显式「预览 → 应用」的输入，不移走 | 文档里约 15 处 |
 | Q16 | 模型账号 | Console 账号页（全局 owner 可以引用 env）；`zhin ai account` 作为高级；`setup --ai` 不再生成 plan | 由 `setup --ai` 继续生成 plan 作为种子 | `setup --ai` 行为变更 |
@@ -590,7 +590,7 @@ R1–R7 都只需要静态扫描，可以先以 warning 加入 `pnpm check:all`�
 | Q18 | 人设与引导文件 | 机器人只读 `BOT.md`；`SOUL.md` / `TOOLS.md` 弃用并由 `doctor --fix` 合并；删除 profile 人设字段和 `ai.agent.persona` | 保留 `SOUL.md` / `BOT.md` / `TOOLS.md` 三个文件，只删 profile 和 yml 两处 | 现有项目的引导文件需要迁移 |
 | Q19 | 定时任务 | 分成插件内部任务（只读）和用户任务（聊天创建，Console 统一管理）；profile `routines` 变为种子；合并存储 | profile 继续生效，启动时自动按 profile 对齐 enabled 状态 | 存储迁移，涉及 schedule-feature、reminder、agent |
 | Q20 | 群问答 | 合成「问答」一套命令和一份存储，旧命令变别名 | 保留两套，`list` 时一起列出 | group-suite 数据迁移 |
-| Q21 | 命令命名 | `<领域> <动作>`，加中文别名；连字符旧名隐藏但长期保留 | 连字符旧名到 major 删除 | 官方插件的菜单变化 |
+| Q21 | 命令命名 | `<领域> <动作>`，加中文别名；连字符旧名隐藏但长期保留，作为 R5 的 `hidden-long-term` 例外逐条登记（有 `replacement` 与 `reason`，无 `removeIn`） | 连字符旧名到 major 删除 | 官方插件的菜单变化 |
 | Q22 | 试聊 | 只用 Console 沙盒；本地 `/sandbox` 初始化后跳转到 Console | 本地页改为接受 API 令牌并继续保留 | README 改动 |
 | Q23 | 群插话 | 纳入功能分级覆盖，群管理员用「功能 关闭 插话」；`conversations` 白名单变为种子 | 只加 `excludeConversations`，开关仍是全局配置 | 扩展 ADR 0050 / 0055 的功能定义 |
 | Q24 | 插件页面 | 通用对象只用 Console 内置页；插件页面只放插件自己的领域视图，挂成页签 | 插件页面不受限制 | 部分官方插件页面要改为只读 |

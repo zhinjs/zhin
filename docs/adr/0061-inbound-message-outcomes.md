@@ -66,17 +66,18 @@ sidebar: false
 
 次一级：`unified-mailbox-spine.ts:595`（非人类来源直接 `return false`，无原因）；`control-gate.ts:28-33`（判定异常失败关闭为 `emergency_stop`，聊天里无提示）；`ambient-engagement.ts:382`（读最近消息失败被记成 `no_context`，真实原因丢失）；交互态 `inbound-runtime.ts:382-389`（等待确认时吞掉群里任意一句话，`reminder-confirm-captures-chat`）。
 
-### 4. 已在进行中的相关改动（本地分支，未合并）
+### 4. 已在进行中的相关改动（#1250 批次 PR，本 ADR 接受时均未合并）
 
-| 分支 | 已做 |
+本 ADR 只依赖下表“行为”一列描述的语义，不依赖这些 PR 的具体代码；某个 PR 改名或拆分时，以这里写下的判定标准为准。
+
+| 来源 | 行为 |
 | --- | --- |
-| `wt/1250-chat` | `UserFacingError`（`packages/im/command/src/user-facing-error.ts`）：命令里预期的拒绝变成回复 |
-| `wt/1250-sched` | `UserFacingError` 扩展到入站中间件与事件处理器；定时任务下次运行、`schedule.unschedulable` 关注项、投递目标校验 |
-| `wt/1250-cli3` | Console API 预期失败结构化错误码 + `errorId`（`instance/console/internal-error.ts` 的 `createErrorId`）；`send-failure.ts` 发送失败分类；控制面 / 会话画像 / 旁听写 `model_skip` 时标 `parent`（`DECISION_PARENT_KEY`） |
-| `wt/1250-behavior` | 被拒 / 无审批通道的工具标“未执行”、回合末如实说明（`unexecuted-tool-notice`）；审批结果 `unavailable { reason: unattended \| no_channel }` 写审计 |
-| `wt/1250-ai` | 模型首响应超时 `no_response`（`FirstResponseTimeoutError`、`firstResponseTimeoutMs`）；trace 记 `model_timeout` |
-| `wt/1250-cmd` | 近似命令提示（`command-suggestion.ts`，阶段 `command-suggestion`）；turn trace 记 `trigger`（触发消息、等待时长） |
-| `wt/1250-host` | 发送失败原因码（`console-rpc-handlers.ts` `consoleSendFailure`）；`failedDeliveryReceipt` 文案带码 |
+| #1250 第 2 批（聊天）PR | **`UserFacingError`**：命令执行时抛出的“预期拒绝”（插件明确声明可以原样给用户看的错误，如“这个群没有开启抽奖”）转成一句回复发给发起人，不再冒泡成无上下文的异常；其他异常仍是内部错误。**近似命令提示**：一条点名消息（见 §1 定义）去掉命令前缀后没有匹配到任何命令时，回一句“没有这条指令，你是不是想用 …”；非点名的群聊不提示；回复走普通入站回复路径。turn trace 记 `trigger`（触发消息 ID、等待时长） |
+| #1250 批次 PR（定时任务） | `UserFacingError` 同样适用于入站中间件与事件处理器；定时任务显示下次运行时间；无法排期的任务进「需要你处理」（`schedule.unschedulable`）；保存时校验投递目标 |
+| zhinjs/zhin#1256（CLI 第 1 批） | Console API 的预期失败返回结构化错误码，非预期失败只返回 `errorId`（`err_` + 12 位十六进制，`instance/console/internal-error.ts` 的 `createErrorId`），详情只进日志；Console 发送失败按原因分类（`@zhin.js/console-protocol` 新增公开导出 `classifyConsoleSendFailure`、`ConsoleSendFailure`、`CONSOLE_SEND_FAILURE_MESSAGES`）；控制面 / 会话画像 / 旁听写 `model_skip` 时标出所属的决定性事件（`DECISION_PARENT_KEY`），回放可折叠 |
+| #1250 批次 PR（Agent 行为） | 工具被拒或没有审批通道时标为“未执行”，回合末如实告诉用户哪一步没做；审批结果 `unavailable { reason: unattended \| no_channel }` 写审计 |
+| #1250 批次 PR（模型） | 模型在 `firstResponseTimeoutMs` 内没有任何响应时判为 `no_response`（与请求总超时 `timeout` 区分）；trace 记 `model_timeout` |
+| zhinjs/zhin#1254（Host 第 3 批） | Console 发送失败带原因码，`failedDeliveryReceipt` 的文案带码 |
 
 这些改动各自解决了一个点，但用了各自的词汇（`dispatchStatus`、`stage`、`route`、`ChatFailureKind`、`ConsoleSendFailure.reason`、`TurnAdmissionRejectReason`、`reason_code`……），而且没有一个地方能回答“这条消息最后怎么了”。
 
@@ -94,7 +95,7 @@ sidebar: false
 
 `internal_error` > `delivery_failed` > `model_timeout` / `model_error` / `budget_exhausted` > `approval_denied` / `approval_timeout` / `approval_unavailable` > `tool_failed_reported` > `refused` / `permission_denied` / `rate_limited` / `invalid_input` / `filtered_by_policy` > 回复类 > 静默类 > `unrecorded`。
 
-“被 @ / 私聊 / 使用了命令前缀 / 回复了机器人的消息”称为**点名消息**（与 `suggestCommandReply` 的判定一致）。原则：**点名消息不得以无人知晓的静默结束**——要么在聊天里回了一句，要么结局的 `visibility` 至少是 `sender`、且原因属于“按设计不能说话”（平台禁言、控制面急停）。
+“被 @ / 私聊 / 使用了命令前缀 / 回复了机器人的消息”称为**点名消息**。判定：私聊消息；群 / 频道消息中 @ 了机器人（`message.mentioned`）、以本会话生效的命令前缀开头（实例顶层或端点逐项覆盖的 `commandPrefix`），或者是对机器人某条消息的回复。近似命令提示（§4 表）只对点名消息生效，用的也是这一判定。原则：**点名消息不得以无人知晓的静默结束**——要么在聊天里回了一句，要么结局的 `visibility` 至少是 `sender`、且原因属于“按设计不能说话”（平台禁言、控制面急停）。
 
 #### 1.1 回复类（`reply: yes`）
 
@@ -122,7 +123,7 @@ sidebar: false
 | `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 沿用 `chatFailureLine` 现有话术（“刚卡了一下……” 等）。 / Existing `chatFailureLine` lines. | 沿用 `chatFailureLine` 的原因括注 + `{provider}/{model}`。 / Same cause as `chatFailureLine` + `{provider}/{model}`. |
 | `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{budget}`。 / Budget `{budget}` exceeded. |
 
-`approval_*`、`tool_failed_reported` 要求回合末如实说明（`wt/1250-behavior`）；若模型已在回复中说明，`reply: yes`，`why` 复用同一句。
+`approval_*`、`tool_failed_reported` 要求回合末如实说明（§4 表“Agent 行为”一行）；若模型已在回复中说明，`reply: yes`，`why` 复用同一句。
 
 #### 1.3 按设计不回复（`reply: no`，人话原因只在被问时给出）
 
@@ -172,7 +173,7 @@ sidebar: false
 | `internal_error` | `command_threw` / `handler_threw` / `middleware_threw` / `agent_threw` / `inbound_threw` | 发起人（只给错误号）| 处理时出错了，已记录（错误号 {errorId}）。 / Something went wrong; logged as {errorId}. | `{stage}` 抛出 `{errorName}: {message}`（截断 200 字，脱敏），插件 `{owner}`。 |
 | `unrecorded` | `missing_outcome` | 管理员 | 这条消息的处理结果没有记录下来。 / No outcome was recorded. | 最后阶段 `{lastStage}`；这是框架缺陷，请报告。 / Last stage `{lastStage}`; a framework bug. |
 
-`internal_error` 的 `errorId` 与 Console API 的 `err_` + 12 位十六进制（`wt/1250-cli3` `createErrorId`）同一格式、同一生成函数，`zhin logs` 可按它检索。
+`internal_error` 的 `errorId` 与 Console API 的 `err_` + 12 位十六进制同一格式、同一生成函数（zhinjs/zhin#1256 的 `createErrorId`，P1 下移到 `@zhin.js/logger`，见 §5），`zhin logs` 可按它检索。
 
 #### 1.7 定时任务与其他非消息入口
 
@@ -209,15 +210,16 @@ sidebar: false
 | `command` / `owner` | 命令名、插件 ID |
 | `turn_id` | 进入 Agent 时的回合 ID，链接 `ai_decision_events.turn_id` 与 turn trace |
 | `diagnostic_id` / `error_id` / `merged_into` | 链接进程内诊断、日志、合入的回合 |
-| `detail` | 仅管理员可见，≤ 200 字，经 `redactDecisionPayload` 同一套规则脱敏 |
+| `detail` | 仅管理员可见，≤ 200 字，经与决策审计同一套规则（`redactDecisionPayload`）脱敏；该函数随 P1 下移到 `@zhin.js/kernel`，见下文“分层” |
 
 - **不存消息正文**，也不存截断预览。需要看原文时按 `message_id` join `conversation_events`（ADR 0008，那里本来就有正文和自己的保留期）。
-- **保留期** `im.outcomes.retentionDays`，默认 7 天（决策审计 14 天、trace 自有轮转）；清理与决策审计同一调度。
+- **保留期** `im.outcomes.retentionDays`，默认 7 天（决策审计 14 天、trace 自有轮转）；清理由 Core 自己调度（与 `im_message_outcomes` 模型一起在 Core 侧注册），不挂在 Agent 的决策审计清理上。
+- **分层**：表、写入、清理、脱敏都不得依赖 `@zhin.js/agent`——Core 不能导入 Agent（依赖方向 kernel → ai → core → agent），且 ADR 0019 的默认安装里根本没有 Agent。今天的脱敏函数 `redactDecisionPayload` 在 `packages/im/agent/src/decision-events.ts`，是不依赖 Agent 任何运行时的纯函数（连同其密钥键表、提示词键表、令牌值模式）；P1 把它下移到 `@zhin.js/kernel`，Agent 的 `decision-events.ts` 以原名再导出，决策审计行为不变。
 - **采样与聚合**（`unaddressed-message-no-record`）：`not_addressed` / `ignored_bot` / `ignored_self` / `dropped_duplicate` 量最大。默认全量写（单行很小）；当某会话 1 分钟内此类行超过 `im.outcomes.quietSampleLimit`（默认 30）时，超出部分改为每分钟一行聚合（`reason` 不变，`facets: ['aggregated:<n>']`，`message_id` 为空）。点名消息与非静默结局永不采样。
 - **无数据库**（memory / redis 项目）：只保留进程内环形缓冲（2000 条 / 24 小时），`why` 仍可用，Console 标注“未持久化”。
 - **进程内诊断**：`RuntimeMessageDiagnostic` 增加 `outcome` 字段，其 `route` 改为由结局派生；`/messages/diagnostics` 返回结局。诊断仍是 15 分钟的细粒度时间线，结局表是长期的一行摘要。
-- **与决策审计的关系**：决策审计继续记录 Agent 内部过程（门禁、旁听、工具、审批、出站），**不新增** `message_outcome` kind，避免同一事实写两遍。结局行通过 `turn_id` 关联；Console 决策回放按回合展开时，顶部先显示这条消息的结局行，过程行（已有 `parent` 标记的折叠在其决定性事件下，`wt/1250-cli3`）在下。
-- **与 turn trace 的关系**：`TurnTrace.termination` 增加 `outcome` / `reason`；`zhin trace` 头部显示结局；`trigger.message_id`（`wt/1250-cmd`）与结局行互相可查。
+- **与决策审计的关系**：决策审计继续记录 Agent 内部过程（门禁、旁听、工具、审批、出站），**不新增** `message_outcome` kind，避免同一事实写两遍。结局行通过 `turn_id` 关联；Console 决策回放按回合展开时，顶部先显示这条消息的结局行，过程行（带 `parent` 标记的折叠在其决定性事件下，zhinjs/zhin#1256）在下。
+- **与 turn trace 的关系**：`TurnTrace.termination` 增加 `outcome` / `reason`；`zhin trace` 头部显示结局；trace 的 `trigger.message_id`（§4 表“聊天”一行）与结局行互相可查。
 
 ### 3. 如何查询
 
@@ -237,7 +239,7 @@ sidebar: false
 #### 3.2 Console
 
 - 会话页「记录」新增**结局时间线**（每条消息一行：时间、发送者、结局徽标、人话原因；展开为管理员补充、链接到决策回放回合与 trace）。
-- 新 RPC `plugin.root.message-outcomes`（列表、按会话 / 发送者 / 结局 / 时间过滤）与 `plugin.root.message-outcome`（单条），登记到 `CONSOLE_RPC_PERMISSIONS`：列表与人话需要 `status:view`，`detail` / `error_id` 需要 `decisions:read`。
+- 新 RPC `plugin.root.message-outcomes`（列表、按会话 / 发送者 / 结局 / 时间过滤）与 `plugin.root.message-outcome`（单条）。与现有 `plugin.root.decisions` 一样，它们是根插件经 `definePluginConsoleRpc` 声明的查询（`requiredPermissions`，见 `instance/console/decision-replay.ts`），不是 `CONSOLE_RPC_PERMISSIONS` 里的内置 RPC：两者的 `requiredPermissions` 为 `status.view`（列表与两种人话模板）。同一 RPC 内按字段的区分在处理函数里执行，不在权限映射里表达：调用者另有 `decisions:read`（`DECISIONS_READ_PERMISSION`）时才返回 `detail` / `error_id`，否则这两个字段被删去。
 - 「机器人状态」关注项（`attention.list`）新增“最近 1 小时 `internal_error` / `delivery_failed` / `unrecorded` 计数”。`internal_error` 不主动推送给 owner，只进关注项；P3 之后再评估是否需要每日摘要（决定 8）。
 - 文档 `docs/console/index.md:133`、`docs/paths/console.md:128` 改为“结局时间线说明每条消息的去向；决策回放说明 Agent 回合内部的每一步”。
 
@@ -254,14 +256,14 @@ sidebar: false
 | 普通用户（聊天） | 自己消息的结局，发起人模板 |
 | 会话 `admin`（聊天） | 本会话任意消息，管理员模板，无 `detail` |
 | `owner`（私聊）/ Console `decisions:read` | 全部字段 |
-| Console `status:view` | 列表与两种模板，无 `detail` / `error_id` |
+| Console `status.view` | 列表与两种模板，无 `detail` / `error_id` |
 
 ### 4. 强制手段
 
 1. **结局账本 + `finally` 提交**：Core 新增 `InboundOutcomeLedger`，在 `#receiveMessage` 开头创建并挂在 `RuntimeMessage` 上（内部 symbol，经 `@zhin.js/core` 的 `reportInboundOutcome(message, candidate)` 提交候选；Agent 在 Core 之上，可直接调用）。`finally` 中 `settle()`：
    - 有候选 → 按优先级取主结局，其余为 `facets`；
    - 抛出了异常 → `internal_error`（生成 `errorId`，`logger.error` 带会话、消息 ID、阶段、插件），**原样重新抛出**，不改变适配器 `emitAccepted` 的确认语义；
-   - 没有候选 → `unrecorded` + `logger.warn({ op: 'inbound_outcome_unrecorded', lastStage })`；测试环境（`NODE_ENV=test`）下直接抛错。
+   - 没有候选 → `unrecorded` + `logger.warn({ op: 'inbound_outcome_unrecorded', lastStage })`。测试环境（`NODE_ENV=test`）的严格程度分阶段：P1–P5 期间各阶段只给自己接入的分支补结局，其余分支必然还是 `unrecorded`，所以测试中**只告警**并计入一份允许清单（`packages/im/core/tests/fixtures/unrecorded-allowlist.json`，按 `lastStage` 登记，每个阶段完成时删去自己负责的条目）；P6 起清单必须为空，测试中出现 `unrecorded` 直接抛错（与 §6 P6 一致）。
    - `IngressRoute.route` 的返回值从 `boolean` 扩展为 `boolean | IngressRouteResult { handled; outcome? }`，旧返回值继续可用。`halt { handled: true }` 必须带结局。
 2. **`check:silent-catch` 脚本**（`scripts/check-silent-catch.mjs`，并入 `check:all`）：
    - 范围：`basic/`、`packages/`、`plugins/` 非测试源码。
@@ -272,34 +274,45 @@ sidebar: false
    - `packages/im/core/tests/plugin-runtime/message-outcomes.test.ts`：夹具表类型为 `satisfies Record<MessageOutcome, OutcomeFixture>`，新增结局码不写夹具即编译失败；每个夹具驱动一条真实入站并断言 `outcome` / `reason` / `reply`。
    - Agent 侧结局（门禁、旁听、合流、模型、审批、工具、媒体）在 `packages/im/agent/tests/plugin-runtime/` 同样用穷举夹具。
    - 模板测试：每个码都有 zh-CN / en 的发起人与管理员模板，占位符与字段一致。
-   - Vitest setup 注册一个钩子：任何测试中出现 `unrecorded` 即失败。
-4. **CI 观测**：`pnpm test:e2e:gateway` 增加断言——跑完后 `unrecorded` 计数为 0。
+   - Vitest setup 注册一个钩子：P1–P5 中，测试里出现不在允许清单内的 `lastStage` 的 `unrecorded` 即失败，清单内的只告警；P6 起任何 `unrecorded` 即失败。
+4. **CI 观测**：`pnpm test:e2e:gateway` 在 P1–P5 输出 `unrecorded` 计数（只报告），P6 起断言计数为 0。
 
 ### 5. 与已有改动的关系
 
-| 分支 | 纳入方式 | 需改名 / 归并 |
+“来源”一列对应 §4 表；本表只约定纳入方式，那些 PR 若在本 ADR 实施前未合并，由实施 PR 按 §4 表的行为描述补齐。
+
+| 来源 | 纳入方式 | 需改名 / 归并 |
 | --- | --- | --- |
-| `wt/1250-chat` / `wt/1250-sched` `UserFacingError` | 结局 `refused` / `user_facing_error`，`stage` 为 `command` / `middleware` / `handlers` | 无 |
-| `wt/1250-cli3` `createErrorId` | `internal_error.error_id` 用同一函数 | 从 `packages/im/zhin/src/instance/console/internal-error.ts` 移到 `@zhin.js/logger`（`createErrorId`，Core 与网关都能用） |
-| `wt/1250-cli3` `DECISION_PARENT_KEY` | 回放把 `model_skip` 折叠到决定性事件下；结局行的 `reason` 取决定性事件的码 | 无 |
-| `wt/1250-cli3` `send-failure.ts` 与 `wt/1250-host` `consoleSendFailure` | `delivery_failed.reason` | 两份几乎相同的 `consoleSendFailure`，加上 `message-diagnostics.ts` 的 `deliveryCodes` 集合，共三份发送失败码表：归并为 `@zhin.js/im-contract` 的 `DELIVERY_FAILURE_CODES` + `classifyDeliveryFailure(receipt)`，Console 协议只做展示文案 |
-| `wt/1250-behavior` 审批 `unavailable` / 未执行工具说明 | `approval_unavailable` / `approval_denied` / `approval_timeout` / `tool_failed_reported`；回合末说明即发起人模板 | `ApprovalBlockReason` 的 `unattended` / `no_channel` 直接作为 `reason` |
-| `wt/1250-ai` `no_response` | `model_timeout` / `no_response`；`timeout` → `request_timeout`；`turn_timeout` | `ChatFailureKind` 按“超时类 → `model_timeout`、其余 → `model_error`”映射，话术仍由 `chatFailureLine` 提供 |
-| `wt/1250-cmd` 近似命令、trace `trigger` | `suggested` / `near_miss`；`stage: suggestion`；trace 与结局按 `message_id` 互查 | `InboundSpineStage` 的 `'command-suggestion'` 并入结局 `stage` 枚举 `suggestion` |
-| `wt/1250-sched` `schedule.unschedulable` 关注项、下次运行 | 定时任务结局 `unschedulable` | 关注项读结局表计数 |
+| `UserFacingError`（#1250 第 2 批与定时任务批次） | 结局 `refused` / `user_facing_error`，`stage` 为 `command` / `middleware` / `handlers` | 无 |
+| `createErrorId`（zhinjs/zhin#1256） | `internal_error.error_id` 用同一函数 | 从 `packages/im/zhin/src/instance/console/internal-error.ts` 移到 `@zhin.js/logger`（`createErrorId`，Core 与网关都能用） |
+| `DECISION_PARENT_KEY`（zhinjs/zhin#1256） | 回放把 `model_skip` 折叠到决定性事件下；结局行的 `reason` 取决定性事件的码 | 无 |
+| 发送失败分类（zhinjs/zhin#1256 的 `send-failure.ts`、zhinjs/zhin#1254 的 `consoleSendFailure`） | `delivery_failed.reason` | 两份几乎相同的分类，加上 `message-diagnostics.ts` 的 `deliveryCodes` 集合，共三份发送失败码表：归并为 `@zhin.js/im-contract` 的 `DELIVERY_FAILURE_CODES` + `classifyDeliveryFailure(receipt)`，分类只在这一处。zhinjs/zhin#1256 已在 `@zhin.js/console-protocol` 公开导出 `classifyConsoleSendFailure`、`ConsoleSendFailure`、`CONSOLE_SEND_FAILURE_MESSAGES`：这三个名字**保留**，改为对 `@zhin.js/im-contract` 的兼容再导出（`ConsoleSendFailure` 为对应类型的别名，`CONSOLE_SEND_FAILURE_MESSAGES` 仍是 Console 的展示文案表，键改为 `DELIVERY_FAILURE_CODES`），标 `@deprecated`，只在 `@zhin.js/console-protocol` 的下一个 major 删除；在此之前对使用方没有 API 变化。为此 `scripts/check-architecture-layers.mjs` 中 `packages/console/protocol` 的 `allowedImports` 增加 `packages/im/im-contract`（两者同为 level 0、无运行时依赖的契约包） |
+| 审批 `unavailable` / 未执行工具说明（#1250 批次 PR，Agent 行为） | `approval_unavailable` / `approval_denied` / `approval_timeout` / `tool_failed_reported`；回合末说明即发起人模板 | `ApprovalBlockReason` 的 `unattended` / `no_channel` 直接作为 `reason` |
+| 模型首响应超时 `no_response`（#1250 批次 PR，模型） | `model_timeout` / `no_response`；`timeout` → `request_timeout`；`turn_timeout` | `ChatFailureKind` 按“超时类 → `model_timeout`、其余 → `model_error`”映射，话术仍由 `chatFailureLine` 提供 |
+| 近似命令、trace `trigger`（#1250 第 2 批） | `suggested` / `near_miss`；`stage: suggestion`；trace 与结局按 `message_id` 互查 | 该批的入站阶段名 `'command-suggestion'` 并入结局 `stage` 枚举 `suggestion` |
+| `schedule.unschedulable` 关注项、下次运行（#1250 批次 PR，定时任务） | 定时任务结局 `unschedulable` | 关注项读结局表计数 |
 
 统一后废弃的平行词汇：`RuntimeMessageDiagnostic.route`（由结局派生，保留只读兼容一个小版本）、`InboundSpineStage`（内部类型，换成结局 `stage`）、Agent `halt.handled`（改为带结局）。
 
 #### 5.1 IM 回合审批接入 `ToolApprovalQueue`（与 ADR 0062 共同的决定）
 
-所有者在 PR #1253 的讨论中同意：**IM 回合里的工具审批也接入 `ToolApprovalQueue`**。今天只有危险工具硬闸（G6）的审批卡进队列（`packages/im/agent/src/security/tool-approval-queue.ts`，Console「需要你处理」与审批人私聊 `approve <id>` / `deny <id>` 先到先得，见 `plugin-runtime/host/tool-approval-im-channel.ts`）；普通的 `approval_required` 与来源可疑（provenance）确认走 `turn.ports.approval`（`ApprovalPort`）在会话里直接问，Console 看不到，也无法代为处理（`packages/im/agent/src/tool/turn-tool-runtime.ts`）。
+所有者在 PR #1253 的讨论中同意：**IM 回合里的工具审批也接入 `ToolApprovalQueue`**。现状（`packages/im/agent/src/`）：
+
+- 只有危险工具硬闸（G6）的审批卡进队列（`security/tool-approval-queue.ts`；Console「需要你处理」与审批人私聊 `approve <id>` / `deny <id>` 先到先得，见 `plugin-runtime/host/tool-approval-im-channel.ts`）。队列只在 `TurnToolRuntime` 的 `options.approvalQueue` 里，且只交给硬闸上下文（`ToolHardGate` 的 `queue`）。
+- 硬闸**已经**实现了“会话提问与队列竞速”：`ToolHardGate.#awaitApproval`（`security/tool-hard-gate.ts`）同时发起 `requestApprovalOutcome`（会话提问）、`queue.wait(entry.id)`（Console / 私聊结算）、超时计时与回合取消，`Promise.race` 取先结算者；会话先答时以 `queue.resolve(id, …, 'approval_port')` 结算卡，队列先结算时经共用的 `AbortController` 撤回会话提问。
+- 普通的 `approval_required` 与来源可疑（provenance）确认只在 `tool/turn-tool-runtime.ts` 里调用 `requestApprovalOutcome(this.turn.ports.approval, …)`，Console 看不到，也无法代为处理。`requestApprovalOutcome`（`session/approval-port.ts`）只面对 `ApprovalPort`，与传输无关，拿不到队列，也不该拿到。
 
 决定：
 
-- IM 会话内的确认与 Console「需要你处理」里的工具审批**共用同一个队列**：`requestApprovalOutcome` 在会话里发确认的同时在 `ToolApprovalQueue` 建一张卡，卡上记录来源会话（`ToolApprovalOrigin`）。
+- **实现方式**：不改 `requestApprovalOutcome`。把 `ToolHardGate.#awaitApproval` 中“会话提问 / 队列等待 / 计时 / 取消四路竞速、先结算者生效、另一方经 `AbortController` 撤回或以 `queue.resolve` 结算”的逻辑抽成 `security/` 下一个共用函数，硬闸改为调用它；`turn-tool-runtime.ts` 的 `approval_required` 与来源可疑两个分支也调用它，队列同样取自 `options.approvalQueue`。
+- **只在真的发出提问时建卡**：`createRuntimeApprovalPort`（`plugin-runtime/ingress/request-ports.ts`）对 owner 的非 humanOnly 请求直接返回 `approve-always`，命中记住的授权（`ApprovalDecisionMemory.recall`）时直接返回已记住的结论——这两种情况不发提问，**也不建卡**。卡由端口在即将发出提问（`interaction.ask`）之前回调创建（例如 `ApprovalRequestInput` 增加一个建卡回调），不在 `turn-tool-runtime` 里预先建卡。
+- **卡的种类**：`ToolApprovalEntry` 增加 `kind: 'hard_gate' | 'turn_prompt'`（缺省按 `hard_gate` 读，兼容现有卡）。IM 审批通道 `tool-approval-im-channel.ts` 的 `onEnqueue` 只投递 `hard_gate` 卡，`approve <id>` / `deny <id>` 也只接受 `hard_gate` 卡；`turn_prompt` 卡只出现在 Console「需要你处理」。这样审批人范围不因接入队列而扩大，也不会把每一个普通确认都私聊推给审批人名单。
+- **Console 结算的语义**：队列的结算接口是 `resolve(id, approved: boolean, decidedBy, …)`，只有是 / 否。Console 批准一张 `turn_prompt` 卡等于**仅本次批准**（`approve-once`），拒绝等于仅本次拒绝，都**不写入** `ApprovalDecisionMemory`；“总是允许 / 总是拒绝”只能在会话里回答。
+- **生命周期**：“批准后由下一次同指纹调用消费”（`consumeApproved` / `markConsumed`）与默认 5 分钟 TTL（`DEFAULT_TOOL_APPROVAL_TTL_MS`）**只适用 `hard_gate` 卡**。`turn_prompt` 卡与会话提问同生共死：提问超时、回合取消、会话里先回答时卡随之结算（`timeout` / `turn_cancelled` / `approval_port`）；Console 先结算时直接唤醒正在等待的回合，结果不留给下一次调用消费。
 - **任一处批准或拒绝即生效，另一处同步失效**：会话里先回答，Console 卡片显示“已在聊天中处理”并不可再操作；Console 先处理，会话里的待确认提问被撤回（`interactions` 结算为已处理，之后的回答不再被当作确认吃掉），并在会话里说明结果。
-- 审批权限不变：会话内确认仍按现有 `ApprovalPort` 规则判定谁的回答算数；Console 端按 `CONSOLE_RPC_PERMISSIONS` 中工具审批的现有权限；硬闸卡仍是 humanOnly、一次一卡，群里不能结算硬闸卡。
-- 结局：两处任一结算都写同一条 `tool_approval` 审计，消息结局按 §1.2 取 `approval_denied` / `approval_timeout` / `approval_unavailable`；`approval_unavailable { no_channel }` 只在会话与 Console 都不可达（无人值守且无 Console 审批人）时出现。
+- **审批权限不变**：会话内确认仍按现有 `ApprovalPort` 规则判定谁的回答算数；Console 端按工具审批的现有权限；硬闸卡仍是 humanOnly、一次一卡。普通群（审批人群除外）里不能用 `approve <id>` / `deny <id>` 结算任何卡；但回合内的 humanOnly 提问本来就发在触发它的会话里，在群里被有权的人回答时照常结算，记 `decidedBy: 'approval_port'`。
+- **无人值守仍然失败关闭，不等 Console**：无人值守回合或会话端口不可用时，`turn-tool-runtime` 今天在提问之前就拒绝（`approval required but ApprovalPort unavailable`），这一点不变——回合立即以 `approval_unavailable`（`reason: unattended` / `no_channel`）结束，绝不阻塞等待 Console。此时没有会话提问，所以普通确认不建 `turn_prompt` 卡；硬闸照今天的行为在拒绝前已入队留卡。留了卡时结局带 facet `approval_card_left`（发起人人话追加“已留下审批卡，在 Console 批准后重试即可”），之后同参数的重试由 `consumeApproved` 消费这张已批准的卡。
+- **结局与审计**：两处任一结算都写同一条 `tool_approval` 审计，消息结局按 §1.2 取 `approval_denied` / `approval_timeout` / `approval_unavailable`。
 - 这同时是 ADR 0062 R4（一个意图只对应一个后端操作）在审批上的落实：审批只有一个后端（队列），聊天与 Console 都是它的前端。
 
 实施归入 P2（见 §6），属于 `@zhin.js/agent` minor 与 `@zhin.js/console-protocol` / Console 前端的 minor。
@@ -309,12 +322,12 @@ sidebar: false
 | 阶段 | 内容 | 包与版本级别 |
 | --- | --- | --- |
 | P0 | 本 ADR；`check:silent-catch` 报告模式 + 基线；`allowEmptyCatch: false` 并修 12 处空 `catch` | 根脚本（不发版）；`@zhin.js/database`、`@zhin.js/cli`、`@zhin.js/pagemanager` patch |
-| P1 | Core：`MessageOutcome` 码表与模板、`InboundOutcomeLedger`、`finally` 提交、`internal_error` + `errorId`、Core 侧全部结局（准入、交互态、中间件、处理器、命令、近似命令、发送）；诊断带结局；`reportInboundRejection`，修 14 处 `void emit`；统一发送失败码 | `@zhin.js/core` minor、`@zhin.js/im-contract` minor、`@zhin.js/command` patch、`@zhin.js/logger` minor（`createErrorId`）、`@zhin.js/console-protocol` minor、相关适配器 patch |
-| P2 | Agent：`route` 返回结局；门禁、未进插话群（`not_addressed`）、旁听、合流、`/clear`、`stop`、模型、预算、审批、工具、空输出、陈旧回复、失败话术发送失败；媒体逐项原因（`media_rejected`）；trace `termination.outcome`；修 `agent-runtime.ts:449` 为 warn；IM 回合审批接入 `ToolApprovalQueue`，会话与 Console 任一处结算、另一处同步失效（§5.1） | `@zhin.js/agent` minor、`@zhin.js/ai` patch、`@zhin.js/console-protocol` minor、Console 前端 |
-| P3 | 持久化 `im_message_outcomes`、保留期、采样聚合；Console RPC 与权限、结局时间线、关注项；文档修订 | `@zhin.js/core` minor、`zhin.js` minor（`instance/console`）、`@zhin.js/console-protocol` minor、Console 前端 |
+| P1 | Core：`MessageOutcome` 码表与模板、`InboundOutcomeLedger`、`finally` 提交、`internal_error` + `errorId`、Core 侧全部结局（准入、交互态、中间件、处理器、命令、近似命令、发送）；诊断带结局；`reportInboundRejection`，修 14 处 `void emit`；统一发送失败码（`@zhin.js/im-contract`），`@zhin.js/console-protocol` 的三个发送失败导出改为弃用的兼容再导出；`redactDecisionPayload` 下移到 kernel；`unrecorded` 测试允许清单（§4） | `@zhin.js/core` minor、`@zhin.js/im-contract` minor、`@zhin.js/kernel` minor、`@zhin.js/agent` patch（再导出）、`@zhin.js/command` patch、`@zhin.js/logger` minor（`createErrorId`）、`@zhin.js/console-protocol` minor、相关适配器 patch |
+| P2 | Agent：`route` 返回结局；门禁、未进插话群（`not_addressed`）、旁听、合流、`/clear`、`stop`、模型、预算、审批、工具、空输出、陈旧回复、失败话术发送失败；媒体逐项原因（`media_rejected`）；trace `termination.outcome`；修 `agent-runtime.ts:449` 为 warn；IM 回合审批接入 `ToolApprovalQueue`：抽出硬闸的竞速逻辑、`turn_prompt` 卡、IM 通道只投递 `hard_gate` 卡（§5.1） | `@zhin.js/agent` minor、`@zhin.js/ai` patch、`@zhin.js/console-protocol` minor、Console 前端 |
+| P3 | 持久化 `im_message_outcomes`、保留期（Core 自己调度清理）、采样聚合；Console RPC 与权限、结局时间线、关注项；文档修订 | `@zhin.js/core` minor、`zhin.js` minor（`instance/console`）、`@zhin.js/console-protocol` minor、Console 前端 |
 | P4 | 查询入口：`why` 内置命令与固定短语、`explain_last_outcome` 工具、`zhin why`、`zhin trace --message` | `@zhin.js/core` minor、`@zhin.js/agent` minor、`@zhin.js/cli` minor |
 | P5 | 定时任务结局（助手任务、插件 `schedules/`、会话日程），`zhin schedule runs`；交互态声明“谁的回答算数” | `@zhin.js/agent` minor、`@zhin.js/schedule-feature` minor、`@zhin.js/core` minor、`plugins/utils/reminder` patch、`@zhin.js/cli` minor |
-| P6 | `check:silent-catch` 改为失败模式（入站链路基线清零）；穷举夹具与 `unrecorded` 零容忍进 CI | 根脚本、测试 |
+| P6 | `check:silent-catch` 改为失败模式（入站链路基线清零）；`unrecorded` 允许清单清空，测试中 `unrecorded` 由告警改为抛错，e2e 断言计数为 0；穷举夹具进 CI | 根脚本、测试 |
 
 ## 备选方案及否决理由
 
@@ -354,20 +367,21 @@ sidebar: false
 6. **自然语句识别**：Core 固定短语表（默认开、只对点名消息）+ Agent 只读工具 `explain_last_outcome`；不为此调用模型做意图识别（§3.1）。
 7. **notice / request / system 事件**：不逐条记结局，只记处理器抛错（`internal_error`）与请求的自动处理结果（`request_handled`）（§1.7）。
 8. **`internal_error` 推送给 owner**：不推送，进 Console 关注项；P3 之后再评估每日摘要（§3.2）。
-9. **生产中的 `unrecorded`**：warn + 关注项计数；测试与 e2e 中直接失败（§4）。
+9. **生产中的 `unrecorded`**：warn + 关注项计数。测试与 e2e 中：P1–P5 只告警（测试按允许清单放行尚未接入的阶段，e2e 只报告计数），P6 起直接失败（§4、§6）。
 10. **静默结局采样**：每会话每分钟 30 行后聚合（`im.outcomes.quietSampleLimit`）；点名消息与非静默结局永不采样（§2）。
 11. **交互态吞消息（`reminder-confirm-captures-chat`）**：P5 让提问方声明 `answeredBy: 'target' | 'anyone'`（默认 `target`），非被问者的消息不再被吞；同一提问的重复提示最多重发一次；在此之前先记 `interaction_consumed`（§1.3）。
 12. **`why` 可被功能开关关掉**：可以（`im.outcomes.chatCommand`），但 Console / CLI 查询始终可用（§3.1）。
 
 另有一条与 ADR 0062 共同的决定：
 
-13. **IM 回合审批接入 `ToolApprovalQueue`**：IM 会话内确认与 Console「需要你处理」里的工具审批共用同一个队列，任一处批准即生效、另一处同步失效（所有者在 PR #1253 的讨论中同意的推荐）。细节见 §5.1，实施归入 P2。
+13. **IM 回合审批接入 `ToolApprovalQueue`**：IM 会话内确认与 Console「需要你处理」里的工具审批共用同一个队列，任一处批准即生效、另一处同步失效（所有者在 PR #1253 的讨论中同意的推荐）。只在真的发出提问时建卡；普通确认的卡（`turn_prompt`）只进 Console、批准即仅本次、随会话提问结算；无人值守回合仍立即失败关闭。细节见 §5.1，实施归入 P2。
 
 ## 落盘位置（计划）
 
 - `packages/im/core/src/plugin-runtime/im/`：`message-outcome.ts`（码表、优先级、模板）、`inbound-outcome-ledger.ts`、`inbound-runtime.ts`（`finally` 提交）、`inbound-spine.ts`、`message-dispatcher.ts`、`message-diagnostics.ts`、`host/`（`im_message_outcomes` 模型与清理）、内置 `why` 命令
-- `packages/im/im-contract/src/`：`DELIVERY_FAILURE_CODES`、`classifyDeliveryFailure`
-- `packages/im/agent/src/plugin-runtime/ingress/`（`unified-mailbox-spine.ts`、`ingress-venue-helpers.ts`、`ingress-ambient-stage.ts`、`ingress-outbound.ts`、`scene-event-ingress.ts`）、`turn/inbound-media.ts`、`media/media-normalize.ts`、`tool/turn-tool-runtime.ts`、`trace/turn-trace.ts`、`assistant/timer-scheduler.ts`、`schedule-domain/`
+- `packages/im/im-contract/src/`：`DELIVERY_FAILURE_CODES`、`classifyDeliveryFailure`；`packages/console/protocol/src/send-failure.ts` 改为弃用的兼容再导出
+- `packages/im/kernel/src/`：自 `agent/src/decision-events.ts` 下移的 `redactDecisionPayload`
+- `packages/im/agent/src/plugin-runtime/ingress/`（`unified-mailbox-spine.ts`、`ingress-venue-helpers.ts`、`ingress-ambient-stage.ts`、`ingress-outbound.ts`、`scene-event-ingress.ts`、`request-ports.ts`）、`turn/inbound-media.ts`、`media/media-normalize.ts`、`tool/turn-tool-runtime.ts`、`security/tool-hard-gate.ts`（抽出审批竞速）、`security/tool-approval-queue.ts`（卡种类）、`plugin-runtime/host/tool-approval-im-channel.ts`、`trace/turn-trace.ts`、`assistant/timer-scheduler.ts`、`schedule-domain/`
 - `packages/im/schedule-feature/src/schedule-index.ts`
 - `packages/im/zhin/src/instance/console/`（结局 RPC、决策回放 join）、`packages/console/protocol/src/permissions.ts`
 - `basic/cli/src/commands/`（`why.ts`、`trace.ts`、`schedule.ts`）
