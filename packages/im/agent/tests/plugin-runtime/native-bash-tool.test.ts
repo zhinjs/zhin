@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { Sandbox, type SandboxResult } from '../../src/security/sandbox.js';
+import { CONTAINER_STOP_RETRY_MS } from '../../src/security/sandbox-docker.js';
 import {
   NativeBashToolFeature,
   SandboxBashExecutionPort,
@@ -256,6 +257,74 @@ describe('SandboxBashExecutionPort self-file quarantine', () => {
     await vi.waitFor(() => expect(isSelfFileAnchorTainted(dir)).toBe(false));
     expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
     expect(readdirSync(dir).filter(name => name.startsWith('BOT.md.quarantined-'))).toHaveLength(3);
+  });
+
+  it('keeps the taint until every overlapping unconfirmed stop is confirmed, even when the first confirms first (#1266)', async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'zhin-bash-quarantine-')));
+    const dir = root;
+    let confirmA!: (value: boolean) => void;
+    let confirmB!: (value: boolean) => void;
+    const stoppedA = new Promise<boolean>(resolve => { confirmA = resolve; });
+    const stoppedB = new Promise<boolean>(resolve => { confirmB = resolve; });
+    const unconfirmed = (containerStopped: Promise<boolean>) => ({ ...ok, success: false, timedOut: true, containerStopConfirmed: false, containerStopped });
+    const port = new SandboxBashExecutionPort();
+    const request = { command: 'loop', cwd: root, timeoutMs: 10, signal: new AbortController().signal, policy: isolatedPolicy(root) };
+
+    // Run A times out unconfirmed; run B starts during A's taint and also times out unconfirmed.
+    vi.spyOn(Sandbox.prototype, 'execute').mockResolvedValueOnce(unconfirmed(stoppedA));
+    await port.execute(request);
+    vi.spyOn(Sandbox.prototype, 'execute').mockResolvedValueOnce(unconfirmed(stoppedB));
+    await port.execute(request);
+
+    // A's container is confirmed gone first: B's may still be alive, so the anchor stays tainted.
+    confirmA(true);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(isSelfFileAnchorTainted(dir)).toBe(true);
+
+    // B's surviving container writes BOT.md; run C must not take it for a pre-existing file.
+    writeFileSync(join(dir, 'BOT.md'), 'take over');
+    vi.spyOn(Sandbox.prototype, 'execute').mockResolvedValueOnce(ok);
+    const c = await port.execute(request);
+    expect(c.quarantined?.map(entry => entry.name)).toEqual(['BOT.md']);
+    expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
+
+    confirmB(true);
+    await vi.waitFor(() => expect(isSelfFileAnchorTainted(dir)).toBe(false));
+  });
+
+  it('sweeps a tainted anchor between runs, not only at the next run (#1266)', async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'zhin-bash-quarantine-')));
+    const dir = root;
+    let confirm!: (value: boolean) => void;
+    const stopped = new Promise<boolean>(resolve => { confirm = resolve; });
+    vi.spyOn(Sandbox.prototype, 'execute').mockResolvedValueOnce({ ...ok, success: false, timedOut: true, containerStopConfirmed: false, containerStopped: stopped });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      await new SandboxBashExecutionPort().execute({ command: 'loop', cwd: root, timeoutMs: 10, signal: new AbortController().signal, policy: isolatedPolicy(root) });
+      writeFileSync(join(dir, 'BOT.md'), 'written by the surviving container');
+      vi.advanceTimersByTime(CONTAINER_STOP_RETRY_MS);
+      expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
+      expect(readdirSync(dir).some(name => name.startsWith('BOT.md.quarantined-'))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      confirm(true);
+    }
+    await vi.waitFor(() => expect(isSelfFileAnchorTainted(dir)).toBe(false));
+  });
+
+  it('fails closed when the injected project root cannot be resolved', async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'zhin-bash-quarantine-')));
+    const dir = root;
+    vi.spyOn(Sandbox.prototype, 'execute').mockImplementation(async () => {
+      writeFileSync(join(dir, 'BOT.md'), 'new');
+      return ok;
+    });
+    const policy = isolatedPolicy(root);
+    const result = await new SandboxBashExecutionPort().execute({
+      command: 'x', cwd: join(root, 'missing-cwd'), timeoutMs: 10, signal: new AbortController().signal,
+      policy: { ...policy, filesystem: { ...policy.filesystem, protectedPaths: { projectRoot: root, roots: [], selfFiles: [], selfDirs: [], denyFiles: [] } } },
+    });
+    expect(result.quarantined?.map(entry => entry.name)).toEqual(['BOT.md']);
   });
 
   it('leaves self files alone when they existed before the run, and on read-only turns', async () => {

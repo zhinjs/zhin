@@ -7,6 +7,7 @@ import {
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
 import { Sandbox, type SandboxConfig, type SandboxResult } from '../security/sandbox.js';
+import { CONTAINER_STOP_RETRY_MS } from '../security/sandbox-docker.js';
 import { getLogger } from '@zhin.js/logger';
 import {
   computeHiddenOverlays,
@@ -121,15 +122,17 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
     // gets none). Snapshot the project root's self files and quarantine any new one afterwards.
     // The sandbox settles a stopped (timeout / cancel) run only after the container is confirmed
     // gone; when that cannot be confirmed the anchor stays tainted (see `taintedAnchors`).
+    // Fail closed: an anchor that cannot be resolved falls back to the raw injected root or the
+    // mounted directory rather than skipping the check.
     const anchor = !unrestricted && access === 'workspace-write'
-      ? selfFileAnchor(mountDir, filesystem.protectedPaths)
+      ? selfFileAnchor(mountDir, filesystem.protectedPaths) ?? filesystem.protectedPaths?.projectRoot ?? mountDir
       : undefined;
     const selfNames = rootSelfFileNames(filesystem.protectedPaths);
     const taint = anchor ? taintedAnchors.get(anchor) : undefined;
     let quarantined: QuarantinedSelfFile[] = [];
     // A container of an earlier run on this anchor may still be alive: sweep against its baseline.
-    if (anchor && taint) quarantined = quarantineAndWarn(anchor, selfNames, taint);
-    const before = anchor ? taint ?? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
+    if (anchor && taint) quarantined = quarantineAndWarn(anchor, selfNames, taint.baseline);
+    const before = anchor ? taint?.baseline ?? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
     let result: BashExecutionResult & Partial<Pick<SandboxResult, 'containerStopConfirmed' | 'containerStopped'>> | undefined;
     try {
       result = await sandbox.execute(request.command, {
@@ -151,14 +154,26 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
 }
 
 /**
- * Anchors whose last stopped container could not be confirmed gone, with the self-file baseline
- * taken before that run. While an anchor is tainted every isolated run on it first quarantines
- * against that baseline and uses it (not a fresh snapshot) as its own "before", so a file the
- * surviving container recreates is never mistaken for a pre-existing one. The taint is cleared
- * once the background stop confirms the container is gone and a final sweep ran. Process-local:
- * a restart drops it (the container is `--rm` and keeps being killed by name until confirmed).
+ * Anchors with at least one stopped container that could not be confirmed gone. `baseline` is the
+ * self-file snapshot taken before the *first* tainting run (the earliest one: later runs reuse it
+ * as their own "before" and never add to it), and `pending` holds one token per unconfirmed
+ * container. While an anchor is tainted:
+ *  - every isolated run on it first sweeps against `baseline` and uses it as its "before", so a
+ *    file a surviving container recreates is never mistaken for a pre-existing one;
+ *  - a background sweep runs every {@link CONTAINER_STOP_RETRY_MS} (unref'd), so such a file is
+ *    also quarantined between runs.
+ * A token is removed when its container's background stop is confirmed; the taint is cleared —
+ * after a final sweep — only when no token is left. A stop that gives up (after
+ * `CONTAINER_STOP_RETRIES` retries) leaves its token, so the taint stays for the life of the
+ * process. Process-local: a restart drops it.
  */
-const taintedAnchors = new Map<string, ReadonlySet<string>>();
+interface AnchorTaint {
+  readonly baseline: ReadonlySet<string>;
+  readonly names: ReadonlySet<string>;
+  readonly pending: Set<symbol>;
+  readonly sweeper: NodeJS.Timeout;
+}
+const taintedAnchors = new Map<string, AnchorTaint>();
 
 function taintAnchor(
   anchor: string,
@@ -166,12 +181,27 @@ function taintAnchor(
   baseline: ReadonlySet<string>,
   stopped: Promise<boolean> | undefined,
 ): void {
-  taintedAnchors.set(anchor, baseline);
+  let taint = taintedAnchors.get(anchor);
+  if (!taint) {
+    const sweeper = setInterval(() => { quarantineAndWarn(anchor, names, baseline); }, CONTAINER_STOP_RETRY_MS);
+    sweeper.unref();
+    taint = { baseline, names, pending: new Set(), sweeper };
+    taintedAnchors.set(anchor, taint);
+  }
+  const token = Symbol('unconfirmed-container-stop');
+  taint.pending.add(token);
+  const entry = taint;
   logger.warn(`Isolated shell container under ${anchor} could not be confirmed stopped; new self files keep being quarantined until it is`);
-  void stopped?.then((confirmed) => {
-    if (!confirmed) return;
-    quarantineAndWarn(anchor, names, baseline);
-    if (taintedAnchors.get(anchor) === baseline) taintedAnchors.delete(anchor);
+  void (stopped ?? Promise.resolve(false)).then((confirmed) => {
+    if (!confirmed) {
+      logger.warn(`Gave up confirming an isolated shell container under ${anchor} stopped; the anchor stays tainted`);
+      return;
+    }
+    entry.pending.delete(token);
+    if (entry.pending.size > 0 || taintedAnchors.get(anchor) !== entry) return;
+    quarantineAndWarn(anchor, entry.names, entry.baseline);
+    clearInterval(entry.sweeper);
+    taintedAnchors.delete(anchor);
   }).catch(() => undefined);
 }
 

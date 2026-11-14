@@ -156,6 +156,8 @@ const SYSTEM_DOCKER: DockerCli = {
 };
 
 const NO_SUCH_CONTAINER = /no such (?:container|object)/iu;
+/** `docker run` exit status for an error of the Docker daemon itself (the container may exist). */
+const DOCKER_DAEMON_ERROR_EXIT = 125;
 
 /** Bounds of the stop protocol: the synchronous confirmation, then background retries. */
 export const CONTAINER_STOP_CONFIRM_MS = 10_000;
@@ -179,15 +181,19 @@ export async function stopContainer(
     const inspect = await docker.run(['inspect', '--format', '{{.State.Status}}', containerName], Math.max(1, deadline - Date.now()));
     if (inspect && inspect.code !== 0 && NO_SUCH_CONTAINER.test(inspect.stderr)) return true;
     if (Date.now() >= deadline) return false;
-    await new Promise(resolve => setTimeout(resolve, Math.min(200 * (attempt + 1), 1_000)));
+    await new Promise(resolve => setTimeout(resolve, Math.min(200 * (attempt + 1), 1_000)).unref());
   }
 }
 
-/** Keeps retrying {@link stopContainer} in the background; resolves once confirmed or after the last retry. */
+/**
+ * Keeps retrying {@link stopContainer} in the background ({@link CONTAINER_STOP_RETRIES} times,
+ * {@link CONTAINER_STOP_RETRY_MS} apart); resolves `true` once confirmed, `false` when it gives up.
+ * The timers are unref'd so a pending retry never keeps the process alive.
+ */
 function keepStopping(docker: Pick<DockerCli, 'run'>, containerName: string): Promise<boolean> {
   return (async () => {
     for (let retry = 0; retry < CONTAINER_STOP_RETRIES; retry += 1) {
-      await new Promise(resolve => setTimeout(resolve, CONTAINER_STOP_RETRY_MS));
+      await new Promise(resolve => setTimeout(resolve, CONTAINER_STOP_RETRY_MS).unref());
       if (await stopContainer(docker, containerName)) return true;
     }
     return false;
@@ -346,31 +352,41 @@ export async function executeInDocker(
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) onAbort();
 
-    child.on('close', (exitCode) => {
+    let settled = false;
+    const settle = (build: () => SandboxResult, mustStop: boolean) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       void (async () => {
-        const confirmed = stopRequested ? await stopContainer(docker, containerName, options.stopConfirmMs) : undefined;
+        const confirmed = mustStop ? await stopContainer(docker, containerName, options.stopConfirmMs) : undefined;
         cleanup();
         resolve({
-          success: exitCode === 0 && !timedOut && !aborted,
-          stdout: stdoutChunks.join('').slice(0, maxOutput),
-          stderr: stderrChunks.join('').slice(0, maxOutput),
-          exitCode,
-          duration: Date.now() - startTime,
-          timedOut,
-          blocked: false,
+          ...build(),
           ...(confirmed === undefined ? {} : { containerStopConfirmed: confirmed }),
           ...(confirmed === false ? { containerStopped: keepStopping(docker, containerName) } : {}),
         });
       })();
+    };
+
+    child.on('close', (exitCode, closeSignal) => {
+      // An exit we did not cause may leave the container running: the CLI died by a signal
+      // (`exitCode === null`) or reported a daemon error (125). Confirm it is gone like a stop.
+      const unexpected = exitCode === null || closeSignal != null || exitCode === DOCKER_DAEMON_ERROR_EXIT;
+      settle(() => ({
+        success: exitCode === 0 && !timedOut && !aborted,
+        stdout: stdoutChunks.join('').slice(0, maxOutput),
+        stderr: stderrChunks.join('').slice(0, maxOutput),
+        exitCode,
+        duration: Date.now() - startTime,
+        timedOut,
+        blocked: false,
+      }), stopRequested || unexpected);
     });
 
     child.on('error', (error) => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      cleanup();
-      resolve({
+      // A spawn failure never started a container; after a stop request one may still exist.
+      settle(() => ({
         success: false,
         stdout: stdoutChunks.join(''),
         stderr: `Docker 执行错误: ${error.message}`,
@@ -378,7 +394,7 @@ export async function executeInDocker(
         duration: Date.now() - startTime,
         timedOut: false,
         blocked: false,
-      });
+      }), stopRequested);
     });
   });
 }

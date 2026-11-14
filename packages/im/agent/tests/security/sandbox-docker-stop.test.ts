@@ -13,7 +13,7 @@ import { SandboxBashExecutionPort } from '../../src/plugin-runtime/native-bash-t
  * but the "container" (an interval writing BOT.md into the workspace) only dies `killDelayMs`
  * after `docker kill` / `docker rm -f`, and never when `killable` is false.
  */
-function fakeDocker(workspace: string, options: { killDelayMs?: number; killable?: boolean } = {}) {
+function fakeDocker(workspace: string, options: { killDelayMs?: number; killable?: boolean; cliExit?: { code: number | null; signal?: string | null; afterMs: number }; spawnError?: boolean } = {}) {
   let alive = false;
   let writer: NodeJS.Timeout | undefined;
   const calls: string[][] = [];
@@ -27,8 +27,16 @@ function fakeDocker(workspace: string, options: { killDelayMs?: number; killable
       Object.assign(child, {
         stdout: new EventEmitter(),
         stderr: new EventEmitter(),
-        kill: () => { setImmediate(() => child.emit('close', null)); return true; },
+        kill: () => {
+          setImmediate(() => options.spawnError ? child.emit('error', new Error('docker CLI crashed')) : child.emit('close', null, 'SIGKILL'));
+          return true;
+        },
       });
+      // The CLI exits on its own (not by our stop): a signal or a daemon error.
+      if (options.cliExit) {
+        const exit = options.cliExit;
+        setTimeout(() => child.emit('close', exit.code, exit.signal ?? null), exit.afterMs);
+      }
       return child;
     },
     run: async (args) => {
@@ -110,5 +118,32 @@ describe('docker stop confirmation', () => {
     expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(existsSync(join(dir, 'BOT.md'))).toBe(false);
+  });
+
+  it('confirms the container after a CLI exit we did not cause (signal or daemon error)', async () => {
+    for (const cliExit of [{ code: null, signal: 'SIGTERM', afterMs: 5 }, { code: 125, afterMs: 5 }]) {
+      const dir = workspace();
+      const fake = fakeDocker(dir, { killDelayMs: 20, cliExit });
+      stops.push(fake.stop);
+      const result = await executeInDocker('loop', { workingDirectory: dir, timeout: 5_000, dockerImage: 'img:1' }, { docker: fake.docker, stopConfirmMs: 2_000 });
+      expect(result.timedOut).toBe(false);
+      expect(result.containerStopConfirmed).toBe(true);
+      expect(fake.isAlive()).toBe(false);
+    }
+    // A clean exit of the container needs no stop.
+    const dir = workspace();
+    const fake = fakeDocker(dir, { cliExit: { code: 0, afterMs: 5 } });
+    stops.push(fake.stop);
+    const clean = await executeInDocker('true', { workingDirectory: dir, timeout: 5_000, dockerImage: 'img:1' }, { docker: fake.docker });
+    expect(clean).not.toHaveProperty('containerStopConfirmed');
+  });
+
+  it('confirms the container when the CLI errors after a stop request, and reports when it cannot', async () => {
+    const dir = workspace();
+    const fake = fakeDocker(dir, { killable: false, spawnError: true });
+    stops.push(fake.stop);
+    const result = await executeInDocker('loop', { workingDirectory: dir, timeout: 20, dockerImage: 'img:1' }, { docker: fake.docker, stopConfirmMs: 100 });
+    expect(result.stderr).toContain('docker CLI crashed');
+    expect(result.containerStopConfirmed).toBe(false);
   });
 });
