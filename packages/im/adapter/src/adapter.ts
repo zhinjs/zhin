@@ -1,5 +1,6 @@
 import { redactConfigurationUrl } from './configuration-metadata.js';
 import { AsyncResource } from 'node:async_hooks';
+import { setMaxListeners } from 'node:events';
 import { sameConfigurationIdentity } from './configuration-identity.js';
 import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, type SelfProfile } from './endpoint-profile.js';
@@ -7,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
 import type { EndpointMessageStream, EndpointStreamRequest, EndpointStreaming } from './endpoint-stream.js';
@@ -16,7 +18,20 @@ import {
   type EndpointDesiredRecord, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointCreationContext, type EndpointPreviousIdentity, type EndpointMetadata, type AdapterMutationResult, type EndpointSecretResolver,
   type EndpointExecution, type EndpointAction, type AdapterMutationOptions, type EndpointConfigurationView,
+  type EndpointStartFailure, type EndpointStartPhase, type EndpointFailureCategory,
 } from './adapter-types.js';
+import {
+  compareEndpointDirectories, configuredEndpointSeeds, endpointWritebackEntry, splitEnvironmentReferences,
+  type EndpointConfigDrift, type EndpointConfigSource, type EndpointWritebackPlaceholder,
+} from './endpoint-config-drift.js';
+
+const logger = getLogger('adapter');
+/** How long activation waits for account starts before the generation commits without them. */
+export const DEFAULT_ENDPOINT_START_GRACE_MS = 3_000;
+/** Automatic start retry backoff: 5s doubling to 5min, ±20% jitter, unlimited attempts. */
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 5 * 60_000;
+const RETRY_JITTER = 0.2;
 
 type ExecutionState = { -readonly [K in keyof EndpointExecution]: EndpointExecution[K] };
 interface ChildEpoch<E extends AnyEndpoint> {
@@ -24,6 +39,8 @@ interface ChildEpoch<E extends AnyEndpoint> {
   readonly identity: import('./adapter-types.js').EndpointDesiredMetadata;
   execution?: ExecutionState;
   cleanupFailed?: boolean;
+  /** Credential values resolved for this epoch, only to mask them in failure messages. */
+  secrets?: readonly string[];
   readonly epoch: number;
   readonly cancellation: AbortController;
   endpoint?: E;
@@ -38,11 +55,25 @@ interface ChildEpoch<E extends AnyEndpoint> {
   leases: number;
   drain?: () => void;
 }
+/** Background start supervision of one account; never part of a generation transaction. */
+interface StartState {
+  attempt: number;
+  failure?: EndpointStartFailure;
+  phase?: EndpointStartPhase;
+  nextRetryAt?: number;
+}
 interface Child<E extends AnyEndpoint> {
   desired: EndpointDesiredRecord;
   epoch: number;
   current?: ChildEpoch<E>;
   execution?: ExecutionState;
+  /** Token of the current supervision loop; stop/replace/update/dispose invalidate it. */
+  supervision: number;
+  /** Whether a supervision loop (attempt or retry wait) is running. */
+  supervising?: boolean;
+  /** Wakes the current retry wait early (stop cancels it, relogin retries immediately). */
+  retry?: AbortController;
+  start?: StartState;
 }
 interface MutationRequest<E extends AnyEndpoint> {
   readonly instanceId: string;
@@ -70,8 +101,12 @@ export interface AdapterInitialization<E extends AnyEndpoint> {
   readonly bind: (endpoint: E, record: EndpointDesiredRecord, signal: AbortSignal) => readonly import('./definition.js').AdapterOperation[];
   readonly repository?: EndpointDesiredRepository;
   readonly secrets?: EndpointSecretResolver;
+  /** Stored configuration file, for `zhin.config.yml` drift, import and write-back (#1250). */
+  readonly configSource?: EndpointConfigSource;
   /** Captured startup connection defaults, used only once for newly added/replaced accounts. */
   readonly creationDefaults?: Readonly<Record<string, unknown>>;
+  /** @internal Activation grace for account starts (default {@link DEFAULT_ENDPOINT_START_GRACE_MS}). */
+  readonly startGraceMs?: number;
 }
 
 /** Owns desired state and each child execution epoch. AdapterIndex is a read/routing projection. */
@@ -139,6 +174,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #revision: number | null = null;
   #closed = false;
   readonly #verificationAbort = new AbortController();
+  /** Adapter lifetime: background start supervision ends with dispose, never with a transaction. */
+  readonly #lifetime = unboundedAbortController();
   #admission = false;
   #repositoryReady = false;
   #restoration?: Promise<void>;
@@ -183,8 +220,162 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       this.#install(loaded ?? { revision: 0, endpoints: this.#options.initial });
       if (loaded === undefined) this.#revision = null;
       this.#repositoryReady = true;
+      if (loaded !== undefined) this.#reportConfigDrift();
     });
     await this.#restoration;
+  }
+
+  /** Startup / reload notice: account ids and difference kinds only, never values. */
+  #reportConfigDrift(): void {
+    if (!this.#options.configSource) return;
+    void this.configDrift().then(drift => {
+      if (!drift.entries.length) return;
+      const ids = (kind: string) => drift.entries.filter(entry => entry.kind === kind).map(entry => entry.id);
+      const changed = drift.entries.filter(entry => entry.kind === 'changed')
+        .map(entry => `${entry.id}(${(entry.fields ?? []).map(field => field.path).join('|')})`);
+      logger.warn(formatCompact({ op: 'endpoint_config_drift', adapter: this.descriptor.name,
+        ...(ids('config_only').length ? { configOnly: ids('config_only').join(',') } : {}),
+        ...(ids('snapshot_only').length ? { savedOnly: ids('snapshot_only').join(',') } : {}),
+        ...(changed.length ? { changed: changed.join(',') } : {}),
+        hint: 'saved accounts win over zhin.config.yml endpoints; import or write back in the Console' }));
+    }, () => undefined);
+  }
+
+  /**
+   * `zhin.config.yml` `endpoints` versus the persisted accounts (#1250): ids and paths only.
+   * `authority: 'config'` while no snapshot exists (the file still seeds the accounts).
+   */
+  async configDrift(options: Readonly<{ signal?: AbortSignal; sensitiveFields?: readonly string[] }> = {}): Promise<EndpointConfigDrift> {
+    this.#assertOpen();
+    const source = this.#options.configSource;
+    if (!source) throw new AdapterManagementError('unsupported', 'Endpoint configuration source is unavailable');
+    if (this.#options.repository && !this.#repositoryReady) {
+      throw new AdapterManagementError('unavailable', 'Endpoint desired state is not restored yet');
+    }
+    if (!this.#options.repository || this.#revision === null) {
+      return Object.freeze({ authority: 'config', revision: this.#revision, entries: Object.freeze([]), unverified: Object.freeze([]) });
+    }
+    const revision = this.#revision;
+    const records = this.#desired();
+    const document = await source.read(this.descriptor.owner, options.signal);
+    const seeds = configuredEndpointSeeds(document.config, this.descriptor.name, source.resolveIdentifier?.bind(source));
+    const { entries, unverified } = compareEndpointDirectories(seeds, records, this.#secretKey(source, options.sensitiveFields));
+    return Object.freeze({ authority: 'snapshot', revision, configRevision: document.revision, entries, unverified });
+  }
+
+  /**
+   * Import one `zhin.config.yml` account into the persisted directory (#1250): `${VAR}` values
+   * become `secretRefs` (resolved at start, never stored resolved). An account already persisted
+   * under that id takes the file's configuration (identity kept); a new one is added. `start`
+   * also enables and starts it.
+   */
+  importConfigured(endpointId: string, expectedRevision: number | null,
+    options: AdapterMutationOptions & Readonly<{ start?: boolean }> = {}): Promise<AdapterMutationResult> {
+    this.#assertOpen();
+    const source = this.#options.configSource;
+    if (!source) throw new AdapterManagementError('unsupported', 'Endpoint configuration source is unavailable');
+    if (!this.canManage) throw new AdapterManagementError('unavailable', 'Endpoint desired repository is unavailable');
+    if (this.#revision !== expectedRevision) throw new AdapterManagementError('conflict', 'Endpoint desired state revision conflicts');
+    const { start, ...mutation } = options;
+    return source.read(this.descriptor.owner, options.signal).then(document => {
+      const seed = configuredEndpointSeeds(document.config, this.descriptor.name, source.resolveIdentifier?.bind(source))
+        .find(value => value.endpointId === endpointId);
+      if (!seed) throw new AdapterManagementError('not_found', 'The configuration file has no such account');
+      const { config, secretRefs } = splitEnvironmentReferences(seed.config);
+      configuredSelfProfile(config);
+      const existing = [...this.#children.values()].find(child => child.desired.endpointId === endpointId);
+      if (existing) {
+        const instanceId = existing.desired.instanceId;
+        const identity = [...(this.configurationIdentityFields ?? []), ...this.configurationIdentityProbeFields];
+        const identityChanged = identity.some(field =>
+          !isDeepStrictEqual(readConfigurationPath(existing.desired.config, field), readConfigurationPath(config, field))
+          || existing.desired.secretRefs?.[field] !== secretRefs?.[field]);
+        return this.#commit({
+          expectedRevision,
+          next: () => this.#replace(instanceId, record => {
+            const { platformUserId, secretRefs: _previous, ...rest } = record;
+            return { ...rest, config, ...(secretRefs ? { secretRefs } : {}),
+              ...(platformUserId !== undefined && !identityChanged ? { platformUserId } : {}),
+              desiredEnabled: start === true ? true : record.desiredEnabled, revision: record.revision + 1 };
+          }),
+          execution: { instanceId, action: start === true ? 'start' : 'update', child: existing, run: async () => {
+            const child = this.#require(instanceId);
+            await this.#stop(child);
+            if (child.desired.desiredEnabled) await this.#supervise(child, { restart: true });
+          } },
+        }, mutation);
+      }
+      const seedId = (seed.singleton ? this.descriptor.id : `${this.descriptor.id}~${endpointId}`) as CapabilityId;
+      const taken = this.#children.has(seedId) || this.#canonical.has(seedId);
+      const instanceId = taken ? randomUUID() : String(seedId);
+      const record: EndpointDesiredRecord = Object.freeze({ instanceId,
+        canonicalId: (taken ? `${this.descriptor.id}~${instanceId}` : seedId) as CapabilityId,
+        endpointId, revision: 1, desiredEnabled: start === true, config, ...(secretRefs ? { secretRefs } : {}) });
+      return this.#commit({
+        expectedRevision,
+        next: () => [...this.#desired(), record],
+        execution: { instanceId, action: 'add',
+          ...(start === true ? { run: () => this.#supervise(this.#require(instanceId), { restart: true }) } : {}) },
+      }, mutation);
+    });
+  }
+
+  /**
+   * Write persisted accounts back into `zhin.config.yml` `endpoints` (#1250). Credentials are
+   * written as `${VAR}` references only: the reference the file already had, else a placeholder
+   * returned in `placeholders` for the operator to set in `.env`. The persisted accounts are not
+   * changed. Single-account instance blocks (no `endpoints` list) are not rewritten.
+   */
+  async writeBackConfigured(endpointIds: readonly string[], options: Readonly<{
+    signal?: AbortSignal; sensitiveFields?: readonly string[];
+  }> = {}): Promise<Readonly<{ revision: string; written: readonly string[]; placeholders: readonly EndpointWritebackPlaceholder[];
+    missingEnv: readonly string[] }>> {
+    this.#assertOpen();
+    const source = this.#options.configSource;
+    if (!source) throw new AdapterManagementError('unsupported', 'Endpoint configuration source is unavailable');
+    if (!this.canManage || this.#revision === null) {
+      throw new AdapterManagementError('conflict', 'No saved accounts yet: the configuration file is still authoritative');
+    }
+    const ids = [...new Set(endpointIds)];
+    if (!ids.length || ids.some(id => typeof id !== 'string' || !id)) throw new AdapterManagementError('invalid_configuration', 'Account ids are required');
+    const document = await source.read(this.descriptor.owner, options.signal);
+    const block = document.config ?? {};
+    if (block.endpoints !== undefined && !Array.isArray(block.endpoints)) {
+      throw new AdapterManagementError('invalid_configuration', 'endpoints must be a list');
+    }
+    const current = (block.endpoints ?? []) as readonly unknown[];
+    const { endpoints: _endpoints, ...base } = block;
+    const resolveIdentifier = source.resolveIdentifier?.bind(source);
+    const resolveId = (value: unknown) => typeof value !== 'string' ? undefined
+      : (value.includes('${') && resolveIdentifier ? resolveIdentifier(value) : value).trim();
+    const isSecretKey = this.#secretKey(source, options.sensitiveFields);
+    const entries = current.map(entry => entry);
+    const placeholders: EndpointWritebackPlaceholder[] = [];
+    for (const id of ids) {
+      const child = [...this.#children.values()].find(value => value.desired.endpointId === id);
+      if (!child) throw new AdapterManagementError('not_found', 'No saved account has this id');
+      if (child.desired.canonicalId === this.descriptor.id) {
+        throw new AdapterManagementError('unsupported', 'Single-account configuration blocks are edited directly');
+      }
+      const index = entries.findIndex(entry => !!entry && typeof entry === 'object' && resolveId((entry as { id?: unknown }).id) === id);
+      const existing = index >= 0 ? entries[index] as Readonly<Record<string, unknown>> : undefined;
+      const written = endpointWritebackEntry({ adapter: this.descriptor.name, record: child.desired, existing, base,
+        isSecretKey, resolveIdentifier });
+      placeholders.push(...written.placeholders);
+      if (index >= 0) entries[index] = written.entry; else entries.push(written.entry);
+    }
+    options.signal?.throwIfAborted();
+    const result = await source.writeEndpoints(this.descriptor.owner,
+      entries as readonly Readonly<Record<string, unknown>>[], document.revision, options.signal);
+    return Object.freeze({ revision: result.revision, written: Object.freeze(ids), placeholders: Object.freeze(placeholders),
+      missingEnv: Object.freeze([...(result.missingEnv ?? [])]) });
+  }
+
+  #secretKey(source: EndpointConfigSource, sensitiveFields: readonly string[] = []): (key: string) => boolean {
+    const declared = new Set(sensitiveFields.map(field => field.split('.').at(-1) ?? field));
+    return key => declared.has(key) || (source.isSecretKey ? source.isSecretKey(key)
+      : /(?:password|passwd|secret|apikey|accesskey|privatekey|credential|authorization|cookie|token$)/u
+        .test(key.replace(/[^a-z0-9]/giu, '').toLowerCase()));
   }
 
   getEndpoint(instanceId: string): E | undefined {
@@ -198,6 +389,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       started: child.current?.started === true && !child.current.retired,
       admitted: child.current?.open === true && !child.current.retired,
       ...(child.execution ? { execution: Object.freeze({ ...child.execution }) } : {}),
+      ...startFacts(child),
     })));
   }
   get needsMigration(): boolean { return this.#revision === null && this.#children.size > 0; }
@@ -208,7 +400,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   runtimeStatus(): readonly EndpointMetadata[] {
     const retired = [...this.#retiredEpochs].map(epoch => Object.freeze({
       ...epoch.identity, desiredEnabled: false, epoch: epoch.epoch, incarnationId: epoch.incarnationId, started: false, admitted: false,
-      retiring: true, removed: !this.#children.has(epoch.identity.instanceId),
+      startAttempt: 0, retiring: true, removed: !this.#children.has(epoch.identity.instanceId),
       execution: Object.freeze({
         instanceId: epoch.identity.instanceId, revision: epoch.execution?.revision ?? this.#revision,
         action: epoch.execution?.action ?? 'stop',
@@ -305,7 +497,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         ...(profileOnly ? {} : { run: async () => {
           const child = this.#require(instanceId);
           await this.#stop(child);
-          if (child.desired.desiredEnabled) await this.#start(child);
+          if (child.desired.desiredEnabled) await this.#supervise(child);
         } }),
       },
     }, options);
@@ -333,7 +525,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       next: () => this.#replace(instanceId, record => ({
         ...record, desiredEnabled: true, revision: record.revision + 1,
       })),
-      execution: { instanceId, action: 'start', child: target, run: () => this.#start(target) },
+      execution: { instanceId, action: 'start', child: target, run: () => this.#supervise(target, { restart: true }) },
     }, options);
   }
   stop(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
@@ -394,12 +586,42 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return configuredSelfProfile(this.#require(instanceId).desired.config);
   }
 
-  async activate(signal: AbortSignal): Promise<void> {
+  /**
+   * Starts every enabled account in the background and waits at most the start grace period.
+   * Account start failures never reject activation (they are retried per account, see
+   * {@link Adapter.retryStart}); only cancellation of `signal` does.
+   *
+   * `awaitStarts` (tools and tests that exercise one Endpoint's own start contract) instead waits
+   * for every first attempt and rejects with the first failure, as `Endpoint.start()` threw it;
+   * the caller then disposes the Adapter, which also ends the scheduled retries.
+   */
+  async activate(signal: AbortSignal, options: Readonly<{ awaitStarts?: boolean }> = {}): Promise<void> {
     this.#assertOpen();
     await this.#restore(signal);
+    const attempts: Promise<void>[] = [];
     for (const child of this.#children.values()) {
-      if (child.desired.desiredEnabled) await this.#start(child, signal);
+      if (child.desired.desiredEnabled) attempts.push(this.#supervise(child));
     }
+    const settled = Promise.allSettled(attempts);
+    if (attempts.length) await graceWait(settled, options.awaitStarts ? Infinity
+      : this.#options.startGraceMs ?? DEFAULT_ENDPOINT_START_GRACE_MS, signal);
+    signal.throwIfAborted();
+    if (!options.awaitStarts) return;
+    const failure = (await settled).find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failure) throw failure.reason instanceof EndpointStartAttemptError ? failure.reason.cause : failure.reason;
+  }
+
+  /**
+   * Retry a failed or retry-waiting account now (Console relogin / start). Returns false when the
+   * account is not in a failed start state, is disabled or the Adapter is closed.
+   */
+  retryStart(instanceId: string): boolean {
+    const child = this.#children.get(instanceId);
+    if (this.#closed || !child || !child.desired.desiredEnabled || !child.start?.phase) return false;
+    if (child.supervising && child.retry) { child.retry.abort(); return true; }
+    if (child.supervising) return false;
+    void this.#supervise(child);
+    return true;
   }
   open(): void {
     this.#assertOpen();
@@ -435,6 +657,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     this.assertExternalLifecycle('stop');
     this.#closed = true;
     this.#verificationAbort.abort(new AdapterManagementError('closed', 'Adapter disposed'));
+    this.#lifetime.abort(new AdapterManagementError('closed', 'Adapter disposed'));
+    // A disposed Adapter retries nothing: its accounts read as offline, not retrying.
+    for (const child of this.#children.values()) { this.#cancelSupervision(child); child.start = undefined; }
     this.#admission = false;
     const stack = new DisposeStack();
     const epochs = new Set(this.#retiredEpochs);
@@ -609,7 +834,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       if (existing && (existing.desired.canonicalId !== desired.canonicalId || existing.desired.endpointId !== desired.endpointId)) {
         throw new AdapterManagementError('invalid_configuration', 'Existing Endpoint identity cannot change');
       }
-      const child = existing ?? { desired, epoch: 0 };
+      const child: Child<E> = existing ?? { desired, epoch: 0, supervision: 0 };
       child.desired = freezeRecord(desired);
       next.set(desired.instanceId, child);
     }
@@ -683,7 +908,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       try {
         if (this.#closed) { execution.status = 'failed'; execution.code = 'adapter_closed'; }
         else { await apply?.(); execution.status = 'applied'; }
-      } catch { execution.status = 'failed'; execution.code = 'endpoint_execution_failed'; }
+      } catch (error) {
+        execution.status = 'failed';
+        execution.code = error instanceof EndpointStartAttemptError ? 'endpoint_start_failed' : 'endpoint_execution_failed';
+      }
       return this.#mutationResult(execution);
     }));
     this.#operations.add(completion);
@@ -707,10 +935,14 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const preparation = Promise.resolve().then(async () => {
       cancellation.signal.throwIfAborted();
       const config: Record<string, unknown> = structuredClone(desired.config);
+      const resolved: string[] = [];
       for (const [field, reference] of Object.entries(desired.secretRefs ?? {})) {
         if (!this.#options.secrets) throw new AdapterManagementError('unavailable', 'Endpoint secret resolver is unavailable');
-        writeConfigurationPath(config, field, await this.#options.secrets.resolve(reference, { instanceId: desired.instanceId, signal: cancellation.signal }));
+        const value = await this.#options.secrets.resolve(reference, { instanceId: desired.instanceId, signal: cancellation.signal });
+        resolved.push(value);
+        writeConfigurationPath(config, field, value);
       }
+      epoch.secrets = resolved;
       const endpoint = await this.createEndpoint(config as Config, {
         signal: cancellation.signal, epoch: epoch.epoch, incarnationId: epoch.incarnationId, instanceId: desired.instanceId,
         canonicalId: desired.canonicalId, endpointId: desired.endpointId,
@@ -725,7 +957,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     });
     epoch.preparation = preparation;
     try { await preparation; return epoch; }
-    catch (error) { await this.#stopEpoch(epoch); throw error; }
+    catch (error) {
+      if (error instanceof Error) preparationErrors.add(error);
+      await this.#stopEpoch(epoch);
+      throw error;
+    }
     finally { signal?.removeEventListener('abort', abort); }
   }
   async #start(child: Child<E>, signal?: AbortSignal): Promise<void> {
@@ -779,6 +1015,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     epoch.open = true;
   }
   #stop(child: Child<E>): Promise<void> {
+    this.#cancelSupervision(child);
+    child.start = undefined;
     if (!child.current) return Promise.resolve();
     child.current.execution = child.execution;
     return this.#stopEpoch(child.current);
@@ -812,8 +1050,246 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return Object.freeze({ desired: metadata(child.desired), endpoint: current?.endpoint, epoch: child.epoch,
       ...(current ? { incarnationId: current.incarnationId } : {}),
       operations: current?.operations ?? [], started: current?.started ?? false, open: current?.open ?? false,
-      stopped: current?.retired ?? false, startAttempted: current?.startAttempted ?? false });
+      stopped: current?.retired ?? false, startAttempted: current?.startAttempted ?? false, ...startFacts(child) });
   }
+
+  #cancelSupervision(child: Child<E>): void {
+    child.supervision += 1;
+    child.supervising = false;
+    child.retry?.abort();
+    child.retry = undefined;
+  }
+  #supervised(child: Child<E>, token: number): boolean {
+    return !this.#closed && child.supervision === token && this.#children.get(child.desired.instanceId) === child
+      && child.desired.desiredEnabled;
+  }
+
+  /**
+   * One background start loop per account. The returned promise settles with the first attempt
+   * (rejecting with {@link EndpointStartAttemptError}); later attempts only update the start state.
+   * A loop exits silently when stop/replace/update/remove/dispose supersedes it, and never opens
+   * an account it no longer owns: each attempt is a fresh epoch checked against the token.
+   */
+  #supervise(child: Child<E>, options: Readonly<{ restart?: boolean }> = {}): Promise<void> {
+    if (this.#closed) return Promise.reject(new AdapterManagementError('closed', 'Adapter is closed'));
+    if (child.current?.started && !child.current.retired) return Promise.resolve();
+    if (!options.restart && child.supervising && !child.start?.phase) {
+      // An attempt is already running (e.g. activation after a mutation started it).
+      return Promise.resolve();
+    }
+    this.#cancelSupervision(child);
+    const token = child.supervision;
+    let settle!: (error?: unknown) => void;
+    const first = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      settle = error => {
+        if (settled) return;
+        settled = true;
+        if (error === undefined) resolve(); else reject(error);
+      };
+    });
+    void first.catch(() => undefined);
+    child.supervising = true;
+    // The first attempt begins synchronously, exactly where a direct start would have begun.
+    const loop = this.#executionScope.runInAsyncScope(async () => {
+      let attempt = 0;
+      try {
+        for (;;) {
+          if (!this.#supervised(child, token)) {
+            settle(new AdapterManagementError('inactive', 'Endpoint start was superseded'));
+            return;
+          }
+          attempt += 1;
+          child.start = { attempt, ...(child.start?.failure ? { failure: child.start.failure } : {}) };
+          try {
+            // Dispose retires the attempt's epoch itself (reason `inactive`), as for any stop.
+            await this.#start(child);
+          } catch (error) {
+            if (!this.#supervised(child, token)) { settle(error); return; }
+            const terminal = this.#terminalStartFailure(child, error);
+            const code = terminal === 'cleanup' ? 'endpoint_cleanup_failed' : startErrorCode(error);
+            const delay = terminal ? undefined : retryDelay(attempt);
+            const at = Date.now();
+            const category = failureCategory(error, terminal);
+            // Stored / returned text is built from the category and code only (raw SDK text may carry
+            // credentials); the warn log gets the raw message with this account's credentials masked.
+            const reason = redactFailureMessage(error, [...credentialValues(child.desired.config), ...(child.current?.secrets ?? [])]);
+            child.start = { attempt, failure: Object.freeze({ code, at, category, message: failureSummary(category, code) }),
+              phase: terminal ? 'failed' : 'retrying', ...(delay !== undefined ? { nextRetryAt: at + delay } : {}) };
+            logger.warn(formatCompact({ op: 'endpoint_start_failed', adapter: this.descriptor.name,
+              endpoint: child.desired.endpointId, attempt, error: errorName(error), code, category,
+              ...(reason ? { reason } : {}),
+              ...(delay !== undefined ? { retryInMs: delay } : { retry: 'manual' }) }));
+            settle(new EndpointStartAttemptError(code, { cause: error }));
+            if (delay === undefined) return;
+            await this.#retryWait(child, delay);
+            continue;
+          }
+          if (!this.#supervised(child, token) || !child.current?.started || child.current.retired) {
+            // Stopped before or while starting without an error: an intentional stop, not a failure.
+            settle();
+            return;
+          }
+          child.start = undefined;
+          settle();
+          return;
+        }
+      } finally {
+        if (child.supervision === token) { child.supervising = false; child.retry = undefined; }
+      }
+    });
+    this.#operations.add(loop);
+    void loop.finally(() => this.#operations.delete(loop)).catch(() => undefined);
+    void loop.catch(error => settle(error));
+    return first;
+  }
+  /** Configuration, unsupported and cleanup failures (and every interactive login) wait for a person. */
+  #terminalStartFailure(child: Child<E>, error: unknown): false | 'configuration' | 'cleanup' | 'interactive' {
+    if (child.current?.cleanupFailed) return 'cleanup';
+    if (error instanceof AdapterManagementError && (error.code === 'invalid_configuration' || error.code === 'unsupported')) {
+      return 'configuration';
+    }
+    if (error instanceof Error && preparationErrors.has(error) && error instanceof TypeError) return 'configuration';
+    if (this.#descriptor?.login?.mode === 'interactive') return 'interactive';
+    return false;
+  }
+  #retryWait(child: Child<E>, delay: number): Promise<void> {
+    const wake = new AbortController();
+    child.retry = wake;
+    const lifetime = this.#lifetime.signal;
+    return new Promise<void>(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        wake.signal.removeEventListener('abort', done);
+        lifetime.removeEventListener('abort', done);
+        if (child.retry === wake) child.retry = undefined;
+        resolve();
+      };
+      const timer = setTimeout(done, delay);
+      timer.unref?.();
+      wake.signal.addEventListener('abort', done, { once: true });
+      lifetime.addEventListener('abort', done, { once: true });
+      if (wake.signal.aborted || lifetime.aborted) done();
+    });
+  }
+}
+
+/** The first start attempt of a supervision failed; the loop goes on per its retry policy. */
+class EndpointStartAttemptError extends Error {
+  constructor(readonly code: string, options?: ErrorOptions) {
+    super('Endpoint start failed', options);
+    this.name = 'EndpointStartAttemptError';
+  }
+}
+/** Errors raised while creating/binding an Endpoint (configuration, not transport). */
+const preparationErrors = new WeakSet<Error>();
+
+function startFacts<E extends AnyEndpoint>(child: Child<E>): Pick<EndpointMetadata, 'startAttempt' | 'startFailure' | 'startPhase' | 'nextRetryAt'> {
+  const state = child.start;
+  return {
+    startAttempt: state?.attempt ?? 0,
+    ...(state?.failure ? { startFailure: state.failure } : {}),
+    ...(state?.phase ? { startPhase: state.phase } : {}),
+    ...(state?.nextRetryAt !== undefined ? { nextRetryAt: state.nextRetryAt } : {}),
+  };
+}
+function retryDelay(attempt: number): number {
+  const base = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
+  return Math.round(base * (1 - RETRY_JITTER + Math.random() * 2 * RETRY_JITTER));
+}
+/** Stable, credential-free code: an error's own short code, else its class name. */
+function startErrorCode(error: unknown): string {
+  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
+  if (typeof code === 'string' && /^[\w.:-]{1,64}$/u.test(code)) return code;
+  return errorName(error);
+}
+const FAILURE_MESSAGE_MAX = 200;
+/** Classified start failure cause; credential-free (reads only codes, names and message words). */
+function failureCategory(error: unknown, terminal: false | 'configuration' | 'cleanup' | 'interactive'): EndpointFailureCategory {
+  if (terminal === 'configuration') return 'config';
+  const parts: string[] = [];
+  for (let current: unknown = error, depth = 0; current && depth < 4; current = (current as { cause?: unknown }).cause, depth += 1) {
+    if (typeof current !== 'object') { parts.push(String(current)); break; }
+    const value = current as { code?: unknown; name?: unknown; message?: unknown; status?: unknown };
+    parts.push(...[value.code, value.name, value.message, value.status].filter(item => item !== undefined).map(String));
+  }
+  const text = parts.join(' ');
+  if (/\b(?:401|403)\b|unauthori[sz]ed|forbidden|authenticat|invalid[ _-]?(?:token|secret|credential|password|signature|appid|app[ _-]?id|key)|access denied|login failed/iu.test(text)) return 'auth';
+  if (/timed? ?out|ETIMEDOUT|ESOCKETTIMEDOUT|deadline/iu.test(text)) return 'timeout';
+  if (/ECONN|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|EPIPE|socket hang up|network|fetch failed|getaddrinfo|certificate|TLS/iu.test(text)) return 'network';
+  if (/exit(?:ed)? (?:with )?code|exit code|spawn|SIGTERM|SIGKILL|child process/iu.test(text)) return 'process_exit';
+  if (error instanceof AdapterManagementError && (error.code === 'invalid_configuration' || error.code === 'unsupported')) return 'config';
+  if (/invalid[ _-]?config|missing required|is required|must be (?:a|an|set)/iu.test(text)) return 'config';
+  return 'unknown';
+}
+const FAILURE_SUMMARIES: Readonly<Record<EndpointFailureCategory, string>> = Object.freeze({
+  auth: 'The platform rejected the account credentials',
+  network: 'The platform could not be reached',
+  timeout: 'The connection attempt timed out',
+  config: 'The account configuration is incomplete or invalid',
+  process_exit: 'The account process exited during start-up',
+  unknown: 'The account failed to start',
+});
+/** Credential-free operator text: category description plus the error code. */
+function failureSummary(category: EndpointFailureCategory, code: string): string {
+  return `${FAILURE_SUMMARIES[category]} (${code})`.slice(0, FAILURE_MESSAGE_MAX);
+}
+/** String leaves of an account configuration under credential-like keys. */
+function credentialValues(config: Readonly<Record<string, unknown>>): string[] {
+  const out: string[] = [];
+  const visit = (value: unknown, key: string, depth: number) => {
+    if (depth > 8) return;
+    if (typeof value === 'string') {
+      if (/(?:password|passwd|secret|apikey|accesskey|privatekey|credential|authorization|cookie|token)/u
+        .test(key.replace(/[^a-z0-9]/giu, '').toLowerCase())) out.push(value);
+      return;
+    }
+    if (value && typeof value === 'object') for (const [child, item] of Object.entries(value)) visit(item, child, depth + 1);
+  };
+  visit(config, '', 0);
+  return out;
+}
+/**
+ * Short operator text from a start error: URL credentials, query strings, the account's credential
+ * values and long token-like runs are masked; at most 200 characters.
+ */
+function redactFailureMessage(error: unknown, secrets: readonly string[] = []): string | undefined {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (!raw) return undefined;
+  let text = raw;
+  for (const secret of [...new Set(secrets)].filter(value => typeof value === 'string' && value.length >= 4)
+    .sort((a, b) => b.length - a.length)) text = text.split(secret).join('***');
+  text = text
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]*@/giu, '$1***@')
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#]*)[?#][^\s]*/giu, '$1?***')
+    .replace(/\b(bearer|basic|token|key|secret|password|pwd|cookie)(\s*[:=]\s*)[^\s,;]+/giu, '$1$2***')
+    .replace(/[A-Za-z0-9_\-+/=]{24,}/gu, '***')
+    // Words that name or carry a credential (`secret-token`, `api_key=…`) are masked whole.
+    .replace(/[^\s:,;()"'`]*(?:secret|token|passw|cookie|credential|api[_-]?key|private[_-]?key)[^\s:,;()"'`]*/giu, '***')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (!text) return undefined;
+  return text.length > FAILURE_MESSAGE_MAX ? `${text.slice(0, FAILURE_MESSAGE_MAX - 1)}…` : text;
+}
+function errorName(error: unknown): string {
+  const name = error instanceof Error ? error.name : typeof error;
+  return /^[\w.:-]{1,64}$/u.test(name) ? name : 'Error';
+}
+/** One listener per account attempt; many accounts must not trip the EventTarget leak warning. */
+function unboundedAbortController(): AbortController {
+  const controller = new AbortController();
+  setMaxListeners(0, controller.signal);
+  return controller;
+}
+/** Resolves when `work` settles, the grace period ends or `signal` aborts — never rejects. */
+function graceWait(work: Promise<unknown>, ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); };
+    const timer = Number.isFinite(ms) ? setTimeout(done, Math.max(0, ms)) : undefined;
+    signal.addEventListener('abort', done, { once: true });
+    void work.then(done, done);
+  });
 }
 
 function metadata(record: EndpointDesiredRecord): import('./adapter-types.js').EndpointDesiredMetadata {

@@ -1,4 +1,4 @@
-import { adapterFeatureId, consoleAccountTarget, isAdapterIndex, type AdapterConsoleMutation } from '@zhin.js/adapter';
+import { adapterFeatureId, consoleAccountTarget, isAdapterIndex, type AdapterConsoleConfigAction, type AdapterConsoleMutation } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 import {
   CONSOLE_PERMISSIONS,
@@ -267,9 +267,10 @@ function authorizePrincipal(
   return operator;
 }
 
-const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace']);
+// `import` / `writeback` (#1250) resolve and authorize like the other account methods (`endpoint.manage`).
+const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace', 'import', 'writeback']);
 
-interface AccountCall { readonly action: AdapterConsoleMutation; readonly input: Readonly<Record<string, unknown>> }
+interface AccountCall { readonly action: AdapterConsoleMutation | AdapterConsoleConfigAction; readonly input: Readonly<Record<string, unknown>> }
 
 /**
  * `endpoint-<action>` (adapter account methods). Handlers read only `data`, so an `id` /
@@ -281,7 +282,7 @@ function accountCall(method: string, message: Readonly<Record<string, unknown>>,
   for (const key of ['id', 'instanceId']) {
     if (Object.hasOwn(message, key) && message[key] !== input[key]) throw new Failure('invalid_input', `${key} 只能放在 data 里`);
   }
-  return { action: action as AdapterConsoleMutation, input };
+  return { action: action as AdapterConsoleMutation | AdapterConsoleConfigAction, input };
 }
 
 /**

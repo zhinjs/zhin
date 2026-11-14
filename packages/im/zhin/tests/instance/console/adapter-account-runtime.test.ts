@@ -475,4 +475,16 @@ describe('adapter account RPC target follows the account the handler selects', (
     expect(await as('endpoint-update', { instanceId: a.instanceId, values: { label: 'after' } })).toMatchObject({ status: 200 });
     expect(await as('endpoint-stop', { id: 'acct-a' })).toMatchObject({ status: 200 });
   });
+
+  it('authorizes #1250 import per account and write-back at the adapter level', async () => {
+    const { f, as } = await endpointFixture();
+    const writes = f.repository.compareAndSet.mock.calls.length;
+    // Import names the account it writes: an endpoint binding covers only that account.
+    expect(await as('endpoint-import', { id: 'acct-b' })).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    // Authorized, then refused by the handler: this Host fixture has no configuration file port.
+    expect(await as('endpoint-import', { id: 'acct-a' })).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+    // Write-back rewrites the adapter's `endpoints` list: an endpoint binding never suffices.
+    expect(await as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
+  });
 });

@@ -72,6 +72,19 @@ http:
 
 `owner` 是插件实例路径；`name` 是 capability ID 最后一段的稳定槽名。多账号展开使用 `适配器槽名~endpoints[].id`，未展开时使用适配器槽名。不要填平台昵称。未列出的 Endpoint 不阻止就绪；必需插件被禁用或对应槽不存在时返回 503。
 
+<a id="account-start"></a>
+**账号登录不阻塞实例就绪。** 实例提交 generation 后即报告就绪，不等待各账号（Endpoint）登录完成：启动时每个账号最多等待约 3 秒的宽限期，宽限期内登录完成的账号照常在就绪前上线，其余账号在后台继续启动。因此 `/pub/ready` 返回 200、`zhin start` 显示实例运行中，都不代表账号已在线；需要某个账号在线才算就绪时，把它写进上面的 `http.readiness.endpoints`。
+
+- 后台启动失败的账号按退避自动重试：首次 5 秒，之后翻倍，最长 5 分钟，带 ±20% 抖动，不限次数；日志每次记一条 `endpoint_start_failed`（只记错误类名与错误码，不记原始报错，避免泄露凭据）。
+- 不自动重试：配置错误、不支持的配置，以及交互式登录（`login.mode: interactive`，如 ICQQ 扫码 / 设备锁）——这类账号停在「启动失败」，在 Console 里点「重新登录」或「启动」再试；重新登录也会让等待重试的账号立即重试。
+- 账号启动失败不再让实例启动失败或让热重载回滚：改坏账号配置的热重载会提交，旧账号下线，新账号进入失败并按上面的规则处理。宽限期内没完成登录的慢账号，热重载时变为「先下旧再上新」。
+- 账号上线前向它发送消息会立即失败（`not_sent`），不会排队。
+- `zhin start --once` 可能在慢账号上线前就退出。
+
+`GET /api/system/readiness` 的详情里附带 `endpoints[]`（每个账号的 `phase`、`attempt`、`failure`、`nextRetryAt`），仅供排查，不参与就绪判断；`phase` 取值 `pending` / `starting` / `online` / `reconnecting` / `offline` / `retrying`（失败后等待自动重试）/ `failed`（等待人工处理）。Console 的连接列表另有 `awaiting_assist`，表示账号正在等待你完成登录验证。
+
+网关的 `gateway.readyTimeout`（默认 60 秒）只约束实例就绪，不再覆盖账号登录耗时；扫码、设备锁等待再久也不会让网关判定实例启动超时并重启它。
+
 详细报告通过需要 `status.view` 权限的 `GET /api/system/readiness` 获取（自定义 `http.base` 同样生效），包含 generation、检查时间、逐项原因和修复建议。CLI 使用同一报告：
 
 ```bash

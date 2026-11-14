@@ -72,6 +72,19 @@ http:
 
 `owner` is the exact plugin instance path. `name` is the stable last part of the capability ID: `adapter-slot~endpoints[].id` for expanded accounts, otherwise the adapter slot. Display names are not selectors. Unlisted endpoints are optional; missing or disabled required instances fail readiness.
 
+<a id="account-start"></a>
+**Account logins do not hold back instance readiness.** The instance reports ready once its generation is committed, without waiting for every account (Endpoint) to log in: at startup each account gets a grace period of about 3 seconds, accounts that finish within it come online before ready as before, and the rest keep starting in the background. A 200 from `/pub/ready` or a running instance in `zhin start` therefore does not mean the accounts are online; list an account under `http.readiness.endpoints` above when readiness must wait for it.
+
+- An account whose background start fails is retried automatically with backoff: 5 seconds first, doubling up to 5 minutes, with ±20% jitter and no attempt limit. Each failure logs one `endpoint_start_failed` line with the error class and code only (never the raw message, which may contain credentials).
+- No automatic retry for configuration errors, unsupported configuration and interactive logins (`login.mode: interactive`, such as ICQQ QR code or device lock): those accounts stay in "start failed" until you choose Relogin or Start in the Console. Relogin also retries an account that is waiting for its next automatic retry at once.
+- An account start failure no longer fails instance startup or rolls back a hot reload: a reload with a broken account configuration commits, the old account goes offline, and the new one fails and is handled as above. A slow account that does not finish within the grace period is now replaced "old down, then new up" on reload.
+- Sending to an account before it is online fails immediately (`not_sent`); nothing is queued.
+- `zhin start --once` may exit before slow accounts come online.
+
+The details of `GET /api/system/readiness` include `endpoints[]` (each account's `phase`, `attempt`, `failure` and `nextRetryAt`) for troubleshooting only; they never decide readiness. `phase` is `pending`, `starting`, `online`, `reconnecting`, `offline`, `retrying` (failed, automatic retry scheduled) or `failed` (waiting for a person). The Console's connection list adds `awaiting_assist`: the account is waiting for you to complete a login challenge.
+
+The gateway's `gateway.readyTimeout` (60 seconds by default) bounds instance readiness only and no longer covers account login time: however long a QR code or device lock waits, the gateway does not treat the instance start as timed out or restart it.
+
 `GET /api/system/readiness` returns generation, check time, component reasons and remediation, which requires the `status.view` permission. It respects custom `http.base`. The CLI consumes that same report:
 
 ```bash

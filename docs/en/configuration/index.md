@@ -140,7 +140,7 @@ Where a setting lives depends on who changes it, when, and how many entries it h
 
 **Still being migrated** (later ADR 0057 steps; current behaviour is unchanged):
 
-- `endpoints[]` in plugin blocks and the project's `ai.plan.yml` are still seeds imported into the database on first start: once imported, YAML account seeds do not rewrite existing managed accounts, while adapter profile defaults still apply to accounts that inherit them; removing the seeds after import and Console export are not available yet;
+- `endpoints[]` in plugin blocks and the project's `ai.plan.yml` are still seeds imported into the database on first start: once imported, YAML account seeds do not rewrite existing managed accounts, while adapter profile defaults still apply to accounts that inherit them; when the two differ, the startup log and the Console attention inbox say so and each account can be imported or written back, see [Configuration file accounts and saved accounts](#endpoints-drift);
 - Permanent approvals are still stored in `data/owner-approve-always.json`;
 - Encryption keys are still in `.zhin/inference/` and `.zhin/endpoint-credentials/`, and there is no `zhin backup` yet — back up these keys together with the database, or credentials cannot be decrypted.
 
@@ -526,6 +526,21 @@ Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
 - Connection fields are shallow-merged, with per-entry fields taking precedence. Profile fallbacks merge separately per field.
 - Every entry requires a non-empty `id`. Reserved delimiters (`~` and NUL), duplicate IDs and invalid entries are rejected.
 - Missing or empty `endpoints` creates one Endpoint using the top-level `id`, or the instance key when it is absent.
+
+#### Configuration file accounts and saved accounts {#endpoints-drift}
+
+`endpoints` is only a **first-start seed**: while the project database holds no accounts for the adapter, startup creates them from this list; afterwards the database (the encrypted account document, keys in `.zhin/endpoint-credentials/`) is authoritative, and everything the Console adds, edits, starts or stops changes those records. Later edits of `endpoints` in the YAML file therefore **do not take effect on their own**: a removed account still signs in, an added one does not run.
+
+When the two differ:
+
+- startup (and a reload triggered by a configuration change) logs one `endpoint_config_drift` warning with the account ids and kinds of difference, never field values;
+- the Console attention inbox shows "Accounts … in the configuration file differ from the saved ones" per adapter instance, in three groups: **only in the configuration file** (not running), **no longer in the configuration file** (still run as saved), **configured differently**;
+- the accounts page resolves each account:
+  - **Import from configuration** (`plugin.<instance>.endpoint-import`, optionally starting it): writes that YAML account into the saved accounts. `${VAR}` references are saved as references and resolved against the current environment only when the account starts; the database never stores the resolved value. An existing account with that id takes the YAML configuration (its identity is kept);
+  - **Write back to the configuration file** (`plugin.<instance>.endpoint-writeback`): writes saved accounts into the YAML `endpoints`. Credential fields are written only as `${VAR}` references — the reference the file already had or, without one, a placeholder reference (such as `${QQ_MAIN_SECRET}`) that you then set in `.env`; a credential value is never written into the file. The single-account form (the account of a block without an `endpoints` list) is edited in the file directly.
+  - An account no longer in the file that you do not want to keep is deleted on the accounts page.
+
+Comparison: accounts are matched by id (an id written as `${VAR}` is matched by its resolved value); fields are compared **without** resolving `${VAR}` — a reference equals only the same reference. When the file holds a reference and the saved account a value (every account seeded before this release), they cannot be compared without resolving it; such fields do not count as differences, and importing the account once turns them into references that compare from then on.
 
 Real-world example (QQ official bot, main account through proxy gateway + sandbox account coexisting):
 
