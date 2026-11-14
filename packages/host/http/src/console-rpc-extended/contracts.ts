@@ -22,6 +22,11 @@ export interface ConsoleRpcExtendedCtx {
   databaseHost?: { models: { get(name: string): unknown } };
   /** Narrow generation-bound persistent-job port; null when Assistant is disabled. */
   resolveScheduleEngine?: () => ConsoleScheduleEngine | null | undefined;
+  /**
+   * Resolves a persistent job's delivery target (#1250): `{ resolved, display?, reason? }`, where
+   * `resolved: false` means the job's results cannot be delivered (no target / unknown account).
+   */
+  describeScheduleTarget?: (notify: unknown) => ConsoleScheduleTarget;
   /** LoginAssist list/submit/cancel（刷新后仍可消费扫码/滑块待办）；ADR 0058 flow methods are optional. */
   loginAssist?: ConsoleLoginAssistPort;
   /** ADR 0058: the Endpoint's login declaration and lease-scoped login control (`null` = unknown Endpoint). */
@@ -223,4 +228,12 @@ export interface EndpointManagementPort {
   muteGroupMember?(request: EndpointMuteCommand): Promise<void>;
   setGroupAdmin?(request: EndpointAdminCommand): Promise<void>;
   deleteFriend?(request: EndpointUserCommand): Promise<void>;
+}
+
+/** `target` of a `schedule:list` persistent row (#1250). */
+export interface ConsoleScheduleTarget {
+  readonly resolved: boolean;
+  readonly display?: string;
+  /** `missing_target` | `incomplete_target` | `endpoint_not_found` */
+  readonly reason?: string;
 }

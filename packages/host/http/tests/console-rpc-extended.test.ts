@@ -276,6 +276,19 @@ describe('dispatchExtendedConsoleRpc', () => {
         .toMatchObject({ data: { persistent: [{ id: 'p1', kind: 'user-task' }] } });
     });
 
+    it('adds the resolved delivery target and next run to persistent rows (#1250)', async () => {
+      const notify = { channel: 'im', target: { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'gone', sceneId: 'u1', kind: 'private' } } };
+      const persistent = { listJobs: vi.fn().mockResolvedValue([{ id: 'p1', enabled: true, schedule: { kind: 'workday', cron: '0 0 9 * * *' },
+        action: { prompt: 'x' }, notify, state: { nextRunAtMs: 42 } }]), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      const describeScheduleTarget = vi.fn(() => ({ resolved: false, reason: 'endpoint_not_found', display: 'gone（sandbox）· 私聊 u1' }));
+      const result = await dispatchExtendedConsoleRpc('schedule:list', {}, {
+        fullScope: true, projectRoot: '/tmp', scheduleHost: { list: () => [] }, resolveScheduleEngine: () => persistent, describeScheduleTarget,
+      });
+      expect(result).toMatchObject({ data: { persistent: [{ id: 'p1', nextExecution: 42,
+        target: { resolved: false, reason: 'endpoint_not_found', display: 'gone（sandbox）· 私聊 u1' } }] } });
+      expect(describeScheduleTarget).toHaveBeenCalledWith(notify);
+    });
+
     it('rejects invalid create requests before writing to the persistent engine', async () => {
       const engine = { listJobs: vi.fn(), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
       expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '99 99 * * * *', prompt: 'fixture' }, makeCtx({ resolveScheduleEngine: () => engine }))).toMatchObject({ error: expect.stringContaining('Cron 表达式无效') });

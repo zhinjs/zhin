@@ -529,8 +529,11 @@ zhin schedule resume <id>
 | `--prompt` | Required: the prompt sent to the AI when due |
 | `-l, --label` | Job name |
 | `--kind` | `solar` (default, Gregorian) / `lunar` / `workday` / `freeDay` |
-| `--notify-channel` | `im` / `silent` (default) / `log` |
+| `--notify-channel` | `im` / `silent` (default; `im` when `--target` is given) / `log` |
+| `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
+
+`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list).
 
 ### agent: Agent Diagnostics
 

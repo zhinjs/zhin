@@ -1,6 +1,6 @@
 /** Delivery boundary for the independent schedule execution domain. */
 import { resolveLocale } from '@zhin.js/plugin-runtime';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { EndpointDeliveryError, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
@@ -139,7 +139,14 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 
       if (!result.success) {
         event('error');
-        logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
+        // jobId / purpose / Agent binding: which job and which model path failed (#1250).
+        logger.error(formatCompact({
+          op: 'schedule_execute_failed',
+          jobId: job.id,
+          purpose: previewSource ? 'preview' : 'scheduled',
+          agent: job.action.kind === 'agent' && job.action.agent ? job.action.agent : 'zhin',
+          error: result.error ?? 'unknown error',
+        }));
       } else if (previewSource) {
         event('finish');
       } else {

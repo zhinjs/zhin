@@ -516,8 +516,11 @@ zhin schedule resume <id>
 | `--prompt` | 必填，到时间后发给 AI 的提示词 |
 | `-l, --label` | 任务名称 |
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
-| `--notify-channel` | `im` / `silent`（默认）/ `log` |
+| `--notify-channel` | `im` / `silent`（默认；给了 `--target` 时为 `im`）/ `log` |
+| `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因 |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
+
+`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。
 
 ### agent：Agent 诊断
 

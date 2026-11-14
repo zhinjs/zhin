@@ -167,6 +167,47 @@ agents: |
     }
   });
 
+  it('keeps the recorded state and createdAt when a restart re-syncs an unchanged routine (#1250)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-state-'));
+    try {
+      const store = new ScheduleJobStore({ dataDir: dir });
+      const profile = { version: 1, routines: { weatherReport: { scheduleKind: 'workday' as const, cron: '0 0 9 * * *', prompt: '天气' } } };
+      await syncProfileRoutinesToStore(store, profile);
+      await store.updateJobState('assistant-profile-weatherReport', { lastExecutedAt: 123, lastStatus: 'ok', nextRunAtMs: 456 });
+      const before = await store.getJob('assistant-profile-weatherReport');
+      await syncProfileRoutinesToStore(store, profile);
+      const after = await store.getJob('assistant-profile-weatherReport');
+      expect(after?.state).toEqual({ lastExecutedAt: 123, lastStatus: 'ok', nextRunAtMs: 456 });
+      expect(after?.createdAt).toBe(before?.createdAt);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('aligns the persisted heartbeat with routines.heartbeat.enabled: false (#1250)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-heartbeat-off-'));
+    try {
+      const store = new ScheduleJobStore({ dataDir: dir });
+      await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { everyMs: 60_000 } } });
+      await store.updateJobState(PROFILE_HEARTBEAT_JOB_ID, { nextRunAtMs: 1, lastExecutedAt: 2 });
+      expect((await store.getJob(PROFILE_HEARTBEAT_JOB_ID))?.enabled).toBe(true);
+
+      expect(await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { enabled: false, everyMs: 60_000 } } })).toBe(false);
+      const disabled = await store.getJob(PROFILE_HEARTBEAT_JOB_ID);
+      expect(disabled?.enabled).toBe(false);
+      expect(disabled?.state).toEqual({ lastExecutedAt: 2 });
+
+      // Switching it back on re-enables the same job.
+      await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { everyMs: 60_000 } } });
+      expect((await store.getJob(PROFILE_HEARTBEAT_JOB_ID))?.enabled).toBe(true);
+      // No profile at all (assistant.profile disabled): the store is left as it is.
+      expect(await syncProfileHeartbeatToStore(store, null)).toBe(false);
+      expect((await store.getJob(PROFILE_HEARTBEAT_JOB_ID))?.enabled).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('validateAssistantProfile 拒绝非法 everyMs', () => {
     const errors = validateAssistantProfile({
       version: 1,

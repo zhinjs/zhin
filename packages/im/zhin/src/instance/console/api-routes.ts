@@ -145,5 +145,5 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     ...(options.featureStores ? { featureStores: options.featureStores } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
-  registerAgentConsoleRoutes({ http, base, snapshots, projectRoot });
+  registerAgentConsoleRoutes({ http, base, snapshots, projectRoot, ...(im ? { im } : {}) });
 }

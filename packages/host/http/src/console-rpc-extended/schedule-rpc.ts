@@ -90,6 +90,8 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       nextExecution: (job.state as { nextRunAtMs?: number } | undefined)?.nextRunAtMs,
       ...((job.notify as { target?: unknown } | undefined)?.target
         ? { context: { target: (job.notify as { target?: unknown }).target } } : {}),
+      // #1250: the resolved delivery target; `resolved: false` = results cannot be delivered.
+      ...(ctx.describeScheduleTarget ? { target: ctx.describeScheduleTarget(job.notify) } : {}),
       lastExecutedAt: (job.state as { lastExecutedAt?: number } | undefined)?.lastExecutedAt,
       lastStatus: (job.state as { lastStatus?: string } | undefined)?.lastStatus,
     }));

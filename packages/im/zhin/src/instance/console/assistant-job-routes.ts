@@ -4,6 +4,7 @@ import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { internalErrorResponse } from './internal-error.js';
+import { describeScheduleTarget, parseScheduleTargetSpec, type ScheduleEndpointLookup } from './schedule-target.js';
 
 const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
@@ -13,11 +14,37 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+/** Error codes of a rejected job body (`code` of the 400 response). */
+export type AssistantJobInputErrorCode =
+  | 'invalid_job'
+  | 'schedule_target_invalid'
+  | 'schedule_target_required'
+  | 'schedule_target_not_found';
+
+const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
+  + '或在 assistant.defaults.notify / assistant.profile.yml 的 defaults.notify 中配置默认目标';
+
+/** `notify.target`: `<adapter>:<endpoint>:<kind>:<id>` or an IM delivery target object. */
+function parseTarget(value: unknown): { target?: Record<string, unknown> } | { error: string } {
+  if (value === undefined || value === null || value === '') return {};
+  if (typeof value === 'string') {
+    const parsed = parseScheduleTargetSpec(value);
+    return 'error' in parsed ? parsed : { target: parsed.target };
+  }
+  const scene = record(record(value).scene);
+  const text = (field: unknown) => typeof field === 'string' && field.trim() ? field.trim() : undefined;
+  const platform = text(scene.platform), endpointKey = text(scene.endpointKey), sceneId = text(scene.sceneId), kind = text(scene.kind);
+  if (!platform || !endpointKey || !sceneId || !kind) {
+    return { error: 'notify.target.scene 需要 platform、endpointKey、sceneId 与 kind' };
+  }
+  return { target: { channel: 'im', scene: { platform, endpointKey, sceneId, kind } } };
+}
+
 /** Validates the operator job body and rebuilds it from known fields only. */
 export function parseAssistantJobInput(
   body: unknown,
   now = Date.now(),
-): { job: Record<string, unknown> } | { error: string } {
+): { job: Record<string, unknown> } | { error: string; code?: AssistantJobInputErrorCode } {
   const data = record(body);
   const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : '';
   if (!prompt) return { error: 'prompt is required' };
@@ -25,6 +52,8 @@ export function parseAssistantJobInput(
   if (typeof channel !== 'string' || !NOTIFY_CHANNELS.has(channel)) {
     return { error: 'notify.channel must be im | silent | log' };
   }
+  const target = channel === 'im' ? parseTarget(record(data.notify).target) : {};
+  if ('error' in target) return { error: target.error, code: 'schedule_target_invalid' };
   const input = record(data.schedule);
   let schedule: Record<string, unknown>;
   if (input.kind === 'at') {
@@ -58,7 +87,7 @@ export function parseAssistantJobInput(
       enabled: true,
       schedule,
       action: { kind: 'agent', prompt },
-      notify: { channel },
+      notify: target.target ? { channel, target: target.target } : { channel },
       source: 'manual',
     },
   };
@@ -69,12 +98,15 @@ export function registerAssistantJobRoutes(options: Readonly<{
   http: Pick<HttpHost, 'route'>;
   base: string;
   snapshots?: SnapshotReader;
+  /** Checks that a target's account exists (`im.endpoints.get`); absent: not checked. */
+  endpoints?: ScheduleEndpointLookup;
 }>): void {
-  const { http, base, snapshots } = options;
+  const { http, base, snapshots, endpoints } = options;
   const guarded = (
     operation: (
       jobs: {
         add(job: Record<string, unknown>): Promise<Record<string, unknown>>;
+        defaultImNotify?(): unknown;
         remove(id: string): Promise<boolean>;
         pause(id: string): Promise<boolean>;
         resume(id: string): Promise<boolean>;
@@ -99,8 +131,28 @@ export function registerAssistantJobRoutes(options: Readonly<{
 
   http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body) => {
     const parsed = parseAssistantJobInput(body);
-    if ('error' in parsed) return { status: 400, body: { success: false, error: parsed.error } };
-    return { status: 201, body: { success: true, data: { job: await jobs.add(parsed.job) } } };
+    if ('error' in parsed) {
+      return { status: 400, body: { success: false, error: parsed.error, code: parsed.code ?? 'invalid_job' } };
+    }
+    const job = parsed.job;
+    const notify = record(job.notify);
+    if (notify.channel === 'im') {
+      // No explicit target: the instance's default IM target (assistant / profile defaults.notify).
+      const effective = notify.target ? notify : record(jobs.defaultImNotify?.());
+      if (!effective.target) {
+        return { status: 400, body: { success: false, error: TARGET_REQUIRED, code: 'schedule_target_required' } };
+      }
+      const view = describeScheduleTarget(effective, endpoints ?? null);
+      if (!view.resolved) {
+        const scene = record(record(effective.target).scene);
+        return { status: 400, body: { success: false, code: 'schedule_target_not_found',
+          error: view.reason === 'endpoint_not_found'
+            ? `投递目标的账号不存在：${String(scene.platform)} / ${String(scene.endpointKey)}；用 zhin schedule add --target 指定现有账号的会话`
+            : TARGET_REQUIRED } };
+      }
+      job.notify = { channel: 'im', target: effective.target };
+    }
+    return { status: 201, body: { success: true, data: { job: await jobs.add(job) } } };
   }), { summary: 'Add an assistant job', tags: ['assistant'] });
 
   for (const action of ['remove', 'pause', 'resume'] as const) {

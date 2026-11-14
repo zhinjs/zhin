@@ -454,4 +454,38 @@ describe('schedule (running Host)', () => {
     ).rejects.toThrow('process.exit:1');
     expect(requests).toHaveLength(0);
   });
+
+  it('list 显示解析出的投递目标、无效目标标记与下次运行时间 (#1250)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { jobs: [
+      { id: 'weather', label: '天气早报', enabled: true, schedule: { kind: 'workday', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: '天气' }, notify: { channel: 'im' }, createdAt: 1, updatedAt: 1,
+        state: {}, target: { resolved: false, reason: 'endpoint_not_found', display: 'gone（sandbox）· 私聊 u1' } },
+      { id: 'brief', enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+        action: { kind: 'agent', prompt: '早报' }, notify: { channel: 'im' }, createdAt: 1, updatedAt: 1,
+        state: { nextRunAtMs: Date.UTC(2026, 10, 16, 0) }, target: { resolved: true, display: 'sandbox-bot（sandbox）· 私聊 u1' } },
+    ] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const output = lines.join('\n');
+    expect(output).toContain('⚠ 无效：目标账号不存在（gone（sandbox）· 私聊 u1）');
+    expect(output).toContain('⚠ 无（不会触发）');
+    expect(output).toContain('sandbox-bot（sandbox）· 私聊 u1');
+    expect(output).toContain(new Date(Date.UTC(2026, 10, 16, 0)).toLocaleString());
+  });
+
+  it('--target 格式无效时不发请求 (#1250)', async () => {
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+    await expect(
+      scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m', '--prompt', 'hi', '--target', 'sandbox:bot']),
+    ).rejects.toThrow('process.exit:1');
+    expect(requests).toHaveLength(0);
+  });
+
+  it('--target 发送 im 投递目标，渠道默认为 im (#1250)', async () => {
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m', '--prompt', 'hi', '--target', 'sandbox:sandbox-bot:private:u1']);
+    expect(requests[0].body.notify).toEqual({ channel: 'im', target: 'sandbox:sandbox-bot:private:u1' });
+  });
 });

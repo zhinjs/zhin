@@ -220,4 +220,37 @@ describe('ScheduleJobStore', () => {
     });
     expect(readSpy).not.toHaveBeenCalled();
   });
+
+  it('renames schedule-jobs.json to .migrated once the database migration completed, idempotently (#1250)', async () => {
+    const filePath = join(dataDir, SCHEDULE_JOBS_FILENAME);
+    await writeFile(filePath, JSON.stringify({ version: 1, jobs: [{ id: 'legacy', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} }] }));
+    const imported: string[] = [];
+    let marker = false;
+    const storage = (fail = false) => ({
+      activate: async (loadLegacy: () => Promise<{ jobs: { id: string }[] }>) => {
+        if (marker) return;
+        const file = await loadLegacy();
+        if (fail) throw new Error('database unavailable');
+        imported.push(...file.jobs.map(job => job.id));
+        marker = true;
+      },
+    }) as unknown as DatabaseScheduleJobStorage;
+
+    // A failed migration keeps the original file.
+    await expect(new ScheduleJobStore({ dataDir }).activateDatabase(storage(true))).rejects.toThrow('database unavailable');
+    expect(await readFile(filePath, 'utf-8')).toContain('legacy');
+
+    await new ScheduleJobStore({ dataDir }).activateDatabase(storage());
+    expect(imported).toEqual(['legacy']);
+    await expect(readFile(filePath, 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(`${filePath}.migrated`, 'utf-8')).toContain('legacy');
+
+    // Next start: nothing left to rename; a file written again later is retired without overwriting.
+    await new ScheduleJobStore({ dataDir }).activateDatabase(storage());
+    await writeFile(filePath, '{"version":1,"jobs":[]}');
+    await new ScheduleJobStore({ dataDir }).activateDatabase(storage());
+    expect(await readFile(`${filePath}.migrated`, 'utf-8')).toContain('legacy');
+    expect(await readFile(`${filePath}.migrated.1`, 'utf-8')).toBe('{"version":1,"jobs":[]}');
+  });
 });

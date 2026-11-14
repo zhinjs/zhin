@@ -177,5 +177,7 @@ type AssistantRuntime = {
     remove(id: string): Promise<boolean>;
     pause(id: string): Promise<boolean>;
     resume(id: string): Promise<boolean>;
+    unschedulable?(): readonly { jobId: string; label?: string; reason: string; since: number }[];
+    defaultImNotify?(): unknown;
   };
 };

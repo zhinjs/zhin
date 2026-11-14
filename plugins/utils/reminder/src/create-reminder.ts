@@ -3,6 +3,7 @@ import { reminderMessages as t } from './i18n.js';
 import type { CommandContext } from 'zhin.js/command';
 import type { ReminderConfig } from './config.js';
 import { reminderActor } from './caller.js';
+import { reminderAccountName } from './task-ref.js';
 import { reminderServiceToken } from './runtime.js';
 import { ReminderInputError } from './service.js';
 import { ReminderTimeInputError, parseNaturalReminderTime, formatReminderTime } from './natural-time.js';
@@ -77,7 +78,8 @@ export async function createPersonalReminder(
     }
     const target = actor.target;
     const scene = `${target.kind} ${target.id}${target.parent ? `; ${t(locale, 'parent')} ${target.parent.kind} ${target.parent.id}` : ''}${target.threadId ? `; ${t(locale, 'thread')} ${target.threadId}` : ''}`;
-    const account = `${target.endpoint.adapter} / ${target.endpoint.id.replaceAll('\0', ' / ')}`;
+    // #1250: the account's name, not its internal adapter / capability IDs.
+    const account = reminderAccountName(context.input, target.endpoint);
     const preview = `${t(locale, 'preview', { time: formatReminderTime(parsed.at, parsed.timezone), scene, account, text })}\n${checkExisting}`;
     checkDeadline();
     // Canonical text avoids interpreting reminder content as Markdown/HTML in the prompt renderer.

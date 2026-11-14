@@ -8,6 +8,8 @@ import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
 import { registerAssistantJobRoutes } from './assistant-job-routes.js';
 import { internalErrorResponse } from './internal-error.js';
+import { scheduleEndpointLookup, withScheduleTargets } from './schedule-target.js';
+import type { ImRuntime } from '@zhin.js/core/runtime';
 
 export interface RegisterAgentConsoleRoutesOptions {
   readonly http: HttpHost;
@@ -15,14 +17,17 @@ export interface RegisterAgentConsoleRoutesOptions {
   readonly snapshots?: SnapshotReader;
   /** Enables the persistent trace archive routes (#728). */
   readonly projectRoot?: string;
+  /** Resolves job delivery targets to account names (#1250). */
+  readonly im?: Pick<ImRuntime, 'endpoints'>;
 }
 
 export function registerAgentConsoleRoutes(
   options: RegisterAgentConsoleRoutesOptions,
 ): void {
   const { http, base, snapshots } = options;
+  const endpoints = scheduleEndpointLookup(options.im?.endpoints);
   registerScheduleExecutionRoutes({ http, base, snapshots });
-  registerAssistantJobRoutes({ http, base, snapshots });
+  registerAssistantJobRoutes({ http, base, snapshots, ...(endpoints ? { endpoints } : {}) });
   // Assistant Event Ingress (M2) — needs Agent Host setAssistantRuntime.
   http.route('POST', `${base}/assistant/events`, async (request) => {
     let body: unknown;
@@ -66,7 +71,8 @@ export function registerAgentConsoleRoutes(
         return jsonResponse(404, { success: false, error: 'assistant.enabled is false' });
       }
       try {
-        const jobs = await runtime.jobs.list();
+        // `target`: the resolved delivery target (account display name + conversation), #1250.
+        const jobs = withScheduleTargets(await runtime.jobs.list(), endpoints);
         return jsonResponse(200, {
           success: true,
           data: { jobs, eventsActive: runtime.events.isEnabled() },

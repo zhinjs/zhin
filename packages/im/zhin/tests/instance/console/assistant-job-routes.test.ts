@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withTestUsers } from '../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import {
@@ -90,4 +90,55 @@ it('parseAssistantJobInput builds at/every schedules', () => {
     .toMatchObject({ job: { schedule: { kind: 'at', atMs: 2000, deleteAfterRun: true }, notify: { channel: 'silent' } } });
   expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'every', everyMs: 1000 } }))
     .toMatchObject({ job: { schedule: { kind: 'every', everyMs: 1000 } } });
+});
+
+describe('IM delivery target (#1250)', () => {
+  async function startWith(endpoints?: (adapter: string, key: string) => { name: string; adapter: string } | null) {
+    const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
+    cleanups.push(() => http.close());
+    registerAssistantJobRoutes({ http, base: '/api', ...(endpoints ? { endpoints } : {}) });
+    const { port } = await http.listen();
+    return async (body: unknown) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs`, {
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer operator' }, body: JSON.stringify(body),
+      });
+      return { status: response.status, body: await response.json() as { code?: string; error?: string } };
+    };
+  }
+  const base = { prompt: '天气', schedule: { kind: 'workday', cron: '0 0 9 * * *' } };
+  const known = (adapter: string, key: string) => adapter === 'sandbox' && key === 'sandbox-bot' ? { name: 'sandbox-bot', adapter: 'sandbox' } : null;
+
+  it('rejects im without any target with a clear code instead of an internal error', async () => {
+    const post = await startWith(known);
+    const result = await post({ ...base, notify: { channel: 'im' } });
+    expect(result.status).toBe(400);
+    expect(result.body.code).toBe('schedule_target_required');
+    expect(result.body.error).toContain('--target');
+    expect(jobs.add).not.toHaveBeenCalled();
+  });
+
+  it('parses --target and rejects an unknown account or a malformed spec', async () => {
+    const post = await startWith(known);
+    const bad = await post({ ...base, notify: { channel: 'im', target: 'sandbox:gone:private:u1' } });
+    expect(bad).toMatchObject({ status: 400, body: { code: 'schedule_target_not_found' } });
+    expect(bad.body.error).toContain('sandbox / gone');
+    expect((await post({ ...base, notify: { channel: 'im', target: 'sandbox:bot' } })).body.code).toBe('schedule_target_invalid');
+    expect((await post({ ...base, notify: { channel: 'im', target: 'sandbox:sandbox-bot:room:u1' } })).body.code).toBe('schedule_target_invalid');
+    expect(jobs.add).not.toHaveBeenCalled();
+
+    const ok = await post({ ...base, notify: { channel: 'im', target: 'sandbox:sandbox-bot:group:g:1' } });
+    expect(ok.status).toBe(201);
+    expect(jobs.add.mock.calls[0]![0].notify).toEqual({ channel: 'im', target: { channel: 'im',
+      scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', kind: 'group', sceneId: 'g:1' } } });
+  });
+
+  it('falls back to the instance default IM target and validates its account', async () => {
+    const post = await startWith(known);
+    const fallback = { channel: 'im', target: { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', kind: 'private', sceneId: 'u1' } } };
+    state.assistant = { jobs: { ...jobs, defaultImNotify: () => fallback } };
+    expect((await post({ ...base, notify: { channel: 'im' } })).status).toBe(201);
+    expect(jobs.add.mock.calls[0]![0].notify).toEqual(fallback);
+    state.assistant = { jobs: { ...jobs, defaultImNotify: () => ({ ...fallback, target: { ...fallback.target, scene: { ...fallback.target.scene, endpointKey: 'gone' } } }) } };
+    expect((await post({ ...base, notify: { channel: 'im' } })).body.code).toBe('schedule_target_not_found');
+  });
 });

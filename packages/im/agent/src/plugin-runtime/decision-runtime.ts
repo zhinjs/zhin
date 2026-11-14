@@ -55,9 +55,16 @@ export function getAgentTurnDecisionRuntime(): AgentDecisionRuntime | undefined 
   return decisionTurnStorage.getStore()?.runtime;
 }
 
-/** Opaque capture for the same root, turn, session and held generation. */
-export function getAgentTurnInferenceSnapshot(): InferenceGraphSnapshot | undefined {
-  return decisionTurnStorage.getStore()?.inferenceSnapshot;
+/**
+ * Opaque capture for the same root, turn, session and held generation. With `turnId`, only the
+ * capture of that turn: a turn started inside another (e.g. `schedule_preview` run from a chat
+ * turn's tool call) has its own operation and session, and the outer capture would be refused as
+ * `AI provider: forbidden` (#1250).
+ */
+export function getAgentTurnInferenceSnapshot(turnId?: string): InferenceGraphSnapshot | undefined {
+  const store = decisionTurnStorage.getStore();
+  if (!store || (turnId !== undefined && store.turnId !== turnId)) return undefined;
+  return store.inferenceSnapshot;
 }
 
 export function drainAgentTurnDecisionObservations(): readonly DecisionObservation[] {
