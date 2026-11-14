@@ -97,7 +97,10 @@ html.dark .zk-root, .dark .zk-root, html.dark .zhin-console-surface, .dark .zhin
 .zk-root :where(input, select, textarea)[aria-invalid="true"] { border-color: var(--zk-danger); }
 
 /* ── Page & Layout Primitives ── */
-.zk-page { max-width: 1180px; margin: 0 auto; padding: 28px 28px 48px; display: grid; gap: 24px; }
+.zk-page { max-width: 1180px; margin: 0 auto; padding: 28px 28px 48px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+/* Fill the host's content column even inside a shrink-to-fit (flex / grid) parent: never collapse to one narrow tile. */
+.zk-page { width: 100%; box-sizing: border-box; min-width: 0; }
+.zk-split > * { min-width: 0; }
 /* Embedded in a host page (AdapterConsolePage \`embedded\`): the host owns width, padding, title and refresh. */
 .zk-page.zk-page--embedded { max-width: none; margin: 0; padding: 0; gap: 18px; }
 .zk-embedded-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }

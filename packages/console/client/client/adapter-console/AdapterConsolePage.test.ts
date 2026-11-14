@@ -13,7 +13,7 @@ type Confirm = { onConfirm: () => Promise<void> | void; beforeOpen?: () => boole
 /** Run production hooks and event handlers; HTTP boundaries remain the actual remoteApi functions. */
 function harness() {
   const env = createHookEnv();
-  const page = env.load(file('./AdapterConsolePage.tsx'), ['AdapterConsoleSession', 'captureAdapterConsoleContext', 'runtimeLoginMatches']);
+  const page = env.load(file('./AdapterConsolePage.tsx'), ['AdapterConsoleSession', 'captureAdapterConsoleContext', 'runtimeLoginMatches', 'useAdapterConsoleModel', 'renderAdapterConsoleView']);
   const owner = env.load(file('../ui/plugin-id.ts'));
   const nodes = () => all(env.tree());
   const buttonNodes = () => nodes().filter(node => isComponent(node, 'Button'));
@@ -22,7 +22,15 @@ function harness() {
     mount: env.mount, rerender: env.rerender, settle: env.settle, unmount: env.unmount, nodes,
     button(label: string) { const node = buttonNodes().find(node => text(node.props?.children) === label); if (!node) throw new Error(`missing button ${label}: ${text(env.tree())}`); return node.props as Handlers; },
     confirm(label: string) { const node = nodes().find(node => isComponent(node, 'ConfirmButton') && text(node.props?.children) === label); if (!node) throw new Error(`missing confirm button ${label}`); return node.props as unknown as Confirm; },
-    hasControl(labels: string[]) { return nodes().some(node => (isComponent(node, 'Button') || isComponent(node, 'ConfirmButton')) && labels.includes(text(node.props?.children))); },
+    hasControl(labels: string[]) { return nodes().some(node => ((isComponent(node, 'Button') || isComponent(node, 'ConfirmButton')) && labels.includes(text(node.props?.children)))
+      || (isComponent(node, 'Switch') && labels.includes(node.props?.checked ? '停止' : '启动'))); },
+    /** The account's start / stop switch (the only start / stop control): `启动` flips an off switch on, `停止` an on switch off. */
+    toggle(action: '启动' | '停止') {
+      const node = nodes().find(node => isComponent(node, 'Switch') && node.props?.checked === (action === '停止'));
+      if (!node) throw new Error(`missing switch to ${action}: ${text(env.tree())}`);
+      const props = node.props as { onChange: (value: boolean) => void; disabled?: boolean; checked: boolean; label: string; ariaLabel?: string };
+      return { ...props, onClick: async () => { props.onChange(action === '启动'); } };
+    },
     input(at: number) { return nodes().filter(node => node.type === 'input')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
     select(at: number) { return nodes().filter(node => node.type === 'select')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
     text: () => text(env.tree()),
@@ -72,8 +80,11 @@ function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], star
     return reply({});
   }));
   const h = harness(); const current = h.exports.captureAdapterConsoleContext!() as () => boolean;
-  h.mount(() => h.exports.AdapterConsoleSession!({ adapterKey: 'icqq', isCurrent: current, ...props }));
-  return { h, calls, props, setMode(value: string) { mode = value; }, releaseStatus: () => releaseStatus?.(), failStatus(value: boolean) { statusFails = value; }, failEndpoints(value: boolean) { endpointsFail = value; }, setHostEndpoints(value: unknown[]) { hostEndpoints = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
+  // `hosted`: one shared model, as inside `AdapterAccountsProvider`; the page then renders with `hostAccounts`.
+  const hosted: { accounts?: Record<string, unknown> & { rows: Record<string, unknown>[] } } = {};
+  if (props.hosted) h.mount(() => { const model = h.exports.useAdapterConsoleModel!({ adapterKey: 'icqq', isCurrent: current }) as { accounts: never }; hosted.accounts = model.accounts; return h.exports.renderAdapterConsoleView!(model, { embedded: true, hostAccounts: true }); });
+  else h.mount(() => h.exports.AdapterConsoleSession!({ adapterKey: 'icqq', isCurrent: current, ...props }));
+  return { h, calls, props, hosted, setMode(value: string) { mode = value; }, releaseStatus: () => releaseStatus?.(), failStatus(value: boolean) { statusFails = value; }, failEndpoints(value: boolean) { endpointsFail = value; }, setHostEndpoints(value: unknown[]) { hostEndpoints = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -81,7 +92,7 @@ describe('shared runtime Adapter page production handlers', () => {
   it('uses exact instance, generation and revision for start/stop/remove without touching startup source', async () => {
     const f = fixture(); await f.h.settle();
     expect(f.h.text()).not.toContain('重启后生效');
-    await f.h.button('启动').onClick(); await f.h.settle();
+    await f.h.toggle('启动').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2 } });
     expect(f.h.text()).toContain('已保存，操作进行中');
     const remove = f.h.confirm('删除'); expect(remove.confirmLabel).toBe('删除账号'); await remove.onConfirm(); await f.h.settle();
@@ -103,16 +114,16 @@ describe('shared runtime Adapter page production handlers', () => {
   it('lists legacy accounts and sends migration consent only after the user confirms this operation', async () => {
     const s = status(); s.runtime = { ...s.runtime!, needsMigration: true, canMigrate: true, revision: null };
     const f = fixture(s); await f.h.settle(); expect(f.h.text()).toContain('10001');
-    await f.h.button('启动').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(0);
+    await f.h.toggle('启动').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(0);
     expect(f.h.text()).toContain('确认迁移以下账号'); await f.h.button('确认迁移').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body.data).toEqual({ instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: null, confirmMigration: true }); f.h.unmount();
   });
 
   it.each(['conflict', 'unknown'])('blocks resubmission after %s until an explicit successful reread', async mode => {
     const f = fixture(); await f.h.settle(); f.setMode(mode);
-    await f.h.button('启动').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(1); expect(f.h.button('启动').disabled).toBe(true);
-    await vi.advanceTimersByTimeAsync(6000); await f.h.settle(); expect(f.h.button('启动').disabled).toBe(true); expect(f.writes()).toHaveLength(1);
-    f.setMode(''); await f.h.button('刷新').onClick(); await f.h.settle(); expect(f.h.button('启动').disabled).toBe(false); f.h.unmount();
+    await f.h.toggle('启动').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(1); expect(f.h.toggle('启动').disabled).toBe(true);
+    await vi.advanceTimersByTimeAsync(6000); await f.h.settle(); expect(f.h.toggle('启动').disabled).toBe(true); expect(f.writes()).toHaveLength(1);
+    f.setMode(''); await f.h.button('刷新').onClick(); await f.h.settle(); expect(f.h.toggle('启动').disabled).toBe(false); f.h.unmount();
   });
 
   it('edits a patch without masked credentials and replaces identity in one CAS with fresh required credentials', async () => {
@@ -144,7 +155,7 @@ describe('shared runtime Adapter page production handlers', () => {
       endpointIdentity: { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' } };
     const f = fixture(enabled, [task]); await f.h.settle(); expect(f.h.text()).toContain('MATCHED LOGIN BEFORE STOP');
     const staleSubmit = f.h.button('已扫码，继续').onClick, staleCancel = f.h.button('取消').onClick;
-    f.setMode('late-login'); const stopped = f.h.button('停止').onClick(); await f.h.settle();
+    f.setMode('late-login'); const stopped = f.h.toggle('停止').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body.type).toBe('plugin.plugin-a.endpoint-stop');
     expect(f.h.text()).not.toContain('MATCHED LOGIN BEFORE STOP');
     f.setMode(''); f.finishLogin(); await stopped; await f.h.settle();
@@ -169,7 +180,7 @@ describe('shared runtime Adapter page production handlers', () => {
   });
 
   it('does not apply a late operation or let an old callback send to another Host/auth context', async () => {
-    const f = fixture(); await f.h.settle(); const oldStart = f.h.button('启动').onClick; f.setMode('late'); const pending = oldStart(); await f.h.settle();
+    const f = fixture(); await f.h.settle(); const oldStart = f.h.toggle('启动').onClick; f.setMode('late'); const pending = oldStart(); await f.h.settle();
     localStorage.setItem('zhin_api_base', 'https://host-b.test'); f.finish(); await pending; await f.h.settle(); expect(f.h.text()).not.toContain('已保存，操作进行中');
     await oldStart(); expect(f.writes()).toHaveLength(1);
     expect(await f.h.exports.resolveAdapterConsolePluginId!('icqq')).toBe('plugin-b');
@@ -210,7 +221,7 @@ describe('shared runtime Adapter page production handlers', () => {
 
   it('disables persistence mutations without storage while preserving exact canonical connection testing', async () => {
     const s = status(); s.runtime = { ...s.runtime!, canManage: false, canUpdate: false, canReplace: false, endpoints: s.runtime!.endpoints.map(value => ({ ...value, started: true })) };
-    const f = fixture(s); await f.h.settle(); expect(f.h.button('启动').disabled).toBe(true); expect(f.h.button('添加').disabled).toBe(true);
+    const f = fixture(s); await f.h.settle(); expect(f.h.toggle('启动').disabled).toBe(true); expect(f.h.button('添加').disabled).toBe(true);
     await f.h.button('测试连接').onClick(); await f.h.settle();
     expect(f.calls.find(call => call.body.type === 'endpoint.test')!.body).toMatchObject({ endpointKey: 'canonical-old' }); expect(f.writes()).toHaveLength(0); f.h.unmount();
   });
@@ -371,10 +382,10 @@ describe('loading and failure states (ICQQ page regressions)', () => {
 
   it('never auto-dismisses an error notice but clears a success notice after 8s', async () => {
     const f = fixture(); await f.h.settle(); f.setMode('conflict');
-    await f.h.button('启动').onClick(); await f.h.settle();
+    await f.h.toggle('启动').onClick(); await f.h.settle();
     expect(f.h.text()).toContain('账号清单已变化');
     await vi.advanceTimersByTimeAsync(20_000); expect(f.h.text()).toContain('账号清单已变化'); f.h.unmount();
-    const g = fixture(); await g.h.settle(); await g.h.button('启动').onClick(); await g.h.settle();
+    const g = fixture(); await g.h.settle(); await g.h.toggle('启动').onClick(); await g.h.settle();
     expect(g.h.text()).toContain('已保存，操作进行中'); await vi.advanceTimersByTimeAsync(8_100); await g.h.settle();
     expect(g.h.text()).not.toContain('已保存，操作进行中'); g.h.unmount();
   });
@@ -382,9 +393,8 @@ describe('loading and failure states (ICQQ page regressions)', () => {
   it('keeps per-action busy state local: a slow start leaves test-connection and refresh usable', async () => {
     const s = status(); s.runtime = { ...s.runtime!, endpoints: s.runtime!.endpoints.map(value => ({ ...value, started: true })) };
     const f = fixture(s); await f.h.settle(); f.setMode('late');
-    const starting = f.h.button('启动').onClick(); await f.h.settle();
-    const busyStart = f.h.nodes().find(node => typeof node.type === 'function' && node.type.name === 'Button' && node.props?.busy === true);
-    expect(text(busyStart?.props?.children)).toBe('启动');
+    const starting = f.h.toggle('启动').onClick(); await f.h.settle();
+    expect(f.h.toggle('启动').disabled).toBe(true);
     expect(f.h.button('测试连接').disabled).toBeFalsy(); expect(f.h.button('刷新').disabled).toBeFalsy();
     expect(f.h.button('编辑').disabled).toBe(true);
     f.finish(); await starting; await f.h.settle(); f.h.unmount();
@@ -684,7 +694,78 @@ describe('embedded in a host page', () => {
 
   it('advertises the embedded API for hosts that also run against older SDKs', async () => {
     const page = await import('./AdapterConsolePage.js');
-    expect(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES).toEqual({ embedded: true, toolbar: true, refreshKey: true });
+    expect(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES).toEqual({ embedded: true, toolbar: true, refreshKey: true, renderRow: true, hostAccounts: true });
     expect((page.AdapterConsolePage as unknown as { capabilities: unknown }).capabilities).toBe(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES);
+  });
+});
+
+describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
+  it('labels the start / stop switch with the state and keeps no duplicate start / stop button', async () => {
+    const f = fixture(); await f.h.settle();
+    const off = f.h.toggle('启动'); expect(off.label).toBe('已停止'); expect(off.ariaLabel).toBe('10001：已停止');
+    expect(f.h.nodes().some(node => isComponent(node, 'Button') && ['启动', '停止'].includes(text(node.props?.children)))).toBe(false);
+    await off.onClick(); await f.h.settle();
+    expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedRevision: 2 } });
+    f.h.unmount();
+  });
+
+  it('draws the account avatar from the adapter display name, not a platform table', async () => {
+    const s = status(); s.displayName = 'QQ 官方机器人'; s.adapterKey = 'qq';
+    const f = fixture(s); await f.h.settle();
+    const icon = f.h.nodes().find(node => node.type === 'div' && node.props?.className === 'zk-bot-tile__icon');
+    expect(text(icon?.props?.children)).toBe('Q'); expect(f.h.text()).not.toContain('企Q'); f.h.unmount();
+  });
+
+  it('renders each account through renderRow with its row data', async () => {
+    const seen: unknown[] = [];
+    const renderRow = (row: { endpointId: string; enabledLabel: string; can: unknown }) => { seen.push(row); return { type: 'span', props: { className: 'host-row', children: `${row.endpointId}/${row.enabledLabel}` } }; };
+    const f = fixture(status(), [], '', { renderRow }); await f.h.settle();
+    expect(f.h.text()).toContain('10001/已停止');
+    expect(f.h.nodes().some(node => isComponent(node, 'Switch'))).toBe(false);
+    expect(seen.at(-1)).toMatchObject({ endpointId: '10001', instanceId: 'instance-old', enabled: false, can: { toggle: true, edit: true, remove: true, test: false } });
+    f.h.unmount();
+  });
+
+  it('hands rows and actions to the host and leaves the account list, editor and notices to it', async () => {
+    const f = fixture(status(), [], '', { hosted: true }); await f.h.settle();
+    const accounts = f.hosted.accounts!;
+    expect(accounts.state).toBe('ready'); expect(accounts.rows).toHaveLength(1);
+    expect(f.h.nodes().some(node => isComponent(node, 'Switch'))).toBe(false);
+    expect(f.h.text()).not.toContain('10001');
+    await (accounts.rows[0]!.start as () => Promise<void>)(); await f.h.settle();
+    expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2 } });
+    expect(f.hosted.accounts!.notice).toMatchObject({ kind: 'ok', message: '已保存，操作进行中。' });
+    expect(f.h.text()).not.toContain('已保存，操作进行中');
+    (f.hosted.accounts!.rows[0]!.edit as () => void)(); await f.h.settle();
+    expect(f.hosted.accounts!.editing).toEqual({ instanceId: 'instance-old', endpointId: '10001' });
+    expect(f.h.text()).not.toContain('编辑账号');
+    f.h.unmount();
+  });
+
+  it('reports commit_unknown through the headless controller and blocks further changes', async () => {
+    const f = fixture(status(), [], '', { hosted: true }); await f.h.settle(); f.setMode('unknown');
+    await (f.hosted.accounts!.rows[0]!.start as () => Promise<void>)(); await f.h.settle();
+    expect(f.hosted.accounts!.blocked).toBe(true);
+    expect(f.hosted.accounts!.notice).toMatchObject({ kind: 'error', message: '提交结果尚未确认，请刷新核实，不要重复提交。' });
+    expect(f.hosted.accounts!.rows[0]!.disabled).toBe(true);
+    await (f.hosted.accounts!.rows[0]!.start as () => Promise<void>)(); await f.h.settle(); expect(f.writes()).toHaveLength(1);
+    f.h.unmount();
+  });
+
+  it('offers 立即迁移: confirms first, then commits an empty update with migration consent', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, needsMigration: true, canMigrate: true, revision: null };
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.text()).toContain('配置文件中的 endpoints 不再生效');
+    await f.h.button('立即迁移').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(0);
+    await f.h.button('确认迁移').onClick(); await f.h.settle();
+    expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-update', data: { instanceId: 'instance-old', values: {}, expectedGeneration: 4, expectedRevision: null, confirmMigration: true } });
+    expect(f.h.text()).toContain('已迁移'); f.h.unmount();
+  });
+
+  it('explains the next step when the adapter cannot migrate without a real change', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, needsMigration: true, canMigrate: true, canUpdate: false, revision: null };
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.hasControl(['立即迁移'])).toBe(false); expect(f.h.text()).toContain('第一次编辑或启停账号时会请求确认迁移');
+    f.h.unmount();
   });
 });

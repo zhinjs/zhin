@@ -8,7 +8,7 @@ import {
   pickI18n,
   type AdapterConsoleLocale,
 } from './messages.js';
-import { Badge, Button, ConfirmButton, EmptyState, ErrorState, Field, LoadingState, Notice, PageHeader, PluginPage, Section, StaleNotice, type BadgeTone } from '../ui/components.js';
+import { Badge, Button, ConfirmButton, EmptyState, ErrorState, Field, LoadingState, Notice, PageHeader, PluginPage, Section, StaleNotice, Switch, type BadgeTone } from '../ui/components.js';
 import { resolvePluginId } from '../ui/plugin-id.js';
 import { usePluginRpc, useRpcResource } from '../ui/rpc.js';
 import type {
@@ -210,19 +210,114 @@ export interface AdapterConsolePageProps {
    * button to it. The first value does not trigger a read.
    */
   readonly refreshKey?: string | number;
+  /**
+   * Render each account of the SDK account list with the host's own markup (inside the SDK's list
+   * item). The row carries the account's state and its start / stop / edit / remove / test actions.
+   */
+  readonly renderRow?: (row: AdapterAccountRow) => React.ReactNode;
+  /**
+   * The host renders the accounts itself from `useAdapterAccounts()` (inside an
+   * `AdapterAccountsProvider` for the same adapter): this page then draws no account list, no
+   * account editor (see `AdapterAccountEditor`) and none of the account status the controller
+   * exposes (notice, migration confirmation, blocked notice). It keeps the add form, login tasks,
+   * platform actions and read errors. Without a provider the page ignores this flag.
+   */
+  readonly hostAccounts?: boolean;
 }
 
 /** What this `AdapterConsolePage` supports, for hosts that must also run against older SDKs. */
-export const ADAPTER_CONSOLE_PAGE_CAPABILITIES = Object.freeze({ embedded: true, toolbar: true, refreshKey: true } as const);
+export const ADAPTER_CONSOLE_PAGE_CAPABILITIES = Object.freeze({ embedded: true, toolbar: true, refreshKey: true, renderRow: true, hostAccounts: true } as const);
 
-/**
- * Shared React page body for adapter Console pages.
- *
- * It reads the adapter's `plugin.<pluginId>.status`, the Host's `endpoint.list` /
- * `endpoint.test`, and LoginAssist's `login.list` / `login.submit` / `login.cancel`.
- * Adapter-specific controls come from `status.actions` (for example QQ QR binding).
- */
-export function AdapterConsolePage({ adapterKey, embedded, toolbar, refreshKey }: AdapterConsolePageProps) {
+/** A notice about the last account operation (success notices clear themselves after 8 s). */
+export interface AdapterAccountsNotice {
+  readonly kind: 'ok' | 'error';
+  readonly message: string;
+  readonly url?: string;
+  readonly image?: string;
+}
+
+/** One managed account of an adapter, with its state and the operations allowed on it. */
+export interface AdapterAccountRow {
+  /** Stable React key (instance and epoch). */
+  readonly key: string;
+  /** Account id as configured (the Host's endpoint name). */
+  readonly endpointId: string;
+  readonly instanceId: string;
+  readonly canonicalId: string;
+  /** Desired state: the account is switched on (「运行中」) or off (「已停止」). */
+  readonly enabled: boolean;
+  /** The localized label of `enabled` for the switch: 「运行中」 / 「已停止」. */
+  readonly enabledLabel: string;
+  /** The account's transport has been started on this Host. */
+  readonly started: boolean;
+  /** The account is closing after a remove or replace; it can no longer be changed. */
+  readonly retiring: boolean;
+  /** Connection / lifecycle state for a badge. */
+  readonly state: { readonly label: string; readonly tone: BadgeTone };
+  /** The last operation on this account while it is pending or failed. */
+  readonly execution?: { readonly label: string; readonly tone: BadgeTone };
+  /** A login verification for this account is waiting. */
+  readonly pendingLogin: boolean;
+  /** The Host's connection summary, when the connection list knows this account. */
+  readonly connection?: ConsoleEndpointSummary;
+  /** Configured values (credentials masked by the adapter). */
+  readonly values?: Readonly<Record<string, string>>;
+  /** Latest result of 「测试连接」 in this page. */
+  readonly lastTest?: AdapterConsoleConnectionTest;
+  /** Which operations exist for this account (independent of `disabled`). */
+  readonly can: { readonly toggle: boolean; readonly edit: boolean; readonly remove: boolean; readonly test: boolean };
+  /** Account changes are locked right now (another change running, migration pending, read-only, blocked). */
+  readonly disabled: boolean;
+  readonly busy: { readonly toggle: boolean; readonly remove: boolean; readonly test: boolean };
+  /** Switch the account on or off (start / stop, with revision checks and migration consent). */
+  readonly setEnabled: (enabled: boolean) => Promise<void>;
+  readonly start: () => Promise<void>;
+  readonly stop: () => Promise<void>;
+  /** Open the account editor (rendered by `AdapterConsolePage` or `AdapterAccountEditor`). */
+  readonly edit: () => void;
+  /** Remove the account (the caller confirms first). */
+  readonly remove: () => Promise<void>;
+  readonly test: () => Promise<void>;
+}
+
+/** Headless view of an adapter's managed accounts: the state and actions of `AdapterConsolePage`'s list. */
+export interface AdapterAccounts {
+  readonly adapterKey: string;
+  /**
+   * `loading` until the first status read; `error` when the owner plugin or the status cannot be
+   * read; `unmanaged` when the adapter offers no account directory (read-only, no rows); `ready`.
+   */
+  readonly state: 'loading' | 'error' | 'unmanaged' | 'ready';
+  readonly error?: Error;
+  readonly rows: readonly AdapterAccountRow[];
+  /** The account store is unavailable: accounts can be viewed but not changed. */
+  readonly readOnly: boolean;
+  /** A change failed in an unknown way (for example `commit_unknown`): refresh before changing again. */
+  readonly blocked: boolean;
+  readonly needsMigration: boolean;
+  readonly canMigrate: boolean;
+  /**
+   * 「立即迁移」: migrate the listed accounts now (asks for consent through `migration` first). Absent
+   * when the adapter cannot migrate without a real change; the first edit / start / stop then asks.
+   */
+  readonly migrate?: () => Promise<void>;
+  /** An operation waits for the user's consent to migrate the listed accounts first. */
+  readonly migration?: { readonly ids: readonly string[]; readonly busy: boolean; readonly confirm: () => Promise<void>; readonly cancel: () => void };
+  readonly notice?: AdapterAccountsNotice;
+  readonly dismissNotice: () => void;
+  /** Adding accounts; absent when this adapter cannot add accounts from the Console. */
+  readonly add?: { readonly open: boolean; readonly disabled: boolean; readonly toggle: () => void };
+  /** The account whose editor is open. */
+  readonly editing?: { readonly instanceId: string; readonly endpointId: string };
+  readonly closeEditor: () => void;
+  /** Label of the last account operation and its result. */
+  readonly lastMutation?: string;
+  readonly refresh: () => Promise<void>;
+  readonly refreshing: boolean;
+}
+
+/** Watches the credentials and page the requests use; a change starts a fresh session. */
+function useConsoleConnection(): readonly [number, () => boolean] {
   const [connection, setConnection] = useState(0);
   const context = useRef(captureAdapterConsoleContext());
   useEffect(() => {
@@ -242,13 +337,73 @@ export function AdapterConsolePage({ adapterKey, embedded, toolbar, refreshKey }
       clearInterval(timer);
     };
   }, []);
-  return <AdapterConsoleSession key={`${adapterKey}:${connection}`} adapterKey={adapterKey} embedded={embedded} toolbar={toolbar} refreshKey={refreshKey} isCurrent={context.current} />;
+  return [connection, context.current] as const;
+}
+
+type AdapterAccountsScope = { readonly adapterKey: string; readonly model: AdapterConsoleModel };
+const AdapterAccountsContext = React.createContext<AdapterAccountsScope | undefined>(undefined);
+
+/**
+ * Shared React page body for adapter Console pages.
+ *
+ * It reads the adapter's `plugin.<pluginId>.status`, the Host's `endpoint.list` /
+ * `endpoint.test`, and LoginAssist's `login.list` / `login.submit` / `login.cancel`.
+ * Adapter-specific controls come from `status.actions` (for example QQ QR binding).
+ *
+ * Inside an `AdapterAccountsProvider` for the same adapter, the page shares the provider's state
+ * (one set of reads, one revision and migration flow) with `useAdapterAccounts()`.
+ */
+export function AdapterConsolePage(props: AdapterConsolePageProps) {
+  const hosted = React.useContext(AdapterAccountsContext);
+  const [connection, isCurrent] = useConsoleConnection();
+  if (hosted && hosted.adapterKey === props.adapterKey) return renderAdapterConsoleView(hosted.model, props);
+  return <AdapterConsoleSession key={`${props.adapterKey}:${connection}`} {...props} hostAccounts={false} isCurrent={isCurrent} />;
 }
 AdapterConsolePage.capabilities = ADAPTER_CONSOLE_PAGE_CAPABILITIES;
 
+/**
+ * Holds the account state of one adapter for `useAdapterAccounts()`, `AdapterAccountEditor` and an
+ * `AdapterConsolePage` of the same adapter below it. Changing `refreshKey` re-reads everything.
+ */
+export function AdapterAccountsProvider({ adapterKey, refreshKey, children }: { readonly adapterKey: string; readonly refreshKey?: string | number; readonly children?: React.ReactNode }) {
+  const [connection, isCurrent] = useConsoleConnection();
+  return <AdapterAccountsScopeProvider key={`${adapterKey}:${connection}`} adapterKey={adapterKey} refreshKey={refreshKey} isCurrent={isCurrent}>{children}</AdapterAccountsScopeProvider>;
+}
+
+function AdapterAccountsScopeProvider({ adapterKey, refreshKey, isCurrent, children }: { readonly adapterKey: string; readonly refreshKey?: string | number; readonly isCurrent: () => boolean; readonly children?: React.ReactNode }) {
+  const model = useAdapterConsoleModel({ adapterKey, refreshKey, isCurrent });
+  return <AdapterAccountsContext.Provider value={{ adapterKey, model }}>{children}</AdapterAccountsContext.Provider>;
+}
+
+/**
+ * Headless account list of the nearest `AdapterAccountsProvider`: rows with state and
+ * start / stop / edit / remove / test, plus notice, migration and add controls. Throws outside a provider.
+ */
+export function useAdapterAccounts(): AdapterAccounts {
+  const scope = React.useContext(AdapterAccountsContext);
+  if (!scope) throw new Error('useAdapterAccounts() must be used inside <AdapterAccountsProvider>');
+  return scope.model.accounts;
+}
+
+/** The account editor of the nearest `AdapterAccountsProvider`; renders nothing while no account is being edited. */
+export function AdapterAccountEditor() {
+  const scope = React.useContext(AdapterAccountsContext);
+  if (!scope || !scope.model.editor) return null;
+  return <div className="zk-root zk-account-editor-host"><style>{adapterConsoleStyles}</style>{renderAccountEditor(scope.model)}</div>;
+}
+
 type EditorState = { instanceId: string; id: string; originalId: string; values: Record<string, string>; originalValues: Readonly<Record<string, string>>; generation: number; revision: number | null };
 
-function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshKey, isCurrent }: AdapterConsolePageProps & { readonly isCurrent: () => boolean }) {
+type AdapterConsoleViewProps = Pick<AdapterConsolePageProps, 'embedded' | 'toolbar' | 'renderRow' | 'hostAccounts'>;
+
+function AdapterConsoleSession(props: AdapterConsolePageProps & { readonly isCurrent: () => boolean }) {
+  const model = useAdapterConsoleModel(props);
+  return renderAdapterConsoleView(model, props);
+}
+
+type AdapterConsoleModel = ReturnType<typeof useAdapterConsoleModel>;
+
+function useAdapterConsoleModel({ adapterKey, refreshKey, isCurrent }: { readonly adapterKey: string; readonly refreshKey?: string | number; readonly isCurrent: () => boolean }) {
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const current = useCallback(() => alive.current && isCurrent(), [isCurrent]);
@@ -387,7 +542,7 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
     await endpointRead.refresh();
   });
 
-  const runtimeMutation = async (action: string, payload: Record<string, unknown>, base: { generation: number; revision: number | null }, done?: () => void) => {
+  const runtimeMutation = async (action: string, payload: Record<string, unknown>, base: { generation: number; revision: number | null }, done?: () => void, successMessage?: string) => {
     if (!pluginId || !runtime || !runtime.canManage || runtimeBlocked || !current()) return;
     const key = `mutate:${action}:${String(payload.instanceId ?? '')}`;
     const perform = async (confirmed = false) => {
@@ -403,7 +558,7 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
         statusRead.mutate(previous => previous ? { ...previous, runtime: result.runtime } : previous);
         done?.();
         setMigration(undefined);
-        setNotice({ kind: result.execution.status === 'failed' ? 'error' : 'ok', message: t(locale,
+        setNotice({ kind: result.execution.status === 'failed' ? 'error' : 'ok', message: successMessage && result.execution.status !== 'failed' ? successMessage : t(locale,
           result.execution.status === 'failed' ? '配置已保存，执行失败。请查看账号状态。'
             : action === 'add' || action === 'replace' ? '已保存，请手动启动账号。'
               : result.execution.status === 'pending' ? '已保存，操作进行中。' : '已保存。') });
@@ -424,6 +579,18 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
       if (!runtime.canMigrate) { setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') }); return; }
       setMigration({ ids: (status?.configured ?? []).map(entry => entry.id), run: () => perform(true) });
     } else await perform();
+  };
+
+  /**
+   * 「立即迁移」: an empty configuration update of one account is a pure desired-state commit (no
+   * restart), so it carries the migration through the same confirm / revision / commit_unknown path.
+   */
+  const migrationTarget = runtime?.endpoints.find(endpoint => !endpoint.retiring && !endpoint.removed);
+  const canMigrateNow = !!runtime?.needsMigration && runtime.canMigrate && runtime.canUpdate && !!migrationTarget;
+  const migrateNow = async () => {
+    if (!canMigrateNow || !runtime || !migrationTarget) return;
+    await runtimeMutation('update', { instanceId: migrationTarget.instanceId, values: {} }, runtime, undefined,
+      t(locale, '已迁移。账号以数据库为准，配置文件中的 endpoints 不再生效。'));
   };
 
   const toggleAdd = () => {
@@ -700,14 +867,110 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
   const hasSidebar = !!status && (sidebarActions.length > 0 || sidebarExtraEntries.length > 0);
   const statusError = statusRead.error;
   const canAdd = !!runtime && !!status?.canAdd;
+  const refreshPage = () => run('refresh', t(locale, '刷新'), reread);
+  // Account avatar: the first character of the adapter's display name (adapter metadata, no platform table).
+  const mark = (Array.from((status?.displayName || adapterKey).trim())[0] ?? '?').toUpperCase();
+
+  // One row per managed account: the SDK list, `renderRow` and `useAdapterAccounts()` all read these.
+  const rows: AdapterAccountRow[] = (runtime?.endpoints ?? []).map(endpoint => {
+    const connection = endpoints.find(value => value.endpoint?.id === endpoint.canonicalId);
+    const configured = status?.configured.find(entry => entry.instanceId === endpoint.instanceId);
+    const editable = !endpoint.retiring && !endpoint.removed;
+    const disabled = mutationLocked || mutating;
+    const lastTest = lastTestByCanonicalId[endpoint.canonicalId];
+    const setEnabled = async (enabled: boolean) => {
+      if (disabled || !runtime || !editable) return;
+      await runtimeMutation(enabled ? 'start' : 'stop', { instanceId: endpoint.instanceId }, runtime);
+    };
+    return {
+      key: `${endpoint.instanceId}:${endpoint.epoch}`,
+      endpointId: endpoint.endpointId,
+      instanceId: endpoint.instanceId,
+      canonicalId: endpoint.canonicalId,
+      enabled: endpoint.desiredEnabled,
+      enabledLabel: t(locale, endpoint.desiredEnabled ? '运行中' : '已停止'),
+      started: endpoint.started,
+      retiring: !!endpoint.retiring,
+      state: {
+        label: endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale, connectionsKnown),
+        tone: endpoint.retiring ? 'warning' : !endpoint.desiredEnabled ? 'neutral' : connectionTone(connection, connectionsKnown),
+      },
+      ...(endpoint.execution ? { execution: {
+        label: executionLabel(endpoint.execution, locale),
+        tone: endpoint.execution.status === 'failed' ? 'danger' : endpoint.execution.status === 'pending' ? 'warning' : 'neutral',
+      } } : {}),
+      pendingLogin: visibleLogins.some(task => task.endpointIdentity?.instanceId === endpoint.instanceId || task.endpointKey === endpoint.endpointId),
+      ...(connection ? { connection } : {}),
+      ...(configured ? { values: configured.values } : {}),
+      ...(lastTest ? { lastTest } : {}),
+      can: { toggle: editable, edit: editable && !!(runtime?.canUpdate || runtime?.canReplace), remove: editable && !!status?.canRemove, test: editable && endpoint.started },
+      disabled,
+      busy: {
+        toggle: isBusy(`mutate:start:${endpoint.instanceId}`) || isBusy(`mutate:stop:${endpoint.instanceId}`),
+        remove: isBusy(`mutate:remove:${endpoint.instanceId}`),
+        test: isBusy(`test:${endpoint.canonicalId}`),
+      },
+      setEnabled,
+      start: () => setEnabled(true),
+      stop: () => setEnabled(false),
+      edit: () => { if (editable && !disabled) openEdit(endpoint); },
+      remove: async () => { if (editable && !disabled && runtime) await runtimeMutation('remove', { instanceId: endpoint.instanceId }, runtime); },
+      test: () => testConnection(endpoint.canonicalId),
+    } satisfies AdapterAccountRow;
+  });
+
+  const accountsError = owner.state === 'error' ? owner.error : statusRead.state === 'error' ? statusError : undefined;
+  const accounts: AdapterAccounts = {
+    adapterKey,
+    state: owner.state === 'error' || owner.state === 'empty' || statusRead.state === 'error' ? 'error' : !status ? 'loading' : !runtime ? 'unmanaged' : 'ready',
+    ...(accountsError ? { error: accountsError } : {}),
+    rows,
+    readOnly: !!runtime && !runtime.canManage,
+    blocked: runtimeBlocked,
+    needsMigration: !!runtime?.needsMigration,
+    canMigrate: !!runtime?.canMigrate,
+    ...(canMigrateNow ? { migrate: migrateNow } : {}),
+    ...(migration ? { migration: { ids: migration.ids, busy: mutating, confirm: () => migration.run(), cancel: () => setMigration(undefined) } } : {}),
+    ...(notice ? { notice } : {}),
+    dismissNotice: () => setNotice(undefined),
+    ...(canAdd ? { add: { open: addOpen, disabled: addDisabled, toggle: toggleAdd } } : {}),
+    ...(editor ? { editing: { instanceId: editor.instanceId, endpointId: editor.originalId } } : {}),
+    closeEditor: closeEdit,
+    ...(runtime?.lastMutation ? { lastMutation: `${operationLabel(runtime.lastMutation.action, locale)} · ${executionLabel(runtime.lastMutation, locale)}` } : {}),
+    refresh: refreshPage,
+    refreshing: isBusy('refresh'),
+  };
+
+  return {
+    accounts, rows, locale, owner, statusRead, endpointRead, loginRead, status, runtime, connectionsKnown, endpoints, endpointById, runningIds, runningModes,
+    notice, setNotice, isBusy, mutating, addOpen, addId, setAddId, addValues, setAddValues, formError, actionValues, setActionValues, actionResults, actionErrors,
+    loginValues, setLoginValues, now, runtimeBlocked, migration, setMigration, editor, setEditor, setSelectedModeKey, activeConnectionMode, platformProfile,
+    copiedCallback, setCopiedCallback, effectiveAdapterKey, testConnection, toggleAdd, addEndpoint, addAndStartEndpoint, submitLogin, cancelLogin,
+    validateAction, runAction, visibleLogins, closeEdit, editorReplacing, collectEdit, saveEdit, title, docsUrl, mutationLocked, addDisabled, sidebarActions,
+    sidebarExtraEntries, hasSidebar, statusError, canAdd, refreshPage, mark, canMigrateNow, migrateNow, pluginId,
+  };
+}
+
+function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, toolbar, renderRow, hostAccounts = false }: AdapterConsoleViewProps) {
+  const {
+    rows, locale, owner, statusRead, endpointRead, loginRead, status, runtime, connectionsKnown, endpointById, runningIds, runningModes,
+    notice, setNotice, isBusy, mutating, addOpen, addId, setAddId, addValues, setAddValues, formError, actionValues, setActionValues, actionResults, actionErrors,
+    loginValues, setLoginValues, now, runtimeBlocked, migration, setMigration, editor, setSelectedModeKey, activeConnectionMode, platformProfile,
+    copiedCallback, setCopiedCallback, effectiveAdapterKey, testConnection, toggleAdd, addEndpoint, addAndStartEndpoint, submitLogin, cancelLogin,
+    validateAction, runAction, visibleLogins, closeEdit, title, docsUrl, addDisabled, sidebarActions,
+    sidebarExtraEntries, hasSidebar, statusError, canAdd, refreshPage, mark, canMigrateNow, migrateNow, pluginId,
+  } = m;
   const docsLink = docsUrl ? <a href={docsUrl} target="_blank" rel="noreferrer" className="zk-btn zk-btn--secondary">{t(locale, '文档')}</a> : null;
   const addButton = canAdd ? <Button variant="primary" disabled={addDisabled} aria-expanded={addOpen} aria-controls="adapter-add-account" onClick={toggleAdd}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button> : null;
   const toolbarControls: AdapterConsoleToolbarControls = {
     ...(docsUrl ? { docsUrl } : {}),
     ...(canAdd ? { add: { open: addOpen, disabled: addDisabled, toggle: toggleAdd, controls: 'adapter-add-account' } } : {}),
-    refresh: () => run('refresh', t(locale, '刷新'), reread),
+    refresh: refreshPage,
     refreshing: isBusy('refresh'),
   };
+  // The host draws the account list, editor and account status from `useAdapterAccounts()`.
+  const showAccounts = !hostAccounts;
+  const showEditor = !!editor && showAccounts;
 
   return (
     <PluginPage className={embedded ? 'zk-page--embedded' : undefined} data-embedded={embedded || undefined}>
@@ -718,7 +981,7 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
         description={status ? t(locale, runtime ? '管理 {0} 的账号与登录。' : '查看 {0} 的连接与账号配置。', title) : undefined}
         actions={<>
           {docsLink}
-          <Button busy={isBusy('refresh')} onClick={() => run('refresh', t(locale, '刷新'), reread)}>{isBusy('refresh') ? t(locale, '刷新中…') : t(locale, '刷新')}</Button>
+          <Button busy={isBusy('refresh')} onClick={refreshPage}>{isBusy('refresh') ? t(locale, '刷新中…') : t(locale, '刷新')}</Button>
           {addButton}
         </>}
       />}
@@ -727,12 +990,12 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
         : (docsLink || addButton) && <div className="zk-embedded-toolbar zk-row">{docsLink}{addButton}</div>)}
 
       {status && <nav className="zk-nav" aria-label={t(locale, '页面导航')}>
-        <a href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>{t(locale, '账号')}<span className="zk-count">{runtime?.endpoints.length ?? status.configured.length}</span></a>
+        {showAccounts && <a href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>{t(locale, '账号')}<span className="zk-count">{runtime?.endpoints.length ?? status.configured.length}</span></a>}
         {visibleLogins.length > 0 && <a href="#adapter-logins">{t(locale, '登录待办')}<span className="zk-count">{visibleLogins.length}</span></a>}
         {sidebarActions.length > 0 && <a href="#adapter-tools">{t(locale, '平台操作')}</a>}
       </nav>}
 
-      {notice && <Notice tone={notice.kind === 'error' ? 'danger' : 'success'} onDismiss={() => setNotice(undefined)}>
+      {notice && showAccounts && <Notice tone={notice.kind === 'error' ? 'danger' : 'success'} onDismiss={() => setNotice(undefined)}>
         {notice.message}
         {notice.url && <> · <a href={notice.url} target="_blank" rel="noreferrer">{notice.url}</a></>}
         {/* 二维码必须黑码白底才能被扫描，所以图片容器固定白底。 */}
@@ -973,48 +1236,41 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
       })()}
 
       {runtime && <section id="adapter-accounts" className="zk-section">
-        {runtime.needsMigration && <Notice tone="warning" title={t(locale, '首次修改前需迁移以下账号，保留身份和历史。')}>
+        {showAccounts && runtime.needsMigration && <Notice tone="warning" title={t(locale, '首次修改前需迁移以下账号，保留身份和历史。')}
+          actions={canMigrateNow ? <Button variant="primary" size="sm" disabled={mutating || !!migration || runtimeBlocked} onClick={() => void migrateNow()}>{t(locale, '立即迁移')}</Button> : undefined}>
           <ul>{status?.configured.map(entry => <li key={entry.instanceId ?? entry.id}>{entry.id}</li>)}</ul>
-          {!runtime.canMigrate && <p>{t(locale, '首次迁移需要管理员确认。')}</p>}
+          <p>{t(locale, '迁移后账号以数据库为准，配置文件中的 endpoints 不再生效；之后在这里添加、编辑和启停账号。')}</p>
+          {!runtime.canMigrate ? <p>{t(locale, '首次迁移需要管理员确认。')}</p>
+            : !canMigrateNow ? <p>{t(locale, '第一次编辑或启停账号时会请求确认迁移。')}</p> : null}
         </Notice>}
-        {runtimeBlocked && <Notice tone="danger">{t(locale, '请刷新账号清单后再操作。')}</Notice>}
-        {migration && <div role="alertdialog" aria-label={t(locale, '确认迁移')} className="zk-card">
+        {showAccounts && runtimeBlocked && <Notice tone="danger">{t(locale, '请刷新账号清单后再操作。')}</Notice>}
+        {showAccounts && migration && <div role="alertdialog" aria-label={t(locale, '确认迁移')} className="zk-card">
           <p>{t(locale, '确认迁移以下账号并执行本次操作？身份和历史将保留。')}</p>
           <ul>{migration.ids.map(id => <li key={id}>{id}</li>)}</ul>
           <div className="zk-row"><Button variant="primary" busy={mutating} onClick={() => void migration.run()}>{t(locale, '确认迁移')}</Button>
             <Button disabled={mutating} onClick={() => setMigration(undefined)}>{t(locale, '取消')}</Button></div>
         </div>}
-        {!runtime.canManage && <p className="zk-hint">{t(locale, '账号配置存储不可用：当前环境只能查看，不能新增或删除账号。')}</p>}
-        {!addOpen && !editor && !runtime.endpoints.length && <EmptyState title={t(locale, '还没有账号')} description={t(locale, status?.canAdd && runtime.canManage ? '添加平台账号后，即可在这里管理连接与登录。' : '配置的账号会显示在这里。')} />}
-        {!addOpen && !editor && <ul className="zk-bot-grid">{runtime.endpoints.map(endpoint => {
-          const connection = endpoints.find(value => value.endpoint?.id === endpoint.canonicalId);
-          const configured = status?.configured.find(entry => entry.instanceId === endpoint.instanceId);
-          const editable = !endpoint.retiring && !endpoint.removed;
-          const disabled = mutationLocked || mutating;
-          const stateTone: BadgeTone = endpoint.retiring ? 'warning' : !endpoint.desiredEnabled ? 'neutral' : connectionTone(connection, connectionsKnown);
-          const toggleKey = `mutate:${endpoint.desiredEnabled ? 'stop' : 'start'}:${endpoint.instanceId}`;
-          const protocolPills = inferAccountProtocolPills(effectiveAdapterKey, configured?.values, runningModes.get(endpoint.endpointId));
-          const lastTest = lastTestByCanonicalId[endpoint.canonicalId];
-          const pendingTask = visibleLogins.find(
-            task => task.endpointIdentity?.instanceId === endpoint.instanceId || task.endpointKey === endpoint.endpointId,
-          );
-          const brandMark = platformProfile?.brandMark ?? title.slice(0, 2);
-          return <li key={`${endpoint.instanceId}:${endpoint.epoch}`} className="zk-bot-tile">
+        {showAccounts && !runtime.canManage && <p className="zk-hint">{t(locale, '账号配置存储不可用：当前环境只能查看，不能新增或删除账号。')}</p>}
+        {showAccounts && !addOpen && !editor && !runtime.endpoints.length && <EmptyState title={t(locale, '还没有账号')} description={t(locale, status?.canAdd && runtime.canManage ? '添加平台账号后，即可在这里管理连接与登录。' : '配置的账号会显示在这里。')} />}
+        {showAccounts && !addOpen && !editor && <ul className="zk-bot-grid">{rows.map(row => {
+          if (renderRow) return <li key={row.key} className="zk-bot-tile zk-bot-tile--host">{renderRow(row)}</li>;
+          const protocolPills = inferAccountProtocolPills(effectiveAdapterKey, row.values, runningModes.get(row.endpointId));
+          return <li key={row.key} className="zk-bot-tile">
             <div className="zk-bot-tile__head">
               <div className="zk-bot-tile__identity">
-                <div className="zk-bot-tile__icon" aria-hidden="true">{brandMark}</div>
+                <div className="zk-bot-tile__icon" aria-hidden="true">{mark}</div>
                 <div className="zk-bot-tile__title-wrap">
                   <div className="zk-bot-tile__title">
-                    <strong>{endpoint.endpointId}</strong>
-                    <Badge tone={stateTone}>{endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale, connectionsKnown)}</Badge>
-                    {endpoint.execution && <Badge tone={endpoint.execution.status === 'failed' ? 'danger' : endpoint.execution.status === 'pending' ? 'warning' : 'neutral'}>{executionLabel(endpoint.execution, locale)}</Badge>}
-                    {pendingTask && (
+                    <strong>{row.endpointId}</strong>
+                    {(row.enabled || row.retiring) && <Badge tone={row.state.tone}>{row.state.label}</Badge>}
+                    {row.execution && <Badge tone={row.execution.tone}>{row.execution.label}</Badge>}
+                    {row.pendingLogin && (
                       <Badge tone="warning">
                         {t(locale, '待验证')} · <a href="#adapter-logins">{t(locale, '前往验证')}</a>
                       </Badge>
                     )}
-                    {lastTest && lastTest.latencyMs !== undefined && (
-                      <Badge tone={lastTest.connected ? 'success' : 'danger'}>{lastTest.latencyMs} ms</Badge>
+                    {row.lastTest && row.lastTest.latencyMs !== undefined && (
+                      <Badge tone={row.lastTest.connected ? 'success' : 'danger'}>{row.lastTest.latencyMs} ms</Badge>
                     )}
                   </div>
                   <span className="zk-bot-tile__subtitle">
@@ -1022,17 +1278,11 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
                   </span>
                 </div>
               </div>
-              {editable && (
+              {row.can.toggle && (
                 <div className="zk-bot-tile__head-right">
-                  <span
-                    className="zk-switch zk-switch--sm"
-                    role="switch"
-                    aria-checked={endpoint.desiredEnabled}
-                    aria-label={t(locale, endpoint.desiredEnabled ? '停止' : '启动')}
-                    onClick={() => { if (!disabled) void runtimeMutation(endpoint.desiredEnabled ? 'stop' : 'start', { instanceId: endpoint.instanceId }, runtime); }}
-                  >
-                    <span className="zk-switch__thumb" />
-                  </span>
+                  {/* The switch is the only start / stop control; its visible label names the state. */}
+                  <Switch size="sm" checked={row.enabled} disabled={row.disabled} label={row.enabledLabel}
+                    ariaLabel={t(locale, '{0}：{1}', row.endpointId, row.enabledLabel)} onChange={enabled => { void row.setEnabled(enabled); }} />
                 </div>
               )}
             </div>
@@ -1043,20 +1293,19 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
                 ))}
               </div>
             )}
-            {configured && Object.keys(configured.values).length > 0 && <details className="zk-bot-tile__config"><summary>{t(locale, '连接配置')}</summary><dl className="zk-dl">
-              {Object.entries(configured.values).map(([key, value]) => {
+            {row.values && Object.keys(row.values).length > 0 && <details className="zk-bot-tile__config"><summary>{t(locale, '连接配置')}</summary><dl className="zk-dl">
+              {Object.entries(row.values).map(([key, value]) => {
                 const fDef = status?.fields.find(f => f.key === key);
                 const labelText = fDef ? resolveFieldDisplay(effectiveAdapterKey, fDef, locale).displayLabel : key;
                 return <React.Fragment key={key}><dt title={key}>{labelText}</dt><dd>{value}</dd></React.Fragment>;
               })}
             </dl></details>}
-            {editable && <div className="zk-bot-tile__actions">
-              <Button variant={endpoint.desiredEnabled ? 'secondary' : 'primary'} busy={isBusy(toggleKey)} disabled={disabled} onClick={() => runtimeMutation(endpoint.desiredEnabled ? 'stop' : 'start', { instanceId: endpoint.instanceId }, runtime)}>{t(locale, endpoint.desiredEnabled ? '停止' : '启动')}</Button>
-              {endpoint.started && <Button busy={isBusy(`test:${endpoint.canonicalId}`)} onClick={() => testConnection(endpoint.canonicalId)}>{t(locale, '测试连接')}</Button>}
-              {(runtime.canUpdate || runtime.canReplace) && <Button disabled={disabled} onClick={() => openEdit(endpoint)}>{t(locale, '编辑')}</Button>}
-              {status?.canRemove && <ConfirmButton disabled={disabled} busy={isBusy(`mutate:remove:${endpoint.instanceId}`)} confirmLabel={t(locale, '删除账号')}
-                message={t(locale, '删除账号「{0}」？账号将关闭，历史保留。', endpoint.endpointId)}
-                onConfirm={() => runtimeMutation('remove', { instanceId: endpoint.instanceId }, runtime)}>{t(locale, '删除')}</ConfirmButton>}
+            {(row.can.test || row.can.edit || row.can.remove) && <div className="zk-bot-tile__actions">
+              {row.can.test && <Button busy={row.busy.test} onClick={row.test}>{t(locale, '测试连接')}</Button>}
+              {row.can.edit && <Button disabled={row.disabled} onClick={row.edit}>{t(locale, '编辑')}</Button>}
+              {row.can.remove && <ConfirmButton disabled={row.disabled} busy={row.busy.remove} confirmLabel={t(locale, '删除账号')}
+                message={t(locale, '删除账号「{0}」？账号将关闭，历史保留。', row.endpointId)}
+                onConfirm={row.remove}>{t(locale, '删除')}</ConfirmButton>}
             </div>}
           </li>;
         })}
@@ -1075,89 +1324,8 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
           </li>
         )}
         </ul>}
-        {runtime.lastMutation && <p role="status" className="zk-hint">{t(locale, '最近操作：{0}', operationLabel(runtime.lastMutation.action, locale))} · {executionLabel(runtime.lastMutation, locale)}</p>}
-        {editor && <div className="zk-stack" role="region" aria-label={t(locale, '编辑账号')}>
-          <div className="zk-editor-topbar">
-            <div className="zk-editor-topbar__left">
-              <button type="button" className="zk-chip-btn" onClick={closeEdit}>← {t(locale, '账号列表')}</button>
-              <strong className="zk-editor-topbar__title">{t(locale, '编辑账号')} · {editor.originalId}</strong>
-            </div>
-            <Badge tone="neutral">{title}</Badge>
-          </div>
-          <div className="zk-editor-layout">
-            <div className="zk-card zk-editor-main">
-              {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <Notice tone="danger">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</Notice>}
-              <div className="zk-form-grid">
-                <div className="zk-field-cell zk-field-cell--full">
-                  <Field label={t(locale, '账号 ID')} hint={platformProfile?.idLabel}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
-                </div>
-                {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => {
-                  const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
-                  const hintText = display.displayLabel !== field.key
-                    ? `${display.hint ? `${display.hint} · ` : ''}${field.key}`
-                    : display.hint;
-                  return <div key={field.key} className="zk-field-cell">
-                    <Field label={display.displayLabel} hint={hintText}>
-                      <div className="zk-input-group">
-                        {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: display.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
-                        {isRandomSecretField(field.key) && (
-                          <button
-                            type="button"
-                            className="zk-chip-btn"
-                            onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: generateRandomSecret(field.key) } })}
-                          >
-                            🎲 {t(locale, '生成随机密钥')}
-                          </button>
-                        )}
-                      </div>
-                    </Field>
-                    {display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean' && (
-                      <div className="zk-option-pills">
-                        {display.quickOptions.map(opt => (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            className="zk-chip-btn"
-                            aria-pressed={(editor.values[field.key] ?? '') === opt.value}
-                            onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: opt.value } })}
-                          >
-                            {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>;
-                })}
-              </div>
-              {formError && <Notice tone="danger">{formError}</Notice>}
-              <div className="zk-row">
-                {editorReplacing
-                  ? <ConfirmButton variant="primary" danger={false} confirmLabel={t(locale, '替换账号')} disabled={runtimeBlocked || !!migration || mutating || editor.generation !== runtime.generation || editor.revision !== runtime.revision}
-                    message={t(locale, '替换账号「{0}」？旧账号将关闭，历史保留；新账号不继承会话和设置，保存后需手动启动。', editor.originalId)}
-                    beforeOpen={() => collectEdit() !== undefined} onConfirm={saveEdit}>{t(locale, '保存')}</ConfirmButton>
-                  : <Button variant="primary" busy={isBusy('mutate:update:' + editor.instanceId)} disabled={runtimeBlocked || !!migration || (mutating && !isBusy('mutate:update:' + editor.instanceId)) || editor.generation !== runtime.generation || editor.revision !== runtime.revision} onClick={saveEdit}>{t(locale, '保存')}</Button>}
-                <Button variant="ghost" onClick={closeEdit}>{t(locale, '取消')}</Button>
-              </div>
-            </div>
-            {platformProfile && (
-              <aside className="zk-editor-side" aria-label={t(locale, '平台接入指南')}>
-                <div className="zk-guide-card">
-                  <div className="zk-guide-card__head">
-                    <strong>{platformProfile.onboardingTitle || t(locale, '平台接入指南')}</strong>
-                    <Badge tone="neutral">{locale === 'en' ? (platformProfile.categoryBadgeEn ?? platformProfile.categoryBadge) : platformProfile.categoryBadge}</Badge>
-                  </div>
-                  {platformProfile.onboardingSteps.length > 0 && (
-                    <ol className="zk-guide-steps">
-                      {platformProfile.onboardingSteps.map((step, idx) => (
-                        <li key={idx} className="zk-guide-step">{step}</li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              </aside>
-            )}
-          </div>
-        </div>}
+        {showAccounts && runtime.lastMutation && <p role="status" className="zk-hint">{t(locale, '最近操作：{0}', operationLabel(runtime.lastMutation.action, locale))} · {executionLabel(runtime.lastMutation, locale)}</p>}
+        {showEditor && renderAccountEditor(m)}
       </section>}
 
       {!runtime && status && <Section id="adapter-accounts" title={t(locale, '已配置的账号')}>
@@ -1493,6 +1661,97 @@ function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshK
       <p className="zk-footnote">{t(locale, '此页面由适配器提供；敏感凭据不会展示。')}</p>
     </PluginPage>
   );
+}
+
+/** The account editor (edit or replace one account) of a model with an open editor. */
+function renderAccountEditor(m: AdapterConsoleModel) {
+  const {
+    editor, runtime, locale, title, mutating, migration, platformProfile, status, effectiveAdapterKey, setEditor, editorReplacing,
+    formError, runtimeBlocked, collectEdit, saveEdit, isBusy, closeEdit,
+  } = m;
+  if (!editor || !runtime) return null;
+  return <div className="zk-stack" role="region" aria-label={t(locale, '编辑账号')}>
+          <div className="zk-editor-topbar">
+            <div className="zk-editor-topbar__left">
+              <button type="button" className="zk-chip-btn" onClick={closeEdit}>← {t(locale, '账号列表')}</button>
+              <strong className="zk-editor-topbar__title">{t(locale, '编辑账号')} · {editor.originalId}</strong>
+            </div>
+            <Badge tone="neutral">{title}</Badge>
+          </div>
+          <div className="zk-editor-layout">
+            <div className="zk-card zk-editor-main">
+              {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <Notice tone="danger">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</Notice>}
+              <div className="zk-form-grid">
+                <div className="zk-field-cell zk-field-cell--full">
+                  <Field label={t(locale, '账号 ID')} hint={platformProfile?.idLabel}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
+                </div>
+                {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => {
+                  const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
+                  const hintText = display.displayLabel !== field.key
+                    ? `${display.hint ? `${display.hint} · ` : ''}${field.key}`
+                    : display.hint;
+                  return <div key={field.key} className="zk-field-cell">
+                    <Field label={display.displayLabel} hint={hintText}>
+                      <div className="zk-input-group">
+                        {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: display.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
+                        {isRandomSecretField(field.key) && (
+                          <button
+                            type="button"
+                            className="zk-chip-btn"
+                            onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: generateRandomSecret(field.key) } })}
+                          >
+                            🎲 {t(locale, '生成随机密钥')}
+                          </button>
+                        )}
+                      </div>
+                    </Field>
+                    {display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean' && (
+                      <div className="zk-option-pills">
+                        {display.quickOptions.map(opt => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            className="zk-chip-btn"
+                            aria-pressed={(editor.values[field.key] ?? '') === opt.value}
+                            onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: opt.value } })}
+                          >
+                            {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>;
+                })}
+              </div>
+              {formError && <Notice tone="danger">{formError}</Notice>}
+              <div className="zk-row">
+                {editorReplacing
+                  ? <ConfirmButton variant="primary" danger={false} confirmLabel={t(locale, '替换账号')} disabled={runtimeBlocked || !!migration || mutating || editor.generation !== runtime.generation || editor.revision !== runtime.revision}
+                    message={t(locale, '替换账号「{0}」？旧账号将关闭，历史保留；新账号不继承会话和设置，保存后需手动启动。', editor.originalId)}
+                    beforeOpen={() => collectEdit() !== undefined} onConfirm={saveEdit}>{t(locale, '保存')}</ConfirmButton>
+                  : <Button variant="primary" busy={isBusy('mutate:update:' + editor.instanceId)} disabled={runtimeBlocked || !!migration || (mutating && !isBusy('mutate:update:' + editor.instanceId)) || editor.generation !== runtime.generation || editor.revision !== runtime.revision} onClick={saveEdit}>{t(locale, '保存')}</Button>}
+                <Button variant="ghost" onClick={closeEdit}>{t(locale, '取消')}</Button>
+              </div>
+            </div>
+            {platformProfile && (
+              <aside className="zk-editor-side" aria-label={t(locale, '平台接入指南')}>
+                <div className="zk-guide-card">
+                  <div className="zk-guide-card__head">
+                    <strong>{platformProfile.onboardingTitle || t(locale, '平台接入指南')}</strong>
+                    <Badge tone="neutral">{locale === 'en' ? (platformProfile.categoryBadgeEn ?? platformProfile.categoryBadge) : platformProfile.categoryBadge}</Badge>
+                  </div>
+                  {platformProfile.onboardingSteps.length > 0 && (
+                    <ol className="zk-guide-steps">
+                      {platformProfile.onboardingSteps.map((step, idx) => (
+                        <li key={idx} className="zk-guide-step">{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              </aside>
+            )}
+          </div>
+        </div>;
 }
 
 /** Convention page factory: `pages/index/index.ts` default-exports this. */
