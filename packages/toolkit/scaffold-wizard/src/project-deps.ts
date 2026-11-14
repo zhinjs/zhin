@@ -373,10 +373,20 @@ export function diagnoseAIDependencies(
   };
 }
 
-export function formatAIDependencyFixCommand(packages: string[], required: Record<string, string>): string {
+/**
+ * `pnpm add <specs>` that runs as printed in `cwd`: a scaffolded project is a pnpm workspace root
+ * (`pnpm-workspace.yaml`), where pnpm refuses a plain `pnpm add` (`ERR_PNPM_ADDING_TO_ROOT`)
+ * unless `-w` says the root package is meant.
+ */
+export function formatPnpmAddCommand(specs: readonly string[], cwd?: string): string {
+  const workspaceRoot = cwd !== undefined && fs.existsSync(path.join(cwd, 'pnpm-workspace.yaml'));
+  return `pnpm add${workspaceRoot ? ' -w' : ''} ${specs.join(' ')}`;
+}
+
+export function formatAIDependencyFixCommand(packages: string[], required: Record<string, string>, cwd?: string): string {
   if (packages.length === 0) return 'pnpm install';
   const specs = packages.map((name) => `${name}@${required[name] ?? 'latest'}`);
-  return `pnpm add ${specs.join(' ')}`;
+  return formatPnpmAddCommand(specs, cwd);
 }
 
 /**

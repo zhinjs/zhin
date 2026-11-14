@@ -392,7 +392,7 @@ export const doctorCommand = new Command('doctor')
         const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, config as Record<string, unknown>, pkg);
         const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
         if (zhinFixPackages.length > 0) {
-          const fixCmd = formatZhinStackFixCommand(zhinFixPackages, zhinDiagnosis.required);
+          const fixCmd = formatZhinStackFixCommand(zhinFixPackages, zhinDiagnosis.required, cwd);
           const detailParts = [
             zhinDiagnosis.missingFromPackageJson.length > 0
               ? `缺少: ${zhinDiagnosis.missingFromPackageJson.join(', ')}`
@@ -478,7 +478,7 @@ export const doctorCommand = new Command('doctor')
               : '';
 
             if (fixPackages.length > 0) {
-              const fixCmd = formatAIDependencyFixCommand(fixPackages, aiDiagnosis.required);
+              const fixCmd = formatAIDependencyFixCommand(fixPackages, aiDiagnosis.required, cwd);
               const detailParts = [
                 aiDiagnosis.missingFromPackageJson.length > 0
                   ? `缺少: ${aiDiagnosis.missingFromPackageJson.join(', ')}`

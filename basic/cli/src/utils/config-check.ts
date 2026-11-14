@@ -225,7 +225,7 @@ function checkZhinStackDependencies(
           : ''
       }`,
       fixable: true,
-      fixHint: formatZhinStackFixCommand(fixPackages, diagnosis.required),
+      fixHint: formatZhinStackFixCommand(fixPackages, diagnosis.required, cwd),
     });
   }
 
@@ -261,7 +261,7 @@ function checkAiDependencies(
           : ''
       }`,
       fixable: true,
-      fixHint: formatAIDependencyFixCommand(fixPackages, diagnosis.required),
+      fixHint: formatAIDependencyFixCommand(fixPackages, diagnosis.required, cwd),
     });
   }
 
