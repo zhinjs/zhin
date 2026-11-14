@@ -59,8 +59,9 @@ export interface NativeBuildAllowancePlan {
 
 /**
  * Plans the build-script allowance for the gateway's native dependencies in a pnpm project that
- * declares `@zhin.js/gateway`. Existing entries are kept; only missing ones are appended:
- * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent);
+ * declares `@zhin.js/gateway`. Existing decisions are kept; only missing ones are appended:
+ * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent; a non-boolean value
+ *   such as pnpm 11's `set this to true or false` placeholder is replaced);
  * - `onlyBuiltDependencies` in `pnpm-workspace.yaml` when that list exists or the project pins
  *   pnpm < 10.26, and in `package.json#pnpm.onlyBuiltDependencies` when that list exists
  *   (mutated in `pkg`; never created — pnpm 11 warns about the `pnpm` field).
@@ -80,7 +81,10 @@ export function planNativeBuildAllowance(dir: string, pkg: Record<string, any>):
     for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
       const current = doc.getIn(['allowBuilds', name]);
       if (current === false) denied.push(name);
-      if (current !== undefined && current !== null) continue;
+      // A boolean is the project's decision. Anything else — notably the `set this to true or false`
+      // placeholder pnpm 11 writes for every build script it ignored — is not a decision: pnpm keeps
+      // failing the install with ERR_PNPM_IGNORED_BUILDS until it is replaced.
+      if (typeof current === 'boolean') continue;
       doc.setIn(['allowBuilds', name], true);
       changes.push({ file: WORKSPACE_FILE, setting: `allowBuilds.${name}`, value: 'true' });
     }
@@ -127,7 +131,7 @@ export function syncNativeBuildAllowance(dir: string, pkg: Record<string, any>, 
   const plan = planNativeBuildAllowance(dir, pkg);
   if (!plan) return false;
   for (const name of plan.denied) {
-    console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false，保留（denied by the project, kept; the Console terminal needs node-pty）`));
+    console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false（项目已拒绝），保留；Console 终端需要 node-pty 的原生模块`));
   }
   for (const change of plan.changes) {
     const target = change.setting.startsWith('allowBuilds.')

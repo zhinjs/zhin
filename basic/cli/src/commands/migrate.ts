@@ -26,7 +26,18 @@ import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from 
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
-import { syncNativeBuildAllowance } from '../utils/native-build-deps.js';
+import { syncNativeBuildAllowance, usesPnpm } from '../utils/native-build-deps.js';
+import {
+  compareInstalledVersions,
+  declaredZhinDependencies,
+  detectPnpmMajor,
+  explainVersionMismatch,
+  formatInstalledVersionRows,
+  snapshotInstalledVersions,
+  syncReleaseAgeExclusions,
+} from '../utils/installed-versions.js';
+import { readConfig, findConfigFile } from '@zhin.js/gateway/project';
+import { isAiEnabledInConfig } from '@zhin.js/scaffold-wizard';
 
 const cwd = process.cwd();
 
@@ -114,9 +125,12 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
   let changed = false;
   const lookup = cachedRegistryLookup(options.lookup ?? npmRegistryLookup);
   /** The specifier an upgrade writes: the registry's latest release, exact when the old one was exact. */
+  /** Registry releases the upgrade targets (`name → version`), for pnpm's release-age exclusions. */
+  const releases = new Map<string, string>();
   const upgradeSpecifier = (dep: string, existing: string): string | undefined => {
     const release = lookup(dep);
     if (!release) return undefined;
+    releases.set(dep, release.version);
     return isExactVersionSpecifier(existing) ? release.version : `^${release.version}`;
   };
 
@@ -136,8 +150,8 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
       const message = change.kind === 'move'
         ? `${change.name}: devDependencies → dependencies (${change.version})`
         : change.kind === 'drop-dev-placeholder'
-          ? `${change.name}: devDependencies 中的占位版本 ${change.version} 已移除，改在 dependencies 中声明（placeholder removed, declared in dependencies instead）`
-          : `${change.name}: devDependencies 中的重复项已移除（dependencies 已声明 / already in dependencies）`;
+          ? `${change.name}: devDependencies 中的占位版本 ${change.version} 已移除，改在 dependencies 中声明`
+          : `${change.name}: devDependencies 中的重复项已移除（dependencies 中已声明）`;
       console.log(chalk.cyan(options.dryRun ? `  [dry-run] ${message}` : `  · ${message}`));
     }
     if (stack.changes.length > 0) {
@@ -158,12 +172,12 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
       continue;
     }
     if (!options.includePinned && isPinnedSpecifier(String(existing))) {
-      console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（pinned, kept; use --include-pinned to upgrade it）`));
+      console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（加 --include-pinned 一并升级）`));
       continue;
     }
     const next = upgradeSpecifier(dep, String(existing));
     if (next === undefined) {
-      console.log(chalk.yellow(`  ! ${dep}: 无法从 registry 查询最新版本，保留 ${existing}（registry lookup failed, kept）`));
+      console.log(chalk.yellow(`  ! ${dep}: 无法从 registry 查询最新版本，保留 ${existing}`));
       continue;
     }
     if (existing === next) continue;
@@ -180,9 +194,12 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     let version: string;
     if (name === '@zhin.js/gateway') {
       version = gatewayRangeFor(upgraded.get('@zhin.js/cli') ?? String(pkg.dependencies['@zhin.js/cli']));
+      const floor = /^[\^~]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/u.exec(version)?.[1];
+      if (floor) releases.set(name, floor);
     } else {
       // An added package gets the registry's release; offline, the range released with this CLI.
       const release = lookup(name);
+      if (release) releases.set(name, release.version);
       version = release
         ? `^${release.version}`
         : withScaffoldVersionRanges({ [name]: String(pkg.dependencies[name]) })[name] ?? String(pkg.dependencies[name]);
@@ -197,6 +214,14 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
   // pnpm 10+ skips dependency build scripts: allow the gateway's native ones (node-pty for the
   // Console terminal) in pnpm-workspace.yaml; the install below then builds them.
   if (syncNativeBuildAllowance(path.dirname(pkgPath), pkg, options.dryRun)) changed = true;
+
+  // pnpm 11 holds back releases younger than minimumReleaseAge (one day by default) and would keep
+  // the old version ("Already up to date"): list the targets in minimumReleaseAgeExclude, as pnpm
+  // itself does in a fresh scaffold. Only for pnpm projects, and only the registry releases the
+  // (possibly unchanged) specifiers now point at — pinned and local specifiers are never listed.
+  if (usesPnpm(path.dirname(pkgPath), pkg)) {
+    syncReleaseAgeExclusions(path.dirname(pkgPath), releases, options.dryRun);
+  }
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。
   if (!pkg.scripts) pkg.scripts = {};
@@ -249,7 +274,7 @@ function syncZhinOverrides(pkg: any, upgraded: ReadonlyMap<string, string>, look
   const target = upgraded.get(CORE_PACKAGE) ?? (isExactVersionSpecifier(declared) ? declared.replace(/^=?v?/, '') : undefined);
   const coreDependencies = target ? lookup(CORE_PACKAGE, target.replace(/^\^/, ''))?.dependencies : undefined;
   if (target && !coreDependencies) {
-    console.log(chalk.yellow(`  ! pnpm.overrides: 无法查询 zhin.js@${target} 的依赖，未同步（registry lookup failed, overrides kept）`));
+    console.log(chalk.yellow(`  ! pnpm.overrides: 无法查询 zhin.js@${target} 的依赖，保留原值`));
   }
 
   let changed = false;
@@ -268,18 +293,27 @@ function syncZhinOverrides(pkg: any, upgraded: ReadonlyMap<string, string>, look
   return changed;
 }
 
-function ensureDirs(dir: string, dryRun: boolean): void {
-  const dirs = ['data', 'plugins', 'src/plugins'];
-  for (const d of dirs) {
+/**
+ * Directories the current scaffold creates and the runtime needs: `data/` (SQLite, uploads) and
+ * `plugins/` (a `pnpm-workspace.yaml` package glob). Older migrate releases also created
+ * `src/plugins`, which no scaffold or loader uses any more. Returns how many were (or would be) created.
+ */
+export const MIGRATE_PROJECT_DIRECTORIES: readonly string[] = Object.freeze(['data', 'plugins']);
+
+export function ensureDirs(dir: string, dryRun: boolean): number {
+  let created = 0;
+  for (const d of MIGRATE_PROJECT_DIRECTORIES) {
     const full = path.join(dir, d);
     if (fs.existsSync(full)) continue;
+    created++;
     if (dryRun) {
-      console.log(chalk.cyan(`  [dry-run] mkdir ${d}`));
+      console.log(chalk.cyan(`  [dry-run] 创建目录 ${d}/`));
     } else {
       fs.ensureDirSync(full);
-      console.log(chalk.green(`  ✓ 确保目录 ${d}`));
+      console.log(chalk.green(`  ✓ 已创建目录 ${d}/`));
     }
   }
+  return created;
 }
 
 // ============================================================================
@@ -434,69 +468,60 @@ function backupBeforeOverwrite(filePath: string): void {
   fs.copyFileSync(filePath, `${filePath}.bak`);
 }
 
-export function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
+/**
+ * AI bootstrap files (SOUL.md / TOOLS.md / AGENTS.md). Files still on the old Chinese template are
+ * upgraded (with a `.bak`); customized files are left alone. Missing files are created only for a
+ * project that uses AI (`aiEnabled`) — the scaffold writes them only when AI is enabled, and a
+ * project without AI never reads them. Returns how many files were (or would be) written.
+ */
+export function upgradeBootstrapFiles(dir: string, dryRun: boolean, aiEnabled = true): number {
   let upgraded = 0;
   const files = [
-    { name: 'SOUL.md', newContent: NEW_SOUL_MD },
-    { name: 'TOOLS.md', newContent: NEW_TOOLS_MD },
+    { name: 'SOUL.md', build: (_existing?: string) => NEW_SOUL_MD },
+    { name: 'TOOLS.md', build: (_existing?: string) => NEW_TOOLS_MD },
+    // AGENTS.md keeps the user's preferences / records / TODO sections.
+    { name: 'AGENTS.md', build: (existing?: string) => buildNewAgentsMd(existing) },
   ];
 
-  for (const { name, newContent } of files) {
+  for (const { name, build } of files) {
     const filePath = path.join(dir, name);
     if (fs.existsSync(filePath)) {
       const existing = fs.readFileSync(filePath, 'utf-8');
-      if (isOldChineseTemplate(existing)) {
-        if (dryRun) {
-          console.log(chalk.cyan(`  [dry-run] ${name}: upgrade to English template`));
-        } else {
-          backupBeforeOverwrite(filePath);
-          fs.writeFileSync(filePath, newContent, 'utf-8');
-          console.log(chalk.green(`  ✓ ${name} upgraded to English template (backup: ${name}.bak)`));
-        }
-        upgraded++;
-      } else {
-        console.log(chalk.gray(`  · ${name} already customized, skipped`));
+      if (!isOldChineseTemplate(existing)) {
+        console.log(chalk.gray(`  · ${name} 已自定义，跳过`));
+        continue;
       }
-    } else {
       if (dryRun) {
-        console.log(chalk.cyan(`  [dry-run] ${name}: create new`));
+        console.log(chalk.cyan(`  [dry-run] ${name}: 升级为新模板（保留备份 ${name}.bak）`));
       } else {
-        fs.writeFileSync(filePath, newContent, 'utf-8');
-        console.log(chalk.green(`  ✓ ${name} created`));
+        backupBeforeOverwrite(filePath);
+        fs.writeFileSync(filePath, build(existing), 'utf-8');
+        console.log(chalk.green(`  ✓ ${name} 已升级为新模板${name === 'AGENTS.md' ? '（保留了用户偏好、重要记录与待办）' : ''}，备份 ${name}.bak`));
+      }
+      upgraded++;
+    } else if (aiEnabled) {
+      if (dryRun) {
+        console.log(chalk.cyan(`  [dry-run] ${name}: 创建`));
+      } else {
+        fs.writeFileSync(filePath, build(), 'utf-8');
+        console.log(chalk.green(`  ✓ 已创建 ${name}`));
       }
       upgraded++;
     }
   }
-
-  // AGENTS.md — special handling to preserve user data
-  const agentsPath = path.join(dir, 'AGENTS.md');
-  if (fs.existsSync(agentsPath)) {
-    const existing = fs.readFileSync(agentsPath, 'utf-8');
-    if (isOldChineseTemplate(existing)) {
-      const merged = buildNewAgentsMd(existing);
-      if (dryRun) {
-        console.log(chalk.cyan(`  [dry-run] AGENTS.md: upgrade to English (user data preserved)`));
-      } else {
-        backupBeforeOverwrite(agentsPath);
-        fs.writeFileSync(agentsPath, merged, 'utf-8');
-        console.log(chalk.green(`  ✓ AGENTS.md upgraded to English (user data preserved, backup: AGENTS.md.bak)`));
-      }
-      upgraded++;
-    } else {
-      console.log(chalk.gray(`  · AGENTS.md already customized, skipped`));
-    }
-  } else {
-    const fresh = buildNewAgentsMd();
-    if (dryRun) {
-      console.log(chalk.cyan(`  [dry-run] AGENTS.md: create new`));
-    } else {
-      fs.writeFileSync(agentsPath, fresh, 'utf-8');
-      console.log(chalk.green(`  ✓ AGENTS.md created`));
-    }
-    upgraded++;
-  }
-
   return upgraded;
+}
+
+/** The project uses AI: the config enables it, or package.json declares `@zhin.js/agent`. */
+export async function projectUsesAi(dir: string, pkg: Record<string, any>): Promise<boolean> {
+  if (pkg.dependencies?.['@zhin.js/agent'] || pkg.devDependencies?.['@zhin.js/agent']) return true;
+  const configFile = findConfigFile(dir);
+  if (!configFile) return false;
+  try {
+    return isAiEnabledInConfig(await readConfig(path.join(dir, configFile)) as Record<string, unknown>);
+  } catch {
+    return false;
+  }
 }
 
 function resolveMigrationInstallCommand(dir: string): string | undefined {
@@ -528,6 +553,38 @@ function runInstall(dir: string, dryRun: boolean, cmd: string): boolean {
     logger.error(`执行 ${cmd} 失败，请手动在项目目录执行`);
     return false;
   }
+}
+
+/**
+ * Prints each declared Zhin package's installed version before → after the install (read from
+ * node_modules). Returns true when one is missing or outside its declared range; each such row is
+ * followed by the likely cause.
+ */
+export function reportInstalledVersions(
+  dir: string,
+  pkg: Record<string, any>,
+  declared: Readonly<Record<string, string>>,
+  before: ReadonlyMap<string, string | undefined>,
+): boolean {
+  const rows = compareInstalledVersions(dir, declared, before);
+  if (rows.length === 0) return false;
+  console.log(chalk.bold('  实际安装的版本（node_modules）：'));
+  const lines = formatInstalledVersionRows(rows);
+  let pnpmMajor: number | undefined | null = null;
+  let behind = false;
+  rows.forEach((row, index) => {
+    console.log(lines[index]);
+    if (row.status === 'ok' || row.status === 'unchecked') return;
+    behind = true;
+    if (row.status === 'missing') {
+      console.log(chalk.red(`      未安装：在项目目录运行 pnpm install，并检查上方 pnpm 输出`));
+      return;
+    }
+    if (pnpmMajor === null) pnpmMajor = detectPnpmMajor(dir);
+    console.log(chalk.red(`      ${explainVersionMismatch(dir, pkg, row, pnpmMajor)}`));
+  });
+  console.log('');
+  return behind;
 }
 
 export const migrateCommand = new Command('migrate')
@@ -578,46 +635,59 @@ Note: "zhin runtime migrate" migrates legacy plugin capability code, not the con
     }
     console.log('');
 
-    // 2. 确保目录
-    console.log(chalk.bold.blue('2. Ensure directory structure'));
-    ensureDirs(cwd, dryRun);
+    // 2. 目录结构：只补当前脚手架也会创建的目录
+    console.log(chalk.bold.blue('2. 检查目录结构'));
+    if (ensureDirs(cwd, dryRun) === 0) console.log(chalk.gray('  目录结构已与当前脚手架一致'));
     console.log('');
 
-    // 3. Upgrade bootstrap files (SOUL.md, TOOLS.md, AGENTS.md)
-    console.log(chalk.bold.blue('3. Upgrade bootstrap files'));
-    const bootstrapCount = upgradeBootstrapFiles(cwd, dryRun);
+    // 3. AI 引导文件：只有使用 AI 的项目才需要
+    const usesAi = await projectUsesAi(cwd, fs.readJsonSync(pkgPath));
+    console.log(chalk.bold.blue('3. AI 引导文件（SOUL.md / TOOLS.md / AGENTS.md）'));
+    const bootstrapCount = upgradeBootstrapFiles(cwd, dryRun, usesAi);
     if (bootstrapCount === 0) {
-      console.log(chalk.gray('  No bootstrap files need upgrading'));
+      console.log(chalk.gray(usesAi ? '  无需更新' : '  项目未启用 AI，不需要引导文件'));
     }
     console.log('');
 
-    // 4. 安装依赖
+    // 4. 安装依赖，并核对实际安装的版本
+    let installFailed = false;
+    let versionsBehind = false;
     if (installCommand) {
-      console.log(chalk.bold.blue('4. Install dependencies'));
+      console.log(chalk.bold.blue('4. 安装依赖'));
+      const declared = declaredZhinDependencies(fs.readJsonSync(pkgPath));
+      const before = snapshotInstalledVersions(cwd, Object.keys(declared));
       const ok = runInstall(cwd, dryRun, installCommand);
-      if (!ok && !dryRun) {
-        process.exitCode = 1;
-        return;
-      }
       console.log('');
+      if (!dryRun) {
+        installFailed = !ok;
+        versionsBehind = reportInstalledVersions(cwd, fs.readJsonSync(pkgPath), declared, before);
+      }
     }
 
-    if (dryRun) console.log(chalk.bold.yellow('Dry run finished: nothing was changed. 未写入任何文件，也未安装依赖。'));
-    else console.log(chalk.bold.green('✅ Migration complete'));
+    if (installFailed || versionsBehind) {
+      process.exitCode = 1;
+      console.log(chalk.bold.red(versionsBehind
+        ? '✗ 迁移未完成：package.json 已更新，但上面标 ✗ 的包没有装上声明的版本（原因见各行说明）'
+        : '✗ 迁移未完成：依赖安装失败，请按上方 pnpm 输出修复后在项目目录运行 pnpm install'));
+      console.log('');
+      return;
+    }
+
+    if (dryRun) console.log(chalk.bold.yellow('dry-run 结束：未写入任何文件，也未安装依赖。'));
+    else console.log(chalk.bold.green('✅ 迁移完成'));
     console.log('');
     const legacy = await detectLegacyConfig(cwd);
     if (legacy.legacy) {
       // This command never rewrites config files; point to the dedicated converter.
       console.log(chalk.yellow('配置仍是 v1 格式，新版 Runtime 会拒绝启动。先停止 Bot，再运行：'));
-      console.log(chalk.yellow('Your config is still v1 and the new runtime will refuse it. Stop the Bot, then run:'));
-      console.log(chalk.cyan('  zhin migrate instances') + chalk.gray('          preview'));
-      console.log(chalk.cyan('  zhin migrate instances --apply') + chalk.gray('  apply (automatic backup)'));
+      console.log(chalk.cyan('  zhin migrate instances') + chalk.gray('          预览改动'));
+      console.log(chalk.cyan('  zhin migrate instances --apply') + chalk.gray('  应用（自动备份）'));
       console.log(chalk.gray(`  ${CONFIG_V2_MIGRATION_DOCS_URL}`));
       console.log('');
     }
-    console.log(chalk.gray('Next steps:'));
-    console.log(chalk.cyan('  zhin doctor') + chalk.gray('  check project health'));
-    console.log(chalk.cyan('  pnpm dev') + chalk.gray('   start dev server'));
+    console.log(chalk.gray('下一步：'));
+    console.log(chalk.cyan('  zhin doctor') + chalk.gray('  检查项目健康状况'));
+    console.log(chalk.cyan('  pnpm dev') + chalk.gray('     启动开发模式'));
     console.log('');
   });
 

@@ -414,3 +414,28 @@ describe('doctor: gateway native dependency node-pty (#1250)', () => {
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 });
+
+describe('doctor: installed Zhin versions match package.json (#1250)', () => {
+  it('warns when node_modules holds a version outside the declared range, with the cause and fix', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.mkdirSync(path.join(dir, 'node_modules', 'zhin.js'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'node_modules', 'zhin.js', 'package.json'), JSON.stringify({ name: 'zhin.js', version: '0.9.0' }));
+      fs.writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'minimumReleaseAge: 1440\n');
+    });
+    try {
+      expect(output).toContain('Zhin 已安装版本: zhin.js 已安装 0.9.0，不满足 package.json 声明的 ^1.0.0');
+      expect(output).toContain('minimumReleaseAgeExclude');
+      expect(output).toContain('pnpm install');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('stays silent when the installed version satisfies the declared range', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.mkdirSync(path.join(dir, 'node_modules', 'zhin.js'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'node_modules', 'zhin.js', 'package.json'), JSON.stringify({ name: 'zhin.js', version: '1.4.0' }));
+    });
+    try {
+      expect(output).not.toContain('Zhin 已安装版本');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});

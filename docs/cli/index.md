@@ -248,7 +248,11 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
-声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有条目保留，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+
+pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复），安装后逐个读取 `node_modules` 列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
+
+`zhin migrate` 只补当前脚手架也会创建的目录（`data/`、`plugins/`），不再创建 `src/plugins`；`SOUL.md` / `TOOLS.md` / `AGENTS.md` 只在项目使用 AI（配置启用 AI 或声明了 `@zhin.js/agent`）时补齐，仍是旧中文模板的文件会升级并留 `.bak`。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 

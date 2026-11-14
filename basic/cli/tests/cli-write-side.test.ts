@@ -527,6 +527,7 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     expect(workspace()).toEqual({
       packages: ['.', 'plugins/*'],
       allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
+      minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8'))).not.toHaveProperty('pnpm');
 
@@ -540,13 +541,13 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     const pkgPath = botPackage({ packageManager: 'pnpm@11.27.1' });
     vi.spyOn(console, 'log').mockImplementation(() => {});
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
-    expect(workspace()).toEqual({ allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true } });
+    expect(workspace()).toEqual({ allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true }, minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'], });
 
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'allowBuilds:\n  node-pty: false\n');
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     expect(workspace().allowBuilds).toEqual({ 'node-pty': false, ssh2: true, 'cpu-features': true });
-    expect(log.mock.calls.flat().join('\n')).toContain('allowBuilds.node-pty 为 false，保留');
+    expect(log.mock.calls.flat().join('\n')).toContain('allowBuilds.node-pty 为 false（项目已拒绝），保留');
   });
 
   it('appends to existing onlyBuiltDependencies lists, and adds one for pnpm releases before allowBuilds', () => {
@@ -557,12 +558,34 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     expect(workspace()).toEqual({
       allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
       onlyBuiltDependencies: ['node-pty', 'ssh2', 'cpu-features'],
+      minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
 
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - sharp\n  - ssh2\n');
     botPackage({ packageManager: 'pnpm@11.27.1' });
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     expect(workspace().onlyBuiltDependencies).toEqual(['sharp', 'ssh2', 'node-pty', 'cpu-features']);
+  });
+
+  it('replaces the placeholder pnpm 11 writes for ignored build scripts', () => {
+    const pkgPath = botPackage({ packageManager: 'pnpm@11.27.1' });
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'allowBuilds:\n  cpu-features: set this to true or false\n  esbuild: true\n  node-pty: set this to true or false\n  ssh2: false\n');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const written = fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).not.toContain('set this to true or false');
+    expect(workspace().allowBuilds).toEqual({ 'cpu-features': true, esbuild: true, 'node-pty': true, ssh2: false });
+  });
+
+  it('keeps release-age exclusions that already cover a release and skips pinned packages', () => {
+    const pkgPath = botPackage({ packageManager: 'pnpm@11.27.1' });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    pkg.dependencies['@zhin.js/adapter-icqq'] = '1.0.0';
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg));
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "minimumReleaseAgeExclude:\n  - '@zhin.js/*'\n");
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(workspace().minimumReleaseAgeExclude).toEqual(['@zhin.js/*', 'zhin.js@9.4.2']);
   });
 
   it('leaves npm projects and projects without the gateway alone', () => {

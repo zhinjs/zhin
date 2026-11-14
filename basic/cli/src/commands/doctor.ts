@@ -37,6 +37,7 @@ import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/pro
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
+import { compareInstalledVersions, declaredZhinDependencies, detectPnpmMajor, explainVersionMismatch } from '../utils/installed-versions.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
@@ -435,6 +436,26 @@ export const doctorCommand = new Command('doctor')
           status: 'warn',
           message: '无法读取配置以检查 Zhin 生态依赖',
         });
+      }
+    }
+
+    // 5c. 已安装版本与 package.json 声明一致（pnpm 11 的 minimumReleaseAge 会让新版本装不上，#1250）
+    if (fs.existsSync(projectPackagePath) && fs.existsSync(path.join(cwd, 'node_modules'))) {
+      try {
+        const pkg = await readProjectPackage();
+        const mismatched = compareInstalledVersions(cwd, declaredZhinDependencies(pkg))
+          .filter(row => row.status === 'mismatch');
+        if (mismatched.length > 0) {
+          const pnpmMajor = detectPnpmMajor(cwd);
+          results.push({
+            name: 'Zhin 已安装版本',
+            status: 'warn',
+            message: mismatched.map(row => `${row.name} 已安装 ${row.after}，不满足 package.json 声明的 ${row.declared}`).join('；'),
+            fix: `${explainVersionMismatch(cwd, pkg, mismatched[0]!, pnpmMajor)}；修复后运行 pnpm install`,
+          });
+        }
+      } catch {
+        // package.json 不可读：上面的 package.json 检查已报告
       }
     }
 
