@@ -14,6 +14,12 @@ const version = (require('../../package.json') as { version: string }).version;
 const userAgent = `zhin.js-ai/${version}`;
 
 const codexBase = 'https://chatgpt.com/backend-api/codex';
+/** Public Claude API model IDs offered as unverified suggestions; subscription access is checked only by a real call. */
+const CLAUDE_SUBSCRIPTION_MODEL_SUGGESTIONS = Object.freeze([
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (suggestion)' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (suggestion)' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (suggestion)' },
+].map(item => Object.freeze(item)));
 const codexCacheRouting = 'driver';
 const codexProtocols = [{ name: 'codex-responses', kind: 'language' }] as const;
 const claudeProtocols = [{ name: 'anthropic-messages', kind: 'language' }] as const;
@@ -38,8 +44,17 @@ export const codexProvider = defineProvider({
   serviceSchema: fixedServiceSchema(codexBase),
   profileSchema: codexProfileSchema,
   authentication: { methods: ['oauth'], oauth: codexOAuth },
-  targets: () => ({ authentication: ['https://auth.openai.com/oauth'], inference: [codexBase] }),
+  targets: () => ({ authentication: ['https://auth.openai.com/oauth'], inference: [codexBase], discovery: [`${codexBase}/models`] }),
   models: service => declaredModels(service, codexProtocols),
+  // The Codex CLI reads its model picker from `GET {codex base}/models?client_version=…` (openai/codex,
+  // codex-rs/codex-api/src/endpoint/models.rs); the backend may filter by client version.
+  discover: input => discoverModels(input, {
+    endpoint: `${codexBase}/models?client_version=${encodeURIComponent(version)}`, format: 'codex', bearer: true,
+    headers(grant) {
+      const account = grant.metadata?.chatgptAccountId;
+      return { 'user-agent': userAgent, originator: 'zhin', ...(typeof account === 'string' ? { 'chatgpt-account-id': account } : {}) };
+    },
+  }),
   createExecution(input) {
     return sdkExecution(input, {
       family: 'openai', api: 'responses', sessionHeader: 'session_id', forceStreamingGeneration: true, promptCacheRouting: codexCacheRouting,
@@ -89,6 +104,8 @@ export const claudeSubscriptionProvider = defineProvider({
   authentication: { methods: ['oauth'], oauth: claudeOAuth },
   targets: () => ({ authentication: ['https://api.anthropic.com/v1/oauth'], inference: ['https://api.anthropic.com/v1/messages'] }),
   models: service => declaredModels(service, claudeProtocols),
+  // No catalogue endpoint is confirmed for subscription OAuth tokens, so the Console gets suggestions, not discovery.
+  modelSuggestions: CLAUDE_SUBSCRIPTION_MODEL_SUGGESTIONS,
   createExecution: input => sdkExecution(input, {
     family: 'anthropic', bearer: true,
     credentialTarget: 'https://api.anthropic.com/v1/messages',

@@ -106,6 +106,7 @@ export function codeOAuth<S>(configuration: OAuthCodeConfiguration): OAuthAuthen
   return {
     contractVersion: '1',
     redirectUri: configuration.redirectUri,
+    ...(configuration.requiresClientSecret ? { requiresClientSecret: true } : {}),
     async begin({ redirectUri, client }) {
       if (redirectUri !== configuration.redirectUri || configuration.requiresClientSecret && !client?.clientSecret) throw new ProviderAuthenticationError('not-submitted');
       const state = randomBytes(32).toString('base64url');
@@ -189,43 +190,154 @@ const antigravityCodeOAuth = codeOAuth<FixedServiceOptions>({
   encoding: 'form', pkce: false, authorizeParameters: { access_type: 'offline', prompt: 'consent' },
 });
 
-/** Preparation failure retains the exchanged credential in Host; it never replays OAuth. */
+/** Upstream preparation step that failed; diagnostic only, never a credential or URL. */
+export type ProviderPreparationStep = 'identity' | 'load-code-assist' | 'onboard-user' | 'onboard-operation';
+
+/** Preparation failure retains the exchanged credential in Host; it never replays OAuth.
+ * `status` is the upstream HTTP status and `reason` a sanitized upstream reason code
+ * (e.g. Google `PERMISSION_DENIED` / `SERVICE_DISABLED`); response bodies, messages and tokens never escape. */
 export class ProviderPreparationError extends Error {
   readonly code: 'identity-unavailable' | 'project-unavailable';
-  constructor(code: ProviderPreparationError['code']) {
+  readonly status?: number;
+  readonly reason?: string;
+  readonly step?: ProviderPreparationStep;
+  constructor(code: ProviderPreparationError['code'], detail?: Readonly<{ status?: number; reason?: string; step?: ProviderPreparationStep }>) {
     super(`Provider account preparation: ${code}`);
     this.name = 'ProviderPreparationError'; this.code = code;
+    if (detail?.status !== undefined) this.status = detail.status;
+    const reason = safeReasonCode(detail?.reason);
+    if (reason) this.reason = reason;
+    if (detail?.step) this.step = detail.step;
   }
 }
 
-export const antigravityOAuth: OAuthAuthentication<FixedServiceOptions> = {
-  ...antigravityCodeOAuth,
-  async complete(input) {
-    return { ...await antigravityCodeOAuth.complete(input), preparation: { status: 'required' } };
-  },
-  async prepare({ credential, fetch, signal }) {
-    signal.throwIfAborted();
-    const headers = { authorization: `Bearer ${credential.accessToken}`, accept: 'application/json' };
-    let identity: Record<string, unknown>;
-    try {
-      const response = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', { headers, signal, redirect: 'error' });
-      if (!response.ok) throw new ProviderPreparationError('identity-unavailable');
-      identity = tokenRecord(await response.json());
-      if (typeof identity.id !== 'string' || !identity.id) throw new ProviderPreparationError('identity-unavailable');
-    } catch { throw new ProviderPreparationError('identity-unavailable'); }
-    let project: Record<string, unknown>;
-    try {
-      const response = await fetch('https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
-        method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: '{}', signal, redirect: 'error',
-      });
-      if (!response.ok) throw new ProviderPreparationError('project-unavailable');
-      project = tokenRecord(await response.json());
-    } catch { throw new ProviderPreparationError('project-unavailable'); }
-    const value = project.cloudaicompanionProject;
-    const projectId = typeof value === 'string' ? value
-      : value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' ? value.id : undefined;
-    if (!projectId) throw new ProviderPreparationError('project-unavailable');
-    return { ...credential, subject: identity.id as string, preparation: { status: 'ready' },
-      metadata: { ...credential.metadata, projectId } };
-  },
-};
+/** Only enum-like upstream codes (`PERMISSION_DENIED`, `INELIGIBLE_ACCOUNT`, `project-required`) are kept. */
+function safeReasonCode(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u.test(value) ? value : undefined;
+}
+
+/** Google RPC error: prefer `ErrorInfo.reason`, then `error.status`; never the free-text message. */
+function googleErrorReason(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const error = 'error' in value && value.error && typeof value.error === 'object' ? value.error as Record<string, unknown> : value as Record<string, unknown>;
+  const details = Array.isArray(error.details) ? error.details : [];
+  for (const detail of details) {
+    if (detail && typeof detail === 'object' && 'reason' in detail) {
+      const reason = safeReasonCode(detail.reason);
+      if (reason) return reason;
+    }
+  }
+  return safeReasonCode(error.status);
+}
+
+const CODE_ASSIST_BASE = 'https://cloudcode-pa.googleapis.com/v1internal';
+/** Client metadata shape used by the official open-source Code Assist client (google-gemini/gemini-cli). */
+const CODE_ASSIST_METADATA = Object.freeze({ ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' });
+
+export interface AntigravityPreparationOptions {
+  /** Delay between long-running onboarding polls. */
+  readonly pollIntervalMs?: number;
+  /** Bounded number of polls after the initial onboardUser call. */
+  readonly maxPollAttempts?: number;
+}
+
+function projectIdOf(value: unknown): string | undefined {
+  if (typeof value === 'string' && value) return value;
+  if (value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' && value.id) return value.id;
+  return undefined;
+}
+
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (ms <= 0) { signal.throwIfAborted(); return Promise.resolve(); }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/** Antigravity OAuth with Code Assist project preparation; exported for tests with short polling. */
+export function createAntigravityOAuth(options: AntigravityPreparationOptions = {}): OAuthAuthentication<FixedServiceOptions> {
+  const pollIntervalMs = options.pollIntervalMs ?? 5_000;
+  const maxPollAttempts = options.maxPollAttempts ?? 12;
+  return {
+    ...antigravityCodeOAuth,
+    async complete(input) {
+      return { ...await antigravityCodeOAuth.complete(input), preparation: { status: 'required' } };
+    },
+    async prepare({ credential, fetch, signal }) {
+      signal.throwIfAborted();
+      const headers = { authorization: `Bearer ${credential.accessToken}`, accept: 'application/json' };
+      let identity: Record<string, unknown>;
+      let status: number | undefined;
+      try {
+        const response = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', { headers, signal, redirect: 'error' });
+        status = response.status;
+        if (!response.ok) {
+          throw new ProviderPreparationError('identity-unavailable', { status: response.status, reason: googleErrorReason(await response.json().catch(() => undefined)), step: 'identity' });
+        }
+        identity = tokenRecord(await response.json());
+        if (typeof identity.id !== 'string' || !identity.id) throw new ProviderPreparationError('identity-unavailable', { status: response.status, reason: 'missing-subject', step: 'identity' });
+      } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof ProviderPreparationError) throw error;
+        throw new ProviderPreparationError('identity-unavailable', status === undefined ? { reason: 'transport', step: 'identity' } : { status, reason: 'invalid-response', step: 'identity' });
+      }
+
+      /** One Code Assist call; non-2xx and transport failures become project-unavailable with status/reason. */
+      const call = async (step: ProviderPreparationStep, url: string, body?: unknown): Promise<Record<string, unknown>> => {
+        let response: Response;
+        try {
+          response = await fetch(url, body === undefined
+            ? { method: 'GET', headers, signal, redirect: 'error' }
+            : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal, redirect: 'error' });
+        } catch {
+          signal.throwIfAborted();
+          throw new ProviderPreparationError('project-unavailable', { reason: 'transport', step });
+        }
+        let value: unknown;
+        try { value = await response.json(); } catch { value = undefined; }
+        if (!response.ok) throw new ProviderPreparationError('project-unavailable', { status: response.status, reason: googleErrorReason(value), step });
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderPreparationError('project-unavailable', { status: response.status, reason: 'invalid-response', step });
+        return value as Record<string, unknown>;
+      };
+
+      const loaded = await call('load-code-assist', `${CODE_ASSIST_BASE}:loadCodeAssist`, { metadata: CODE_ASSIST_METADATA });
+      let projectId = projectIdOf(loaded.cloudaicompanionProject);
+      if (!projectId) {
+        const ineligible = Array.isArray(loaded.ineligibleTiers) ? loaded.ineligibleTiers : [];
+        const ineligibleReason = ineligible.map(tier => tier && typeof tier === 'object' && 'reasonCode' in tier ? safeReasonCode(tier.reasonCode) : undefined).find(Boolean);
+        // An already-onboarded account without a managed project needs a user-chosen Cloud project, which this driver does not configure.
+        if (loaded.currentTier) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'load-code-assist' });
+        const tiers = Array.isArray(loaded.allowedTiers) ? loaded.allowedTiers as unknown[] : [];
+        const tier = tiers.find((item): item is Record<string, unknown> => !!item && typeof item === 'object' && (item as Record<string, unknown>).isDefault === true);
+        const tierId = tier && typeof tier.id === 'string' && tier.id ? tier.id : undefined;
+        if (!tierId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'no-default-tier', step: 'load-code-assist' });
+        // No user-chosen Cloud project is configured: the free tier uses a Google-managed project
+        // (naming one there is rejected upstream); other tiers report project-required below.
+        const request = { tierId, metadata: CODE_ASSIST_METADATA };
+        let operation = await call('onboard-user', `${CODE_ASSIST_BASE}:onboardUser`, request);
+        for (let attempt = 0; operation.done !== true; attempt++) {
+          if (attempt >= maxPollAttempts) throw new ProviderPreparationError('project-unavailable', { reason: 'onboarding-timeout', step: 'onboard-operation' });
+          await abortableDelay(pollIntervalMs, signal);
+          const name = typeof operation.name === 'string' && /^operations\/[A-Za-z0-9_.-]+$/u.test(operation.name) ? operation.name : undefined;
+          // Prefer polling the named long-running operation; repeat onboardUser when no operation name is returned.
+          operation = name
+            ? await call('onboard-operation', `${CODE_ASSIST_BASE}/${name}`)
+            : await call('onboard-user', `${CODE_ASSIST_BASE}:onboardUser`, request);
+        }
+        if (operation.error) {
+          const code = operation.error && typeof operation.error === 'object' && 'code' in operation.error && typeof operation.error.code === 'number' ? operation.error.code : undefined;
+          throw new ProviderPreparationError('project-unavailable', { reason: googleErrorReason(operation.error) ?? (code === undefined ? 'onboarding-failed' : `rpc-${code}`), step: 'onboard-operation' });
+        }
+        const response = operation.response && typeof operation.response === 'object' ? operation.response as Record<string, unknown> : {};
+        projectId = projectIdOf(response.cloudaicompanionProject);
+        if (!projectId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'onboard-operation' });
+      }
+      return { ...credential, subject: identity.id as string, preparation: { status: 'ready' },
+        metadata: { ...credential.metadata, projectId } };
+    },
+  };
+}
+
+export const antigravityOAuth: OAuthAuthentication<FixedServiceOptions> = createAntigravityOAuth();

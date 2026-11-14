@@ -623,7 +623,7 @@ export class HostAccountRuntime {
 
   #reportCleanup(message: string): void {
     try {
-      if (this.options.cleanupFailed) this.options.cleanupFailed();
+      if (this.options.cleanupFailed) this.options.cleanupFailed(message);
       else getLogger('inference').warn(message);
     } catch {
       /* Reporting cannot change an operation result. */

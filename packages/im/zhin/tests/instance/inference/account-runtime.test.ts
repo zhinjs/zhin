@@ -60,7 +60,7 @@ it('retains material identity when an environment expression resolves to a diffe
     } finally { await rebuilt.close(); }
   } finally { await fixture.close(); }
 });
-async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
+async function setup(method: 'api-key' | 'oauth' | 'none', source?: string, extra: { cleanupFailed?: (message: string) => void; requiresClientSecret?: boolean } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-account-'));
   const db = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'state.sqlite') });
   const repo = new DatabaseInferenceRepository({ database: db, normalizeGraph: value => structuredClone(value) as ProviderGraph });
@@ -76,7 +76,7 @@ async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
   const release = vi.fn(async () => {});
   const definition: ProviderDefinition<unknown, unknown> = { id: 'fixture', contractVersion: '1',
     serviceSchema: { parse: input => input }, models: service => service.models, authentication: { methods: [method], ...(method === 'oauth' ? { oauth: {
-      contractVersion: '1', redirectUri: 'http://localhost:1455/auth/callback', begin: async () => ({ authorizationUrl: 'https://provider.example/authorize', state: 'synthetic-state', privateState: { verifier: 'private-verifier' } }),
+      contractVersion: '1', redirectUri: 'http://localhost:1455/auth/callback', ...(extra.requiresClientSecret ? { requiresClientSecret: true } : {}), begin: async () => ({ authorizationUrl: 'https://provider.example/authorize', state: 'synthetic-state', privateState: { verifier: 'private-verifier' } }),
       complete, refresh, prepare,
     } } : {}) },
     targets: () => ({ authentication: ['https://provider.example/token'], inference: ['https://provider.example/v1'] }),
@@ -88,7 +88,8 @@ async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
   const resolveSource = vi.fn<(source: string | EnvironmentExpressionSource) => string | undefined>(() => environment.key);
   const runtime = () => new HostAccountRuntime({ hostOwnerId: 'host', repository: repo, credentials: store, drivers: { acquire: async () => lease() },
     fetch: () => vi.fn(async () => new Response('{}')),
-    allowTarget: ({ target }) => target.origin === 'https://provider.example', resolveSource, now: () => 1000 });
+    allowTarget: ({ target }) => target.origin === 'https://provider.example', resolveSource, now: () => 1000,
+    ...(extra.cleanupFailed ? { cleanupFailed: extra.cleanupFailed } : {}) });
   const host = runtime();
   const execution: ProviderExecutionContext = { binding: { graphRevision: 1, account, service,
     model: { id: 'model', kinds: ['language'], protocol: 'fixture' },
@@ -145,6 +146,33 @@ it('persists an exchanged token before read-only preparation and retries prepara
     expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'logged-in', metadata: { projectId: 'real-synthetic-project' } });
     expect(fixture.complete).toHaveBeenCalledOnce(); expect(fixture.prepare).toHaveBeenCalledTimes(2);
     expect(fixture.refresh).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
+});
+
+it('reports a driver preparation failure with its code and upstream status, never swallowing it', async () => {
+  const warnings: string[] = [];
+  const fixture = await setup('oauth', undefined, { cleanupFailed: message => warnings.push(message) });
+  const failure = Object.assign(new Error('Provider account preparation: project-unavailable'), {
+    name: 'ProviderPreparationError', code: 'project-unavailable', status: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user', secret: 'private-synthetic-token' });
+  fixture.complete.mockResolvedValue({ accessToken: 'logged-in', refreshToken: 'login-refresh', expiresAt: 5000, preparation: { status: 'required' } });
+  fixture.prepare.mockRejectedValue(failure);
+  try {
+    const signal = new AbortController().signal, login = await fixture.host.beginLogin({ account: fixture.account, signal });
+    await fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+    expect(warnings).toEqual(['Account preparation failed: code=project-unavailable step=onboard-user upstreamStatus=403 reason=SERVICE_DISABLED']);
+    await expect(fixture.host.prepareLogin({ account: fixture.account, expectedRevision: 2, signal })).rejects.toMatchObject({
+      code: 'preparation-failed', preparation: { code: 'project-unavailable', status: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' } });
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join('\n')).not.toContain('private-synthetic-token'); expect(warnings.join('\n')).not.toContain('logged-in');
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'authenticated', preparation: 'required', revision: 2 });
+  } finally { await fixture.close(); }
+});
+
+it('refuses to begin a confidential-client login without a client secret as a precondition, not an outage', async () => {
+  const fixture = await setup('oauth', undefined, { requiresClientSecret: true });
+  try {
+    await expect(fixture.host.beginLogin({ account: fixture.account, signal: new AbortController().signal }))
+      .rejects.toMatchObject({ code: 'client-secret-required' });
   } finally { await fixture.close(); }
 });
 

@@ -153,3 +153,33 @@ it('repairs one selected literal template through the Console key payload, opaqu
     expect(JSON.stringify((await f.call('')).payload)).not.toContain('synthetic-private-default');
   } finally { await f.close(); }
 });
+
+it('maps a missing client secret to 428 and a failed driver preparation to 424 with safe diagnostics', async () => {
+  const { InferenceAuthenticationError } = await import('@zhin.js/agent/runtime');
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
+  const account = { id: 'account' };
+  const accounts = {
+    beginLogin: vi.fn(async () => { throw new InferenceAuthenticationError('client-secret-required'); }),
+    prepareLogin: vi.fn(async () => { throw new InferenceAuthenticationError('preparation-failed',
+      { code: 'project-unavailable', status: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' }); }),
+  };
+  registerInferenceRoutes({ http, base: '/api',
+    acquire: () => ({ management: { account: async () => account }, accounts, sessions: {}, authenticationContract: async () => '1', release: () => {} }) as never,
+    owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
+    principal: input => resolveInferenceManagementPrincipal({ ...input, hostOwnerId: 'host', bindings: {} }) });
+  const { origin } = await http.listen();
+  try {
+    const post = async (path: string, body: unknown) => {
+      const response = await fetch(`${origin}/api/agent/inference${path}`, { method: 'POST',
+        headers: { authorization: 'Bearer operator-fixture', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      return { status: response.status, payload: await response.json() };
+    };
+    const begun = await post('/login/begin', { accountId: 'account' });
+    expect(begun.status).toBe(428);
+    expect(begun.payload).toMatchObject({ success: false, code: 'client-secret-required', reason: 'client-secret-required' });
+    expect(begun.payload.error).toContain('client secret');
+    const prepared = await post('/login/prepare', { accountId: 'account', expectedRevision: 2 });
+    expect(prepared.status).toBe(424);
+    expect(prepared.payload).toMatchObject({ success: false, code: 'project-unavailable', upstreamStatus: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' });
+  } finally { await http.close(); }
+});

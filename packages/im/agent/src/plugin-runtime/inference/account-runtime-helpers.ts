@@ -17,6 +17,7 @@ import {
   type OpenCredential,
   type OAuthExchangeFailure,
   type EnvironmentExpressionSource,
+  type InferencePreparationFailure,
 } from './credentials.js';
 
 export interface AccountRuntimeOptions {
@@ -44,7 +45,8 @@ export interface AccountRuntimeOptions {
   /** Explicit Host environment port. Never reads .env or another client's credential cache. */
   readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
   readonly now?: () => number;
-  readonly cleanupFailed?: () => void;
+  /** Receives the operator-facing warning; it never contains credentials or upstream bodies. */
+  readonly cleanupFailed?: (message: string) => void;
 }
 
 export interface Flight {
@@ -416,4 +418,25 @@ export async function publishAccountCredential(
     throw new InferenceAuthenticationError('outcome-unknown');
   }
   throw new InferenceAuthenticationError('unavailable');
+}
+
+const SAFE_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u;
+/** Duck-typed driver `ProviderPreparationError`: only enum-like codes and an HTTP status are kept. */
+export function preparationFailure(error: unknown): InferencePreparationFailure | undefined {
+  if (!error || typeof error !== 'object' || !('name' in error) || error.name !== 'ProviderPreparationError') return undefined;
+  const value = error as { code?: unknown; status?: unknown; reason?: unknown; step?: unknown };
+  if (typeof value.code !== 'string' || !SAFE_CODE.test(value.code)) return undefined;
+  return {
+    code: value.code,
+    ...(Number.isInteger(value.status) && Number(value.status) >= 100 && Number(value.status) <= 599 ? { status: Number(value.status) } : {}),
+    ...(typeof value.reason === 'string' && SAFE_CODE.test(value.reason) ? { reason: value.reason } : {}),
+    ...(typeof value.step === 'string' && SAFE_CODE.test(value.step) ? { step: value.step } : {}),
+  };
+}
+
+export function describePreparationFailure(failure: InferencePreparationFailure): string {
+  return `Account preparation failed: code=${failure.code}`
+    + (failure.step ? ` step=${failure.step}` : '')
+    + (failure.status === undefined ? '' : ` upstreamStatus=${failure.status}`)
+    + (failure.reason ? ` reason=${failure.reason}` : '');
 }

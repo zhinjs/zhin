@@ -80,12 +80,15 @@ export interface OAuthAuthentication<S = JsonObject> {
   readonly contractVersion: string;
   /** Product callback contract, not a request-body redirect or an HTTP listener. */
   readonly redirectUri: string;
+  /** The OAuth client is confidential: an account-bound client secret must be supplied before `begin`. */
+  readonly requiresClientSecret?: boolean;
   begin(input: OAuthOperationOptions<S> & Readonly<{ redirectUri: string }>): Promise<OAuthChallenge>;
   complete(input: OAuthOperationOptions<S> & Readonly<{
     redirectUri: string; code: string; state: string; challenge: OAuthChallenge;
   }>): Promise<OAuthCredential>;
   refresh(input: OAuthOperationOptions<S> & Readonly<{ credential: OAuthCredential }>): Promise<OAuthCredential>;
-  /** Explicit post-login read-only preparation. Host retains the exchanged bundle
+  /** Explicit post-login preparation (identity/project lookup, and idempotent supplier-side
+   * enrollment where the supplier requires it). Host retains the exchanged bundle
    * if this fails; retrying preparation must not re-exchange the authorization code. */
   prepare?(input: OAuthOperationOptions<S> & Readonly<{ credential: OAuthCredential }>): Promise<OAuthCredential>;
 }
@@ -153,6 +156,9 @@ export interface ProviderDefinition<S = JsonObject, P = JsonObject> {
   models(service: ProviderService<S>): Readonly<Record<string, ModelDefinition>>;
   /** Pure credential-audience identity. Omit only when every option is identity-bearing. */
   identity?(service: ProviderService<S>): JsonValue;
+  /** Unverified authoring hints shown when adding a model to a driver without discovery.
+   * Suggestions only: never admitted models, never proof that the account can use them. */
+  readonly modelSuggestions?: readonly ProviderModelObservation[];
   /** Explicit authenticated management action; observations require a separate reviewed graph edit. */
   discover?(input: ProviderDiscoveryOptions<S>): Promise<readonly ProviderModelObservation[]>;
   /** Pure traits of the already validated protocol, with no credential or SDK handle. */

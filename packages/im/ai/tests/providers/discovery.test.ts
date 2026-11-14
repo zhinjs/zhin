@@ -1,5 +1,5 @@
 import { googleProvider, anthropicProvider, openAiProvider } from '../../src/providers/api-key.js';
-import { openCodeGoProvider, openCodeZenProvider, codexProvider } from '../../src/providers/subscriptions.js';
+import { openCodeGoProvider, openCodeZenProvider, codexProvider, claudeSubscriptionProvider } from '../../src/providers/subscriptions.js';
 
 function service<T>(definition: { id: string; serviceSchema: { parse(input: unknown): T } }) {
   return { id: 'service', rootId: 'root', ownerId: 'host:test', revision: 1,
@@ -44,6 +44,7 @@ it.each([openCodeGoProvider, openCodeZenProvider])('keeps the OpenCode $id produ
   expect(new Request(...fetch.mock.calls[0]).url).toBe(`https://opencode.ai/inference${definition.id === 'opencode-go' ? '/go' : ''}/v1/models`);
 });
 
-it('does not advertise an unimplemented subscription catalogue as a working discovery interface', () => {
-  expect(codexProvider.discover).toBeUndefined();
+it('advertises discovery only where a real subscription catalogue exists (Codex), not for Claude subscription', () => {
+  expect(typeof codexProvider.discover).toBe('function');
+  expect(claudeSubscriptionProvider.discover).toBeUndefined();
 });

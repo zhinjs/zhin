@@ -77,7 +77,15 @@ function revision(value: unknown): number {
     throw new InferenceManagementError('invalid-input');
   return Number(value);
 }
-function failure(error: unknown): { status: number; code: string } {
+interface RouteFailure {
+  readonly status: number;
+  readonly code: string;
+  /** Safe, enum-like diagnostics only (driver step, upstream HTTP status and reason code). */
+  readonly details?: Readonly<{ reason?: string; upstreamStatus?: number; step?: string }>;
+  /** Operator-facing text replacing the generic one when the failure is actionable. */
+  readonly message?: string;
+}
+function failure(error: unknown): RouteFailure {
   if (error instanceof PersonalSessionMigrationRequiredError)
     return { status: 409, code: 'migration-required' };
   if (error instanceof PersonalSessionAccessError) return { status: 403, code: 'forbidden' };
@@ -109,6 +117,27 @@ function failure(error: unknown): { status: number; code: string } {
       }[error.code],
       code: error.code,
     };
+  if (error instanceof InferenceAuthenticationError && error.code === 'client-secret-required')
+    return {
+      status: 428,
+      code: error.code,
+      details: { reason: 'client-secret-required' },
+      message: '该服务使用机密 OAuth 客户端，登录前需要先为账号设置客户端凭据（client secret）',
+    };
+  if (error instanceof InferenceAuthenticationError && error.code === 'preparation-failed') {
+    const preparation = error.preparation;
+    return {
+      // Failed dependency: the upstream supplier refused or could not complete account preparation.
+      status: 424,
+      code: preparation?.code ?? error.code,
+      details: {
+        ...(preparation?.reason ? { reason: preparation.reason } : {}),
+        ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }),
+        ...(preparation?.step ? { step: preparation.step } : {}),
+      },
+      message: '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
+    };
+  }
   if (error instanceof InferenceAuthenticationError)
     return {
       status: ['conflict', 'identity-change'].includes(error.code)
@@ -196,8 +225,9 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
           return withNoStore(jsonResponse(result.status, {
             success: false,
             code: result.code,
+            ...(result.details ?? {}),
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
-            error: '模型服务操作未完成',
+            error: result.message ?? '模型服务操作未完成',
           }));
         } finally {
           request.signal.removeEventListener('abort', abort);

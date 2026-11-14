@@ -78,7 +78,9 @@ export const antigravityProvider = defineProvider({
   authentication: { methods: ['oauth'], oauth: antigravityOAuth },
   targets: () => ({ authentication: ['https://oauth2.googleapis.com/token'], inference: [
     `${baseUrl}/v1internal:generateContent`, `${baseUrl}/v1internal:streamGenerateContent`,
-  ], identity: ['https://www.googleapis.com/oauth2/v1/userinfo'], discovery: ['https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'] }),
+  ], identity: ['https://www.googleapis.com/oauth2/v1/userinfo',
+    // Preparation-only Code Assist onboarding (onboardUser + its long-running operation).
+    'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', 'https://cloudcode-pa.googleapis.com/v1internal/operations'], discovery: ['https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'] }),
   models: service => declaredModels(service, protocols),
   createExecution(input) {
     return sdkExecution(input, {

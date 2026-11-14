@@ -20,6 +20,11 @@
       "package": "@zhin.js/host-http",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开类型导出 `InferencePreparationFailure`，`InferenceAuthenticationError` 新增 `preparation` 字段与错误码 `client-secret-required` / `preparation-failed`，`InferenceDriverView` 新增 `requiresClientSecret` / `modelSuggestions`，`cleanupFailed` 回调接收告警文本。"
     }
   ]
 }

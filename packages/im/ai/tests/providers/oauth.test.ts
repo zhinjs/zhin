@@ -1,4 +1,4 @@
-import { antigravityOAuth, codexOAuth, ProviderAuthenticationError } from '../../src/providers/oauth.js';
+import { antigravityOAuth, codexOAuth, createAntigravityOAuth, ProviderAuthenticationError, ProviderPreparationError } from '../../src/providers/oauth.js';
 import type { StandardServiceOptions } from '../../src/providers/schema.js';
 import type { ProviderService } from '../../src/provider/types.js';
 
@@ -105,4 +105,93 @@ it.each([
   const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response());
   await expect(codexOAuth.refresh({ service, fetch, signal, credential: { accessToken: 'old', refreshToken: 'refresh' } })).rejects.toBeInstanceOf(ProviderAuthenticationError);
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+describe('Antigravity Code Assist preparation', () => {
+  const antigravityService = { ...service, driver: { id: 'antigravity', owner: 'root/providers', contractVersion: '1' } } as ProviderService<StandardServiceOptions>;
+  const client = { clientSecret: 'synthetic-client-secret' };
+  const credential = { accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh', preparation: { status: 'required' as const } };
+  const bodies = (fetch: ReturnType<typeof vi.fn<typeof globalThis.fetch>>) => fetch.mock.calls.map(([url, init]) => ({
+    url: String(url), method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? JSON.parse(init.body) as unknown : undefined,
+  }));
+
+  it('sends client metadata to loadCodeAssist and uses a returned project without onboarding', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'free-tier' }, cloudaicompanionProject: 'managed-project' }));
+    const ready = await antigravityOAuth.prepare!({ service: antigravityService, signal, fetch, client, credential });
+    expect(ready).toMatchObject({ subject: 'google-subject', preparation: { status: 'ready' }, metadata: { projectId: 'managed-project' } });
+    const calls = bodies(fetch);
+    expect(calls[1]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', method: 'POST',
+      body: { metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } });
+    expect(calls.some(call => call.url.includes('onboardUser'))).toBe(false);
+  });
+
+  it('onboards the default tier when no project exists and polls the long-running operation', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 3 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'standard-tier' }, { id: 'free-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/onboard-1', done: false }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/onboard-1', done: false }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/onboard-1', done: true, response: { cloudaicompanionProject: { id: 'onboarded-project' } } }));
+    const ready = await oauth.prepare!({ service: antigravityService, signal, fetch, client, credential });
+    expect(ready.metadata?.projectId).toBe('onboarded-project');
+    const calls = bodies(fetch);
+    expect(calls[2]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', method: 'POST',
+      body: { tierId: 'free-tier', metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } });
+    expect(calls.slice(3).map(call => `${call.method} ${call.url}`)).toEqual([
+      'GET https://cloudcode-pa.googleapis.com/v1internal/operations/onboard-1',
+      'GET https://cloudcode-pa.googleapis.com/v1internal/operations/onboard-1',
+    ]);
+  });
+
+  it('bounds onboarding polling', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 2 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockImplementation(async () => Response.json({ done: false }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', reason: 'onboarding-timeout', step: 'onboard-operation' });
+    // One onboardUser call plus two bounded re-submissions (no operation name was returned).
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('surfaces the upstream HTTP status and reason of a failed onboarding without the message body', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'PRIVATE user@example.com',
+        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'SERVICE_DISABLED' }] } }, { status: 403 }));
+    let failure: unknown;
+    try { await antigravityOAuth.prepare!({ service: antigravityService, signal, fetch, client, credential }); } catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(ProviderPreparationError);
+    expect(failure).toMatchObject({ code: 'project-unavailable', status: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' });
+    expect(JSON.stringify(failure)).not.toContain('PRIVATE');
+    expect(String((failure as Error).message)).not.toContain('PRIVATE');
+  });
+
+  it('reports a failed long-running operation and an ineligible account', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
+    const failedOperation = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/x', done: true, error: { code: 9, status: 'FAILED_PRECONDITION' } }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: failedOperation, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', reason: 'FAILED_PRECONDITION', step: 'onboard-operation' });
+    const ineligible = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ ineligibleTiers: [{ reasonCode: 'INELIGIBLE_ACCOUNT', reasonMessage: 'PRIVATE' }] }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: ineligible, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', status: 200, reason: 'INELIGIBLE_ACCOUNT', step: 'load-code-assist' });
+    expect(ineligible).toHaveBeenCalledTimes(2);
+  });
+
+  it('declares that the Antigravity client needs a client secret and refuses to begin without one', async () => {
+    expect(antigravityOAuth.requiresClientSecret).toBe(true);
+    expect(codexOAuth.requiresClientSecret).toBeUndefined();
+    await expect(antigravityOAuth.begin({ service: antigravityService, signal, fetch: vi.fn(), redirectUri: antigravityOAuth.redirectUri }))
+      .rejects.toMatchObject({ code: 'not-submitted' });
+  });
 });
