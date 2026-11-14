@@ -9,8 +9,12 @@
  *   **global** binding when a person involved holds a global grant (merging extends it to new
  *   identities, ADR 0060 §5.2);
  * - `link-console` / `unlink-console` / `export` / `import`: global `iam.manage` (§2.4, §4.5);
+ * - `merge` additionally needs a global binding when either person carries a Console link;
  * - `chat-identities.bind-code.create` / `me` / `simulated.ensure`: the caller's own link only
- *   (`self.chat-identity`); `simulated.ensure` only on local simulation adapters (ADR 0060 §5.4).
+ *   (`self.chat-identity`); `simulated.ensure` only on local simulation adapters (ADR 0060 §5.4),
+ *   and a global binding when the caller's linked person holds a global grant (refused otherwise);
+ * - who is linked to a Console user (`consoleLink`, link methods that imply one, `createdBy`
+ *   naming a Console user, grantor names taken from links) is shown to global managers only.
  *
  * Without a relational project database writes are refused (503 `chat-roles-unpersisted`).
  */
@@ -74,11 +78,15 @@ function redactedView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
   return Object.freeze({ level: entry.level, key: entry.key, role: entry.role, source: entry.source, redacted: true as const });
 }
 
-function identityView(identity: StoredChatIdentity | ChatIdentity, now: number): ConsoleChatIdentity {
+/** Link methods that tell an identity was bound to a Console user (shown to global managers only). */
+const CONSOLE_LINK_METHODS: ReadonlySet<string> = new Set(['code', 'console']);
+
+function identityView(identity: StoredChatIdentity | ChatIdentity, now: number, showConsoleLinks = true): ConsoleChatIdentity {
   const stored = identity as StoredChatIdentity;
   const recent = stored.lastSeenAt !== undefined && now - stored.lastSeenAt < CHAT_IDENTITY_RETENTION_MS;
+  const linkMethod = stored.linkMethod && (showConsoleLinks || !CONSOLE_LINK_METHODS.has(stored.linkMethod)) ? stored.linkMethod : undefined;
   return Object.freeze({ adapter: identity.adapter, userId: identity.userId,
-    ...(stored.linkMethod ? { linkMethod: stored.linkMethod } : {}), ...(stored.linkedAt ? { linkedAt: stored.linkedAt } : {}),
+    ...(linkMethod ? { linkMethod } : {}), ...(linkMethod && stored.linkedAt ? { linkedAt: stored.linkedAt } : {}),
     ...(recent ? { lastSeenAt: stored.lastSeenAt! } : {}), ...(recent && stored.lastDisplayName ? { lastDisplayName: stored.lastDisplayName } : {}) });
 }
 
@@ -143,16 +151,19 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
       if (visible.length === 0) return undefined;
       const id = stored?.id ?? implicitChatPrincipalId(implicit!);
       const entries = store.list().filter(entry => chatRoleEntryPrincipalId(entry) === id);
-      const roles = await Promise.all(entries.map(async entry =>
-        await allowed(entry.level, entry.key || undefined) ? chatRoleView(entry, { grantorName }) : redactedView(entry)));
-      const link = stored ? principals.linkOf(stored.id) : undefined;
+      // Console links are global information (ADR 0060 §7): scoped managers see no link, no link
+      // method implying one, no `createdBy` naming a Console user and no grantor name from a link.
       const global = await allowed('global');
+      const roles = await Promise.all(entries.map(async entry =>
+        await allowed(entry.level, entry.key || undefined) ? chatRoleView(entry, global ? { grantorName } : {}) : redactedView(entry)));
+      const link = stored ? principals.linkOf(stored.id) : undefined;
+      const createdBy = stored?.createdBy && (global || !/^console:/u.test(stored.createdBy)) ? stored.createdBy : undefined;
       return Object.freeze({
         id,
         ...(stored?.displayName ? { displayName: stored.displayName } : {}),
-        ...(stored?.createdBy ? { createdBy: stored.createdBy } : {}),
+        ...(createdBy ? { createdBy } : {}),
         ...(stored?.createdAt ? { createdAt: stored.createdAt } : {}),
-        identities: Object.freeze(visible.map(identity => identityView(identity, now))),
+        identities: Object.freeze(visible.map(identity => identityView(identity, now, global))),
         ...(identities.length > visible.length ? { hiddenIdentities: identities.length - visible.length } : {}),
         roles: Object.freeze(roles),
         ...(link && global ? { consoleLink: Object.freeze({ consoleUserId: link.consoleUserId,
@@ -174,6 +185,10 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
       const id = people.principalIdOf(ref);
       // An identity without a stored person holds no grant (grants create the person).
       return id ? people.holdsGlobal(id) : false;
+    };
+    const linkedRef = (ref: ChatPrincipalRef): boolean => {
+      const id = people.principalIdOf(ref);
+      return id ? principals.linkOf(id) !== undefined : false;
     };
     const changed = () => context.publishEvent?.('chat-principals:updated', {});
 
@@ -212,6 +227,9 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         await requireAdapters([...identitiesOfRef(into), ...identitiesOfRef(from)]);
         // §5.2: merging a person that holds a global grant extends it to new identities.
         if (holdsGlobalRef(into) || holdsGlobalRef(from)) await requireGlobal('归并持有全局角色的人');
+        // A merge moves identities under a Console link (or the link itself): what the linked user
+        // speaks as in the Sandbox widens, so only global managers may do it (ADR 0060 §2.4).
+        if (linkedRef(into) || linkedRef(from)) await requireGlobal('归并已链接 Console 用户的人');
         const result = await people.merge({ into, from, actor });
         const principal = await view(result.principalId);
         data = Object.freeze({ status: result.status, ...(principal ? { principal } : {}) });
@@ -288,7 +306,7 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         for (const identity of candidates) {
           if (rows.length >= limit) break;
           if (!(await managesAdapter(identity.adapter))) continue;
-          rows.push(Object.freeze({ ...identityView(identity, now), principalId: identity.principalId ?? implicitChatPrincipalId(identity) }));
+          rows.push(Object.freeze({ ...identityView(identity, now, await allowed('global')), principalId: identity.principalId ?? implicitChatPrincipalId(identity) }));
         }
         data = Object.freeze({ identities: Object.freeze(rows) });
         break;
@@ -333,8 +351,9 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         if (typeof input.adapter === 'string' && !simulated.includes(input.adapter)) throw new FeatureRpcError(400, `${input.adapter} 不是已加载的模拟适配器`);
         const aliases = typeof input.adapter === 'string' ? [input.adapter] : simulated;
         if (!aliases.length) throw new FeatureRpcError(404, '没有已加载的模拟适配器');
+        // A linked person's global grants would count for the Sandbox identity (ADR 0060 §5.4).
         const result = await people.ensureSimulatedIdentities({ consoleUserId: user.userId,
-          ...(user.displayName ? { consoleDisplayName: user.displayName } : {}), aliases });
+          ...(user.displayName ? { consoleDisplayName: user.displayName } : {}), aliases, canManageGlobal: await allowed('global') });
         data = Object.freeze({ status: result.status, principalId: result.principalId,
           identities: Object.freeze(result.identities.map(identity => identityView(principals.identity(identity) ?? identity, now))) });
         if (result.status === 'saved') changed();
@@ -349,7 +368,7 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
       return { status: 503, body: { success: false, code: error.code, error: error.message, type, requestId: message.requestId } };
     }
     if (error instanceof ChatPeopleError) {
-      const status = error.code === 'not-found' ? 404 : error.code === 'conflict' ? 409 : 400;
+      const status = error.code === 'not-found' ? 404 : error.code === 'conflict' ? 409 : error.code === 'forbidden' ? 403 : 400;
       return { status, body: { success: false, error: error.message, type, requestId: message.requestId } };
     }
     const status = error instanceof FeatureRpcError ? error.status : 500;

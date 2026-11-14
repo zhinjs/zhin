@@ -2,15 +2,16 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { isProjectPathAllowed } from '@zhin.js/host-http';
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import {
-  CHAT_OWNER_CLAIM_FILE, CHAT_OWNER_CLAIM_MAX_FAILURES, ChatOwnerClaim, chatOwnerClaimCodeHash, executeOwnerClaim, generateChatOwnerClaimCode, hasGlobalOwner,
+  CHAT_OWNER_CLAIM_FILE, CHAT_OWNER_CLAIM_MAX_FAILURES, CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES, CHAT_OWNER_CLAIM_SENDER_WINDOW_MS, ChatOwnerClaim, chatOwnerClaimCodeHash, executeOwnerClaim, generateChatOwnerClaimCode, hasGlobalOwner,
 } from '../../src/instance/chat-owner-claim.js';
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
 
-function setup(options: { persistent?: boolean } = {}) {
+function setup(options: { persistent?: boolean; now?: () => number } = {}) {
   const roles: InstanceChatRoleService = new ChatRoleService({ store: options.persistent === false
     ? new ChatRoleStore({ database: { dialect: 'memory', started: true, models: new Map() } as never })
     : new ChatRoleStore() });
@@ -22,7 +23,7 @@ function setup(options: { persistent?: boolean } = {}) {
     roles, lines, audits,
     make: (projectRoot?: string) => new ChatOwnerClaim({ roles, ...(projectRoot ? { projectRoot } : {}),
       logger: { info: line => { lines.push(line); }, warn: line => { lines.push(line); } },
-      audit: () => entry => { audits.push(entry); }, code: () => codes[next++]!, now: () => 42, pid: 4242 }),
+      audit: () => entry => { audits.push(entry); }, code: () => codes[next++]!, now: options.now ?? (() => 42), pid: 4242 }),
   };
 }
 
@@ -42,7 +43,9 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     const claim = make(root);
     await claim.refresh();
     expect(claim.active).toBe(true);
-    expect(lines.some(line => line.includes('认领 AAAA2222'))).toBe(true);
+    // Security review: the log (SystemLog, `GET /logs`) never carries the code, only its hash prefix.
+    expect(lines.join('\n')).not.toContain('AAAA2222');
+    expect(lines.some(line => line.includes('zhin status') && line.includes(chatOwnerClaimCodeHash('AAAA2222')))).toBe(true);
     const file = join(root, CHAT_OWNER_CLAIM_FILE);
     expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ code: 'AAAA2222', pid: 4242, createdAt: 42 });
     if (process.platform !== 'win32') expect((await stat(file)).mode & 0o077).toBe(0);
@@ -88,7 +91,8 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     const reply = await executeOwnerClaim({ code: 'AAAA2222', actor: actor('group') as never, adapterKind: 'platform', locale: 'zh-CN' }, claim);
     expect(reply).toContain('只接受私聊');
     expect(hasGlobalOwner(roles)).toBe(false);
-    expect(lines.some(line => line.includes('认领 BBBB3333'))).toBe(true);
+    expect(lines.some(line => line.includes(chatOwnerClaimCodeHash('BBBB3333')))).toBe(true);
+    expect(lines.join('\n')).not.toMatch(/AAAA2222|BBBB3333/u);
     // The burnt code no longer works in private either.
     expect(await executeOwnerClaim({ code: 'AAAA2222', actor: actor() as never, adapterKind: 'platform', locale: 'zh-CN' }, claim)).toContain('不正确');
   });
@@ -108,12 +112,47 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     const { make, roles } = setup();
     const claim = make();
     await claim.refresh();
+    // Different senders (one sender is limited, see below).
     for (let attempt = 0; attempt < CHAT_OWNER_CLAIM_MAX_FAILURES; attempt += 1) {
-      expect(await claim.attempt({ code: `ZZZZ${attempt}999`, identity: { adapter: 'qq', userId: 'x' }, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+      expect(await claim.attempt({ code: `ZZZZ${attempt}999`, identity: { adapter: 'qq', userId: `x${attempt}` }, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
     }
-    expect(await claim.attempt({ code: 'AAAA2222', identity: { adapter: 'qq', userId: 'x' }, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
-    expect(await claim.attempt({ code: 'BBBB3333', identity: { adapter: 'qq', userId: 'x' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
+    expect(await claim.attempt({ code: 'AAAA2222', identity: { adapter: 'qq', userId: 'y' }, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+    expect(await claim.attempt({ code: 'BBBB3333', identity: { adapter: 'qq', userId: 'z' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
     expect(hasGlobalOwner(roles)).toBe(true);
+  });
+
+  it('limits wrong attempts per sender so one sender cannot keep rotating the code (security review)', async () => {
+    let now = 1_000;
+    const { make, roles } = setup({ now: () => now });
+    const claim = make();
+    await claim.refresh();
+    const mallory = { adapter: 'qq', userId: 'mallory' };
+    for (let attempt = 0; attempt < CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES; attempt += 1) {
+      expect(await claim.attempt({ code: `ZZZZ${attempt}999`, identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+    }
+    // Further attempts are refused without counting: the code never rotates because of one sender.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect(await claim.attempt({ code: `YYYY${attempt % 10}888`, identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('locked');
+    }
+    expect(await executeOwnerClaim({ code: 'AAAA2222', actor: actor('private', 'mallory') as never, adapterKind: 'platform', locale: 'zh-CN' }, claim)).toContain('错误次数过多');
+    expect(roles.hasRole(mallory, '', 'owner')).toBe(false);
+    // The original code still works for the real deployer.
+    expect(await claim.attempt({ code: 'AAAA2222', identity: { adapter: 'qq', userId: 'alice' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
+    // The limit is per window.
+    const other = setup({ now: () => now });
+    const reopened = other.make();
+    await reopened.refresh();
+    for (let attempt = 0; attempt < CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES; attempt += 1) {
+      await reopened.attempt({ code: `ZZZZ${attempt}999`, identity: mallory, kind: 'private', adapterKind: 'platform' });
+    }
+    expect(await reopened.attempt({ code: 'ZZZZ7999', identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('locked');
+    now += CHAT_OWNER_CLAIM_SENDER_WINDOW_MS;
+    expect(await reopened.attempt({ code: 'ZZZZ7999', identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+  });
+
+  it('the claim file is not reachable through the Console project-file routes (security review)', () => {
+    expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE)).toBe(false);
+    expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE.replace(/\\/gu, '/'))).toBe(false);
   });
 
   it('does not open without a relational database', async () => {

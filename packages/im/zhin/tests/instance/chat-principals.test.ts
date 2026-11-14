@@ -181,6 +181,51 @@ describe('bind codes (ADR 0060 §2.4 / §5.2)', () => {
     expect(roles.hasRole(qq('boss-qq'), '', 'owner')).toBe(true);
   });
 
+  it('security review: an operator code phished from the owner does not link the owner\'s person (reviewer repro)', async () => {
+    const { roles, store, people, codes } = setup();
+    await store.grant({ level: 'global', key: '', ...qq('owner'), role: 'owner' });
+    // An operator without global iam.manage creates a code; the owner is tricked into sending it.
+    codes.create({ consoleUserId: 'op', consoleDisplayName: 'Operator', canManageGlobal: false });
+    const reply = await executeIdentityBind({ code: 'BIND2222', actor: actor('private', qq('owner')), adapterKind: 'platform', locale: 'zh-CN' }, codes);
+    expect(reply).toContain('未绑定');
+    // The reply names the Console account, so the holder can notice whose code it was.
+    expect(reply).toContain('「Operator」（Console 用户 op）');
+    expect(store.principals.linkOfConsoleUser('op')).toBeUndefined();
+    // So simulated.ensure gives the operator a role-less person of their own, not the owner's.
+    const ensured = await dispatchChatPrincipalsConsoleRpc({ type: CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, data: {} },
+      { people, authorize: () => false, consoleUser: { userId: 'op' }, simulatedAdapters: () => ['sandbox'] });
+    expect(ensured!.status).toBe(200);
+    expect(roles.hasRole({ adapter: 'sandbox', userId: 'console-op' }, '', 'owner')).toBe(false);
+    expect(roles.principalOf({ adapter: 'sandbox', userId: 'console-op' }).id).not.toBe(roles.principalOf(qq('owner')).id);
+    // Also for a person holding only a scoped grant.
+    await store.grant({ level: 'adapter', key: 'qq', ...qq('helper'), role: 'admin' });
+    codes.create({ consoleUserId: 'op2', canManageGlobal: false });
+    expect(await codes.attempt({ code: 'BIND3333', identity: qq('helper'), kind: 'private', adapterKind: 'platform' })).toBe('needs-admin');
+    // A person without grants still binds by themselves, and the reply names the account.
+    codes.create({ consoleUserId: 'u3', consoleDisplayName: 'Una', canManageGlobal: false });
+    expect(await executeIdentityBind({ code: 'BIND4444', actor: actor('private', qq('plain')), adapterKind: 'platform', locale: 'zh-CN' }, codes))
+      .toContain('Console 账号 「Una」（Console 用户 u3）');
+  });
+
+  it('security review: the global iam.manage of a code is re-checked when it is redeemed', async () => {
+    const { roles, store, codes } = setup();
+    await store.grant({ level: 'global', key: '', ...qq('owner'), role: 'owner' });
+    // Created by a global manager who has since lost iam.manage (seen on their next Console request).
+    codes.create({ consoleUserId: 'admin', canManageGlobal: true });
+    codes.observeAuthority('admin', false);
+    expect(await codes.attempt({ code: 'BIND2222', identity: qq('owner'), kind: 'private', adapterKind: 'platform' })).toBe('needs-admin');
+    // A revocation from the gateway (bindings changed) drops an open code outright.
+    codes.create({ consoleUserId: 'admin', canManageGlobal: true });
+    codes.revoke('admin');
+    expect(await codes.attempt({ code: 'BIND3333', identity: qq('owner'), kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+    expect(store.principals.linkOfConsoleUser('admin')).toBeUndefined();
+    // Still a global manager: the confirmed bind goes through.
+    codes.create({ consoleUserId: 'admin', canManageGlobal: true });
+    codes.observeAuthority('admin', true);
+    expect(await codes.attempt({ code: 'BIND4444', identity: qq('owner'), kind: 'private', adapterKind: 'platform' })).toBe('bound');
+    expect(store.principals.linkOfConsoleUser('admin')?.principalId).toBe(roles.principalOf(qq('owner')).id);
+  });
+
   it('locks an identity out after repeated wrong codes', async () => {
     const { codes } = setup();
     codes.create({ consoleUserId: 'u1', canManageGlobal: false });
@@ -225,8 +270,14 @@ describe('Console user lifecycle and grantor names (ADR 0060 §2.4, Q12)', () =>
       for (const listener of listeners) listener({ type: 'principal-revoked', payload: { principalId: 'u1', reason } });
       await host.roles.store.exclusive(async () => undefined);
     };
+    // Security review: any revocation (here: bindings changed) drops the user's open bind code.
+    const codes = host.stores.bindCodes!;
+    codes.create({ consoleUserId: 'u1', canManageGlobal: true });
     await send('password');
+    expect(codes.pending('u1')).toBeUndefined();
+    codes.create({ consoleUserId: 'u1', canManageGlobal: true });
     await send('bindings');
+    expect(codes.pending('u1')).toBeUndefined();
     expect(host.roles.store.principals.linkOfConsoleUser('u1')).toBeDefined();
     await send('disabled');
     expect(host.roles.store.principals.linkOfConsoleUser('u1')).toBeUndefined();
@@ -264,6 +315,39 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
     const ok = await rpc(CHAT_PRINCIPALS_RPC.MERGE, { into: qq('helper'), from: qq('boss') }, { people, authorize: global, actor: 'user:root' });
     expect(ok.status).toBe(200);
     expect(roles.hasRole(qq('helper'), '', 'owner')).toBe(true);
+  });
+
+  it('security review: merging a person with a Console link needs global iam.manage', async () => {
+    const { roles, store, people } = setup();
+    await store.grant({ level: 'adapter', key: 'qq', ...qq('linked'), role: 'trusted' });
+    await people.linkConsole({ principal: qq('linked'), consoleUserId: 'u-op', via: 'manual', actor: 'user:root' });
+    await store.grant({ level: 'adapter', key: 'qq', ...qq('victim'), role: 'admin' });
+    for (const [into, from] of [[qq('linked'), qq('victim')], [qq('victim'), qq('linked')]]) {
+      const denied = await rpc(CHAT_PRINCIPALS_RPC.MERGE, { into, from }, { people, authorize: scoped, actor: 'user:scoped' });
+      expect(denied.status).toBe(403);
+      expect(denied.body.error).toContain('Console');
+    }
+    expect(roles.principalOf(qq('victim')).id).not.toBe(roles.principalOf(qq('linked')).id);
+    expect((await rpc(CHAT_PRINCIPALS_RPC.MERGE, { into: qq('linked'), from: qq('victim') }, { people, authorize: global, actor: 'user:root' })).status).toBe(200);
+  });
+
+  it('security review: scoped managers see no link methods, Console creators or linked grantor names', async () => {
+    const { store, people, codes } = setup();
+    codes.create({ consoleUserId: 'u7', consoleDisplayName: 'Seven', canManageGlobal: false });
+    await codes.attempt({ code: 'BIND2222', identity: qq('seven'), kind: 'private', adapterKind: 'platform' });
+    await people.rename({ principalId: store.principals.linkOfConsoleUser('u7')!.principalId, displayName: '小七', actor: 'user:root' });
+    await store.grant({ level: 'adapter', key: 'qq', ...qq('seven'), role: 'trusted', grantedBy: 'user:u7' });
+    const scopedView = (await rpc(CHAT_PRINCIPALS_RPC.GET, { adapter: 'qq', userId: 'seven' }, { people, authorize: scoped })).body.data as any;
+    expect(scopedView.principal.consoleLink).toBeUndefined();
+    expect(scopedView.principal.identities[0].linkMethod).toBeUndefined();
+    expect(scopedView.principal).not.toHaveProperty('createdBy');
+    expect(JSON.stringify(scopedView)).not.toMatch(/console:user:u7|consoleUserId/u);
+    expect(scopedView.principal.roles[0]).not.toHaveProperty('grantedByName');
+    const recent = (await rpc(CHAT_PRINCIPALS_RPC.IDENTITIES_RECENT, { level: 'adapter', key: 'qq' }, { people, authorize: scoped })).body.data as any;
+    for (const identity of recent.identities) expect(identity.linkMethod).toBeUndefined();
+    const globalView = (await rpc(CHAT_PRINCIPALS_RPC.GET, { adapter: 'qq', userId: 'seven' }, { people, authorize: global })).body.data as any;
+    expect(globalView.principal).toMatchObject({ consoleLink: { consoleUserId: 'u7' }, createdBy: 'console:user:u7',
+      identities: [{ linkMethod: 'code' }], roles: [{ grantedByName: '小七' }] });
   });
 
   it('a scoped manager sees only identities on its adapters and no Console links', async () => {
@@ -345,10 +429,16 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
     expect(roles.roleAt({ adapter: 'sandbox', userId: 'console-u1' }, '')).toBeUndefined();
     expect((await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, {}, { people, authorize: () => false, consoleUser: { userId: 'u1' }, simulatedAdapters: simulated })).body.data)
       .toMatchObject({ status: 'unchanged' });
-    // Linked to a global owner: the sandbox identity joins that person and so speaks as the owner.
+    // Linked to a global owner: the sandbox identity would join that person and so speak as the
+    // owner — refused without global iam.manage (security review), allowed with it.
     await store.grant({ level: 'global', key: '', ...qq('boss'), role: 'owner' });
     await people.linkConsole({ principal: qq('boss'), consoleUserId: 'u-boss', via: 'manual', actor: 'user:root' });
-    await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, { adapter: 'sandbox' }, { people, authorize: () => false, consoleUser: { userId: 'u-boss' }, simulatedAdapters: simulated });
+    const refused = await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, { adapter: 'sandbox' }, { people, authorize: () => false, consoleUser: { userId: 'u-boss' }, simulatedAdapters: simulated });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toContain('全局 iam.manage');
+    expect(store.principals.principalOf({ adapter: 'sandbox', userId: 'console-u-boss' })).toBeUndefined();
+    expect(roles.hasRole({ adapter: 'sandbox', userId: 'console-u-boss' }, 'sandbox/dev/private:x', 'owner')).toBe(false);
+    await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, { adapter: 'sandbox' }, { people, authorize: global, consoleUser: { userId: 'u-boss' }, simulatedAdapters: simulated });
     expect(roles.hasRole({ adapter: 'sandbox', userId: 'console-u-boss' }, 'sandbox/dev/private:x', 'owner')).toBe(true);
     expect(audits).toContainEqual(expect.objectContaining({ action: 'chat-identities.bind', actor: 'console:user:u-boss', detail: expect.objectContaining({ linkMethod: 'console' }) }));
     // The reader resolves the Console speaker from the link only.

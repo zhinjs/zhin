@@ -110,7 +110,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
-3. **认领码（无 Console 时）**：没有全局 owner 时，实例启动日志与 `zhin status` 打印一次性认领码（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
+3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
 
 ### 4. 迁移与兼容
 
@@ -162,7 +162,7 @@ ADR 0057 §3 对种子「再次出现」的处理是「已忽略，数据库为�
 - 种子导入只在**首次**自动生效；之后一律经 Console 全局 `iam.manage` 确认（§4.2）。
 - 配置里的 `master` 视为「部署者声明」，可信度等同于写配置的人；因此它导入为**账号层** owner（与 ADR 0056 一致），不自动成为全局 owner；提升只经 Console 全局 `iam.manage` 确认（决定 Q1）。
 - `personalPrincipals` 不导入任何角色。
-- 认领码只在「尚无全局 owner」时可用，且只输出到日志 / 本地 CLI（持有者已能读宿主文件），不进入聊天、不进入 Console 前端。
+- 认领码只在「尚无全局 owner」时可用，且只通过本地 CLI（`zhin status` / `.zhin/chat-owner-claim.json`）给出（持有者已能读宿主文件）；日志只记哈希前缀，不进入聊天、不进入 Console 前端。
 
 #### 5.2 绑定与归并
 
@@ -299,7 +299,7 @@ export type ChatScopeRef =
 | Q4 | 自助绑定所需的 Console 权限 | 新增 `self.chat-identity`，所有内置角色（含 `viewer`）默认带；只能操作自己的链接（P2 / P3）。 |
 | Q5 | 配置中人员字段「再次出现」：待确认导入还是维持启动失败？ | **待确认导入**（§4.2），与 ADR 0057 种子一致；不再启动失败。 |
 | Q6 | P1–P3 的 minor 是否批准？ | **批准** `@zhin.js/core`、`zhin.js`、`@zhin.js/console-protocol`（P1、P2）、`@zhin.js/cli`（P2）、`@zhin.js/agent`（P3）；每阶段单独记入 `.changeset/version-policy.json` 的 `approvedNonPatchReleases`（由所有者统一写入）。 |
-| Q7 | 认领码（无 Console 的第一位 owner）是否要做？ | **做**（P1），只在尚无全局 owner 时有效，只打印到实例日志与 `zhin status`；`--standalone` 同样可用。 |
+| Q7 | 认领码（无 Console 的第一位 owner）是否要做？ | **做**（P1），只在尚无全局 owner 时有效，只由 `zhin status` 给出（实例日志只记哈希前缀）；`--standalone` 同样可用。 |
 | Q8 | 群聊中能否发起 `绑定` / `认领`？ | **不能**，只接受私聊；在群聊中提交正确的码会使该码立即作废并轮换（防围观者截码）。平台没有私聊（能力画像无私聊会话）时只能走 Console 授予 / 运营者代绑。 |
 | Q9 | `personalSessionOwnerId` 含 `rootId`，是否在本 ADR 内改为稳定的项目 id？ | **另开 ADR**：本 ADR 只保证链接不再因 `rootId` 失效；个人数据 owner id 稳定化涉及凭据库与会话键迁移。 |
 | Q10 | 低于全局的绑定是否应对同一人的其他平台身份生效？ | **不生效**（§2.3）：作用范围本身就绑定在一个适配器上；跨平台只有全局层。 |
@@ -332,6 +332,33 @@ export type ChatScopeRef =
 - **`ai.personalPrincipals` 的导入记录**：单独的 `.zhin/personal-principals-import.json`（不改 v2 角色迁移记录）；条目按 `(配置键, adapterId, subjectId)` 幂等，`pending`（适配器未加载）下次启动重试，`imported` / `skipped` 不再处理，配置中仍出现时只告警「已导入，数据库为准」。导入时 Console 用户已链接则身份归入已链接的人；未链接则取第一个尚未链接的已有人或新建，再链接（`import`）；身份已属于他人时跳过并告警。个人推理主体按链接的人的身份 × 该适配器的每个账号计算，`rootId` 用当前目录。
 - **个人推理主体切换**：推理管理 HTTP 仍以 `agent.configure` 门禁（未放宽到「本人」）；`full` 范围下请求 `?owner=` 只接受调用者自己链接的人的个人主体。
 - **Q2 提示只给本人**：`chat-roles.imported` 只在「需要你处理」的查看者正是被 `ai.personalPrincipals` 链接的 Console 用户、且尚无全局 owner 时提示「是否同时设为全局 owner」（实例看不到网关里其他用户是否是 Console 所有者）；确认走既有的全局 `chat-roles.grant`（全局 `iam.manage`，审计 `chat-roles.grant`）。
+
+### 安全复核后的修正（zhinjs/zhin#1268）
+
+根因：已链接到某个人的 Console 用户可以调用 `chat-identities.simulated.ensure`（只需 `self.chat-identity`），在该人名下建立 Sandbox 身份；全局授予对这个人的全部身份生效。所以「链接到一个人」等同于「拿到这个人的全局授予」。凡是建立或扩大链接的路径，只要目标人持有授予，就必须由全局 `iam.manage` 持有者完成。
+
+- **绑定码，Console 用户尚未链接**：若该身份所属的人持有任何授予，而绑定码不是由全局 `iam.manage` 持有者生成的，结果为 `needs-admin`，不建立链接。
+  - 机器人的回复会写明绑定码来自哪个 Console 账号（显示名与用户 id），被诱导发送他人绑定码的人能看出来。
+  - 已链接时的规则（会把授予带到另一个身份上时需要全局 `iam.manage`）不变。
+- **绑定码的权限在兑换时复核**：创建时记录的「全局 `iam.manage`」不再直接信任。
+  - 创建者之后每次 Console 请求都会刷新实例掌握的状态（`observeAuthority`）。
+  - 网关发出的任何 `principal-revoked`（绑定变更、改密码、停用、删除）都会作废该用户未用的绑定码。
+  - 网关在自定义角色的权限被修改或角色被删除时，也会向持有该角色的用户发出 `principal-revoked`（`bindings`）。
+  - 实例不读取网关账号库，所以复核依据的是「最近一次已知状态」；绑定码 10 分钟有效。
+- **`chat-identities.simulated.ensure`**：调用者链接的人持有全局授予时，需要全局 `iam.manage`；否则**拒绝**（403，提示改用模拟身份），不改为「无角色身份」。
+  - 选拒绝，是为了不让同一个人名下出现一个看似属于他、却没有他角色的身份。
+- **`ai.personalPrincipals`**：
+  - 永不自动链接到持有授予的人：既不把 Console 用户链接到这样的人，也不往已链接且持有授予的人名下加身份。这类条目记为 `pending` / `needs-confirmation`。
+  - 一次性首次导入（记录中的 `migratedAt`）之后，新增或修改的条目一律等待确认；首次导入时留下的 `unknown-adapter` 条目会继续重试，但仍受上一条约束。
+  - 待确认条目由全局 `iam.manage` 持有者经 `chat-roles.imports.list`（`personalPending`）与 `chat-roles.imports.resolve` 的 `import` / `ignore` 处理，并列入「需要你处理」的 `chat-roles.import-pending`。
+  - 需要关系型项目数据库（sqlite / mysql / pg），否则不导入。
+- **认领码**：
+  - 实例日志只写哈希前 8 位，并提示用 `zhin status` 查看；日志会进入 SystemLog 与 `GET /logs`（`status.view` 可读）。
+  - 认领码只出现在 `.zhin/chat-owner-claim.json`（0600，经 `zhin status` 读取）。Console 的项目文件路由拒绝点目录。
+  - 连错 5 次轮换的规则保留，但同一发送者在 10 分钟窗口内最多计 2 次，之后直接拒绝（`locked`）且不计数，一个发送者无法反复让码轮换。
+- **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
+- **非全局管理者看不到链接信息**：`consoleLink`、暗示链接的 `linkMethod`（`code` / `console`）、指向 Console 用户的 `createdBy`，以及从链接得出的授予者名（`grantedByName`），都只对全局 `iam.manage` 持有者显示。
+- **`chat-principals.import`**：导入的授予一律记为 `grantedBy: import:<导入者>`，忽略文件里的 `grantedBy` 标签。
 
 ## 落盘位置（计划）
 

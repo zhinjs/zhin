@@ -10,6 +10,12 @@
  *   client picks the sender id) never accept codes.
  * - Five wrong codes from one identity within 10 minutes lock that identity out for the rest of
  *   the window.
+ * - Whether the code may carry roles (its creator held global `iam.manage`) is re-checked when it
+ *   is redeemed: every Console request of the creator refreshes what the instance knows
+ *   ({@link ChatIdentityBindCodes.observeAuthority}), and a `principal-revoked` from the gateway
+ *   (bindings changed, password reset, disabled, deleted) drops the code and that knowledge.
+ * - The reply names the Console account the identity is bound to (or would be), so a holder
+ *   tricked into sending someone else's code can tell.
  * - Audited as `chat-identities.bind` (`link_method: code`); logs and the audit carry only the
  *   first 8 hex digits of the code's SHA-256.
  */
@@ -54,6 +60,13 @@ export type ChatBindAttemptOutcome =
   | 'locked'
   | 'unpersisted';
 
+/** Outcome of a redeemed code, with the Console account it names (when one was found). */
+export interface ChatBindRedemption {
+  readonly outcome: ChatBindAttemptOutcome;
+  /** `「<display name>」（Console 用户 <id>）` / the id: shown to the chat user. */
+  readonly consoleAccount?: Readonly<{ userId: string; displayName?: string }>;
+}
+
 export interface ChatBindAttempt {
   readonly code: string;
   readonly identity: ChatIdentity;
@@ -67,6 +80,8 @@ export class ChatIdentityBindCodes {
   readonly #code: () => string;
   readonly #codes = new Map<string, OpenCode>();
   readonly #failures = new Map<string, { count: number; since: number }>();
+  /** Last known global `iam.manage` of Console users with an open code (false after a revocation). */
+  readonly #authority = new Map<string, boolean>();
 
   constructor(options: Readonly<{ people: ChatPeople; now?: () => number; code?: () => string }>) {
     this.#people = options.people;
@@ -86,6 +101,7 @@ export class ChatIdentityBindCodes {
   /** A fresh code for the Console user (replaces the previous one). */
   create(input: Readonly<{ consoleUserId: string; consoleDisplayName?: string; canManageGlobal: boolean }>): Readonly<{ code: string; expiresAt: number }> {
     this.#sweep();
+    this.#authority.set(input.consoleUserId, input.canManageGlobal);
     const code = this.#code();
     const expiresAt = this.#now() + CHAT_BIND_CODE_TTL_MS;
     this.#codes.set(input.consoleUserId, Object.freeze({ code, consoleUserId: input.consoleUserId,
@@ -99,8 +115,22 @@ export class ChatIdentityBindCodes {
     return this.#codes.get(consoleUserId)?.expiresAt;
   }
 
-  /** Drops the user's open code (the Console user was removed). */
-  revoke(consoleUserId: string): void { this.#codes.delete(consoleUserId); }
+  /**
+   * Drops the user's open code: the gateway revoked or narrowed the user's credentials (bindings
+   * changed, password reset, disabled, deleted). Global authority is unknown until their next
+   * Console request.
+   */
+  revoke(consoleUserId: string): void {
+    this.#codes.delete(consoleUserId);
+    this.#authority.set(consoleUserId, false);
+    if (this.#authority.size > 10_000) this.#authority.delete(this.#authority.keys().next().value!);
+  }
+
+  /** What a Console request of the user shows about their global `iam.manage` right now. */
+  observeAuthority(consoleUserId: string, canManageGlobal: boolean): void {
+    if (!this.#codes.has(consoleUserId) && !this.#authority.has(consoleUserId)) return;
+    this.#authority.set(consoleUserId, canManageGlobal);
+  }
 
   #find(code: string): OpenCode | undefined {
     for (const open of this.#codes.values()) if (sameCode(open.code, code)) return open;
@@ -108,6 +138,15 @@ export class ChatIdentityBindCodes {
   }
 
   async attempt(attempt: ChatBindAttempt): Promise<ChatBindAttemptOutcome> {
+    return (await this.redeem(attempt)).outcome;
+  }
+
+  async redeem(attempt: ChatBindAttempt): Promise<ChatBindRedemption> {
+    const result = await this.#redeem(attempt);
+    return typeof result === 'string' ? Object.freeze({ outcome: result }) : result;
+  }
+
+  async #redeem(attempt: ChatBindAttempt): Promise<ChatBindAttemptOutcome | ChatBindRedemption> {
     this.#sweep();
     const code = normalizeCode(attempt.code);
     const open = this.#find(code);
@@ -131,11 +170,14 @@ export class ChatIdentityBindCodes {
     }
     // Single use: consumed before the write.
     this.#codes.delete(open.consoleUserId);
+    const consoleAccount = Object.freeze({ userId: open.consoleUserId, ...(open.consoleDisplayName ? { displayName: open.consoleDisplayName } : {}) });
+    // Re-checked now, not trusted from creation: the creator may have lost global iam.manage.
+    const canManageGlobal = open.canManageGlobal && this.#authority.get(open.consoleUserId) !== false;
     try {
       const result = await this.#people.bindByCode({ consoleUserId: open.consoleUserId,
         ...(open.consoleDisplayName ? { consoleDisplayName: open.consoleDisplayName } : {}),
-        identity: attempt.identity, canManageGlobal: open.canManageGlobal, codeHash: chatOwnerClaimCodeHash(code) });
-      return result.outcome;
+        identity: attempt.identity, canManageGlobal, codeHash: chatOwnerClaimCodeHash(code) });
+      return Object.freeze({ outcome: result.outcome, consoleAccount });
     } catch (error) {
       if (error instanceof ChatRoleStorageUnavailableError) return 'unpersisted';
       throw error;
@@ -151,13 +193,28 @@ const messages = createMessages({
   invalid: { 'zh-CN': '绑定码不正确或已过期。', en: 'The code is wrong or has expired.' },
   locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },
   unpersisted: { 'zh-CN': '未保存：聊天身份需要关系型项目数据库（sqlite / mysql / pg）。', en: 'Not saved: chat identities need a relational project database (sqlite / mysql / pg).' },
-  bound: { 'zh-CN': '已绑定：你的聊天身份（{identity}）已关联到 Console 账号。', en: 'Bound: your chat identity ({identity}) is now linked to the Console account.' },
-  unchanged: { 'zh-CN': '这个聊天身份已经绑定到该 Console 账号。', en: 'This chat identity is already bound to that Console account.' },
+  bound: {
+    'zh-CN': '已绑定：你的聊天身份（{identity}）已关联到 Console 账号 {account}。如果这不是你本人的 Console 账号，请立即联系主人在 Console「聊天成员」页解除。',
+    en: 'Bound: your chat identity ({identity}) is now linked to the Console account {account}. If that is not your own Console account, ask the owner to unlink it in the Console right away.',
+  },
+  unchanged: { 'zh-CN': '这个聊天身份已经绑定到 Console 账号 {account}。', en: 'This chat identity is already bound to the Console account {account}.' },
   ownedElsewhere: { 'zh-CN': '未绑定：这个聊天身份已属于另一个人（已关联其他 Console 账号或其他身份）。请联系主人在 Console「聊天成员」页处理。', en: 'Not bound: this chat identity already belongs to another person. Ask the owner to resolve it in the Console.' },
-  needsAdmin: { 'zh-CN': '未绑定：绑定会把聊天角色带到另一个身份上，需要持有全局 iam.manage 的 Console 用户生成绑定码，或由主人在 Console 归并。', en: 'Not bound: binding would carry chat roles to another identity; a Console user with global iam.manage must create the code, or the owner merges in the Console.' },
+  needsAdmin: {
+    'zh-CN': '未绑定：这个码来自 Console 账号 {account}，绑定会把聊天角色带给该账号或带到另一个身份上，需要持有全局 iam.manage 的 Console 用户生成绑定码，或由主人在 Console 链接 / 归并。若你不认识这个账号，请忽略并告知主人。',
+    en: 'Not bound: the code comes from the Console account {account}; binding would hand chat roles to that account or carry them to another identity. A Console user with global iam.manage must create the code, or the owner links / merges in the Console. If you do not know that account, ignore it and tell the owner.',
+  },
   unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   failed: { 'zh-CN': '绑定失败：{error}', en: 'Binding failed: {error}' },
 });
+
+/** `「Alice」（Console 用户 ab12…）`: names the account so the identity's holder can recognise it. */
+function consoleAccountText(account: ChatBindRedemption['consoleAccount'], locale: Locale): string {
+  if (!account) return '';
+  const name = account.displayName?.replace(/[\r\n]+/gu, ' ').trim().slice(0, 64);
+  const en = locale === 'en';
+  const id = en ? `Console user ${account.userId}` : `Console 用户 ${account.userId}`;
+  return name ? (en ? `"${name}" (${id})` : `「${name}」（${id}）`) : (en ? `(${id})` : `（${id}）`);
+}
 
 /** Runs one `绑定` / `bind` invocation and returns the reply text (normal send chain). */
 export async function executeIdentityBind(
@@ -167,17 +224,18 @@ export async function executeIdentityBind(
   const { locale, actor } = input;
   if (!actor) return messages(locale, 'unknownConversation');
   if (!input.code) return messages(locale, 'usage');
-  let outcome: ChatBindAttemptOutcome;
+  let redemption: ChatBindRedemption;
   try {
-    outcome = await codes.attempt({ code: input.code, identity: actor.identity, kind: actor.kind, adapterKind: input.adapterKind });
+    redemption = await codes.redeem({ code: input.code, identity: actor.identity, kind: actor.kind, adapterKind: input.adapterKind });
   } catch (error) {
     return messages(locale, 'failed', { error: (error as Error).message });
   }
-  switch (outcome) {
-    case 'bound': return messages(locale, 'bound', { identity: `${actor.identity.adapter}:${actor.identity.userId}` });
-    case 'unchanged': return messages(locale, 'unchanged');
+  const account = consoleAccountText(redemption.consoleAccount, locale);
+  switch (redemption.outcome) {
+    case 'bound': return messages(locale, 'bound', { identity: `${actor.identity.adapter}:${actor.identity.userId}`, account });
+    case 'unchanged': return messages(locale, 'unchanged', { account });
     case 'owned-elsewhere': return messages(locale, 'ownedElsewhere');
-    case 'needs-admin': return messages(locale, 'needsAdmin');
+    case 'needs-admin': return messages(locale, 'needsAdmin', { account });
     case 'not-private': return messages(locale, 'notPrivate');
     case 'simulated': return messages(locale, 'simulated');
     case 'locked': return messages(locale, 'locked');

@@ -78,11 +78,55 @@ describe('ai.personalPrincipals import (ADR 0060 §4.1, P3)', () => {
 
   it('an already linked Console user keeps their person; the identity joins it', async () => {
     const { store, people, logger, book } = await setup();
-    await store.grant({ level: 'global', key: '', adapter: 'tg', userId: 'me', role: 'owner' });
     await people.linkConsole({ principal: { adapter: 'tg', userId: 'me' }, consoleUserId: 'u1', via: 'code', actor: 'user:u1' });
     const before = store.principals.linkOfConsoleUser('u1')!.principalId;
     await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
     expect(store.principals.principalOf({ adapter: 'qq', userId: '10001' })!.id).toBe(before);
+  });
+
+  it('security review: never links onto a person who holds grants without a global iam.manage holder confirming it', async () => {
+    const { store, roles, people, logger, book, root } = await setup();
+    // (a) The configured identity belongs to the owner: linking u-op to it would hand u-op the owner.
+    await store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'owner', role: 'owner' });
+    // (b) u1 is linked to a person with a global grant: joining an identity would extend it.
+    await store.grant({ level: 'global', key: '', adapter: 'tg', userId: 'me', role: 'owner' });
+    await people.linkConsole({ principal: { adapter: 'tg', userId: 'me' }, consoleUserId: 'u1', via: 'code', actor: 'user:u1' });
+    const state = await book.run({ seeds: [seed('user:u-op', 'owner'), seed('user:u1', '10001')], people, logger });
+    expect(state.entries.map(entry => [entry.subjectId, entry.status, entry.reason])).toEqual([
+      ['owner', 'pending', 'needs-confirmation'], ['10001', 'pending', 'needs-confirmation']]);
+    expect(store.principals.linkOfConsoleUser('u-op')).toBeUndefined();
+    expect(store.principals.principalOf({ adapter: 'qq', userId: '10001' })).toBeUndefined();
+    expect(roles.hasRole({ adapter: 'qq', userId: '10001' }, '', 'owner')).toBe(false);
+    // Listed for a global manager and resolved like a role candidate.
+    const imports = new ChatRoleImportBook({ projectRoot: root, roles: () => roles, adapterKind: () => () => 'platform' });
+    const context = { imports, personal: book, people, roles, authorizeGlobal: () => true, actor: 'user:root' };
+    const listed = await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.list' }, context);
+    const pending = (listed!.body.data as any).personalPending;
+    expect(pending).toMatchObject([{ consoleUserId: 'u-op', adapter: 'qq', userId: 'owner' }, { consoleUserId: 'u1', adapter: 'qq', userId: '10001' }]);
+    expect((await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.resolve', data: { decision: 'ignore', id: pending[0].id } }, context))!.body.data)
+      .toEqual({ status: 'ignored' });
+    expect(store.principals.linkOfConsoleUser('u-op')).toBeUndefined();
+    expect((await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.resolve', data: { decision: 'import', id: pending[1].id } }, context))!.body.data)
+      .toEqual({ status: 'imported', result: 'written' });
+    expect(roles.principalOf({ adapter: 'qq', userId: '10001' }).id).toBe(store.principals.linkOfConsoleUser('u1')!.principalId);
+    // Scoped managers cannot resolve it.
+    expect((await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.list' }, { ...context, authorizeGlobal: () => false }))!.status).toBe(403);
+  });
+
+  it('security review: after the first import, new or changed entries wait for confirmation', async () => {
+    const { store, people, logger, book } = await setup();
+    await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeDefined();
+    // A later configuration edit adds a new user and changes u1's identity: nothing is linked.
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u1', '20002'), seed('user:u2', '30003')], people, logger });
+    const by = (userId: string) => state.entries.find(entry => entry.subjectId === userId)!;
+    expect(by('20002')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(by('30003')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.principalOf({ adapter: 'qq', userId: '20002' })).toBeUndefined();
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+    // A further start does not import them either.
+    await book.run({ seeds: [seed('user:u2', '30003')], people, logger });
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
   });
 });
 
@@ -105,6 +149,15 @@ describe('chat-roles.imported for ai.personalPrincipals (Q2)', () => {
     // With a global owner there is nothing to offer.
     const owned = (await collectAttention({ chatRoles: async () => state({ hasGlobalOwner: true }) }, { allows, viewerUserId: 'u1' })).items.find(entry => entry.kind === 'chat-roles.imported')!;
     expect(owned.action.path).toBe(ATTENTION_PATHS.chatRoles);
+  });
+
+  it('lists waiting ai.personalPrincipals links under chat-roles.import-pending (security review)', async () => {
+    const result = await collectAttention({ chatRoles: async () => state({ personal: undefined,
+      personalPending: [{ id: 'a'.repeat(24), consoleUserId: 'u-op', adapter: 'qq', userId: 'owner', at: 5 }] }) }, { allows });
+    const item = result.items.find(entry => entry.kind === 'chat-roles.import-pending')!;
+    expect(item.title).toContain('1');
+    expect(item.detail).toContain('Console 用户 u-op ↔ qq:owner');
+    expect(item.detail).not.toContain('已从配置文件移除');
   });
 
   it('acknowledge also marks the personal import as read', async () => {

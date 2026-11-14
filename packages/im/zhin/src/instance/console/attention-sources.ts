@@ -16,6 +16,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
+import { personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
@@ -173,6 +174,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
           pending: state?.pending ?? [],
           ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),
             entries: personal.map(({ consoleUserId, adapter, userId }) => ({ consoleUserId, adapter, userId })) } } : {}),
+          ...(personalState ? { personalPending: personalPrincipalPending(personalState.entries) } : {}),
         };
       },
     } : {}),

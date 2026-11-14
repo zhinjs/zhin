@@ -30,7 +30,7 @@ import type { ChatRoleAudit } from './chat-role-migration.js';
 export type ChatPrincipalRef = Readonly<{ principalId: string }> | ChatIdentity;
 
 export class ChatPeopleError extends Error {
-  constructor(readonly code: 'not-found' | 'conflict' | 'invalid', message: string) {
+  constructor(readonly code: 'not-found' | 'conflict' | 'invalid' | 'forbidden', message: string) {
     super(message);
     this.name = 'ChatPeopleError';
   }
@@ -259,9 +259,9 @@ export class ChatPeople {
    * private chat (the caller checked that). Without a person yet, the Console user is linked to
    * the identity's person; with one, the identity joins it. Refused when the identity belongs to
    * a person that is linked to someone else or has other identities, and — unless the code was
-   * made by a holder of global `iam.manage` — when it would carry roles to another identity
-   * (the identity's person holds grants, or the Console user's person holds grants that would
-   * count for the identity).
+   * made by a holder of global `iam.manage` (re-checked when it is redeemed) — when it would carry
+   * roles across: the identity's person holds any grant (linking it would hand them to the Console
+   * user), or the Console user's person holds grants that would count for the identity.
    */
   async bindByCode(input: Readonly<{ consoleUserId: string; consoleDisplayName?: string; identity: ChatIdentity; canManageGlobal: boolean; codeHash: string }>): Promise<Readonly<{ outcome: ChatBindOutcome; principalId?: string }>> {
     const actor = `chat:${identityText(input.identity)}`;
@@ -276,6 +276,11 @@ export class ChatPeople {
         if (ownerLink || owner.identities.length > 1) return { outcome: 'owned-elsewhere' };
       }
       if (!mine) {
+        // Linking the Console user to a person who holds grants hands the user those grants
+        // (Sandbox speaks as the linked person, global grants count for all its identities): a
+        // phished `绑定 <码>` from the holder must not do that. Needs a code from a global
+        // `iam.manage` holder (or an operator link in the Console).
+        if (owner && this.#store.grantsOf(owner.id).length > 0 && !input.canManageGlobal) return { outcome: 'needs-admin' };
         const principalId = owner?.id ?? await principals.createPrincipal({ createdBy: `console:user:${input.consoleUserId}` });
         await principals.assignIdentity(input.identity, principalId, { method: 'code', by: `console:user:${input.consoleUserId}` });
         await principals.setLink({ principalId, consoleUserId: input.consoleUserId,
@@ -306,16 +311,32 @@ export class ChatPeople {
    * is the one already linked to it; else the first configured identity's person when that one is
    * not linked yet; else a new person — linked to the user (`import`). Identities without a person
    * join it; an identity owned by another person stays there (reported). Never grants a role.
+   * Without `confirmedBy` (a global `iam.manage` holder in the Console) nothing is written when
+   * that would link the user to, or add identities to, a person who holds grants.
    */
-  async importPersonalPrincipal(input: Readonly<{ consoleUserId: string; identities: readonly ChatIdentity[]; actor: string }>): Promise<Readonly<{
-    principalId: string; linked: boolean; joined: readonly ChatIdentity[]; ownedElsewhere: readonly ChatIdentity[]; linkConflict: boolean;
+  async importPersonalPrincipal(input: Readonly<{ consoleUserId: string; identities: readonly ChatIdentity[]; actor: string; confirmedBy?: string }>): Promise<Readonly<{
+    principalId?: string; linked: boolean; joined: readonly ChatIdentity[]; ownedElsewhere: readonly ChatIdentity[]; linkConflict: boolean;
+    /** Nothing was written: the link or join involves a person who holds grants and nobody confirmed it. */
+    needsConfirmation?: true;
   }>> {
     if (!input.consoleUserId || input.consoleUserId.length > 128) throw new ChatPeopleError('invalid', 'consoleUserId 无效');
     const identities = input.identities.filter(isChatIdentity);
     const result = await this.#store.exclusive(async () => {
       this.#store.assertPersistent();
       const principals = this.#store.principals;
+      const holdsGrants = (principalId: string) => this.#store.grantsOf(principalId).length > 0;
       let principalId = principals.linkOfConsoleUser(input.consoleUserId)?.principalId;
+      // Whoever edits the configuration is not necessarily an owner: never link a Console user to
+      // a person who holds grants, and never add identities to such a person, without a global
+      // `iam.manage` holder confirming it (`confirmedBy`).
+      if (!input.confirmedBy) {
+        const candidate = principalId ? undefined
+          : identities.map(identity => principals.principalOf(identity)).find(person => person && !principals.linkOf(person.id));
+        const joining = identities.some(identity => !principals.principalOf(identity));
+        if ((candidate && holdsGrants(candidate.id)) || (principalId && joining && holdsGrants(principalId))) {
+          return { linked: false, joined: [], ownedElsewhere: [], linkConflict: false, needsConfirmation: true as const };
+        }
+      }
       let linked = false;
       let linkConflict = false;
       if (!principalId) {
@@ -335,9 +356,11 @@ export class ChatPeople {
       }
       return { principalId, linked, joined, ownedElsewhere, linkConflict };
     });
-    this.#audit({ actor: input.actor, action: 'chat-roles.import', target: result.principalId, outcome: 'ok',
+    if ('needsConfirmation' in result) return Object.freeze(result);
+    this.#audit({ actor: input.confirmedBy ?? input.actor, action: 'chat-roles.import', target: result.principalId, outcome: 'ok',
       detail: Object.freeze({ source: 'ai.personalPrincipals', consoleUserId: input.consoleUserId, linked: result.linked,
-        identities: result.joined.map(identityText), skipped: result.ownedElsewhere.map(identityText) }) });
+        identities: result.joined.map(identityText), skipped: result.ownedElsewhere.map(identityText),
+        ...(input.confirmedBy ? { confirmed: true } : {}) }) });
     return Object.freeze({ ...result, joined: Object.freeze(result.joined), ownedElsewhere: Object.freeze(result.ownedElsewhere) });
   }
 
@@ -347,8 +370,12 @@ export class ChatPeople {
    * user has none. Console authentication is the proof, so the identity is the user's own; only
    * aliases the caller classified as local simulations may be passed. An identity id already held
    * by another person (an operator merged it elsewhere) is left alone.
+   *
+   * Global grants count for every identity of a person, so a Sandbox identity under a person who
+   * holds one speaks with that grant: refused (`forbidden`) unless the caller holds global
+   * `iam.manage` (`canManageGlobal`). A link alone must never be worth the person's global grants.
    */
-  async ensureSimulatedIdentities(input: Readonly<{ consoleUserId: string; consoleDisplayName?: string; aliases: readonly string[] }>): Promise<Readonly<{ status: 'saved' | 'unchanged'; principalId: string; identities: readonly ChatIdentity[] }>> {
+  async ensureSimulatedIdentities(input: Readonly<{ consoleUserId: string; consoleDisplayName?: string; aliases: readonly string[]; canManageGlobal: boolean }>): Promise<Readonly<{ status: 'saved' | 'unchanged'; principalId: string; identities: readonly ChatIdentity[] }>> {
     if (!input.consoleUserId || input.consoleUserId.length > 128) throw new ChatPeopleError('invalid', 'consoleUserId 无效');
     const by = `console:user:${input.consoleUserId}`;
     const result = await this.#store.exclusive(async () => {
@@ -356,6 +383,9 @@ export class ChatPeople {
       const principals = this.#store.principals;
       let changed = false;
       let principalId = principals.linkOfConsoleUser(input.consoleUserId)?.principalId;
+      if (principalId && !input.canManageGlobal && this.holdsGlobal(principalId)) {
+        throw new ChatPeopleError('forbidden', '你链接的人持有全局聊天角色：以这个人在 Sandbox 发言需要全局 iam.manage 权限（否则请用模拟身份）');
+      }
       if (!principalId) {
         principalId = await principals.createPrincipal({ createdBy: by,
           ...(cleanChatDisplayName(input.consoleDisplayName) ? { displayName: cleanChatDisplayName(input.consoleDisplayName)! } : {}) });
@@ -478,7 +508,8 @@ export class ChatPeople {
         const principalId = principals.principalOf(identity)?.id
           ?? await this.#store.ensurePrincipalUnlocked(identity, { method: 'import', by: actor });
         const raised = await this.#store.raiseUnlocked({ level: row.level as FeatureConfigLevel, key, role: row.role, ...identity, principalId,
-          grantedBy: typeof row.grantedBy === 'string' ? row.grantedBy : `import:${actor}` });
+          // The file's `grantedBy` is only a label someone wrote: the importer is accountable.
+          grantedBy: `import:${actor}`.slice(0, 256) });
         if (raised) counts.roles += 1;
       }
       for (const row of list(data.consoleLinks)) {

@@ -123,7 +123,7 @@ function actor(options: { user?: string; key?: string; standing?: 'owner' | 'adm
 const DENIED = '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
 /** ADR 0060 §5.3: group owners / admins are told their platform standing is not a zhin role. */
 const DENIED_STANDING = '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
-const NO_OWNER_HINT = '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见实例启动日志或 zhin status）。';
+const NO_OWNER_HINT = '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见 zhin status）。';
 const OWNER_DENIED = 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。';
 
 /** zhin roles come only from grants: make `user` a conversation admin (ADR 0056 §4, revised 2026-11-12). */

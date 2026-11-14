@@ -184,7 +184,7 @@ export interface AttentionErrorLogs {
 /** Chat role bootstrap state (ADR 0060 §3 / §4). */
 export interface AttentionChatRoles {
   readonly hasGlobalOwner: boolean;
-  /** A claim code is open (instance log / `zhin status`). */
+  /** A claim code is open (`zhin status`). */
   readonly claimOpen: boolean;
   /** First import not yet marked as read: grants written / raised / skipped. */
   readonly imported?: {
@@ -201,6 +201,8 @@ export interface AttentionChatRoles {
     readonly at: number;
     readonly entries: readonly { readonly consoleUserId: string; readonly adapter: string; readonly userId: string }[];
   };
+  /** `ai.personalPrincipals` links waiting for confirmation (ADR 0060 §4.1, security review). */
+  readonly personalPending?: readonly { readonly id: string; readonly consoleUserId: string; readonly adapter: string; readonly userId: string; readonly at: number }[];
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -470,8 +472,8 @@ const messages = createMessages({
     en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
   },
   'roles.noOwner.claim': {
-    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见实例启动日志或 zhin status（一次性，重启轮换）。',
-    en: 'Or send 「claim <code>」 to the bot in a private chat; the code is in the instance log or zhin status (one-time, rotates on restart).',
+    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
+    en: 'Or send 「claim <code>」 to the bot in a private chat; zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
   },
   'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
   'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
@@ -489,7 +491,15 @@ const messages = createMessages({
     en: 'The person linked to your Console account holds no role and there is no global owner yet: make that person the global owner as well? Confirm under My chat identity.',
   },
   'roles.imported.promoteMeAction': { 'zh-CN': '设为全局 owner…', en: 'Make global owner…' },
-  'roles.pending.title': { 'zh-CN': '配置中又出现了 {count} 条人员名单，等待确认', en: '{count} people-list entries reappeared in the configuration and wait for review' },
+  'roles.pending.title': { 'zh-CN': '配置中有 {count} 条人员名单或身份链接等待确认', en: '{count} people-list or identity-link entries from the configuration wait for review' },
+  'roles.pending.personalLine': {
+    'zh-CN': 'Console 用户 {user} ↔ {identity}',
+    en: 'Console user {user} ↔ {identity}',
+  },
+  'roles.pending.personalDetail': {
+    'zh-CN': 'ai.personalPrincipals 中新的或已修改的链接：{entries}。链接不授予角色，但会让该 Console 账号以这个人发言（Sandbox），因此不会自动生效；逐条「导入」或「忽略」。',
+    en: 'New or changed ai.personalPrincipals links: {entries}. A link grants no role but lets that Console account speak as the person (Sandbox), so it never applies by itself; import or ignore each.',
+  },
   'roles.pending.detail': {
     'zh-CN': '{entries}。它们没有被自动授予（改配置的人不一定是主人），已从配置文件移除；逐条「导入」或「忽略」。',
     en: '{entries}. They were not granted automatically (whoever edits the file is not necessarily an owner) and were removed from the file; import or ignore each.',
@@ -944,11 +954,20 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,
           action: promoteMe ? { label: t('roles.imported.promoteMeAction'), path: ATTENTION_PATHS.chatIdentityMe } : action, since: at });
       }
-      if (state.pending.length) {
-        drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning', state: { ids: state.pending.map(entry => entry.id) },
-          title: t('roles.pending.title', { count: state.pending.length }),
-          detail: t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) }),
-          action, since: Math.min(...state.pending.map(entry => entry.seenAt)) });
+      const personalPending = state.personalPending ?? [];
+      if (state.pending.length || personalPending.length) {
+        const gap = locale === 'en' ? ' ' : '';
+        const details = [
+          ...(state.pending.length ? [t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) })] : []),
+          ...(personalPending.length ? [t('roles.pending.personalDetail', { entries: listed(personalPending.map(entry =>
+            t('roles.pending.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })), locale) })] : []),
+        ];
+        const count = state.pending.length + personalPending.length;
+        drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning',
+          state: { ids: [...state.pending.map(entry => entry.id), ...personalPending.map(entry => entry.id)] },
+          title: t('roles.pending.title', { count }),
+          detail: details.join(gap),
+          action, since: Math.min(...state.pending.map(entry => entry.seenAt), ...personalPending.map(entry => entry.at)) });
       }
       return drafts;
     });

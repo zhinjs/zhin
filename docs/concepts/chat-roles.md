@@ -96,7 +96,7 @@ interface PlatformStanding {
 | 名单 | 现状 | 方向 |
 | --- | --- | --- |
 | 聊天角色 `chat_roles` | 唯一事实来源；授予属于「人」，一个人可有多个平台身份（ADR 0060 P2） | — |
-| `ai.personalPrincipals` | 首次启动导入为「人 ↔ Console 账号」链接（不授予角色，P3）；之后个人推理主体只读链接，配置中的字段仅告警「已导入，数据库为准」 | P4 从 schema 移除（出现时告警并忽略） |
+| `ai.personalPrincipals` | 首次启动导入为「人 ↔ Console 账号」链接（不授予角色，P3；需要关系型项目数据库 sqlite / mysql / pg）；之后个人推理主体只读链接。之后新增或修改的条目，以及会链接到持有角色的人的条目，进入「需要你处理」等待全局 `iam.manage` 确认 | P4 从 schema 移除（出现时告警并忽略） |
 | 适配器 `master` / `trusted`、`ai.trigger.masters` / `trusted` | 只作**种子**：首次启动导入；之后再出现不自动授予，进入 Console「需要你处理」等待确认导入（见[升级指南](../migrations/chat-roles.md)） | 长期作为种子格式支持 |
 | 插件自建名单（`masters` 等） | 不推荐 | 改用 `isOwner` / `hasChatRole` / `chatRolesToken`（见下节） |
 | Console 账号 | 另一个主体体系：Console 权限不等于聊天角色；可与聊天中的「人」一对一链接（不传递权限）。Console「聊天成员」页、Sandbox「以我的聊天身份发言」与个人推理主体都读这条链接（P3） | — |
@@ -113,7 +113,7 @@ interface PlatformStanding {
 - 聊天中 `角色 授予` 的目标除 `@提及` 与用户 id 外，还可以写 `#<人 id 前缀>`（如 `#cp_ab12cd`，前缀唯一时）引用一个人，便于给多平台的同一人授予全局角色。
 - 导出 / 导入：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例，需要全局 `iam.manage`；导入只新增或提升，不降级、不删除、不改挂已属于他人的身份）。
 
-第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用实例日志或 `zhin status` 中的一次性认领码，在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。
+第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用 `zhin status` 显示的一次性认领码（日志只记哈希前缀），在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。
 
 ## 在代码里使用
 

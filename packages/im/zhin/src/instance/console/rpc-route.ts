@@ -137,7 +137,11 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       }
       const authorizedPrincipal = principal;
       // ADR 0060 Q12: a linked Console user's cached display name follows their own calls.
-      if (isUserPrincipal(principal)) options.featureStores?.people?.touchConsoleUser(principal.userId, principal.displayName);
+      if (isUserPrincipal(principal)) {
+        options.featureStores?.people?.touchConsoleUser(principal.userId, principal.displayName);
+        // ADR 0060 §2.4: a bind code carries roles only while its creator still holds global iam.manage.
+        options.featureStores?.bindCodes?.observeAuthority(principal.userId, principalAllows(principal, CONSOLE_PERMISSIONS.IAM_MANAGE));
+      }
       // ADR 0060 §2 / §7: people behind chat identities; bind codes only for the caller's own link.
       const chatPrincipalsReply = await dispatchChatPrincipalsConsoleRpc(message, {
         ...(options.featureStores?.people ? { people: options.featureStores.people } : {}),
@@ -173,6 +177,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(options.featureStores?.chatRoleImports ? { imports: options.featureStores.chatRoleImports } : {}),
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         ...(options.featureStores?.personalPrincipalImports ? { personal: options.featureStores.personalPrincipalImports } : {}),
+        ...(options.featureStores?.people ? { people: options.featureStores.people } : {}),
         authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),
@@ -184,7 +189,9 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const chatRolesReply = await dispatchChatRolesConsoleRpc(message, {
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
-        grantorName: grantedBy => chatGrantorName(options.featureStores?.people, grantedBy),
+        // Names taken from Console links are global information (ADR 0060 §7).
+        ...(principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE)
+          ? { grantorName: (grantedBy: string) => chatGrantorName(options.featureStores?.people, grantedBy) } : {}),
         actor: auditActor(principal),
         ...(isUserPrincipal(principal) && principal.displayName ? { actorDisplayName: principal.displayName } : {}),
         publishEvent: (type, data) => options.hub.publish(type, data),

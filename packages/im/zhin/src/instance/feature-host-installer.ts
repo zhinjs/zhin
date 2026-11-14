@@ -145,8 +145,11 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   const people = new ChatPeople({ store: roles.store, audit: () => audit });
   const bindCodes = new ChatIdentityBindCodes({ people });
   options.gatewayMessages?.onMessage(message => {
-    if (message.type !== 'principal-revoked' || !LINK_ENDING_REASONS.has(message.payload.reason ?? '')) return;
+    if (message.type !== 'principal-revoked') return;
+    // Any revocation (bindings changed, password reset, disabled, deleted) drops an open bind
+    // code: it may have been created with a global iam.manage the user no longer holds.
     bindCodes.revoke(message.payload.principalId);
+    if (!LINK_ENDING_REASONS.has(message.payload.reason ?? '')) return;
     void people.consoleUserRemoved(message.payload.principalId, message.payload.reason!)
       .catch(error => getLogger('chat-roles').warn(`Chat principal link not removed: ${(error as Error).message}`));
   });

@@ -137,8 +137,24 @@ export interface ConsoleChatRoleImportGrant {
  */
 export type ConsoleChatRoleImportResult = 'written' | 'upgraded' | 'kept' | 'memory' | 'skipped';
 
-/** `skipped`: a local simulation adapter (clients choose the sender id), or an adapter that was not loaded. */
-export type ConsoleChatRoleImportSkipReason = 'simulated' | 'unknown-adapter';
+/**
+ * `skipped`: a local simulation adapter (clients choose the sender id), an adapter that was not
+ * loaded, or (`ai.personalPrincipals` links) an identity that already belongs to another person.
+ */
+export type ConsoleChatRoleImportSkipReason = 'simulated' | 'unknown-adapter' | 'owned-elsewhere';
+
+/**
+ * An `ai.personalPrincipals` entry waiting for a global `iam.manage` holder (ADR 0060 §4.1): new
+ * or changed after the first import, or one that would link a Console user to a person who holds
+ * chat roles. Resolved with `chat-roles.imports.resolve` like a role candidate; no role is granted.
+ */
+export interface ConsoleChatPersonalLinkCandidate {
+  readonly id: string;
+  readonly consoleUserId: string;
+  readonly adapter: string;
+  readonly userId: string;
+  readonly seenAt: number;
+}
 
 export interface ConsoleChatRoleImportedGrant extends ConsoleChatRoleImportGrant {
   readonly result: ConsoleChatRoleImportResult;
@@ -160,6 +176,8 @@ export interface ConsoleChatRoleImportsListResult {
   readonly acknowledgedAt?: number;
   /** Re-appeared configured grants: never granted until imported here (ADR 0060 §4.2). */
   readonly pending: readonly ConsoleChatRoleImportCandidate[];
+  /** `ai.personalPrincipals` links waiting for confirmation (absent when there are none). */
+  readonly personalPending?: readonly ConsoleChatPersonalLinkCandidate[];
   /**
    * Whether any global `owner` exists. Without one, an imported account-level `owner` may be
    * promoted with `chat-roles.grant` at `global` (ADR 0060 Q1); never automatic.
@@ -169,7 +187,10 @@ export interface ConsoleChatRoleImportsListResult {
 
 export type ConsoleChatRoleImportDecision = 'import' | 'ignore' | 'acknowledge';
 
-/** `chat-roles.imports.resolve`: `import` / `ignore` need `id`; `acknowledge` marks the first import as read. */
+/**
+ * `chat-roles.imports.resolve`: `import` / `ignore` need `id` (a role candidate or a personal link
+ * candidate); `acknowledge` marks the first import as read.
+ */
 export interface ConsoleChatRoleImportsResolveRequest {
   readonly decision: ConsoleChatRoleImportDecision;
   readonly id?: string;

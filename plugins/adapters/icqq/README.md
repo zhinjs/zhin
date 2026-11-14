@@ -52,7 +52,7 @@ icqq:
 ```
 
 ::: tip 主人不在适配器配置里
-`master` 不再是适配器字段（也不是必填）。「谁是主人」由聊天角色决定（ADR 0056 / ADR 0060）：在 Console「聊天角色」中授予全局 owner，或在新部署中按实例日志 / `zhin status` 给出的认领码私聊机器人发送 `认领 <码>`。旧配置中的 `master` 会在首次启动时迁移为账号层 owner；之后再写入不会自动授予，而是进入 Console「需要你处理」等待确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
+`master` 不再是适配器字段（也不是必填）。「谁是主人」由聊天角色决定（ADR 0056 / ADR 0060）：在 Console「聊天角色」中授予全局 owner，或在新部署中按 `zhin status` 给出的认领码私聊机器人发送 `认领 <码>`。旧配置中的 `master` 会在首次启动时迁移为账号层 owner；之后再写入不会自动授予，而是进入 Console「需要你处理」等待确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
 :::
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：

@@ -76,7 +76,7 @@ export type ConsoleAttentionKind =
   | 'schedule.unschedulable'
   /**
    * No global chat `owner` exists yet (ADR 0060 §3): grant one in the Console, or claim it with the
-   * code from the instance log / `zhin status`. Visible with global `iam.manage`.
+   * code `zhin status` shows. Visible with global `iam.manage`.
    */
   | 'chat-roles.no-owner'
   /** The first configuration import granted chat roles (information; ADR 0060 §4.1). Global `iam.manage`. */

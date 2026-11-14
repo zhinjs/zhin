@@ -2,11 +2,14 @@
  * ADR 0060 §3.3: the claim code — the first global `owner` without a Console.
  *
  * - Active only while no global `owner` grant exists and grants can be saved (relational project
- *   database). The code is written to the instance log and to `.zhin/chat-owner-claim.json` (mode
- *   0600, read by `zhin status`) — never into chat, never into the Console front end. Whoever reads
- *   it can already read the host's files.
+ *   database). The code is written only to `.zhin/chat-owner-claim.json` (mode 0600, read by
+ *   `zhin status`) — never into the log (SystemLog is readable in the Console with `status.view`),
+ *   never into chat, never into the Console. The log names the hash prefix only. Whoever reads the
+ *   file can already read the host's files; project file routes refuse dot directories.
  * - One-time: a successful claim, any global owner granted elsewhere, or the instance exiting ends
- *   it; every start rotates it. Five wrong attempts rotate it as well.
+ *   it; every start rotates it. Five wrong attempts rotate it as well, but one sender counts for
+ *   at most {@link CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES} of them per window: after that its
+ *   attempts are refused (`locked`) without being counted, so no single sender can keep rotating it.
  * - Accepted only in a private chat (ADR 0060 Q8) on a real platform adapter: a correct code sent
  *   in a group is burnt and rotated (bystanders saw it); adapters whose capability profile marks a
  *   local simulation (`runtime.sandbox`, clients pick their own sender id) never accept it.
@@ -31,6 +34,10 @@ import { featureChatActor, featureChatTokens } from './feature-self-service.js';
 export const CHAT_OWNER_CLAIM_FILE = join('.zhin', 'chat-owner-claim.json');
 /** Wrong attempts before a code is rotated. */
 export const CHAT_OWNER_CLAIM_MAX_FAILURES = 5;
+/** Wrong attempts one sender may make per window; more are refused without counting. */
+export const CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES = 2;
+/** Window of the per-sender limit. */
+export const CHAT_OWNER_CLAIM_SENDER_WINDOW_MS = 10 * 60_000;
 /** 32 symbols without 0 / O / 1 / I: 8 symbols = 40 bits. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
@@ -67,6 +74,8 @@ export type ChatOwnerClaimOutcome =
   /** A local simulation adapter, or an adapter whose kind is unknown. */
   | 'simulated'
   | 'invalid'
+  /** This sender made too many wrong attempts in the window. */
+  | 'locked'
   | 'unpersisted'
   | 'claimed';
 
@@ -93,6 +102,8 @@ export class ChatOwnerClaim {
   readonly #options: ChatOwnerClaimOptions;
   #code: string | undefined;
   #failures = 0;
+  /** Wrong attempts per sender identity in the current window. */
+  readonly #senderFailures = new Map<string, { count: number; since: number }>();
   #unsubscribe: (() => void) | undefined;
   #exitHook: (() => void) | undefined;
 
@@ -123,10 +134,12 @@ export class ChatOwnerClaim {
     const code = (this.#options.code ?? generateChatOwnerClaimCode)();
     this.#code = code;
     this.#failures = 0;
-    this.#options.logger.warn(`聊天角色：还没有全局 owner（聊天主人）。私聊机器人发送「认领 ${code}」（claim ${code}）即成为全局 owner；`
-      + '认领码一次性，实例重启后轮换，也可用 zhin status 查看。也可以在 Console「聊天角色」页授予全局 owner。'
-      + ' (No global chat owner yet: send the claim code to the bot in a private chat.)');
     const file = this.#file;
+    // Never the code itself: the log reaches SystemLog and `GET /logs`.
+    this.#options.logger.warn(`聊天角色：还没有全局 owner（聊天主人）。认领码见 zhin status（或本机 ${CHAT_OWNER_CLAIM_FILE}），`
+      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；私聊机器人发送「认领 <码>」即成为全局 owner。认领码一次性，实例重启后轮换。`
+      + '也可以在 Console「聊天角色」页授予全局 owner。'
+      + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
     if (!file) return;
     try {
       await mkdir(dirname(file), { recursive: true });
@@ -139,7 +152,8 @@ export class ChatOwnerClaim {
         process.once('exit', this.#exitHook);
       }
     } catch (error) {
-      this.#options.logger.warn(`聊天角色：认领码未能写入 ${CHAT_OWNER_CLAIM_FILE}（${(error as Error).message}）；请从实例日志读取。`);
+      this.#options.logger.warn(`聊天角色：认领码未能写入 ${CHAT_OWNER_CLAIM_FILE}（${(error as Error).message}），本次无法认领；`
+        + '请在 Console「聊天角色」页授予全局 owner，或修复目录权限后重启实例。');
     }
   }
 
@@ -147,6 +161,7 @@ export class ChatOwnerClaim {
   async close(): Promise<void> {
     this.#code = undefined;
     this.#failures = 0;
+    this.#senderFailures.clear();
     const file = this.#file;
     if (file) await rm(file, { force: true }).catch(() => undefined);
     if (this.#exitHook) { process.removeListener('exit', this.#exitHook); this.#exitHook = undefined; }
@@ -181,7 +196,19 @@ export class ChatOwnerClaim {
       this.#audit(attempt, 'denied', 'simulated', code);
       return 'simulated';
     }
+    const sender = `${attempt.identity.adapter}\u0000${attempt.identity.userId}`;
+    const now = (this.#options.now ?? Date.now)();
+    const senderFailures = this.#senderFailures.get(sender);
+    if (senderFailures && now - senderFailures.since >= CHAT_OWNER_CLAIM_SENDER_WINDOW_MS) this.#senderFailures.delete(sender);
+    if ((this.#senderFailures.get(sender)?.count ?? 0) >= CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES) {
+      this.#audit(attempt, 'denied', 'locked', code);
+      return 'locked';
+    }
     if (!correct) {
+      const current = this.#senderFailures.get(sender) ?? { count: 0, since: now };
+      current.count += 1;
+      this.#senderFailures.set(sender, current);
+      if (this.#senderFailures.size > 10_000) this.#senderFailures.delete(this.#senderFailures.keys().next().value!);
       this.#failures += 1;
       this.#audit(attempt, 'denied', 'invalid', code);
       if (this.#failures >= CHAT_OWNER_CLAIM_MAX_FAILURES) await this.rotate();
@@ -206,11 +233,12 @@ export class ChatOwnerClaim {
 
 const messages = createMessages({
   description: { 'zh-CN': '尚无聊天主人时，私聊发送认领码成为全局 owner', en: 'Become the global chat owner with the claim code (private chat, only while there is none)' },
-  usage: { 'zh-CN': '用法：认领 <认领码>（码见实例启动日志或 zhin status，只接受私聊）', en: 'Usage: claim <code> (the code is in the instance log or zhin status; private chat only)' },
+  usage: { 'zh-CN': '用法：认领 <认领码>（码见 zhin status，只接受私聊）', en: 'Usage: claim <code> (zhin status shows the code; private chat only)' },
   inactive: { 'zh-CN': '当前不接受认领：本机器人已有主人，或认领未开启。请联系主人在 Console「聊天角色」页授予角色。', en: 'Claims are closed: this bot already has an owner, or claims are not open. Ask the owner to grant you a role in the Console (Chat roles).' },
-  notPrivate: { 'zh-CN': '认领只接受私聊。若刚才发送的是有效认领码，它已作废，新码见实例日志或 zhin status。', en: 'Claims are accepted in private chats only. If that was a valid code it has been revoked; the new one is in the instance log or zhin status.' },
+  notPrivate: { 'zh-CN': '认领只接受私聊。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only. If that was a valid code it has been revoked; zhin status shows the new one.' },
   simulated: { 'zh-CN': '这个适配器上不接受认领（模拟适配器的发言者 id 可由客户端自选）。请在真实平台私聊机器人。', en: 'Claims are not accepted on this adapter (a simulation lets clients choose the sender id). Message the bot privately on a real platform.' },
   invalid: { 'zh-CN': '认领码不正确或已失效。', en: 'The claim code is wrong or no longer valid.' },
+  locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },
   unpersisted: { 'zh-CN': '未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg）。', en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg).' },
   claimed: { 'zh-CN': '认领成功：你（{identity}）现在是本机器人的全局 owner，认领码已失效。', en: 'Claimed: you ({identity}) are now the global owner of this bot; the code no longer works.' },
   unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
@@ -237,6 +265,7 @@ export async function executeOwnerClaim(
     case 'not-private': return messages(locale, 'notPrivate');
     case 'simulated': return messages(locale, 'simulated');
     case 'invalid': return messages(locale, 'invalid');
+    case 'locked': return messages(locale, 'locked');
     case 'unpersisted': return messages(locale, 'unpersisted');
     default: return messages(locale, 'inactive');
   }

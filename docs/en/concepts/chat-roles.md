@@ -96,7 +96,7 @@ Chat roles (`chat_roles`) are the only source of truth. "Who is an admin" used t
 | List | Status | Direction |
 | --- | --- | --- |
 | Chat roles `chat_roles` | The only source; grants belong to a "person" with one or more platform identities (ADR 0060 P2) | — |
-| `ai.personalPrincipals` | Imported once as person ↔ Console account links (no role, P3); afterwards personal inference owners come only from the links and the field only warns "imported, the database decides" | P4: removed from the schema (warned and ignored when present) |
+| `ai.personalPrincipals` | Imported once as person ↔ Console account links (no role, P3; needs a relational project database: sqlite / mysql / pg); afterwards personal inference owners come only from the links. Later new or changed entries, and entries that would link to a person holding roles, wait under "Needs your attention" for a global `iam.manage` holder | P4: removed from the schema (warned and ignored when present) |
 | Adapter `master` / `trusted`, `ai.trigger.masters` / `trusted` | **Seeds only**: imported on the first start; when they appear again they are never granted automatically and wait in the Console inbox for review (see the [upgrade guide](../migrations/chat-roles.md)) | Kept as a seed format |
 | Plugin-specific lists (`masters` …) | Discouraged | Use `isOwner` / `hasChatRole` / `chatRolesToken` (next section) |
 | Console accounts | A separate principal system: Console permissions are not chat roles; linkable one-to-one with a chat person (no permissions carried over). The Console "Chat members" page, the Sandbox "speak as my chat identity" switch and personal inference owners all read this link (P3) | — |
@@ -113,7 +113,7 @@ Chat roles (`chat_roles`) are the only source of truth. "Who is an admin" used t
 - The `role grant` target in chat accepts `#<person id prefix>` (e.g. `#cp_ab12cd`, when the prefix is unique) besides an @mention or user id, to grant a global role to the same person across platforms.
 - Export / import: `zhin chat-roles export [file]` / `zhin chat-roles import <file>` (through the running instance, global `iam.manage`; imports only add or raise, never lower, remove or move an identity owned by someone else).
 
-The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code from the instance log or `zhin status` and send `claim <code>` to the bot in a private chat on a real platform (see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
+The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code `zhin status` shows (logs carry only a hash prefix) and send `claim <code>` to the bot in a private chat on a real platform (see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
 
 ## In code
 

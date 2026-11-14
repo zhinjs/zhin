@@ -14,7 +14,7 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：ADR 0060 新增公开导出 `CHAT_PRINCIPALS_RPC`、`CHAT_PRINCIPALS_RPC_PERMISSIONS`、`isConsoleChatPrincipalsRpcType` 与人 / 平台身份 / 绑定码 / 导出导入 / 配置导入的协议类型，权限 `self.chat-identity`，attention 条目 `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending`，`ConsoleChatRoleEntry` 新增可选 `grantedByName` / `principalId`。npm 上 1.4.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：ADR 0060 新增公开导出 `CHAT_PRINCIPALS_RPC`、`CHAT_PRINCIPALS_RPC_PERMISSIONS`、`isConsoleChatPrincipalsRpcType` 与人 / 平台身份 / 绑定码 / 导出导入 / 配置导入的协议类型，权限 `self.chat-identity`，attention 条目 `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending`，`ConsoleChatRoleEntry` 新增可选 `grantedByName` / `principalId`，`chat-roles.imports.list` 新增可选 `personalPending`（`ConsoleChatPersonalLinkCandidate`），`ConsoleChatRoleImportSkipReason` 新增 `owned-elsewhere`。npm 上 1.4.0 未被占用。"
     },
     {
       "package": "@zhin.js/cli",

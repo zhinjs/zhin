@@ -6,6 +6,8 @@
  * - `resolve` `import` applies the first import's rules (a stored role is only raised; `ai.trigger.*`
  *   global grants only on real platform adapters) and is audited as `chat-roles.import`; `ignore`
  *   drops the candidate (audited); `acknowledge` marks the first import as read.
+ * - Waiting `ai.personalPrincipals` links (new or changed after the first import, or onto a person
+ *   who holds grants) are listed as `personalPending` and resolved with the same `import` / `ignore`.
  * - Without a relational project database `import` is refused (503 `chat-roles-unpersisted`) and
  *   the candidate stays.
  */
@@ -16,13 +18,16 @@ import {
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from '../chat-roles.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
 import type { ChatRoleImportBook } from '../chat-role-migration.js';
-import type { PersonalPrincipalImportBook } from '../chat-personal-principals.js';
+import { personalPrincipalPending, type PersonalPrincipalImportBook } from '../chat-personal-principals.js';
+import type { ChatPeople } from '../chat-people.js';
 import { FeatureRpcError, type FeatureRpcReply } from './console-feature-rpc.js';
 
 export interface ChatRoleImportsRpcContext {
   readonly imports?: ChatRoleImportBook;
   /** ADR 0060 §4.1 (P3): `ai.personalPrincipals` import record; `acknowledge` marks it read as well. */
   readonly personal?: PersonalPrincipalImportBook;
+  /** Applies a confirmed personal link. */
+  readonly people?: ChatPeople;
   readonly roles?: InstanceChatRoleService;
   /** Whether the caller holds `iam.manage` globally. Deny by default. */
   readonly authorizeGlobal?: () => boolean | Promise<boolean>;
@@ -50,11 +55,14 @@ export async function dispatchChatRoleImportsConsoleRpc(message: Record<string, 
     let data: ConsoleChatRoleImportsListResult | ConsoleChatRoleImportsResolveResult;
     if (type === CHAT_ROLES_RPC.IMPORTS_LIST) {
       const state = await imports.read();
+      const personalPending = context.personal ? personalPrincipalPending((await context.personal.read()).entries)
+        .map(({ at, ...entry }) => Object.freeze({ ...entry, seenAt: at })) : [];
       data = Object.freeze({
         imported: state.imported,
         ...(state.importedAt ? { importedAt: state.importedAt } : {}),
         ...(state.importedAcknowledgedAt ? { acknowledgedAt: state.importedAcknowledgedAt } : {}),
         pending: state.pending,
+        ...(personalPending.length ? { personalPending: Object.freeze(personalPending) } : {}),
         hasGlobalOwner: context.roles ? hasGlobalOwner(context.roles) : false,
       });
     } else {
@@ -67,6 +75,17 @@ export async function dispatchChatRoleImportsConsoleRpc(message: Record<string, 
       } else if (decision === 'import' || decision === 'ignore') {
         if (typeof input.id !== 'string' || !/^[0-9a-f]{24}$/u.test(input.id)) throw new FeatureRpcError(400, 'id 必须是导入候选的 id');
         const resolution = await imports.resolve({ id: input.id, decision, actor });
+        if (resolution.status === 'not-found' && context.personal && context.people) {
+          // ADR 0060 §4.1: a waiting `ai.personalPrincipals` link (no role is granted).
+          const personal = await context.personal.resolve({ id: input.id, decision, people: context.people, actor });
+          if (personal.status !== 'not-found') {
+            data = Object.freeze(personal.status === 'ignored' ? { status: 'ignored' as const }
+              : { status: 'imported' as const, result: personal.status === 'imported' ? 'written' as const : 'skipped' as const,
+                ...(personal.status === 'skipped' ? { reason: 'owned-elsewhere' as const } : {}) });
+            context.publishEvent?.('chat-principals:updated', {});
+            return { status: 200, body: { success: true, data, type, requestId: message.requestId } };
+          }
+        }
         if (resolution.status === 'not-found') throw new FeatureRpcError(404, '没有这个待确认的导入候选（可能已被处理）');
         data = Object.freeze(resolution.status === 'imported'
           ? { status: 'imported' as const, result: resolution.result, ...(resolution.reason ? { reason: resolution.reason } : {}) }
