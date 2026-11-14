@@ -61,5 +61,13 @@
         ]
       }
     }
+  },
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
   }
 }

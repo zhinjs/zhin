@@ -23,7 +23,7 @@ export const codeRunnerConfig = Schema.object({
     .i18n({ en: { description: 'Optional backend token; prefer ${CODE_RUNNER_TOKEN}. Sent as the raw Authorization header for piston and as "Authorization: Token <token>" for glot.' } })
     .effect('reload')
     .fieldLevels(['global']),
-});
+}).featureLevels(['global', 'adapter', 'endpoint', 'conversation']);
 
 export type CodeRunnerConfig = Schema.Output<typeof codeRunnerConfig>;
 

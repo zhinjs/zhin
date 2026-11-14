@@ -2319,6 +2319,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/code-runner/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/code-runner/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `code-runner.provider` | `"piston"` \| `"glot"` | 否 | `"piston"` | 代码运行后端协议：piston（自建 Piston 的 /api/v2/execute）或 glot（glot.io 兼容的 /api/run） |

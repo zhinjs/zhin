@@ -2319,6 +2319,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/code-runner/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/code-runner/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `code-runner.provider` | `"piston"` \| `"glot"` | no | `"piston"` | Backend protocol: piston (a self-hosted Piston /api/v2/execute) or glot (a glot.io-compatible /api/run). |
