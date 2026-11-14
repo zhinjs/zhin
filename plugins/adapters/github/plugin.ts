@@ -24,10 +24,6 @@ const GITHUB_SUBSCRIPTIONS_SCHEMA = {
 export default definePlugin({
   name: 'github',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'GitHub Adapter',
-    displayNameI18n: { 'zh-CN': 'GitHub 适配器', en: 'GitHub Adapter' },
-  },
   setup(context) {
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);

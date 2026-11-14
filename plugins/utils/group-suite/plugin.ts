@@ -19,10 +19,6 @@ import { defineGroupSuiteTables } from './src/tables.js';
  */
 export default definePlugin<GroupSuiteConfig>({
   name: 'group-suite',
-  metadata: {
-    displayName: 'Group Suite',
-    displayNameI18n: { 'zh-CN': '群管套件', en: 'Group Suite' },
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [groupSuiteRuntimeStore, pluginConsoleRpcToken],
     injects: [databaseHostToken, memberWelcomeOwnerToken, outboundMessageToken],

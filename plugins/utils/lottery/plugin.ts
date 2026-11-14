@@ -36,10 +36,6 @@ export interface LotteryConsoleStatus {
  */
 export default definePlugin<LotteryConfig>({
   name: 'lottery',
-  metadata: {
-    displayName: 'Lottery',
-    displayNameI18n: { 'zh-CN': '彩票分析', en: 'Lottery Analysis' },
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [lotteryRuntimeStore, pluginConsoleRpcToken],
     injects: [databaseHostToken, outboundHostToken, scheduleHostToken, projectLocaleToken],

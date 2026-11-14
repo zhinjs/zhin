@@ -14,10 +14,6 @@ import { createBilibiliConsoleRpc } from './src/console.js';
 export default definePlugin({
   name: 'bilibili',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'Bilibili Comment Adapter (Experimental)',
-    displayNameI18n: { 'zh-CN': '哔哩哔哩评论适配器（实验性）', en: 'Bilibili Comment Adapter (Experimental)' },
-  },
   setup(context) {
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     const notifier: BilibiliNotifier = async (target, text) => {

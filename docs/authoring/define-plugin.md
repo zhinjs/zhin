@@ -36,7 +36,7 @@ my-plugin/
 
 - **插件名**取包名去掉 scope 后的部分：`@scope/foo` → `foo`，`foo` → `foo`。不会去掉 `zhin-plugin-` 之类的前缀。
 - 这个名字同样要满足 `/^[a-z][a-z0-9-]*$/`。不满足（例如 `zhin.js-foo` 含有 `.`）时启动报错，提示你添加带显式 `name` 的 `plugin.ts`。
-- `displayName`、`displayNameI18n`、`icon` 写在 `zhin.metadata` 里。
+- `displayName`、`displayNameI18n`、`icon`，以及插件市场用的 `descriptionI18n`、`category`，写在 `zhin.metadata` 里。
 - 只要声明了 `entry`（或 `exports["./zhin"]`），它就必须存在；只有两者都省略才是无入口插件。目录里有 `plugin.ts` 但没声明入口时，它不会被加载，`zhin plugin check` 会给出警告。
 - 需要 `setup`、内联 `config`、`requires` 或 `capabilityGraph` 时，再添加 `plugin.ts` 并声明 `zhin.entry`。
 
@@ -368,7 +368,7 @@ async setup(context) {
 | 字段 | 作用 |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Console 插件卡片的名称、图标、排序，不影响运行 |
-| `metadata.displayNameI18n` | 按 Console 界面语言显示的名称，如 `{ 'zh-CN': '复读机', en: 'Repeater' }`；见[语言与本地化](../configuration/localization.md#插件如何接入) |
+| `metadata.displayNameI18n` | 按 Console 界面语言显示的名称，如 `{ 'zh-CN': '复读机', en: 'Repeater' }`；见[语言与本地化](../configuration/localization.md#插件如何接入)。发布到 npm 的插件建议写在 `package.json#zhin.metadata`，插件市场才能读到 |
 | `requires` | 必须存在的资源 token 列表，缺失时拒绝启动 |
 | `capabilityGraph` | 使用 `definePluginCapabilityGraph({ provides, injects, features })` 显式声明本插件的能力拓扑（对外提供的 token、注入的 token，以及按 feature 分组的能力项），供静态治理与 Console 可观测使用 |
 
@@ -460,7 +460,13 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
     "platformFeatures": true,         // 可选（仅 plugin）：默认 true，Root 自动获得官方 Stable Features
     "features": [                     // 可选（仅 plugin）：依赖的 Feature 包；省略时按约定目录推断
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
-    ]
+    ],
+    "metadata": {                     // 可选（仅 plugin）：Console 与插件市场展示的信息，见下表
+      "displayName": "RSS",
+      "displayNameI18n": { "zh-CN": "RSS 订阅", "en": "RSS Feeds" },
+      "descriptionI18n": { "zh-CN": "订阅 RSS / Atom 源并推送新内容", "en": "Subscribe to RSS / Atom feeds" },
+      "category": "information"
+    }
   }
 }
 ```
@@ -473,6 +479,7 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `engine` | 否 | semver 范围，与运行时版本不匹配时拒绝加载 |
 | `runtime` | 否 | `isolated` 表示在隔离环境中运行：仅限子插件、不能挂载 Host Feature，且需要隔离适配器支持 |
 | `platformFeatures` | 否 | 默认 `true`：Root 插件即使不声明，也会获得官方 Stable Features |
+| `metadata` | 否 | 展示信息：`displayName`、`displayNameI18n`、`icon`（Console），`descriptionI18n`、`category`（插件市场，只能写在这里）。`displayName` / `displayNameI18n` / `icon` 与 `definePlugin({ metadata })` 只能写一处。语言键只接受 `zh-CN` / `en`，值为非空字符串；`category` 取值见[插件市场元数据](./plugin-delivery.md#marketplace-metadata) |
 | `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级。省略时[按约定目录推断](#infer-features) |
 
 `type: "feature"` 的包只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，`featureApi` 声明它实现的 API 版本，供使用方的 `features[].api` 校验。

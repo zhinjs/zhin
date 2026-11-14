@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/adapter-github",
   "version": "1.1.29",
-  "description": "Zhin.js GitHub adapter for Plugin Runtime (App auth + webhook)",
+  "description": "GitHub adapter: Issue and PR comment threads as chat channels, GitHub App auth and webhook events.",
+  "keywords": [
+    "zhin.js",
+    "github",
+    "issues",
+    "pull-requests",
+    "webhook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -17,22 +28,6 @@
       "import": "./lib/gh-client.js"
     },
     "./package.json": "./package.json"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "github",
-    "issue",
-    "pull-request",
-    "webhook",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -162,6 +157,18 @@
         "optional": true
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "GitHub Adapter",
+      "displayNameI18n": {
+        "zh-CN": "GitHub 适配器",
+        "en": "GitHub Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "GitHub 适配器：把 Issue / PR 评论区作为聊天通道，GitHub App 认证，Webhook 入站。",
+        "en": "GitHub adapter: Issue and PR comment threads as chat channels, GitHub App auth and webhook events."
+      },
+      "category": "adapter"
+    }
   }
 }

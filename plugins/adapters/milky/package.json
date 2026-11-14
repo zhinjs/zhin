@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-milky",
   "version": "1.1.29",
-  "description": "Zhin.js Milky adapter for Plugin Runtime (WebSocket client)",
+  "description": "Milky protocol adapter: forward WebSocket by default, plus webhook, reverse WS and SSE, for Milky-compatible QQ implementations.",
+  "keywords": [
+    "zhin.js",
+    "milky",
+    "qq",
+    "websocket"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -31,15 +41,6 @@
     "README.md",
     "CHANGELOG.md",
     "PERMITS.md"
-  ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "milky",
-    "qq",
-    "chatbot"
   ],
   "license": "MIT",
   "repository": {
@@ -82,11 +83,6 @@
       "optional": true
     }
   },
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org",
@@ -120,6 +116,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Milky Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Milky 适配器",
+        "en": "Milky Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "Milky 协议适配器：默认正向 WebSocket，也支持 Webhook、反向 WS 与 SSE，接入兼容 Milky 的 QQ 实现。",
+        "en": "Milky protocol adapter: forward WebSocket by default, plus webhook, reverse WS and SSE, for Milky-compatible QQ implementations."
+      },
+      "category": "adapter"
+    }
   }
 }

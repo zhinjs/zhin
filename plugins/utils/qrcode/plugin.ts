@@ -27,10 +27,6 @@ const MAX_HISTORY_ITEMS = 20;
 
 export default definePlugin({
   name: 'qrcode',
-  metadata: {
-    displayName: 'QR Code',
-    displayNameI18n: { 'zh-CN': '二维码', en: 'QR Code' },
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [pluginConsoleRpcToken],
     features: {

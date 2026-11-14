@@ -3,6 +3,11 @@ import {
   findAdapterByPackage,
   type AdapterDefinition,
 } from '@zhin.js/scaffold-wizard';
+import {
+  informativeKeywords,
+  normalizePluginCategory,
+  readPluginMarketplaceMetadata,
+} from '@zhin.js/plugin-runtime';
 import { stripNpmVersion } from '../commands/install.js';
 
 /** 插件生态包分类 */
@@ -45,15 +50,19 @@ export interface NpmSearchResult {
   version?: string;
   description?: string;
   keywords?: string[];
+  /** npm search: `package.json#author` (may be absent from search documents). */
+  author?: string | { name?: string };
+  maintainers?: Array<{ name?: string; username?: string } | string>;
+  /** The account that published the version (the release bot for CI publishes); never shown as the author. */
   publisher?: { username?: string };
+  /** Published `package.json#zhin` (present in `npm view`, usually absent from search). */
+  zhin?: unknown;
   date?: string;
   downloads?: string | number;
   [key: string]: unknown;
 }
 
 export interface NpmPackageInfo extends NpmSearchResult {
-  author?: { name?: string };
-  maintainers?: Array<{ name?: string }>;
   time?: { modified?: string; created?: string };
   homepage?: string;
   repository?: { url?: string };
@@ -61,11 +70,6 @@ export interface NpmPackageInfo extends NpmSearchResult {
   license?: string;
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
-  zhin?: {
-    displayName?: string;
-    category?: string;
-    features?: string[];
-  };
 }
 
 export interface SearchFilterOptions {
@@ -87,13 +91,18 @@ export function filterSearchResults(results: NpmSearchResult[], options: SearchF
       pkg.name.startsWith('zhin.js-');
     if (!hasZhin) return false;
 
-    if (options.category) {
-      const category = keywords.find((k) => k.includes(options.category!));
-      if (!category) return false;
-    }
+    if (options.category && !matchesCategory(pkg, options.category)) return false;
 
     if (options.keyword) {
-      const searchIn = [pkg.name, pkg.description || '', ...keywords].join(' ').toLowerCase();
+      const market = readPluginMarketplaceMetadata(pkg.zhin);
+      const searchIn = [
+        pkg.name,
+        pkg.description || '',
+        market.displayName ?? '',
+        ...Object.values(market.displayNameI18n ?? {}),
+        ...Object.values(market.descriptionI18n ?? {}),
+        ...informativeKeywords(keywords),
+      ].join(' ').toLowerCase();
       return searchIn.includes(options.keyword.toLowerCase());
     }
     return true;
@@ -108,6 +117,18 @@ export function filterSearchResults(results: NpmSearchResult[], options: SearchF
   const limit = options.limit ?? 20;
   if (filtered.length > limit) filtered = filtered.slice(0, limit);
   return filtered;
+}
+
+/**
+ * 分类匹配：优先读发布清单的 `zhin.metadata.category`（接受旧别名如 util）；
+ * 没有声明分类的包（npm search 结果通常不含 zhin 字段）退回到包名约定与 keywords。
+ */
+function matchesCategory(pkg: NpmSearchResult, wanted: string): boolean {
+  const category = normalizePluginCategory(wanted) ?? wanted;
+  const declared = readPluginMarketplaceMetadata(pkg.zhin).category;
+  if (declared) return declared === category;
+  if (category === 'adapter' && classifyPackage(pkg).kind === 'adapter') return true;
+  return (pkg.keywords ?? []).some((keyword) => keyword.toLowerCase().includes(wanted.toLowerCase()));
 }
 
 /** npm search（IO 包装，测试中不直接调用） */

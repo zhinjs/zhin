@@ -15,10 +15,6 @@ import {
  */
 export default defineGamePlugin<SessionService>({
   name: 'idiom-chain',
-  metadata: {
-    displayName: 'Idiom Chain',
-    displayNameI18n: { 'zh-CN': '成语接龙', en: 'Idiom Chain' },
-  },
   game: {
     commandPath: 'chain',
     titleI18n: { en: 'Chinese Idiom Chain' },

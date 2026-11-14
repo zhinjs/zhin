@@ -24,10 +24,6 @@ export interface ShortUrlConsoleStatus {
 
 export default definePlugin({
   name: 'short-url',
-  metadata: {
-    displayName: 'Short URL',
-    displayNameI18n: { 'zh-CN': '短链接', en: 'Short URL' },
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [pluginConsoleRpcToken],
     features: {

@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-qq",
   "version": "1.1.29",
-  "description": "Zhin.js QQ Official adapter for Plugin Runtime (WebSocket gateway)",
+  "description": "QQ official bot adapter: private, group and guild channel messages over the WebSocket gateway.",
+  "keywords": [
+    "zhin.js",
+    "qq",
+    "qq-official",
+    "tencent"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,21 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "qq",
-    "tencent",
-    "official",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -147,6 +142,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "QQ Official WebSocket Adapter",
+      "displayNameI18n": {
+        "zh-CN": "QQ 官方机器人适配器",
+        "en": "QQ Official WebSocket Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "QQ 官方机器人适配器：通过 WebSocket Gateway 收发私聊、群聊与频道消息。",
+        "en": "QQ official bot adapter: private, group and guild channel messages over the WebSocket gateway."
+      },
+      "category": "adapter"
+    }
   }
 }

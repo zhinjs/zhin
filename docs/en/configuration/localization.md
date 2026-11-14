@@ -123,6 +123,8 @@ metadata: {
 
 The Console plugin list, feature matrix and feature pages choose the name by interface locale, falling back from the current locale → `en` → `displayName` → the instance key. Only the `zh-CN` and `en` keys are accepted, and each value must be a non-empty string.
 
+Plugins published to npm should declare it in `package.json#zhin.metadata`: the plugin market only reads the published `package.json`, never `definePlugin()` code. The market also reads `descriptionI18n` (localized description) and `category` from the same place; see [Plugin delivery · Marketplace metadata](../authoring/plugin-delivery.md#marketplace-metadata).
+
 For immediate protocol responses before normal message dispatch, a signature-verified `Endpoint` may call `await this.resolveLocale(senderId)`. This uses the same personal preferences and project language with the current Endpoint identity. Candidate or retired endpoints return `undefined` without reading user state. Keep the resolved language for that response; do not infer it from request parameters or platform profiles. Normal messages continue to use `Message.locale` without a second lookup.
 
 Plugin business checks may provide `titleI18n` and `effectsI18n`; results may provide `summaryI18n` and `evidenceI18n`, keyed by `zh-CN` / `en`. Translated effects and evidence must match the original arrays item for item with nonempty text. Empty translations cannot hide entries. Console only selects the displayed language; approval remains bound to the original check ID, generation and revision covering the complete translation definitions.

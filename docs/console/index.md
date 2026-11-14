@@ -244,7 +244,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 账号与会话（对象树） | RPC `endpoint.list` / `endpoint.test`、`login.*`、`feature.get` / `feature.set-*` / `feature.conversations`、`chat-roles.list` / `grant` / `revoke` + 收件箱表 | 全局 / 适配器 / 账号 / 会话四级对象页；账号「聊天」含统一收件箱（消息 / 请求 / 通知），「接入」含连接测试与 LoginAssist 登录待办 |
 | 适配器连接管理 | `plugin.<pluginId>.status` + RPC `endpoint.list` / `endpoint.test` + `login.*` | 由适配器插件提供，嵌在适配器对象页「概览」：连接状态与测试、账号增删改启停；QQ 另有扫码绑定 |
 | 插件 / 插件详情 | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*`、`gateway.packages.*` | 已安装插件的来源、版本与健康状态；详情含版本与依赖、在哪开了、声明与配置、权限、能力清单；安装 / 更新 / 卸载计划与提交、配置校验、诊断 |
-| 插件市场 | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件索引（plugins.json + npmmirror）、核验 latest、检查更新 |
+| 插件市场 | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件索引（plugins.json + npmmirror）、核验 latest、检查更新；搜索带 `locale=zh-CN\|en` 时按语言解析显示名与描述，展示字段见[插件市场元数据](../authoring/plugin-delivery.md#marketplace-metadata) |
 | 功能矩阵 / 全局配置 | RPC `feature.matrix`、`feature.get`、`config:*` | 每个功能在全局与各适配器的开关；插件的全局 Schema 表单 |
 | 配置文件 | RPC `config:get-source` / `config:replace-source` / `config:set` / `config:patch` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置；简单页面用 `config:patch` 按路径写入（见[插件页面](../authoring/console-pages.md#在页面里保存设置-config-patch)） |
 | 运行日志 | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |

@@ -8,8 +8,4 @@ import { definePlugin } from 'zhin.js';
  */
 export default definePlugin({
   name: 'douyin-live',
-  metadata: {
-    displayName: 'Douyin Live Danmaku Adapter (Experimental)',
-    displayNameI18n: { 'zh-CN': '抖音直播弹幕适配器（实验性）', en: 'Douyin Live Danmaku Adapter (Experimental)' },
-  },
 });
