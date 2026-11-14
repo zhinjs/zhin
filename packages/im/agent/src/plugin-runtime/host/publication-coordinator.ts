@@ -28,6 +28,8 @@ export interface AgentHostPublicationCoordinatorOptions {
   readonly agent: AgentRuntimeFoundation;
   readonly bootstrapText: string;
   readonly contextFiles?: readonly ContextFile[];
+  /** Live bootstrap the host re-reads when its files change (#1250); overrides the two above. */
+  readonly bootstrap?: () => Readonly<{ bootstrapContext: string; contextFiles?: readonly ContextFile[] }>;
 }
 
 /** Publishes the Agent Host ports for protocol, introspection, and Console. */
@@ -54,11 +56,16 @@ export class AgentHostPublicationCoordinator {
         },
       }),
       introspection: Object.freeze({
-        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => Object.freeze({
-          name: entry.name,
-          connected: resourceHub.mcps.isConnected(entry.name),
-          toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
-        })),
+        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => {
+          const connected = resourceHub.mcps.isConnected(entry.name);
+          const lastError = connected ? undefined : resourceHub.mcps.getLastFailure(entry.name);
+          return Object.freeze({
+            name: entry.name,
+            connected,
+            toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
+            ...(lastError ? { lastError } : {}),
+          });
+        }),
       }),
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
@@ -113,6 +120,7 @@ export class AgentHostPublicationCoordinator {
       loopHooks: service.loopHooks,
       bootstrapContext: options.bootstrapText,
       contextFiles: options.contextFiles,
+      ...(options.bootstrap ? { bootstrap: options.bootstrap } : {}),
     }));
   }
 }

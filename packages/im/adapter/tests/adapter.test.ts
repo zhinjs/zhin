@@ -490,7 +490,7 @@ describe('Adapter Feature', () => {
 
 
 
-  it('handles both promises when a synchronous Endpoint start aborts and throws', async () => {
+  it('handles both promises when a synchronous Endpoint start aborts the transaction and throws', async () => {
     const controller = new AbortController();
     const cleanup = vi.fn();
     const originalError = new Error('synchronous startup failure');
@@ -508,7 +508,8 @@ describe('Adapter Feature', () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
     try {
-      await expect(index.activate(controller.signal)).rejects.toBe(originalError);
+      // Cancellation of the transaction (not the start failure) rejects activation.
+      await expect(index.activate(controller.signal)).rejects.toThrow('startup cancelled');
       await new Promise((resolve) => setImmediate(resolve));
       expect(unhandled).not.toHaveBeenCalled();
       expect(cleanup).toHaveBeenCalledOnce();
@@ -624,7 +625,7 @@ describe('Adapter Feature', () => {
     expect(events.at(-1)).toBe('stop');
   });
 
-  it('rolls back the complete candidate set when one Endpoint start fails', async () => {
+  it('commits healthy accounts and supervises the one whose Endpoint start fails', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     const healthy = createCapabilitySlot({
@@ -658,17 +659,64 @@ describe('Adapter Feature', () => {
     });
     const index = await createAdapterIndex([broken, healthy], snapshot([healthy, broken]));
 
-    await expect(index.activate(new AbortController().signal)).rejects.toThrow('connect failed');
-    expect(events).toEqual([
-      'healthy:start',
-      'broken:start',
-      'broken:stop',
-      'healthy:stop',
-    ]);
+    await expect(index.activate(new AbortController().signal)).resolves.toBeUndefined();
+    expect(events).toEqual(expect.arrayContaining(['healthy:start', 'broken:start', 'broken:stop']));
+    expect(events).not.toContain('healthy:stop');
+    const rows = index.describe();
+    expect(rows.find(row => row.name === 'a-healthy')).toMatchObject({ phase: 'online', startAttempt: 0 });
+    expect(rows.find(row => row.name === 'z-broken')).toMatchObject({
+      phase: 'retrying', startAttempt: 1, startFailure: { code: 'Error' }, nextRetryAt: expect.any(Number),
+    });
+    await index.stop();
+    expect(events.at(-1)).toBe('healthy:stop');
+    expect(events.filter(event => event === 'broken:start')).toHaveLength(1);
   });
 
-  it('fails Root integrity when candidate Endpoint cleanup cannot be proven', async () => {
+  it('commits the generation when a candidate account start fails during Root transact (HMR)', async () => {
     const rootId = rootPluginId();
+    const events: string[] = [];
+    const slot = createCapabilitySlot({
+      owner: rootId,
+      feature: adapterFeatureId,
+      localName: 'broken-start',
+      source: '/adapters/broken-start/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['inbound'],
+        createEndpoint: () => new TestEndpoint({
+          start: () => { events.push('start'); throw new Error('connect failed'); },
+          stop: () => { events.push('stop'); },
+        }),
+      }),
+    });
+    const initial = snapshot([]);
+    const candidateSnapshot = snapshot([slot]);
+    const projection = await adapterFeature.runtime.project([slot], {
+      snapshot: candidateSnapshot,
+      signal: new AbortController().signal,
+    });
+    const handoff = new GenerationHandoffStack();
+    if (projection.handoff) handoff.add(projection.handoff);
+    const root = new RootController(snapshotState(initial));
+    await root.start(() => ({ snapshot: snapshotState(initial), dispose: () => undefined }));
+
+    const committed = await root.transact(() => ({
+      snapshot: {
+        ...snapshotState(candidateSnapshot),
+        projections: new Map([[adapterFeatureId, projection.value]]),
+      },
+      handoff: handoff.seal(),
+      dispose: projection.dispose ?? (() => undefined),
+    }));
+    expect(committed.generation).toBeGreaterThan(0);
+    expect(root.state).toBe('running');
+    expect(projection.value.describe()[0]).toMatchObject({ phase: 'retrying', startFailure: { code: 'Error' } });
+    await expect(root.stop()).resolves.toBeUndefined();
+    expect(events).toEqual(['start', 'stop']);
+  });
+
+  it('keeps a candidate whose Endpoint cleanup cannot be proven failed, without retrying it', async () => {
+    const rootId = rootPluginId();
+    const start = vi.fn(() => { throw new Error('connect failed'); });
     const slot = createCapabilitySlot({
       owner: rootId,
       feature: adapterFeatureId,
@@ -677,7 +725,7 @@ describe('Adapter Feature', () => {
       definition: defineFixtureAdapter({
         capabilities: ['inbound'],
         createEndpoint: () => new TestEndpoint({
-          start: () => { throw new Error('connect failed'); },
+          start,
           stop: () => { throw new Error('cleanup failed'); },
         }),
       }),
@@ -693,16 +741,24 @@ describe('Adapter Feature', () => {
     const root = new RootController(snapshotState(initial));
     await root.start(() => ({ snapshot: snapshotState(initial), dispose: () => undefined }));
 
-    await expect(root.transact(() => ({
+    await root.transact(() => ({
       snapshot: {
         ...snapshotState(candidateSnapshot),
         projections: new Map([[adapterFeatureId, projection.value]]),
       },
       handoff: handoff.seal(),
       dispose: projection.dispose ?? (() => undefined),
-    }))).rejects.toThrow('Root integrity failed');
-    expect(root.state).toBe('failed');
-    await expect(root.stop()).resolves.toBeUndefined();
+    }));
+    const [row] = projection.value.describe();
+    expect(row).toMatchObject({ phase: 'failed', startFailure: { code: 'endpoint_cleanup_failed' } });
+    expect(row?.nextRetryAt).toBeUndefined();
+    const [adapter] = projection.value.adapters();
+    expect(adapter?.runtimeStatus().find(entry => entry.retiring)?.execution).toMatchObject({
+      status: 'failed', code: 'endpoint_cleanup_failed',
+    });
+    expect(start).toHaveBeenCalledOnce();
+    // Shutdown still reports the unproven cleanup.
+    await expect(root.stop()).rejects.toThrow();
   });
 
   it('lets Root Stop abort and settle required Endpoint readiness', async () => {

@@ -1,0 +1,171 @@
+// `zhin doctor` loads node-pty the way the project's gateway would, in a child process (#1250).
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { confirmsPnpm10, findAncestorWorkspaceFile, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, syncNativeBuildAllowance, usesPnpm } from '../../src/utils/native-build-deps.js';
+
+const roots: string[] = [];
+afterEach(() => {
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+function writePackage(dir: string, manifest: Record<string, unknown>, files: Record<string, string>): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest));
+  for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), content);
+}
+
+/** A project whose gateway (an ESM-only package, like the real one) has `node-pty` next to it. */
+function project(nodePty: 'loads' | 'broken' | 'missing', withGateway = true): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-probe-'));
+  roots.push(root);
+  writePackage(root, { name: 'bot', private: true }, {});
+  if (!withGateway) return root;
+  const gateway = path.join(root, 'node_modules', '@zhin.js', 'gateway');
+  writePackage(gateway, { name: '@zhin.js/gateway', type: 'module', exports: { '.': { import: './lib/index.js' } } }, {});
+  fs.mkdirSync(path.join(gateway, 'lib'));
+  fs.writeFileSync(path.join(gateway, 'lib', 'index.js'), 'export {};\n');
+  if (nodePty === 'missing') return root;
+  // Installed next to the gateway, as pnpm lays out an optional dependency (not in the project's root).
+  writePackage(path.join(gateway, 'node_modules', 'node-pty'), { name: 'node-pty', main: 'index.js' }, {
+    'index.js': nodePty === 'loads'
+      ? 'module.exports = { spawn() {} };\n'
+      : "throw new Error(\"Cannot find module '../build/Release/pty.node'\");\n",
+  });
+  return root;
+}
+
+describe('probeGatewayNativeModule', () => {
+  it('reports ok when node-pty loads from the gateway location', async () => {
+    await expect(probeGatewayNativeModule(project('loads'))).resolves.toEqual({ status: 'ok' });
+  });
+
+  it('reports the load error when the native binding was not built', async () => {
+    const probe = await probeGatewayNativeModule(project('broken'));
+    expect(probe).toEqual({ status: 'failed', reason: expect.stringContaining('pty.node') });
+  });
+
+  it('reports a missing node-pty as a failure', async () => {
+    const probe = await probeGatewayNativeModule(project('missing'));
+    expect(probe.status).toBe('failed');
+    expect(probe.status === 'failed' && probe.reason).toContain('node-pty');
+  });
+
+  it('skips projects without the gateway', async () => {
+    await expect(probeGatewayNativeModule(project('loads', false))).resolves.toEqual({ status: 'no-gateway' });
+  });
+});
+
+describe('nativeModuleFixCommand', () => {
+  it('points pnpm projects at allowBuilds and pnpm rebuild, npm projects at npm rebuild', () => {
+    const root = project('loads', false);
+    expect(usesPnpm(root, {})).toBe(true);
+    expect(nativeModuleFixCommand(root, {})).toContain('allowBuilds: { node-pty: true }');
+    expect(nativeModuleFixCommand(root, {})).toContain('pnpm rebuild node-pty');
+    fs.writeFileSync(path.join(root, 'package-lock.json'), '{}');
+    expect(nativeModuleFixCommand(root, {})).toContain('npm rebuild node-pty');
+    expect(nativeModuleFixCommand(root, { packageManager: 'pnpm@11.27.1' })).toContain('pnpm rebuild node-pty');
+  });
+});
+
+describe('creating pnpm-workspace.yaml needs pnpm 10+', () => {
+  const gatewayProject = (manifest: Record<string, unknown> = {}) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-plan-'));
+    roots.push(root);
+    return { root, pkg: { name: 'bot', dependencies: { '@zhin.js/gateway': '^1.0.0' }, ...manifest } };
+  };
+
+  it('reads packageManager first, then the installed pnpm version', () => {
+    const never = () => { throw new Error('not consulted'); };
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@10.0.0' }, never)).toBe(true);
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@11.2.0+sha512.abc' }, never)).toBe(true);
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@9.15.4' }, never)).toBe(false);
+    expect(confirmsPnpm10('.', {}, () => '10.12.1')).toBe(true);
+    expect(confirmsPnpm10('.', {}, () => '9.0.2')).toBe(false);
+    expect(confirmsPnpm10('.', {}, () => undefined)).toBe(false);
+  });
+
+  it('skips the workspace file when pnpm 10+ is not confirmed, and plans it otherwise', () => {
+    const unknown = gatewayProject();
+    const skipped = planNativeBuildAllowance(unknown.root, unknown.pkg, { pnpmVersion: () => undefined });
+    expect(skipped).toMatchObject({ workspaceSkipped: true, changes: [] });
+    skipped!.apply();
+    expect(fs.existsSync(path.join(unknown.root, 'pnpm-workspace.yaml'))).toBe(false);
+
+    const pnpm10 = gatewayProject();
+    const planned = planNativeBuildAllowance(pnpm10.root, pnpm10.pkg, { pnpmVersion: () => '10.30.0' });
+    expect(planned?.workspaceSkipped).toBe(false);
+    planned!.apply();
+    expect(fs.readFileSync(path.join(pnpm10.root, 'pnpm-workspace.yaml'), 'utf8')).toContain('node-pty: true');
+  });
+
+  it('still extends package.json#pnpm.onlyBuiltDependencies without a workspace file', () => {
+    const { root, pkg } = gatewayProject({ pnpm: { onlyBuiltDependencies: ['esbuild'] } });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '9.0.2' });
+    expect(plan?.workspaceSkipped).toBe(true);
+    expect(plan?.changes.map(change => change.file)).toEqual(['package.json', 'package.json', 'package.json']);
+  });
+});
+
+describe('pnpm 11 placeholder values in allowBuilds', () => {
+  it('replaces the "set this to true or false" placeholder with true and keeps an explicit false', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-placeholder-'));
+    roots.push(root);
+    const file = path.join(root, 'pnpm-workspace.yaml');
+    fs.writeFileSync(file, 'allowBuilds:\n  node-pty: set this to true or false\n  ssh2: false\n');
+    const pkg = { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' } };
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.denied).toEqual(['ssh2']);
+    expect(plan?.changes).toEqual(expect.arrayContaining([
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true', replaced: 'set this to true or false' },
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.cpu-features', value: 'true' },
+    ]));
+    expect(plan?.changes.some(change => change.setting === 'allowBuilds.ssh2')).toBe(false);
+    plan!.apply();
+    const written = fs.readFileSync(file, 'utf8');
+    expect(written).toContain('node-pty: true');
+    expect(written).toContain('ssh2: false');
+    expect(written).not.toContain('set this to true or false');
+  });
+});
+
+describe('a project nested in an enclosing pnpm workspace', () => {
+  const nested = () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-nested-'));
+    roots.push(root);
+    const rootFile = path.join(root, 'pnpm-workspace.yaml');
+    const original = "packages:\n  - 'bots/*'\n";
+    fs.writeFileSync(rootFile, original);
+    const dir = path.join(root, 'bots', 'bot');
+    fs.mkdirSync(dir, { recursive: true });
+    return { root, rootFile, original, dir, pkg: { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' } } };
+  };
+
+  it('finds the nearest ancestor workspace file, stopping at the home directory', () => {
+    const { root, rootFile, dir } = nested();
+    expect(findAncestorWorkspaceFile(dir, '/nonexistent-home')).toBe(rootFile);
+    // The project's own file is not an ancestor.
+    expect(findAncestorWorkspaceFile(root, '/nonexistent-home')).toBeUndefined();
+    // The search never reaches the home directory or beyond it.
+    expect(findAncestorWorkspaceFile(dir, root)).toBeUndefined();
+    expect(findAncestorWorkspaceFile(dir, path.join(root, 'bots'))).toBeUndefined();
+  });
+
+  it('does not create a workspace file in the project even with pnpm 10+, and points at the root file instead', () => {
+    const { rootFile, original, dir, pkg } = nested();
+    const probe = vi.fn(() => '11.0.0');
+    const plan = planNativeBuildAllowance(dir, pkg, { pnpmVersion: probe, homeDir: '/nonexistent-home' });
+    expect(plan).toMatchObject({ workspaceSkipped: true, workspaceSkipReason: { kind: 'nested-workspace', workspaceFile: rootFile }, changes: [] });
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      syncNativeBuildAllowance(dir, pkg, false, { pnpmVersion: probe, homeDir: '/nonexistent-home' });
+      const output = log.mock.calls.flat().join('\n');
+      expect(output).toContain(rootFile);
+      expect(output).toContain('allowBuilds: { node-pty: true, ssh2: true, cpu-features: true }');
+    } finally { log.mockRestore(); }
+    expect(fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(rootFile, 'utf8')).toBe(original);
+  });
+});

@@ -30,7 +30,8 @@ const rssSchema = {
 function snapshot(): RuntimeSnapshot {
   const node = (id: PluginId, instanceKey: string, configSchema?: object, displayName?: string) => ({
     id, instanceKey, packageName: `@x/${instanceKey}`, packageRoot: `/x/${instanceKey}`, parent: id === root ? undefined : root,
-    children: [], ...(configSchema ? { configSchema } : {}), ...(displayName ? { metadata: { displayName } } : {}),
+    children: [], ...(configSchema ? { configSchema } : {}),
+    ...(displayName ? { metadata: { displayName, ...(instanceKey === 'rss' ? { displayNameI18n: { en: 'RSS feeds' } } : {}) } } : {}),
   });
   const adapter = (owner: PluginId) => createCapabilitySlot({ owner, feature: featureId('zhin.adapter'), localName: 'main', source: '/a.ts', definition: {} });
   return {
@@ -117,7 +118,7 @@ describe('feature.* Console RPC', () => {
     const { call } = await harness(base);
     const reply = await call('feature.list');
     expect(reply!.body.data).toMatchObject({ revision: 'r1', features: [
-      { plugin: 'rss', displayName: 'RSS 订阅', levels: ['global', 'adapter', 'endpoint'], hasSchema: true, globalEnabled: true },
+      { plugin: 'rss', displayName: 'RSS 订阅', displayNameI18n: { en: 'RSS feeds' }, levels: ['global', 'adapter', 'endpoint'], hasSchema: true, globalEnabled: true },
       { plugin: 'qq', levels: ['global'], hasSchema: false, globalEnabled: true, adapter: true },
       { plugin: 'tg', adapter: true },
       { plugin: 'plain', hasSchema: false, globalEnabled: false },
@@ -130,8 +131,9 @@ describe('feature.* Console RPC', () => {
     expect(data.adapters).toEqual(['qq', 'tg']);
     expect(data.endpoints).toEqual({ qq: ['bot-1', 'bot-2'], tg: ['news'] });
     const row = (plugin: string) => data.rows.find(item => item.plugin === plugin)!;
-    expect(row('rss')).toMatchObject({ global: { enabled: true, overridden: false },
+    expect(row('rss')).toMatchObject({ displayName: 'RSS 订阅', displayNameI18n: { en: 'RSS feeds' }, global: { enabled: true, overridden: false },
       adapters: { qq: { enabled: false, overridden: true }, tg: { enabled: true, overridden: false } } });
+    expect(row('plain')).not.toHaveProperty('displayNameI18n');
     expect(row('plain')).toMatchObject({ global: { enabled: false, overridden: false },
       adapters: { qq: { enabled: false, lockedBy: 'global', overridden: false }, tg: { enabled: false, lockedBy: 'global', overridden: false } } });
   });

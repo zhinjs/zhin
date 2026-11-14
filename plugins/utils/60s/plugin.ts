@@ -7,9 +7,6 @@ export interface SixtySConfig {
 
 export default definePlugin<SixtySConfig>({
   name: 'sixty-s',
-  metadata: {
-    displayName: '60s API',
-  },
   setup(context) {
     sixtySClientStore.provide(
       context,

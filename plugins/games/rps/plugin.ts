@@ -15,9 +15,6 @@ import {
  */
 export default defineGamePlugin<SessionService>({
   name: 'rps',
-  metadata: {
-    displayName: 'RPS',
-  },
   game: {
     commandPath: 'rps',
     titleI18n: { en: 'Rock Paper Scissors' },

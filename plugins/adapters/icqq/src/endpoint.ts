@@ -116,6 +116,15 @@ const BOUND_EVENTS = [
   'system.login.auth',
 ] as const;
 
+/**
+ * Log level of an ICQQ `system.*` event by meaning: coming online and login challenges waiting for
+ * the person (QR code, device lock, slider, identity check) are normal progress (`info`); only
+ * failures (login errors, going offline) are `warn`, so a routine login stays out of the warnings.
+ */
+export function icqqSystemEventLogLevel(type: string): 'info' | 'warn' {
+  return type === 'online' || type.startsWith('login.') && type !== 'login.error' ? 'info' : 'warn';
+}
+
 export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   readonly [endpointSpec]: EndpointSpecification;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
@@ -1032,7 +1041,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   #logSystemEvent(type: string, event: unknown, safe?: Record<string, unknown> | null): void {
     const payload = safe === undefined ? serializeIcqqEvent(event) : safe;
     const line = payload;
-    this.#logger.warn(formatCompact({
+    this.#logger[icqqSystemEventLogLevel(type)](formatCompact({
       op: `system.${type}`,
       endpoint: this.endpointName,
       ...(line ? { event: JSON.stringify(line) } : {}),

@@ -15,6 +15,16 @@
       "type": "string",
       "default": "https://60s.viki.moe",
       "description": "60s API base URL",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "API 地址",
+          "description": "60s API 服务的基础地址"
+        },
+        "en": {
+          "title": "API base URL",
+          "description": "Base URL of the 60s API service."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"

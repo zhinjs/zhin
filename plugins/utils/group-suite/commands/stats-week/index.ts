@@ -7,6 +7,8 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   description: '查看本周消息统计', descriptionI18n: { en: "View this week's message statistics" },
+  alias: ['stats week'],
+  preferredAliasI18n: { 'zh-CN': 'stats week', en: 'stats week' },
   execute({ config, input, owner, use, has, locale }) {
     const groupId = resolveGroupId({ ...input, locale });
     const title = groupId ? t(locale, 'statsWeekGroup') : t(locale, 'statsWeekAll');

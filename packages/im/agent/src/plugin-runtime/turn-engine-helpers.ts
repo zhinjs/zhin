@@ -44,6 +44,12 @@ export interface FullAgentTurnEngineOptions {
   readonly loopHooks?: PluginAILoopHookRegistry;
   readonly bootstrapContext?: string;
   readonly contextFiles?: readonly ContextFile[];
+  /**
+   * Current project bootstrap (SOUL / AGENTS / TOOLS), read at the start of every turn. Set when
+   * the host re-reads changed bootstrap files without rebuilding the generation (#1250); it then
+   * replaces `bootstrapContext` / `contextFiles`.
+   */
+  readonly bootstrap?: () => Readonly<{ bootstrapContext: string; contextFiles?: readonly ContextFile[] }>;
 }
 
 const logger = getLogger('FullAgentTurnEngine');

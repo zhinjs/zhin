@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -9,6 +9,89 @@ vi.mock('child_process', async importOriginal => ({
   ...await importOriginal<typeof import('child_process')>(),
   exec: (_command: string, callback: (error: null, result: { stdout: string; stderr: string }) => void) => callback(null, { stdout: '9.0.0', stderr: '' }),
 }));
+
+// The project's running gateway, as `zhin doctor` sees it over .zhin/gateway.sock (none by default).
+const runningGateway = vi.hoisted(() => ({ current: undefined as undefined | Record<string, unknown> }));
+vi.mock('../src/utils/gateway.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/utils/gateway.js')>(),
+  probeGateway: async () => runningGateway.current,
+}));
+
+async function runDoctor(setup: (directory: string) => void, flags: string[] = []): Promise<{ output: string; directory: string }> {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-run-'));
+  const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+  const previous = process.env.HTTP_TOKEN;
+  delete process.env.HTTP_TOKEN;
+  try {
+    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: 'doctor-run', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+    setup(directory);
+    const { doctorCommand } = await import('../src/commands/doctor.js');
+    await doctorCommand.parseAsync(['node', 'zhin', ...flags]).catch(() => {});
+    return { output: log.mock.calls.map(args => args.join(' ')).join('\n'), directory };
+  } finally {
+    if (previous === undefined) delete process.env.HTTP_TOKEN;
+    else process.env.HTTP_TOKEN = previous;
+    cwd.mockRestore();
+    log.mockRestore();
+    exit.mockRestore();
+  }
+}
+
+const gatewayInfo = (consoleInitialized: boolean) => ({
+  gateway: { pid: 4242, ports: [8086], origins: ['http://127.0.0.1:8086'], socket: '.zhin/gateway.sock', startedAt: Date.now(), version: '1.2.0', mode: 'daemon', args: [] },
+  instance: { state: 'running' },
+  consoleInitialized,
+});
+
+describe('doctor with the project gateway running (#1250)', () => {
+  afterEach(() => { runningGateway.current = undefined; });
+
+  it('reports the HTTP port held by this project\'s gateway as ok, not as a conflict to kill', async () => {
+    runningGateway.current = gatewayInfo(true);
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('端口 8086: 由本项目的管理网关监听（pid 4242）');
+      expect(output).not.toContain('kill <pid>');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('still warns when the port is taken but the gateway listens elsewhere', async () => {
+    runningGateway.current = { ...gatewayInfo(true), gateway: { ...gatewayInfo(true).gateway, ports: [9000] } };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('端口 8086: 已被占用');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it.each([
+    ['running gateway', () => { runningGateway.current = gatewayInfo(true); }],
+    ['offline marker', (directory: string) => {
+      fs.mkdirSync(path.join(directory, '.zhin'), { recursive: true });
+      fs.writeFileSync(path.join(directory, '.zhin', 'console-iam.initialized'), '1\n');
+    }],
+  ])('only notes a weak HTTP_TOKEN once the Console is initialized (%s), and --fix leaves it alone', async (_label, arrange) => {
+    const env = 'HTTP_TOKEN=change-me\n';
+    const { output, directory } = await runDoctor(dir => { arrange(dir); fs.writeFileSync(path.join(dir, '.env'), env); });
+    try {
+      expect(output).toContain('HTTP_TOKEN: Console 已初始化：初始化后此令牌一律被拒绝，可从 .env 删除 HTTP_TOKEN');
+      expect(output).not.toContain('弱值');
+      await runDoctor(dir => { arrange(dir); fs.writeFileSync(path.join(dir, '.env'), env); }, ['--fix']).then(run => {
+        expect(fs.readFileSync(path.join(run.directory, '.env'), 'utf8')).toBe(env);
+        fs.rmSync(run.directory, { recursive: true, force: true });
+      });
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('keeps warning about a weak HTTP_TOKEN while the Console is not initialized', async () => {
+    runningGateway.current = gatewayInfo(false);
+    const { output, directory } = await runDoctor(dir => fs.writeFileSync(path.join(dir, '.env'), 'HTTP_TOKEN=change-me\n'));
+    try {
+      expect(output).toContain('弱值');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
 
 describe('doctor console diagnostics', () => {
   it.each([
@@ -286,5 +369,48 @@ describe('doctor adapter endpoints check', () => {
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }
+  });
+});
+
+describe('doctor: gateway native dependency node-pty (#1250)', () => {
+  /** The project's gateway (ESM-only, like the real package) with node-pty installed next to it. */
+  const installGateway = (directory: string, nodePty: 'loads' | 'broken') => {
+    const gateway = path.join(directory, 'node_modules', '@zhin.js', 'gateway');
+    fs.mkdirSync(path.join(gateway, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(gateway, 'package.json'), JSON.stringify({ name: '@zhin.js/gateway', type: 'module', exports: { '.': { import: './lib/index.js' } } }));
+    fs.writeFileSync(path.join(gateway, 'lib', 'index.js'), 'export {};\n');
+    const pty = path.join(gateway, 'node_modules', 'node-pty');
+    fs.mkdirSync(pty, { recursive: true });
+    fs.writeFileSync(path.join(pty, 'package.json'), JSON.stringify({ name: 'node-pty', main: 'index.js' }));
+    fs.writeFileSync(path.join(pty, 'index.js'), nodePty === 'loads'
+      ? 'module.exports = { spawn() {} };\n'
+      : "throw new Error(\"Cannot find module '../build/Release/pty.node'\");\n");
+  };
+
+  it('warns with the repair command when node-pty does not load', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      installGateway(dir, 'broken');
+      fs.writeFileSync(path.join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    });
+    try {
+      expect(output).toContain('终端依赖 node-pty: 无法加载');
+      expect(output).toContain('pty.node');
+      expect(output).toContain('Console 的本地终端不可用');
+      expect(output).toContain('pnpm rebuild node-pty');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('reports ok when node-pty loads', async () => {
+    const { output, directory } = await runDoctor(dir => installGateway(dir, 'loads'));
+    try {
+      expect(output).toContain('终端依赖 node-pty: 可加载');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('skips the check when the project has no gateway', async () => {
+    const { output, directory } = await runDoctor(dir => fs.mkdirSync(path.join(dir, 'node_modules')));
+    try {
+      expect(output).not.toContain('node-pty');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 });

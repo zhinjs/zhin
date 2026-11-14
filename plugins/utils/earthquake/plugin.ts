@@ -26,9 +26,6 @@ import { createMemoryState, SubscriptionStore, subscriptionKey, type KeyValueSta
  */
 export default definePlugin<EarthquakeConfig>({
   name: 'earthquake',
-  metadata: {
-    displayName: '地震速报',
-  },
   setup(context) {
     const config = resolveEarthquakeConfig(context.config.get());
     assertEarthquakeTimezone(config.timezone);

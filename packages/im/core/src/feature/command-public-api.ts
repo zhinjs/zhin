@@ -6,6 +6,8 @@ export {
   defineCommand,
   commandFeedbackToken,
   commandMenuPresentationToken,
+  UserFacingError,
+  isUserFacingError,
   type CommandContext,
   type CommandConversation,
   type CommandDefiner,

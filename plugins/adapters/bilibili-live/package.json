@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-bilibili-live",
   "version": "0.1.12",
-  "description": "Zhin.js Bilibili live danmaku adapter for Plugin Runtime (Experimental; danmaku WebSocket, one reply per danmaku window)",
+  "description": "Bilibili live danmaku adapter (experimental): reads danmaku in your own live room and replies once per danmaku window.",
+  "keywords": [
+    "zhin.js",
+    "bilibili",
+    "live-streaming",
+    "danmaku"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,21 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "bilibili",
-    "live",
-    "danmaku",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -107,6 +102,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Bilibili Live Danmaku Adapter (Experimental)",
+      "displayNameI18n": {
+        "zh-CN": "哔哩哔哩直播弹幕适配器（实验性）",
+        "en": "Bilibili Live Danmaku Adapter (Experimental)"
+      },
+      "descriptionI18n": {
+        "zh-CN": "B 站直播弹幕适配器（实验性）：在你自己的直播间看弹幕，按弹幕窗口挑一条回复。",
+        "en": "Bilibili live danmaku adapter (experimental): reads danmaku in your own live room and replies once per danmaku window."
+      },
+      "category": "adapter"
+    }
   }
 }

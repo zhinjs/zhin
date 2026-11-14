@@ -35,6 +35,8 @@ import { useLocale, type PluginUiLocale, type PluginUiText } from './locale.js';
 import { resolveSyncPluginId } from './plugin-id.js';
 import { usePluginRpc, type RpcResource } from './rpc.js';
 import { pluginUiStyles } from './styles.js';
+import { ConversationLabel, ConversationPicker, conversationPickerStyles } from './conversation-picker.js';
+import { ConversationDirectoryContext, useConversationDirectory } from './conversation-directory.js';
 
 export type DeclarativeI18nText = string | { readonly zh: string; readonly en?: string; readonly 'zh-CN'?: string };
 
@@ -57,7 +59,17 @@ export type DeclarativeValueExpr =
         readonly empty?: DeclarativeI18nText;
       };
     }
-  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean };
+  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean }
+  /** `data[path]` is `{ 'zh-CN': …, en: … }`; the viewer's locale picks one. */
+  | { readonly $i18n: string; readonly fallback?: string | number | boolean };
+
+function pickLocalizedDataValue(value: unknown, locale: PluginUiLocale): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  return locale === 'en'
+    ? record.en ?? record['zh-CN'] ?? record.zh
+    : record['zh-CN'] ?? record.zh ?? record.en;
+}
 
 function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -69,7 +81,8 @@ function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
     (rec.$format !== undefined && Array.isArray(rec.$args ?? rec.args)) ||
     (rec.$map !== null && typeof rec.$map === 'object') ||
     (rec.$join !== null && typeof rec.$join === 'object') ||
-    Array.isArray(rec.$coalesce)
+    Array.isArray(rec.$coalesce) ||
+    typeof rec.$i18n === 'string'
   );
 }
 
@@ -181,6 +194,11 @@ function evaluateDeclarativeExpr(
     }
     return rec.fallback !== undefined ? String(rec.fallback) : '-';
   }
+  if (typeof rec.$i18n === 'string') {
+    const val = pickLocalizedDataValue(resolveDataPath(data, rec.$i18n), locale);
+    const out = val !== undefined && val !== null && val !== '' ? val : rec.fallback;
+    return out === undefined || out === null || out === '' ? '-' : String(out);
+  }
   return '-';
 }
 
@@ -215,7 +233,15 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
-  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented';
+  /**
+   * `date` / `time` render native pickers (`YYYY-MM-DD` / `HH:mm`); `conversation` renders
+   * {@link ConversationPicker} and submits the chosen `DeliveryTarget` as JSON.
+   */
+  readonly type?:
+    | 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented'
+    | 'date' | 'time' | 'conversation';
+  /** `conversation` fields: accepted conversation kinds (default all). */
+  readonly conversationKinds?: readonly ('private' | 'group' | 'channel')[];
   readonly options?: readonly {
     readonly value: string;
     readonly label: DeclarativeI18nText;
@@ -247,6 +273,14 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly params?: Readonly<Record<string, unknown>> | ((data: TData | undefined, values: Readonly<Record<string, string>>) => Readonly<Record<string, unknown>>);
   readonly disabled?: boolean | ((data: TData | undefined) => boolean);
   readonly successMessage?: DeclarativeI18nText;
+  /** Shows the RPC answer inline under the form (expressions read the result object), not as a page-top banner. */
+  readonly result?: DeclarativeActionResultSpec;
+}
+
+export interface DeclarativeActionResultSpec {
+  readonly title?: DeclarativeI18nText | DeclarativeValueExpr;
+  readonly tone?: BadgeTone | DeclarativeValueExpr;
+  readonly entries?: readonly { readonly label: DeclarativeI18nText; readonly value: string | DeclarativeValueExpr }[];
 }
 
 export type DeclarativeColumnType =
@@ -260,7 +294,9 @@ export type DeclarativeColumnType =
   | 'number'
   | 'progress'
   | 'tags'
-  | 'json';
+  | 'json'
+  /** A conversation key or `DeliveryTarget`, shown by its display name ({@link ConversationLabel}). */
+  | 'conversation';
 
 export interface DeclarativeColumnSpec<TRow = Record<string, unknown>, TData = Record<string, unknown>> {
   readonly key: keyof TRow & string;
@@ -335,7 +371,16 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   readonly renderItem?: (item: TRow, index: number, ctx: DeclarativePageContext<TData>) => React.ReactNode;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
   readonly entries?:
-    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value?: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string; readonly hint?: DeclarativeI18nText }[]
+    | readonly {
+        readonly label: DeclarativeI18nText | React.ReactNode;
+        readonly value?: React.ReactNode | DeclarativeValueExpr;
+        readonly dataKey?: string;
+        readonly hint?: DeclarativeI18nText;
+        /** Greys the value out when truthy (e.g. a configured but disabled schedule). */
+        readonly muted?: boolean | DeclarativeValueExpr;
+        /** Badge beside the value; an empty label hides it. */
+        readonly badge?: { readonly label: DeclarativeI18nText | DeclarativeValueExpr; readonly tone?: BadgeTone | DeclarativeValueExpr };
+      }[]
     | ((data: TData, ctx: DeclarativePageContext<TData>) => Readonly<Record<string, React.ReactNode>> | readonly { readonly label: React.ReactNode; readonly value: React.ReactNode }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode;
@@ -524,6 +569,13 @@ const declarativeStyles = `
   text-align: right; overflow-wrap: anywhere;
 }
 .zk-empty-cell { color: var(--zk-muted); opacity: 0.65; }
+.zk-action-inline-result { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--zk-border); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+.zk-action-inline-result__message { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.zk-action-inline-result__list { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.zk-action-inline-result__list dt { color: var(--zk-muted); }
+.zk-action-inline-result__list dd { margin: 0; overflow-wrap: anywhere; }
+.zk-entry-card__value--muted > :not(.zk-badge), .zk-entry-card__value--muted { color: var(--zk-muted); font-weight: 500; }
+.zk-entry-card__value--muted code { opacity: 0.6; text-decoration: line-through; }
 .zk-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .zk-action-card { display: grid; gap: 12px; align-content: start; }
 .zk-action-card__head { display: grid; gap: 4px; }
@@ -930,6 +982,21 @@ function resolveBadgeTone<TData>(
   return VALID_BADGE_TONES.has(toneSpec) ? toneSpec : 'neutral';
 }
 
+/** `muted: true`, or an expression whose value is truthy (`$path` reads the raw value, not its text). */
+function isEntryMuted(
+  spec: boolean | DeclarativeValueExpr | undefined,
+  data: unknown,
+  locale: PluginUiLocale,
+  t: PluginUiText['t'],
+): boolean {
+  if (spec === undefined || spec === false) return false;
+  if (spec === true) return true;
+  const raw = typeof (spec as { $path?: unknown }).$path === 'string'
+    ? resolveDataPath(data, (spec as { $path: string }).$path)
+    : evaluateDeclarativeExpr(spec, data, locale, t);
+  return raw === true || raw === 'true' || (typeof raw === 'number' && raw !== 0);
+}
+
 const CODE_KEY_PATTERN =
   /(?:^id$|Id$|_id$|^pid$|^cron$|Cron$|Path$|Key$|^hostname$|^platform$|^nodeVersion$|^intervalMs$)/u;
 
@@ -1019,6 +1086,7 @@ function renderSmartValue(
 ): React.ReactNode {
   if (raw === null || raw === undefined || raw === '') return <span className="zk-empty-cell">—</span>;
   const colType = colSpec?.type ?? 'auto';
+  if (colType === 'conversation') return <ConversationLabel value={raw} />;
   if (colType === 'progress') {
     const num = Number(raw);
     return Number.isFinite(num) ? <ProgressBar value={num} size="sm" showValue /> : <span className="zk-empty-cell">—</span>;
@@ -1122,6 +1190,78 @@ function renderSmartValue(
   return raw as React.ReactNode;
 }
 
+/** Whether any column or action field shows conversations (so the page loads the directory once). */
+function specUsesConversations(spec: DeclarativePageSpec<any>): boolean {
+  const columns = (spec.sections ?? []).flatMap((section) => section.columns ?? []);
+  const fields = (spec.actions ?? []).flatMap((action) => action.fields ?? []);
+  return columns.some((column) => column.type === 'conversation') || fields.some((field) => field.type === 'conversation');
+}
+
+/** Whether a `result` spec already shows the RPC's `message` field (title or an entry reads it). */
+function resultSpecRendersMessage(spec: DeclarativeActionResultSpec): boolean {
+  const reads = (value: unknown): boolean => {
+    if (!isDeclarativeValueExpr(value)) return false;
+    const expr = value as Record<string, unknown>;
+    const nested = (key: string) => (expr[key] as { readonly path?: unknown } | undefined)?.path;
+    const paths = [
+      expr.$path, expr.$count, expr.$i18n, nested('$sum'), nested('$map'), nested('$join'),
+      ...(Array.isArray(expr.$coalesce) ? expr.$coalesce : []),
+      ...(Array.isArray(expr.args) ? expr.args : []),
+      ...(Array.isArray(expr.$args) ? expr.$args : []),
+    ];
+    return paths.some((path) => path === 'message');
+  };
+  return reads(spec.title) || (spec.entries ?? []).some((entry) => reads(entry.value));
+}
+
+/** Inline answer of an action with a `result` spec, rendered under its form. */
+function ActionInlineResult({ name, spec, result, fallbackTone = 'neutral', message, locale, t, onDismiss }: {
+  readonly name: string;
+  readonly spec: DeclarativeActionResultSpec;
+  readonly result: Record<string, unknown>;
+  /** Tone derived from the answer (`passed: false` / `decision`), used when the spec sets no `tone`. */
+  readonly fallbackTone?: BadgeTone;
+  /** The answer's message, shown unless the spec already renders `message`. */
+  readonly message?: string;
+  readonly locale: PluginUiLocale;
+  readonly t: PluginUiText['t'];
+  readonly onDismiss: () => void;
+}) {
+  const tone = spec.tone === undefined ? fallbackTone : resolveBadgeTone(spec.tone, result, locale, t);
+  const title = spec.title === undefined
+    ? undefined
+    : isDeclarativeValueExpr(spec.title)
+      ? evaluateDeclarativeExpr(spec.title, result, locale, t)
+      : pickText(spec.title, locale, t);
+  return (
+    <div className={`zk-action-inline-result zk-action-inline-result--${tone}`} role="status" data-action-result={name}>
+      <div className="zk-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        {title !== undefined && <Badge tone={tone}>{title}</Badge>}
+        <button type="button" className="zk-copy-btn" onClick={onDismiss}>{t('关闭')}</button>
+      </div>
+      {message && !resultSpecRendersMessage(spec) && (
+        <p className="zk-action-inline-result__message" data-action-result-message="">{message}</p>
+      )}
+      {spec.entries && spec.entries.length > 0 && (
+        <dl className="zk-action-inline-result__list">
+          {spec.entries.map((entry, idx) => (
+            <React.Fragment key={idx}>
+              <dt>{pickText(entry.label, locale, t)}</dt>
+              <dd>{evaluateDeclarativeExpr(entry.value, result, locale, t)}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+interface InlineActionResult {
+  readonly result: Record<string, unknown>;
+  readonly tone: BadgeTone;
+  readonly message?: string;
+}
+
 const TABLE_PAGE_SIZE = 15;
 
 interface StickyColMeta {
@@ -1202,6 +1342,10 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [pollIntervalMs, setPollIntervalMs] = useState<number>(defaultPollMs);
   const pollMs = pollIntervalMs > 0 ? pollIntervalMs : undefined;
 
+  // One accounts + recent-conversations read per page, shared by every conversation column and picker.
+  const usesConversations = useMemo(() => specUsesConversations(spec), [spec]);
+  const conversations = useConversationDirectory({ enabled: usesConversations });
+
   const resource = usePluginRpc<TData>(pluginId, statusMethod, undefined, {
     pollMs,
     isEmpty: spec.isEmpty ?? (() => false),
@@ -1212,6 +1356,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [manualRefreshBusy, setManualRefreshBusy] = useState(false);
   const [actionInputs, setActionInputs] = useState<Readonly<Record<string, Readonly<Record<string, string>>>>>({});
   const [actionResults, setActionResults] = useState<Readonly<Record<string, Record<string, unknown>>>>({});
+  const [inlineResults, setInlineResults] = useState<Readonly<Record<string, InlineActionResult>>>({});
   const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
   const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
   const [sectionSorts, setSectionSorts] = useState<Readonly<Record<string, { readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>>>({});
@@ -1295,15 +1440,32 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         ? action.name.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`)
         : action.name;
       const res = await call<Record<string, unknown> | undefined>(rpcMethod, payload);
-      const msg = (res && typeof res === 'object' && typeof res.message === 'string' && res.message)
+      const answerMessage = res && typeof res === 'object' && typeof res.message === 'string' && res.message
         ? res.message
-        : (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
+        : undefined;
+      const msg = answerMessage
+        ?? (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
       const tone: 'success' | 'warning' | 'danger' =
         res && typeof res === 'object' && (res.passed === false || res.decision === 'block')
           ? 'danger'
           : res && typeof res === 'object' && (res.decision === 'review' || res.decision === 'warn')
             ? 'warning'
             : 'success';
+      if (action.result) {
+        // Inline result next to the form; no page-top banner far from the input. The message and the
+        // computed tone go with it (the spec's own `tone` still wins).
+        const inlineMessage = answerMessage ?? (action.successMessage ? pickText(action.successMessage, locale, t) : undefined);
+        setInlineResults((prev) => ({
+          ...prev,
+          [action.name]: {
+            result: res && typeof res === 'object' ? res : {},
+            tone,
+            ...(inlineMessage ? { message: inlineMessage } : {}),
+          },
+        }));
+        await resource.refresh();
+        return;
+      }
       if (res && typeof res === 'object') {
         const previewKeys = ['dataUrl', 'qrDataUrl', 'imageUrl', 'shortUrl', 'url', 'text', 'output', 'result'];
         const hasPreviewable = previewKeys.some((k) => res[k] !== undefined && res[k] !== null && res[k] !== '');
@@ -1455,9 +1617,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const headerActions = spec.actions?.filter((a) => !a.fields || a.fields.length === 0) ?? [];
   const formActions = spec.actions?.filter((a) => a.fields && a.fields.length > 0) ?? [];
 
-  return (
+  const page = (
     <PluginPage data-zhin-plugin-id={pluginId}>
-      <style>{pluginUiStyles}{declarativeStyles}</style>
+      <style>{pluginUiStyles}{declarativeStyles}{conversationPickerStyles}</style>
       <PageHeader
         mark={defaultMark}
         title={resolvedTitle}
@@ -1701,6 +1863,22 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                         field.type === 'radio' ||
                         field.type === 'checkbox-group';
                       const wrapperClass = isFullWidth ? 'zk-field--full col-span-full' : undefined;
+                      if (field.type === 'conversation') {
+                        return (
+                          <div key={field.key} className="zk-field--full col-span-full">
+                            <Field label={fieldLabelText} hint={fieldHint} required={field.required}>
+                              {() => (
+                                <ConversationPicker
+                                  value={fieldVal}
+                                  onChange={setVal}
+                                  disabled={isDisabled || isBusy}
+                                  {...(field.conversationKinds ? { kinds: field.conversationKinds } : {})}
+                                />
+                              )}
+                            </Field>
+                          </div>
+                        );
+                      }
                       if (field.type === 'switch') {
                         return (
                           <div key={field.key} className={wrapperClass}>
@@ -1802,7 +1980,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                             ) : (
                               <input
                                 className="zk-input"
-                                type={field.secret || field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                                type={field.secret || field.type === 'password'
+                                  ? 'password'
+                                  : field.type === 'number' || field.type === 'date' || field.type === 'time'
+                                    ? field.type
+                                    : 'text'}
                                 placeholder={field.placeholder ?? (locale === 'en' ? `Enter ${fieldLabelText}…` : `请输入${fieldLabelText}…`)}
                                 value={fieldVal}
                                 onChange={(e) => setVal(e.target.value)}
@@ -1839,6 +2021,22 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                     )}
                   </div>
                   {renderActionResultPreview(action.name, actionResults[action.name])}
+                  {action.result && action.name in inlineResults && (
+                    <ActionInlineResult
+                      name={action.name}
+                      spec={action.result}
+                      result={inlineResults[action.name]?.result ?? {}}
+                      fallbackTone={inlineResults[action.name]?.tone}
+                      message={inlineResults[action.name]?.message}
+                      locale={locale}
+                      t={t}
+                      onDismiss={() => setInlineResults((prev) => {
+                        const next = { ...prev };
+                        delete next[action.name];
+                        return next;
+                      })}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -1949,8 +2147,19 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                         typeof (entry.value as { $path?: unknown }).$path === 'string'
                           ? (entry.value as { $path: string }).$path
                           : undefined);
+                      const muted = isEntryMuted(entry.muted, data, locale, t);
+                      const badgeLabel = entry.badge
+                        ? (isDeclarativeValueExpr(entry.badge.label)
+                          ? evaluateDeclarativeExpr(entry.badge.label, data, locale, t)
+                          : pickText(entry.badge.label as DeclarativeI18nText, locale, t))
+                        : undefined;
+                      const badge = badgeLabel && badgeLabel !== '-'
+                        ? { label: badgeLabel, tone: resolveBadgeTone(entry.badge?.tone, data, locale, t) }
+                        : undefined;
                       return {
                         key: inferredKey,
+                        muted,
+                        badge,
                         hint: entry.hint ? pickText(entry.hint, locale, t) : undefined,
                         label:
                           typeof entry.label === 'string' ||
@@ -2030,7 +2239,10 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                                   <span className="zk-hint">{(entry as { hint?: React.ReactNode }).hint}</span>
                                 )}
                               </div>
-                              <div className="zk-entry-card__value">
+                              <div
+                                className={`zk-entry-card__value${(entry as { muted?: boolean }).muted ? ' zk-entry-card__value--muted' : ''}`}
+                                data-muted={(entry as { muted?: boolean }).muted ? 'true' : undefined}
+                              >
                                 {renderSmartValue(
                                   rawVal,
                                   entryFieldKey,
@@ -2038,6 +2250,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                                   copiedKey,
                                   handleCopy,
                                   t,
+                                )}
+                                {(entry as { badge?: { label: React.ReactNode; tone: BadgeTone } }).badge && (
+                                  <Badge tone={(entry as { badge: { tone: BadgeTone } }).badge.tone}>
+                                    {(entry as { badge: { label: React.ReactNode } }).badge.label}
+                                  </Badge>
                                 )}
                                 {canQuickCopy && (
                                   <button
@@ -2496,6 +2713,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       {spec.footnote && <p className="zk-footnote">{pickText(spec.footnote, locale, t)}</p>}
     </PluginPage>
   );
+  return usesConversations
+    ? <ConversationDirectoryContext.Provider value={conversations}>{page}</ConversationDirectoryContext.Provider>
+    : page;
 }
 
 export interface DataTableBatchAction<TRow = Record<string, unknown>> {

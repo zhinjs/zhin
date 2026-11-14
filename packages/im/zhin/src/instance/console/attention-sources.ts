@@ -2,8 +2,10 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type {
   AttentionEndpoint,
+  AttentionEndpointDrift,
   AttentionErrorLogs,
   AttentionMcpServer,
   AttentionPluginInspection,
@@ -60,7 +62,31 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
         ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
         transportState: row.transportState, pendingLogin: row.pendingLogin,
+        ...(row.lastError ? { lastError: { category: row.lastError.category, message: row.lastError.message } } : {}),
       })),
+    } : {}),
+    ...(snapshots ? {
+      // #1250: zhin.config.yml `endpoints` versus persisted accounts, per adapter (ids / kinds only).
+      endpointConfigDrift: async (): Promise<readonly AttentionEndpointDrift[]> => {
+        const lease = snapshots.acquire();
+        try {
+          const snapshot = lease.value;
+          const index = snapshot.projections.get(adapterFeatureId);
+          if (!isAdapterIndex(index)) return [];
+          const rows: AttentionEndpointDrift[] = [];
+          for (const adapter of index.adapters()) {
+            const node = snapshot.tree.get(adapter.descriptor.owner);
+            if (!node || node.parent !== snapshot.root) continue;
+            let drift;
+            try { drift = await adapter.configDrift(); } catch { continue; }
+            if (!drift.entries.length) continue;
+            const ids = (kind: string) => drift.entries.filter(entry => entry.kind === kind).map(entry => entry.id);
+            rows.push({ instanceKey: node.instanceKey, adapter: adapter.descriptor.name,
+              configOnly: ids('config_only'), savedOnly: ids('snapshot_only'), changed: ids('changed') });
+          }
+          return rows;
+        } finally { lease.release(); }
+      },
     } : {}),
     ...(pluginManagement?.inspect && snapshots ? {
       plugins: async (): Promise<AttentionPluginsRead> => {

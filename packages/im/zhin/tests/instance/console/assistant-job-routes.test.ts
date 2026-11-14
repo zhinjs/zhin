@@ -65,6 +65,25 @@ it('rejects invalid job bodies without calling the scheduler', async () => {
   expect(jobs.add).not.toHaveBeenCalled();
 });
 
+it('rejects an IM notify without a target as an expected, classified failure (#1250)', async () => {
+  const post = await start();
+  const response = await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, notify: { channel: 'im' } });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ success: false, code: 'notify_target_missing', error: expect.stringContaining('需要目标会话') });
+  expect(jobs.add).not.toHaveBeenCalled();
+  expect(await (await post('', { schedule: { kind: 'every', everyMs: 60_000 } })).json()).toMatchObject({ code: 'invalid_argument' });
+  expect(await (await post('/pause', { id: 'ghost' })).json()).toMatchObject({ code: 'not_found' });
+});
+
+it('answers an unexpected scheduler failure with the generic message and a log correlation id', async () => {
+  jobs.add.mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'scene')"));
+  const post = await start();
+  const response = await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 } });
+  expect(response.status).toBe(500);
+  const body = await response.json();
+  expect(body).toEqual({ success: false, code: 'internal_error', error: 'Internal error', errorId: expect.stringMatching(/^err_[0-9a-f]{12}$/) });
+});
+
 it('removes, pauses and resumes by id; unknown ids are 404', async () => {
   const post = await start();
   for (const action of ['remove', 'pause', 'resume'] as const) {

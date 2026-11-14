@@ -6,6 +6,8 @@ import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: '查看今日已发布的推荐报告',
+  alias: ['lottery today'],
+  preferredAliasI18n: { 'zh-CN': 'lottery today', en: 'lottery today' },
   descriptionI18n: { en: 'Show today published recommendation report' },
   async execute({ use, locale, formatCommand }) {
     const { db } = use(lotteryRuntimeToken);

@@ -140,7 +140,7 @@ Where a setting lives depends on who changes it, when, and how many entries it h
 
 **Still being migrated** (later ADR 0057 steps; current behaviour is unchanged):
 
-- `endpoints[]` in plugin blocks and the project's `ai.plan.yml` are still seeds imported into the database on first start: once imported, YAML account seeds do not rewrite existing managed accounts, while adapter profile defaults still apply to accounts that inherit them; removing the seeds after import and Console export are not available yet;
+- `endpoints[]` in plugin blocks and the project's `ai.plan.yml` are still seeds imported into the database on first start: once imported, YAML account seeds do not rewrite existing managed accounts, while adapter profile defaults still apply to accounts that inherit them; when the two differ, the startup log and the Console attention inbox say so and each account can be imported or written back, see [Configuration file accounts and saved accounts](#endpoints-drift);
 - Permanent approvals are still stored in `data/owner-approve-always.json`;
 - Encryption keys are still in `.zhin/inference/` and `.zhin/endpoint-credentials/`, and there is no `zhin backup` yet — back up these keys together with the database, or credentials cannot be decrypted.
 
@@ -174,6 +174,7 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 | `htmlRenderer` | object | Shotium HTML rendering (e.g., `width` / `viewport` / `scale`) |
 | `menuKeyword` | string \| false | Built-in menu keyword; defaults to `菜单`, `false` or an empty string disables it |
 | `menuStyle` | object | Menu title, subtitle, accent color and background when rendering is available |
+| `commandSuggestion` | boolean \| object | Reply "did you mean" for near-miss commands instead of the AI; `false` disables it, `maxDistance` / `limit` tune it |
 | `plugin` | object | Root Plugin (the application itself) configuration |
 | `configVersion` | number | Must be 2 |
 | `plugins` | object | Instance alias to package mapping |
@@ -526,6 +527,27 @@ Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
 - Connection fields are shallow-merged, with per-entry fields taking precedence. Profile fallbacks merge separately per field.
 - Every entry requires a non-empty `id`. Reserved delimiters (`~` and NUL), duplicate IDs and invalid entries are rejected.
 - Missing or empty `endpoints` creates one Endpoint using the top-level `id`, or the instance key when it is absent.
+
+#### Configuration file accounts and saved accounts {#endpoints-drift}
+
+`endpoints` is only a **first-start seed**: while the project database holds no accounts for the adapter, startup creates them from this list; afterwards the database (the encrypted account document, keys in `.zhin/endpoint-credentials/`) is authoritative, and everything the Console adds, edits, starts or stops changes those records. Later edits of `endpoints` in the YAML file therefore **do not take effect on their own**: a removed account still signs in, an added one does not run.
+
+When the two differ:
+
+- startup (and a reload triggered by a configuration change) logs one `endpoint_config_drift` warning with the account ids and kinds of difference, never field values;
+- the Console attention inbox shows "Accounts … in the configuration file differ from the saved ones" per adapter instance, in three groups: **only in the configuration file** (not running), **no longer in the configuration file** (still run as saved), **configured differently**;
+- the accounts page resolves each account:
+  - **Import from configuration** (`plugin.<instance>.endpoint-import`, optionally starting it): writes that YAML account into the saved accounts. `${VAR}` references are saved as references and resolved against the current environment only when the account starts; the database never stores the resolved value. An existing account with that id takes the YAML configuration (its identity is kept). When the YAML entry's identity fields (the platform's declared account identity, such as a bot uin or appid) differ from the saved account, the import is **refused** — that is another platform account: replace the account, or delete it and import again. Imported configuration is validated and prepared by the adapter like an add or update. The call must carry `expectedRevision` (the account list revision; a missing one is rejected). Importing an account that is not saved yet adds an account and needs `endpoint.manage` at the adapter level (a binding to one account is not enough);
+  - **Write back to the configuration file** (`plugin.<instance>.endpoint-writeback`): writes saved accounts into the YAML `endpoints`. Credential fields are written only as `${VAR}` references; a credential value is never written into the file:
+    - a reference already in the file (the entry's own or one inherited from the instance block) is kept only when it **resolves to the saved value** — compared in-process, the value is never output or logged; when it resolves to something else or a variable is unset, a new placeholder reference is written (such as `${QQ_MAIN_SECRET}`, with `_NEW` appended when the old reference has that name) and reported in `placeholders` with its reason (`reference_mismatch` / `reference_unresolved`) for you to set in `.env`;
+    - a credential field without a reference gets a placeholder reference (no `reason` means `credential`);
+    - besides key names, credentials are recognized by value: URL userinfo (`ws://user:pass@host`) and credential-like query parameters (`?access_token=…`, `?sign=…`, …) become placeholder references; a list holding credentials (such as `tokens: [...]`, or items carrying a password) cannot be referenced as a whole and the write-back is **refused** — edit the file directly;
+    - the single-account form (the account of a block without an `endpoints` list) is edited in the file directly. Because it rewrites the configuration file, it needs a global `ops.config.write` (like every configuration write) on top of `endpoint.manage` for that adapter;
+    - write-back regenerates the whole `endpoints` sequence: comments inside the list are lost and entries that were not written back are re-serialized in the standard format (same content);
+    - it changes the instance's configuration block, which reloads that plugin instance: **every account of that adapter instance reconnects**, not only the written ones (the result carries `reconnectsAll: true` and says so in its message).
+  - An account no longer in the file that you do not want to keep is deleted on the accounts page.
+
+Comparison: accounts are matched by id (an id written as `${VAR}` is matched by its resolved value); a reference equals the same reference. When the file holds a reference and the saved account a value (every account seeded before this release), the reference is resolved in-process and compared (the value is never output): a different value counts as a (sensitive) difference, an unset variable lists the field as unverified rather than different. Importing the account once turns such fields into references.
 
 Real-world example (QQ official bot, main account through proxy gateway + sandbox account coexisting):
 

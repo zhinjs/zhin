@@ -29,7 +29,7 @@ async function project(config: Record<string, unknown>) {
   return root;
 }
 
-async function child(root: string, metadata?: { displayName?: string; icon?: string }, installed = false) {
+async function child(root: string, metadata?: { displayName?: string; displayNameI18n?: Record<string, string>; icon?: string }, installed = false) {
   const directory = installed ? join(root, 'node_modules/@test/child') : join(root, 'plugins/child');
   await json(join(directory, 'package.json'), { name: '@test/child', type: 'module', zhin: { ...manifest, ...(metadata ? { metadata } : {}) } });
   // Both executable schema and entry are deliberately unusable. Projection may
@@ -80,6 +80,14 @@ describe('Console plugin metadata projection', () => {
       expect(loads.length).toBeGreaterThan(0);
       expect(loads.every(source => source === join(root, 'plugin.ts'))).toBe(true);
     } finally { await runtime.stop(); }
+  });
+
+  it('projects display-name translations beside the untranslated name for inactive plugins', async () => {
+    const root = await project({ plugins: { pending: '@test/child' } });
+    await child(root, { displayName: 'Repeater', displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' } }, true);
+    const [item] = await buildManagedPluginList(root, join(root, '.zhin/plugin-lifecycle.json'));
+    expect(item).toMatchObject({ description: 'Repeater · 等待 Host 加载', displayName: 'Repeater',
+      displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' } });
   });
 
   it('preserves source order for numeric aliases in the managed list', async () => {

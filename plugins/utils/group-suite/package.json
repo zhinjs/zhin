@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-group-suite",
   "version": "1.1.28",
-  "description": "Zhin.js 群运营套件：签到、教学、统计、持久词库与群欢迎",
+  "description": "Check-in points, message stats, group Q&A, a persistent phrase bank and member welcomes.",
+  "keywords": [
+    "zhin.js",
+    "group",
+    "check-in",
+    "statistics",
+    "welcome"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -33,21 +44,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "group",
-    "checkin",
-    "stats",
-    "teach"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -144,6 +140,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Group Suite",
+      "displayNameI18n": {
+        "zh-CN": "群管套件",
+        "en": "Group Suite"
+      },
+      "descriptionI18n": {
+        "zh-CN": "签到积分、消息统计、群问答、持久词库与新成员欢迎。",
+        "en": "Check-in points, message stats, group Q&A, a persistent phrase bank and member welcomes."
+      },
+      "category": "community"
+    }
   }
 }

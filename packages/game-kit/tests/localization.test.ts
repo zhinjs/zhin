@@ -3,6 +3,7 @@ import { DisposeStack, outboundHostToken, projectLocaleToken, scheduleHostToken,
 import { defineGamePlugin } from '../src/define-game-plugin.js';
 import { GameEventBus } from '../src/game-events.js';
 import { GameSessionConflictError } from '../src/session-coordinator.js';
+import { isUserFacingError, userFacingErrorText } from '@zhin.js/core/feature/command';
 import type { BaseGameSessionRow } from '../src/base-session-service.js';
 
 it('localizes a session conflict only at the presentation boundary', () => {
@@ -10,6 +11,14 @@ it('localizes a session conflict only at the presentation boundary', () => {
   expect(error.format('en')).toContain('already have an active');
   expect(error.format('zh-CN')).toBe(error.message);
   expect(error).toMatchObject({ requestedGameId: 'next', activeGameId: 'active', sessionId: 'session', userId: 'user' });
+});
+
+it('is a sender-facing refusal, so command dispatch replies with it instead of failing the inbound message', () => {
+  const error = new GameSessionConflictError('rps', 'guess', 'session', 'user');
+  expect(error.name).toBe('GameSessionConflictError');
+  expect(isUserFacingError(error)).toBe(true);
+  expect(userFacingErrorText(error, 'en')).toBe(error.format('en'));
+  expect(userFacingErrorText(error, 'zh-CN')).toContain('「guess」');
 });
 
 it('uses the stored game locale for timeout notifications and keeps rows without a saved locale in Chinese', async () => {

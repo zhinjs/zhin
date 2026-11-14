@@ -299,8 +299,9 @@ const registryFixture = {
       description: 'foo plugin',
       author: 'zhin',
       isOfficial: true,
+      // Legacy registry category: read as `utility`.
       category: 'util',
-      tags: ['foo', 'demo'],
+      tags: ['zhin', 'zhin.js', 'bot', 'foo', 'demo'],
       downloads: { weekly: 10, monthly: 40 },
     },
     {
@@ -313,6 +314,17 @@ const registryFixture = {
       isOfficial: true,
       category: 'game',
       tags: ['bar'],
+    },
+    {
+      name: '@zhin.js/plugin-rss',
+      displayName: 'RSS',
+      displayNameI18n: { 'zh-CN': 'RSS 订阅', en: 'RSS Feeds', ja: 'ignored' },
+      version: '1.0.0',
+      description: 'RSS/Atom feed subscription',
+      descriptionI18n: { 'zh-CN': '订阅 RSS/Atom 源并推送新文章', en: 'Subscribe to RSS/Atom feeds' },
+      author: 'lc-cn',
+      category: 'information',
+      tags: ['zhin.js', 'rss', 'atom'],
     },
   ],
 };
@@ -336,7 +348,23 @@ function fakeMarketplaceFetch(url: unknown): Promise<Response> {
       'dist-tags': { latest: '1.1.0' },
       versions: {
         '1.0.0': { license: 'MIT', keywords: ['foo'] },
-        '1.1.0': { license: 'MIT', keywords: ['foo', 'latest'] },
+        '1.1.0': {
+          license: 'MIT',
+          keywords: ['zhin', 'zhin.js', 'bot', 'foo', 'latest'],
+          author: { name: 'zhin', url: 'https://github.com/zhinjs/zhin' },
+          // The publishing account is the release bot; the market never shows it.
+          _npmUser: { name: 'GitHub Actions' },
+          zhin: {
+            protocol: 1,
+            type: 'plugin',
+            metadata: {
+              displayName: 'Foo',
+              displayNameI18n: { 'zh-CN': '福', en: 'Foo' },
+              descriptionI18n: { 'zh-CN': '福插件', en: 'Foo plugin' },
+              category: 'utility',
+            },
+          },
+        },
       },
       time: { '1.0.0': '2026-01-01T00:00:00Z', '1.1.0': '2026-02-01T00:00:00Z' },
       author: { name: 'zhin' },
@@ -380,14 +408,14 @@ describe('console-rest-pages marketplace', () => {
   it('GET /pub/marketplace/search 返回分页列表并支持 keyword/category/official 过滤', async () => {
     const base = await startHost(baseCtx(), marketplaceOptions);
     const all = await json(await fetch(`${base}/pub/marketplace/search`));
-    expect(all).toMatchObject({ success: true, total: 2, page: 1, size: 20 });
+    expect(all).toMatchObject({ success: true, total: 3, page: 1, size: 20 });
     const items = all.data as Array<Record<string, unknown>>;
     expect(items[0]).toMatchObject({
       name: '@zhin.js/plugin-foo',
       displayName: 'Foo',
       official: true,
       isOfficial: true,
-      category: 'util',
+      category: 'utility',
       keywords: ['foo', 'demo'],
       downloads: { weekly: 10, monthly: 40 },
     });
@@ -401,6 +429,35 @@ describe('console-rest-pages marketplace', () => {
       `${base}/pub/marketplace/search?official=true&category=util`,
     ));
     expect(officials.total).toBe(1);
+    const utilities = await json(await fetch(`${base}/pub/marketplace/search?category=utility`));
+    expect((utilities.data as Array<{ name: string }>).map((p) => p.name)).toEqual(['@zhin.js/plugin-foo']);
+  });
+
+  it('GET /pub/marketplace/search 投影本地化名称、描述与分类，并按其搜索', async () => {
+    const base = await startHost(baseCtx(), marketplaceOptions);
+    const raw = await json(await fetch(`${base}/pub/marketplace/search?q=rss`));
+    expect(raw.data[0]).toMatchObject({
+      name: '@zhin.js/plugin-rss',
+      displayName: 'RSS',
+      displayNameI18n: { 'zh-CN': 'RSS 订阅', en: 'RSS Feeds' },
+      description: 'RSS/Atom feed subscription',
+      descriptionI18n: { 'zh-CN': '订阅 RSS/Atom 源并推送新文章', en: 'Subscribe to RSS/Atom feeds' },
+      category: 'information',
+      keywords: ['rss', 'atom'],
+    });
+    expect(raw.data[0].displayNameI18n).not.toHaveProperty('ja');
+
+    const zh = await json(await fetch(`${base}/pub/marketplace/search?q=${encodeURIComponent('推送新文章')}&locale=zh-CN`));
+    expect(zh.total).toBe(1);
+    expect(zh.data[0]).toMatchObject({ displayName: 'RSS 订阅', description: '订阅 RSS/Atom 源并推送新文章' });
+    const en = await json(await fetch(`${base}/pub/marketplace/search?q=rss&locale=en`));
+    expect(en.data[0]).toMatchObject({ displayName: 'RSS Feeds', description: 'Subscribe to RSS/Atom feeds' });
+
+    // Generic keywords are neither shown nor searchable.
+    const generic = await json(await fetch(`${base}/pub/marketplace/search?q=chatbot`));
+    expect(generic.total).toBe(0);
+    const information = await json(await fetch(`${base}/pub/marketplace/search?category=information`));
+    expect(information.total).toBe(1);
   });
 
   it('GET /pub/marketplace/detail/:name 返回包详情（scoped 名可带斜杠）', async () => {
@@ -415,6 +472,10 @@ describe('console-rest-pages marketplace', () => {
       license: 'MIT',
       author: 'zhin',
       keywords: ['foo', 'latest'],
+      displayName: 'Foo',
+      displayNameI18n: { 'zh-CN': '福', en: 'Foo' },
+      descriptionI18n: { 'zh-CN': '福插件', en: 'Foo plugin' },
+      category: 'utility',
       downloads: { weekly: 10, monthly: 40 },
       versions: ['1.0.0', '1.1.0'],
       lastPublish: '2026-02-01T00:00:00Z',
@@ -504,6 +565,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
       commands: () => [
         { pattern: 'foo', desc: 'foo cmd', plugin: 'core' },
         { pattern: 'bar', desc: 'bar cmd', plugin: 'game' },
+        { pattern: 'remind', desc: 'remind cmd', plugin: './node_modules/x/commands/remind/index.ts', pluginInstance: 'reminder', pluginPackage: '@zhin.js/plugin-reminder' },
       ],
       middlewares: () => [{ name: 'audit', owner: 'root', phase: 'before-dispatch', target: 'inbound', order: 10 }],
       components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card/index.ts' }],
@@ -536,12 +598,18 @@ describe('console-rest-pages introspection', () => {
     const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
     const body = await json(await fetch(`${base}/api/introspection/commands`));
     expect(body.success).toBe(true);
-    expect(body.data).toMatchObject({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
+    expect(body.data).toMatchObject({ page: 1, pageSize: 25, total: 3, totalPages: 1 });
     expect((body.data as { items: unknown[] }).items[0]).toMatchObject({ pattern: 'foo' });
 
     const filtered = await json(await fetch(`${base}/api/introspection/commands?filter=game`));
     expect((filtered.data as { total: number }).total).toBe(1);
     expect((filtered.data as { items: unknown[] }).items[0]).toMatchObject({ pattern: 'bar' });
+
+    // #1250: the owning plugin instance and package are searchable.
+    for (const filter of ['reminder', 'plugin-reminder']) {
+      const byOwner = await json(await fetch(`${base}/api/introspection/commands?filter=${filter}`));
+      expect((byOwner.data as { items: unknown[] }).items).toEqual([expect.objectContaining({ pattern: 'remind', pluginInstance: 'reminder' })]);
+    }
   });
 
   it('GET /api/introspection/endpoints 来自 ctx.getEndpoints', async () => {

@@ -15,6 +15,15 @@
       "type": "boolean",
       "default": true,
       "description": "Enable activity feedback for this plugin instance.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "启用活动反馈",
+          "description": "是否启用当前活动反馈插件实例。"
+        },
+        "en": {
+          "title": "Enable activity feedback"
+        }
+      },
       "x-descriptionZh": "是否启用当前活动反馈插件实例。",
       "x-zhin-config": {
         "levels": [
@@ -25,6 +34,15 @@
     "defaults": {
       "$ref": "#/$defs/activityFeedback",
       "description": "Default policy for all platforms and Endpoints.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "默认策略",
+          "description": "所有平台与 Endpoint 的默认策略。"
+        },
+        "en": {
+          "title": "Default policy"
+        }
+      },
       "x-descriptionZh": "所有平台与 Endpoint 的默认策略。",
       "x-zhin-config": {
         "levels": [
@@ -39,6 +57,15 @@
         "$ref": "#/$defs/activityFeedback"
       },
       "description": "Platform overrides keyed by platform name; values use the same shape as defaults.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "按平台覆盖",
+          "description": "按平台名覆盖；值的结构与 defaults 相同。"
+        },
+        "en": {
+          "title": "Platform overrides"
+        }
+      },
       "x-descriptionZh": "按平台名覆盖；值的结构与 defaults 相同。",
       "x-zhin-config": {
         "levels": [
@@ -53,6 +80,15 @@
         "$ref": "#/$defs/activityFeedback"
       },
       "description": "Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "按账号覆盖",
+          "description": "按 platform:endpointKey 覆盖；值的结构与 defaults 相同。"
+        },
+        "en": {
+          "title": "Endpoint overrides"
+        }
+      },
       "x-descriptionZh": "按 platform:endpointKey 覆盖；值的结构与 defaults 相同。",
       "x-zhin-config": {
         "levels": [
@@ -63,6 +99,15 @@
     "schedule": {
       "$ref": "#/$defs/scheduleFeedback",
       "description": "Schedule-only start, finish, and error feedback.",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "定时任务反馈",
+          "description": "仅用于 Schedule 的开始、完成与失败反馈。"
+        },
+        "en": {
+          "title": "Schedule feedback"
+        }
+      },
       "x-descriptionZh": "仅用于 Schedule 的开始、完成与失败反馈。",
       "x-zhin-config": {
         "levels": [
@@ -80,31 +125,97 @@
           "type": "boolean",
           "default": true,
           "description": "Enable this policy layer.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用此策略层",
+              "description": "是否启用当前策略层。"
+            },
+            "en": {
+              "title": "Enable this layer"
+            }
+          },
           "x-descriptionZh": "是否启用当前策略层。"
         },
         "phases": {
           "type": "object",
           "additionalProperties": false,
           "description": "Feedback policy keyed by lifecycle phase.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "各阶段反馈",
+              "description": "按生命周期 phase 配置反馈策略。"
+            },
+            "en": {
+              "title": "Phase feedback"
+            }
+          },
           "x-descriptionZh": "按生命周期 phase 配置反馈策略。",
           "properties": {
             "queued": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "排队中"
+                },
+                "en": {
+                  "title": "Queued"
+                }
+              }
             },
             "active": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "处理中"
+                },
+                "en": {
+                  "title": "Active"
+                }
+              }
             },
             "thinking": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "思考中"
+                },
+                "en": {
+                  "title": "Thinking"
+                }
+              }
             },
             "schedule_start": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "定时任务开始"
+                },
+                "en": {
+                  "title": "Schedule start"
+                }
+              }
             },
             "schedule_finish": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "定时任务完成"
+                },
+                "en": {
+                  "title": "Schedule finish"
+                }
+              }
             },
             "schedule_error": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "定时任务失败"
+                },
+                "en": {
+                  "title": "Schedule error"
+                }
+              }
             }
           }
         }
@@ -115,13 +226,37 @@
       "additionalProperties": false,
       "properties": {
         "private": {
-          "$ref": "#/$defs/phaseConfig"
+          "$ref": "#/$defs/phaseConfig",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "私聊"
+            },
+            "en": {
+              "title": "Private chat"
+            }
+          }
         },
         "group": {
-          "$ref": "#/$defs/phaseConfig"
+          "$ref": "#/$defs/phaseConfig",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "群聊"
+            },
+            "en": {
+              "title": "Group chat"
+            }
+          }
         },
         "channel": {
-          "$ref": "#/$defs/phaseConfig"
+          "$ref": "#/$defs/phaseConfig",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "频道"
+            },
+            "en": {
+              "title": "Channel"
+            }
+          }
         }
       }
     },
@@ -138,33 +273,87 @@
             "none"
           ],
           "description": "How the phase is presented.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "呈现方式",
+              "description": "该 phase 的呈现方式。"
+            },
+            "en": {
+              "title": "Presentation"
+            }
+          },
           "x-descriptionZh": "该 phase 的呈现方式。"
         },
         "emoji": {
           "type": "string",
           "description": "Reaction value for type=reaction.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "回应表情",
+              "description": "type=reaction 时使用的回应值。"
+            },
+            "en": {
+              "title": "Reaction"
+            }
+          },
           "x-descriptionZh": "type=reaction 时使用的回应值。"
         },
         "message": {
           "type": "string",
           "description": "Status text for type=message.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "状态文本",
+              "description": "type=message 时使用的状态文本。"
+            },
+            "en": {
+              "title": "Status text"
+            }
+          },
           "x-descriptionZh": "type=message 时使用的状态文本。"
         },
         "autoRemove": {
           "type": "boolean",
           "default": true,
           "description": "Remove the feedback after the phase stops.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "自动移除",
+              "description": "phase 停止后是否自动移除反馈。"
+            },
+            "en": {
+              "title": "Remove automatically"
+            }
+          },
           "x-descriptionZh": "phase 停止后是否自动移除反馈。"
         },
         "removeDelay": {
           "type": "number",
           "description": "Delay before removal in milliseconds; negative values are normalized to zero at runtime.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "移除延迟（毫秒）",
+              "description": "自动移除前等待的毫秒数；负值会在运行时归一化为 0。"
+            },
+            "en": {
+              "title": "Removal delay (ms)"
+            }
+          },
           "x-descriptionZh": "自动移除前等待的毫秒数；负值会在运行时归一化为 0。"
         },
         "platformConfig": {
           "type": "object",
           "additionalProperties": true,
           "description": "Platform-specific options.",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "平台专属选项",
+              "description": "平台特定选项。"
+            },
+            "en": {
+              "title": "Platform options"
+            }
+          },
           "x-descriptionZh": "平台特定选项。"
         }
       }
@@ -175,16 +364,48 @@
       "properties": {
         "phases": {
           "type": "object",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "各阶段反馈"
+            },
+            "en": {
+              "title": "Phase feedback"
+            }
+          },
           "additionalProperties": false,
           "properties": {
             "start": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "开始"
+                },
+                "en": {
+                  "title": "Start"
+                }
+              }
             },
             "finish": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "完成"
+                },
+                "en": {
+                  "title": "Finish"
+                }
+              }
             },
             "error": {
-              "$ref": "#/$defs/scenePhases"
+              "$ref": "#/$defs/scenePhases",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "失败"
+                },
+                "en": {
+                  "title": "Error"
+                }
+              }
             }
           }
         }

@@ -10,7 +10,10 @@
  * even when the configured policy would allow it outright. The approval card
  * shows the chain of sources that led to the call.
  *
- * Unattended turns have no ApprovalPort, so such calls are denied there.
+ * Unattended turns have no ApprovalPort, so such calls are denied there. A
+ * live IM turn whose conversation has no approver with authority may still
+ * ask the turn's own initiator to confirm their intent (#1250); that answer
+ * never replaces an approval the call needs for other reasons.
  */
 import type { InitiatorTrustLevel } from './trust-level.js';
 import { isOutboundToolName } from './trust-level.js';
@@ -142,6 +145,11 @@ export function formatProvenanceReason(kind: HighRiskActionKind, chain: string):
 
 export const PROVENANCE_UNATTENDED_REASON =
   '读取外部内容之后的高危动作（执行命令、向其他会话发消息、修改配置、定时任务）需要人工确认，无人值守的回合无法确认，已拒绝。';
+
+/** #1250: a live conversation that cannot show a confirmation is not an unattended turn; say which it is. */
+export const PROVENANCE_NO_CHANNEL_REASON =
+  '读取外部内容之后的高危动作（执行命令、向其他会话发消息、修改配置、定时任务）需要发起人确认，'
+  + '但当前会话没有可用的确认渠道，已拒绝。这不是无人值守的回合，用户也没有拒绝。';
 
 function describeSource(source: ProvenanceSource): string {
   switch (source.kind) {

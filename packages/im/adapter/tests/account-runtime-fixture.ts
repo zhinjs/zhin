@@ -30,7 +30,8 @@ const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 
 /** Same owning Index and CAS port as production, without file writers, provider IO or another account registry. */
-export async function accountRuntimeFixture(options: { config?: Record<string, unknown>; migration?: boolean; noDatabase?: boolean } = {}) {
+export async function accountRuntimeFixture(options: { config?: Record<string, unknown>; migration?: boolean; noDatabase?: boolean;
+  persistence?: Omit<import('../src/index.js').AdapterPersistencePorts, 'repository'> } = {}) {
   const root = rootPluginId(), owner = childPluginId(root, 'one'), otherOwner = childPluginId(root, 'two');
   const source = options.config ?? { endpoints: [] }, repository = new AccountRepository();
   const adapters = new Map([[owner, new AccountAdapter()], [otherOwner, new AccountAdapter()]]);
@@ -42,7 +43,7 @@ export async function accountRuntimeFixture(options: { config?: Record<string, u
     ...[owner, otherOwner].map(id => [id, { id, parent: root, instanceKey: String(id), packageName: 'fixture-child', packageRoot: '/fixture/child', children: [] }] as const),
   ]), config: new Map([[owner, source], [otherOwner, { endpoints: [] }]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
     resources: new Map([owner, otherOwner].map(id => [id, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }]])])) };
-  const index = await AdapterIndex.create(slots, createSnapshotView(0, state), new AbortController().signal, options.noDatabase ? {} : { repository });
+  const index = await AdapterIndex.create(slots, createSnapshotView(0, state), new AbortController().signal, options.noDatabase ? {} : { repository, ...options.persistence });
   await index.activate(new AbortController().signal);
   const snapshot = { ...state, projections: new Map([[adapterFeatureId, index]]) }, store = new SnapshotStore(snapshot);
   cleanup.push(() => store.close(), () => index.stop());

@@ -172,6 +172,11 @@ export interface ToolResultMessage extends AgentMessageBase {
   toolName: string;
   content: ToolResultContentBlock[];
   isError: boolean;
+  /**
+   * Written only by the agent framework on a policy denial: the approval-policy fingerprint the denial was
+   * decided under. Stamp-like text inside a tool's own output is never trusted for this (#1250 review).
+   */
+  deniedUnderPolicy?: string;
 }
 
 /**

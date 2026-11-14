@@ -87,10 +87,13 @@ export function createCalendarConsoleRpc(defaultRuntime?: CalendarRuntime): Plug
           if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) {
             throw new PluginConsoleRpcError('invalid_input', '请提供 YYYY-MM-DD 格式的日期');
           }
-          const time =
-            typeof input.time === 'string' && input.time.trim()
-              ? input.time.trim()
-              : '09:00';
+          const rawTime = typeof input.time === 'string' ? input.time.trim() : '';
+          // The page's time picker submits `HH:mm` (some browsers add `:ss`).
+          const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/u.exec(rawTime);
+          if (rawTime && !timeMatch) {
+            throw new PluginConsoleRpcError('invalid_input', '请提供 HH:mm 格式的时间');
+          }
+          const time = timeMatch ? `${timeMatch[1]}:${timeMatch[2]}` : '09:00';
           const repeat =
             typeof input.repeat === 'string' &&
             ['none', 'daily', 'weekly', 'monthly', 'yearly'].includes(input.repeat)

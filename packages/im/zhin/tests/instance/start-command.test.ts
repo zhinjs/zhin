@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { hasAgentConfiguration, warnLiteralConfigSecrets } from '../../src/instance/start-command.js';
+import { hasAgentConfiguration, warnLiteralConfigSecrets, warnUnsetConfigEnvPlaceholders } from '../../src/instance/start-command.js';
 
 describe('start command Agent configuration boundary', () => {
   it('does not load the optional Agent Host for explicitly disabled sections', () => {
@@ -45,6 +45,33 @@ describe('start command literal secret warning (ADR 0057)', () => {
   it('stays silent when every secret is a ${VAR} reference', () => {
     const warn = vi.fn();
     warnLiteralConfigSecrets({ http: { token: '${HTTP_TOKEN}' } }, { root: 'root', tree: new Map() } as never, 'zhin.config.yml', { warn });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('start command unset ${VAR} warning (#1250)', () => {
+  const document = {
+    configVersion: 2,
+    plugins: { qq: '@zhin.js/adapter-qq', rss: 'rss-plugin' },
+    disable_plugins: ['qq'],
+    http: { token: '${HTTP_TOKEN}' },
+    qq: { appid: '${QQ_APPID}', secret: '${QQ_SECRET}' },
+    rss: { key: '${RSS_KEY}' },
+  };
+
+  it('skips the configuration block of a plugin instance listed in disable_plugins', () => {
+    const warn = vi.fn();
+    warnUnsetConfigEnvPlaceholders(document, () => undefined, 'zhin.config.yml', { warn });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]![0]);
+    expect(message).toContain('${HTTP_TOKEN}');
+    expect(message).toContain('${RSS_KEY}');
+    expect(message).not.toMatch(/QQ_APPID|QQ_SECRET/u);
+  });
+
+  it('stays silent when only a disabled plugin references unset variables', () => {
+    const warn = vi.fn();
+    warnUnsetConfigEnvPlaceholders(document, name => (name === 'HTTP_TOKEN' || name === 'RSS_KEY' ? 'set' : undefined), 'zhin.config.yml', { warn });
     expect(warn).not.toHaveBeenCalled();
   });
 });

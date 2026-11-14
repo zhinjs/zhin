@@ -129,7 +129,8 @@ export class MessageDispatcher {
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({
-        op: 'dispatch_hit',
+        // A UserFacingError refusal is an expected outcome, replied to the sender; logged apart.
+        op: result.refused ? 'dispatch_refused' : 'dispatch_hit',
         command: result.command,
         owner: result.owner,
       }));

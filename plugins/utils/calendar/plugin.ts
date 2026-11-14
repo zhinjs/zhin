@@ -34,7 +34,6 @@ export type { CalendarConsoleEventItem };
 
 export default definePlugin<CalendarConfig>({
   name: "calendar",
-  metadata: { displayName: "日历" },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [calendarRuntimeStore, pluginConsoleRpcToken],
     injects: [databaseHostToken, outboundHostToken, httpHostToken, projectLocaleToken],

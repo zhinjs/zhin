@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/service-typesafe",
   "version": "1.0.21",
-  "description": "Optional TypeSafe AI Jev decision provider for Zhin",
+  "description": "Connects TypeSafe Choice and Score decision models to the inference runtime.",
+  "keywords": [
+    "zhin.js",
+    "typesafe",
+    "decision-model",
+    "inference"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -61,7 +71,6 @@
     }
   },
   "license": "MIT",
-  "author": "Zhin.js Team",
   "zhin": {
     "protocol": 1,
     "type": "plugin",
@@ -69,6 +78,18 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "TypeSafe AI",
+      "displayNameI18n": {
+        "zh-CN": "TypeSafe 决策服务",
+        "en": "TypeSafe AI"
+      },
+      "descriptionI18n": {
+        "zh-CN": "为推理运行时提供 TypeSafe Choice / Score 决策模型接入。",
+        "en": "Connects TypeSafe Choice and Score decision models to the inference runtime."
+      },
+      "category": "ai"
+    }
   }
 }

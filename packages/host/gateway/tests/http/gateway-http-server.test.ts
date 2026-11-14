@@ -126,15 +126,20 @@ describe('GatewayHttpServer Console RPC', () => {
   it('answers gateway.* itself and forwards every other type unchanged', async () => {
     const transport = new FakeTransport();
     const { server, origin } = await startServer(transport, { rpc: true });
-    withUsers(server);
+    const audits = installTestConsoleUsers(server as unknown as HttpHost, { 'owner-token': 'owner', 'viewer-token': 'viewer', nobody: 'none' });
     const own = await post(origin, 'viewer-token', { type: 'gateway.instance.status', requestId: 'q1' });
     expect(own.status).toBe(200);
     expect(await own.json()).toMatchObject({ success: true, type: 'gateway.instance.status', requestId: 'q1', data: { instanceId: 'default', state: 'running' } });
-    // viewer lacks ops.restart; an unknown gateway.* type is unmapped, not forwarded.
+    // viewer lacks ops.restart: refused and audited with a reason.
     const denied = await post(origin, 'viewer-token', { type: 'gateway.instance.restart', requestId: 'q2' });
     expect(denied.status).toBe(403);
     expect(await denied.json()).toMatchObject({ success: false, code: 'forbidden', requestId: 'q2' });
-    expect((await (await post(origin, 'owner-token', { type: 'gateway.nope' })).json())).toMatchObject({ code: 'unmapped' });
+    expect(audits).toEqual([expect.objectContaining({ action: 'rpc:gateway.instance.restart', outcome: 'denied', detail: expect.objectContaining({ reason: 'insufficient_permission' }) })]);
+    // zhinjs/zhin#1250: an unknown gateway.* type is answered 404 unknown_rpc, not forwarded, not audited.
+    const unknown = await post(origin, 'owner-token', { type: 'gateway.nope' });
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ success: false, code: 'unknown_rpc' });
+    expect(audits).toHaveLength(1);
     expect(transport.requests).toHaveLength(0);
     const forwardedBody = { type: 'config:get', requestId: 'q3', data: { name: 'x' } };
     const forwarded = await post(origin, 'viewer-token', forwardedBody);
@@ -144,6 +149,48 @@ describe('GatewayHttpServer Console RPC', () => {
     expect(transport.requests[0]!.context.principal).toMatchObject({ userId: 'viewer-token' });
     // The route is authenticated at the gateway before anything is dispatched.
     expect((await post(origin, 'wrong', { type: 'gateway.instance.status' })).status).toBe(401);
+  });
+});
+
+describe('GatewayHttpServer Console capabilities (zhinjs/zhin#1250)', () => {
+  const read = (origin: string, token?: string) => fetch(`${origin}/api/console/capabilities`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+
+  it('merges the gateway-owned RPC types with the instance reply', async () => {
+    const transport = new FakeTransport();
+    transport.handler = async () => jsonResponse(200, { success: true, data: { version: 1, rpc: ['attention.list', 'ping'], features: ['rpc.plugin'], complete: true } });
+    const { server, origin } = await startServer(transport, { rpc: true });
+    withUsers(server);
+    const reply = await read(origin, 'nobody');
+    expect(reply.status).toBe(200);
+    const { data } = await reply.json() as { data: { rpc: string[]; features: string[]; complete: boolean } };
+    expect(data.complete).toBe(true);
+    expect(data.rpc).toEqual(expect.arrayContaining(['attention.list', 'ping', 'gateway.instance.status']));
+    expect(data.features).toEqual(expect.arrayContaining(['rpc.plugin', 'rpc.unknown-code', 'gateway']));
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]!.context.principal).toMatchObject({ userId: 'nobody' });
+    // Signed-in principals only.
+    expect((await read(origin)).status).toBe(401);
+  });
+
+  it('says complete: false while the instance is not answering or predates the route', async () => {
+    const transport = new FakeTransport();
+    transport.ready = false;
+    const { server, origin } = await startServer(transport, { rpc: true });
+    withUsers(server);
+    const down = await (await read(origin, 'viewer-token')).json() as { data: { rpc: string[]; complete: boolean } };
+    expect(down.data.complete).toBe(false);
+    expect(down.data.rpc).toContain('gateway.instance.status');
+    expect(down.data.rpc).not.toContain('attention.list');
+    transport.ready = true;
+    transport.handler = async () => jsonResponse(403, { success: false, code: 'forbidden', error: 'Route is not registered with a Console permission' });
+    const old = await (await read(origin, 'viewer-token')).json() as { data: { complete: boolean } };
+    expect(old.data.complete).toBe(false);
+    // An instance without the route is asked once per route table (its refusal is audited there).
+    const asked = transport.requests.length;
+    await read(origin, 'viewer-token');
+    expect(transport.requests).toHaveLength(asked);
   });
 });
 

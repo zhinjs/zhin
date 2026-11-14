@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-slack",
   "version": "1.1.29",
-  "description": "Zhin.js Slack adapter for Plugin Runtime (Socket Mode / HTTP Events)",
+  "description": "Slack adapter: Socket Mode by default or the HTTP Events API, with Block Kit messages.",
+  "keywords": [
+    "zhin.js",
+    "slack",
+    "socket-mode",
+    "events-api"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,19 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "slack",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -138,6 +135,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Slack Adapter",
+      "displayNameI18n": {
+        "zh-CN": "Slack 适配器",
+        "en": "Slack Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "Slack 适配器：默认 Socket Mode 长连接，也可经 HTTP Events API 收发消息，支持 Block Kit。",
+        "en": "Slack adapter: Socket Mode by default or the HTTP Events API, with Block Kit messages."
+      },
+      "category": "adapter"
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
+import { resolveHostCredentialSource, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
 import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { prepareFeatureOverrideMigration } from './feature-override-migration.js';
@@ -11,7 +11,7 @@ import { PluginManagementActivity } from '@zhin.js/gateway/plugin-management';
 import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
-import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken, resolveStaticCapabilities } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointConfigSourceToken, endpointDesiredRepositoryToken, endpointSecretResolverToken, resolveStaticCapabilities } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -33,6 +33,7 @@ import {
   type GenerationAdmissionBindable,
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
+import { describeHmrReloadLog, describeManifestIgnoredLog, describeRestartLog } from './hmr-log.js';
 import {
   ConfigValidationError,
   createConfigDocument,
@@ -83,6 +84,7 @@ import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './spe
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
 import { PersistentEndpointRepository } from './runtime-endpoints/state.js';
+import { createEndpointConfigSource, createEndpointSecretResolver } from './runtime-endpoints/config-source.js';
 import { HostSelfChangeApply } from './self-change-apply.js';
 import { registerReadinessRoutes, type ReadinessSource } from '@zhin.js/runtime';
 import {
@@ -163,10 +165,6 @@ function readConsoleLoginAssistConfig(config: unknown): { captchaHelperUrl?: str
   const block = consoleBlock && typeof consoleBlock === 'object' ? (consoleBlock as Record<string, unknown>).loginAssist : undefined;
   const url = block && typeof block === 'object' ? (block as Record<string, unknown>).captchaHelperUrl : undefined;
   return typeof url === 'string' && url ? { captchaHelperUrl: url } : {};
-}
-
-function readableCapabilityId(value: string): string {
-  return value.split('\0').join(':');
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
@@ -270,6 +268,29 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
+  const currentEnvironment = () => {
+    const lease = host.runtime.snapshots.acquire();
+    try {
+      return lease.value.resources.get(lease.value.root)?.get(envStoreToken.id) as import('@zhin.js/runtime').EnvStore | undefined ?? hostEnvironment;
+    } finally { lease.release(); }
+  };
+  const expandEnvironment = (value: string) => String(currentEnvironment().expandMissingAsEmpty(value));
+  const endpointSecretResolver = createEndpointSecretResolver(expandEnvironment);
+  const endpointConfigSource = createEndpointConfigSource({
+    read: async () => {
+      const { document, revision } = await config.read();
+      return { document: document as Readonly<Record<string, unknown>>, revision };
+    },
+    snapshot: () => {
+      const lease = host.runtime.snapshots.acquire();
+      try { return lease.value; } finally { lease.release(); }
+    },
+    patch: request => consoleConfigurationStore.patchProject(request),
+    expand: expandEnvironment,
+    expandStrict: (value: string) => {
+      try { return String(currentEnvironment().expand(value)); } catch { return undefined; }
+    },
+  });
   const isRelationalDialect = ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect);
   if (isRelationalDialect) {
     databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
@@ -366,6 +387,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     environmentSource,
     configUpdates: [featureOverrideMigration.configUpdate],
     disabledPluginInstanceKeys: [],
+    // Marketplace-only manifest metadata problems are dropped, not fatal; `zhin plugin check` stays strict.
+    onManifestWarning: (warning) => {
+      getLogger('runtime').warn(formatCompact({
+        op: 'manifest_metadata_dropped',
+        package: warning.package,
+        field: warning.field,
+        message: warning.message,
+      }));
+    },
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
       im.install(context.resources);
@@ -386,6 +416,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // static accounts; a failed read on a supported database still fails startup.
       if (['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect)) {
         context.resources.provide(endpointDesiredRepositoryToken, endpointRepository);
+        // #1250: imported accounts keep `${VAR}` references, resolved here at start against the
+        // current environment; the config source compares / writes back `zhin.config.yml` endpoints.
+        context.resources.provide(endpointSecretResolverToken, endpointSecretResolver);
+        context.resources.provide(endpointConfigSourceToken, endpointConfigSource);
       }
       installLocaleHost(databaseHost)(context);
       installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
@@ -461,6 +495,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       installConsoleApiResources(consoleEventHub)(context);
     },
     async onRestartRequired(plan) {
+      // #1250: one structured line says which file changed and why this is a restart, not a reload.
+      getLogger('runtime').info(formatCompact(describeRestartLog(options.root, plan)));
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
       // 插件管理操作进行中时不在此重启：依赖/声明变更由插件管理流程的
       // 「应用/重启」步骤统一显式触发，避免在安装与应用之间意外重启。
@@ -476,18 +512,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
       await requestProcessRestart('dependencies');
     },
-    onReload(plan, generation, durationMs) {
-      getLogger('runtime').info(formatCompact({
-        op: 'hmr_reload',
-        generation,
-        duration_ms: durationMs,
-        scope: plan.subtrees.length > 0 ? 'subtree' : 'capability',
-        changed: plan.changed.map((source) => relative(options.root, source)).join(','),
-        ...(plan.slots.length > 0
-          ? { capabilities: plan.slots.map(readableCapabilityId).join(',') }
-          : {}),
-        ...(plan.subtrees.length > 0 ? { subtrees: plan.subtrees.join(',') } : {}),
-      }));
+    onReload(plan, generation, durationMs, report) {
+      // #1250: `rebuilt` / `rebuilt_plugins` are what the generation really set up again.
+      const log = describeHmrReloadLog(options.root, plan, generation, durationMs, report);
+      getLogger('runtime').info(formatCompact(log.info));
+      if (log.warn) getLogger('runtime').warn(formatCompact(log.warn));
+      if (log.staleWarn) getLogger('runtime').warn(formatCompact(log.staleWarn));
+    },
+    onManifestIgnored(change) {
+      getLogger('runtime').debug(formatCompact(describeManifestIgnoredLog(options.root, change)));
     },
     onError(error) {
       selfChangeApply.noteError();
@@ -669,9 +702,20 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // The gateway pipes the instance's output and echoes it to its terminal (ADR 0054 §3).
   const interactiveOutput = process.stdout.isTTY || process.env.ZHIN_INSTANCE_INTERACTIVE === '1';
   if (interactiveOutput && !parsed.once) {
+    // Ready no longer waits for account logins: report who is still starting or failed.
     const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
-    const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
+    const rest = endpoints.filter((ep) => ep.status !== 'online');
+    const starting = rest.filter((ep) => ep.phase === 'starting' || ep.phase === 'awaiting_assist' || ep.phase === 'reconnecting')
+      .map((ep) => ep.phase === 'awaiting_assist' ? `${ep.name} (awaiting login)` : ep.name);
+    // Redacted reason (#1250): category + the Adapter-masked message, never the raw error.
+    const reason = (ep: (typeof endpoints)[number]) => ep.lastError
+      ? `${ep.lastError.category}: ${ep.lastError.message}` : ep.startFailure?.code;
+    const failed = rest.filter((ep) => ep.phase === 'failed' || ep.phase === 'retrying')
+      .map((ep) => ep.startFailure ? `${ep.name} (${reason(ep)}${ep.phase === 'retrying' ? ', retrying' : ''})` : ep.name);
+    const offlineRows = rest.filter((ep) => !['starting', 'awaiting_assist', 'reconnecting', 'failed', 'retrying'].includes(ep.phase));
+    const offline = offlineRows.filter((ep) => !ep.startFailure).map((ep) => ep.name);
+    const offlineFailed = offlineRows.filter((ep) => ep.startFailure).map((ep) => `${ep.name} (${reason(ep)})`);
     const startup = getLogger('setup');
     startup.success('zhin runtime started');
     startup.info(formatCompact({
@@ -681,8 +725,17 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     if (online.length > 0) {
       startup.info(`online: ${online.join(', ')}`);
     }
+    if (starting.length > 0) {
+      startup.info(`starting: ${starting.join(', ')}`);
+    }
+    if (failed.length > 0) {
+      startup.warn(`failed: ${failed.join(', ')}`);
+    }
     if (offline.length > 0) {
       startup.info(`offline: ${offline.join(', ')}`);
+    }
+    if (offlineFailed.length > 0) {
+      startup.warn(`offline: ${offlineFailed.join(', ')}`);
     }
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
@@ -693,8 +746,21 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     ...(bridgedHttpHost ? { routes: bridgedHttpHost.routeTable() } : {}),
   });
   if (parsed.once) {
+    // `--once` is a start-up check: it waits (bounded) for every account's first start attempt to
+    // settle, then an enabled account whose start failed (failed, or retrying after a failed
+    // attempt) fails the run. Accounts still starting at the deadline or waiting for an
+    // interactive login are not failures (nothing has failed yet).
+    await waitForFirstStartOutcomes(() => im.endpoints.list(), ONCE_START_SETTLE_MS);
+    const failures = onceStartFailures(im.endpoints.list(), (() => {
+      const lease = host.runtime.snapshots.acquire();
+      try {
+        const adapters = lease.value.projections.get(adapterFeatureId);
+        return isAdapterIndex(adapters) ? (id: string) => adapters.startFailureReason(id as CapabilityId) : () => undefined;
+      } finally { lease.release(); }
+    })());
     await control.stop();
     controlChannel?.close();
+    if (failures.length) throw new AccountStartupError(failures);
     return;
   }
   // ADR 0040 §6：启动完成后接续生效中 / 待校验的自我变更（健康检查、回滚、回报）。
@@ -912,10 +978,16 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
   startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (可在页面顶部直接输入 HTTP_TOKEN 或访问 ?token=<HTTP_TOKEN>)') : ''}`);
 }
 
-function warnUnsetConfigEnvPlaceholders(
+/**
+ * Warns once about `${VAR}` placeholders whose variable is unset. The business block of an
+ * instance listed in `disable_plugins` (same key as its alias) is skipped: that plugin never
+ * loads, so its unset variables are not a startup problem.
+ */
+export function warnUnsetConfigEnvPlaceholders(
   document: unknown,
   getEnv: (name: string) => string | undefined,
   configFile: string,
+  logger: Pick<ReturnType<typeof getLogger>, 'warn'> = getLogger('setup'),
 ): void {
   const unset = new Set<string>();
   const visit = (value: unknown): void => {
@@ -936,11 +1008,21 @@ function warnUnsetConfigEnvPlaceholders(
       for (const item of Object.values(value)) visit(item);
     }
   };
-  visit(document);
+  if (document && typeof document === 'object' && !Array.isArray(document)) {
+    const record = document as Record<string, unknown>;
+    const disabled = new Set(Array.isArray(record.disable_plugins)
+      ? record.disable_plugins.filter((key): key is string => typeof key === 'string')
+      : []);
+    for (const [key, value] of Object.entries(record)) {
+      if (!disabled.has(key)) visit(value);
+    }
+  } else {
+    visit(document);
+  }
   if (unset.size > 0) {
     const vars = [...unset].map(name => `\${${name}}`).join(', ');
     const rel = relative(process.cwd(), configFile) || configFile;
-    getLogger('setup').warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
+    logger.warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
   }
 }
 
@@ -970,6 +1052,70 @@ function openBrowser(url: string): void {
       error: error instanceof Error ? error.message : String(error),
     }));
   });
+}
+
+/** One account that failed to start within `zhin start --once`. */
+export interface OnceStartFailure {
+  readonly account: string;
+  readonly phase: 'failed' | 'retrying';
+  readonly category?: string;
+  /** The account's start failure, credentials masked (the `endpoint_start_failed` log text). */
+  readonly reason: string;
+}
+
+/** Upper bound `zhin start --once` waits for first start attempts beyond the activation grace. */
+export const ONCE_START_SETTLE_MS = 30_000;
+
+/**
+ * Resolves once no account is still in its first start attempt (`starting` without a login flow
+ * waiting for a person), or after `timeoutMs`.
+ */
+export async function waitForFirstStartOutcomes(
+  list: () => readonly Readonly<{ phase: string; pendingLogin?: boolean }>[],
+  timeoutMs: number,
+  intervalMs = 100,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (list().some(row => row.phase === 'starting' && !row.pendingLogin) && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, Math.max(0, deadline - Date.now()))));
+  }
+}
+
+/**
+ * Accounts that make `zhin start --once` fail: not online, start phase `failed` or `retrying`
+ * (a start attempt failed; retries would follow in a long-running instance), and no login flow
+ * waiting for a person. `starting` / `awaiting_assist` are not failures.
+ */
+export function onceStartFailures(
+  endpoints: readonly Readonly<{ id: string; name: string; adapter: string; status: string; phase: string; pendingLogin?: boolean;
+    lastError?: Readonly<{ category: string; message: string }>; startFailure?: Readonly<{ code: string }> }>[],
+  reasonOf: (id: string) => string | undefined,
+): readonly OnceStartFailure[] {
+  return endpoints
+    .filter(row => row.status !== 'online' && (row.phase === 'failed' || row.phase === 'retrying') && !row.pendingLogin)
+    .map(row => Object.freeze({
+      account: `${row.adapter}/${row.name}`,
+      phase: row.phase as 'failed' | 'retrying',
+      ...(row.lastError ? { category: row.lastError.category } : {}),
+      reason: reasonOf(row.id) ?? row.lastError?.message ?? row.startFailure?.code ?? 'start failed',
+    }));
+}
+
+/**
+ * `zhin start --once` with failed accounts: the message leads with the first failure (as the CLI
+ * printed a failed start before #1250) and names every failed account.
+ */
+export class AccountStartupError extends Error {
+  readonly failures: readonly OnceStartFailure[];
+  constructor(failures: readonly OnceStartFailure[]) {
+    const [first, ...rest] = failures;
+    const describe = (failure: OnceStartFailure) =>
+      `${failure.account}${failure.category ? ` ${failure.category}` : ''}${failure.phase === 'retrying' ? ', retrying' : ''}`;
+    super(`${first!.reason} [${describe(first!)}]${rest.length
+      ? `; ${rest.length} more account(s) failed to start: ${rest.map(describe).join('; ')}` : ''}`);
+    this.name = 'AccountStartupError';
+    this.failures = Object.freeze([...failures]);
+  }
 }
 
 /** Plugins owning an Endpoint whose profile declares `runtime.sandbox` (ADR 0044). */

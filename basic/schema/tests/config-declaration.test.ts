@@ -27,6 +27,15 @@ describe('configuration declaration export', () => {
     expect(input).toEqual({ region: 'cn' });
     expect(validate({ region: 'China' })).toBe(false);
   });
+  it('exports per-locale titles and descriptions for both Console languages', () => {
+    const declaration = Schema.object({ teachCooldownMs: Schema.number().default(3000)
+      .i18n({ 'zh-CN': { title: '教学冷却', description: '同一成员两次教学的最短间隔' }, en: { title: 'Teach cooldown' } }) });
+    expect(declaration.toJsonSchema()).toMatchObject({ properties: { teachCooldownMs: {
+      'x-i18n': { 'zh-CN': { title: '教学冷却', description: '同一成员两次教学的最短间隔' }, en: { title: 'Teach cooldown' } },
+    } } });
+    expect(declaration.toJsonSchema().properties).not.toHaveProperty('teachCooldownMs.title');
+    expect(configValidator(declaration)({ teachCooldownMs: 1000 })).toBe(true);
+  });
   it('uses one subscription declaration for typed defaults and strict validation', () => {
     const schema = Schema.object({
       interval: Schema.number().min(1).max(86400).step(1).default(300).description('Polling interval in seconds').effect('reload'),

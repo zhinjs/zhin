@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-reminder",
   "version": "1.0.17",
-  "description": "Persistent personal reminders for Zhin Plugin Runtime",
+  "description": "Persistent personal reminders that survive restarts and are delivered to and managed in their original conversation.",
+  "keywords": [
+    "zhin.js",
+    "reminder",
+    "schedule",
+    "提醒"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -111,6 +121,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "持久提醒",
+      "displayNameI18n": {
+        "zh-CN": "持久提醒",
+        "en": "Reminders"
+      },
+      "descriptionI18n": {
+        "zh-CN": "个人定时提醒，重启后不丢失，只在创建它的会话里提醒和管理。",
+        "en": "Persistent personal reminders that survive restarts and are delivered to and managed in their original conversation."
+      },
+      "category": "utility"
+    }
   }
 }

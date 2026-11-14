@@ -15,9 +15,6 @@ import {
  */
 export default defineGamePlugin<SessionService>({
   name: 'guess-number',
-  metadata: {
-    displayName: 'Guess Number',
-  },
   game: {
     commandPath: 'guess',
     titleI18n: { en: 'Guess the Number' },

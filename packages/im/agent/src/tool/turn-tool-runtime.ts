@@ -4,15 +4,21 @@ import { approvalActionLabel } from './approval-presentation.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
+  formatApprovalBlocked,
   formatApprovalDenial,
   isApprovalPortAvailable,
   requestApprovalOutcome,
+  type ApprovalBlockReason,
+  type ApprovalDenialContext,
+  type ApprovalOutcome,
 } from '../session/approval-port.js';
+import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 import {
+  PROVENANCE_NO_CHANNEL_REASON,
   PROVENANCE_POLICY,
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
@@ -46,9 +52,9 @@ type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
 
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
-  | Readonly<{ status: 'denied'; policy: string; reason: string }>
+  | Readonly<{ status: 'denied'; policy: string; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean }>;
+  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
 
 export interface TurnToolRuntimeOptions {
   /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
@@ -78,6 +84,7 @@ export class TurnToolRuntime {
   readonly #leakInspector?: OutboundLeakInspector;
   readonly #messageAliases?: Pick<MessageAliasTable, 'resolve'>;
   readonly #hardGate: ToolHardGate;
+  readonly #decisionAudit?: DecisionAuditSink;
   /** Lower-trust sources that reached the model during this turn (#727). */
   readonly provenance: TurnProvenance;
 
@@ -90,6 +97,7 @@ export class TurnToolRuntime {
     this.#guard = resolveInjectionGuard(options.injectionGuard);
     this.provenance = options.provenance ?? new TurnProvenance();
     this.#messageAliases = options.messageAliases;
+    this.#decisionAudit = options.decisionAudit;
     this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
     this.#hardGate = new ToolHardGate(options.hardGate, {
       turnId: turn.identity.turnId,
@@ -129,7 +137,7 @@ export class TurnToolRuntime {
       } catch (error) {
         if (!(error instanceof UnconfirmedMessageAliasError)) throw error;
         await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: error.message, durationMs: 0 }, causedBy);
-        return Object.freeze({ status: 'failed', error: error.message, retryable: false });
+        return Object.freeze({ status: 'failed', error: error.message, retryable: false, sideEffect: tool.readOnly !== true });
       }
     }
     let actingFor: string | undefined;
@@ -153,7 +161,7 @@ export class TurnToolRuntime {
         actingFor = resolution.member.subjectId;
       }
     }
-    const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
+    const decision = await runTurnToolPolicies({ turn: this.turn, tool, input, provenanceTainted: this.provenance.tainted });
     // File/cwd authorization is asynchronous: cancellation can arrive after
     // the ingress check but before an allowed decision reaches execution.
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -188,16 +196,23 @@ export class TurnToolRuntime {
     const provenanceGate = highRisk !== undefined
       && this.#guard.confirmHighRisk === 'external_content'
       && this.provenance.tainted;
+    const denial: ApprovalDenialContext = { toolName: name, ...(highRisk ? { action: highRisk } : {}) };
+    // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
+    let authorizationRequired = decision.status === 'approval_required';
     if (hardGate.status === 'approved') {
-      // Already confirmed by a human for exactly these arguments.
+      authorizationRequired = false;
     } else if (provenanceGate) {
       // #727 M3.3: a high-risk action after lower-trust content always asks
       // first, even when the configured policy would allow it outright.
-      if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
-        return this.#deny(name, toolUseId, PROVENANCE_POLICY, PROVENANCE_UNATTENDED_REASON, causedBy);
+      const blocked = this.#approvalBlocked('intent');
+      if (blocked) {
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked });
+        return this.#deny(name, toolUseId, PROVENANCE_POLICY, `${blocked === 'unattended'
+          ? PROVENANCE_UNATTENDED_REASON
+          : PROVENANCE_NO_CHANNEL_REASON} ${formatApprovalBlocked(blocked, denial)}`, causedBy);
       }
       const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
-      const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+      const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
         ...(humanOnly ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
@@ -208,19 +223,34 @@ export class TurnToolRuntime {
         toolName: name,
         // Never matches a remembered approval: each tainted call is confirmed on its own.
         scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
+        purpose: 'intent',
+        // #1250 review: an admin's own answer may cover the call only when the call itself needs no
+        // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
+        ...(!authorizationRequired || (decision.status === 'approval_required' && decision.adminMayApprove)
+          ? { adminMayApprove: true }
+          : { requiresOwner: true }),
         question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
           humanOnly, tool.description),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+      this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval);
       if (approval.status !== 'approved') {
-        return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval), causedBy);
+        return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval, denial), causedBy);
       }
-    } else if (decision.status === 'approval_required') {
-      if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
-        return this.#deny(name, toolUseId, decision.policy, 'approval required but ApprovalPort unavailable', causedBy);
+      // #1250: an initiator-only confirmation proves intent, not authority; the ordinary approval still runs.
+      if (approval.scope !== 'intent') authorizationRequired = false;
+    }
+    if (authorizationRequired && decision.status === 'approval_required') {
+      // #1250 review: some policies only need the initiator to confirm their own intent (memory poisoning guard).
+      const purpose = decision.purpose ?? 'authorization';
+      const blocked = this.#approvalBlocked(purpose);
+      if (blocked) {
+        this.#auditApproval(name, decision.policy, purpose, { status: 'unavailable', reason: blocked });
+        return this.#deny(name, toolUseId, decision.policy,
+          formatApprovalBlocked(blocked, denial, blocked === 'no_channel' ? 'ApprovalPort unavailable' : undefined), causedBy);
       }
-      const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+      const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
         ...(humanOnly ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
@@ -229,18 +259,28 @@ export class TurnToolRuntime {
           : {}),
         requesterId: actingFor ?? this.turn.principal.subjectId,
         toolName: name,
-        scopeKey: tool.requiresApproval === 'once'
-          ? name
-          : approvalScopeKey(name, effectiveInput),
-        ...(tool.requiresApproval === 'once' || decision.policy === 'exec-policy'
+        // An intent confirmation never matches a remembered approval: each call is confirmed on its own.
+        scopeKey: purpose === 'intent'
+          ? `${decision.policy}:${this.turn.identity.turnId}:${toolUseId}`
+          : tool.requiresApproval === 'once'
+            ? name
+            : approvalScopeKey(name, effectiveInput),
+        ...(purpose !== 'intent' && (tool.requiresApproval === 'once' || decision.policy === 'exec-policy')
           ? { remember: 'session' as const }
           : {}),
+        purpose,
+        ...(decision.requiresOwner ? { requiresOwner: true } : {}),
+        ...(decision.adminMayApprove ? { adminMayApprove: true } : {}),
         question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-      if (approval.status !== 'approved') {
-        return this.#deny(name, toolUseId, decision.policy, formatApprovalDenial(approval), causedBy);
+      this.#auditApproval(name, decision.policy, purpose, approval);
+      // Fail closed if a surface ever answers an authorization request with an intent-only confirmation.
+      if (approval.status !== 'approved' || (approval.scope === 'intent' && purpose !== 'intent')) {
+        return this.#deny(name, toolUseId, decision.policy, approval.status === 'approved'
+          ? formatApprovalBlocked('no_channel', denial, 'only the initiator confirmed; approval needs someone with authority')
+          : formatApprovalDenial(approval, denial), causedBy);
       }
     }
 
@@ -276,7 +316,57 @@ export class TurnToolRuntime {
       }
       const message = error instanceof Error ? error.message : String(error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
-      return Object.freeze({ status: 'failed', error: message, retryable: false });
+      return Object.freeze({ status: 'failed', error: message, retryable: false, sideEffect: tool.readOnly !== true });
+    }
+  }
+
+  /** Unattended turns and turns without an approval surface cannot ask anyone (#1250: kept apart for the model). */
+  #approvalBlocked(purpose: 'authorization' | 'intent'): ApprovalBlockReason | undefined {
+    if (this.turn.policy.unattended) return 'unattended';
+    return isApprovalPortAvailable(this.turn.ports.approval, purpose) ? undefined : 'no_channel';
+  }
+
+  /** Ordinary and provenance prompts are audited like hard-gate cards (`tool_approval`, channel `turn_prompt`). */
+  #auditApproval(
+    toolName: string,
+    policy: string,
+    purpose: 'authorization' | 'intent',
+    outcome: ApprovalOutcome | Readonly<{ status: 'unavailable'; reason: string }>,
+  ): void {
+    const sink = this.#decisionAudit;
+    if (!sink) return;
+    const location = hardGateLocation(this.turn);
+    const [outcomeKind, reasonCode] = outcome.status === 'approved'
+      ? ['allow', 'tool_approval_approved'] as const
+      : outcome.status === 'timed_out'
+        ? ['deny', 'tool_approval_timeout'] as const
+        : outcome.status === 'denied'
+          ? ['deny', 'tool_approval_denied'] as const
+          : ['deny', 'tool_approval_unavailable'] as const;
+    try {
+      const result = sink.record({
+        turnId: this.turn.identity.turnId,
+        instanceId: location.instanceId,
+        platform: location.platform,
+        sceneId: location.sceneId,
+        userId: location.userId ?? null,
+        kind: 'tool_approval',
+        outcome: outcomeKind,
+        reasonCode,
+        ...(outcome.status === 'unavailable' ? { reasonDetail: outcome.reason } : {}),
+        payload: {
+          tool: toolName,
+          policy,
+          purpose,
+          channel: 'turn_prompt',
+          ...(outcome.status === 'approved' ? { decision: outcome.decision, ...(outcome.scope ? { scope: outcome.scope } : {}) } : {}),
+          ...(outcome.status === 'denied' ? { by: outcome.by } : {}),
+        },
+        actor: 'system',
+      });
+      if (result && typeof (result as Promise<unknown>).catch === 'function') (result as Promise<unknown>).catch(() => undefined);
+    } catch {
+      // Auditing never decides: a failed write does not change the approval outcome.
     }
   }
 
@@ -292,7 +382,9 @@ export class TurnToolRuntime {
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
     await this.#append({ type: 'tool_denied', toolName, toolUseId, policy, reason }, causedBy);
-    return Object.freeze({ status: 'denied', policy, reason });
+    // #1250: unknown tools changed nothing; a known tool not declared read-only would have written.
+    const tool = this.#tools.get(toolName);
+    return Object.freeze({ status: 'denied', policy, reason, sideEffect: tool !== undefined && tool.readOnly !== true });
   }
 
   async #cancel(toolName: string, toolUseId: string, durationMs: number, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
@@ -354,7 +446,7 @@ function formatApprovalQuestion(
   humanOnly: boolean,
   description?: string,
 ): string {
-  const command = typeof input.command === 'string' ? input.command.trim() : '';
+  const command = typeof input.command === 'string' ? redactSecretText(input.command.trim()) : '';
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
   const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
   return [
@@ -362,8 +454,11 @@ function formatApprovalQuestion(
     command ? `命令：${command}` : undefined,
     cwd ? `工作目录：${cwd}` : undefined,
     path ? `目标文件：${path}` : undefined,
-    humanOnly || (!command && !path && Object.keys(input).length > 0) ? `本次参数：${stableApprovalValue(input)}` : undefined,
-    reason.startsWith('tool approval policy is ') ? undefined : `风险：${reason}`,
+    humanOnly || (!command && !path && Object.keys(input).length > 0)
+      ? `本次参数：${stableApprovalValue(redactApprovalDisplay(input))}`
+      : undefined,
+    // #1250 review: policy reasons can quote the raw command (exec-policy); mask secrets like the arguments.
+    reason.startsWith('tool approval policy is ') ? undefined : `风险：${redactSecretText(reason)}`,
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 

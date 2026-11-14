@@ -12,9 +12,6 @@ import { createGameHubConsoleRpc } from './src/console.js';
  */
 export default definePlugin({
   name: 'game-hub',
-  metadata: {
-    displayName: 'Game Hub',
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [pluginConsoleRpcToken],
     injects: [gameIndexStore],

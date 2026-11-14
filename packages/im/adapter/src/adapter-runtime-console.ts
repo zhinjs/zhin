@@ -21,7 +21,9 @@ export interface AdapterConsoleRuntimeView {
   readonly lastMutation?: EndpointExecution;
 }
 
-export type AdapterConsoleMutation = 'add' | 'update' | 'start' | 'stop' | 'remove' | 'replace';
+export type AdapterConsoleMutation = 'add' | 'update' | 'start' | 'stop' | 'remove' | 'replace' | 'import';
+/** Account methods that act on the configuration file rather than the persisted directory. */
+export type AdapterConsoleConfigAction = 'writeback';
 
 /** Selection only from a Host-granted owner directory, never a Root snapshot or latest lookup. */
 export function ownedConsoleAdapter(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall): AdapterInstance {
@@ -79,6 +81,15 @@ export function prepareConsoleAdapterMutation(spec: AdapterConsoleSpec, call: Pl
 
 export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall, action: AdapterConsoleMutation,
   input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
+  if (action === 'import') {
+    // `expectedGeneration` may be omitted (the current generation); `expectedRevision` may not: an
+    // import overwrites a saved account, so the caller must name the account list it looked at.
+    if (!Object.hasOwn(input, 'expectedRevision')) {
+      throw new PluginConsoleRpcError('invalid_input', '导入需要 expectedRevision（刷新账号清单后使用其中的 revision）');
+    }
+    input = { ...input,
+      ...(input.expectedGeneration === undefined && call.runtime ? { expectedGeneration: call.runtime.generation } : {}) };
+  }
   const { adapter, revision, options } = prepareConsoleAdapterMutation(spec, call, input);
   try {
     let result;
@@ -86,6 +97,10 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
       if (spec.canAdd === false) throw new PluginConsoleRpcError('unsupported', '此 Adapter 不支持新增账号');
       const id = requireRuntimeId(spec, input.id);
       result = await adapter.add(revision, { endpointId: id, config: accountConfiguration(id, runtimeValues(spec, input.values, false)) }, options);
+    } else if (action === 'import') {
+      if (typeof input.id !== 'string' || !input.id.trim()) throw new PluginConsoleRpcError('invalid_input', '需要账号 id');
+      if (input.start !== undefined && typeof input.start !== 'boolean') throw new PluginConsoleRpcError('invalid_input', 'start 必须是布尔值');
+      result = await adapter.importConfigured(input.id.trim(), revision, { ...options, start: input.start === true });
     } else {
       const target = runtimeTarget(adapter, input, action === 'replace');
       switch (action) {
@@ -112,17 +127,79 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
     return { saved: true, restartRequired: false, execution: { ...result.execution },
       ...(result.operation ? { operation: { ...result.operation } } : {}),
       runtime: consoleRuntimeView(spec, call, adapter) as unknown as PluginConsoleRpcJson,
-      message: action === 'add' || action === 'replace' ? '账号配置已保存，尚未启动' : '账号期望状态已保存，请查看运行状态',
+      message: action === 'add' || action === 'replace' ? '账号配置已保存，尚未启动'
+        : action === 'import' ? (input.start === true ? '已从配置文件导入账号并开始启动' : '已从配置文件导入账号，尚未启动')
+          : '账号期望状态已保存，请查看运行状态',
     };
   } catch (error) {
-    if (error instanceof PluginConsoleRpcError) throw error;
-    if (error instanceof AdapterManagementError) {
-      const code = error.code === 'duplicate_entry' || error.code === 'conflict' || error.code === 'closed' ? 'conflict'
-        : error.code === 'not_found' ? 'not_found' : error.code === 'invalid_configuration' ? 'invalid_input'
-          : error.code === 'unsupported' ? 'unsupported' : error.code === 'commit_unknown' ? 'commit_unknown' : 'unavailable';
-      throw new PluginConsoleRpcError(code, code === 'commit_unknown' ? '提交结果未知，请刷新状态，勿重复提交' : '账号操作未能完成，请检查输入并刷新状态');
-    }
-    throw new PluginConsoleRpcError('commit_unknown', '提交结果尚未确认，请刷新状态，勿重复提交');
+    throw consoleAccountError(error, action === 'import');
+  }
+}
+
+/** Fixed, credential-free texts for account failures; conflicts name the CAS that failed. */
+function consoleAccountError(error: unknown, configuration = false): PluginConsoleRpcError {
+  if (error instanceof PluginConsoleRpcError) return error;
+  if (error instanceof AdapterManagementError) {
+    const code = error.code === 'duplicate_entry' || error.code === 'conflict' || error.code === 'closed' ? 'conflict'
+      : error.code === 'not_found' ? 'not_found' : error.code === 'invalid_configuration' ? 'invalid_input'
+        : error.code === 'unsupported' ? 'unsupported' : error.code === 'commit_unknown' ? 'commit_unknown' : 'unavailable';
+    const message = code === 'commit_unknown' ? '提交结果未知，请刷新状态，勿重复提交'
+      : code === 'conflict' ? (configuration ? '账号或配置文件已被其他操作修改，请刷新后重试' : '账号配置已变化，请刷新清单')
+        : code === 'not_found' && configuration ? '配置文件或已保存账号中没有该账号'
+          : code === 'unsupported' && configuration ? '此账号不能按这种方式导入或写回（单账号写法或列表中的 ${VAR} 引用）'
+            : '账号操作未能完成，请检查输入并刷新状态';
+    return new PluginConsoleRpcError(code, message);
+  }
+  return new PluginConsoleRpcError('commit_unknown', '提交结果尚未确认，请刷新状态，勿重复提交');
+}
+
+function sensitiveFields(spec: AdapterConsoleSpec): string[] {
+  return (spec.fields ?? []).filter(field => field.env || field.secret).map(field => field.key);
+}
+
+/** `endpoint-drift`: configuration file accounts versus persisted accounts (ids and paths only). */
+export async function consoleConfigDrift(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall): Promise<PluginConsoleRpcJson> {
+  const adapter = ownedConsoleAdapter(spec, call);
+  try {
+    const drift = await adapter.configDrift({ signal: call.signal, sensitiveFields: sensitiveFields(spec) });
+    return JSON.parse(JSON.stringify({
+      ...drift, generation: call.runtime?.generation ?? null,
+      canImport: adapter.canManage && drift.authority === 'snapshot',
+      canWriteback: adapter.canManage && drift.authority === 'snapshot',
+    })) as PluginConsoleRpcJson;
+  } catch (error) {
+    throw consoleAccountError(error, true);
+  }
+}
+
+/** `endpoint-writeback { ids }`: persisted accounts into `zhin.config.yml`; credentials only as `${VAR}`. */
+export async function consoleConfigWriteback(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall,
+  input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
+  const adapter = ownedConsoleAdapter(spec, call);
+  const runtime = call.runtime;
+  if (!runtime || !adapter.canManage) throw new PluginConsoleRpcError('unsupported', '此环境不支持持久化账号管理');
+  if (input.expectedGeneration !== undefined && input.expectedGeneration !== runtime.generation) {
+    throw new PluginConsoleRpcError('conflict', '运行代次已变化，请刷新账号清单');
+  }
+  const ids = input.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 64 || ids.some(id => typeof id !== 'string' || !id.trim())) {
+    throw new PluginConsoleRpcError('invalid_input', 'ids 需要 1-64 个账号 id');
+  }
+  call.signal.throwIfAborted();
+  try {
+    // The file write may cross its save boundary even if this call then times out.
+    call.commitStarted?.();
+    const result = await adapter.writeBackConfigured(ids.map(id => (id as string).trim()),
+      { signal: call.signal, sensitiveFields: sensitiveFields(spec) });
+    // Rewriting `<instance>.endpoints` reloads that plugin instance: every account of this Adapter
+    // instance reconnects, not only the written ones.
+    const reconnect = '该 Adapter 实例的全部账号会随配置重载重新连接';
+    return JSON.parse(JSON.stringify({ saved: true, ...result, reconnectsAll: true,
+      message: result.placeholders.length
+        ? `已写回配置文件，${reconnect}；请在 .env 中设置 ${result.placeholders.map(item => item.variable).join('、')}`
+        : `已写回配置文件，${reconnect}` })) as PluginConsoleRpcJson;
+  } catch (error) {
+    throw consoleAccountError(error, true);
   }
 }
 
@@ -132,9 +209,16 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
  * The Host authorizes against this before calling the handler. `undefined`: adapter-level target.
  * Throws `invalid_input` when `id` and `instanceId` are both present and disagree.
  */
-export function consoleAccountTarget(adapters: readonly AdapterInstance[], action: AdapterConsoleMutation,
+export function consoleAccountTarget(adapters: readonly AdapterInstance[], action: AdapterConsoleMutation | AdapterConsoleConfigAction,
   input: PluginConsoleRpcInput): string | undefined {
-  if (action === 'add' || action === 'replace') return undefined;
+  if (action === 'add' || action === 'replace' || action === 'writeback') return undefined;
+  if (action === 'import') {
+    // Importing over a saved account acts on that account; importing a new one adds an account,
+    // which (like `add`) needs the adapter level — an endpoint binding never covers a new account.
+    const id = typeof input.id === 'string' ? input.id.trim() : '';
+    if (!id) return undefined;
+    return adapters.some(adapter => adapter.list().some(entry => entry.endpointId === id)) ? id : undefined;
+  }
   if (typeof input.instanceId === 'string' && input.instanceId) {
     const selected = adapters.flatMap(adapter => adapter.list()).find(entry => entry.instanceId === input.instanceId);
     if (!selected) return undefined;

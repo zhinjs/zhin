@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-ledger",
   "version": "1.0.7",
-  "description": "Personal expense ledger for Zhin.js (Plugin Runtime): per-user entries in integer cents, period and category summaries, group privacy and an opt-in daily report",
+  "description": "Per-user expense records with daily, weekly and monthly category summaries, amounts hidden in groups, and an opt-in daily report.",
+  "keywords": [
+    "zhin.js",
+    "ledger",
+    "expense",
+    "bookkeeping",
+    "记账"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,19 +43,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "ledger",
-    "expense"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "dependencies": {
     "@zhin.js/console-contract": "workspace:*",
@@ -124,6 +122,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "记账",
+      "displayNameI18n": {
+        "zh-CN": "记账",
+        "en": "Ledger"
+      },
+      "descriptionI18n": {
+        "zh-CN": "按用户记录消费，按日 / 周 / 月汇总分类明细，群聊不显示金额，可订阅每日日报。",
+        "en": "Per-user expense records with daily, weekly and monthly category summaries, amounts hidden in groups, and an opt-in daily report."
+      },
+      "category": "utility"
+    }
   }
 }

@@ -115,6 +115,10 @@ export {
   type HostProtectedPaths,
   type HostProtectedPathsInput,
 } from './security/host-config-paths.js';
+export {
+  describeApprovalChannelConflicts,
+  type ApprovalChannelConflictInput,
+} from './security/approval-channel-conflicts.js';
 export { managementCommandText } from './init/command-presentation.js';
 export {
   handleRuntimeManagementCommand,
@@ -247,6 +251,7 @@ export {
   DECISION_ACTORS,
   DECISION_EVENT_KINDS,
   DECISION_OUTCOMES,
+  DECISION_PARENT_KEY,
   DECISION_REASON_CODES,
   DEFAULT_DECISION_AUDIT_RETENTION_DAYS,
   DecisionEventValidationError,
@@ -695,8 +700,10 @@ export {
 } from './assistant/index.js';
 
 export type {
+  ApprovalBlockReason,
   ApprovalDecision,
   ApprovalDecisionMemory,
+  ApprovalDenialContext,
   ApprovalDecisionPort,
   ApprovalOutcome,
   ApprovalOutcomePort,
@@ -705,6 +712,7 @@ export type {
 } from './session/approval-port.js';
 export {
   approvalOutcomeToDecision,
+  formatApprovalBlocked,
   formatApprovalDenial,
   requestApprovalOutcome,
 } from './session/approval-port.js';
@@ -885,6 +893,7 @@ export type {
 // ── MCP Client ──
 export { McpClientManager, McpClientConnection, mcpToolToAgentTool } from './mcp-client/index.js';
 export type { McpClientConnectionState, McpToolDefinition } from './mcp-client/index.js';
+export type { McpConnectionFailure, McpConnectionFailureCategory } from './mcp-client/index.js';
 
 // ── Common adapter tools (migrated from core) ──
 export {

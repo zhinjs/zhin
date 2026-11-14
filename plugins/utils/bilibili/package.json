@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-bilibili",
   "version": "0.1.13",
-  "description": "Bilibili live-start and UP dynamic subscriptions for Zhin.js (Plugin Runtime)",
+  "description": "Live-start alerts and new dynamics from UP hosts, pushed to private chats, groups or channels.",
+  "keywords": [
+    "zhin.js",
+    "bilibili",
+    "subscription",
+    "live-alert"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,22 +42,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "bilibili",
-    "live",
-    "dynamic",
-    "subscription",
-    "push"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -109,6 +103,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "哔哩哔哩订阅",
+      "displayNameI18n": {
+        "zh-CN": "哔哩哔哩订阅",
+        "en": "Bilibili Subscriptions"
+      },
+      "descriptionI18n": {
+        "zh-CN": "订阅 UP 主开播提醒与新动态，推送到私聊、群聊或频道。",
+        "en": "Live-start alerts and new dynamics from UP hosts, pushed to private chats, groups or channels."
+      },
+      "category": "information"
+    }
   }
 }

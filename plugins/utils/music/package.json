@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-music",
   "version": "1.1.28",
-  "description": "Music search and sharing plugin for Zhin.js (Plugin Runtime)",
+  "description": "Search QQ Music and NetEase Cloud Music and share song cards.",
+  "keywords": [
+    "zhin.js",
+    "music",
+    "qq-music",
+    "netease-music"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -31,22 +41,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "music",
-    "qq-music",
-    "netease-music",
-    "search",
-    "share"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -124,6 +118,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Music",
+      "displayNameI18n": {
+        "zh-CN": "点歌",
+        "en": "Music"
+      },
+      "descriptionI18n": {
+        "zh-CN": "搜索 QQ 音乐、网易云音乐并分享歌曲卡片。",
+        "en": "Search QQ Music and NetEase Cloud Music and share song cards."
+      },
+      "category": "entertainment"
+    }
   }
 }
