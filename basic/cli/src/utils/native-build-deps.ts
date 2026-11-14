@@ -9,6 +9,7 @@
  */
 import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import chalk from 'chalk';
 import { Document, isMap, isScalar, isSeq, parseDocument } from 'yaml';
@@ -97,24 +98,51 @@ export interface NativeBuildAllowancePlan {
   /** Entries the user explicitly denied (`allowBuilds.<name>: false`); left as they are. */
   readonly denied: readonly string[];
   /**
-   * `pnpm-workspace.yaml` is missing and pnpm 10+ is not confirmed, so it was not planned (pnpm 9
-   * runs dependency build scripts anyway); the caller prints a hint instead.
+   * The project's `pnpm-workspace.yaml` is missing and was not planned; the caller prints a hint
+   * instead. See {@link workspaceSkipReason}.
    */
   readonly workspaceSkipped: boolean;
+  readonly workspaceSkipReason?: WorkspaceSkipReason;
   /** Writes the workspace file (the caller writes `package.json`, already updated in `pkg`). */
   apply(): void;
+}
+
+/** Why a missing `pnpm-workspace.yaml` is not created. */
+export type WorkspaceSkipReason =
+  /** The project is a member of an enclosing pnpm workspace: a file here would make it a separate root. */
+  | { readonly kind: 'nested-workspace'; readonly workspaceFile: string }
+  /** pnpm 10+ is not confirmed: pnpm 9 rejects a workspace file without `packages` (and runs build scripts anyway). */
+  | { readonly kind: 'pnpm-unconfirmed' };
+
+/**
+ * The nearest `pnpm-workspace.yaml` in an ancestor of `dir` (not `dir` itself). The search stops
+ * at the filesystem root and at the user's home directory (neither beyond nor at it).
+ */
+export function findAncestorWorkspaceFile(dir: string, homeDir: string = os.homedir()): string | undefined {
+  const home = homeDir ? path.resolve(homeDir) : undefined;
+  let current = path.resolve(dir);
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current || parent === home) return undefined;
+    const candidate = path.join(parent, WORKSPACE_FILE);
+    if (fs.existsSync(candidate)) return candidate;
+    current = parent;
+  }
 }
 
 export interface NativeBuildAllowanceOptions {
   /** Installed pnpm version, consulted when `packageManager` does not pin pnpm. */
   readonly pnpmVersion?: PnpmVersionProbe;
+  /** Upper bound of the enclosing-workspace search (default: the user's home directory). */
+  readonly homeDir?: string;
 }
 
 /**
  * Plans the build-script allowance for the gateway's native dependencies in a pnpm project that
  * declares `@zhin.js/gateway`. Existing entries are kept; only missing ones are appended:
- * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent, only once pnpm 10+
- *   is confirmed — see {@link confirmsPnpm10});
+ * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent, only when the
+ *   project is not inside an enclosing pnpm workspace and pnpm 10+ is confirmed — see
+ *   {@link findAncestorWorkspaceFile}, {@link confirmsPnpm10});
  * - `onlyBuiltDependencies` in `pnpm-workspace.yaml` when that list exists or the project pins
  *   pnpm < 10.26, and in `package.json#pnpm.onlyBuiltDependencies` when that list exists
  *   (mutated in `pkg`; never created — pnpm 11 warns about the `pnpm` field).
@@ -128,7 +156,13 @@ export function planNativeBuildAllowance(
   if (!declaresGateway(pkg) || !usesPnpm(dir, pkg)) return undefined;
   const workspacePath = path.join(dir, WORKSPACE_FILE);
   const exists = fs.existsSync(workspacePath);
-  const workspaceSkipped = !exists && !confirmsPnpm10(dir, pkg, options.pnpmVersion);
+  let workspaceSkipReason: WorkspaceSkipReason | undefined;
+  if (!exists) {
+    const workspaceFile = findAncestorWorkspaceFile(dir, options.homeDir);
+    if (workspaceFile) workspaceSkipReason = { kind: 'nested-workspace', workspaceFile };
+    else if (!confirmsPnpm10(dir, pkg, options.pnpmVersion)) workspaceSkipReason = { kind: 'pnpm-unconfirmed' };
+  }
+  const workspaceSkipped = workspaceSkipReason !== undefined;
   const doc = exists ? parseDocument(fs.readFileSync(workspacePath, 'utf8')) : new Document({});
   if (doc.errors.length > 0 || (doc.contents !== null && !isMap(doc.contents))) return undefined;
 
@@ -178,6 +212,7 @@ export function planNativeBuildAllowance(
     changes,
     denied,
     workspaceSkipped,
+    ...(workspaceSkipReason ? { workspaceSkipReason } : {}),
     apply() {
       // lineWidth 0: keep long strings on one line instead of reflowing the user's file.
       if (workspaceChanged) fs.writeFileSync(workspacePath, doc.toString({ lineWidth: 0 }));
@@ -197,10 +232,17 @@ export function syncNativeBuildAllowance(
 ): boolean {
   const plan = planNativeBuildAllowance(dir, pkg, options);
   if (!plan) return false;
-  if (plan.workspaceSkipped) {
+  const entries = `allowBuilds: { ${GATEWAY_NATIVE_BUILD_DEPENDENCIES.join(': true, ')}: true }`;
+  if (plan.workspaceSkipReason?.kind === 'nested-workspace') {
+    console.log(chalk.yellow(
+      `  ! 项目位于 pnpm workspace 内，未在项目中创建 ${WORKSPACE_FILE}（会使它成为独立的 workspace 根）；`
+      + `请在 ${plan.workspaceSkipReason.workspaceFile} 中加入 ${entries}`
+      + `（nested in a pnpm workspace: add these allowBuilds entries to the root file）`,
+    ));
+  } else if (plan.workspaceSkipped) {
     console.log(chalk.gray(
       `  · 未确认 pnpm >= 10，未创建 ${WORKSPACE_FILE}（pnpm 9 本身会运行依赖构建脚本；升级到 pnpm 10+ 后再运行 zhin migrate，`
-      + `或手动在 ${WORKSPACE_FILE} 加入 allowBuilds: { ${GATEWAY_NATIVE_BUILD_DEPENDENCIES.join(': true, ')}: true }）`
+      + `或手动在 ${WORKSPACE_FILE} 加入 ${entries}）`
       + `（pnpm 10+ not confirmed, ${WORKSPACE_FILE} not created）`,
     ));
   }

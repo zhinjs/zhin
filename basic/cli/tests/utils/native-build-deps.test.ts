@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { confirmsPnpm10, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, usesPnpm } from '../../src/utils/native-build-deps.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { confirmsPnpm10, findAncestorWorkspaceFile, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, syncNativeBuildAllowance, usesPnpm } from '../../src/utils/native-build-deps.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -105,5 +105,45 @@ describe('creating pnpm-workspace.yaml needs pnpm 10+', () => {
     const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '9.0.2' });
     expect(plan?.workspaceSkipped).toBe(true);
     expect(plan?.changes.map(change => change.file)).toEqual(['package.json', 'package.json', 'package.json']);
+  });
+});
+
+describe('a project nested in an enclosing pnpm workspace', () => {
+  const nested = () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-nested-'));
+    roots.push(root);
+    const rootFile = path.join(root, 'pnpm-workspace.yaml');
+    const original = "packages:\n  - 'bots/*'\n";
+    fs.writeFileSync(rootFile, original);
+    const dir = path.join(root, 'bots', 'bot');
+    fs.mkdirSync(dir, { recursive: true });
+    return { root, rootFile, original, dir, pkg: { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' } } };
+  };
+
+  it('finds the nearest ancestor workspace file, stopping at the home directory', () => {
+    const { root, rootFile, dir } = nested();
+    expect(findAncestorWorkspaceFile(dir, '/nonexistent-home')).toBe(rootFile);
+    // The project's own file is not an ancestor.
+    expect(findAncestorWorkspaceFile(root, '/nonexistent-home')).toBeUndefined();
+    // The search never reaches the home directory or beyond it.
+    expect(findAncestorWorkspaceFile(dir, root)).toBeUndefined();
+    expect(findAncestorWorkspaceFile(dir, path.join(root, 'bots'))).toBeUndefined();
+  });
+
+  it('does not create a workspace file in the project even with pnpm 10+, and points at the root file instead', () => {
+    const { rootFile, original, dir, pkg } = nested();
+    const probe = vi.fn(() => '11.0.0');
+    const plan = planNativeBuildAllowance(dir, pkg, { pnpmVersion: probe, homeDir: '/nonexistent-home' });
+    expect(plan).toMatchObject({ workspaceSkipped: true, workspaceSkipReason: { kind: 'nested-workspace', workspaceFile: rootFile }, changes: [] });
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      syncNativeBuildAllowance(dir, pkg, false, { pnpmVersion: probe, homeDir: '/nonexistent-home' });
+      const output = log.mock.calls.flat().join('\n');
+      expect(output).toContain(rootFile);
+      expect(output).toContain('allowBuilds: { node-pty: true, ssh2: true, cpu-features: true }');
+    } finally { log.mockRestore(); }
+    expect(fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(rootFile, 'utf8')).toBe(original);
   });
 });
