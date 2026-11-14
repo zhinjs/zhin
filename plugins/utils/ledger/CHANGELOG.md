@@ -1,5 +1,13 @@
 # @zhin.js/plugin-ledger
 
+## 1.0.7
+
+### Patch Changes
+
+- @zhin.js/page@1.1.19
+- @zhin.js/skill@1.1.18
+- @zhin.js/tool@1.1.20
+
 ## 1.0.6
 
 ### Patch Changes
