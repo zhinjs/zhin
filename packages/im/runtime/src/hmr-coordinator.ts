@@ -210,6 +210,8 @@ export class HmrCoordinator {
           ? {
               affectedSources: (source: string) =>
                 this.options.modules.affectedSources?.(source) ?? [source],
+              staleDependents: (source: string) =>
+                this.options.modules.staleDependents?.(source) ?? [],
             }
           : undefined;
         const plan = new InvalidationPlanner(this.options.ownership(), dependencyPort).plan(
@@ -292,6 +294,7 @@ export class HmrCoordinator {
   #syncModuleState(): void {
     const ownership = this.options.ownership();
     this.options.modules.updateWatchRoots?.(ownership.watchRoots());
+    this.options.modules.updateRevisionableRoots?.(ownership.revisionableRoots());
     this.options.modules.commitGeneration?.(ownership.moduleSources());
     // Baselines for field comparison of the manifests this generation was built from.
     if (this.options.modules.watch) {

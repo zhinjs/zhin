@@ -7,6 +7,8 @@ import type { ManifestFieldChange } from './manifest-change.js';
 
 export interface DependencyImpactPort {
   affectedSources(source: string): readonly string[];
+  /** Importers that keep their old instance of the source after a reload (#1250). */
+  staleDependents?(source: string): readonly string[];
 }
 
 export interface NoInvalidationPlan {
@@ -25,6 +27,12 @@ export interface GenerationInvalidationPlan {
   /** Paths without ownership records; RootRuntime may claim them through a convention. */
   readonly fallbacks: readonly FallbackInvalidation[];
   readonly reasons: readonly string[];
+  /**
+   * Loaded modules that import a changed source but are not refreshed by this reload, e.g.
+   * through a package-name import of a package the runtime cannot revision (#1250
+   * `hmr-stale-cross-package-import`). They keep the old code until the process restarts.
+   */
+  readonly unrefreshedDependents?: readonly string[];
 }
 
 export interface FallbackInvalidation {
@@ -74,6 +82,7 @@ export class InvalidationPlanner {
     const manifestSources = new Set<string>();
     const reasons = new Set<string>();
     const processReasons = new Set<string>();
+    const unrefreshed = new Set<string>();
 
     for (const source of changed) {
       if (basename(source) === 'package.json') {
@@ -84,6 +93,9 @@ export class InvalidationPlanner {
           normalizeSourcePath(item),
         ),
       );
+      for (const dependent of this.dependencies?.staleDependents?.(source) ?? []) {
+        unrefreshed.add(normalizeSourcePath(dependent));
+      }
       let matched = false;
       for (const item of affected) {
         const records = this.ownership.recordsFor(item);
@@ -146,6 +158,7 @@ export class InvalidationPlanner {
       subtrees: Object.freeze(roots),
       fallbacks: Object.freeze(fallbacks),
       reasons: Object.freeze([...reasons]),
+      ...(unrefreshed.size > 0 ? { unrefreshedDependents: Object.freeze([...unrefreshed].sort()) } : {}),
     });
   }
 }

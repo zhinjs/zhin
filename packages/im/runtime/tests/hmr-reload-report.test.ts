@@ -50,7 +50,7 @@ it('reports a Root-owned non-capability file change as a whole-Root rebuild with
   expect(f.reports).toHaveLength(1);
   expect(f.reports[0]).toMatchObject({
     kind: 'reloaded', rebuilt: 'root',
-    reason: `changed Root Plugin files are not a convention capability: ${join(f.root, 'AGENTS.md')}`,
+    reason: `changed Root Plugin files are not a convention capability and no Root installer declared reading them: ${join(f.root, 'AGENTS.md')}`,
   });
   // The sibling "adapter" plugin is set up again although nothing of it changed.
   expect(f.reports[0]?.plugins).toEqual(expect.arrayContaining(['root', 'root/adapter', 'root/child']));

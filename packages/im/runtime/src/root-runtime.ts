@@ -36,8 +36,9 @@ import {
 import {
   emptyState, executeReloadWithEvents, GenerationAssembler,
   describeHmrReload, isProcessPlan, prepareInvalidatedGeneration,
-  type HmrReloadReport, type PreparedRebuild, type ReloadEventRequest,
+  type HmrReloadReport, type PreparedRebuild, type ReloadEventRequest, type SubtreePreparation,
 } from './root-runtime-diagnostics.js';
+import { projectFileWatchesOf } from './project-file-watches.js';
 import type {
   PreparedRuntimeGeneration, RuntimeGenerationModel, RuntimeGenerationState,
 } from './runtime-generation.js';
@@ -342,7 +343,42 @@ export class RootRuntime {
     return this.#enqueueControl(() => this.#reloadPlanInQueue(plan));
   }
 
-  async #reloadPlanInQueue(plan: GenerationInvalidationPlan): Promise<{ snapshot: RuntimeSnapshot; report?: HmrReloadReport } | ProcessInvalidationPlan> {
+  /**
+   * Splits off unclaimed project files that a committed Root installer declared it reads
+   * (`watchProjectFiles`, #1250): they are handed to that installer instead of rebuilding the Root.
+   */
+  #splitProjectFileChanges(plan: GenerationInvalidationPlan): { readonly plan: GenerationInvalidationPlan; readonly files: readonly string[] } {
+    const watches = projectFileWatchesOf(this.#model?.scopes.get(rootPluginId()));
+    if (!watches?.size || plan.fallbacks.length === 0) return { plan, files: [] };
+    const files = plan.fallbacks
+      .map((fallback) => normalizeSourcePath(fallback.source))
+      .filter((source) => !this.#runtimeInputSources.has(source) && watches.matches(source));
+    if (files.length === 0) return { plan, files: [] };
+    const declared = new Set(files);
+    return {
+      files: Object.freeze([...declared]),
+      plan: Object.freeze({
+        ...plan,
+        changed: Object.freeze(plan.changed.filter((source) => !declared.has(normalizeSourcePath(source)))),
+        fallbacks: Object.freeze(plan.fallbacks.filter((fallback) => !declared.has(normalizeSourcePath(fallback.source)))),
+      }),
+    };
+  }
+
+  async #reloadPlanInQueue(original: GenerationInvalidationPlan): Promise<{ snapshot: RuntimeSnapshot; report?: HmrReloadReport } | ProcessInvalidationPlan> {
+    const { plan, files: resourceFiles } = this.#splitProjectFileChanges(original);
+    if (resourceFiles.length > 0 && plan.changed.length === 0) {
+      // Only declared project files changed: no generation, no Scope rebuilt, no Endpoint touched.
+      await projectFileWatchesOf(this.#model?.scopes.get(rootPluginId()))?.notify(resourceFiles);
+      return {
+        snapshot: this.snapshot,
+        report: Object.freeze({
+          kind: 'reloaded', rebuilt: 'resource', plugins: Object.freeze([]), capabilities: Object.freeze([]),
+          resources: resourceFiles,
+        }),
+      };
+    }
+    const previousRoot = this.#model?.scopes.get(rootPluginId());
     let inputs: RuntimeInputCandidate | undefined;
     const previousInputs = this.#runtimeInputState();
     const previousGeneration = this.snapshot.generation;
@@ -365,7 +401,7 @@ export class RootRuntime {
           inspectProject: (doc, env) => this.#inspectProject(doc, env),
           prepareFull: (cur, sig, doc, env) => this.#prepare(cur, sig, doc, env),
           prepareInspected: (cur, insp, sig) => this.#prepareInspected(cur, insp, sig),
-          prepareSubtrees: (cur, insp, roots, sig, updates) => this.#prepareSubtrees(cur, insp, roots, sig, updates),
+          prepareSubtrees: (cur, insp, roots, sig, updates) => this.#prepareSubtreesReported(cur, insp, roots, sig, updates),
         }, current, signal, plan, inputs);
         if (outcome.restart) { restart = outcome.restart; return undefined; }
         if (!outcome.prepared) return undefined;
@@ -399,9 +435,17 @@ export class RootRuntime {
       this.#adoptRuntimeInputs(inputs);
       this.#recordApplication(inputs.applicationGroups ?? [], true, previousGeneration);
     }
-    const report = rebuild && snapshot.generation !== previousGeneration
+    if (resourceFiles.length > 0) {
+      // A replaced Root installer already read the new files during its setup.
+      const root = this.#model?.scopes.get(rootPluginId());
+      if (root === previousRoot) await projectFileWatchesOf(root)?.notify(resourceFiles);
+    }
+    const described = rebuild && snapshot.generation !== previousGeneration
       ? describeHmrReload(rebuild, previousScopes, this.#model?.scopes)
       : undefined;
+    const report = described && resourceFiles.length > 0
+      ? Object.freeze({ ...described, resources: resourceFiles })
+      : described;
     return { snapshot, report };
   }
 
@@ -570,16 +614,30 @@ export class RootRuntime {
     current: RuntimeSnapshot, inspected: InspectedProject, roots: readonly PluginId[], signal: AbortSignal,
     configUpdates?: Readonly<{ config: ReadonlyMap<PluginId, unknown>; projections: ReadonlyMap<FeatureId, unknown> }>,
   ): Promise<PreparedRuntimeGeneration> {
-    if (!this.#model) return this.#prepareInspected(current, inspected, signal);
+    return (await this.#prepareSubtreesReported(current, inspected, roots, signal, configUpdates)).prepared;
+  }
+
+  async #prepareSubtreesReported(
+    current: RuntimeSnapshot, inspected: InspectedProject, roots: readonly PluginId[], signal: AbortSignal,
+    configUpdates?: Readonly<{ config: ReadonlyMap<PluginId, unknown>; projections: ReadonlyMap<FeatureId, unknown> }>,
+  ): Promise<SubtreePreparation> {
+    if (!this.#model) {
+      return { prepared: await this.#prepareInspected(current, inspected, signal), fullRebuildReason: 'no committed generation to reload against' };
+    }
     try {
-      return await new SubtreeGenerationPreparer(
-        this.#modules, this.#model, inspected.graph, inspected.configResolver,
-        inspected.primaryConfigDocument, this.#environment, this.#installResources,
-        inspected.environmentLayers, this.#isolation, configUpdates,
-      ).prepare(current, roots, signal);
+      return {
+        prepared: await new SubtreeGenerationPreparer(
+          this.#modules, this.#model, inspected.graph, inspected.configResolver,
+          inspected.primaryConfigDocument, this.#environment, this.#installResources,
+          inspected.environmentLayers, this.#isolation, configUpdates,
+        ).prepare(current, roots, signal),
+      };
     } catch (error) {
       if (!(error instanceof SubtreeTopologyChangedError)) throw error;
-      return this.#prepareInspected(current, inspected, signal);
+      return {
+        prepared: await this.#prepareInspected(current, inspected, signal),
+        fullRebuildReason: `the Plugin topology changed under a subtree reload: ${error.message}`,
+      };
     }
   }
 }

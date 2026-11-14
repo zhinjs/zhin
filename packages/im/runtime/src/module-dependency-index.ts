@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { init, parse } from 'es-module-lexer';
-import { resolve as resolveImport } from 'import-meta-resolve';
+import { moduleResolve, resolve as resolveImport } from 'import-meta-resolve';
 
 const executableExtensions = Object.freeze([
   '.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx',
@@ -18,7 +18,16 @@ const sourceAlternatives: Readonly<Record<string, readonly string[]>> = Object.f
 export interface ModuleDependencyAnalysis {
   readonly dependencies: ReadonlySet<string>;
   readonly commonJsSources: ReadonlySet<string>;
+  /**
+   * Dependencies reached through package-name imports (#1250 `hmr-stale-cross-package-import`),
+   * with the file each package-name import resolved to along the way. A dependency missing here
+   * is reached through relative / `#` / file imports only.
+   */
+  readonly crossings?: ReadonlyMap<string, readonly string[]>;
 }
+
+/** Decides whether a module imported by package name is reloaded together with its importer. */
+export type RevisionablePredicate = (source: string) => boolean;
 
 /** Tracks the local import closure of every module entry loaded by the runtime. */
 export class ModuleDependencyIndex {
@@ -28,20 +37,23 @@ export class ModuleDependencyIndex {
   readonly #entriesByCommonJsSource = new Map<string, Set<string>>();
   readonly #commonJsByDirectory = new Map<string, Promise<boolean>>();
   readonly #dirtyEntries = new Set<string>();
+  readonly #crossingsByEntry = new Map<string, ReadonlyMap<string, readonly string[]>>();
 
   async analyze(entry: string): Promise<ModuleDependencyAnalysis> {
     const normalized = normalizeSourcePath(entry);
     const cached = this.#dependenciesByEntry.get(normalized);
     if (cached && !this.#dirtyEntries.has(normalized)) {
-      return analysis(cached, this.#commonJsSourcesByEntry.get(normalized) ?? new Set());
+      return analysis(cached, this.#commonJsSourcesByEntry.get(normalized) ?? new Set(),
+        this.#crossingsByEntry.get(normalized) ?? new Map());
     }
 
     await init;
     const dependencies = new Set<string>();
     const commonJsSources = new Set<string>();
+    const crossings = new Map<string, readonly string[]>();
     const visited = new Set<string>();
-    await this.#visit(normalized, normalized, dependencies, commonJsSources, visited);
-    return analysis(dependencies, commonJsSources);
+    await this.#visit(normalized, normalized, dependencies, commonJsSources, crossings, visited, []);
+    return analysis(dependencies, commonJsSources, crossings);
   }
 
   commit(entry: string, result: ModuleDependencyAnalysis): void {
@@ -51,6 +63,7 @@ export class ModuleDependencyIndex {
     const commonJsSources = new Set(result.commonJsSources);
     this.#dependenciesByEntry.set(normalized, dependencies);
     this.#commonJsSourcesByEntry.set(normalized, commonJsSources);
+    this.#crossingsByEntry.set(normalized, new Map(result.crossings ?? []));
     this.#dirtyEntries.delete(normalized);
     for (const dependency of dependencies) {
       addReverseEntry(this.#entriesByDependency, dependency, normalized);
@@ -96,6 +109,7 @@ export class ModuleDependencyIndex {
     this.#entriesByCommonJsSource.clear();
     this.#commonJsByDirectory.clear();
     this.#dirtyEntries.clear();
+    this.#crossingsByEntry.clear();
   }
 
   hasCommonJsImpact(source: string): boolean {
@@ -107,10 +121,32 @@ export class ModuleDependencyIndex {
     );
   }
 
-  affectedSources(source: string): readonly string[] {
+  /**
+   * The source and every loaded entry that re-imports it on reload. Without `revisionable`, a
+   * dependency reached through a package-name import is counted as reloadable.
+   */
+  affectedSources(source: string, revisionable?: RevisionablePredicate): readonly string[] {
     const normalized = normalizeSourcePath(source);
-    const entries = [...(this.#entriesByDependency.get(normalized) ?? [])].sort();
+    const entries = [...(this.#entriesByDependency.get(normalized) ?? [])]
+      .filter((entry) => !revisionable || this.#reloadsThrough(entry, normalized, revisionable))
+      .sort();
     return Object.freeze([normalized, ...entries.filter((entry) => entry !== normalized)]);
+  }
+
+  /**
+   * Loaded entries that import the source only through a package-name import of a package that
+   * is not reloaded with its importers (#1250): a reload keeps their old module instance.
+   */
+  staleDependents(source: string, revisionable: RevisionablePredicate): readonly string[] {
+    const normalized = normalizeSourcePath(source);
+    return Object.freeze([...(this.#entriesByDependency.get(normalized) ?? [])]
+      .filter((entry) => entry !== normalized && !this.#reloadsThrough(entry, normalized, revisionable))
+      .sort());
+  }
+
+  #reloadsThrough(entry: string, dependency: string, revisionable: RevisionablePredicate): boolean {
+    const hops = this.#crossingsByEntry.get(entry)?.get(dependency);
+    return !hops || hops.every((hop) => revisionable(hop));
   }
 
   #remove(entry: string): void {
@@ -122,6 +158,7 @@ export class ModuleDependencyIndex {
     }
     this.#dependenciesByEntry.delete(entry);
     this.#commonJsSourcesByEntry.delete(entry);
+    this.#crossingsByEntry.delete(entry);
     this.#dirtyEntries.delete(entry);
   }
 
@@ -130,11 +167,16 @@ export class ModuleDependencyIndex {
     source: string,
     dependencies: Set<string>,
     commonJsSources: Set<string>,
+    crossings: Map<string, readonly string[]>,
     visited: Set<string>,
+    hops: readonly string[],
   ): Promise<void> {
     if (visited.has(source)) return;
     visited.add(source);
-    if (source !== entry) dependencies.add(source);
+    if (source !== entry) {
+      dependencies.add(source);
+      if (hops.length > 0) crossings.set(source, Object.freeze([...hops]));
+    }
     if (!executableExtensions.includes(extname(source))) return;
     let text: string;
     try {
@@ -157,7 +199,12 @@ export class ModuleDependencyIndex {
     for (const specifier of specifiers) {
       const dependency = await resolveLocalImport(source, specifier);
       if (dependency) {
-        await this.#visit(entry, dependency, dependencies, commonJsSources, visited);
+        await this.#visit(entry, dependency, dependencies, commonJsSources, crossings, visited, hops);
+        continue;
+      }
+      const packaged = resolvePackageImport(source, specifier);
+      if (packaged) {
+        await this.#visit(entry, packaged, dependencies, commonJsSources, crossings, visited, [...hops, packaged]);
       }
     }
   }
@@ -177,8 +224,9 @@ export class ModuleDependencyIndex {
 function analysis(
   dependencies: ReadonlySet<string>,
   commonJsSources: ReadonlySet<string>,
+  crossings: ReadonlyMap<string, readonly string[]>,
 ): ModuleDependencyAnalysis {
-  return Object.freeze({ dependencies, commonJsSources });
+  return Object.freeze({ dependencies, commonJsSources, crossings });
 }
 
 function addReverseEntry(index: Map<string, Set<string>>, source: string, entry: string): void {
@@ -380,6 +428,47 @@ async function resolveLocalImport(importer: string, specifier: string): Promise<
     if (await exists(candidate)) return normalizeSourcePath(candidate);
   }
   return undefined;
+}
+
+/**
+ * A package-name import that Node resolves (with this process's conditions, symlinks followed)
+ * to a project source outside `node_modules` — a workspace or `file:` package (#1250).
+ * Installed packages are never tracked: they are not watched and need a restart to change.
+ */
+function resolvePackageImport(importer: string, specifier: string): string | undefined {
+  if (!isPackageSpecifier(specifier)) return undefined;
+  let resolved: URL;
+  try {
+    resolved = moduleResolve(specifier, pathToFileURL(importer), activeConditions());
+  } catch {
+    return undefined;
+  }
+  if (resolved.protocol !== 'file:') return undefined;
+  const path = normalizeSourcePath(fileURLToPath(resolved));
+  if (path.split(/[\\/]/u).includes('node_modules')) return undefined;
+  return path;
+}
+
+function isPackageSpecifier(specifier: string): boolean {
+  return !specifier.startsWith('.') && !specifier.startsWith('#') && !specifier.startsWith('/')
+    && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/u.test(specifier) && !isAbsolute(specifier);
+}
+
+let conditions: Set<string> | undefined;
+
+/** Node's default ESM conditions plus `--conditions` / `-C` from the command line and NODE_OPTIONS. */
+function activeConditions(): Set<string> {
+  if (conditions) return conditions;
+  const result = new Set(['node', 'import']);
+  const args = [...process.execArgv, ...(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    const inline = /^(?:--conditions|-C)=(.+)$/u.exec(arg);
+    if (inline?.[1]) result.add(inline[1]);
+    else if ((arg === '--conditions' || arg === '-C') && args[index + 1]) result.add(args[++index]!);
+  }
+  conditions = result;
+  return result;
 }
 
 function importCandidates(requested: string): readonly string[] {

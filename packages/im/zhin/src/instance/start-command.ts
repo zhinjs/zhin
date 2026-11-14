@@ -480,6 +480,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       const log = describeHmrReloadLog(options.root, plan, generation, durationMs, report);
       getLogger('runtime').info(formatCompact(log.info));
       if (log.warn) getLogger('runtime').warn(formatCompact(log.warn));
+      if (log.staleWarn) getLogger('runtime').warn(formatCompact(log.staleWarn));
     },
     onManifestIgnored(change) {
       getLogger('runtime').debug(formatCompact(describeManifestIgnoredLog(options.root, change)));

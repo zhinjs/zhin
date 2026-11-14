@@ -37,6 +37,8 @@ export interface HmrReloadLog {
   readonly info: LogFields;
   /** Set when the reload rebuilt the whole Root generation while the plan asked for less. */
   readonly warn?: LogFields;
+  /** Set when loaded modules import a changed file but were not refreshed by this reload. */
+  readonly staleWarn?: LogFields;
 }
 
 /**
@@ -51,8 +53,9 @@ export function describeHmrReloadLog(
   durationMs: number,
   report?: HmrReloadReport,
 ): HmrReloadLog {
-  const scope = plannedScope(plan);
+  const scope = report?.rebuilt === 'resource' ? 'resource' : plannedScope(plan);
   const changed = plan.changed.map((source) => display(root, source));
+  const unrefreshed = (plan.unrefreshedDependents ?? []).map((source) => display(root, source));
   const info: LogFields = {
     op: 'hmr_reload',
     generation,
@@ -63,10 +66,21 @@ export function describeHmrReloadLog(
     capabilities: list((report?.capabilities.length ? report.capabilities : plan.slots).map(readableCapabilityId)),
     subtrees: list(plan.subtrees),
     rebuilt_plugins: list(report?.plugins ?? []),
+    resources: list((report?.resources ?? []).map((source) => display(root, source))),
+    unrefreshed_dependents: list(unrefreshed),
   };
-  if (report?.rebuilt !== 'root' || scope === 'root') return { info };
+  // #1250 `hmr-stale-cross-package-import`: say which importers still run the old code.
+  const staleWarn: LogFields | undefined = unrefreshed.length > 0 ? {
+    op: 'hmr_unrefreshed_dependents',
+    generation,
+    changed: changed.join(','),
+    dependents: unrefreshed.join(','),
+    hint: 'imported through a package that is not a mounted local Plugin; restart the instance to load the new code',
+  } : undefined;
+  if (report?.rebuilt !== 'root' || scope === 'root') return { info, ...(staleWarn ? { staleWarn } : {}) };
   return {
     info,
+    ...(staleWarn ? { staleWarn } : {}),
     warn: {
       op: 'hmr_full_rebuild',
       generation,

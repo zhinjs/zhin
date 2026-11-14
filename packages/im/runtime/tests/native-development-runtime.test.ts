@@ -172,6 +172,59 @@ process.stdout.write(JSON.stringify({ first, second }));
     expect(JSON.parse(stdout)).toEqual({ first: 'v1', second: 'v2' });
   });
 
+  nativeTypeScriptIt('reloads a package-name import of a mounted workspace Plugin with its importer (#1250)', async () => {
+    const root = await fixture();
+    const runtimeEntry = new URL('../src/index.ts', import.meta.url).href;
+    const scenario = join(root, 'cross-package-scenario.mjs');
+    await writeFile(scenario, `
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { NativeDevelopmentModuleRuntime } from ${JSON.stringify(runtimeEntry)};
+const root = ${JSON.stringify(root)};
+const weather = join(root, 'plugins/weather');
+const shared = join(root, 'packages/shared');
+const wttr = join(weather, 'src/wttr.ts');
+const value = join(shared, 'value.ts');
+const entry = join(root, 'tools/lookup/index.ts');
+for (const directory of [join(weather, 'src'), shared, join(root, 'tools/lookup'), join(root, 'node_modules/@test')]) {
+  await mkdir(directory, { recursive: true });
+}
+// A workspace Plugin and a plain workspace library, linked like pnpm does.
+await writeFile(join(weather, 'package.json'), JSON.stringify({ name: '@test/weather', type: 'module', exports: { './wttr': './src/wttr.ts' } }));
+await writeFile(join(shared, 'package.json'), JSON.stringify({ name: '@test/shared', type: 'module', exports: { './value': './value.ts' } }));
+await symlink(weather, join(root, 'node_modules/@test/weather'), 'dir');
+await symlink(shared, join(root, 'node_modules/@test/shared'), 'dir');
+await writeFile(wttr, "export const forecast = 'v1';\\n");
+await writeFile(value, "export const value = 's1';\\n");
+await writeFile(entry, "import { forecast } from '@test/weather/wttr';\\nimport { value } from '@test/shared/value';\\nexport default forecast + ':' + value;\\n");
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+const first = (await runtime.load(entry)).default;
+// The committed generation mounts plugins/weather as a local child Plugin.
+runtime.updateRevisionableRoots([weather]);
+const affected = runtime.affectedSources(wttr);
+const stale = runtime.staleDependents(value);
+await writeFile(wttr, "export const forecast = 'v2';\\n");
+await runtime.invalidate(wttr);
+const second = (await runtime.load(entry)).default;
+await runtime.close();
+process.stdout.write(JSON.stringify({ first, second, affected, stale }));
+`);
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [...inheritedStripTypeArguments, '--import', tsxLoaderUrl, scenario],
+      { cwd: process.cwd() },
+    );
+    const entry = join(root, 'tools/lookup/index.ts');
+    expect(JSON.parse(stdout)).toEqual({
+      first: 'v1:s1',
+      second: 'v2:s1',
+      affected: [join(root, 'plugins/weather/src/wttr.ts'), entry],
+      // A plain library is not revisioned: its importer keeps the old instance and is reported.
+      stale: [entry],
+    });
+  });
+
   nativeTypeScriptIt('loads native .mts and .cts capability entries consistently', async () => {
     const root = await fixture();
     const mts = join(root, 'commands/status/index.mts');

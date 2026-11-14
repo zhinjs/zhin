@@ -68,6 +68,32 @@ describe('hmr_reload log (#1250)', () => {
   });
 });
 
+describe('hmr_reload resource and stale-dependent records (#1250)', () => {
+  it('reports a declared project file as a resource reload, without a full-rebuild warning', () => {
+    const log = describeHmrReloadLog(root, plan({
+      changed: ['/srv/bot/AGENTS.md'],
+      fallbacks: [{ source: '/srv/bot/AGENTS.md', owners: ['root' as never] }],
+    }), 7, 3, { kind: 'reloaded', rebuilt: 'resource', plugins: [], capabilities: [], resources: ['/srv/bot/AGENTS.md'] });
+    expect(formatCompact(log.info)).toBe(
+      'hmr_reload | generation: 7 | duration_ms: 3 | scope: resource | rebuilt: resource | changed: AGENTS.md | resources: AGENTS.md',
+    );
+    expect(log.warn).toBeUndefined();
+    expect(log.staleWarn).toBeUndefined();
+  });
+
+  it('lists importers the reload could not refresh', () => {
+    const log = describeHmrReloadLog(root, plan({
+      changed: ['/srv/bot/packages/shared/value.ts'],
+      subtrees: ['root/weather' as never],
+      unrefreshedDependents: ['/srv/bot/tools/lookup/index.ts'],
+    }), 4, 20, { kind: 'reloaded', rebuilt: 'subtree', plugins: ['root/weather'] as HmrReloadReport['plugins'], capabilities: [] });
+    expect(log.info).toMatchObject({ unrefreshed_dependents: 'tools/lookup/index.ts' });
+    expect(log.staleWarn).toMatchObject({
+      op: 'hmr_unrefreshed_dependents', changed: 'packages/shared/value.ts', dependents: 'tools/lookup/index.ts',
+    });
+  });
+});
+
 describe('instance_restart log (#1250)', () => {
   it('names the manifest, its changed fields and the runtime-relevant ones', () => {
     const restart: ProcessInvalidationPlan = {
