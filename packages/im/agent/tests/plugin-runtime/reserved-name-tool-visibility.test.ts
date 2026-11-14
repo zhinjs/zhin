@@ -22,6 +22,7 @@ describe('reserved-name tool calls', () => {
     expect(call).toMatchObject({ status: 'denied', policy: 'workspace-access' });
     // The loop continued: the denial came back to the model as a tool result.
     expect(run.modelRequests).toHaveLength(2);
-    expect(run.outbound).toEqual(['Writing files is not available here.']);
+    // #1250 owner review: an unexecuted side-effect call always gets the fixed notice line.
+    expect(run.outbound).toEqual(['Writing files is not available here.\n（文件操作未执行）']);
   });
 });

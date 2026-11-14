@@ -16,7 +16,7 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
-import { acknowledgesUnexecuted, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
+import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
@@ -427,17 +427,15 @@ export async function finalizeTurnReplyAndOutput(params: {
     output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart));
   }
   // #1250: a side-effect tool that was denied or failed must not be reported as done. Nothing has
-  // been published yet on this path (no settled phase, no streamed prefix), so one honest line can
-  // still be added when the reply itself says nothing about it.
+  // been published yet on this path (no settled phase, no streamed prefix), so one deterministic line
+  // is always added (owner review: no keyword guessing; an occasional redundant line is accepted).
   let honestTextReply = textReply;
   if (!state.phaseSettled && !state.replyRun?.offered && !stopped) {
     const unexecuted = unresolvedSideEffectFailures(finalPhaseToolCalls);
-    const rendered = imReply ? renderAgentOutput(output) : textReply;
-    if (unexecuted.length > 0 && rendered.trim() && !acknowledgesUnexecuted(rendered)) {
-      const notice = turnReplyMessages(input.turnContext.input?.locale, 'unexecuted',
-        { tools: unexecuted.map(call => `「${call.tool}」`).join('、') });
+    if (unexecuted.length > 0) {
+      const notice = formatUnexecutedNotice(unexecuted, input.turnContext.input?.locale);
       output = [...output, { type: 'text', content: notice }];
-      honestTextReply = `${textReply}\n\n${notice}`;
+      honestTextReply = textReply.trim() ? `${textReply}\n\n${notice}` : notice;
       logger.info(formatCompact({ op: 'unexecuted_tool_notice', session: sessionId, tools: unexecuted.map(call => call.tool).join(',') }));
     }
   }

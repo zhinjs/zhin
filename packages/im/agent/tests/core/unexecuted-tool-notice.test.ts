@@ -7,7 +7,7 @@ import { assistantTextReply, assistantToolCallReply, wireMockLlmApi, type MockLl
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import { DEFAULT_ALWAYS_LOADED_TOOLS } from '../../src/tool-catalog/types.js';
 import {
-  acknowledgesUnexecuted,
+  formatUnexecutedNotice,
   formatUnexecutedToolResult,
   unresolvedSideEffectFailures,
 } from '../../src/core/unexecuted-tool-notice.js';
@@ -33,15 +33,13 @@ describe('unexecuted tool notice helpers (#1250)', () => {
     ]).map(call => call.tool)).toEqual(['memory_upsert']);
   });
 
-  it('recognizes replies that already admit the failure', () => {
-    expect(acknowledgesUnexecuted('抱歉，没能记住，需要审批。')).toBe(true);
-    expect(acknowledgesUnexecuted('这次写不进去，记忆功能暂时不可用')).toBe(true);
-    expect(acknowledgesUnexecuted('Sorry, I could not save that.')).toBe(true);
-    expect(acknowledgesUnexecuted('Writing files is not available here.')).toBe(true);
-    expect(acknowledgesUnexecuted("I can't do that here.")).toBe(true);
-    expect(acknowledgesUnexecuted('记住啦，以后不给你放香菜～')).toBe(false);
-    expect(acknowledgesUnexecuted('没问题，记住啦！')).toBe(false);
-    expect(acknowledgesUnexecuted('Got it, saved!')).toBe(false);
+  it('names the action kinds in one deterministic line', () => {
+    const call = (tool: string) => ({ tool, result: 'x', status: 'denied' as const, sideEffect: true });
+    expect(formatUnexecutedNotice([call('memory_upsert')])).toBe('（记忆操作未执行）');
+    expect(formatUnexecutedNotice([call('schedule_add'), call('memory_upsert')])).toBe('（提醒、记忆等操作未执行）');
+    expect(formatUnexecutedNotice([call('memory_upsert'), call('memory_delete')])).toBe('（记忆操作未执行）');
+    expect(formatUnexecutedNotice([call('save_pref')])).toBe('（「save_pref」操作未执行）');
+    expect(formatUnexecutedNotice([call('write_file'), call('bash')], 'en')).toBe('(Not done: files, commands.)');
   });
 });
 
@@ -84,17 +82,27 @@ describe('final reply after a failed side-effect tool (#1250)', () => {
     agent = createAgent(llm, ['save_pref']);
     const output = JSON.stringify(await agent.process('记住：我不吃香菜', message(), [failingTool('save_pref', false)]));
     expect(output).toContain('记住啦');
-    expect(output).toContain('「save_pref」 这次没有执行成功');
+    expect(output).toContain('（「save_pref」操作未执行）');
     const toolResult = JSON.stringify(llm.calls.at(-1)?.context.messages);
     expect(toolResult).toContain('未执行成功');
   });
 
-  it('adds nothing when the reply already says it was not done', async () => {
+  it('appends the line even when the reply already says it was not done (no keyword guessing)', async () => {
     const llm = wireMockLlmApi();
     scripted(llm, 'save_pref', '抱歉，这次没能记住，记忆功能暂时不可用。');
     agent = createAgent(llm, ['save_pref']);
     const output = JSON.stringify(await agent.process('记住：我不吃香菜', message(), [failingTool('save_pref', false)]));
-    expect(output).not.toContain('没有执行成功');
+    expect(output).toContain('没能记住');
+    expect(output).toContain('（「save_pref」操作未执行）');
+  });
+
+  it('appends the line when the reply merely contains a refusal word (#1250 counterexample)', async () => {
+    const llm = wireMockLlmApi();
+    scripted(llm, 'memory_save', '记住啦，你不能吃香菜');
+    agent = createAgent(llm, ['memory_save']);
+    const output = JSON.stringify(await agent.process('记住：我不吃香菜', message(), [failingTool('memory_save', false)]));
+    expect(output).toContain('记住啦，你不能吃香菜');
+    expect(output).toContain('（记忆操作未执行）');
   });
 
   it('adds nothing for a failed read-only tool', async () => {
@@ -102,6 +110,6 @@ describe('final reply after a failed side-effect tool (#1250)', () => {
     scripted(llm, 'peek_pref', '好的～');
     agent = createAgent(llm, ['peek_pref']);
     const output = JSON.stringify(await agent.process('看看我的偏好', message(), [failingTool('peek_pref', true)]));
-    expect(output).not.toContain('没有执行成功');
+    expect(output).not.toContain('操作未执行');
   });
 });

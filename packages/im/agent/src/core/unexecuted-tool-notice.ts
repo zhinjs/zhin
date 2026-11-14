@@ -7,9 +7,10 @@
  * 1. The tool result itself starts with 「未执行」 / "NOT EXECUTED" and the reason, and tells the
  *    model to say so in its reply.
  * 2. When the turn ends with a side-effect tool that was denied or failed (and not later completed),
- *    and the final reply does not acknowledge it, the framework appends one plain line naming the
- *    operation. The check is deliberately one-sided: it never removes or rewrites model text, it only
- *    adds a line when the reply says nothing about the failure.
+ *    the framework always adds one short deterministic line naming the kind of operation
+ *    (「（提醒、记忆等操作未执行）」). It never removes or rewrites model text and does not try to guess
+ *    from keywords whether the reply already admitted it (「记住啦，你不能吃香菜」 contains 不能 but
+ *    admits nothing). A streamed reply gets the line as a short follow-up message instead.
  *
  * "Side-effect tool" = any tool not declared read-only (`readOnly` / `isReadOnly`), the same rule
  * restricted turns already use; undeclared tools count as writing.
@@ -49,19 +50,40 @@ export function unresolvedSideEffectFailures(calls: readonly ToolCallRecord[]): 
   return [...pending.values()];
 }
 
-const ACKNOWLEDGEMENT = new RegExp([
-  '未执行', '未能', '未成功', '未完成', '未生效', '未保存', '未写入', '未记录', '未创建',
-  '没(?:有)?(?:能)?(?:执行|成功|完成|生效|保存|记住|记下|写入|写进|存下|创建|建成|做到|办成|改成|添加|设置|发出|发送|删除|处理)',
-  '无法', '不能', '失败', '被拒', '拒绝', '审批', '没法', '做不到', '办不到',
-  '(?:建|写|存|记|删|改|发)不了', '(?:写|存|记)不(?:进|住|下)', '不可用',
-  "\\bnot\\b[^.!?\\n]{0,24}\\b(?:executed|done|completed|saved|applied|created|stored|remembered|run)\\b",
-  "\\bfail(?:ed|ure)?\\b", "\\bcould(?:n['’]?t| not)\\b", "\\bunable\\b", "\\bdenied\\b", "\\brejected\\b",
-  "\\bdid(?:n['’]?t| not)\\b", "\\bwas(?:n['’]?t| not)\\b", '\\bapproval\\b',
-  "\\b(?:not|isn['’]?t|aren['’]?t)\\s+(?:available|allowed|possible|permitted)\\b", '\\bunavailable\\b',
-  "\\bcan(?:not|['’]t)\\b", "\\bwon['’]?t\\b",
-].join('|'), 'iu');
+/** Action kinds named in the notice, so the user knows what was not done without seeing tool names. */
+type UnexecutedActionKind = 'reminder' | 'memory' | 'config' | 'file' | 'command' | 'message';
 
-/** Whether the reply already tells the user that something was not done. */
-export function acknowledgesUnexecuted(reply: string): boolean {
-  return ACKNOWLEDGEMENT.test(reply);
+const ACTION_KIND_PATTERNS: ReadonlyArray<readonly [UnexecutedActionKind, RegExp]> = [
+  ['reminder', /schedule|cron|remind|timer|alarm/i],
+  ['memory', /memory|remember/i],
+  ['config', /config|setting|install|plugin/i],
+  ['command', /^(?:bash|shell|exec)(?:_|$)/i],
+  ['file', /file|dir/i],
+  ['message', /send|message|post|notice|announce|reply|forward/i],
+];
+
+const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+  reminder: { 'zh-CN': '提醒', en: 'reminders' },
+  memory: { 'zh-CN': '记忆', en: 'memory' },
+  config: { 'zh-CN': '配置', en: 'configuration' },
+  command: { 'zh-CN': '命令', en: 'commands' },
+  file: { 'zh-CN': '文件', en: 'files' },
+  message: { 'zh-CN': '消息发送', en: 'messages' },
+};
+
+/**
+ * The deterministic notice for unexecuted side-effect calls (#1250 owner review): always added when there
+ * are any, whatever the reply says (no keyword guessing; an occasional redundant line is accepted).
+ * Names action kinds (「提醒、记忆」), falling back to the tool name for a tool of no known kind.
+ */
+export function formatUnexecutedNotice(calls: readonly ToolCallRecord[], locale?: string): string {
+  const lang = locale?.toLowerCase().startsWith('en') ? 'en' : 'zh-CN';
+  const labels: string[] = [];
+  for (const call of calls) {
+    const kind = ACTION_KIND_PATTERNS.find(([, pattern]) => pattern.test(call.tool))?.[0];
+    const label = kind ? ACTION_KIND_LABELS[kind][lang] : lang === 'en' ? `"${call.tool}"` : `「${call.tool}」`;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  if (lang === 'en') return `(Not done: ${labels.join(', ')}.)`;
+  return `（${labels.join('、')}${labels.length > 1 ? '等' : ''}操作未执行）`;
 }
