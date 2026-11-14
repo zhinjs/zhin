@@ -6,6 +6,7 @@
  * |---|---|---|
  * | `login.pending` | LoginAssist pending tasks | `endpoint.view` on that account |
  * | `endpoint.offline` | Endpoint registry (offline, not stopped, no login task) | `endpoint.view` on that account |
+ * | `endpoint.config-drift` | `zhin.config.yml` `endpoints` vs persisted accounts (#1250) | `endpoint.view` on that adapter instance |
  * | `plugin.error` / `plugin.dependencies` / `plugin.config` | plugin management `inspect` of declared plugins | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
@@ -51,6 +52,22 @@ export interface AttentionEndpoint {
   readonly connected: boolean;
   readonly phase: string;
   readonly transportState: string;
+  /** Classified, redacted reason of the last failed start (#1250). */
+  readonly lastError?: Readonly<{ category: string; message: string }>;
+}
+
+/** One adapter instance whose configuration file accounts differ from the persisted ones (#1250). */
+export interface AttentionEndpointDrift {
+  /** Plugin instance key (Console adapter scope segment and the configuration block name). */
+  readonly instanceKey: string;
+  /** Adapter local name. */
+  readonly adapter: string;
+  /** Account ids only in the configuration file (not running). */
+  readonly configOnly: readonly string[];
+  /** Account ids saved (and possibly running) but no longer in the configuration file. */
+  readonly savedOnly: readonly string[];
+  /** Account ids in both with different configuration. */
+  readonly changed: readonly string[];
 }
 
 export interface AttentionPluginState {
@@ -94,6 +111,7 @@ export interface AttentionErrorLogs {
 export interface AttentionSources {
   readonly loginTasks?: () => readonly AttentionLoginTask[];
   readonly endpoints?: () => readonly AttentionEndpoint[] | Promise<readonly AttentionEndpoint[]>;
+  readonly endpointConfigDrift?: () => Promise<readonly AttentionEndpointDrift[]>;
   /** Declared plugins' management state; a rejected entry marks the source incomplete. */
   readonly plugins?: () => Promise<readonly PromiseSettledResult<AttentionPluginState>[]>;
   readonly configuration?: AttentionConfiguration;
@@ -108,7 +126,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs';
 
 // ---------------------------------------------------------------- first observation
 
@@ -150,6 +168,13 @@ const messages = createMessages({
   'endpoint.title': { 'zh-CN': '{account} 离线', en: '{account} is offline' },
   'endpoint.detail': { 'zh-CN': '连接状态：{state}。检查凭据、网络和适配器日志，或在「接入」里测试连接。', en: 'Connection: {state}. Check credentials, network and adapter logs, or test the connection under Connection.' },
   'endpoint.action': { 'zh-CN': '查看接入', en: 'Open connection' },
+  'endpoint.reason': { 'zh-CN': '最近一次启动失败（{category}）：{message}', en: 'Last start failed ({category}): {message}' },
+  'drift.title': { 'zh-CN': '{adapter} 的配置文件账号与已保存账号不一致', en: 'Accounts of {adapter} in the configuration file differ from the saved ones' },
+  'drift.configOnly': { 'zh-CN': '仅在配置文件（未运行）：{ids}', en: 'Only in the configuration file (not running): {ids}' },
+  'drift.savedOnly': { 'zh-CN': '已不在配置文件（仍按已保存账号运行）：{ids}', en: 'No longer in the configuration file (still run as saved): {ids}' },
+  'drift.changed': { 'zh-CN': '配置不同：{ids}', en: 'Configured differently: {ids}' },
+  'drift.detail': { 'zh-CN': '{parts}。配置文件里的 endpoints 只在首次启动时导入；之后以已保存账号为准。请在账号页「从配置导入」或「写回配置文件」。', en: '{parts}. The endpoints list is only imported on first start; the saved accounts win afterwards. Import from the configuration or write back on the accounts page.' },
+  'drift.action': { 'zh-CN': '处理账号差异', en: 'Review accounts' },
   'plugin.error.title': { 'zh-CN': '插件 {plugin} 运行异常', en: 'Plugin {plugin} has a problem' },
   'plugin.dependencies.title': { 'zh-CN': '插件 {plugin} 的依赖未满足', en: 'Dependencies of plugin {plugin} are not met' },
   'plugin.config.title': { 'zh-CN': '插件 {plugin} 的配置需要修正', en: 'Configuration of plugin {plugin} needs fixing' },
@@ -194,6 +219,7 @@ const segment = (value: string) => encodeURIComponent(value);
 /** Console deep links (console-routes.mjs). */
 export const ATTENTION_PATHS = Object.freeze({
   endpointAccess: (adapter: string, endpoint: string) => `/scope/${segment(adapter)}/${segment(endpoint)}?tab=access`,
+  adapterAccounts: (instanceKey: string) => `/plugins/${segment(instanceKey)}`,
   plugin: (instanceKey: string) => `/plugins/${segment(instanceKey)}`,
   config: '/ops/config',
   toolApprovals: '/ops/schedules?tab=admin',
@@ -311,9 +337,38 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           subject,
           state: { transportState: endpoint.transportState },
           title: t('endpoint.title', { account: `${endpoint.adapter} / ${endpoint.name}` }),
-          detail: t('endpoint.detail', { state: endpoint.transportState }),
+          detail: endpoint.lastError
+            ? `${t('endpoint.detail', { state: endpoint.transportState })} ${t('endpoint.reason', endpoint.lastError)}`
+            : t('endpoint.detail', { state: endpoint.transportState }),
           action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(endpoint.adapter, endpoint.name) },
           source: 'endpoints',
+        }, present);
+      }
+    });
+  }
+
+  if (sources.endpointConfigDrift && anyEndpointView) {
+    await read('endpoint-config', async (present) => {
+      for (const drift of await sources.endpointConfigDrift!()) {
+        const subject = { adapter: drift.instanceKey, plugin: drift.instanceKey };
+        const id = attentionItemId('endpoint.config-drift', subject);
+        present.add(id);
+        observations.since(id, 'endpoint-config', at);
+        if (!allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'adapter', adapter: drift.instanceKey }))) continue;
+        const parts = [
+          ...(drift.configOnly.length ? [t('drift.configOnly', { ids: listed(drift.configOnly, locale) })] : []),
+          ...(drift.savedOnly.length ? [t('drift.savedOnly', { ids: listed(drift.savedOnly, locale) })] : []),
+          ...(drift.changed.length ? [t('drift.changed', { ids: listed(drift.changed, locale) })] : []),
+        ];
+        item({
+          kind: 'endpoint.config-drift',
+          severity: 'warning',
+          subject,
+          state: { configOnly: drift.configOnly, savedOnly: drift.savedOnly, changed: drift.changed },
+          title: t('drift.title', { adapter: drift.instanceKey }),
+          detail: t('drift.detail', { parts: parts.join(locale === 'en' ? '; ' : '；') }),
+          action: { label: t('drift.action'), path: ATTENTION_PATHS.adapterAccounts(drift.instanceKey) },
+          source: 'endpoint-config',
         }, present);
       }
     });

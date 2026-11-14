@@ -4,6 +4,7 @@ export type {
   CaptureEndpointOperationInput,
   CapturedEndpointOperation,
   EndpointRuntimeDetail,
+  EndpointRuntimeFailure,
   EndpointRuntimeSummary,
   EndpointRuntimePhase,
   RuntimeEndpointEditInput,

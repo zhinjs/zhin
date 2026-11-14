@@ -374,7 +374,12 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
 /** Adapter account mutations contributed by `defineAdapterConsoleRpc` (`plugin.<id>.endpoint-*`). */
 const ADAPTER_ACCOUNT_METHODS: ReadonlySet<string> = new Set([
   'endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace',
+  // #1250: import a zhin.config.yml account into the persisted accounts / write persisted accounts back to the file.
+  'endpoint-import', 'endpoint-writeback',
 ]);
+
+/** Adapter account reads contributed by `defineAdapterConsoleRpc` (#1250 `endpoint-drift`: ids and paths only). */
+const ADAPTER_ACCOUNT_READ_METHODS: ReadonlySet<string> = new Set(['endpoint-drift']);
 
 const pluginRpcPattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-zA-Z][a-zA-Z0-9.-]{0,79})$/u;
 
@@ -435,6 +440,11 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
         ? Object.freeze({ kind: 'endpoint', adapter: alias, endpoint: id })
         : Object.freeze({ kind: 'adapter', adapter: alias });
     return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_MANAGE, target });
+  }
+  if (ADAPTER_ACCOUNT_READ_METHODS.has(method)) {
+    const alias = pluginAlias(pluginId);
+    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_VIEW,
+      target: alias ? Object.freeze({ kind: 'adapter', adapter: alias }) : GLOBAL_TARGET });
   }
   return Object.freeze({ kind: 'plugin', read: P.FEATURE_VIEW, write: P.FEATURE_CONFIGURE, target: GLOBAL_TARGET });
 }

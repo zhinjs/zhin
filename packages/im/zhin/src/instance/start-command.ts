@@ -11,7 +11,7 @@ import { PluginManagementActivity } from '@zhin.js/gateway/plugin-management';
 import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
-import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken, resolveStaticCapabilities } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointConfigSourceToken, endpointDesiredRepositoryToken, endpointSecretResolverToken, resolveStaticCapabilities } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -83,6 +83,7 @@ import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './spe
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
 import { PersistentEndpointRepository } from './runtime-endpoints/state.js';
+import { createEndpointConfigSource, createEndpointSecretResolver } from './runtime-endpoints/config-source.js';
 import { HostSelfChangeApply } from './self-change-apply.js';
 import { registerReadinessRoutes, type ReadinessSource } from '@zhin.js/runtime';
 import {
@@ -270,6 +271,26 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
+  const currentEnvironment = () => {
+    const lease = host.runtime.snapshots.acquire();
+    try {
+      return lease.value.resources.get(lease.value.root)?.get(envStoreToken.id) as import('@zhin.js/runtime').EnvStore | undefined ?? hostEnvironment;
+    } finally { lease.release(); }
+  };
+  const expandEnvironment = (value: string) => String(currentEnvironment().expandMissingAsEmpty(value));
+  const endpointSecretResolver = createEndpointSecretResolver(expandEnvironment);
+  const endpointConfigSource = createEndpointConfigSource({
+    read: async () => {
+      const { document, revision } = await config.read();
+      return { document: document as Readonly<Record<string, unknown>>, revision };
+    },
+    snapshot: () => {
+      const lease = host.runtime.snapshots.acquire();
+      try { return lease.value; } finally { lease.release(); }
+    },
+    patch: request => consoleConfigurationStore.patchProject(request),
+    expand: expandEnvironment,
+  });
   const isRelationalDialect = ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect);
   if (isRelationalDialect) {
     databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
@@ -386,6 +407,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // static accounts; a failed read on a supported database still fails startup.
       if (['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect)) {
         context.resources.provide(endpointDesiredRepositoryToken, endpointRepository);
+        // #1250: imported accounts keep `${VAR}` references, resolved here at start against the
+        // current environment; the config source compares / writes back `zhin.config.yml` endpoints.
+        context.resources.provide(endpointSecretResolverToken, endpointSecretResolver);
+        context.resources.provide(endpointConfigSourceToken, endpointConfigSource);
       }
       installLocaleHost(databaseHost)(context);
       installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
@@ -675,10 +700,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     const rest = endpoints.filter((ep) => ep.status !== 'online');
     const starting = rest.filter((ep) => ep.phase === 'starting' || ep.phase === 'awaiting_assist' || ep.phase === 'reconnecting')
       .map((ep) => ep.phase === 'awaiting_assist' ? `${ep.name} (awaiting login)` : ep.name);
+    // Redacted reason (#1250): category + the Adapter-masked message, never the raw error.
+    const reason = (ep: (typeof endpoints)[number]) => ep.lastError
+      ? `${ep.lastError.category}: ${ep.lastError.message}` : ep.startFailure?.code;
     const failed = rest.filter((ep) => ep.phase === 'failed' || ep.phase === 'retrying')
-      .map((ep) => ep.startFailure ? `${ep.name} (${ep.startFailure.code}${ep.phase === 'retrying' ? ', retrying' : ''})` : ep.name);
-    const offline = rest.filter((ep) => !['starting', 'awaiting_assist', 'reconnecting', 'failed', 'retrying'].includes(ep.phase))
-      .map((ep) => ep.name);
+      .map((ep) => ep.startFailure ? `${ep.name} (${reason(ep)}${ep.phase === 'retrying' ? ', retrying' : ''})` : ep.name);
+    const offlineRows = rest.filter((ep) => !['starting', 'awaiting_assist', 'reconnecting', 'failed', 'retrying'].includes(ep.phase));
+    const offline = offlineRows.filter((ep) => !ep.startFailure).map((ep) => ep.name);
+    const offlineFailed = offlineRows.filter((ep) => ep.startFailure).map((ep) => `${ep.name} (${reason(ep)})`);
     const startup = getLogger('setup');
     startup.success('zhin runtime started');
     startup.info(formatCompact({
@@ -696,6 +725,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     }
     if (offline.length > 0) {
       startup.info(`offline: ${offline.join(', ')}`);
+    }
+    if (offlineFailed.length > 0) {
+      startup.warn(`offline: ${offlineFailed.join(', ')}`);
     }
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);

@@ -89,11 +89,20 @@ export interface AdapterMutationOptions {
   /** Internal request boundary, after validation and immediately before the single CAS. */
   readonly beforeCommit?: () => void;
 }
-/** Last failed start of one account (code only: raw error text may contain credentials). */
+/** Why an account start failed, for operators (aligned with the Console MCP failure categories). */
+export type EndpointFailureCategory = 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+/** Last failed start of one account. Raw error text may contain credentials: never stored as is. */
 export interface EndpointStartFailure {
   readonly code: string;
   /** Epoch milliseconds. */
   readonly at: number;
+  /** Classified cause (absent on failures recorded before #1250). */
+  readonly category?: EndpointFailureCategory;
+  /**
+   * Operator text, at most 200 characters, built from `category` and `code` only — never the raw
+   * error text (which may carry credentials; the warn log gets it with credentials masked).
+   */
+  readonly message?: string;
 }
 /**
  * Background start supervision of one account: `retrying` waits for `nextRetryAt`,
@@ -171,6 +180,13 @@ export interface EndpointChildLease<E extends AnyEndpoint = AnyEndpoint> {
 
 export const endpointDesiredRepositoryToken = createFeaturePrivateToken<EndpointDesiredRepository>(
   'zhin.adapter.endpoint-desired-repository', featureId('zhin.adapter'), 'Adapter-owned endpoint desired state persistence',
+);
+/**
+ * Stored (never environment-expanded) startup configuration of an Adapter's accounts, used to
+ * compare `zhin.config.yml` `endpoints` with the persisted accounts and to import / write back (#1250).
+ */
+export const endpointConfigSourceToken = createFeaturePrivateToken<import('./endpoint-config-drift.js').EndpointConfigSource>(
+  'zhin.adapter.endpoint-config-source', featureId('zhin.adapter'), 'Stored startup configuration of adapter accounts',
 );
 export const endpointSecretResolverToken = createFeaturePrivateToken<EndpointSecretResolver>(
   'zhin.adapter.endpoint-secret-resolver', featureId('zhin.adapter'), 'Execution-only endpoint credential resolver',

@@ -51,6 +51,18 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     });
   });
 
+  it('registers the #1250 configuration file account methods like the other account methods', () => {
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1', start: true } })).toMatchObject({
+      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'endpoint', adapter: 'qq', endpoint: 'bot-1' },
+    });
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } })).toMatchObject({
+      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'adapter', adapter: 'qq' },
+    });
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-drift')).toMatchObject({
+      kind: 'exact', permission: 'endpoint.view', target: { kind: 'adapter', adapter: 'qq' },
+    });
+  });
+
   it('refines config:patch by instanceKey and extracts scope targets from payloads', () => {
     expect(resolveConsoleRpcPermission('config:patch', { patches: [] })).toMatchObject({ permission: 'agent.configure' });
     expect(resolveConsoleRpcPermission('config:patch', { instanceKey: 'rss' })).toMatchObject({ permission: 'feature.configure' });

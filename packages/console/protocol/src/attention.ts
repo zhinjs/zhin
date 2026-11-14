@@ -38,6 +38,11 @@ export type ConsoleAttentionKind =
   | 'login.pending'
   /** An account the Host runs is offline (not deliberately stopped, not waiting for login). */
   | 'endpoint.offline'
+  /**
+   * `zhin.config.yml` `endpoints` differ from the persisted accounts (the file only seeds them the
+   * first time): accounts only in the file, only saved, or configured differently (#1250).
+   */
+  | 'endpoint.config-drift'
   /** A declared plugin is degraded (failed to load / its package is missing / other issues). */
   | 'plugin.error'
   /** A declared plugin's dependencies or required services are not satisfied. */
@@ -58,7 +63,7 @@ export type ConsoleAttentionKind =
   | 'logs.errors';
 
 export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.freeze([
-  'login.pending', 'endpoint.offline', 'plugin.error', 'plugin.dependencies', 'plugin.config',
+  'login.pending', 'endpoint.offline', 'endpoint.config-drift', 'plugin.error', 'plugin.dependencies', 'plugin.config',
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors',
 ]);

@@ -93,6 +93,8 @@ type SelfStandingConversation = Pick<ConversationRef, 'kind' | 'id' | 'parent' |
 export interface AdapterPersistencePorts {
   readonly repository?: EndpointDesiredRepository;
   readonly secrets?: EndpointSecretResolver;
+  /** Stored configuration file port (#1250 drift / import / write-back). */
+  readonly configSource?: import('./endpoint-config-drift.js').EndpointConfigSource;
   /** @internal Activation grace for account starts (tests); see `DEFAULT_ENDPOINT_START_GRACE_MS`. */
   readonly startGraceMs?: number;
 }

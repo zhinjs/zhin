@@ -409,6 +409,17 @@ export type ConsoleEndpointPhase =
 
 export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
 
+/** Why an account start failed (aligned with the MCP client failure categories, #1250). */
+export type ConsoleEndpointFailureCategory = 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+
+export interface ConsoleEndpointFailure {
+  readonly category: ConsoleEndpointFailureCategory;
+  /** Short and redacted (no URL credentials, query strings or credential values); ≤ 200 chars. */
+  readonly message: string;
+  /** Epoch milliseconds of the failed attempt. */
+  readonly at: number;
+}
+
 /** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
   /** Canonical target for projection and message correlation, independent of display names. */
@@ -428,6 +439,8 @@ export interface ConsoleEndpointSummary {
   readonly startFailure?: Readonly<{ code: string; at: number }>;
   /** Epoch milliseconds of the next automatic start retry. */
   readonly nextRetryAt?: number;
+  /** Classified, redacted reason of the last failed start while the account is not online (#1250). */
+  readonly lastError?: ConsoleEndpointFailure;
   readonly pendingLogin?: boolean;
   /** ADR 0058: step of the unfinished login flow (1-based). */
   readonly loginStep?: Readonly<{ index: number; total: number; title: string }>;

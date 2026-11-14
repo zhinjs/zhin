@@ -40,6 +40,15 @@ import {
  */
 export type EndpointRuntimePhase = AdapterEndpointPhase | 'awaiting_assist';
 
+/** Console `lastError` of an account (same shape as the MCP client failure). */
+export interface EndpointRuntimeFailure {
+  readonly category: 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+  /** Redacted, ≤ 200 characters. */
+  readonly message: string;
+  /** Epoch milliseconds. */
+  readonly at: number;
+}
+
 export interface EndpointRuntimeSummary {
   readonly id: string;
   readonly endpoint: ConversationRef['endpoint'];
@@ -60,6 +69,11 @@ export interface EndpointRuntimeSummary {
   readonly startFailure?: Readonly<{ code: string; at: number }>;
   /** Epoch milliseconds of the next automatic start retry. */
   readonly nextRetryAt?: number;
+  /**
+   * Classified, redacted reason of the last failed start while the account is not online (#1250);
+   * the Adapter masks credentials before it records the message.
+   */
+  readonly lastError?: EndpointRuntimeFailure;
   /** ADR 0058: an unfinished login flow of this Endpoint waits for a person. */
   readonly pendingLogin: boolean;
   /** ADR 0058: where the unfinished login flow is (1-based step of the timeline). */
@@ -534,10 +548,13 @@ function runtimePhase(
   return row.phase === 'starting' && loginFlowOf(flows, row, adapter)?.state === 'active' ? 'awaiting_assist' : row.phase;
 }
 
-function startFacts(row: AdapterEndpointSummary): Pick<EndpointRuntimeSummary, 'startAttempt' | 'startFailure' | 'nextRetryAt'> {
+function startFacts(row: AdapterEndpointSummary): Pick<EndpointRuntimeSummary, 'startAttempt' | 'startFailure' | 'nextRetryAt' | 'lastError'> {
+  const failure = row.startFailure;
   return {
     startAttempt: row.startAttempt ?? 0,
-    ...(row.startFailure ? { startFailure: Object.freeze({ code: row.startFailure.code, at: row.startFailure.at }) } : {}),
+    ...(failure ? { startFailure: Object.freeze({ code: failure.code, at: failure.at }) } : {}),
+    ...(failure ? { lastError: Object.freeze({ category: failure.category ?? 'unknown',
+      message: (failure.message ?? failure.code).slice(0, 200), at: failure.at }) } : {}),
     ...(row.nextRetryAt !== undefined ? { nextRetryAt: row.nextRetryAt } : {}),
   };
 }
