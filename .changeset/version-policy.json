@@ -1,4 +1,25 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）。"
+    },
+    {
+      "package": "zhin.js",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。"
+    },
+    {
+      "package": "@zhin.js/gateway",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数。"
+    },
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    }
+  ]
 }
