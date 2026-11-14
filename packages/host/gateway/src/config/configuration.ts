@@ -24,7 +24,10 @@ import {
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 import { declarationKeyMessage, describeArrayPathProblem, unknownConfigKeyMessage } from './patch-path-messages.js';
 import { findProjectLiteralSecrets } from './literal-secrets.js';
-import { planSecretExternalization, writeSecretAssignments } from './secret-storage.js';
+import {
+  planSecretExternalization, SECRET_ENVIRONMENT_WRITE_REQUIRED, SecretEnvironmentWriteRequiredError, secretEnvironmentWriteRequiredMessage,
+  writeSecretAssignments,
+} from './secret-storage.js';
 import type { LiteralConfigSecret } from '@zhin.js/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
@@ -92,6 +95,15 @@ function chatApplication(application: ConsoleConfigApplication | undefined): Con
 }
 
 /** Owns one project's Console configuration projection over the Root config authority. */
+/**
+ * What the caller of a configuration write may do besides `ops.config.write`. Set by the Console
+ * RPC context from the principal's grants, and by trusted in-process / local-owner callers.
+ */
+export interface ConfigWriteAuthority {
+  /** The caller may write `.env` (`ops.env.write`): secret literals may be moved there. Default false. */
+  readonly environmentWrite?: boolean;
+}
+
 export class ConsoleConfigurationStore {
   readonly #projectRoot: string;
   readonly #document: ConfigFileDocument;
@@ -185,7 +197,12 @@ export class ConsoleConfigurationStore {
     });
   }
 
-  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & ConsoleConfigApplicationStatus> {
+  /**
+   * `options.environmentWrite`: the caller holds `ops.env.write` (or is a trusted in-process / local
+   * owner caller). Without it a block whose secret fields hold literals is refused
+   * ({@link SecretEnvironmentWriteRequiredError}): those values would be written into `.env`.
+   */
+  setKey(pluginName: string, data: unknown, options: ConfigWriteAuthority = {}): Promise<{ restartRequired: boolean } & ConsoleConfigApplicationStatus> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       await this.#assertUnambiguousKey(current.document, pluginName);
@@ -193,6 +210,9 @@ export class ConsoleConfigurationStore {
       // Literal values of secret fields go to `.env`; the block keeps `${VAR}` references (#1250).
       const plan = await planSecretExternalization(this.#projectRoot, this.#environmentName(), current.document,
         applyConfigPatches(current.document, patches), patches.map(patch => patch.path));
+      if (plan.assignments.length > 0 && options.environmentWrite !== true) {
+        throw new SecretEnvironmentWriteRequiredError(plan.assignments.map(item => item.path));
+      }
       if (plan.errors.length > 0) throw new Error(plan.errors.map(error => error.message).join('；'));
       patches.push(...plan.patches);
       const restoreEnvironment = await writeSecretAssignments(this.#projectRoot, this.#environmentName(), plan.assignments);
@@ -229,8 +249,8 @@ export class ConsoleConfigurationStore {
    * allowlist are rejected before reading values; a stale revision returns the latest
    * values instead of overwriting; every touched section is validated by its schema.
    */
-  patch(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult> {
-    return this.#serialize(() => this.#patchCore(request, 'scoped'));
+  patch(request: ConsoleConfigPatchRequest, options: ConfigWriteAuthority = {}): Promise<ConsoleConfigPatchResult> {
+    return this.#serialize(() => this.#patchCore(request, 'scoped', options));
   }
 
   /**
@@ -239,10 +259,10 @@ export class ConsoleConfigurationStore {
    * `config:patch` / `HOST_CONFIG_PATCH_PATHS`. Declaration writes are rejected as
    * `invalid`, conflict values are masked, and a thrown commit is `unconfirmed`.
    */
-  patchProject(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult> {
+  patchProject(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>, options: ConfigWriteAuthority = {}): Promise<ConsoleConfigProjectPatchResult> {
     return this.#serialize(async () => {
       try { return await this.#patchCore({ expectedRevision: request.expectedRevision, patches: request.patches,
-        ...(request.secretStorage === undefined ? {} : { secretStorage: request.secretStorage }) }, 'project'); }
+        ...(request.secretStorage === undefined ? {} : { secretStorage: request.secretStorage }) }, 'project', options); }
       catch (error) {
         if (!(error instanceof ConfigCommitUnconfirmedError)) throw error;
         // The file may already hold the candidate. Do not retry or roll back.
@@ -270,7 +290,7 @@ export class ConsoleConfigurationStore {
   }
 
   /** Shared single-CAS write: `scoped` keeps the page allowlist; `project` is the trusted full path. */
-  async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project' | 'chat'): Promise<ConsoleConfigPatchResult> {
+  async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project' | 'chat', authority: ConfigWriteAuthority = {}): Promise<ConsoleConfigPatchResult> {
     let phase: 'prepare' | 'commit' | 'committed' = 'prepare';
     // Restores `.env` when secrets were moved there but the config write does not happen.
     let restoreEnvironment: (() => Promise<void>) | undefined;
@@ -324,6 +344,15 @@ export class ConsoleConfigurationStore {
         if (plan.errors.length > 0) {
           return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(plan.errors),
             missingEnv: Object.freeze([]), message: '配置校验失败，未保存' });
+        }
+        // Moving a value into `.env` is an `.env` write: it needs `ops.env.write` (#1250). Without
+        // it the write is refused, never stored as plain text behind the caller's back.
+        if (plan.assignments.length > 0 && authority.environmentWrite !== true) {
+          const paths = plan.assignments.map(item => item.path);
+          return Object.freeze({ status: 'invalid', revision: current.revision, code: SECRET_ENVIRONMENT_WRITE_REQUIRED,
+            errors: Object.freeze(paths.map(path => Object.freeze({ path: `$.${path.join('.')}`,
+              message: '敏感字段的值要写入 .env，需要 ops.env.write 权限' }))),
+            missingEnv: Object.freeze([]), message: secretEnvironmentWriteRequiredMessage(paths) });
         }
         if (plan.patches.length > 0) {
           patches = Object.freeze([...patches, ...plan.patches]);

@@ -778,7 +778,9 @@ export function createResilientCompletionPort(
           }
           throw error;
         }
-        // A hung service is not re-asked on the same model; callers with a fallback chain move on.
+        // A hung service is not re-asked on the same model. The failure is reported as `no_response`;
+        // whether to switch models is the caller's decision, where it counts toward the
+        // consecutive-timeout switch like a whole-request timeout (no switching here).
         if (info.kind === "no_response") {
           reportEvent({
             type: "give_up",

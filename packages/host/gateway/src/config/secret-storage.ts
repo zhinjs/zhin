@@ -4,8 +4,12 @@
  * A `set` that writes a literal into a schema-marked secret field (`x-zhin-secret`, `writeOnly`,
  * `format: password`, `x-zhin-config.secret`, or the secret field-name fallback) is rewritten:
  * the value is stored as a `.env` variable and the config keeps (or gets) the `${VAR}` reference.
- * The variable is the one the field already referenced; otherwise a canonical name derived from
- * the path (`http.token` → `HTTP_TOKEN`). Values are never returned or logged.
+ * The variable is the field's canonical name derived from its path (`http.token` → `HTTP_TOKEN`,
+ * with a numeric suffix when another value already holds that name). A `${VAR}` the field merely
+ * references is never overwritten unless it is that canonical name: otherwise a config write could
+ * replace any `.env` variable (e.g. point `http.token` at `${OPENAI_API_KEY}`, then set a literal).
+ * Writing into `.env` at all needs the caller's `ops.env.write` ({@link SecretEnvironmentWriteRequiredError}).
+ * Values are never returned or logged.
  */
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -18,6 +22,24 @@ import { dotenvLine, findProjectLiteralSecrets, literalSecretEnvironmentName, re
 export type ConfigSecretStorage = 'env' | 'plain';
 
 const WHOLE_REFERENCE = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u;
+
+/** Result / error code when a write would store secret values in `.env` without `ops.env.write`. */
+export const SECRET_ENVIRONMENT_WRITE_REQUIRED = 'env-write-required';
+
+/** Refusal message for {@link SECRET_ENVIRONMENT_WRITE_REQUIRED}; names the fields, never values. */
+export function secretEnvironmentWriteRequiredMessage(paths: readonly (readonly string[])[]): string {
+  return `敏感字段 ${paths.map(path => path.join('.')).join('、')} 的值要写入 .env，需要 ops.env.write 权限；未保存。`
+    + '请让有该权限的管理员设置，或在 .env 中设置变量后写入 ${VAR} 引用';
+}
+
+/** `setKey` refusal: the block holds secret literals but the caller may not write `.env`. */
+export class SecretEnvironmentWriteRequiredError extends Error {
+  readonly code = SECRET_ENVIRONMENT_WRITE_REQUIRED;
+  constructor(readonly paths: readonly (readonly string[])[]) {
+    super(secretEnvironmentWriteRequiredMessage(paths));
+    this.name = 'SecretEnvironmentWriteRequiredError';
+  }
+}
 
 export interface SecretAssignment {
   readonly path: readonly string[];
@@ -72,12 +94,15 @@ export async function planSecretExternalization(
     const value = readPath(candidate, secret.path);
     if (typeof value !== 'string' || value === '' || value === readPath(current, secret.path)) continue;
     const label = secret.path.join('.');
+    const canonical = canonicalSecretVariable(secret.path);
     const reference = WHOLE_REFERENCE.exec(String(readPath(current, secret.path) ?? ''))?.[1];
-    let variable = reference ?? canonicalSecretVariable(secret.path);
-    if (!reference) {
-      // A canonical name another value already uses gets a suffix; the field's own reference is reused as is.
-      const base = variable;
-      for (let suffix = 2; taken.has(variable) && taken.get(variable) !== value; suffix += 1) variable = `${base}_${suffix}`;
+    // Only the field's own canonical variable is updated in place. Any other `${VAR}` the field
+    // references may belong to something else (#1250): a fresh name is written instead.
+    let variable = canonical;
+    if (reference !== canonical) {
+      for (let suffix = 2; (taken.has(variable) && taken.get(variable) !== value) || variable === reference; suffix += 1) {
+        variable = `${canonical}_${suffix}`;
+      }
     }
     if (!dotenvLine(variable, value)) {
       errors.push({ path: `$.${label}`, message: `${label} 是敏感字段，值含换行等字符，无法写入 .env；请手动在 .env 设置后引用 \${${variable}}，或明确用明文保存（zhin config set --plain）` });

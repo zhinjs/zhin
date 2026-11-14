@@ -678,6 +678,11 @@ export type ConsoleConfigPatchResult =
   | Readonly<{
     status: 'invalid';
     revision: string;
+    /**
+     * `env-write-required` (#1250): the write would store secret values in `.env` and the caller
+     * lacks `ops.env.write`; nothing was saved. Absent for ordinary validation failures.
+     */
+    code?: 'env-write-required';
     errors: readonly Readonly<{ path: string; message: string }>[];
     missingEnv: readonly string[];
     message: string;

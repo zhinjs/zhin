@@ -56,7 +56,7 @@ export interface SetupDatabaseInput {
 /** Config-file and dotenv access the setup flow needs (ConsoleConfigurationStore satisfies `config`). */
 export interface SetupConfigPort {
   readDocument(): Promise<Record<string, unknown>>;
-  setKey(key: string, value: unknown): Promise<unknown>;
+  setKey(key: string, value: unknown, options?: { readonly environmentWrite?: boolean }): Promise<unknown>;
 }
 
 export interface SetupEnvFilePort {
@@ -181,7 +181,8 @@ export class ConsoleSetupService {
     if (Object.keys(envUpdates).length) {
       await this.#options.envFile.write(upsertDotenv(await this.#options.envFile.read(), envUpdates));
     }
-    await this.#options.config.setKey('database', block);
+    // The setup flow writes `.env` itself (bootstrap / owner): secret literals may go there too.
+    await this.#options.config.setKey('database', block, { environmentWrite: true });
     const notice = prepared.dialect === 'pg' || prepared.dialect === 'mysql' ? `${SETUP_NO_MIGRATION_NOTICE}${SETUP_CONSOLE_ROLE_NOTICE}` : SETUP_NO_MIGRATION_NOTICE;
     return Object.freeze({ restartRequired: true, notice });
   }

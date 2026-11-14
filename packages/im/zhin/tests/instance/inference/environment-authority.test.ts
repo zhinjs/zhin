@@ -29,7 +29,7 @@ const localCli: ConsoleUserPrincipal = Object.freeze({
   roles: Object.freeze(['owner']),
 });
 
-async function setup(input: Readonly<{ probe?: (profileId: string) => InferenceProbeResult }> = {}) {
+async function setup(input: Readonly<{ probe?: (profileId: string) => InferenceProbeResult; now?: () => number }> = {}) {
   const fixture = await setupInferenceManagement({ method: 'api-key' });
   // The built-in Driver's official address is its schema default; a plan may omit it.
   const management = new InferenceManagementService({ rootId: '/root', hostOwnerId: 'host', directory: join(fixture.directory, 'private'),
@@ -51,7 +51,8 @@ async function setup(input: Readonly<{ probe?: (profileId: string) => InferenceP
     authenticationContract: async () => '1', probe, release() {} }),
     owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
     principal: value => resolveInferenceManagementPrincipal({ ...value, hostOwnerId: 'host', bindings: {} }),
-    audit: entry => { audits.push(entry); } });
+    audit: entry => { audits.push(entry); },
+    ...(input.now ? { connectionTestRateLimit: { now: input.now } } : {}) });
   const { origin } = await http.listen();
   async function call(path: string, body: unknown, token: string) {
     const response = await fetch(`${origin}/api/agent/inference${path}`, { method: 'POST',
@@ -243,5 +244,23 @@ it('tells the Console view whether the caller may reference Host environment var
     expect(owner.environmentReferences).toBe('console-owner');
     const admin = await f.management.view({ ownerId: 'host', hostAdministrator: true, environmentReferences: 'none' });
     expect(admin.environmentReferences).toBe('none');
+  } finally { await f.close(); }
+});
+
+it('rate-limits connection tests per account: 6 per minute across /account/test and /probe, then 429 with retryAfterMs (#1250 security review)', async () => {
+  let now = 1_000_000;
+  const f = await setup({ now: () => now });
+  try {
+    for (let index = 0; index < 4; index += 1) expect((await f.call('/account/test', { accountId: 'account' }, 'owner')).status).toBe(200);
+    // /probe of a profile of the same account shares the budget.
+    for (let index = 0; index < 2; index += 1) expect((await f.call('/probe', { profileId: 'profile' }, 'owner')).status).toBe(200);
+    const limited = await f.call('/account/test', { accountId: 'account' }, 'owner');
+    expect(limited).toMatchObject({ status: 429, payload: { success: false, code: 'rate-limited', retryAfterMs: 60_000 } });
+    expect((await f.call('/probe', { profileId: 'profile' }, 'owner')).status).toBe(429);
+    expect(f.probe).toHaveBeenCalledTimes(6);
+    now += 30_000;
+    expect((await f.call('/probe', { profileId: 'profile' }, 'owner')).payload).toMatchObject({ code: 'rate-limited', retryAfterMs: 30_000 });
+    now += 30_000;
+    expect((await f.call('/account/test', { accountId: 'account' }, 'owner')).status).toBe(200);
   } finally { await f.close(); }
 });

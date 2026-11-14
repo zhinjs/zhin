@@ -135,6 +135,23 @@ it('refuses an explicit loopback --host that reports no project id, before sendi
   expect(await readFile(file, 'utf8')).toBe(source);
 });
 
+it('refuses an explicit loopback --host whose health probe fails (timeout), never sending the token (#1250 security review)', async () => {
+  const { file, source, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+    urls.push(String(url));
+    if (String(url).endsWith('/pub/health')) throw Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+    return new Response(JSON.stringify({ data: sourceReply }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(last(output)).toMatchObject({ status: 'project-unverified', message: expect.stringContaining('健康探测超时') });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+  expect(urls).toEqual(['http://127.0.0.1:8068/pub/health']);
+  expect(await readFile(file, 'utf8')).toBe(source);
+});
+
 it('--allow-unverified-host warns and proceeds against a loopback --host without project id', async () => {
   const { errors } = await fixture();
   vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');

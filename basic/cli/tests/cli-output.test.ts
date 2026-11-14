@@ -238,6 +238,21 @@ describe('instance failures', () => {
     expect(stderr.join('')).toContain('--allow-unverified-host');
   });
 
+  it('zhin packages --live refuses a local host whose health probe fails, sending no token (#1250 security review)', async () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n');
+    vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'live-token');
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (String(url).endsWith('/pub/health')) throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+      return new Response(JSON.stringify({ success: true, data: {} }));
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const { packagesCommand } = await import('../src/commands/packages.js');
+    await expect(packagesCommand.parseAsync(['node', 'zhin', 'status', 'demo', '--live', 'http://127.0.0.1:9321'])).rejects.toMatchObject({ code: 'project-unverified' });
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['http://127.0.0.1:9321/pub/health']);
+    expect(JSON.stringify(fetchSpy.mock.calls)).not.toContain('live-token');
+    vi.unstubAllEnvs();
+  });
+
   it('zhin send shows the classified delivery failure instead of "Internal error"', async () => {
     fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
     vi.stubGlobal('fetch', vi.fn(async () => ({

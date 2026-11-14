@@ -4,7 +4,7 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：功能未启用状态契约（ConsoleFeatureDisabled / ConsoleFeatureDisabledReason / CONSOLE_FEATURE_DISABLED_MESSAGES / consoleFeatureDisabled() / isConsoleFeatureDisabled()）、功能矩阵行分类与能力（ConsoleFeatureKind、ConsoleFeatureCapabilities，行字段 kind / capabilities / readOnly）、账号传输状态（ConsoleEndpointTransportState、endpointTransportLabel()，ConsoleEndpointSummary.transportLabel）、配置写入 secretStorage 与 envSecrets 字段、/pub/health 的 project.id。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：功能未启用状态契约（ConsoleFeatureDisabled / ConsoleFeatureDisabledReason / CONSOLE_FEATURE_DISABLED_MESSAGES / consoleFeatureDisabled() / isConsoleFeatureDisabled()）、功能矩阵行分类与能力（ConsoleFeatureKind、ConsoleFeatureCapabilities，行字段 kind / capabilities / readOnly）、账号传输状态（ConsoleEndpointTransportState、endpointTransportLabel()，ConsoleEndpointSummary.transportLabel）、配置写入 secretStorage 与 envSecrets 字段、/pub/health 的 project.id；配置补丁 invalid 结果新增可选 code: 'env-write-required'。"
     },
     {
       "package": "zhin.js",
@@ -14,7 +14,7 @@
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：projectIdentity()（/project）、officialPluginCatalog() / officialPluginCandidates() / undeclaredPluginMessage()（/plugin-management）、pnpm ignored builds 识别（/onboarding：parseIgnoredBuilds、ignoredBuildsHint 等）、dotenvLine() / readDocumentPath()（/config）；/pub/health 报告 project.id。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：projectIdentity()（/project）、officialPluginCatalog() / officialPluginCandidates() / undeclaredPluginMessage()（/plugin-management）、pnpm ignored builds 识别（/onboarding：parseIgnoredBuilds、ignoredBuildsHint 等）、dotenvLine() / readDocumentPath()（/config）；/pub/health 报告 project.id；安全复核新增 SECRET_ENVIRONMENT_WRITE_REQUIRED / SecretEnvironmentWriteRequiredError（/config），ConsoleConfigurationStore 的 setKey / patch / patchProject 新增可选写入授权参数 { environmentWrite }。"
     },
     {
       "package": "@zhin.js/host-http",

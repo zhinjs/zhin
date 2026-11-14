@@ -245,7 +245,8 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   if (options.offline) {
     const store = createOfflineConfigurationStore(process.cwd(), options.environment ?? 'development');
     const { revision: expectedRevision } = await store.readProject({ path: [], reveal: true });
-    const result = await store.patchProject({ expectedRevision, patches, ...secretStorage });
+    // Offline: the operator edits the project's own files, `.env` included.
+    const result = await store.patchProject({ expectedRevision, patches, ...secretStorage }, { environmentWrite: true });
     const code = result.status === 'saved' ? CONFIG_EXIT_CODES.ok : configPatchExitCode(result);
     const outcome = result.status === 'saved'
       ? { status: 'saved', revision: result.revision, paths: result.paths, missingEnv: result.missingEnv, application: 'not-requested',

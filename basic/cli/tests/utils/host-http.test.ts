@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  connectableHost, hostGet, HostTargetError, listHostEndpoints, loadHostHttpConfig, normalizeHostUrl, verifyHostProject,
+  connectableHost, hostGet, HostTargetError, isLocalMachineUrl, isLoopbackUrl, listHostEndpoints, loadHostHttpConfig, normalizeHostUrl,
+  verifyHostProject,
 } from '../../src/utils/host-http.js';
+import { requestPluginConsole } from '../../src/plugin-management/console-client.js';
 import { LOCAL_GATEWAY_RPC, LocalControlServer } from '@zhin.js/gateway/local';
 import { projectIdentity } from '@zhin.js/gateway/project';
 
@@ -286,5 +288,83 @@ describe('verifyHostProject (#1250)', () => {
     expect(normalizeHostUrl('https://h.test/custom/')).toBe('https://h.test/custom');
     expect(() => normalizeHostUrl('http://user:pass@h.test')).toThrow(HostTargetError);
     expect(() => normalizeHostUrl('ftp://h.test')).toThrow(HostTargetError);
+  });
+});
+
+describe('security review (#1250): the --host check fails closed', () => {
+  const root = path.join(os.tmpdir(), 'zhin-verify-project-closed');
+  const failing = (error: Error) => vi.fn(async () => { throw error; });
+  const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+
+  it.each([
+    ['a timeout', timeout],
+    ['a redirect (redirect: error)', new TypeError('fetch failed: unexpected redirect')],
+    ['a connection reset', Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })],
+  ])('treats %s of the health probe as unverified: refused by default', async (_label, error) => {
+    const fetch = failing(error);
+    const refused = await verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: fetch as never }).catch((caught: unknown) => caught);
+    expect(refused).toBeInstanceOf(HostTargetError);
+    expect(refused).toMatchObject({ code: 'project-unverified', message: expect.stringContaining('--allow-unverified-host') });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const warn = vi.fn();
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: failing(error) as never, warn, allowUnverifiedHost: true }))
+      .resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('健康探测'));
+  });
+
+  it('refuses through loadHostHttpConfig (send / schedule / watch) when the probe fails', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-closed-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 8068\n');
+      await expect(loadHostHttpConfig(dir, 'development', { host: 'http://127.0.0.1:8068', fetch: failing(timeout) as never }))
+        .rejects.toMatchObject({ code: 'project-unverified' });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('counts 0.0.0.0, IPv4-mapped loopback and *.localhost as loopback; other addresses are not', () => {
+    for (const url of ['http://0.0.0.0:8068', 'http://[::]:8068', 'http://[::ffff:127.0.0.1]:8068', 'http://[::ffff:7f00:1]:8068',
+      'http://app.localhost:8068', 'http://LOCALHOST:8068', 'http://127.1.2.3:8068', 'http://[::1]:8068']) {
+      expect(isLoopbackUrl(url), url).toBe(true);
+    }
+    for (const url of ['http://10.0.0.5:8068', 'http://[::ffff:a00:5]:8068', 'http://localhost.example.com:8068', 'http://example.com']) {
+      expect(isLoopbackUrl(url), url).toBe(false);
+    }
+  });
+
+  it('verifies an address of a local network interface too (not loopback, still this machine)', async () => {
+    const addresses = () => new Set(['192.168.1.20', 'fe80::1']);
+    expect(isLocalMachineUrl('http://192.168.1.20:8068', addresses)).toBe(true);
+    expect(isLocalMachineUrl('http://[fe80::1]:8068', addresses)).toBe(true);
+    expect(isLocalMachineUrl('http://192.168.1.21:8068', addresses)).toBe(false);
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' })));
+    await expect(verifyHostProject('http://192.168.1.20:8068/api', root, { fetch: fetch as never, isLocal: url => isLocalMachineUrl(url, addresses) }))
+      .rejects.toMatchObject({ code: 'project-unverified' });
+    expect(fetch).toHaveBeenCalledWith('http://192.168.1.20:8068/pub/health', expect.anything());
+  });
+
+  it('hostGet never sends a token over plain HTTP to a non-loopback host', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ success: true, data: 1 })));
+    vi.stubGlobal('fetch', fetch);
+    expect(await hostGet({ baseUrl: 'http://10.0.0.5:8068/api', token: 'secret-token' }, '/stats'))
+      .toMatchObject({ ok: false, code: 'insecure-transport', error: expect.stringContaining('https://') });
+    expect(fetch).not.toHaveBeenCalled();
+    // Without a token, over HTTPS, to loopback, or over the local socket the request goes out.
+    await hostGet({ baseUrl: 'http://10.0.0.5:8068/api', token: '' }, '/stats');
+    await hostGet({ baseUrl: 'https://bot.example.com/api', token: 'secret-token' }, '/stats');
+    await hostGet({ baseUrl: 'http://0.0.0.0:8068/api', token: 'secret-token' }, '/stats');
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const local = vi.fn(async () => new Response(JSON.stringify({ success: true, data: 1 })));
+    await hostGet({ baseUrl: 'http://192.168.1.20:8068/api', token: 'secret-token', fetch: local as never }, '/stats');
+    expect(local).toHaveBeenCalledTimes(1);
+  });
+
+  it('requestPluginConsole (config / packages --live) shares the loopback rule', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ success: true, data: { ok: true } })));
+    await expect(requestPluginConsole('http://10.0.0.5:8068', { type: 'x' }, 'ZHIN_CONSOLE_TOKEN', { token: 't', fetch: fetch as never }))
+      .rejects.toThrow('HTTPS');
+    await requestPluginConsole('http://[::ffff:7f00:1]:8068', { type: 'x' }, 'ZHIN_CONSOLE_TOKEN', { token: 't', fetch: fetch as never });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

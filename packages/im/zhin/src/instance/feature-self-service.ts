@@ -500,11 +500,13 @@ async function setGlobalField(deps: FeatureSelfServiceDeps, plugin: string, fiel
   if (!configuration.readProject) return { status: 503, body: { success: false, error: 'configuration unavailable' } };
   const read = await configuration.readProject({});
   const segments = plugin.split('/');
+  // No `.env` authority from chat: a literal for a secret field is refused (`env-write-required`, #1250).
   const result = await configuration.patch({ instanceKey: segments[0]!, expectedRevision: read.revision,
     patches: [{ op: 'set', path: [...segments, field], value }] });
   if (result.status === 'saved') return { status: 200, body: { success: true, data: { status: 'saved' } } };
   if (result.status === 'conflict') return { status: 200, body: { success: true, data: { status: 'conflict' } } };
-  return { status: 200, body: { success: true, data: { status: 'invalid', errors: result.errors } } };
+  return { status: 200, body: { success: true, data: { status: 'invalid', errors: result.errors,
+    ...(result.status === 'invalid' && result.code ? { code: result.code } : {}) } } };
 }
 
 

@@ -632,9 +632,11 @@ export async function dispatchRuntimeConsoleRpc(
           },
         });
       } catch (error) {
+        const code = error instanceof Error && 'code' in error && error.code === 'env-write-required' ? { code: 'env-write-required' } : {};
         emit({
           requestId,
           error: `Failed to set config: ${error instanceof Error ? error.message : String(error)}`,
+          ...code,
         });
       }
       return payloads;

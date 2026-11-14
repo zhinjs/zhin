@@ -251,3 +251,12 @@ it.each([['applying', true], ['verifying', true], ['applying', false], ['verifyi
   expect(await readFile(join(f.projectRoot, 'commands/ping.ts'), 'utf8')).toBe('export default "new";\n');
   expect(await freshStore.readSnapshot(f.draft.id)).toMatchObject({ config: { revision } });
 });
+
+it('applies configuration without .env authority: secret literals are refused by the store (#1250 security review)', async () => {
+  const f = await fixture();
+  const patch = vi.spyOn(f.configuration, 'patch');
+  expect(await f.applier.apply(f.draft.id)).toBe('applied');
+  expect(patch).toHaveBeenCalledTimes(1);
+  // No `{ environmentWrite: true }`: the agent cannot move values into (or overwrite) `.env` variables.
+  expect(patch.mock.calls[0]![1]).toBeUndefined();
+});

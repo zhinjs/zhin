@@ -281,9 +281,11 @@ describe('secret fields are stored in .env, not in the config file (#1250)', () 
     return { configuration: new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')), environmentName: 'development' }), root };
   }
   const read = (root: string, name: string) => readFile(join(root, name), 'utf8');
-  const set = async (configuration: ConsoleConfigurationStore, path: string[], value: unknown, secretStorage?: 'env' | 'plain') => {
+  /** Writes as a caller holding `ops.env.write` unless `environmentWrite: false`. */
+  const set = async (configuration: ConsoleConfigurationStore, path: string[], value: unknown, secretStorage?: 'env' | 'plain', environmentWrite = true) => {
     const { revision } = await configuration.readSource();
-    return configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path, value }], ...(secretStorage ? { secretStorage } : {}) });
+    return configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path, value }], ...(secretStorage ? { secretStorage } : {}) },
+      { environmentWrite });
   };
 
   it('keeps the existing ${HTTP_TOKEN} reference and replaces the variable in .env', async () => {
@@ -332,8 +334,50 @@ describe('secret fields are stored in .env, not in the config file (#1250)', () 
 
   it('applies to whole-block writes from the Console (config:set)', async () => {
     const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n', 'HTTP_TOKEN=old\n');
-    await configuration.setKey('http', { token: 'from-console', port: 8068 });
+    await configuration.setKey('http', { token: 'from-console', port: 8068 }, { environmentWrite: true });
     expect(parseYaml(await read(root, 'zhin.config.yml')).http).toEqual({ token: '${HTTP_TOKEN}', port: 8068 });
     expect(await read(root, '.env')).toBe("HTTP_TOKEN='from-console'\n");
+  });
+
+  describe('security review (#1250): a config write cannot reach arbitrary .env variables', () => {
+    it('refuses to move a secret into .env without ops.env.write (config patch and config:set), nothing written', async () => {
+      const config = 'configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n  port: 8068\n';
+      const { configuration, root } = await project(config, 'HTTP_TOKEN=old\n');
+      const refused = await set(configuration, ['http', 'token'], 'sk-attacker', undefined, false);
+      expect(refused).toMatchObject({ status: 'invalid', code: 'env-write-required', errors: [{ path: '$.http.token' }],
+        message: expect.stringContaining('ops.env.write') });
+      expect(JSON.stringify(refused)).not.toContain('sk-attacker');
+      // The default (no authority passed, e.g. chat self-service or agent self-change) refuses too.
+      const { revision } = await configuration.readSource();
+      expect(await configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path: ['http', 'token'], value: 'sk-attacker' }] }))
+        .toMatchObject({ status: 'invalid', code: 'env-write-required' });
+      await expect(configuration.setKey('http', { token: 'sk-attacker', port: 8068 }))
+        .rejects.toMatchObject({ name: 'SecretEnvironmentWriteRequiredError', code: 'env-write-required' });
+      expect(await read(root, '.env')).toBe('HTTP_TOKEN=old\n');
+      expect(await read(root, 'zhin.config.yml')).toBe(config);
+      // An explicit plain-text request is not refused: nothing goes to `.env`.
+      expect(await set(configuration, ['http', 'token'], 'visible-literal', 'plain', false)).toMatchObject({ status: 'saved' });
+      expect(await read(root, '.env')).toBe('HTTP_TOKEN=old\n');
+    });
+
+    it('never overwrites a variable the field merely references: point at ${OPENAI_API_KEY}, then set a literal', async () => {
+      const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  port: 8068\n', 'OPENAI_API_KEY=sk-real\n');
+      expect(await set(configuration, ['http', 'token'], '${OPENAI_API_KEY}', undefined, false)).toMatchObject({ status: 'saved' });
+      // Without `.env` authority the literal is refused outright.
+      expect(await set(configuration, ['http', 'token'], 'sk-attacker', undefined, false)).toMatchObject({ status: 'invalid', code: 'env-write-required' });
+      expect(await read(root, '.env')).toBe('OPENAI_API_KEY=sk-real\n');
+      // Even with it, the field gets its own canonical variable; OPENAI_API_KEY is untouched.
+      const saved = await set(configuration, ['http', 'token'], 'sk-attacker');
+      expect(saved).toMatchObject({ status: 'saved', envSecrets: [{ path: ['http', 'token'], variable: 'HTTP_TOKEN' }] });
+      expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('${HTTP_TOKEN}');
+      expect(await read(root, '.env')).toBe("OPENAI_API_KEY=sk-real\nHTTP_TOKEN='sk-attacker'\n");
+    });
+
+    it('skips a canonical-looking name the field references but does not own', async () => {
+      // HTTP_TOKEN_2 is referenced by the field but is not its canonical name: a fresh name is used.
+      const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN_2}\n', 'HTTP_TOKEN=a\nHTTP_TOKEN_2=b\n');
+      expect(await set(configuration, ['http', 'token'], 'c')).toMatchObject({ envSecrets: [{ variable: 'HTTP_TOKEN_3' }] });
+      expect(await read(root, '.env')).toBe("HTTP_TOKEN=a\nHTTP_TOKEN_2=b\nHTTP_TOKEN_3='c'\n");
+    });
   });
 });

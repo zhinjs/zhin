@@ -6,6 +6,9 @@ import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhi
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile, loadRuntimeEnvironmentLayers, projectIdentity } from '@zhin.js/gateway/project';
 import { createLocalGatewayFetch, probeLocalGateway, type LocalGatewayFetch } from '@zhin.js/gateway/local';
+import { isLocalMachineUrl, isLoopbackUrl } from './loopback.js';
+
+export { isLocalMachineUrl, isLoopbackHostname, isLoopbackUrl } from './loopback.js';
 
 export interface HostHttpConfig {
   baseUrl: string;
@@ -71,42 +74,45 @@ export function normalizeHostUrl(host: string): string {
   return `${url.origin}${path}`;
 }
 
-export function isLoopbackUrl(value: string): boolean {
-  const hostname = new URL(value).hostname;
-  return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/u.test(hostname);
-}
-
 /**
  * Before a request (and a Console token) goes to an explicit `--host` on this machine: the gateway
  * there must report this project's id on `/pub/health`. A different id is refused; so is a target that
  * reports none (older versions, a `--standalone` instance) unless `allowUnverifiedHost`
  * (`--allow-unverified-host`) accepts it with a warning. Only the `/pub/health` probe is sent before
- * that decision, never a token. Remote hosts are not checked: the operator named them explicitly and
- * they cannot share this checkout's path.
+ * that decision, never a token; a probe that fails is unverified too. "This machine" is loopback
+ * (incl. `0.0.0.0`, `::ffff:127.x`, `*.localhost`) or one of its interface addresses. Remote hosts are
+ * not checked: the operator named them explicitly and they cannot share this checkout's path.
  */
 export async function verifyHostProject(
   baseUrl: string,
   projectRoot: string,
-  options: Pick<LoadHostHttpOptions, 'fetch' | 'warn' | 'allowUnverifiedHost'> = {},
+  options: Pick<LoadHostHttpOptions, 'fetch' | 'warn' | 'allowUnverifiedHost'> & {
+    /** Whether the target is this machine (tests); default: loopback or a local interface address. */
+    readonly isLocal?: (baseUrl: string) => boolean;
+  } = {},
 ): Promise<void> {
-  if (!isLoopbackUrl(baseUrl)) return;
+  if (!(options.isLocal ?? isLocalMachineUrl)(baseUrl)) return;
   const origin = new URL(baseUrl).origin;
   const warn = options.warn ?? ((message: string) => console.error(message));
   let reported: unknown;
+  // A probe that fails (timeout, redirect, reset, non-JSON) proves nothing: it is unverified,
+  // never a pass (#1250). Only this probe is sent before the decision, never a token.
+  let failure: string | undefined;
   try {
     const response = await (options.fetch ?? fetch)(`${origin}/pub/health`, { signal: AbortSignal.timeout(3_000), redirect: 'error' });
     const body = (await response.json().catch(() => undefined)) as { project?: { id?: unknown } } | undefined;
     reported = body?.project?.id;
-  } catch {
-    return; // Unreachable: the request itself reports the connection failure.
+  } catch (error) {
+    failure = error instanceof Error && error.name === 'TimeoutError' ? '健康探测超时' : '健康探测失败（无法连接、被重定向或连接中断）';
   }
   if (typeof reported !== 'string') {
+    const why = failure ? `${failure}，无法确认它属于本项目` : '没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目';
     if (!options.allowUnverifiedHost) {
       throw new HostTargetError('project-unverified',
-        `${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已拒绝，未发送请求和令牌。`
+        `${origin} ${why}；已拒绝，未发送请求和令牌。`
         + '请升级该网关并用 zhin start 启动本项目；确认目标无误时可加 --allow-unverified-host 继续');
     }
-    warn(`! ${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已按 --allow-unverified-host 继续`);
+    warn(`! ${origin} ${why}；已按 --allow-unverified-host 继续`);
     return;
   }
   const expected = projectIdentity(projectRoot);
@@ -254,6 +260,12 @@ async function hostFetch<T>(
 ): Promise<HostFetchResult<T>> {
   const timeoutMs = input.timeoutMs ?? 5_000;
   const url = `${http.baseUrl}${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`;
+  // Like requestPluginConsole: a token never goes over plain HTTP to a non-loopback host (#1250).
+  // Over the local socket (`http.fetch`) the URL is only a label and nothing crosses the network.
+  if (http.token && !http.fetch && new URL(url).protocol === 'http:' && !isLoopbackUrl(url)) {
+    return { ok: false, status: 0, code: 'insecure-transport',
+      error: `拒绝通过明文 HTTP 向非本机地址 ${new URL(url).origin} 发送 Console 令牌；请改用 https:// 地址` };
+  }
   try {
     const res = await (http.fetch ?? fetch)(url, {
       method: input.method,
