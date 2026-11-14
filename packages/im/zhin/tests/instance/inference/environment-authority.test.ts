@@ -1,7 +1,7 @@
 /**
- * #1250 host-account-add-path / console-account-env-key-impossible / account-env-ref-immutable:
- * who may make a Host account read a Host environment variable, through which route, and what
- * leaves the Host (never a value).
+ * #1250 account-env-ref-immutable and the owner decision on Console env references: who may make a
+ * Host account read a Host environment variable (a global owner for `*_API_KEY` names toward any
+ * address; the local CLI for any name), through which route, and what leaves the Host (never a value).
  */
 import { createHttpHost } from '@zhin.js/host-http/node';
 import { LOCAL_SOCKET_CREDENTIAL_ID, LOCAL_SOCKET_USER_ID, type ConsoleUserPrincipal } from '@zhin.js/host-http';
@@ -77,7 +77,11 @@ it('refuses Host environment references from a Console user who is not a global 
     const denied = await f.call('/plan', { plan: envAccount('OPENAI_API_KEY'), bindings: { services: { shared: 'service' } } }, 'admin');
     expect(denied.status).toBe(403);
     expect(denied.payload).toMatchObject({ code: 'forbidden', reason: 'environment-console-user' });
-    expect(denied.payload.error).toContain('Console 用户的账号不能引用 Host 环境变量');
+    expect(denied.payload.error).toContain('只有全局 owner 可以在 Console 中引用 Host 环境变量');
+    // A custom address does not lift the owner rule.
+    const relay = await f.call('/plan', { plan: { version: 1, services: { relay: { driver: 'fixture', options: { baseUrl: 'https://relay.example/v1' }, models: {} } },
+      accounts: { created: { service: 'relay', auth: { method: 'api-key', source: 'env://OPENAI_API_KEY' } } } } }, 'admin');
+    expect(relay.payload).toMatchObject({ code: 'forbidden', reason: 'environment-console-user' });
     const key = await f.call('/key/prepare', { accountId: 'account', expectedRevision: 0, key: '${OPENAI_API_KEY:-fallback}' }, 'admin');
     expect(key.status).toBe(403);
     expect(key.payload.reason).toBe('environment-console-user');
@@ -87,17 +91,27 @@ it('refuses Host environment references from a Console user who is not a global 
   } finally { await f.close(); }
 });
 
-it('lets a global owner import a Host account only for *_API_KEY toward an existing or official service', async () => {
+it('lets a global owner import a Host account only for *_API_KEY names, toward any service address', async () => {
   const f = await setup();
   try {
     const name = await f.call('/plan', { plan: envAccount('HTTP_TOKEN'), bindings: { services: { shared: 'service' } } }, 'owner');
     expect(name.payload).toMatchObject({ code: 'forbidden', reason: 'environment-name' });
-    for (const variable of ['DB_SECRET', 'ADMIN_PASSWORD', 'ZHIN_CONSOLE_TOKEN'])
+    expect(name.payload.error).toContain('_API_KEY');
+    for (const variable of ['GITHUB_TOKEN', 'DB_SECRET', 'ADMIN_PASSWORD', 'ZHIN_CONSOLE_TOKEN', 'OPENAI_API_KEY_BACKUP'])
       expect((await f.call('/plan', { plan: envAccount(variable), bindings: { services: { shared: 'service' } } }, 'owner')).payload.reason).toBe('environment-name');
-    const custom = await f.call('/plan', { plan: { version: 1, services: { evil: { driver: 'fixture', options: { baseUrl: 'https://collector.example/v1' }, models: {} } },
-      accounts: { created: { service: 'evil', auth: { method: 'api-key', source: 'env://OPENAI_API_KEY' } } } } }, 'owner');
-    expect(custom.payload).toMatchObject({ code: 'forbidden', reason: 'environment-service-address' });
-    expect(custom.payload.error).toContain('官方地址');
+    // The name rule holds at a custom address too.
+    const unrelated = await f.call('/plan', { plan: { version: 1, services: { relay: { driver: 'fixture', options: { baseUrl: 'https://relay.example/v1' }, models: {} } },
+      accounts: { created: { service: 'relay', auth: { method: 'api-key', source: 'env://GITHUB_TOKEN' } } } } }, 'owner');
+    expect(unrelated.payload).toMatchObject({ code: 'forbidden', reason: 'environment-name' });
+    const key = await f.call('/key/prepare', { accountId: 'account', expectedRevision: 0, key: '${GITHUB_TOKEN:-}' }, 'owner');
+    expect(key.payload.reason).toBe('environment-name');
+    // A custom relay address (9router-style) is accepted for a *_API_KEY name.
+    const custom = await f.importPlan({ version: 1, services: { relay: { driver: 'fixture', options: { baseUrl: 'https://relay.example/v1' }, models: {} } },
+      accounts: { created: { service: 'relay', auth: { method: 'api-key', source: 'env://OPENAI_API_KEY' } } } }, 'owner');
+    expect(custom.payload).toMatchObject({ success: true, data: { status: 'committed' } });
+    const graph = (await f.repository.readGraph({ rootId: '/root' }))!;
+    const relay = Object.values(graph.accounts).find(account => account.authentication.method === 'api-key' && account.authentication.source === 'env://OPENAI_API_KEY');
+    expect(graph.services[relay!.serviceId]!.options).toMatchObject({ baseUrl: 'https://relay.example/v1' });
     const official = await f.importPlan({ version: 1, services: { official: { driver: 'fixture', options: {}, models: {} } },
       accounts: { created: { service: 'official', auth: { method: 'api-key', source: 'env://OPENAI_API_KEY' } } } }, 'owner');
     expect(official.payload).toMatchObject({ success: true, data: { status: 'committed' } });

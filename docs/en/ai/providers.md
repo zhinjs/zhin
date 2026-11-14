@@ -158,9 +158,14 @@ An account's key comes from one of three sources, each with its own limits:
 | --- | --- | --- |
 | First-start import of `ai.plan.yml` | The project file (imported once, only while the model configuration is empty) | Yes: `auth.source: env://NAME`, owned by the Host |
 | Local command `zhin ai account add` | The Host administrator running `zhin start` in the project (over the local gateway control socket; no Console session or API token) | Yes: any variable, an existing service or a built-in service's official address |
-| Console models page | Console users with `agent.configure` | Only a **global owner**, only variables ending in `_API_KEY`, and only toward an existing service or a built-in service's official address; other Console users enter keys directly |
+| Console models page | Console users with `agent.configure` | Only a **global owner**, and only variables ending in `_API_KEY`; any service address (official, an existing service, or a custom relay). Reference it as the account source `env://NAME`, or enter `${NAME}` / `${NAME:-}` under "Set key". Other Console users enter keys directly |
 
-Why the Console cannot reference arbitrary Host variables: the Host process environment also holds database passwords, Console tokens and bot credentials. An account that references a variable sends its value as an API key to that account's service address, so letting any Console user create an account that reads `ZHIN_CONSOLE_TOKEN` and sends it to a self-hosted address would expose every Host secret. The Console therefore lets only a global owner reference `*_API_KEY` variables toward known addresses (the same applies when the service of an env-backed account changes address), and refusals carry a clear reason. Key values never appear in responses, logs, audit entries or plaintext database rows.
+Console references to Host environment variables follow two rules:
+
+1. **Global owners only.** A global owner can already view and edit the project's `.env` in the Console, so letting them reference its variables grants nothing new; other Console users (even with `agent.configure`) cannot, or they could use an account to exfiltrate secrets they cannot see.
+2. **The name must end in `_API_KEY`.** An account that references a variable sends its value as an API key to that account's service address, and the Host environment also holds database passwords, `ZHIN_CONSOLE_TOKEN`, `GITHUB_TOKEN` and bot credentials. The suffix keeps an unrelated secret from being sent to an arbitrary address by a misconfiguration.
+
+The service address itself is not restricted: a global owner may point a `*_API_KEY` account at a custom address (for example a self-hosted model relay). Both rules are re-checked when a reference is created or renamed, and when the service of an env-backed account changes; refusals carry a clear reason. Key values never appear in responses, logs, audit entries or plaintext database rows.
 
 ```bash
 zhin ai account add --service openai --env OPENAI_API_KEY --name main --test

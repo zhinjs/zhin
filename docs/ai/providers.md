@@ -158,9 +158,14 @@ purposes:
 | --- | --- | --- |
 | 首次启动导入 `ai.plan.yml` | 项目文件（只在模型配置为空时导入一次） | 可以：`auth.source: env://NAME`，账号归 Host |
 | 本机命令 `zhin ai account add` | 在项目目录运行 `zhin start` 的 Host 管理员（经本机网关控制套接字；Console 会话、API 令牌都不行） | 可以：任意变量名、已有服务或内置服务的官方地址 |
-| Console「模型」页 | 有 `agent.configure` 的 Console 用户 | 只有**全局 owner** 可以，且变量名必须以 `_API_KEY` 结尾，服务必须是已存在的服务或内置服务类型的官方地址；其他 Console 用户只能直接填写密钥 |
+| Console「模型」页 | 有 `agent.configure` 的 Console 用户 | 只有**全局 owner** 可以，且变量名必须以 `_API_KEY` 结尾；服务地址不限（官方地址、已有服务或自建中转都可以）。引用方式：账号来源 `env://NAME`，或在「设置密钥」中填写 `${NAME}` / `${NAME:-}`。其他 Console 用户只能直接填写密钥 |
 
-为什么 Console 不能随意引用 Host 环境变量：Host 进程的环境里还有数据库密码、Console 令牌、各平台机器人凭据等。账号引用一个变量，就会把它的值作为 API Key 发给该账号的服务地址；如果任意 Console 用户都能新建“读 `ZHIN_CONSOLE_TOKEN`、发往自建地址”的账号，就等于能读走整个 Host 的机密。因此 Console 侧只允许全局 owner 引用 `*_API_KEY` 并发往已知地址，且引用 env 的账号所用服务被改地址时同样受限；被拒绝时返回明确原因。密钥值不会出现在任何响应、日志、审计或数据库明文中。
+Console 引用 Host 环境变量只有两条规则：
+
+1. **只有全局 owner。** 全局 owner 本来就能在 Console 中查看和编辑项目的 `.env`，允许他引用其中的变量并不扩大权限；其他 Console 用户（即使有 `agent.configure`）不能引用，否则就能借账号读走自己看不到的机密。
+2. **变量名必须以 `_API_KEY` 结尾。** 账号引用一个变量，就会把它的值作为 API Key 发给该账号的服务地址；Host 进程的环境里还有数据库密码、`ZHIN_CONSOLE_TOKEN`、`GITHUB_TOKEN`、各平台机器人凭据等。这个后缀让无关的机密不会因为一次误配置被发到任意地址。
+
+服务地址本身不受限制：全局 owner 可以把 `*_API_KEY` 账号指向自定义地址（例如自建的模型中转）。新建引用、修改引用名，或修改引用 env 的账号所用服务时都会重新检查这两条规则；被拒绝时返回明确原因。密钥值不会出现在任何响应、日志、审计或数据库明文中。
 
 ```bash
 # 新增一个读取 OPENAI_API_KEY 的 Host 账号（服务可写已有服务的 id／名称，或内置服务类型）

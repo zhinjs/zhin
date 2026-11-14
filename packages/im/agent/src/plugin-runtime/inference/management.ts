@@ -34,8 +34,9 @@ import { DatabaseInferenceRepository } from './repository.js';
  * source, `${NAME}` key expression), or change the service such an account sends it to (#1250):
  * - absent: a trusted in-process caller (startup `ai.plan.yml` seed, offline migration);
  * - `local-cli`: the project owner's CLI over the gateway control socket;
- * - `console-owner`: a global Console owner — only `*_API_KEY` names, only toward a built-in
- *   service's official address or an already defined service;
+ * - `console-owner`: a global Console owner — only `*_API_KEY` names, toward any service address
+ *   (custom relays included: an owner can already read `.env`; the suffix keeps unrelated
+ *   secrets such as `ZHIN_CONSOLE_TOKEN` or `GITHUB_TOKEN` from being sent anywhere);
  * - `none`: any other Console user — no Host environment references at all.
  */
 export type InferenceEnvironmentAuthority = 'local-cli' | 'console-owner' | 'none';
@@ -48,9 +49,8 @@ export interface InferenceManagementPrincipal {
 }
 /** User-facing reasons (closed set) for a refused Host environment reference. */
 export const INFERENCE_ENVIRONMENT_REFUSALS = Object.freeze({
-  'environment-console-user': 'Console 用户的账号不能引用 Host 环境变量，请直接填写密钥，或由 Host 管理员在本机用命令添加（zhin ai account add）',
+  'environment-console-user': '只有全局 owner 可以在 Console 中引用 Host 环境变量；请直接填写密钥，或请全局 owner 添加（也可由 Host 管理员在本机运行 zhin ai account add）',
   'environment-name': '只能引用以 _API_KEY 结尾的环境变量（例如 OPENAI_API_KEY）',
-  'environment-service-address': '引用 Host 环境变量的账号只能使用内置服务的官方地址或已存在的服务，不能在这次导入中新建或改成自定义地址',
   'environment-local-only': '该操作只能由 Host 管理员在本机用 zhin 命令完成',
   'environment-missing': '新的环境变量在 Host 上未设置或为空',
   'environment-mismatch': '新变量的值与当前凭据的指纹不一致；确认是同一账号的新密钥后加 --reauthorize 重试',
@@ -308,7 +308,7 @@ export class InferenceManagementService {
       validateProfile: (input) => this.#normalizeProfile(input),
     });
     this.#checkEnvironmentSources(reviewed.graph);
-    await this.#checkEnvironmentAuthority(principal, graph, reviewed.graph);
+    this.#checkEnvironmentAuthority(principal, graph, reviewed.graph);
     const dependencies = mutationDependencies({
       before: graph,
       after: reviewed.graph,
@@ -885,23 +885,11 @@ export class InferenceManagementService {
     const name = environmentVariableName(source);
     if (!name || !API_KEY_VARIABLE.test(name)) throw new InferenceManagementError('forbidden', 'environment-name');
   }
-  /** Whether `service` is unchanged from `before` or sits at its built-in Driver's official address. */
-  async #knownServiceAddress(before: ProviderGraph, service: ProviderService): Promise<boolean> {
-    const previous = before.services[service.id];
-    if (previous && providerPlanFingerprint(previous.driver) === providerPlanFingerprint(service.driver)
-      && providerPlanFingerprint(previous.options as JsonObject) === providerPlanFingerprint(service.options as JsonObject)) return true;
-    const options = (service.options ?? {}) as Record<string, unknown>;
-    if (options.headers !== undefined && Object.keys(options.headers as object).length > 0) return false;
-    try {
-      const official = await this.options.resolveService({ driver: service.driver, options: {}, models: {}, requestedModels: [] });
-      const address = (official.options as Record<string, unknown>).baseUrl;
-      return typeof address === 'string' && address === options.baseUrl;
-    } catch {
-      return false; // The Driver has no built-in address: only an existing service may be used.
-    }
-  }
-  /** Host environment references and their destinations need the caller's environment authority. */
-  async #checkEnvironmentAuthority(principal: InferenceManagementPrincipal, before: ProviderGraph, after: ProviderGraph): Promise<void> {
+  /**
+   * A Host environment reference that is new, renamed, or whose service changes needs the caller's
+   * environment authority; the destination address itself is not restricted for a global owner.
+   */
+  #checkEnvironmentAuthority(principal: InferenceManagementPrincipal, before: ProviderGraph, after: ProviderGraph): void {
     const authority = principal.environmentReferences;
     if (authority === undefined || authority === 'local-cli') return;
     for (const account of Object.values(after.accounts)) {
@@ -915,9 +903,8 @@ export class InferenceManagementService {
         || providerPlanFingerprint(previousService.driver) !== providerPlanFingerprint(service.driver)
         || providerPlanFingerprint(previousService.options as JsonObject) !== providerPlanFingerprint(service.options as JsonObject);
       if (!touched) continue;
+      // Owners may point a `*_API_KEY` reference at any address, custom relays included (#1250).
       this.#authorizeEnvironmentName(principal, source);
-      if (!service || !(await this.#knownServiceAddress(before, service)))
-        throw new InferenceManagementError('forbidden', 'environment-service-address');
     }
   }
   #checkEnvironmentSources(graph: ProviderGraph): void {
