@@ -221,8 +221,21 @@ export type RuntimeConsoleRpcContext = {
   readProjectFile?(filePath: string): Promise<{ content: string; size: number }>;
   saveProjectFile?(filePath: string, content: string): Promise<void>;
   listEnvFiles?(): Promise<readonly { name: string; exists: boolean }[]>;
+  /**
+   * @deprecated Not used any more: `env:get` answers {@link readEnvFileView} only, so the file as
+   * written never reaches the Console (issue #1250).
+   */
   readEnvFile?(filename: string): Promise<string>;
+  /** @deprecated Not used any more: `env:save` writes through {@link updateEnvVariables} / {@link replaceEnvFile}. */
   writeEnvFile?(filename: string, content: string): Promise<void>;
+  /** `env:get`: masked view (key names, masks, lengths; comments and blank lines in place). */
+  readEnvFileView?(filename: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvFileView>;
+  /** `env:reveal`: one variable as written. The route requires `ops.env.write` + `ops.env.read` and audits. */
+  revealEnvVariable?(filename: string, key: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvRevealResult>;
+  /** `env:save { changes }`: validates and writes only the named keys (mask placeholders refused). */
+  updateEnvVariables?(filename: string, changes: unknown): Promise<{ readonly changed: readonly string[] }>;
+  /** `env:save { content, mode: 'replace' }`: whole file; refused when it holds mask placeholders. */
+  replaceEnvFile?(filename: string, content: string): Promise<void>;
   /** Optional schema accessors (plugin schema.json / Runtime schema registry). */
   getSchema?(pluginName?: string): Promise<unknown>;
   getAllSchemas?(): Promise<Record<string, unknown>>;

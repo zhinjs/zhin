@@ -12,7 +12,7 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 | 实例（含项目依赖） | `/ops/instance` | `status.view`；依赖列表 `feature.view` | 起停 `ops.restart`；依赖 `plugin.manage` |
 | 数据库 | `/ops/database` | `ops.database.read`（浏览、排序、筛选、表结构） | 记录 `ops.database.write`；SQL 控制台与表结构 `ops.database.schema` |
 | 配置文件 | `/ops/config` | `ops.config.read` | `ops.config.write` |
-| 环境变量 | `/ops/env` | `ops.env.read` | `ops.env.write` |
+| 环境变量 | `/ops/env` | `ops.env.read`（只看打码值） | `ops.env.write`；「显示」原文需要 `ops.env.read` + `ops.env.write` |
 | 定时任务 | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |
 | 项目文件 | `/ops/files` | `ops.files.read` | `ops.files.write` |
 | 终端 | `/ops/terminal` | `ops.terminal`（仅 `owner`） | — |
@@ -49,7 +49,11 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 
 - **数据库**：浏览表、按条件查询、增删改行与 KV 存储，SQL 控制台与表结构调整见[下文](#database)。写操作直接作用于项目数据库，没有撤销。
 - **配置文件**：按当前 YAML / JSON 格式查看与编辑 `zhin.config.yml`，保存带修订号，保存失败自动回滚。实例离线时由网关读写。某个插件的配置在它的全局配置页（`/features/global/:plugin`）用表单改，按层级的覆盖在对象页的「功能」页签。
-- **环境变量**：`.env` 文件。可能含机密，所以 `viewer` 没有 `ops.env.read`。
+- **环境变量**：`.env`、`.env.development`、`.env.production`。可能含机密，所以 `viewer` 没有 `ops.env.read`。
+  - **默认打码**：页面（`env:get`）只拿到每个变量的打码值、长度和是否有值，从不拿到原文。值超过 8 个字符时只显示前 2 位与后 2 位（如 `sk●●●●●●●●ef`），8 个字符以内全部打码；不管变量名看起来是不是密钥，一律按这个规则打码。注释与空行保留在原位；被注释掉的赋值（`# KEY=...`）只显示变量名与打码值，既不是注释也不是赋值的行只显示长度。
+  - **逐个显示**：每行的「显示」按钮调用 `env:reveal` 取回**这一个**变量在文件里的原文（含引号），需要同时持有 `ops.env.read` 与 `ops.env.write`（内置角色里只有 `owner` / `admin`），每次调用都写入[审计日志](./access-control.md#audit)（文件、变量名、主体；不记录值）。显示后可再隐藏，切换文件、保存或离开页面即清除。
+  - **只保存改动的变量**：保存（`env:save { changes }`）只提交新增、修改或删除的变量；文件里其它行（包括从没显示过的密钥）按磁盘上的原样保留，不会被打码值覆盖。新值若是打码占位（含连续 3 个以上 `●`，或只由 `●` 组成）会被拒绝。整文件保存（`env:save { content }`）必须显式声明 `mode: "replace"`，内容里有打码占位同样被拒绝——旧版 Console 把看到的内容整份存回时因此会失败，并提示升级。
+  - 旧版 Host（`env:get` 返回原文、没有 `env:reveal`）上，Console 按旧方式展示，并提示「当前 Host 版本会显示原文」。
 - **定时任务**：打开时是「全部任务」总览，汇总每个任务的状态、下次运行、最近结果、目标与审批，可按状态筛选；创建、暂停和查看记录在各自的页签：「管理员任务」（`?tab=admin`，按用途创建管理员任务）、「定时提醒」（`?tab=schedule`，插件注册的任务与持久化任务）、「助手任务」（`?tab=assistant`）、「执行记录」（`?tab=history`）。
 - **项目文件**：项目文件树与文本文件编辑，范围是插件源码与约定目录、`package.json` / `tsconfig.json`、配置文件、Agent 引导文件（`AGENTS.md`、`SOUL.md`、`TOOLS.md`、`HEARTBEAT.md`）与知识库目录 `knowledge/`；读写配置文件仍需要 `ops.config.*`。**`.env` 与 `.env.*`（含 `.env.local`、`.env.production` 等）不出现在文件树里，也不能经项目文件读写**（任何大小写、`./`、`..`、URL 编码、尾部斜杠或空格、指向它们的符号链接都会被拒绝），请求会返回错误并提示改用「环境变量」页 `/ops/env`；环境变量在该页管理，权限仍是 `ops.env.read` / `ops.env.write`。
 

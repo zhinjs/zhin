@@ -585,7 +585,12 @@ describe('runtime console RPC', () => {
         listProjectFiles: () => buildProjectFileTree(root),
         readProjectFile: (filePath: string) => readProjectFile(root, filePath),
         saveProjectFile: (filePath: string, content: string) => saveProjectFile(root, filePath, content),
+        // A legacy raw reader is never used: env:get answers the masked view only (issue #1250).
         readEnvFile: async (filename: string) => readFile(path.join(root, filename), 'utf8'),
+        readEnvFileView: async (filename: string) => ({
+          format: 'masked' as const, file: filename, lines: [{ kind: 'entry' as const, key: 'SECRET' }],
+          variables: [{ key: 'SECRET', masked: '●●●●●●●●', length: 7, hasValue: true }], content: 'SECRET=●●●●●●●●\n',
+        }),
       };
       const tree = await dispatchRuntimeConsoleRpc({ type: 'files:tree', requestId: 40 }, ctx);
       expect(JSON.stringify(tree)).not.toContain('.env');
@@ -600,10 +605,91 @@ describe('runtime console RPC', () => {
       expect(await readFile(path.join(root, '.env'), 'utf8')).toBe('SECRET=exposed');
       // The environment page keeps working, behind its own permission.
       const env = await dispatchRuntimeConsoleRpc({ type: 'env:get', requestId: 43, filename: '.env' }, ctx);
-      expect(pickRpcReply({ type: 'env:get', requestId: 43 }, env)).toMatchObject({ data: { content: 'SECRET=exposed' } });
+      expect(pickRpcReply({ type: 'env:get', requestId: 43 }, env)).toMatchObject({ data: { format: 'masked', variables: [{ key: 'SECRET' }] } });
+      expect(JSON.stringify(env)).not.toContain('exposed');
       const soul = await dispatchRuntimeConsoleRpc({ type: 'files:read', requestId: 44, filePath: 'SOUL.md' }, ctx);
       expect(pickRpcReply({ type: 'files:read', requestId: 44 }, soul)).toMatchObject({ data: { content: '# soul' } });
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  describe('environment variables are masked by default (issue #1250)', () => {
+    const custom = (permissions: string[]) => Object.freeze({
+      ...userPrincipal('viewer'),
+      grants: Object.freeze([{ role: 'custom', scope: { kind: 'global' as const }, permissions }]),
+    });
+    const envCtx = () => {
+      const calls: { reveal: unknown[][]; update: unknown[][]; replace: unknown[][]; raw: number } = { reveal: [], update: [], replace: [], raw: 0 };
+      return {
+        calls,
+        ctx: {
+          authScope: 'full' as const,
+          listPages: async () => [],
+          readEnvFile: async () => { calls.raw += 1; return 'SECRET=exposed'; },
+          writeEnvFile: async () => { calls.raw += 1; },
+          revealEnvVariable: async (file: string, key: string) => { calls.reveal.push([file, key]); return { file, key, value: 'exposed' }; },
+          updateEnvVariables: async (file: string, changes: unknown) => { calls.update.push([file, changes]); return { changed: ['PORT'] }; },
+          replaceEnvFile: async (file: string, content: string) => { calls.replace.push([file, content]); },
+        },
+      };
+    };
+
+    it('env:get never falls back to the raw file', async () => {
+      const { ctx, calls } = envCtx();
+      const replies = await dispatchRuntimeConsoleRpc({ type: 'env:get', requestId: 1, filename: '.env' }, { ...ctx, principal: userPrincipal('owner') });
+      expect(pickRpcReply({ type: 'env:get', requestId: 1 }, replies)?.error).toBe('Env read is not configured');
+      expect(JSON.stringify(replies)).not.toContain('exposed');
+      expect(calls.raw).toBe(0);
+    });
+
+    it('env:reveal needs ops.env.write and ops.env.read', async () => {
+      const denied: [string, ReturnType<typeof custom> | typeof VIEWER][] = [
+        ['ops.env.write', VIEWER],
+        ['ops.env.write', userPrincipal('operator')],
+        ['ops.env.write', custom(['ops.env.read'])],
+        ['ops.env.read', custom(['ops.env.write'])],
+      ];
+      for (const [missing, principal] of denied) {
+        const { ctx, calls } = envCtx();
+        const replies = await dispatchRuntimeConsoleRpc({ type: 'env:reveal', requestId: 2, filename: '.env', key: 'SECRET' }, { ...ctx, principal });
+        expect(pickRpcReply({ type: 'env:reveal', requestId: 2 }, replies)).toMatchObject({ code: 'forbidden', error: `缺少权限 ${missing}` });
+        expect(JSON.stringify(replies)).not.toContain('exposed');
+        expect(calls.reveal).toEqual([]);
+      }
+      for (const principal of [userPrincipal('owner'), userPrincipal('admin'), custom(['ops.env.read', 'ops.env.write'])]) {
+        const { ctx, calls } = envCtx();
+        const replies = await dispatchRuntimeConsoleRpc({ type: 'env:reveal', requestId: 3, filename: '.env', key: 'SECRET' }, { ...ctx, principal });
+        expect(pickRpcReply({ type: 'env:reveal', requestId: 3 }, replies)).toMatchObject({ data: { file: '.env', key: 'SECRET', value: 'exposed' } });
+        expect(calls.reveal).toEqual([['.env', 'SECRET']]);
+      }
+      const { ctx } = envCtx();
+      const missingKey = await dispatchRuntimeConsoleRpc({ type: 'env:reveal', requestId: 4, filename: '.env' }, { ...ctx, principal: userPrincipal('owner') });
+      expect(pickRpcReply({ type: 'env:reveal', requestId: 4 }, missingKey)?.error).toBe('key is required');
+    });
+
+    it('env:save writes the submitted changes only; a whole file must be declared as replace', async () => {
+      const owner = userPrincipal('owner');
+      const { ctx, calls } = envCtx();
+      const changes = [{ key: 'PORT', value: '9090' }];
+      const saved = await dispatchRuntimeConsoleRpc({ type: 'env:save', requestId: 5, filename: '.env', changes }, { ...ctx, principal: owner });
+      expect(pickRpcReply({ type: 'env:save', requestId: 5 }, saved)).toMatchObject({ data: { success: true, changed: ['PORT'] } });
+      expect(calls.update).toEqual([['.env', changes]]);
+
+      // An older Console posts back the file it was shown: refused without a declaration.
+      const legacy = await dispatchRuntimeConsoleRpc({ type: 'env:save', requestId: 6, filename: '.env', content: 'SECRET=●●●●●●●●\n' }, { ...ctx, principal: owner });
+      expect(pickRpcReply({ type: 'env:save', requestId: 6 }, legacy)?.error).toMatch(/逐键保存/u);
+      const both = await dispatchRuntimeConsoleRpc({ type: 'env:save', requestId: 7, filename: '.env', content: 'A=1', changes, mode: 'replace' }, { ...ctx, principal: owner });
+      expect(pickRpcReply({ type: 'env:save', requestId: 7 }, both)?.error).toMatch(/只能提供一个/u);
+      expect(calls.replace).toEqual([]);
+      expect(calls.raw).toBe(0);
+
+      const replaced = await dispatchRuntimeConsoleRpc({ type: 'env:save', requestId: 8, filename: '.env', content: 'A=1\n', mode: 'replace' }, { ...ctx, principal: owner });
+      expect(pickRpcReply({ type: 'env:save', requestId: 8 }, replaced)).toMatchObject({ data: { success: true } });
+      expect(calls.replace).toEqual([['.env', 'A=1\n']]);
+
+      const denied = await dispatchRuntimeConsoleRpc({ type: 'env:save', requestId: 9, filename: '.env', changes }, { ...ctx, principal: VIEWER });
+      expect(pickRpcReply({ type: 'env:save', requestId: 9 }, denied)?.error).toMatch(/缺少权限 ops\.env\.write/u);
+      expect(calls.update).toHaveLength(1);
+    });
   });
 
   it('answers schema and db stub RPCs', async () => {    const schema = await dispatchRuntimeConsoleRpc(
