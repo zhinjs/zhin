@@ -6,6 +6,7 @@ import type {
   AttentionEndpoint,
   AttentionErrorLogs,
   AttentionMcpServer,
+  AttentionPluginInspection,
   AttentionPluginsRead,
   AttentionSources,
   AttentionToolApproval,
@@ -57,6 +58,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       // `adapter` / `name` as `endpoint.list` rows carry them: the Console's account address.
       endpoints: (): readonly AttentionEndpoint[] => im.endpoints.list().map(row => ({
         id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
+        ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
         transportState: row.transportState, pendingLogin: row.pendingLogin,
       })),
     } : {}),
@@ -70,12 +72,16 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const manageable = declared.filter(plugin => plugin.manageable);
         // The dependency graph is project-wide: check it once here instead of once per inspect.
         const checkOnce = typeof pluginManagement.checkDependencies === 'function' && manageable.length > 0;
-        const [dependencies, states] = await Promise.all([
+        const [dependencies, settled] = await Promise.all([
           checkOnce ? pluginManagement.checkDependencies!() : undefined,
           Promise.allSettled(manageable.map(plugin => checkOnce
             ? pluginManagement.inspect!(plugin.instanceKey, { dependencies: 'skip' })
             : pluginManagement.inspect!(plugin.instanceKey))),
         ]);
+        // A failed inspect keeps its plugin's key, so it is reported for that plugin alone.
+        const states = settled.map((result, index): AttentionPluginInspection => result.status === 'fulfilled'
+          ? { status: 'fulfilled', value: result.value }
+          : { status: 'rejected', instanceKey: manageable[index]!.instanceKey, reason: result.reason });
         return { states, ...(dependencies ? { dependencies } : {}) };
       },
     } : {}),
@@ -89,6 +95,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const queue = snapshots.rootResource!(lease, agentToolApprovalQueueToken) as ToolApprovalQueue | undefined;
         return queue?.list().filter(entry => entry.status === 'pending').map(entry => ({
           id: entry.id, toolName: entry.toolName, sessionKey: entry.sessionKey, createdAt: entry.createdAt,
+          // No conversation names are stored; the origin is described in words instead of the key.
+          ...(entry.origin ? { origin: entry.origin } : {}),
         }));
       }),
     } : {}),

@@ -72,10 +72,12 @@ describe('attention sources wired to the instance', () => {
     const list = await collectAttention(sources, { allows: () => true });
     expect(inspected.sort()).toEqual(['news', 'weather']);
     expect(dependencyChecks).toBe(1);
-    // One plugin could not be inspected: the plugin source is unavailable as a whole (no partial items).
-    expect(list.items.map(item => item.kind)).toEqual(['mcp.disconnected', 'logs.errors']);
+    // One plugin could not be inspected: it gets its own item with the reason, the other plugin's item stays.
+    expect(list.items.map(item => item.id)).toEqual(['plugin.error:plugin=news', 'plugin.error:plugin=weather', 'mcp.disconnected:mcpServer=search', 'logs.errors']);
+    expect(list.items[0]).toMatchObject({ title: '无法读取插件 news 的状态', detail: '原因：inspect failed', action: { path: '/plugins/news' } });
+    expect(list.items[1]).toMatchObject({ title: '插件 weather 运行异常', detail: 'Declared plugin package is not installed' });
     expect(list.items.find(item => item.kind === 'logs.errors')).toMatchObject({ since: '2026-11-13T07:00:00.000Z', title: '最近 24 小时日志里有 3 条错误' });
-    expect(list.unavailable).toEqual(['plugins']);
+    expect(list.unavailable).toBeUndefined();
     // The cache revision follows the generation and the project files.
     const before = await sources.revision!();
     expect(before).toMatch(/^0\|\d/u);

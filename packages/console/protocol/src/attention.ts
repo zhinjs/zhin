@@ -38,7 +38,12 @@ export type ConsoleAttentionKind =
   | 'login.pending'
   /** An account the Host runs is offline (not deliberately stopped, not waiting for login). */
   | 'endpoint.offline'
-  /** A declared plugin is degraded (failed to load / its package is missing / other issues). */
+  /**
+   * A declared plugin is degraded (failed to load / its package is missing / other issues), or its
+   * management state cannot be read (`detail` says why). When every declared plugin fails to be
+   * read for the same reason (e.g. legacy lifecycle state), this is one project-wide item without
+   * a `plugin` subject instead of one per plugin.
+   */
   | 'plugin.error'
   /**
    * The project's plugin dependency graph is not satisfied. The check is project-wide, so this is
@@ -126,6 +131,19 @@ export interface ConsoleAttentionList {
    * list is incomplete for them, which is not the same as "nothing to do".
    */
   readonly unavailable?: readonly string[];
+  /**
+   * Why each `unavailable` source could not be read, same order as `unavailable` (added later:
+   * older Hosts omit it, so a Console falls back to `unavailable`). `reason` is a short sanitized
+   * explanation — never an absolute path or a credential — and may be in English.
+   */
+  readonly unavailableDetails?: readonly ConsoleAttentionUnavailable[];
+}
+
+/** One source of `attention.list` that could not be read, with a short sanitized reason. */
+export interface ConsoleAttentionUnavailable {
+  /** Same value as the matching `unavailable` entry (`plugins`, `logs`, …). */
+  readonly source: string;
+  readonly reason: string;
 }
 
 /** 64-bit FNV-1a over UTF-16 code units, 16 hex digits; tells states apart, never a security boundary. */

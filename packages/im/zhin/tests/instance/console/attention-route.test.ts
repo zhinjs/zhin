@@ -28,7 +28,8 @@ async function host() {
       owner: 'root/qq-work', connected: false, admitted: true, transportState: 'closed', status: 'offline', phase: 'offline' },
   ];
   const queue = new ToolApprovalQueue();
-  queue.enqueue({ toolName: 'group_kick', category: 'member', sessionKey: 'qq:bot:group:1', requesterId: 'u1', turnId: 't1', args: {} });
+  queue.enqueue({ toolName: 'group_kick', category: 'member', sessionKey: 'personal-session:v1:0123abcd', requesterId: 'u1', turnId: 't1', args: {},
+    origin: { platform: 'qq', endpointKey: 'bot', scope: 'group', sceneId: '1' } });
   const root = rootPluginId();
   const state: SnapshotState = {
     root,
@@ -46,6 +47,24 @@ async function host() {
         { role: 'operator', scope: { kind: 'endpoint', key: 'qq/bot' } as const, permissions: ['endpoint.view'] },
       ]) }),
     nobody: 'none',
+    // Bindings written before the `<adapter>/<name>` key: the canonical id (old `endpoint.list` key
+    // `<endpoint.adapter>/<endpoint.id>`, and the alias + canonical id).
+    legacy: Object.freeze({ ...testUser('operator', { kind: 'endpoint', key: 'qq/root/qq-work\u0000zhin.adapter\u0000main' }, 'legacy'),
+      grants: Object.freeze([
+        { role: 'viewer', scope: { kind: 'global' } as const, permissions: ['status.view'] },
+        { role: 'operator', scope: { kind: 'endpoint', key: 'qq/root/qq-work\u0000zhin.adapter\u0000main' } as const, permissions: ['endpoint.view'] },
+      ]) }),
+    legacyAlias: Object.freeze({ ...testUser('operator', { kind: 'endpoint', key: 'qq-work/root/qq-work\u0000zhin.adapter\u0000main' }, 'legacyAlias'),
+      grants: Object.freeze([
+        { role: 'viewer', scope: { kind: 'global' } as const, permissions: ['status.view'] },
+        { role: 'operator', scope: { kind: 'endpoint', key: 'qq-work/root/qq-work\u0000zhin.adapter\u0000main' } as const, permissions: ['endpoint.view'] },
+      ]) }),
+    // Old canonical-id binding of `qq/bot` (id `e2`).
+    legacyBot: Object.freeze({ ...testUser('operator', { kind: 'endpoint', key: 'qq/e2' }, 'legacyBot'),
+      grants: Object.freeze([
+        { role: 'viewer', scope: { kind: 'global' } as const, permissions: ['status.view'] },
+        { role: 'operator', scope: { kind: 'endpoint', key: 'qq/e2' } as const, permissions: ['endpoint.view'] },
+      ]) }),
     work: Object.freeze({ ...testUser('operator', { kind: 'endpoint', key: 'qq-work/ops' }, 'work'),
       grants: Object.freeze([
         { role: 'viewer', scope: { kind: 'global' } as const, permissions: ['status.view'] },
@@ -83,6 +102,23 @@ describe('endpoint identity shared by attention.list and endpoint.list', () => {
     const scoped = await request('scoped', undefined, 'endpoint.list') as unknown as { body: { data?: { endpoints: { name: string }[] } } };
     expect(scoped.body.data!.endpoints.map(row => row.name)).toEqual(['bot']);
   });
+
+  it('keeps matching bindings written with the canonical id (id ≠ name) during the transition, for that account only', async () => {
+    const request = await host();
+    const names = async (token: string) => ((await request(token, undefined, 'endpoint.list')) as unknown as { body: { data?: { endpoints: { name: string }[] } } })
+      .body.data!.endpoints.map(row => row.name);
+    expect(await names('legacy')).toEqual(['ops']);
+    expect(await names('legacyAlias')).toEqual(['ops']);
+    expect(await names('legacyBot')).toEqual(['bot']);
+    // Unrelated accounts stay hidden: the new-key bindings still see only their own account.
+    expect(await names('work')).toEqual(['ops']);
+    expect(await names('scoped')).toEqual(['bot']);
+    // attention.list applies the same rule.
+    const items = async (token: string) => (await request(token)).body.data!.items.map(item => `${item.kind}:${item.subject?.adapter}/${item.subject?.endpointKey}`);
+    expect(await items('legacy')).toEqual(['endpoint.offline:qq-work/ops']);
+    expect(await items('legacyAlias')).toEqual(['endpoint.offline:qq-work/ops']);
+    expect(await items('legacyBot')).toEqual(['endpoint.offline:qq/bot']);
+  });
 });
 
 describe('attention.list over the Console RPC route', () => {
@@ -93,6 +129,10 @@ describe('attention.list over the Console RPC route', () => {
     const kinds = reply.body.data!.items.map(item => `${item.kind}${item.subject?.endpointKey ? `:${item.subject.endpointKey}` : ''}`);
     expect(new Set(kinds)).toEqual(new Set(['login.pending:10001', 'endpoint.offline:bot', 'endpoint.offline:ops', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending']));
     expect(reply.body.data!.items[0]).toMatchObject({ kind: 'login.pending', title: 'icqq / 10001 is waiting to sign in' });
+    // The approval names its origin conversation, not the internal session key.
+    const approval = reply.body.data!.items.find(item => item.kind === 'tool-approval.pending')!;
+    expect(approval.detail).toBe('Requested in group 1 on qq / bot; it is denied if nobody decides in time.');
+    expect(JSON.stringify(reply.body.data)).not.toContain('personal-session');
   });
 
   it('filters items per principal and refuses callers without status.view', async () => {
