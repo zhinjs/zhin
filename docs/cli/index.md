@@ -11,6 +11,8 @@ description: "zhin 命令行的全部子命令：启动与停止、配置向导�
 npx zhin --help        # 查看全部命令
 ```
 
+命令结果（列表、详情）写到标准输出，不带日志前缀，可以直接管道给其他程序；进度与诊断写到标准错误。全局选项 `--verbose` 让诊断行带上 `[时间][级别] [CLI]` 前缀；`--debug` 在运行中的实例返回内部错误时显示日志关联 id，并从实例日志里找出对应的那一行。
+
 ::: tip 在 Bot 项目外运行
 项目里装了 `@zhin.js/cli`，`npx zhin` 直接用它。在项目外（例如新建独立插件、在插件目录发布），npx 会去 npm 下载名为 `zhin` 的包：
 
@@ -373,7 +375,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-搜索插件市场，或查看单个插件的详情。
+搜索插件市场，或查看单个插件的详情。详情含作者（`author`，缺省时取 `maintainers`）；插件已安装到当前项目时，还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
 
 ### use-cases：按用途找到配置入口 {#use-cases}
 
@@ -491,6 +493,8 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 
 `scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
+发送失败时显示具体原因（例如 Sandbox 会话没有打开、账号未连接、平台拒绝）。实例内部出错时只显示「实例内部错误」；加 `--debug` 会显示日志关联 id，并从 `zhin logs` 的最近 1000 行里找出那一行。
+
 ### watch：监视运行实例
 
 ```bash
@@ -518,7 +522,7 @@ zhin schedule resume <id>
 | `--prompt` | 必填，到时间后发给 AI 的提示词 |
 | `-l, --label` | 任务名称 |
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
-| `--notify-channel` | `im` / `silent`（默认）/ `log` |
+| `--notify-channel` | `silent`（默认）/ `log`；`im` 需要目标会话，命令行无法指定，会被拒绝——在聊天里让机器人创建这类任务 |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
 ### agent：Agent 诊断

@@ -734,6 +734,8 @@ export * from './chat-roles.js';
 export * from './attention.js';
 export * from './gateway.js';
 export * from './introspection.js';
+export * from './send-failure.js';
+export * from './api-error.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

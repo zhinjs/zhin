@@ -52,8 +52,10 @@ export interface NpmSearchResult {
 }
 
 export interface NpmPackageInfo extends NpmSearchResult {
-  author?: { name?: string };
-  maintainers?: Array<{ name?: string }>;
+  /** `npm view` returns a string (`"Name <mail>"`) or an object, depending on how it was published. */
+  author?: string | { name?: string; email?: string };
+  /** `npm view` lists maintainers as `"name <email>"` strings. */
+  maintainers?: Array<string | { name?: string; email?: string }>;
   time?: { modified?: string; created?: string };
   homepage?: string;
   repository?: { url?: string };
@@ -64,7 +66,8 @@ export interface NpmPackageInfo extends NpmSearchResult {
   zhin?: {
     displayName?: string;
     category?: string;
-    features?: string[];
+    /** Manifest entries are `{ package, api }`; older manifests used plain names. */
+    features?: Array<string | { package?: string; api?: string }>;
   };
 }
 

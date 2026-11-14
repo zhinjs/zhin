@@ -11,6 +11,8 @@ Day to day, working with Zhin mostly means working with one command, `zhin`: sta
 npx zhin --help        # list every command
 ```
 
+Command results (lists, details) go to stdout without a log prefix, so they can be piped; progress and diagnostics go to stderr. The global `--verbose` option adds the `[time][LEVEL] [CLI]` prefix to diagnostic lines; `--debug` shows the log correlation id when a running instance answers with an internal error, and finds the matching line in the instance log.
+
 ::: tip Running outside a bot project
 Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly. Outside one (for example creating a standalone plugin, or publishing from a plugin directory), npx downloads the npm package named `zhin`:
 
@@ -373,7 +375,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-Search the plugin marketplace or show one plugin's details.
+Search the plugin marketplace or show one plugin's details. Details include the author (`author`, or `maintainers` when absent); when the plugin is installed in the current project they also list its commands, Agent tools and config fields (read statically from the convention directories and `schema.json`; no plugin code runs).
 
 ### use-cases: Find a Setup Path by Purpose
 
@@ -504,6 +506,8 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 
 `scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` may be omitted only when the instance has a single adapter; `-e` picks an account ID, defaulting to the adapter's first online account.
 
+A failed send shows the reason (for example no open Sandbox session, an account that is not connected, or a platform refusal). An internal instance error shows only "Internal error"; with `--debug` the CLI shows its log correlation id and finds that line in the last 1000 lines of `zhin logs`.
+
 ### watch: Monitor a Running Instance
 
 ```bash
@@ -531,7 +535,7 @@ zhin schedule resume <id>
 | `--prompt` | Required: the prompt sent to the AI when due |
 | `-l, --label` | Job name |
 | `--kind` | `solar` (default, Gregorian) / `lunar` / `workday` / `freeDay` |
-| `--notify-channel` | `im` / `silent` (default) / `log` |
+| `--notify-channel` | `silent` (default) / `log`; `im` needs a target conversation the command line cannot name and is refused — ask the bot in a chat to create such a job |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
 
 ### agent: Agent Diagnostics
