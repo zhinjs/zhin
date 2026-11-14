@@ -382,9 +382,18 @@ function placeholderVariableAvoiding(adapter: string, endpointId: string, path: 
   }
 }
 
+/** Strips leading and trailing `_` in linear time (an anchored `/_+$/` backtracks on long `_` runs). */
+function trimUnderscores(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '_') start += 1;
+  while (end > start && value[end - 1] === '_') end -= 1;
+  return value.slice(start, end);
+}
+
 /** `QQ_MAIN_SECRET` style variable name for a placeholder reference. */
 export function placeholderVariable(adapter: string, endpointId: string, path: string): string {
-  const name = [adapter, endpointId, path].join('_').replace(/[^A-Za-z0-9]+/gu, '_').replace(/^_+|_+$/gu, '').toUpperCase();
+  const name = trimUnderscores([adapter, endpointId, path].join('_').replace(/[^A-Za-z0-9]+/gu, '_')).toUpperCase();
   return /^[A-Z_]/u.test(name) ? name : `_${name}`;
 }
 

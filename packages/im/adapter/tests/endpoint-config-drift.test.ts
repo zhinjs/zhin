@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId,
   type CapabilityId, type PluginId, type PluginNodeSnapshot, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, compareEndpointDirectories, configuredEndpointSeeds,
-  createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, endpointWritebackEntry,
+  createEndpointSpecification, defineAdapter, placeholderVariable, endpointEventGatewayToken, endpointSpec, endpointWritebackEntry,
   splitEnvironmentReferences, type Endpoint, type EndpointConfigSource, type EndpointCreationContext, type EndpointDesiredRecord,
   type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointSecretResolver } from '../src/index.js';
 
@@ -371,5 +371,19 @@ describe('start failure reasons', () => {
     const row = root.index.describe().find(entry => entry.id.endsWith('~main'))!;
     expect(root.index.startFailureReason(row.id)).toBe('rejected session ***');
     expect(warn.mock.calls.flat().join('\n')).not.toContain(cookie);
+  });
+});
+
+describe('placeholderVariable', () => {
+  it('trims separators and upper-cases', () => {
+    expect(placeholderVariable('qq', 'main', 'secret')).toBe('QQ_MAIN_SECRET');
+    expect(placeholderVariable('-qq', 'main', 'a.b-')).toBe('QQ_MAIN_A_B');
+    expect(placeholderVariable('1qq', 'main', 'x')).toBe('_1QQ_MAIN_X');
+  });
+
+  it('stays linear on long separator runs', () => {
+    const started = performance.now();
+    expect(placeholderVariable('_'.repeat(50_000) + 'x', 'main', '_'.repeat(50_000))).toBe('X_MAIN');
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
