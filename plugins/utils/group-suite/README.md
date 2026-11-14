@@ -92,6 +92,8 @@ group-suite:
 | `skills/<name>/tools/<tool>/index.ts` | Skill 激活后披露签到查询、排行、统计和群公告 Tool |
 | `pages/index` + `pluginConsoleRpcToken` | Console「群管套件」页面（`group-suite:read`），展示签到记录数、问答词条数、签到排行榜与关键词问答规则 |
 
+持有 `group-suite:read` 的 Console 账号能在页面上看到各群的关键词问答规则，包括持久关键词（`keyword-add`）的回复内容，与 `teach` 问答表的可见范围相同；只授予需要查看这些内容的角色。
+
 关键词与问答修改命令要求群主、管理员、master 或 trusted；普通成员不能修改。查询命令仍按其
 各自公开 permit 执行。Tool 保持既有审批策略，命令角色判断不能替代 Tool 审批或平台权限。
 欢迎通过 `outboundMessageToken` 走统一发送链路，投递失败/未知会报错，不盲目重试。

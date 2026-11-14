@@ -95,6 +95,9 @@ export function ConversationPicker({
   const [manualAccount, setManualAccount] = useState('');
   const [manualKind, setManualKind] = useState<ConversationKind>(allowedKinds[0] ?? 'group');
   const [manualId, setManualId] = useState('');
+  // Without `endpoint.view` no accounts are listed; the account is then typed in by hand.
+  const [manualAdapter, setManualAdapter] = useState('');
+  const [manualEndpointId, setManualEndpointId] = useState('');
 
   const selected = useMemo(() => parseConversationAddress(value), [value]);
   const selectedLabel = selected
@@ -106,10 +109,16 @@ export function ConversationPicker({
   );
   const choose = (address: ConversationAddress) => onChange(serializeConversationAddress(address), address);
 
+  const accountsListed = directory.accounts.length > 0;
   const account = directory.accounts.find(item => `${item.adapter}\u0000${item.endpointId}` === manualAccount)
     ?? (directory.accounts.length === 1 ? directory.accounts[0] : undefined);
-  const manualAddress: ConversationAddress | undefined = account && manualId.trim()
-    ? { endpoint: { adapter: account.adapter, id: account.endpointId }, kind: manualKind, id: manualId.trim() }
+  const manualEndpoint = accountsListed
+    ? account && { adapter: account.adapter, id: account.endpointId }
+    : manualAdapter.trim() && manualEndpointId.trim()
+      ? { adapter: manualAdapter.trim(), id: parseManualEndpointId(manualEndpointId) }
+      : undefined;
+  const manualAddress: ConversationAddress | undefined = manualEndpoint && manualId.trim()
+    ? { endpoint: manualEndpoint, kind: manualKind, id: manualId.trim() }
     : undefined;
 
   return (
@@ -131,7 +140,7 @@ export function ConversationPicker({
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)}
       />
       {error && (
-        <Notice tone="warning">{t('无法读取账号与最近会话（需要「查看账号」权限），可手动填写。')}</Notice>
+        <Notice tone="warning">{t('无法读取账号与最近会话（需要「查看账号」权限 endpoint.view），可手动填写。')}</Notice>
       )}
       {!error && !loading && !inboxAvailable && (
         <Notice tone="info">{t('无法读取最近会话，仅列出账号；可手动填写会话 ID。')}</Notice>
@@ -164,7 +173,7 @@ export function ConversationPicker({
       )}
       {allowManual && manual && (
         <div className="zk-conversation-picker__manual" data-conversation-manual="">
-          {directory.accounts.length > 0 ? (
+          {accountsListed ? (
             <Select
               aria-label={t('机器人账号')}
               value={account ? `${account.adapter}\u0000${account.endpointId}` : manualAccount}
@@ -176,7 +185,23 @@ export function ConversationPicker({
               }))}
             />
           ) : (
-            <span className="zk-hint">{t('没有可选的机器人账号')}</span>
+            <>
+              <span className="zk-hint" data-conversation-manual-hint="">
+                {t('未列出机器人账号（读取账号列表需要「查看账号」权限 endpoint.view），请手动填写适配器与账号 ID。')}
+              </span>
+              <Input
+                aria-label={t('适配器')}
+                placeholder={t('适配器名称')}
+                value={manualAdapter}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setManualAdapter(event.target.value)}
+              />
+              <Input
+                aria-label={t('账号 ID')}
+                placeholder={t('账号的规范 endpoint ID')}
+                value={manualEndpointId}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setManualEndpointId(event.target.value)}
+              />
+            </>
           )}
           <Select
             aria-label={t('会话类型')}
@@ -202,6 +227,14 @@ export function ConversationPicker({
       )}
     </div>
   );
+}
+
+/**
+ * A hand-typed canonical endpoint id. Canonical ids separate their segments with NUL, which cannot
+ * be typed, so the escapes `\0` / `\u0000` are accepted for it.
+ */
+export function parseManualEndpointId(value: string): string {
+  return value.trim().replace(/\\u0000|\\0/gu, '\u0000');
 }
 
 export interface ConversationLabelProps {

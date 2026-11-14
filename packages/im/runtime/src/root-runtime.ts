@@ -21,7 +21,9 @@ import {
 import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
 import type { GenerationInvalidationPlan, ProcessInvalidationPlan } from './invalidation-planner.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
+import type { ManifestWarning } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
+import { emitManifestWarning } from './package-resolver.js';
 import type { PluginConfigResolver, RootResourceInstaller } from './plugin-scope-assembler.js';
 import { RootProcessRestartExecutor, type ProcessRestartAdapter } from './process-restart.js';
 import {
@@ -67,6 +69,12 @@ export interface RootRuntimeOptions {
   readonly disabledPluginInstanceKeys?: readonly string[];
   readonly configUpdates?: readonly RootConfigUpdateHandler[];
   readonly pluginConfigurationSelection?: RootPluginConfigurationSelection;
+  /**
+   * Receives manifest problems the loader tolerates (invalid marketplace-only metadata, unknown
+   * display-name locales), once per distinct problem for this runtime. Defaults to a Node process
+   * warning (`ZhinManifestWarning`).
+   */
+  readonly onManifestWarning?: (warning: ManifestWarning) => void;
 }
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
@@ -98,6 +106,7 @@ export class RootRuntime {
   readonly #controller: RootController<RuntimeGenerationState>;
   readonly #disabledPluginInstanceKeys: readonly string[];
   readonly #onControlError: ControlErrorHandler;
+  readonly #onManifestWarning: (warning: ManifestWarning) => void;
   readonly #configUpdates: readonly RootConfigUpdateHandler[];
   readonly #pluginConfigurationSelection?: RootPluginConfigurationSelection;
   readonly #controlContexts = new WeakSet<RuntimeControlContext>();
@@ -114,6 +123,15 @@ export class RootRuntime {
     this.#configUpdates = Object.freeze([...(options.configUpdates ?? [])]);
     validateConfigUpdateHandlerDeclarations(this.#configUpdates);
     this.#onControlError = options.onControlError ?? (() => undefined);
+    // Project inspection repeats on every reload: report each distinct manifest problem once.
+    const reportedManifestWarnings = new Set<string>();
+    const manifestWarningSink = options.onManifestWarning ?? emitManifestWarning;
+    this.#onManifestWarning = (warning) => {
+      const key = `${warning.source}\u0000${warning.message}`;
+      if (reportedManifestWarnings.has(key)) return;
+      reportedManifestWarnings.add(key);
+      manifestWarningSink(warning);
+    };
     void this.#configurationReady.catch(() => undefined);
     this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#modules = options.modules;
@@ -475,6 +493,7 @@ export class RootRuntime {
     return inspectRuntimeProject({
       projectRoot: this.#projectRoot, modules: this.#modules, environment: this.#environment,
       disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys, configResolver: this.#configResolver,
+      onManifestWarning: this.#onManifestWarning,
       snapshot: this.snapshot, readCommittedSnapshot: () => this.snapshot, getConfigDocument: () => this.#configDocument,
       getConfigSnapshot: () => this.#configSnapshot, refreshConfigDocument: () => this.#refreshConfigDocument(),
       onInitialSchemas: (schemas) => {

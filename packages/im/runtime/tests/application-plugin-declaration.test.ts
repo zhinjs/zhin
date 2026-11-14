@@ -9,6 +9,7 @@ import {
   parsePackageJson,
   pluginInstanceConfigPath,
   readApplicationPluginDeclaration,
+  type ManifestWarning,
 } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -129,6 +130,59 @@ describe('application Plugin declarations', () => {
     expect(reject({ category: 'fun' })).toThrow('metadata.category must be one of adapter');
     expect(reject({ category: 'util' })).toThrow('metadata.category');
     expect(reject({ category: ['game'] })).toThrow('metadata.category');
+  });
+
+  it('lenient (instance load) mode warns and drops invalid marketplace metadata instead of throwing', () => {
+    const warnings: ManifestWarning[] = [];
+    const parsed = parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: {
+      displayName: 'Repeater',
+      displayNameI18n: { 'zh-CN': '复读机', ja: 'リピーター' },
+      descriptionI18n: { en: 'Repeats', fr: 'Répéteur' },
+      category: 'fun',
+    } } }, 'fixture', { metadata: 'lenient', onWarning: warning => warnings.push(warning) });
+    expect(parsed.zhin.type === 'plugin' && parsed.zhin.metadata).toEqual({
+      displayName: 'Repeater', displayNameI18n: { 'zh-CN': '复读机' }, descriptionI18n: { en: 'Repeats' },
+    });
+    expect(warnings.map(({ package: name, field, code }) => ({ name, field, code }))).toEqual([
+      { name: '@test/plugin', field: 'zhin.metadata.displayNameI18n', code: 'manifest-metadata-dropped' },
+      { name: '@test/plugin', field: 'zhin.metadata.descriptionI18n', code: 'manifest-metadata-dropped' },
+      { name: '@test/plugin', field: 'zhin.metadata.category', code: 'manifest-metadata-dropped' },
+    ]);
+    expect(warnings[2]?.message).toContain('metadata.category must be one of');
+    // Whole-field drops: a non-object description, or a display-name map with only unknown locales.
+    const dropped: ManifestWarning[] = [];
+    const whole = parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: {
+      displayNameI18n: { ja: 'リピーター' }, descriptionI18n: 'Repeats', category: ['game'],
+    } } }, 'fixture', { metadata: 'lenient', onWarning: warning => dropped.push(warning) });
+    expect(whole.zhin.type === 'plugin' && whole.zhin.metadata).toEqual({});
+    expect(dropped).toHaveLength(3);
+  });
+
+  it('lenient mode keeps runtime-affecting metadata problems fatal', () => {
+    const lenient = (metadata: Record<string, unknown>) => () => parsePackageJson(
+      { name: '@test/plugin', zhin: { ...plugin, metadata } }, 'fixture', { metadata: 'lenient', onWarning: () => undefined },
+    );
+    expect(lenient({ order: 1 })).toThrow('metadata.order');
+    expect(lenient({ displayNameI18n: 'Repeater' })).toThrow('displayNameI18n must be an object');
+    expect(lenient({ displayNameI18n: { en: '' } })).toThrow('displayNameI18n.en');
+    expect(lenient({ displayName: '' })).toThrow('metadata.displayName');
+  });
+
+  it('loads a package with a bad marketplace category through the resolver and reports it once', async () => {
+    const root = await fixture({ name: '@test/root', dependencies: { '@test/child': 'workspace:*' } });
+    await json(join(root, 'plugins/child/package.json'), {
+      name: '@test/child', zhin: { ...plugin, metadata: { category: 'fun', descriptionI18n: { ja: '子' } } },
+    });
+    const warnings: ManifestWarning[] = [];
+    const resolver = await NodePackageResolver.create(root, { onManifestWarning: warning => warnings.push(warning) });
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    expect(graph.root.children.map(node => node.id)).toEqual(['root/child']);
+    const child = resolver.workspacePackages().find(item => item.name === '@test/child');
+    expect(child?.packageJson.zhin.type === 'plugin' && child.packageJson.zhin.metadata).toEqual({});
+    expect(warnings.map(warning => [warning.package, warning.field])).toEqual([
+      ['@test/child', 'zhin.metadata.descriptionI18n'],
+      ['@test/child', 'zhin.metadata.category'],
+    ]);
   });
 });
 

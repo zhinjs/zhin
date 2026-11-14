@@ -10,6 +10,7 @@ import {
   type EnvironmentLayersPort,
   type HmrCoordinator,
   type InvalidationPlan,
+  type ManifestWarning,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
   type RootConfigUpdateHandler,
@@ -33,6 +34,8 @@ export interface RootHostOptions {
   readonly pluginConfigurationSelection?: RootPluginConfigurationSelection;
   readonly disabledPluginInstanceKeys?: readonly string[];
   readonly watch?: boolean | readonly RuntimeWatchScope[];
+  /** Tolerated manifest problems (dropped marketplace metadata); see `RootRuntimeOptions.onManifestWarning`. */
+  onManifestWarning?(warning: ManifestWarning): void;
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
@@ -99,6 +102,7 @@ export class RootHost {
         platform: 'node',
       },
       disabledPluginInstanceKeys: options.disabledPluginInstanceKeys,
+      ...(options.onManifestWarning ? { onManifestWarning: (warning: ManifestWarning) => options.onManifestWarning?.(warning) } : {}),
       onControlError: (error) => {
         void Promise.resolve(this.#onError(error)).catch(() => undefined);
       },

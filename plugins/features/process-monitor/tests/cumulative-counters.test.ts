@@ -73,6 +73,20 @@ describe('process monitor: this run vs cumulative (#1250)', () => {
     expect(monitor.state.events?.some(event => event.at < now - EVENT_RETENTION_MS)).toBe(false);
   });
 
+  it('treats a non-finite trackingSince / eventsSince (1e999 parses to Infinity) as missing', async () => {
+    const now = Date.UTC(2026, 10, 14, 12);
+    const file = stateFile();
+    fs.writeFileSync(file, '{"restartCount":1,"crashCount":0,"totalUptime":0,"trackingSince":1e999,"eventsSince":-1e999,"events":[]}');
+    const monitor = new ProcessMonitor({ notifyOnCrash: false, notifyOnRestart: false, notifyOnStart: false }, { stateFile: file, now: () => now });
+    await started(monitor);
+    const status = monitor.getStatus('en');
+    expect(status.trackingSinceEstimated).toBe(true);
+    expect(status.trackingSince).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    const persisted = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    expect(Number.isFinite(persisted.trackingSince)).toBe(true);
+    expect(persisted.eventsSince).toBe(now);
+  });
+
   it('a fresh state file records its own start', async () => {
     const now = Date.UTC(2026, 10, 14, 12);
     const file = stateFile();

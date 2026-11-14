@@ -221,6 +221,10 @@ export interface AdapterConsolePageProps {
    * account editor (see `AdapterAccountEditor`) and none of the account status the controller
    * exposes (notice, migration confirmation, blocked notice). It keeps the add form, login tasks,
    * platform actions and read errors. Without a provider the page ignores this flag.
+   *
+   * The host must then render `useAdapterAccounts().migration` (and `notice` / `blocked`): an
+   * edit or start/stop that needs a migration waits on that confirmation and otherwise appears to
+   * do nothing.
    */
   readonly hostAccounts?: boolean;
 }

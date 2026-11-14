@@ -294,12 +294,12 @@ export class ProcessMonitor {
         totalUptime: finiteCount(loaded.totalUptime),
         events: Array.isArray(loaded.events) ? loaded.events.filter(isStartupEvent) : [],
       };
-      if (typeof this.#state.trackingSince !== 'number') {
+      if (!Number.isFinite(this.#state.trackingSince)) {
         // Older files never recorded when counting began: the file's own age is the best bound.
         this.#state.trackingSince = this.#legacyTrackingStart(now);
         this.#state.trackingSinceEstimated = true;
       }
-      if (typeof this.#state.eventsSince !== 'number') this.#state.eventsSince = now;
+      if (!Number.isFinite(this.#state.eventsSince)) this.#state.eventsSince = now;
     } catch {
       this.#state = { restartCount: 0, crashCount: 0, totalUptime: 0, trackingSince: now, events: [], eventsSince: now };
     }

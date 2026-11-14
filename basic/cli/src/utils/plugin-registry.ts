@@ -79,17 +79,31 @@ export interface SearchFilterOptions {
 }
 
 /**
+ * Keywords that mark a package as part of the Zhin ecosystem. `zhin.js` is what the authoring docs
+ * recommend (plus feature words); `zhin` / `zhinjs` / `zhin-plugin` and the legacy generic `plugin`
+ * are still accepted. Matching is case-insensitive.
+ */
+export const ZHIN_ECOSYSTEM_KEYWORDS: readonly string[] = Object.freeze(['zhin.js', 'zhin', 'zhinjs', 'zhin-plugin', 'plugin']);
+
+/**
+ * Whether an npm search result belongs to the Zhin ecosystem: a recognised keyword, an official or
+ * conventional package name, or a published `package.json#zhin` manifest (when the search document
+ * carries it).
+ */
+export function isZhinEcosystemPackage(pkg: NpmSearchResult): boolean {
+  if (pkg.name.startsWith('@zhin.js/') || pkg.name.startsWith('zhin.js-')) return true;
+  if (pkg.zhin !== undefined && pkg.zhin !== null && typeof pkg.zhin === 'object') return true;
+  const keywords = (pkg.keywords ?? []).map((keyword) => String(keyword).toLowerCase());
+  return keywords.some((keyword) => ZHIN_ECOSYSTEM_KEYWORDS.includes(keyword));
+}
+
+/**
  * 过滤 + 排序 npm search 结果（纯函数，便于测试）
  */
 export function filterSearchResults(results: NpmSearchResult[], options: SearchFilterOptions): NpmSearchResult[] {
   let filtered = results.filter((pkg) => {
     const keywords = pkg.keywords || [];
-    const hasZhin =
-      keywords.includes('zhin') ||
-      keywords.includes('plugin') ||
-      pkg.name.startsWith('@zhin.js/') ||
-      pkg.name.startsWith('zhin.js-');
-    if (!hasZhin) return false;
+    if (!isZhinEcosystemPackage(pkg)) return false;
 
     if (options.category && !matchesCategory(pkg, options.category)) return false;
 

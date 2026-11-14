@@ -126,6 +126,61 @@ describe('ConversationPicker / ConversationLabel (#1250)', () => {
     env.unmount();
   });
 
+  it('without endpoint.view, allows typing the adapter, account ID and conversation, and names the missing permission', async () => {
+    stubHost(() => ({ code: 403, error: 'denied' }));
+    const env = createHookEnv();
+    const { ConversationPicker, parseManualEndpointId } = env.load(file('./conversation-picker.tsx'));
+    const onChange = vi.fn();
+    env.mount(() => ConversationPicker({ value: '', onChange, kinds: ['group'] }));
+    await env.settle();
+    expect(textOf(env.tree())).toContain('endpoint.view');
+    const toggle = allNodes(env.tree()).find(node => isComponent(node, 'Button') && textOf(node).includes('手动填写'))!;
+    (toggle.props!.onClick as () => void)();
+    env.rerender();
+    expect(textOf(env.tree())).toContain('未列出机器人账号（读取账号列表需要「查看账号」权限 endpoint.view）');
+    expect(allNodes(env.tree()).some(node => isComponent(node, 'Select') && node.props?.['aria-label'] === '机器人账号')).toBe(false);
+    const type = (label: string, value: string) => {
+      const input = allNodes(env.tree()).find(node => isComponent(node, 'Input') && node.props?.['aria-label'] === label)!;
+      (input.props!.onChange as (event: { target: { value: string } }) => void)({ target: { value } });
+      env.rerender();
+    };
+    const use = () => allNodes(env.tree()).find(node => isComponent(node, 'Button') && textOf(node) === '使用该会话')!;
+    type('会话 ID', '12345');
+    expect(use().props!.disabled).toBe(true);
+    type('适配器', 'sandbox');
+    expect(use().props!.disabled).toBe(true);
+    type('账号 ID', 'root/sandbox\\0zhin.adapter\\u0000sandbox~sandbox-bot');
+    expect(use().props!.disabled).toBe(false);
+    (use().props!.onClick as () => void)();
+    expect(JSON.parse(onChange.mock.calls[0]![0] as string)).toEqual({ endpoint: { adapter: 'sandbox', id: BOT }, kind: 'group', id: '12345' });
+    expect(parseManualEndpointId(` ${BOT} `)).toBe(BOT);
+    env.unmount();
+  });
+
+  it('N labels without a Provider share one endpoint.list + inbox.recent pair (in-flight dedupe and TTL cache)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const calls = stubHost((type) => type === 'endpoint.list' ? { data: endpoints } : { data: messages });
+    const env = createHookEnv();
+    const { ConversationLabel } = env.load(file('./conversation-picker.tsx'));
+    env.mount(() => [ConversationLabel({ value: GROUP_KEY }), ConversationLabel({ value: PRIVATE_KEY }), ConversationLabel({ value: GROUP_KEY })]);
+    await env.settle();
+    expect(calls.sort()).toEqual(['endpoint.list', 'inbox.recent']);
+    const texts = (env.tree() as { props: { children: unknown } }[]).map(node => textOf(node.props.children));
+    expect(texts[0]).toBe('群聊 · 测试群（g-1） · sandbox-bot');
+    // A later mount inside the TTL reuses the loaded snapshot (hook slots appended after the labels).
+    const { useConversationDirectory } = env.load(file('./conversation-directory.ts'));
+    const labels = () => [ConversationLabel({ value: GROUP_KEY }), ConversationLabel({ value: PRIVATE_KEY }), ConversationLabel({ value: GROUP_KEY })];
+    env.mount(() => [...labels(), useConversationDirectory()]);
+    await env.settle();
+    expect(calls).toHaveLength(2);
+    // After the TTL a new mount reads again.
+    vi.setSystemTime(Date.now() + 10_001);
+    env.mount(() => [...labels(), useConversationDirectory(), useConversationDirectory()]);
+    await env.settle();
+    expect(calls).toHaveLength(4);
+    env.unmount();
+  });
+
   it('labels a stored key by display name and shows other values unchanged', async () => {
     stubHost((type) => type === 'endpoint.list' ? { data: endpoints } : { data: messages });
     const env = createHookEnv();
@@ -230,6 +285,42 @@ describe('declarative page additions (#1250)', () => {
     const rendered = (inline.type as unknown as (props: unknown) => unknown)(inline.props);
     expect(textOf(rendered)).toContain('拦截');
     expect(textOf(rendered)).toContain('违禁词');
+    env.unmount();
+  });
+
+  it('an inline result without its own tone uses the computed tone and shows the message it does not render', async () => {
+    const env = await mountPage({
+      pluginId: 'root/demo',
+      title: 'Demo',
+      pollMs: 0,
+      actions: [{
+        name: 'test-rule',
+        label: '试运行',
+        fields: [{ key: 'text', label: '文本' }],
+        result: { title: '结果', entries: [{ label: '命中', value: { $path: 'hits' } }] },
+      }, {
+        name: 'echo',
+        label: '回显',
+        fields: [{ key: 'text', label: '文本' }],
+        result: { title: { $path: 'message' }, tone: 'info' },
+      }],
+    }, { passed: false, hits: 'a, b', message: '规则未通过' });
+    const runAction = async (label: string) => {
+      const run = allNodes(env.tree()).find(node => isComponent(node, 'Button') && textOf(node) === label)!;
+      await (run.props!.onClick as () => Promise<void>)();
+      await env.settle();
+    };
+    await runAction('试运行');
+    await runAction('回显');
+    const inlines = allNodes(env.tree()).filter(node => isComponent(node, 'ActionInlineResult'));
+    const [failed, echo] = inlines.map(node => ({ node, rendered: (node.type as unknown as (props: unknown) => unknown)(node.props) as { props: { className: string } } }));
+    expect(failed!.node.props).toMatchObject({ name: 'test-rule', fallbackTone: 'danger', message: '规则未通过' });
+    expect(failed!.rendered.props.className).toContain('zk-action-inline-result--danger');
+    expect(textOf(failed!.rendered)).toContain('规则未通过');
+    // The spec's own tone wins, and a message the spec already renders is not repeated.
+    expect(echo!.rendered.props.className).toContain('zk-action-inline-result--info');
+    expect(allNodes(echo!.rendered).filter(node => node.props?.['data-action-result-message'] !== undefined)).toHaveLength(0);
+    expect(allNodes(env.tree()).some(node => isComponent(node, 'Notice') && textOf(node).includes('规则未通过'))).toBe(false);
     env.unmount();
   });
 

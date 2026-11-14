@@ -90,6 +90,19 @@ import { AdapterAccountEditor, AdapterAccountsProvider, AdapterConsolePage, useA
 </AdapterAccountsProvider>
 ```
 
+**`hostAccounts` 时宿主必须渲染迁移确认**：SDK 页不再画 `notice`、`blocked` 与迁移确认，账号编辑 / 启停在需要迁移时只会把确认放进 `useAdapterAccounts().migration`（`ids`、`busy`、`confirm()`、`cancel()`）。宿主不渲染它，这类操作就会停在等待确认、看起来没有反应；同样应展示 `notice`（含 `commit_unknown` 提示）与 `blocked`。
+
+```tsx
+const { migration } = useAdapterAccounts();
+{migration && (
+  <Notice tone="warning">
+    需要先把 {migration.ids.join('、')} 迁移到数据库。
+    <Button size="sm" busy={migration.busy} onClick={migration.confirm}>确认迁移</Button>
+    <Button size="sm" variant="ghost" onClick={migration.cancel}>取消</Button>
+  </Notice>
+)}
+```
+
 只想换掉 SDK 卡片内容时，传 `renderRow={row => …}`（拿到同样的账号行）。`capabilities` 里的 `renderRow` / `hostAccounts` 标明支持。
 
 ## 插件页 UI 套件

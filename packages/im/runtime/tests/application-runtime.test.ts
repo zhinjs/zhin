@@ -13,7 +13,7 @@ import {
   type PluginDefinition,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { RootRuntime, primaryConfigToken, type PrimaryConfig, type ModuleRuntime } from '../src/index.js';
+import { RootRuntime, primaryConfigToken, type ManifestWarning, type PrimaryConfig, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];
 const running: RootRuntime[] = [];
@@ -289,6 +289,21 @@ describe('flat application Runtime', () => {
     await runtime.stop();
   });
 
+  it('starts with an invalid marketplace category, dropping it with a structured warning', async () => {
+    const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
+    f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Child' } }));
+    await f.childManifest({ metadata: { category: 'fun', displayNameI18n: { en: 'Child', ja: '子' } } });
+    const warnings: ManifestWarning[] = [];
+    const runtime = f.runtime({ onManifestWarning: warning => warnings.push(warning) });
+    await runtime.start();
+    expect(runtime.snapshot.tree.get('root/child' as never)?.metadata).toEqual({ displayName: 'Child', displayNameI18n: { en: 'Child' } });
+    expect(warnings.map(warning => [warning.package, warning.field])).toEqual([
+      ['@test/child', 'zhin.metadata.displayNameI18n'],
+      ['@test/child', 'zhin.metadata.category'],
+    ]);
+    await runtime.stop();
+  });
+
   it('rejects duplicate metadata even when values match and before executing plugin setup', async () => {
     const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
     f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Same' } }));
@@ -341,7 +356,7 @@ async function fixture(initial: RuntimeConfigDocument) {
   };
   const document = new MemoryDocument(join(root, 'zhin.config.json'), initial);
   return { root, definitions, loads, setups, document, modules, child, childManifest,
-    runtime() { const runtime = new RootRuntime({ projectRoot: root, config: document, modules, environment }); running.push(runtime); return runtime; },
+    runtime(options: Partial<ConstructorParameters<typeof RootRuntime>[0]> = {}) { const runtime = new RootRuntime({ projectRoot: root, config: document, modules, environment, ...options }); running.push(runtime); return runtime; },
   };
 }
 

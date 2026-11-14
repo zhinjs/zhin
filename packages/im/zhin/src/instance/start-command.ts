@@ -366,6 +366,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     environmentSource,
     configUpdates: [featureOverrideMigration.configUpdate],
     disabledPluginInstanceKeys: [],
+    // Marketplace-only manifest metadata problems are dropped, not fatal; `zhin plugin check` stays strict.
+    onManifestWarning: (warning) => {
+      getLogger('runtime').warn(formatCompact({
+        op: 'manifest_metadata_dropped',
+        package: warning.package,
+        field: warning.field,
+        message: warning.message,
+      }));
+    },
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
       im.install(context.resources);

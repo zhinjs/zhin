@@ -570,6 +570,7 @@ const declarativeStyles = `
 }
 .zk-empty-cell { color: var(--zk-muted); opacity: 0.65; }
 .zk-action-inline-result { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--zk-border); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+.zk-action-inline-result__message { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 .zk-action-inline-result__list { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
 .zk-action-inline-result__list dt { color: var(--zk-muted); }
 .zk-action-inline-result__list dd { margin: 0; overflow-wrap: anywhere; }
@@ -1196,16 +1197,37 @@ function specUsesConversations(spec: DeclarativePageSpec<any>): boolean {
   return columns.some((column) => column.type === 'conversation') || fields.some((field) => field.type === 'conversation');
 }
 
+/** Whether a `result` spec already shows the RPC's `message` field (title or an entry reads it). */
+function resultSpecRendersMessage(spec: DeclarativeActionResultSpec): boolean {
+  const reads = (value: unknown): boolean => {
+    if (!isDeclarativeValueExpr(value)) return false;
+    const expr = value as Record<string, unknown>;
+    const nested = (key: string) => (expr[key] as { readonly path?: unknown } | undefined)?.path;
+    const paths = [
+      expr.$path, expr.$count, expr.$i18n, nested('$sum'), nested('$map'), nested('$join'),
+      ...(Array.isArray(expr.$coalesce) ? expr.$coalesce : []),
+      ...(Array.isArray(expr.args) ? expr.args : []),
+      ...(Array.isArray(expr.$args) ? expr.$args : []),
+    ];
+    return paths.some((path) => path === 'message');
+  };
+  return reads(spec.title) || (spec.entries ?? []).some((entry) => reads(entry.value));
+}
+
 /** Inline answer of an action with a `result` spec, rendered under its form. */
-function ActionInlineResult({ name, spec, result, locale, t, onDismiss }: {
+function ActionInlineResult({ name, spec, result, fallbackTone = 'neutral', message, locale, t, onDismiss }: {
   readonly name: string;
   readonly spec: DeclarativeActionResultSpec;
   readonly result: Record<string, unknown>;
+  /** Tone derived from the answer (`passed: false` / `decision`), used when the spec sets no `tone`. */
+  readonly fallbackTone?: BadgeTone;
+  /** The answer's message, shown unless the spec already renders `message`. */
+  readonly message?: string;
   readonly locale: PluginUiLocale;
   readonly t: PluginUiText['t'];
   readonly onDismiss: () => void;
 }) {
-  const tone = resolveBadgeTone(spec.tone, result, locale, t);
+  const tone = spec.tone === undefined ? fallbackTone : resolveBadgeTone(spec.tone, result, locale, t);
   const title = spec.title === undefined
     ? undefined
     : isDeclarativeValueExpr(spec.title)
@@ -1217,6 +1239,9 @@ function ActionInlineResult({ name, spec, result, locale, t, onDismiss }: {
         {title !== undefined && <Badge tone={tone}>{title}</Badge>}
         <button type="button" className="zk-copy-btn" onClick={onDismiss}>{t('关闭')}</button>
       </div>
+      {message && !resultSpecRendersMessage(spec) && (
+        <p className="zk-action-inline-result__message" data-action-result-message="">{message}</p>
+      )}
       {spec.entries && spec.entries.length > 0 && (
         <dl className="zk-action-inline-result__list">
           {spec.entries.map((entry, idx) => (
@@ -1229,6 +1254,12 @@ function ActionInlineResult({ name, spec, result, locale, t, onDismiss }: {
       )}
     </div>
   );
+}
+
+interface InlineActionResult {
+  readonly result: Record<string, unknown>;
+  readonly tone: BadgeTone;
+  readonly message?: string;
 }
 
 const TABLE_PAGE_SIZE = 15;
@@ -1325,7 +1356,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [manualRefreshBusy, setManualRefreshBusy] = useState(false);
   const [actionInputs, setActionInputs] = useState<Readonly<Record<string, Readonly<Record<string, string>>>>>({});
   const [actionResults, setActionResults] = useState<Readonly<Record<string, Record<string, unknown>>>>({});
-  const [inlineResults, setInlineResults] = useState<Readonly<Record<string, Record<string, unknown>>>>({});
+  const [inlineResults, setInlineResults] = useState<Readonly<Record<string, InlineActionResult>>>({});
   const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
   const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
   const [sectionSorts, setSectionSorts] = useState<Readonly<Record<string, { readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>>>({});
@@ -1409,9 +1440,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         ? action.name.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`)
         : action.name;
       const res = await call<Record<string, unknown> | undefined>(rpcMethod, payload);
-      const msg = (res && typeof res === 'object' && typeof res.message === 'string' && res.message)
+      const answerMessage = res && typeof res === 'object' && typeof res.message === 'string' && res.message
         ? res.message
-        : (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
+        : undefined;
+      const msg = answerMessage
+        ?? (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
       const tone: 'success' | 'warning' | 'danger' =
         res && typeof res === 'object' && (res.passed === false || res.decision === 'block')
           ? 'danger'
@@ -1419,8 +1452,17 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
             ? 'warning'
             : 'success';
       if (action.result) {
-        // Inline result next to the form; no page-top banner far from the input.
-        setInlineResults((prev) => ({ ...prev, [action.name]: res && typeof res === 'object' ? res : {} }));
+        // Inline result next to the form; no page-top banner far from the input. The message and the
+        // computed tone go with it (the spec's own `tone` still wins).
+        const inlineMessage = answerMessage ?? (action.successMessage ? pickText(action.successMessage, locale, t) : undefined);
+        setInlineResults((prev) => ({
+          ...prev,
+          [action.name]: {
+            result: res && typeof res === 'object' ? res : {},
+            tone,
+            ...(inlineMessage ? { message: inlineMessage } : {}),
+          },
+        }));
         await resource.refresh();
         return;
       }
@@ -1983,7 +2025,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                     <ActionInlineResult
                       name={action.name}
                       spec={action.result}
-                      result={inlineResults[action.name] ?? {}}
+                      result={inlineResults[action.name]?.result ?? {}}
+                      fallbackTone={inlineResults[action.name]?.tone}
+                      message={inlineResults[action.name]?.message}
                       locale={locale}
                       t={t}
                       onDismiss={() => setInlineResults((prev) => {

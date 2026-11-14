@@ -9,7 +9,7 @@
  * permission map applies (`endpoint.view`; a principal without it simply gets no names).
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { consoleRpc } from '../console-utils/remoteApi.js';
+import { captureAuthRequest, consoleRpc } from '../console-utils/remoteApi.js';
 
 export type ConversationKind = 'private' | 'group' | 'channel';
 
@@ -322,6 +322,54 @@ async function loadSnapshot(): Promise<Snapshot> {
   };
 }
 
+/** How long a loaded directory is reused by components that mount without a shared Provider. */
+export const CONVERSATION_DIRECTORY_TTL_MS = 10_000;
+
+interface CachedSnapshot {
+  readonly promise: Promise<Snapshot>;
+  settledAt?: number;
+}
+
+/** Module-level in-flight dedupe + short TTL cache, keyed by transport (API base + credential). */
+const snapshotCache = new Map<string, CachedSnapshot>();
+
+function transportKey(): string {
+  const { apiBase, token } = captureAuthRequest();
+  return `${apiBase}\u0000${token ?? ''}`;
+}
+
+/**
+ * The directory snapshot for the current transport: concurrent callers share one in-flight
+ * `endpoint.list` + `inbox.recent` pair, and a loaded snapshot is reused for
+ * {@link CONVERSATION_DIRECTORY_TTL_MS}. A snapshot where both reads failed is not kept, so the
+ * next mount retries. `force` always starts a new read (used by `refresh`).
+ */
+function sharedSnapshot(force = false): Promise<Snapshot> {
+  const key = transportKey();
+  const now = Date.now();
+  for (const [cachedKey, cached] of snapshotCache) {
+    if (cached.settledAt !== undefined && now - cached.settledAt >= CONVERSATION_DIRECTORY_TTL_MS) snapshotCache.delete(cachedKey);
+  }
+  const cached = snapshotCache.get(key);
+  if (!force && cached) return cached.promise;
+  const entry: CachedSnapshot = {
+    promise: loadSnapshot().then((snapshot) => {
+      if (snapshotCache.get(key) === entry) {
+        if (snapshot.error) snapshotCache.delete(key);
+        else entry.settledAt = Date.now();
+      }
+      return snapshot;
+    }),
+  };
+  snapshotCache.set(key, entry);
+  return entry.promise;
+}
+
+/** Drops the cached directory snapshots (tests, sign-out). */
+export function clearConversationDirectoryCache(): void {
+  snapshotCache.clear();
+}
+
 /**
  * Lets one page share a single directory: the declarative page provides it when a column or field
  * needs conversations, and every {@link useSharedConversationDirectory} below reads it instead of
@@ -331,7 +379,14 @@ export const ConversationDirectoryContext = createContext<ConversationDirectoryS
 
 /**
  * Accounts and recent conversations for display names and pickers, read from `endpoint.list` +
- * `inbox.recent` once per mount; pass `enabled: false` to skip loading.
+ * `inbox.recent`; pass `enabled: false` to skip loading.
+ *
+ * Without a {@link ConversationDirectoryContext} Provider every component calls this hook on its
+ * own; concurrent mounts still share one in-flight request pair and reuse its result for
+ * {@link CONVERSATION_DIRECTORY_TTL_MS}. Custom pages that show many conversations should still
+ * read the directory once and wrap their tree in
+ * `<ConversationDirectoryContext.Provider value={useConversationDirectory()}>` so every
+ * `ConversationLabel` / `ConversationPicker` shares one state (and one `refresh`).
  */
 export function useConversationDirectory(options: { readonly enabled?: boolean } = {}): ConversationDirectoryState {
   const enabled = options.enabled !== false;
@@ -342,7 +397,7 @@ export function useConversationDirectory(options: { readonly enabled?: boolean }
     if (!enabled) return;
     let alive = true;
     setLoading(true);
-    void loadSnapshot().then((next) => {
+    void sharedSnapshot().then((next) => {
       if (!alive) return;
       setSnapshot(next);
       setLoading(false);
@@ -352,7 +407,7 @@ export function useConversationDirectory(options: { readonly enabled?: boolean }
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setSnapshot(await loadSnapshot());
+    setSnapshot(await sharedSnapshot(true));
     setLoading(false);
   }, []);
 
