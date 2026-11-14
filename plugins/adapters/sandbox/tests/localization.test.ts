@@ -77,3 +77,14 @@ it('uses ready.locale without remounting or replacing stored conversations and d
   inbound({type:'ready',endpoint:'legacy',timestamp:3});view=run();expect(view.locale).toBe('zh-CN');
   expect(view.channels[0].name).toBe('用户保留的会话');expect(view.inputText).toBe('未发送草稿');
 });
+
+it('quick commands pre-fill the composer without taking focus, and history loading keeps the empty-state height', async () => {
+  const source = await readFile(new URL('../pages/index/SandboxChat.tsx', import.meta.url), 'utf8');
+  const chips = source.slice(source.indexOf('className="sandbox-quick-commands"'), source.indexOf('className="sandbox-command-chip is-clear"'));
+  expect(chips).toContain('tabIndex={-1}');
+  expect(chips).toContain('onMouseDown={(event) => event.preventDefault()}');
+  expect(chips).toContain('editorRef.current?.setText(cmd)');
+  expect(chips).not.toContain('runPrompt(cmd)');
+  expect(source).toMatch(/channelMessages\.length === 0 && history\.loading \? \(\s*\/\/[^\n]*\n\s*<div className="agent-playground-empty" role="status">/u);
+  expect(sandboxText('en', '正在加载会话记录…')).toBe('Loading conversation history…');
+});

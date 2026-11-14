@@ -19,6 +19,8 @@ export interface RichTextEditorProps {
 export interface RichTextEditorRef {
     focus: () => void
     clear: () => void
+    /** Replace the draft with plain text and put the caret at its end (quick commands pre-fill, never send). */
+    setText: (text: string) => void
     insertFace: (faceId: number) => void
     insertImage: (url: string) => void
     insertVideo: (url: string) => void
@@ -236,6 +238,22 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             }
         }
 
+        const setText = (text: string) => {
+            const editor = editorRef.current
+            if (!editor) return
+            editor.textContent = text
+            editor.focus()
+            const selection = window.getSelection()
+            if (selection) {
+                const range = document.createRange()
+                range.selectNodeContents(editor)
+                range.collapse(false)
+                selection.removeAllRanges()
+                selection.addRange(range)
+            }
+            handleChange()
+        }
+
         // 聚焦编辑器
         const focus = () => {
             editorRef.current?.focus()
@@ -399,6 +417,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         useImperativeHandle(ref, () => ({
             focus,
             clear,
+            setText,
             insertFace,
             insertImage,
             insertVideo,
