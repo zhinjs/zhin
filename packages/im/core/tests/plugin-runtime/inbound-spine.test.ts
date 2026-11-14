@@ -110,6 +110,44 @@ describe('executeInboundTurnSpine & @zhin.js/core/runtime host installers', () =
     });
   });
 
+  it('answers a near-miss command with a suggestion instead of handing it to the AI (#1250)', async () => {
+    const reportDispatch = vi.fn(async () => undefined);
+    const route = vi.fn(async () => true);
+    const outcome = await executeInboundTurnSpine(createEnvelope({
+      ingressRoute: { route },
+      suggestCommand: async () => '没有这个指令，你是不是想用：rss list',
+    }), { reportDispatch });
+
+    expect(route).not.toHaveBeenCalled();
+    expect(outcome.stage).toBe('command-suggestion');
+    expect(outcome.dispatch.matched).toBe(false);
+    expect(outcome.reply).toEqual({ owner: rootPluginId(), content: '没有这个指令，你是不是想用：rss list' });
+    expect(reportDispatch).toHaveBeenCalledWith({ matched: false, path: 'none', replied: true });
+  });
+
+  it('keeps the AI path when no command is similar or a handler already replied', async () => {
+    const route = vi.fn(async () => true);
+    const none = await executeInboundTurnSpine(createEnvelope({
+      ingressRoute: { route }, suggestCommand: async () => undefined,
+    }));
+    expect(none.stage).toBe('agent-ingress');
+    expect(route).toHaveBeenCalledTimes(1);
+
+    const suggestCommand = vi.fn(async () => 'unused');
+    const replied = await executeInboundTurnSpine(createEnvelope({
+      ingressRoute: { route }, suggestCommand, hasReplied: () => true,
+    }));
+    expect(suggestCommand).not.toHaveBeenCalled();
+    expect(replied.reply).toBeUndefined();
+    expect(route).toHaveBeenCalledTimes(2);
+
+    const failing = await executeInboundTurnSpine(createEnvelope({
+      ingressRoute: { route }, suggestCommand: async () => { throw new Error('index unavailable'); },
+    }));
+    expect(failing.stage).toBe('agent-ingress');
+    expect(route).toHaveBeenCalledTimes(3);
+  });
+
   it('invokes onTurnComplete with a frozen InboundTurnRecord for command turns', async () => {
     const onTurnComplete = vi.fn();
     const outcome = await executeInboundTurnSpine(createEnvelope({

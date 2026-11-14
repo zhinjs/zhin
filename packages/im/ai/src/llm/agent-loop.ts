@@ -270,6 +270,10 @@ export async function* agentLoop(
   // 修复不变量由 loop 持有：消息 append-only，按最后 user 边界增量修复；
   // 历史被替换（transform/压缩）时重置检查点。
   const repairer = createIncrementalRepair();
+  // A tools-mutating result (e.g. `load_tool`) that no re-completion refreshed yet: the
+  // next request must declare the loaded tools, or providers that only accept declared
+  // function names cannot call them (#1250).
+  let toolsStale = false;
 
   yield { type: 'agent_start' };
 
@@ -280,6 +284,11 @@ export async function* agentLoop(
     if (signal?.aborted) break;
 
     yield { type: 'turn_start' };
+
+    if (toolsStale && config.refreshTools) {
+      tools = [...await config.refreshTools()];
+      toolsStale = false;
+    }
 
     const transformed = config.transformContext
       ? await config.transformContext(messages, signal)
@@ -389,9 +398,11 @@ export async function* agentLoop(
     // A re-completion that answers in text (no further tool calls) is the
     // final reply; asking the model again would cost a step and repeat it.
     let recompleteAnswered = false;
+    if (recompletePending && !(config.refreshTools && recompleteCount < maxRecomplete)) toolsStale = true;
     if (recompletePending && config.refreshTools && recompleteCount < maxRecomplete) {
       const refreshed = await config.refreshTools();
       tools = [...refreshed];
+      toolsStale = false;
       recompleteCount += 1;
       try {
         // Build/repair failures and tool execution errors are not model failures.
@@ -429,6 +440,7 @@ export async function* agentLoop(
               toolResults.push(result);
               messages.push(result);
               emitted.push(result);
+              if (config.shouldRecompleteAfterTool?.(result) === true) toolsStale = true;
             },
             onEvent: (event) => {
               followEvents.push(event);

@@ -52,26 +52,51 @@ export function auditStaleReply(
  * Records how the turn was admitted on its TurnTrace once the trace exists,
  * and tells the mailbox when the turn acts (ADR 0038 §4: such replies are never dropped).
  */
+/** The inbound message that started a turn, as {@link observeWithAdmission} records it (#1250). */
+export interface TurnTriggerFacts {
+  readonly text: string;
+  readonly senderId?: string;
+  readonly senderName?: string;
+  readonly conversation?: Readonly<{ kind: string; id: string }>;
+  readonly messageId?: string;
+  /** Epoch milliseconds the runtime received the message. */
+  readonly receivedAt?: number;
+}
+
 export function observeWithAdmission(
   observe: ReturnType<typeof observeAgentTurnTrace>,
   turnId: string,
   admission: Extract<TurnAdmission, { kind: 'run' }> | undefined,
+  trigger?: TurnTriggerFacts,
 ): ReturnType<typeof observeAgentTurnTrace> {
-  if (!admission) return observe;
-  const facts = admission.facts;
-  const noteFacts = facts.queuedMs > 0 || facts.mergedMessages > 1 || facts.supersededPrevious;
-  let noted = !noteFacts;
+  if (!admission && !trigger) return observe;
+  const facts = admission?.facts;
+  let noted = false;
   return (event) => {
-    if (isActingTurnEvent(event)) admission.markActed();
+    if (isActingTurnEvent(event)) admission?.markActed();
     if (!noted) {
       noted = true;
-      noteTurnTrace(turnId, {
-        kind: 'admission',
-        queued_ms: facts.queuedMs,
-        merged_messages: facts.mergedMessages,
-        superseded_previous: facts.supersededPrevious,
-        ...(facts.mergeWindow ? { merged_senders: facts.mergeWindow.senders.length } : {}),
-      });
+      if (trigger) {
+        noteTurnTrace(turnId, {
+          kind: 'trigger',
+          text: trigger.text,
+          ...(trigger.senderId ? { sender_id: trigger.senderId } : {}),
+          ...(trigger.senderName ? { sender_name: trigger.senderName } : {}),
+          ...(trigger.conversation ? { conversation: `${trigger.conversation.kind}:${trigger.conversation.id}` } : {}),
+          ...(trigger.messageId ? { message_id: trigger.messageId } : {}),
+          ...(trigger.receivedAt !== undefined ? { received_at: trigger.receivedAt } : {}),
+          ...(facts ? { merged_messages: facts.mergedMessages, queued_ms: facts.queuedMs } : {}),
+        });
+      }
+      if (facts && (facts.queuedMs > 0 || facts.mergedMessages > 1 || facts.supersededPrevious)) {
+        noteTurnTrace(turnId, {
+          kind: 'admission',
+          queued_ms: facts.queuedMs,
+          merged_messages: facts.mergedMessages,
+          superseded_previous: facts.supersededPrevious,
+          ...(facts.mergeWindow ? { merged_senders: facts.mergeWindow.senders.length } : {}),
+        });
+      }
     }
     observe(event);
   };

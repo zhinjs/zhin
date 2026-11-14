@@ -479,6 +479,14 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
+        // #1250: `load_tool` succeeds against the session catalog, but this turn's catalog can be
+        // narrower (turn policy); say so instead of leaving the model to rediscover the tool.
+        const unavailable = unavailableLoadedTool(resolvedName, effectiveArgs, outcome.output, deferredController ? catalog : undefined);
+        if (unavailable) {
+          recordProgress(resolvedName, effectiveArgs, false);
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: unavailable });
+          return toolResultToAgentMessage(toolCall, unavailable, true);
+        }
         const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
         let modelOutput = outcome.output;
 
@@ -576,3 +584,17 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
     },
   };
 }
+
+/** Error text when `load_tool` reported success for a tool this turn's catalog cannot declare. */
+export function unavailableLoadedTool(
+  toolName: string,
+  args: unknown,
+  output: unknown,
+  catalog: readonly { readonly name: string }[] | undefined,
+): string | undefined {
+  if (toolName !== 'load_tool' || !catalog || typeof output !== 'string' || !output.startsWith('Loaded tool')) return undefined;
+  const target = args && typeof args === 'object' ? String((args as Record<string, unknown>).name ?? '') : '';
+  if (!target || catalog.some(item => item.name === target)) return undefined;
+  return `Tool "${target}" cannot be called in this turn: the current turn policy does not allow it. Do not call discover or load_tool for it again; tell the user it is unavailable here.`;
+}
+

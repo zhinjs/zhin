@@ -7,7 +7,8 @@ import { ledgerServiceToken } from '../../src/runtime.js';
 
 export default defineCommand({
   description: '列出账目及编号（最新 20 笔）：账单 [今日|本周|本月|全部]，默认本月', descriptionI18n: { en: "List the latest 20 expense records with IDs; defaults to the current month" },
-  alias: ['账单'],
+  alias: ['账单', 'ledger list'],
+  preferredAliasI18n: { 'zh-CN': '账单', en: 'ledger list' },
   params: {
     period: { type: 'word', optional: true, description: '今日、本周、本月或全部', descriptionI18n: { en: "Today, this week, this month, or all time" } },
   },

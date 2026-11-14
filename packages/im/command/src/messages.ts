@@ -11,6 +11,8 @@ export function commandDescription(
 /** Static dictionaries; the caller supplies the operation's language. */
 export const commandMessages = createMessages({
   menuKeyword: { 'zh-CN': '菜单', en: 'menu' },
+  didYouMean: { 'zh-CN': '没有这个指令，你是不是想用：{commands}', en: 'No such command. Did you mean: {commands}?' },
+  suggestionSeparator: { 'zh-CN': '、', en: ', ' },
   progress: { 'zh-CN': '正在处理中，请稍候。', en: 'Working on it, please wait.' },
   invalidPage: { 'zh-CN': '页码必须是正整数。用法：{command} [插件名] --page <页码>', en: 'The page must be a positive integer. Usage: {command} [plugin] --page <page>' },
   missingPlugin: { 'zh-CN': '未找到插件: {plugin}', en: 'Plugin not found: {plugin}' },

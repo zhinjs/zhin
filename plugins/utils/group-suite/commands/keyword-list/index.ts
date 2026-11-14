@@ -7,6 +7,8 @@ import { keywordsForCommand } from '../../src/keywords.js';
 export default defineCommand<GroupSuiteConfig, string, Message>({
   permit: ['group()'],
   description: '查看当前群关键词回复对', descriptionI18n: { en: "List this group's keyword replies" },
+  alias: ['keyword list'],
+  preferredAliasI18n: { 'zh-CN': 'keyword list', en: 'keyword list' },
   async execute(context) {
     const repository = keywordsForCommand(context.input, context);
     if (typeof repository === 'string') return repository;

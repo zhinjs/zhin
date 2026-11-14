@@ -6,7 +6,8 @@ import { ledgerServiceToken } from '../../src/runtime.js';
 
 export default defineCommand({
   description: '查看本月消费合计与分类明细', descriptionI18n: { en: "View this month's spending totals and categories" },
-  alias: ['本月消费'],
+  alias: ['本月消费', 'ledger month'],
+  preferredAliasI18n: { 'zh-CN': '本月消费', en: 'ledger month' },
   async execute({ input, use, locale, formatCommand }) {
     return replyLedger(async () => {
       const caller = ledgerCaller(input, locale);

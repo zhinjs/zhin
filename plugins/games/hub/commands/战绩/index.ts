@@ -19,8 +19,8 @@ function formatStats(index: GameIndex, stats: UserGameStats[], locale: Locale, m
 }
 
 export default defineCommand({
-  alias: ['game-stats'],
-  preferredAliasI18n: { en: 'game-stats' },
+  alias: ['game-stats', 'game stats'],
+  preferredAliasI18n: { en: 'game stats' },
   description: '查看本人在本群的游戏战绩', descriptionI18n: { en: "View your game statistics in this group" },
   async execute({ input, project, locale, formatCommand }) {
     const index = project<GameIndex>(gameFeatureId);
