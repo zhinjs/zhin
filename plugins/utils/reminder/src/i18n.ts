@@ -336,5 +336,17 @@ export const reminderMessages = createMessages({
   "invalidState": {
     "zh-CN": "提醒持久状态格式无效，已停止投递",
     "en": "Reminder storage is invalid; delivery has been stopped"
+  },
+  "refIndexOutOfRange": {
+    "zh-CN": "没有序号 #{index} 的提醒（当前共 {count} 条），先用 remind list 查看",
+    "en": "There is no reminder #{index} ({count} in total); check remind list first"
+  },
+  "refTooShort": {
+    "zh-CN": "请提供 remind list 中的序号、完整任务 ID，或至少 {min} 位的 ID 前缀",
+    "en": "Give the number from remind list, the full task ID, or an ID prefix of at least {min} characters"
+  },
+  "refAmbiguous": {
+    "zh-CN": "这个 ID 前缀对应多条提醒，请用序号或更长的前缀：\n{candidates}",
+    "en": "This ID prefix matches several reminders; use the number or a longer prefix:\n{candidates}"
   }
 });
