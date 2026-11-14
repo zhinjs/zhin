@@ -352,7 +352,7 @@ export interface GatewayRpcRequest {
   readonly data?: unknown;
 }
 
-export type GatewayRpcErrorCode = 'invalid_input' | 'forbidden' | 'unmapped' | 'conflict' | 'unavailable' | 'internal';
+export type GatewayRpcErrorCode = 'invalid_input' | 'forbidden' | 'unmapped' | 'unknown_rpc' | 'conflict' | 'unavailable' | 'internal';
 
 /**
  * One schema violation of a `gateway.plugins.declare` config. `path` is relative to the instance

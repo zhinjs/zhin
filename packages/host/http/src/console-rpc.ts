@@ -3,6 +3,7 @@ import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
+  CONSOLE_UNKNOWN_RPC_CODE,
   grantsAllow,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
@@ -12,6 +13,7 @@ import {
   type ConsoleEndpointSummary,
 } from '@zhin.js/console-protocol';
 import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from './access-control.js';
+import { isRuntimeConsoleRpcType } from './console-rpc-types.js';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
 import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 import {
@@ -300,9 +302,9 @@ export async function dispatchRuntimeConsoleRpc(
   let canOperateEndpoint: ConsoleRpcExtendedCtx['canOperateEndpoint'];
   if (ctx.principal) {
     const principal = ctx.principal;
-    const decision = authorizeConsoleRpc(principal, message as Record<string, unknown>);
+    const decision = authorizeConsoleRpc(principal, message as Record<string, unknown>, { registered: isRuntimeConsoleRpcType });
     if (!decision.allowed) {
-      emit({ requestId, error: decision.error, code: decision.code });
+      emit({ requestId, error: decision.error, code: decision.code, ...(decision.reason ? { reason: decision.reason } : {}) });
       return payloads;
     }
     authorizedEndpoint = scopedAuthorizedEndpoint(principal, decision);
@@ -630,7 +632,7 @@ export async function dispatchRuntimeConsoleRpc(
         });
         return payloads;
       }
-      emit({ requestId, error: `Unknown RPC type: ${type || '<empty>'}` });
+      emit({ requestId, error: `Unknown RPC type: ${type.slice(0, 64) || '<empty>'}`, code: CONSOLE_UNKNOWN_RPC_CODE });
       return payloads;
     }
   }

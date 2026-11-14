@@ -57,7 +57,8 @@ export async function dispatchGatewayRpc(
 ): Promise<GatewayRpcResponse> {
   try {
     const type = request?.type;
-    if (!isGatewayRpcType(type)) throw new GatewayError('unmapped', `RPC "${String(type ?? '').slice(0, 64)}" 未登记权限`);
+    // zhinjs/zhin#1250: a `gateway.*` type this gateway does not have is not a refusal (not audited).
+    if (!isGatewayRpcType(type)) throw new GatewayError('unknown_rpc', `RPC "${String(type ?? '').slice(0, 64)}" 不存在`);
     if (!principal) throw new GatewayError('forbidden', '未登录');
     const packageMutation = type === GATEWAY_RPC.PLAN || type === GATEWAY_RPC.INSTALL;
     // The bootstrap token reaches plan / install only, where the service limits it to database drivers.

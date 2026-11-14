@@ -93,7 +93,8 @@ describe('runtime console RPC', () => {
       { type: 'made.up', requestId: 4 },
       { authScope: 'full', principal: userPrincipal('owner'), listPages: async () => [] },
     );
-    expect(pickRpcReply({ type: 'made.up', requestId: 4 }, unmapped)).toMatchObject({ code: 'unmapped' });
+    // zhinjs/zhin#1250: a type the Host has no handler for is unknown (not run, not a refusal).
+    expect(pickRpcReply({ type: 'made.up', requestId: 4 }, unmapped)).toMatchObject({ code: 'unknown_rpc' });
     const setupOnly = await dispatchRuntimeConsoleRpc(
       { type: 'ping', requestId: 5 },
       { authScope: 'full', principal: { kind: 'bootstrap', open: false }, listPages: async () => [] },
@@ -134,7 +135,7 @@ describe('runtime console RPC', () => {
         { type, requestId, packageName: '@zhin.js/adapter-telegram', targetVersion: '2.0.0', confirmation: '@zhin.js/adapter-telegram' },
         { authScope: 'full', principal: userPrincipal('owner'), listPages: async () => [] },
       );
-      expect(pickRpcReply({ type, requestId }, replies)).toMatchObject({ code: 'unmapped' });
+      expect(pickRpcReply({ type, requestId }, replies)).toMatchObject({ code: 'unknown_rpc' });
     }
   });
 

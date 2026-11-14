@@ -760,6 +760,7 @@ export * from './attention.js';
 export * from './gateway.js';
 export * from './send-failure.js';
 export * from './status.js';
+export * from './capabilities.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

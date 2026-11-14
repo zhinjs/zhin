@@ -28,9 +28,11 @@ import {
   type TokenRegistry,
 } from '@zhin.js/host-http';
 import {
+  CONSOLE_DENIAL_REASONS,
   FEATURE_RPC,
   PLUGIN_RPC,
   isGlobalFeatureSwitch,
+  type ConsoleDenialReason,
   type ConsoleFeatureWarning,
   type GatewayPackageTransactionResult,
 } from '@zhin.js/console-protocol';
@@ -80,6 +82,7 @@ export function createGatewayPluginSwitchRpc(options: GatewayPluginSwitchRpcOpti
   return Object.freeze({
     owns: (type: string) => type === PLUGIN_RPC.SET_ENABLED || type === FEATURE_RPC.SET_ENABLED,
     claims: isGatewayPluginSwitch,
+    types: () => [PLUGIN_RPC.SET_ENABLED, FEATURE_RPC.SET_ENABLED],
     async handle(message: Readonly<Record<string, unknown>>, context: RouteContext, registry: TokenRegistry): Promise<Response> {
       const noStore = { 'cache-control': 'no-store' };
       const type = String(message.type ?? '');
@@ -90,26 +93,29 @@ export function createGatewayPluginSwitchRpc(options: GatewayPluginSwitchRpcOpti
       }
       // plugin.manage: `plugin:set-enabled` is mapped to it, `feature.set-enabled` is refined by level.
       const decision: ConsoleRpcDecision = authorizeConsoleRpc(principal, message);
-      const audit = (outcome: 'ok' | 'denied' | 'error'): void => {
+      const audit = (outcome: 'ok' | 'denied' | 'error', reason?: ConsoleDenialReason): void => {
         try {
           registry.accessProvider?.audit?.({
             actor: auditActor(principal),
             action: `rpc:${type}`.slice(0, 256),
             ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
             outcome,
-            detail: rpcAuditDetail(message),
+            detail: reason ? { ...rpcAuditDetail(message), reason } : rpcAuditDetail(message),
             ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
           });
         } catch { /* audit never breaks a request */ }
       };
       if (!decision.allowed) {
-        audit('denied');
+        audit('denied', decision.reason);
         return jsonResponse(403, { success: false, code: decision.code, error: decision.error, requestId }, noStore);
       }
       const reply = type === PLUGIN_RPC.SET_ENABLED
         ? await setPluginEnabled(message, principal, options, readConfig)
         : await setFeatureGlobal(message, principal, options, readConfig);
-      audit(reply.status < 400 && reply.body.success !== false ? 'ok' : reply.status === 403 ? 'denied' : 'error');
+      audit(
+        reply.status < 400 && reply.body.success !== false ? 'ok' : reply.status === 403 ? 'denied' : 'error',
+        reply.status === 403 ? CONSOLE_DENIAL_REASONS.HANDLER_DENIED : undefined,
+      );
       return jsonResponse(reply.status, { ...reply.body, requestId }, noStore);
     },
   });
