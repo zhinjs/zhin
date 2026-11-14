@@ -75,12 +75,21 @@ describe('Agent workbench projections (#1250)', () => {
       const snapshot = { root: 'root', resources: new Map() } as never;
       const resolver = createAgentRuntimeLeaseResolver(root, { acquire: () => ({ value: snapshot, release() {} }) } as never, {
         providerDisplay: async () => createProviderDisplayIndex(graph),
-        recentTraces: async () => [{ turn_id: 't9', session_key: 's', started_at: 9, model_calls: [], termination: { status: 'completed' } }],
+        recentTraces: async () => [
+          { turn_id: 't8', session_key: 'webhook:access_token=abc123secret', started_at: 8, model_calls: [], termination: { status: 'failed' },
+            principal: { subject_id: 'u', display_name: 'Bearer abcdefghijklmnop', roles: [] } },
+          { turn_id: 't9', session_key: 's', started_at: 9, model_calls: [], termination: { status: 'completed' } },
+        ],
       })!;
       const lease = resolver()!;
       const bindings = await lease.value.introspection!.bindings!();
       expect(bindings[0]).toMatchObject({ name: 'zhin', provider: 'AG 中转', model: 'ag/gemini-3.8-flash' });
-      expect(await lease.value.introspection!.recentTurns!()).toMatchObject([{ turnId: 't9', status: 'completed' }]);
+      const turns = await lease.value.introspection!.recentTurns!();
+      expect(turns).toMatchObject([{ turnId: 't9', status: 'completed' }, { turnId: 't8' }]);
+      // #1250: the same redaction pass as the trace archive routes.
+      expect(JSON.stringify(turns)).not.toContain('abc123secret');
+      expect(JSON.stringify(turns)).not.toContain('abcdefghijklmnop');
+      expect(turns[1]).toMatchObject({ principal: 'Bearer [redacted]' });
       lease.release();
     } finally {
       rmSync(root, { recursive: true, force: true });

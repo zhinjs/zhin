@@ -7,7 +7,18 @@ import {
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
 import { Sandbox, type SandboxConfig } from '../security/sandbox.js';
-import { computeHiddenOverlays, computeReadOnlyOverlays } from '../security/sandbox-mounts.js';
+import { getLogger } from '@zhin.js/logger';
+import {
+  computeHiddenOverlays,
+  computeReadOnlyOverlays,
+  quarantineNewSelfFiles,
+  rootSelfFileNames,
+  selfFileAnchor,
+  snapshotRootSelfFiles,
+  type QuarantinedSelfFile,
+} from '../security/sandbox-mounts.js';
+
+const logger = getLogger('BashTool');
 
 export interface BashExecutionRequest {
   readonly command: string;
@@ -23,6 +34,12 @@ export interface BashExecutionResult {
   readonly blocked?: boolean;
   readonly blockReason?: string;
   readonly timedOut?: boolean;
+  /**
+   * Self files (`BOT.md`, `AGENTS.md`, root config…) the isolated shell created at the project
+   * root that were moved aside after the run (#1250): read-only overlays only cover files that
+   * already existed.
+   */
+  readonly quarantined?: readonly QuarantinedSelfFile[];
 }
 
 export interface BashExecutionPort {
@@ -100,15 +117,41 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
           useDocker: 'always',
           readOnlyOverlays,
         });
-    const result = await sandbox.execute(request.command, {
-      cwd: request.cwd,
-      timeout: request.timeoutMs,
-      // Cancelling the Turn kills the running process group / container.
-      signal: request.signal,
-    });
+    // A writable isolated run can still *create* a self file that had no overlay (a missing file
+    // gets none). Snapshot the project root's self files and quarantine any new one afterwards.
+    const watchSelfFiles = !unrestricted && access === 'workspace-write';
+    const anchor = selfFileAnchor(mountDir, filesystem.protectedPaths);
+    const selfNames = rootSelfFileNames(filesystem.protectedPaths);
+    const before = watchSelfFiles ? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
+    let quarantined: QuarantinedSelfFile[] = [];
+    let result: BashExecutionResult;
+    try {
+      result = await sandbox.execute(request.command, {
+        cwd: request.cwd,
+        timeout: request.timeoutMs,
+        // Cancelling the Turn kills the running process group / container.
+        signal: request.signal,
+      });
+    } finally {
+      if (watchSelfFiles) quarantined = quarantineAndWarn(anchor, selfNames, before);
+    }
     request.signal.throwIfAborted();
-    return result;
+    return quarantined.length ? { ...result, quarantined } : result;
   }
+}
+
+function quarantineAndWarn(
+  anchor: string,
+  names: ReadonlySet<string>,
+  before: ReadonlySet<string>,
+): QuarantinedSelfFile[] {
+  const quarantined = quarantineNewSelfFiles(anchor, names, before);
+  for (const entry of quarantined) {
+    logger.warn(entry.error
+      ? `Isolated shell created self file ${entry.name} under ${anchor}; quarantine failed: ${entry.error}`
+      : `Isolated shell created self file ${entry.name} under ${anchor}; quarantined as ${entry.quarantinedAs}`);
+  }
+  return quarantined;
 }
 
 /** Native generation ToolFeature for shell execution. */
@@ -154,7 +197,7 @@ export class NativeBashToolFeature {
     if (result.blocked) {
       throw new Error(`Command blocked by sandbox: ${result.blockReason ?? 'unknown reason'}`);
     }
-    if (result.timedOut) throw new Error(`Command timed out after ${timeoutMs}ms`);
+    if (result.timedOut) throw new Error(`Command timed out after ${timeoutMs}ms${formatQuarantine(result.quarantined)}`);
     return formatOutput(command, result);
   }
 }
@@ -168,7 +211,19 @@ function formatOutput(command: string, result: BashExecutionResult): string {
     result.stdout.trim() ? `STDOUT:\n${result.stdout.trim()}` : '',
     result.stderr.trim() ? `STDERR:\n${result.stderr.trim()}` : '',
   ].filter(Boolean).join('\n');
-  return `${tag} ${output || '(no output)'}`;
+  return `${tag} ${output || '(no output)'}${formatQuarantine(result.quarantined)}`;
+}
+
+/** Tells the model (and through it the user) which self files the run created were moved aside. */
+function formatQuarantine(quarantined: readonly QuarantinedSelfFile[] | undefined): string {
+  if (!quarantined?.length) return '';
+  const lines = quarantined.map(entry => entry.error
+    ? `- ${entry.name}: could not be quarantined (${entry.error}); it is still in place`
+    : `- ${entry.name} -> ${entry.quarantinedAs}`);
+  return '\nQUARANTINED:\nThe isolated shell may not create host self files (bot instructions, root config). '
+    + 'These new files were moved aside and will not be loaded; ask the user to review them, '
+    + 'or change them through the approved file tools:\n'
+    + lines.join('\n');
 }
 
 function requiredString(value: unknown, name: string): string {

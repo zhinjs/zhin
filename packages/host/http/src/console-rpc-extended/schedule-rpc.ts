@@ -100,6 +100,22 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
   }
 }
 
+/** The account (`adapter` / `endpoint`) a schedule delivery target sends from, if it names one. */
+function deliveryAccount(target: unknown): { adapter: string; endpoint: string } | undefined {
+  if (typeof target === 'string') {
+    // `<adapter>:<endpoint>:<kind>:<id>`
+    const [adapter, endpoint] = target.split(':');
+    return adapter && endpoint ? { adapter, endpoint } : undefined;
+  }
+  if (!target || typeof target !== 'object') return undefined;
+  const scene = (target as { scene?: unknown }).scene;
+  if (!scene || typeof scene !== 'object') return undefined;
+  const { platform, endpointKey } = scene as { platform?: unknown; endpointKey?: unknown };
+  return typeof platform === 'string' && platform && typeof endpointKey === 'string' && endpointKey
+    ? { adapter: platform, endpoint: endpointKey }
+    : undefined;
+}
+
 export async function addCron(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
@@ -118,6 +134,16 @@ export async function addCron(
   const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
+  // A delivery target sends to that account on every run: `endpoint.operate` there, like
+  // `/message/send`, on top of `ops.schedule.write` (absent check = trusted in-process caller).
+  if (target && ctx.canOperateEndpoint) {
+    const account = deliveryAccount(target);
+    if (!account || !ctx.canOperateEndpoint(account.adapter, account.endpoint)) {
+      return { error: account
+        ? `没有向该账号投递的权限：需要 ${account.adapter} / ${account.endpoint} 上的 endpoint.operate`
+        : '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' };
+    }
+  }
   const job = {
     id: `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     ...(label ? { label } : {}),

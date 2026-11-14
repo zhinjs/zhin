@@ -228,7 +228,7 @@ describe('installAgentHost', () => {
     }
   });
 
-  it('reads a data/BOT.md when the root has none instead of dropping both instruction files (#1250)', async () => {
+  it('ignores a data/BOT.md: only the project-root BOT.md replaces AGENTS.md (#1250)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-data-bot-'));
     try {
       await mkdir(join(root, 'data'), { recursive: true });
@@ -241,8 +241,8 @@ describe('installAgentHost', () => {
         inference: inferenceFor(root),
       })(context(new Scope(rootPluginId())));
       expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
-        bootstrapText: '## BOT.md\nBot rules from data.',
-        contextFiles: [{ path: 'BOT.md', content: 'Bot rules from data.' }],
+        bootstrapText: '## AGENTS.md\nDeveloper rules.',
+        contextFiles: [{ path: 'AGENTS.md', content: 'Developer rules.' }],
       }));
     } finally {
       await rm(root, { recursive: true, force: true });

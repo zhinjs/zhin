@@ -51,7 +51,9 @@ function createAgentRuntime(
       recentTurns: async () => {
         if (!insights) return [];
         const [traces, display] = await Promise.all([insights.recentTraces(RECENT_TURNS_LIMIT), providerDisplayOf(insights)]);
-        return projectRecentTurns(traces, display, RECENT_TURNS_LIMIT);
+        // Same string redaction pass as the trace archive routes (credentials in names / keys).
+        const { redactStrings } = await import('@zhin.js/agent/trace');
+        return redactStrings(projectRecentTurns(traces, display, RECENT_TURNS_LIMIT));
       },
       tools: () => listGenerationTools(getSnapshot(), projectRoot),
       promptSections: () => listGenerationPromptSections(getSnapshot(), projectRoot),

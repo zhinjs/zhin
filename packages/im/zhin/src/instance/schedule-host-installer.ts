@@ -23,6 +23,24 @@ export function resolveScheduleTimezone(
   return environment.TZ || systemTimezone() || 'UTC';
 }
 
+const ERROR_SECRET_RULES: ReadonlyArray<readonly [RegExp, string]> = [
+  // URL userinfo: `https://user:pass@host` → `https://[redacted]@host`.
+  [/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1[redacted]@'],
+  // Credential query / assignment values: `?access_token=…`, `apiKey: …`, `password=…`.
+  [/\b((?:access[_-]?token|refresh[_-]?token|api[_-]?key|apikey|token|secret|password|passwd|sig|signature|key|auth)"?\s*[=:]\s*"?)[^\s&"',;}]+/gi, '$1[redacted]'],
+  [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]'],
+  [/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}/g, '[redacted]'],
+  [/\b(?:ghp|gho|ghs|github_pat|xox[abpr])[_-][A-Za-z0-9_-]{12,}/g, '[redacted]'],
+];
+
+/**
+ * A plugin job's failure text with credentials masked: it is kept as `lastRun.error` and shown to
+ * Console readers (`schedule:list`, `ops.schedule.read`), who must not see URL credentials or tokens.
+ */
+export function redactScheduleError(message: string): string {
+  return ERROR_SECRET_RULES.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), message);
+}
+
 function displayOf(job: ScheduleJobDisplay): ScheduleJobDisplay {
   return {
     ...(typeof job.title === 'string' && job.title.trim() ? { title: job.title.trim() } : {}),
@@ -67,7 +85,7 @@ export function createScheduleHost(now: () => number = Date.now): ScheduleHost &
           await job.execute();
           lastRuns.set(job.id, Object.freeze({ startedAt, finishedAt: now(), status: 'succeeded' }));
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = redactScheduleError(error instanceof Error ? error.message : String(error));
           lastRuns.set(job.id, Object.freeze({ startedAt, finishedAt: now(), status: 'failed', error: message.slice(0, 500) }));
           logger.warn(formatCompact({
             op: 'schedule_execute_failed',

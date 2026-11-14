@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { readJsonBody, principalAllows, type ConsolePrincipal, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
 import { withGenerationAgentConsole } from './agent-console.js';
@@ -19,7 +19,8 @@ export type AssistantJobInputErrorCode =
   | 'invalid_job'
   | 'schedule_target_invalid'
   | 'schedule_target_required'
-  | 'schedule_target_not_found';
+  | 'schedule_target_not_found'
+  | 'schedule_target_forbidden';
 
 const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
   + '或在 assistant.defaults.notify / assistant.profile.yml 的 defaults.notify 中配置默认目标';
@@ -93,6 +94,19 @@ export function parseAssistantJobInput(
   };
 }
 
+/**
+ * Whether the caller may schedule delivery to `target` (`notify.target`): `endpoint.operate` on its
+ * account. No principal: an in-process / unauthenticated test Host, trusted like the other routes.
+ */
+function mayDeliverTo(principal: ConsolePrincipal | undefined, target: unknown): boolean {
+  if (!principal) return true;
+  const scene = record(record(target).scene);
+  const adapter = typeof scene.platform === 'string' ? scene.platform : '';
+  const endpoint = typeof scene.endpointKey === 'string' ? scene.endpointKey : '';
+  if (!adapter || !endpoint) return false;
+  return principalAllows(principal, 'endpoint.operate', Object.freeze({ kind: 'endpoint', adapter, endpoint }));
+}
+
 /** Write side of `/assistant/jobs`, used by `zhin schedule`; the live scheduler owns persistence. */
 export function registerAssistantJobRoutes(options: Readonly<{
   http: Pick<HttpHost, 'route'>;
@@ -112,15 +126,16 @@ export function registerAssistantJobRoutes(options: Readonly<{
         resume(id: string): Promise<boolean>;
       },
       body: unknown,
+      principal: ConsolePrincipal | undefined,
     ) => Promise<{ status: number; body: unknown }>,
-  ): Parameters<HttpHost['route']>[2] => async (request) => {
+  ): Parameters<HttpHost['route']>[2] => async (request, context) => {
     const body = await readJsonBody(request);
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant }) => {
       if (!assistant) {
         return jsonResponse(404, { success: false, error: DISABLED });
       }
       try {
-        const result = await operation(assistant.jobs, body);
+        const result = await operation(assistant.jobs, body, context.principal);
         return jsonResponse(result.status, result.body);
       } catch (error) {
         return internalErrorResponse(500, 'assistant_job_failed', error);
@@ -129,7 +144,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     return handled ?? jsonResponse(404, { success: false, error: DISABLED });
   };
 
-  http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body) => {
+  http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body, principal) => {
     const parsed = parseAssistantJobInput(body);
     if ('error' in parsed) {
       return { status: 400, body: { success: false, error: parsed.error, code: parsed.code ?? 'invalid_job' } };
@@ -137,6 +152,14 @@ export function registerAssistantJobRoutes(options: Readonly<{
     const job = parsed.job;
     const notify = record(job.notify);
     if (notify.channel === 'im') {
+      // An explicit target delivers to that account on every run: the same `endpoint.operate` the
+      // operator would need to `/message/send` there, on top of `ops.schedule.write`. The instance
+      // default target is the owner's configuration and needs no extra grant.
+      if (notify.target && !mayDeliverTo(principal, notify.target)) {
+        const scene = record(record(notify.target).scene);
+        return { status: 403, body: { success: false, code: 'schedule_target_forbidden',
+          error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` } };
+      }
       // No explicit target: the instance's default IM target (assistant / profile defaults.notify).
       const effective = notify.target ? notify : record(jobs.defaultImNotify?.());
       if (!effective.target) {

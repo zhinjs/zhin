@@ -14,11 +14,19 @@
  *    are sent through the normal outbound chain.
  *
  * References are random and resolve once: a model cannot conjure media by writing one.
+ *
+ * Only **tool-produced** media is handed back ({@link collectTurnAttachments}): media the
+ * sub-agent merely wrote into its reply text (`![](/etc/passwd)`, `[file:x](/path)`) is never an
+ * attachment, because it would be sent with the asker's (wider) outbound media authority. Each
+ * tool attachment is additionally authorized with the sub-agent's own, narrowed authority
+ * ({@link authorizeActorAttachments}) before it is recorded.
  */
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import { extractMediaElementsFromToolCalls } from './media-tool-bridge.js';
+import { authorizeOutboundMediaPath, type OutboundMediaAuthority } from './media-normalize.js';
 
 export type AgentAttachment = Extract<AgentOutputElement, { type: 'image' | 'audio' | 'video' | 'file' }>;
 
@@ -39,18 +47,16 @@ function attachmentKey(element: AgentAttachment): string {
   return `${element.type}:${element.url}`;
 }
 
-/** Media of one finished agent turn: its output media plus media its tools returned. */
+/**
+ * Media one finished agent turn's **tools** produced. The turn's parsed reply output is not a
+ * source: links the model wrote into its text are model-authored, not tool results.
+ */
 export function collectTurnAttachments(
-  output: readonly AgentOutputElement[] | undefined,
   toolCalls: readonly ToolCallRecord[] | undefined,
 ): AgentAttachment[] {
   const seen = new Set<string>();
   const out: AgentAttachment[] = [];
-  const candidates = [
-    ...(output ?? []).filter(isAttachment),
-    ...extractMediaElementsFromToolCalls([...(toolCalls ?? [])]).filter(isAttachment),
-  ];
-  for (const element of candidates) {
+  for (const element of extractMediaElementsFromToolCalls([...(toolCalls ?? [])]).filter(isAttachment)) {
     const key = attachmentKey(element);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -58,6 +64,48 @@ export function collectTurnAttachments(
     if (out.length >= MAX_AGENT_ATTACHMENTS) break;
   }
   return out;
+}
+
+const SCHEME = /^([a-z][a-z0-9+.-]*):/iu;
+
+/**
+ * Keeps the attachments the sub-agent itself may hand out, judged with its own (narrowed)
+ * authority, not the asker's:
+ *  - inline media (`data:` / `base64://`, or a `base64` payload) passes;
+ *  - `http(s)` URLs pass — they carry no host data, and the asker's outbound chain fetches them
+ *    under its own network authority;
+ *  - a local path (or `file:` URL) passes only when the sub-agent's file authority admits it
+ *    (the same decision as `read_file`); it is replaced by the canonical path;
+ *  - anything else is dropped.
+ */
+export async function authorizeActorAttachments(
+  attachments: readonly AgentAttachment[],
+  authority: OutboundMediaAuthority,
+): Promise<AgentAttachment[]> {
+  const kept: AgentAttachment[] = [];
+  for (const attachment of attachments) {
+    const url = attachment.url;
+    if (('base64' in attachment && attachment.base64) || /^(?:data:|base64:\/\/)/iu.test(url)) {
+      kept.push(attachment);
+      continue;
+    }
+    const scheme = SCHEME.exec(url)?.[1]?.toLowerCase();
+    // A one-letter "scheme" is a Windows drive letter, i.e. a local path.
+    if (scheme === 'http' || scheme === 'https') {
+      kept.push(attachment);
+      continue;
+    }
+    let localPath: string | undefined;
+    if (scheme === 'file') {
+      try { localPath = fileURLToPath(url); } catch { localPath = undefined; }
+    } else if (!scheme || scheme.length === 1) {
+      localPath = url;
+    }
+    if (!localPath) continue;
+    const canonical = await authorizeOutboundMediaPath(localPath, authority).catch(() => null);
+    if (canonical) kept.push({ ...attachment, url: canonical } as AgentAttachment);
+  }
+  return kept;
 }
 
 /** Stores a sub-agent turn's media under the mails it answered. */

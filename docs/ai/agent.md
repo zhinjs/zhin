@@ -586,10 +586,10 @@ assistant:
 
 项目根目录的 `AGENTS.md` 同时会被编码代理（Claude Code、Codex 等）和机器人读到，开发向的内容（构建命令、目录结构……）会让机器人每轮多读一段无关提示词。约定：
 
-- 项目根目录（或 `data/`）有非空的 `BOT.md` 时，机器人只读 `BOT.md`（与 `SOUL.md`、`TOOLS.md` 一起），**不再读任何 `AGENTS.md`**——包括 Turn 信封里的子目录 `AGENTS.md` 链；`AGENTS.md` 只留给开发者和编码代理。
+- 项目根目录有非空的 `BOT.md` 时（只认根目录，`data/BOT.md` 不会被读取），机器人只读 `BOT.md`（与 `SOUL.md`、`TOOLS.md` 一起），**不再读任何 `AGENTS.md`**——包括 Turn 信封里的子目录 `AGENTS.md` 链；`AGENTS.md` 只留给开发者和编码代理。
 - 没有 `BOT.md` 时行为不变：机器人读 `AGENTS.md`，并按下方 scope 标注过滤。
 - `BOT.md` 同样支持 scope 标注；改动后的热重载与 `AGENTS.md` 一致（读取入口：`@zhin.js/agent` 的 `botBootstrapFilenames()` / `loadBootstrapFiles()`，实例装配在 `zhin.js/instance` 的 Agent Host 安装器）。
-- 机器人用文件工具或自改提案修改 `BOT.md` 与修改根 `AGENTS.md` 一样需要审批。
+- 机器人用文件工具或自改提案修改 `BOT.md` 与修改根 `AGENTS.md` 一样需要审批；隔离 shell 里已存在的 `BOT.md` 是只读挂载，shell 新建的 `BOT.md` 在运行结束后被隔离改名（见[默认行为](./default-behavior.md)）。
 - 新项目（`create-zhin` / 脚手架，启用 AI 时）生成 `BOT.md`（机器人指令与记忆）和面向开发者的 `AGENTS.md`；`zhin setup --bootstrap` 在项目已有 `AGENTS.md` 且没有 `BOT.md` 时继续写 `AGENTS.md`，不会用新 `BOT.md` 把原有记忆遮住。
 
 迁移已有项目：把 `AGENTS.md` 里给机器人的内容挪到 `BOT.md`，开发说明留在 `AGENTS.md`。

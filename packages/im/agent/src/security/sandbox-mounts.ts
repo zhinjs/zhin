@@ -339,3 +339,71 @@ export function removeMountPointDirs(created: readonly string[]): void {
     }
   }
 }
+
+/** One self file the isolated shell created that was moved aside after the run. */
+export interface QuarantinedSelfFile {
+  /** Name the shell created, directly under the project root. */
+  readonly name: string;
+  /** Name it was renamed to (same directory). */
+  readonly quarantinedAs: string;
+  /** Set when the rename failed: the file is still in place under its original name. */
+  readonly error?: string;
+}
+
+/**
+ * Case-folded names of the self files directly under the project root: {@link DEFAULT_SELF_FILES}
+ * plus the root-level entries of the host-injected `selfFiles`.
+ */
+export function rootSelfFileNames(protectedPaths?: ToolProtectedPathData): ReadonlySet<string> {
+  const names = new Set(DEFAULT_SELF_FILES.map(fold));
+  for (const rel of protectedPaths?.selfFiles ?? []) {
+    if (!rel.includes('/')) names.add(fold(rel));
+  }
+  return names;
+}
+
+/** The project root the self-file overlays anchor to; the mounted directory stands in without data. */
+export function selfFileAnchor(mountDir: string, protectedPaths?: ToolProtectedPathData): string {
+  return protectedPaths?.projectRoot ?? mountDir;
+}
+
+/** Names (original case) of the self files that exist directly under `projectRoot` right now. */
+export function snapshotRootSelfFiles(projectRoot: string, names: ReadonlySet<string>): ReadonlySet<string> {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(projectRoot);
+  } catch {
+    return new Set();
+  }
+  return new Set(entries.filter(entry => names.has(fold(entry))));
+}
+
+/**
+ * Read-only overlays only cover self files that existed before the run (a missing file gets no
+ * overlay, see the module comment). After an isolated-shell run, a self file that did not exist
+ * before and exists now — e.g. a new `BOT.md`, which would replace `AGENTS.md` as the bot's
+ * instructions — is renamed to `<name>.quarantined-<timestamp>` so the host never loads it.
+ */
+export function quarantineNewSelfFiles(
+  projectRoot: string,
+  names: ReadonlySet<string>,
+  before: ReadonlySet<string>,
+  now: number = Date.now(),
+): QuarantinedSelfFile[] {
+  const quarantined: QuarantinedSelfFile[] = [];
+  for (const name of snapshotRootSelfFiles(projectRoot, names)) {
+    if (before.has(name)) continue;
+    let quarantinedAs = `${name}.quarantined-${now}`;
+    for (let n = 1; fs.existsSync(path.join(projectRoot, quarantinedAs)); n += 1) {
+      quarantinedAs = `${name}.quarantined-${now}-${n}`;
+    }
+    try {
+      fs.renameSync(path.join(projectRoot, name), path.join(projectRoot, quarantinedAs));
+      quarantined.push({ name, quarantinedAs });
+    } catch (error) {
+      if (!fs.existsSync(path.join(projectRoot, name))) continue; // gone already
+      quarantined.push({ name, quarantinedAs, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return quarantined;
+}

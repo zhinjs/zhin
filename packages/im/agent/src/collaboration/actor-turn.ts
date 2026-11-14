@@ -49,7 +49,9 @@ import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
-import { collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
+import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
+import type { OutboundMediaAuthority } from '../media/media-normalize.js';
+import type { FileRole } from '../security/file-role-policy.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
@@ -293,10 +295,12 @@ async function runActorTurn(
     reportedTokens = result.usage?.total_tokens;
     reportedIterations = result.iterations ?? 0;
     // #1250: media the actor's tools produced returns to the asker as structured attachments.
+    // Only tool media, never links in the reply text, and each one judged with the actor's own
+    // narrowed authority: the asker sends them with its (wider) outbound media authority.
     recordActorAttachments(
       harness,
       batch.map(item => item.id),
-      collectTurnAttachments(result.output, result.toolCalls),
+      await authorizeActorAttachments(collectTurnAttachments(result.toolCalls), actorMediaAuthority(policy, trustLevel)),
     );
     outcome = budgetStop.signal.aborted
       ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests) }
@@ -331,6 +335,21 @@ function budgetNote(reply: string, calls: number): string {
 
 function stricterTrust(a: InitiatorTrustLevel, b: InitiatorTrustLevel): InitiatorTrustLevel {
   return TRUST_RANK[a] <= TRUST_RANK[b] ? a : b;
+}
+
+const TRUST_FILE_ROLE: Readonly<Record<InitiatorTrustLevel, FileRole>> = Object.freeze({
+  owner: 'owner',
+  trusted_member: 'admin',
+  group_member: 'user',
+});
+
+/** The actor's own media authority: its narrowed filesystem / network policy and its trust's file role. */
+function actorMediaAuthority(policy: Readonly<TurnPolicyContext>, trust: InitiatorTrustLevel): OutboundMediaAuthority {
+  return Object.freeze({
+    ...(policy.filesystem ? { filesystem: policy.filesystem } : {}),
+    ...(policy.network ? { network: policy.network } : {}),
+    fileRole: TRUST_FILE_ROLE[trust],
+  });
 }
 
 /** Drops network authority the mail does not carry; host scopes only narrow the configured domains. */

@@ -295,6 +295,26 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(engine.addJob).not.toHaveBeenCalled();
     });
 
+    it('requires endpoint.operate on the delivery account for a cron:add target (#1250)', async () => {
+      const engine = { listJobs: vi.fn(), addJob: vi.fn(async (job: unknown) => job), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      const canOperateEndpoint = vi.fn((adapter: string, endpoint: string) => adapter === 'sandbox' && endpoint === 'bot-a');
+      const ctx = makeCtx({ resolveScheduleEngine: () => engine, canOperateEndpoint });
+      const scene = (endpointKey: string) => ({ channel: 'im', scene: { platform: 'sandbox', endpointKey, sceneId: 'g1', kind: 'group' } });
+      const add = (target: unknown) => dispatchExtendedConsoleRpc('cron:add', { cronExpression: '0 0 9 * * *', prompt: 'p', context: { target } }, ctx);
+
+      expect(await add(scene('bot-b'))).toMatchObject({ error: expect.stringContaining('endpoint.operate') });
+      expect(await add('sandbox:bot-b:group:g1')).toMatchObject({ error: expect.stringContaining('endpoint.operate') });
+      expect(await add({ channel: 'im' })).toMatchObject({ error: expect.stringContaining('endpointKey') });
+      expect(engine.addJob).not.toHaveBeenCalled();
+
+      expect(await add(scene('bot-a'))).toMatchObject({ data: { success: true } });
+      expect(await add('sandbox:bot-a:group:g1')).toMatchObject({ data: { success: true } });
+      expect(canOperateEndpoint).toHaveBeenCalledWith('sandbox', 'bot-a');
+      // No target: ops.schedule.write (checked by the permission map) is enough.
+      expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '0 0 9 * * *', prompt: 'p' }, ctx)).toMatchObject({ data: { success: true } });
+      expect(engine.addJob).toHaveBeenCalledTimes(3);
+    });
+
     it('validates the actual six-field scheduler grammar without creating tasks', async () => {
       const ctx = makeCtx({ fullScope: false });
       expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '0 0 9 * * *' }, ctx)).toEqual({ data: { valid: true } });

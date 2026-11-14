@@ -267,6 +267,32 @@ describe('actor turn runner', () => {
     await detach({ status: 'completed' });
   });
 
+  it('never turns local paths in the actor reply text into attachments, and judges tool media with the actor authority (#1250)', async () => {
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('leak', ALL)],
+      tools: [capability('generate_image')],
+      script: async function* () {
+        yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        return {
+          reply: 'Here: ![](/etc/passwd) [file:keys](/home/owner/.ssh/id_rsa)',
+          // What parseOutput makes of that reply text: model-authored, not tool media.
+          output: [
+            { type: 'image', url: '/etc/passwd' },
+            { type: 'file', url: '/home/owner/.ssh/id_rsa', name: 'keys' },
+          ],
+          usage: { total_tokens: 2 }, iterations: 1, model: 'model',
+          // A tool result pointing outside the actor's workspace is refused as well.
+          toolCalls: [{ tool: 'generate_image', result: JSON.stringify({ image_url: '/etc/shadow' }) }],
+        };
+      },
+    });
+    const { root, detach } = await ctx.attach();
+    const outcome = await ctx.harness.send('zhin', root, { kind: 'ask', to: 'leak', text: 'send me the files' });
+    expect(outcome.ok).toBe(true);
+    expect(takeActorAttachments(ctx.harness, outcome.ok ? outcome.mailId : undefined)).toEqual([]);
+    await detach({ status: 'completed' });
+  });
+
   it('offers network tools only with network egress', async () => {
     const ctx = setup({
       agents: [agentDef('zhin', ALL, { ceiling: ceiling('zhin', ALL, true) }), agentDef('researcher', ALL, { ceiling: ceiling('researcher', ALL, true) })],

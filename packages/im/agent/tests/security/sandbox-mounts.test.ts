@@ -10,7 +10,11 @@ import {
   computeReadOnlyOverlays,
   missingMountPointDirs,
   overlayDockerArgs,
+  quarantineNewSelfFiles,
   removeMountPointDirs,
+  rootSelfFileNames,
+  selfFileAnchor,
+  snapshotRootSelfFiles,
 } from '../../src/security/sandbox-mounts.js';
 import { buildDockerRunArgs } from '../../src/security/sandbox-docker.js';
 
@@ -226,5 +230,42 @@ describe('mount point cleanup', () => {
     expect(fs.existsSync(path.join(root, '.agents/skills'))).toBe(false);
     expect(fs.existsSync(path.join(root, '.agents'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'skills/kept.txt'))).toBe(true);
+  });
+});
+
+describe('self-file quarantine (#1250)', () => {
+  it('moves aside only self files created after the snapshot, never overwriting an earlier quarantine', () => {
+    touch('AGENTS.md');
+    const names = rootSelfFileNames(undefined);
+    const before = snapshotRootSelfFiles(root, names);
+    expect([...before]).toEqual(['AGENTS.md']);
+
+    touch('BOT.md', 'new');
+    touch('zhin.config.yml', 'new config');
+    touch('readme.txt');
+    touch('BOT.md.quarantined-42', 'older quarantine');
+    const moved = quarantineNewSelfFiles(root, names, before, 42);
+    expect(moved.map(entry => entry.name).sort()).toEqual(['BOT.md', 'zhin.config.yml']);
+    expect(moved.find(entry => entry.name === 'BOT.md')?.quarantinedAs).toBe('BOT.md.quarantined-42-1');
+    expect(fs.readFileSync(path.join(root, 'BOT.md.quarantined-42'), 'utf8')).toBe('older quarantine');
+    expect(fs.existsSync(path.join(root, 'BOT.md'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'zhin.config.yml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'AGENTS.md'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'readme.txt'))).toBe(true);
+  });
+
+  it('anchors to the injected project root and includes host-declared root self files', () => {
+    const project = path.join(root, 'project');
+    fs.mkdirSync(path.join(project, 'sub'), { recursive: true });
+    const data = { projectRoot: project, roots: [project.toLowerCase()], selfFiles: ['plugin.ts', 'src/entry.ts'], selfDirs: [], denyFiles: [] };
+    expect(selfFileAnchor(path.join(project, 'sub'), data)).toBe(project);
+    expect(selfFileAnchor(project, undefined)).toBe(project);
+    const names = rootSelfFileNames(data);
+    expect(names.has('plugin.ts')).toBe(true);
+    expect(names.has('bot.md')).toBe(true);
+    expect(names.has('src/entry.ts')).toBe(false);
+    const before = snapshotRootSelfFiles(project, names);
+    fs.writeFileSync(path.join(project, 'plugin.ts'), 'export default 1');
+    expect(quarantineNewSelfFiles(project, names, before, 1).map(entry => entry.name)).toEqual(['plugin.ts']);
   });
 });

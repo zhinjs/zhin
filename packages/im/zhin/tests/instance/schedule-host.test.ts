@@ -11,6 +11,7 @@ import type { RootResourceContext } from '@zhin.js/runtime';
 import {
   createScheduleHost,
   installScheduleHost,
+  redactScheduleError,
   resolveScheduleTimezone,
 } from '../../src/instance/schedule-host-installer.js';
 
@@ -64,6 +65,31 @@ describe('ScheduleHost', () => {
       host.stop();
     }
     expect(host.list()).toEqual([]);
+  });
+
+  it('masks credentials in a failed run before it is kept and listed (#1250)', async () => {
+    const host = createScheduleHost();
+    const dispose = host.register({
+      id: 'rss/poll_secret', cron: '* * * * * *',
+      execute: async () => { throw new Error('GET https://alice:hunter2@feeds.example/rss?access_token=abc123&page=2 failed: 401'); },
+    });
+    try {
+      await vi.waitFor(() => expect(host.list()[0]!.lastRun).toMatchObject({ status: 'failed' }), { timeout: 3_000, interval: 50 });
+      const error = host.list()[0]!.lastRun!.error!;
+      expect(error).not.toContain('hunter2');
+      expect(error).not.toContain('abc123');
+      expect(error).toContain('https://[redacted]@feeds.example/rss?access_token=[redacted]&page=2 failed: 401');
+    } finally {
+      dispose();
+      host.stop();
+    }
+  });
+
+  it('redacts URL userinfo, token assignments and bearer / API keys', () => {
+    expect(redactScheduleError('Authorization: Bearer abcdefghijklmnop')).toBe('Authorization: Bearer [redacted]');
+    expect(redactScheduleError('apiKey="sk-ABCDEFGHIJKLMNOP"')).not.toContain('ABCDEFGHIJKLMNOP');
+    expect(redactScheduleError('connect redis://default:pw@cache:6379 refused')).toBe('connect redis://[redacted]@cache:6379 refused');
+    expect(redactScheduleError('feed timeout')).toBe('feed timeout');
   });
 
   it('does not let a retired generation cancel its replacement', () => {

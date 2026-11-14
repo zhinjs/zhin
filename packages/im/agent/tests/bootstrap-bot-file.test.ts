@@ -48,13 +48,17 @@ describe('BOT.md bootstrap', () => {
     expect(await loadAgentsMemory(root)).toBe('bot instructions');
   });
 
-  it('ignores an empty BOT.md and finds one under data/', async () => {
+  it('ignores an empty BOT.md and never reads data/BOT.md (only the project root counts)', async () => {
     await writeFile(join(root, 'BOT.md'), '  \n');
     expect(await hasBotBootstrapFile(root)).toBe(false);
     await rm(join(root, 'BOT.md'));
     await mkdir(join(root, 'data'));
     await writeFile(join(root, 'data', 'BOT.md'), 'data bot');
-    expect(await loadAgentsMemory(root)).toBe('data bot');
+    expect(await hasBotBootstrapFile(root)).toBe(false);
+    expect(await loadAgentsMemory(root)).not.toContain('data bot');
+    const files = await loadBootstrapFiles(root);
+    expect(files.map(file => file.name)).toEqual(['SOUL.md', 'AGENTS.md', 'TOOLS.md']);
+    expect(buildContextFiles(files).map(file => file.content).join('\n')).not.toContain('data bot');
   });
 
   it('replaces the AGENTS.md chain in the turn envelope', async () => {

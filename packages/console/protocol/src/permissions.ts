@@ -493,6 +493,8 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('DELETE', '/logs', P.OPS_DATABASE_WRITE),
   httpRule('POST', '/logs/cleanup', P.OPS_DATABASE_WRITE),
   httpRule('GET', '/messages/diagnostics', P.STATUS_VIEW),
+  // Recent Agent turns (session names, principals, models): Agent data, not status.
+  httpRule('GET', '/introspection/recent-turns', P.AGENT_VIEW),
   httpRule('GET', '/introspection', P.STATUS_VIEW, true),
   httpRule('POST', '/introspection/components/render', P.STATUS_VIEW),
   httpRule('GET', '/commands/permissions', P.STATUS_VIEW),

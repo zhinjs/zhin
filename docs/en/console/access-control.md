@@ -83,7 +83,7 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `ops.env.read` / `ops.env.write` | Environment file |
 | `ops.database.read` / `ops.database.write` | Database browser (sort, filter, table structure and schema change previews) / record edits |
 | `ops.database.schema` | The SQL console (read-only queries and write SQL) and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited with its literals redacted. See [Database](./operations.md#database) |
-| `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks |
+| `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks (an explicit IM delivery target also needs `endpoint.operate` on that account) |
 | `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |
 | `ops.terminal` | Terminal (see [Operations](./operations.md#terminal)) |

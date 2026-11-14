@@ -55,17 +55,17 @@ export function botBootstrapFilenames(hasBotFile: boolean): readonly BootstrapFi
   return hasBotFile ? BOT_BOOTSTRAP_FILENAMES : BOOTSTRAP_FILENAMES;
 }
 
-/** 项目根目录（或 `data/`）里是否有非空的 `BOT.md`。 */
+/**
+ * 项目根目录里是否有非空的 `BOT.md`。只认根目录：`data/BOT.md` 不算（`data/` 下的文件不受
+ * 只读覆盖保护的同等约束，接受它会让写得进 `data/` 的人整体替换机器人的指令，#1250）。
+ */
 export async function hasBotBootstrapFile(workspaceDir?: string): Promise<boolean> {
   const cwd = workspaceDir || process.cwd();
-  for (const filePath of [path.join(cwd, BOT_BOOTSTRAP_FILENAME), path.join(getDataDir(cwd), BOT_BOOTSTRAP_FILENAME)]) {
-    try {
-      if ((await fs.promises.readFile(filePath, 'utf-8')).trim()) return true;
-    } catch {
-      // missing: try the next location
-    }
+  try {
+    return !!(await fs.promises.readFile(path.join(cwd, BOT_BOOTSTRAP_FILENAME), 'utf-8')).trim();
+  } catch {
+    return false;
   }
-  return false;
 }
 
 /** 可缓存 system §11：仅 SOUL + TOOLS（AGENTS 进 Turn envelope） */
@@ -129,7 +129,8 @@ export function getDataDir(workspaceDir?: string): string {
 /**
  * 加载工作区引导文件
  *
- * 搜索顺序：项目根目录 → data/ 目录。`BOT.md` 存在时读它而不读 `AGENTS.md`（#1250）。
+ * 搜索顺序：项目根目录 → data/ 目录。`BOT.md` 存在时读它而不读 `AGENTS.md`（#1250）；
+ * `BOT.md` 只从项目根目录读取，从不读 `data/BOT.md`。
  */
 export async function loadBootstrapFiles(
   workspaceDir?: string,
@@ -145,7 +146,8 @@ export async function loadBootstrapFiles(
     const dataPath = path.join(dataDir, name);
 
     let found = false;
-    for (const filePath of [rootPath, dataPath]) {
+    const candidates = name === BOT_BOOTSTRAP_FILENAME ? [rootPath] : [rootPath, dataPath];
+    for (const filePath of candidates) {
       try {
         const content = await readContextFile(filePath);
         result.push({ name, path: filePath, content, missing: false });

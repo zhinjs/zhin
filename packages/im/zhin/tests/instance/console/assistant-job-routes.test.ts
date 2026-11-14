@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withTestUsers } from '../utils/console-users.js';
+import type { ConsolePermission } from '@zhin.js/console-protocol';
+import type { ConsoleUserPrincipal } from '@zhin.js/host-http';
+import { testUser, withTestUsers } from '../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import {
   parseAssistantJobInput,
@@ -142,3 +144,48 @@ describe('IM delivery target (#1250)', () => {
     expect((await post({ ...base, notify: { channel: 'im' } })).body.code).toBe('schedule_target_not_found');
   });
 });
+
+describe('schedule delivery target permission (#1250)', () => {
+  const scheduler = (endpointGrant?: string): ConsoleUserPrincipal => Object.freeze({
+    ...testUser('viewer', { kind: 'global' }, endpointGrant ? 'bot-operator' : 'scheduler'),
+    grants: Object.freeze([
+      { role: 'scheduler', scope: { kind: 'global' as const }, permissions: ['ops.schedule.write'] as ConsolePermission[] },
+      ...(endpointGrant ? [{ role: 'operator', scope: { kind: 'endpoint' as const, key: endpointGrant }, permissions: ['endpoint.operate'] as ConsolePermission[] }] : []),
+    ]),
+    roles: Object.freeze(['scheduler']),
+  });
+  const known = (adapter: string, key: string) => adapter === 'sandbox' && (key === 'sandbox-bot' || key === 'other-bot') ? { name: key, adapter } : null;
+  async function startAs() {
+    const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), {
+      owner: 'owner', scheduler: scheduler(), scoped: scheduler('sandbox/sandbox-bot'),
+    });
+    cleanups.push(() => http.close());
+    registerAssistantJobRoutes({ http, base: '/api', endpoints: known });
+    const { port } = await http.listen();
+    return async (token: string, body: unknown) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs`, {
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+      });
+      return { status: response.status, body: await response.json() as { code?: string } };
+    };
+  }
+  const job = (target: string) => ({ prompt: '天气', schedule: { kind: 'workday', cron: '0 0 9 * * *' }, notify: { channel: 'im', target } });
+
+  it('denies an explicit target without endpoint.operate on that account', async () => {
+    const post = await startAs();
+    expect(await post('scheduler', job('sandbox:sandbox-bot:group:g1'))).toMatchObject({ status: 403, body: { code: 'schedule_target_forbidden' } });
+    // Scoped to another account: still denied.
+    expect(await post('scoped', job('sandbox:other-bot:group:g1'))).toMatchObject({ status: 403, body: { code: 'schedule_target_forbidden' } });
+    expect(jobs.add).not.toHaveBeenCalled();
+  });
+
+  it('allows the target with endpoint.operate scoped to its account, or globally', async () => {
+    const post = await startAs();
+    expect((await post('scoped', job('sandbox:sandbox-bot:group:g1'))).status).toBe(201);
+    expect((await post('owner', job('sandbox:other-bot:private:u1'))).status).toBe(201);
+    // Without a delivery target ops.schedule.write alone is enough.
+    expect((await post('scheduler', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 } })).status).toBe(201);
+    expect(jobs.add).toHaveBeenCalledTimes(3);
+  });
+});
+

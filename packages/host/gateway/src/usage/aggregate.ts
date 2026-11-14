@@ -329,6 +329,9 @@ function tokens(t: Tally): UsageStatsTokens {
   };
 }
 
+/** Sub-agent nesting depth the aggregate follows; deeper (malformed) trees are cut off. */
+const MAX_SUBAGENT_DEPTH = 16;
+
 function nearestRank(sorted: readonly number[], p: number): number {
   if (sorted.length === 0) return 0;
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))]!;
@@ -368,13 +371,23 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
     session.displayName ??= sessionDisplayNameOf(trace);
     sessions.set(trace.session_key, session);
 
-    const calls: unknown[] = Array.isArray(trace.model_calls) ? trace.model_calls : [];
+    // Every model call of the turn: the root's, then each sub-agent's (nested, up to MAX_SUBAGENT_DEPTH). A
+    // sub-agent trace's own `model_calls` are not repeated in its parent's, so nothing counts twice;
+    // its calls count toward the root turn's session. `firstPrompt` is the root's first request.
+    const calls: unknown[] = [];
+    const collect = (node: any, depth: number) => {
+      if (!node || typeof node !== 'object' || depth > MAX_SUBAGENT_DEPTH) return;
+      if (Array.isArray(node.model_calls)) calls.push(...node.model_calls);
+      if (Array.isArray(node.subagents)) for (const child of node.subagents) collect(child, depth + 1);
+    };
+    collect(trace, 0);
+    const rootCalls = Array.isArray(trace.model_calls) ? trace.model_calls.length : 0;
     let firstPrompt: number | undefined;
-    for (const raw of calls) {
+    for (const [index, raw] of calls.entries()) {
       const call = raw as any;
       const prompt = num(call?.prompt_tokens);
       if (prompt === undefined) continue;
-      firstPrompt ??= prompt;
+      if (index < rootCalls) firstPrompt ??= prompt;
       const output = num(call?.completion_tokens) ?? 0;
       const cache = num(call?.cache_read_tokens) ?? 0;
       const cacheWrite = num(call?.cache_write_tokens) ?? 0;
