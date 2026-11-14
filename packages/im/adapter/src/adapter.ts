@@ -1166,7 +1166,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     if (error instanceof AdapterManagementError && (error.code === 'invalid_configuration' || error.code === 'unsupported')) {
       return 'configuration';
     }
-    if (error instanceof Error && preparationErrors.has(error) && error instanceof TypeError) return 'configuration';
+    // A TypeError while creating the Endpoint is a configuration mistake — unless it is a transport
+    // failure surfaced as TypeError (undici `fetch failed`, with a network `cause`): that retries.
+    if (error instanceof Error && preparationErrors.has(error) && error instanceof TypeError && !isNetworkTypeError(error)) return 'configuration';
     if (this.#descriptor?.login?.mode === 'interactive') return 'interactive';
     return false;
   }
@@ -1200,6 +1202,22 @@ class EndpointStartAttemptError extends Error {
 }
 /** Errors raised while creating/binding an Endpoint (configuration, not transport). */
 const preparationErrors = new WeakSet<Error>();
+
+const NETWORK_ERROR_CODE = /^(?:ECONN\w*|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EHOSTDOWN|ENETUNREACH|ENETDOWN|EPIPE|ETIMEDOUT|ESOCKETTIMEDOUT|ECONNRESET|EPROTO|CERT_\w+|ERR_TLS\w*|UND_ERR\w*|DEPTH_ZERO_SELF_SIGNED_CERT|UNABLE_TO_\w+|SELF_SIGNED_CERT\w*)$/u;
+
+/**
+ * A transport failure thrown as `TypeError`: undici's `fetch failed` (its `cause` carries the
+ * socket / DNS / TLS code), or any TypeError whose cause chain has a network error code.
+ */
+function isNetworkTypeError(error: TypeError): boolean {
+  if (/^fetch failed$|network ?error|failed to fetch/iu.test(error.message)) return true;
+  for (let current: unknown = error.cause, depth = 0; current && typeof current === 'object' && depth < 4;
+    current = (current as { cause?: unknown }).cause, depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string' && NETWORK_ERROR_CODE.test(code)) return true;
+  }
+  return false;
+}
 
 function startFacts<E extends AnyEndpoint>(child: Child<E>): Pick<EndpointMetadata, 'startAttempt' | 'startFailure' | 'startPhase' | 'nextRetryAt'> {
   const state = child.start;

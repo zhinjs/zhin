@@ -7,7 +7,7 @@ import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, create
   type EndpointDesiredRecord, type EndpointDesiredRepository, type EndpointDesiredSnapshot } from '../src/index.js';
 
 /** What one start attempt does; `hang` resolves or rejects only when the test says so. */
-type Plan = 'ok' | 'fail' | 'hang' | 'config';
+type Plan = 'ok' | 'fail' | 'hang' | 'config' | 'type' | 'fetch';
 interface Attempt {
   readonly endpoint: ScriptedEndpoint;
   readonly incarnationId: string;
@@ -36,6 +36,10 @@ class ScriptedAdapter extends Adapter<ScriptedEndpoint> {
   protected createEndpoint(_config: Record<string, unknown>, context: EndpointCreationContext): ScriptedEndpoint {
     const plan = this.plans.get(context.endpointId)?.shift() ?? 'ok';
     if (plan === 'config') throw new AdapterManagementError('invalid_configuration', 'missing token secret-value');
+    // A programming / configuration TypeError while creating the Endpoint …
+    if (plan === 'type') throw new TypeError('uin must be a number');
+    // … versus undici's transport failure, also a TypeError (`fetch failed` with a socket cause).
+    if (plan === 'fetch') throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), { code: 'ECONNREFUSED' }) });
     let resolve!: () => void, reject!: (error: unknown) => void;
     const settled = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
     const endpoint = new ScriptedEndpoint(async () => {
@@ -264,6 +268,17 @@ describe('Adapter background start supervision', () => {
     expect(vi.getTimerCount()).toBe(0);
     await vi.advanceTimersByTimeAsync(3_600_000);
     expect(adapter.plans.get('bad')).toEqual(['ok']);
+  });
+
+  it('does not retry a TypeError while creating the Endpoint, but retries undici fetch failures', async () => {
+    const { adapter, row, activate } = await fixture({ typed: ['type', 'ok'], net: ['fetch', 'ok'] });
+    await activate();
+    expect(row('typed')).toMatchObject({ phase: 'failed', startFailure: { category: 'config' } });
+    expect(row('typed')?.nextRetryAt).toBeUndefined();
+    expect(row('net')).toMatchObject({ phase: 'retrying', startFailure: { category: 'network' }, nextRetryAt: expect.any(Number) });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(row('net')).toMatchObject({ phase: 'online' });
+    expect(adapter.plans.get('typed')).toEqual(['ok']);
   });
 
   it('never auto-retries an interactive login; Console relogin retries it at once', async () => {
