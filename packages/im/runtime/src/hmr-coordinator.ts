@@ -8,11 +8,17 @@ import {
 } from './invalidation-planner.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { isEditorTempFile } from './editor-temp-file.js';
+import { ManifestChangeTracker, type ManifestFieldChange } from './manifest-change.js';
+import { basename, join } from 'node:path';
 import type { SourceOwnershipIndex } from './source-ownership.js';
+import type { HmrReloadReport } from './root-runtime-diagnostics.js';
+
+export type { HmrRebuildKind, HmrReloadReport } from './root-runtime-diagnostics.js';
 
 export interface HmrReloadPort {
   handlesSource?(source: string): boolean;
-  reload(plan: GenerationInvalidationPlan): Promise<ProcessInvalidationPlan | void>;
+  /** Resolves with a restart plan, or with what the committed generation actually rebuilt. */
+  reload(plan: GenerationInvalidationPlan): Promise<ProcessInvalidationPlan | HmrReloadReport | void>;
 }
 
 export interface HmrCoordinatorOptions {
@@ -24,9 +30,27 @@ export interface HmrCoordinatorOptions {
   onRestartRequired(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
+  /**
+   * A watched `package.json` changed only in fields that cannot affect the Runtime (`scripts`,
+   * `description`, ...): the event is dropped without a reload or restart (#1250).
+   */
+  onManifestIgnored?(change: ManifestFieldChange): void | Promise<void>;
+  /** Reads a `package.json` for field comparison; defaults to the file system. */
+  readonly readManifest?: (source: string) => string;
+  /**
+   * Quiet period for automatic watch events (default {@link DEFAULT_WATCH_DEBOUNCE_MS}). Events
+   * arriving within it are merged into one reload request: atomic saves (`sed -i`, editors writing
+   * a temp file and renaming it) and batch changes (`git checkout`) report one path several times
+   * across macrotasks, which the microtask batch of {@link HmrCoordinator.enqueue} cannot merge
+   * (#1250). Explicit {@link HmrCoordinator.enqueue} calls are never delayed. `0` disables it.
+   */
+  readonly watchDebounceMs?: number;
   /** Fires once after a generation transaction commits successfully. */
-  onReload?(plan: GenerationInvalidationPlan, durationMs: number): void | Promise<void>;
+  onReload?(plan: GenerationInvalidationPlan, durationMs: number, report?: HmrReloadReport): void | Promise<void>;
 }
+
+/** Debounce window for watch events; covers the ~250 ms gap seen between `sed -i` events (#1250). */
+export const DEFAULT_WATCH_DEBOUNCE_MS = 300;
 
 export class HmrCoordinator {
   readonly #pending = new Set<string>();
@@ -39,8 +63,16 @@ export class HmrCoordinator {
   #closing = false;
   #restartRequired = false;
   #stopResult?: Promise<void>;
+  /** Watch events waiting for the debounce window to close. */
+  readonly #debounced = new Set<string>();
+  #debounceTimer?: ReturnType<typeof setTimeout>;
+  /** Sources requested through {@link enqueue}: they keep their meaning, whatever changed in them. */
+  readonly #explicit = new Set<string>();
+  readonly #manifests: ManifestChangeTracker;
 
-  constructor(private readonly options: HmrCoordinatorOptions) {}
+  constructor(private readonly options: HmrCoordinatorOptions) {
+    this.#manifests = new ManifestChangeTracker(options.readManifest);
+  }
 
   start(): Dispose {
     if (this.#unwatch) throw new Error('HmrCoordinator is already started');
@@ -54,7 +86,7 @@ export class HmrCoordinator {
       // Any ModuleRuntime watcher may report editor temp/backup files; they never reload (#857).
       if (isEditorTempFile(source)) return;
       if (this.options.acceptWatchedSource && !this.options.acceptWatchedSource(source)) return;
-      void this.enqueue(source).catch(() => undefined);
+      this.#admitWatched(source);
     });
     return () => this.stop();
   }
@@ -62,6 +94,8 @@ export class HmrCoordinator {
   stop(): Promise<void> {
     if (this.#stopResult) return this.#stopResult;
     this.#closing = true;
+    // Debounced events were never admitted: a stopping coordinator drops them.
+    this.#clearDebounce();
     const unwatch = this.#unwatch;
     this.#unwatch = undefined;
     this.#stopResult = Promise.resolve().then(async () => {
@@ -76,13 +110,19 @@ export class HmrCoordinator {
   }
 
   enqueue(source: string): Promise<void> {
+    return this.#enqueue(source, true);
+  }
+
+  #enqueue(source: string, explicit: boolean): Promise<void> {
     if (this.#closing) {
       return Promise.reject(new Error('HMR coordinator is stopping'));
     }
     if (this.#restartRequired) {
       return Promise.reject(new Error('HMR coordinator requires a process restart'));
     }
-    this.#pending.add(normalizeSourcePath(source));
+    const normalized = normalizeSourcePath(source);
+    this.#pending.add(normalized);
+    if (explicit) this.#explicit.add(normalized);
     const completed = new Promise<void>((resolve, reject) => {
       this.#waiters.push({ resolve, reject });
     });
@@ -90,6 +130,33 @@ export class HmrCoordinator {
     // same filesystem operation into one generation transaction.
     this.#ensureDrain();
     return completed;
+  }
+
+  #admitWatched(source: string): void {
+    const delay = this.options.watchDebounceMs ?? DEFAULT_WATCH_DEBOUNCE_MS;
+    if (delay <= 0) {
+      void this.#enqueue(source, false).catch(() => undefined);
+      return;
+    }
+    this.#debounced.add(normalizeSourcePath(source));
+    // Trailing debounce: every event restarts the quiet period, so a burst becomes one request.
+    if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
+    this.#debounceTimer = setTimeout(() => {
+      this.#debounceTimer = undefined;
+      const sources = [...this.#debounced];
+      this.#debounced.clear();
+      if (this.#closing || this.#restartRequired) return;
+      // Synchronous enqueues share one microtask drain: the burst is one generation transaction.
+      for (const item of sources) void this.#enqueue(item, false).catch(() => undefined);
+    }, delay);
+    // A pending debounce must not keep a process alive on its own.
+    this.#debounceTimer.unref?.();
+  }
+
+  #clearDebounce(): void {
+    if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
+    this.#debounceTimer = undefined;
+    this.#debounced.clear();
   }
 
   #ensureDrain(): void {
@@ -104,8 +171,25 @@ export class HmrCoordinator {
   async #drain(): Promise<void> {
     try {
       while (this.#pending.size > 0) {
-        const changed = [...this.#pending];
+        const explicit = new Set(this.#explicit);
+        this.#explicit.clear();
+        const manifestChanges: ManifestFieldChange[] = [];
+        const changed = [...this.#pending].filter((source) => {
+          if (basename(source) !== 'package.json') return true;
+          const change = this.#manifests.diff(source);
+          if (!change) return true;
+          if (change.runtimeFields.length > 0 || explicit.has(source)) {
+            manifestChanges.push(change);
+            return true;
+          }
+          this.#notifyManifestIgnored(change);
+          return false;
+        });
         this.#pending.clear();
+        if (changed.length === 0) continue;
+        const withManifests = (plan: ProcessInvalidationPlan): ProcessInvalidationPlan => (
+          manifestChanges.length > 0 ? Object.freeze({ ...plan, manifestChanges: Object.freeze(manifestChanges) }) : plan
+        );
         const forcedRestart = changed.filter((source) => (
           !this.options.runtime.handlesSource?.(source)
           && this.options.modules.requiresProcessRestart?.(source)
@@ -113,13 +197,13 @@ export class HmrCoordinator {
         if (forcedRestart.length > 0) {
           this.#restartRequired = true;
           this.#pending.clear();
-          this.#notifyRestart(Object.freeze({
+          this.#notifyRestart(withManifests(Object.freeze({
             kind: 'process',
             changed: Object.freeze(changed),
             reasons: Object.freeze([
               `Module loader cannot safely invalidate: ${forcedRestart.join(', ')}`,
             ]),
-          }));
+          })));
           break;
         }
         const dependencyPort = this.options.modules.affectedSources
@@ -136,7 +220,7 @@ export class HmrCoordinator {
           this.#restartRequired = true;
           this.#pending.clear();
           this.#notifyPlan(plan);
-          this.#notifyRestart(plan);
+          this.#notifyRestart(withManifests(plan));
           break;
         }
         this.#notifyPlan(plan);
@@ -148,12 +232,14 @@ export class HmrCoordinator {
           for (const source of plan.changed) {
             await this.options.modules.invalidate?.(source);
           }
-          const restart = await this.options.runtime.reload(plan);
+          const result = await this.options.runtime.reload(plan);
+          const restart = result?.kind === 'process' ? result : undefined;
+          const report = result?.kind === 'reloaded' ? result : undefined;
           if (restart) {
             this.options.modules.rollbackGeneration?.();
             this.#restartRequired = true;
             this.#pending.clear();
-            this.#notifyRestart(restart);
+            this.#notifyRestart(withManifests(restart));
             break;
           }
 
@@ -163,7 +249,7 @@ export class HmrCoordinator {
           this.#syncModuleState();
           const durationMs = Number((performance.now() - startedAt).toFixed(1));
           try {
-            await this.options.onReload?.(plan, durationMs);
+            await this.options.onReload?.(plan, durationMs, report);
           } catch (error) {
             // A projection/observer cannot change an already committed reload.
             try {
@@ -207,6 +293,24 @@ export class HmrCoordinator {
     const ownership = this.options.ownership();
     this.options.modules.updateWatchRoots?.(ownership.watchRoots());
     this.options.modules.commitGeneration?.(ownership.moduleSources());
+    // Baselines for field comparison of the manifests this generation was built from.
+    if (this.options.modules.watch) {
+      this.#manifests.prime([
+        ...ownership.manifestSources(),
+        ...ownership.watchRoots().map((root) => join(root.root, 'package.json')),
+      ]);
+    }
+  }
+
+  #notifyManifestIgnored(change: ManifestFieldChange): void {
+    if (!this.options.onManifestIgnored) return;
+    try {
+      void Promise.resolve(this.options.onManifestIgnored(change)).catch((error) => {
+        this.#reportDiagnostic(error);
+      });
+    } catch (error) {
+      this.#reportDiagnostic(error);
+    }
   }
 
   #notifyRestart(plan: ProcessInvalidationPlan): void {

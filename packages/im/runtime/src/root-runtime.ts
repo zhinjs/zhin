@@ -35,7 +35,8 @@ import {
 } from './root-runtime-config.js';
 import {
   emptyState, executeReloadWithEvents, GenerationAssembler,
-  isProcessPlan, prepareInvalidatedGeneration, type ReloadEventRequest,
+  describeHmrReload, isProcessPlan, prepareInvalidatedGeneration,
+  type HmrReloadReport, type PreparedRebuild, type ReloadEventRequest,
 } from './root-runtime-diagnostics.js';
 import type {
   PreparedRuntimeGeneration, RuntimeGenerationModel, RuntimeGenerationState,
@@ -316,7 +317,7 @@ export class RootRuntime {
         handlesSource: (source) => this.#runtimeInputSources.has(normalizeSourcePath(source)),
         reload: async (plan) => {
           const result = await this.#reloadPlan(plan);
-          return isProcessPlan(result) ? result : undefined;
+          return isProcessPlan(result) ? result : result.report;
         },
       },
     });
@@ -337,15 +338,17 @@ export class RootRuntime {
     return result;
   }
 
-  async #reloadPlan(plan: GenerationInvalidationPlan): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
+  async #reloadPlan(plan: GenerationInvalidationPlan): Promise<{ snapshot: RuntimeSnapshot; report?: HmrReloadReport } | ProcessInvalidationPlan> {
     return this.#enqueueControl(() => this.#reloadPlanInQueue(plan));
   }
 
-  async #reloadPlanInQueue(plan: GenerationInvalidationPlan): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
+  async #reloadPlanInQueue(plan: GenerationInvalidationPlan): Promise<{ snapshot: RuntimeSnapshot; report?: HmrReloadReport } | ProcessInvalidationPlan> {
     let inputs: RuntimeInputCandidate | undefined;
     const previousInputs = this.#runtimeInputState();
     const previousGeneration = this.snapshot.generation;
+    const previousScopes = this.#model?.scopes;
     let restart: ProcessInvalidationPlan | undefined;
+    let rebuild: PreparedRebuild | undefined;
     const snapshot = await this.#reloadWithEvents({
       target: plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       trigger: 'source', changed: plan.changed,
@@ -366,6 +369,7 @@ export class RootRuntime {
         }, current, signal, plan, inputs);
         if (outcome.restart) { restart = outcome.restart; return undefined; }
         if (!outcome.prepared) return undefined;
+        rebuild = outcome.rebuild;
         if (inputs) {
           inputs = {
             ...inputs,
@@ -395,7 +399,10 @@ export class RootRuntime {
       this.#adoptRuntimeInputs(inputs);
       this.#recordApplication(inputs.applicationGroups ?? [], true, previousGeneration);
     }
-    return snapshot;
+    const report = rebuild && snapshot.generation !== previousGeneration
+      ? describeHmrReload(rebuild, previousScopes, this.#model?.scopes)
+      : undefined;
+    return { snapshot, report };
   }
 
   get #model(): RuntimeGenerationModel | undefined {

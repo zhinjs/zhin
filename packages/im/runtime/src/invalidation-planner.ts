@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/plugin-runtime';
 import type { SourceOwnershipIndex, SourceOwnershipRecord } from './source-ownership.js';
 import { isWithin } from './topology-transaction.js';
+import type { ManifestFieldChange } from './manifest-change.js';
 
 export interface DependencyImpactPort {
   affectedSources(source: string): readonly string[];
@@ -35,6 +36,8 @@ export interface ProcessInvalidationPlan {
   readonly kind: 'process';
   readonly changed: readonly string[];
   readonly reasons: readonly string[];
+  /** Fields of the changed `package.json` files in this batch, when file watching knew them (#1250). */
+  readonly manifestChanges?: readonly ManifestFieldChange[];
 }
 
 export type InvalidationPlan =

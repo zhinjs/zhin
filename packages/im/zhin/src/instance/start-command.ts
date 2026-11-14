@@ -33,6 +33,7 @@ import {
   type GenerationAdmissionBindable,
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
+import { describeHmrReloadLog, describeManifestIgnoredLog, describeRestartLog } from './hmr-log.js';
 import {
   ConfigValidationError,
   createConfigDocument,
@@ -163,10 +164,6 @@ function readConsoleLoginAssistConfig(config: unknown): { captchaHelperUrl?: str
   const block = consoleBlock && typeof consoleBlock === 'object' ? (consoleBlock as Record<string, unknown>).loginAssist : undefined;
   const url = block && typeof block === 'object' ? (block as Record<string, unknown>).captchaHelperUrl : undefined;
   return typeof url === 'string' && url ? { captchaHelperUrl: url } : {};
-}
-
-function readableCapabilityId(value: string): string {
-  return value.split('\0').join(':');
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
@@ -461,6 +458,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       installConsoleApiResources(consoleEventHub)(context);
     },
     async onRestartRequired(plan) {
+      // #1250: one structured line says which file changed and why this is a restart, not a reload.
+      getLogger('runtime').info(formatCompact(describeRestartLog(options.root, plan)));
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
       // 插件管理操作进行中时不在此重启：依赖/声明变更由插件管理流程的
       // 「应用/重启」步骤统一显式触发，避免在安装与应用之间意外重启。
@@ -476,18 +475,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
       await requestProcessRestart('dependencies');
     },
-    onReload(plan, generation, durationMs) {
-      getLogger('runtime').info(formatCompact({
-        op: 'hmr_reload',
-        generation,
-        duration_ms: durationMs,
-        scope: plan.subtrees.length > 0 ? 'subtree' : 'capability',
-        changed: plan.changed.map((source) => relative(options.root, source)).join(','),
-        ...(plan.slots.length > 0
-          ? { capabilities: plan.slots.map(readableCapabilityId).join(',') }
-          : {}),
-        ...(plan.subtrees.length > 0 ? { subtrees: plan.subtrees.join(',') } : {}),
-      }));
+    onReload(plan, generation, durationMs, report) {
+      // #1250: `rebuilt` / `rebuilt_plugins` are what the generation really set up again.
+      const log = describeHmrReloadLog(options.root, plan, generation, durationMs, report);
+      getLogger('runtime').info(formatCompact(log.info));
+      if (log.warn) getLogger('runtime').warn(formatCompact(log.warn));
+    },
+    onManifestIgnored(change) {
+      getLogger('runtime').debug(formatCompact(describeManifestIgnoredLog(options.root, change)));
     },
     onError(error) {
       selfChangeApply.noteError();

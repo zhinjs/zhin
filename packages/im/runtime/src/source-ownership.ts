@@ -133,6 +133,14 @@ export class SourceOwnershipIndex {
       .sort());
   }
 
+  /** `package.json` files of mounted Plugin and Feature packages. */
+  manifestSources(): readonly string[] {
+    return Object.freeze([...this.#records.entries()]
+      .filter(([, records]) => records.some((record) => record.role === 'manifest'))
+      .map(([source]) => source)
+      .sort());
+  }
+
   watchRoots(): readonly ModuleWatchRoot[] {
     return Object.freeze([...this.#watchRoots.values()]);
   }
