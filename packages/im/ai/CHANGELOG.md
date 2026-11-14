@@ -1,5 +1,20 @@
 # @zhin.js/ai
 
+## 1.7.0
+
+### Minor Changes
+
+- 8bf8dfa: #1250 第 10 批（试用反馈、关键修复与 AI 账号）的公开 API 新增按 minor 发布：Console 协议的功能未启用状态、功能矩阵分类与传输状态文字；Host 端口校验与 owner 判定导出；网关项目标识与插件候选；Agent 运行时的连接测试与 Host 环境变量引用授权；模型请求首响应时限；`zhin ai` 命令与 `--allow-unverified-host`；日志单行转义导出；Host 根配置新增 `firstResponseTimeoutMs`，icqq 新增 `logLevel` 配置（按 commandSuggestion 先例为 minor）。
+- 07f9d01: 所有用途支持备用模型（#1250 chat-purpose-no-fallback）：聊天、摘要、旁听、Agent 角色（`purposes.agents`）以及 Adapter / Endpoint / 场景的聊天覆盖都可以写 `{ profile, fallbacks }`。额度用完、余额不足或密钥被拒（单纯的 403 不算）时按顺序换下一个备用模型；同一模型连续 2 次超时后下一次尝试也换（#1270）。只换到能接得住这次请求的模型（输入媒体、上下文窗口、工具循环协议），从当前对话继续、不重放已执行的工具；失败的模型在恢复前跳过（有供应商提示按提示，日配额到太平洋时间午夜，其他固定冷却）。用了备用模型的回合在 trace 中标记「本轮由备用模型回答」，Console 管理视图可读取跳过中的模型与最近切换；配置校验错误指明出错的链路径（如 `purposes.adapters.qq.chat.fallbacks[1]`）。
+
+### Patch Changes
+
+- 603b892: #1250 安全复核修复：配置补丁把敏感字段的值移入 `.env` 需要 `ops.env.write`，否则以 `env-write-required` 拒绝（聊天自助与 Agent 自改同样拒绝），且只更新字段自己的规范变量、绝不覆盖字段仅仅引用的其他变量；CLI 的 `/pub/health` 项目核对在探测失败时按"未验证"处理（默认拒绝，`--allow-unverified-host` 时警告后继续），本机判定覆盖 `0.0.0.0`、`::ffff:127.x`、`*.localhost` 与本机网卡地址，`hostFetch` 不再以明文 HTTP 向非回环地址发送令牌；模型连接测试（`/probe`、`/account/test`）按账号限流（每分钟 6 次，超出返回 429 与 `retryAfterMs`）。
+- 48fdf0d: 模型请求首个响应超时（#1250 model-request-hangs-no-timeout）：`ai.agent.providerResilience` 新增 `firstResponseTimeoutMs`（默认 30000，0 关闭），`requestTimeoutMs` 默认值由 180000 降为 120000。在时限内收不到响应头或首个流事件即判定模型服务无响应（新增 `ProviderErrorKind` `no_response`）：不在同一模型上重试，回合经正常出站链回复「模型服务无响应」；写 `provider_timeout` warn 日志（会话、回合 id、用途、Provider 别名、模型、阶段、时限，不含内容与密钥），回合 trace 时间线记录 `model_timeout`。`StreamOptions` 新增 `onResponseStart`，SDK 传输在收到响应头时调用。
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [35e5d89]
+  - @zhin.js/logger@1.2.0
+
 ## 1.6.0
 
 ### Minor Changes

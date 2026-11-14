@@ -1,5 +1,87 @@
 # @zhin.js/cli
 
+## 1.5.0
+
+### Minor Changes
+
+- 8bf8dfa: #1250 第 10 批（试用反馈、关键修复与 AI 账号）的公开 API 新增按 minor 发布：Console 协议的功能未启用状态、功能矩阵分类与传输状态文字；Host 端口校验与 owner 判定导出；网关项目标识与插件候选；Agent 运行时的连接测试与 Host 环境变量引用授权；模型请求首响应时限；`zhin ai` 命令与 `--allow-unverified-host`；日志单行转义导出；Host 根配置新增 `firstResponseTimeoutMs`，icqq 新增 `logLevel` 配置（按 commandSuggestion 先例为 minor）。
+- 760e9f5: 聊天身份的「人」模型（ADR 0060 P2）：
+
+  - 角色授予属于「人」：新实例表 `chat_principals`、`chat_identities`（一个平台身份至多属于一个人）、`chat_principal_console_links`（Console 用户与人一对一，缓存 Console 显示名）。全局授予对一个人的全部平台身份生效；低于全局的授予只对该作用范围所属适配器上的身份生效。
+  - `chat_roles` 原地新增 `principal_id` 列：首次启动为已有授予的身份各建一个人并回填（幂等），迁移前全部授予导出到 `.zhin/backups/chat-roles-<时间>.json`；过渡期双写 `adapter` / `user_id` 并保持原行 id，降级到旧版本角色不变（回滚见升级指南）。
+  - 入站消息新增 Runtime 写入的只读 `sender.chatPrincipal`，适配器或插件自带的同名字段被丢弃；`ChatRoleReader.principalOf` / `holders` 返回真实的人，`subscribe` 新增 `merge` / `split` 变化，`factsOf` 返回 `chatPrincipal`。
+  - 新 Console RPC：`chat-principals.list|get|merge|split|rename|link-console|unlink-console|export|import`、`chat-identities.recent|me|bind-code.create`，全部登记到权限表；新权限 `self.chat-identity`（所有内置角色默认带）。归并 / 拆分持有全局角色的人、链接 Console 用户、导出导入需要全局 `iam.manage`。`chat-roles.*` 条目新增 `grantedByName`（授予者显示名的规范字段：已链接的人名优先）与 `principalId`；1.3.0 已发布的 `grantedByDisplayName` 保留并标记为 deprecated，取值始终与 `grantedByName` 相同。
+  - 聊天侧新增 `绑定 <码>`（`bind <code>`）：只接受私聊，群聊中发送的正确码立即作废，模拟适配器不接受；审计 `chat-identities.bind`、`chat-principals.merge|split|rename|link-console|unlink-console`。
+  - 最近发言时间与显示名缓存保留 90 天（供选择器，不参与鉴权）。
+  - CLI：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例；导入只新增或提升）。结果（含跳过的条目）写到 stdout，错误写到 stderr。
+  - 网关：Console 用户被删除或禁用时若实例不在线，在实例重新就绪后补发通知，实例据此删除该用户的链接。
+
+### Patch Changes
+
+- 39db402: AI 账号与 Host 环境变量（#1250）：Console 账号可以引用 Host 环境变量（账号来源 `env://NAME`，或在设置密钥中填写 `${NAME}` / `${NAME:-}`），规则为：仅全局 owner（owner 本就能读写 `.env`），且变量名以 `_API_KEY` 结尾（避免把无关机密发往任意地址）；服务地址不限，自定义中转地址可用（其他 Console 用户与不合规的变量名返回明确中文原因 `reason`）；新增本机命令 `zhin ai account add / rename-env / test`（只经网关控制套接字，写审计，不回显值）及对应实例路由 `POST {base}/agent/inference/cli/account/add`、`/cli/account/rename-env`；新增 `POST /agent/inference/probe` 与 `/account/test` 连通性探测（带 tools 的最小请求，成功时激活凭据）。账号状态新增 `environment`（`env://` 账号无凭据时的环境变量就绪情况）与 `lastCall`（本进程最近一次真实调用结果）。`@zhin.js/host-http` 导出 `isLocalSocketPrincipal`、`isGlobalOwnerPrincipal`、`LOCAL_SOCKET_USER_ID`、`LOCAL_SOCKET_CREDENTIAL_ID`。
+- 603b892: #1250 安全复核修复：配置补丁把敏感字段的值移入 `.env` 需要 `ops.env.write`，否则以 `env-write-required` 拒绝（聊天自助与 Agent 自改同样拒绝），且只更新字段自己的规范变量、绝不覆盖字段仅仅引用的其他变量；CLI 的 `/pub/health` 项目核对在探测失败时按"未验证"处理（默认拒绝，`--allow-unverified-host` 时警告后继续），本机判定覆盖 `0.0.0.0`、`::ffff:127.x`、`*.localhost` 与本机网卡地址，`hostFetch` 不再以明文 HTTP 向非回环地址发送令牌；模型连接测试（`/probe`、`/account/test`）按账号限流（每分钟 6 次，超出返回 429 与 `retryAfterMs`）。
+- bc31cd3: 聊天角色的引导与种子导入（ADR 0060 P1）：
+
+  - 公共 API：`isOwner(sender, { level })`（默认全局 owner）、`hasChatRole(sender, role, { level })`，以及只读的 `chatRolesToken`（`ChatRoleReader`：`roleOf` / `principalOf` / `holders` / `factsOf` / `subscribe`），插件不再需要自建 `masters` 名单。
+  - 认领码：没有全局 owner 且数据库为关系型时，实例日志与 `zhin status` 给出一次性认领码；在真实平台私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。群聊中发送正确的码会立即作废，连错 5 次轮换，模拟适配器上不接受；审计 `chat-roles.claim` 只记码哈希前 8 位。
+  - 配置中的人员名单（适配器 `master` / `trusted`、`ai.trigger.*`）在导入完成后再次出现不再启动失败：不自动授予，记入迁移记录后从配置移除，等待持有全局 `iam.manage` 的 Console 用户通过新 RPC `chat-roles.imports.list|resolve` 逐条导入或忽略（审计 `chat-roles.import`）。导入只升不降；迁移记录升为版本 2，原版本 1 保存为 `.zhin/chat-roles-migration.v1.json` 供回滚。
+  - 「需要你处理」新增 `chat-roles.no-owner`、`chat-roles.imported`、`chat-roles.import-pending`（仅全局 `iam.manage` 可见）。
+
+- 5c7f9c5: CLI 不再落到别的项目的网关上（#1250，安全）：
+
+  - `zhin config get/set/unset/list`、`zhin send`、`zhin schedule …`、`zhin watch` 在本项目网关未运行时直接报「本项目的网关未运行（zhin start 启动；`zhin config` 还可加 `--offline`）」，不再按配置的 `http.port` 去请求 `127.0.0.1` 并带上 `ZHIN_CONSOLE_TOKEN` / `HTTP_TOKEN`——那个端口上可能是另一个正在运行的项目，原先可能改到它的配置。`zhin console init` 判断「Host 是否运行」也只看本项目网关。
+  - 确需连接其他地址时显式 `--host <url>`（`zhin send`、`zhin schedule`、`zhin watch` 新增该选项；`zhin config --host`、`zhin packages … --live` 原有）。本机地址会先读对方 `GET /pub/health` 的新字段 `project.id`（`GatewayHealth.project`，项目根路径的哈希，`@zhin.js/gateway/project` 的 `projectIdentity()`），与当前项目不一致就拒绝，不发送请求和令牌；没有报告项目标识的旧版网关或 `--standalone` 实例默认同样拒绝（只发出 `/pub/health` 探测，不发送令牌，非零退出），提示升级并用 `zhin start` 启动；确认目标无误时可加新选项 `--allow-unverified-host`（`zhin config`、`zhin send`、`zhin schedule`、`zhin watch`、`zhin packages … --live` 均支持）改为警告后继续。非本机地址仍不核对。
+
+- e2b04b7: `zhin enable` / `zhin disable`（以及 Console 的插件开关）找不到插件实例时，不再把用户输入拼成 `zhin install <输入>`（#1250）：例如 `zhin enable reminder` 原先提示 `zhin install reminder`，而 npm 上的 `reminder` 是无关的第三方包。现在只从官方目录（目录中的适配器、用途入口的插件）和项目里已安装的 `@zhin.js/*` 包中找名称相近的候选（如 `@zhin.js/plugin-reminder`）；没有候选时只说「找不到插件实例 X（配置中没有声明）」。
+- 9d3f50b: 依赖事务回滚后不再让机器人停在 `stopped`（#1250）：
+
+  - 回滚时即使恢复文件或重新安装依赖失败，只要实例原来在运行就仍尝试拉起；拉起失败单独记入新字段 `restartError`（`GatewayPackageTransactionResult`），`rollbackError` 只描述恢复文件 / 重新安装依赖。
+  - pnpm 11 在依赖已安装完成、只是跳过了未放行的构建脚本时以 `ERR_PNPM_IGNORED_BUILDS` 退出 1。网关（以及没有网关时的 `zhin install`）在确认依赖已就位（`node_modules/.modules.yaml` 存在且 `add` 的包都在）后不再把它当成安装失败，而是在结果里给出 `ignoredBuilds` 并提示用 `allowBuilds` 放行后 `pnpm rebuild`。
+  - CLI 打印事务时，包管理器的原文逐行加 `│` 前缀放在对应步骤下，与「· 步骤」行分开；回滚失败时分别说明回滚错误与实例是否已重新启动。
+
+- 11ef8ce: `zhin config set|unset` 与 Console 配置补丁的错误说明（#1250）：未知顶层键提示「没有这个配置项」并列出相近的配置项，插件声明键说明去 Console「插件」页或配置文件修改（不再出现 `gateway.plugins.declare` 等 RPC 名）；数组下标越界或该写下标处写了键名时返回 `invalid` 和中文原因（当前长度、如何追加），不再抛出英文的 `Config path … out of bounds`。CLI 只在退出码 6（结果未知）或全局 `--debug` 时在 stderr 打印 `requestId` / `expectedRevision`；校验错误的路径按 `a.b.c` 显示。
+- ea480f8: `zhin doctor` / `zhin config check` 不再在配置有 `database:` 块时误报 ❌ 缺少 `@zhin.js/database`：它是 `zhin.js` 自己的依赖，能经已安装的 `zhin.js` 解析时视为已提供（诊断结果新增 `providedByZhin`）。依赖修复命令在 pnpm workspace 根（脚手架项目都有 `pnpm-workspace.yaml`）里改为 `pnpm add -w …`，避免 `ERR_PNPM_ADDING_TO_ROOT`。`@zhin.js/scaffold-wizard` 新增导出 `formatPnpmAddCommand`、`resolvesThroughZhin`，`formatZhinStackFixCommand` / `formatAIDependencyFixCommand` 新增可选参数 `cwd`（#1250）。
+- 00ca418: 没装或没启用 AI 时，Console 读取不再显示「暂时无法读取」（#1250）：`GET /api/assistant/jobs` 与 `GET /api/conversations/results` 在功能关闭时返回 200 `{ success: true, data: { status: 'disabled', reason, message, …空列表 } }`，`reason` 为 `agent-not-installed`（未安装 `@zhin.js/agent`）、`agent-disabled`（已安装但 AI 未启用）或 `assistant-disabled`（`assistant.enabled` 为 false），替代原来的 404 `assistant.enabled is false` 与 503 `result_store_unavailable`（存储损坏等真实读取失败仍是 503）。任务写入（`POST /api/assistant/jobs*`）仍返回 404 与旧的 `error: 'assistant.enabled is false'`（兼容旧 CLI），新增 `code: 'unavailable'` 与 `data`（同样的 `ConsoleFeatureDisabled`）。`@zhin.js/console-protocol` 新增 `ConsoleFeatureDisabled`、`ConsoleFeatureDisabledReason`、`consoleFeatureDisabled()`、`isConsoleFeatureDisabled()`；`zhin schedule` / `zhin watch` 识别新形状并打印原因。
+- 817b2bf: `http.port` 校验与默认端口（#1250）：
+
+  - `http.port` / `http.listeners[].port` 只接受 1–65535 的整数，或展开后为该范围整数的 `${VAR}` 引用（`0` 保留原含义：由系统分配空闲端口，供测试与嵌入使用）。Host 配置 Schema 收紧（`integer` + `minimum`/`maximum` + 只允许整串 `${VAR}` 的 `pattern`），`zhin config set`、Console 保存与 `plugin:validate-config` 一致拒绝并给出中文原因（如「字段 port 只接受数值或 ${VAR} 形式的环境变量引用」「字段 port 不能大于 65535」）；`zhin config check` 报 `http.port_invalid` 错误（含引用展开后的值）。
+  - 启动时非法端口直接报错退出，不再悄悄监听默认端口；`${PORT}` 展开得到的数字字符串现在会被正确使用（此前被忽略而回退到默认端口）。
+  - **未配置 `http.port` 时的默认端口从 8086 改为 8068**，与脚手架写入、文档和 Console 链接一致（8086 常被 InfluxDB 等占用）。已在配置中写了端口的项目不受影响；依赖旧默认值的项目请显式写 `http.port: 8086`。
+  - `zhin doctor` 按启动方式解析端口（展开 `.env` 中的 `${VAR}`），检查真实生效的端口；无法解析或非法时报错并给出 `zhin config set http.port 8068 --offline`，不再悄悄检查 8086。
+  - 配置里的端口已损坏且网关未运行时，CLI 配置命令给出离线修复提示，而不是 `Invalid URL`；网关运行时经本地 socket 照常工作。
+  - `@zhin.js/host-http` 新增导出 `DEFAULT_HTTP_PORT`、`parseHttpPort`、`describeInvalidPortValue`、`InvalidHttpPortError`、`ENVIRONMENT_REFERENCE_PATTERN`。
+
+- 6616d07: `zhin migrate` 核对实际安装的版本（#1250）：pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会停在旧版本。migrate 现在把升级目标以 `name@version` 写进 `pnpm-workspace.yaml#minimumReleaseAgeExclude`（与 pnpm 写入新脚手架的形式一致，已覆盖的条目不重复；没有该文件的项目不创建），把 pnpm 11 留下的 `allowBuilds` 占位值改为 `true`，安装后读取 `node_modules` 列出每个包升级前后的实际版本，没装上声明版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突）。`zhin doctor` 新增「Zhin 已安装版本」检查：已安装版本不满足 `package.json` 声明时警告并给出修复命令。migrate 不再创建 `src/plugins`，未使用 AI 的项目不再生成 `SOUL.md` / `TOOLS.md` / `AGENTS.md`，输出统一为中文。
+- 9cd764a: 敏感配置不再以明文写进配置文件（#1250）：经 `config:patch-project` / `config:patch` / `config:set`（`zhin config set` 与 Console 保存共用的 Host 写入路径）写入 Schema 标为敏感的字段（`x-zhin-secret`、`writeOnly`、`format: password`、`x-zhin-config.secret`，以及 token / 密码类键名）时，值写入项目 `.env`，配置里保留或改为 `${VAR}` 引用：沿用该字段原来引用的变量名，原来不是引用时按路径生成规范名（`http.token` → `HTTP_TOKEN`，重名加 `_2`）；`.env.<环境>` 已定义该变量时写到那里；配置写入失败时 `.env` 恢复原样。保存结果新增 `envSecrets: [{ path, variable }]`（只有变量名，从不含值）；补丁请求新增可选 `secretStorage: 'env' | 'plain'`（`ConsoleConfigPatchRequest`），`zhin config set --plain` 以明文写入并打印警告。
+- Updated dependencies [39db402]
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [603b892]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [5c7f9c5]
+- Updated dependencies [39d5b88]
+- Updated dependencies [e2b04b7]
+- Updated dependencies [9d3f50b]
+- Updated dependencies [35e5d89]
+- Updated dependencies [48fdf0d]
+- Updated dependencies [11ef8ce]
+- Updated dependencies [ea480f8]
+- Updated dependencies [00ca418]
+- Updated dependencies [e690123]
+- Updated dependencies [817b2bf]
+- Updated dependencies [6616d07]
+- Updated dependencies [9cd764a]
+- Updated dependencies [b2ed753]
+  - @zhin.js/host-http@1.4.0
+  - @zhin.js/gateway@1.4.0
+  - @zhin.js/console-protocol@1.4.0
+  - @zhin.js/scaffold-wizard@1.3.0
+  - @zhin.js/logger@1.2.0
+  - @zhin.js/runtime@1.4.0
+  - @zhin.js/pagemanager@1.1.29
+
 ## 1.4.0
 
 ### Minor Changes

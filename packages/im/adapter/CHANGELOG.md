@@ -1,5 +1,13 @@
 # @zhin.js/adapter
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [35e5d89]
+  - @zhin.js/logger@1.2.0
+
 ## 1.3.0
 
 ### Minor Changes

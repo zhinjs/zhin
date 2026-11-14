@@ -1,5 +1,30 @@
 # @zhin.js/client
 
+## 1.2.1
+
+### Patch Changes
+
+- 9d3f50b: 依赖事务回滚后不再让机器人停在 `stopped`（#1250）：
+
+  - 回滚时即使恢复文件或重新安装依赖失败，只要实例原来在运行就仍尝试拉起；拉起失败单独记入新字段 `restartError`（`GatewayPackageTransactionResult`），`rollbackError` 只描述恢复文件 / 重新安装依赖。
+  - pnpm 11 在依赖已安装完成、只是跳过了未放行的构建脚本时以 `ERR_PNPM_IGNORED_BUILDS` 退出 1。网关（以及没有网关时的 `zhin install`）在确认依赖已就位（`node_modules/.modules.yaml` 存在且 `add` 的包都在）后不再把它当成安装失败，而是在结果里给出 `ignoredBuilds` 并提示用 `allowBuilds` 放行后 `pnpm rebuild`。
+  - CLI 打印事务时，包管理器的原文逐行加 `│` 前缀放在对应步骤下，与「· 步骤」行分开；回滚失败时分别说明回滚错误与实例是否已重新启动。
+
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [603b892]
+- Updated dependencies [bc31cd3]
+- Updated dependencies [760e9f5]
+- Updated dependencies [5d90159]
+- Updated dependencies [73475bd]
+- Updated dependencies [5c7f9c5]
+- Updated dependencies [9d3f50b]
+- Updated dependencies [00ca418]
+- Updated dependencies [e690123]
+- Updated dependencies [9cd764a]
+- Updated dependencies [b2ed753]
+  - @zhin.js/console-protocol@1.4.0
+  - @zhin.js/contract@1.1.27
+
 ## 1.2.0
 
 ### Minor Changes

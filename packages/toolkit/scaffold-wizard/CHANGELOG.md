@@ -1,5 +1,20 @@
 # @zhin.js/scaffold-wizard
 
+## 1.3.0
+
+### Minor Changes
+
+- 8bf8dfa: #1250 第 10 批（试用反馈、关键修复与 AI 账号）的公开 API 新增按 minor 发布：Console 协议的功能未启用状态、功能矩阵分类与传输状态文字；Host 端口校验与 owner 判定导出；网关项目标识与插件候选；Agent 运行时的连接测试与 Host 环境变量引用授权；模型请求首响应时限；`zhin ai` 命令与 `--allow-unverified-host`；日志单行转义导出；Host 根配置新增 `firstResponseTimeoutMs`，icqq 新增 `logLevel` 配置（按 commandSuggestion 先例为 minor）。
+
+### Patch Changes
+
+- ea480f8: `zhin doctor` / `zhin config check` 不再在配置有 `database:` 块时误报 ❌ 缺少 `@zhin.js/database`：它是 `zhin.js` 自己的依赖，能经已安装的 `zhin.js` 解析时视为已提供（诊断结果新增 `providedByZhin`）。依赖修复命令在 pnpm workspace 根（脚手架项目都有 `pnpm-workspace.yaml`）里改为 `pnpm add -w …`，避免 `ERR_PNPM_ADDING_TO_ROOT`。`@zhin.js/scaffold-wizard` 新增导出 `formatPnpmAddCommand`、`resolvesThroughZhin`，`formatZhinStackFixCommand` / `formatAIDependencyFixCommand` 新增可选参数 `cwd`（#1250）。
+- 6616d07: 创建项目时 `pnpm install` 以非零状态退出、但 `package.json` 里的依赖都已装进 `node_modules`（pnpm 11 跳过依赖构建脚本时就是这样，`ERR_PNPM_IGNORED_BUILDS`）时，不再打印笼统的「创建项目失败」并以 1 退出：改为说明 pnpm 跳过了哪些包的构建脚本（读 pnpm 写在 `allowBuilds` 里的 `set this to true or false` 占位值）与修复办法，然后继续自检并打印 Console 链接（#1250）。
+- Updated dependencies [8bf8dfa]
+- Updated dependencies [48fdf0d]
+- Updated dependencies [817b2bf]
+  - @zhin.js/runtime@1.4.0
+
 ## 1.2.0
 
 ### Minor Changes
