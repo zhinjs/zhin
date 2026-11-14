@@ -11,7 +11,7 @@
 pnpm dev:test
 ```
 
-- Console `https://console.zhin.dev` · API `http://127.0.0.1:8086`
+- Console `https://console.zhin.dev` · API `http://127.0.0.1:8068`
 - Sandbox `/sandbox`；命令 `/ping` `/mem` `/games` `/猜数`
 - 无平台凭据时适配器 soft-fail offline，不阻断启动
 

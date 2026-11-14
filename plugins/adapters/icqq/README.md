@@ -45,12 +45,15 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # 必填，顶层共享（/approve 与 master 角色）
   autoReconnect: true
   endpoints:
     - id: "${ICQQ_ACCOUNT}" # QQ 号
       # password: "${ICQQ_PASSWORD}"  # 可选；不填则扫码登录
 ```
+
+::: tip 主人不在适配器配置里
+`master` 不再是适配器字段（也不是必填）。「谁是主人」由聊天角色决定（ADR 0056 / ADR 0060）：在 Console「聊天角色」中授予全局 owner，或在新部署中按 `zhin status` 给出的认领码私聊机器人发送 `认领 <码>`。旧配置中的 `master` 会在首次启动时迁移为账号层 owner；之后再写入不会自动授予，而是进入 Console「需要你处理」等待确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
+:::
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
@@ -59,7 +62,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338"
   endpoints:
     - id: "${ICQQ_ACCOUNT}"
     - id: "${ICQQ_ACCOUNT_2}"
@@ -205,7 +207,8 @@ ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」
 - **滑块提交格式**：NT 登录（SDK 的 `sig.nt_captcha` 指向这个滑块）提交 `ticket,randstr`，缺 randstr 时会提示并留在滑块；旧版 wtlogin 只提交 `ticket`。
 - **验证链接**带会话标识（sid / sig），密保手机号也算敏感信息：
   - Zhin 自己的日志和 `system.receive` 副事件只有挑战类型和链接的主机名（`{ kind, host }`），不含链接、手机号、设备信息和二维码图片；`login.error` 只带错误码和清洗后的说明。
-  - icqq SDK 自己的日志（log4js，`mark` 级别会打印滑块、设备锁、身份验证链接和手机号）经适配器包装：链接只保留到路径（查询串变成 `?…`），手机号变成 `***`。
+  - icqq SDK 自己的日志（原本经 log4js 输出，`mark` 级别会打印滑块、设备锁、身份验证链接和手机号）改由适配器转写到 Zhin 日志（同一格式；输出不是终端时没有颜色）：链接只保留到路径（查询串变成 `?…`），手机号变成 `***`。
+  - SDK 日志级别用 `logLevel` 配置（`trace` / `debug` / `info` / `warn` / `error` / `fatal` / `mark` / `off`，默认 `warn`，可在 `endpoints[]` 里单独设置）。SDK 逐条打印的收发消息原文（`recv from: …`、`succeed to send: …`）一律按 `debug` 处理，默认不会写进日志；开到 `debug` 时，消息中的换行写成 `⏎`、控制字符转义，并截断到 300 字，多行消息不会再拆成多条没有时间戳的日志行。
   - **未覆盖**：SDK 绕过日志直接写到控制台的两处——终端里画出的登录二维码，以及旧版登录 237 分支的 `console.log(proto.toJSON())`（可能包含验证页信息）。这两处不改 SDK 无法拦截；如果控制台输出会被收集，请注意。
   - `endpoint.login.flow` 事件和历史里不含验证链接（`linkOmitted`），Console 用 `login.flow.get` 读取当前链接。
 - **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写 Zhin 的日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。
@@ -239,19 +242,18 @@ console:
 
 ## 掉线通知与重新登录
 
-配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 master 发通知。例如用 QQ 官方机器人实例通知：
+配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 `notify` 指向的会话（通常是部署者自己）发通知。例如用 QQ 官方机器人实例通知：
 
 ```yaml
 qq:
   # ... 已配置好的 QQ 官方机器人
 icqq:
-  master: 123456
   autoReconnect: true   # 默认 true：被踢下线后自动重新登录
   notify:
     adapter: qq
     endpoint: bot-1
     kind: private
-    id: "${QQ_MASTER_OPENID}"   # master 在 QQ 官方机器人里的 openid
+    id: "${QQ_OWNER_OPENID}"   # 接收通知的人在 QQ 官方机器人里的 openid
 ```
 
 `autoReconnect: true` 时，被踢下线会自动重试登录；出现二维码、滑块、设备锁或身份验证时，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
@@ -266,7 +268,7 @@ icqq:
 
 **设备锁**：`icqq login status` 会给出验证链接。用手机 QQ 完成验证后回复 `icqq login confirm`；无法用链接验证时回复 `icqq login code sms`，收到短信后回复 `icqq login code <验证码>`。不回复 `sms` 不会发短信。身份验证需要复制设备信息，请在 Console 完成。等待验证期间不会自动重新登录（否则链接会失效）；5 分钟没有处理，挑战过期，等你重新登录。
 
-命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
+命令只接受全局 owner（聊天角色，ADR 0056）或 `notify.id` 对应账号；两者都没有时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
 ## 故障排查
 

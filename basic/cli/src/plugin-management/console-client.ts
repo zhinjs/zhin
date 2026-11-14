@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { LocalGatewayFetch } from '@zhin.js/gateway/local';
+import { isLoopbackHostname } from '../utils/loopback.js';
 
 /** A request was dispatched but no authoritative RPC result was received. Never retry a mutation blindly. */
 export class ConsoleRequestUnconfirmedError extends Error {
@@ -74,8 +75,7 @@ export async function requestPluginConsole<T>(
   const base = url.pathname === '/' ? '/api' : url.pathname.replace(/\/$/u, '');
   url.pathname = `${base}/console/request`;
   const token = options.token ?? process.env[tokenEnvironment];
-  const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/u.test(url.hostname);
-  if (token && url.protocol === 'http:' && !loopback) throw new Error('Console credentials require HTTPS for non-loopback hosts');
+  if (token && url.protocol === 'http:' && !isLoopbackHostname(url.hostname)) throw new Error('Console credentials require HTTPS for non-loopback hosts');
   const requestId = options.requestId ?? randomUUID();
   let response: Response;
   try {

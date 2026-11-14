@@ -1739,6 +1739,22 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "⚠ 依赖安装失败",
     "en": "⚠ Dependency installation failed"
   },
+  "⚠ pnpm install 以非零状态退出，但项目依赖已全部安装，创建继续。": {
+    "zh-CN": "⚠ pnpm install 以非零状态退出，但项目依赖已全部安装，创建继续。",
+    "en": "⚠ pnpm install exited with an error, but every project dependency is installed; creation continues."
+  },
+  "  原因：pnpm 跳过了这些依赖的构建脚本：{v0}（ERR_PNPM_IGNORED_BUILDS）。Console 终端需要 node-pty 的原生模块。": {
+    "zh-CN": "  原因：pnpm 跳过了这些依赖的构建脚本：{v0}（ERR_PNPM_IGNORED_BUILDS）。Console 终端需要 node-pty 的原生模块。",
+    "en": "  Cause: pnpm skipped the build scripts of {v0} (ERR_PNPM_IGNORED_BUILDS). The Console terminal needs node-pty's native module."
+  },
+  "  修复：在 pnpm-workspace.yaml 的 allowBuilds 中把它们设为 true，然后运行：": {
+    "zh-CN": "  修复：在 pnpm-workspace.yaml 的 allowBuilds 中把它们设为 true，然后运行：",
+    "en": "  Fix: set them to true under allowBuilds in pnpm-workspace.yaml, then run:"
+  },
+  "  上方是 pnpm 的输出；修复后在项目目录重新运行：": {
+    "zh-CN": "  上方是 pnpm 的输出；修复后在项目目录重新运行：",
+    "en": "  pnpm's output is above; after fixing it, rerun in the project directory:"
+  },
   "你可以稍后手动安装:": {
     "zh-CN": "你可以稍后手动安装:",
     "en": "Install manually later:"

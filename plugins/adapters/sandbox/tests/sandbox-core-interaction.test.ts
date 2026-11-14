@@ -74,13 +74,14 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     const native = adapters.client<SandboxClient>('sandbox', String(adapter.id));
     expect(native).toBeInstanceOf(SandboxClient);
     expect(sessions[0]?.endpoint).toBe(native); expect(sessions[0]?.adapter).toBe(adapters.adapter(adapter.id));
-    expect(sessions[0]?.event).toBe(frame); expect(sessions[0]?.sender?.id).toBe('configured-owner');
+    expect(sessions[0]?.event).toBe(frame); expect(sessions[0]?.sender?.id).toBe('~sim:configured-owner');
     expect(sessions[0]?.message).toMatchObject({ id: 'normal-input', text: 'normal chat' });
     expect(sessions[0]?.scene).toMatchObject({ kind: 'group', id: 'room', endpoint: { adapter: 'sandbox', id: adapter.id } });
     const conversation = { endpoint: { adapter: 'sandbox', id: String(adapter.id) }, kind: 'group' as const, id: 'room' };
+    // The asked sender is the Sandbox's simulated speaker (ADR 0060 §5.4), so its own click settles it.
     let settlements = 0;
     answer = im.createInteraction(new RuntimeMessage(
-      { conversation: conversation, content: 'ask', sender: { id: 'configured-owner' } },
+      { conversation: conversation, content: 'ask', sender: { id: '~sim:configured-owner' } },
       { generation: 0, reply: (content) => im.send({ requester: root, conversation, content }) },
     ))!
       .ask({ type: 'confirm', title: 'Allow this operation?', purpose: 'approval', signal: abort.signal });

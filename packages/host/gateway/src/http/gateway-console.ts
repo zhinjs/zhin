@@ -26,6 +26,7 @@ import {
   type TokenRegistry,
 } from '@zhin.js/host-http';
 import { CONSOLE_DENIAL_REASONS, IAM_RPC, ONBOARDING_RPC, type ConsoleDenialReason, type ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
+import type { BridgeRouteTable } from '@zhin.js/host-http/bridge';
 import { DEFAULT_ROOT_CONFIG_FILE_NAME } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -59,6 +60,10 @@ export interface GatewayConsoleInstancePort {
   pluginPermissions?(): readonly ConsolePluginPermissionInfo[];
   /** Sends `principal-revoked` (the instance closes that user's live connections). */
   revokePrincipal?(principalId: string, reason?: string): void;
+  /** Whether an instance is attached and answering (a message sent now is delivered). */
+  readonly ready?: boolean;
+  /** Runs on every route table change (an instance's first `ready` included; empty when it goes away). */
+  onRoutes?(listener: (table: BridgeRouteTable) => void): () => void;
   /** Audit entries written by the instance. */
   onAudit?(listener: (entry: ConsoleAuditEntry) => void): () => void;
 }
@@ -164,10 +169,29 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     logger: { warn: (message: string) => logger.warn(message), info: (message: string) => logger.info(message) },
   });
 
+  // ADR 0060 §2.4: a deleted / disabled Console user's chat person link is removed by the
+  // instance on `principal-revoked`. Those two reasons are kept while no instance is attached
+  // and sent once one reports ready, so a link never outlives its user because the instance was
+  // down (bounded; in memory only: a gateway restart forgets them).
+  const undelivered = new Map<string, string>();
   const revoke = (userId: string, reason: string): void => {
     terminal.terminatePrincipal(`user:${userId}`, 'revoked');
+    const ending = reason === 'deleted' || reason === 'disabled';
+    if (ending && options.instance?.ready === false) {
+      undelivered.delete(userId);
+      undelivered.set(userId, reason);
+      if (undelivered.size > 1024) undelivered.delete(undelivered.keys().next().value!);
+    }
     try { options.instance?.revokePrincipal?.(userId, reason); } catch { /* bridge gone */ }
   };
+  const stopUndelivered = options.instance?.onRoutes?.(() => {
+    if (options.instance?.ready !== true) return;
+    for (const [userId, reason] of [...undelivered]) {
+      undelivered.delete(userId);
+      try { options.instance?.revokePrincipal?.(userId, reason); } catch { /* bridge gone */ }
+    }
+  });
+  if (stopUndelivered) disposers.push(stopUndelivered);
 
   const projectDatabase = async (): Promise<ProjectDatabaseConfig> => options.database
     ?? resolveProjectDatabaseConfig(projectRoot, await loadExpandedProjectConfig(projectRoot, environment));

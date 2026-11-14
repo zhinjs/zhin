@@ -7,7 +7,7 @@ import {
   type Token,
 } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
-import type { ConsolePrincipal, ConsoleRequestMeta, HttpHost, HttpHostOptions } from '@zhin.js/host-http';
+import { DEFAULT_HTTP_PORT, type ConsolePrincipal, type ConsoleRequestMeta, type HttpHost, type HttpHostOptions } from '@zhin.js/host-http';
 import type { A2AMailboxTransport, RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
 import {
   expandEnvironmentValue,
@@ -222,7 +222,7 @@ async function resolveProtocolConfig(
     mcp: asRecord(document.mcp) as RuntimeMcpConfig | undefined,
     a2a: asRecord(document.a2a) as RuntimeA2aConfig | undefined,
     httpToken: typeof httpDocument?.token === 'string' ? httpDocument.token : http.token,
-    publicBaseUrl: publicUrl || `http://${host}:${http.port ?? 8086}`,
+    publicBaseUrl: publicUrl || `http://${host}:${http.port ?? DEFAULT_HTTP_PORT}`,
   });
 }
 

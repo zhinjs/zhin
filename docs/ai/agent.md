@@ -84,7 +84,7 @@ sequenceDiagram
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
-- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理，不切换模型。显式配置的媒体感知备用链继续生效。
+- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：只在额度用完、余额不足或鉴权失败时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
 一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
@@ -702,6 +702,7 @@ ai:
 - **错误分类**：429 限流、超时、5xx、网络错误可重试；鉴权失败、上下文超长、调用方取消不重试，原样上抛（上下文超长仍走压缩重试）。
 - **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待（OpenAI 的 `retry-after-ms` 精度更高，优先采用），超过上限则停止本次请求的重试并反馈错误。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
 - **重试耗尽**：反馈当前模型的错误，不切换模型；重试和放弃会写入 `provider_retry` / `provider_give_up` 日志。
+- **无响应与超时**：每次请求有两道时限。`firstResponseTimeoutMs`（默认 30 秒）内收不到首个响应（响应头或首个流事件）即判定模型服务无响应（`no_response`）：不在同一模型上重试，直接结束本次请求并经正常出站链回复（主人看到「模型服务无响应」原因；成员看到一句“刚卡了一下”）；识图用途按其备用链尝试下一个 Profile。无响应与整段超时都计入用途备用模型的「连续超时」切换：同一次请求里同一模型连续 2 次 `no_response` / `timeout` 后，这次请求的下一次尝试换到下一个已配置的备用模型（调用方自己设的截止时间不算），见[备用模型](./model-policy.md#备用模型fallbacks)；没配置备用模型时不换模型。`requestTimeoutMs`（默认 120 秒）是整段输出的上限，超时按 `timeout` 重试。两种超时都会写一条 `provider_timeout` warn 日志（会话、回合 id、用途、Provider 别名、模型、阶段、时限；不含请求内容或密钥），并在回合 trace 时间线上记录 `model_timeout`。
 - **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
 - **流内错误**：HTTP 200 的流中途出现的错误（Anthropic `overloaded_error`、OpenAI `server_error`、Responses API `rate_limit_exceeded`）保留 message / type / code，并推断出对应的 HTTP 状态（如 `overloaded_error` → 529），与同类 HTTP 错误一样按分类决定是否在同一模型上重试。DeepSeek 以 finishReason `insufficient_system_resource` 结束时按 5xx 退避重试，不再误报为"无法解析的工具调用"。
 - **上下文超长**：重试层与压缩共用同一个判定（`llm/context-overflow.ts`），覆盖 OpenAI、Anthropic "prompt is too long"、Gemini "input token count (N) exceeds the maximum number of tokens allowed" 与 Vertex "input token count is N but model only supports up to M"；超长不重试、不降级，交给压缩后重问一次。
@@ -718,11 +719,12 @@ ai:
       baseDelayMs: 1000        # 首次退避，之后翻倍
       maxDelayMs: 10000        # 单次退避上限
       maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，反馈错误
-      requestTimeoutMs: 180000 # 单次请求（整段流式输出）超时；0 关闭
+      requestTimeoutMs: 120000 # 单次请求（整段流式输出）超时；0 关闭
+      firstResponseTimeoutMs: 30000 # 等待首个响应（响应头或首个流事件）的时限；0 关闭
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
 ```
 
-旧 `ai.agent.providerResilience.fallback` 已退役。感知仅按运行时 perception 用途明确选择的 Profile 备用链顺序尝试，不配置则只用感知主 Profile；它不让聊天自动换模型。
+旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足或鉴权失败时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 

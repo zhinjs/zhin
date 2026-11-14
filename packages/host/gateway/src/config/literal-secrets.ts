@@ -114,7 +114,7 @@ export async function moveLiteralSecretsToEnv(projectRoot: string, configFile: s
 }
 
 /** A `NAME=value` dotenv line that parses back to exactly `value`, or undefined when none does. */
-function dotenvLine(name: string, value: string): string | undefined {
+export function dotenvLine(name: string, value: string): string | undefined {
   if (/[\r\n]/u.test(value)) return undefined;
   for (const quote of ["'", '`', '"']) {
     if (value.includes(quote)) continue;
@@ -122,6 +122,10 @@ function dotenvLine(name: string, value: string): string | undefined {
     if (parseDotenv(line)[name] === value) return line;
   }
   return undefined;
+}
+
+export function readDocumentPath(document: unknown, path: readonly string[]): unknown {
+  return readPath(document, path);
 }
 
 function readPath(document: unknown, path: readonly string[]): unknown {

@@ -4,6 +4,7 @@ import { sandboxText } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
 import * as transport from '../pages/index/sandboxTransport.js';
+import * as chatIdentity from '../pages/index/chatIdentity.js';
 import * as directories from '../pages/index/workspaceDirectory.js';
 import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
 import * as composer from '../pages/index/composerCommands.js';
@@ -75,7 +76,7 @@ function fixture(options: {
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
-    sandboxText, ...traces, ...playground, ...transport,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),

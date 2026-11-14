@@ -173,6 +173,23 @@ describe('gateway Console access control without an instance (B1.4)', () => {
     expect((await context.rpc('iam.users.list', {})).status).toBe(401);
   });
 
+  it('ADR 0060 §2.4: a user deleted while the instance is down is reported once it is ready again', async () => {
+    const context = await gatewayOnly({ token: 'setup-token' });
+    const session = await signedInOwner(context, 'setup-token');
+    const created = await context.rpc('iam.users.create', { username: 'gone', password: PASSWORD, bindings: [{ role: 'viewer' }] }, session);
+    const userId = created.body.data.user.id as string;
+    const changed = await context.rpc('iam.users.update', { id: userId, displayName: 'Gone' }, session);
+    expect(changed.status).toBe(200);
+    // Instance offline: the send is dropped by the bridge, so the gateway keeps the link-ending reasons.
+    expect((await context.rpc('iam.users.delete', { id: userId }, session)).status).toBe(200);
+    expect(context.instance.revoked).toEqual([{ principalId: userId, reason: 'deleted' }]);
+    context.instance.setReady(true);
+    expect(context.instance.revoked).toEqual([{ principalId: userId, reason: 'deleted' }, { principalId: userId, reason: 'deleted' }]);
+    // Delivered once: later route tables (hot reload) do not repeat it.
+    context.instance.setReady(true);
+    expect(context.instance.revoked).toHaveLength(2);
+  });
+
   it('forwards the locally authenticated principal and reports revocations, instance audit and the plugin catalog', async () => {
     const context = await gatewayOnly({ token: 'setup-token' });
     const session = await signedInOwner(context, 'setup-token');

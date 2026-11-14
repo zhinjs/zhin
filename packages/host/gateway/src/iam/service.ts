@@ -590,8 +590,16 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       if (patch.description !== undefined) row.description = descriptionOf(patch.description);
       if (patch.permissions !== undefined) row.permissions = JSON.stringify(permissionList(patch.permissions));
       if (Object.keys(row).length) await this.#model('roles').update(row).where({ id });
+      // Grants of every holder may have shrunk: their long-lived connections and anything the
+      // instance derived from their grants (open chat bind codes) re-authorize from scratch.
+      if (patch.permissions !== undefined) for (const userId of await this.#usersBoundTo(id)) this.#emitRevocation(userId, 'bindings');
       return withPluginPermissions((await this.#role(id))!, this.pluginPermissionCatalog());
     });
+  }
+
+  async #usersBoundTo(roleId: string): Promise<readonly string[]> {
+    const rows = await this.#model('bindings').select('user_id').where({ role_id: roleId });
+    return [...new Set(rows.map(row => String((row as { user_id: unknown }).user_id)))];
   }
 
   deleteRole(id: string): Promise<void> {
@@ -599,8 +607,10 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       const role = await this.#role(id);
       if (!role) throw new IamError('not_found', '角色不存在');
       if (role.builtin) throw new IamError('forbidden', '内置角色不可删除');
+      const holders = await this.#usersBoundTo(id);
       await this.#model('bindings').delete().where({ role_id: id });
       await this.#model('roles').delete().where({ id });
+      for (const userId of holders) this.#emitRevocation(userId, 'bindings');
     });
   }
 

@@ -12,7 +12,7 @@ import { createIcqqTestPorts } from './_icqq-mock.js';
 import { ICQQ_LOGIN_ERROR_TABLE, mapIcqqLoginError, sanitizeIcqqLoginMessage } from '../src/icqq-login-errors.js';
 import { authDescriptor, icqqAuthHelperScript, sliderCaptchaQuery } from '../src/icqq-login-descriptors.js';
 import { icqqLinkHost, icqqSliderSubmission, isNtCaptcha } from '../src/icqq-login-assist.js';
-import { redactIcqqLogText, redactingIcqqLogger } from '../src/sdk-logger.js';
+import { isBridgedIcqqSdkLogger, redactIcqqLogText, redactingIcqqLogger } from '../src/sdk-logger.js';
 import { pickIcqqCodeTarget } from '../commands/icqq/login/definition.js';
 import type { IcqqLoginControl } from '../src/icqq-login-control.js';
 import { icqqSystemEventLogLevel, loginChallengeLogLine } from '../src/endpoint.js';
@@ -672,11 +672,16 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(redactingIcqqLogger(wrapped)).toBe(wrapped);
     });
 
-    it('the Endpoint installs the redacting logger on its SDK client', async () => {
+    it('the Endpoint replaces the SDK logger with the redacting Zhin bridge (#1250)', async () => {
       const s = await setup();
-      const client = s.client as unknown as { logger: { mark(...args: unknown[]): void }; rawLog: { mark: ReturnType<typeof vi.fn> } };
+      const client = s.client as unknown as { logger: { level: unknown; mark(...args: unknown[]): void; info(...args: unknown[]): void }; rawLog: { mark: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> } };
+      expect(isBridgedIcqqSdkLogger(client.logger)).toBe(true);
+      expect(client.logger.level).toBe('warn');
       client.logger.mark('收到滑动验证码，请访问以下地址完成滑动：https://ssl.captcha.qq.com/x?sid=LEAK');
-      expect(client.rawLog.mark).toHaveBeenCalledWith('收到滑动验证码，请访问以下地址完成滑动：https://ssl.captcha.qq.com/x?…');
+      client.logger.info('recv from: [Group: g(1), Member: m(2)] secret chat');
+      // Nothing reaches the SDK's own log4js logger any more.
+      expect(client.rawLog.mark).not.toHaveBeenCalled();
+      expect(client.rawLog.info).not.toHaveBeenCalled();
     });
 
     it('fails the attempt when the automatic relogin is exhausted', async () => {

@@ -74,15 +74,20 @@ describe('createChatRoleSenderEnricher', () => {
     const service = new ChatRoleService({ store: { list: () => [grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' })] } });
     const enrich = createChatRoleSenderEnricher({ roles: () => service });
     expect(enrich({ id: 'boss', chatRole: 'trusted', chatRoleLevels: { owner: 'global' } } as never, conversation('group'), snapshot()))
-      .toEqual({ id: 'boss', chatRole: 'owner', chatRoleLevels: { owner: 'endpoint', admin: 'endpoint', trusted: 'endpoint' } });
-    expect(enrich({ id: 'eve', chatRoleLevels: { owner: 'global' } } as never, conversation('group'), snapshot())).toEqual({ id: 'eve' });
+      .toEqual({ id: 'boss', chatPrincipal: 'implicit:qq:boss', chatRole: 'owner', chatRoleLevels: { owner: 'endpoint', admin: 'endpoint', trusted: 'endpoint' } });
+    expect(enrich({ id: 'eve', chatRoleLevels: { owner: 'global' } } as never, conversation('group'), snapshot())).toEqual({ id: 'eve', chatPrincipal: 'implicit:qq:eve' });
     // Platform admins keep their standing but get no zhin role from it.
     expect(enrich({ id: 'mod', platform: { standing: 'admin' } } as never, conversation('group'), snapshot()))
-      .toEqual({ id: 'mod', platform: { standing: 'admin' } });
+      .toEqual({ id: 'mod', chatPrincipal: 'implicit:qq:mod', platform: { standing: 'admin' } });
     // Private chats: no platform standing, no mapped role.
     expect(enrich({ id: 'mod', platform: { standing: 'owner' } } as never, conversation('private'), snapshot()))
-      .toEqual({ id: 'mod' });
-    expect(enrich({ id: 'eve', chatRole: 'owner' } as never, conversation('group'), snapshot())).toEqual({ id: 'eve' });
+      .toEqual({ id: 'mod', chatPrincipal: 'implicit:qq:mod' });
+    expect(enrich({ id: 'eve', chatRole: 'owner' } as never, conversation('group'), snapshot())).toEqual({ id: 'eve', chatPrincipal: 'implicit:qq:eve' });
+    // ADR 0060 §2.3: an adapter-supplied `chatPrincipal` is dropped; the Runtime writes its own.
+    expect(enrich({ id: 'eve', chatPrincipal: 'cp_forgedforgedforgedforgedfo' } as never, conversation('group'), snapshot()))
+      .toEqual({ id: 'eve', chatPrincipal: 'implicit:qq:eve' });
+    expect(createChatRoleSenderEnricher({ roles: () => undefined })({ id: 'x', chatPrincipal: 'cp_forged' } as never, conversation('group'), snapshot()))
+      .toEqual({ id: 'x' });
     // Without a role service only the normalization runs.
     expect(createChatRoleSenderEnricher({ roles: () => undefined })({ id: 'x', chatRole: 'owner' } as never, conversation('group'), snapshot()))
       .toEqual({ id: 'x' });
@@ -100,7 +105,7 @@ describe('role levels and host-wide trust (ADR 0056 §2, security review)', () =
     ] } });
     const enrich = createChatRoleSenderEnricher({ roles: () => service });
     const c = enrich({ id: 'c' } as never, conversation, snapshot());
-    expect(c).toEqual({ id: 'c', chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation', trusted: 'adapter' } });
+    expect(c).toEqual({ id: 'c', chatPrincipal: 'implicit:qq:c', chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation', trusted: 'adapter' } });
     expect(roles.hostChatRole(c)).toBe('admin');
     expect(roles.chatRoleHeldAt(c, 'owner', 'conversation')).toBe(true);
     expect(roles.chatRoleHeldAt(c, 'owner', 'endpoint')).toBe(false);
@@ -129,7 +134,7 @@ describe('role levels and host-wide trust (ADR 0056 §2, security review)', () =
     // A conversation id with control characters cannot be part of a key.
     const odd = { endpoint: { id: 'ep', adapter: 'qq' }, kind: 'group', id: 'bad\u0000id' } as const;
     expect(roles.chatRoleMessageContext(snapshot(), { conversation: odd, sender: { id: 'g' } })?.context.conversationKey).toBe('qq/bot-1');
-    expect(enrich({ id: 'g' } as never, odd, snapshot())).toEqual({ id: 'g', chatRole: 'owner', chatRoleLevels: { owner: 'global', admin: 'global', trusted: 'global' } });
+    expect(enrich({ id: 'g' } as never, odd, snapshot())).toEqual({ id: 'g', chatPrincipal: 'implicit:qq:g', chatRole: 'owner', chatRoleLevels: { owner: 'global', admin: 'global', trusted: 'global' } });
   });
 });
 

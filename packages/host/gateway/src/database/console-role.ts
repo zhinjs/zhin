@@ -118,7 +118,8 @@ export async function setupConsoleRole(options: SetupConsoleRoleOptions): Promis
   const block = document.database && typeof document.database === 'object' && !Array.isArray(document.database)
     ? document.database as Record<string, unknown>
     : { dialect };
-  await store.setKey('database', { ...block, console: { ...ENV_REFERENCE } });
+  // Local owner CLI (`zhin db console-role`): may write `.env`.
+  await store.setKey('database', { ...block, console: { ...ENV_REFERENCE } }, { environmentWrite: true });
   return Object.freeze({
     dialect,
     user,

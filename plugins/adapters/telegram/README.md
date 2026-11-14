@@ -109,7 +109,7 @@ telegram:
 configVersion: 2
 http:
   host: 127.0.0.1
-  port: 8086
+  port: 8068
 plugins:
   telegram: "@zhin.js/adapter-telegram"
 telegram:

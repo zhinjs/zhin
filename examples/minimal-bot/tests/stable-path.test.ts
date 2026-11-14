@@ -276,9 +276,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       started: true,
       generation: 1,
       plugins: 1,
-      // Seven authored capabilities, the Host language + restart commands, and five Host
-      // config routes: config / fields / get / set / unset.
-      capabilities: 14,
+      // Seven authored capabilities, the Host language + restart commands, the chat identity
+      // commands claim + bind (ADR 0060), and five Host config routes: config / fields / get /
+      // set / unset.
+      capabilities: 16,
       // adapter + command + component + middleware + handler + schedule + tool（platformFeatures 继承）
       projections: 7,
     });

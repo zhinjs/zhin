@@ -17,12 +17,14 @@ import { setupCommand } from './commands/setup.js';
 import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
 import { scheduleCommand } from './commands/schedule.js';
+import { chatRolesCommand } from './commands/chat-roles.js';
 import { migrateCommand } from './commands/migrate.js';
 import { sendCommand } from './commands/send.js';
 import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
 import { runtimeCommand } from './commands/runtime.js';
 import { traceCommand } from './commands/trace.js';
+import { aiCommand } from './commands/ai.js';
 import { usageCommand } from './commands/usage.js';
 import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
@@ -50,6 +52,7 @@ program
 
 // 注册命令
 program.addCommand(startCommand);
+program.addCommand(aiCommand);
 program.addCommand(stopCommand);
 program.addCommand(restartCommand);
 program.addCommand(statusCommand);
@@ -73,6 +76,7 @@ program.addCommand(setupCommand);
 program.addCommand(configCommand);
 program.addCommand(onboardCommand);
 program.addCommand(scheduleCommand);
+program.addCommand(chatRolesCommand);
 program.addCommand(migrateCommand);
 program.addCommand(sendCommand);
 program.addCommand(watchCommand);

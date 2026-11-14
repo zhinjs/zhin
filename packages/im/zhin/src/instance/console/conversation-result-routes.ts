@@ -4,6 +4,13 @@ import type { HttpHost } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
+import { consoleFeatureDisabled } from '@zhin.js/console-protocol';
+
+function isModuleNotFound(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND')
+    && String((error as { message?: unknown }).message ?? '').includes('@zhin.js/agent');
+}
 
 /** Read execution output and separate delivery facts; never send or execute a recovered result. */
 export function registerConversationResultRoutes(options: Readonly<{
@@ -11,7 +18,10 @@ export function registerConversationResultRoutes(options: Readonly<{
   base: string;
   projectRoot: string;
   snapshots?: SnapshotReader;
+  /** Loads the Agent package (tests replace it to simulate a project without `@zhin.js/agent`). */
+  importAgent?: () => Promise<Pick<typeof import('@zhin.js/agent'), 'FileJournalStore'>>;
 }>): void {
+  const importAgent = options.importAgent ?? (() => import('@zhin.js/agent'));
   options.http.route('GET', `${options.base}/conversations/results`, noStore(async (_request, { url }) => {
     const sessionKey = url.searchParams.get('sessionKey') ?? '';
     const connectionId = url.searchParams.get('connectionId') ?? '';
@@ -38,7 +48,15 @@ export function registerConversationResultRoutes(options: Readonly<{
         if (session.status === 'invalid') {
           return jsonResponse(400, { success: false, code: 'invalid_result_query', error: '请提供当前连接和有效的 Sandbox 会话' });
         }
-        const { FileJournalStore } = await import('@zhin.js/agent');
+        let FileJournalStore: typeof import('@zhin.js/agent').FileJournalStore;
+        try {
+          ({ FileJournalStore } = await importAgent());
+        } catch (error) {
+          if (!isModuleNotFound(error)) throw error;
+          // No Agent package: there are no task results — a state, not a read failure (#1250).
+          return jsonResponse(200, { success: true, data: {
+            ...consoleFeatureDisabled('agent-not-installed'), sessionKey, nextCursor: null, hasMore: false, results: [] } });
+        }
         const store = new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal'));
         const page = await store.readResultsPage(sessionKey, scope.ownerId, {
           endpoint: scope.endpoint, kind: session.kind, id: session.id,

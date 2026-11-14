@@ -4,6 +4,7 @@ import { isMediaRef, type ConversationRef, type PlatformStanding } from '@zhin.j
 import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 import type { MessageSegment, SendContent } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
+import { DEFAULT_ICQQ_SDK_LOG_LEVEL, ICQQ_SDK_LOG_LEVELS, isIcqqSdkLogLevel, type IcqqSdkLogLevel } from "./sdk-logger.js";
 
 export type ActionResult = {
   id: string;
@@ -248,6 +249,8 @@ export interface IcqqEndpointConfig extends EndpointProfileConfiguration {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  /** Level of the ICQQ SDK's own log lines (default `warn`; its per-message lines are `debug`). */
+  readonly logLevel?: IcqqSdkLogLevel;
   /** Optional out-of-band outage notification target (usually a QQ adapter instance). */
   readonly notify?: AdapterNotifyTarget;
 }
@@ -268,6 +271,7 @@ export interface ResolvedIcqqConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  readonly logLevel: IcqqSdkLogLevel;
   readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
@@ -321,10 +325,15 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
   const qqnt = config.qqnt;
   const ntLogin = config.ntLogin;
   const notify = resolveAdapterNotifyTarget(config.notify);
+  if (config.logLevel !== undefined && !isIcqqSdkLogLevel(config.logLevel)) {
+    throw new TypeError(`ICQQ logLevel must be one of ${ICQQ_SDK_LOG_LEVELS.join(', ')}`);
+  }
+  const logLevel = config.logLevel ?? DEFAULT_ICQQ_SDK_LOG_LEVEL;
   return {
     context: 'icqq',
     id,
     autoReconnect,
+    logLevel,
     ...(outboundMedia ? { outboundMedia } : {}),
     ...(password ? { password } : {}),
     ...(platform != null ? { platform: Number(platform) } : {}),

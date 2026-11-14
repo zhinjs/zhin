@@ -39,6 +39,9 @@ export {
   formatCompactUsage,
   addCompactUsage,
   truncatePreview,
+  escapeLogText,
+  LOG_CONTENT_MAX_LENGTH,
+  LOG_NEWLINE_MARK,
   EMPTY_COMPACT_USAGE,
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'

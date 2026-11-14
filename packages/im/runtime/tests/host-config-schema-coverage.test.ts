@@ -40,12 +40,21 @@ describe('Host configuration field coverage', () => {
     // ADR 0049: Console users / API tokens live in the database, not in config.
     expect(field(['http']).properties).not.toHaveProperty('tokens');
     check({ http: { host: '${BIND}', port: '${PORT}', base: '/api', token: '${ACCESS}',
-      tls: false, listeners: [{ enabled: 'off', port: '8081', tls: null }],
+      tls: false, listeners: [{ enabled: 'off', port: 8081, tls: null }, { port: '${EXTRA_PORT:-8082}' }],
       readiness: { endpoints: [{ owner: 'root/mock', name: 'main' }] },
     } });
     check({ http: { tls: { enabled: '${TLS_ENABLED}', keyFile: './key.pem', certFile: './cert.pem', passphrase: '${KEY_PASS}' } } });
     for (const trustProxy of [false, true, 2, ['loopback', '10.0.0.0/8'], '${TRUST_PROXY}']) check({ http: { trustProxy } });
     expect(parsePluginConfigSchema(hostSchema, { http: { trustProxy: { hops: 1 } } }).errors).not.toEqual([]);
+  });
+
+  it('accepts only 1–65535 integers or whole ${VAR} references as ports (#1250)', () => {
+    for (const port of ['abc', '8081', -1, 65536, 99999, 80.5, 'x${PORT}']) {
+      expect(parsePluginConfigSchema(hostSchema, { http: { port } }).errors, String(port)).not.toEqual([]);
+      expect(parsePluginConfigSchema(hostSchema, { http: { listeners: [{ host: '127.0.0.1', port }] } }).errors, String(port)).not.toEqual([]);
+    }
+    // 0 keeps its listener meaning: the system picks a free port.
+    for (const port of [0, 1, 8068, 65535, '${PORT}', '${PORT:-8068}']) check({ http: { port } });
   });
 
   it('declares console.loginAssist.captchaHelperUrl (ADR 0058)', () => {

@@ -145,7 +145,8 @@ it.each([
         tools: [],
       });
       expect(requests).toHaveLength(expectedCalls);
-      expect(armed).toEqual(Array(expectedCalls).fill(31000));
+      // Each attempt arms the harness request deadline and the default first-response deadline.
+      expect(armed).toEqual(Array(expectedCalls).fill([31000, 30000]).flat());
       expect(timeout).not.toHaveBeenCalledWith(19000);
       expect(
         new Set(

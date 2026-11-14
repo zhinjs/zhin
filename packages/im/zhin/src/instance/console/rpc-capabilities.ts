@@ -1,9 +1,10 @@
 /**
  * Which Console RPC types the instance answers (zhinjs/zhin#1250): the runtime dispatcher of
  * `@zhin.js/host-http` plus the instance's own slices (IAM, feature configuration, chat roles,
- * attention inbox, agent collaboration, plugin Console RPC). It tells an RPC the instance has but
- * forgot to map (audited `unmapped`) from one it does not have (`unknown_rpc`, not audited), and it
- * is the instance part of `GET {base}/console/capabilities`.
+ * chat people and identities (ADR 0060), attention inbox, agent collaboration, plugin Console
+ * RPC). It tells an RPC the instance has but forgot to map (audited `unmapped`) from one it does
+ * not have (`unknown_rpc`, not audited), and it is the instance part of
+ * `GET {base}/console/capabilities`.
  */
 import { isRuntimeConsoleRpcType } from '@zhin.js/host-http';
 import { isIamRpc } from '@zhin.js/gateway/iam';
@@ -14,6 +15,7 @@ import {
   PLUGIN_CONSOLE_RPC_PREFIX,
   createConsoleCapabilities,
   isConsoleAttentionRpcType,
+  isConsoleChatPrincipalsRpcType,
   isConsoleChatRolesRpcType,
   isConsoleFeatureRpcType,
   type ConsoleCapabilities,
@@ -27,6 +29,7 @@ function isBuiltinInstanceRpcType(type: string): boolean {
     || isIamRpc(type)
     || isConsoleFeatureRpcType(type)
     || isConsoleChatRolesRpcType(type)
+    || isConsoleChatPrincipalsRpcType(type)
     || isConsoleAttentionRpcType(type)
     || AGENT_COLLABORATION_TYPES.has(type);
 }

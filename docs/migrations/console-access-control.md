@@ -69,7 +69,11 @@ Webhook 和其他插件自己的路由同样自行鉴权。
 
 ## 5. 个人推理主体
 
-`ai.personalPrincipals` 以前按 `http.tokens[].principalId` 把令牌绑定到个人推理配置。`http.tokens` 删除后，Console 里的推理管理一律以 Host 管理员身份进行（需要 `agent.configure` 权限），暂时不能从 Console 切换到某个个人推理主体。
+`ai.personalPrincipals` 以前按 `http.tokens[].principalId` 把令牌绑定到个人推理配置。`http.tokens` 删除后，个人推理主体改由「聊天中的人 ↔ Console 账号」链接决定（ADR 0060 P3）：
+
+- 升级后首次启动，`ai.personalPrincipals` 的每个 `user:<id>` 条目被导入为一个人（挂上其中列出的平台身份）并链接到 Console 用户 `<id>`；**不授予任何聊天角色**。`rootId` 与当前项目目录不一致（项目移动过）不再导致启动失败，按适配器别名 + `subjectId` 导入并告警；适配器未加载的条目下次启动再导入。之后链接表是唯一来源，配置中的字段只告警「已导入，数据库为准」，可以删除。
+- Console 推理管理仍默认以 Host 管理员身份进行（需要 `agent.configure`）；已链接的 Console 用户可在其中切换到**自己**链接的人的个人推理主体（`?owner=<个人主体 id>`，只接受属于自己的主体）。
+- 没有 `ai.personalPrincipals` 的部署：在 Console 用「把聊天身份绑定到我」建立链接即可。
 
 ## 6. Console 终端（可选）
 

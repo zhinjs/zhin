@@ -11,6 +11,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { httpHostToken, type HttpHost } from './http-host.js';
 import type { HttpHostOptions } from './host-options.js';
 import { parseTrustProxy } from './trust-proxy.js';
+import { parseHttpPort } from './port.js';
 
 export interface ResolvedHttpConfig extends HttpHostOptions {
   /** Additional listeners that mirror the primary Host route surface. */
@@ -30,17 +31,19 @@ export async function resolveHttpConfig(
     http,
     (key) => envOverlay?.[key] ?? process.env[key],
   ) as Record<string, unknown>;
+  const stored = http as Record<string, unknown>;
   if (value.tokens !== undefined && value.tokens !== null) throw new Error(HTTP_TOKENS_REMOVED_MESSAGE);
   const primary: HttpHostOptions = Object.freeze({
     host: typeof value.host === 'string' ? value.host : undefined,
-    port: typeof value.port === 'number' ? value.port : undefined,
+    // An invalid port is an error, never a silent fallback to the default (#1250).
+    port: parseHttpPort(value.port, 'http.port', stored.port),
     token: typeof value.token === 'string' ? value.token : undefined,
     corsOrigins: injectDesktopWebviewOrigins(parseStringList(value.corsOrigins), envOverlay),
     apiBase: typeof value.base === 'string' ? value.base : undefined,
     tls: await parseTlsConfig(value.tls, projectRoot),
     trustProxy: parseTrustProxy(value.trustProxy),
   });
-  const configuredListeners = await parseAdditionalListeners(value.listeners, primary, projectRoot);
+  const configuredListeners = await parseAdditionalListeners(value.listeners, primary, projectRoot, stored.listeners);
   const listeners = await injectDesktopDeviceListener(
     configuredListeners,
     primary,
@@ -110,6 +113,7 @@ async function parseAdditionalListeners(
   value: unknown,
   primary: HttpHostOptions,
   projectRoot: string,
+  stored?: unknown,
 ): Promise<readonly HttpHostOptions[]> {
   if (value === undefined) return Object.freeze([]);
   if (!Array.isArray(value)) throw new Error('http.listeners must be an array');
@@ -123,13 +127,15 @@ async function parseAdditionalListeners(
     if (typeof listener.host !== 'string' || !listener.host) {
       throw new Error(`http.listeners[${index}].host is required`);
     }
-    if (typeof listener.port !== 'number') {
+    const storedPort = Array.isArray(stored) ? (stored[index] as Record<string, unknown> | undefined)?.port : undefined;
+    const port = parseHttpPort(listener.port, `http.listeners[${index}].port`, storedPort);
+    if (port === undefined) {
       throw new Error(`http.listeners[${index}].port is required`);
     }
     listeners.push(Object.freeze({
       ...primary,
       host: listener.host,
-      port: listener.port,
+      port,
       tls: await parseTlsConfig(listener.tls, projectRoot),
     }));
   }

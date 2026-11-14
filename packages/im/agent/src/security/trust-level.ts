@@ -6,8 +6,8 @@
  * sub-agent reports) is rendered as labelled data and can never raise it.
  *
  * Levels, from most to least trusted:
- * - owner:            the bot master (`master` role).
- * - trusted_member:   a member on the `trigger.trusted` list; also non-IM
+ * - owner:            a global zhin `owner` (ADR 0056 §2; lower-level owners count as admin).
+ * - trusted_member:   a zhin `admin` / `trusted` (chat roles, ADR 0056); also non-IM
  *                     ingress, which keeps its configured policy unchanged.
  * - group_member:     anyone else reaching the bot over IM — in a group or
  *                     channel, or in a private chat (#753).
@@ -46,7 +46,8 @@ export const TRUST_CEILINGS: Readonly<Record<TrustLevel, TrustCeiling>> = Object
 export const TRUST_LEVEL_POLICY = 'trust-level';
 
 export const TRUST_RESTRICTION_REASON =
-  '非主人且不在信任名单中的用户发起的对话暂不支持执行命令、写入文件或向其他会话发消息；如确有需要，请联系主人处理或将你加入信任名单。';
+  '没有 zhin 信任角色（全局 owner，或 admin / trusted）的用户发起的对话暂不支持执行命令、写入文件或向其他会话发消息；'
+  + '群主 / 群管理员的平台身份不等于 zhin 角色。如确有需要，请联系本机器人的主人授予 trusted 角色（聊天中「角色 授予」或 Console「聊天角色」页）。';
 
 const FILE_WRITE_TOOLS = new Set([
   'write_file',

@@ -1,6 +1,7 @@
 import { Adapter, type AdapterContext, type EndpointCreationContext } from 'zhin.js/adapter';
 import { httpHostToken } from '@zhin.js/host-http';
 import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
+import { chatRolesToken, type ChatRoleReader } from 'zhin.js';
 import { resolveSandboxEndpoint, type SandboxEndpointConfig } from './protocol.js';
 import { SandboxWsEndpoint } from './endpoint.js';
 import type { SandboxClientEventMap } from './client.js';
@@ -14,8 +15,13 @@ export class SandboxAdapter extends Adapter<SandboxWsEndpoint, SandboxEndpointCo
   protected override validateConfiguration(config: SandboxEndpointConfig): void { resolveSandboxEndpoint(config); }
   protected createEndpoint(input: SandboxEndpointConfig, execution: EndpointCreationContext): SandboxWsEndpoint {
     return new SandboxWsEndpoint({ id: execution.canonicalId, defaults: resolveSandboxEndpoint(input),
-      http: this.#context.use(httpHostToken), locale: resolveLocale(this.#context.use(projectLocaleToken)) });
+      http: this.#context.use(httpHostToken), locale: resolveLocale(this.#context.use(projectLocaleToken)),
+      ...optionalChatRoles(() => this.#context.use(chatRolesToken)) });
   }
+}
+/** The instance provides chat roles (ADR 0060 §6); hosts without them (tests, other roots) show no zhin role. */
+function optionalChatRoles(read: () => ChatRoleReader): { chatRoles?: ChatRoleReader } {
+  try { return { chatRoles: read() }; } catch { return {}; }
 }
 declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { readonly sandbox: SandboxAdapter; }

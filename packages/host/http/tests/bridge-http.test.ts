@@ -436,7 +436,10 @@ describe('bridge HTTP', () => {
     const context = await started({ responseTimeoutMs: 80 });
     let aborted = false;
     context.host.route('GET', '/hang', (request) => new Promise<Response>(() => {
-      request.signal.addEventListener('abort', () => { aborted = true; });
+      // Under load the request can reach the handler after the 80 ms timeout already aborted it;
+      // an 'abort' listener added then never fires, so read the current state as well.
+      if (request.signal.aborted) aborted = true;
+      else request.signal.addEventListener('abort', () => { aborted = true; });
     }));
     await opened(context);
     await expect(context.transport.fetch(new Request('http://gateway/hang'))).rejects.toMatchObject({ code: 'timeout' });

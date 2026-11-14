@@ -63,7 +63,7 @@ describe('aiCompletion.completeText', () => {
       if (outcome === 'acquisition-failed') throw new Error('synthetic acquisition failure');
       return executionScope({ chat: executionBundle({
         model: { id: 'selected', provider: 'actual-account', api: 'fixture', input: ['text'], contextWindow: 0, maxTokens: 0 },
-        completion: { complete: async () => assistantTextReply('observed result') },
+        completion: { complete: async () => ({ ...assistantTextReply('observed result'), provider: 'actual-account', model: 'selected' }) },
       }) });
     });
     try {
@@ -78,6 +78,26 @@ describe('aiCompletion.completeText', () => {
       else expect(log).not.toContain('provider: actual-account');
       expect(acquireDefaultModel).toHaveBeenCalledOnce();
     } finally { info.mockRestore(); warn.mockRestore(); }
+  });
+
+  it('reports the model and service of a purpose fallback that answered (#1250)', async () => {
+    const f = fixture();
+    const logger = getLogger('agent');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const acquireDefaultModel = async () => executionScope({ chat: executionBundle({
+      model: { id: 'gemini-flash', provider: 'gemini-account', api: 'fixture', input: ['text'], contextWindow: 0, maxTokens: 0 },
+      // The fallback port annotates its answer with the fallback's service id.
+      completion: { complete: async () => ({ ...assistantTextReply('from fallback'), provider: 'deepseek-service', model: 'deepseek-chat' }) },
+    }) });
+    try {
+      const result = await createAiCompletion({ service: f.service, acquireDefaultModel })
+        .completeText({ purpose: 'fallback-test', prompt: 'hello', agent: 'zhin' });
+      expect(result).toMatchObject({ text: 'from fallback', model: 'deepseek-chat' });
+      const log = info.mock.calls.flat().join(' ');
+      expect(log).toContain('provider: deepseek-service');
+      expect(log).toContain('model: deepseek-chat');
+      expect(log).not.toContain('gemini-account');
+    } finally { info.mockRestore(); }
   });
 
   it('advertises shared attribution only when the injected quota port supports it', async () => {
@@ -163,7 +183,7 @@ describe('aiCompletion.completeText', () => {
     expect(opts).toMatchObject({ model: 'main', maxTokens: 200 });
     // No tools are forwarded. The wrapper owns the attempt timer and disables the lower timer.
     expect(opts.requestTimeoutMs).toBe(0);
-    expect(Object.keys(opts).sort()).toEqual(['maxRetries', 'maxTokens', 'model', 'requestTimeoutMs', 'signal', 'temperature']);
+    expect(Object.keys(opts).sort()).toEqual(['maxRetries', 'maxTokens', 'model', 'onResponseStart', 'requestTimeoutMs', 'signal', 'temperature']);
   });
 
   it('uses another binding when asked and rejects unknown bindings', async () => {

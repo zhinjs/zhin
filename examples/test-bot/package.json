@@ -12,7 +12,7 @@
     "stop": "zhin stop"
   },
   "_scripts-info": {
-    "dev": "Plugin Runtime（推荐）。Console: https://console.zhin.dev ，API Base http://127.0.0.1:8086",
+    "dev": "Plugin Runtime（推荐）。Console: https://console.zhin.dev ，API Base http://127.0.0.1:8068",
     "start": "Plugin Runtime 生产模式（无 watch）",
     "daemon": "后台守护（Plugin Runtime，zhin stop 停止）",
     "build": "类型检查",

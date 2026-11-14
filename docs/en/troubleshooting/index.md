@@ -42,7 +42,7 @@ Console remains offline or reconnecting and page data stops updating.
 
 ### Verification
 
-- `curl -i http://127.0.0.1:8086/pub/health` should succeed, and the Console header should return to Connected.
+- `curl -i http://127.0.0.1:8068/pub/health` should succeed, and the Console header should return to Connected.
 
 </section>
 
@@ -66,7 +66,7 @@ Requests remain rejected after login, or write actions report insufficient permi
 
 ### Verification
 
-- Check which principal and permissions a credential resolves to with `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8086/api/auth/me`.
+- Check which principal and permissions a credential resolves to with `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8068/api/auth/me`.
 
 </section>
 

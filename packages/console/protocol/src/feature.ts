@@ -151,6 +151,20 @@ export function parseFeatureConversationKey(key: string): ConsoleFeatureConversa
   }
 }
 
+/**
+ * What a feature row is (#1250): `root` — the project's own root plugin (its convention commands,
+ * components and tools; always on, not switchable); `adapter` — a plugin that provides adapter
+ * Endpoints (a matrix column, too); `plugin` — any other declared plugin instance.
+ */
+export type ConsoleFeatureKind = 'root' | 'plugin' | 'adapter';
+
+/** Convention capabilities a plugin contributes directly, by local name (e.g. command routes `hello`, `card`). */
+export interface ConsoleFeatureCapabilities {
+  readonly commands: readonly string[];
+  readonly components: readonly string[];
+  readonly tools: readonly string[];
+}
+
 export interface ConsoleFeatureSummary {
   /** Instance path: the top-level alias (`rss`) or `parent/child` for nested Plugins. */
   readonly plugin: string;
@@ -163,6 +177,10 @@ export interface ConsoleFeatureSummary {
   readonly globalEnabled: boolean;
   /** The instance provides adapter Endpoints (it is a matrix column, too). */
   readonly adapter?: boolean;
+  /** Row category; absent from older Hosts (then `adapter` tells adapters apart). */
+  readonly kind?: ConsoleFeatureKind;
+  /** Commands / components / tools this plugin contributes; absent from older Hosts. */
+  readonly capabilities?: ConsoleFeatureCapabilities;
   /** ADR 0055 §2: fields editable at the conversation level (empty: switch only). */
   readonly conversationFields: readonly string[];
   /** Fields group admins may change in chat (subset of `conversationFields`). */
@@ -182,10 +200,17 @@ export interface ConsoleFeatureMatrixCell {
 }
 
 export interface ConsoleFeatureMatrixRow {
+  /** Instance path; `''` for the `root` row (the project's own plugin, which has no instance alias). */
   readonly plugin: string;
   readonly displayName: string;
   /** See {@link ConsoleFeatureSummary.displayNameI18n}. */
   readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  /** Row category; absent from older Hosts. */
+  readonly kind?: ConsoleFeatureKind;
+  /** Commands / components / tools this plugin contributes; absent from older Hosts. */
+  readonly capabilities?: ConsoleFeatureCapabilities;
+  /** True for the `root` row: always enabled and not switchable through feature overrides. */
+  readonly readOnly?: boolean;
   readonly global: ConsoleFeatureMatrixCell;
   /** Keyed by adapter instance alias (see {@link ConsoleFeatureMatrixResult.adapters}). */
   readonly adapters: Readonly<Record<string, ConsoleFeatureMatrixCell>>;

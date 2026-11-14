@@ -38,6 +38,7 @@ import { InferenceSessionManagement } from './session-management.js';
 import { createInferenceTargetsReader, type InferenceTargetsReader } from './targets.js';
 import { createPersonalSessionDirectory } from './session-directory.js';
 import { createCredentialRequestAccess, type CredentialTransportFact } from './request-access.js';
+import { probeLanguageProfile, type InferenceProbeResult } from './probe.js';
 
 export interface InferenceManagementLease {
   readonly management: InferenceManagementService;
@@ -45,6 +46,8 @@ export interface InferenceManagementLease {
   readonly sessions: InferenceSessionManagement;
   readonly targets?: InferenceTargetsReader;
   readonly authenticationContract: (accountId: string) => Promise<string>;
+  /** One minimal tool-carrying request to a Host language Profile (connectivity test, #1250). */
+  readonly probe?: (input: Readonly<{ profileId: string; signal: AbortSignal }>) => Promise<InferenceProbeResult>;
   release(): void | Promise<void>;
 }
 
@@ -53,7 +56,12 @@ export interface HostInferenceOptions {
   readonly database: DatabaseHost;
   readonly snapshots: () => SnapshotReader;
   readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
-  readonly personalOwners: readonly PersonalSessionOwner[];
+  /**
+   * Personal inference owners. ADR 0060 P3: a function is read on every management lease, so the
+   * Host can answer from the person ↔ Console links (and the current adapters) instead of a list
+   * fixed at start.
+   */
+  readonly personalOwners: readonly PersonalSessionOwner[] | (() => readonly PersonalSessionOwner[]);
   /** Trusted process-private in-flight evidence only; not a Console or persistent audit sink. */
   readonly observeCredentialTransport?: (fact: CredentialTransportFact) => void | Promise<void>;
 }
@@ -291,7 +299,7 @@ export class HostInference {
           beforeSubmit,
           observe: this.options.observeCredentialTransport,
           network: (submit, retainTransportState) =>
-            this.accounts.bindFetch(
+            this.accounts.observeCalls(account, this.accounts.bindFetch(
               account,
               createProviderNetwork({
                 account,
@@ -303,7 +311,7 @@ export class HostInference {
                 retainTransportState,
               }),
               retainTransportState
-            ),
+            )),
         });
         accesses.set(execution, value);
       }
@@ -506,7 +514,7 @@ export class HostInference {
       sessions: new InferenceSessionManagement({
         rootId: this.rootId,
         hostOwnerId: this.hostOwnerId,
-        owners: this.options.personalOwners,
+        owners: typeof this.options.personalOwners === 'function' ? this.options.personalOwners() : this.options.personalOwners,
         sessions: this.sessions,
         repository: this.repository,
         directory: createPersonalSessionDirectory(() => this.options.database),
@@ -520,6 +528,9 @@ export class HostInference {
           ? driver.authentication.oauth!.contractVersion
           : driver.contractVersion;
       },
+      probe: ({ profileId, signal }) =>
+        this.withInferenceScope({ lease, sessionKey: 'console:connectivity-probe', signal },
+          scope => probeLanguageProfile({ client: scope.client, profileId, signal })),
       release: () => lease.release(),
     };
   }

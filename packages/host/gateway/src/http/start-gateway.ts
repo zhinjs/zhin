@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
+import { projectIdentity } from '../project/identity.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
 import { GatewayPackageService } from '../packages/service.js';
@@ -25,7 +26,7 @@ const logger = getLogger('gateway');
  * optional {@link GatewayConsoleInstancePort} methods (plugin catalog, instance audit,
  * `principal-revoked`) when the transport has them (`IpcInstanceTransport` does).
  */
-export interface GatewayInstanceTransport extends InstanceTransport, GatewayConsoleInstancePort {
+export interface GatewayInstanceTransport extends InstanceTransport, Omit<GatewayConsoleInstancePort, 'ready' | 'onRoutes'> {
   dispose?(): void | Promise<void>;
   /** Told the bound listener addresses after listen (the instance's `HttpHost.address`). */
   setAddresses?(addresses: readonly import('@zhin.js/host-http').HttpHostAddress[]): void;
@@ -195,6 +196,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     ...(options.retryAfterSeconds !== undefined ? { retryAfterSeconds: options.retryAfterSeconds } : {}),
     ...(options.maxRequestBodyBytes !== undefined ? { maxRequestBodyBytes: options.maxRequestBodyBytes } : {}),
     consoleRpc: createGatewayConsoleRpc(rpc),
+    projectId: projectIdentity(options.projectRoot),
   });
   registry = server.tokenRegistry;
   // The Console's global plugin switch is a gateway transaction (stop → write → start, rollback);

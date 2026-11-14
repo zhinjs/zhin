@@ -83,7 +83,9 @@ afterEach(async () => {
 
 async function run(...args: string[]): Promise<{ code: number; data: unknown }> {
   process.exitCode = undefined;
-  await createConfigCommand().parseAsync(['node', 'zhin', '--json', '--host', host, ...args]);
+  // The Host here is a bare instance HTTP server without a gateway: it reports no project id on
+  // /pub/health, which the CLI refuses on loopback unless --allow-unverified-host (#1250).
+  await createConfigCommand().parseAsync(['node', 'zhin', '--json', '--host', host, '--allow-unverified-host', ...args]);
   return { code: (process.exitCode ?? 0) as number, data: JSON.parse(String(output.mock.calls.at(-1)?.[0])) };
 }
 
@@ -150,6 +152,12 @@ describe('zhin config against a real Host HTTP control plane', () => {
     let writes = 0;
     const direct = host;
     proxy = createServer(async (request, response) => {
+      if (request.method === 'GET') {
+        // The CLI's loopback identity probe (/pub/health) passes through unchanged (#1250).
+        const probed = await fetch(`${direct}${request.url ?? '/'}`);
+        response.writeHead(probed.status, { 'content-type': 'application/json' }).end(await probed.text());
+        return;
+      }
       const parts: Buffer[] = [];
       for await (const chunk of request) parts.push(Buffer.from(chunk));
       const body = Buffer.concat(parts).toString('utf8');

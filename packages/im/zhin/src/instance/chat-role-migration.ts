@@ -19,21 +19,28 @@
  * replays the pending record on the next start. Without a relational database the grants only take
  * effect in memory (grants and revocations are refused there, so nothing revoked comes back) and
  * the record stays `pending` — marked `memoryOnly` — until a relational database is configured.
- * After that, configuration that names these fields
- * again stops startup with {@link LegacyChatRoleConfigError}, pointing at the upgrade guide.
+ *
+ * ADR 0060 §4.2 (replaces the startup failure of ADR 0056): configuration that names these fields
+ * again after the import is never granted automatically — the next editor of the file is not
+ * necessarily an owner. The fields become candidates in the record (`pendingImports`, recorded
+ * before they are removed from the file, since adapter schemas reject them) and wait for a global
+ * `iam.manage` Console user to import or ignore each ({@link ChatRoleImportBook}). A stored role is
+ * only ever raised by an import, never lowered or removed (ADR 0060 §4.3).
  * The interim `features.selfService.platformAdmins | roles | allowUsers` switches and the removed
  * `roles` (mapping rule) blocks of adapters / accounts always stop startup.
  */
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
-  CHAT_ROLES, higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatRole,
+  higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatIdentity, type ChatRole,
 } from '@zhin.js/core';
 import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
 import {
   readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type FeatureConfigLevel, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import type { InstanceChatRoleService } from './chat-roles.js';
+import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatPeople } from './chat-people.js';
 
 export const CHAT_ROLE_UPGRADE_GUIDE = 'docs/migrations/chat-roles.md';
 export const CHAT_ROLE_MIGRATION_FILE = join('.zhin', 'chat-roles-migration.json');
@@ -84,7 +91,7 @@ export function readLegacyChatRoleConfig(document: Readonly<Record<string, unkno
   const paths: string[][] = [];
   const skipped: string[] = [];
   const unsupported: string[] = [];
-  let plugins: Readonly<Record<string, unknown>> = {};
+  let plugins: Readonly<Record<string, unknown>>;
   try { plugins = readPluginConfigurationMap(document); } catch { plugins = {}; }
   const adapters: string[] = [];
   const add = (level: LegacyChatRoleGrant['level'], key: string, adapter: string, role: LegacyChatRoleGrant['role'], value: unknown, source: string) => {
@@ -156,33 +163,103 @@ function dedupe(grants: readonly LegacyChatRoleGrant[]): LegacyChatRoleGrant[] {
   return [...byScope.values()];
 }
 
+/** Outcome of importing one configured grant. */
+export type ChatRoleImportResult = 'written' | 'upgraded' | 'kept' | 'memory' | 'skipped';
+
+/** One grant of the first import (ADR 0060 §4.1), as the `chat-roles.imported` item lists it. */
+export interface ChatRoleImportedGrant extends LegacyChatRoleGrant {
+  /** {@link chatRoleImportId}. */
+  readonly id: string;
+  readonly result: ChatRoleImportResult;
+  /** `skipped` only: a local simulation adapter, or an adapter that was not loaded. */
+  readonly reason?: 'simulated' | 'unknown-adapter';
+  readonly at: number;
+}
+
+/** A configured grant that re-appeared after the first import (ADR 0060 §4.2): waits for a Console decision. */
+export interface ChatRolePendingImport extends LegacyChatRoleGrant {
+  readonly id: string;
+  /** When the configuration named it (first time). */
+  readonly seenAt: number;
+}
+
+/**
+ * `.zhin/chat-roles-migration.json`. Version 2 (ADR 0060) adds the first import's outcome and the
+ * re-appeared candidates; a version 1 file is read as before and kept as `.v1.json` the first time
+ * version 2 is written (downgrade: restore that copy, `docs/migrations/chat-roles.md`).
+ */
 interface MigrationRecord {
-  readonly version: 1;
+  readonly version: 2;
   readonly status: 'pending' | 'done';
   readonly grants: readonly LegacyChatRoleGrant[];
   readonly startedAt: number;
   readonly completedAt?: number;
   /** Last start that could only apply the grants in memory (no relational database). */
   readonly memoryOnlyAt?: number;
+  readonly imported?: readonly ChatRoleImportedGrant[];
+  /** A Console user marked the first import as read (`chat-roles.imported` disappears). */
+  readonly importedAcknowledgedAt?: number;
+  readonly pendingImports?: readonly ChatRolePendingImport[];
 }
 
-async function readRecord(file: string): Promise<MigrationRecord | undefined> {
+/** Version 1 copy kept for a downgrade (ADR 0060 §4.5). */
+export const CHAT_ROLE_MIGRATION_V1_BACKUP = join('.zhin', 'chat-roles-migration.v1.json');
+
+/** Idempotency key of a configured grant: `(source path, alias, user id, level, scope key)` (ADR 0060 §4.3). */
+export function chatRoleImportId(grant: Pick<LegacyChatRoleGrant, 'source' | 'adapter' | 'userId' | 'level' | 'key'>): string {
+  return createHash('sha256').update(JSON.stringify([grant.source, grant.adapter, grant.userId, grant.level, grant.key])).digest('hex').slice(0, 24);
+}
+
+const isGrant = (grant: unknown): grant is LegacyChatRoleGrant => record(grant)
+  && (grant.level === 'global' || grant.level === 'adapter' || grant.level === 'endpoint')
+  && typeof grant.key === 'string' && typeof grant.source === 'string' && isChatIdentity(grant)
+  && (grant.role === 'owner' || grant.role === 'trusted');
+
+const grantOf = (grant: LegacyChatRoleGrant): LegacyChatRoleGrant => Object.freeze({
+  level: grant.level, key: grant.key, adapter: grant.adapter, userId: grant.userId, role: grant.role, source: grant.source,
+});
+
+const RESULTS: readonly string[] = ['written', 'upgraded', 'kept', 'memory', 'skipped'];
+
+interface ReadRecord {
+  readonly value: MigrationRecord;
+  /** The raw text of a version 1 file (kept as `.v1.json` on the first version 2 write). */
+  readonly v1Text?: string;
+}
+
+async function readRecord(file: string): Promise<ReadRecord | undefined> {
   let text: string;
   try { text = await readFile(file, 'utf8'); } catch { return undefined; }
-  const value = JSON.parse(text) as Partial<MigrationRecord>;
-  if (value.version !== 1 || (value.status !== 'pending' && value.status !== 'done') || !Array.isArray(value.grants)) {
+  const value = JSON.parse(text) as Partial<Omit<MigrationRecord, 'version'>> & { version?: unknown };
+  if ((value.version !== 1 && value.version !== 2) || (value.status !== 'pending' && value.status !== 'done') || !Array.isArray(value.grants)) {
     throw new Error(`${file} is malformed; restore it or delete it after checking chat_roles (${CHAT_ROLE_UPGRADE_GUIDE})`);
   }
-  const grants = value.grants.filter((grant): grant is LegacyChatRoleGrant => record(grant)
-    && (grant.level === 'global' || grant.level === 'adapter' || grant.level === 'endpoint')
-    && typeof grant.key === 'string' && isChatIdentity(grant) && (CHAT_ROLES as readonly string[]).includes(String(grant.role)));
-  return { version: 1, status: value.status, grants, startedAt: Number(value.startedAt) || 0,
-    ...(value.completedAt ? { completedAt: Number(value.completedAt) } : {}),
-    ...(value.memoryOnlyAt ? { memoryOnlyAt: Number(value.memoryOnlyAt) } : {}) };
+  const grants = value.grants.filter(isGrant).map(grantOf);
+  const imported = Array.isArray(value.imported) ? value.imported.filter((entry): entry is ChatRoleImportedGrant => isGrant(entry)
+    && typeof (entry as ChatRoleImportedGrant).id === 'string' && RESULTS.includes(String((entry as ChatRoleImportedGrant).result)))
+    .map(entry => Object.freeze({ ...grantOf(entry), id: entry.id, result: entry.result,
+      ...(entry.reason === 'simulated' || entry.reason === 'unknown-adapter' ? { reason: entry.reason } : {}), at: Number(entry.at) || 0 })) : undefined;
+  const pendingImports = Array.isArray(value.pendingImports) ? value.pendingImports
+    .filter((entry): entry is ChatRolePendingImport => isGrant(entry) && typeof (entry as ChatRolePendingImport).id === 'string')
+    .map(entry => Object.freeze({ ...grantOf(entry), id: entry.id, seenAt: Number(entry.seenAt) || 0 })) : undefined;
+  return {
+    value: { version: 2, status: value.status, grants, startedAt: Number(value.startedAt) || 0,
+      ...(value.completedAt ? { completedAt: Number(value.completedAt) } : {}),
+      ...(value.memoryOnlyAt ? { memoryOnlyAt: Number(value.memoryOnlyAt) } : {}),
+      ...(imported ? { imported } : {}),
+      ...(value.importedAcknowledgedAt ? { importedAcknowledgedAt: Number(value.importedAcknowledgedAt) } : {}),
+      ...(pendingImports?.length ? { pendingImports } : {}) },
+    ...(value.version === 1 ? { v1Text: text } : {}),
+  };
 }
 
-async function writeRecord(file: string, value: MigrationRecord): Promise<void> {
+async function writeRecord(file: string, value: MigrationRecord, v1Text?: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
+  if (v1Text !== undefined) {
+    // Keep the first version 1 text for a downgrade; never overwrite an existing copy.
+    try { await writeFile(join(dirname(file), basename(CHAT_ROLE_MIGRATION_V1_BACKUP)), v1Text, { encoding: 'utf8', mode: 0o600, flag: 'wx' }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+  }
   const temp = `${file}.${process.pid}.tmp`;
   await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   await rename(temp, file);
@@ -193,6 +270,11 @@ export interface ChatRoleMigrationLogger {
   warn(message: string): void;
 }
 
+/** Audit sink (the instance's audit channel to the gateway's audit log). */
+export type ChatRoleAudit = (entry: Readonly<{
+  actor: string; action: string; target?: string; outcome: 'ok' | 'denied' | 'error'; detail?: Readonly<Record<string, unknown>>;
+}>) => void;
+
 /** How an adapter instance alias is classified for global grants: a local simulation, a real platform, or unknown. */
 export type ChatRoleMigrationAdapterKind = 'simulated' | 'platform' | undefined;
 
@@ -201,6 +283,16 @@ export type ChatRoleMigrationAdapterKind = 'simulated' | 'platform' | undefined;
  * platform names): `runtime.sandbox` marks a local simulation whose clients choose their sender id.
  */
 export function chatRoleMigrationAdapterKinds(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): (alias: string) => ChatRoleMigrationAdapterKind {
+  const kinds = classifyAdapters(snapshot);
+  return alias => kinds.get(alias);
+}
+
+/** Aliases of the snapshot's local simulation adapters (`runtime.sandbox`), sorted. */
+export function simulatedAdapterAliases(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): readonly string[] {
+  return Object.freeze([...classifyAdapters(snapshot)].filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
+}
+
+function classifyAdapters(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>> {
   const kinds = new Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>>();
   try {
     const index = snapshot?.projections.get(adapterFeatureId);
@@ -214,7 +306,7 @@ export function chatRoleMigrationAdapterKinds(snapshot: Pick<RuntimeSnapshot, 'p
       }
     }
   } catch { /* unknown: every alias stays unclassified */ }
-  return alias => kinds.get(alias);
+  return kinds;
 }
 
 export interface ChatRoleMigrationCompleteOptions {
@@ -225,20 +317,55 @@ export interface ChatRoleMigrationCompleteOptions {
    * Simulated and unknown adapters get no global grant (fail closed; both are logged).
    */
   readonly adapterKind?: (alias: string) => ChatRoleMigrationAdapterKind;
+  /** Each written grant is audited as `chat-roles.import` (actor `migration`). */
+  readonly audit?: ChatRoleAudit;
 }
 
 export interface ChatRoleMigration {
   /** Grants still to be written once the database is loaded. */
   readonly pending: readonly LegacyChatRoleGrant[];
-  /** Writes pending grants (existing stored roles at the same scope are kept) and completes the record. */
+  /** Writes pending grants (a higher stored role at the same scope is kept) and completes the record. */
   complete(roles: InstanceChatRoleService, options?: ChatRoleMigrationCompleteOptions): Promise<void>;
 }
 
 const isTriggerGrant = (grant: LegacyChatRoleGrant) => grant.level === 'global' && grant.source.startsWith('ai.trigger.');
 
 /**
- * Before the Runtime reads the configuration: migrate legacy fields out of it (first start) or
- * refuse them (afterwards). `expand` resolves `${ENV}` placeholders for the values.
+ * Applies one configured grant (first import and Console import share the rules of ADR 0060 §4.3):
+ * global grants of `ai.trigger.*` only on real platform adapters; a stored role at the same scope
+ * is only ever raised, never lowered or removed.
+ */
+async function applyConfiguredGrant(
+  roles: InstanceChatRoleService,
+  grant: LegacyChatRoleGrant,
+  options: Readonly<{ kind: (alias: string) => ChatRoleMigrationAdapterKind; persistent: boolean; grantedBy: string }>,
+): Promise<{ result: ChatRoleImportResult; reason?: 'simulated' | 'unknown-adapter' }> {
+  if (isTriggerGrant(grant)) {
+    const classified = options.kind(grant.adapter);
+    if (classified === 'simulated') return { result: 'skipped', reason: 'simulated' };
+    if (classified !== 'platform') return { result: 'skipped', reason: 'unknown-adapter' };
+  }
+  if (!options.persistent) {
+    return { result: await roles.store.seed([{ ...grant, grantedBy: options.grantedBy }]) ? 'memory' : 'kept' };
+  }
+  const existing = roles.store.get(grant.level, grant.key, grant);
+  if (existing && higherChatRole(existing.role, grant.role) === existing.role) return { result: 'kept' };
+  await roles.store.grant({ ...grantOf(grant), grantedBy: options.grantedBy });
+  return { result: existing ? 'upgraded' : 'written' };
+}
+
+function auditImport(audit: ChatRoleAudit | undefined, actor: string, grant: LegacyChatRoleGrant, outcome: 'ok' | 'error', detail: Record<string, unknown>): void {
+  try {
+    audit?.({ actor, action: 'chat-roles.import', target: `${grant.level}:${grant.key}`.slice(0, 512), outcome,
+      detail: Object.freeze({ source: grant.source, adapter: grant.adapter, userId: grant.userId, role: grant.role, level: grant.level, ...detail }) });
+  } catch { /* audit never breaks an import */ }
+}
+
+/**
+ * Before the Runtime reads the configuration: migrate legacy fields out of it (first start), or
+ * — once that is done — record them as candidates waiting for a Console decision (ADR 0060 §4.2:
+ * never granted automatically) and remove them from the file. `expand` resolves `${ENV}`
+ * placeholders for the values.
  */
 export async function prepareChatRoleMigration(options: Readonly<{
   projectRoot: string;
@@ -252,60 +379,204 @@ export async function prepareChatRoleMigration(options: Readonly<{
   const snapshot = await options.config.read();
   const legacy = readLegacyChatRoleConfig(options.expand(snapshot.document));
   if (legacy.unsupported.length) throw new LegacyChatRoleConfigError(legacy.unsupported);
-  let current = await readRecord(file);
+  const read = await readRecord(file);
+  let current = read?.value;
   if (legacy.paths.length) {
     const fields = legacy.paths.map(path => path.join('.'));
-    if (current?.status === 'done') throw new LegacyChatRoleConfigError(fields);
-    const grants = dedupe([...(current?.grants ?? []), ...legacy.grants]);
-    current = { version: 1, status: 'pending', grants, startedAt: current?.startedAt ?? now() };
-    // Record first: the configuration edit below is then always recoverable.
-    await writeRecord(file, current);
-    const prepared = await options.config.prepare(snapshot, legacy.paths.map(path => ({ op: 'remove' as const, path })));
-    await prepared.commit();
-    options.logger.info(`Chat roles (ADR 0056): moved ${grants.length} role grant(s) out of the configuration `
-      + `(${fields.join(', ')}); they are written to the project database chat_roles. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
-    for (const item of legacy.skipped) options.logger.warn(`Chat roles migration skipped ${item}`);
+    if (current?.status === 'done') {
+      // ADR 0060 §4.2: whoever edits the file now is not necessarily an owner — never auto-grant.
+      const at = now();
+      const candidates = new Map((current.pendingImports ?? []).map(entry => [entry.id, entry] as const));
+      let added = 0;
+      for (const grant of legacy.grants) {
+        const id = chatRoleImportId(grant);
+        if (candidates.has(id)) continue;
+        candidates.set(id, Object.freeze({ ...grantOf(grant), id, seenAt: at }));
+        added += 1;
+      }
+      current = { ...current, pendingImports: Object.freeze([...candidates.values()]) };
+      // Record first: the configuration edit below is then always recoverable.
+      await writeRecord(file, current, read?.v1Text);
+      const prepared = await options.config.prepare(snapshot, legacy.paths.map(path => ({ op: 'remove' as const, path })));
+      await prepared.commit();
+      options.logger.warn(`Chat roles (ADR 0060): the configuration names people lists again (${fields.join(', ')}); `
+        + `they were NOT granted. ${added} candidate(s) wait for review in the Console (「需要你处理」→ chat-roles.import-pending, `
+        + `global iam.manage) and the fields were removed from the configuration file. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
+      for (const item of legacy.skipped) options.logger.warn(`Chat roles import skipped ${item}`);
+    } else {
+      const grants = dedupe([...(current?.grants ?? []), ...legacy.grants]);
+      current = { version: 2, status: 'pending', grants, startedAt: current?.startedAt ?? now() };
+      // Record first: the configuration edit below is then always recoverable.
+      await writeRecord(file, current, read?.v1Text);
+      const prepared = await options.config.prepare(snapshot, legacy.paths.map(path => ({ op: 'remove' as const, path })));
+      await prepared.commit();
+      options.logger.info(`Chat roles (ADR 0056): moved ${grants.length} role grant(s) out of the configuration `
+        + `(${fields.join(', ')}); they are written to the project database chat_roles. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
+      for (const item of legacy.skipped) options.logger.warn(`Chat roles migration skipped ${item}`);
+    }
   }
   const pending = current?.status === 'pending' ? current.grants : [];
   const record_ = current;
+  const v1Text = legacy.paths.length ? undefined : read?.v1Text;
   return Object.freeze({
     pending,
     async complete(roles: InstanceChatRoleService, completeOptions: ChatRoleMigrationCompleteOptions = {}) {
       if (!record_ || record_.status !== 'pending') return;
       const kind = completeOptions.adapterKind ?? (() => undefined);
-      const grants = record_.grants.filter(grant => {
-        if (!isTriggerGrant(grant)) return true;
-        const classified = kind(grant.adapter);
-        if (classified === 'platform') return true;
-        if (classified === 'simulated') {
+      const persistent = completeOptions.persistent !== false && roles.store.persistent;
+      const at = now();
+      const imported: ChatRoleImportedGrant[] = [];
+      for (const grant of record_.grants) {
+        const outcome = await applyConfiguredGrant(roles, grant, { kind, persistent, grantedBy: `migration:${grant.source}` });
+        imported.push(Object.freeze({ ...grantOf(grant), id: chatRoleImportId(grant), ...outcome, at }));
+        if (outcome.reason === 'simulated') {
           options.logger.info(`Chat roles migration: ${grant.source} ${grant.userId} is not granted on ${grant.adapter} `
             + '(local simulation adapter: its clients choose their own sender id).');
-        } else {
+        } else if (outcome.reason === 'unknown-adapter') {
           options.logger.warn(`Chat roles migration: ${grant.source} ${grant.userId} is not granted on ${grant.adapter} `
             + `(adapter not loaded, its kind is unknown); grant it in the Console if needed. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
         }
-        return false;
-      });
-      const persistent = completeOptions.persistent !== false && roles.store.persistent;
+      }
       if (!persistent) {
         // No relational database: effective in memory only. Grants / revocations are refused on such
         // a store, so a revoked migrated role can never come back; the record waits for a database.
-        const added = roles.store.seed(grants.map(grant => ({ ...grant, grantedBy: `migration:${grant.source}` })));
-        await writeRecord(file, { ...record_, memoryOnlyAt: now() });
+        const added = imported.filter(entry => entry.result === 'memory').length;
+        await writeRecord(file, { ...record_, memoryOnlyAt: now() }, v1Text);
         options.logger.warn(`Chat roles: ${added} migrated grant(s) are held in memory only (no relational database); `
           + `${CHAT_ROLE_MIGRATION_FILE} stays pending until a relational database (sqlite / mysql / pg) is configured.`);
         return;
       }
-      let written = 0;
-      for (const grant of grants) {
-        const existing = roles.store.get(grant.level, grant.key, grant);
-        if (existing) continue;
-        await roles.store.grant({ ...grant, grantedBy: `migration:${grant.source}` });
-        written += 1;
+      for (const entry of imported) {
+        if (entry.result === 'written' || entry.result === 'upgraded') auditImport(completeOptions.audit, 'migration', entry, 'ok', { result: entry.result });
+      }
+      // ADR 0060 §4.1: one `ai.trigger.*` id across adapters is one person.
+      const people = new ChatPeople({ store: roles.store, ...(completeOptions.audit ? { audit: () => completeOptions.audit } : {}) });
+      const named = new Map<string, ChatIdentity[]>();
+      for (const entry of imported) {
+        if (!entry.source.startsWith('ai.trigger.') || entry.result === 'skipped') continue;
+        const list = named.get(entry.userId) ?? [];
+        list.push({ adapter: entry.adapter, userId: entry.userId });
+        named.set(entry.userId, list);
+      }
+      for (const identities of named.values()) {
+        await people.mergeConfigured(identities, 'migration:ai.trigger').catch(error =>
+          options.logger.warn(`Chat roles migration: ai.trigger ids not grouped into one person (${(error as Error).message}).`));
       }
       const { memoryOnlyAt: _memoryOnly, ...done } = record_;
-      await writeRecord(file, { ...done, status: 'done', completedAt: now() });
+      await writeRecord(file, { ...done, status: 'done', completedAt: now(), imported: Object.freeze(imported) }, v1Text);
+      const written = imported.filter(entry => entry.result === 'written' || entry.result === 'upgraded').length;
       options.logger.info(`Chat roles: wrote ${written} migrated grant(s) to chat_roles.`);
     },
   });
+}
+
+class RecordQueue {
+  #queue: Promise<unknown> = Promise.resolve();
+  run<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.#queue.then(work);
+    this.#queue = run.catch(() => undefined);
+    return run;
+  }
+}
+
+/** What the Console sees of the migration record. */
+export interface ChatRoleImportState {
+  /** The first import's grants (empty before it completed). */
+  readonly imported: readonly ChatRoleImportedGrant[];
+  readonly importedAt?: number;
+  readonly importedAcknowledgedAt?: number;
+  /** Re-appeared configured grants waiting for 「导入」/「忽略」. */
+  readonly pending: readonly ChatRolePendingImport[];
+}
+
+export type ChatRoleImportDecision = 'import' | 'ignore';
+
+export type ChatRoleImportResolution =
+  | Readonly<{ status: 'imported'; result: ChatRoleImportResult; reason?: 'simulated' | 'unknown-adapter'; grant: ChatRolePendingImport }>
+  | Readonly<{ status: 'ignored'; grant: ChatRolePendingImport }>
+  | Readonly<{ status: 'not-found' }>;
+
+/**
+ * ADR 0060 §4.2: the Console side of the migration record — the first import (`chat-roles.imported`)
+ * and the re-appeared candidates (`chat-roles.import-pending`). Callers authorize (global
+ * `iam.manage`); every decision is audited as `chat-roles.import`.
+ */
+export class ChatRoleImportBook {
+  readonly #file: string;
+  readonly #queue = new RecordQueue();
+  readonly #options: Readonly<{
+    roles: () => InstanceChatRoleService | undefined;
+    adapterKind: () => (alias: string) => ChatRoleMigrationAdapterKind;
+    audit?: ChatRoleAudit;
+    now?: () => number;
+  }>;
+
+  constructor(options: Readonly<{
+    projectRoot: string;
+    roles: () => InstanceChatRoleService | undefined;
+    /** Classification of the current generation's adapters (read per decision). */
+    adapterKind: () => (alias: string) => ChatRoleMigrationAdapterKind;
+    audit?: ChatRoleAudit;
+    now?: () => number;
+  }>) {
+    this.#file = join(options.projectRoot, CHAT_ROLE_MIGRATION_FILE);
+    this.#options = options;
+  }
+
+  async read(): Promise<ChatRoleImportState> {
+    const read = await readRecord(this.#file);
+    const value = read?.value;
+    if (!value) return Object.freeze({ imported: Object.freeze([]), pending: Object.freeze([]) });
+    return Object.freeze({
+      imported: value.imported ?? Object.freeze([]),
+      ...(value.status === 'done' && value.completedAt ? { importedAt: value.completedAt } : {}),
+      ...(value.importedAcknowledgedAt ? { importedAcknowledgedAt: value.importedAcknowledgedAt } : {}),
+      pending: value.pendingImports ?? Object.freeze([]),
+    });
+  }
+
+  /** 「导入」 or 「忽略」 one candidate. Import needs a relational database (the candidate stays otherwise). */
+  resolve(input: Readonly<{ id: string; decision: ChatRoleImportDecision; actor: string }>): Promise<ChatRoleImportResolution> {
+    return this.#queue.run(async () => {
+      const read = await readRecord(this.#file);
+      const value = read?.value;
+      const grant = value?.pendingImports?.find(entry => entry.id === input.id);
+      if (!value || !grant) return Object.freeze({ status: 'not-found' as const });
+      let resolution: ChatRoleImportResolution;
+      if (input.decision === 'import') {
+        const roles = this.#options.roles();
+        if (!roles || !roles.store.persistent) throw new ChatRoleStorageUnavailableError();
+        let outcome: Awaited<ReturnType<typeof applyConfiguredGrant>>;
+        try {
+          outcome = await applyConfiguredGrant(roles, grant, { kind: this.#options.adapterKind(), persistent: true, grantedBy: input.actor });
+        } catch (error) {
+          auditImport(this.#options.audit, input.actor, grant, 'error', { decision: 'import' });
+          throw error;
+        }
+        auditImport(this.#options.audit, input.actor, grant, 'ok', { decision: 'import', result: outcome.result, ...(outcome.reason ? { reason: outcome.reason } : {}) });
+        resolution = Object.freeze({ status: 'imported' as const, ...outcome, grant });
+      } else {
+        auditImport(this.#options.audit, input.actor, grant, 'ok', { decision: 'ignore' });
+        resolution = Object.freeze({ status: 'ignored' as const, grant });
+      }
+      const pendingImports = value.pendingImports!.filter(entry => entry.id !== input.id);
+      const { pendingImports: _old, ...rest } = value;
+      await writeRecord(this.#file, { ...rest, ...(pendingImports.length ? { pendingImports } : {}) }, read?.v1Text);
+      return resolution;
+    });
+  }
+
+  /** Marks the first import as read (the `chat-roles.imported` item disappears). */
+  acknowledge(actor: string): Promise<'saved' | 'unchanged'> {
+    return this.#queue.run(async () => {
+      const read = await readRecord(this.#file);
+      const value = read?.value;
+      if (!value?.imported?.length || value.importedAcknowledgedAt) return 'unchanged' as const;
+      await writeRecord(this.#file, { ...value, importedAcknowledgedAt: (this.#options.now ?? Date.now)() }, read?.v1Text);
+      try {
+        this.#options.audit?.({ actor, action: 'chat-roles.import', target: 'imported', outcome: 'ok', detail: Object.freeze({ decision: 'acknowledge' }) });
+      } catch { /* audit never breaks a request */ }
+      return 'saved' as const;
+    });
+  }
 }
