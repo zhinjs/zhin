@@ -8,12 +8,20 @@
 import {
   auditActor,
   jsonResponse,
+  unknownRpcLog,
   type ConsolePrincipal,
   type RouteContext,
   type TokenRegistry,
 } from '@zhin.js/host-http';
-import { GATEWAY_RPC, type GatewayRpcHttpErrorReply } from '@zhin.js/console-protocol';
-import type { GatewayRpcDispatcher } from '../packages/rpc.js';
+import {
+  CONSOLE_DENIAL_REASONS,
+  GATEWAY_RPC,
+  GATEWAY_RPC_PERMISSIONS,
+  type ConsoleDenialReason,
+  type GatewayRpcHttpErrorReply,
+} from '@zhin.js/console-protocol';
+import { isGatewayRpcType, type GatewayRpcDispatcher } from '../packages/rpc.js';
+import { gatewayPrincipalAllows } from '../packages/authorization.js';
 
 /** RPC types with this prefix belong to the gateway (unknown ones are refused as unmapped). */
 export const GATEWAY_RPC_PREFIX = 'gateway.';
@@ -40,6 +48,18 @@ export interface GatewayRpcHandler extends GatewayConsoleRpc {
    * is forwarded to the instance untouched (e.g. `feature.set-enabled` below the global level).
    */
   claims?(message: Readonly<Record<string, unknown>>): boolean;
+  /** RPC types this handler answers, for `GET {base}/console/capabilities`. */
+  types?(): readonly string[];
+}
+
+/** Why the gateway dispatcher refused `type` (`forbidden`). */
+function gatewayDenialReason(type: string, principal: ConsolePrincipal | undefined): ConsoleDenialReason {
+  if (!principal) return CONSOLE_DENIAL_REASONS.NOT_AUTHENTICATED;
+  if (isGatewayRpcType(type) && !gatewayPrincipalAllows(principal, GATEWAY_RPC_PERMISSIONS[type])) {
+    return principal.kind === 'bootstrap' ? CONSOLE_DENIAL_REASONS.SETUP_REQUIRED : CONSOLE_DENIAL_REASONS.INSUFFICIENT_PERMISSION;
+  }
+  // The permission map admitted it; the service's own rule refused (e.g. bootstrap package limits).
+  return CONSOLE_DENIAL_REASONS.HANDLER_DENIED;
 }
 
 export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): GatewayConsoleRpc {
@@ -50,13 +70,17 @@ export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): Gateway
       const principal: ConsolePrincipal | undefined = context.principal;
       const result = await dispatch({ type, data: message.data }, principal);
       const write = !READ_ONLY_TYPES.has(type);
+      const unknown = !result.ok && result.error.code === 'unknown_rpc';
       const outcome = result.ok ? 'ok' : result.error.code === 'forbidden' ? 'denied' : 'error';
-      if (write || outcome === 'denied') {
+      // zhinjs/zhin#1250: an unknown `gateway.*` type ran nothing and is not a refusal: not audited.
+      if (unknown) unknownRpcLog.note(type);
+      else if (write || outcome === 'denied') {
         try {
           tokenRegistry.accessProvider?.audit?.({
             actor: auditActor(principal),
             action: `rpc:${type}`.slice(0, 256),
             outcome,
+            ...(outcome === 'denied' ? { detail: { type: type.slice(0, 256), reason: gatewayDenialReason(type, principal) } } : {}),
             ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
           });
         } catch { /* audit never breaks a request */ }

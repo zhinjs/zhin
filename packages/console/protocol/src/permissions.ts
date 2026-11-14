@@ -470,6 +470,8 @@ const httpRule = (
 /** Every Console `/api` route → required permission (paths relative to the API base). */
 export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Object.freeze([
   httpRule('POST', '/console/request', 'rpc'),
+  // zhinjs/zhin#1250: which RPC types this Host answers (`CONSOLE_CAPABILITIES_PATH`).
+  httpRule('GET', '/console/capabilities', 'authenticated'),
   httpRule('POST', '/auth/login', 'public'),
   httpRule('GET', '/auth/setup', 'bootstrap'),
   httpRule('POST', '/auth/setup', 'bootstrap'),

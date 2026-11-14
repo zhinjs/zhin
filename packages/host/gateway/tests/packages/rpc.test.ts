@@ -47,7 +47,8 @@ describe('dispatchGatewayRpc', () => {
     expect(isGatewayRpcType('gateway.instance.status')).toBe(true);
     expect(isGatewayRpcType('config:get')).toBe(false);
     const { dispatch } = setup();
-    expect(await dispatch({ type: 'gateway.instance.reboot' }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'unmapped', status: 403 } });
+    // zhinjs/zhin#1250: a gateway.* type this gateway lacks is unknown, not a refusal.
+    expect(await dispatch({ type: 'gateway.instance.reboot' }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'unknown_rpc', status: 404 } });
   });
 
   it('enforces the permission map per role', async () => {
