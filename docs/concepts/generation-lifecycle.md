@@ -109,11 +109,11 @@ setup({ events }) {
 
 ### Adapter 的准入由快照原子切换
 
-热重载时，平台连接不会先断开再重连：
+热重载时，在宽限期内完成登录的平台连接不会先断开再重连：
 
-1. 候选代的 `AdapterIndex` 在 `activateNext` 阶段完成 `start()` 与 `open()` 准备，但在 `commit` 之前，候选代的入站准入闸门（`GenerationAdmissionGate`）保持关闭。
+1. 候选代的 `AdapterIndex` 在 `activateNext` 阶段启动各账号并完成 `open()` 准备，但在 `commit` 之前，候选代的入站准入闸门（`GenerationAdmissionGate`）保持关闭。每个账号的 `start()` 最多等待约 3 秒宽限期，未完成的账号在后台继续启动，提交后上线即进入新代准入；这类慢账号相当于「先下旧再上新」。
 2. `SnapshotStore` 提交新快照的瞬间，同步开放新代准入闸门并关闭被替换的旧闸门；未被替换的插件子树与连接投影保持无感复用。
-3. 若候选代有任何已配置的 Endpoint 创建或启动失败，整个候选代会被拒绝，旧代保持原样在线服务。
+3. 账号的 Endpoint 启动失败**不会**拒绝候选代：新代照常提交，失败的账号在后台按退避重试（配置错误与交互式登录除外，等人工处理），见[账号登录不阻塞实例就绪](../operations/production.md#account-start)。Adapter 恢复持久化状态失败或事务被取消时，候选代仍会被拒绝，旧代保持原样在线服务。
 4. 提交后，旧 Endpoint 随在途消息的快照租约自然排空（drain），排空后由旧代 disposer 执行 `close()` / `stop()`。共享的 HTTP listener、Console RPC 与 SSE 归属于进程级 Host，热重载期间始终保持可用。
 
 ## 快照租约：在途消息不被打断

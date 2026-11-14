@@ -669,9 +669,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // The gateway pipes the instance's output and echoes it to its terminal (ADR 0054 §3).
   const interactiveOutput = process.stdout.isTTY || process.env.ZHIN_INSTANCE_INTERACTIVE === '1';
   if (interactiveOutput && !parsed.once) {
+    // Ready no longer waits for account logins: report who is still starting or failed.
     const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
-    const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
+    const rest = endpoints.filter((ep) => ep.status !== 'online');
+    const starting = rest.filter((ep) => ep.phase === 'starting' || ep.phase === 'awaiting_assist' || ep.phase === 'reconnecting')
+      .map((ep) => ep.phase === 'awaiting_assist' ? `${ep.name} (awaiting login)` : ep.name);
+    const failed = rest.filter((ep) => ep.phase === 'failed' || ep.phase === 'retrying')
+      .map((ep) => ep.startFailure ? `${ep.name} (${ep.startFailure.code}${ep.phase === 'retrying' ? ', retrying' : ''})` : ep.name);
+    const offline = rest.filter((ep) => !['starting', 'awaiting_assist', 'reconnecting', 'failed', 'retrying'].includes(ep.phase))
+      .map((ep) => ep.name);
     const startup = getLogger('setup');
     startup.success('zhin runtime started');
     startup.info(formatCompact({
@@ -680,6 +687,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     }));
     if (online.length > 0) {
       startup.info(`online: ${online.join(', ')}`);
+    }
+    if (starting.length > 0) {
+      startup.info(`starting: ${starting.join(', ')}`);
+    }
+    if (failed.length > 0) {
+      startup.warn(`failed: ${failed.join(', ')}`);
     }
     if (offline.length > 0) {
       startup.info(`offline: ${offline.join(', ')}`);

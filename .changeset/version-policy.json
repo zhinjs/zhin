@@ -1,4 +1,15 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/adapter",
+      "type": "minor",
+      "reason": "所有者已批准 minor（#1250）：账号启动改为后台监管，Adapter.activate 不再因账号 start 失败或久等而失败；新增 retryStart、启动状态字段与 failed / retrying 阶段。npm 上旧架构已占用 1.2.0–1.2.2，package.json 先置为 1.2.2 由 minor 升至 1.3.0"
+    },
+    {
+      "package": "@zhin.js/core",
+      "type": "minor",
+      "reason": "所有者已批准 minor（#1250）：Endpoint 列表新增 awaiting_assist 阶段与 startAttempt / startFailure / nextRetryAt"
+    }
+  ]
 }

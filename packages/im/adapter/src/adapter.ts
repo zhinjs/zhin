@@ -1,5 +1,6 @@
 import { redactConfigurationUrl } from './configuration-metadata.js';
 import { AsyncResource } from 'node:async_hooks';
+import { setMaxListeners } from 'node:events';
 import { sameConfigurationIdentity } from './configuration-identity.js';
 import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, type SelfProfile } from './endpoint-profile.js';
@@ -7,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
 import type { EndpointMessageStream, EndpointStreamRequest, EndpointStreaming } from './endpoint-stream.js';
@@ -16,7 +18,16 @@ import {
   type EndpointDesiredRecord, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointCreationContext, type EndpointPreviousIdentity, type EndpointMetadata, type AdapterMutationResult, type EndpointSecretResolver,
   type EndpointExecution, type EndpointAction, type AdapterMutationOptions, type EndpointConfigurationView,
+  type EndpointStartFailure, type EndpointStartPhase,
 } from './adapter-types.js';
+
+const logger = getLogger('adapter');
+/** How long activation waits for account starts before the generation commits without them. */
+export const DEFAULT_ENDPOINT_START_GRACE_MS = 3_000;
+/** Automatic start retry backoff: 5s doubling to 5min, ±20% jitter, unlimited attempts. */
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 5 * 60_000;
+const RETRY_JITTER = 0.2;
 
 type ExecutionState = { -readonly [K in keyof EndpointExecution]: EndpointExecution[K] };
 interface ChildEpoch<E extends AnyEndpoint> {
@@ -38,11 +49,25 @@ interface ChildEpoch<E extends AnyEndpoint> {
   leases: number;
   drain?: () => void;
 }
+/** Background start supervision of one account; never part of a generation transaction. */
+interface StartState {
+  attempt: number;
+  failure?: EndpointStartFailure;
+  phase?: EndpointStartPhase;
+  nextRetryAt?: number;
+}
 interface Child<E extends AnyEndpoint> {
   desired: EndpointDesiredRecord;
   epoch: number;
   current?: ChildEpoch<E>;
   execution?: ExecutionState;
+  /** Token of the current supervision loop; stop/replace/update/dispose invalidate it. */
+  supervision: number;
+  /** Whether a supervision loop (attempt or retry wait) is running. */
+  supervising?: boolean;
+  /** Wakes the current retry wait early (stop cancels it, relogin retries immediately). */
+  retry?: AbortController;
+  start?: StartState;
 }
 interface MutationRequest<E extends AnyEndpoint> {
   readonly instanceId: string;
@@ -72,6 +97,8 @@ export interface AdapterInitialization<E extends AnyEndpoint> {
   readonly secrets?: EndpointSecretResolver;
   /** Captured startup connection defaults, used only once for newly added/replaced accounts. */
   readonly creationDefaults?: Readonly<Record<string, unknown>>;
+  /** @internal Activation grace for account starts (default {@link DEFAULT_ENDPOINT_START_GRACE_MS}). */
+  readonly startGraceMs?: number;
 }
 
 /** Owns desired state and each child execution epoch. AdapterIndex is a read/routing projection. */
@@ -139,6 +166,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #revision: number | null = null;
   #closed = false;
   readonly #verificationAbort = new AbortController();
+  /** Adapter lifetime: background start supervision ends with dispose, never with a transaction. */
+  readonly #lifetime = unboundedAbortController();
   #admission = false;
   #repositoryReady = false;
   #restoration?: Promise<void>;
@@ -198,6 +227,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       started: child.current?.started === true && !child.current.retired,
       admitted: child.current?.open === true && !child.current.retired,
       ...(child.execution ? { execution: Object.freeze({ ...child.execution }) } : {}),
+      ...startFacts(child),
     })));
   }
   get needsMigration(): boolean { return this.#revision === null && this.#children.size > 0; }
@@ -208,7 +238,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   runtimeStatus(): readonly EndpointMetadata[] {
     const retired = [...this.#retiredEpochs].map(epoch => Object.freeze({
       ...epoch.identity, desiredEnabled: false, epoch: epoch.epoch, incarnationId: epoch.incarnationId, started: false, admitted: false,
-      retiring: true, removed: !this.#children.has(epoch.identity.instanceId),
+      startAttempt: 0, retiring: true, removed: !this.#children.has(epoch.identity.instanceId),
       execution: Object.freeze({
         instanceId: epoch.identity.instanceId, revision: epoch.execution?.revision ?? this.#revision,
         action: epoch.execution?.action ?? 'stop',
@@ -305,7 +335,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         ...(profileOnly ? {} : { run: async () => {
           const child = this.#require(instanceId);
           await this.#stop(child);
-          if (child.desired.desiredEnabled) await this.#start(child);
+          if (child.desired.desiredEnabled) await this.#supervise(child);
         } }),
       },
     }, options);
@@ -333,7 +363,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       next: () => this.#replace(instanceId, record => ({
         ...record, desiredEnabled: true, revision: record.revision + 1,
       })),
-      execution: { instanceId, action: 'start', child: target, run: () => this.#start(target) },
+      execution: { instanceId, action: 'start', child: target, run: () => this.#supervise(target, { restart: true }) },
     }, options);
   }
   stop(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
@@ -394,12 +424,42 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return configuredSelfProfile(this.#require(instanceId).desired.config);
   }
 
-  async activate(signal: AbortSignal): Promise<void> {
+  /**
+   * Starts every enabled account in the background and waits at most the start grace period.
+   * Account start failures never reject activation (they are retried per account, see
+   * {@link Adapter.retryStart}); only cancellation of `signal` does.
+   *
+   * `awaitStarts` (tools and tests that exercise one Endpoint's own start contract) instead waits
+   * for every first attempt and rejects with the first failure, as `Endpoint.start()` threw it;
+   * the caller then disposes the Adapter, which also ends the scheduled retries.
+   */
+  async activate(signal: AbortSignal, options: Readonly<{ awaitStarts?: boolean }> = {}): Promise<void> {
     this.#assertOpen();
     await this.#restore(signal);
+    const attempts: Promise<void>[] = [];
     for (const child of this.#children.values()) {
-      if (child.desired.desiredEnabled) await this.#start(child, signal);
+      if (child.desired.desiredEnabled) attempts.push(this.#supervise(child));
     }
+    const settled = Promise.allSettled(attempts);
+    if (attempts.length) await graceWait(settled, options.awaitStarts ? Infinity
+      : this.#options.startGraceMs ?? DEFAULT_ENDPOINT_START_GRACE_MS, signal);
+    signal.throwIfAborted();
+    if (!options.awaitStarts) return;
+    const failure = (await settled).find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failure) throw failure.reason instanceof EndpointStartAttemptError ? failure.reason.cause : failure.reason;
+  }
+
+  /**
+   * Retry a failed or retry-waiting account now (Console relogin / start). Returns false when the
+   * account is not in a failed start state, is disabled or the Adapter is closed.
+   */
+  retryStart(instanceId: string): boolean {
+    const child = this.#children.get(instanceId);
+    if (this.#closed || !child || !child.desired.desiredEnabled || !child.start?.phase) return false;
+    if (child.supervising && child.retry) { child.retry.abort(); return true; }
+    if (child.supervising) return false;
+    void this.#supervise(child);
+    return true;
   }
   open(): void {
     this.#assertOpen();
@@ -435,6 +495,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     this.assertExternalLifecycle('stop');
     this.#closed = true;
     this.#verificationAbort.abort(new AdapterManagementError('closed', 'Adapter disposed'));
+    this.#lifetime.abort(new AdapterManagementError('closed', 'Adapter disposed'));
+    // A disposed Adapter retries nothing: its accounts read as offline, not retrying.
+    for (const child of this.#children.values()) { this.#cancelSupervision(child); child.start = undefined; }
     this.#admission = false;
     const stack = new DisposeStack();
     const epochs = new Set(this.#retiredEpochs);
@@ -609,7 +672,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       if (existing && (existing.desired.canonicalId !== desired.canonicalId || existing.desired.endpointId !== desired.endpointId)) {
         throw new AdapterManagementError('invalid_configuration', 'Existing Endpoint identity cannot change');
       }
-      const child = existing ?? { desired, epoch: 0 };
+      const child: Child<E> = existing ?? { desired, epoch: 0, supervision: 0 };
       child.desired = freezeRecord(desired);
       next.set(desired.instanceId, child);
     }
@@ -683,7 +746,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       try {
         if (this.#closed) { execution.status = 'failed'; execution.code = 'adapter_closed'; }
         else { await apply?.(); execution.status = 'applied'; }
-      } catch { execution.status = 'failed'; execution.code = 'endpoint_execution_failed'; }
+      } catch (error) {
+        execution.status = 'failed';
+        execution.code = error instanceof EndpointStartAttemptError ? 'endpoint_start_failed' : 'endpoint_execution_failed';
+      }
       return this.#mutationResult(execution);
     }));
     this.#operations.add(completion);
@@ -725,7 +791,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     });
     epoch.preparation = preparation;
     try { await preparation; return epoch; }
-    catch (error) { await this.#stopEpoch(epoch); throw error; }
+    catch (error) {
+      if (error instanceof Error) preparationErrors.add(error);
+      await this.#stopEpoch(epoch);
+      throw error;
+    }
     finally { signal?.removeEventListener('abort', abort); }
   }
   async #start(child: Child<E>, signal?: AbortSignal): Promise<void> {
@@ -779,6 +849,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     epoch.open = true;
   }
   #stop(child: Child<E>): Promise<void> {
+    this.#cancelSupervision(child);
+    child.start = undefined;
     if (!child.current) return Promise.resolve();
     child.current.execution = child.execution;
     return this.#stopEpoch(child.current);
@@ -812,8 +884,173 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return Object.freeze({ desired: metadata(child.desired), endpoint: current?.endpoint, epoch: child.epoch,
       ...(current ? { incarnationId: current.incarnationId } : {}),
       operations: current?.operations ?? [], started: current?.started ?? false, open: current?.open ?? false,
-      stopped: current?.retired ?? false, startAttempted: current?.startAttempted ?? false });
+      stopped: current?.retired ?? false, startAttempted: current?.startAttempted ?? false, ...startFacts(child) });
   }
+
+  #cancelSupervision(child: Child<E>): void {
+    child.supervision += 1;
+    child.supervising = false;
+    child.retry?.abort();
+    child.retry = undefined;
+  }
+  #supervised(child: Child<E>, token: number): boolean {
+    return !this.#closed && child.supervision === token && this.#children.get(child.desired.instanceId) === child
+      && child.desired.desiredEnabled;
+  }
+
+  /**
+   * One background start loop per account. The returned promise settles with the first attempt
+   * (rejecting with {@link EndpointStartAttemptError}); later attempts only update the start state.
+   * A loop exits silently when stop/replace/update/remove/dispose supersedes it, and never opens
+   * an account it no longer owns: each attempt is a fresh epoch checked against the token.
+   */
+  #supervise(child: Child<E>, options: Readonly<{ restart?: boolean }> = {}): Promise<void> {
+    if (this.#closed) return Promise.reject(new AdapterManagementError('closed', 'Adapter is closed'));
+    if (child.current?.started && !child.current.retired) return Promise.resolve();
+    if (!options.restart && child.supervising && !child.start?.phase) {
+      // An attempt is already running (e.g. activation after a mutation started it).
+      return Promise.resolve();
+    }
+    this.#cancelSupervision(child);
+    const token = child.supervision;
+    let settle!: (error?: unknown) => void;
+    const first = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      settle = error => {
+        if (settled) return;
+        settled = true;
+        if (error === undefined) resolve(); else reject(error);
+      };
+    });
+    void first.catch(() => undefined);
+    child.supervising = true;
+    // The first attempt begins synchronously, exactly where a direct start would have begun.
+    const loop = this.#executionScope.runInAsyncScope(async () => {
+      let attempt = 0;
+      try {
+        for (;;) {
+          if (!this.#supervised(child, token)) {
+            settle(new AdapterManagementError('inactive', 'Endpoint start was superseded'));
+            return;
+          }
+          attempt += 1;
+          child.start = { attempt, ...(child.start?.failure ? { failure: child.start.failure } : {}) };
+          try {
+            // Dispose retires the attempt's epoch itself (reason `inactive`), as for any stop.
+            await this.#start(child);
+          } catch (error) {
+            if (!this.#supervised(child, token)) { settle(error); return; }
+            const terminal = this.#terminalStartFailure(child, error);
+            const code = terminal === 'cleanup' ? 'endpoint_cleanup_failed' : startErrorCode(error);
+            const delay = terminal ? undefined : retryDelay(attempt);
+            const at = Date.now();
+            child.start = { attempt, failure: Object.freeze({ code, at }), phase: terminal ? 'failed' : 'retrying',
+              ...(delay !== undefined ? { nextRetryAt: at + delay } : {}) };
+            logger.warn(formatCompact({ op: 'endpoint_start_failed', adapter: this.descriptor.name,
+              endpoint: child.desired.endpointId, attempt, error: errorName(error), code,
+              ...(delay !== undefined ? { retryInMs: delay } : { retry: 'manual' }) }));
+            settle(new EndpointStartAttemptError(code, { cause: error }));
+            if (delay === undefined) return;
+            await this.#retryWait(child, delay);
+            continue;
+          }
+          if (!this.#supervised(child, token) || !child.current?.started || child.current.retired) {
+            // Stopped before or while starting without an error: an intentional stop, not a failure.
+            settle();
+            return;
+          }
+          child.start = undefined;
+          settle();
+          return;
+        }
+      } finally {
+        if (child.supervision === token) { child.supervising = false; child.retry = undefined; }
+      }
+    });
+    this.#operations.add(loop);
+    void loop.finally(() => this.#operations.delete(loop)).catch(() => undefined);
+    void loop.catch(error => settle(error));
+    return first;
+  }
+  /** Configuration, unsupported and cleanup failures (and every interactive login) wait for a person. */
+  #terminalStartFailure(child: Child<E>, error: unknown): false | 'configuration' | 'cleanup' | 'interactive' {
+    if (child.current?.cleanupFailed) return 'cleanup';
+    if (error instanceof AdapterManagementError && (error.code === 'invalid_configuration' || error.code === 'unsupported')) {
+      return 'configuration';
+    }
+    if (error instanceof Error && preparationErrors.has(error) && error instanceof TypeError) return 'configuration';
+    if (this.#descriptor?.login?.mode === 'interactive') return 'interactive';
+    return false;
+  }
+  #retryWait(child: Child<E>, delay: number): Promise<void> {
+    const wake = new AbortController();
+    child.retry = wake;
+    const lifetime = this.#lifetime.signal;
+    return new Promise<void>(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        wake.signal.removeEventListener('abort', done);
+        lifetime.removeEventListener('abort', done);
+        if (child.retry === wake) child.retry = undefined;
+        resolve();
+      };
+      const timer = setTimeout(done, delay);
+      timer.unref?.();
+      wake.signal.addEventListener('abort', done, { once: true });
+      lifetime.addEventListener('abort', done, { once: true });
+      if (wake.signal.aborted || lifetime.aborted) done();
+    });
+  }
+}
+
+/** The first start attempt of a supervision failed; the loop goes on per its retry policy. */
+class EndpointStartAttemptError extends Error {
+  constructor(readonly code: string, options?: ErrorOptions) {
+    super('Endpoint start failed', options);
+    this.name = 'EndpointStartAttemptError';
+  }
+}
+/** Errors raised while creating/binding an Endpoint (configuration, not transport). */
+const preparationErrors = new WeakSet<Error>();
+
+function startFacts<E extends AnyEndpoint>(child: Child<E>): Pick<EndpointMetadata, 'startAttempt' | 'startFailure' | 'startPhase' | 'nextRetryAt'> {
+  const state = child.start;
+  return {
+    startAttempt: state?.attempt ?? 0,
+    ...(state?.failure ? { startFailure: state.failure } : {}),
+    ...(state?.phase ? { startPhase: state.phase } : {}),
+    ...(state?.nextRetryAt !== undefined ? { nextRetryAt: state.nextRetryAt } : {}),
+  };
+}
+function retryDelay(attempt: number): number {
+  const base = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
+  return Math.round(base * (1 - RETRY_JITTER + Math.random() * 2 * RETRY_JITTER));
+}
+/** Stable, credential-free code: an error's own short code, else its class name. */
+function startErrorCode(error: unknown): string {
+  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
+  if (typeof code === 'string' && /^[\w.:-]{1,64}$/u.test(code)) return code;
+  return errorName(error);
+}
+function errorName(error: unknown): string {
+  const name = error instanceof Error ? error.name : typeof error;
+  return /^[\w.:-]{1,64}$/u.test(name) ? name : 'Error';
+}
+/** One listener per account attempt; many accounts must not trip the EventTarget leak warning. */
+function unboundedAbortController(): AbortController {
+  const controller = new AbortController();
+  setMaxListeners(0, controller.signal);
+  return controller;
+}
+/** Resolves when `work` settles, the grace period ends or `signal` aborts — never rejects. */
+function graceWait(work: Promise<unknown>, ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); };
+    const timer = Number.isFinite(ms) ? setTimeout(done, Math.max(0, ms)) : undefined;
+    signal.addEventListener('abort', done, { once: true });
+    void work.then(done, done);
+  });
 }
 
 function metadata(record: EndpointDesiredRecord): import('./adapter-types.js').EndpointDesiredMetadata {

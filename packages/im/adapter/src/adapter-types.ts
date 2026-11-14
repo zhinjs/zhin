@@ -89,6 +89,17 @@ export interface AdapterMutationOptions {
   /** Internal request boundary, after validation and immediately before the single CAS. */
   readonly beforeCommit?: () => void;
 }
+/** Last failed start of one account (code only: raw error text may contain credentials). */
+export interface EndpointStartFailure {
+  readonly code: string;
+  /** Epoch milliseconds. */
+  readonly at: number;
+}
+/**
+ * Background start supervision of one account: `retrying` waits for `nextRetryAt`,
+ * `failed` waits for an explicit start / relogin (configuration errors, interactive login).
+ */
+export type EndpointStartPhase = 'failed' | 'retrying';
 export interface EndpointMetadata extends EndpointDesiredMetadata {
   readonly epoch: number;
   readonly incarnationId?: string;
@@ -97,6 +108,12 @@ export interface EndpointMetadata extends EndpointDesiredMetadata {
   readonly execution?: EndpointExecution;
   readonly retiring?: boolean;
   readonly removed?: boolean;
+  /** Start attempts of the current supervision (0 = none yet or online). */
+  readonly startAttempt: number;
+  readonly startFailure?: EndpointStartFailure;
+  readonly startPhase?: EndpointStartPhase;
+  /** Epoch milliseconds of the next automatic retry. */
+  readonly nextRetryAt?: number;
 }
 export interface EndpointConfigurationView {
   readonly id: string;
@@ -119,6 +136,10 @@ export interface EndpointChildView<E extends AnyEndpoint = AnyEndpoint> {
   readonly open: boolean;
   readonly stopped: boolean;
   readonly startAttempted: boolean;
+  readonly startAttempt: number;
+  readonly startFailure?: EndpointStartFailure;
+  readonly startPhase?: EndpointStartPhase;
+  readonly nextRetryAt?: number;
 }
 
 /** Originating operation retained by a scoped semantic port. */

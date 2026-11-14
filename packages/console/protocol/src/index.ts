@@ -391,12 +391,19 @@ export const ENDPOINT_MANAGEMENT_CAPABILITIES = [
 export type EndpointManagementCapability =
   (typeof ENDPOINT_MANAGEMENT_CAPABILITIES)[number];
 
+/**
+ * `failed`: start failed and waits for a person (configuration, interactive login);
+ * `retrying`: start failed, an automatic retry is scheduled (`nextRetryAt`);
+ * `awaiting_assist`: starting, and the login flow waits for a person (LoginAssist).
+ */
 export type ConsoleEndpointPhase =
   | 'pending'
   | 'starting'
+  | 'awaiting_assist'
   | 'online'
   | 'offline'
   | 'reconnecting'
+  | 'retrying'
   | 'failed'
   | 'unconfigured';
 
@@ -415,6 +422,12 @@ export interface ConsoleEndpointSummary {
   readonly eventDiagnostics?: Readonly<{ buffered: number; dropped: number; dispatchFailures: number }>;
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;
+  /** Start attempts of the background start supervision (0 = none pending). */
+  readonly startAttempt?: number;
+  /** Last failed start (code only, epoch milliseconds) while the account is not online. */
+  readonly startFailure?: Readonly<{ code: string; at: number }>;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
   readonly pendingLogin?: boolean;
   /** ADR 0058: step of the unfinished login flow (1-based). */
   readonly loginStep?: Readonly<{ index: number; total: number; title: string }>;

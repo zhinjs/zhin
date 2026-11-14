@@ -5,6 +5,7 @@ export type {
   CapturedEndpointOperation,
   EndpointRuntimeDetail,
   EndpointRuntimeSummary,
+  EndpointRuntimePhase,
   RuntimeEndpointEditInput,
   RuntimeEndpointMessageInput,
   RuntimeEndpointReactionInput,

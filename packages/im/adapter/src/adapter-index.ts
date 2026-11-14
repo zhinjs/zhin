@@ -60,7 +60,8 @@ import {
 } from '@zhin.js/im-contract';
 
 import type { AdapterInstance } from './adapter.js';
-import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope } from './adapter-types.js';
+import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope,
+  type EndpointStartFailure, type EndpointStartPhase } from './adapter-types.js';
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, mergeEndpointProfileConfiguration,
   type SelfProfile, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
@@ -92,6 +93,8 @@ type SelfStandingConversation = Pick<ConversationRef, 'kind' | 'id' | 'parent' |
 export interface AdapterPersistencePorts {
   readonly repository?: EndpointDesiredRepository;
   readonly secrets?: EndpointSecretResolver;
+  /** @internal Activation grace for account starts (tests); see `DEFAULT_ENDPOINT_START_GRACE_MS`. */
+  readonly startGraceMs?: number;
 }
 
 export interface AdapterDescriptor {
@@ -112,6 +115,12 @@ export interface AdapterEndpointSummary extends AdapterDescriptor {
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
   readonly managementCapabilities: readonly EndpointManagementCapability[];
+  /** Start attempts of the current background supervision (0 = none pending). */
+  readonly startAttempt: number;
+  /** Last failed start (code only), while the account is not online. */
+  readonly startFailure?: EndpointStartFailure;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
 }
 
 /** Immutable connection data. SDK and executable framework ports remain lease-scoped. */
@@ -124,8 +133,12 @@ export interface EndpointConnectionInfo {
   readonly eventDiagnostics: AdapterEndpointSummary['eventDiagnostics'];
 }
 
+/**
+ * `failed`: start failed and waits for a person (configuration, interactive login);
+ * `retrying`: start failed and an automatic retry is scheduled.
+ */
 export type AdapterEndpointPhase =
-  'pending' | 'starting' | 'online' | 'reconnecting' | 'offline';
+  'pending' | 'starting' | 'online' | 'reconnecting' | 'offline' | 'failed' | 'retrying';
 
 interface AdapterRecord extends AdapterDescriptor {
   readonly adapterName: string;
@@ -138,6 +151,10 @@ interface AdapterRecord extends AdapterDescriptor {
   readonly open: boolean;
   readonly stopped: boolean;
   readonly startAttempted: boolean;
+  readonly startAttempt: number;
+  readonly startFailure?: EndpointStartFailure;
+  readonly startPhase?: EndpointStartPhase;
+  readonly nextRetryAt?: number;
 }
 
 /** Concrete receiver and originating lifetime captured before creating port closures. */
@@ -349,7 +366,8 @@ export class AdapterIndex {
   list(): readonly AdapterDescriptor[] {
     return this.#order.map(({ endpoint: _endpoint,
       started: _started, open: _open, stopped: _stopped,
-      startAttempted: _startAttempted, segments: _segments, adapterName: _adapterName,
+      startAttempted: _startAttempted, startAttempt: _startAttempt, startFailure: _startFailure,
+      startPhase: _startPhase, nextRetryAt: _nextRetryAt, segments: _segments, adapterName: _adapterName,
       profile: _profile, capabilityResolver: _resolver,
       ...descriptor }) => Object.freeze(descriptor));
   }
@@ -371,6 +389,9 @@ export class AdapterIndex {
       status: endpointConnected(record) ? 'online' as const : 'offline' as const,
       phase: endpointPhase(record),
       managementCapabilities: listEndpointManagementCapabilities(record.endpoint ? endpointRuntimeOf(record.endpoint) : undefined),
+      startAttempt: record.startAttempt,
+      ...(record.startFailure && !endpointConnected(record) ? { startFailure: record.startFailure } : {}),
+      ...(record.nextRetryAt !== undefined ? { nextRetryAt: record.nextRetryAt } : {}),
     })));
   }
 
@@ -478,6 +499,21 @@ export class AdapterIndex {
    */
   loginControl(id: CapabilityId, scope?: EndpointPortScope): EndpointLoginControl | undefined {
     const record = this.#record(id);
+    // A failed / retry-waiting start has no live incarnation to relogin: relogin retries the start now.
+    if (record?.startPhase && !record.open) {
+      const adapter = this.adapterForEndpoint(id);
+      const instanceId = adapter?.find(id)?.desired.instanceId;
+      if (!adapter || instanceId === undefined) return undefined;
+      return Object.freeze<EndpointLoginControl>({
+        relogin: async request => {
+          scope?.assertActive?.();
+          request.signal?.throwIfAborted();
+          if (!adapter.retryStart(instanceId)) {
+            throw new EndpointDeliveryError('endpoint_inactive', 'Adapter Endpoint start is not waiting for a retry', 'not_sent');
+          }
+        },
+      });
+    }
     const port = record?.endpoint ? endpointRuntimeOf(record.endpoint).login : undefined;
     if (!port || !record?.endpoint) return undefined;
     const invoke = this.#portInvoker({ id, endpoint: record.endpoint, scope }, 'login');
@@ -631,9 +667,24 @@ export class AdapterIndex {
     });
   }
 
-  async start(signal: AbortSignal = new AbortController().signal): Promise<void> {
+  /**
+   * Starts every account and waits for each first start attempt; rejects (after stopping every
+   * Adapter) with the first `Endpoint.start()` failure. For tools and tests of one Endpoint's own
+   * start contract; a Root generation uses {@link AdapterIndex.activate}, which never waits for logins.
+   */
+  start(signal: AbortSignal = new AbortController().signal): Promise<void> {
+    return this.#start(signal, true);
+  }
+
+  /**
+   * Activates every Adapter together: each one waits at most its account start grace period, so
+   * slow accounts of several Adapters do not add up. Only restore and cancellation errors reject.
+   */
+  async #start(signal: AbortSignal, awaitStarts: boolean): Promise<void> {
     try {
-      for (const adapter of this.#adapters) await adapter.activate(signal);
+      const results = await Promise.allSettled(this.#adapters.map(adapter => adapter.activate(signal, { awaitStarts })));
+      const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (failure) throw failure.reason;
     } catch (error) {
       try { await this.stop(); } catch (cleanupError) {
         throw new GenerationCompensationError([error, cleanupError],
@@ -644,7 +695,7 @@ export class AdapterIndex {
   }
 
   async activate(signal: AbortSignal): Promise<void> {
-    try { await this.start(signal); this.open(); }
+    try { await this.#start(signal, false); this.open(); }
     catch (error) { await this.stop(); throw error; }
   }
   open(): void {
@@ -783,6 +834,10 @@ function projectRecord(adapter: AdapterInstance, child: EndpointChildView): Adap
     capabilities: adapter.descriptor.capabilities, operations: child.operations,
     endpoint: child.endpoint, segments: adapter.descriptor.segments,
     started: child.started, open: child.open, stopped: child.stopped, startAttempted: child.startAttempted,
+    startAttempt: child.startAttempt,
+    ...(child.startFailure ? { startFailure: child.startFailure } : {}),
+    ...(child.startPhase ? { startPhase: child.startPhase } : {}),
+    ...(child.nextRetryAt !== undefined ? { nextRetryAt: child.nextRetryAt } : {}),
   };
 }
 
@@ -834,6 +889,7 @@ function endpointLiveName(endpoint: AnyEndpoint | undefined): string | undefined
 }
 
 function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
+  if (record.startPhase && !record.open) return record.startPhase;
   if (record.stopped) return 'offline';
   if (record.open) {
     if ((record.endpoint ? endpointRuntimeOf(record.endpoint).transportState : undefined) === 'reconnecting') return 'reconnecting';
