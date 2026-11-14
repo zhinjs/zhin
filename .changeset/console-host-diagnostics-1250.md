@@ -1,10 +1,10 @@
 ---
-"@zhin.js/console-protocol": patch
+"@zhin.js/console-protocol": minor
 "@zhin.js/host-http": patch
 "@zhin.js/core": patch
-"@zhin.js/agent": patch
+"@zhin.js/agent": minor
 "zhin.js": patch
-"@zhin.js/gateway": patch
+"@zhin.js/gateway": minor
 ---
 
 Console Host 侧诊断数据修正（#1250），新字段均为可选、旧客户端不受影响：

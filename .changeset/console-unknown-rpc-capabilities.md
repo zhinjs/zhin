@@ -1,7 +1,7 @@
 ---
-"@zhin.js/console-protocol": patch
-"@zhin.js/host-http": patch
-"@zhin.js/gateway": patch
+"@zhin.js/console-protocol": minor
+"@zhin.js/host-http": minor
+"@zhin.js/gateway": minor
 "zhin.js": patch
 ---
 

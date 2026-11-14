@@ -1,4 +1,30 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。"
+    },
+    {
+      "package": "@zhin.js/gateway",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 .env 打码视图、单变量查看与按键保存的公开导出，gateway.packages.list 的 kind 与网关进程样本。"
+    },
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 unknown_rpc 判定与日志、审计拒绝原因码、/console/capabilities 相关公开导出。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。"
+    },
+    {
+      "package": "@zhin.js/client",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。"
+    }
+  ]
 }
