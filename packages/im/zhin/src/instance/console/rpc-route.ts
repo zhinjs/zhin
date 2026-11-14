@@ -117,7 +117,9 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         // Overrides are environment-expanded: only principals that may edit `.env` themselves
         // (owners, `ops.env.write`) may plant `${…}` / `env://` references through feature.*.
         () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE),
-        consoleOverrideOperator(authorizedPrincipal)));
+        consoleOverrideOperator(authorizedPrincipal),
+        // Sandbox workspace names are shown where the workspace directory is (`endpoint.view`).
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.ENDPOINT_VIEW)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }

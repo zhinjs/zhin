@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http/node';
-import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { createCapabilitySlot, createSnapshotView, resolveEndpointFeatureKey, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerWorkspaceConversationRoutes } from '../../../src/instance/console/workspace-conversation-routes.js';
 import { defineWorkspaceConversationTable, readWorkspaceConversationNames } from '../../../src/instance/console/workspace-conversations.js';
@@ -35,8 +35,9 @@ async function fixture(options: { filename?: string; unavailable?: boolean;
   const secondConnections = new Map([['other-endpoint', connection('configured-owner')]]);
   type WorkspaceConnections = typeof connections;
   class WorkspaceClient {
-    constructor(private readonly connections: WorkspaceConnections) {}
-    connectionById(id: string) { return this.connections.get(id); }
+    constructor(private readonly records: WorkspaceConnections) {}
+    connectionById(id: string) { return this.records.get(id); }
+    connections() { return [...this.records.values()]; }
     send(): never { throw new Error('Directory reads and writes must not send messages'); }
   }
   class TestEndpoint extends WorkspaceClient implements Endpoint {
@@ -56,7 +57,7 @@ async function fixture(options: { filename?: string; unavailable?: boolean;
   if (options.commands?.menuKeyword !== undefined) config.set(root, { menuKeyword: options.commands.menuKeyword });
   const base: SnapshotState = { root, tree: new Map<PluginId, PluginNodeSnapshot>([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: owners }],
-    ...owners.map(owner => [owner, { id: owner, instanceKey: String(owner), packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }] as const),
+    ...owners.map(owner => [owner, { id: owner, instanceKey: String(owner).split('/').pop()!, packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }] as const),
   ]), config, resources: new Map(owners.map(owner => [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])),
   capabilities: new Map([...slots, ...commandSlots].map(slot => [slot.id, slot])), projections: new Map() };
   const adapters = await AdapterIndex.create(slots, createSnapshotView(0, base), new AbortController().signal);
@@ -81,7 +82,9 @@ async function fixture(options: { filename?: string; unavailable?: boolean;
   const commands = (query: Record<string, string> = {}, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/conversations/workspaces/commands?${new URLSearchParams({ connectionId: 'first-page', ...query })}`, {
     headers: { authorization: `Bearer ${token}` },
   });
-  return { db, snapshots, read, save, commands, connections, endpointId: String(slots[0]!.id) };
+  /** Feature conversation key of a scene on the first (or second) Sandbox Endpoint, as `feature.*` spells it. */
+  const featureKey = (kind: string, id: string, endpoint = 0) => resolveEndpointFeatureKey(createSnapshotView(0, { ...base, projections: projections as never }), String(slots[endpoint]!.id), undefined, { kind, id })!;
+  return { db, snapshots, read, save, commands, connections, featureKey, endpointId: String(slots[0]!.id) };
 }
 
 describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
@@ -219,16 +222,33 @@ describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
     expect((await (await absent.commands()).json()).data.quick).toEqual(['菜单']);
   });
 
-  it('resolves Console-given conversation names for feature keys, leaving ambiguous ones out (#1250)', async () => {
+  it('resolves Console-given conversation names for feature keys of the same Endpoint and owner (#1250)', async () => {
     const f = await fixture();
     const group = { ...conversation, id: 'group-6cf34af4', type: 'group', name: '测试群' };
     expect((await f.save({ connectionId: 'first-page', conversation: group, expectedRevision: null })).status).toBe(200);
-    const key = 'sandbox/sandbox-bot/group:group-6cf34af4';
-    expect(await readWorkspaceConversationNames(f.db, [key, 'sandbox/sandbox-bot/group:unknown', 'not a key'])).toEqual(new Map([[key, '测试群']]));
-    // Another workspace names the same scene differently: no guess.
+    const key = f.featureKey('group', 'group-6cf34af4');
+    expect(key).toBe('sandbox-one/sandbox/group:group-6cf34af4');
+    expect(await readWorkspaceConversationNames(f.db, f.snapshots, [key, f.featureKey('group', 'unknown'), 'not a key'])).toEqual(new Map([[key, '测试群']]));
+    // Same kind and id under another Endpoint: not this workspace's conversation.
+    expect((await readWorkspaceConversationNames(f.db, f.snapshots, [f.featureKey('group', 'group-6cf34af4', 1)])).size).toBe(0);
+    // Same scene, wrong adapter alias or endpoint id in the key: nothing.
+    expect((await readWorkspaceConversationNames(f.db, f.snapshots, ['other/sandbox/group:group-6cf34af4', 'sandbox-one/other/group:group-6cf34af4'])).size).toBe(0);
+    // Another owner served by the same Endpoint names it differently: ambiguous, no guess.
     expect((await f.save({ connectionId: 'other-owner', conversation: { ...group, name: '另一个名字' }, expectedRevision: null })).status).toBe(200);
-    expect((await readWorkspaceConversationNames(f.db, [key])).size).toBe(0);
-    expect((await readWorkspaceConversationNames(undefined, [key])).size).toBe(0);
+    expect((await readWorkspaceConversationNames(f.db, f.snapshots, [key])).size).toBe(0);
+    expect((await readWorkspaceConversationNames(undefined, f.snapshots, [key])).size).toBe(0);
+    expect((await readWorkspaceConversationNames(f.db, undefined, [key])).size).toBe(0);
+  });
+
+  it('never reveals a name stored under an owner the Endpoint no longer serves (#1250)', async () => {
+    const f = await fixture();
+    const group = { ...conversation, id: 'room-a', type: 'group', name: '甲的会话' };
+    expect((await f.save({ connectionId: 'other-owner', conversation: group, expectedRevision: null })).status).toBe(200);
+    const key = f.featureKey('group', 'room-a');
+    expect(await readWorkspaceConversationNames(f.db, f.snapshots, [key])).toEqual(new Map([[key, '甲的会话']]));
+    // The owner's connections are gone (owner reconfigured): its names stay private.
+    f.connections.delete('other-owner');
+    expect((await readWorkspaceConversationNames(f.db, f.snapshots, [key])).size).toBe(0);
   });
 
   it('reports malformed JSON precisely and preserves existing danger-mode network normalization', async () => {

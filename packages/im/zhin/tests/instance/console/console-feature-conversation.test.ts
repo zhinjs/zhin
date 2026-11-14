@@ -68,7 +68,7 @@ async function harness(options: Partial<FeatureRpcContext> = {}, storeExtras: Pa
     publishEvent: type => { events.push(type); }, actor: 'user:u1', ...options,
   };
   const call = async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data }, context);
-  return { call, conversations, authorized, events, state };
+  return { call, conversations, authorized, events, state, configurationPort: configuration, snapshots: context.snapshots };
 }
 
 const g1 = 'qq/bot-1/group:1001';
@@ -186,6 +186,31 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
     // Without a structured operator, the legacy id still tells the Console principal.
     expect(plain.operator).toEqual({ source: 'console', principalId: 'u1' });
     expect((await failing.call('feature.conversations', {}))!.status).toBe(200);
+  });
+
+  it('shows who wrote an override only to callers who may configure it; view-only callers see the source (#1250)', async () => {
+    const writer = await harness({ operator: { source: 'console', principalId: 'u1', displayName: 'Alice' } });
+    await writer.call('feature.set-enabled', { plugin: 'repeater', level: 'conversation', key: g1, enabled: false });
+    // Same store, a caller holding only `feature.view`.
+    const viewer = { ...writer, call: async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data }, {
+      authScope: 'full', authorize: request => request.permission === 'feature.view', configuration: (await harness()).configurationPort,
+      snapshots: writer.snapshots, stores: { overrides: writer.conversations,
+        conversationNames: async keys => new Map(keys.map(key => [key, '测试群'])) },
+      mayViewConversationNames: () => false,
+    }) };
+    const read = (await viewer.call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data as any;
+    expect(read.operator).toEqual({ source: 'console' });
+    expect(JSON.stringify(read)).not.toContain('Alice');
+    // Without `endpoint.view` the Console-given workspace name is left out too.
+    expect(read.conversation).not.toHaveProperty('name');
+    const list = (await viewer.call('feature.conversations', {}))!.body.data as any;
+    const item = list.conversations.find((entry: any) => entry.key === g1);
+    expect(item.overrides[0].operator).toEqual({ source: 'console' });
+    expect(item).not.toHaveProperty('name');
+    expect(JSON.stringify(list)).not.toContain('Alice');
+    // A caller who may configure that conversation sees the full writer.
+    const full = (await writer.call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data as any;
+    expect(full.operator).toEqual({ source: 'console', principalId: 'u1', displayName: 'Alice' });
   });
 
   it('describes the Console writer from the signed-in principal (#1250)', () => {

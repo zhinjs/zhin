@@ -93,7 +93,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     } finally { lease.release(); }
   };
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
-  const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, keys);
+  const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
   const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {

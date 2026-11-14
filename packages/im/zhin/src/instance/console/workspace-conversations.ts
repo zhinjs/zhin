@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { decodeStorageIdentity, encodeStorageIdentity, parseFeatureConversationKey, type DatabaseHost, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
+import {
+  decodeStorageIdentity, encodeStorageIdentity, parseFeatureConversationKey, resolveEndpointFeatureKey,
+  type DatabaseHost, type DatabaseHostModel, type SnapshotReader,
+} from '@zhin.js/plugin-runtime';
 import type { SandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 
 const TABLE = 'console_conversations';
@@ -82,34 +86,93 @@ export async function saveWorkspaceConversation(database: DatabaseHost | undefin
 
 /**
  * Display names the Console gave conversations (Sandbox sessions), keyed by feature conversation
- * key (#1250). A key is matched by conversation kind and id; when two workspaces name the same
- * conversation differently the name is ambiguous and left out. Best effort: no store, no names.
+ * key (#1250). Best effort: no store or no generation, no names.
+ *
+ * A key `<alias>/<endpointId>/<kind>:<id>` resolves only against rows of the Sandbox Endpoint that
+ * key names (same adapter and Endpoint capability) whose owner is an owner that Endpoint currently
+ * serves (its live or placeholder connections). That is the scope the workspace directory itself
+ * shows (`GET /api/conversations/workspaces` reads the owner of the caller's live connection), so a
+ * name stored under another or a former owner, or under another Endpoint with a similar alias, is
+ * never revealed. When the matching rows name a conversation differently the name is left out.
  */
-export async function readWorkspaceConversationNames(database: DatabaseHost | undefined, keys: readonly string[]): Promise<ReadonlyMap<string, string>> {
+export async function readWorkspaceConversationNames(
+  database: DatabaseHost | undefined,
+  snapshots: SnapshotReader | undefined,
+  keys: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
   const names = new Map<string, string>();
-  const wanted = new Map<string, string[]>();
+  // `<alias>/<endpointId>` → scene (`kind\0id`) → keys.
+  const wanted = new Map<string, Map<string, string[]>>();
   for (const key of keys) {
     const ref = parseFeatureConversationKey(key);
     if (!ref) continue;
+    const endpoint = `${ref.adapter}/${ref.endpointId}`;
+    const scenes = wanted.get(endpoint) ?? new Map<string, string[]>();
     const scene = `${ref.conversation.kind}\0${ref.conversation.id}`;
-    wanted.set(scene, [...(wanted.get(scene) ?? []), key]);
+    scenes.set(scene, [...(scenes.get(scene) ?? []), key]);
+    wanted.set(endpoint, scenes);
   }
-  if (!wanted.size || !database?.started || !['sqlite', 'mysql', 'pg'].includes(database.dialect)) return names;
+  if (!wanted.size || !snapshots || !database?.started || !['sqlite', 'mysql', 'pg'].includes(database.dialect)) return names;
   const model = database.models.get(TABLE);
   if (!model) return names;
-  const found = new Map<string, Set<string>>();
-  for (const row of await model.select('conversation_id', 'conversation_kind', 'name')) {
-    let id: string;
-    try { id = decodeStorageIdentity(String(row.conversation_id)); } catch { continue; }
-    const scene = `${String(row.conversation_kind)}\0${id}`;
-    if (!wanted.has(scene) || typeof row.name !== 'string' || !row.name.trim()) continue;
-    found.set(scene, (found.get(scene) ?? new Set()).add(row.name.trim()));
-  }
-  for (const [scene, candidates] of found) {
-    if (candidates.size !== 1) continue;
-    for (const key of wanted.get(scene)!) names.set(key, [...candidates][0]!);
+  const endpoints = sandboxEndpointsFor(snapshots, new Set(wanted.keys()));
+  for (const { featureEndpoint, adapter, endpointId, owners } of endpoints) {
+    const scenes = wanted.get(featureEndpoint)!;
+    if (!owners.length) continue;
+    const ids = [...new Set([...scenes.keys()].map(scene => encodeStorageIdentity(scene.slice(scene.indexOf('\0') + 1))))];
+    const rows = await model.select('conversation_id', 'conversation_kind', 'name').where({
+      endpoint_adapter: encodeStorageIdentity(adapter),
+      endpoint_id: encodeStorageIdentity(endpointId),
+      owner_id: { $in: owners.map(owner => encodeStorageIdentity(owner)) },
+      conversation_id: { $in: ids },
+    });
+    const found = new Map<string, Set<string>>();
+    for (const row of rows) {
+      let id: string;
+      try { id = decodeStorageIdentity(String(row.conversation_id)); } catch { continue; }
+      const scene = `${String(row.conversation_kind)}\0${id}`;
+      if (!scenes.has(scene) || typeof row.name !== 'string' || !row.name.trim()) continue;
+      found.set(scene, (found.get(scene) ?? new Set()).add(row.name.trim()));
+    }
+    for (const [scene, candidates] of found) {
+      if (candidates.size !== 1) continue;
+      for (const key of scenes.get(scene)!) names.set(key, [...candidates][0]!);
+    }
   }
   return names;
+}
+
+interface SandboxEndpointScope {
+  /** `<alias>/<endpointId>` as feature conversation keys spell it. */
+  readonly featureEndpoint: string;
+  /** Stored scope: client adapter name and Endpoint capability id (see `withSandboxWorkspaceScope`). */
+  readonly adapter: string;
+  readonly endpointId: string;
+  readonly owners: readonly string[];
+}
+
+/** Sandbox Endpoints (ADR 0044 `runtime.sandbox`) of this generation that `wanted` names. */
+function sandboxEndpointsFor(snapshots: SnapshotReader, wanted: ReadonlySet<string>): readonly SandboxEndpointScope[] {
+  let lease: ReturnType<SnapshotReader['acquire']>;
+  try { lease = snapshots.acquire(); } catch { return []; }
+  try {
+    const index = lease.value.projections.get(adapterFeatureId);
+    if (!isAdapterIndex(index)) return [];
+    const result: SandboxEndpointScope[] = [];
+    for (const row of index.describe()) {
+      try {
+        const profile = index.capabilityProfile(row.id);
+        if (!profile || resolveStaticCapabilities(profile, []).runtime?.sandbox !== true) continue;
+        const featureEndpoint = resolveEndpointFeatureKey(lease.value, String(row.id));
+        if (!featureEndpoint || !wanted.has(featureEndpoint)) continue;
+        const client = index.clientById<{ connections?: () => readonly { owner?: unknown }[] }>(row.id);
+        const owners = [...new Set((typeof client.connections === 'function' ? client.connections() : [])
+          .map(connection => connection.owner).filter((owner): owner is string => typeof owner === 'string' && owner.length > 0))];
+        result.push(Object.freeze({ featureEndpoint, adapter: index.clientAdapter(row.id), endpointId: String(row.id), owners: Object.freeze(owners) }));
+      } catch { /* an Endpoint without a live client contributes no names */ }
+    }
+    return result;
+  } finally { lease.release(); }
 }
 
 function requireStore(database: DatabaseHost | undefined): DatabaseHostModel {
