@@ -1,7 +1,7 @@
 ---
-"@zhin.js/command": patch
+"@zhin.js/command": minor
 "@zhin.js/core": patch
-"@zhin.js/runtime": patch
+"@zhin.js/runtime": minor
 "@zhin.js/agent": patch
 ---
 

@@ -1,6 +1,6 @@
 ---
-"@zhin.js/command": patch
-"@zhin.js/core": patch
+"@zhin.js/command": minor
+"@zhin.js/core": minor
 "@zhin.js/game-kit": patch
 ---
 

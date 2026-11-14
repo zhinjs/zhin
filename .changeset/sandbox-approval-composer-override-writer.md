@@ -1,10 +1,10 @@
 ---
-"@zhin.js/im-contract": patch
-"@zhin.js/core": patch
+"@zhin.js/im-contract": minor
+"@zhin.js/core": minor
 "@zhin.js/agent": patch
 "@zhin.js/adapter-sandbox": patch
-"@zhin.js/console-protocol": patch
-"zhin.js": patch
+"@zhin.js/console-protocol": minor
+"zhin.js": minor
 ---
 
 Sandbox 会话页与功能自助反馈（#1250）：

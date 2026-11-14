@@ -26,7 +26,7 @@ const conversation = { id: 'room:中文\0%', type: 'private', name: '一个工�
 
 /** Real SQLite, generation AdapterIndex, and authenticated HTTP; no provider or platform sends. */
 async function fixture(options: { filename?: string; unavailable?: boolean;
-  commands?: { prefix?: string; menuKeyword?: string | false; names?: readonly (string | { name: string; permit?: string[] })[] } } = {}) {
+  commands?: { prefix?: string; menuKeyword?: string | false; names?: readonly (string | { name: string; permit?: string[]; params?: Record<string, { type: 'string'; optional?: boolean }> })[] } } = {}) {
   const db = createDatabaseHost({ dialect: 'sqlite', filename: options.filename ?? join(directory, 'directory.sqlite') });
   defineWorkspaceConversationTable(db);
   await db.start();
@@ -49,7 +49,7 @@ async function fixture(options: { filename?: string; unavailable?: boolean;
     const command = typeof item === 'string' ? { name: item } : item;
     return createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
       source: `/app/commands/${command.name}/index.ts`,
-      definition: defineCommand({ ...(command.permit ? { permit: command.permit } : {}), execute: () => 'ok' }) });
+      definition: defineCommand({ ...(command.permit ? { permit: command.permit } : {}), ...('params' in command && command.params ? { params: command.params } : {}), execute: () => 'ok' }) });
   });
   const config = new Map<PluginId, unknown>();
   if (options.commands?.prefix !== undefined) config.set(owners[0]!, { commandPrefix: options.commands.prefix });
@@ -199,6 +199,14 @@ describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
     expect((await (await bare.commands()).json()).data).toEqual({ prefix: '', menu: '帮助', quick: ['帮助'] });
     const off = await fixture({ commands: { menuKeyword: false, names: [] } });
     expect((await (await off.commands()).json()).data).toEqual({ prefix: '', quick: [] });
+  });
+
+  it('leaves commands with a required parameter out of quick commands', async () => {
+    // Declared on the command itself (`params`), as a parameter directory would; a quick command is sent as is.
+    const f = await fixture({ commands: { prefix: '/', names: [{ name: 'ping', params: { target: { type: 'string' } } }, 'status'] } });
+    expect((await (await f.commands({ type: 'group', id: 'room' })).json()).data).toEqual({ prefix: '/', menu: '/菜单', quick: ['/菜单', '/status'] });
+    const optional = await fixture({ commands: { prefix: '/', names: [{ name: 'ping', params: { target: { type: 'string', optional: true } } }] } });
+    expect((await (await optional.commands({ type: 'group', id: 'room' })).json()).data.quick).toEqual(['/菜单', '/ping']);
   });
 
   it('guards quick commands like the directory: credentials, live binding and a valid scene', async () => {

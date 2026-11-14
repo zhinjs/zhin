@@ -1,5 +1,5 @@
 ---
-"@zhin.js/agent": patch
+"@zhin.js/agent": minor
 "@zhin.js/ai": patch
 ---
 
