@@ -75,6 +75,8 @@ export type ResolvedSandboxBot = {
   readonly randomNamePerConnection: boolean;
   readonly streaming: boolean;
   readonly streamingIntervalMs: number;
+  /** Configured `nickname`; `[@nickname]` also mentions this bot. */
+  readonly nickname?: string;
 };
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
@@ -102,6 +104,7 @@ export function resolveSandboxEndpoint(
     randomNamePerConnection: false,
     streaming: config.streaming !== false,
     streamingIntervalMs,
+    ...(optionalEndpointField(config.nickname) ? { nickname: optionalEndpointField(config.nickname)! } : {}),
   };
 }
 
@@ -208,8 +211,72 @@ export type SandboxWsFrame =
   | { readonly kind: 'message'; readonly message: SandboxParsedMessage }
   | { readonly kind: 'invalid' };
 
+/**
+ * The bot this socket talks to. Typed `[@<id or name>]` text (the input hint the Sandbox page shows)
+ * becomes a mention segment; a match on `id` or one of `names` (case-insensitive) targets `id`,
+ * so the IM layer recognises it as a mention of the bot.
+ */
+export interface SandboxSelfMention {
+  readonly id: string;
+  readonly names?: readonly string[];
+}
+
+const TYPED_MENTION = /\[@([^\[\]\n]{1,64})\]/gu;
+
+function expandTypedMentions(
+  content: MessageElement[],
+  text: string,
+  self: SandboxSelfMention | undefined,
+): { content: MessageElement[]; text: string } {
+  const selfKeys = new Set([self?.id, ...(self?.names ?? [])]
+    .flatMap(value => typeof value === 'string' && value.trim() ? [value.trim().toLowerCase()] : []));
+  const resolve = (name: string): { target: string; self: boolean } => {
+    const trimmed = name.trim();
+    return self && selfKeys.has(trimmed.toLowerCase()) ? { target: self.id, self: true } : { target: trimmed, self: false };
+  };
+  let expanded = false;
+  const next: MessageElement[] = [];
+  for (const segment of content) {
+    // A picked mention (`mention` segment) may carry the bot's name instead of its id.
+    if ((segment.type === 'mention' || segment.type === 'at') && self && typeof segment.data?.target === 'string'
+      && segment.data.target !== self.id && selfKeys.has(segment.data.target.trim().toLowerCase())) {
+      expanded = true;
+      next.push({ ...segment, data: { ...segment.data, target: self.id } });
+      continue;
+    }
+    const value = segment.type === 'text' ? segment.data?.text : undefined;
+    if (typeof value !== 'string' || !value.includes('[@')) {
+      next.push(segment);
+      continue;
+    }
+    let last = 0;
+    for (const match of value.matchAll(TYPED_MENTION)) {
+      const name = match[1]!;
+      if (!name.trim()) continue;
+      expanded = true;
+      if (match.index > last) next.push({ type: 'text', data: { text: value.slice(last, match.index) } });
+      const { target } = resolve(name);
+      next.push({ type: 'mention', data: { target, name: name.trim() } });
+      last = match.index + match[0].length;
+    }
+    if (last === 0) next.push(segment);
+    else if (last < value.length) next.push({ type: 'text', data: { text: value.slice(last) } });
+  }
+  if (!expanded) return { content, text };
+  // Plain-text view: drop mentions of the bot (like other platforms strip the at-self prefix),
+  // keep `@name` for anyone else so commands and the Agent still see who was addressed.
+  let removedSelf = false;
+  const plain = text.replace(TYPED_MENTION, (whole, name: string) => {
+    if (!name.trim()) return whole;
+    const resolved = resolve(name);
+    if (resolved.self) { removedSelf = true; return ''; }
+    return `@${resolved.target}`;
+  });
+  return { content: next, text: removedSelf ? plain.replace(/[ \t]{2,}/gu, ' ').trim() : plain };
+}
+
 /** Control frames never fall through into chat or platform message hooks. */
-export function parseSandboxWsFrame(raw: string): SandboxWsFrame {
+export function parseSandboxWsFrame(raw: string, self?: SandboxSelfMention): SandboxWsFrame {
   const payload = readSandboxWirePayload(raw);
   if ('op' in payload) {
     const conversation = payload.conversation as Partial<SandboxConversation> | null;
@@ -218,28 +285,28 @@ export function parseSandboxWsFrame(raw: string): SandboxWsFrame {
       || typeof conversation.id !== 'string' || !conversation.id.trim()) return { kind: 'invalid' };
     return { kind: 'subscribe', conversation: { type: conversation.type, id: conversation.id } };
   }
-  const message = normalizeSandboxWsPayload(payload, raw);
+  const message = normalizeSandboxWsPayload(payload, raw, self);
   if (!['private', 'direct', 'group', 'channel', 'guild'].includes(message.type)
     || typeof message.id !== 'string') return { kind: 'invalid' };
   return { kind: 'message', message };
 }
 
-export function parseSandboxWsPayload(raw: string): SandboxParsedMessage {
-  return normalizeSandboxWsPayload(readSandboxWirePayload(raw), raw);
+export function parseSandboxWsPayload(raw: string, self?: SandboxSelfMention): SandboxParsedMessage {
+  return normalizeSandboxWsPayload(readSandboxWirePayload(raw), raw, self);
 }
 
 export const parseSandboxInboundPayload = parseSandboxWsPayload;
 
-function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): SandboxParsedMessage {
+function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string, self?: SandboxSelfMention): SandboxParsedMessage {
   const type = payload.type ?? 'private';
   const id = payload.id ?? 'sandbox-user';
-  const content: MessageElement[] = typeof payload.content === 'string'
+  const wireContent: MessageElement[] = typeof payload.content === 'string'
     ? [{ type: 'text', data: { text: payload.content } }]
     : Array.isArray(payload.content)
       ? payload.content
       : [{ type: 'text', data: { text: payload.text ?? raw } }];
 
-  const actionSegment = content.find((segment) => segment.type === 'action');
+  const actionSegment = wireContent.find((segment) => segment.type === 'action');
   let action: { id: string; payload: string } | undefined;
   if (actionSegment?.data) {
     const actionPayload = typeof actionSegment.data.payload === 'string'
@@ -255,7 +322,7 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): Sa
     }
   }
 
-  let text = content
+  let text = wireContent
     .flatMap((segment) => (segment.type === 'text' && typeof segment.data?.text === 'string'
       ? [segment.data.text]
       : []))
@@ -265,6 +332,9 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): Sa
       ? payload.text
       : action?.payload ?? raw;
   }
+  const typed = expandTypedMentions(wireContent, text, self);
+  const content = typed.content;
+  text = typed.text;
   const agentRun = normalizeSandboxAgentRunConfig(payload.agentRun);
   const rawMessageId = typeof payload.messageId === 'string' ? payload.messageId.trim() : '';
   const messageId = /^[A-Za-z0-9._:-]{1,160}$/u.test(rawMessageId) ? rawMessageId : undefined;
