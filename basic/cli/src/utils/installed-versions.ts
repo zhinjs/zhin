@@ -172,6 +172,6 @@ export function formatInstalledVersionRows(rows: readonly InstalledVersionRow[])
     const after = row.after ?? '未安装';
     const change = before === after ? `${after}（未变化）` : `${before} → ${after}`;
     const mark = row.status === 'ok' || row.status === 'unchecked' ? chalk.green('✓') : chalk.red('✗');
-    return `  ${mark} ${row.name}: ${change}　声明 ${row.declared}`;
+    return `  ${mark} ${row.name}: ${change}  （声明 ${row.declared}）`;
   });
 }

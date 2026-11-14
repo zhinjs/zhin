@@ -20,11 +20,11 @@ import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
-import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
+import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
-import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
+import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
 import { syncNativeBuildAllowance, usesPnpm } from '../utils/native-build-deps.js';
 import {
@@ -36,8 +36,6 @@ import {
   snapshotInstalledVersions,
   syncReleaseAgeExclusions,
 } from '../utils/installed-versions.js';
-import { readConfig, findConfigFile } from '@zhin.js/gateway/project';
-import { isAiEnabledInConfig } from '@zhin.js/scaffold-wizard';
 
 const cwd = process.cwd();
 

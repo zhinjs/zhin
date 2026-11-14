@@ -31,10 +31,9 @@ import {
 import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
 import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
-import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
-import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
+import { findConfigFile, loadRuntimeEnvironmentLayers, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';

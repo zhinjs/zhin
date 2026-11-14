@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 describe('create-zhin install', () => {
   describe('Installation utilities', () => {
@@ -29,7 +29,6 @@ describe('create-zhin install', () => {
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'fs-extra'
-import { vi, afterEach } from 'vitest'
 import { areDeclaredDependenciesInstalled, findIgnoredBuildPlaceholders, installDependencies } from '../src/install.js'
 
 describe('installDependencies outcome (#1250)', () => {

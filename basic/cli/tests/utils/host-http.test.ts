@@ -180,6 +180,6 @@ describe('loadHostHttpConfig', () => {
   it('falls back to the default listener', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
     fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'log_level: info\n');
-    expect(await loadHostHttpConfig(dir)).toEqual({ baseUrl: 'http://127.0.0.1:8086/api', token: '' });
+    expect(await loadHostHttpConfig(dir)).toEqual({ baseUrl: 'http://127.0.0.1:8068/api', token: '' });
   });
 });
