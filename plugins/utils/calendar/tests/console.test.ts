@@ -103,4 +103,26 @@ describe('Calendar Console RPC & Declarative Page', () => {
     });
     expect(typeof CalendarPage).toBe('function');
   });
+
+  it('uses date / time pickers and deletes from each event row (#1250)', () => {
+    const spec = (CalendarPage as unknown as { spec: {
+      actions: readonly { name: string; fields?: readonly { key: string; type?: string }[] }[];
+      sections: readonly { id?: string; rowActions?: readonly { name: string; idParamKey?: string; confirm?: unknown }[] }[];
+    } }).spec;
+    const create = spec.actions.find(action => action.name === 'create')!;
+    expect(create.fields?.find(field => field.key === 'date')?.type).toBe('date');
+    expect(create.fields?.find(field => field.key === 'time')?.type).toBe('time');
+    expect(spec.actions.map(action => action.name)).not.toContain('delete');
+    const events = spec.sections.find(section => section.id === 'events')!;
+    expect(events.rowActions).toEqual([expect.objectContaining({ name: 'delete', idParamKey: 'id', confirm: expect.anything() })]);
+  });
+
+  it('accepts picker times and rejects malformed ones', async () => {
+    const runtime = { config: { timezone: 'Asia/Shanghai' }, provider: undefined, auth: undefined } as unknown as CalendarRuntime;
+    const create = createCalendarConsoleRpc().methods.get('create')!;
+    const created = await create.handler({ title: 'Standup', date: '2026-11-20', time: '10:30:00' }, createCall(runtime)) as Record<string, unknown>;
+    expect(created.time).toBe('10:30');
+    await expect(Promise.resolve().then(() => create.handler({ title: 'x', date: '2026-11-20', time: '25:00' }, createCall(runtime))))
+      .rejects.toBeInstanceOf(PluginConsoleRpcError);
+  });
 });

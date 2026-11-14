@@ -272,7 +272,21 @@ export type DeclarativeValueExpr =
         readonly empty?: DeclarativeI18nText;
       };
     }
-  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean };
+  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean }
+  /**
+   * A value the status RPC already localized: `data[path]` is `{ 'zh-CN': …, en: … }` (or a plain
+   * string), and the viewer's locale picks one, falling back to `zh-CN` / `zh`.
+   */
+  | { readonly $i18n: string; readonly fallback?: string | number | boolean };
+
+/** Picks the viewer's locale from a `{ 'zh-CN' | zh | en: … }` record; plain values pass through. */
+export function pickLocalizedDataValue(value: unknown, locale: DeclarativeUiLocale): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  return locale === 'en'
+    ? record.en ?? record['zh-CN'] ?? record.zh
+    : record['zh-CN'] ?? record.zh ?? record.en;
+}
 
 export function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -284,7 +298,8 @@ export function isDeclarativeValueExpr(value: unknown): value is DeclarativeValu
     (rec.$format !== undefined && Array.isArray(rec.$args ?? rec.args)) ||
     (rec.$map !== null && typeof rec.$map === 'object') ||
     (rec.$join !== null && typeof rec.$join === 'object') ||
-    Array.isArray(rec.$coalesce)
+    Array.isArray(rec.$coalesce) ||
+    typeof rec.$i18n === 'string'
   );
 }
 
@@ -392,6 +407,10 @@ export function evaluateDeclarativeValue(
     }
     return rec.fallback;
   }
+  if (typeof rec.$i18n === 'string') {
+    const val = pickLocalizedDataValue(resolveDataPath(data, rec.$i18n), locale);
+    return val !== undefined && val !== null && val !== '' ? val : rec.fallback;
+  }
   return undefined;
 }
 
@@ -466,7 +485,16 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
-  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented';
+  /**
+   * `date` / `time` render native pickers and submit `YYYY-MM-DD` / `HH:mm`. `conversation`
+   * renders the Console conversation picker (accounts and recent conversations, with manual entry
+   * as an advanced option) and submits the chosen canonical `DeliveryTarget` as a JSON string.
+   */
+  readonly type?:
+    | 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented'
+    | 'date' | 'time' | 'conversation';
+  /** `conversation` fields only: the conversation kinds the action accepts (default: all). */
+  readonly conversationKinds?: readonly ('private' | 'group' | 'channel')[];
   readonly options?: readonly {
     readonly value: string;
     readonly label: DeclarativeI18nText;
@@ -503,6 +531,20 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
       ) => Readonly<Record<string, unknown>>);
   readonly disabled?: boolean | ((data: TData | undefined) => boolean);
   readonly successMessage?: DeclarativeI18nText;
+  /**
+   * Shows the RPC's answer inline, right under this action's form, instead of a page-top banner.
+   * Expressions read the action's result object (not the page status).
+   */
+  readonly result?: DeclarativeActionResultSpec;
+}
+
+export interface DeclarativeActionResultSpec {
+  readonly title?: DeclarativeI18nText | DeclarativeValueExpr;
+  readonly tone?: DeclarativeBadgeTone | DeclarativeValueExpr;
+  readonly entries?: readonly {
+    readonly label: DeclarativeI18nText;
+    readonly value: string | DeclarativeValueExpr;
+  }[];
 }
 
 export type DeclarativeColumnType =
@@ -516,7 +558,9 @@ export type DeclarativeColumnType =
   | 'number'
   | 'progress'
   | 'tags'
-  | 'json';
+  | 'json'
+  /** A conversation key (`["conversation-v1", …]`) or `DeliveryTarget`, shown by its Console display name. */
+  | 'conversation';
 
 export interface DeclarativeColumnSpec<
   TRow = Record<string, unknown>,
@@ -627,6 +671,14 @@ export interface DeclarativeSectionSpec<
         readonly label: DeclarativeI18nText;
         readonly value?: DeclarativeRenderable | DeclarativeValueExpr;
         readonly dataKey?: string;
+        readonly hint?: DeclarativeI18nText;
+        /** Greys the value out when truthy (e.g. a schedule that is configured but switched off). */
+        readonly muted?: boolean | DeclarativeValueExpr;
+        /** A badge next to the value, e.g. 「未启用」. An empty label hides it. */
+        readonly badge?: {
+          readonly label: DeclarativeI18nText | DeclarativeValueExpr;
+          readonly tone?: DeclarativeBadgeTone | DeclarativeValueExpr;
+        };
       }[]
     | ((
         data: TData,

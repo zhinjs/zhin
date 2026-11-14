@@ -85,15 +85,14 @@ export default definePageBlueprint<CalendarConsoleStatus>({
         },
         {
           key: 'date',
-          label: { zh: '日期 YYYY-MM-DD', en: 'Date (YYYY-MM-DD)' },
-          type: 'text',
+          label: { zh: '日期', en: 'Date' },
+          type: 'date',
           required: true,
-          placeholder: '2026-11-08',
         },
         {
           key: 'time',
-          label: { zh: '时间 HH:mm', en: 'Time (HH:mm)' },
-          type: 'text',
+          label: { zh: '时间', en: 'Time' },
+          type: 'time',
           defaultValue: '09:00',
         },
         {
@@ -111,19 +110,6 @@ export default definePageBlueprint<CalendarConsoleStatus>({
         },
       ],
     },
-    {
-      name: 'delete',
-      label: { zh: '删除日程', en: 'Delete Event' },
-      variant: 'danger',
-      fields: [
-        {
-          key: 'id',
-          label: { zh: '日程 ID', en: 'Event ID' },
-          type: 'text',
-          required: true,
-        },
-      ],
-    },
   ],
   sections: [
     {
@@ -132,6 +118,19 @@ export default definePageBlueprint<CalendarConsoleStatus>({
       title: { zh: '日程列表', en: 'Calendar Events' },
       emptyText: { zh: '暂无日程记录', en: 'No calendar events yet' },
       items: 'events',
+      rowKey: 'id',
+      // Delete from the row itself; no event ID to copy by hand.
+      rowActions: [
+        {
+          name: 'delete',
+          label: { zh: '删除', en: 'Delete' },
+          variant: 'danger',
+          confirm: { zh: '确认删除该日程？', en: 'Delete this event?' },
+          confirmLabel: { zh: '删除', en: 'Delete' },
+          idParamKey: 'id',
+          successMessage: { zh: '已删除日程', en: 'Event deleted' },
+        },
+      ],
       columns: [
         { key: 'id', label: { zh: 'ID', en: 'ID' } },
         { key: 'title', label: { zh: '日程标题', en: 'Title' } },

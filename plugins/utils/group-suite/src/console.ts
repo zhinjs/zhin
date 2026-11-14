@@ -1,5 +1,8 @@
 import {
+  createDeliveryTarget,
   definePluginConsoleRpc,
+  type DeliveryTarget,
+  type PluginStateStore,
   type PluginConsoleRpc,
   type PluginConsoleRpcCall,
   type PluginConsoleRpcJson,
@@ -13,12 +16,17 @@ import {
   type GroupSuiteRow,
 } from './memory-store.js';
 import { groupSuiteRuntimeToken, type GroupSuiteRuntime } from './runtime-state.js';
+import { conversationKey } from './conversation-scope.js';
+import { KEYWORD_INDEX_KEY, readKeywordIndex } from './keywords.js';
 
 export const GROUP_SUITE_CONSOLE_PAGE = 'index';
 export const GROUP_SUITE_READ_PERMISSION = 'group-suite:read';
 
 export interface GroupSuiteCheckinLeaderboardRow {
+  /** Nickname recorded at check-in, else the user id. */
+  readonly user: string;
   readonly userId: string;
+  readonly userName: string;
   readonly groupId: string;
   readonly totalDays: number;
   readonly streakDays: number;
@@ -27,15 +35,23 @@ export interface GroupSuiteCheckinLeaderboardRow {
 }
 
 export interface GroupSuiteKeywordRow {
+  /** `teach` = 问答 (`teach` command), `keyword` = 关键词回复 (`keyword-add`). */
+  readonly kind: 'teach' | 'keyword';
+  /** Conversation key (`["conversation-v1", …]`), or `global` / a legacy group id. */
   readonly groupId: string;
   readonly keyword: string;
   readonly reply: string;
   readonly creatorId: string;
+  readonly creator: string;
 }
 
 export interface GroupSuiteConsoleStatus {
   readonly checkinCount: number;
+  /** Same scopes as `teach-list` (问答) and `keyword-list` (关键词), counted separately. */
+  readonly teachCount: number;
   readonly keywordCount: number;
+  /** teachCount + keywordCount. */
+  readonly qaCount: number;
   readonly dailyStatsCount: number;
   readonly topCheckins: readonly GroupSuiteCheckinLeaderboardRow[];
   readonly keywords: readonly GroupSuiteKeywordRow[];
@@ -104,8 +120,12 @@ async function readTableRows(
 }
 
 function mapCheckinRow(row: GroupSuiteRow): GroupSuiteCheckinLeaderboardRow {
+  const userId = String(row.userId ?? row.user_id ?? '');
+  const userName = String(row.userName ?? row.user_name ?? '');
   return {
-    userId: String(row.userId ?? row.user_id ?? ''),
+    user: userName || userId,
+    userId,
+    userName,
     groupId: String(row.groupId ?? row.group_id ?? row.context_id ?? ''),
     totalDays: Number(row.totalDays ?? row.total_days ?? row.total_checkins ?? 0) || 0,
     streakDays: Number(row.streakDays ?? row.streak_days ?? row.streak ?? 0) || 0,
@@ -114,12 +134,17 @@ function mapCheckinRow(row: GroupSuiteRow): GroupSuiteCheckinLeaderboardRow {
   };
 }
 
-function mapKeywordRow(row: GroupSuiteRow): GroupSuiteKeywordRow {
+function mapKeywordRow(row: GroupSuiteRow, kind: GroupSuiteKeywordRow['kind']): GroupSuiteKeywordRow {
+  const creatorId = String(row.creatorId ?? row.creator_id ?? '');
+  const creatorName = String(row.creatorName ?? row.creator_name ?? '');
+  const contextType = String(row.context_type ?? '');
   return {
-    groupId: String(row.groupId ?? row.group_id ?? row.context_id ?? ''),
+    kind,
+    groupId: String(row.groupId ?? row.group_id ?? row.context_id ?? '') || (contextType === 'global' ? 'global' : ''),
     keyword: String(row.keyword ?? row.question ?? ''),
     reply: String(row.reply ?? row.answer ?? ''),
-    creatorId: String(row.creatorId ?? row.creator_id ?? ''),
+    creatorId,
+    creator: creatorName || creatorId,
   };
 }
 
@@ -129,18 +154,53 @@ function collectEphemeralKeywords(runtime: GroupSuiteRuntime | undefined): Group
   for (const [groupId, entries] of runtime.keywords.entries()) {
     for (const [keyword, reply] of entries.entries()) {
       rows.push({
+        kind: 'keyword',
         groupId,
         keyword,
         reply,
         creatorId: '',
+        creator: '',
       });
     }
   }
   return rows;
 }
 
+/** Bounded read of the persistent keyword dictionaries listed in the plugin's keyword index. */
+async function collectPersistentKeywords(state: PluginStateStore | undefined): Promise<GroupSuiteKeywordRow[]> {
+  if (!state) return [];
+  const rows: GroupSuiteKeywordRow[] = [];
+  let targets: readonly DeliveryTarget[];
+  try {
+    targets = await readKeywordIndex(state);
+  } catch {
+    return [];
+  }
+  for (const target of targets.slice(0, 200)) {
+    try {
+      const entries = await state.forConversation(createDeliveryTarget({ conversation: target }))
+        .get<readonly (readonly [string, string])[]>('keywords');
+      const groupId = conversationKey(target);
+      for (const [keyword, reply] of entries ?? []) {
+        rows.push({ kind: 'keyword', groupId, keyword, reply, creatorId: '', creator: '' });
+      }
+    } catch {
+      // One unreadable conversation must not hide the rest.
+    }
+  }
+  return rows;
+}
+
+export interface GroupSuiteConsoleOptions {
+  /** Persistent state of the Database Host; persistent keywords live there (see `keywords.ts`). */
+  readonly keywordState?: () => PluginStateStore | undefined;
+}
+
+export { KEYWORD_INDEX_KEY };
+
 export function createGroupSuiteConsoleRpc(
   defaultRuntime?: GroupSuiteRuntime,
+  options: GroupSuiteConsoleOptions = {},
 ): PluginConsoleRpc {
   return definePluginConsoleRpc({
     status: {
@@ -148,10 +208,18 @@ export function createGroupSuiteConsoleRpc(
       requiredPermissions: [GROUP_SUITE_READ_PERMISSION],
       async handler(_input, call): Promise<PluginConsoleRpcJson> {
         const runtime = resolveRuntime(call, defaultRuntime);
-        const [checkinRows, keywordDbRows, statsRows] = await Promise.all([
+        let keywordState: PluginStateStore | undefined;
+        try {
+          keywordState = options.keywordState?.();
+        } catch {
+          keywordState = undefined;
+        }
+        const [checkinRows, teachRows, legacyKeywordRows, statsRows, persistentKeywords] = await Promise.all([
           readTableRows(runtime, ['group_checkin', CHECKIN_TABLE]),
-          readTableRows(runtime, ['group_keywords', TEACH_TABLE]),
+          readTableRows(runtime, [TEACH_TABLE]),
+          readTableRows(runtime, ['group_keywords']),
           readTableRows(runtime, ['group_daily_stats', STATS_TABLE]),
+          collectPersistentKeywords(keywordState),
         ]);
 
         const mappedCheckins = checkinRows.map(mapCheckinRow);
@@ -159,15 +227,19 @@ export function createGroupSuiteConsoleRpc(
           .sort((a, b) => (b.points - a.points) || (b.totalDays - a.totalDays))
           .slice(0, 20);
 
-        const mappedKeywords = [
-          ...keywordDbRows.map(mapKeywordRow),
+        const teach = teachRows.map(row => mapKeywordRow(row, 'teach'));
+        const keywordList = [
+          ...legacyKeywordRows.map(row => mapKeywordRow(row, 'keyword')),
+          ...persistentKeywords,
           ...collectEphemeralKeywords(runtime),
         ];
-        const keywords = mappedKeywords.slice(0, 50);
+        const keywords = [...teach, ...keywordList].slice(0, 50);
 
         return {
           checkinCount: mappedCheckins.length,
-          keywordCount: mappedKeywords.length,
+          teachCount: teach.length,
+          keywordCount: keywordList.length,
+          qaCount: teach.length + keywordList.length,
           dailyStatsCount: statsRows.length,
           topCheckins: topCheckins as unknown as PluginConsoleRpcJson,
           keywords: keywords as unknown as PluginConsoleRpcJson,

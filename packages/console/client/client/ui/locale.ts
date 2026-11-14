@@ -49,6 +49,26 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '展开详情': 'Expand details',
   '收起详情': 'Collapse details',
   '批量操作': 'Batch actions',
+  // Conversation picker / label (#1250)
+  '已选择': 'Selected',
+  '清除': 'Clear',
+  '搜索群名、昵称、ID 或账号': 'Search by group, nickname, ID or account',
+  '搜索会话': 'Search conversations',
+  '无法读取账号与最近会话（需要「查看账号」权限），可手动填写。': 'Accounts and recent conversations are unavailable (needs the “view accounts” permission); enter the conversation manually.',
+  '无法读取最近会话，仅列出账号；可手动填写会话 ID。': 'Recent conversations are unavailable; only accounts are listed. Enter the conversation ID manually.',
+  '最近会话': 'Recent conversations',
+  '没有匹配的最近会话': 'No matching recent conversation',
+  '暂无最近会话': 'No recent conversations yet',
+  '手动填写（高级）': 'Enter manually (advanced)',
+  '收起手动填写': 'Hide manual entry',
+  '机器人账号': 'Bot account',
+  '选择机器人账号': 'Choose a bot account',
+  '没有可选的机器人账号': 'No bot account available',
+  '会话类型': 'Conversation type',
+  '会话 ID': 'Conversation ID',
+  '群号 / 用户 ID / 频道 ID': 'Group / user / channel ID',
+  '使用该会话': 'Use this conversation',
+  '未启用': 'Disabled',
 };
 
 /**
