@@ -502,6 +502,52 @@ describe('adapter account RPC target follows the account the handler selects', (
     expect(await withConfig.as('endpoint-writeback', { ids: ['acct-a'] })).toMatchObject({ status: 400, body: { code: 'unsupported' } });
   });
 
+  it('authorizes camelCase / action. spellings of account methods exactly like the kebab form', async () => {
+    const adapterOperator: ConsoleGrant = { role: 'operator', scope: { kind: 'adapter', key: 'first' }, permissions: ['endpoint.view', 'endpoint.manage', 'account:read'] };
+    const spellings = (kebab: string, camel: string) => [kebab, camel, `action.${camel}`, `action.${kebab}`];
+    // Signed-in principal: endpoint.manage on the adapter, no ops.config.write → every spelling of write-back is refused.
+    const { f, as } = await endpointFixture([adapterOperator]);
+    const writes = f.repository.compareAndSet.mock.calls.length;
+    for (const action of spellings('endpoint-writeback', 'endpointWriteback')) {
+      expect(await as(action, { ids: ['acct-a'] }), action)
+        .toMatchObject({ status: 403, body: { code: 'forbidden', error: expect.stringContaining('ops.config.write') } });
+    }
+    const withConfig = await endpointFixture([adapterOperator, { scope: { kind: 'global' }, permissions: ['ops.config.write'] }]);
+    for (const action of spellings('endpoint-writeback', 'endpointWriteback')) {
+      expect(await withConfig.as(action, { ids: ['acct-a'] }), action).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+    }
+    // Another account method keeps its endpoint target in every spelling: a binding on acct-a never reaches acct-b.
+    const scoped = await endpointFixture();
+    for (const action of spellings('endpoint-import', 'endpointImport')) {
+      expect(await scoped.as(action, { id: 'acct-b' }), action).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    }
+    for (const action of spellings('endpoint-stop', 'endpointStop')) {
+      expect(await scoped.as(action, { id: 'acct-b' }), action).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    }
+    expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
+  });
+
+  it('applies alsoRequires to a token for camelCase / action. write-back even with a stale forwarded rule', async () => {
+    const { f, adapter } = await endpointFixture();
+    const call = (action: string, permissions: string[], withStaleRule = false) => {
+      const message = { type: `plugin.${owner}.${action}`, data: { expectedGeneration: 0, expectedRevision: adapter.revision, ids: ['acct-a'] } };
+      return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions, roles: [] },
+        pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
+        ...(withStaleRule ? { principal: {
+          grants: [{ scope: { kind: 'global' }, permissions }],
+          roles: [],
+          // A rule resolved from some other spelling: the generic plugin rule, without alsoRequires.
+          rule: Object.freeze({ kind: 'plugin', read: 'feature.view', write: 'feature.configure', target: Object.freeze({ kind: 'global' }) }),
+        } } : {}) } as never);
+    };
+    const held = ['account:read', 'account:write', 'endpoint.manage'];
+    for (const action of ['endpoint-writeback', 'endpointWriteback', 'action.endpointWriteback', 'action.endpoint-writeback']) {
+      expect(await call(action, held), action).toMatchObject({ status: 403, body: { code: 'forbidden', error: expect.stringContaining('ops.config.write') } });
+      expect(await call(action, held, true), action).toMatchObject({ status: 403, body: { code: 'forbidden', error: expect.stringContaining('ops.config.write') } });
+      expect(await call(action, [...held, 'ops.config.write']), action).toMatchObject({ status: 400, body: { code: 'unsupported' } });
+    }
+  });
+
   it('refuses #1250 write-back to a scoped access token without ops.config.write', async () => {
     const { f, adapter } = await endpointFixture();
     const call = (permissions: string[]) => {

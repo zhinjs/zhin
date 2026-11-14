@@ -390,14 +390,50 @@ const ADAPTER_ACCOUNT_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePer
 /** Adapter account reads contributed by `defineAdapterConsoleRpc` (#1250 `endpoint-drift`: ids and paths only). */
 const ADAPTER_ACCOUNT_READ_METHODS: ReadonlySet<string> = new Set(['endpoint-drift']);
 
-const pluginRpcPattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-zA-Z][a-zA-Z0-9.-]{0,79})$/u;
+/** Plugin RPC shape admitted (then delegated) by the gate; the dispatcher answers only normalizable ones. */
+const pluginRpcShapePattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-zA-Z][a-zA-Z0-9.-]{0,79})$/u;
+/** Accepted spellings: `plugin.<id>.<method>` / `plugin.<id>.action.<method>`, method kebab- or camelCase. */
+const pluginRpcPattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.(?:action\.)?([a-zA-Z][a-zA-Z0-9-]{0,79})$/u;
+/** Canonical method name (`parsePluginConsoleRpcType`). */
+const canonicalPluginRpcMethod = /^[a-z][a-z0-9-]{0,63}$/u;
+
+/** A plugin Console RPC type in its one canonical spelling (see {@link normalizePluginConsoleRpcType}). */
+export interface NormalizedPluginConsoleRpcType {
+  /** `plugin.<pluginId>.<method>` with the kebab-case method. */
+  readonly type: string;
+  readonly pluginId: string;
+  /** Kebab-case method (`endpoint-writeback`). */
+  readonly method: string;
+  /** The method as sent (`endpointWriteback`), without any `action.` prefix. */
+  readonly rawMethod: string;
+}
 
 /**
- * Whether `type` is a plugin Console RPC (`plugin.<pluginId>.<method>`). Its method-level
- * permissions are only known to the runtime dispatcher, which authorizes signed-in principals.
+ * The single normalization of a plugin Console RPC type, shared by the permission catalog and the
+ * runtime dispatcher so every spelling the dispatcher answers is authorized and audited as the
+ * same method: strips an `action.` prefix from the method and turns camelCase into kebab-case
+ * (`plugin.root/qq.action.endpointWriteback` → `plugin.root/qq.endpoint-writeback`). Returns null
+ * for anything the dispatcher would not answer.
+ */
+export function normalizePluginConsoleRpcType(type: unknown): NormalizedPluginConsoleRpcType | null {
+  if (typeof type !== 'string' || type.length > 640) return null;
+  const match = pluginRpcPattern.exec(type);
+  if (!match) return null;
+  const pluginId = match[1]!;
+  const rawMethod = match[2]!;
+  const method = rawMethod.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`);
+  if (!canonicalPluginRpcMethod.test(method)) return null;
+  return Object.freeze({ type: `plugin.${pluginId}.${method}`, pluginId, method, rawMethod });
+}
+
+/**
+ * Whether `type` has the shape of a plugin Console RPC (`plugin.<pluginId>.<method>`). Its
+ * method-level permissions are only known to the runtime dispatcher, which authorizes signed-in
+ * principals and answers only types {@link normalizePluginConsoleRpcType} accepts (any other is
+ * denied because no dispatcher answers it).
  */
 export function isPluginConsoleRpcType(type: unknown): type is string {
-  return typeof type === 'string' && type.length <= 640 && pluginRpcPattern.test(type);
+  return typeof type === 'string' && type.length <= 640 && pluginRpcShapePattern.test(type);
 }
 
 export type ConsoleRpcPermissionRule =
@@ -440,10 +476,14 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
     }
     return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload) });
   }
-  const plugin = pluginRpcPattern.exec(type);
-  if (!plugin) return null;
-  const pluginId = plugin[1]!;
-  const method = plugin[2]!.replace(/^action\./u, '');
+  // Every spelling resolves through the canonical method, so camelCase / `action.` forms carry the
+  // same target, `alsoRequires` and write classification (audit) as the kebab form.
+  if (!isPluginConsoleRpcType(type)) return null;
+  const plugin = normalizePluginConsoleRpcType(type);
+  // Plugin-shaped but not addressable (e.g. a dotted method): no dispatcher answers it, so the
+  // generic rule only lets the gate delegate — and the caller then denies.
+  if (!plugin) return Object.freeze({ kind: 'plugin', read: P.FEATURE_VIEW, write: P.FEATURE_CONFIGURE, target: GLOBAL_TARGET });
+  const { pluginId, method } = plugin;
   if (ADAPTER_ACCOUNT_METHODS.has(method)) {
     const alias = pluginAlias(pluginId);
     const id = firstString(payload, 'id');

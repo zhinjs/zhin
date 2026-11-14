@@ -157,6 +157,19 @@ describe('/auth and iam.* after setup', () => {
     ]));
   });
 
+  it('audits camelCase / action. account method spellings as the canonical write', async () => {
+    const { host, owner } = await initialised();
+    await host.rpc('iam.users.create', { username: 'olga', password: PASSWORD, bindings: [{ role: 'operator' }] }, owner);
+    const olga = (await host.call('POST', '/auth/login', { username: 'olga', password: PASSWORD })).body.data.token as string;
+    // endpoint-writeback is a write (endpoint.manage + ops.config.write) in every spelling: audited even though no plugin answers.
+    for (const type of ['plugin.root/missing.endpointWriteback', 'plugin.root/missing.action.endpointWriteback']) {
+      expect((await host.rpc(type, { ids: ['bot-1'] }, olga)).body).toMatchObject({ success: false });
+    }
+    const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
+    const entries = audit.body.data.entries as Array<{ action: string }>;
+    expect(entries.filter(entry => entry.action === 'rpc:plugin.root/missing.endpoint-writeback')).toHaveLength(2);
+  });
+
   it('changes the password, revoking other sessions, and refuses to remove the last owner over RPC', async () => {
     const { host, owner } = await initialised();
     const other = (await host.call('POST', '/auth/login', { username: 'alice', password: PASSWORD })).body.data.token as string;

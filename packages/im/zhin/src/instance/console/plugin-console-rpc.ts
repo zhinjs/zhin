@@ -3,6 +3,7 @@ import type { ConsoleAccess } from '@zhin.js/host-http';
 import {
   CONSOLE_PERMISSIONS,
   grantsAllow,
+  normalizePluginConsoleRpcType,
   parsePluginConsoleRpcType,
   resolveConsoleRpcPermission,
   type ConsoleGrant,
@@ -95,18 +96,12 @@ export async function dispatchPluginConsoleRpcRequest(
   message: Readonly<Record<string, unknown>>,
   options: PluginConsoleRpcRequestOptions,
 ): Promise<PluginConsoleRpcResult | undefined> {
-  let rawMethodName: string | undefined;
-  let address = parsePluginConsoleRpcType(message.type);
-  if (!address && typeof message.type === 'string' && message.type.startsWith('plugin.')) {
-    const normalizedType = message.type.replace(/\.action\.([a-zA-Z0-9-]+)$/u, '.$1');
-    const lastDot = normalizedType.lastIndexOf('.');
-    if (lastDot > 'plugin.'.length) {
-      rawMethodName = normalizedType.slice(lastDot + 1);
-      const kebabMethod = rawMethodName.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`);
-      address = parsePluginConsoleRpcType(`${normalizedType.slice(0, lastDot + 1)}${kebabMethod}`);
-    }
-  }
-  if (!address) return undefined;
+  // One normalization with the permission catalog (`resolveConsoleRpcPermission`): every spelling
+  // answered here is authorized, `alsoRequires`-checked and audited as its canonical method.
+  const normalized = normalizePluginConsoleRpcType(message.type);
+  const address = normalized ? parsePluginConsoleRpcType(normalized.type) : null;
+  if (!normalized || !address) return undefined;
+  const rawMethodName = normalized.rawMethod !== normalized.method ? normalized.rawMethod : undefined;
   const requestId = message.requestId;
   let lease: SnapshotLease | undefined;
   const releases: Array<() => void> = [];
@@ -130,11 +125,14 @@ export async function dispatchPluginConsoleRpcRequest(
     let operator = options.access.unrestricted;
     if (options.principal && !options.access.unrestricted) {
       const account = accountCall(address.method, message, input);
-      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, pagesOwnedBy, account);
+      // The catalog rule of the canonical address: a forwarded `principal.rule` resolved from a
+      // non-canonical spelling must not demote an account method to the generic plugin rule.
+      const catalogRule = resolveConsoleRpcPermission(normalized.type, message) ?? options.principal.rule ?? null;
+      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, catalogRule, pagesOwnedBy, account);
     } else {
       authorize(snapshot, pluginId, method, options.access, pagesOwnedBy);
     }
-    assertAlsoRequired(message, options);
+    assertAlsoRequired(normalized.type, message, options);
     if (provider) releases.push(...admit(provider));
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
       owner: pluginId, generation: snapshot.generation,
@@ -235,10 +233,10 @@ function authorizePrincipal(
   pluginId: PluginId,
   method: NormalizedPluginConsoleRpcMethod,
   principal: PluginConsoleRpcPrincipal,
+  rule: ConsoleRpcPermissionRule | null,
   pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
   accountMethod: AccountCall | undefined,
 ): boolean {
-  const rule = principal.rule ?? null;
   const account = accountMethod !== undefined && rule?.kind === 'exact' && rule.permission === P.ENDPOINT_MANAGE;
   const target: ConsoleScopeTarget = account ? accountTarget(snapshot, pluginId, accountMethod) : adapterTarget(snapshot, pluginId);
   const allows = (permission: string) => grantsAllow(principal.grants, permission, target, principal.levelOf);
@@ -274,9 +272,14 @@ function authorizePrincipal(
  * `endpoint-writeback` rewrites `zhin.config.yml`, so it also needs `ops.config.write` (#1250).
  * Checked for every caller that is not unrestricted, whatever path admitted the method.
  */
-function assertAlsoRequired(message: Readonly<Record<string, unknown>>, options: PluginConsoleRpcRequestOptions): void {
+function assertAlsoRequired(
+  canonicalType: string,
+  message: Readonly<Record<string, unknown>>,
+  options: PluginConsoleRpcRequestOptions,
+): void {
   if (options.access.unrestricted) return;
-  const rules = [options.principal?.rule, resolveConsoleRpcPermission(message.type, message)];
+  // The catalog rule of the canonical address, whatever spelling (camelCase, `action.`) was sent.
+  const rules = [options.principal?.rule, resolveConsoleRpcPermission(canonicalType, message)];
   const required = new Set(rules.flatMap((rule) => (rule?.kind === 'exact' ? rule.alsoRequires ?? [] : [])));
   for (const permission of required) {
     const held = options.principal

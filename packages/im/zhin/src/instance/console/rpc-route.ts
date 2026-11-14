@@ -27,7 +27,7 @@ import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-fe
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
 import { AttentionObservations, AttentionSourceCache, AttentionWarnings, allowsEndpointAccount, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
-import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
+import { CONSOLE_PERMISSIONS, featureScopeTarget, normalizePluginConsoleRpcType } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
 import { getLogger } from '@zhin.js/logger';
@@ -73,7 +73,8 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         const login = loginAuditDetail(message.type, body?.data);
         http.tokenRegistry?.accessProvider?.audit?.({
           actor: auditActor(principal),
-          action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
+          // Plugin RPCs are audited under their canonical method, whatever spelling was sent.
+          action: `rpc:${normalizePluginConsoleRpcType(message.type)?.type ?? String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
           detail: login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions),
