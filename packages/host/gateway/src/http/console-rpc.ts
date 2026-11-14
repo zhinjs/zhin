@@ -19,12 +19,21 @@ import {
   GATEWAY_RPC_PERMISSIONS,
   type ConsoleDenialReason,
   type GatewayRpcHttpErrorReply,
+  type GatewayRpcResponse,
 } from '@zhin.js/console-protocol';
 import { isGatewayRpcType, type GatewayRpcDispatcher } from '../packages/rpc.js';
 import { gatewayPrincipalAllows } from '../packages/authorization.js';
+import { LOCAL_GATEWAY_RPC } from '../local/protocol.js';
 
 /** RPC types with this prefix belong to the gateway (unknown ones are refused as unmapped). */
 export const GATEWAY_RPC_PREFIX = 'gateway.';
+
+/**
+ * Socket-only RPC types ({@link LOCAL_GATEWAY_RPC}): they exist, but never over HTTP. Refused
+ * with 403 (`forbidden`, audit reason `socket_only`) rather than `unknown_rpc`, so an attempt to
+ * reach Console administration over HTTP stays visible in the audit log.
+ */
+const SOCKET_ONLY_TYPES: ReadonlySet<string> = new Set(Object.values(LOCAL_GATEWAY_RPC));
 
 const READ_ONLY_TYPES: ReadonlySet<string> = new Set([
   GATEWAY_RPC.LIST,
@@ -68,7 +77,10 @@ export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): Gateway
       const type = typeof message.type === 'string' ? message.type : '';
       const requestId = message.requestId;
       const principal: ConsolePrincipal | undefined = context.principal;
-      const result = await dispatch({ type, data: message.data }, principal);
+      const socketOnly = SOCKET_ONLY_TYPES.has(type);
+      const result: GatewayRpcResponse = socketOnly
+        ? { ok: false, error: { code: 'forbidden', status: 403, message: `RPC "${type.slice(0, 64)}" 只能通过本机网关套接字调用（zhin console …）` } }
+        : await dispatch({ type, data: message.data }, principal);
       const write = !READ_ONLY_TYPES.has(type);
       const unknown = !result.ok && result.error.code === 'unknown_rpc';
       const outcome = result.ok ? 'ok' : result.error.code === 'forbidden' ? 'denied' : 'error';
@@ -80,7 +92,7 @@ export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): Gateway
             actor: auditActor(principal),
             action: `rpc:${type}`.slice(0, 256),
             outcome,
-            ...(outcome === 'denied' ? { detail: { type: type.slice(0, 256), reason: gatewayDenialReason(type, principal) } } : {}),
+            ...(outcome === 'denied' ? { detail: { type: type.slice(0, 256), reason: socketOnly ? CONSOLE_DENIAL_REASONS.SOCKET_ONLY : gatewayDenialReason(type, principal) } } : {}),
             ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
           });
         } catch { /* audit never breaks a request */ }

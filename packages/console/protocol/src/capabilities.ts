@@ -33,6 +33,8 @@ export const CONSOLE_DENIAL_REASONS = Object.freeze({
   HANDLER_DENIED: 'handler_denied',
   /** A plugin Console RPC that no loaded plugin answers. */
   NO_PLUGIN_HANDLER: 'no_plugin_handler',
+  /** A socket-only gateway RPC (`gateway.console.*` etc.) sent over HTTP. */
+  SOCKET_ONLY: 'socket_only',
 } as const);
 
 export type ConsoleDenialReason = typeof CONSOLE_DENIAL_REASONS[keyof typeof CONSOLE_DENIAL_REASONS];
