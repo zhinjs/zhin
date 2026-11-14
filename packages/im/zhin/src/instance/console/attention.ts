@@ -59,6 +59,11 @@ export interface AttentionLoginTask {
 export interface AttentionEndpoint {
   /** Canonical Endpoint id (matches login tasks; never shown or used for authorization). */
   readonly id?: string;
+  /**
+   * Adapter type of the canonical Endpoint (`endpoint.list` row `endpoint.adapter`); only used to
+   * honour account bindings written before 1.2.x as `<endpoint.adapter>/<canonical id>`.
+   */
+  readonly adapterType?: string;
   /** Adapter alias (Console scope segment, `endpoint.list` row `adapter`). */
   readonly adapter: string;
   /** Account name (Console scope segment, `endpoint.list` row `name`). */
@@ -83,10 +88,18 @@ export interface AttentionPluginState {
   };
 }
 
+/**
+ * Management state of one declared plugin, or why `inspect` failed for it. A failed plugin is
+ * reported as its own `plugin.error` item; it does not void the other plugins' items.
+ */
+export type AttentionPluginInspection =
+  | { readonly status: 'fulfilled'; readonly value: AttentionPluginState }
+  | { readonly status: 'rejected'; readonly instanceKey: string; readonly reason: unknown };
+
 /** One read of the declared plugins. */
 export interface AttentionPluginsRead {
-  /** Management state per declared plugin; a rejected entry makes the read incomplete. */
-  readonly states: readonly PromiseSettledResult<AttentionPluginState>[];
+  /** Management state per declared plugin. */
+  readonly states: readonly AttentionPluginInspection[];
   /**
    * The project-wide dependency graph check, run once per read (`inspect` then skips it, so it
    * is not repeated, nor reported, once per plugin). Absent: not checked.
@@ -102,11 +115,26 @@ export interface AttentionConfiguration {
   readonly projectRoot?: string;
 }
 
+/** Where an approval was requested (the queue entry's `origin`). */
+export interface AttentionApprovalOrigin {
+  /** Adapter alias. */
+  readonly platform: string;
+  readonly endpointKey: string;
+  /** Absent for non-IM sessions (e.g. a Console trial chat). */
+  readonly scope?: 'private' | 'group' | 'channel';
+  /** Native conversation id (group / channel id, private peer id). */
+  readonly sceneId: string;
+}
+
 export interface AttentionToolApproval {
   readonly id: string;
   readonly toolName: string;
+  /** Internal session key: kept in the item state, never in its text. */
   readonly sessionKey: string;
   readonly createdAt: number;
+  /** Display name of the conversation (group / session / sender name), when known. */
+  readonly sessionName?: string;
+  readonly origin?: AttentionApprovalOrigin | null;
 }
 
 export interface AttentionMcpServer {
@@ -114,10 +142,16 @@ export interface AttentionMcpServer {
   readonly connected: boolean;
 }
 
+/** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
+export const DEFAULT_ERROR_LOG_WINDOW_HOURS = 24;
+
 export interface AttentionErrorLogs {
+  /** Error rows inside the window (not the whole log). */
   readonly count: number;
   /** ISO time of the newest error row. */
   readonly latest: string | null;
+  /** Length of the counted window in hours; the item says which period it covers. */
+  readonly windowHours?: number;
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -143,6 +177,88 @@ export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) 
 
 /** Source names, as reported in `unavailable`. */
 export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs';
+
+// ---------------------------------------------------------------- account addresses
+
+/**
+ * Scope targets under which an account may be authorized. An account is addressed by its row's
+ * adapter alias + `name` (what the Console's binding editor writes). Bindings written before
+ * 1.2.x addressed it by its canonical Endpoint id instead (`<adapter>/<id>`, and in
+ * `endpoint.list` `<endpoint.adapter>/<id>`); during the transition those still match the same
+ * account. Never any other account.
+ */
+export function endpointAccountTargets(account: { readonly adapter: string; readonly name: string; readonly id?: string; readonly adapterType?: string }): readonly ConsoleScopeTarget[] {
+  const targets: ConsoleScopeTarget[] = [endpointTarget(account.adapter, account.name)];
+  const add = (adapter: string, endpoint: string) => {
+    if (!adapter || !endpoint || targets.some(target => target.kind === 'endpoint' && target.adapter === adapter && target.endpoint === endpoint)) return;
+    targets.push(endpointTarget(adapter, endpoint));
+  };
+  if (account.id) {
+    add(account.adapter, account.id);
+    if (account.adapterType) add(account.adapterType, account.id);
+  }
+  return targets;
+}
+
+/** Whether `allows` grants `permission` on the account under any of its addresses. */
+export function allowsEndpointAccount(allows: AttentionAllows, permission: string, account: Parameters<typeof endpointAccountTargets>[0]): boolean {
+  return endpointAccountTargets(account).some(target => allows(permission, target));
+}
+
+// ---------------------------------------------------------------- failure reasons
+
+const MAX_REASON = 200;
+
+/**
+ * A short, sanitized explanation of a failure for operators: the first line of its message with
+ * absolute paths reduced to their last segment and credentials (`Bearer …`, `token=…`, URL user
+ * info) masked.
+ */
+export function attentionFailureReason(error: unknown): string {
+  const record = error && typeof error === 'object' ? error as { message?: unknown } : undefined;
+  const raw = typeof error === 'string' ? error : typeof record?.message === 'string' ? record.message : '';
+  let text = (raw.split(/\r?\n/u).find(line => line.trim()) ?? '').trim();
+  text = text
+    .replace(/\b(Bearer|Basic)\s+[^\s,;]+/giu, '$1 ***')
+    .replace(/\b([\w-]*(?:token|secret|password|passwd|api[-_]?key|access[-_]?key|credential)[\w-]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/giu, '$1$2***')
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, '$1***@')
+    .replace(/(?:\b[A-Za-z]:\\|\\\\)[^\s'"`]*/gu, path => `…\\${path.split(/[\\/]/u).filter(Boolean).pop() ?? ''}`)
+    .replace(/(^|[\s'"`(=])((?:\/[^\s'"`/)]+)+\/?)/gu, (_match, before: string, path: string) => `${before}…/${path.split('/').filter(Boolean).pop() ?? ''}`);
+  if (!text) return 'unknown error';
+  return text.length > MAX_REASON ? `${text.slice(0, MAX_REASON - 1)}…` : text;
+}
+
+/** A `zhin …` command a failure message tells the operator to run (`…; run zhin migrate instances`). */
+function suggestedCommand(reason: string): string | undefined {
+  return /\brun\s+`?(zhin(?:\s+[a-z][\w-]*)+)/iu.exec(reason)?.[1];
+}
+
+/**
+ * Logs why attention sources are unavailable, once per key until the reason changes or
+ * `intervalMs` passes, so a broken source does not log on every poll.
+ */
+export class AttentionWarnings {
+  readonly #log: (message: string) => void;
+  readonly #interval: number;
+  readonly #now: () => number;
+  readonly #last = new Map<string, { readonly reason: string; readonly at: number }>();
+
+  constructor(log: (message: string) => void, options: { readonly intervalMs?: number; readonly now?: () => number } = {}) {
+    this.#log = log;
+    this.#interval = options.intervalMs ?? 10 * 60_000;
+    this.#now = options.now ?? Date.now;
+  }
+
+  /** Logs `reason` for `key` unless the same reason was logged within the interval; true when logged. */
+  warn(key: string, reason: string): boolean {
+    const at = this.#now();
+    const last = this.#last.get(key);
+    if (last && last.reason === reason && at - last.at < this.#interval) return false;
+    this.#last.set(key, { reason, at });
+    this.#log(`attention.list: ${key}: ${reason}`);
+    return true;
+  }
+}
 
 // ---------------------------------------------------------------- shared reads
 
@@ -232,8 +348,19 @@ const messages = createMessages({
   'login.step.other': { 'zh-CN': '登录步骤', en: 'sign-in' },
   'endpoint.title': { 'zh-CN': '{account} 离线', en: '{account} is offline' },
   'endpoint.detail': { 'zh-CN': '连接状态：{state}。检查凭据、网络和适配器日志，或在「接入」里测试连接。', en: 'Connection: {state}. Check credentials, network and adapter logs, or test the connection under Connection.' },
+  'endpoint.state.idle': { 'zh-CN': '未启动', en: 'not started' },
+  'endpoint.state.connecting': { 'zh-CN': '连接中', en: 'connecting' },
+  'endpoint.state.open': { 'zh-CN': '已连接', en: 'connected' },
+  'endpoint.state.reconnecting': { 'zh-CN': '重连中', en: 'reconnecting' },
+  'endpoint.state.closed': { 'zh-CN': '已断开', en: 'disconnected' },
+  'endpoint.state.stopped': { 'zh-CN': '已停止', en: 'stopped' },
+  'endpoint.state.unknown': { 'zh-CN': '未知', en: 'unknown' },
   'endpoint.action': { 'zh-CN': '查看接入', en: 'Open connection' },
   'plugin.error.title': { 'zh-CN': '插件 {plugin} 运行异常', en: 'Plugin {plugin} has a problem' },
+  'plugin.inspect.title': { 'zh-CN': '无法读取插件 {plugin} 的状态', en: 'Cannot read the state of plugin {plugin}' },
+  'plugin.inspect.all.title': { 'zh-CN': '{count} 个插件的状态都无法读取', en: 'Cannot read the state of {count} plugins' },
+  'plugin.inspect.detail': { 'zh-CN': '原因：{reason}', en: 'Reason: {reason}' },
+  'plugin.inspect.hint': { 'zh-CN': '运行 `{command}` 后刷新。', en: 'Run `{command}`, then refresh.' },
   'plugin.dependencies.title': { 'zh-CN': '插件依赖未满足', en: 'Plugin dependencies are not met' },
   'plugin.dependencies.action': { 'zh-CN': '查看插件', en: 'Open plugins' },
   'plugin.config.title': { 'zh-CN': '插件 {plugin} 的配置需要修正', en: 'Configuration of plugin {plugin} needs fixing' },
@@ -258,17 +385,23 @@ const messages = createMessages({
   'config.secrets.detail': { 'zh-CN': '{paths}。运行 zhin doctor --fix 把它们移到 .env 并改为 ${…} 引用。', en: '{paths}. Run zhin doctor --fix to move them to .env as ${…} references.' },
   'config.action': { 'zh-CN': '打开配置文件', en: 'Open configuration' },
   'approval.title': { 'zh-CN': '工具 {tool} 等待审批', en: 'Tool {tool} is waiting for approval' },
-  'approval.detail': { 'zh-CN': '来自会话 {session}；超时无人处理会被拒绝。', en: 'Requested in session {session}; it is denied if nobody decides in time.' },
+  'approval.detail': { 'zh-CN': '来自{session}；超时无人处理会被拒绝。', en: 'Requested in {session}; it is denied if nobody decides in time.' },
+  'approval.session.named': { 'zh-CN': '会话「{name}」', en: 'the conversation “{name}”' },
+  'approval.session.group': { 'zh-CN': '{account} 的群 {scene}', en: 'group {scene} on {account}' },
+  'approval.session.channel': { 'zh-CN': '{account} 的频道 {scene}', en: 'channel {scene} on {account}' },
+  'approval.session.private': { 'zh-CN': '{account} 的私聊 {scene}', en: 'a private chat ({scene}) on {account}' },
+  'approval.session.other': { 'zh-CN': '一个会话', en: 'a conversation' },
   'approval.action': { 'zh-CN': '去审批', en: 'Review' },
   'mcp.title': { 'zh-CN': 'MCP 服务 {server} 未连接', en: 'MCP server {server} is not connected' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
   'mcp.action': { 'zh-CN': '查看 MCP', en: 'Open MCP' },
-  'logs.title': { 'zh-CN': '日志里有 {count} 条错误', en: 'Errors in the logs: {count}' },
-  'logs.detail': { 'zh-CN': '持久日志统计；清理日志后重新计数。', en: 'Persistent log count; it restarts after logs are cleaned up.' },
+  'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },
+  'logs.detail': { 'zh-CN': '只统计最近 {hours} 小时的错误；更早的错误不再提醒，仍可在错误日志里查看。', en: 'Counts errors from the last {hours} hours only; older errors no longer raise this item and stay in the error log.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
 });
 
 const LOGIN_STEPS = new Set(['qrcode', 'sms', 'slider', 'device', 'auth']);
+const TRANSPORT_STATES = new Set(['idle', 'connecting', 'open', 'reconnecting', 'closed', 'stopped']);
 const MAX_LISTED = 5;
 const MAX_DETAIL = 500;
 
@@ -353,6 +486,8 @@ export interface CollectAttentionOptions {
   readonly allowsPluginPermission?: (permission: string) => boolean;
   /** Shares the raw reads of plugins / config / MCP / logs between requests. */
   readonly cache?: AttentionSourceCache;
+  /** Logs unavailable sources and failed plugin reads (rate-limited per key). */
+  readonly warnings?: AttentionWarnings;
 }
 
 const P = CONSOLE_PERMISSIONS;
@@ -386,11 +521,14 @@ interface ConfigRead {
  * The login task's account in Console terms (`adapter` / `name` of its `endpoint.list` row),
  * matched like the Endpoint runtime matches login flows; the task's own fields otherwise.
  */
-function loginAccount(task: AttentionLoginTask, rows: readonly AttentionEndpoint[] | undefined): { adapter: string; name: string } {
+function loginAccount(task: AttentionLoginTask, rows: readonly AttentionEndpoint[] | undefined): { adapter: string; name: string; id?: string; adapterType?: string } {
   const row = task.canonicalId !== undefined
     ? rows?.find(item => item.id === task.canonicalId)
     : rows?.find(item => item.adapter === task.adapter && (item.name === task.endpointKey || (item.id !== undefined && item.id === task.endpointKey)));
-  return row ? { adapter: row.adapter, name: row.name } : { adapter: task.adapter, name: task.endpointKey };
+  if (row) {
+    return { adapter: row.adapter, name: row.name, ...(row.id !== undefined ? { id: row.id } : {}), ...(row.adapterType !== undefined ? { adapterType: row.adapterType } : {}) };
+  }
+  return { adapter: task.adapter, name: task.endpointKey, ...(task.canonicalId !== undefined ? { id: task.canonicalId } : {}) };
 }
 
 /** Gathers, filters and sorts the attention items the caller may view. */
@@ -403,15 +541,21 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   const allows = options.allows;
   const shared = <T>(name: AttentionCachedSource, load: () => Promise<T>): Promise<T> => options.cache ? options.cache.read(name, load) : load();
   const items: ConsoleAttentionItem[] = [];
-  const unavailable: AttentionSourceName[] = [];
+  const unavailable: { readonly source: AttentionSourceName; readonly reason: string }[] = [];
 
   // A source is read only when the caller may view something it reports. A read is all or
   // nothing: its items (and observations) are committed only when the whole read succeeded, so a
-  // source is either fully present or listed in `unavailable`. Observations are settled from the
-  // full (unfiltered) read so another viewer's filter never resets them.
+  // source is either fully present or listed in `unavailable` with a sanitized reason (and a
+  // rate-limited warning). Observations are settled from the full (unfiltered) read so another
+  // viewer's filter never resets them.
   const read = async (name: AttentionSourceName, run: () => readonly AttentionDraft[] | Promise<readonly AttentionDraft[]>): Promise<void> => {
     let drafts: readonly AttentionDraft[];
-    try { drafts = await run(); } catch { unavailable.push(name); return; }
+    try { drafts = await run(); } catch (error) {
+      const reason = attentionFailureReason(error);
+      unavailable.push(Object.freeze({ source: name, reason }));
+      options.warnings?.warn(`source ${name} unavailable`, reason);
+      return;
+    }
     const present = new Set<string>();
     for (const draft of drafts) {
       const id = attentionItemId(draft.kind, draft.subject);
@@ -437,9 +581,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   const anyEndpointView = allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'any' }));
   // Endpoint rows (live): offline accounts, and the account each login task belongs to.
   let rows: readonly AttentionEndpoint[] | undefined;
-  let rowsError = false;
+  let rowsError: { readonly error: unknown } | undefined;
   if (sources.endpoints && anyEndpointView) {
-    try { rows = await sources.endpoints(); } catch { rowsError = true; }
+    try { rows = await sources.endpoints(); } catch (error) { rowsError = { error }; }
   }
 
   const waiting = new Set<string>();
@@ -457,14 +601,15 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         detail: t('login.detail', { step: t(`login.step.${step}`) }),
         action: { label: t('login.action'), path: ATTENTION_PATHS.endpointAccess(account.adapter, account.name) },
         since: task.createdAt,
-        visible: allows(P.ENDPOINT_VIEW, endpointTarget(account.adapter, account.name)),
+        visible: allowsEndpointAccount(allows, P.ENDPOINT_VIEW, account),
       };
     }));
   }
 
   if (sources.endpoints && anyEndpointView) {
     await read('endpoints', () => {
-      if (rowsError || !rows) throw new Error('endpoints unavailable');
+      if (rowsError) throw rowsError.error;
+      if (!rows) throw new Error('endpoints unavailable');
       // Offline for real: not connecting / reconnecting, not stopped on purpose, not waiting for a login step.
       return rows.filter(row => !row.connected && row.phase === 'offline' && row.transportState !== 'stopped'
         && !row.pendingLogin && !waiting.has(accountKey(row.adapter, row.name))).map((row): AttentionDraft => ({
@@ -473,9 +618,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         subject: { adapter: row.adapter, endpointKey: row.name },
         state: { transportState: row.transportState },
         title: t('endpoint.title', { account: `${row.adapter} / ${row.name}` }),
-        detail: t('endpoint.detail', { state: row.transportState }),
+        detail: t('endpoint.detail', { state: t(`endpoint.state.${TRANSPORT_STATES.has(row.transportState) ? row.transportState as 'idle' : 'unknown'}`) }),
         action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(row.adapter, row.name) },
-        visible: allows(P.ENDPOINT_VIEW, endpointTarget(row.adapter, row.name)),
+        visible: allowsEndpointAccount(allows, P.ENDPOINT_VIEW, row),
       }));
     });
   }
@@ -490,8 +635,35 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           title: t('plugin.dependencies.title'), detail: result.dependencies.error,
           action: { label: t('plugin.dependencies.action'), path: ATTENTION_PATHS.plugins } });
       }
+      // A plugin whose state cannot be read is reported on its own; the others still are. When
+      // every declared plugin fails for the same reason (e.g. legacy lifecycle state), that is a
+      // project problem: one item, not one per plugin.
+      const failures = result.states.flatMap(settled => settled.status === 'rejected'
+        ? [{ plugin: settled.instanceKey, reason: attentionFailureReason(settled.reason) }] : []);
+      const inspectDetail = (reason: string) => {
+        const command = suggestedCommand(reason);
+        const detail = t('plugin.inspect.detail', { reason });
+        if (!command) return detail;
+        return `${detail}${/[.。!！?？]$/u.test(detail) ? '' : locale === 'en' ? '.' : '。'}${locale === 'en' ? ' ' : ''}${t('plugin.inspect.hint', { command })}`;
+      };
+      const reasons = new Set(failures.map(failure => failure.reason));
+      if (failures.length > 1 && failures.length === result.states.length && reasons.size === 1) {
+        const [reason] = reasons as Set<string>;
+        const plugins = failures.map(failure => failure.plugin).sort();
+        options.warnings?.warn('plugins inspect', `${reason} (${plugins.length} plugins)`);
+        drafts.push({ kind: 'plugin.error', severity: 'danger', state: { inspect: reason, plugins },
+          title: t('plugin.inspect.all.title', { count: plugins.length }), detail: inspectDetail(reason!),
+          action: { label: t('plugin.dependencies.action'), path: ATTENTION_PATHS.plugins } });
+        return drafts;
+      }
+      for (const failure of failures) {
+        options.warnings?.warn(`plugin ${failure.plugin} inspect`, failure.reason);
+        drafts.push({ kind: 'plugin.error', severity: 'danger', subject: { plugin: failure.plugin }, state: { inspect: failure.reason },
+          title: t('plugin.inspect.title', { plugin: failure.plugin }), detail: inspectDetail(failure.reason),
+          action: { label: t('plugin.action'), path: ATTENTION_PATHS.plugin(failure.plugin) } });
+      }
       for (const settled of result.states) {
-        if (settled.status === 'rejected') throw new Error('plugin state incomplete');
+        if (settled.status === 'rejected') continue;
         const state = settled.value;
         if (state.disabled) continue;
         const subject = { plugin: state.instanceKey };
@@ -562,8 +734,8 @@ export async function collectAttention(sources: AttentionSources, options: Colle
     : TOOL_APPROVAL_READ.some(permission => allows(permission));
   if (sources.toolApprovals && approvalsAllowed) {
     await read('tool-approvals', () => (sources.toolApprovals!() ?? []).map((card): AttentionDraft => ({
-      kind: 'tool-approval.pending', severity: 'warning', subject: { approvalId: card.id }, state: { id: card.id },
-      title: t('approval.title', { tool: card.toolName }), detail: t('approval.detail', { session: card.sessionKey }),
+      kind: 'tool-approval.pending', severity: 'warning', subject: { approvalId: card.id }, state: { id: card.id, sessionKey: card.sessionKey },
+      title: t('approval.title', { tool: card.toolName }), detail: t('approval.detail', { session: approvalSession(card) }),
       action: { label: t('approval.action'), path: ATTENTION_PATHS.toolApprovals }, since: card.createdAt,
     })));
   }
@@ -583,8 +755,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       if (logs === null) throw new Error('log store unavailable');
       if (logs.count <= 0) return [];
       const latest = logs.latest ? Date.parse(logs.latest) : Number.NaN;
-      return [{ kind: 'logs.errors', severity: 'info', state: { count: logs.count, latest: logs.latest },
-        title: t('logs.title', { count: logs.count }), detail: t('logs.detail'),
+      const hours = logs.windowHours ?? DEFAULT_ERROR_LOG_WINDOW_HOURS;
+      return [{ kind: 'logs.errors', severity: 'info', state: { count: logs.count, latest: logs.latest, windowHours: hours },
+        title: t('logs.title', { count: logs.count, hours }), detail: t('logs.detail', { hours }),
         action: { label: t('logs.action'), path: ATTENTION_PATHS.errorLogs },
         ...(Number.isNaN(latest) ? {} : { since: latest }) }];
     });
@@ -594,8 +767,22 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   return Object.freeze({
     items: Object.freeze(items),
     generatedAt: new Date(at).toISOString(),
-    ...(unavailable.length ? { unavailable: Object.freeze([...unavailable]) } : {}),
+    ...(unavailable.length ? {
+      unavailable: Object.freeze(unavailable.map(entry => entry.source)),
+      unavailableDetails: Object.freeze([...unavailable]),
+    } : {}),
   });
+
+  /** Where an approval was requested, in words: never the internal session key. */
+  function approvalSession(card: AttentionToolApproval): string {
+    const name = card.sessionName?.trim();
+    if (name) return t('approval.session.named', { name });
+    const origin = card.origin;
+    if (origin?.scope && origin.sceneId) {
+      return t(`approval.session.${origin.scope}`, { account: `${origin.platform} / ${origin.endpointKey}`, scene: origin.sceneId });
+    }
+    return t('approval.session.other');
+  }
 }
 
 function formatPath(path: readonly string[]): string {
@@ -610,6 +797,7 @@ export interface AttentionRpcContext {
   readonly allowsPluginPermission?: (permission: string) => boolean;
   readonly observations?: AttentionObservations;
   readonly cache?: AttentionSourceCache;
+  readonly warnings?: AttentionWarnings;
   readonly now?: () => number;
 }
 
@@ -630,6 +818,7 @@ export async function dispatchAttentionConsoleRpc(message: Record<string, unknow
     ...(context.allowsPluginPermission ? { allowsPluginPermission: context.allowsPluginPermission } : {}),
     ...(context.observations ? { observations: context.observations } : {}),
     ...(context.cache ? { cache: context.cache } : {}),
+    ...(context.warnings ? { warnings: context.warnings } : {}),
     ...(context.now ? { now: context.now } : {}),
   });
   return { status: 200, body: { success: true, data, type: ATTENTION_RPC.LIST, requestId: message.requestId } };

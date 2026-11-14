@@ -2,19 +2,29 @@
   "defaultReleaseType": "patch",
   "approvedNonPatchReleases": [
     {
-      "package": "@zhin.js/cli",
+      "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增全局 CLI 选项 --verbose / --debug，zhin packages info 新增命令、工具与配置小节。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）。；所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。；所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。"
     },
     {
-      "package": "@zhin.js/console-protocol",
+      "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数。"
+    },
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    },
+    {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增全局 CLI 选项 --verbose / --debug，zhin packages info 新增命令、工具与配置小节。"
     },
     {
       "package": "@zhin.js/agent",

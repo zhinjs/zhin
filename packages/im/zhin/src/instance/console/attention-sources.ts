@@ -6,10 +6,12 @@ import type {
   AttentionEndpoint,
   AttentionErrorLogs,
   AttentionMcpServer,
+  AttentionPluginInspection,
   AttentionPluginsRead,
   AttentionSources,
   AttentionToolApproval,
 } from './attention.js';
+import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { buildManagedPluginList } from './plugin-projection.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
@@ -33,7 +35,14 @@ const REVISION_FILES = Object.freeze(['package.json', ...ROOT_CONFIG_FILE_NAMES]
  * read live; plugins, configuration, MCP and logs are meant to be shared through an
  * `AttentionSourceCache` keyed by `revision` (project file mtimes + runtime generation).
  */
-export function createAttentionSources(composition: ConsoleRpcComposition): AttentionSources {
+export interface AttentionSourceOptions {
+  /** Clock for the error-log window (tests). */
+  readonly now?: () => number;
+  /** Hours of error logs counted by the `logs.errors` item; defaults to 24. */
+  readonly errorLogWindowHours?: number;
+}
+
+export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
   const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile } = composition;
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
     if (!snapshots) throw new Error('Runtime snapshots are unavailable');
@@ -49,6 +58,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
       // `adapter` / `name` as `endpoint.list` rows carry them: the Console's account address.
       endpoints: (): readonly AttentionEndpoint[] => im.endpoints.list().map(row => ({
         id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
+        ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
         transportState: row.transportState, pendingLogin: row.pendingLogin,
       })),
     } : {}),
@@ -62,12 +72,16 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         const manageable = declared.filter(plugin => plugin.manageable);
         // The dependency graph is project-wide: check it once here instead of once per inspect.
         const checkOnce = typeof pluginManagement.checkDependencies === 'function' && manageable.length > 0;
-        const [dependencies, states] = await Promise.all([
+        const [dependencies, settled] = await Promise.all([
           checkOnce ? pluginManagement.checkDependencies!() : undefined,
           Promise.allSettled(manageable.map(plugin => checkOnce
             ? pluginManagement.inspect!(plugin.instanceKey, { dependencies: 'skip' })
             : pluginManagement.inspect!(plugin.instanceKey))),
         ]);
+        // A failed inspect keeps its plugin's key, so it is reported for that plugin alone.
+        const states = settled.map((result, index): AttentionPluginInspection => result.status === 'fulfilled'
+          ? { status: 'fulfilled', value: result.value }
+          : { status: 'rejected', instanceKey: manageable[index]!.instanceKey, reason: result.reason });
         return { states, ...(dependencies ? { dependencies } : {}) };
       },
     } : {}),
@@ -81,6 +95,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         const queue = snapshots.rootResource!(lease, agentToolApprovalQueueToken) as ToolApprovalQueue | undefined;
         return queue?.list().filter(entry => entry.status === 'pending').map(entry => ({
           id: entry.id, toolName: entry.toolName, sessionKey: entry.sessionKey, createdAt: entry.createdAt,
+          // No conversation names are stored; the origin is described in words instead of the key.
+          ...(entry.origin ? { origin: entry.origin } : {}),
         }));
       }),
     } : {}),
@@ -96,13 +112,15 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         if (!model || typeof model.select !== 'function') return null;
         // A count query only: never load the error rows to count them.
         if (typeof model.count !== 'function') return null;
-        const where = { level: 'error' };
+        const windowHours = options.errorLogWindowHours ?? DEFAULT_ERROR_LOG_WINDOW_HOURS;
+        const since = new Date((options.now?.() ?? Date.now()) - windowHours * 3_600_000);
+        const where = { level: 'error', timestamp: { $gte: since } };
         const count = await model.count(where);
-        if (count <= 0) return { count: 0, latest: null };
+        if (count <= 0) return { count: 0, latest: null, windowHours };
         const [row] = await model.select('timestamp').where(where).orderBy('timestamp', 'DESC').limit(1);
         const value = row?.timestamp;
         const latest = value instanceof Date ? value.toISOString() : typeof value === 'string' || typeof value === 'number' ? new Date(value).toISOString() : null;
-        return { count, latest };
+        return { count, latest, windowHours };
       },
     } : {}),
     revision: async () => {
