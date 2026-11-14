@@ -238,3 +238,18 @@ S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2）。真实登录
 - **账号**：B1 Host-owned；B2 本轮无个人 OAuth UI；B3 订阅 Profile 默认不发布给普通成员。
 - **C/D/E**：全勾；下一切片 S1。
 - **主干合入状态**：`main` 保留 `claudeSubscriptionProvider` / `antigravityProvider` 默认注册，已按 §1a 挂实验标识与 README 风险声明，不写成「官方支持」。
+
+## 增补：用途备用模型（#1250 chat-purpose-no-fallback，2026-11）
+
+**背景。** 此前只有识图（perception）用途能配置备用链；聊天、摘要、旁听语言模型、Agent 角色（`purposes.agents`）以及 Adapter / Endpoint / 场景的聊天覆盖都只能选一个 Profile。Gemini 官方免费档的日配额（`GenerateRequestsPerDayPerProjectPerModel-FreeTier`）用完后，相关渠道每条消息只回「模型额度用完了」直到太平洋时间午夜，即使已配置其他可用账号。`provider-resilience` 只在同一模型上重试，按设计从不换模型或账号。
+
+**决策。**
+
+1. **配置形状（向后兼容）。** 导入提案（`ai.plan.yml`、Console 写入、导出）中，`chat` / `summary` / `ambient` / `agents.<key>` / `adapters|endpoints.<key>.chat` / `scenes.<key>.chat` 可以写成 Profile 别名字符串，或 `{ profile, fallbacks? }`（与 `perception` 相同）。写入一个用途即替换它的整条链，`null` 同时清除主项与链。持久化配置图保持原有的主项字符串字段不变，备用链放在同级字段：`defaults.chatFallbacks` / `summaryFallbacks` / `ambientFallbacks`、`adapters|endpoints.<key>.chatFallbacks`、`scenes.<key>.chatFallbacks`、`agentFallbacks.<key>`。链必须非空、不重复、不含主项，只能出现在有主项的同一层；所有备用 Profile 与主项一样须为 Host 所有。生图（`image`）与六类决策（`decisions.*`）不支持备用链（C3 不变：决策无跨模型降级）。个人 Session 显式选择的聊天 Profile 不带备用链。
+2. **链归属于选中主项的那一层。** 场景 / Endpoint / Adapter 覆盖了 `chat`，就只用该层的链，不与外层的链拼接；摘要、旁听未单独配置时继承部署聊天，也继承部署聊天的链。
+3. **切换条件。** 只有整个模型请求以 `quota_exhausted`、`billing`（余额不足 / 402 / `insufficient_quota`）或 `auth`（401 / 403 / 无效 key）失败时才按顺序换下一个备用模型。超时、5xx、限流、网络错误、请求被拒、内容拦截、上下文超长保持原行为（同模型重试后报错），不切换：换账号修不好它们，也不应因为主模型慢就把流量悄悄转到付费备用账号。备用层位于 `provider-resilience` 之下：这三类失败本就不重试，因此等价于「重试放弃之后再切换」。
+4. **不重放工具。** 切换按单次请求进行，从当前对话记录继续：失败的请求没有产生工具调用，已执行的工具调用以结果形式留在记录里，备用模型接着往下回答，绝不重新执行（与 D3 一致）。如果失败前已经向用户流出了文字，或调用方禁止重试（回复阶段已交付），则不切换，直接报错。同一次操作一旦切换就留在备用模型上。选择会话级历史的跨供应商转换与现有「Session 切换模型保留历史」相同。
+5. **跳过与恢复。** 以上三类失败的模型按「账号 + 原生模型 ID」记入进程内存的跳过表，带过期时间：有供应商重置提示（`Retry-After` / `retry-after-ms`）时按提示（最长 48 小时）；日配额（Gemini `...PerDay...` 配额、429 写明 `per day (RPD/TPD)`）没有提示时到下一个美国太平洋时间（America/Los_Angeles，含夏令时）午夜，Gemini 的短 `retryDelay` 对日配额无意义而忽略；其他配额 1 小时、余额不足 1 小时、鉴权失败 15 分钟。跳过表不持久化，重启后每个模型会再试一次。选型时主项在跳过期内就直接选第一个可用备用模型；全部在跳过期内时仍试主项。
+6. **可观测。** 每次切换在回合 trace 里记 `model_fallbacks[]`（原 / 答复 Profile、账号、模型、原因、阶段 `selection|request`、原模型恢复时间、`notice: 「本轮由备用模型回答」`）并加时间线 `model_fallback`。Console 管理视图（`GET /agent/inference`，已登记 `agent.view` 权限，无新路由）对 Host 管理员增加只读 `modelAvailability`：`notice`、`unavailable[]`（跳过中的账号 + 模型及恢复时间）、`recentFallbacks[]`（最近 20 次切换）。
+
+**后果。** 免费档日配额耗尽不再让渠道整天只回错误；没有配置备用链的部署行为不变。备用模型的上下文窗口、提示词族与主模型可能不同：中途切换时本回合已组装的提示与压缩阈值仍按主模型计算，下一回合起主项若仍在跳过期，整回合按备用模型选型。

@@ -47,6 +47,7 @@ import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
+import { traceModelFallback } from '../model-runtime/purpose-fallback.js';
 import { captureSubTurnTracing, createScopedTraceJournal, type SubTurnTrace, type SubTurnTracing } from '../trace/turn-trace-registry.js';
 import type { TurnTraceTermination } from '../trace/turn-trace.js';
 import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
@@ -215,6 +216,8 @@ function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExec
     model: models.chat.model.id,
     ...(source ? { source: source.level } : {}),
   } });
+  // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the sub-turn's trace.
+  if (trace) models.observeModelFallback?.(event => trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) }));
 }
 
 async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: ActorTurnRun): Promise<ActorTurnOutcome> {

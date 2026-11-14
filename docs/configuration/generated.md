@@ -511,9 +511,9 @@ outline: [2, 3]
 | `profiles.<key>.label` | string | 否 | — | — |
 | `profiles.<key>.parameters` | object | 否 | — | — |
 | `purposes` | object | 否 | — | — |
-| `purposes.chat` | object \| null | 否 | — | — |
-| `purposes.summary` | object \| null | 否 | — | — |
-| `purposes.ambient` | object \| null | 否 | — | — |
+| `purposes.chat` | string \| object \| null | 否 | — | — |
+| `purposes.summary` | string \| object \| null | 否 | — | — |
+| `purposes.ambient` | string \| object \| null | 否 | — | — |
 | `purposes.image` | object \| null | 否 | — | — |
 | `purposes.perception` | object \| null | 否 | — | — |
 | `purposes.decisions` | object | 否 | — | — |

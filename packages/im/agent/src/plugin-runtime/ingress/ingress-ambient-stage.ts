@@ -1,9 +1,9 @@
 import { readOperationSession } from '@zhin.js/core';
-import type { InferenceOperationScope } from '@zhin.js/ai/provider';
+import { providerPurposeSelections, type InferenceOperationScope } from '@zhin.js/ai/provider';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
-import { createInvocationCompletion, invocationModel } from '../../model-runtime/index.js';
+import { createInvocationCompletion, invocationModel, resolvePurposeExecution } from '../../model-runtime/index.js';
 import {
   resolveAgentDecisionRuntime,
   type DecisionObservation,
@@ -67,6 +67,11 @@ export function createAmbientEngagementJudge(input: Readonly<{
         const provider = runtime?.forTask('ambient');
         const base = policy?.mode === 'active' ? undefined : await (async () => {
           const selected = await scope.resolve({ kind: 'language', purpose: 'ambient' });
+          // #1250 chat-purpose-no-fallback: an ambient purpose with fallbacks switches to them too.
+          if (providerPurposeSelections({ graph: scope.graph, context: scope.context, purpose: 'ambient' }).length > 1) {
+            const execution = await resolvePurposeExecution({ scope, purpose: 'ambient', primary: selected });
+            return new LlmEngagementJudge(execution.completion, execution.model);
+          }
           return new LlmEngagementJudge(
             createInvocationCompletion({ binding: selected, client: scope.client, purpose: 'ambient' }),
             invocationModel(selected),

@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。；所有者已批准（zhinjs/zhin#1250）：IM 回合审批渠道与 Agent 行为改进新增公开 API——根入口新增 formatApprovalBlocked、describeApprovalChannelConflicts 及类型 ApprovalBlockReason / ApprovalDenialContext / ApprovalChannelConflictInput；ApprovalRequestInput.purpose、ApprovalOutcome.scope、formatApprovalDenial 可选上下文参数、createBypassApprovalPort 的 confirmIntent 选项；`@zhin.js/agent/security` 新增 MEMORY_SCOPE_POLICY 与审批策略指纹相关导出。；所有者已批准（zhinjs/zhin#1250）：新增公开类型导出 `InferencePreparationFailure`，`InferenceAuthenticationError` 新增 `preparation` 字段与错误码 `client-secret-required` / `preparation-failed`，`InferenceDriverView` 新增 `requiresClientSecret` / `modelSuggestions`，`cleanupFailed` 回调接收告警文本。；所有者已批准（zhinjs/zhin#1250）：新增公开导出 captureSubTurnTracing / SubTurnTrace / SubTurnTracing / TurnTraceSave / TurnTraceModelSelection / LOOKUP_CLAIM_PATTERNS / findLookupClaim / claimWithoutToolCall，ModelExecutionScope 新增 purpose，ModelDelegationAuthority 可多次 acquire 并新增可选 agent 字段，TurnTrace 新增 model_selection / claim_without_tool_call（后台委派结果送达、子 Agent 用途绑定、子回合 trace、无工具调用却声称查过的标记）。；所有者已批准（zhinjs/zhin#1250）：新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`（BOT.md，且纳入 `DEFAULT_SELF_FILES` 受保护文件），`@zhin.js/agent/trace` 新增 `turnTraceTotalUsage` / `TurnTraceUsageTotals` 与 trace 字段 `subagent_usage`。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——聊天、摘要、旁听、Agent 角色与 Adapter / 场景覆盖按各自备用链在额度用完 / 余额不足 / 鉴权失败时换用备用模型（不重放已执行工具）；新增导出 resolvePurposeExecution、ModelFallbackLog、traceModelFallback，ModelExecutionScope 新增可选 modelFallbacks / observeModelFallback，ModelRuntimeServiceOptions 新增 modelAvailability，回合 trace 新增 model_fallbacks 与 TurnTraceModelFallback，管理视图 InferenceManagementView 新增只读 modelAvailability。"
     },
     {
       "package": "@zhin.js/client",
@@ -79,7 +79,7 @@
     {
       "package": "@zhin.js/ai",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：npm 上已有旧架构的 `@zhin.js/ai` 1.2.0–1.5.9（latest 仍为 1.1.56），本地版本号先置为 1.5.9，按 minor 升到第一个空闲的 1.6.0（先例见 docs/contributing/publishing.md 的 core 1.5.16→1.6.0）；同时承接 #1250 各批次新增的公开导出，例如 `ProviderDiscoveryError`、`CODEX_DEFAULT_CLIENT_VERSION`、`CodexServiceOptions` / `AntigravityServiceOptions` 与新的服务配置项。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——所有语言用途支持备用模型：导入提案的 chat / summary / ambient / agents.<key> / adapters|endpoints.<key>.chat / scenes.<key>.chat 接受 `{ profile, fallbacks }`，配置图新增同级字段 chatFallbacks / summaryFallbacks / ambientFallbacks / agentFallbacks；新增公开导出 createFallbackCompletionPort、ModelAvailabilityRegistry、modelAvailability、modelFallbackFailure、modelFallbackResetAt、nextPacificMidnight、MODEL_FALLBACK_NOTICE 及相关类型，ProviderErrorClassification 新增可选 quotaWindow。"
     },
     {
       "package": "@zhin.js/plugin-code-runner",

@@ -120,6 +120,28 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './llm/index.js';
+export {
+  AUTH_FALLBACK_COOLDOWN_MS,
+  BILLING_FALLBACK_COOLDOWN_MS,
+  MAX_FALLBACK_SKIP_MS,
+  MODEL_FALLBACK_NOTICE,
+  ModelAvailabilityRegistry,
+  QUOTA_FALLBACK_COOLDOWN_MS,
+  createFallbackCompletionPort,
+  modelAvailability,
+  modelFallbackFailure,
+  modelFallbackResetAt,
+  nextPacificMidnight,
+} from './llm/index.js';
+export type {
+  FallbackCompletionOptions,
+  ModelFallbackCandidate,
+  ModelFallbackEndpoint,
+  ModelFallbackEvent,
+  ModelFallbackReason,
+  ModelFallbackTarget,
+  ModelUnavailability,
+} from './llm/index.js';
 export { finishFailureKind, resolveFinish } from './llm/index.js';
 export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.js';
 

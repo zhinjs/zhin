@@ -46,6 +46,12 @@ export interface ProviderErrorClassification {
   readonly status?: number;
   /** Server-provided `Retry-After`, in milliseconds. */
   readonly retryAfterMs?: number;
+  /**
+   * `quota_exhausted` only: the exhausted window is a per-day quota (Gemini
+   * `...PerDay...` quota ids, a 429 naming `per day (RPD/TPD)`). Used to pick a
+   * reset time when the provider gives no hint (#1250 chat-purpose-no-fallback).
+   */
+  readonly quotaWindow?: "day";
 }
 
 export interface ProviderResilienceConfig {
@@ -431,13 +437,19 @@ export function classifyProviderError(
   if (google?.status === "DEADLINE_EXCEEDED")
     return { kind: "timeout", retryable: true, status };
   if (isDailyQuota(google))
-    return { kind: "quota_exhausted", retryable: false, status };
+    return { kind: "quota_exhausted", retryable: false, status, quotaWindow: "day" };
   // Groq (and OpenAI) name the exhausted window in the 429 message: "... on requests per
   // day (RPD): Limit 1000, Used 1000, Requested 1. Please try again in 1m26s". A daily
   // window does not reopen within any sensible retry; Groq limits are per model, so
   // another candidate may still answer. Per-minute windows (RPM / TPM) stay rate limits.
   if (status === 429 && PER_DAY_LIMIT_PATTERN.test(message)) {
-    return { kind: "quota_exhausted", retryable: false, status };
+    return {
+      kind: "quota_exhausted",
+      retryable: false,
+      status,
+      quotaWindow: "day",
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+    };
   }
 
   if (name === "AbortError") return { kind: "aborted", retryable: false };

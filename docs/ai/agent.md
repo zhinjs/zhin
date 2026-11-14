@@ -84,7 +84,7 @@ sequenceDiagram
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
-- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理，不切换模型。显式配置的媒体感知备用链继续生效。
+- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：只在额度用完、余额不足或鉴权失败时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
 一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
@@ -722,7 +722,7 @@ ai:
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
 ```
 
-旧 `ai.agent.providerResilience.fallback` 已退役。感知仅按运行时 perception 用途明确选择的 Profile 备用链顺序尝试，不配置则只用感知主 Profile；它不让聊天自动换模型。
+旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足或鉴权失败时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 

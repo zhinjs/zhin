@@ -1,5 +1,5 @@
 import type { AgentStartupConfig } from '../config/agent-startup.js';
-import type { LlmCompletionPort, Model } from '@zhin.js/ai';
+import type { LlmCompletionPort, Model, ModelAvailabilityRegistry, ModelFallbackEvent } from '@zhin.js/ai';
 import type {
   ExecutionBinding, InferenceClient, InferenceGraphSnapshot, InferenceOperationScope, InferenceRuntime, ProviderCallContext, ProviderGraph,
 } from '@zhin.js/ai/provider';
@@ -63,6 +63,13 @@ export interface ModelExecutionScope {
   readonly resolve: InferenceOperationScope['resolve'];
   readonly summarySource: ModelSummarySource;
   readonly policyRevision: number;
+  /**
+   * Switches of this operation to a purpose fallback (#1250 chat-purpose-no-fallback).
+   * `chat` is already the answering model when the primary was skipped at selection.
+   */
+  readonly modelFallbacks?: () => readonly ModelFallbackEvent[];
+  /** Replays earlier switches, then reports new ones; the returned function stops it. */
+  readonly observeModelFallback?: (listener: (event: ModelFallbackEvent) => void) => () => void;
   retainDelegation(): ModelDelegationAuthority;
   release(): Promise<void>;
 }
@@ -105,6 +112,8 @@ export interface ModelRuntimeServiceOptions {
   readonly context: (input: ModelTurnResolveInput) => ProviderCallContext | Promise<ProviderCallContext>;
   /** Agent binding names (`ai.agents.<name>`; `zhin` is implied): `purposes.agents` keys a sub-agent never uses. */
   readonly bindingNames?: () => Iterable<string>;
+  /** Skip state of models that failed with quota / billing / auth; defaults to the process-wide one. */
+  readonly modelAvailability?: ModelAvailabilityRegistry;
 }
 export type ModelRuntimeErrorCode = 'not-prepared' | 'invalid-context' | 'unknown-binding';
 export class ModelRuntimeError extends Error {

@@ -3,6 +3,8 @@ import {
   type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
 import { createInvocationCompletion, invocationModel } from './completion.js';
+import { ModelFallbackLog, resolvePurposeExecution } from './purpose-fallback.js';
+import type { ModelFallbackEvent } from '@zhin.js/ai';
 import { getLogger } from '@zhin.js/logger';
 import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionCandidate, type ModelExecutionScope,
   type ModelDelegationAuthority, type ModelContextAcquireInput, type ModelRuntimeServiceOptions, type ModelTurnAcquireInput,
@@ -114,7 +116,10 @@ export class ModelRuntimeService {
     try {
       const purpose = selectLanguagePurpose(scope.graph, input, this.#bindingNames());
       const selected = await scope.resolve({ kind: 'language', purpose });
-      const chat = await bundle({ scope, binding: selected, purpose });
+      // #1250 chat-purpose-no-fallback: every language purpose carries its own fallbacks.
+      const fallbackLog = new ModelFallbackLog();
+      const registry = this.options.modelAvailability;
+      const chat = await resolvePurposeExecution({ scope, purpose, primary: selected, registry, onFallback: fallbackLog.record });
       const candidate = (options: Readonly<{
         profileId: string;
         source?: ProviderSelectionSource;
@@ -134,7 +139,8 @@ export class ModelRuntimeService {
       let summary: ModelExecutionCandidate | undefined;
       if (scope.graph.purposes.defaults.summary || scope.graph.purposes.defaults.chat) {
         summary = candidate({ profileId: scope.graph.purposes.defaults.summary ?? scope.graph.purposes.defaults.chat!, resolve: async () =>
-          bundle({ scope, binding: await scope.resolve({ kind: 'language', purpose: 'summary' }), purpose: 'summary' }) });
+          resolvePurposeExecution({ scope, purpose: 'summary', primary: await scope.resolve({ kind: 'language', purpose: 'summary' }),
+            registry, onFallback: fallbackLog.record }) });
       }
       const perception: ModelExecutionCandidate[] = [];
       for (const { id, source } of providerPurposeSelections({ graph: scope.graph, context, purpose: 'perception' })) {
@@ -152,6 +158,8 @@ export class ModelRuntimeService {
         graph: scope.graph, context: scope.context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
         summarySource: scope.graph.purposes.defaults.summary ? 'runtime' as const : 'deployment-chat' as const,
         policyRevision: scope.graph.revision,
+        modelFallbacks: () => fallbackLog.events(),
+        observeModelFallback: (listener: (event: ModelFallbackEvent) => void) => fallbackLog.observe(listener),
         retainDelegation: () => {
           if (release) throw new ModelRuntimeError('not-prepared');
           scope.signal.throwIfAborted();

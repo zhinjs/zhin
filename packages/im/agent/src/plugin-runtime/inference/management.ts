@@ -23,6 +23,7 @@ import {
   normalizeProviderJson,
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
+import { MODEL_FALLBACK_NOTICE, modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent, type ModelUnavailability } from '@zhin.js/ai';
 import { createHostDocumentCipher } from '@zhin.js/plugin-runtime';
 import { InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
 import { createPersonalModelFetch } from './personal-network.js';
@@ -76,6 +77,18 @@ export interface InferenceManagementOptions {
     }>
   ) => Promise<readonly ProviderModelObservation[]>;
   readonly drivers: () => readonly InferenceDriverView[];
+  /** Skip state of purpose models (#1250); defaults to the process-wide registry. */
+  readonly modelAvailability?: ModelAvailabilityRegistry;
+}
+/**
+ * Read-only fallback state for the Console purposes page (#1250 chat-purpose-no-fallback):
+ * models skipped until their reset time, and recent switches to a fallback. `notice` is the
+ * wording the page shows for a turn answered by a fallback.
+ */
+export interface InferenceModelAvailabilityView {
+  readonly notice: string;
+  readonly unavailable: readonly ModelUnavailability[];
+  readonly recentFallbacks: readonly ModelFallbackEvent[];
 }
 /** Serializable authoring metadata from the held declaration; no parser functions or credentials. */
 export interface InferenceDriverView {
@@ -118,6 +131,8 @@ export interface InferenceManagementView {
   }>[];
   readonly drivers: readonly InferenceDriverView[];
   readonly purposes?: PurposePolicy;
+  /** Host administrators only (#1250). */
+  readonly modelAvailability?: InferenceModelAvailabilityView;
 }
 interface PreparedMutation {
   readonly kind: 'graph' | 'credential';
@@ -240,8 +255,12 @@ export class InferenceManagementService {
       statuses,
       deployment,
       drivers,
-      ...(principal.hostAdministrator ? { purposes: graph.purposes } : {}),
+      ...(principal.hostAdministrator ? { purposes: graph.purposes, modelAvailability: this.#availability() } : {}),
     };
+  }
+  #availability(): InferenceModelAvailabilityView {
+    const registry = this.options.modelAvailability ?? modelAvailability;
+    return Object.freeze({ notice: MODEL_FALLBACK_NOTICE, unavailable: registry.list(), recentFallbacks: registry.recentFallbacks() });
   }
   async review(
     principal: InferenceManagementPrincipal,
@@ -673,25 +692,27 @@ export class InferenceManagementService {
         },
       ])
     );
-    const reference = (id: string | undefined) => (id ? { profile: id } : undefined);
-    const selection = (value: { chat?: string; perception?: unknown }) => ({
-      ...(value.chat ? { chat: reference(value.chat) } : {}),
+    // #1250: a language purpose exports as `{ profile, fallbacks? }`, the shape the plan imports.
+    const reference = (id: string | undefined, fallbacks?: readonly string[]) =>
+      id ? { profile: id, ...(fallbacks?.length ? { fallbacks: [...fallbacks] } : {}) } : undefined;
+    const selection = (value: { chat?: string; chatFallbacks?: readonly string[]; perception?: unknown }) => ({
+      ...(value.chat ? { chat: reference(value.chat, value.chatFallbacks) } : {}),
       ...(value.perception ? { perception: value.perception } : {}),
     });
     const purposes = {
       ...selection(graph.purposes.defaults),
       ...(graph.purposes.defaults.summary
-        ? { summary: reference(graph.purposes.defaults.summary) }
+        ? { summary: reference(graph.purposes.defaults.summary, graph.purposes.defaults.summaryFallbacks) }
         : {}),
       ...(graph.purposes.defaults.ambient
-        ? { ambient: reference(graph.purposes.defaults.ambient) }
+        ? { ambient: reference(graph.purposes.defaults.ambient, graph.purposes.defaults.ambientFallbacks) }
         : {}),
       ...(graph.purposes.defaults.image ? { image: reference(graph.purposes.defaults.image) } : {}),
       ...(graph.purposes.decisions ? { decisions: graph.purposes.decisions } : {}),
       ...(graph.purposes.agents
         ? {
             agents: Object.fromEntries(
-              Object.entries(graph.purposes.agents).map(([key, id]) => [key, reference(id)])
+              Object.entries(graph.purposes.agents).map(([key, id]) => [key, reference(id, graph.purposes.agentFallbacks?.[key])])
             ),
           }
         : {}),
