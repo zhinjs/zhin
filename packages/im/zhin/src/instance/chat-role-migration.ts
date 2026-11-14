@@ -283,6 +283,16 @@ export type ChatRoleMigrationAdapterKind = 'simulated' | 'platform' | undefined;
  * platform names): `runtime.sandbox` marks a local simulation whose clients choose their sender id.
  */
 export function chatRoleMigrationAdapterKinds(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): (alias: string) => ChatRoleMigrationAdapterKind {
+  const kinds = classifyAdapters(snapshot);
+  return alias => kinds.get(alias);
+}
+
+/** Aliases of the snapshot's local simulation adapters (`runtime.sandbox`), sorted. */
+export function simulatedAdapterAliases(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): readonly string[] {
+  return Object.freeze([...classifyAdapters(snapshot)].filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
+}
+
+function classifyAdapters(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>> {
   const kinds = new Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>>();
   try {
     const index = snapshot?.projections.get(adapterFeatureId);
@@ -296,7 +306,7 @@ export function chatRoleMigrationAdapterKinds(snapshot: Pick<RuntimeSnapshot, 'p
       }
     }
   } catch { /* unknown: every alias stays unclassified */ }
-  return alias => kinds.get(alias);
+  return kinds;
 }
 
 export interface ChatRoleMigrationCompleteOptions {

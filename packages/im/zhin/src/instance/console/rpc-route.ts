@@ -27,6 +27,7 @@ import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-fe
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
 import { dispatchChatRoleImportsConsoleRpc } from './chat-role-imports-rpc.js';
 import { chatGrantorName, dispatchChatPrincipalsConsoleRpc } from './chat-principals-rpc.js';
+import { simulatedAdapterAliases } from '../chat-role-migration.js';
 import { AttentionObservations, AttentionSourceCache, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
 import { CONSOLE_PERMISSIONS, featureScopeTarget, type ConsoleFeatureOverrideOperator } from '@zhin.js/console-protocol';
@@ -118,6 +119,11 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(isUserPrincipal(principal) ? { consoleUser: { userId: principal.userId, displayName: principal.displayName } } : {}),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),
+        simulatedAdapters: () => {
+          const lease = options.snapshots?.acquire();
+          if (!lease) return [];
+          try { return simulatedAdapterAliases(lease.value); } finally { lease.release(); }
+        },
       });
       if (chatPrincipalsReply) {
         return reply(chatPrincipalsReply.status, chatPrincipalsReply.body, noStore);

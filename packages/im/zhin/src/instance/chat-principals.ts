@@ -28,10 +28,12 @@ export const CHAT_IDENTITY_RETENTION_MS = 90 * 24 * 60 * 60_000;
 /** Sightings of the same identity within this window (same name and scope) are not written again. */
 export const CHAT_IDENTITY_SIGHTING_THROTTLE_MS = 10 * 60_000;
 
-export type ChatIdentityLinkMethod = 'implicit' | 'code' | 'manual' | 'import';
-export type ChatConsoleLinkVia = 'code' | 'manual' | 'import';
-const LINK_METHODS: readonly string[] = ['implicit', 'code', 'manual', 'import'];
-const LINK_VIAS: readonly string[] = ['code', 'manual', 'import'];
+/** `console`: an identity on a local simulation adapter given to the signed-in Console user's own person (ADR 0060 §5.4). */
+export type ChatIdentityLinkMethod = 'implicit' | 'code' | 'manual' | 'import' | 'console';
+/** `console`: created when the signed-in user asked for a simulation identity without a person yet. */
+export type ChatConsoleLinkVia = 'code' | 'manual' | 'import' | 'console';
+const LINK_METHODS: readonly string[] = ['implicit', 'code', 'manual', 'import', 'console'];
+const LINK_VIAS: readonly string[] = ['code', 'manual', 'import', 'console'];
 
 export interface StoredChatPrincipal {
   readonly id: string;

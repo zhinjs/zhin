@@ -24,6 +24,12 @@ export const CHAT_PRINCIPALS_RPC = Object.freeze({
   BIND_CODE_CREATE: 'chat-identities.bind-code.create',
   /** The caller's own link: person, identities, roles and the open bind code. */
   ME: 'chat-identities.me',
+  /**
+   * ADR 0060 §5.4: gives the caller's person (created and linked when the caller has none) an
+   * identity on the local simulation adapters (Sandbox), so the Console can speak there as the
+   * caller — Console authentication is the proof. Real platform adapters are never touched.
+   */
+  SIMULATED_ENSURE: 'chat-identities.simulated.ensure',
 } as const);
 
 export type ConsoleChatPrincipalsRpcType = typeof CHAT_PRINCIPALS_RPC[keyof typeof CHAT_PRINCIPALS_RPC];
@@ -33,8 +39,8 @@ export type ConsoleChatPrincipalsRpcType = typeof CHAT_PRINCIPALS_RPC[keyof type
  *   count for the identities on that adapter. Merging, splitting or renaming a person that holds a
  *   global grant, linking / unlinking a Console user, export and import need a **global**
  *   `iam.manage` binding (ADR 0060 §5.2).
- * - `chat-identities.bind-code.create` / `chat-identities.me`: `self.chat-identity` (every built-in
- *   role has it, ADR 0060 Q4); only the caller's own link.
+ * - `chat-identities.bind-code.create` / `chat-identities.me` / `chat-identities.simulated.ensure`:
+ *   `self.chat-identity` (every built-in role has it, ADR 0060 Q4); only the caller's own link.
  */
 export const CHAT_PRINCIPALS_RPC_PERMISSIONS: Readonly<Record<ConsoleChatPrincipalsRpcType, 'iam.manage' | 'self.chat-identity'>> = Object.freeze({
   [CHAT_PRINCIPALS_RPC.LIST]: 'iam.manage',
@@ -49,6 +55,7 @@ export const CHAT_PRINCIPALS_RPC_PERMISSIONS: Readonly<Record<ConsoleChatPrincip
   [CHAT_PRINCIPALS_RPC.IDENTITIES_RECENT]: 'iam.manage',
   [CHAT_PRINCIPALS_RPC.BIND_CODE_CREATE]: 'self.chat-identity',
   [CHAT_PRINCIPALS_RPC.ME]: 'self.chat-identity',
+  [CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE]: 'self.chat-identity',
 });
 
 export function isConsoleChatPrincipalsRpcType(value: unknown): value is ConsoleChatPrincipalsRpcType {
@@ -58,9 +65,10 @@ export function isConsoleChatPrincipalsRpcType(value: unknown): value is Console
 /**
  * How an identity came to its person: `implicit` (its own single-identity person, created on first
  * need or by the migration), `code` (the identity's holder sent a bind code in a private chat),
- * `manual` (merged by an operator, not proven by the holder), `import`.
+ * `manual` (merged by an operator, not proven by the holder), `import`, `console` (an identity on a
+ * local simulation adapter, given to the signed-in Console user's own person).
  */
-export type ConsoleChatIdentityLinkMethod = 'implicit' | 'code' | 'manual' | 'import';
+export type ConsoleChatIdentityLinkMethod = 'implicit' | 'code' | 'manual' | 'import' | 'console';
 
 export interface ConsoleChatIdentity {
   readonly adapter: string;
@@ -73,8 +81,12 @@ export interface ConsoleChatIdentity {
   readonly lastDisplayName?: string;
 }
 
-/** `code` (self-service bind code), `manual` (an operator with global `iam.manage`), `import`. */
-export type ConsoleChatConsoleLinkVia = 'code' | 'manual' | 'import';
+/**
+ * `code` (self-service bind code), `manual` (an operator with global `iam.manage`), `import`
+ * (`ai.personalPrincipals` or an export file), `console` (the user asked for a simulation identity
+ * while signed in and had no person yet).
+ */
+export type ConsoleChatConsoleLinkVia = 'code' | 'manual' | 'import' | 'console';
 
 export interface ConsoleChatConsoleLink {
   readonly consoleUserId: string;
@@ -239,4 +251,16 @@ export interface ConsoleChatRolesImportResult {
   readonly consoleLinks: number;
   /** Entries left out (identity owned by another person, link conflicts, malformed rows). */
   readonly skipped: readonly string[];
+}
+
+/** `chat-identities.simulated.ensure`: one simulation adapter alias, or every loaded one. */
+export interface ConsoleChatSimulatedEnsureRequest {
+  readonly adapter?: string;
+}
+
+export interface ConsoleChatSimulatedEnsureResult {
+  readonly status: 'saved' | 'unchanged';
+  readonly principalId: string;
+  /** The caller's identities on simulation adapters. */
+  readonly identities: readonly ConsoleChatIdentity[];
 }

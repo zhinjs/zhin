@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { createChatRoleReader } from '@zhin.js/core';
 import { authorizeConsoleRpc, type ConsolePrincipal } from '@zhin.js/host-http';
 import { CHAT_PRINCIPALS_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 import {
@@ -327,6 +328,38 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
     expect(store.principals.linkOfConsoleUser('viewer')).toBeDefined();
   });
 
+  it('simulated.ensure gives only the caller an identity on simulation adapters, never on a platform (ADR 0060 §5.4)', async () => {
+    const { store, roles, people, audits } = setup();
+    const simulated = () => ['sandbox'];
+    // No signed-in user (bootstrap / standalone): refused.
+    expect((await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, {}, { people, authorize: global, simulatedAdapters: simulated })).status).toBe(403);
+    // A real platform adapter is never touched (that needs a bind code from the identity's holder).
+    expect((await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, { adapter: 'qq' }, { people, authorize: () => false, consoleUser: { userId: 'u1' }, simulatedAdapters: simulated })).status).toBe(400);
+    expect((await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, {}, { people, authorize: () => false, consoleUser: { userId: 'u1' }, simulatedAdapters: () => [] })).status).toBe(404);
+    // Unlinked: a new person, linked (`console`), with a sandbox identity; no role comes with it.
+    const first = await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, {}, { people, authorize: () => false, consoleUser: { userId: 'u1', displayName: 'Una' }, simulatedAdapters: simulated });
+    expect(first.status).toBe(200);
+    expect(first.body.data).toMatchObject({ status: 'saved', identities: [{ adapter: 'sandbox', userId: 'console-u1', linkMethod: 'console' }] });
+    expect(store.principals.linkOfConsoleUser('u1')).toMatchObject({ linkedVia: 'console' });
+    expect(roles.roleAt({ adapter: 'sandbox', userId: 'console-u1' }, '')).toBeUndefined();
+    expect((await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, {}, { people, authorize: () => false, consoleUser: { userId: 'u1' }, simulatedAdapters: simulated })).body.data)
+      .toMatchObject({ status: 'unchanged' });
+    // Linked to a global owner: the sandbox identity joins that person and so speaks as the owner.
+    await store.grant({ level: 'global', key: '', ...qq('boss'), role: 'owner' });
+    await people.linkConsole({ principal: qq('boss'), consoleUserId: 'u-boss', via: 'manual', actor: 'user:root' });
+    await rpc(CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE, { adapter: 'sandbox' }, { people, authorize: () => false, consoleUser: { userId: 'u-boss' }, simulatedAdapters: simulated });
+    expect(roles.hasRole({ adapter: 'sandbox', userId: 'console-u-boss' }, 'sandbox/dev/private:x', 'owner')).toBe(true);
+    expect(audits).toContainEqual(expect.objectContaining({ action: 'chat-identities.bind', actor: 'console:user:u-boss', detail: expect.objectContaining({ linkMethod: 'console' }) }));
+    // The reader resolves the Console speaker from the link only.
+    const reader = createChatRoleReader({ roles: () => roles, conversationKey: c => `sandbox/dev/${c.kind}:${c.id}`,
+      consolePrincipal: user => store.principals.linkOfConsoleUser(user)?.principalId });
+    const room = { endpoint: { id: 'x', adapter: 'sandbox' }, kind: 'private', id: 'r' } as never;
+    expect(reader.consoleSpeaker!(room, 'u-boss')).toEqual({ adapter: 'sandbox', userId: 'console-u-boss' });
+    expect(reader.consoleSpeaker!(room, 'u-nobody')).toBeUndefined();
+    // Typing the owner's sandbox id as a simulated sender never resolves the role.
+    expect(reader.factsOf(room, '~sim:console-u-boss')).toBeUndefined();
+  });
+
   it('chat-identities.recent lists recent speakers at the scope', async () => {
     const { store, people } = setup();
     people.observe({ identity: qq('x'), scopeKey: 'qq/bot/group:1', displayName: 'Xiao' });
@@ -343,6 +376,7 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
       grants: [{ scope: { kind: 'global' }, permissions: [...CONSOLE_BUILTIN_ROLES.viewer.permissions] }] } as never;
     expect(authorizeConsoleRpc(viewer, { type: CHAT_PRINCIPALS_RPC.BIND_CODE_CREATE }).allowed).toBe(true);
     expect(authorizeConsoleRpc(viewer, { type: CHAT_PRINCIPALS_RPC.ME }).allowed).toBe(true);
+    expect(authorizeConsoleRpc(viewer, { type: CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE }).allowed).toBe(true);
     expect(authorizeConsoleRpc(viewer, { type: CHAT_PRINCIPALS_RPC.MERGE, data: {} }).allowed).toBe(false);
     const scopedManager: ConsolePrincipal = { kind: 'user', userId: 's', username: 's', displayName: 's', credentialId: 'c', roles: [],
       grants: [{ scope: { kind: 'adapter', key: 'qq' }, permissions: ['iam.manage'] }] } as never;

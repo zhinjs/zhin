@@ -120,9 +120,9 @@ describe('Sandbox scoped multi-connection transport', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(second.frames.some(frame => frame.direction === 'inbound')).toBe(true));
     const echo = first.frames.find(frame => frame.direction === 'inbound')!;
-    expect(echo).toMatchObject({ ...scene, senderId: 'shared-owner', messageId: 'client-message', content: [{ type: 'text', data: { text: 'hello' } }] });
+    expect(echo).toMatchObject({ ...scene, senderId: '~sim:shared-owner', displaySenderId: 'shared-owner', simulated: true, messageId: 'client-message', content: [{ type: 'text', data: { text: 'hello' } }] });
     expect(second.frames.find(frame => frame.direction === 'inbound')).toEqual(echo);
-    expect(receive.mock.calls[0]![0]).toMatchObject({ endpointId: 'shared-bot', sender: { id: 'shared-owner' }, message: { id: echo.messageId } });
+    expect(receive.mock.calls[0]![0]).toMatchObject({ endpointId: 'shared-bot', sender: { id: '~sim:shared-owner' }, message: { id: echo.messageId } });
     const receipt = await endpoint.send({ conversation: conversation(scene), payload: 'reply' });
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === receipt)).toBe(true));
     expect(first.frames.find(frame => frame.messageId === receipt)).toEqual(second.frames.find(frame => frame.messageId === receipt));
@@ -145,7 +145,7 @@ describe('Sandbox scoped multi-connection transport', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(second.frames.some(frame => frame.direction === 'inbound')).toBe(true));
     const echo = second.frames.find(frame => frame.direction === 'inbound')!;
-    expect(echo).toMatchObject({ type: 'channel', id: 'legacy-room', senderId: 'shared-owner' });
+    expect(echo).toMatchObject({ type: 'channel', id: 'legacy-room', senderId: '~sim:shared-owner', displaySenderId: 'shared-owner' });
     expect(echo.messageId).toEqual(expect.any(String));
     expect(receive.mock.calls[0]![0]).toMatchObject({ message: { id: echo.messageId }, conversation: conversation({ type: 'channel', id: 'legacy-room' }) });
     expect(first.frames.some(frame => frame.direction === 'inbound')).toBe(false);

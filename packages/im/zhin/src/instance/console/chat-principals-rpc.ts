@@ -9,7 +9,8 @@
  *   **global** binding when a person involved holds a global grant (merging extends it to new
  *   identities, ADR 0060 §5.2);
  * - `link-console` / `unlink-console` / `export` / `import`: global `iam.manage` (§2.4, §4.5);
- * - `chat-identities.bind-code.create` / `me`: the caller's own link only (`self.chat-identity`).
+ * - `chat-identities.bind-code.create` / `me` / `simulated.ensure`: the caller's own link only
+ *   (`self.chat-identity`); `simulated.ensure` only on local simulation adapters (ADR 0060 §5.4).
  *
  * Without a relational project database writes are refused (503 `chat-roles-unpersisted`).
  */
@@ -46,6 +47,8 @@ export interface ChatPrincipalsRpcContext {
   readonly actor?: string;
   readonly publishEvent?: (type: string, data: unknown) => void;
   readonly now?: () => number;
+  /** Aliases of the loaded local simulation adapters (`runtime.sandbox`); `chat-identities.simulated.ensure` only touches these. */
+  readonly simulatedAdapters?: () => readonly string[];
 }
 
 type Record_ = Record<string, unknown>;
@@ -319,6 +322,22 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         }
         data = Object.freeze({ ...(principal ? { principal } : {}), ...(pending ? { pendingCode: Object.freeze({ expiresAt: pending }) } : {}),
           ...(principal && global && !hasGlobalOwner({ store }) ? { suggestGlobalOwner: true } : {}) });
+        break;
+      }
+      case CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE: {
+        const user = context.consoleUser;
+        if (!user) throw new FeatureRpcError(403, '需要以 Console 用户身份登录');
+        const simulated = context.simulatedAdapters?.() ?? [];
+        if (input.adapter !== undefined && typeof input.adapter !== 'string') throw new FeatureRpcError(400, 'adapter 必须是适配器实例别名');
+        // Only local simulations: an identity on a real platform needs proof from its holder (bind code).
+        if (typeof input.adapter === 'string' && !simulated.includes(input.adapter)) throw new FeatureRpcError(400, `${input.adapter} 不是已加载的模拟适配器`);
+        const aliases = typeof input.adapter === 'string' ? [input.adapter] : simulated;
+        if (!aliases.length) throw new FeatureRpcError(404, '没有已加载的模拟适配器');
+        const result = await people.ensureSimulatedIdentities({ consoleUserId: user.userId,
+          ...(user.displayName ? { consoleDisplayName: user.displayName } : {}), aliases });
+        data = Object.freeze({ status: result.status, principalId: result.principalId,
+          identities: Object.freeze(result.identities.map(identity => identityView(principals.identity(identity) ?? identity, now))) });
+        if (result.status === 'saved') changed();
         break;
       }
       default:

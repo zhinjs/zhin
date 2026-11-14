@@ -302,6 +302,47 @@ export class ChatPeople {
   }
 
   /**
+   * ADR 0060 §5.4: gives the Console user's person an identity on each simulation adapter alias
+   * (`console-<consoleUserId>`), creating the person and its Console link (`console`) when the
+   * user has none. Console authentication is the proof, so the identity is the user's own; only
+   * aliases the caller classified as local simulations may be passed. An identity id already held
+   * by another person (an operator merged it elsewhere) is left alone.
+   */
+  async ensureSimulatedIdentities(input: Readonly<{ consoleUserId: string; consoleDisplayName?: string; aliases: readonly string[] }>): Promise<Readonly<{ status: 'saved' | 'unchanged'; principalId: string; identities: readonly ChatIdentity[] }>> {
+    if (!input.consoleUserId || input.consoleUserId.length > 128) throw new ChatPeopleError('invalid', 'consoleUserId 无效');
+    const by = `console:user:${input.consoleUserId}`;
+    const result = await this.#store.exclusive(async () => {
+      this.#store.assertPersistent();
+      const principals = this.#store.principals;
+      let changed = false;
+      let principalId = principals.linkOfConsoleUser(input.consoleUserId)?.principalId;
+      if (!principalId) {
+        principalId = await principals.createPrincipal({ createdBy: by,
+          ...(cleanChatDisplayName(input.consoleDisplayName) ? { displayName: cleanChatDisplayName(input.consoleDisplayName)! } : {}) });
+        await principals.setLink({ principalId, consoleUserId: input.consoleUserId,
+          ...(input.consoleDisplayName ? { consoleDisplayName: input.consoleDisplayName } : {}), linkedVia: 'console' });
+        changed = true;
+      }
+      for (const alias of new Set(input.aliases)) {
+        const mine = principals.identitiesOf(principalId).some(identity => identity.adapter === alias);
+        if (mine) continue;
+        const identity = { adapter: alias, userId: `console-${input.consoleUserId}` };
+        if (!isChatIdentity(identity) || principals.principalOf(identity)) continue;
+        await principals.assignIdentity(identity, principalId, { method: 'console', by });
+        changed = true;
+      }
+      const identities = principals.identitiesOf(principalId).filter(identity => input.aliases.includes(identity.adapter))
+        .map(identity => Object.freeze({ adapter: identity.adapter, userId: identity.userId }));
+      return { status: changed ? 'saved' as const : 'unchanged' as const, principalId, identities: Object.freeze(identities) };
+    });
+    if (result.status === 'saved') {
+      this.#audit({ actor: by, action: 'chat-identities.bind', target: result.principalId, outcome: 'ok',
+        detail: Object.freeze({ linkMethod: 'console', identities: result.identities.map(identityText) }) });
+    }
+    return Object.freeze(result);
+  }
+
+  /**
    * ADR 0060 §2.2 `last_seen_at`: throttled, fire-and-forget; never part of authorization and
    * never blocks a message.
    */

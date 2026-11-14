@@ -132,6 +132,14 @@ export interface ChatRoleReader {
   factsOf(conversation: ConversationRef, userId: string): ChatRoleFacts | undefined;
   /** Grant / revoke / merge / split notifications; returns the unsubscribe function. */
   subscribe(listener: (change: ChatRoleChange) => void): () => void;
+  /**
+   * ADR 0060 §5.4: the identity on `conversation`'s adapter of the person linked to Console user
+   * `consoleUserId` (the first one when the person has several there); undefined when the user is
+   * not linked or the person has no identity on that adapter. A local simulation (the Console
+   * Sandbox) speaks as it for an authenticated Console user who chose 「以我的聊天身份发言」.
+   * Optional for readers built before P3.
+   */
+  consoleSpeaker?(conversation: ConversationRef, consoleUserId: string): ChatIdentity | undefined;
 }
 
 export const chatRolesToken = createToken<ChatRoleReader>(
@@ -145,6 +153,8 @@ export interface ChatRoleReaderOptions {
   /** Scope key of a conversation in the current generation (conversation key, else the endpoint key). */
   readonly conversationKey: (conversation: ConversationRef) => string | undefined;
   readonly subscribe?: (listener: (change: ChatRoleChange) => void) => () => void;
+  /** Stored person linked to a Console user id (ADR 0060 §2.4); absent: no Console links. */
+  readonly consolePrincipal?: (consoleUserId: string) => string | undefined;
 }
 
 const LEVEL_INDEX = (level: ChatRoleLevel) => CHAT_ROLE_LEVELS.indexOf(level);
@@ -239,6 +249,19 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
     },
     subscribe(listener) {
       return options.subscribe ? options.subscribe(listener) : () => undefined;
+    },
+    consoleSpeaker(conversation, consoleUserId) {
+      if (typeof consoleUserId !== 'string' || !consoleUserId || !options.consolePrincipal) return undefined;
+      const key = scopeKey({ level: 'conversation', conversation });
+      if (key === undefined) return undefined;
+      const adapter = chainOf(key)[1];
+      if (!adapter) return undefined;
+      let principalId: string | undefined;
+      let service: ChatRoleService | undefined;
+      try { principalId = options.consolePrincipal(consoleUserId); service = options.roles(); } catch { return undefined; }
+      if (!principalId || !service) return undefined;
+      const held = service.store.principal?.(principalId)?.identities.find(identity => identity.adapter === adapter && isChatIdentity(identity));
+      return held ? Object.freeze({ adapter: held.adapter, userId: held.userId }) : undefined;
     },
   };
   return Object.freeze(api);

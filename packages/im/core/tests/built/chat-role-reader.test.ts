@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ChatRoleService, type ChatRoleEntry } from '../../src/built/roles.js';
+import { ChatRoleService, isChatIdentity, type ChatRoleEntry } from '../../src/built/roles.js';
 import { chatRolesToken, createChatRoleReader, hasChatRole, implicitChatPrincipalId, isOwner } from '../../src/built/chat-role-reader.js';
 import { renderCommandFeedback } from '../../src/plugin-runtime/im/command-feedback.js';
 
@@ -73,6 +73,36 @@ describe('chat role public API (ADR 0060 §6)', () => {
     expect(r.roleOf({ adapter: 'QQ!', userId: 'boss' })).toBeUndefined();
     expect(r.roleOf({ adapter: 'qq', userId: 'boss' }, { level: 'adapter', adapter: 'bad/alias' })).toBeUndefined();
     expect(r.holders('owner', { scope: { level: 'endpoint', adapter: 'qq', endpointId: '' } })).toEqual([]);
+  });
+});
+
+describe('simulated senders and the Console speaker (ADR 0060 §5.4)', () => {
+  it('a reserved `~` sender id never resolves a role, even when its suffix is an owner id', () => {
+    const entries = [grant({ level: 'global', key: '', adapter: 'qq', userId: 'boss', role: 'owner' })];
+    const service = new ChatRoleService({ store: { list: () => entries } });
+    const { reader: r } = reader(entries);
+    expect(isChatIdentity({ adapter: 'qq', userId: '~sim:boss' })).toBe(false);
+    expect(service.hasRole({ adapter: 'qq', userId: '~sim:boss' }, '', 'owner')).toBe(false);
+    expect(service.heldBy({ adapter: 'qq', userId: '~boss' })).toEqual([]);
+    expect(r.factsOf(conversation(), '~sim:boss')).toBeUndefined();
+    expect(r.roleOf({ adapter: 'qq', userId: '~sim:boss' })).toBeUndefined();
+  });
+
+  it('consoleSpeaker returns the linked person\'s identity on the conversation adapter only', () => {
+    const person = { id: 'cp_me', identities: [{ adapter: 'tg', userId: 't1' }, { adapter: 'qq', userId: 'q1' }] };
+    const service = new ChatRoleService({ store: { list: () => [], principal: (id: string) => id === person.id ? person : undefined } });
+    const r = createChatRoleReader({ roles: () => service, conversationKey: c => `qq/bot-1/${c.kind}:${c.id}`,
+      consolePrincipal: user => user === 'u1' ? 'cp_me' : undefined });
+    expect(r.consoleSpeaker!(conversation(), 'u1')).toEqual({ adapter: 'qq', userId: 'q1' });
+    expect(r.consoleSpeaker!(conversation(), 'u2')).toBeUndefined();
+    expect(r.consoleSpeaker!(conversation(), '')).toBeUndefined();
+    const other = createChatRoleReader({ roles: () => service, conversationKey: c => `sandbox/dev/${c.kind}:${c.id}`,
+      consolePrincipal: () => 'cp_me' });
+    // No identity on that adapter: no speaker (the caller falls back to a simulated sender).
+    expect(other.consoleSpeaker!(conversation(), 'u1')).toBeUndefined();
+    // Without Console links there is never a speaker.
+    const { reader: unlinked } = reader([]);
+    expect(unlinked.consoleSpeaker!(conversation(), 'u1')).toBeUndefined();
   });
 });
 

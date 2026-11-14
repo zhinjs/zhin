@@ -76,10 +76,20 @@ export interface ChatIdentity {
   readonly userId: string;
 }
 
+/**
+ * ADR 0060 §5.4: sender ids starting with `~` are reserved for **simulated** speakers (a local
+ * simulation such as the Console Sandbox writes a client-chosen id as `~sim:<id>`). They are not
+ * chat identities: they never hold, receive or resolve a role, never belong to a person and are
+ * never recorded as recent speakers — so typing someone's id into a simulation cannot borrow
+ * their role.
+ */
+const RESERVED_SENDER_PREFIX = '~';
+
 export function isChatIdentity(value: unknown): value is ChatIdentity {
   const identity = value as Partial<ChatIdentity> | undefined;
   return !!identity && typeof identity.adapter === 'string' && ADAPTER_ALIAS.test(identity.adapter)
-    && typeof identity.userId === 'string' && identity.userId.length > 0 && identity.userId.length <= 256 && !CONTROL.test(identity.userId);
+    && typeof identity.userId === 'string' && identity.userId.length > 0 && identity.userId.length <= 256 && !CONTROL.test(identity.userId)
+    && !identity.userId.startsWith(RESERVED_SENDER_PREFIX);
 }
 
 /** Validates `level` + `key` and returns the normalized scope key; throws TypeError. */
@@ -245,6 +255,8 @@ export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantSt
    * global grants and grants at scopes of the identity's own adapter (ADR 0060 Q10).
    */
   heldBy(identity: ChatIdentity): readonly ChatRoleEntry[] {
+    // A reserved (simulated) or malformed sender id holds nothing, whatever is stored (ADR 0060 §5.4).
+    if (!isChatIdentity(identity)) return Object.freeze([]);
     const principal = this.principalOf(identity).id;
     return Object.freeze(this.store.list().filter(entry => chatRoleEntryPrincipalId(entry) === principal && chatRoleEntryAppliesTo(entry, identity)));
   }

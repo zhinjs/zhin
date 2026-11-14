@@ -12,6 +12,7 @@ import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMe
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
+import { ensureSandboxChatIdentity, readServerSpeaker, wantsAsMe, type SandboxServerSpeaker, type SandboxSpeakerMode } from './chatIdentity.js';
 import { isJsxNode, segmentFallbackText, segmentPreviewText } from './segmentFallback.js';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
@@ -117,8 +118,13 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [senderId, setSenderId] = useState('dev-user')
     const [senderName, setSenderName] = useState('Developer')
     const [senderRole, setSenderRole] = useState<'master' | 'admin' | 'member'>('master')
-    // ADR 0060 §5.4: what the server resolved for the last message sent (zhin role + Agent trust tier).
-    const [serverRole, setServerRole] = useState<{ senderId: string; chatRole?: string; trustLevel: string } | null>(null)
+    // ADR 0060 §5.4: what the server resolved for the last message sent (speaker, zhin role, Agent trust tier).
+    const [serverRole, setServerRole] = useState<SandboxServerSpeaker | null>(null)
+    // 「以我的聊天身份发言」 (default) vs a simulated sender; only a signed-in Console user can speak as themselves.
+    const [speakerMode, setSpeakerMode] = useState<SandboxSpeakerMode>('me')
+    const [consoleUser, setConsoleUser] = useState(false)
+    const [identitySetup, setIdentitySetup] = useState<{ status: 'idle' | 'busy' | 'done' | 'unsupported' } | { status: 'failed'; message: string }>({ status: 'idle' })
+    const asMe = wantsAsMe(speakerMode, consoleUser)
     const [showSenderSettings, setShowSenderSettings] = useState(false)
     /** Runbar overflow: identity, run settings, inspector and clear live here (#1250). */
     const [showMoreActions, setShowMoreActions] = useState(false)
@@ -273,7 +279,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
         messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
         senderName?: string; senderRole?: 'master' | 'admin' | 'member';
-        senderChatRole?: string; senderTrustLevel?: string;
+        senderChatRole?: string; senderTrustLevel?: string; consoleUser?: boolean;
+        simulated?: boolean; displaySenderId?: string; asMeUnavailable?: string;
         revision?: number; streaming?: boolean;
         conversation?: { type: Channel['type']; id: string };
     }) => {
@@ -297,6 +304,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
             setReadyConnectionId(data.connectionId)
             setCanExecute(data.canExecute !== false)
+            setConsoleUser(data.consoleUser === true)
             setTransportNotice(data.canExecute === false ? sandboxText(locale, "当前 Token 只有演示权限，任务运行已禁用。") : null)
             if (data.shellIsolation) {
                 setShellIsolation({
@@ -340,9 +348,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const channelType: Channel['type'] = data.conversation?.type ?? (data.type === 'group' || data.type === 'channel' ? data.type : 'private')
         const sceneId = data.conversation?.id ?? data.id
         const isInput = data.direction === 'inbound'
-        if (isInput && data.senderId && typeof data.senderTrustLevel === 'string') {
-            setServerRole({ senderId: data.senderId, trustLevel: data.senderTrustLevel, ...(data.senderChatRole ? { chatRole: data.senderChatRole } : {}) })
-        }
+        const speaker = isInput ? readServerSpeaker(data as Record<string, unknown>) : null
+        if (speaker) setServerRole(speaker)
         // Interactive choices are transport inputs, not another chat turn or an approval result.
         if (isInput && content.every((segment) => segment.type === 'action')) return
         const channelName = channelType === 'private'
@@ -365,7 +372,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         setMessages((prev) => mergePlaygroundMessage(prev, {
             id: data.messageId ?? createSandboxMessageId(), type: isInput ? 'sent' : 'received', channelType,
             interactionReadOnly: false,
-            channelId: sceneId, channelName, senderId: isInput ? data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
+            channelId: sceneId, channelName, senderId: isInput ? data.displaySenderId || data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
             senderName: isInput ? (typeof data.senderName === 'string' && data.senderName.trim() ? data.senderName.trim() : sandboxText(locale, "当前用户")) : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
             ...(Number.isSafeInteger(data.revision) && data.revision! > 0 ? { revision: data.revision } : {}),
             ...(typeof data.streaming === 'boolean' ? { streaming: data.streaming } : {}),
@@ -380,7 +387,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: createSandboxMessageId(), content: segments,
-            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole,
+            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
             agentRun: scene.runConfig, timestamp: Date.now(),
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
@@ -893,7 +900,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: newMessage.id, content: segments,
-            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole,
+            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
             agentRun: scene.runConfig, timestamp: newMessage.timestamp,
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，消息未发送。"))
@@ -1214,12 +1221,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                             onClick={() => { setShowSenderSettings((visible) => !visible); setShowMoreActions(false) }}>
                                             <User size={14} />
                                             <span>{sandboxText(locale, "模拟发送者")}</span>
-                                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)} title={locale === 'en' ? 'Simulated platform standing (not a zhin role)' : '模拟的平台身份（不是 zhin 角色）'}>{senderName.trim() || senderId.trim() || 'dev-user'} · {platformStandingLabel(senderRole, locale)}</em>
-                                            {serverRole && serverRole.senderId === (senderId.trim() || connectionRef.current.ownerId || 'dev-user') && (
-                                                <em className="sandbox-role-badge is-zhin" title={locale === 'en' ? 'Resolved by the server: zhin role · Agent trust tier' : '服务端解析：zhin 角色 · Agent 信任档位'}>
+                                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)} title={locale === 'en' ? 'Simulated platform standing (not a zhin role)' : '模拟的平台身份（不是 zhin 角色）'}>{asMe ? sandboxText(locale, "我的聊天身份") : (senderName.trim() || senderId.trim() || 'dev-user')} · {platformStandingLabel(senderRole, locale)}</em>
+                                            {serverRole && (serverRole.simulated
+                                                ? <em className="sandbox-role-badge is-simulated" title={sandboxText(locale, "客户端自填的发送者不解析 zhin 角色")}>{sandboxText(locale, "模拟身份，无角色")}</em>
+                                                : <em className="sandbox-role-badge is-zhin" title={locale === 'en' ? 'Resolved by the server: zhin role · Agent trust tier' : '服务端解析：zhin 角色 · Agent 信任档位'}>
                                                     {`zhin: ${serverRole.chatRole ?? (locale === 'en' ? 'none' : '无')} · ${serverRole.trustLevel}`}
-                                                </em>
-                                            )}
+                                                </em>)}
                                         </button>
                                         <button type="button" role="menuitemcheckbox" aria-checked={showRunSettings}
                                             onClick={() => { setShowRunSettings((visible) => !visible); setShowMoreActions(false) }}>
@@ -1242,10 +1249,39 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
                 {showSenderSettings && (
                     <section className="agent-playground-run-settings sandbox-sender-settings" aria-label={locale === 'en' ? 'Simulated sender' : '模拟发送者配置'}>
+                        <div className="sandbox-speaker-mode">
+                            <label className="sandbox-speaker-toggle">
+                                <input type="checkbox" checked={speakerMode === 'me'} disabled={!consoleUser}
+                                    onChange={(event) => setSpeakerMode(event.target.checked ? 'me' : 'simulated')} />
+                                <span>{sandboxText(locale, "以我的聊天身份发言")}</span>
+                            </label>
+                            <p>
+                                {!consoleUser
+                                    ? sandboxText(locale, "当前连接没有 Console 用户（未登录或 --standalone），所有消息都按模拟身份处理，不解析 zhin 角色。")
+                                    : asMe
+                                    ? sandboxText(locale, "以链接到你 Console 账号的聊天身份发言，角色按你的聊天角色解析。")
+                                    : sandboxText(locale, "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。")}
+                            </p>
+                            {asMe && serverRole?.asMeUnavailable === 'no-identity' && (
+                                <div className="sandbox-speaker-setup" role="status">
+                                    <span>{sandboxText(locale, "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。")}</span>
+                                    <button type="button" disabled={identitySetup.status === 'busy'} onClick={() => {
+                                        setIdentitySetup({ status: 'busy' })
+                                        void ensureSandboxChatIdentity(socketRequestContextRef.current ?? undefined).then((result) => {
+                                            setIdentitySetup(result.status === 'ok' ? { status: 'done' } : result)
+                                        })
+                                    }}>{sandboxText(locale, "在 Sandbox 上创建我的聊天身份")}</button>
+                                    {identitySetup.status === 'done' && <em>{sandboxText(locale, "已创建，下一条消息生效。")}</em>}
+                                    {identitySetup.status === 'unsupported' && <em>{sandboxText(locale, "当前 Host 不支持，请升级。")}</em>}
+                                    {identitySetup.status === 'failed' && <em>{identitySetup.message}</em>}
+                                </div>
+                            )}
+                        </div>
                         <label>
-                            <span><User size={14} />{locale === 'en' ? 'Sender ID' : '发送者 ID'}</span>
+                            <span><User size={14} />{locale === 'en' ? 'Sender ID (simulated, no role)' : '发送者 ID（模拟身份，无角色）'}</span>
                             <input
                                 value={senderId}
+                                disabled={asMe}
                                 onChange={(event) => setSenderId(event.target.value)}
                                 placeholder="dev-user"
                                 spellCheck={false}
@@ -1255,6 +1291,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             <span>{locale === 'en' ? 'Sender Name' : '发送者昵称'}</span>
                             <input
                                 value={senderName}
+                                disabled={asMe}
                                 onChange={(event) => setSenderName(event.target.value)}
                                 placeholder="Developer"
                                 spellCheck={false}

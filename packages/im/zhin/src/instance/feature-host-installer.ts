@@ -156,6 +156,8 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       finally { lease.release(); }
     },
     subscribe: listener => roles.store.subscribe(listener),
+    // ADR 0060 §5.4: the Sandbox speaks as the person linked to the authenticated Console user.
+    consolePrincipal: consoleUserId => people.store.principals.linkOfConsoleUser(consoleUserId)?.principalId,
   });
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, keys);
