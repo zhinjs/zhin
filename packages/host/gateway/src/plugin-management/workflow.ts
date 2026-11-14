@@ -19,6 +19,7 @@ import type { ConsoleConfigExplanation, GatewayPluginConfigurationNeed } from '@
 import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
 import { dependenciesInPlace, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
+import { officialPluginCandidates, undeclaredPluginMessage } from './plugin-candidates.js';
 import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
@@ -606,7 +607,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       target = await this.#resolveTarget(key, entries);
       declared = entries.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
     } catch (error) { throw new PluginEnablementError('invalid-request', errorMessage(error), [], []); }
-    if (!declared) throw new PluginEnablementError('not-declared', `插件实例 ${target.instanceKey}（${target.packageName}）未在配置中声明；先运行 zhin install ${target.packageName}`);
+    // The fallback target is derived from the request itself: never suggest installing it (#1250).
+    if (!declared) throw new PluginEnablementError('not-declared', undeclaredPluginMessage(key, await officialPluginCandidates(key, this.#root)));
     const state = await this.inspect(target.instanceKey);
     if (enabled && (!state.installed || !state.plugin)) {
       throw new PluginEnablementError('not-installed', `${state.packageName} ${state.installed ? `不是可加载的 Plugin 包${state.issues[0] ? `：${state.issues[0]}` : ''}` : '未安装'}；先运行 zhin install ${state.packageName}`);
