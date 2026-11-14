@@ -7,7 +7,7 @@ import {
   GENERIC_PLUGIN_KEYWORDS as TS_GENERIC_KEYWORDS,
   PLUGIN_CATEGORIES as TS_CATEGORIES,
 } from '../packages/im/plugin-runtime/src/marketplace-metadata.js';
-import { GENERIC_PLUGIN_KEYWORDS, PLUGIN_CATEGORIES } from './lib/plugin-marketplace.mjs';
+import { GENERIC_PLUGIN_KEYWORDS, PLUGIN_CATEGORIES, packageAuthorName } from './lib/plugin-marketplace.mjs';
 import {
   collectWorkspacePlugins,
   getCommunityCategory,
@@ -121,5 +121,14 @@ describe('update-plugins workspace filter', () => {
       // The market shows the maintainer, never the CI publishing account.
       expect(plugin.author, plugin.name).not.toMatch(/github actions/iu);
     }
+  });
+});
+
+describe('packageAuthorName (script copy)', () => {
+  it('keeps only the name before the first < or (', () => {
+    expect(packageAuthorName({ author: 'Jane Doe <jane@example.com> (https://example.com)' })).toBe('Jane Doe');
+    expect(packageAuthorName({ author: 'Jane (JD)' })).toBe('Jane');
+    expect(packageAuthorName({ author: 'x<<script>script>' })).toBe('x');
+    expect(packageAuthorName({ author: '<a@b.c>' })).toBeUndefined();
   });
 });

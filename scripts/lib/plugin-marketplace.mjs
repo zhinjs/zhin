@@ -50,7 +50,9 @@ export function informativeKeywords(keywords) {
 /** @param {unknown} person */
 function personName(person) {
   if (typeof person === 'string') {
-    const name = person.replace(/<[^>]*>/gu, '').replace(/\([^)]*\)/gu, '').trim();
+    // npm "Name <email> (url)": the name is everything before the first `<` or `(`.
+    const cut = person.search(/[<(]/u);
+    const name = (cut === -1 ? person : person.slice(0, cut)).trim();
     return name || undefined;
   }
   if (person && typeof person === 'object' && !Array.isArray(person) && typeof person.name === 'string') {
