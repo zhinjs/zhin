@@ -233,3 +233,41 @@ function createStore(root: string, fileName: string): ConsoleConfigurationStore 
     document: createConfigDocument(join(root, fileName)),
   });
 }
+
+describe('http.port accepts only 1–65535 integers or ${VAR} references (#1250)', () => {
+  async function store(): Promise<{ store: ConsoleConfigurationStore; root: string }> {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-http-port-')); tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nhttp:\n  port: 8068\n');
+    return { store: createStore(root, 'zhin.config.yml'), root };
+  }
+
+  it('rejects non-numeric strings, out-of-range and fractional ports with Chinese reasons', async () => {
+    const { store: configuration } = await store();
+    expect(await configuration.validatePluginConfig('http', { port: 'abc' })).toMatchObject({
+      valid: false, errors: [{ path: '$.port', message: '字段 port 只接受数值或 ${VAR} 形式的环境变量引用' }],
+    });
+    expect(await configuration.validatePluginConfig('http', { port: 99999 })).toMatchObject({
+      valid: false, errors: [{ path: '$.port', message: '字段 port 不能大于 65535' }],
+    });
+    expect(await configuration.validatePluginConfig('http', { port: 0 })).toMatchObject({ valid: false });
+    expect(await configuration.validatePluginConfig('http', { port: 80.5 })).toMatchObject({ valid: false });
+    expect(await configuration.validatePluginConfig('http', { port: '8068' })).toMatchObject({ valid: false });
+  });
+
+  it('accepts integers in range and ${VAR} references', async () => {
+    const { store: configuration } = await store();
+    for (const port of [1, 8068, 65535, '${PORT}', '${PORT:-8068}']) {
+      expect(await configuration.validatePluginConfig('http', { port })).toMatchObject({ valid: true });
+    }
+  });
+
+  it('config:patch refuses to save an invalid port and leaves the file unchanged', async () => {
+    const { store: configuration, root } = await store();
+    const before = await readFile(join(root, 'zhin.config.yml'), 'utf8');
+    const { revision } = await configuration.readSource();
+    const result = await configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path: ['http', 'port'], value: 'abc' }] });
+    expect(result).toMatchObject({ status: 'invalid', errors: [{ path: '$.http.port', message: '字段 port 只接受数值或 ${VAR} 形式的环境变量引用' }] });
+    expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).toBe(before);
+  });
+});

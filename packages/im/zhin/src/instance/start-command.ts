@@ -64,7 +64,7 @@ import {
   installConsoleIam,
   installHostConsoleTerminal,
 } from './console/module.js';
-import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
+import { DEFAULT_HTTP_PORT, installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
@@ -624,7 +624,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
 
   let snapshot: Awaited<ReturnType<typeof host.start>>;
-  let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
+  let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? DEFAULT_HTTP_PORT}`;
   try {
     const address = await httpHost.listen();
     if (address) httpOrigin = address.origin;

@@ -186,7 +186,7 @@ Notes:
 
 ## 6. Ports and clean exit
 
-The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8086`). On `EADDRINUSE`, find the owner first:
+The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8068`). On `EADDRINUSE`, find the owner first:
 
 ```bash
 lsof -nP -iTCP:<port> -sTCP:LISTEN

@@ -116,7 +116,7 @@ function resolveStackVersion(packageName: string): string {
   return ZHIN_STACK_VERSIONS[packageName as ZhinStackPackage] ?? 'latest';
 }
 
-/** create-zhin / minimal-bot 默认 Host 端口（避免与常见 8086 占用冲突） */
+/** create-zhin / minimal-bot 默认 Host 端口，与运行时未配置 http.port 时的默认端口（@zhin.js/host-http DEFAULT_HTTP_PORT）一致；避开 InfluxDB 等常用的 8086 */
 export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 
 /** create-zhin 生成项目固定使用的 pnpm 版本。 */

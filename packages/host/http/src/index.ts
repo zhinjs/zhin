@@ -21,6 +21,13 @@ export {
 export type { HttpHostAddress, HttpHostOptions, HttpHostTlsOptions } from './host-options.js';
 export { listHttpHostAddresses } from './addresses.js';
 export {
+  DEFAULT_HTTP_PORT,
+  ENVIRONMENT_REFERENCE_PATTERN,
+  InvalidHttpPortError,
+  describeInvalidPortValue,
+  parseHttpPort,
+} from './port.js';
+export {
   TokenRegistry,
   extractBearerToken,
   publicConsoleAccess,

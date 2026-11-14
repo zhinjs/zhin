@@ -2,7 +2,7 @@
  * 读取 zhin.config + .env，连接运行中 Host API（`zhin send` / `zhin watch` / `zhin schedule` 共用）
  */
 import path from 'path';
-import { resolveHttpConfig } from '@zhin.js/host-http';
+import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
@@ -30,6 +30,17 @@ export function connectableHost(host: string): string {
 }
 
 /**
+ * The project's `http.*` configuration cannot be used to reach the Host (an invalid `http.port`)
+ * and no gateway answers on the local socket. The message says how to repair it (#1250).
+ */
+export class HostConfigInvalidError extends Error {
+  constructor(readonly configFile: string, readonly cause: InvalidHttpPortError) {
+    super(`${configFile} 的 ${cause.message}。无法据此连接 Host；先离线修复：zhin config set ${cause.field.startsWith('http.listeners') ? cause.field : 'http.port'} ${DEFAULT_HTTP_PORT} --offline（或直接编辑 ${configFile}；用 \${VAR} 引用时检查 .env），然后 zhin restart`);
+    this.name = 'HostConfigInvalidError';
+  }
+}
+
+/**
  * 从项目目录解析 Host API baseUrl 与 Bearer token。
  * Uses the same config document, `.env` + `.env.<environment>` layers and `http` resolver as `zhin runtime start`.
  */
@@ -41,18 +52,27 @@ export async function loadHostHttpConfig(
   if (!configFile) return null;
 
   const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
-  const http = await resolveHttpConfig(
-    createConfigDocument(path.join(cwd, configFile)),
-    layers.environments?.[environment],
-    cwd,
-  );
+  const local = await localGatewayFetch(cwd);
+  let http: Awaited<ReturnType<typeof resolveHttpConfig>>;
+  try {
+    http = await resolveHttpConfig(
+      createConfigDocument(path.join(cwd, configFile)),
+      layers.environments?.[environment],
+      cwd,
+    );
+  } catch (error) {
+    if (!(error instanceof InvalidHttpPortError)) throw error;
+    // A running gateway still answers over its local socket, where the URL only carries the path:
+    // keep config commands working so the port can be repaired through the gateway.
+    if (!local) throw new HostConfigInvalidError(configFile, error);
+    http = {};
+  }
   const scheme = http.tls ? 'https' : 'http';
   const host = connectableHost(http.host ?? '127.0.0.1');
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
-  const local = await localGatewayFetch(cwd);
   const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
   return {
-    baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
+    baseUrl: `${scheme}://${host}:${http.port ?? DEFAULT_HTTP_PORT}/${base}`,
     // After Console setup http.token is rejected (ADR 0049): use a user API token instead. Over
     // the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
     // request as that token's principal); without one the request runs as the local owner.

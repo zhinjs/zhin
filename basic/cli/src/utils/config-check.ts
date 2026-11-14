@@ -12,6 +12,7 @@ import {
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { DEFAULT_HTTP_PORT, InvalidHttpPortError, describeInvalidPortValue, parseHttpPort } from '@zhin.js/host-http';
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
@@ -115,6 +116,42 @@ function checkEndpoints(
     path: 'endpoints',
     message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 <适配器实例>.endpoints；请按 v2 实例配置手动迁移',
   });
+}
+
+/**
+ * `http.port` / `http.listeners[].port`: an integer 1–65535 or a `${VAR}` reference that expands to
+ * one (#1250). The Host refuses to start on anything else, so it is an error here too.
+ */
+function checkHttpPorts(config: Record<string, unknown>, issues: ConfigIssue[], env: Record<string, string | undefined>): void {
+  const http = config.http;
+  if (!http || typeof http !== 'object' || Array.isArray(http)) return;
+  const record = http as Record<string, unknown>;
+  const check = (raw: unknown, field: string): void => {
+    if (raw === undefined || raw === null) return;
+    const stored = describeInvalidPortValue(raw);
+    let reason = stored;
+    if (!reason && typeof raw === 'string') {
+      // A reference: check what it expands to (an unset variable is reported by collectEnvRefs too).
+      const expanded = expandEnvironmentValue(raw, key => env[key]);
+      try { parseHttpPort(expanded, field, raw); }
+      catch (error) { reason = error instanceof InvalidHttpPortError ? error.reason : String(error); }
+    }
+    if (!reason) return;
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'http.port_invalid',
+      path: field,
+      message: `${field} 无效：${reason}；Host 会拒绝启动`,
+      fixable: false,
+      fixHint: `zhin config set ${field} ${DEFAULT_HTTP_PORT} --offline（或在 .env 中把引用的变量设为 1–65535 的整数）`,
+    });
+  };
+  check(record.port, 'http.port');
+  if (Array.isArray(record.listeners)) {
+    record.listeners.forEach((listener, index) => {
+      if (listener && typeof listener === 'object') check((listener as Record<string, unknown>).port, `http.listeners[${index}].port`);
+    });
+  }
 }
 
 function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): void {
@@ -328,6 +365,7 @@ export async function runConfigCheck(
     if (Array.isArray(manifest.zhin?.plugins) && manifest.zhin.plugins.length) pushIssue(issues, {severity: 'error', code: 'plugins.legacy_manifest', path: 'package.json#zhin.plugins', message: '旧插件挂载声明不再参与运行；请运行 zhin migrate instances'});
   }
   checkLogLevel(config, issues);
+  checkHttpPorts(config, issues, env);
   checkDatabase(config, issues, env);
   checkEndpoints(config, issues);
   checkZhinStackDependencies(cwd, config, issues);

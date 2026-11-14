@@ -184,7 +184,7 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 
 ```yaml
 http:
-  port: 8086                 # Runtime fallback when no config exists
+  port: 8068                 # default when unset; only 1–65535 integers or ${VAR} references
   host: 127.0.0.1            # Default 127.0.0.1
   token: ${HTTP_TOKEN}       # bootstrap token: only creates the first Console owner, refused afterwards
   corsOrigins:               # Allowed cross-origin sources
@@ -192,7 +192,7 @@ http:
   base: /api                 # API mount path
 ```
 
-With no configuration, Runtime falls back to 8086; the current project scaffold writes 8068. Trust the project configuration and startup log.
+Without `http.port` the gateway listens on 8068, the value the scaffold writes (early 1.x runtimes defaulted to 8086; projects that set a port are unaffected). `http.port` accepts only an integer from 1 to 65535, or a `${VAR}` reference that expands to one; anything else is refused by `zhin config set`, Console saves and `zhin config check`, and startup fails instead of silently using the default port.
 
 Local development can access without `token`; production must set one. `tokens` supports multiple scoped tokens.
 

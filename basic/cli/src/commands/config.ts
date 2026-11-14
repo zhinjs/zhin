@@ -5,7 +5,7 @@ import {
   type ConsoleConfigSource,
 } from '@zhin.js/console-protocol';
 import { configCheckCommand } from './config-check.js';
-import { loadHostHttpConfig } from '../utils/host-http.js';
+import { HostConfigInvalidError, loadHostHttpConfig } from '../utils/host-http.js';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
@@ -71,7 +71,14 @@ async function connection(options: Options): Promise<Connection> {
     : process.env[tokenEnvironment];
   const explicit = options.host ?? options.live;
   if (explicit) return { host: explicit, token: envToken, tokenEnvironment };
-  const discovered = await loadHostHttpConfig(process.cwd());
+  let discovered: Awaited<ReturnType<typeof loadHostHttpConfig>>;
+  try { discovered = await loadHostHttpConfig(process.cwd()); }
+  catch (error) {
+    if (error instanceof HostConfigInvalidError) {
+      throw new ConfigCommandError({ status: 'config-invalid', message: error.message }, CONFIG_EXIT_CODES.error);
+    }
+    throw error;
+  }
   if (!discovered) {
     throw new ConfigCommandError({ status: 'not-connected',
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);

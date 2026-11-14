@@ -40,7 +40,7 @@ async function runDoctor(setup: (directory: string) => void, flags: string[] = [
 }
 
 const gatewayInfo = (consoleInitialized: boolean) => ({
-  gateway: { pid: 4242, ports: [8086], origins: ['http://127.0.0.1:8086'], socket: '.zhin/gateway.sock', startedAt: Date.now(), version: '1.2.0', mode: 'daemon', args: [] },
+  gateway: { pid: 4242, ports: [8068], origins: ['http://127.0.0.1:8068'], socket: '.zhin/gateway.sock', startedAt: Date.now(), version: '1.2.0', mode: 'daemon', args: [] },
   instance: { state: 'running' },
   consoleInitialized,
 });
@@ -52,7 +52,7 @@ describe('doctor with the project gateway running (#1250)', () => {
     runningGateway.current = gatewayInfo(true);
     const { output, directory } = await runDoctor(() => {});
     try {
-      expect(output).toContain('端口 8086: 由本项目的管理网关监听（pid 4242）');
+      expect(output).toContain('端口 8068: 由本项目的管理网关监听（pid 4242）');
       expect(output).not.toContain('kill <pid>');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
@@ -61,7 +61,7 @@ describe('doctor with the project gateway running (#1250)', () => {
     runningGateway.current = { ...gatewayInfo(true), gateway: { ...gatewayInfo(true).gateway, ports: [9000] } };
     const { output, directory } = await runDoctor(() => {});
     try {
-      expect(output).toContain('端口 8086: 已被占用');
+      expect(output).toContain('端口 8068: 已被占用');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
@@ -436,6 +436,40 @@ describe('doctor: installed Zhin versions match package.json (#1250)', () => {
     });
     try {
       expect(output).not.toContain('Zhin 已安装版本');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+describe('doctor: the effective HTTP port (#1250)', () => {
+  const config = (port: string) => `configVersion: 2\nplugins: {}\nhttp:\n  port: ${port}\n`;
+
+  it('checks the port a ${VAR} reference expands to from .env, not a fallback', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.writeFileSync(path.join(dir, 'zhin.config.yml'), config("'${PORT}'"));
+      fs.writeFileSync(path.join(dir, '.env'), 'PORT=9321\n');
+    });
+    try {
+      expect(output).toContain('端口 9321');
+      expect(output).not.toMatch(/端口 80(86|68)/);
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('reports an unresolvable or invalid port as an error instead of checking another port', async () => {
+    for (const [port, expected] of [["'${PORT}'", '环境变量未设置或为空'], ['abc', '当前值 "abc"'], ['99999', '1–65535']] as const) {
+      const { output, directory } = await runDoctor(dir => { fs.writeFileSync(path.join(dir, 'zhin.config.yml'), config(port)); });
+      try {
+        expect(output).toContain('HTTP 端口: http.port 无效');
+        expect(output).toContain(expected);
+        expect(output).toContain('zhin config set http.port 8068 --offline');
+        expect(output).not.toMatch(/端口 \d+: /);
+      } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+    }
+  });
+
+  it('uses the default port 8068 when http.port is not configured', async () => {
+    const { output, directory } = await runDoctor(dir => { fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n'); });
+    try {
+      expect(output).toContain('端口 8068');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 });
