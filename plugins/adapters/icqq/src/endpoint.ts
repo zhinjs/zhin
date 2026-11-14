@@ -41,7 +41,7 @@ import type { CapabilityId } from 'zhin.js';
 import type { IcqqLoginControl } from './icqq-login-control.js';
 import { IcqqLoginDriver, icqqLinkHost, type IcqqChallengeKind } from './icqq-login-assist.js';
 import { messages as t } from './i18n.js';
-import { redactingIcqqLogger, type IcqqSdkLogger } from './sdk-logger.js';
+import { bridgeIcqqSdkLogger } from './sdk-logger.js';
 import { sanitizeIcqqLoginMessage } from './icqq-login-errors.js';
 import { IcqqContentResolver } from './content-resolver.js';
 import {
@@ -266,11 +266,13 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
         },
       },
     });
-    // The SDK logs verification links (sid / sig) and the phone at `mark` level: redact them.
-    if (this.logger) this.logger = redactingIcqqLogger(this.logger as IcqqSdkLogger) as typeof this.logger;
+    this.#logger = getAdapterLogger('icqq', options.config.id);
+    // The SDK's own log4js output is replaced by a bridge into this Zhin logger (#1250): one format,
+    // no ANSI off a terminal, `logLevel` (default warn), chat text only at debug and escaped onto one
+    // line, verification links (sid / sig) and phone numbers redacted.
+    if (this.logger) this.logger = bridgeIcqqSdkLogger(this.#logger, options.config.logLevel) as unknown as typeof this.logger;
     this.#contentResolver = new IcqqContentResolver(this);
     this.#content = this.#contentResolver.port;
-    this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
     this.#login = new IcqqLoginDriver({
@@ -1434,7 +1436,7 @@ function resolveIcqqGroupReactionTarget(
 
 function resolveNativeClientConfig(config: ResolvedIcqqConfig): NativeIcqqClientConfig {
   return {
-    log_level: 'info',
+    log_level: config.logLevel,
     platform: config.platform,
     ...(config.ver ? { ver: config.ver } : {}),
     ...(config.dataDir ? { data_dir: config.dataDir } : {}),

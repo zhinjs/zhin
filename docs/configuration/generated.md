@@ -897,6 +897,7 @@ outline: [2, 3]
 | `icqq.autoServer` | boolean | 否 | `true` | 是否自动选择最优服务器（默认 true） |
 | `icqq.qqnt` | boolean | 否 | `true` | 是否使用 QQNT 协议（默认 true） |
 | `icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"warn"` | ICQQ SDK 自身日志的级别（默认 warn）；它逐条打印的收发消息原文（recv from / succeed to send）只在 debug 及以下出现，且转义为单行 |
 | `icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `icqq.endpoints[].id` | string | 是 | — | QQ uin |
 | `icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
@@ -912,6 +913,7 @@ outline: [2, 3]
 | `icqq.endpoints[].autoServer` | boolean | 否 | — | 是否自动选择最优服务器 |
 | `icqq.endpoints[].qqnt` | boolean | 否 | — | 是否使用 QQNT 协议 |
 | `icqq.endpoints[].ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | ICQQ SDK 自身日志的级别 |
 | `icqq.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
 | `icqq.endpoints[].notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
 | `icqq.endpoints[].notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |

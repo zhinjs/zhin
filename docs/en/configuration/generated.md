@@ -897,6 +897,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.autoServer` | boolean | no | `true` | Automatically select the optimal server (default true). |
 | `icqq.qqnt` | boolean | no | `true` | Use the QQNT protocol (default true). |
 | `icqq.ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"warn"` | Level of the ICQQ SDK's own log lines (default warn). Its per-message lines with the message text (recv from / succeed to send) only appear at debug or below, escaped onto one line. |
 | `icqq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `icqq.endpoints[].id` | string | yes | — | QQ uin |
 | `icqq.endpoints[].password` | string | no | — | QQ password for this endpoint. |
@@ -912,6 +913,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.endpoints[].autoServer` | boolean | no | — | Automatically select the optimal server. |
 | `icqq.endpoints[].qqnt` | boolean | no | — | Use the QQNT protocol. |
 | `icqq.endpoints[].ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | — | Level of the ICQQ SDK's own log lines. |
 | `icqq.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
 | `icqq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
 | `icqq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
