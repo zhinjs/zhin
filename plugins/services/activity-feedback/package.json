@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/service-activity-feedback",
   "version": "1.1.31",
-  "description": "Activity Feedback 服务插件（Plugin Runtime）",
+  "description": "Shows typing, reactions or status messages while the AI is thinking or working, based on each platform's capabilities.",
+  "keywords": [
+    "zhin.js",
+    "typing-indicator",
+    "reactions",
+    "ai-status"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -28,15 +38,6 @@
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "plugin",
-    "service",
-    "activity-feedback",
-    "typing-indicator"
-  ],
-  "author": "Zhin.js Team",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -73,7 +74,19 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Activity Feedback",
+      "displayNameI18n": {
+        "zh-CN": "活动反馈",
+        "en": "Activity Feedback"
+      },
+      "descriptionI18n": {
+        "zh-CN": "在 AI 思考和执行时按平台能力显示输入中、表情回应或状态消息。",
+        "en": "Shows typing, reactions or status messages while the AI is thinking or working, based on each platform's capabilities."
+      },
+      "category": "service"
+    }
   },
   "publishConfig": {
     "exports": {

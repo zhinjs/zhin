@@ -275,6 +275,20 @@ describe('flat application Runtime', () => {
     await expect(g.runtime().start()).rejects.toThrow('metadata.displayNameI18n in both');
   });
 
+  it('carries manifest-only marketplace metadata into the plugin snapshot', async () => {
+    const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
+    f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Child' } }));
+    await f.childManifest({ metadata: { descriptionI18n: { 'zh-CN': '子插件说明', en: 'Child plugin' }, category: 'utility' } });
+    const runtime = f.runtime();
+    await runtime.start();
+    expect(runtime.snapshot.tree.get('root/child' as never)?.metadata).toEqual({
+      displayName: 'Child',
+      descriptionI18n: { 'zh-CN': '子插件说明', en: 'Child plugin' },
+      category: 'utility',
+    });
+    await runtime.stop();
+  });
+
   it('rejects duplicate metadata even when values match and before executing plugin setup', async () => {
     const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
     f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Same' } }));

@@ -70,6 +70,24 @@ describe('filterSearchResults', () => {
     expect(filtered.map((p) => p.name)).toEqual(['@zhin.js/adapter-telegram']);
   });
 
+  it('按发布清单声明的分类过滤（接受旧别名 util）', () => {
+    const declared = [
+      { name: 'zhin.js-plugin-a', keywords: ['zhin'], zhin: { metadata: { category: 'utility' } } },
+      { name: 'zhin.js-plugin-b', keywords: ['zhin', 'utility'], zhin: { metadata: { category: 'game' } } },
+    ];
+    expect(filterSearchResults(declared, { category: 'util' }).map((p) => p.name)).toEqual(['zhin.js-plugin-a']);
+    expect(filterSearchResults(declared, { category: 'game' }).map((p) => p.name)).toEqual(['zhin.js-plugin-b']);
+  });
+
+  it('关键词搜索匹配本地化名称/描述，不匹配通用 keywords', () => {
+    const packages = [
+      { name: 'zhin.js-plugin-a', keywords: ['zhin', 'bot', 'rss'], zhin: { metadata: { descriptionI18n: { 'zh-CN': '订阅推送' } } } },
+    ];
+    expect(filterSearchResults(packages, { keyword: '订阅' })).toHaveLength(1);
+    expect(filterSearchResults(packages, { keyword: 'rss' })).toHaveLength(1);
+    expect(filterSearchResults(packages, { keyword: 'bot' })).toHaveLength(0);
+  });
+
   it('limit 截断结果', () => {
     const filtered = filterSearchResults(results, { limit: 2 });
     expect(filtered).toHaveLength(2);

@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-icqq",
   "version": "1.1.29",
-  "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
+  "description": "ICQQ adapter: in-process @icqqjs/icqq client for QQ groups, private chats, temporary sessions and guild channels.",
+  "keywords": [
+    "zhin.js",
+    "icqq",
+    "qq",
+    "tencent"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,21 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "icqq",
-    "qq",
-    "tencent",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -156,6 +151,18 @@
         "optional": true
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "ICQQ Adapter",
+      "displayNameI18n": {
+        "zh-CN": "ICQQ 适配器",
+        "en": "ICQQ Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "ICQQ 适配器：进程内直连 @icqqjs/icqq，支持 QQ 群聊、私聊、临时会话与频道消息。",
+        "en": "ICQQ adapter: in-process @icqqjs/icqq client for QQ groups, private chats, temporary sessions and guild channels."
+      },
+      "category": "adapter"
+    }
   }
 }

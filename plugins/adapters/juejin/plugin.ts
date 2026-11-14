@@ -11,10 +11,6 @@ import { createJuejinConsoleRpc } from './src/console.js';
 export default definePlugin({
   name: 'juejin',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'Juejin Comment Adapter (Experimental)',
-    displayNameI18n: { 'zh-CN': '掘金评论适配器（实验性）', en: 'Juejin Comment Adapter (Experimental)' },
-  },
   setup(context) {
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     const notifier: JuejinNotifier = async (target, text) => {

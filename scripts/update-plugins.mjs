@@ -8,6 +8,13 @@
  * `zhin.type` 为 plugin / adapter 的公开包（框架包、Feature 包、已删除的包都不是插件）。
  * 社区插件来自 npm 搜索（zhin.js-* 命名）。
  *
+ * 市场字段（scripts/lib/plugin-marketplace.mjs）：
+ * - 显示名、描述翻译与分类读 `package.json#zhin.metadata`（displayName / displayNameI18n /
+ *   descriptionI18n / category）；官方插件以 workspace 清单为准，社区插件读 npm 上发布的清单。
+ * - 作者读 package.json 的 author / maintainers，**不**读 `_npmUser` / search 的 `publisher`：
+ *   官方包由 CI 可信发布，发布账号是「GitHub Actions」机器人。
+ * - keywords 去掉 zhin / zhin.js / bot 之类通用词后写入 tags。
+ *
  * 用法: node scripts/update-plugins.mjs
  *
  * 增强功能：
@@ -20,6 +27,12 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  PLUGIN_CATEGORIES,
+  informativeKeywords,
+  packageAuthorName,
+  readMarketplaceMetadata,
+} from './lib/plugin-marketplace.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT_PATH = resolve(__dirname, '../docs/public/plugins.json');
@@ -31,13 +44,13 @@ const CONCURRENCY = 5;
 
 const PLUGINS_ROOT = resolve(__dirname, '../plugins');
 const PLUGIN_TYPES = new Set(['plugin', 'adapter']);
-// plugins/<dir> -> category
+// plugins/<dir> -> fallback category when the manifest declares no zhin.metadata.category
 const CATEGORY_BY_DIR = {
   adapters: 'adapter',
   services: 'service',
   games: 'game',
-  features: 'feature',
-  utils: 'util',
+  features: 'utility',
+  utils: 'utility',
 };
 
 /**
@@ -58,7 +71,11 @@ export function collectWorkspacePlugins(root = PLUGINS_ROOT) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
       if (manifest.private || typeof manifest.name !== 'string') continue;
       if (!PLUGIN_TYPES.has(manifest.zhin?.type)) continue;
-      found.set(manifest.name, { category, manifest, dir: `plugins/${group.name}/${entry.name}` });
+      found.set(manifest.name, {
+        category: readMarketplaceMetadata(manifest.zhin).category ?? category,
+        manifest,
+        dir: `plugins/${group.name}/${entry.name}`,
+      });
     }
   }
   return found;
@@ -66,15 +83,47 @@ export function collectWorkspacePlugins(root = PLUGINS_ROOT) {
 
 // ---- 社区插件分类（官方插件的分类来自 workspace 目录） ----
 
-function getCommunityCategory(name, keywords = []) {
+/** Fallback for community packages whose published manifest declares no category. */
+export function getCommunityCategory(name, keywords = []) {
   const lowerName = name.toLowerCase();
   if (lowerName.includes('adapter-')) return 'adapter';
   const kwSet = new Set(keywords.map(k => k.toLowerCase()));
   if (kwSet.has('adapter')) return 'adapter';
-  if (kwSet.has('game')) return 'game';
-  if (kwSet.has('service')) return 'service';
-  if (kwSet.has('feature')) return 'feature';
-  return 'util';
+  for (const category of PLUGIN_CATEGORIES) if (kwSet.has(category)) return category;
+  if (kwSet.has('games')) return 'game';
+  return 'utility';
+}
+
+/** Marketplace fields of a manifest: localized names/descriptions only when declared. */
+function marketplaceFields(market) {
+  return {
+    ...(market.displayNameI18n ? { displayNameI18n: market.displayNameI18n } : {}),
+    ...(market.descriptionI18n ? { descriptionI18n: market.descriptionI18n } : {}),
+  };
+}
+
+/**
+ * Registry entry of an official plugin from its workspace manifest (before npm details).
+ * @param {string} name
+ * @param {{ category: string, manifest: Record<string, any>, dir: string }} workspace
+ */
+export function officialRegistryEntry(name, { category, manifest, dir }) {
+  const market = readMarketplaceMetadata(manifest.zhin);
+  return {
+    name,
+    displayName: market.displayName || name.replace('@zhin.js/', '').replace(/^adapter-/, ''),
+    ...marketplaceFields(market),
+    description: manifest.description || '',
+    author: packageAuthorName(manifest) || '',
+    isOfficial: true,
+    category,
+    version: '',
+    npm: `https://www.npmjs.com/package/${name}`,
+    github: `https://github.com/zhinjs/zhin/tree/main/${dir}`,
+    homepage: '',
+    tags: informativeKeywords(manifest.keywords),
+    lastUpdate: '',
+  };
 }
 
 // ---- npm 搜索 ----
@@ -118,7 +167,9 @@ async function fetchPackageDetail(name) {
       description: latestVersion?.description || data.description || '',
       keywords: latestVersion?.keywords || [],
       lastUpdate: (latest && data.time?.[latest]) || data.time?.modified || '',
-      author: latestVersion?._npmUser?.name || (typeof latestVersion?.author === 'string' ? latestVersion.author : latestVersion?.author?.name) || '',
+      // Never `_npmUser`: that is the publishing account (the CI release bot), not the author.
+      author: packageAuthorName(latestVersion ?? {}) || packageAuthorName(data) || '',
+      market: readMarketplaceMetadata(latestVersion?.zhin),
       license: data.license || latestVersion?.license || '',
       engines: latestVersion?.engines || {},
       peerDependencies: latestVersion?.peerDependencies || {},
@@ -173,6 +224,18 @@ function readPreviousDownloads() {
   return previous;
 }
 
+/** @param {{ isOfficial: boolean, category: string }[]} plugins */
+export function registryStats(plugins) {
+  const categories = Object.fromEntries(PLUGIN_CATEGORIES.map(category => [category, 0]));
+  for (const plugin of plugins) categories[plugin.category] = (categories[plugin.category] ?? 0) + 1;
+  return {
+    total: plugins.length,
+    official: plugins.filter(p => p.isOfficial).length,
+    community: plugins.filter(p => !p.isOfficial).length,
+    categories,
+  };
+}
+
 async function main() {
   console.log('Fetching plugins from npm...');
   const previousDownloads = readPreviousDownloads();
@@ -183,21 +246,8 @@ async function main() {
   const basicPlugins = [];
 
   // 官方：workspace 是事实来源；未发布到 npm 的包稍后按 404 跳过
-  for (const [name, { category, manifest, dir }] of workspacePlugins) {
-    basicPlugins.push({
-      name,
-      displayName: name.replace('@zhin.js/', '').replace(/^adapter-/, ''),
-      description: manifest.description || '',
-      author: '',
-      isOfficial: true,
-      category,
-      version: '',
-      npm: `https://www.npmjs.com/package/${name}`,
-      github: `https://github.com/zhinjs/zhin/tree/main/${dir}`,
-      homepage: '',
-      tags: manifest.keywords || [],
-      lastUpdate: '',
-    });
+  for (const [name, workspace] of workspacePlugins) {
+    basicPlugins.push(officialRegistryEntry(name, workspace));
   }
 
   // 社区：npm 搜索到的 zhin.js-* 包
@@ -208,10 +258,8 @@ async function main() {
     if (!name.startsWith('zhin.js-') || seen.has(name)) continue;
     seen.add(name);
 
-    let author = 'Unknown';
-    if (pkg.publisher?.username) author = pkg.publisher.username;
-    else if (typeof pkg.author === 'string') author = pkg.author;
-    else if (pkg.author?.name) author = pkg.author.name;
+    // author / maintainers only; `publisher` is the publishing account.
+    const author = packageAuthorName(pkg) || 'Unknown';
 
     basicPlugins.push({
       name,
@@ -224,7 +272,7 @@ async function main() {
       npm: pkg.links?.npm || `https://www.npmjs.com/package/${name}`,
       github: pkg.links?.repository || '',
       homepage: pkg.links?.homepage || '',
-      tags: pkg.keywords || [],
+      tags: informativeKeywords(pkg.keywords),
       lastUpdate: pkg.date || '',
     });
   }
@@ -249,14 +297,21 @@ async function main() {
     ...base,
     ...(base.isOfficial
       ? {
+          // Official: the workspace manifest is the source of truth; npm fills what it lacks.
           version: detail.version,
-          description: detail.description || base.description,
-          author: detail.author || 'Unknown',
-          tags: detail.keywords?.length ? detail.keywords : base.tags,
+          description: base.description || detail.description,
+          author: base.author || detail.author || 'Unknown',
+          tags: base.tags.length ? base.tags : informativeKeywords(detail.keywords),
           lastUpdate: detail.lastUpdate,
           homepage: detail.homepage,
         }
-      : {}),
+      : {
+          // Community: the published manifest declares the marketplace fields.
+          ...(detail?.market.displayName ? { displayName: detail.market.displayName } : {}),
+          ...(detail ? marketplaceFields(detail.market) : {}),
+          ...(detail?.market.category ? { category: detail.market.category } : {}),
+          ...(base.author === 'Unknown' && detail?.author ? { author: detail.author } : {}),
+        }),
     downloads: downloads || previousDownloads.get(base.name) || { weekly: 0, monthly: 0 },
     readme: detail?.readme || '',
     license: detail?.license || '',
@@ -272,16 +327,7 @@ async function main() {
   });
 
   // 统计
-  const stats = {
-    total: plugins.length,
-    official: plugins.filter(p => p.isOfficial).length,
-    community: plugins.filter(p => !p.isOfficial).length,
-    adapters: plugins.filter(p => p.category === 'adapter').length,
-    services: plugins.filter(p => p.category === 'service').length,
-    utils: plugins.filter(p => p.category === 'util').length,
-    games: plugins.filter(p => p.category === 'game').length,
-    features: plugins.filter(p => p.category === 'feature').length,
-  };
+  const stats = registryStats(plugins);
 
   const output = { plugins, stats, updatedAt: new Date().toISOString() };
 
@@ -292,7 +338,7 @@ async function main() {
   writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2), 'utf-8');
   console.log(`Done. ${stats.total} plugins written to ${OUTPUT_PATH}`);
   console.log(`  official: ${stats.official}, community: ${stats.community}`);
-  console.log(`  adapters: ${stats.adapters}, services: ${stats.services}, utils: ${stats.utils}, games: ${stats.games}, features: ${stats.features}`);
+  console.log(`  categories: ${Object.entries(stats.categories).map(([category, count]) => `${category} ${count}`).join(', ')}`);
 }
 
 // Only run when executed directly, so tests can import collectWorkspacePlugins.

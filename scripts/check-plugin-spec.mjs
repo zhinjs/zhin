@@ -5,10 +5,17 @@
  * - 检查插件是否有正确的 package.json
  * - 检查插件是否使用了正确的导入路径
  * - 检查插件是否有测试文件
+ * - 检查 plugins/ 下公开插件的市场元数据（zhin.metadata 的 descriptionI18n / category、
+ *   author、有信息量的 keywords），插件市场直接展示这些字段
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  PLUGIN_CATEGORIES,
+  informativeKeywords,
+  packageAuthorName,
+} from './lib/plugin-marketplace.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -100,6 +107,12 @@ function checkPlugin(pluginPath, pluginName) {
     }
   }
 
+  if (!packageJson.private && packageJson.zhin?.type === 'plugin' && relativePath.startsWith('plugins')) {
+    for (const issue of marketplaceMetadataIssues(packageJson)) {
+      violations.push({ plugin: relativePath, issue });
+    }
+  }
+
   // 检查是否有 main 或 exports 字段
   if (!packageJson.main && !packageJson.exports) {
     violations.push({
@@ -152,6 +165,40 @@ function checkPlugin(pluginPath, pluginName) {
       issue: 'Missing README.md',
     });
   }
+}
+
+/** Release bot accounts that must never appear as a package author. */
+const BOT_AUTHORS = /github[- ]actions|\[bot\]/iu;
+
+/**
+ * 插件市场展示的字段：本地化描述与分类（zhin.metadata）、作者、有信息量的 keywords。
+ * @param {Record<string, any>} packageJson
+ * @returns {string[]}
+ */
+function marketplaceMetadataIssues(packageJson) {
+  const issues = [];
+  const metadata = packageJson.zhin?.metadata ?? {};
+  for (const locale of ['zh-CN', 'en']) {
+    const text = metadata.descriptionI18n?.[locale];
+    if (typeof text !== 'string' || !text.trim()) {
+      issues.push(`zhin.metadata.descriptionI18n["${locale}"] is required for the plugin market`);
+    }
+  }
+  if (!PLUGIN_CATEGORIES.includes(metadata.category)) {
+    issues.push(`zhin.metadata.category must be one of ${PLUGIN_CATEGORIES.join(', ')}`);
+  }
+  const author = packageAuthorName(packageJson);
+  if (!author || BOT_AUTHORS.test(author)) {
+    issues.push('author must name the maintainer ({ "name", "url" }), not a release bot');
+  }
+  if (packageJson.author && typeof packageJson.author === 'object' && 'email' in packageJson.author) {
+    issues.push('author must not publish an email address; use { "name", "url" }');
+  }
+  const keywords = informativeKeywords(packageJson.keywords);
+  if (keywords.length < 3 || keywords.length > 6) {
+    issues.push(`keywords need 3–6 informative entries besides zhin / zhin.js / bot (found ${keywords.length})`);
+  }
+  return issues;
 }
 
 /**

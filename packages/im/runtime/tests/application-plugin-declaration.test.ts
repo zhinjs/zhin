@@ -114,6 +114,22 @@ describe('application Plugin declarations', () => {
     expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayNameI18n: { en: '' } } } }, 'fixture')).toThrow('displayNameI18n.en');
     expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayNameI18n: 'Repeater' } } }, 'fixture')).toThrow('displayNameI18n');
   });
+
+  it('accepts marketplace descriptions and a known category, validated like display names', () => {
+    const metadata = {
+      descriptionI18n: { 'zh-CN': '群内复读', en: 'Repeats group messages' },
+      category: 'entertainment',
+    };
+    const parsed = parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata } }, 'fixture');
+    expect(parsed.zhin).toMatchObject({ metadata });
+    const reject = (value: Record<string, unknown>) => () => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: value } }, 'fixture');
+    expect(reject({ descriptionI18n: { fr: 'Répéteur' } })).toThrow('descriptionI18n.fr');
+    expect(reject({ descriptionI18n: { 'zh-CN': '' } })).toThrow('descriptionI18n.zh-CN');
+    expect(reject({ descriptionI18n: 'Repeats' })).toThrow('descriptionI18n must be an object');
+    expect(reject({ category: 'fun' })).toThrow('metadata.category must be one of adapter');
+    expect(reject({ category: 'util' })).toThrow('metadata.category');
+    expect(reject({ category: ['game'] })).toThrow('metadata.category');
+  });
 });
 
 const plugin = { protocol: 1, type: 'plugin', entry: './plugin.ts' };

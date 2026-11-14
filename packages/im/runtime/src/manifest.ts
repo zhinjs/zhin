@@ -1,3 +1,5 @@
+import { PLUGIN_CATEGORIES, isPluginCategory, type PluginCategory } from '@zhin.js/plugin-runtime';
+
 export interface PackageReference {
   readonly package: string;
   readonly optional?: boolean;
@@ -24,6 +26,10 @@ export interface ZhinPluginManifest {
     displayName?: string;
     /** Console display-name translations keyed by `zh-CN` / `en`. */
     displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    /** Plugin-market description translations keyed by `zh-CN` / `en` (manifest only). */
+    descriptionI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    /** Plugin-market category, one of `PLUGIN_CATEGORIES` (manifest only). */
+    category?: PluginCategory;
     icon?: string;
   }>;
   /**
@@ -249,18 +255,30 @@ function parsePluginMetadata(value: unknown, source: string, issues: string[]): 
   if (value === undefined) return undefined;
   const record = asRecord(value, source, issues);
   for (const key of Object.keys(record)) {
-    if (key !== 'displayName' && key !== 'displayNameI18n' && key !== 'icon') issues.push(`${source}.${key} is not supported`);
+    if (!PLUGIN_METADATA_KEYS.has(key)) issues.push(`${source}.${key} is not supported`);
   }
   return Object.freeze({
     ...(record.displayName !== undefined ? { displayName: readString(record, 'displayName', source, issues) } : {}),
     ...(record.displayNameI18n !== undefined
-      ? { displayNameI18n: parseDisplayNameI18n(record.displayNameI18n, `${source}.displayNameI18n`, issues) }
+      ? { displayNameI18n: parseLocalizedText(record.displayNameI18n, `${source}.displayNameI18n`, issues) }
       : {}),
+    ...(record.descriptionI18n !== undefined
+      ? { descriptionI18n: parseLocalizedText(record.descriptionI18n, `${source}.descriptionI18n`, issues) }
+      : {}),
+    ...(record.category !== undefined ? { category: parsePluginCategory(record.category, `${source}.category`, issues) } : {}),
     ...(record.icon !== undefined ? { icon: readString(record, 'icon', source, issues) } : {}),
   });
 }
 
-function parseDisplayNameI18n(
+const PLUGIN_METADATA_KEYS = new Set(['displayName', 'displayNameI18n', 'descriptionI18n', 'category', 'icon']);
+
+function parsePluginCategory(value: unknown, source: string, issues: string[]): PluginCategory | undefined {
+  if (isPluginCategory(value)) return value;
+  issues.push(`${source} must be one of ${PLUGIN_CATEGORIES.join(', ')}`);
+  return undefined;
+}
+
+function parseLocalizedText(
   value: unknown,
   source: string,
   issues: string[],

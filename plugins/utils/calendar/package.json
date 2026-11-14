@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-calendar",
   "version": "0.1.19",
-  "description": "CalDAV / Google / Microsoft calendar tools for Zhin Agent",
+  "description": "CalDAV, Google Calendar and Outlook event lookup and creation for the Agent, with authorization done in chat.",
+  "keywords": [
+    "zhin.js",
+    "calendar",
+    "caldav",
+    "google-calendar",
+    "outlook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -37,19 +48,7 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean",
     "auth": "tsx src/cli/auth.ts"
   },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "plugin",
-    "calendar",
-    "caldav"
-  ],
   "license": "MIT",
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "dependencies": {
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
@@ -119,6 +118,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "日历",
+      "displayNameI18n": {
+        "zh-CN": "日历",
+        "en": "Calendar"
+      },
+      "descriptionI18n": {
+        "zh-CN": "为 Agent 提供 CalDAV、Google Calendar 与 Outlook 日程查询和创建，授权在聊天里完成。",
+        "en": "CalDAV, Google Calendar and Outlook event lookup and creation for the Agent, with authorization done in chat."
+      },
+      "category": "utility"
+    }
   }
 }

@@ -123,6 +123,8 @@ metadata: {
 
 Console 的插件列表、功能矩阵和功能页按界面语言选择显示名，回退顺序为当前语言 → `en` → `displayName` → 实例 key。只接受 `zh-CN` 与 `en` 两个键，值必须是非空字符串。
 
+要发布到 npm 的插件请写在 `package.json#zhin.metadata`：插件市场只能读到发布的 `package.json`，读不到 `definePlugin()` 代码。市场还会读同一位置的 `descriptionI18n`（本地化描述）和 `category`（分类），见[插件交付 · 插件市场元数据](../authoring/plugin-delivery.md#marketplace-metadata)。
+
 平台协议必须立即返回、尚未进入普通消息分发的默认回复，可在已经验签的 `Endpoint` 中调用 `await this.resolveLocale(senderId)`。它复用同一份个人偏好与项目语言，以当前 Endpoint 身份查询；候选或已退役 Endpoint 返回 `undefined`，不会读取用户状态。协议适配器保留本次查询结果，不能从请求参数或平台资料猜测语言。普通消息继续使用 `Message.locale`，无需再次查询。
 
 插件业务验证可为检查提供 `titleI18n`、`effectsI18n`，为结果提供 `summaryI18n`、`evidenceI18n`，键为 `zh-CN` / `en`。副作用和证据译文须与原数组逐项对应且非空，不能用空译文隐藏条目。Console 只选择展示语言；审批仍绑定原检查 ID、运行代和包含完整翻译定义的修订号。

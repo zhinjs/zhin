@@ -1,5 +1,13 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
+import {
+  PLUGIN_CATEGORIES,
+  PLUGIN_CATEGORY_LABELS,
+  informativeKeywords,
+  packageAuthorName,
+  pickLocalizedText,
+  readPluginMarketplaceMetadata,
+} from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
 import {
   classifyPackage,
@@ -63,8 +71,10 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
       filteredResults.forEach((pkg, index: number) => {
         const name = pkg.name;
         const version = pkg.version;
-        const description = pkg.description || '无描述';
-        const author = pkg.publisher?.username || '未知';
+        const market = readPluginMarketplaceMetadata(pkg.zhin);
+        const description = pickLocalizedText(market.descriptionI18n, 'zh-CN', pkg.description) || '无描述';
+        // 作者取 package.json 的 author / maintainers；publisher 是发布账号（CI 发布时为机器人），不显示。
+        const author = packageAuthorName(pkg) || '未知';
         const date = pkg.date ? new Date(pkg.date).toLocaleDateString('zh-CN') : '未知';
 
         const badge = formatPackageBadge(classifyPackage(pkg));
@@ -117,8 +127,14 @@ export async function runPluginInfo(packageName: string) {
 
       logger.log(`📦 名称: ${info.name}`);
       logger.log(`📝 版本: ${info.version}`);
-      logger.log(`📄 描述: ${info.description || '无'}`);
-      logger.log(`👤 作者: ${info.author?.name || info.maintainers?.[0]?.name || '未知'}`);
+      const market = readPluginMarketplaceMetadata(info.zhin);
+      const displayName = pickLocalizedText(market.displayNameI18n, 'zh-CN', market.displayName);
+      if (displayName) logger.log(`🏷️  显示名称: ${displayName}`);
+      logger.log(`📄 描述: ${pickLocalizedText(market.descriptionI18n, 'zh-CN', info.description) || '无'}`);
+      if (market.category) {
+        logger.log(`🗂️  分类: ${PLUGIN_CATEGORY_LABELS[market.category]['zh-CN']}（${market.category}）`);
+      }
+      logger.log(`👤 作者: ${packageAuthorName(info) || '未知'}`);
       const publishedAt = info.time?.modified ?? info.time?.created;
       logger.log(`📅 发布时间: ${publishedAt
         ? new Date(publishedAt).toLocaleDateString('zh-CN')
@@ -127,7 +143,7 @@ export async function runPluginInfo(packageName: string) {
         logger.log(`📈 周下载量: ${weeklyDownloads}`);
       }
 
-      const keywords = info.keywords ?? [];
+      const keywords = informativeKeywords(info.keywords);
       if (keywords.length > 0) {
         logger.log(`🏷️  标签: ${keywords.join(', ')}`);
       }
@@ -159,21 +175,6 @@ export async function runPluginInfo(packageName: string) {
         });
       }
 
-      // Zhin 特定信息
-      if (info.zhin) {
-        logger.log('');
-        logger.log('🎯 Zhin 信息:');
-        if (info.zhin.displayName) {
-          logger.log(`   显示名称: ${info.zhin.displayName}`);
-        }
-        if (info.zhin.category) {
-          logger.log(`   分类: ${info.zhin.category}`);
-        }
-        const features = info.zhin.features ?? [];
-        if (features.length > 0) {
-          logger.log(`   功能: ${features.join(', ')}`);
-        }
-      }
 
       // 官方适配器：追加配置入口提示
       const adapterHint = adapterConfigHintForPackage(info.name);
@@ -208,7 +209,7 @@ export async function runPluginInfo(packageName: string) {
 export const searchCommand = new Command('search')
   .description('搜索 Zhin.js 插件（等价于 zhin packages search）')
   .argument('[keyword]', '搜索关键词')
-  .option('-c, --category <category>', '按分类搜索 (utility|service|game|adapter|admin|ai)')
+  .option('-c, --category <category>', `按分类搜索 (${PLUGIN_CATEGORIES.join('|')})`)
   .option('-l, --limit <number>', '限制结果数量', '20')
   .option('--official', '仅显示官方插件', false)
   .action(runPluginSearch);

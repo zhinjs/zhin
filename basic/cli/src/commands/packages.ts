@@ -1,3 +1,4 @@
+import { PLUGIN_CATEGORIES } from '@zhin.js/plugin-runtime';
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import {
@@ -27,7 +28,7 @@ const packagesCommand = new Command('packages')
 packagesCommand
   .command('search [keyword]')
   .description('搜索 Zhin.js 插件（npm registry）')
-  .option('-c, --category <category>', '按分类搜索 (utility|service|game|adapter|admin|ai)')
+  .option('-c, --category <category>', `按分类搜索 (${PLUGIN_CATEGORIES.join('|')})`)
   .option('-l, --limit <number>', '限制结果数量', '20')
   .option('--official', '仅显示官方插件', false)
   .action((keyword: string | undefined, options: { category?: string; limit?: number; official?: boolean }) =>

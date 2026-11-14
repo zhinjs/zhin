@@ -36,7 +36,7 @@ When `package.json#zhin` declares neither `entry` nor `exports["./zhin"]`, the r
 
 - **The plugin name** is the unscoped package name: `@scope/foo` → `foo`, `foo` → `foo`. Prefixes such as `zhin-plugin-` are not stripped.
 - That name must still match `/^[a-z][a-z0-9-]*$/`. If it does not (for example `zhin.js-foo` contains a `.`), startup fails and tells you to add a `plugin.ts` with an explicit `name`.
-- Put `displayName`, `displayNameI18n` and `icon` in `zhin.metadata`.
+- Put `displayName`, `displayNameI18n` and `icon`, plus the plugin-market `descriptionI18n` and `category`, in `zhin.metadata`.
 - A declared `entry` (or `exports["./zhin"]`) must exist; only omitting both makes an entry-less plugin. A `plugin.ts` on disk without a declared entry is not loaded, and `zhin plugin check` warns about it.
 - Add a `plugin.ts` and declare `zhin.entry` once you need `setup`, inline `config`, `requires` or `capabilityGraph`.
 
@@ -368,7 +368,7 @@ async setup(context) {
 | Field | Purpose |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Name, icon and sort order on the Console plugin card; no runtime effect |
-| `metadata.displayNameI18n` | Name per Console interface locale, such as `{ 'zh-CN': '复读机', en: 'Repeater' }`; see [Language and localization](../configuration/localization.md#plugin-integration) |
+| `metadata.displayNameI18n` | Name per Console interface locale, such as `{ 'zh-CN': '复读机', en: 'Repeater' }`; see [Language and localization](../configuration/localization.md#plugin-integration). Plugins published to npm should declare it in `package.json#zhin.metadata` so the plugin market can read it |
 | `requires` | Resource tokens that must exist; startup refuses if any is missing |
 | `capabilityGraph` | Explicitly declares the plugin's capability graph via `definePluginCapabilityGraph({ provides, injects, features })` (provided tokens, injected tokens, and feature-grouped capabilities) for static governance and Console observability |
 
@@ -460,7 +460,13 @@ Plugins and Feature packages declare their packaging contract in the top-level `
     "platformFeatures": true,         // optional (plugin only): default true, Root gets the official Stable Features
     "features": [                     // optional (plugin only): Feature packages this plugin depends on; inferred from convention directories when omitted
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
-    ]
+    ],
+    "metadata": {                     // optional (plugin only): what the Console and the plugin market show, see the table
+      "displayName": "RSS",
+      "displayNameI18n": { "zh-CN": "RSS 订阅", "en": "RSS Feeds" },
+      "descriptionI18n": { "zh-CN": "订阅 RSS / Atom 源并推送新内容", "en": "Subscribe to RSS / Atom feeds" },
+      "category": "information"
+    }
   }
 }
 ```
@@ -473,6 +479,7 @@ Plugins and Feature packages declare their packaging contract in the top-level `
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
+| `metadata` | No | Display information: `displayName`, `displayNameI18n`, `icon` (Console), `descriptionI18n`, `category` (plugin market, manifest only). `displayName` / `displayNameI18n` / `icon` go here or in `definePlugin({ metadata })`, not both. Locale keys are `zh-CN` / `en` only, with non-empty strings; see [Marketplace metadata](./plugin-delivery.md#marketplace-metadata) for `category` values |
 | `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing. [Inferred from convention directories](#infer-features) when omitted |
 
 A `type: "feature"` package has only `protocol` / `type` / `entry` / `engine` / `featureApi`; `featureApi` declares the API version it implements, checked against consumers' `features[].api`.

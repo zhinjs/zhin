@@ -21,10 +21,6 @@ import { createInMemoryBiliDb, defineBiliTables, type BiliDb } from './src/store
  */
 export default definePlugin<BilibiliConfig>({
   name: 'bilibili',
-  metadata: {
-    displayName: '哔哩哔哩订阅',
-    displayNameI18n: { 'zh-CN': '哔哩哔哩订阅', en: 'Bilibili Subscriptions' },
-  },
   setup(context) {
     const config = Object.freeze(resolveBilibiliConfig(context.config.get()));
     const database = context.resources.has(databaseHostToken) ? context.resources.use(databaseHostToken) : undefined;

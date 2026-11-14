@@ -2,7 +2,17 @@
   "name": "@zhin.js/adapter-email",
   "version": "1.1.29",
   "type": "module",
-  "description": "Zhin.js Email adapter for Plugin Runtime (SMTP/IMAP)",
+  "description": "Email adapter: sends over SMTP and polls IMAP, turning a mailbox into a chat channel.",
+  "keywords": [
+    "zhin.js",
+    "email",
+    "smtp",
+    "imap"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
@@ -43,21 +53,6 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "email",
-    "smtp",
-    "imap",
-    "mail"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -111,6 +106,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Email Adapter",
+      "displayNameI18n": {
+        "zh-CN": "邮件适配器",
+        "en": "Email Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "邮件适配器：通过 SMTP 发信、IMAP 轮询收信，把邮箱作为聊天通道接入。",
+        "en": "Email adapter: sends over SMTP and polls IMAP, turning a mailbox into a chat channel."
+      },
+      "category": "adapter"
+    }
   }
 }

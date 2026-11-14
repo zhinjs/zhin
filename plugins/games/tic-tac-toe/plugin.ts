@@ -27,10 +27,6 @@ import {
  */
 export default defineGamePlugin<SessionServices>({
   name: 'tic-tac-toe',
-  metadata: {
-    displayName: 'Tic Tac Toe',
-    displayNameI18n: { 'zh-CN': '井字棋', en: 'Tic Tac Toe' },
-  },
   game: {
     commandPath: 'ttt',
     titleI18n: { en: 'Tic-Tac-Toe' },

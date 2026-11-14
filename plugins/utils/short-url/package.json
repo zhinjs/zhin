@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-short-url",
   "version": "1.1.21",
-  "description": "URL shortener plugin for Zhin.js — shorten & expand URLs (Plugin Runtime)",
+  "description": "Shorten links and expand them, checking every redirect hop for safety.",
+  "keywords": [
+    "zhin.js",
+    "short-url",
+    "url-shortener",
+    "短链接"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -30,19 +40,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "short-url",
-    "url-shortener"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "devDependencies": {
@@ -103,7 +100,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Short URL",
+      "displayNameI18n": {
+        "zh-CN": "短链接",
+        "en": "Short URL"
+      },
+      "descriptionI18n": {
+        "zh-CN": "生成与还原短链接，还原时逐跳校验地址安全。",
+        "en": "Shorten links and expand them, checking every redirect hop for safety."
+      },
+      "category": "utility"
+    }
   },
   "dependencies": {
     "@zhin.js/console-contract": "workspace:*",
