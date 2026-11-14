@@ -60,12 +60,14 @@ export async function executionScope(input: Readonly<{
     // Consumer-boundary tests have no plugin generation. Snapshot retention itself is
     // covered by ModelRuntimeService + SubagentRuntime integration, not this fixture.
     retainDelegation: () => {
-      let child: ReturnType<typeof executionScope> | undefined;
+      const children: ReturnType<typeof executionScope>[] = [];
       let closed: Promise<void> | undefined;
-      const release = (): Promise<void> => closed ??= (async () => { await (await child)?.release(); })();
+      const release = (): Promise<void> => closed ??= (async () => {
+        await Promise.allSettled(children.map(async child => (await child).release()));
+      })();
       return { acquire: async () => {
-        if (closed || child) throw new Error('Fixture delegation already used');
-        child = executionScope(input); return child;
+        if (closed) throw new Error('Fixture delegation already released');
+        const child = executionScope(input); children.push(child); return child;
       }, release };
     },
     release: async () => { await scope.close(); runtime.retire(); } };

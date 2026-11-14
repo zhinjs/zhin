@@ -19,6 +19,8 @@ import {
   type SpeakBlockReason,
   type TurnOutcome,
 } from '../../index.js';
+import { renderAgentOutput } from '../../outbound/agent-output.js';
+import { claimWithoutToolCall } from '../../trace/lookup-claim.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('agent');
@@ -88,11 +90,16 @@ export function auditCannotSpeak(audit: DecisionAudit, reason: SpeakBlockReason,
 }
 
 /** 模型回合结束的一行摘要（不记提示词、不记输出正文）。 */
-export function auditModelRun(audit: DecisionAudit, outcome: TurnOutcome, payload: DecisionPayload = {}): void {
+export function auditModelRun(audit: DecisionAudit, outcome: TurnOutcome, payload: DecisionPayload = {}, toolCalls?: number): void {
   const usage = outcome.usage as Partial<Record<'prompt_tokens' | 'completion_tokens', unknown>> | undefined;
+  // #1250 tool-capability-unverified: a claimed lookup without any tool call is flagged for replay only.
+  const claim = outcome.status === 'completed' && toolCalls !== undefined
+    ? claimWithoutToolCall(renderAgentOutput(outcome.output), toolCalls) : undefined;
   const summary = {
     ...payload,
     status: outcome.status,
+    ...(toolCalls !== undefined ? { toolCalls } : {}),
+    ...(claim ? { claimWithoutToolCall: true, claimPhrase: claim } : {}),
     ...(typeof usage?.prompt_tokens === 'number' ? { inputTokens: usage.prompt_tokens } : {}),
     ...(typeof usage?.completion_tokens === 'number' ? { outputTokens: usage.completion_tokens } : {}),
   };

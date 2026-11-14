@@ -114,6 +114,8 @@ export interface CollaborationBinding {
   readonly runTurn: ActorTurnRunner;
   readonly onEscalate?: (notice: EscalationNotice) => void | Promise<void>;
   readonly venueProjector?: VenueProjector;
+  /** Runs once when the engagement closes or the Mailbox closes (releases what the binding holds). */
+  readonly onClosed?: () => void;
 }
 
 interface Ticket {
@@ -192,6 +194,14 @@ function participantsOfBatch(
       ...(access ? { access } : {}),
     });
   }));
+}
+
+function closeBinding(binding: CollaborationBinding): void {
+  try {
+    binding.onClosed?.();
+  } catch (error) {
+    logger.warn(`collaboration binding close failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export class HostMailbox {
@@ -283,8 +293,10 @@ export class HostMailbox {
       onEngagementClosed: (engagement) => {
         this.#venueHopsSeen.delete(engagement.id);
         void this.#journal.compact(engagement.id).catch(() => undefined);
-        if (this.#bindings.delete(engagement.id) && this.#bindings.size === 0) {
-          for (const waiter of this.#idleWaiters.splice(0)) waiter();
+        const binding = this.#bindings.get(engagement.id);
+        if (binding && this.#bindings.delete(engagement.id)) {
+          closeBinding(binding);
+          if (this.#bindings.size === 0) for (const waiter of this.#idleWaiters.splice(0)) waiter();
         }
         if (++this.#closedSince >= 256) {
           this.#closedSince = 0;
@@ -517,7 +529,9 @@ export class HostMailbox {
    * still find their runner after the root turn ended.
    */
   bindCollaboration(engagementId: EngagementId, binding: CollaborationBinding): void {
+    const previous = this.#bindings.get(engagementId);
     this.#bindings.set(engagementId, binding);
+    if (previous && previous !== binding) closeBinding(previous);
   }
 
   /**
@@ -540,6 +554,7 @@ export class HostMailbox {
       for (const ticket of this.#tickets.values()) this.#settle(ticket, Object.freeze({ kind: 'rejected', reason: 'stopped' }));
       this.#tickets.clear();
       this.#queued.clear();
+      for (const binding of this.#bindings.values()) closeBinding(binding);
       this.#bindings.clear();
       for (const waiter of this.#idleWaiters.splice(0)) waiter();
       this.#release();

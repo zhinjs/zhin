@@ -743,7 +743,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       admission = admittedResult.admission;
       const inbound = admittedResult.inbound;
 
-      const { outcome, capabilities, routed } = await executeAdmittedMailTurn({
+      const { outcome, capabilities, routed, toolCalls } = await executeAdmittedMailTurn({
         message, lease, snapshot, requester, operationSession, operationSignal, turnId, sessionKey,
         senderId, senderRoles, ownerId, effectiveAdapter, turnAccess, conversationSequence,
         sceneEvents, inbound, liveRoom, ambient, sceneMerge, gate, mailbox, admission, venueRoute,
@@ -764,7 +764,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       });
       finalizeIngressTurnSuccess({
         audit, outcome, capabilities, routedAgentName: routed.agent?.name,
-        modelPayload, sttApplied: inbound.sttApplied,
+        modelPayload, sttApplied: inbound.sttApplied, toolCalls,
       });
       return true;
     } catch (error) {

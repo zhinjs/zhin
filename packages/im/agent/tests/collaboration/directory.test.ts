@@ -95,6 +95,17 @@ describe('createCollaborationDirectory', () => {
     expect(dir.get('a')!.description).toBe('first');
   });
 
+  it('carries the qualified name and marks a bare name another plugin also uses (#1250 purpose keys)', () => {
+    const dir = build([
+      agent('a', { qualifiedName: 'p1__a' }),
+      agent('a', { qualifiedName: 'p2__a' }),
+      agent('b', { qualifiedName: 'p1__b' }),
+    ]);
+    expect(dir.get('a')).toMatchObject({ qualifiedName: 'p1__a', bareNameShared: true });
+    expect(dir.get('b')!.qualifiedName).toBe('p1__b');
+    expect(dir.get('b')).not.toHaveProperty('bareNameShared');
+  });
+
   it('freezes everything', () => {
     const dir = build([agent('a')]);
     expect(Object.isFrozen(dir)).toBe(true);

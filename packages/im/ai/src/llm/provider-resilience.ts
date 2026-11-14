@@ -31,6 +31,11 @@ export type ProviderErrorKind =
   | "context_overflow"
   | "auth"
   | "bad_request"
+  /**
+   * A successful (2xx) answer that is not JSON / an event stream, typically a site's HTML
+   * home page because the service address lacks its API path (`/v1`). Never retried (#1250).
+   */
+  | "non_json_response"
   | "aborted"
   | "unknown";
 
@@ -123,6 +128,7 @@ const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   context_overflow: "对话内容超出模型上下文长度",
   auth: "模型服务鉴权失败，请检查 API 密钥配置",
   bad_request: "模型服务拒绝了请求",
+  non_json_response: "服务返回的不是 JSON（可能少了 /v1），请检查服务地址",
   aborted: "请求已取消",
   unknown: "模型调用失败",
 };
