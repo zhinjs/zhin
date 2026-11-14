@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { register } from 'node:module';
-import { isAbsolute, sep } from 'node:path';
+import { isAbsolute, relative, sep } from 'node:path';
+import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 interface ResolveResult {
@@ -39,11 +40,91 @@ export async function resolve(
 
 let registered = false;
 
+/**
+ * Main thread: the channel to the hooks thread. Package roots whose modules a package-name import
+ * reloads with its importer (#1250 `hmr-stale-cross-package-import`) are sent over it.
+ */
+let control: MessagePort | undefined;
+let messageSequence = 0;
+const pendingAcks = new Map<number, () => void>();
+
 /** Register once for the current process (safe to call from CLI / RootHost). */
 export function ensureTypeScriptSpecifierRemap(): void {
   if (registered) return;
   registered = true;
-  register(import.meta.url);
+  const channel = new MessageChannel();
+  try {
+    register(import.meta.url, { data: { port: channel.port2 }, transferList: [channel.port2] });
+  } catch {
+    // Loaders without transferable data still get the TypeScript remap.
+    register(import.meta.url);
+    channel.port1.close();
+    return;
+  }
+  control = channel.port1;
+  control.on('message', (message: { readonly ack?: number }) => {
+    if (typeof message?.ack !== 'number') return;
+    pendingAcks.get(message.ack)?.();
+  });
+  control.unref();
+}
+
+/**
+ * Replaces the revisionable package roots one module runtime owns. Resolves once the hooks
+ * thread applied them, or after a short grace period when it does not answer (the hook then
+ * keeps the previous behaviour: package-name imports are not revisioned).
+ */
+export function publishRevisionablePackageRoots(owner: string, roots: readonly string[]): Promise<void> {
+  if (!control) return Promise.resolve();
+  const id = ++messageSequence;
+  const port = control;
+  return new Promise<void>((resolve) => {
+    // While an answer is due the port keeps the process alive; the bounded timer ends the wait.
+    const settle = () => {
+      clearTimeout(timer);
+      pendingAcks.delete(id);
+      if (pendingAcks.size === 0) port.unref();
+      resolve();
+    };
+    const timer = setTimeout(settle, 1000);
+    pendingAcks.set(id, settle);
+    port.ref();
+    port.postMessage({ id, owner, roots: [...roots] });
+  });
+}
+
+/** Hooks thread: revisionable package roots by owning module runtime. */
+const revisionableRootsByOwner = new Map<string, readonly string[]>();
+
+export function initialize(data?: { readonly port?: MessagePort }): void {
+  const port = data?.port;
+  if (!port) return;
+  port.on('message', (message: { readonly id?: number; readonly owner?: string; readonly roots?: readonly string[] }) => {
+    if (typeof message?.owner === 'string' && Array.isArray(message.roots)) {
+      if (message.roots.length === 0) revisionableRootsByOwner.delete(message.owner);
+      else revisionableRootsByOwner.set(message.owner, Object.freeze([...message.roots]));
+    }
+    if (typeof message?.id === 'number') port.postMessage({ ack: message.id });
+  });
+  port.unref();
+}
+
+function isRevisionablePackageFile(url: string): boolean {
+  if (revisionableRootsByOwner.size === 0) return false;
+  let path: string;
+  try {
+    path = fileURLToPath(url);
+  } catch {
+    return false;
+  }
+  if (path.split(/[\\/]/u).includes('node_modules')) return false;
+  for (const roots of revisionableRootsByOwner.values()) {
+    for (const root of roots) {
+      const child = relative(root, path);
+      if (child === '' || (!child.startsWith('..') && !isAbsolute(child))) return true;
+    }
+  }
+  return false;
 }
 
 function shouldTryTypeScript(specifier: string, error: unknown): boolean {
@@ -59,9 +140,10 @@ function inheritGenerationRevision(
   parentURL: string | undefined,
   resolved: ResolveResult,
 ): ResolveResult {
-  if (!parentURL || !isLocalSpecifier(specifier) || !resolved.url.startsWith('file:')) {
-    return resolved;
-  }
+  if (!parentURL || !resolved.url.startsWith('file:')) return resolved;
+  // A package-name import of a mounted local Plugin package is reloaded with its importer
+  // (#1250); other package-name imports keep one shared instance (framework identity).
+  if (!isLocalSpecifier(specifier) && !isRevisionablePackageFile(resolved.url)) return resolved;
   let revision: string | null;
   try {
     revision = new URL(parentURL).searchParams.get('zhin-generation');

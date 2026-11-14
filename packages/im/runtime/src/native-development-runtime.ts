@@ -15,7 +15,8 @@ import {
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { withToolPackageInstallHint } from './missing-tool-package.js';
 import { isEditorTempFile } from './editor-temp-file.js';
-import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
+import { ensureTypeScriptSpecifierRemap, publishRevisionablePackageRoots } from './typescript-specifier-remap.js';
+import { randomUUID } from 'node:crypto';
 import { getEsmCacheEvictor, type EsmCacheEvictor } from './esm-cache-evictor.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
@@ -75,6 +76,11 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   /** Revision each entry was actually loaded at, by the committed generation. */
   readonly #committedRevisions = new Map<string, number>();
   #pendingRevisions?: Map<string, number>;
+  /** Mounted local Plugin package roots whose package-name imports reload with the importer (#1250). */
+  #revisionableRoots: readonly string[] = [];
+  #rootsPublished?: Promise<void>;
+  readonly #hookOwner = randomUUID();
+  readonly #isRevisionable = (source: string): boolean => this.#revisionableRoots.some((root) => isWithinRoot(root, source));
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
     ensureTypeScriptSpecifierRemap();
@@ -121,17 +127,32 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     return loaded;
   }
 
-  invalidate(source: string): void {
-    const impacted = this.#dependencies.affectedSources(source);
+  invalidate(source: string): void | Promise<void> {
+    const impacted = this.#dependencies.affectedSources(source, this.#isRevisionable);
     this.#dependencies.invalidate(source);
     this.#revision += 1;
     for (const entry of new Set([normalizeSourcePath(source), ...impacted])) {
       this.#entryRevisions.set(entry, this.#revision);
     }
+    // The loader hook must know the revisionable roots before the importers load again.
+    return this.#rootsPublished;
   }
 
   affectedSources(source: string): readonly string[] {
-    return this.#dependencies.affectedSources(source);
+    return this.#dependencies.affectedSources(source, this.#isRevisionable);
+  }
+
+  /** Loaded entries that keep their old instance of the source after a reload (#1250). */
+  staleDependents(source: string): readonly string[] {
+    return this.#dependencies.staleDependents(source, this.#isRevisionable);
+  }
+
+  updateRevisionableRoots(roots: readonly string[]): void {
+    this.#assertOpen();
+    const next = [...new Set(roots.map((root) => normalizeSourcePath(root)))].sort();
+    if (next.length === this.#revisionableRoots.length && next.every((root, index) => root === this.#revisionableRoots[index])) return;
+    this.#revisionableRoots = Object.freeze(next);
+    this.#rootsPublished = publishRevisionablePackageRoots(this.#hookOwner, next);
   }
 
   requiresProcessRestart(source: string): boolean {
@@ -285,6 +306,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#entryRevisions.clear();
     this.#committedRevisions.clear();
     this.#pendingRevisions = undefined;
+    if (this.#revisionableRoots.length > 0) {
+      this.#revisionableRoots = [];
+      await publishRevisionablePackageRoots(this.#hookOwner, []);
+    }
     await this.#tsxLoader?.close?.();
   }
 
@@ -528,4 +553,9 @@ function normalizeWatchRoots(roots: readonly string[]): readonly string[] {
 
 function sameRoots(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((root, index) => root === right[index]);
+}
+
+function isWithinRoot(root: string, source: string): boolean {
+  const child = relative(root, normalizeSourcePath(source));
+  return child === '' || (!child.startsWith('..') && !isAbsolute(child));
 }

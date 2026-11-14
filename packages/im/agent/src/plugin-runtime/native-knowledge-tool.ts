@@ -25,6 +25,8 @@ export interface KnowledgeSearchResult {
 
 export interface KnowledgeIndex {
   search(query: string, limit: number, signal: AbortSignal): Promise<KnowledgeSearchResult>;
+  /** Drops cached documents so the next search reads the directory again (#1250 file watching). */
+  invalidate?(): void;
 }
 
 interface KnowledgeChunk {
@@ -56,6 +58,13 @@ export class MarkdownKnowledgeIndex implements KnowledgeIndex {
     this.#maxDepth = options.maxDepth ?? 5;
     this.#maxFiles = options.maxFiles ?? 1_000;
     this.#maxFileBytes = options.maxFileBytes ?? 1_048_576;
+  }
+
+  /** The indexed directory (absolute). */
+  get root(): string { return this.#root; }
+
+  invalidate(): void {
+    this.#cache = undefined;
   }
 
   async search(query: string, limit: number, signal: AbortSignal): Promise<KnowledgeSearchResult> {

@@ -64,8 +64,20 @@ export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): 
     contextFiles: Object.freeze(options.contextFiles.map(file => Object.freeze({ ...file }))),
   } : {}) };
   return Object.freeze({
-    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(captured, context),
+    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(withCurrentBootstrap(captured), context),
   });
+}
+
+function withCurrentBootstrap(options: FullAgentTurnEngineOptions): FullAgentTurnEngineOptions {
+  if (!options.bootstrap) return options;
+  const current = options.bootstrap();
+  return {
+    ...options,
+    bootstrapContext: current.bootstrapContext,
+    contextFiles: current.contextFiles === undefined
+      ? undefined
+      : Object.freeze(current.contextFiles.map(file => Object.freeze({ ...file }))),
+  };
 }
 
 async function* runFullAgentTurn(

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { capabilityId, childPluginId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
+  DEFAULT_WATCH_DEBOUNCE_MS,
   HmrCoordinator,
   SourceOwnershipIndex,
   type GenerationInvalidationPlan,
+  type ManifestFieldChange,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
 } from '../src/index.js';
@@ -426,6 +428,180 @@ describe('HmrCoordinator', () => {
     await Promise.resolve();
     expect(reported).toEqual([failure]);
     await expect(coordinator.enqueue('/project/plugin.ts')).rejects.toThrow('process restart');
+  });
+});
+
+describe('HmrCoordinator watch debounce (#1250)', () => {
+  const sleep = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
+
+  it('merges a sed -i style burst (events ~250 ms apart) into one reload by default', async () => {
+    expect(DEFAULT_WATCH_DEBOUNCE_MS).toBe(300);
+    const source = '/project/commands/status/index.ts';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    let reloaded!: () => void;
+    const done = new Promise<void>((resolve) => { reloaded = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {},
+      onError() {},
+      onReload() { reloaded(); },
+    });
+    const stop = coordinator.start();
+    try {
+      // Temp file write, then rename onto the source: two events for one edit.
+      modules.emit(source);
+      await sleep(250);
+      expect(plans).toHaveLength(0);
+      modules.emit(source);
+      await done;
+      await sleep(400);
+      expect(plans).toHaveLength(1);
+      expect(plans[0]?.changed).toEqual([source]);
+    } finally { await stop(); }
+  });
+
+  it('merges different files of one batch into a single reload request', async () => {
+    const first = '/project/plugins/child/commands/first/index.ts';
+    const second = '/project/plugins/child/commands/second/index.ts';
+    const ownership = new SourceOwnershipIndex();
+    ownership.addPackageRoot('/project/plugins/child', child);
+    for (const [source, name] of [[first, 'first'], [second, 'second']] as const) {
+      ownership.add({ source, role: 'capability', owner: child, capability: capabilityId(child, command, name), feature: command });
+    }
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    let reloaded!: () => void;
+    const done = new Promise<void>((resolve) => { reloaded = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules, ownership: () => ownership, watchDebounceMs: 50,
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {}, onError() {}, onReload() { reloaded(); },
+    });
+    const stop = coordinator.start();
+    try {
+      modules.emit(first);
+      await sleep(20);
+      modules.emit(second);
+      await sleep(20);
+      modules.emit(first);
+      await done;
+      await sleep(100);
+      expect(plans).toHaveLength(1);
+      expect(plans[0]?.changed).toEqual([first, second]);
+    } finally { await stop(); }
+  });
+
+  it('never delays explicit enqueue requests, and stop drops events still waiting for the window', async () => {
+    const source = '/project/commands/status/index.ts';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      watchDebounceMs: 10_000,
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {},
+      onError() {},
+    });
+    coordinator.start();
+    await coordinator.enqueue(source);
+    expect(plans).toHaveLength(1);
+    modules.emit(source);
+    await coordinator.stop();
+    expect(plans).toHaveLength(1);
+  });
+});
+
+describe('HmrCoordinator package.json field filter (#1250)', () => {
+  const manifest = '/project/package.json';
+  const base = { name: 'bot', version: '1.0.0', type: 'module', scripts: { start: 'zhin start' },
+    dependencies: { 'zhin.js': '^1.2.0' }, pnpm: { overrides: {}, onlyBuiltDependencies: [] } };
+
+  function setup(processPlan = false) {
+    const files = new Map<string, string>([[manifest, JSON.stringify(base)]]);
+    const modules = new WatchingFakeModules();
+    const ownership = ownershipFor('/project/commands/status/index.ts', '/project');
+    ownership.add({ source: manifest, role: 'manifest', owner: root });
+    const plans: GenerationInvalidationPlan[] = [];
+    const ignored: ManifestFieldChange[] = [];
+    const restarts: ProcessInvalidationPlan[] = [];
+    let settle!: () => void;
+    const settled = new Promise<void>((resolve) => { settle = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules, ownership: () => ownership, watchDebounceMs: 0,
+      readManifest: (source) => {
+        const text = files.get(source);
+        if (text === undefined) throw new Error('ENOENT');
+        return text;
+      },
+      runtime: {
+        async reload(plan) {
+          plans.push(plan);
+          if (processPlan) return { kind: 'process', changed: plan.changed, reasons: ['package runtime ABI changed: bot'] };
+        },
+      },
+      onRestartRequired(plan) { restarts.push(plan); settle(); },
+      onManifestIgnored(change) { ignored.push(change); settle(); },
+      onReload() { settle(); },
+      onError(error) { throw error; },
+    });
+    const stop = coordinator.start();
+    const write = (value: unknown) => files.set(manifest, JSON.stringify(value));
+    return { coordinator, modules, plans, ignored, restarts, settled, stop, write };
+  }
+
+  it('drops a watched change of scripts / description without reload or restart', async () => {
+    const f = setup();
+    try {
+      f.write({ ...base, scripts: { start: 'zhin start --foreground' }, description: 'x', pnpm: { ...base.pnpm, onlyBuiltDependencies: ['esbuild'] } });
+      f.modules.emit(manifest);
+      await f.settled;
+      expect(f.plans).toEqual([]);
+      expect(f.restarts).toEqual([]);
+      expect(f.ignored).toEqual([{ source: manifest, fields: ['description', 'pnpm.onlyBuiltDependencies', 'scripts'], runtimeFields: [] }]);
+    } finally { await f.stop(); }
+  });
+
+  it.each([
+    ['dependencies', { dependencies: { 'zhin.js': '^1.3.0' } }],
+    ['pnpm.overrides', { pnpm: { ...base.pnpm, overrides: { ws: '8.18.0' } } }],
+    ['zhin', { zhin: { protocol: 1, type: 'plugin' } }],
+    ['exports', { exports: './lib/index.js' }],
+  ] as const)('keeps the normal reload path when %s changes', async (_name, patch) => {
+    const f = setup();
+    try {
+      f.write({ ...base, scripts: { build: 'tsc' }, ...patch });
+      f.modules.emit(manifest);
+      await f.settled;
+      expect(f.ignored).toEqual([]);
+      expect(f.plans).toHaveLength(1);
+      expect(f.plans[0]?.manifestSources).toEqual([manifest]);
+      expect(f.plans[0]?.changed).toEqual([manifest]);
+    } finally { await f.stop(); }
+  });
+
+  it('attaches the changed fields to the restart plan so the restart can be explained', async () => {
+    const f = setup(true);
+    try {
+      f.write({ ...base, type: 'commonjs', scripts: {} });
+      f.modules.emit(manifest);
+      await f.settled;
+      expect(f.restarts).toHaveLength(1);
+      expect(f.restarts[0]?.manifestChanges).toEqual([{ source: manifest, fields: ['scripts', 'type'], runtimeFields: ['type'] }]);
+    } finally { await f.stop(); }
+  });
+
+  it('never drops an explicitly requested manifest reload', async () => {
+    const f = setup();
+    try {
+      f.write({ ...base, scripts: {} });
+      await f.coordinator.enqueue(manifest);
+      expect(f.ignored).toEqual([]);
+      expect(f.plans).toHaveLength(1);
+    } finally { await f.stop(); }
   });
 });
 

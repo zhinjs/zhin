@@ -153,16 +153,41 @@ export async function resolveCapabilityDelta(
   return { plan: effective, capabilities };
 }
 
+/**
+ * Whether the affected child subtrees (plus capability slots outside them) can be rebuilt while
+ * every other Plugin Scope — adapters and their Endpoints included — is retained (#1250
+ * `hmr-multi-change-full-rebuild`). The planner already mapped every changed source to its owner:
+ * a Plugin entry / schema to its subtree, a capability file to its slot, a support module to the
+ * entries importing it, and an unclaimed file to the package that contains it. A narrower reload
+ * is wrong only for Feature provider modules (the provider itself would stay loaded) and for the
+ * Root Plugin.
+ */
 export function canPrepareSubtrees(
   plan: GenerationInvalidationPlan,
   runtimeInputSources: ReadonlySet<string>,
   sourceOwnership: SourceOwnershipIndex,
+  dependencies?: (source: string) => readonly string[],
 ): boolean {
   if (plan.subtrees.length === 0 || plan.subtrees.includes(rootPluginId())) return false;
-  return plan.changed.every((source) => {
-    if (runtimeInputSources.has(normalizeSourcePath(source))) return true;
-    const records = sourceOwnership.recordsFor(source);
-    return records.length > 0 && records.every((record) => record.role === 'plugin' || record.role === 'schema');
+  return subtreeUnsupportedSources(plan, runtimeInputSources, sourceOwnership, dependencies).length === 0;
+}
+
+function subtreeUnsupportedSources(
+  plan: GenerationInvalidationPlan,
+  runtimeInputSources: ReadonlySet<string>,
+  sourceOwnership: SourceOwnershipIndex,
+  dependencies?: (source: string) => readonly string[],
+): readonly string[] {
+  const supported = (role: string) => role === 'plugin' || role === 'schema' || role === 'capability';
+  return plan.changed.filter((source) => {
+    if (runtimeInputSources.has(normalizeSourcePath(source))) return false;
+    const own = sourceOwnership.recordsFor(source);
+    // A support module counts through the loaded entries that import it.
+    const records = own.length > 0 ? own : (dependencies?.(source) ?? [])
+      .filter((entry) => normalizeSourcePath(entry) !== normalizeSourcePath(source))
+      .flatMap((entry) => sourceOwnership.recordsFor(entry));
+    // No record at all: an unclaimed file, already resolved to a capability or its owner subtree.
+    return !records.every((record) => supported(record.role));
   });
 }
 
@@ -177,7 +202,19 @@ export interface PrepareInvalidatedGenerationContext {
   readonly inspectProject: (document?: RuntimeConfigDocument, environmentLayers?: Readonly<EnvironmentLayers>) => Promise<InspectedProject>;
   readonly prepareFull: (current: RuntimeSnapshot, signal: AbortSignal, document?: RuntimeConfigDocument, environmentLayers?: Readonly<EnvironmentLayers>) => Promise<PreparedRuntimeGeneration>;
   readonly prepareInspected: (current: RuntimeSnapshot, inspected: InspectedProject, signal: AbortSignal) => Promise<PreparedRuntimeGeneration>;
-  readonly prepareSubtrees: (current: RuntimeSnapshot, inspected: InspectedProject, roots: readonly PluginId[], signal: AbortSignal, configUpdates?: RuntimeInputCandidate['configUpdates']) => Promise<PreparedRuntimeGeneration>;
+  readonly prepareSubtrees: (current: RuntimeSnapshot, inspected: InspectedProject, roots: readonly PluginId[], signal: AbortSignal, configUpdates?: RuntimeInputCandidate['configUpdates']) => Promise<SubtreePreparation>;
+}
+
+/** A subtree preparation, and why it had to rebuild the whole Root instead (topology changed). */
+export interface SubtreePreparation {
+  readonly prepared: PreparedRuntimeGeneration;
+  readonly fullRebuildReason?: string;
+}
+
+function subtreeRebuild(subtree: SubtreePreparation): PreparedRebuild {
+  return subtree.fullRebuildReason
+    ? { rebuilt: 'root', reason: subtree.fullRebuildReason }
+    : { rebuilt: 'subtree' };
 }
 
 export async function prepareInvalidatedGeneration(
@@ -186,7 +223,7 @@ export async function prepareInvalidatedGeneration(
   signal: AbortSignal,
   plan: GenerationInvalidationPlan,
   inputs: RuntimeInputCandidate | undefined,
-): Promise<{ prepared?: PreparedRuntimeGeneration; restart?: ProcessInvalidationPlan }> {
+): Promise<{ prepared?: PreparedRuntimeGeneration; restart?: ProcessInvalidationPlan; rebuild?: PreparedRebuild }> {
   const effectiveInputPlan = inputs
     ? Object.freeze({
         ...plan,
@@ -205,13 +242,17 @@ export async function prepareInvalidatedGeneration(
     const inspected = inputs?.inspected ?? await ctx.inspectProject(inputs?.document, inputs?.environmentLayers);
     const restart = new RestartBoundaryPlanner().plan(ctx.model.graph, inspected.graph, effective.changed);
     if (restart) return { restart };
-    const prepared = effective.subtrees.includes(rootPluginId())
-      ? await ctx.prepareInspected(current, inspected, signal)
-      : await new TopologyGenerationPreparer(
-        ctx.modules, ctx.model, inspected.graph, inspected.configResolver, inspected.primaryConfigDocument,
-        ctx.environment, ctx.installResources, inspected.environmentLayers, ctx.isolation, inputs?.configUpdates,
-      ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
-    return { prepared };
+    if (effective.subtrees.includes(rootPluginId())) {
+      return {
+        prepared: await ctx.prepareInspected(current, inspected, signal),
+        rebuild: { rebuilt: 'root', reason: rootFallbackReason(ctx, effective) },
+      };
+    }
+    const prepared = await new TopologyGenerationPreparer(
+      ctx.modules, ctx.model, inspected.graph, inspected.configResolver, inspected.primaryConfigDocument,
+      ctx.environment, ctx.installResources, inspected.environmentLayers, ctx.isolation, inputs?.configUpdates,
+    ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
+    return { prepared, rebuild: { rebuilt: 'subtree' } };
   }
   if (effective.subtrees.length === 0 && resolved.capabilities.size > 0 && ctx.model) {
     const primary = inputs?.primaryConfigChanged
@@ -220,16 +261,73 @@ export async function prepareInvalidatedGeneration(
       : undefined;
     const prepared = await new SlotGenerationPreparer(ctx.modules, ctx.model, primary, inputs?.configUpdates)
       .prepare(current, resolved.capabilities, signal);
-    return { prepared };
+    return { prepared, rebuild: { rebuilt: 'capability', capabilities: capabilityDeltaIds(resolved.capabilities) } };
   }
-  if (ctx.model && canPrepareSubtrees(effective, ctx.runtimeInputSources, ctx.sourceOwnership)) {
+  const dependencies = ctx.modules.affectedSources?.bind(ctx.modules);
+  if (ctx.model && canPrepareSubtrees(effective, ctx.runtimeInputSources, ctx.sourceOwnership, dependencies)) {
     const inspected = inputs?.inspected ?? await ctx.inspectProject(inputs?.document, inputs?.environmentLayers);
-    return { prepared: await ctx.prepareSubtrees(current, inspected, effective.subtrees, signal, inputs?.configUpdates) };
+    if (resolved.capabilities.size > 0) {
+      // Mixed batch: child subtrees plus capability slots outside them (e.g. a Root tool that
+      // imports a changed module of a workspace Plugin) commit as one generation (#1250).
+      const prepared = await new TopologyGenerationPreparer(
+        ctx.modules, ctx.model, inspected.graph, inspected.configResolver, inspected.primaryConfigDocument,
+        ctx.environment, ctx.installResources, inspected.environmentLayers, ctx.isolation, inputs?.configUpdates,
+      ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
+      return { prepared, rebuild: { rebuilt: 'subtree', capabilities: capabilityDeltaIds(resolved.capabilities) } };
+    }
+    const subtree = await ctx.prepareSubtrees(current, inspected, effective.subtrees, signal, inputs?.configUpdates);
+    return { prepared: subtree.prepared, rebuild: subtreeRebuild(subtree) };
   }
   if (ctx.model && inputs?.primaryConfigChanged && effective.subtrees.length === 0 && resolved.capabilities.size === 0) {
-    return { prepared: await ctx.prepareSubtrees(current, inputs.inspected, [], signal, inputs.configUpdates) };
+    const subtree = await ctx.prepareSubtrees(current, inputs.inspected, [], signal, inputs.configUpdates);
+    return { prepared: subtree.prepared, rebuild: subtreeRebuild(subtree) };
   }
-  return { prepared: await ctx.prepareFull(current, signal, inputs?.document, inputs?.environmentLayers) };
+  return {
+    prepared: await ctx.prepareFull(current, signal, inputs?.document, inputs?.environmentLayers),
+    rebuild: { rebuilt: 'root', reason: rootFallbackReason(ctx, effective) },
+  };
+}
+
+/**
+ * Which preparation path a source reload took (#1250: `hmr_reload` reports it, not the plan).
+ * `resource`: only project files a Root installer declared it reads changed; no Scope was rebuilt.
+ */
+export type HmrRebuildKind = 'root' | 'subtree' | 'capability' | 'resource';
+
+export interface PreparedRebuild {
+  readonly rebuilt: HmrRebuildKind;
+  /** Replaced capability slots (`capability` path). */
+  readonly capabilities?: readonly CapabilityId[];
+  /** Why the whole Root generation was rebuilt (`root` path). */
+  readonly reason?: string;
+}
+
+/**
+ * Explains a whole-Root rebuild in terms of the changed sources, without changing the choice
+ * (the scope algorithm itself is unchanged; see #1250 `hmr-multi-change-full-rebuild`).
+ */
+function rootFallbackReason(ctx: PrepareInvalidatedGenerationContext, plan: GenerationInvalidationPlan): string {
+  if (!ctx.model) return 'no committed generation to reload against';
+  const root = rootPluginId();
+  if (plan.subtrees.includes(root)) {
+    if (plan.manifestSources.some((source) => ctx.sourceOwnership.recordsFor(source).some((record) => record.owner === root))) {
+      return 'the Root Plugin manifest changed';
+    }
+    const unresolved = plan.changed.filter((source) => (
+      !ctx.runtimeInputSources.has(normalizeSourcePath(source))
+      && ctx.sourceOwnership.ownersForPath(source).includes(root)
+      && !ctx.sourceOwnership.recordsFor(source).some((record) => record.role === 'capability')
+    ));
+    return unresolved.length > 0
+      ? `changed Root Plugin files are not a convention capability and no Root installer declared reading them: ${unresolved.join(', ')}`
+      : 'the Root Plugin is in the invalidated subtrees';
+  }
+  const unsupported = subtreeUnsupportedSources(
+    plan, ctx.runtimeInputSources, ctx.sourceOwnership, ctx.modules.affectedSources?.bind(ctx.modules),
+  );
+  return unsupported.length > 0
+    ? `Feature provider modules changed; a subtree reload would keep the old provider: ${unsupported.join(', ')}`
+    : 'no narrower reload path applies to this change set';
 }
 
 export function collapseInvalidationSubtrees(values: readonly PluginId[]): readonly PluginId[] {
@@ -376,8 +474,41 @@ export function emptyState(): SnapshotState {
   };
 }
 
-export function isProcessPlan(value: RuntimeSnapshot | ProcessInvalidationPlan): value is ProcessInvalidationPlan {
+export function isProcessPlan<T extends object>(value: T | ProcessInvalidationPlan): value is ProcessInvalidationPlan {
   return 'kind' in value && value.kind === 'process';
+}
+
+/** What a committed source reload actually rebuilt (#1250). */
+export interface HmrReloadReport {
+  readonly kind: 'reloaded';
+  readonly rebuilt: HmrRebuildKind;
+  /**
+   * Plugins whose Scope was set up again (replaced, added or removed) — adapters and their
+   * Endpoints included. Empty for a pure capability swap.
+   */
+  readonly plugins: readonly PluginId[];
+  readonly capabilities: readonly CapabilityId[];
+  /** Why the whole Root generation was rebuilt (`rebuilt: 'root'`). */
+  readonly reason?: string;
+  /** Project files handed to the Root installers that declared reading them (no rebuild for them). */
+  readonly resources?: readonly string[];
+}
+
+export function describeHmrReload(
+  rebuild: PreparedRebuild,
+  previous: ReadonlyMap<PluginId, unknown> | undefined,
+  next: ReadonlyMap<PluginId, unknown> | undefined,
+): HmrReloadReport {
+  const plugins = new Set<PluginId>();
+  for (const [id, scope] of next ?? []) if (previous?.get(id) !== scope) plugins.add(id);
+  for (const id of previous?.keys() ?? []) if (!next?.has(id)) plugins.add(id);
+  return Object.freeze({
+    kind: 'reloaded',
+    rebuilt: rebuild.rebuilt,
+    plugins: Object.freeze([...plugins].sort()),
+    capabilities: Object.freeze([...(rebuild.capabilities ?? [])]),
+    ...(rebuild.reason ? { reason: rebuild.reason } : {}),
+  });
 }
 
 export async function disposePreparedParts(

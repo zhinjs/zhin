@@ -4,6 +4,7 @@ import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.j
 import type { ZhinFeatureManifest } from './manifest.js';
 import type { ModuleWatchRoot } from './module-runtime.js';
 import type { ProjectGraph, PluginGraphNode } from './project-graph.js';
+import { PLATFORM_FEATURE_CARRIER, PLATFORM_FEATURE_FACADE } from './platform-features.js';
 
 export type SourceRole = 'plugin' | 'schema' | 'manifest' | 'feature' | 'capability';
 
@@ -24,6 +25,7 @@ export class SourceOwnershipIndex {
   readonly #records = new Map<string, SourceOwnershipRecord[]>();
   readonly #packages: PackageOwner[] = [];
   readonly #watchRoots = new Map<string, ModuleWatchRoot>();
+  readonly #revisionableRoots = new Set<string>();
 
   static empty(): SourceOwnershipIndex {
     return new SourceOwnershipIndex();
@@ -41,6 +43,7 @@ export class SourceOwnershipIndex {
     }
     visitPlugin(graph.root, (node) => {
       index.addPackageRoot(node.package.root, node.id);
+      if (isRevisionablePluginPackage(node)) index.addRevisionableRoot(node.package.root);
       const entry = node.package.packageJson.zhin.entry;
       // Entry-less Plugins own no entry module; their convention files are indexed below.
       if (entry !== undefined) {
@@ -133,6 +136,27 @@ export class SourceOwnershipIndex {
       .sort());
   }
 
+  /** `package.json` files of mounted Plugin and Feature packages. */
+  manifestSources(): readonly string[] {
+    return Object.freeze([...this.#records.entries()]
+      .filter(([, records]) => records.some((record) => record.role === 'manifest'))
+      .map(([source]) => source)
+      .sort());
+  }
+
+  /**
+   * Package roots of mounted child Plugins built from local sources (#1250
+   * `hmr-stale-cross-package-import`): a module imported from one of them by package name is
+   * reloaded together with its importer, like a relative import.
+   */
+  revisionableRoots(): readonly string[] {
+    return Object.freeze([...this.#revisionableRoots].sort());
+  }
+
+  addRevisionableRoot(packageRoot: string): void {
+    this.#revisionableRoots.add(normalizeSource(packageRoot));
+  }
+
   watchRoots(): readonly ModuleWatchRoot[] {
     return Object.freeze([...this.#watchRoots.values()]);
   }
@@ -141,6 +165,17 @@ export class SourceOwnershipIndex {
     const normalized = normalizeSourcePath(root.root);
     this.#watchRoots.set(normalized, Object.freeze({ ...root, root: normalized }));
   }
+}
+
+/**
+ * Framework packages (`zhin.js`, `@zhin.js/core`) can be Plugin packages too; reloading a copy of
+ * them for one importer would split framework identity, so they are never revisioned.
+ */
+function isRevisionablePluginPackage(node: PluginGraphNode): boolean {
+  return node.parent !== undefined
+    && node.package.source !== 'node_modules'
+    && node.package.name !== PLATFORM_FEATURE_CARRIER
+    && node.package.name !== PLATFORM_FEATURE_FACADE;
 }
 
 function visitPlugin(node: PluginGraphNode, visit: (node: PluginGraphNode) => void): void {

@@ -13,6 +13,14 @@ export interface ModuleRuntime {
   loadClientModule?<T = unknown>(source: string, request: ClientModuleRequest): Promise<T>;
   invalidate?(source: string): Promise<void> | void;
   affectedSources?(source: string): readonly string[];
+  /**
+   * Loaded entries that import the source but keep their old module instance after a reload
+   * (#1250 `hmr-stale-cross-package-import`): e.g. a package-name import of a package that is
+   * not a mounted local Plugin. Reported as possibly stale dependents; empty when unknown.
+   */
+  staleDependents?(source: string): readonly string[];
+  /** Mounted local Plugin package roots whose package-name imports reload with their importer (#1250). */
+  updateRevisionableRoots?(roots: readonly string[]): void;
   /** True when this adapter cannot invalidate the complete importer closure safely. */
   requiresProcessRestart?(source: string): boolean;
   /** Starts staging module metadata for a generation transaction. */
