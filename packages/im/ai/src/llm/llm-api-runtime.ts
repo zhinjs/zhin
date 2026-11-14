@@ -39,6 +39,12 @@ export interface StreamOptions {
   /** Optional semantic-input observer; the SDK can repeat it for same-input retries. Failures are isolated. */
   onRequest?: (request: LlmRequestObservation) => void;
   onResponse?: (response: unknown) => void;
+  /**
+   * Called when the provider first answers this request (response headers, or the first stream
+   * event when the transport cannot see headers). A resilience wrapper uses it to stop its
+   * first-response timer; transports call it at most once per HTTP response and never throw from it.
+   */
+  onResponseStart?: () => void;
   /** Functional text consumer before completion resolves; throwing aborts this provider request. */
   onTextDelta?: (text: string) => void;
   /** A completion owner may prohibit regeneration after publishing partial output. */

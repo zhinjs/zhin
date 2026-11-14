@@ -28,6 +28,7 @@ const messages = createMessages({
   refuse: { 'zh-CN': '这个我不接', en: 'I cannot help with that.' },
   rate_limit: { 'zh-CN': '模型限流', en: 'Model rate limit' },
   timeout: { 'zh-CN': '模型超时', en: 'Model timeout' },
+  no_response: { 'zh-CN': '模型服务无响应', en: 'Model service not responding' },
   server: { 'zh-CN': '模型服务不可用', en: 'Model service unavailable' },
   network: { 'zh-CN': '连不上模型服务', en: 'Cannot reach the model service' },
   empty_response: { 'zh-CN': '模型回了空', en: 'Empty model response' },
@@ -52,7 +53,7 @@ const CONFUSED_LINES = ['confused'] as const;
 const REFUSE_LINES = ['refuse'] as const;
 
 const LINES: Readonly<Record<ChatFailureKind, readonly MessageKey[]>> = {
-  rate_limit: TRANSIENT_LINES, timeout: TRANSIENT_LINES, server: TRANSIENT_LINES, network: TRANSIENT_LINES,
+  rate_limit: TRANSIENT_LINES, timeout: TRANSIENT_LINES, no_response: TRANSIENT_LINES, server: TRANSIENT_LINES, network: TRANSIENT_LINES,
   empty_response: TRANSIENT_LINES, malformed_tool_call: TRANSIENT_LINES, provider_error: TRANSIENT_LINES,
   length: TRANSIENT_LINES, bad_request: TRANSIENT_LINES, unknown: TRANSIENT_LINES, format: TRANSIENT_LINES,
   turn_timeout: TRANSIENT_LINES, turn_error: TRANSIENT_LINES,

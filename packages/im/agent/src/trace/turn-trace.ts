@@ -121,7 +121,9 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'last_iteration_nudge'; iteration: number; limit: number }>
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
-  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>;
+  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
+  /** A model request attempt hit its first-response or whole-request deadline (#1250). */
+  | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -262,6 +264,8 @@ export class TurnTraceCollector {
     } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
+    } else if (note.kind === 'model_timeout') {
+      this.#addTimeline('model_timeout', `${note.provider}/${note.model} ${note.phase === 'first_response' ? 'no response' : 'request'} after ${note.timeout_ms}ms (attempt ${note.attempt})`);
     } else {
       this.#addTimeline('admission', describeAdmission(note));
     }

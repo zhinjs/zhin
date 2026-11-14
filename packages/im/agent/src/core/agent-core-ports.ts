@@ -169,6 +169,10 @@ export function createTurnCompletionPort(input: {
   harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
   sessionId: string;
   transport: LlmCompletionPort;
+  /** Trace target and log context for timeouts; absent outside a traced turn. */
+  turnId?: string;
+  /** The model's purpose, for logs (`chat` for the main turn). */
+  purpose?: string;
 }): LlmCompletionPort {
   const { host, sessionId } = input;
   // Profile/Driver owns execution settings; global policy and explicit harness
@@ -185,6 +189,23 @@ export function createTurnCompletionPort(input: {
     config,
     timers: host.config.providerTimers,
     onEvent: (event) => {
+      if (event.type === 'timeout') {
+        // Identifiers only: provider alias, model, purpose and turn; never request content or keys.
+        logger.warn(formatCompact({
+          op: 'provider_timeout',
+          session: sessionId,
+          turn: input.turnId,
+          purpose: input.purpose ?? 'chat',
+          provider: input.providerAlias,
+          model: event.model,
+          phase: event.phase,
+          timeout_ms: event.timeoutMs,
+          attempt: event.attempt,
+        }));
+        noteTurnTrace(input.turnId, { kind: 'model_timeout', phase: event.phase, timeout_ms: event.timeoutMs,
+          attempt: event.attempt, provider: input.providerAlias, model: event.model });
+        return;
+      }
       const { type, error, ...fields } = event;
       logger.warn(formatCompact({
         op: `provider_${type}`,
@@ -353,6 +374,8 @@ export function createTurnCompletionRuntime<TLlmTools extends ReturnType<typeof 
     harness,
     sessionId,
     transport: { complete: attempt('complete'), completeSimple: attempt('completeSimple') },
+    turnId: traceTurnId(input.turnContext),
+    purpose: 'chat',
   });
   const complete = (method: keyof LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
     state.preparedCallId = undefined;

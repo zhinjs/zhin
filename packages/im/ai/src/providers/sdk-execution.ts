@@ -104,7 +104,7 @@ export function sdkExecution(
     };
   }
 
-  async function prepare(signal: AbortSignal, requestTimeoutMs = parameters.requestTimeoutMs) {
+  async function prepare(signal: AbortSignal, requestTimeoutMs = parameters.requestTimeoutMs, onResponseStart?: () => void) {
     modelParameterShape.shape.requestTimeoutMs.parse(requestTimeoutMs);
     const combined = AbortSignal.any([
       input.signal, signal,
@@ -155,6 +155,8 @@ export function sdkExecution(
       const boundRequest = input.credentials.bindRequest({ grant, request });
       callRequests.add(request); callRequests.add(boundRequest);
       const response = await input.fetch(boundRequest);
+      // First byte from the provider: the caller's first-response deadline is met.
+      try { onResponseStart?.(); } catch { /* an observer cannot change the transport outcome */ }
       return configuration.prepareResponse?.(response) ?? response;
     };
     let transport = withResponseHeaderTimeout(fetch, parameters.firstChunkTimeoutMs) ?? fetch;
@@ -175,7 +177,7 @@ export function sdkExecution(
     configuration.validateRequest?.(request);
     if (parameters.imageGeneration !== undefined) throw new ProviderProtocolError('unsupported-parameter');
     if (parameters.safetySettings && configuration.family !== 'google') throw new ProviderProtocolError('unsupported-parameter');
-    const { combined, token, fetch } = await prepare(signal, request.options?.requestTimeoutMs);
+    const { combined, token, fetch } = await prepare(signal, request.options?.requestTimeoutMs, request.options?.onResponseStart);
     const model = languageModel({
       family: configuration.family, api: configuration.api, model: input.binding.model.id,
       baseUrl, token, fetch, bearer: configuration.bearer, compat: service.compat,

@@ -226,7 +226,8 @@ outline: [2, 3]
 | `ai.agent.providerResilience.baseDelayMs` | number \| string | 否 | — | First backoff delay in ms; doubles each retry. Default 1000. |
 | `ai.agent.providerResilience.maxDelayMs` | number \| string | 否 | — | Upper bound for one backoff delay in ms. Default 10000. |
 | `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | 否 | — | A `Retry-After` longer than this stops retry. Default 30000. |
-| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
+| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables. |
+| `ai.agent.providerResilience.firstResponseTimeoutMs` | number \| string | 否 | — | Per-attempt wait in ms for the provider's first response (response headers or the first stream event). Default 30000. `0` disables. A service that does not answer in time is not re-asked on the same model: the attempt fails as `no_response`. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | 否 | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
 | `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |

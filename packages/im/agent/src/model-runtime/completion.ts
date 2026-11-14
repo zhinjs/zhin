@@ -33,8 +33,11 @@ export function createInvocationCompletion(input: InvocationCompletionOptions): 
     }
     const run = await input.client.stream({ profile, purpose: input.purpose, request, signal });
     let result: AssistantMessage | undefined;
+    let started = false;
     try {
       for await (const event of run) {
+        // A transport that cannot report headers still proves a response with its first event.
+        if (!started) { started = true; options.onResponseStart?.(); }
         if (event.type === 'text_delta' && event.text) options.onTextDelta(event.text);
         if (event.type === 'error') throw event.error ?? new Error('Inference stream failed');
         if (event.type === 'done' && event.message) result = event.message;
