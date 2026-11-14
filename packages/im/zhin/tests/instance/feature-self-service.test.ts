@@ -6,6 +6,7 @@ import {
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { FeatureOverrideStore } from '../../src/instance/console/feature-override-store.js';
+import { ChatPeople } from '../../src/instance/chat-people.js';
 import {
   ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
@@ -436,5 +437,41 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(await run({ ...actor(), displayName: '小明' }, '关闭 repeater')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')).toMatchObject({ updatedBy: 'chat:qq:u1',
       operator: { source: 'chat', adapter: 'qq', userId: 'u1', displayName: '小明' } });
+  });
+});
+
+describe('角色 授予 #<person id prefix> (ADR 0060 §7)', () => {
+  it('grants one person by id prefix; below global only through an identity on the actor\'s adapter', async () => {
+    const { role, roles } = await harness(on, {}, ['root']);
+    await roles.store.grant({ level: 'adapter', key: 'tg', adapter: 'tg', userId: 'alice-tg', role: 'trusted' });
+    const people = new ChatPeople({ store: roles.store });
+    await people.merge({ into: { adapter: 'tg', userId: 'alice-tg' }, from: { adapter: 'qq', userId: 'alice' }, actor: 'user:op' });
+    const id = roles.principalOf({ adapter: 'qq', userId: 'alice' }).id;
+    const owner = actor({ user: 'root' });
+    expect(await role(owner, `授予 #${id.slice(0, 9)} admin 全局`)).toBe('已保存（全局层），立即生效。');
+    // The global grant reaches every identity of that person.
+    expect(roles.roleAt({ adapter: 'tg', userId: 'alice-tg' }, 'tg/news/group:1')).toBe('admin');
+    expect(roles.roleAt({ adapter: 'qq', userId: 'alice' }, 'qq/bot-1/group:100')).toBe('admin');
+    // `cp_` may be omitted.
+    expect(await role(owner, `撤销 #${id.slice(3, 9)} admin 全局`)).toBe('已保存（全局层），立即生效。');
+    expect(roles.roleAt({ adapter: 'tg', userId: 'alice-tg' }, '')).toBeUndefined();
+  });
+
+  it('refuses unknown, too short, ambiguous prefixes and people without an identity on this adapter (negative)', async () => {
+    const { role, roles } = await harness(on, {}, ['root']);
+    const owner = actor({ user: 'root' });
+    expect(await role(owner, '授予 #cp_zzzzzzz admin 全局')).toBe('没有 id 以 #cp_zzzzzzz 开头的人。');
+    expect(await role(owner, '授予 #cp_a admin 全局')).toBe('没有 id 以 #cp_a 开头的人。');
+    await roles.store.grant({ level: 'adapter', key: 'tg', adapter: 'tg', userId: 'only-tg', role: 'trusted' });
+    const id = roles.principalOf({ adapter: 'tg', userId: 'only-tg' }).id;
+    expect(await role(owner, `授予 #${id} admin 适配器`)).toBe('这个人在适配器 qq 上没有身份；低于全局的角色只对本适配器上的身份生效。');
+    expect(roles.store.list().filter(entry => entry.role === 'admin')).toEqual([]);
+    // An ambiguous prefix is refused, never resolved to one of the matches.
+    await roles.store.exclusive(async () => {
+      await roles.store.principals.createPrincipal({ id: `cp_abcd${'a'.repeat(22)}` });
+      await roles.store.principals.createPrincipal({ id: `cp_abcd${'b'.repeat(22)}` });
+    });
+    expect(await role(owner, '授予 #cp_abcd admin 全局')).toBe('有多个人的 id 以 #cp_abcd 开头，请多写几位。');
+    expect(roles.store.list().filter(entry => entry.role === 'admin')).toEqual([]);
   });
 });

@@ -143,6 +143,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const chatRoleImportsReply = await dispatchChatRoleImportsConsoleRpc(message, {
         ...(options.featureStores?.chatRoleImports ? { imports: options.featureStores.chatRoleImports } : {}),
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
+        ...(options.featureStores?.personalPrincipalImports ? { personal: options.featureStores.personalPrincipalImports } : {}),
         authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),
@@ -168,6 +169,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         cache: attentionCache,
         allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
         allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
+        ...(isUserPrincipal(principal) ? { viewerUserId: principal.userId } : {}),
       });
       if (attentionReply) {
         return reply(attentionReply.status, attentionReply.body, noStore);

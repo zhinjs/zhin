@@ -133,6 +133,14 @@ export interface AttentionChatRoles {
   };
   /** Re-appeared configured grants waiting for a decision. */
   readonly pending: readonly { readonly id: string; readonly source: string; readonly adapter: string; readonly userId: string; readonly role: string; readonly seenAt: number }[];
+  /**
+   * ADR 0060 §4.1 (P3): `ai.personalPrincipals` imported as people linked to Console users (no
+   * roles), not yet marked as read.
+   */
+  readonly personal?: {
+    readonly at: number;
+    readonly entries: readonly { readonly consoleUserId: string; readonly adapter: string; readonly userId: string }[];
+  };
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -299,6 +307,15 @@ const messages = createMessages({
     'zh-CN': '账号层 owner 不等于宿主主人；还没有全局 owner 时，可在「聊天角色」中把其中一位提升为全局 owner。',
     en: 'An account-level owner is not the host owner; with no global owner yet, you may promote one of them to global owner under Chat roles.',
   },
+  'roles.imported.personalLine': {
+    'zh-CN': 'ai.personalPrincipals：Console 用户 {user} ↔ {identity}（只链接，不授予角色）',
+    en: 'ai.personalPrincipals: Console user {user} ↔ {identity} (linked only, no role)',
+  },
+  'roles.imported.promoteMe': {
+    'zh-CN': '其中链接到你的 Console 账号的人还没有角色，而这里还没有全局 owner：是否同时把这个人设为全局 owner？请在「我的聊天身份」中确认。',
+    en: 'The person linked to your Console account holds no role and there is no global owner yet: make that person the global owner as well? Confirm under My chat identity.',
+  },
+  'roles.imported.promoteMeAction': { 'zh-CN': '设为全局 owner…', en: 'Make global owner…' },
   'roles.pending.title': { 'zh-CN': '配置中又出现了 {count} 条人员名单，等待确认', en: '{count} people-list entries reappeared in the configuration and wait for review' },
   'roles.pending.detail': {
     'zh-CN': '{entries}。它们没有被自动授予（改配置的人不一定是主人），已从配置文件移除；逐条「导入」或「忽略」。',
@@ -333,6 +350,8 @@ export const ATTENTION_PATHS = Object.freeze({
   errorLogs: '/logs?level=error',
   /** Global scope page, chat roles tab (ADR 0056 §3 / ADR 0060 §7). */
   chatRoles: '/scope?tab=roles',
+  /** Console 「聊天成员」 page, own identity panel (ADR 0060 §3.1 「设为全局 owner」). */
+  chatIdentityMe: '/chat-members?me=1',
 });
 
 // ---------------------------------------------------------------- configuration problems
@@ -393,6 +412,8 @@ export interface CollectAttentionOptions {
   readonly allowsPluginPermission?: (permission: string) => boolean;
   /** Shares the raw reads of plugins / config / MCP / logs between requests. */
   readonly cache?: AttentionSourceCache;
+  /** The signed-in Console user (`user:<id>` without the prefix); items about the viewer's own link use it. */
+  readonly viewerUserId?: string;
 }
 
 const P = CONSOLE_PERMISSIONS;
@@ -644,13 +665,25 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           detail: state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),
           action });
       }
-      if (state.imported?.entries.length) {
-        const entries = state.imported.entries;
+      const personal = state.personal?.entries ?? [];
+      if (state.imported?.entries.length || personal.length) {
+        const entries = state.imported?.entries ?? [];
+        const gap = locale === 'en' ? ' ' : '';
         const promote = !state.hasGlobalOwner && entries.some(entry => entry.role === 'owner' && entry.level !== 'global');
-        drafts.push({ kind: 'chat-roles.imported', severity: 'info', state: { at: state.imported.at, count: entries.length },
-          title: t('roles.imported.title', { count: entries.length }),
-          detail: `${t('roles.imported.detail', { entries: listed(entries.map(entry => `${who(entry)}（${entry.result}）`), locale) })}${promote ? `${locale === 'en' ? ' ' : ''}${t('roles.imported.promote')}` : ''}`,
-          action, since: state.imported.at });
+        // Q2: the viewer's own Console account was linked by `ai.personalPrincipals` and they hold a
+        // global iam.manage (this item is only listed then): offer to make that person the global owner.
+        const promoteMe = !state.hasGlobalOwner && options.viewerUserId !== undefined
+          && personal.some(entry => entry.consoleUserId === options.viewerUserId);
+        const lines = [
+          ...entries.map(entry => `${who(entry)}（${entry.result}）`),
+          ...personal.map(entry => t('roles.imported.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })),
+        ];
+        const at = Math.min(state.imported?.at ?? Number.POSITIVE_INFINITY, state.personal?.at ?? Number.POSITIVE_INFINITY);
+        drafts.push({ kind: 'chat-roles.imported', severity: 'info',
+          state: { at, count: lines.length, ...(promoteMe ? { promoteMe: true } : {}) },
+          title: t('roles.imported.title', { count: lines.length }),
+          detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,
+          action: promoteMe ? { label: t('roles.imported.promoteMeAction'), path: ATTENTION_PATHS.chatIdentityMe } : action, since: at });
       }
       if (state.pending.length) {
         drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning', state: { ids: state.pending.map(entry => entry.id) },
@@ -678,6 +711,7 @@ function formatPath(path: readonly string[]): string {
 
 export interface AttentionRpcContext {
   readonly sources: AttentionSources;
+  readonly viewerUserId?: string;
   readonly allows: AttentionAllows;
   readonly allowsPluginPermission?: (permission: string) => boolean;
   readonly observations?: AttentionObservations;
@@ -703,6 +737,7 @@ export async function dispatchAttentionConsoleRpc(message: Record<string, unknow
     ...(context.observations ? { observations: context.observations } : {}),
     ...(context.cache ? { cache: context.cache } : {}),
     ...(context.now ? { now: context.now } : {}),
+    ...(context.viewerUserId ? { viewerUserId: context.viewerUserId } : {}),
   });
   return { status: 200, body: { success: true, data, type: ATTENTION_RPC.LIST, requestId: message.requestId } };
 }

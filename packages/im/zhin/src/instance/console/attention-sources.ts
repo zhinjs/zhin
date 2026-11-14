@@ -112,11 +112,19 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         const roles = featureStores.roles!;
         const state = featureStores.chatRoleImports ? await featureStores.chatRoleImports.read() : undefined;
         const imported = state && state.imported.length && !state.importedAcknowledgedAt ? state.imported : [];
+        // ADR 0060 §4.1 (P3): people linked by `ai.personalPrincipals` (no roles), until marked read.
+        const personalState = featureStores.personalPrincipalImports ? await featureStores.personalPrincipalImports.read() : undefined;
+        const personal = personalState && !personalState.acknowledgedAt
+          ? personalState.entries.filter(entry => entry.status === 'imported' && entry.adapter)
+            .map(entry => ({ consoleUserId: entry.consoleUserId, adapter: entry.adapter!, userId: entry.subjectId, at: entry.at }))
+          : [];
         return {
           hasGlobalOwner: hasGlobalOwner(roles),
           claimOpen: featureStores.claim?.active === true,
           ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
           pending: state?.pending ?? [],
+          ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),
+            entries: personal.map(({ consoleUserId, adapter, userId }) => ({ consoleUserId, adapter, userId })) } } : {}),
         };
       },
     } : {}),

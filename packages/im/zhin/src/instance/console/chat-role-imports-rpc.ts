@@ -16,10 +16,13 @@ import {
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from '../chat-roles.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
 import type { ChatRoleImportBook } from '../chat-role-migration.js';
+import type { PersonalPrincipalImportBook } from '../chat-personal-principals.js';
 import { FeatureRpcError, type FeatureRpcReply } from './console-feature-rpc.js';
 
 export interface ChatRoleImportsRpcContext {
   readonly imports?: ChatRoleImportBook;
+  /** ADR 0060 §4.1 (P3): `ai.personalPrincipals` import record; `acknowledge` marks it read as well. */
+  readonly personal?: PersonalPrincipalImportBook;
   readonly roles?: InstanceChatRoleService;
   /** Whether the caller holds `iam.manage` globally. Deny by default. */
   readonly authorizeGlobal?: () => boolean | Promise<boolean>;
@@ -59,7 +62,8 @@ export async function dispatchChatRoleImportsConsoleRpc(message: Record<string, 
       const actor = context.actor ?? 'console';
       if (decision === 'acknowledge') {
         const status = await imports.acknowledge(actor);
-        data = Object.freeze({ status: status === 'saved' ? 'acknowledged' as const : 'unchanged' as const });
+        const personal = context.personal ? await context.personal.acknowledge(actor) : 'unchanged';
+        data = Object.freeze({ status: status === 'saved' || personal === 'saved' ? 'acknowledged' as const : 'unchanged' as const });
       } else if (decision === 'import' || decision === 'ignore') {
         if (typeof input.id !== 'string' || !/^[0-9a-f]{24}$/u.test(input.id)) throw new FeatureRpcError(400, 'id 必须是导入候选的 id');
         const resolution = await imports.resolve({ id: input.id, decision, actor });

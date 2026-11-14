@@ -114,8 +114,8 @@ const messages = createMessages({
     en: 'Usage: feature list [page] | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global. Quote values with spaces, e.g. "Welcome aboard"',
   },
   roleUsage: {
-    'zh-CN': '用法：角色 列表 | 授予 <用户> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
-    en: 'Usage: role list | grant <user> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
+    'zh-CN': '用法：角色 列表 | 授予 <用户|#人 id 前缀> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
+    en: 'Usage: role list | grant <user|#person-id-prefix> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
   },
   locked: { 'zh-CN': '{plugin} 已在{level}层停用，下级不能开启或修改开关。', en: '{plugin} is disabled at the {level} level; levels below it cannot enable or change it.' },
   saved: { 'zh-CN': '已保存（{level}层），立即生效。', en: 'Saved ({level} level), effective now.' },
@@ -156,7 +156,10 @@ const messages = createMessages({
   none: { 'zh-CN': '无', en: 'none' },
   rolesHeader: { 'zh-CN': '本会话生效的聊天角色：', en: 'Chat roles effective in this conversation:' },
   roleLine: { 'zh-CN': '{role} @ {level} {scope}：{user}（{source}）', en: '{role} @ {level} {scope}: {user} ({source})' },
-  userMissing: { 'zh-CN': '请 @ 用户或给出用户 id。', en: 'Mention a user or give a user id.' },
+  userMissing: { 'zh-CN': '请 @ 用户、给出用户 id，或用 #<人 id 前缀> 引用一个人。', en: 'Mention a user, give a user id, or refer to a person with #<person id prefix>.' },
+  principalNotFound: { 'zh-CN': '没有 id 以 {prefix} 开头的人。', en: 'No person has an id starting with {prefix}.' },
+  principalAmbiguous: { 'zh-CN': '有多个人的 id 以 {prefix} 开头，请多写几位。', en: 'Several people have ids starting with {prefix}; give more characters.' },
+  principalNoIdentity: { 'zh-CN': '这个人在适配器 {adapter} 上没有身份；低于全局的角色只对本适配器上的身份生效。', en: 'This person has no identity on adapter {adapter}; roles below global only count for identities on that adapter.' },
   levelConversation: { 'zh-CN': '会话', en: 'conversation' },
   levelEndpoint: { 'zh-CN': '账号', en: 'endpoint' },
   levelAdapter: { 'zh-CN': '适配器', en: 'adapter' },
@@ -563,13 +566,24 @@ export async function executeRoleChat(
   const user = input.tokens[1];
   const userId = typeof user === 'object' ? user.user : user;
   if (!userId) return messages(locale, 'userMissing');
+  // ADR 0060 §7: `#<person id prefix>` names a person (grant the same person across platforms).
+  const person = typeof user === 'string' && user.startsWith('#') ? resolvePersonRef(deps.roles.store, user.slice(1)) : undefined;
+  if (person && 'error' in person) return messages(locale, person.error, { prefix: person.prefix });
   const role = ROLE_WORDS[(words[2] ?? '').toLowerCase()];
   const level = levelPicker(words[3]);
   if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return messages(locale, 'roleUsage');
   const audit = auditor(deps, actor, 'chat-roles.chat');
   if (level === 'conversation' && actor.kind === 'private') return messages(locale, 'privateConversation');
   const scope = scopeAt(actor, level);
-  const target = { adapter: actor.identity.adapter, userId: String(userId) };
+  let target: ChatIdentity = { adapter: actor.identity.adapter, userId: String(userId) };
+  if (person) {
+    // The grant goes to the person through one of its identities: below global only one on the
+    // scope's adapter counts (ADR 0060 Q10); globally any (the actor's adapter first).
+    const local = person.identities.find(identity => identity.adapter === actor.identity.adapter);
+    const chosen = level === 'global' ? local ?? person.identities[0] : local;
+    if (!chosen) return messages(locale, 'principalNoIdentity', { adapter: actor.identity.adapter });
+    target = { adapter: chosen.adapter, userId: chosen.userId };
+  }
   if (!isChatIdentity(target)) return messages(locale, 'userMissing');
   const current = deps.roles.store.get(level, scope, target);
   // A revoke with nothing stored is checked like handling the named role (no silent "unchanged" for outsiders).
@@ -594,6 +608,26 @@ export async function executeRoleChat(
   audit(sub, level, scope, 'ok', { role });
   if (status === 'saved') deps.publishEvent?.('chat-roles:updated', { level, key: scope });
   return status === 'saved' ? messages(locale, 'saved', { level: levelName(locale, level) }) : messages(locale, 'unchanged');
+}
+
+/** Shortest person id prefix accepted after `#` (without `cp_`). */
+const PERSON_PREFIX_MIN = 4;
+
+/**
+ * `#cp_ab12…` / `#ab12…`: the stored person whose id starts with the prefix — only when exactly one
+ * does (a prefix shorter than {@link PERSON_PREFIX_MIN} symbols never matches).
+ */
+export function resolvePersonRef(store: InstanceChatRoleService['store'], raw: string):
+  { readonly id: string; readonly identities: readonly ChatIdentity[] } | { readonly error: 'principalNotFound' | 'principalAmbiguous'; readonly prefix: string } {
+  const text = raw.trim().toLowerCase();
+  const prefix = text.startsWith('cp_') ? text : `cp_${text}`;
+  const shown = `#${prefix}`;
+  if (prefix.length < 3 + PERSON_PREFIX_MIN || !/^cp_[a-z2-7]+$/u.test(prefix)) return { error: 'principalNotFound', prefix: shown };
+  const matches = store.principals.principals().filter(person => person.id.startsWith(prefix));
+  if (matches.length === 0) return { error: 'principalNotFound', prefix: shown };
+  if (matches.length > 1) return { error: 'principalAmbiguous', prefix: shown };
+  const id = matches[0]!.id;
+  return { id, identities: store.principals.identitiesOf(id).map(identity => ({ adapter: identity.adapter, userId: identity.userId })) };
 }
 
 /** Opening quote → closing quote: ASCII, Chinese curly quotes and corner brackets. */

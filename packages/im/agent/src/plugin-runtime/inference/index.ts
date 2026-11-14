@@ -8,6 +8,7 @@ export * from './environment-source.js';
 export * from './headless-host.js';
 export * from './host-identity.js';
 export * from './host.js';
+export * from './linked-owners.js';
 export * from './management.js';
 export * from './migration-preview.js';
 export * from './migration-record.js';

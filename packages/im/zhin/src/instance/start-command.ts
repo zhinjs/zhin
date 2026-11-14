@@ -69,6 +69,7 @@ import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
 import { createFeatureHost } from './feature-host-installer.js';
+import { PersonalPrincipalImportBook } from './chat-personal-principals.js';
 import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
   createRestartChatAuthorizer,
@@ -244,9 +245,20 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const databaseHost = createDatabaseHost(databaseConfig);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
+  // ADR 0060 P3: the Agent Host reads personal inference owners from the person ↔ Console links,
+  // which the feature host (created below, before anything runs) loads.
+  let chatPeople: import('./chat-people.js').ChatPeople | undefined;
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
+    chatLinks: () => chatPeople ? {
+      identitiesOf: consoleUserId => {
+        const link = chatPeople!.store.principals.linkOfConsoleUser(consoleUserId);
+        return link ? chatPeople!.store.principals.identitiesOf(link.principalId) : [];
+      },
+      linkedUsers: () => chatPeople!.store.principals.links().map(link => link.consoleUserId),
+    } : undefined,
   });
+  const personalPrincipalImports = new PersonalPrincipalImportBook({ projectRoot: options.root });
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
   const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
   let complete!: () => void;
@@ -257,6 +269,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots, projectRoot: options.root,
+    personalPrincipalImports,
     ...(controlChannel ? { gatewayMessages: controlChannel } : {}),
     afterLoad: async (roles, candidate, overrides, audit) => {
       await chatRoleMigration.complete(roles, {
@@ -265,8 +278,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         ...(audit ? { audit } : {}),
       });
       await featureOverrideMigration.complete(overrides, candidate);
+      // ADR 0060 §4.1 (P3): `ai.personalPrincipals` → people + Console links (no roles), once.
+      const seeds = agentHost?.personalPrincipalSeeds(candidate) ?? [];
+      if (seeds.length) {
+        await personalPrincipalImports.run({ seeds, people: featureHost.people, logger: getLogger('chat-roles'), ...(audit ? { audit } : {}) })
+          .catch(error => getLogger('chat-roles').warn(`ai.personalPrincipals 导入失败：${(error as Error).message}`));
+      }
     },
   });
+  chatPeople = featureHost.people;
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
@@ -733,8 +753,21 @@ function reportSelfChangeRecoverError(error: unknown): void {
   }));
 }
 
+/** The person ↔ Console links (ADR 0060 §2.4) the Agent Host reads personal inference owners from. */
+interface ChatConsoleLinks {
+  /** Identities of the person linked to a Console user (none when unlinked). */
+  identitiesOf(consoleUserId: string): readonly import('@zhin.js/core').ChatIdentity[];
+  /** Console users with a link. */
+  linkedUsers(): readonly string[];
+}
+
 interface ConfiguredAgentHost {
   close(): Promise<void>;
+  /**
+   * ADR 0060 §4.1 (P3): the configured `ai.personalPrincipals` owners as chat identities of the
+   * given generation (imported once as people + Console links).
+   */
+  personalPrincipalSeeds(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot | undefined): readonly import('./chat-personal-principals.js').PersonalPrincipalSeed[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
@@ -761,6 +794,8 @@ async function loadConfiguredAgentHost(options: Readonly<{
   projectRoot: string;
   database: import('@zhin.js/plugin-runtime').DatabaseHost;
   resolveSource: (reference: string | import('@zhin.js/plugin-runtime').EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
+  /** ADR 0060 P3: personal inference owners come from these links (late-bound: the chat stores load later). */
+  chatLinks?: () => ChatConsoleLinks | undefined;
 }>): Promise<ConfiguredAgentHost | undefined> {
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
@@ -802,32 +837,50 @@ async function loadConfiguredAgentHost(options: Readonly<{
     turnTraceStore,
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
+  // ADR 0060 P3: a Console user's personal inference owners are the identities of the person
+  // linked to them, addressed in the current generation under the current rootId. The
+  // `ai.personalPrincipals` field is only a seed (imported once by the feature host).
+  const linkedOwners = (consoleUserId: string): readonly import('@zhin.js/agent/personal-session').PersonalSessionOwner[] => {
+    const identities = options.chatLinks?.()?.identitiesOf(consoleUserId) ?? [];
+    if (!identities.length || !snapshotReader) return [];
+    const lease = snapshotReader.acquire();
+    try { return agentHost.personalOwnersOfIdentities({ rootId: inference.rootId, snapshot: lease.value, identities }); }
+    finally { lease.release(); }
+  };
+  const consoleUserOf = (principalId: string | undefined) => principalId ? /^user:(.+)$/u.exec(principalId)?.[1] : undefined;
   const inference = new agentHost.HostInference({ projectRoot, database: options.database, resolveSource: options.resolveSource,
-    personalOwners: Object.values(initialAi?.personalPrincipals ?? {}).flat(),
+    personalOwners: () => (options.chatLinks?.()?.linkedUsers() ?? []).flatMap(user => linkedOwners(user)),
     snapshots: () => {
       if (!snapshotReader) throw new Error('Inference Snapshot reader is not attached');
       return snapshotReader;
     },
   });
-  const principalBindings = Object.fromEntries(Object.entries(initialAi?.personalPrincipals ?? {}).map(([id, owners]) => [id,
-    owners.map(owner => {
-      if (owner.rootId !== inference.rootId) throw new Error('Personal principal binding belongs to another Host');
-      return personalSessionOwnerId(owner);
-    }),
-  ]));
+  const principalBindings = (principalId: string): readonly string[] => {
+    const user = consoleUserOf(principalId);
+    return user ? linkedOwners(user).map(owner => personalSessionOwnerId(owner)) : [];
+  };
+  const personalLabel = (owner: import('@zhin.js/agent/personal-session').PersonalSessionOwner) => `${owner.platform} · ${owner.endpoint} · ${owner.subjectId}`;
   let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
   const configured: ConfiguredAgentHost = {
     close: () => inference.close(),
+    personalPrincipalSeeds: snapshot => Object.entries(initialAi?.personalPrincipals ?? {}).flatMap(([key, owners]) => owners.map(owner => {
+      const identity = agentHost.chatIdentityOfPersonalOwner(snapshot, owner);
+      return Object.freeze({ key, adapterId: String(owner.adapterId), subjectId: String(owner.subjectId),
+        ...(identity ? { identity } : {}), ...(owner.rootId !== inference.rootId ? { foreignRoot: true } : {}) });
+    })),
     ambientModels: input => inference.ambientModels(input),
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),
         principal: input => agentHost.resolveInferenceManagementPrincipal({ ...input, hostOwnerId: inference.hostOwnerId, bindings: principalBindings }),
         owners: input => {
-          if (input.scope === 'full') return [{ id: inference.hostOwnerId, label: '部署模型', kind: 'host' }];
-          const bound = input.principalId ? initialAi?.personalPrincipals?.[input.principalId] : undefined;
-          if (!bound?.length) throw new agentHost.InferenceManagementError('forbidden');
-          return bound.map(owner => ({ id: personalSessionOwnerId(owner), label: `${owner.platform} · ${owner.endpoint} · ${owner.subjectId}`, kind: 'personal' as const, personal: owner }));
+          const user = consoleUserOf(input.principalId);
+          const personal = (user ? linkedOwners(user) : [])
+            .map(owner => ({ id: personalSessionOwnerId(owner), label: personalLabel(owner), kind: 'personal' as const, personal: owner }));
+          // ADR 0060 P3: the Console may switch to the personal owners of the person linked to the caller.
+          if (input.scope === 'full') return [{ id: inference.hostOwnerId, label: '部署模型', kind: 'host' as const }, ...personal];
+          if (!personal.length) throw new agentHost.InferenceManagementError('forbidden');
+          return personal;
         },
       });
     },

@@ -53,7 +53,12 @@ export interface HostInferenceOptions {
   readonly database: DatabaseHost;
   readonly snapshots: () => SnapshotReader;
   readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
-  readonly personalOwners: readonly PersonalSessionOwner[];
+  /**
+   * Personal inference owners. ADR 0060 P3: a function is read on every management lease, so the
+   * Host can answer from the person ↔ Console links (and the current adapters) instead of a list
+   * fixed at start.
+   */
+  readonly personalOwners: readonly PersonalSessionOwner[] | (() => readonly PersonalSessionOwner[]);
   /** Trusted process-private in-flight evidence only; not a Console or persistent audit sink. */
   readonly observeCredentialTransport?: (fact: CredentialTransportFact) => void | Promise<void>;
 }
@@ -502,7 +507,7 @@ export class HostInference {
       sessions: new InferenceSessionManagement({
         rootId: this.rootId,
         hostOwnerId: this.hostOwnerId,
-        owners: this.options.personalOwners,
+        owners: typeof this.options.personalOwners === 'function' ? this.options.personalOwners() : this.options.personalOwners,
         sessions: this.sessions,
         repository: this.repository,
         directory: createPersonalSessionDirectory(() => this.options.database),

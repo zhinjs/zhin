@@ -48,6 +48,8 @@ export interface FeatureHostOptions {
    * Console user removes that user's person link (ADR 0060 §2.4). Absent standalone.
    */
   readonly gatewayMessages?: Readonly<{ onMessage(listener: (message: GatewayToInstanceMessage) => void): () => void }>;
+  /** ADR 0060 §4.1 (P3): the `ai.personalPrincipals` import record (「需要你处理」 and its acknowledgement). */
+  readonly personalPrincipalImports?: import('./chat-personal-principals.js').PersonalPrincipalImportBook;
 }
 
 /** Console user lifecycle reasons that end a person ↔ Console link (`ConsoleCredentialRevocationReason`). */
@@ -162,7 +164,8 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, keys);
   const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames, claim, people, bindCodes,
-    ...(chatRoleImports ? { chatRoleImports } : {}) });
+    ...(chatRoleImports ? { chatRoleImports } : {}),
+    ...(options.personalPrincipalImports ? { personalPrincipalImports: options.personalPrincipalImports } : {}) });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
     if (deps.audit) audit = deps.audit;

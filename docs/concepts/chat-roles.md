@@ -96,10 +96,10 @@ interface PlatformStanding {
 | 名单 | 现状 | 方向 |
 | --- | --- | --- |
 | 聊天角色 `chat_roles` | 唯一事实来源；授予属于「人」，一个人可有多个平台身份（ADR 0060 P2） | — |
-| `ai.personalPrincipals` | 仍从配置读取，只表达个人推理配置归谁，不授予角色 | P3 改为「人 ↔ Console 账号」链接，配置字段只作一次性导入 |
+| `ai.personalPrincipals` | 首次启动导入为「人 ↔ Console 账号」链接（不授予角色，P3）；之后个人推理主体只读链接，配置中的字段仅告警「已导入，数据库为准」 | P4 从 schema 移除（出现时告警并忽略） |
 | 适配器 `master` / `trusted`、`ai.trigger.masters` / `trusted` | 只作**种子**：首次启动导入；之后再出现不自动授予，进入 Console「需要你处理」等待确认导入（见[升级指南](../migrations/chat-roles.md)） | 长期作为种子格式支持 |
 | 插件自建名单（`masters` 等） | 不推荐 | 改用 `isOwner` / `hasChatRole` / `chatRolesToken`（见下节） |
-| Console 账号 | 另一个主体体系：Console 权限不等于聊天角色；可与聊天中的「人」一对一链接（不传递权限，P2） | P3：Console「聊天成员」页与个人推理主体改读链接 |
+| Console 账号 | 另一个主体体系：Console 权限不等于聊天角色；可与聊天中的「人」一对一链接（不传递权限）。Console「聊天成员」页、Sandbox「以我的聊天身份发言」与个人推理主体都读这条链接（P3） | — |
 
 ### 人、平台身份与 Console 链接 {#people}
 
@@ -109,6 +109,8 @@ interface PlatformStanding {
 - **把聊天身份绑定到我**：Console 用户（权限 `self.chat-identity`，所有内置角色默认带）获取一次性绑定码（8 位、10 分钟、单次），在聊天中**私聊**机器人发送 `绑定 <码>`（`bind <code>`）。群聊中发送的正确码立即作废；模拟适配器上不接受；同一身份已属于别人（已链接其他 Console 用户或已有其他身份）时拒绝；绑定会把角色带到另一个身份上时，需要持有全局 `iam.manage` 的 Console 用户生成的码。一个 Console 用户只链接一个人，反之亦然；链接**不传递任何权限**。
 - Console 用户被删除或禁用时，网关通知实例删除其链接（角色不受影响）。授予记录的 `grantedBy` 是已链接的 Console 用户时，Console 显示链接的人名（`grantedByName`）。
 - 入站消息上 Runtime 写入只读的 `sender.chatPrincipal`（人 id）；适配器或插件自带的同名字段被丢弃。最近发言时间与显示名缓存（供 Console 选择器用，不参与鉴权）保留 90 天。
+- **Sandbox 的发言者**：Console Sandbox 默认「以我的聊天身份发言」——服务端按连接上的 Console 用户找到其链接的人在 Sandbox 上的身份，角色按这个人的授予解析（全局 owner 在 Sandbox 里就是 owner）。没有 Sandbox 身份时页面提供「在 Sandbox 上创建我的聊天身份」（`chat-identities.simulated.ensure`，只作用于模拟适配器）。关闭开关后客户端自填的发送者 ID 一律是**模拟身份，无角色**：服务端把它写成保留 id `~sim:<id>`（以 `~` 开头的 id 不是聊天身份，不能持有、被授予或解析任何角色），信任档位最低；填 owner 的 id 也不会成为 owner。没有 Console 用户（未登录的引导令牌、`--standalone`）时全部按模拟身份处理。
+- 聊天中 `角色 授予` 的目标除 `@提及` 与用户 id 外，还可以写 `#<人 id 前缀>`（如 `#cp_ab12cd`，前缀唯一时）引用一个人，便于给多平台的同一人授予全局角色。
 - 导出 / 导入：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例，需要全局 `iam.manage`；导入只新增或提升，不降级、不删除、不改挂已属于他人的身份）。
 
 第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用实例日志或 `zhin status` 中的一次性认领码，在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。

@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0060：聊天身份与角色的唯一事实来源——人、平台身份与角色绑定
 
-状态：已接受（Accepted，2026-11-14）。所有者按「决定」一节（原「未决问题」）中的推荐结论定案；P0、P1、P2 已实施，P3、P4 待实施。
+状态：已接受（Accepted，2026-11-14）。所有者按「决定」一节（原「未决问题」）中的推荐结论定案；P0–P3 已实施，P4 待实施。
 
 关联：ADR 0049（Console 访问控制）、ADR 0056（聊天角色）、ADR 0057（配置与状态存放：种子导入）、ADR 0059（Console 账号放 `.zhin/gateway.db`）、ADR 0044（能力画像，不按平台名分支）。来源：issue zhinjs/zhin#1250 的部署反馈（`identity-lists-fragmented`、`chat-role-bootstrap`、`sandbox-console-identity-owner`、`role-grant-identity-picker`）。
 
@@ -324,6 +324,14 @@ export type ChatScopeRef =
 - **导出 / 导入**：经运行中实例的 Console RPC `chat-principals.export` / `chat-principals.import`（全局 `iam.manage`；本地网关套接字下 CLI 以本地 owner 身份调用）。导入时角色绑定到身份**当前**所属的人，不按文件里的人 id 改挂；已属于他人的身份跳过。
 - **授予者显示名（Q12）**：`chat-roles.list` 等返回的条目新增 `grantedByName`（`grantedBy` 为 `user:<id>` / `console:user:<id>` 且已链接时）与 `principalId`。Console 显示属 P3。
 - 新 RPC 之外还加了 `chat-identities.me`（`self.chat-identity`：自己的链接、身份、角色与未用的绑定码到期时间；无全局 owner 且调用者持有全局 `iam.manage` 时返回 `suggestGlobalOwner`，供 §3.1 的「设为全局 owner」流程）。
+
+### 实施中补充的约定（P3）
+
+- **模拟发送者的保留 id**：Sandbox 把客户端自填的发送者 id 写成 `~sim:<id>`；核心把**所有以 `~` 开头的发送者 id** 视为「不是聊天身份」（`isChatIdentity` 为 false，`ChatRoleService.heldBy` 返回空），因此无论 `entriesFor`、`hasRole` 还是宿主全局判断（`senderIsGlobalOwner`）都解析不出角色，授予 / 绑定 / 导入也无法写入这样的身份，最近发言人也不记录。选这种「id 命名空间」而不是在 sender 上加标记，是因为现有的宿主全局判断直接按 `sender.id` 查库，命名空间一次覆盖全部路径。
+- **Sandbox 上「我的聊天身份」从哪来**：绑定码在模拟适配器上不接受，所以新增 `chat-identities.simulated.ensure`（`self.chat-identity`）：为调用者的人在每个已加载的模拟适配器上建立身份 `console-<Console 用户 id>`（`link_method: console`）；调用者还没有人时新建并链接（`linked_via: console`）。Console 认证本身就是控制权证明；只作用于能力画像 `runtime.sandbox` 的适配器，真实平台仍只能用绑定码或运营者归并。`ChatRoleReader.consoleSpeaker(conversation, consoleUserId)` 返回该人在会话所属适配器上的身份；Sandbox 只在客户端请求 `asMe` 且连接上是已登录 Console 用户（`user` / `api-token`）时使用它，否则按模拟身份并在回显中给出 `asMeUnavailable`。
+- **`ai.personalPrincipals` 的导入记录**：单独的 `.zhin/personal-principals-import.json`（不改 v2 角色迁移记录）；条目按 `(配置键, adapterId, subjectId)` 幂等，`pending`（适配器未加载）下次启动重试，`imported` / `skipped` 不再处理，配置中仍出现时只告警「已导入，数据库为准」。导入时 Console 用户已链接则身份归入已链接的人；未链接则取第一个尚未链接的已有人或新建，再链接（`import`）；身份已属于他人时跳过并告警。个人推理主体按链接的人的身份 × 该适配器的每个账号计算，`rootId` 用当前目录。
+- **个人推理主体切换**：推理管理 HTTP 仍以 `agent.configure` 门禁（未放宽到「本人」）；`full` 范围下请求 `?owner=` 只接受调用者自己链接的人的个人主体。
+- **Q2 提示只给本人**：`chat-roles.imported` 只在「需要你处理」的查看者正是被 `ai.personalPrincipals` 链接的 Console 用户、且尚无全局 owner 时提示「是否同时设为全局 owner」（实例看不到网关里其他用户是否是 Console 所有者）；确认走既有的全局 `chat-roles.grant`（全局 `iam.manage`，审计 `chat-roles.grant`）。
 
 ## 落盘位置（计划）
 

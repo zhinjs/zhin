@@ -16,3 +16,4 @@ export { HostInference } from '@zhin.js/agent/runtime';
 export { registerInferenceRoutes } from '../inference/routes.js';
 export { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
 export { InferenceManagementError } from '@zhin.js/agent/runtime';
+export { chatIdentityOfPersonalOwner, personalOwnersOfIdentities } from '@zhin.js/agent/runtime';

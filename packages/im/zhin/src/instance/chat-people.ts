@@ -302,6 +302,46 @@ export class ChatPeople {
   }
 
   /**
+   * ADR 0060 §4.1 / §4.3: one `ai.personalPrincipals[user:<id>]` entry. The Console user's person
+   * is the one already linked to it; else the first configured identity's person when that one is
+   * not linked yet; else a new person — linked to the user (`import`). Identities without a person
+   * join it; an identity owned by another person stays there (reported). Never grants a role.
+   */
+  async importPersonalPrincipal(input: Readonly<{ consoleUserId: string; identities: readonly ChatIdentity[]; actor: string }>): Promise<Readonly<{
+    principalId: string; linked: boolean; joined: readonly ChatIdentity[]; ownedElsewhere: readonly ChatIdentity[]; linkConflict: boolean;
+  }>> {
+    if (!input.consoleUserId || input.consoleUserId.length > 128) throw new ChatPeopleError('invalid', 'consoleUserId 无效');
+    const identities = input.identities.filter(isChatIdentity);
+    const result = await this.#store.exclusive(async () => {
+      this.#store.assertPersistent();
+      const principals = this.#store.principals;
+      let principalId = principals.linkOfConsoleUser(input.consoleUserId)?.principalId;
+      let linked = false;
+      let linkConflict = false;
+      if (!principalId) {
+        const candidate = identities.map(identity => principals.principalOf(identity)).find(person => person && !principals.linkOf(person.id));
+        principalId = candidate?.id ?? await principals.createPrincipal({ createdBy: `import:${input.actor}` });
+        await principals.setLink({ principalId, consoleUserId: input.consoleUserId, linkedVia: 'import' });
+        linked = true;
+      }
+      const joined: ChatIdentity[] = [];
+      const ownedElsewhere: ChatIdentity[] = [];
+      for (const identity of identities) {
+        const owner = principals.principalOf(identity)?.id;
+        if (owner === principalId) continue;
+        if (owner) { ownedElsewhere.push(identity); if (principals.linkOf(owner)) linkConflict = true; continue; }
+        await principals.assignIdentity(identity, principalId, { method: 'import', by: input.actor });
+        joined.push(Object.freeze({ adapter: identity.adapter, userId: identity.userId }));
+      }
+      return { principalId, linked, joined, ownedElsewhere, linkConflict };
+    });
+    this.#audit({ actor: input.actor, action: 'chat-roles.import', target: result.principalId, outcome: 'ok',
+      detail: Object.freeze({ source: 'ai.personalPrincipals', consoleUserId: input.consoleUserId, linked: result.linked,
+        identities: result.joined.map(identityText), skipped: result.ownedElsewhere.map(identityText) }) });
+    return Object.freeze({ ...result, joined: Object.freeze(result.joined), ownedElsewhere: Object.freeze(result.ownedElsewhere) });
+  }
+
+  /**
    * ADR 0060 §5.4: gives the Console user's person an identity on each simulation adapter alias
    * (`console-<consoleUserId>`), creating the person and its Console link (`console`) when the
    * user has none. Console authentication is the proof, so the identity is the user's own; only
