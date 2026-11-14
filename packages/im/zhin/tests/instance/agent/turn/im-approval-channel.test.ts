@@ -56,14 +56,23 @@ describe('resolveImApprover', () => {
     expect(resolveImApprover({ ...base, ownerId: 'alice' })).toEqual({ kind: 'owner', subjectId: 'alice' });
   });
 
-  it('lets a present admin initiator confirm in their own private chat when the owner cannot answer there', () => {
-    expect(resolveImApprover({ ...base, isAdmin: true, ownerId: 'boss' })).toEqual({ kind: 'initiator', subjectId: 'alice' });
-    expect(resolveImApprover({ ...base, isAdmin: true })).toEqual({ kind: 'initiator', subjectId: 'alice' });
+  it('never makes an admin an approver unless approval.adminSelfApprove is on (default off, #1250 owner review)', () => {
+    expect(resolveImApprover({ ...base, isAdmin: true, ownerId: 'boss' }))
+      .toMatchObject({ kind: 'none', reason: expect.stringContaining('owner cannot answer') });
+    expect(resolveImApprover({ ...base, isAdmin: true })).toMatchObject({ kind: 'none', reason: expect.stringContaining('no bot owner') });
+    expect(resolveImApprover({ ...base, isAdmin: true, adminSelfApprove: false })).toMatchObject({ kind: 'none' });
+    // The owner path is unchanged by the switch.
+    expect(resolveImApprover({ ...base, scope: 'group', isAdmin: true, ownerId: 'boss' })).toEqual({ kind: 'owner', subjectId: 'boss' });
   });
 
-  it('does not fall back to admin self-approval in a group or channel without an owner (#1250 review)', () => {
+  it('lets a present admin initiator confirm in their own private chat when the switch is on and the owner cannot answer there', () => {
+    expect(resolveImApprover({ ...base, isAdmin: true, ownerId: 'boss', adminSelfApprove: true })).toEqual({ kind: 'initiator', subjectId: 'alice' });
+    expect(resolveImApprover({ ...base, isAdmin: true, adminSelfApprove: true })).toEqual({ kind: 'initiator', subjectId: 'alice' });
+  });
+
+  it('does not fall back to admin self-approval in a group or channel without an owner, even with the switch on (#1250 review)', () => {
     for (const scope of ['group', 'channel'] as const) {
-      expect(resolveImApprover({ ...base, scope, isAdmin: true }))
+      expect(resolveImApprover({ ...base, scope, isAdmin: true, adminSelfApprove: true }))
         .toMatchObject({ kind: 'none', reason: expect.stringContaining('no bot owner') });
     }
   });
@@ -71,8 +80,8 @@ describe('resolveImApprover', () => {
   it('never makes an ordinary member, an absent initiator or an unknown sender an approver', () => {
     expect(resolveImApprover({ ...base, ownerId: 'boss' })).toMatchObject({ kind: 'none', reason: expect.stringContaining('owner cannot answer') });
     expect(resolveImApprover(base)).toMatchObject({ kind: 'none', reason: expect.stringContaining('no bot owner') });
-    expect(resolveImApprover({ ...base, isAdmin: true, initiatorPresent: false })).toMatchObject({ kind: 'none' });
-    expect(resolveImApprover({ ...base, senderId: ' ', isAdmin: true })).toMatchObject({ kind: 'none' });
+    expect(resolveImApprover({ ...base, isAdmin: true, initiatorPresent: false, adminSelfApprove: true })).toMatchObject({ kind: 'none' });
+    expect(resolveImApprover({ ...base, senderId: ' ', isAdmin: true, adminSelfApprove: true })).toMatchObject({ kind: 'none' });
   });
 });
 

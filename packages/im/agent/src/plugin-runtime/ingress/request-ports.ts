@@ -237,7 +237,8 @@ export function createRuntimeQuestionPort(
  * - `master`: the sender is the global owner (unchanged).
  * - `owner`: the endpoint owner, asked in this conversation. Only in a shared conversation (or when the
  *   owner is the sender): in somebody else's private chat the owner can never answer.
- * - `initiator`: a zhin `admin` (held at endpoint level or above, ADR 0056 §2) who started this live turn
+ * - `initiator`: only with `ai.agent.approval.adminSelfApprove: true` (default off), a zhin `admin` (held at
+ *   endpoint level or above, ADR 0056 §2) who started this live turn
  *   in their private chat confirms it themselves, and only for requests the policy marks admin-approvable
  *   (`adminMayApprove`; see {@link createRuntimeApprovalPort}). Never in a group or channel (with no owner
  *   configured there nobody can approve), and never for merged, ambient, scene or live-room turns, where
@@ -261,6 +262,11 @@ export interface ImApproverInput {
   readonly scope?: 'private' | 'group' | 'channel';
   /** The sender addressed the bot in this live turn (not merged, ambient, scene or live-room). */
   readonly initiatorPresent: boolean;
+  /**
+   * `ai.agent.approval.adminSelfApprove` (#1250 owner review). Default false: the `initiator` branch is never
+   * used and such turns resolve as before (the owner, or nobody).
+   */
+  readonly adminSelfApprove?: boolean;
 }
 
 /**
@@ -280,7 +286,9 @@ export function resolveImApprover(input: ImApproverInput): ImApprover {
   if (ownerId && (ownerId === senderId || input.scope !== 'private')) return { kind: 'owner', subjectId: ownerId };
   // #1250 review: admin self-approval only in the admin's own private chat; a group without an owner
   // configured has nobody who can approve, and no admin stands in for the owner there.
-  if (input.isAdmin && input.initiatorPresent && input.scope === 'private') return { kind: 'initiator', subjectId: senderId };
+  if (input.adminSelfApprove === true && input.isAdmin && input.initiatorPresent && input.scope === 'private') {
+    return { kind: 'initiator', subjectId: senderId };
+  }
   return {
     kind: 'none',
     reason: ownerId

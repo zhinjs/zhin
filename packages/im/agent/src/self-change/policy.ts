@@ -232,6 +232,7 @@ export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze
   // 硬闸与执行审批
   'ai.agent.toolHardGate',
   'ai.agent.execApprovalMode',
+  'ai.agent.approval.adminSelfApprove',
   'ai.agent.execSecurity',
   'ai.agent.execPreset',
   'ai.agent.execAllowlist',

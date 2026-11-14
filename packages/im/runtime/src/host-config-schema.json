@@ -1580,6 +1580,23 @@
                 "security": true
               }
             },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "adminSelfApprove": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Let a zhin admin (held at endpoint level or above) approve, once, in their own private chat, the operations a policy marks admin-approvable (tools tagged admin_approvable such as schedule_add, session memory) when the bot owner cannot answer there. Default false: only the bot owner approves. Never covers sensitive files, shell commands, global/platform memory, human-only or dangerous tools, or groups without an owner.",
+                  "x-descriptionZh": "允许端点层或以上的 zhin admin 在自己的私聊里、主人无法作答时，本人一次性批准策略标为管理员可批的操作（标了 admin_approvable 的工具，如 schedule_add；session 记忆）。默认 false：只有主人能批。敏感文件、Shell 命令、global / platform 记忆、仅限人工与危险工具、无主人的群聊始终不在此列。",
+                  "x-zhin-config": {
+                    "security": true
+                  }
+                }
+              },
+              "description": "IM approval options.",
+              "x-descriptionZh": "IM 审批选项。"
+            },
             "toolExecution": {
               "type": "string",
               "enum": [

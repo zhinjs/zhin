@@ -187,6 +187,8 @@ outline: [2, 3]
 | `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | 否 | `0` | 每个群每分钟可发起的回合数；0 不限。 |
 | `ai.agent.usageQuota.exemptOwner` | boolean | 否 | `true` | 主人不受限制。 |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
+| `ai.agent.approval` | object | 否 | — | IM 审批选项。 |
+| `ai.agent.approval.adminSelfApprove` | boolean | 否 | `false` | 允许端点层或以上的 zhin admin 在自己的私聊里、主人无法作答时，本人一次性批准策略标为管理员可批的操作（标了 admin_approvable 的工具，如 schedule_add；session 记忆）。默认 false：只有主人能批。敏感文件、Shell 命令、global / platform 记忆、仅限人工与危险工具、无主人的群聊始终不在此列。 |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | 否 | — | 同一模型步骤中的工具调用调度方式。 |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | 否 | — | 可选模型尺寸提示；空字符串表示清除提示。 |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |

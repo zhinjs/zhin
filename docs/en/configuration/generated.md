@@ -187,6 +187,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | no | `0` | Turns one group may start per minute; 0 = unlimited. |
 | `ai.agent.usageQuota.exemptOwner` | boolean | no | `true` | The owner is never limited. |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for main Agent commands. |
+| `ai.agent.approval` | object | no | — | IM approval options. |
+| `ai.agent.approval.adminSelfApprove` | boolean | no | `false` | Let a zhin admin (held at endpoint level or above) approve, once, in their own private chat, the operations a policy marks admin-approvable (tools tagged admin_approvable such as schedule_add, session memory) when the bot owner cannot answer there. Default false: only the bot owner approves. Never covers sensitive files, shell commands, global/platform memory, human-only or dangerous tools, or groups without an owner. |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | no | — | How tool calls in one model step are scheduled. |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | no | — | Optional model-size hint; an empty string clears the hint. |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |

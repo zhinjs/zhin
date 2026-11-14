@@ -390,7 +390,7 @@ my-plugin/
 | `description` | Yes | What the tool does, for the model |
 | `inputSchema` | No | `Schema.object(...)` (recommended, from `zhin.js`), Zod 4 object, or a JSON Schema with an `object` root; validated and populated with defaults before execution |
 | `requiresApproval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
-| `tags` | No | Tags. `admin_approvable` (`ADMIN_APPROVABLE_TOOL_TAG`) lets a zhin `admin` (held at endpoint level or above) approve the tool's ordinary approval (`always` / `once` / `on-risk`) once, themselves, in their own private chat; without it only the bot owner approves. No effect on `'human'` or dangerous tools |
+| `tags` | No | Tags. `admin_approvable` (`ADMIN_APPROVABLE_TOOL_TAG`) lets a zhin `admin` (held at endpoint level or above), when `ai.agent.approval.adminSelfApprove` is on (default off), approve the tool's ordinary approval (`always` / `once` / `on-risk`) once, themselves, in their own private chat; without it only the bot owner approves. No effect on `'human'` or dangerous tools |
 | `risk` | No | `'dangerous' \| 'safe'`; `dangerous` goes through the hard gate, see [Declare a dangerous tool](#declare-a-dangerous-tool-hard-gate) |
 | `riskCategory` | No | `'member' \| 'publish' \| 'funds' \| 'identity'`, shown on the approval card; `funds` is disabled by default |
 | `platforms` | No | Restrict to platforms, e.g. `['icqq']`; empty means all |

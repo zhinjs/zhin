@@ -28,6 +28,8 @@ describe('approval policy snapshot (#1250)', () => {
     expect(approvalPolicySnapshot({ execApprovalMode: 'auto' }).fingerprint).not.toBe(ask.fingerprint);
     expect(approvalPolicySnapshot({ execApprovalMode: 'ask', injectionGuard: { confirmHighRisk: 'off' } }).fingerprint).not.toBe(ask.fingerprint);
     expect(ask.summary).toContain('execApprovalMode=ask');
+    // #1250 owner review: turning admin self-approval on changes who can approve.
+    expect(approvalPolicySnapshot({ execApprovalMode: 'ask', approval: { adminSelfApprove: true } }).fingerprint).not.toBe(ask.fingerprint);
     expect(formatPolicyStamp(ask)).toMatch(/^\[当时的策略 policy@[0-9a-f]{8}: /);
   });
 

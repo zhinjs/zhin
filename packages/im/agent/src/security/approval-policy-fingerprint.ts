@@ -21,6 +21,7 @@ export const APPROVAL_POLICY_REVISION = 2;
 /** Configuration keys that decide whether a tool call is approved, asked or refused. */
 const APPROVAL_KEYS = [
   'execApprovalMode',
+  'approval',
   'masterShell',
   'masterShellApprovalMode',
   'execSecurity',

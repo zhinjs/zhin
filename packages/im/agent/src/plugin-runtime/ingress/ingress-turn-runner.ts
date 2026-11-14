@@ -341,6 +341,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             ownerId,
             scope: message.conversation.kind,
             initiatorPresent,
+            adminSelfApprove: service.getAgentConfig()?.approval?.adminSelfApprove === true,
           });
           const approvalInteraction = approver.kind !== 'none'
             ? im.createInteraction(message, { subjectId: approver.subjectId })
