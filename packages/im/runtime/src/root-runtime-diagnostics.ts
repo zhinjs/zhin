@@ -172,22 +172,31 @@ export function canPrepareSubtrees(
   return subtreeUnsupportedSources(plan, runtimeInputSources, sourceOwnership, dependencies).length === 0;
 }
 
+interface SubtreeUnsupportedSource {
+  readonly source: string;
+  /** `feature`: inside a Feature package or loaded by a Feature entry; `unowned`: no ownership record. */
+  readonly kind: 'feature' | 'unowned';
+}
+
 function subtreeUnsupportedSources(
   plan: GenerationInvalidationPlan,
   runtimeInputSources: ReadonlySet<string>,
   sourceOwnership: SourceOwnershipIndex,
   dependencies?: (source: string) => readonly string[],
-): readonly string[] {
+): readonly SubtreeUnsupportedSource[] {
   const supported = (role: string) => role === 'plugin' || role === 'schema' || role === 'capability';
-  return plan.changed.filter((source) => {
-    if (runtimeInputSources.has(normalizeSourcePath(source))) return false;
+  return plan.changed.flatMap((source): SubtreeUnsupportedSource[] => {
+    if (runtimeInputSources.has(normalizeSourcePath(source))) return [];
     const own = sourceOwnership.recordsFor(source);
     // A support module counts through the loaded entries that import it.
     const records = own.length > 0 ? own : (dependencies?.(source) ?? [])
       .filter((entry) => normalizeSourcePath(entry) !== normalizeSourcePath(source))
       .flatMap((entry) => sourceOwnership.recordsFor(entry));
-    // No record at all: an unclaimed file, already resolved to a capability or its owner subtree.
-    return !records.every((record) => supported(record.role));
+    if (records.length > 0 && records.every((record) => supported(record.role))) return [];
+    // A file without any ownership record is not proven to be reloaded by the subtree: inside a
+    // Feature package it may be loaded by the provider, which a subtree reload keeps (#1250).
+    const feature = records.length > 0 || sourceOwnership.isInFeaturePackage(source);
+    return [{ source, kind: feature ? 'feature' : 'unowned' }];
   });
 }
 
@@ -325,8 +334,13 @@ function rootFallbackReason(ctx: PrepareInvalidatedGenerationContext, plan: Gene
   const unsupported = subtreeUnsupportedSources(
     plan, ctx.runtimeInputSources, ctx.sourceOwnership, ctx.modules.affectedSources?.bind(ctx.modules),
   );
-  return unsupported.length > 0
-    ? `Feature provider modules changed; a subtree reload would keep the old provider: ${unsupported.join(', ')}`
+  const feature = unsupported.filter((item) => item.kind === 'feature').map((item) => item.source);
+  if (feature.length > 0) {
+    return `Feature provider modules changed; a subtree reload would keep the old provider: ${feature.join(', ')}`;
+  }
+  const unowned = unsupported.map((item) => item.source);
+  return unowned.length > 0
+    ? `changed files are not a Plugin entry, schema, capability or a module they import: ${unowned.join(', ')}`
     : 'no narrower reload path applies to this change set';
 }
 

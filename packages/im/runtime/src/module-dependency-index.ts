@@ -29,8 +29,24 @@ export interface ModuleDependencyAnalysis {
 /** Decides whether a module imported by package name is reloaded together with its importer. */
 export type RevisionablePredicate = (source: string) => boolean;
 
+export interface ModuleDependencyIndexOptions {
+  /**
+   * Whether a package-name import that resolved to this project source is followed (#1250).
+   * Without it every resolution outside `node_modules` is followed. The module runtime limits it
+   * to its watch roots: a workspace-linked framework package outside them (pnpm symlinks realpath
+   * into the framework sources) never reports a change, so walking it only costs startup time.
+   */
+  readonly followPackageImport?: (source: string) => boolean;
+}
+
 /** Tracks the local import closure of every module entry loaded by the runtime. */
 export class ModuleDependencyIndex {
+  readonly #followPackageImport?: (source: string) => boolean;
+
+  constructor(options: ModuleDependencyIndexOptions = {}) {
+    this.#followPackageImport = options.followPackageImport;
+  }
+
   readonly #dependenciesByEntry = new Map<string, ReadonlySet<string>>();
   readonly #entriesByDependency = new Map<string, Set<string>>();
   readonly #commonJsSourcesByEntry = new Map<string, ReadonlySet<string>>();
@@ -102,6 +118,11 @@ export class ModuleDependencyIndex {
     }
   }
 
+  /** Marks every entry for re-analysis on its next load (e.g. the followed package roots changed). */
+  invalidateAll(): void {
+    for (const entry of this.#dependenciesByEntry.keys()) this.#dirtyEntries.add(entry);
+  }
+
   clear(): void {
     this.#dependenciesByEntry.clear();
     this.#entriesByDependency.clear();
@@ -142,6 +163,30 @@ export class ModuleDependencyIndex {
     return Object.freeze([...(this.#entriesByDependency.get(normalized) ?? [])]
       .filter((entry) => entry !== normalized && !this.#reloadsThrough(entry, normalized, revisionable))
       .sort());
+  }
+
+  /**
+   * Package-name import targets (#1250) to load fresh when `source` changes: the targets on the
+   * recorded import paths to it, and every target in a package that contains a changed file
+   * (`packageOf`). Targets of packages that did not change are left out: they keep one instance.
+   */
+  changedPackageImportTargets(
+    source: string,
+    packageOf: (file: string) => string | undefined,
+  ): readonly string[] {
+    const normalized = normalizeSourcePath(source);
+    const result = new Set<string>();
+    const changedPackage = packageOf(normalized);
+    for (const crossings of this.#crossingsByEntry.values()) {
+      for (const hop of crossings.get(normalized) ?? []) {
+        if (packageOf(hop)) result.add(hop);
+      }
+      if (!changedPackage) continue;
+      for (const hops of crossings.values()) {
+        for (const hop of hops) if (packageOf(hop) === changedPackage) result.add(hop);
+      }
+    }
+    return Object.freeze([...result].sort());
   }
 
   #reloadsThrough(entry: string, dependency: string, revisionable: RevisionablePredicate): boolean {
@@ -203,7 +248,7 @@ export class ModuleDependencyIndex {
         continue;
       }
       const packaged = resolvePackageImport(source, specifier);
-      if (packaged) {
+      if (packaged && (this.#followPackageImport?.(packaged) ?? true)) {
         await this.#visit(entry, packaged, dependencies, commonJsSources, crossings, visited, [...hops, packaged]);
       }
     }

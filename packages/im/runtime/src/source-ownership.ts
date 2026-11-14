@@ -26,6 +26,8 @@ export class SourceOwnershipIndex {
   readonly #packages: PackageOwner[] = [];
   readonly #watchRoots = new Map<string, ModuleWatchRoot>();
   readonly #revisionableRoots = new Set<string>();
+  readonly #featureRoots = new Set<string>();
+  readonly #childPluginManifests = new Set<string>();
 
   static empty(): SourceOwnershipIndex {
     return new SourceOwnershipIndex();
@@ -63,9 +65,11 @@ export class SourceOwnershipIndex {
         role: 'manifest',
         owner: node.id,
       });
+      if (node.parent !== undefined) index.addChildPluginManifest(resolve(node.package.root, 'package.json'));
       for (const requirement of node.features) {
         const packageRoot = resolve(requirement.package.root);
         index.addPackageRoot(packageRoot, node.id);
+        index.addFeaturePackageRoot(packageRoot);
         index.add({
           source: resolve(packageRoot, 'package.json'),
           role: 'manifest',
@@ -155,6 +159,28 @@ export class SourceOwnershipIndex {
 
   addRevisionableRoot(packageRoot: string): void {
     this.#revisionableRoots.add(normalizeSource(packageRoot));
+  }
+
+  /**
+   * Whether the source is the `package.json` of a mounted child Plugin (not the Root project):
+   * its `version` is part of the committed Plugin tree (`packageVersion`, #1250).
+   */
+  isChildPluginManifest(source: string): boolean {
+    return this.#childPluginManifests.has(normalizeSource(source));
+  }
+
+  addChildPluginManifest(source: string): void {
+    this.#childPluginManifests.add(normalizeSource(source));
+  }
+
+  /** Whether the source lies inside the package root of a Feature some mounted Plugin requires. */
+  isInFeaturePackage(source: string): boolean {
+    const normalized = normalizeSource(source);
+    return [...this.#featureRoots].some((root) => contains(root, normalized));
+  }
+
+  addFeaturePackageRoot(packageRoot: string): void {
+    this.#featureRoots.add(normalizeSource(packageRoot));
   }
 
   watchRoots(): readonly ModuleWatchRoot[] {

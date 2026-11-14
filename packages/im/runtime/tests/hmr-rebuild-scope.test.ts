@@ -58,6 +58,19 @@ describe('HMR rebuild scope (#1250)', () => {
     expect(f.transports).toEqual({ create: 1, connect: 1, stop: 0 });
   });
 
+  it('still hands a changed AGENTS.md to its installer when the rest of a mixed batch fails to reload', async () => {
+    const f = await fixture();
+    const generation = f.host.runtime.snapshot.generation;
+    f.modules.set(f.sources.opsEntry, { default: 42 });
+    await writeFile(join(f.root, 'AGENTS.md'), '# bot v3\n');
+
+    await expect(f.host.reloadSources([f.sources.opsEntry, join(f.root, 'AGENTS.md')])).rejects.toThrow();
+
+    expect(f.host.runtime.snapshot.generation).toBe(generation);
+    expect(f.agents.notified).toEqual([[join(f.root, 'AGENTS.md')]]);
+    expect(f.agents.text).toBe('# bot v3\n');
+  });
+
   it('still rebuilds the Root for an undeclared Root file, and says why', async () => {
     const f = await fixture();
     await writeFile(join(f.root, 'NOTES.md'), 'scratch\n');
@@ -109,6 +122,28 @@ describe('HMR rebuild scope (#1250)', () => {
     f.modules.stale.set(f.sources.wttr, [join(f.root, 'plugins/qq-ops/plugin.ts')]);
     expect(await f.host.reloadSources([f.sources.wttr])).toBe('reloaded');
     expect(f.plans.at(-1)?.unrefreshedDependents).toEqual([join(f.root, 'plugins/qq-ops/plugin.ts')]);
+  });
+
+  it('rebuilds the Root for an unowned file inside a Feature package, naming the Feature provider', async () => {
+    const f = await fixture();
+    const helper = join(f.root, 'packages/adapter/helper.ts');
+    await writeFile(helper, 'export const helper = 1;\n');
+    expect(await f.host.reloadSources([helper])).toBe('reloaded');
+    expect(f.reports.at(-1)).toMatchObject({
+      rebuilt: 'root',
+      reason: `Feature provider modules changed; a subtree reload would keep the old provider: ${helper}`,
+    });
+  });
+
+  it('rebuilds the Root for a child Plugin file that no entry, schema or capability owns', async () => {
+    const f = await fixture();
+    const notes = join(f.root, 'plugins/weather/notes.md');
+    await writeFile(notes, 'scratch\n');
+    expect(await f.host.reloadSources([notes])).toBe('reloaded');
+    expect(f.reports.at(-1)).toMatchObject({
+      rebuilt: 'root',
+      reason: `changed files are not a Plugin entry, schema, capability or a module they import: ${notes}`,
+    });
   });
 
   it('rebuilds the adapter Plugin when its own source changes', async () => {

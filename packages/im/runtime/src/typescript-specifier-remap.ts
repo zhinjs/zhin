@@ -70,11 +70,28 @@ export function ensureTypeScriptSpecifierRemap(): void {
 }
 
 /**
+ * Records the revision at which files of revisionable packages were invalidated (#1250). A
+ * package-name import of such a file loads it at that revision, so every importer shares one
+ * instance per change; files that never changed keep their unrevisioned shared instance. Resolves
+ * like {@link publishRevisionablePackageRoots}.
+ */
+export function publishPackageFileRevisions(
+  owner: string,
+  revisions: ReadonlyArray<readonly [file: string, revision: string]>,
+): Promise<void> {
+  return post(owner, { revisions: revisions.map(([file, revision]) => [file, revision]) });
+}
+
+/**
  * Replaces the revisionable package roots one module runtime owns. Resolves once the hooks
  * thread applied them, or after a short grace period when it does not answer (the hook then
  * keeps the previous behaviour: package-name imports are not revisioned).
  */
 export function publishRevisionablePackageRoots(owner: string, roots: readonly string[]): Promise<void> {
+  return post(owner, { roots: [...roots] });
+}
+
+function post(owner: string, payload: Record<string, unknown>): Promise<void> {
   if (!control) return Promise.resolve();
   const id = ++messageSequence;
   const port = control;
@@ -89,42 +106,82 @@ export function publishRevisionablePackageRoots(owner: string, roots: readonly s
     const timer = setTimeout(settle, 1000);
     pendingAcks.set(id, settle);
     port.ref();
-    port.postMessage({ id, owner, roots: [...roots] });
+    port.postMessage({ id, owner, ...payload });
   });
 }
 
 /** Hooks thread: revisionable package roots by owning module runtime. */
 const revisionableRootsByOwner = new Map<string, readonly string[]>();
+/** Hooks thread: invalidated revisionable package files and their latest revision, by owner. */
+const fileRevisionsByOwner = new Map<string, Map<string, string>>();
+
+interface ControlMessage {
+  readonly id?: number;
+  readonly owner?: string;
+  readonly roots?: readonly string[];
+  readonly revisions?: ReadonlyArray<readonly [string, string]>;
+}
 
 export function initialize(data?: { readonly port?: MessagePort }): void {
   const port = data?.port;
   if (!port) return;
-  port.on('message', (message: { readonly id?: number; readonly owner?: string; readonly roots?: readonly string[] }) => {
-    if (typeof message?.owner === 'string' && Array.isArray(message.roots)) {
-      if (message.roots.length === 0) revisionableRootsByOwner.delete(message.owner);
-      else revisionableRootsByOwner.set(message.owner, Object.freeze([...message.roots]));
-    }
+  port.on('message', (message: ControlMessage) => {
+    applyControlMessage(message);
     if (typeof message?.id === 'number') port.postMessage({ ack: message.id });
   });
   port.unref();
 }
 
-function isRevisionablePackageFile(url: string): boolean {
-  if (revisionableRootsByOwner.size === 0) return false;
+/** Applies a control message in the hooks thread. */
+function applyControlMessage(message: ControlMessage): void {
+  if (typeof message?.owner !== 'string') return;
+  if (Array.isArray(message.roots)) {
+    if (message.roots.length === 0) {
+      revisionableRootsByOwner.delete(message.owner);
+      fileRevisionsByOwner.delete(message.owner);
+    } else {
+      revisionableRootsByOwner.set(message.owner, Object.freeze([...message.roots]));
+    }
+  }
+  if (Array.isArray(message.revisions)) {
+    const revisions = fileRevisionsByOwner.get(message.owner) ?? new Map<string, string>();
+    for (const entry of message.revisions) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
+        revisions.set(entry[0], entry[1]);
+      }
+    }
+    fileRevisionsByOwner.set(message.owner, revisions);
+  }
+}
+
+/**
+ * The revision a package-name import of this file loads at: the latest revision its module
+ * runtime invalidated it at, while it lies in a revisionable root of that runtime. `undefined`
+ * keeps the one shared, unrevisioned instance.
+ */
+function packageFileRevision(url: string): string | undefined {
+  if (fileRevisionsByOwner.size === 0) return undefined;
   let path: string;
   try {
     path = fileURLToPath(url);
   } catch {
-    return false;
+    return undefined;
   }
-  if (path.split(/[\\/]/u).includes('node_modules')) return false;
-  for (const roots of revisionableRootsByOwner.values()) {
-    for (const root of roots) {
-      const child = relative(root, path);
-      if (child === '' || (!child.startsWith('..') && !isAbsolute(child))) return true;
-    }
+  if (path.split(/[\\/]/u).includes('node_modules')) return undefined;
+  let latest: string | undefined;
+  for (const [owner, revisions] of fileRevisionsByOwner) {
+    const revision = revisions.get(path);
+    if (revision === undefined) continue;
+    const roots = revisionableRootsByOwner.get(owner) ?? [];
+    if (!roots.some((root) => isWithin(root, path))) continue;
+    if (latest === undefined || Number(revision) > Number(latest)) latest = revision;
   }
-  return false;
+  return latest;
+}
+
+function isWithin(root: string, path: string): boolean {
+  const child = relative(root, path);
+  return child === '' || (!child.startsWith('..') && !isAbsolute(child));
 }
 
 function shouldTryTypeScript(specifier: string, error: unknown): boolean {
@@ -140,10 +197,19 @@ function inheritGenerationRevision(
   parentURL: string | undefined,
   resolved: ResolveResult,
 ): ResolveResult {
-  if (!parentURL || !resolved.url.startsWith('file:')) return resolved;
-  // A package-name import of a mounted local Plugin package is reloaded with its importer
-  // (#1250); other package-name imports keep one shared instance (framework identity).
-  if (!isLocalSpecifier(specifier) && !isRevisionablePackageFile(resolved.url)) return resolved;
+  if (!resolved.url.startsWith('file:')) return resolved;
+  if (!isLocalSpecifier(specifier)) {
+    // A package-name import of a mounted local Plugin package file loads the revision of its
+    // latest change (#1250): importers that reload share one fresh instance, and a package that
+    // did not change keeps its one shared instance (no re-run of top-level side effects).
+    // Other package-name imports always keep one shared instance (framework identity).
+    const revision = packageFileRevision(resolved.url);
+    if (revision === undefined) return resolved;
+    const url = new URL(resolved.url);
+    url.searchParams.set('zhin-generation', revision);
+    return { ...resolved, url: url.href };
+  }
+  if (!parentURL) return resolved;
   let revision: string | null;
   try {
     revision = new URL(parentURL).searchParams.get('zhin-generation');

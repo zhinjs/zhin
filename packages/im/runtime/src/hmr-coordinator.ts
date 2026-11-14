@@ -8,7 +8,9 @@ import {
 } from './invalidation-planner.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { isEditorTempFile } from './editor-temp-file.js';
-import { ManifestChangeTracker, type ManifestFieldChange } from './manifest-change.js';
+import {
+  ManifestChangeTracker, PLUGIN_PACKAGE_RUNTIME_MANIFEST_FIELDS, type ManifestFieldChange,
+} from './manifest-change.js';
 import { basename, join } from 'node:path';
 import type { SourceOwnershipIndex } from './source-ownership.js';
 import type { HmrReloadReport } from './root-runtime-diagnostics.js';
@@ -45,12 +47,20 @@ export interface HmrCoordinatorOptions {
    * (#1250). Explicit {@link HmrCoordinator.enqueue} calls are never delayed. `0` disables it.
    */
   readonly watchDebounceMs?: number;
+  /**
+   * Longest time a watch event may wait in the debounce window (default
+   * {@link DEFAULT_WATCH_DEBOUNCE_MAX_WAIT_MS}): continuous writes (a build tool rewriting files
+   * in a loop) cannot postpone the reload forever.
+   */
+  readonly watchDebounceMaxWaitMs?: number;
   /** Fires once after a generation transaction commits successfully. */
   onReload?(plan: GenerationInvalidationPlan, durationMs: number, report?: HmrReloadReport): void | Promise<void>;
 }
 
 /** Debounce window for watch events; covers the ~250 ms gap seen between `sed -i` events (#1250). */
 export const DEFAULT_WATCH_DEBOUNCE_MS = 300;
+/** Upper bound for one debounce window, measured from its first event. */
+export const DEFAULT_WATCH_DEBOUNCE_MAX_WAIT_MS = 2000;
 
 export class HmrCoordinator {
   readonly #pending = new Set<string>();
@@ -66,6 +76,8 @@ export class HmrCoordinator {
   /** Watch events waiting for the debounce window to close. */
   readonly #debounced = new Set<string>();
   #debounceTimer?: ReturnType<typeof setTimeout>;
+  /** When the first event of the open debounce window arrived. */
+  #debounceStartedAt = 0;
   /** Sources requested through {@link enqueue}: they keep their meaning, whatever changed in them. */
   readonly #explicit = new Set<string>();
   readonly #manifests: ManifestChangeTracker;
@@ -122,7 +134,11 @@ export class HmrCoordinator {
     }
     const normalized = normalizeSourcePath(source);
     this.#pending.add(normalized);
-    if (explicit) this.#explicit.add(normalized);
+    if (explicit) {
+      this.#explicit.add(normalized);
+      // The explicit request covers a debounced watch event for the same path: reload it once.
+      if (this.#debounced.delete(normalized) && this.#debounced.size === 0) this.#clearDebounce();
+    }
     const completed = new Promise<void>((resolve, reject) => {
       this.#waiters.push({ resolve, reject });
     });
@@ -138,8 +154,13 @@ export class HmrCoordinator {
       void this.#enqueue(source, false).catch(() => undefined);
       return;
     }
+    const now = performance.now();
+    if (this.#debounced.size === 0) this.#debounceStartedAt = now;
     this.#debounced.add(normalizeSourcePath(source));
-    // Trailing debounce: every event restarts the quiet period, so a burst becomes one request.
+    // Trailing debounce: every event restarts the quiet period, so a burst becomes one request,
+    // but never later than the max wait after the window's first event.
+    const maxWait = Math.max(delay, this.options.watchDebounceMaxWaitMs ?? DEFAULT_WATCH_DEBOUNCE_MAX_WAIT_MS);
+    const wait = Math.max(0, Math.min(delay, this.#debounceStartedAt + maxWait - now));
     if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
     this.#debounceTimer = setTimeout(() => {
       this.#debounceTimer = undefined;
@@ -148,7 +169,7 @@ export class HmrCoordinator {
       if (this.#closing || this.#restartRequired) return;
       // Synchronous enqueues share one microtask drain: the burst is one generation transaction.
       for (const item of sources) void this.#enqueue(item, false).catch(() => undefined);
-    }, delay);
+    }, wait);
     // A pending debounce must not keep a process alive on its own.
     this.#debounceTimer.unref?.();
   }
@@ -174,9 +195,17 @@ export class HmrCoordinator {
         const explicit = new Set(this.#explicit);
         this.#explicit.clear();
         const manifestChanges: ManifestFieldChange[] = [];
+        const ownership = this.options.ownership();
+        // Baselines as the committed generation knows them; put back when this reload fails.
+        const baselines = this.#manifests.checkpoint(
+          [...this.#pending].filter((source) => basename(source) === 'package.json'),
+        );
         const changed = [...this.#pending].filter((source) => {
           if (basename(source) !== 'package.json') return true;
-          const change = this.#manifests.diff(source);
+          const change = this.#manifests.diff(
+            source,
+            ownership.isChildPluginManifest(source) ? PLUGIN_PACKAGE_RUNTIME_MANIFEST_FIELDS : [],
+          );
           if (!change) return true;
           if (change.runtimeFields.length > 0 || explicit.has(source)) {
             manifestChanges.push(change);
@@ -214,7 +243,7 @@ export class HmrCoordinator {
                 this.options.modules.staleDependents?.(source) ?? [],
             }
           : undefined;
-        const plan = new InvalidationPlanner(this.options.ownership(), dependencyPort).plan(
+        const plan = new InvalidationPlanner(ownership, dependencyPort).plan(
           changed,
         );
 
@@ -262,6 +291,7 @@ export class HmrCoordinator {
           }
         } catch (error) {
           this.options.modules.rollbackGeneration?.();
+          this.#manifests.restore(baselines);
           throw error;
         }
       }
@@ -298,10 +328,12 @@ export class HmrCoordinator {
     this.options.modules.commitGeneration?.(ownership.moduleSources());
     // Baselines for field comparison of the manifests this generation was built from.
     if (this.options.modules.watch) {
+      // A manifest with a queued event keeps no baseline: adopting the file now would make
+      // that edit (made while this generation reloaded) look unchanged.
       this.#manifests.prime([
         ...ownership.manifestSources(),
         ...ownership.watchRoots().map((root) => join(root.root, 'package.json')),
-      ]);
+      ], (source) => this.#pending.has(source) || this.#debounced.has(source));
     }
   }
 

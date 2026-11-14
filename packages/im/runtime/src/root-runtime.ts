@@ -422,12 +422,19 @@ export class RootRuntime {
           )
           : outcome.prepared.generation;
       },
-    }).catch(error => {
+    }).catch(async error => {
       this.#restoreRuntimeInputs(previousInputs);
       if (inputs) this.#recordApplication(
         rejectedApplicationGroups(inputs.applicationGroups ?? [], error, this.#controller.state),
         true, previousGeneration, inputs.configSnapshot?.revision,
       );
+      // The declared project files changed whatever happened to the rest of the batch: the
+      // retained Root installer still has to re-read them (#1250). Its failure cannot replace
+      // the generation error.
+      const root = this.#model?.scopes.get(rootPluginId());
+      if (resourceFiles.length > 0 && root === previousRoot) {
+        try { await projectFileWatchesOf(root)?.notify(resourceFiles); } catch { /* reported by the reload error */ }
+      }
       throw error;
     });
     if (restart) return restart;

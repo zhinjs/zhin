@@ -513,6 +513,51 @@ describe('HmrCoordinator watch debounce (#1250)', () => {
     await coordinator.stop();
     expect(plans).toHaveLength(1);
   });
+  it('reloads within the max wait while events keep arriving', async () => {
+    const source = '/project/commands/status/index.ts';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      watchDebounceMs: 100,
+      watchDebounceMaxWaitMs: 250,
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {},
+      onError() {},
+    });
+    const stop = coordinator.start();
+    try {
+      // A write every 40 ms never leaves a 100 ms quiet period.
+      const startedAt = performance.now();
+      while (performance.now() - startedAt < 700) {
+        modules.emit(source);
+        await sleep(40);
+      }
+      expect(plans.length).toBeGreaterThanOrEqual(2);
+    } finally { await stop(); }
+  });
+
+  it('reloads once when an explicit enqueue covers a debounced watch event of the same path', async () => {
+    const source = '/project/commands/status/index.ts';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      watchDebounceMs: 50,
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {},
+      onError() {},
+    });
+    const stop = coordinator.start();
+    try {
+      modules.emit(source);
+      await coordinator.enqueue(source);
+      await sleep(150);
+      expect(plans).toHaveLength(1);
+    } finally { await stop(); }
+  });
 });
 
 describe('HmrCoordinator package.json field filter (#1250)', () => {
@@ -601,6 +646,110 @@ describe('HmrCoordinator package.json field filter (#1250)', () => {
       await f.coordinator.enqueue(manifest);
       expect(f.ignored).toEqual([]);
       expect(f.plans).toHaveLength(1);
+    } finally { await f.stop(); }
+  });
+});
+
+describe('HmrCoordinator package.json baselines (#1250)', () => {
+  const rootManifest = '/project/package.json';
+  const childManifest = '/project/plugins/child/package.json';
+  const manifest = (name: string, extra: Record<string, unknown> = {}) => JSON.stringify({ name, version: '1.0.0', type: 'module', ...extra });
+
+  function setup(options: { reload?: (plan: GenerationInvalidationPlan, files: Map<string, string>) => Promise<void> | void; mountChild?: boolean } = {}) {
+    const files = new Map<string, string>([[rootManifest, manifest('bot')], [childManifest, manifest('@test/child')]]);
+    const modules = new WatchingFakeModules();
+    const committed = ownershipFor('/project/commands/status/index.ts', '/project');
+    committed.add({ source: rootManifest, role: 'manifest', owner: root });
+    const mounted = (): SourceOwnershipIndex => {
+      const next = ownershipFor('/project/commands/status/index.ts', '/project');
+      next.add({ source: rootManifest, role: 'manifest', owner: root });
+      next.addPackageRoot('/project/plugins/child', child);
+      next.add({ source: childManifest, role: 'manifest', owner: child });
+      next.addChildPluginManifest(childManifest);
+      return next;
+    };
+    let ownership = options.mountChild === false ? committed : mounted();
+    const plans: GenerationInvalidationPlan[] = [];
+    const ignored: ManifestFieldChange[] = [];
+    const errors: unknown[] = [];
+    const coordinator = new HmrCoordinator({
+      modules, ownership: () => ownership, watchDebounceMs: 0,
+      readManifest: (source) => {
+        const text = files.get(source);
+        if (text === undefined) throw new Error('ENOENT');
+        return text;
+      },
+      runtime: {
+        async reload(plan) {
+          plans.push(plan);
+          await options.reload?.(plan, files);
+        },
+      },
+      onRestartRequired() {},
+      onManifestIgnored(change) { ignored.push(change); },
+      onError(error) { errors.push(error); },
+    });
+    const stop = coordinator.start();
+    return {
+      coordinator, modules, plans, ignored, errors, stop, files,
+      mount: () => { ownership = mounted(); },
+    };
+  }
+
+  const settle = () => new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+
+  it('reloads for a version change of a mounted child Plugin, but ignores the Root project version', async () => {
+    const f = setup();
+    try {
+      f.files.set(rootManifest, manifest('bot', { version: '1.1.0' }));
+      f.modules.emit(rootManifest);
+      await settle();
+      expect(f.plans).toEqual([]);
+      expect(f.ignored).toEqual([{ source: rootManifest, fields: ['version'], runtimeFields: [] }]);
+
+      f.files.set(childManifest, JSON.stringify({ name: '@test/child', version: '1.1.0', type: 'module' }));
+      f.modules.emit(childManifest);
+      await settle();
+      expect(f.plans).toHaveLength(1);
+      expect(f.plans[0]?.manifestSources).toEqual([childManifest]);
+    } finally { await f.stop(); }
+  });
+
+  it('puts the baseline back when the reload fails, so the same edit is not ignored next time', async () => {
+    let failures = 1;
+    const f = setup({ reload: () => { if (failures-- > 0) throw new Error('reload failed'); } });
+    try {
+      f.files.set(childManifest, manifest('@test/child', { dependencies: { ws: '^8.0.0' } }));
+      f.modules.emit(childManifest);
+      await settle();
+      expect(f.errors).toHaveLength(1);
+      // The file did not change again; the retry still reports the dependency change.
+      f.modules.emit(childManifest);
+      await settle();
+      expect(f.ignored).toEqual([]);
+      expect(f.plans).toHaveLength(2);
+      expect(f.plans[1]?.manifestSources).toEqual([childManifest]);
+    } finally { await f.stop(); }
+  });
+
+  it('does not adopt a newly mounted manifest edited while the generation reloaded', async () => {
+    let edited = false;
+    const f = setup({
+      mountChild: false,
+      reload: (_plan, files) => {
+        if (edited) return;
+        edited = true;
+        // The new generation mounts the child; its manifest is edited before the commit finishes.
+        files.set(childManifest, manifest('@test/child', { scripts: { build: 'tsc' } }));
+        f.mount();
+        f.modules.emit(childManifest);
+      },
+    });
+    try {
+      await f.coordinator.enqueue('/project/commands/status/index.ts');
+      await settle();
+      expect(f.ignored).toEqual([]);
+      expect(f.plans.map((plan) => plan.changed)).toEqual([['/project/commands/status/index.ts'], [childManifest]]);
     } finally { await f.stop(); }
   });
 });

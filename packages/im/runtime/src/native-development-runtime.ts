@@ -15,7 +15,9 @@ import {
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { withToolPackageInstallHint } from './missing-tool-package.js';
 import { isEditorTempFile } from './editor-temp-file.js';
-import { ensureTypeScriptSpecifierRemap, publishRevisionablePackageRoots } from './typescript-specifier-remap.js';
+import {
+  ensureTypeScriptSpecifierRemap, publishPackageFileRevisions, publishRevisionablePackageRoots,
+} from './typescript-specifier-remap.js';
 import { randomUUID } from 'node:crypto';
 import { getEsmCacheEvictor, type EsmCacheEvictor } from './esm-cache-evictor.js';
 
@@ -63,7 +65,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #projectRoot: string;
   readonly #watchEnabled: boolean;
   readonly #tsxLoader: TsxModuleLoader | undefined;
-  readonly #dependencies = new ModuleDependencyIndex();
+  // Package-name imports are followed only into watched roots: nothing else reports a change.
+  readonly #dependencies = new ModuleDependencyIndex({
+    followPackageImport: (source) => this.#watchRoots.some((root) => isWithin(root, source)),
+  });
   readonly #watchers = new Set<PortableSourceWatcher>();
   #pendingDependencies?: Map<string, ModuleDependencyAnalysis>;
   #watchRoots: readonly string[];
@@ -79,6 +84,11 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   /** Mounted local Plugin package roots whose package-name imports reload with the importer (#1250). */
   #revisionableRoots: readonly string[] = [];
   #rootsPublished?: Promise<void>;
+  /**
+   * Files of revisionable packages imported by package name, with the revision of their latest
+   * change (#1250): the loader hook loads them at it, so unchanged packages keep one instance.
+   */
+  readonly #packageFileRevisions = new Map<string, number>();
   readonly #hookOwner = randomUUID();
   readonly #isRevisionable = (source: string): boolean => this.#revisionableRoots.some((root) => isWithinRoot(root, source));
 
@@ -129,13 +139,23 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
 
   invalidate(source: string): void | Promise<void> {
     const impacted = this.#dependencies.affectedSources(source, this.#isRevisionable);
+    const packageTargets = this.#dependencies.changedPackageImportTargets(
+      source,
+      (file) => this.#revisionableRoots.find((root) => isWithinRoot(root, file)),
+    );
     this.#dependencies.invalidate(source);
     this.#revision += 1;
     for (const entry of new Set([normalizeSourcePath(source), ...impacted])) {
       this.#entryRevisions.set(entry, this.#revision);
     }
-    // The loader hook must know the revisionable roots before the importers load again.
-    return this.#rootsPublished;
+    for (const target of packageTargets) this.#packageFileRevisions.set(target, this.#revision);
+    const revisionsPublished = packageTargets.length > 0
+      ? publishPackageFileRevisions(this.#hookOwner, packageTargets.map((target) => [target, String(this.#revision)] as const))
+      : undefined;
+    // The loader hook must know the revisionable roots and changed package files before the
+    // importers load again.
+    if (!revisionsPublished) return this.#rootsPublished;
+    return Promise.all([this.#rootsPublished, revisionsPublished]).then(() => undefined);
   }
 
   affectedSources(source: string): readonly string[] {
@@ -152,6 +172,9 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     const next = [...new Set(roots.map((root) => normalizeSourcePath(root)))].sort();
     if (next.length === this.#revisionableRoots.length && next.every((root, index) => root === this.#revisionableRoots[index])) return;
     this.#revisionableRoots = Object.freeze(next);
+    for (const file of this.#packageFileRevisions.keys()) {
+      if (!next.some((root) => isWithinRoot(root, file))) this.#packageFileRevisions.delete(file);
+    }
     this.#rootsPublished = publishRevisionablePackageRoots(this.#hookOwner, next);
   }
 
@@ -256,7 +279,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (this.#revision === 0) return;
     const evictor = this.#resolveEvictor();
     if (!evictor) return;
-    const live = new Set([...this.#committedRevisions.values()].map(String));
+    // Package files keep the revision of their latest change for every later importer.
+    const live = new Set([...this.#committedRevisions.values(), ...this.#packageFileRevisions.values()].map(String));
     for (const href of evictor.urls()) {
       if (!href.startsWith('file:') || !href.includes('zhin-generation=')) continue;
       let revision: string | null;
@@ -282,6 +306,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     ]);
     if (sameRoots(this.#watchRoots, next)) return;
     this.#watchRoots = next;
+    // Cached closures followed package imports by the previous roots.
+    this.#dependencies.invalidateAll();
     for (const watcher of this.#watchers) watcher.replaceRoots(next);
   }
 
@@ -306,6 +332,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#entryRevisions.clear();
     this.#committedRevisions.clear();
     this.#pendingRevisions = undefined;
+    this.#packageFileRevisions.clear();
     if (this.#revisionableRoots.length > 0) {
       this.#revisionableRoots = [];
       await publishRevisionablePackageRoots(this.#hookOwner, []);

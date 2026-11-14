@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -223,6 +223,89 @@ process.stdout.write(JSON.stringify({ first, second, affected, stale }));
       // A plain library is not revisioned: its importer keeps the old instance and is reported.
       stale: [entry],
     });
+  });
+
+  nativeTypeScriptIt('keeps one instance of an unchanged mounted Plugin package across importer reloads (#1250)', async () => {
+    const root = await fixture();
+    const runtimeEntry = new URL('../src/index.ts', import.meta.url).href;
+    const scenario = join(root, 'shared-package-scenario.mjs');
+    await writeFile(scenario, `
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { NativeDevelopmentModuleRuntime } from ${JSON.stringify(runtimeEntry)};
+const root = ${JSON.stringify(root)};
+const weather = join(root, 'plugins/weather');
+const wttr = join(weather, 'src/wttr.ts');
+const lookup = join(root, 'tools/lookup/index.ts');
+const local = join(root, 'tools/lookup/local.ts');
+const other = join(root, 'tools/other/index.ts');
+for (const directory of [join(weather, 'src'), join(root, 'tools/lookup'), join(root, 'tools/other'), join(root, 'node_modules/@test')]) {
+  await mkdir(directory, { recursive: true });
+}
+await writeFile(join(weather, 'package.json'), JSON.stringify({ name: '@test/weather', type: 'module', exports: { './wttr': './src/wttr.ts' } }));
+await symlink(weather, join(root, 'node_modules/@test/weather'), 'dir');
+const module = (version) => "globalThis.evaluations = (globalThis.evaluations ?? 0) + 1;\\nexport const forecast = '" + version + "';\\nexport const state = {};\\n";
+await writeFile(wttr, module('v1'));
+await writeFile(local, "export const local = 'l1';\\n");
+await writeFile(lookup, "import { forecast, state } from '@test/weather/wttr';\\nimport { local } from './local.ts';\\nexport default { value: forecast + ':' + local, state };\\n");
+await writeFile(other, "import { forecast, state } from '@test/weather/wttr';\\nexport default { value: forecast, state };\\n");
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+await runtime.load(lookup);
+await runtime.load(other);
+runtime.updateRevisionableRoots([weather]);
+const steps = [];
+const observe = async (reload) => {
+  const a = (await runtime.load(lookup)).default;
+  const b = (await runtime.load(other)).default;
+  steps.push({ lookup: a.value, other: b.value, evaluations: globalThis.evaluations, shared: a.state === b.state });
+};
+// Only the importer's own helper changed: the package keeps its one instance.
+await writeFile(local, "export const local = 'l2';\\n");
+await runtime.invalidate(local);
+await observe();
+// The package changed: every importer that reloads shares one fresh instance.
+await writeFile(wttr, module('v2'));
+await runtime.invalidate(wttr);
+await observe();
+// The importer reloads again for its own helper: the changed package is not evaluated again.
+await writeFile(local, "export const local = 'l3';\\n");
+await runtime.invalidate(local);
+await observe();
+await runtime.close();
+process.stdout.write(JSON.stringify(steps));
+`);
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [...inheritedStripTypeArguments, '--import', tsxLoaderUrl, scenario],
+      { cwd: process.cwd() },
+    );
+    expect(JSON.parse(stdout)).toEqual([
+      { lookup: 'v1:l2', other: 'v1', evaluations: 1, shared: true },
+      { lookup: 'v2:l2', other: 'v2', evaluations: 2, shared: true },
+      { lookup: 'v2:l3', other: 'v2', evaluations: 2, shared: true },
+    ]);
+  });
+
+  it('does not follow a package-name import into linked sources outside its watch roots (#1250)', async () => {
+    const workspace = await fixture();
+    const project = join(workspace, 'project');
+    const framework = join(workspace, 'framework');
+    for (const directory of [join(project, 'commands/status'), join(project, 'node_modules/@test'), framework]) {
+      await mkdir(directory, { recursive: true });
+    }
+    await writeFile(join(project, 'package.json'), '{"type":"module"}\n');
+    await writeFile(join(framework, 'package.json'), JSON.stringify({ name: '@test/framework', type: 'module', exports: './index.js' }));
+    await writeFile(join(framework, 'index.js'), 'export const core = 1;\n');
+    await symlink(framework, join(project, 'node_modules/@test/framework'), 'dir');
+    const entry = join(project, 'commands/status/index.js');
+    await writeFile(entry, "import { core } from '@test/framework';\nexport default core;\n");
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: project, watch: false });
+
+    expect((await runtime.load<{ default: number }>(entry)).default).toBe(1);
+    expect(runtime.affectedSources(join(framework, 'index.js'))).toEqual([join(framework, 'index.js')]);
+    expect(runtime.staleDependents(join(framework, 'index.js'))).toEqual([]);
+    await runtime.close();
   });
 
   nativeTypeScriptIt('loads native .mts and .cts capability entries consistently', async () => {
