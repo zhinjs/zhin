@@ -135,6 +135,7 @@ export default definePlugin<RssConfig>({
         id: 'rss/poll_feeds',
         cron: config.pollCron,
         description: 'Poll RSS subscriptions',
+        title: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS subscriptions' },
         async execute() {
           // Both pools share this existing registration. A slow chat feed does not
           // prevent administrator polling, and neither pool shares the other's cursor.
@@ -147,6 +148,7 @@ export default definePlugin<RssConfig>({
         id: 'rss/clean_old_seen',
         cron: '0 0 4 * * *',
         description: 'Clean seen records older than 7 days',
+        title: '清理 7 天前的 RSS 已读记录', titleI18n: { en: 'Clean RSS seen records older than 7 days' },
         async execute() {
           await cleanOldSeen(runtime);
         },

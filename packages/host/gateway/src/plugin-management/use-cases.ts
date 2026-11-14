@@ -13,12 +13,12 @@ export interface PluginUseCase {
 
 export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
   {
-    id: 'rss-subscription', title: '订阅 RSS 新文章', summary: '在任务中心选择精确目标，创建独立管理员 RSS 订阅。',
+    id: 'rss-subscription', title: '订阅 RSS 新文章', summary: '在 Console「运维 → 定时任务 → 管理员任务」选择精确目标，创建独立管理员 RSS 订阅。',
     packageName: '@zhin.js/plugin-rss', mode: 'administrator-task',
     steps: ['通过现有安装计划安装 RSS 插件，配置持久 Database Host、Schedule Host 与支持精确目标的 Outbound Host，保存并应用。',
-      '在 Console 任务中心选择当前已加载的 RSS 实例，核对账号、会话、父容器和线程。',
+      '在 Console「运维 → 定时任务」的「管理员任务」页签选择当前已加载的 RSS 实例，核对账号、会话、父容器和线程。',
       '填写 HTTP(S) RSS / Atom 地址，阅读抓取和发送影响后创建；保存不会抓取源站或发送测试消息。',
-      '等待实例轮询首次成功抓取建立基线；后续新文章才推送，可在任务中心暂停、编辑、恢复或取消。'],
+      '等待实例轮询首次成功抓取建立基线；后续新文章才推送，可在「运维 → 定时任务 → 管理员任务」暂停、编辑、恢复或取消。'],
     limitations: ['首次和暂停恢复后的首次成功抓取只建基线，不补发历史；每轮只检查源前 20 条，最多展示 maxItems 条，其余提示查看源站，不续轮补发。',
       '管理员订阅与聊天订阅独立；聊天 rss-list、rss-remove 和 rss-check 不管理或触发管理员任务。',
       '投递未确认时不自动重试或恢复，只能取消；先核实目标会话，确需继续时再新建。'],
@@ -27,7 +27,7 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
     id: 'reminder', title: '创建定时提醒', summary: '指定账号、会话与时间，创建可查看、暂停和取消的管理员提醒。',
     packageName: '@zhin.js/plugin-reminder', mode: 'administrator-task',
     steps: ['通过现有安装计划安装持久提醒插件，配置 Database Host 并应用。',
-      '在 Console 任务中心选择当前已加载的提醒实例，检查当前版本与可用表单。',
+      '在 Console「运维 → 定时任务」的「管理员任务」页签选择当前已加载的提醒实例，检查当前版本与可用表单。',
       '选择精确投递账号及会话，填写含时区的时间和内容，确认未来发送的效果后创建。',
       '查看下次执行时间与实际结果；投递不确定时先核对目标会话，不盲目重建。'],
     limitations: ['Console 只管理管理员任务；聊天创建的提醒仍归原发送者。',
@@ -68,11 +68,11 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
 
 const englishUseCases: Readonly<Record<string, Pick<PluginUseCase, 'title' | 'summary' | 'steps' | 'limitations'>>> = {
   'rss-subscription': {
-    title: 'Subscribe to RSS updates', summary: 'Choose an exact delivery target and create a separate administrator RSS subscription.',
+    title: 'Subscribe to RSS updates', summary: 'In Operations → Scheduled tasks → Administrator tasks, choose an exact delivery target and create a separate administrator RSS subscription.',
     steps: ['Install the RSS plugin through the existing installation plan. Configure persistent Database, Schedule and Outbound Hosts with exact-target support, then save and apply.',
-      'Select a loaded RSS instance in Console Tasks. Check its account, conversation, parent container and thread.',
+      'In Console, open Operations → Scheduled tasks → Administrator tasks and select a loaded RSS instance. Check its account, conversation, parent container and thread.',
       'Enter an HTTP(S) RSS or Atom URL, review fetching and delivery effects, then create. Saving does not fetch the feed or send a test message.',
-      'Wait for the first successful poll to establish a baseline. Only later articles are delivered. Use Tasks to pause, edit, resume or cancel.'],
+      'Wait for the first successful poll to establish a baseline. Only later articles are delivered. Pause, edit, resume or cancel it under Operations → Scheduled tasks → Administrator tasks.'],
     limitations: ['The first successful fetch after creation or resuming only establishes a baseline; it does not replay history. Each poll examines the first 20 feed entries and displays at most maxItems, with a link to the feed for the remainder; there is no later catch-up.',
       'Administrator subscriptions and chat subscriptions are separate. Chat rss-list, rss-remove and rss-check do not manage or trigger administrator tasks.',
       'An unconfirmed delivery is not automatically retried or resumed. Cancel it, check the destination, and create a new task only if needed.'],
@@ -80,7 +80,7 @@ const englishUseCases: Readonly<Record<string, Pick<PluginUseCase, 'title' | 'su
   reminder: {
     title: 'Create a scheduled reminder', summary: 'Choose an account, conversation and time, then manage an administrator reminder.',
     steps: ['Install the persistent reminder plugin, configure a Database Host and apply.',
-      'Select a loaded reminder instance in Console Tasks and check its current version and form.',
+      'In Console, open Operations → Scheduled tasks → Administrator tasks, select a loaded reminder instance and check its current version and form.',
       'Choose the exact account and conversation, enter a time with an offset and the content, and confirm the future delivery effect.',
       'Check the next execution time and actual result. If delivery is uncertain, inspect the destination before creating another task.'],
     limitations: ['Console manages administrator tasks only. Chat reminders still belong to the actual sender.',

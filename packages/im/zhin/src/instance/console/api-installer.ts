@@ -46,6 +46,8 @@ export interface ConsoleControlPlaneOptions {
   readonly consoleIam?: () => import('@zhin.js/gateway/iam').ConsoleIamService | undefined;
   /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
+  /** Effective provider bindings and recent turns for the Agent workbench (#1250). */
+  readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -102,6 +104,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
       ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
       ...(options.featureStores ? { featureStores: options.featureStores } : {}),
+      ...(options.agentInsights ? { agentInsights: options.agentInsights } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();

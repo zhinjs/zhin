@@ -600,6 +600,9 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `-s, --session <pattern>` | 会话键子串，或带 `*` 的通配 |
 | `--json` | 输出 JSON |
 | `--cwd <dir>` / `--dir <dir>` | 项目根目录 / 直接指定 trace 目录 |
+| `--tz <zone>` | 按此 IANA 时区划分日期；默认实例时区（`TZ` 环境变量，否则系统时区） |
+
+每天还会列出按「服务名 · 模型」合并的模型用量：同一服务经 `services:` 与 `accounts:` 两种 ID 记录的调用合为一行，服务名读自项目数据库里的模型配置；读不到时只显示模型名。会话列优先显示 trace 里记录的会话名（如 `qq · 群 测试群`），括号里是会话键的短形式。输入 tokens 是每次模型调用上报的输入之和（含多轮迭代与子 Agent），和下面基于首次请求估算的段占比不是同一口径。
 
 每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
 

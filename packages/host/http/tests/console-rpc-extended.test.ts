@@ -229,8 +229,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       ).resolves.toEqual({
         data: {
           memory: [
-            { id: 'job-1', cron: '0 0 8 * * *', description: '早安', expression: '0 0 8 * * *', running: true },
-            { id: 'job-2', cron: '0 */5 * * * *', expression: '0 */5 * * * *', running: true },
+            { id: 'job-1', cron: '0 0 8 * * *', description: '早安', kind: 'plugin-internal', displayName: '早安', expression: '0 0 8 * * *', running: true },
+            { id: 'job-2', cron: '0 */5 * * * *', kind: 'plugin-internal', displayName: 'job-2', expression: '0 */5 * * * *', running: true },
           ],
           persistent: [],
           capabilities: { persistent: false },
@@ -246,6 +246,34 @@ describe('dispatchExtendedConsoleRpc', () => {
       engine.listJobs.mockRejectedValueOnce(new Error('storage unavailable'));
       expect(await dispatchExtendedConsoleRpc('schedule:list', {}, ctx)).toEqual({ error: '读取持久化任务失败: storage unavailable' });
       expect(engine.addJob).not.toHaveBeenCalled();
+    });
+
+    it('classifies plugin jobs, localizes titles and reports the last real run (#1250)', async () => {
+      const ctx = makeCtx({
+        scheduleHost: {
+          list: () => [
+            { id: 'rss/poll_feeds', cron: '0 */5 * * * *', description: 'Poll RSS subscriptions', title: '轮询 RSS 订阅',
+              titleI18n: { en: 'Poll RSS feeds' }, kind: 'plugin-internal',
+              lastRun: { startedAt: 1_000, finishedAt: 1_250, status: 'failed', error: 'feed timeout' } },
+            { id: 'reminder/poll', cron: '*/5 * * * * *', title: '扫描到期提醒', kind: 'user-task',
+              lastRun: { startedAt: 2_000, finishedAt: 2_010, status: 'succeeded' } },
+          ],
+        },
+      });
+      const zh = await dispatchExtendedConsoleRpc('schedule:list', {}, ctx) as { data: { memory: Record<string, unknown>[] } };
+      expect(zh.data.memory[0]).toMatchObject({
+        kind: 'plugin-internal', title: '轮询 RSS 订阅', displayName: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' },
+        lastExecutedAt: 1_000, lastFinishedAt: 1_250, lastDurationMs: 250, lastStatus: 'failed', lastError: 'feed timeout',
+      });
+      expect(zh.data.memory[1]).toMatchObject({ kind: 'user-task', title: '扫描到期提醒', lastStatus: 'succeeded', lastExecutedAt: 2_000 });
+      expect(zh.data.memory[1]).not.toHaveProperty('lastError');
+      const en = await dispatchExtendedConsoleRpc('schedule:list', { locale: 'en-US' }, ctx) as { data: { memory: Record<string, unknown>[] } };
+      expect(en.data.memory[0]).toMatchObject({ title: 'Poll RSS feeds', displayName: 'Poll RSS feeds' });
+      expect(en.data.memory[1]).toMatchObject({ title: '扫描到期提醒' });
+      const persistent = { listJobs: vi.fn().mockResolvedValue([{ id: 'p1', schedule: { cron: '0 0 9 * * *' }, action: { prompt: 'x' } }]),
+        addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, { ...ctx, resolveScheduleEngine: () => persistent }))
+        .toMatchObject({ data: { persistent: [{ id: 'p1', kind: 'user-task' }] } });
     });
 
     it('rejects invalid create requests before writing to the persistent engine', async () => {

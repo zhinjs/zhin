@@ -43,6 +43,9 @@ export class ScheduleIndex {
           id: slot.localName,
           cron: slot.definition.cron,
           description: slot.definition.description,
+          ...(slot.definition.title === undefined ? {} : { title: slot.definition.title }),
+          ...(slot.definition.titleI18n === undefined ? {} : { titleI18n: slot.definition.titleI18n }),
+          ...(slot.definition.kind === undefined ? {} : { kind: slot.definition.kind }),
           execute: () => slot.definition.execute(createCapabilityContext({ snapshot: this.snapshot, ownerId: slot.owner, admission: this.#admission })),
         }));
       }

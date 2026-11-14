@@ -8,10 +8,38 @@ import { generationAdmissionBinder, generationAdmissionSource, type GenerationAd
 import { OwnerOperation } from './owner-operation.js';
 
 /**
+ * What a job is for, so management surfaces do not present background work as a user task.
+ * `plugin-internal`: a plugin's own polling / housekeeping (the default for Host registrations).
+ * `user-task`: work a person scheduled (a reminder, a subscription delivery they asked for).
+ */
+export type ScheduleJobKind = 'plugin-internal' | 'user-task';
+
+/** Outcome of the most recent run the Host actually executed. */
+export interface ScheduleJobLastRun {
+  /** Epoch ms when the run started. */
+  readonly startedAt: number;
+  /** Epoch ms when the run settled. */
+  readonly finishedAt: number;
+  readonly status: 'succeeded' | 'failed';
+  /** Failure message (only when `status` is `failed`). */
+  readonly error?: string;
+}
+
+/** Display metadata shared by registrations and inventory rows. */
+export interface ScheduleJobDisplay {
+  /** Human title in the project default language (Chinese for official plugins). */
+  readonly title?: string;
+  /** Per-locale titles, e.g. `{ en: 'Poll RSS feeds' }`. */
+  readonly titleI18n?: Readonly<Partial<Record<string, string>>>;
+  /** Defaults to `plugin-internal`. */
+  readonly kind?: ScheduleJobKind;
+}
+
+/**
  * Thin Host Resource for Plugin Runtime cron jobs.
  * Implementations typically wrap `@zhin.js/schedule` CalendarScheduler (solar cron).
  */
-export interface ScheduleJobRegistration {
+export interface ScheduleJobRegistration extends ScheduleJobDisplay {
   readonly id: string;
   /** Runtime-assigned owner for diagnostics and Console inventory. */
   readonly owner?: PluginId;
@@ -30,12 +58,14 @@ export interface ScheduleHost {
    * disposers run, and use isActive to select the published registration.
    */
   register(job: ScheduleJobRegistration): () => void;
-  list(): readonly {
+  list(): readonly ({
     readonly id: string;
     readonly cron: string;
     readonly description?: string;
     readonly owner?: PluginId;
-  }[];
+    /** Present when the Host records results; absent until the first run. */
+    readonly lastRun?: ScheduleJobLastRun;
+  } & ScheduleJobDisplay)[];
 }
 
 /** Scoped scheduling surface exposed to a Plugin setup function. */

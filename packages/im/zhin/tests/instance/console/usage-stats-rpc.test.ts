@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PluginConsoleRpcError } from '@zhin.js/plugin-runtime';
 import { AssistantStatus } from '../../../src/instance/console/assistant-status.js';
 import { UsageStatsService, resolveUsageStatsQuery, USAGE_STATS_PERMISSION } from '../../../src/instance/console/usage-stats-rpc.js';
-import { buildUsageStats, parseSessionKey } from '../../../../../host/gateway/src/usage/aggregate.js';
+import { buildUsageStats, bucketStartOf, dayKeyOf, parseSessionKey } from '../../../../../host/gateway/src/usage/aggregate.js';
+import { createProviderDisplayIndex } from '../../../src/instance/inference/provider-display.js';
 
 const signal = new AbortController().signal;
 const dirs: string[] = [];
@@ -76,9 +77,92 @@ describe('buildUsageStats', () => {
   });
 });
 
+describe('usage model labels, input basis, time zone and session names (#1250)', () => {
+  const SVC = 'services:11111111-1111-4111-8111-111111111111';
+  const ACC = 'accounts:22222222-2222-4222-8222-222222222222';
+  const graph = {
+    rootId: '/p', revision: 1,
+    services: { [SVC]: { id: SVC, rootId: '/p', ownerId: 'o', revision: 1, label: 'AG 中转', driver: { id: 'openai-compatible', owner: 'x', contractVersion: '1' }, options: {}, models: {} } },
+    accounts: { [ACC]: { id: ACC, rootId: '/p', ownerId: 'o', revision: 1, serviceId: SVC, incarnation: 'i', authentication: { method: 'none' } } },
+    profiles: { 'profiles:p1': { id: 'profiles:p1', rootId: '/p', ownerId: 'o', revision: 1, accountId: ACC, model: 'ag/gemini-3.8-flash', parameters: {} } },
+    purposes: { defaults: { chat: 'profiles:p1' } },
+  } as never;
+
+  it('merges services:/accounts: ids of one service into a 服务名 · 模型 row', async () => {
+    const dir = fixture({ '2026-10-28.jsonl': [
+      turn('personal-session:v1:' + 'a'.repeat(64), [{ provider: SVC, model: 'ag/gemini-3.8-flash', p: 100 }, { provider: ACC, model: 'ag/gemini-3.8-flash', p: 50 }], NOON,
+        { origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: '42', conversation: { name: '测试群' } } }),
+    ] });
+    const index = createProviderDisplayIndex(graph);
+    const s = await buildUsageStats(dir, range(), { resolveProvider: id => index.resolveProvider(id) });
+    expect(s.byModel).toHaveLength(1);
+    expect(s.byModel[0]).toMatchObject({ provider: SVC, model: 'ag/gemini-3.8-flash', displayName: 'AG 中转 · ag/gemini-3.8-flash', providerLabel: 'AG 中转', inputTokens: 150, calls: 2 });
+    expect(s.byModel[0]!.providerIds).toEqual([ACC, SVC].sort());
+    expect(s.modelLabels).toEqual({ [`${SVC}/ag/gemini-3.8-flash`]: 'AG 中转 · ag/gemini-3.8-flash' });
+    expect(s.series.find(b => b.calls)!.byModel).toEqual({ [`${SVC}/ag/gemini-3.8-flash`]: 150 });
+    expect(s.bySession[0]).toMatchObject({ displayName: 'qq · 群 测试群' });
+    expect(s.bySession[0]).not.toHaveProperty('platform');
+    // Without a resolver opaque ids still merge by model and never show a UUID.
+    const bare = await buildUsageStats(dir, range());
+    expect(bare.byModel).toHaveLength(1);
+    expect(bare.byModel[0]!.displayName).toBe('ag/gemini-3.8-flash');
+  });
+
+  it('labels the two input totals: all reported calls vs the first-request estimate', async () => {
+    const dir = fixture({ '2026-10-28.jsonl': [
+      turn('s', [{ p: 1000 }, { p: 3000 }], NOON, { context_budget: { segments: { history: 500, system: 200, user: 100, active_skills: 50 } } }),
+      turn('s', [{ p: 400 }], NOON + 1),
+    ] });
+    const s = await buildUsageStats(dir, range());
+    expect(s.totals).toMatchObject({ inputTokens: 4400, inputBasis: 'reported-all-calls' });
+    expect(s.inputBreakdown).toEqual({ basis: 'first-request-estimate', turns: 1, history: 500, fixed: 200, user: 100, other: 50, estimatedTotal: 850, firstRequestInputTokens: 1000 });
+  });
+
+  it('buckets by the requested time zone, not the process zone', async () => {
+    // 2026-10-28T20:00Z is 10-29 04:00 in Shanghai and 10-28 in UTC.
+    const at = Date.UTC(2026, 9, 28, 20);
+    expect(dayKeyOf(at, 'Asia/Shanghai')).toBe('2026-10-29');
+    expect(dayKeyOf(at, 'UTC')).toBe('2026-10-28');
+    expect(bucketStartOf(at, 'day', 'Asia/Shanghai')).toBe(Date.UTC(2026, 9, 28, 16));
+    expect(bucketStartOf(at, 'hour', 'Asia/Kolkata')).toBe(Date.UTC(2026, 9, 28, 19, 30));
+    // DST: 2026-03-08 is 23 h long in New York.
+    const ny = bucketStartOf(Date.UTC(2026, 2, 8, 18), 'day', 'America/New_York');
+    expect(ny).toBe(Date.UTC(2026, 2, 8, 5));
+    const dir = fixture({ '2026-10-28.jsonl': [turn('s', [{ p: 7 }], at)] });
+    const s = await buildUsageStats(dir, { since: Date.UTC(2026, 9, 27, 16), until: Date.UTC(2026, 9, 30, 16), bucket: 'day', timeZone: 'Asia/Shanghai' });
+    expect(s.range.timeZone).toBe('Asia/Shanghai');
+    expect(s.series.map(b => b.bucketStart)).toEqual([Date.UTC(2026, 9, 27, 16), Date.UTC(2026, 9, 28, 16), Date.UTC(2026, 9, 29, 16)]);
+    expect(s.series.map(b => b.inputTokens)).toEqual([0, 7, 0]);
+  });
+
+  it('does not read hashed session keys as platform:scope:scene', () => {
+    expect(parseSessionKey('scene-task:v1:' + 'b'.repeat(64))).toEqual({});
+  });
+
+  it('validates the requested time zone and defaults to the instance zone', () => {
+    expect(resolveUsageStatsQuery({}, NOON, 'Asia/Shanghai').timeZone).toBe('Asia/Shanghai');
+    expect(resolveUsageStatsQuery({ timeZone: 'UTC' }, NOON, 'Asia/Shanghai').timeZone).toBe('UTC');
+    expect(() => resolveUsageStatsQuery({ timeZone: 'Mars/Olympus' }, NOON)).toThrow(PluginConsoleRpcError);
+  });
+
+  it('passes the bound provider display into the aggregation', async () => {
+    const seen: unknown[] = [];
+    const status = new AssistantStatus();
+    const svc = new UsageStatsService({
+      dir: () => '/x', now: () => NOON, timeZone: () => 'UTC',
+      providerResolver: async () => (id: string) => createProviderDisplayIndex(graph).resolveProvider(id),
+      build: async (_d, q, options) => { seen.push(q.timeZone, options.resolveProvider?.(ACC)); return { range: q } as never; },
+    });
+    await svc.stats({});
+    expect(seen).toEqual(['UTC', { key: SVC, label: 'AG 中转' }]);
+    status.bindProviderDisplay(async () => createProviderDisplayIndex(graph));
+  });
+});
+
 describe('resolveUsageStatsQuery', () => {
   it('defaults to 7 days ending now, choosing the bucket by range', () => {
     expect(resolveUsageStatsQuery({}, NOON)).toEqual({ since: NOON - 7 * DAY, until: NOON, bucket: 'day' });
+    expect(resolveUsageStatsQuery({}, NOON, 'UTC')).toEqual({ since: NOON - 7 * DAY, until: NOON, bucket: 'day', timeZone: 'UTC' });
     expect(resolveUsageStatsQuery({ since: NOON - DAY }, NOON).bucket).toBe('hour');
     expect(resolveUsageStatsQuery({ since: NOON - 2 * DAY }, NOON).bucket).toBe('hour');
     expect(resolveUsageStatsQuery({ since: NOON - 3 * DAY, bucket: 'hour' }, NOON).bucket).toBe('hour');

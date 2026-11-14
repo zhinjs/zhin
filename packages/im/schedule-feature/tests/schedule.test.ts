@@ -93,6 +93,29 @@ describe('Schedule Feature', () => {
     ]);
   });
 
+  it('passes title, titleI18n and kind to the Host and validates them (#1250)', () => {
+    const owner = rootPluginId();
+    const seen: Record<string, unknown>[] = [];
+    const definition = defineSchedule({ cron: '*/10 * * * * *', title: '写入消息统计', titleI18n: { en: 'Flush message statistics' }, kind: 'plugin-internal', execute() {} });
+    expect(definition).toMatchObject({ title: '写入消息统计', titleI18n: { en: 'Flush message statistics' }, kind: 'plugin-internal' });
+    const host = new PluginScheduleHost(owner, {
+      register(job) { seen.push({ ...job }); return () => {}; },
+      list: () => [],
+    }, createGenerationAdmissionGate());
+    const slot = createCapabilitySlot({ owner, feature: scheduleFeatureId, localName: 'flush-stats',
+      source: '/project/schedules/flush-stats/index.ts', definition });
+    const snapshot: RuntimeSnapshot = { generation: 1, root: owner, tree: new Map(), config: new Map(),
+      resources: new Map([[owner, new Map([[scheduleHostToken.id, host]])]]),
+      capabilities: new Map([[slot.id, slot]]), projections: new Map() };
+    const index = new ScheduleIndex([slot], snapshot);
+    index.start();
+    expect(seen[0]).toMatchObject({ title: '写入消息统计', titleI18n: { en: 'Flush message statistics' }, kind: 'plugin-internal' });
+    index.stop();
+    expect(() => defineSchedule({ cron: '0 * * * * *', title: 1 as never, execute() {} })).toThrow('title');
+    expect(() => defineSchedule({ cron: '0 * * * * *', kind: 'reminder' as never, execute() {} })).toThrow('kind');
+    expect(() => defineSchedule({ cron: '0 * * * * *', titleI18n: { en: 2 } as never, execute() {} })).toThrow('titleI18n');
+  });
+
   it('cleans every staged registration and preserves activation failure when one disposer throws', () => {
     const owner = rootPluginId();
     const activationError = new Error('third job activation failed');

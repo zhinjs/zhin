@@ -137,6 +137,23 @@ describe('Sandbox scoped multi-connection transport', () => {
     expect(first.frames.some(frame => frame.messageId === nextReceipt)).toBe(false);
   });
 
+  it('treats typed [@bot] in a group as a mention of the bot (#1250)', async () => {
+    const { receive, connect } = await fixture();
+    const first = await connect();
+    const scene: Scene = { type: 'group', id: 'mention-room' };
+    await first.subscribe(scene);
+    first.client.send(JSON.stringify({ ...scene, content: '[@shared-bot] 你好' }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    expect(receive.mock.calls[0]![0]).toMatchObject({
+      mentioned: true,
+      content: '你好',
+      segments: [{ type: 'mention', data: { target: 'shared-bot' } }, { type: 'text', data: { text: ' 你好' } }],
+    });
+    first.client.send(JSON.stringify({ ...scene, content: '[@someone-else] 你好' }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    expect((receive.mock.calls[1]![0] as { mentioned?: boolean }).mentioned).toBeUndefined();
+  });
+
   it('lets legacy inputs select their scene and generates one shared ID when absent', async () => {
     const { endpoint, receive, connect } = await fixture();
     const first = await connect(), second = await connect();
