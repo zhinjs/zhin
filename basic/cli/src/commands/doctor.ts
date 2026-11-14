@@ -36,6 +36,7 @@ import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
+import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
@@ -619,6 +620,23 @@ export const doctorCommand = new Command('doctor')
         }
       } catch {
         results.push({ name: 'Zhin 包单实例', status: 'warn', message: '无法检查 node_modules 中的 zhin 包实例' });
+      }
+    }
+
+    // 7c. 网关原生依赖 node-pty（Console 终端）：pnpm 10+ 默认跳过其构建脚本（#1250）。
+    // 子进程在项目目录解析网关后加载，不经 CLI 自己的依赖树；项目未安装网关时跳过。
+    if (fs.existsSync(nodeModulesPath)) {
+      const probe = await probeGatewayNativeModule(cwd);
+      if (probe.status === 'ok') {
+        results.push({ name: '终端依赖 node-pty', status: 'ok', message: '可加载（Console 终端可用）' });
+      } else if (probe.status === 'failed') {
+        const pkg = await readProjectPackage().catch(() => ({}));
+        results.push({
+          name: '终端依赖 node-pty',
+          status: 'warn',
+          message: `无法加载（${probe.reason}）：Console 的本地终端不可用，其余功能不受影响。pnpm 10+ 默认跳过原生依赖的构建脚本`,
+          fix: nativeModuleFixCommand(cwd, pkg),
+        });
       }
     }
 

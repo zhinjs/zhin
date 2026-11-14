@@ -121,7 +121,7 @@ describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm
       expect(pkg.dependencies.ai).toBe('latest');
       const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'));
       expect(workspace.strictPeerDependencies).toBe(false);
-      expect(workspace.allowBuilds).toEqual({ esbuild: true });
+      expect(workspace.allowBuilds).toEqual({ esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true });
       expect(await fs.pathExists(path.join(projectPath, '.npmrc'))).toBe(false);
 
       execSync('pnpm install', {

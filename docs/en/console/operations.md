@@ -103,8 +103,24 @@ console:
         hostFingerprint: SHA256:…             # strongly recommended
 ```
 
-- The local shell needs the optional dependency `node-pty`, SSH needs `ssh2`; when missing, the target shows "unavailable" with an install hint.
+- The local shell needs the optional dependency `node-pty`, SSH needs `ssh2`; when missing, the target shows "unavailable" with an install hint. The same happens when pnpm skipped their build scripts; see below.
 - SSH credentials come only from local key files or environment variables; they never pass through the browser and never appear in any response. The browser can only pick a target by `name`.
+
+### Build scripts of the native dependencies {#native-build}
+
+`node-pty`, `ssh2` and `cpu-features` (an optional dependency of `ssh2`) compile a native module when installed. Since pnpm 10, dependency build scripts do not run by default: pnpm only prints "Ignored build scripts" (pnpm 11 fails `pnpm install` outright), so `node-pty` is installed but cannot load and the local shell is unavailable. Allow them in the project's `pnpm-workspace.yaml`:
+
+```yaml
+allowBuilds:
+  node-pty: true
+  ssh2: true
+  cpu-features: true
+```
+
+- Projects created by `create-zhin-app` already contain this. In an existing project, run `zhin migrate` (preview with `--dry-run` first): missing entries are added, existing ones are kept, and an entry set to `false` is left alone.
+- pnpm 11 only reads `allowBuilds` and no longer reads the `pnpm` field of `package.json`; pnpm releases before 10.26 read `onlyBuiltDependencies`. When the project already has an `onlyBuiltDependencies` list (in `pnpm-workspace.yaml` or `package.json#pnpm`), `zhin migrate` appends to it too.
+- After allowing them, run `pnpm install` (or `pnpm rebuild node-pty`) to build. Platforms without prebuilt binaries need Python and a C/C++ toolchain.
+- `zhin doctor` loads the gateway's `node-pty` from the project directory and warns with the repair command when it fails; projects without `@zhin.js/gateway` are skipped. npm runs build scripts by default; use `npm rebuild node-pty` when the build failed.
 
 ### Pinning SSH host fingerprints {#ssh-fingerprint}
 

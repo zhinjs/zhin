@@ -491,6 +491,95 @@ describe('migrate', () => {
   });
 });
 
+describe('migrate: build scripts of the gateway native dependencies (#1250)', () => {
+  const botPackage = (extra: Record<string, unknown> = {}) => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      private: true,
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2', '@zhin.js/gateway': '~9.4.0' },
+      ...extra,
+    }, null, 2));
+    return pkgPath;
+  };
+  const workspace = () => yaml.parse(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8'));
+
+  it('appends the missing allowBuilds entries and keeps the existing workspace settings and comments', () => {
+    const pkgPath = botPackage();
+    fs.writeFileSync(path.join(tmp, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    const original = "# project workspace\npackages:\n  - '.'\n  - 'plugins/*'\nallowBuilds:\n  esbuild: true\n  node-pty: true\n";
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), original);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
+    expect(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8')).toBe(original);
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('[dry-run] pnpm-workspace.yaml allowBuilds.ssh2: true');
+    expect(preview).toContain('[dry-run] pnpm-workspace.yaml allowBuilds.cpu-features: true');
+    expect(preview).not.toContain('allowBuilds.node-pty');
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const written = fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain('# project workspace');
+    expect(workspace()).toEqual({
+      packages: ['.', 'plugins/*'],
+      allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
+    });
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8'))).not.toHaveProperty('pnpm');
+
+    // A second run has nothing left to add.
+    log.mockClear();
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
+    expect(log.mock.calls.flat().join('\n')).not.toContain('allowBuilds');
+  });
+
+  it('creates pnpm-workspace.yaml for a pnpm project without one and keeps an explicit denial', () => {
+    const pkgPath = botPackage({ packageManager: 'pnpm@11.27.1' });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(workspace()).toEqual({ allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true } });
+
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'allowBuilds:\n  node-pty: false\n');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': false, ssh2: true, 'cpu-features': true });
+    expect(log.mock.calls.flat().join('\n')).toContain('allowBuilds.node-pty 为 false，保留');
+  });
+
+  it('appends to existing onlyBuiltDependencies lists, and adds one for pnpm releases before allowBuilds', () => {
+    const pkgPath = botPackage({ packageManager: 'pnpm@10.12.1', pnpm: { onlyBuiltDependencies: ['esbuild', 'node-pty'] } });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false })).toBe(true);
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty', 'ssh2', 'cpu-features']);
+    expect(workspace()).toEqual({
+      allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
+      onlyBuiltDependencies: ['node-pty', 'ssh2', 'cpu-features'],
+    });
+
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - sharp\n  - ssh2\n');
+    botPackage({ packageManager: 'pnpm@11.27.1' });
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(workspace().onlyBuiltDependencies).toEqual(['sharp', 'ssh2', 'node-pty', 'cpu-features']);
+  });
+
+  it('leaves npm projects and projects without the gateway alone', () => {
+    const pkgPath = botPackage();
+    fs.writeFileSync(path.join(tmp, 'package-lock.json'), '{}');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(fs.existsSync(path.join(tmp, 'pnpm-workspace.yaml'))).toBe(false);
+
+    fs.rmSync(path.join(tmp, 'package-lock.json'));
+    fs.rmSync(path.join(tmp, 'zhin.config.yml'));
+    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'plugin', dependencies: { 'zhin.js': '^9.4.2' } }));
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(fs.existsSync(path.join(tmp, 'pnpm-workspace.yaml'))).toBe(false);
+  });
+});
+
 describe('schedule (running Host)', () => {
   let requests: { url: string; method: string; body: any }[];
   function stubHost(reply: (path: string) => { status: number; body: unknown }) {

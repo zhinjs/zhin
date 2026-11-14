@@ -231,7 +231,7 @@ describe('createWorkspace', () => {
 
     const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
     expect(workspace.packages).toEqual(['.', 'plugins/*', 'packages/*'])
-    expect(workspace.allowBuilds).toEqual({ esbuild: true })
+    expect(workspace.allowBuilds).toEqual({ esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true })
   })
 
   it('uses the real generated config filename for JSON projects', async () => {

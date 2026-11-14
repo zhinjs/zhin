@@ -371,3 +371,46 @@ describe('doctor adapter endpoints check', () => {
     }
   });
 });
+
+describe('doctor: gateway native dependency node-pty (#1250)', () => {
+  /** The project's gateway (ESM-only, like the real package) with node-pty installed next to it. */
+  const installGateway = (directory: string, nodePty: 'loads' | 'broken') => {
+    const gateway = path.join(directory, 'node_modules', '@zhin.js', 'gateway');
+    fs.mkdirSync(path.join(gateway, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(gateway, 'package.json'), JSON.stringify({ name: '@zhin.js/gateway', type: 'module', exports: { '.': { import: './lib/index.js' } } }));
+    fs.writeFileSync(path.join(gateway, 'lib', 'index.js'), 'export {};\n');
+    const pty = path.join(gateway, 'node_modules', 'node-pty');
+    fs.mkdirSync(pty, { recursive: true });
+    fs.writeFileSync(path.join(pty, 'package.json'), JSON.stringify({ name: 'node-pty', main: 'index.js' }));
+    fs.writeFileSync(path.join(pty, 'index.js'), nodePty === 'loads'
+      ? 'module.exports = { spawn() {} };\n'
+      : "throw new Error(\"Cannot find module '../build/Release/pty.node'\");\n");
+  };
+
+  it('warns with the repair command when node-pty does not load', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      installGateway(dir, 'broken');
+      fs.writeFileSync(path.join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    });
+    try {
+      expect(output).toContain('终端依赖 node-pty: 无法加载');
+      expect(output).toContain('pty.node');
+      expect(output).toContain('Console 的本地终端不可用');
+      expect(output).toContain('pnpm rebuild node-pty');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('reports ok when node-pty loads', async () => {
+    const { output, directory } = await runDoctor(dir => installGateway(dir, 'loads'));
+    try {
+      expect(output).toContain('终端依赖 node-pty: 可加载');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('skips the check when the project has no gateway', async () => {
+    const { output, directory } = await runDoctor(dir => fs.mkdirSync(path.join(dir, 'node_modules')));
+    try {
+      expect(output).not.toContain('node-pty');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});

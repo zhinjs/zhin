@@ -3,6 +3,7 @@
  *
  * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖到 registry 上的最新版本（写 ^x.y.z；精确版本保持精确，
  *   用户锁定的依赖默认保留），并按目标 zhin.js 的依赖对齐 pnpm.overrides 中的 @zhin.js/*
+ * - 在 pnpm-workspace.yaml 的 allowBuilds 中补齐网关原生依赖（node-pty、ssh2、cpu-features），已有条目保留
  * - 补全缺失的推荐 scripts、engines
  * - 确保 data、plugins 等目录存在
  * - 执行 pnpm install
@@ -25,6 +26,7 @@ import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from 
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
+import { syncNativeBuildAllowance } from '../utils/native-build-deps.js';
 
 const cwd = process.cwd();
 
@@ -191,6 +193,10 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
   }
 
   if (syncZhinOverrides(pkg, upgraded, lookup, options.dryRun)) changed = true;
+
+  // pnpm 10+ skips dependency build scripts: allow the gateway's native ones (node-pty for the
+  // Console terminal) in pnpm-workspace.yaml; the install below then builds them.
+  if (syncNativeBuildAllowance(path.dirname(pkgPath), pkg, options.dryRun)) changed = true;
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。
   if (!pkg.scripts) pkg.scripts = {};
