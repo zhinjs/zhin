@@ -206,7 +206,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     platform: 'node',
   } as const);
   const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
-  // ADR 0056 §3: people lists move out of the configuration into chat_roles (first start), or stop startup.
+  // ADR 0056 §3 / ADR 0060 §4: people lists move out of the configuration into chat_roles (first start); afterwards they wait for a Console decision.
   const chatRoleMigration = await prepareChatRoleMigration({
     projectRoot: options.root, config, logger: getLogger('chat-roles'),
     expand: document => hostEnvironment.expandMissingAsEmpty(document) as Readonly<Record<string, unknown>>,
@@ -256,11 +256,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
   // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
   const featureHost = createFeatureHost({
-    database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
-    afterLoad: async (roles, candidate, overrides) => {
+    database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots, projectRoot: options.root,
+    afterLoad: async (roles, candidate, overrides, audit) => {
       await chatRoleMigration.complete(roles, {
         persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
         adapterKind: chatRoleMigrationAdapterKinds(candidate),
+        ...(audit ? { audit } : {}),
       });
       await featureOverrideMigration.complete(overrides, candidate);
     },

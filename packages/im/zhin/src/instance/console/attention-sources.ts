@@ -9,7 +9,9 @@ import type {
   AttentionPluginsRead,
   AttentionSources,
   AttentionToolApproval,
+  AttentionChatRoles,
 } from './attention.js';
+import { hasGlobalOwner } from '../chat-owner-claim.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { buildManagedPluginList } from './plugin-projection.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
@@ -34,7 +36,7 @@ const REVISION_FILES = Object.freeze(['package.json', ...ROOT_CONFIG_FILE_NAMES]
  * `AttentionSourceCache` keyed by `revision` (project file mtimes + runtime generation).
  */
 export function createAttentionSources(composition: ConsoleRpcComposition): AttentionSources {
-  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile } = composition;
+  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores } = composition;
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
     if (!snapshots) throw new Error('Runtime snapshots are unavailable');
     const lease = snapshots.acquire();
@@ -103,6 +105,19 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         const value = row?.timestamp;
         const latest = value instanceof Date ? value.toISOString() : typeof value === 'string' || typeof value === 'number' ? new Date(value).toISOString() : null;
         return { count, latest };
+      },
+    } : {}),
+    ...(featureStores?.roles ? {
+      chatRoles: async (): Promise<AttentionChatRoles> => {
+        const roles = featureStores.roles!;
+        const state = featureStores.chatRoleImports ? await featureStores.chatRoleImports.read() : undefined;
+        const imported = state && state.imported.length && !state.importedAcknowledgedAt ? state.imported : [];
+        return {
+          hasGlobalOwner: hasGlobalOwner(roles),
+          claimOpen: featureStores.claim?.active === true,
+          ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
+          pending: state?.pending ?? [],
+        };
       },
     } : {}),
     revision: async () => {

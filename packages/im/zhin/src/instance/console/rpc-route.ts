@@ -25,6 +25,7 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
+import { dispatchChatRoleImportsConsoleRpc } from './chat-role-imports-rpc.js';
 import { AttentionObservations, AttentionSourceCache, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
 import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
@@ -108,6 +109,17 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
+      }
+      // ADR 0060 §4.2: the configuration import of chat roles needs global `iam.manage`.
+      const chatRoleImportsReply = await dispatchChatRoleImportsConsoleRpc(message, {
+        ...(options.featureStores?.chatRoleImports ? { imports: options.featureStores.chatRoleImports } : {}),
+        ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
+        authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
+        actor: auditActor(principal),
+        publishEvent: (type, data) => options.hub.publish(type, data),
+      });
+      if (chatRoleImportsReply) {
+        return reply(chatRoleImportsReply.status, chatRoleImportsReply.body, noStore);
       }
       // ADR 0056 §3: chat roles; adapter / endpoint-scoped `iam.manage` counts under its scope.
       const chatRolesReply = await dispatchChatRolesConsoleRpc(message, {

@@ -27,21 +27,38 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
    | `ai.trigger.masters` | 全局 `owner`，为每个已配置的适配器各登记一个身份；跳过本地模拟适配器（能力画像声明 `runtime.sandbox`，其客户端可自选发送者 id）与未能加载的适配器，并写日志 |
    | `ai.trigger.trusted` | 全局 `trusted`，同上 |
 2. 先把这些授予记入 `.zhin/chat-roles-migration.json`（状态 `pending`），再从配置文件中删除这些字段，并在日志中列出被移走的字段；
-3. 数据库就绪后写入 `chat_roles`（同一身份同一作用范围已有授予时保留原值），记录改为 `done`。
+3. 数据库就绪后写入 `chat_roles`（同一身份同一作用范围已有授予时**保留较高者**：只升不降、从不删除，ADR 0060 §4.3），记录改为 `done`，并记下每条的结果（`imported`）。Console「需要你处理」出现信息项 `chat-roles.imported`，核对后可撤销或确认已读。
 
 迁移中途进程退出时，下次启动会从 `pending` 记录继续，不会丢失。没有关系型数据库（sqlite / mysql / pg）时，迁移来的授予只在内存中生效，记录保持 `pending`（标记 `memoryOnlyAt`），直到配置了关系型数据库再写表；此时授予 / 撤销都会被拒绝（Console 503 `chat-roles-unpersisted`，聊天回复「未保存」），因此不会出现「撤销后下次启动复活」。
 
-迁移完成后，如果配置文件中**再次出现**这些字段，实例启动会报错（`LEGACY_CHAT_ROLE_CONFIG`）并指向本文。请改用：
+迁移完成后，如果配置文件中**再次出现**这些字段（ADR 0060 §4.2，不再启动失败）：
+
+- **不会自动授予**——之后改配置的人不一定是主人（`ops.config.write` 可以单独授予）；
+- 实例先把它们记入 `.zhin/chat-roles-migration.json` 的 `pendingImports`，再从配置文件删除（适配器配置 Schema 不接受这些字段），启动日志告警；
+- Console「需要你处理」出现 `chat-roles.import-pending`，持有**全局** `iam.manage` 的用户逐条「导入」或「忽略」（`chat-roles.imports.list|resolve`）；导入沿用首次导入规则，并写审计 `chat-roles.import`。
+
+日常授予请直接使用：
 
 - Console：全局 / 适配器 / 账号 / 会话对象页的「角色」页签（`chat-roles.grant` / `revoke`，需要 `iam.manage`）；
 - 聊天：开启 `features.selfService.enabled` 后发送 `角色 授予 <用户> <owner|admin|trusted> [层级]` / `role grant …`。
 
 ::: warning 已删除、没有兼容
-以下字段出现在配置中会直接报错（`LEGACY_CHAT_ROLE_CONFIG`）：
+以下字段出现在配置中仍会直接报错（`LEGACY_CHAT_ROLE_CONFIG`）：
 
 - `features.selfService.platformAdmins`、`features.selfService.roles`、`features.selfService.allowUsers`；
 - 适配器块的 `roles`（`roles.mappings` / `roles.inherit`）与账号项的 `endpoints[i].roles`——平台身份 → zhin 角色的映射规则已删除（见第 2 节）。
 :::
+
+### 第一位全局 owner {#first-owner}
+
+新部署（没有任何全局 `owner`）时：
+
+- Console：「需要你处理」出现 `chat-roles.no-owner`，在「聊天角色」中授予全局 owner（需要全局 `iam.manage`）。迁移来的 `master` 只是**账号层** owner，不会自动成为全局 owner；需要时在 Console 中提升。
+- 没有 Console 时：实例启动日志与 `zhin status` 打印一次性**认领码**，部署者在真实平台**私聊**机器人发送 `认领 <码>`（`claim <code>`）即成为全局 owner。认领码只在尚无全局 owner 且有关系型数据库时有效，用一次即失效、重启轮换、连错 5 次轮换；群聊中发送的正确码会立即作废；模拟适配器（Sandbox 等，`runtime.sandbox`）上不接受认领。码保存在 `.zhin/chat-owner-claim.json`（权限 0600），有 owner 或实例退出时删除。
+
+### 回滚（降级到旧版本） {#rollback}
+
+迁移记录升级为版本 2 时，原版本 1 文件保存在 `.zhin/chat-roles-migration.v1.json`。降级前把它改名回 `.zhin/chat-roles-migration.json`（旧版本读不懂版本 2，会报 malformed）。`chat_roles` 表结构未变，已授予的角色不受影响；旧版本会对配置中再次出现的人员字段重新启动失败。
 
 ## 2. 平台身份不再映射为 zhin 角色 {#mappings}
 

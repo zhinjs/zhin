@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { assertInstanceTable } from '@zhin.js/database';
 import {
   isChatIdentity, isChatRole, normalizeChatRoleScope, type ChatRoleService,
-  type ChatIdentity, type ChatRole, type ChatRoleEntry, type ChatRoleGrantStore,
+  type ChatIdentity, type ChatRole, type ChatRoleChange, type ChatRoleEntry, type ChatRoleGrantStore,
 } from '@zhin.js/core';
 import type { DatabaseHost, DatabaseHostModel, FeatureConfigLevel } from '@zhin.js/plugin-runtime';
 
@@ -82,6 +82,7 @@ export class ChatRoleStore implements ChatRoleGrantStore {
   readonly #database?: DatabaseHost;
   readonly #grants = new Map<string, ChatRoleEntry>();
   readonly #queue = new SerialQueue();
+  readonly #listeners = new Set<(change: ChatRoleChange) => void>();
 
   constructor(options: Readonly<{ database?: DatabaseHost }> = {}) { this.#database = options.database; }
 
@@ -137,6 +138,18 @@ export class ChatRoleStore implements ChatRoleGrantStore {
 
   list(): readonly ChatRoleEntry[] { return [...this.#grants.values()]; }
 
+  /** Saved grants and revocations (ADR 0060 §6 `ChatRoleReader.subscribe`); listener errors are ignored. */
+  subscribe(listener: (change: ChatRoleChange) => void): () => void {
+    this.#listeners.add(listener);
+    return () => { this.#listeners.delete(listener); };
+  }
+
+  #notify(change: ChatRoleChange): void {
+    for (const listener of [...this.#listeners]) {
+      try { listener(change); } catch { /* a listener never breaks a write */ }
+    }
+  }
+
   get(level: FeatureConfigLevel, key: string, identity: ChatIdentity): ChatRoleEntry | undefined {
     return this.#grants.get(rowId(level, key, identity));
   }
@@ -159,6 +172,7 @@ export class ChatRoleStore implements ChatRoleGrantStore {
         else await model.insert({ id, ...row });
       }
       this.#grants.set(id, value);
+      this.#notify(Object.freeze({ kind: 'grant', identity: Object.freeze({ ...identity }), level: input.level, key, role: input.role }));
       return 'saved' as const;
     });
   }
@@ -171,6 +185,7 @@ export class ChatRoleStore implements ChatRoleGrantStore {
       if (!this.#grants.has(id)) return 'unchanged' as const;
       await model?.delete().where({ id });
       this.#grants.delete(id);
+      this.#notify(Object.freeze({ kind: 'revoke', identity: Object.freeze({ adapter: input.adapter, userId: input.userId }), level: input.level, key }));
       return 'saved' as const;
     });
   }

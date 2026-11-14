@@ -14,6 +14,7 @@ import { LOCAL_GATEWAY_RPC, type LocalGatewayInfoResult } from '@zhin.js/gateway
 import { consoleLink, loadGatewayHttpConfig } from '@zhin.js/gateway/server';
 import { defaultInstanceLogFile, isSupervisedInstanceProcess } from '@zhin.js/gateway/supervisor';
 import { formatStartOptionHelp, parseStartOptions } from '@zhin.js/runtime';
+import { readChatOwnerClaim, renderChatOwnerClaim } from '../utils/chat-owner-claim.js';
 import {
   describeGatewayError,
   describeInstance,
@@ -161,12 +162,15 @@ export const statusCommand = new Command('status')
     const { root } = target();
     try {
       const running = await probeGateway({ root });
+      // ADR 0060 §3.3: the claim code of the running instance (only while there is no chat owner).
+      const claim = running?.instance.state === 'running' ? await readChatOwnerClaim(root, running.instance) : undefined;
       if (options.json) {
         process.stdout.write(`${JSON.stringify(running
-          ? { gateway: { running: true, ...running.gateway }, instance: running.instance, consoleInitialized: running.consoleInitialized }
+          ? { gateway: { running: true, ...running.gateway }, instance: running.instance, consoleInitialized: running.consoleInitialized,
+            ...(claim ? { chatOwnerClaim: { code: claim.code, createdAt: claim.createdAt } } : {}) }
           : { gateway: { running: false }, instance: null }, null, 2)}\n`);
       } else if (running) {
-        process.stdout.write(`${renderStatus(running).join('\n')}\n`);
+        process.stdout.write(`${[...renderStatus(running), ...(claim ? renderChatOwnerClaim(claim) : [])].join('\n')}\n`);
       } else {
         process.stdout.write('网关：未运行（zhin start 启动）\n');
       }

@@ -5,7 +5,7 @@
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
  * when `features.selfService.enabled` is true.
  */
-import { ChatRoleService } from '@zhin.js/core';
+import { ChatRoleService, chatRolesToken, createChatRoleReader, type ChatRoleReader } from '@zhin.js/core';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -14,6 +14,8 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatOwnerClaim, installChatOwnerClaim } from './chat-owner-claim.js';
+import { ChatRoleImportBook, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
 import {
   defineFeatureOverrideTable, FeatureOverrideStore,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
@@ -28,7 +30,15 @@ export interface FeatureHostOptions {
    * Runs once after the stores loaded (configuration migration, ADR 0056 §3); `candidate` is the
    * generation being activated (its adapter capability profiles classify the migration targets).
    */
-  readonly afterLoad?: (roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined, overrides: FeatureOverrideStore) => Promise<void>;
+  readonly afterLoad?: (
+    roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined, overrides: FeatureOverrideStore,
+    audit: ChatRoleAudit | undefined,
+  ) => Promise<void>;
+  /**
+   * Project root: enables the claim code file (`zhin status`) and the Console side of the role
+   * migration record (ADR 0060 §3.3 / §4.2). Without it neither is offered.
+   */
+  readonly projectRoot?: string;
 }
 
 export interface FeatureHost {
@@ -37,6 +47,10 @@ export interface FeatureHost {
   /** A global owner with an identity on the account's adapter (owner approval address). */
   resolveEndpointOwner(alias: string, endpointId: string): string | undefined;
   readonly selfService: FeatureSelfServiceConfig;
+  /** Read-only chat roles for plugins (`chatRolesToken`, ADR 0060 §6). */
+  readonly reader: ChatRoleReader;
+  /** ADR 0060 §3.3: the first global owner without a Console (open while there is none). */
+  readonly claim: ChatOwnerClaim;
   /** Root resources: the conversation reader, the load step and (when enabled) the chat commands. */
   install(deps: Readonly<{
     context: Omit<FeatureRpcContext, 'authorize' | 'actor' | 'allowedFields' | 'authScope' | 'stores'>;
@@ -92,10 +106,32 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       return Object.freeze([...seen.values()]);
     } finally { lease.release(); }
   };
-  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations });
+  let audit: ChatRoleAudit | undefined;
+  const adapterKind = () => {
+    const lease = options.snapshots().acquire();
+    try { return chatRoleMigrationAdapterKinds(lease.value); } finally { lease.release(); }
+  };
+  const chatRoleImports = options.projectRoot
+    ? new ChatRoleImportBook({ projectRoot: options.projectRoot, roles: () => roles, adapterKind, audit: entry => audit?.(entry) })
+    : undefined;
+  const claim = new ChatOwnerClaim({ roles, ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+    logger: getLogger('chat-roles'), audit: () => audit });
+  const reader = createChatRoleReader({
+    roles: () => roles,
+    conversationKey: conversation => {
+      const lease = options.snapshots().acquire();
+      try { return resolveEndpointFeatureKey(lease.value, conversation.endpoint.id, undefined, conversation); }
+      finally { lease.release(); }
+    },
+    subscribe: listener => roles.store.subscribe(listener),
+  });
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, claim,
+    ...(chatRoleImports ? { chatRoleImports } : {}) });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
+    if (deps.audit) audit = deps.audit;
     context.resources.provide(featureConversationOverridesToken, overrides.reader);
+    context.resources.provide(chatRolesToken, reader);
     context.handoff.add({
       activateNext: async signal => {
         signal.throwIfAborted();
@@ -104,10 +140,12 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         await roles.store.load();
         let candidate: RuntimeSnapshot | undefined;
         try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
-        await options.afterLoad?.(roles, candidate, overrides);
+        await options.afterLoad?.(roles, candidate, overrides, audit);
         loaded = true;
+        await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
       },
     });
+    installChatOwnerClaim({ claim, snapshots: options.snapshots() })(context);
     installFeatureSelfService({
       config: selfService, roles, snapshots: options.snapshots(),
       context: { ...deps.context, stores },
@@ -115,5 +153,5 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       ...(deps.audit ? { audit: deps.audit } : {}),
     })(context);
   };
-  return Object.freeze({ stores, roles, resolveEndpointOwner, selfService, install });
+  return Object.freeze({ stores, roles, reader, claim, resolveEndpointOwner, selfService, install });
 }

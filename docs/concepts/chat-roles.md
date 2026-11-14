@@ -89,6 +89,20 @@ interface PlatformStanding {
 功能开关、订阅等是 zhin 的功能，平台群主 / 管理员需要被授予 zhin 角色才能使用：由 owner 在聊天中发送 `角色 授予 @群主 admin`，或在 Console 会话页的「角色」页签授予。
 :::
 
+## 「谁是管理员」的唯一来源（ADR 0060） {#single-source}
+
+聊天角色（`chat_roles`）是唯一事实来源。历史上「谁是管理员」散在五处，现状与方向：
+
+| 名单 | 现状 | 方向 |
+| --- | --- | --- |
+| 聊天角色 `chat_roles` | 唯一事实来源；身份是「适配器别名 + 用户 id」 | ADR 0060 P2 起在其上增加「人」（一个人可有多个平台身份） |
+| `ai.personalPrincipals` | 仍从配置读取，只表达个人推理配置归谁，不授予角色 | P3 改为「人 ↔ Console 账号」链接，配置字段只作一次性导入 |
+| 适配器 `master` / `trusted`、`ai.trigger.masters` / `trusted` | 只作**种子**：首次启动导入；之后再出现不自动授予，进入 Console「需要你处理」等待确认导入（见[升级指南](../migrations/chat-roles.md)） | 长期作为种子格式支持 |
+| 插件自建名单（`masters` 等） | 不推荐 | 改用 `isOwner` / `hasChatRole` / `chatRolesToken`（见下节） |
+| Console 账号 | 另一个主体体系：Console 权限不等于聊天角色 | P2 起可与聊天中的「人」一对一链接（不传递权限） |
+
+第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用实例日志或 `zhin status` 中的一次性认领码，在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。
+
 ## 在代码里使用
 
 ```ts
@@ -112,9 +126,29 @@ export default defineCommand({
 
 列表各项 AND，单项括号内逗号 OR。不满足时：
 
-- 命令走现有拒绝回复；`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」），zhin 角色与会话条件保持通用提示；命令菜单只列出当前发言者可用的命令。
+- 命令走现有拒绝回复；`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」）；zhin 角色条件说明去哪里获得角色（联系主人 / Console「聊天角色」页，不说缺哪个角色、谁持有），发言者是群主 / 群管理员时另说明平台身份不等于 zhin 角色（ADR 0060 §5.3）；会话条件保持通用提示；命令菜单只列出当前发言者可用的命令。
 - Agent 工具 / 技能在回合开始前就不披露，执行时再校验一次（重新读取发言者当前角色与机器人身份）。
 - 中间件跳过这条消息、继续后续链路（机器人身份只读缓存，缺失或过期视为未知）。因此 permit 不适合必须对每条消息生效的执法型中间件（审核、限流等）。
 - 按钮回调不执行，点击者收到原因。
 
-运行时读取：`message.sender.chatRole`、`message.sender.chatRoleLevels`、`message.sender.platform`；`@zhin.js/core` 提供 `chatRoleIncludes(held, required)`、`chatRoleHeldAt(sender, role, level)`、`hostChatRole(sender)`、`expandChatRole(role)`、`chatRolesFromMessage(message)`；机器人身份由 `AdapterIndex.selfStanding(endpointId, conversation)` 读取。从旧写法升级见[升级到聊天角色](../migrations/chat-roles.md)。
+运行时读取：`message.sender.chatRole`、`message.sender.chatRoleLevels`、`message.sender.platform`。
+
+插件读取聊天角色（ADR 0060 §6，从 `zhin.js` 导入；**不要自建 `masters` / 管理员名单**）：
+
+```ts
+import { chatRolesToken, hasChatRole, isOwner } from 'zhin.js';
+
+isOwner(message.sender);                          // 宿主主人（全局 owner）
+isOwner(message.sender, { level: 'endpoint' });   // 本账号或更高层的 owner
+hasChatRole(message.sender, 'admin');             // 本会话链上的 admin（或 owner）
+
+// 不在消息上下文中（定时任务、Webhook、通知）：只读
+const roles = context.resources.use(chatRolesToken);   // definePlugin setup（命令等能力上下文用 context.use）
+const owners = roles.holders('owner', { adapter: 'qq' });   // 全局 owner 及其身份，用于「通知主人」
+roles.roleOf({ adapter: 'qq', userId: '10001' });          // 某身份在全局层的角色
+roles.subscribe(change => { /* 授予 / 撤销 */ });
+```
+
+命令 / 工具仍首选声明式 `permit`（如 `owner@global`）；`isOwner` / `hasChatRole` 用于代码分支。写入只经 Console 与聊天命令（带门槛与审计）。
+
+另有 `@zhin.js/core` 提供 `chatRoleIncludes(held, required)`、`chatRoleHeldAt(sender, role, level)`、`hostChatRole(sender)`、`expandChatRole(role)`、`chatRolesFromMessage(message)`；机器人身份由 `AdapterIndex.selfStanding(endpointId, conversation)` 读取。从旧写法升级见[升级到聊天角色](../migrations/chat-roles.md)。

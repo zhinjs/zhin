@@ -12,6 +12,7 @@
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
  * | `mcp.disconnected` | Agent MCP servers (configured + connected) | `status.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
+ * | `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending` | chat role store + migration record (ADR 0060) | global `iam.manage` |
  *
  * Text is localized for the request's `locale` (task catalog pattern); dynamic Host text (issues,
  * error messages, ids) is inserted verbatim, except configuration parse errors, which are reduced to
@@ -120,6 +121,20 @@ export interface AttentionErrorLogs {
   readonly latest: string | null;
 }
 
+/** Chat role bootstrap state (ADR 0060 §3 / §4). */
+export interface AttentionChatRoles {
+  readonly hasGlobalOwner: boolean;
+  /** A claim code is open (instance log / `zhin status`). */
+  readonly claimOpen: boolean;
+  /** First import not yet marked as read: grants written / raised / skipped. */
+  readonly imported?: {
+    readonly at: number;
+    readonly entries: readonly { readonly source: string; readonly adapter: string; readonly userId: string; readonly role: string; readonly level: string; readonly result: string }[];
+  };
+  /** Re-appeared configured grants waiting for a decision. */
+  readonly pending: readonly { readonly id: string; readonly source: string; readonly adapter: string; readonly userId: string; readonly role: string; readonly seenAt: number }[];
+}
+
 /** Every source is optional and only read when the caller may view something it reports. */
 export interface AttentionSources {
   readonly loginTasks?: () => readonly AttentionLoginTask[];
@@ -131,6 +146,8 @@ export interface AttentionSources {
   readonly mcpServers?: () => readonly AttentionMcpServer[];
   /** `null` when the log store is not available. */
   readonly errorLogs?: () => Promise<AttentionErrorLogs | null>;
+  /** ADR 0060: chat role bootstrap and configuration import. */
+  readonly chatRoles?: () => Promise<AttentionChatRoles>;
   /**
    * Cheap signal that changes with the project files and the runtime generation; a cached read
    * (see {@link AttentionSourceCache}) older than the current revision is read again.
@@ -142,7 +159,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'chat-roles';
 
 // ---------------------------------------------------------------- shared reads
 
@@ -266,6 +283,27 @@ const messages = createMessages({
   'logs.title': { 'zh-CN': '日志里有 {count} 条错误', en: 'Errors in the logs: {count}' },
   'logs.detail': { 'zh-CN': '持久日志统计；清理日志后重新计数。', en: 'Persistent log count; it restarts after logs are cleaned up.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
+  'roles.noOwner.title': { 'zh-CN': '还没有聊天主人（全局 owner）', en: 'There is no chat owner (global owner) yet' },
+  'roles.noOwner.detail': {
+    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。在「聊天角色」中授予全局 owner；平台群主不会自动成为 zhin 角色。',
+    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Grant one under Chat roles; platform group owners never become zhin roles automatically.',
+  },
+  'roles.noOwner.claim': {
+    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见实例启动日志或 zhin status（一次性，重启轮换）。',
+    en: 'Or send 「claim <code>」 to the bot in a private chat; the code is in the instance log or zhin status (one-time, rotates on restart).',
+  },
+  'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
+  'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
+  'roles.imported.detail': { 'zh-CN': '{entries}。核对后可在「聊天角色」中撤销，并确认已读。', en: '{entries}. Review them, revoke any under Chat roles, then mark this as read.' },
+  'roles.imported.promote': {
+    'zh-CN': '账号层 owner 不等于宿主主人；还没有全局 owner 时，可在「聊天角色」中把其中一位提升为全局 owner。',
+    en: 'An account-level owner is not the host owner; with no global owner yet, you may promote one of them to global owner under Chat roles.',
+  },
+  'roles.pending.title': { 'zh-CN': '配置中又出现了 {count} 条人员名单，等待确认', en: '{count} people-list entries reappeared in the configuration and wait for review' },
+  'roles.pending.detail': {
+    'zh-CN': '{entries}。它们没有被自动授予（改配置的人不一定是主人），已从配置文件移除；逐条「导入」或「忽略」。',
+    en: '{entries}. They were not granted automatically (whoever edits the file is not necessarily an owner) and were removed from the file; import or ignore each.',
+  },
 });
 
 const LOGIN_STEPS = new Set(['qrcode', 'sms', 'slider', 'device', 'auth']);
@@ -293,6 +331,8 @@ export const ATTENTION_PATHS = Object.freeze({
   toolApprovals: '/ops/schedules?tab=admin',
   mcp: '/introspection?tab=mcp',
   errorLogs: '/logs?level=error',
+  /** Global scope page, chat roles tab (ADR 0056 §3 / ADR 0060 §7). */
+  chatRoles: '/scope?tab=roles',
 });
 
 // ---------------------------------------------------------------- configuration problems
@@ -587,6 +627,38 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         title: t('logs.title', { count: logs.count }), detail: t('logs.detail'),
         action: { label: t('logs.action'), path: ATTENTION_PATHS.errorLogs },
         ...(Number.isNaN(latest) ? {} : { since: latest }) }];
+    });
+  }
+
+  // ADR 0060: chat role bootstrap and configuration import (global iam.manage only: who holds a
+  // role and who was named in the configuration is not public).
+  if (sources.chatRoles && allows(P.IAM_MANAGE)) {
+    await read('chat-roles', async () => {
+      const state = await sources.chatRoles!();
+      const action = { label: t('roles.action'), path: ATTENTION_PATHS.chatRoles };
+      const drafts: AttentionDraft[] = [];
+      const who = (entry: { adapter: string; userId: string; role: string; source: string }) => `${entry.source}：${entry.adapter}:${entry.userId} → ${entry.role}`;
+      if (!state.hasGlobalOwner) {
+        drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning', state: { claimOpen: state.claimOpen },
+          title: t('roles.noOwner.title'),
+          detail: state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),
+          action });
+      }
+      if (state.imported?.entries.length) {
+        const entries = state.imported.entries;
+        const promote = !state.hasGlobalOwner && entries.some(entry => entry.role === 'owner' && entry.level !== 'global');
+        drafts.push({ kind: 'chat-roles.imported', severity: 'info', state: { at: state.imported.at, count: entries.length },
+          title: t('roles.imported.title', { count: entries.length }),
+          detail: `${t('roles.imported.detail', { entries: listed(entries.map(entry => `${who(entry)}（${entry.result}）`), locale) })}${promote ? `${locale === 'en' ? ' ' : ''}${t('roles.imported.promote')}` : ''}`,
+          action, since: state.imported.at });
+      }
+      if (state.pending.length) {
+        drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning', state: { ids: state.pending.map(entry => entry.id) },
+          title: t('roles.pending.title', { count: state.pending.length }),
+          detail: t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) }),
+          action, since: Math.min(...state.pending.map(entry => entry.seenAt)) });
+      }
+      return drafts;
     });
   }
 

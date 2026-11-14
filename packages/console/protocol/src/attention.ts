@@ -58,12 +58,21 @@ export type ConsoleAttentionKind =
   /** A configured MCP server is not connected. */
   | 'mcp.disconnected'
   /** The persistent log store holds error entries. */
-  | 'logs.errors';
+  | 'logs.errors'
+  /**
+   * No global chat `owner` exists yet (ADR 0060 §3): grant one in the Console, or claim it with the
+   * code from the instance log / `zhin status`. Visible with global `iam.manage`.
+   */
+  | 'chat-roles.no-owner'
+  /** The first configuration import granted chat roles (information; ADR 0060 §4.1). Global `iam.manage`. */
+  | 'chat-roles.imported'
+  /** People lists named again in the configuration wait for 「导入」/「忽略」 (ADR 0060 §4.2). Global `iam.manage`. */
+  | 'chat-roles.import-pending';
 
 export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.freeze([
   'login.pending', 'endpoint.offline', 'plugin.error', 'plugin.dependencies', 'plugin.config',
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
-  'mcp.disconnected', 'logs.errors',
+  'mcp.disconnected', 'logs.errors', 'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
 ]);
 
 /** The object an item is about. Absent fields do not apply. */

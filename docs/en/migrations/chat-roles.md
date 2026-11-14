@@ -27,21 +27,38 @@ On the first start with this version the instance:
    | `ai.trigger.masters` | global `owner`, one identity per configured adapter — except local simulation adapters (capability profile `runtime.sandbox`, whose clients choose their sender id) and adapters that failed to load; both are logged |
    | `ai.trigger.trusted` | global `trusted`, likewise |
 2. records the grants in `.zhin/chat-roles-migration.json` (status `pending`), removes the fields from the configuration file and logs which fields moved;
-3. once the database is ready, writes them to `chat_roles` (an existing grant for the same identity and scope is kept) and marks the record `done`.
+3. once the database is ready, writes them to `chat_roles` (for an existing grant of the same identity and scope **the higher role wins**: imports only raise, never lower or remove, ADR 0060 §4.3) and marks the record `done` with each grant's outcome (`imported`). The Console inbox shows the information item `chat-roles.imported` to review, revoke or mark as read.
 
 If the process exits half-way, the next start resumes from the `pending` record. Without a relational database (sqlite / mysql / pg) the migrated grants take effect in memory only and the record stays `pending` (marked `memoryOnlyAt`) until a relational database is configured; grants and revocations are refused on such a database (Console 503 `chat-roles-unpersisted`, chat replies "Not saved"), so a revoked migrated role cannot come back on the next start.
 
-After the migration, configuration that names these fields **again** stops startup (`LEGACY_CHAT_ROLE_CONFIG`) and points here. Use instead:
+After the migration, configuration that names these fields **again** no longer stops startup (ADR 0060 §4.2):
+
+- they are **never granted automatically** — whoever edits the file later is not necessarily an owner (`ops.config.write` can be granted on its own);
+- the instance records them in `pendingImports` of `.zhin/chat-roles-migration.json`, then removes them from the configuration file (adapter schemas reject these fields) and logs a warning;
+- the Console inbox shows `chat-roles.import-pending`; a user with **global** `iam.manage` imports or ignores each (`chat-roles.imports.list|resolve`); imports follow the first import's rules and are audited as `chat-roles.import`.
+
+For day-to-day grants use:
 
 - the Console: the **Roles** tab of the global / adapter / account / conversation object pages (`chat-roles.grant` / `revoke`, permission `iam.manage`);
 - chat: with `features.selfService.enabled`, `role grant <user> <owner|admin|trusted> [level]` / `角色 授予 …`.
 
 ::: warning Removed, no compatibility
-These fields stop startup (`LEGACY_CHAT_ROLE_CONFIG`):
+These fields still stop startup (`LEGACY_CHAT_ROLE_CONFIG`):
 
 - `features.selfService.platformAdmins`, `features.selfService.roles`, `features.selfService.allowUsers`;
 - `roles` of an adapter block (`roles.mappings` / `roles.inherit`) and `endpoints[i].roles` of an account — the platform standing → zhin role mapping rules were removed (see section 2).
 :::
+
+### The first global owner {#first-owner}
+
+On a new deployment (no global `owner` at all):
+
+- Console: the inbox shows `chat-roles.no-owner`; grant a global owner under Chat roles (global `iam.manage`). A migrated `master` is only an **account-level** owner and never becomes a global owner automatically; promote it in the Console if needed.
+- Without a Console: the instance log and `zhin status` print a one-time **claim code**; the deployer sends `claim <code>` (`认领 <码>`) to the bot in a **private chat** on a real platform and becomes the global owner. The code works only while there is no global owner and the database is relational, is single-use, rotates on restart and after 5 wrong attempts, is burnt when sent in a group, and is never accepted on simulation adapters (Sandbox etc., `runtime.sandbox`). It is stored in `.zhin/chat-owner-claim.json` (mode 0600) and removed once there is an owner or the instance exits.
+
+### Rollback (downgrading) {#rollback}
+
+When the migration record is upgraded to version 2, the original version 1 file is kept as `.zhin/chat-roles-migration.v1.json`. Before downgrading, rename it back to `.zhin/chat-roles-migration.json` (older versions cannot read version 2 and report it as malformed). The `chat_roles` table is unchanged, so granted roles stay; older versions again stop startup on people fields in the configuration.
 
 ## 2. Platform standing is no longer mapped into zhin roles {#mappings}
 

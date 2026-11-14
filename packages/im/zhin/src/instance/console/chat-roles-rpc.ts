@@ -62,7 +62,8 @@ function readIdentity(input: Record_, scope: string): { adapter: string; userId:
 /** Dispatches `chat-roles.*`; null means the type belongs elsewhere. */
 export async function dispatchChatRolesConsoleRpc(message: Record_, context: ChatRolesRpcContext): Promise<FeatureRpcReply | null> {
   const type = message.type;
-  if (!isConsoleChatRolesRpcType(type)) return null;
+  // `chat-roles.imports.*` (ADR 0060 §4.2) have their own dispatcher with a global gate.
+  if (!isConsoleChatRolesRpcType(type) || type.startsWith('chat-roles.imports.')) return null;
   const input = record(message.data) ? message.data : message;
   try {
     const { level, key } = readScope(input);

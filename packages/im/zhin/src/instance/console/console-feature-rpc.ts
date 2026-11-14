@@ -52,6 +52,10 @@ export interface FeatureStores {
   readonly roles?: import('../chat-roles.js').InstanceChatRoleService;
   /** Known recent conversations (keys), newest first; best effort. */
   readonly recentConversations?: (limit: number) => Promise<readonly FeatureRecentConversation[]>;
+  /** ADR 0060 §3.3: whether a claim code is open (no global owner yet). */
+  readonly claim?: Pick<import('../chat-owner-claim.js').ChatOwnerClaim, 'active'>;
+  /** ADR 0060 §4.2: the role migration record (`chat-roles.imports.*`, `chat-roles.imported` / `import-pending`). */
+  readonly chatRoleImports?: import('../chat-role-migration.js').ChatRoleImportBook;
 }
 
 function conversationDeclaration(schema: JsonSchema | undefined): { conversationFields: readonly string[]; selfServiceFields: readonly string[] } {

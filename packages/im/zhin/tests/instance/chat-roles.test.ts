@@ -144,7 +144,9 @@ describe('chat-roles.* Console RPC', () => {
 
   it('has no mapping RPC: chat-roles.mappings / set-mappings were removed', async () => {
     const { roles } = await service();
-    expect(Object.values(CHAT_ROLES_RPC).sort()).toEqual(['chat-roles.grant', 'chat-roles.list', 'chat-roles.revoke']);
+    expect(Object.values(CHAT_ROLES_RPC).sort()).toEqual(['chat-roles.grant', 'chat-roles.imports.list', 'chat-roles.imports.resolve', 'chat-roles.list', 'chat-roles.revoke']);
+    // ADR 0060: the import RPCs belong to their own dispatcher (global iam.manage).
+    expect(await dispatchChatRolesConsoleRpc({ type: 'chat-roles.imports.list' }, { roles, authorize: () => true })).toBeNull();
     for (const type of ['chat-roles.mappings', 'chat-roles.set-mappings']) {
       expect(await dispatchChatRolesConsoleRpc({ type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }, { roles, authorize: () => true })).toBeNull();
       expect(authorizeConsoleRpc(scoped, { type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }).allowed).toBe(false);
