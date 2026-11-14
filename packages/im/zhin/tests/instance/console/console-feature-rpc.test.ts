@@ -136,6 +136,34 @@ describe('feature.* Console RPC', () => {
       adapters: { qq: { enabled: false, lockedBy: 'global', overridden: false }, tg: { enabled: false, lockedBy: 'global', overridden: false } } });
   });
 
+  it('lists the root plugin\'s own commands as a read-only row and tells plugins from adapters (#1250)', async () => {
+    const snap = snapshot();
+    const command = (owner: PluginId, localName: string, feature = 'zhin.command') =>
+      createCapabilitySlot({ owner, feature: featureId(feature), localName, source: `/${localName}.ts`, definition: {} });
+    const extra = [command(root, 'hello'), command(root, 'card'), command(root, 'status-card', 'zhin.component'), command(rss, 'news')];
+    const withCommands = { ...snap, capabilities: new Map([...snap.capabilities, ...extra.map(slot => [slot.id, slot] as const)]) };
+    const { call } = await harness(base, { snapshots: { acquire: () => ({ value: withCommands, release() {} }) } as never });
+    const data = (await call('feature.matrix'))!.body.data as { rows: Array<Record<string, unknown> & { plugin: string; kind?: string }> };
+    expect(data.rows[0]).toEqual({
+      plugin: '', displayName: '本项目（@x/root）', kind: 'root', readOnly: true,
+      capabilities: { commands: ['card', 'hello'], components: ['status-card'], tools: [] },
+      global: { enabled: true, overridden: false }, adapters: { qq: { enabled: true, overridden: false }, tg: { enabled: true, overridden: false } },
+    });
+    const kinds = data.rows.map(row => [row.plugin, row.kind]);
+    expect(kinds.slice(1)).toEqual(expect.arrayContaining([['rss', 'plugin'], ['plain', 'plugin'], ['qq', 'adapter'], ['tg', 'adapter']]));
+    expect(kinds.findIndex(([, kind]) => kind === 'adapter')).toBeGreaterThan(kinds.findLastIndex(([, kind]) => kind === 'plugin'));
+    expect(data.rows.find(row => row.plugin === 'rss')).toMatchObject({ capabilities: { commands: ['news'] } });
+    const list = (await call('feature.list'))!.body.data as { features: Array<{ plugin: string; kind?: string }> };
+    expect(list.features.find(feature => feature.plugin === 'qq')).toMatchObject({ kind: 'adapter', adapter: true });
+    expect(list.features.some(feature => feature.plugin === '')).toBe(false);
+  });
+
+  it('omits the root row when the root plugin contributes nothing', async () => {
+    const { call } = await harness(base);
+    const data = (await call('feature.matrix'))!.body.data as { rows: Array<{ kind?: string }> };
+    expect(data.rows.some(row => row.kind === 'root')).toBe(false);
+  });
+
   it('reads one level with masked secrets, sources, locks and the stored row revision', async () => {
     const { call } = await harness(base);
     const endpoint = (await call('feature.get', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' }))!.body.data as Record<string, unknown>;
