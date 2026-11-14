@@ -516,6 +516,29 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
 
+## 页面 UI 规范
+
+Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) 的「增补：设计规则」）。对 Console 自带页面它是强制的；对插件页面是**推荐**，外加一条很小的硬性底线。
+
+**推荐：组合 Console 的组件，不自己写样式。** 用纯蓝图（`definePageBlueprint`）写的页面由 Console 渲染，插件不需要做什么：渲染器迁移到统一组件库后（规划中，ADR 0063 P2）就自动符合这些规则。手写 `.tsx` 页面推荐组合 Console 的组件、使用它的语义令牌，而不是自己写字号、圆角、阴影、内边距的数值或 Tailwind 任意值（`p-[…]` 这类），也不要用原生 `<button>`、`<select>`、`<table>` 代替组件。这样做的好处：
+
+- 和 Console 自带页面放在一起时看起来是同一个产品；
+- 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
+
+统一的组件库 `@zhin.js/console-ui` 和它的语义令牌是**规划中（ADR 0063 P1）**，目前还没有发布；在它发布之前，手写页面使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
+
+**允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
+
+**硬性底线（必须遵守）。** 不管是否使用组件库，插件页面都必须做到：
+
+1. 任何宽度下都不出现整页横向滚动；
+2. 内容不溢出页面容器，不覆盖 Console 的顶栏、导航、页头和全局浮层；
+3. 可交互元素获得焦点时有看得见的焦点样式；
+4. 手机宽度下可交互控件的触控尺寸不小于 44×44px；
+5. 背景色和文字色跟随 Console 的深浅色主题，两种主题下都可读。
+
+`zhin plugin check` 计划（ADR 0063 P2）对偏离推荐的写法给出**提示**（不是错误，不会阻止构建或发布），并说明怎样改成组件或令牌。
+
 ## 页面 UI 套件
 
 不想自己写样式时，用 `@zhin.js/client/ui`：按钮、徽标、提示、空/加载/失败状态、行内确认、表单字段，以及带“加载中 / 为空 / 失败 / 数据过期”四态的 `usePluginRpc`。它直接使用 Console 的主题变量，亮暗色自动跟随，不依赖 Tailwind（远程页面不会被 Console 的 Tailwind 扫描）。用法与导出清单见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
