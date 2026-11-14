@@ -47,6 +47,12 @@ export interface MysqlColumnDefinition {
   readonly generation: string | null;
   /** The column is part of an index (a TEXT type would need a key length). */
   readonly indexed: boolean;
+  /**
+   * MariaDB writes `COLUMN_DEFAULT` differently (10.2.7+): a literal as a quoted SQL literal
+   * (`'it''s'`), an expression bare (`current_timestamp()`, `uuid()`), an explicit `DEFAULT NULL`
+   * as the string `NULL`; MySQL shows the bare literal and marks expressions `DEFAULT_GENERATED`.
+   */
+  readonly mariadb?: boolean;
 }
 
 /** Reads one MySQL column definition (parameterised). */
@@ -69,7 +75,9 @@ export async function readMysqlColumnDefinition(
     [table, column],
   ) as unknown[];
   const text = (value: unknown) => (value === null || value === undefined ? null : String(value));
+  const version = await query('SELECT VERSION() AS v') as Array<{ v?: unknown }> | undefined;
   return Object.freeze({
+    mariadb: /mariadb/iu.test(String(version?.[0]?.v ?? '')),
     name: String(row.name),
     columnType: String(row.column_type ?? ''),
     dataType: String(row.data_type ?? '').toLowerCase(),
@@ -90,6 +98,23 @@ const MYSQL_EXPRESSION_DEFAULT = /^(?:tinytext|text|mediumtext|longtext|tinyblob
 /** MySQL string literal: quotes doubled and backslashes escaped (backslash escapes are on by default). */
 function mysqlString(value: string): string {
   return `'${value.replaceAll('\\', '\\\\').replaceAll('\'', '\'\'')}'`;
+}
+
+/** Timestamp functions that are written without parentheses around them in `DEFAULT`. */
+const TIMESTAMP_DEFAULT = /^(?:current_timestamp|now|localtime|localtimestamp)(?:\(\d*\))?$/i;
+
+/**
+ * The `DEFAULT` clause for a MariaDB `COLUMN_DEFAULT`, which is already SQL: a quoted literal
+ * (`'it''s'`, kept verbatim; TEXT / BLOB / JSON need the expression form), a number or bit
+ * literal, the string `NULL` (an explicit `DEFAULT NULL`), or a bare expression.
+ */
+function mariadbDefault(value: string, expressionType: boolean, nullable: boolean): string[] {
+  // A nullable column without a declared default also reads `NULL` (MariaDB's implicit DEFAULT
+  // NULL): a NOT NULL column cannot keep it, and has no default then.
+  if (/^NULL$/u.test(value)) return nullable ? ['DEFAULT NULL'] : [];
+  if (/^'(?:[^'\\]|''|\\.)*'$/su.test(value)) return [`DEFAULT ${expressionType ? `(${value})` : value}`];
+  if (/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/iu.test(value) || /^b'[01]*'$/iu.test(value) || /^0x[0-9a-f]+$/iu.test(value)) return [`DEFAULT ${value}`];
+  return [TIMESTAMP_DEFAULT.test(value) ? `DEFAULT ${value}` : `DEFAULT (${value})`];
 }
 
 /**
@@ -128,6 +153,8 @@ export function renderMysqlModify(
         const literal = typeof change.default === 'string' ? mysqlString(change.default) : host.formatDefaultValue(change.default);
         parts.push(`DEFAULT ${expressionType ? `(${literal})` : literal}`);
       }
+    } else if (current.defaultValue !== null && current.mariadb) {
+      parts.push(...mariadbDefault(current.defaultValue, expressionType, nullable));
     } else if (current.defaultValue !== null) {
       const generated = /\bdefault_generated\b/i.test(current.extra);
       if (generated) {

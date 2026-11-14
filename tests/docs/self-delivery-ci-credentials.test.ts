@@ -103,6 +103,10 @@ describe('untrusted candidate CI credential isolation', () => {
     expect(config.jobs['gateway-e2e'].steps.at(-1).run).toBe('pnpm test:e2e:gateway');
     expect(config.jobs['database-live'].services).toMatchObject({
       mysql: { image: 'mysql:8.4' },
+      // The other supported MySQL servers share the job; their suites run after the main one.
+      mysql80: { image: 'mysql:8.0', ports: ['3307:3306'] },
+      mariadb11: { image: 'mariadb:11', ports: ['3308:3306'] },
+      mariadb1011: { image: 'mariadb:10.11', ports: ['3309:3306'] },
       postgres: { image: 'postgres:17' },
       mongodb: { image: 'mongo:7' },
       redis: { image: 'redis:8' },

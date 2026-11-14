@@ -33,6 +33,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   private usePool: boolean = false;
   private readonly booleanColumns = new Set<string>();
   private readonly bigintColumns = new Set<string>();
+  /** `SELECT VERSION()` of the server, read once at connect ('' when it could not be read). */
+  private serverVersion = '';
 
   constructor(config: MySQLDialectConfig) {
     super('mysql', config);
@@ -67,6 +69,30 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
       logger.error('forgot install mysql2 ?');
       throw new Error(`MySQL 连接失败: ${error}`);
     }
+    try {
+      const rows = await this.query<Array<{ v?: unknown }>>('SELECT VERSION() AS v');
+      this.serverVersion = String(rows?.[0]?.v ?? '');
+    } catch (error) {
+      this.serverVersion = '';
+      // Unknown server: indexed text keys fall back to utf8mb4_0900_bin, which MariaDB < 11.4 lacks.
+      logger.warn(`MySQL: could not read VERSION() (${error instanceof Error ? error.message : String(error)}); assuming MySQL 8 collations`);
+    }
+  }
+
+  /** Whether the server is MariaDB (from `VERSION()`; false when unknown). */
+  isMariaDb(): boolean {
+    return /mariadb/iu.test(this.serverVersion);
+  }
+
+  /**
+   * Binary, NO PAD collation for indexed text keys: `utf8mb4_0900_bin` (MySQL 8.0+),
+   * `utf8mb4_nopad_bin` (MariaDB 10.2+, which has no 0900 collations before 11.4), and
+   * `utf8mb4_bin` on MySQL 5.7 (binary, but PAD SPACE: the only binary utf8mb4 collation there).
+   */
+  indexedTextCollation(): string {
+    if (this.isMariaDb()) return 'utf8mb4_nopad_bin';
+    const major = Number(/^(\d+)\./u.exec(this.serverVersion)?.[1]);
+    return Number.isFinite(major) && major > 0 && major < 8 ? 'utf8mb4_bin' : 'utf8mb4_0900_bin';
   }
 
   async disconnect(): Promise<void> {
@@ -306,7 +332,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     if (indexedText && (column.length ?? 768) > 768) {
       throw new RangeError(`MySQL indexed text column ${field} exceeds the utf8mb4 index limit of 768 characters`);
     }
-    const collation = indexedText ? ' CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin' : '';
+    const collation = indexedText ? ` CHARACTER SET utf8mb4 COLLATE ${this.indexedTextCollation()}` : '';
     const type = boundedText ? 'VARCHAR' : this.mapColumnType(column.type);
     const length = boundedText ? `(${column.length ?? 768})` : column.length ? `(${column.length})` : '';
     const nullable = column.nullable === false ? ' NOT NULL' : '';

@@ -1,4 +1,4 @@
-import { MySQL } from '../src/dialects/mysql.js';
+import { MySQL, MySQLDialect } from '../src/dialects/mysql.js';
 
 describe('MySQL schema generation', () => {
   const db = new MySQL({});
@@ -42,6 +42,20 @@ describe('MySQL schema generation', () => {
     const query = vi.spyOn(smallPages.dialect, 'query').mockResolvedValue([{ page_size: pageSize }]);
     await expect(smallPages.start()).rejects.toThrow(/innodb_page_size=.*declare a smaller key length/);
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks a binary NO PAD collation the server has for indexed text keys', () => {
+    const collation = (version: string) => {
+      const dialect = new MySQLDialect<any>({} as never);
+      (dialect as unknown as { serverVersion: string }).serverVersion = version;
+      return dialect.indexedTextCollation();
+    };
+    expect(collation('8.4.3')).toBe('utf8mb4_0900_bin');
+    expect(collation('8.0.46-0ubuntu0.24.04.5')).toBe('utf8mb4_0900_bin');
+    expect(collation('10.11.14-MariaDB-0ubuntu0.24.04.1')).toBe('utf8mb4_nopad_bin');
+    expect(collation('11.8.9-MariaDB-ubu2404')).toBe('utf8mb4_nopad_bin');
+    expect(collation('5.7.44')).toBe('utf8mb4_bin');
+    expect(collation('')).toBe('utf8mb4_0900_bin');
   });
 
   it('uses fully indexed VARCHAR columns for text keys, without prefix uniqueness', () => {
