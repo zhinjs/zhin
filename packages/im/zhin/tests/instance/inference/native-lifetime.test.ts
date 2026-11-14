@@ -2,14 +2,15 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
 /**
- * Generous backstop only. The fixture bounds every cancellation it checks (2 s each), so the run
- * is driven by the child's own completion: loading the fixture through `tsx` takes most of the
- * time and can exceed 12 s on a loaded machine, which is not what this test measures.
+ * Longest silence allowed between two progress lines of the fixture. The fixture asserts its own
+ * cancellation deadlines (`mustSettle`); this only catches a child that hangs outright. A total
+ * wall-clock budget is not used: tsx transpiling the source graph plus the forced full GCs cost
+ * several seconds of CPU and grow with machine load.
  */
-const CHILD_BACKSTOP_MS = 120_000;
+const IDLE_LIMIT_MS = 30_000;
 
-function runFixture(): Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }> {
-  return new Promise((done, fail) => {
+function runFixture(): Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; output: string }> {
+  return new Promise((done, reject) => {
     const child = spawn(
       process.execPath,
       [
@@ -22,27 +23,38 @@ function runFixture(): Promise<{ code: number | null; signal: NodeJS.Signals | n
       { cwd: resolve('.'), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk; });
-    child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk; });
-    const backstop = setTimeout(() => {
-      child.kill('SIGKILL');
-      fail(new Error(`native lifetime fixture did not finish within ${CHILD_BACKSTOP_MS} ms\nstdout:\n${stdout}\nstderr:\n${stderr}`));
-    }, CHILD_BACKSTOP_MS);
+    let output = '';
+    let idle: NodeJS.Timeout | undefined;
+    const arm = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`native lifetime fixture made no progress for ${IDLE_LIMIT_MS} ms:\n${output}`));
+      }, IDLE_LIMIT_MS);
+    };
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk);
+      output += String(chunk);
+      arm();
+    });
+    child.stderr.on('data', (chunk) => {
+      output += String(chunk);
+    });
     child.once('error', (error) => {
-      clearTimeout(backstop);
-      fail(error);
+      clearTimeout(idle);
+      reject(error);
     });
-    // Completion signal: the child exits after printing its result (or failing an assertion).
     child.once('close', (code, signal) => {
-      clearTimeout(backstop);
-      done({ code, signal, stdout, stderr });
+      clearTimeout(idle);
+      done({ code, signal, stdout, output });
     });
+    arm();
   });
 }
 
 it('keeps real Host SDK, disconnect, discovery and OAuth response cancellation alive through native Fetch GC', async () => {
   const result = await runFixture();
-  expect(result, result.stderr).toMatchObject({ code: 0, signal: null });
+  expect(result.code, result.output).toBe(0);
+  expect(result.signal, result.output).toBeNull();
   expect(result.stdout).toContain('host-native-gc-stream-disconnect-discovery-oauth-passed');
-}, CHILD_BACKSTOP_MS + 10_000);
+}, 180_000);

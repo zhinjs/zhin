@@ -59,7 +59,12 @@
     {
       "package": "@zhin.js/runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：Host 根配置新增 `commandSuggestion`（`false` / `{ enabled, maxDistance, limit }`，写入 host-config-schema 与 Root 保留配置键）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：Host 根配置新增 `commandSuggestion`（`false` / `{ enabled, maxDistance, limit }`，写入 host-config-schema 与 Root 保留配置键）。所有者已批准（zhinjs/zhin#1250）：热重载按受影响子树计算重建范围并实现项目文件监视，公开 API 新增 `HmrCoordinator` 的 `watchDebounceMs` 选项、重载报告字段（rebuilt / rebuilt_plugins）、失效计划的 `unrefreshedDependents` 与 manifest 字段过滤导出（`manifest-change`）。"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增根资源上下文契约 `watchProjectFiles({ patterns, onChange })`，Root 安装器可声明读取的项目文件，变化时只通知声明方而不建新 generation。"
     }
   ]
 }

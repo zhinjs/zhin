@@ -52,6 +52,29 @@ export interface RootResourceContext {
     localName: string,
     definition: TDefinition,
   ): void;
+  /**
+   * Declares project files this installer reads itself (bootstrap Markdown, a knowledge folder, ...)
+   * (#1250). When a hot reload only changes such files and no module imports them, the Runtime
+   * keeps every Plugin Scope and calls `onChange` on the committed Root instead of rebuilding the
+   * Root generation. Undeclared project files keep the conservative Root rebuild. Call it during
+   * setup only; the declaration lives as long as this Root Scope.
+   */
+  readonly watchProjectFiles?: (declaration: ProjectFileWatch) => void;
+}
+
+/** Project files a Root installer reads, and how it takes in their new content (#1250). */
+export interface ProjectFileWatch {
+  /**
+   * Paths relative to the project root, `/`-separated. `*` matches inside one path segment, `**`
+   * any number of segments, `?` one character (`AGENTS.md`, `knowledge/**`, `prompts/*.md`).
+   */
+  readonly patterns: readonly string[];
+  /** Called with the absolute paths of the changed matching files, after they were written. */
+  onChange(change: ProjectFileChange): void | Promise<void>;
+}
+
+export interface ProjectFileChange {
+  readonly files: readonly string[];
 }
 
 export type RootResourceInstaller = (

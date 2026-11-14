@@ -35,6 +35,10 @@ if (crashAfter !== undefined) setTimeout(() => { console.error('crashing'); proc
 if (!env.FAKE_NO_READY) {
   setTimeout(() => {
     send('ready', { version: number('FAKE_VERSION') ?? Number(env.ZHIN_RUNTIME_CHILD), pid: process.pid, generation: 1 });
+    // Route tables published after hot reloads carry the newly committed generation.
+    for (const generation of (env.FAKE_ROUTE_GENERATIONS ?? '').split(',').filter(Boolean)) {
+      send('routes', { table: { revision: Number(generation), generation: Number(generation), apiBase: '/api', http: [], ws: [] } });
+    }
     const restartAfter = number('FAKE_RESTART_AFTER_MS');
     const starts = env.FAKE_COUNTER_FILE ? readFileSync(env.FAKE_COUNTER_FILE, 'utf8').trim().split('\n').length : 1;
     const restartLimit = number('FAKE_RESTART_TIMES') ?? 1;

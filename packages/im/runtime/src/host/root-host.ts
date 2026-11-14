@@ -9,6 +9,8 @@ import {
   type EnvironmentLayers,
   type EnvironmentLayersPort,
   type HmrCoordinator,
+  type HmrReloadReport,
+  type ManifestFieldChange,
   type InvalidationPlan,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
@@ -40,7 +42,11 @@ export interface RootHostOptions {
     plan: Extract<InvalidationPlan, { kind: 'generation' }>,
     generation: number,
     durationMs: number,
+    /** What the committed generation actually rebuilt; absent when nothing was rebuilt. */
+    report?: HmrReloadReport,
   ): void | Promise<void>;
+  /** A watched `package.json` changed only in fields that do not affect the Runtime; it was ignored. */
+  onManifestIgnored?(change: ManifestFieldChange): void | Promise<void>;
   /**
    * Generation commit 回调（包括初始 start 与后续 HMR/config patch）。
    * 用于 Console `hmr:reload` SSE 推送。
@@ -63,6 +69,7 @@ export class RootHost {
   readonly #onError: NonNullable<RootHostOptions['onError']>;
   readonly #onPlan?: RootHostOptions['onPlan'];
   readonly #onReload?: RootHostOptions['onReload'];
+  readonly #onManifestIgnored?: RootHostOptions['onManifestIgnored'];
   readonly #stopGenerationObservation: () => void;
   #stopHmr?: Dispose;
   #hmr?: HmrCoordinator;
@@ -84,6 +91,7 @@ export class RootHost {
     this.#onError = options.onError ?? (() => undefined);
     this.#onPlan = options.onPlan;
     this.#onReload = options.onReload;
+    this.#onManifestIgnored = options.onManifestIgnored;
     this.runtime = new RootRuntime({
       projectRoot: options.projectRoot,
       modules,
@@ -150,8 +158,9 @@ export class RootHost {
       },
       onError: this.#onError,
       onPlan: this.#onPlan,
-      onReload: (plan, durationMs) =>
-        this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs),
+      onReload: (plan, durationMs, report) =>
+        this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs, report),
+      onManifestIgnored: this.#onManifestIgnored,
     });
     // Without `watch` the module runtime's watcher is a no-op; the coordinator only serves reloadSources().
     this.#stopHmr = hmr.start();

@@ -28,6 +28,8 @@ export interface AgentHostPublicationCoordinatorOptions {
   readonly agent: AgentRuntimeFoundation;
   readonly bootstrapText: string;
   readonly contextFiles?: readonly ContextFile[];
+  /** Live bootstrap the host re-reads when its files change (#1250); overrides the two above. */
+  readonly bootstrap?: () => Readonly<{ bootstrapContext: string; contextFiles?: readonly ContextFile[] }>;
 }
 
 /** Publishes the Agent Host ports for protocol, introspection, and Console. */
@@ -118,6 +120,7 @@ export class AgentHostPublicationCoordinator {
       loopHooks: service.loopHooks,
       bootstrapContext: options.bootstrapText,
       contextFiles: options.contextFiles,
+      ...(options.bootstrap ? { bootstrap: options.bootstrap } : {}),
     }));
   }
 }
