@@ -91,6 +91,11 @@ export interface NativeBuildAllowanceChange {
   /** Setting path, e.g. `allowBuilds.node-pty` or `onlyBuiltDependencies`. */
   readonly setting: string;
   readonly value: string;
+  /**
+   * The non-boolean value this change replaced (e.g. pnpm 11's placeholder
+   * `"set this to true or false"` written after `ERR_PNPM_IGNORED_BUILDS`).
+   */
+  readonly replaced?: string;
 }
 
 export interface NativeBuildAllowancePlan {
@@ -178,9 +183,13 @@ export function planNativeBuildAllowance(
     for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
       const current = doc.getIn(['allowBuilds', name]);
       if (current === false) denied.push(name);
-      if (current !== undefined && current !== null) continue;
+      // Only an explicit boolean is the project's decision. Anything else — notably the
+      // placeholder string pnpm 11 writes after ERR_PNPM_IGNORED_BUILDS — counts as unset,
+      // otherwise the next `pnpm install` keeps failing (zhinjs/zhin#1250).
+      if (current === true || current === false) continue;
       doc.setIn(['allowBuilds', name], true);
-      changes.push({ file: WORKSPACE_FILE, setting: `allowBuilds.${name}`, value: 'true' });
+      const replaced = current === undefined || current === null ? undefined : String(current);
+      changes.push({ file: WORKSPACE_FILE, setting: `allowBuilds.${name}`, value: 'true', ...(replaced !== undefined ? { replaced } : {}) });
     }
   }
 
@@ -251,7 +260,7 @@ export function syncNativeBuildAllowance(
   }
   for (const change of plan.changes) {
     const target = change.setting.startsWith('allowBuilds.')
-      ? `${change.file} ${change.setting}: ${change.value}`
+      ? `${change.file} ${change.setting}: ${change.value}${change.replaced !== undefined ? `（替换了占位值 ${JSON.stringify(change.replaced)} / replaced placeholder）` : ''}`
       : `${change.file} ${change.setting}: + ${change.value}`;
     console.log(chalk.cyan(dryRun ? `  [dry-run] ${target}` : `  · ${target}`));
   }

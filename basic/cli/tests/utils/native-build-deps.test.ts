@@ -108,6 +108,28 @@ describe('creating pnpm-workspace.yaml needs pnpm 10+', () => {
   });
 });
 
+describe('pnpm 11 placeholder values in allowBuilds', () => {
+  it('replaces the "set this to true or false" placeholder with true and keeps an explicit false', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-placeholder-'));
+    roots.push(root);
+    const file = path.join(root, 'pnpm-workspace.yaml');
+    fs.writeFileSync(file, 'allowBuilds:\n  node-pty: set this to true or false\n  ssh2: false\n');
+    const pkg = { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' } };
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.denied).toEqual(['ssh2']);
+    expect(plan?.changes).toEqual(expect.arrayContaining([
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true', replaced: 'set this to true or false' },
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.cpu-features', value: 'true' },
+    ]));
+    expect(plan?.changes.some(change => change.setting === 'allowBuilds.ssh2')).toBe(false);
+    plan!.apply();
+    const written = fs.readFileSync(file, 'utf8');
+    expect(written).toContain('node-pty: true');
+    expect(written).toContain('ssh2: false');
+    expect(written).not.toContain('set this to true or false');
+  });
+});
+
 describe('a project nested in an enclosing pnpm workspace', () => {
   const nested = () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-nested-'));
