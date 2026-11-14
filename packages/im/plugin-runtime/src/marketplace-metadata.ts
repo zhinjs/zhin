@@ -103,8 +103,10 @@ export function informativeKeywords(keywords: unknown): string[] {
 
 function personName(person: unknown): string | undefined {
   if (typeof person === 'string') {
-    // npm "Name <email> (url)" shorthand: show the name only.
-    const name = person.replace(/<[^>]*>/gu, '').replace(/\([^)]*\)/gu, '').trim();
+    // npm "Name <email> (url)" shorthand: the name is everything before the first `<` or `(`.
+    // Taking that prefix (rather than deleting bracketed parts) leaves no partially removed markup.
+    const cut = person.search(/[<(]/u);
+    const name = (cut === -1 ? person : person.slice(0, cut)).trim();
     return name || undefined;
   }
   if (person && typeof person === 'object' && !Array.isArray(person)) {
