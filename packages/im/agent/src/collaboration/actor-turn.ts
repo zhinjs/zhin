@@ -140,10 +140,12 @@ async function runActorTurn(
     ...(rootTurn.principal.displayName ? { displayName: rootTurn.principal.displayName } : {}),
     roles: rootTurn.principal.roles,
   } });
+  const entryActor = agent.name === options.directory.entry.name;
   let models: ModelExecutionScope | undefined;
   if (options.models) {
     try {
       models = await options.models.acquire({
+        ...(entryActor ? {} : { agent: agent.name }),
         operationId: turnId,
         sessionKey,
         signal: AbortSignal.any([signal, rootTurn.signal]),

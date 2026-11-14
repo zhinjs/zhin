@@ -21,10 +21,12 @@ import type { ModelExecutionScope } from '../model-runtime/types.js';
 /**
  * Host-owned model operations for actor turns (#1250): each actor turn opens
  * its own operation, independent of the root turn's (which closes when the
- * root turn ends).
+ * root turn ends), selected by `agent:<agent>` when configured, else chat.
  */
 export interface ActorModelSource {
   acquire(input: Readonly<{
+    /** Sub-agent name; omitted for the entry actor, which keeps the root turn's purpose. */
+    agent?: string;
     operationId: string;
     sessionKey: string;
     signal: AbortSignal;

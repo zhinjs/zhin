@@ -148,6 +148,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     acquire: (request: Parameters<ActorModelSource['acquire']>[0]) => delegation.acquire({
       operationId: request.operationId,
       sessionKey: request.sessionKey,
+      ...(request.agent ? { agent: request.agent } : {}),
       signal: request.signal,
     }),
   }) : undefined;

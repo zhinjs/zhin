@@ -40,6 +40,11 @@ export interface ModelDelegationAuthority {
     sessionKey: string;
     epoch?: string;
     bindingName?: string;
+    /**
+     * Sub-agent name: selects the `agent:<name>` purpose when one is configured,
+     * otherwise the chat purpose (#1250 agent-purpose-binding-ignored).
+     */
+    agent?: string;
     signal?: AbortSignal;
   }>): Promise<ModelExecutionScope>;
   release(): Promise<void>;
@@ -77,6 +82,8 @@ export interface ModelContextAcquireInput {
   readonly snapshots: SnapshotReader;
   readonly context: ProviderCallContext;
   readonly bindingName?: string;
+  /** See {@link ModelDelegationAuthority.acquire}: configured `agent:<name>` purpose, else chat. */
+  readonly agent?: string;
   readonly signal?: AbortSignal;
 }
 export interface ModelRuntimeServiceOptions {

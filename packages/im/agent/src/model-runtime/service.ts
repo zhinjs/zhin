@@ -16,6 +16,20 @@ async function bundle(input: Readonly<{
     completion: createInvocationCompletion({ binding: input.binding, client: input.scope.client, purpose: input.purpose }) });
 }
 
+/**
+ * `agent:<name>` for a sub-agent whose purpose is configured, else the binding's
+ * purpose (`chat` for `zhin`). A sub-agent without its own purpose falls back to
+ * chat instead of failing (#1250 agent-purpose-binding-ignored).
+ */
+function selectLanguagePurpose(
+  graph: InferenceOperationScope['graph'],
+  input: Readonly<{ bindingName?: string; agent?: string }>,
+): 'chat' | `agent:${string}` {
+  const agent = input.agent?.trim();
+  if (agent && agent !== 'zhin' && graph.purposes.agents?.[agent]) return `agent:${agent}`;
+  return !input.bindingName || input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}`;
+}
+
 /** Agent integration only. Host persists configuration and owns authentication; this
  * class borrows the exact operation generation and never creates Provider directories. */
 export class ModelRuntimeService {
@@ -53,7 +67,7 @@ export class ModelRuntimeService {
         : await runtime.openScope({ context, signal: input.signal, snapshot: input.inferenceSnapshot });
     } catch (error) { runtime.retire(); throw error; }
     try {
-      const purpose = !input.bindingName || input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}` as const;
+      const purpose = selectLanguagePurpose(scope.graph, input);
       const selected = await scope.resolve({ kind: 'language', purpose });
       const chat = await bundle({ scope, binding: selected, purpose });
       const candidate = (options: Readonly<{
@@ -116,7 +130,7 @@ export class ModelRuntimeService {
               const child: Promise<ModelExecutionScope> = this.#acquire({ lease: retained, snapshots: input.snapshots,
                 context: { ...context, operationId: childInput.operationId, sessionKey: childInput.sessionKey,
                   ...(childInput.epoch !== undefined ? { epoch: childInput.epoch } : {}) },
-                bindingName: childInput.bindingName, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
+                bindingName: childInput.bindingName, agent: childInput.agent, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
               }, true).then(acquired => {
                 let childRelease: Promise<void> | undefined;
                 return Object.freeze({ ...acquired, release: () => childRelease ??= (async () => {

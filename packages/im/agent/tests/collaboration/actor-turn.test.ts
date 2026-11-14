@@ -366,7 +366,7 @@ describe('#1250 actor turns own their model operation and trace', () => {
     return { scope, release };
   }
 
-  it('runs each actor turn on its own host operation and releases it', async () => {
+  it('runs each actor turn on its own host operation, selected through agent:<name>, and releases it', async () => {
     const { getAgentTurnConfiguration } = await import('../../src/turn/agent-turn-context.js');
     const researcher = fakeScope('gemini', 'gemini-profile', 'agent:researcher');
     const acquire = vi.fn<ActorModelSource['acquire']>(async () => researcher.scope);
@@ -385,11 +385,21 @@ describe('#1250 actor turns own their model operation and trace', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'which model?' } })], new AbortController().signal);
     expect(result).toEqual({ status: 'completed', content: 'answer' });
     expect(acquire).toHaveBeenCalledTimes(1);
-    expect(acquire.mock.calls[0]![0]).toMatchObject({ sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ agent: 'researcher', sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
     expect(acquire.mock.calls[0]![0].operationId).toMatch(/^turn-1:actor:researcher:/);
     expect(seen).toBe(researcher.scope);
     expect(ctx.inputs[0]!.modelId).toBe('gemini');
     expect(researcher.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the root purpose for the entry actor continuing with results', async () => {
+    const entry = fakeScope('deepseek', 'chat-profile', 'chat');
+    const acquire = vi.fn<ActorModelSource['acquire']>(async () => entry.scope);
+    const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], models: { acquire } });
+    const { root } = await ctx.attach();
+    await ctx.runner('zhin', [mailFrom(root, { from: { kind: 'actor', actor: 'researcher' }, to: 'zhin', kind: 'result',
+      body: { kind: 'result', inReplyTo: root.id, status: 'completed', content: 'done' } } as Partial<Mail>)], new AbortController().signal);
+    expect(acquire.mock.calls[0]![0]).not.toHaveProperty('agent');
   });
 
   it('fails the actor turn (not the host) when no model operation can be opened', async () => {
