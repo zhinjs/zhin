@@ -76,6 +76,22 @@ import { AdapterConsolePage } from '@zhin.js/client';
 
 `embedded` 不传 `toolbar` 时显示 SDK 自带的「文档」「添加」（没有「刷新」）。需要兼容旧版 SDK 的宿主可读 `AdapterConsolePage.capabilities`（或导出的 `ADAPTER_CONSOLE_PAGE_CAPABILITIES`）判断是否支持；旧版会忽略这些属性。
 
+### 宿主自己画账号行（headless）
+
+宿主要把账号的状态、启停开关和操作并进自己的账号列表时，用 `AdapterAccountsProvider` 包住宿主列表和 SDK 页：两者共用同一份读取、同一套 revision / 迁移确认 / `commit_unknown` 处理。`useAdapterAccounts()` 返回账号行（`rows`：状态、`enabled` 与开关文字 `enabledLabel`「运行中 / 已停止」、`setEnabled` / `start` / `stop` / `edit` / `remove` / `test`、`can`、`busy`、`disabled`）以及 `notice`、`migration`（确认 / 取消）、`migrate`（「立即迁移」）、`blocked`、`add`、`editing`。`AdapterAccountEditor` 只渲染编辑表单（`row.edit()` 打开）。SDK 页传 `hostAccounts` 后不再画账号列表、编辑表单和账号状态提示，只保留添加表单、登录待办与平台操作：
+
+```tsx
+import { AdapterAccountEditor, AdapterAccountsProvider, AdapterConsolePage, useAdapterAccounts } from '@zhin.js/client';
+
+<AdapterAccountsProvider adapterKey="telegram" refreshKey={refreshCount}>
+  <HostAccountTable />                 {/* useAdapterAccounts().rows → 每行：状态、开关、编辑 / 删除 */}
+  <AdapterAccountEditor />
+  <AdapterConsolePage adapterKey="telegram" embedded hostAccounts toolbar={hostToolbar} />
+</AdapterAccountsProvider>
+```
+
+只想换掉 SDK 卡片内容时，传 `renderRow={row => …}`（拿到同样的账号行）。`capabilities` 里的 `renderRow` / `hostAccounts` 标明支持。
+
 ## 插件页 UI 套件
 
 `@zhin.js/client/ui` 是给插件 Console 页面用的小套件：与 Console 共用同一套主题变量（亮暗色、字号、圆角、焦点环自动跟随），**不依赖 Tailwind**（远程页面不会被 Console 的 Tailwind 扫描），所有样式是 `zk-` 前缀的自带类。

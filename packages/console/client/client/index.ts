@@ -174,7 +174,13 @@ export { adapterConsoleStyles } from './adapter-console/styles.js';
 export {
   ADAPTER_CONSOLE_PAGE_CAPABILITIES,
   AdapterConsolePage,
+  AdapterAccountEditor,
+  AdapterAccountsProvider,
   createAdapterConsolePage,
+  useAdapterAccounts,
+  type AdapterAccountRow,
+  type AdapterAccounts,
+  type AdapterAccountsNotice,
   type AdapterConsolePageProps,
   type AdapterConsoleToolbarControls,
 } from "./adapter-console/AdapterConsolePage.js";
