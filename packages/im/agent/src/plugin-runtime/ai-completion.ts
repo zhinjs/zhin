@@ -81,7 +81,8 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       try {
         scope = await options.acquireDefaultModel(input.signal, input.agent);
         model = scope.chat.model.id;
-        provider = scope.chat.binding.account.id;
+        // One provider id everywhere: the service id (#1250); a fallback's answer reports its own.
+        provider = scope.chat.binding.service.id;
         accounting.submitted();
         const completion = createResilientCompletionPort(scope.chat.completion, {
           config: resolveProviderResilienceConfig(options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
@@ -91,6 +92,9 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         const answer = await completion.complete(scope.chat.model,
           { systemPrompt: input.system ?? '', messages: [createUserMessage(user)], tools: [] },
           { temperature: input.temperature, maxTokens: input.maxTokens, signal: input.signal });
+        // A purpose fallback may have answered (#1250): report the model and service that did.
+        if (answer.model) model = answer.model;
+        if (answer.provider) provider = answer.provider === scope.chat.binding.account.id ? scope.chat.binding.service.id : answer.provider;
         const reported = answer.usage?.reported;
         const knownUsage = answer.usage && (!reported || Object.values(reported).some(Boolean));
         result = { text: assistantText(answer), model, ...(knownUsage ? { usage: answer.usage } : {}) };

@@ -114,6 +114,36 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './provider-resilience.js';
+export {
+  AUTH_FALLBACK_COOLDOWN_MS,
+  BILLING_FALLBACK_COOLDOWN_MS,
+  CONSECUTIVE_TIMEOUTS_TO_SWITCH,
+  MAX_FALLBACK_SKIP_MS,
+  MODEL_FALLBACK_NOTICE,
+  ModelAvailabilityRegistry,
+  QUOTA_FALLBACK_COOLDOWN_MS,
+  TIMEOUT_FALLBACK_COOLDOWN_MS,
+  TIMEOUT_GLOBAL_OPERATIONS,
+  TIMEOUT_GLOBAL_WINDOW_MS,
+  createFallbackCompletionPort,
+  estimateRequestTokens,
+  fallbackTranscriptFit,
+  modelAvailability,
+  modelFallbackFailure,
+  modelFallbackResetAt,
+  nextPacificMidnight,
+  requiredInputModalities,
+} from './model-fallback.js';
+export type {
+  FallbackCompletionOptions,
+  FallbackUnfitReason,
+  ModelFallbackCandidate,
+  ModelFallbackEndpoint,
+  ModelFallbackEvent,
+  ModelFallbackReason,
+  ModelFallbackTarget,
+  ModelUnavailability,
+} from './model-fallback.js';
 export { finishFailureKind, resolveFinish } from './bridge/finish-reason.js';
 export type { FinishFailureKind, FinishInput, FinishOutcome } from './bridge/finish-reason.js';
 export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';

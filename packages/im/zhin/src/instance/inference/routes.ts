@@ -143,7 +143,9 @@ interface RouteFailure {
   readonly status: number;
   readonly code: string;
   /** Safe, enum-like diagnostics only (driver step, upstream HTTP status and reason code). */
-  readonly details?: Readonly<{ preparationCode?: string; reason?: string; upstreamStatus?: number; step?: string; retryAfterMs?: number }>;
+  readonly details?: Readonly<{ preparationCode?: string; reason?: string; upstreamStatus?: number; step?: string; retryAfterMs?: number;
+    /** Offending configuration path, e.g. `purposes.adapters.qq.chat.fallbacks[1]` (#1250). */
+    path?: string }>;
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
   /** Why an environment reference was refused (#1250); its text is {@link INFERENCE_ENVIRONMENT_REFUSALS}. */
@@ -162,6 +164,10 @@ function failure(error: unknown): RouteFailure {
   if (error instanceof ProviderError)
     return {
       code: error.code,
+      ...(error.path ? { details: { path: error.path },
+        message: error.code === 'invalid-graph'
+          ? `配置 ${error.path} 引用的模型配置不存在或类型不对（删除模型配置前请先从这里移除）`
+          : `配置 ${error.path} 无效` } : {}),
       status:
         error.code === 'forbidden'
           ? 403

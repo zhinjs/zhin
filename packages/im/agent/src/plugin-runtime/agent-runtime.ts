@@ -28,6 +28,7 @@ import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime
 import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { turnModelPortToken } from '../model-runtime/turn-resource.js';
+import { traceModelFallback, turnUsageTarget } from '../model-runtime/purpose-fallback.js';
 import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -376,6 +377,17 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         save: snapshot => { void this.options.turnTraceStore?.save(snapshot).catch(() => undefined); },
       }) : undefined;
       activeTrace = trace;
+      // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the turn trace.
+      // Usage rows record the Profile that actually answered.
+      models?.observeModelFallback?.(event => {
+        if (trace) trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) });
+        const target = models && turnUsageTarget(models, event);
+        if (target) {
+          selected.provider = target.provider;
+          selected.model = target.model;
+          logContext.selectedModel = `${target.provider}/${target.model}`;
+        }
+      });
       const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
       const catalog = Object.freeze({
         ...capabilities,
