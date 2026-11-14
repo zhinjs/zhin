@@ -193,6 +193,93 @@ jobs:
           ZHIN_TEST_MYSQL_PORT: '3306'
           ZHIN_TEST_PG_PORT: '5432'
 
+  # The MySQL-specific live suites on the other supported servers (ADR 0059: the restricted Console
+  # account has version-specific paths — roles / CURRENT_ROLE(), MariaDB grants without a host, the
+  # minimum-version check). `database-live` covers mysql:8.4; this covers 8.0 and MariaDB. Only the
+  # MySQL cases run (`-t`), so the PostgreSQL / MongoDB cases of the same files are skipped.
+  database-live-mysql-compat:
+    if: github.event_name != 'merge_group'
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: mysql:8.0
+            health: mysqladmin ping -h 127.0.0.1 -uzhin -pzhin
+          - image: mariadb:11
+            health: healthcheck.sh --connect --innodb_initialized
+    name: database-live-mysql-compat (${{ matrix.image }})
+    services:
+      mysql:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: zhin_test
+          MYSQL_USER: zhin
+          MYSQL_PASSWORD: zhin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="${{ matrix.health }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 9.0.2
+
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: setup node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
+
+      - name: install dependencies
+        run: >-
+          pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js...
+          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
+
+      - name: run dependency lifecycle scripts without registry credentials
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js... rebuild
+
+      - name: build database acceptance dependencies
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js... build
+
+      - name: verify the MySQL live suites on ${{ matrix.image }}
+        run: >-
+          pnpm exec vitest run
+          basic/database/tests/live-dialects.test.ts
+          basic/database/tests/console-credential.live.test.ts
+          packages/host/gateway/tests/iam/legacy-import.live.test.ts
+          packages/im/zhin/tests/instance/database-gateway-isolation.live.test.ts
+          packages/im/zhin/tests/instance/mysql-startup.live.test.ts
+          packages/im/zhin/tests/instance/database-console-sql.live.test.ts
+          packages/im/zhin/tests/instance/persistent-state.live.test.ts
+          -t "mysql|MySQL"
+        env:
+          NODE_OPTIONS: --throw-deprecation
+          ZHIN_TEST_EXTERNAL_DATABASES: '1'
+          ZHIN_TEST_MYSQL_HOST: 127.0.0.1
+          ZHIN_TEST_MYSQL_PORT: '3306'
+          ZHIN_TEST_MYSQL_USER: zhin
+          ZHIN_TEST_MYSQL_PASSWORD: zhin
+          ZHIN_TEST_MYSQL_DATABASE: zhin_test
+          # The restricted Console account (ADR 0059) is created by root: MYSQL_USER cannot create users.
+          ZHIN_TEST_MYSQL_ROOT_USER: root
+          ZHIN_TEST_MYSQL_ROOT_PASSWORD: root
+
   # Process-level gateway suite (ADR 0054, plan B1.7 / M7): `zhin start` on a copy of
   # examples/minimal-bot, restart, crash supervision, rolled-back installs, Console walk.
   # Slow (a few minutes), so `pnpm test` skips it; it runs once here. Credential-free.
