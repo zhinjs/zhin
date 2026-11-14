@@ -81,6 +81,7 @@ const expectedSurface = new Map([
     'CommandParams', 'CommandOptions', 'CommandOptionSchema', 'InferCommandParams', 'InferCommandOptions',
     'CommandFeedback', 'CommandFeedbackContext', 'CommandFeedbackRenderer', 'CommandMenuPresentationInput', 'CommandMenuPresenter', 'CommandMenuPage', 'CommandMenuNavigation', 'CommandMenuEntry', 'CommandMenuAppearance', 'CommandValidationIssue',
     'commandFeedbackToken', 'commandMenuPresentationToken',
+    'UserFacingError', 'isUserFacingError',
   ]],
   ['zhin.js/component', ['ComponentContext', 'ComponentDefiner', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [

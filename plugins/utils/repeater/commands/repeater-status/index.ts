@@ -6,6 +6,8 @@ import { repeaterEngineToken } from '../../src/runtime.js';
 
 export default defineCommand<RepeaterConfig>({
   description: '查看复读机的运行状态', descriptionI18n: { en: "View repeater status" },
+  alias: ['repeater status'],
+  preferredAliasI18n: { 'zh-CN': 'repeater status', en: 'repeater status' },
   execute({ config, use, locale }) {
     return use(repeaterEngineToken).statusLines(config, locale);
   },

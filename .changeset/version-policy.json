@@ -4,12 +4,12 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。所有者已批准（zhinjs/zhin#1250）：新增类型 `ConsoleFeatureOverrideOperator` / `ConsoleFeatureOverrideSource`，`feature.get` / `feature.conversations` 结果新增可选 `operator` 与会话 `name`；权限表新增 `GET /conversations/workspaces/commands`。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。所有者已批准（zhinjs/zhin#1250）：实例 Console 后端新增 `GET /api/conversations/workspaces/commands`（Sandbox 快捷命令），`feature.get` / `feature.conversations` 返回 `operator` 与会话名；经 `zhin.js/command` 新增导出 `UserFacingError` / `isUserFacingError`。"
     },
     {
       "package": "@zhin.js/gateway",
@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。"
     },
     {
       "package": "@zhin.js/client",
@@ -40,6 +40,26 @@
       "package": "@zhin.js/scaffold-wizard",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 GATEWAY_NATIVE_BUILD_DEPENDENCIES（allowBuilds 放行的网关原生依赖）。"
+    },
+    {
+      "package": "@zhin.js/command",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 `UserFacingError` / `isUserFacingError` / `userFacingErrorText`（指令抛出即转为回复），`CommandIndex` 新增 `suggest()` / `suggestReply()` 与类型 `CommandSuggestionConfig`（近似命令提示）。"
+    },
+    {
+      "package": "@zhin.js/core",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：`zhin.js/command`（`@zhin.js/core/feature/command`）新增导出 `UserFacingError` / `isUserFacingError`；`KeyboardSegmentData` 与 `UserInteractionView` 新增可选字段 `purpose`（审批标记）。"
+    },
+    {
+      "package": "@zhin.js/im-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增类型 `UserInteractionPurpose`，`UserInteractionRequest` 新增可选字段 `purpose: 'approval'`。"
+    },
+    {
+      "package": "@zhin.js/runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：Host 根配置新增 `commandSuggestion`（`false` / `{ enabled, maxDistance, limit }`，写入 host-config-schema 与 Root 保留配置键）。"
     }
   ]
 }

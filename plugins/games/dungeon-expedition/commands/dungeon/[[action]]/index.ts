@@ -8,7 +8,10 @@ import {
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 export default defineCommand({
-  description: 'Multiplayer dungeon expedition',
+  description: '地牢远征：多人组队探索地牢',
+  descriptionI18n: { en: 'Multiplayer dungeon expedition' },
+  alias: ['地牢远征'],
+  preferredAliasI18n: { 'zh-CN': '地牢远征' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const rawAction = String(params.action ?? '');

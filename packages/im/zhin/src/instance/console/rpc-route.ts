@@ -37,6 +37,7 @@ import {
   CONSOLE_UNKNOWN_RPC_CODE,
   featureScopeTarget,
   type ConsoleDenialReason,
+  type ConsoleFeatureOverrideOperator,
 } from '@zhin.js/console-protocol';
 import { instanceConsoleCapabilities, isInstanceConsoleRpcType } from './rpc-capabilities.js';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
@@ -57,6 +58,13 @@ const OPEN_HOST: ConsolePrincipal = Object.freeze({ kind: 'bootstrap', open: tru
 /** The Host resolves a principal for every `/api` request; a bare test host without credentials is open. */
 function rpcPrincipal(http: HttpHost, resolved: ConsolePrincipal | undefined): ConsolePrincipal | undefined {
   return resolved ?? (http.tokenRegistry?.hasAnyToken() ? undefined : OPEN_HOST);
+}
+
+/** Writer of Console feature overrides (#1250): the signed-in principal and its display name. */
+export function consoleOverrideOperator(principal: ConsolePrincipal): ConsoleFeatureOverrideOperator {
+  if (principal.kind === 'bootstrap') return Object.freeze({ source: 'console' as const });
+  return Object.freeze({ source: 'console' as const, principalId: principal.userId,
+    ...(principal.displayName || principal.username ? { displayName: principal.displayName || principal.username } : {}) });
 }
 
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
@@ -129,7 +137,10 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         auditActor(principal),
         // Overrides are environment-expanded: only principals that may edit `.env` themselves
         // (owners, `ops.env.write`) may plant `${…}` / `env://` references through feature.*.
-        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE)));
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE),
+        consoleOverrideOperator(authorizedPrincipal),
+        // Sandbox workspace names are shown where the workspace directory is (`endpoint.view`).
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.ENDPOINT_VIEW)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }

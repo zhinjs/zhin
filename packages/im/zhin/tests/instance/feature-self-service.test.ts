@@ -20,20 +20,38 @@ const repeater = childPluginId(root, 'repeater');
 const rss = childPluginId(root, 'rss');
 const qq = childPluginId(root, 'qq');
 const tg = childPluginId(root, 'tg');
+const cache = childPluginId(root, 'cache');
+const tgOnly = childPluginId(root, 'tg-only');
+const welcome = childPluginId(root, 'welcome');
+const games = childPluginId(root, 'games');
+const gamesRps = childPluginId(games, 'rps');
 
 const repeaterSchema = {
   type: 'object', additionalProperties: false,
-  'x-zhin-config': { levels: ['global', 'adapter', 'endpoint', 'conversation'], conversationFields: ['threshold', 'cooldown'], selfServiceFields: ['threshold'] },
-  properties: { overrides: { type: 'object' }, threshold: { type: 'integer', minimum: 2 }, cooldown: { type: 'integer' } },
+  'x-zhin-config': { levels: ['global', 'adapter', 'endpoint', 'conversation'], conversationFields: ['threshold', 'cooldown', 'greeting'], selfServiceFields: ['threshold', 'greeting'] },
+  properties: { overrides: { type: 'object' }, threshold: { type: 'integer', minimum: 2 }, cooldown: { type: 'integer' }, greeting: { type: 'string' } },
 };
 
-function snapshot(qqConfig: unknown = {}): RuntimeSnapshot {
+function snapshot(qqConfig: unknown = {}, extra = 0): RuntimeSnapshot {
   const node = (id: PluginId, instanceKey: string, configSchema?: object) => ({ id, instanceKey, packageName: `@x/${instanceKey}`,
     packageRoot: `/x/${instanceKey}`, parent: id === root ? undefined : root, children: [], ...(configSchema ? { configSchema } : {}) });
+  const slot = (owner: PluginId, feature: string, localName: string, definition: object = {}) =>
+    [`${owner}:${feature}:${localName}`, { id: `${owner}:${feature}:${localName}`, owner, feature, localName, definition }] as const;
+  const extras = Array.from({ length: extra }, (_, index) => childPluginId(root, `extra-${String(index).padStart(2, '0')}`));
   return {
-    generation: 1, root, config: new Map([[qq, qqConfig]]), resources: new Map(), capabilities: new Map(),
+    generation: 1, root, config: new Map<PluginId, unknown>([[qq, qqConfig], [welcome, { enabled: false }]]), resources: new Map(),
+    // Chat-facing capabilities decide what `功能 列表` shows; adapters and service-only plugins have none.
+    capabilities: new Map([
+      slot(repeater, 'zhin.middleware', 'repeat'), slot(rss, 'zhin.command', 'rss'), slot(welcome, 'zhin.handler', 'notice/group'),
+      slot(tgOnly, 'zhin.command', 'sticker', { adapter: 'telegram' }), slot(gamesRps, 'zhin.command', 'rps'),
+      slot(cache, 'zhin.tool', 'lookup'), slot(qq, 'zhin.adapter', 'qq'), slot(tg, 'zhin.adapter', 'tg'),
+      ...extras.map(id => slot(id, 'zhin.command', 'run')),
+    ]) as never,
     tree: new Map([[root, node(root, 'root')], [repeater, node(repeater, 'repeater', repeaterSchema)], [rss, node(rss, 'rss')],
-      [qq, node(qq, 'qq')], [tg, node(tg, 'tg')]]) as never,
+      [qq, node(qq, 'qq')], [tg, node(tg, 'tg')], [cache, node(cache, 'cache')], [tgOnly, node(tgOnly, 'tg-only')],
+      [welcome, node(welcome, 'welcome')], [games, { ...node(games, 'games'), children: [gamesRps] }],
+      [gamesRps, { id: gamesRps, instanceKey: 'rps', packageName: '@x/rps', packageRoot: '/x/rps', parent: games, children: [] }],
+      ...extras.map(id => [id, node(id, id.split('/').at(-1)!)] as const)]) as never,
     projections: new Map([[featureId('zhin.adapter'), {
       owner: (id: string) => id.startsWith('tg:') ? tg : qq,
       endpointEntry: (id: string) => ({ desired: { endpointId: id.split(':')[1] } }),
@@ -42,7 +60,9 @@ function snapshot(qqConfig: unknown = {}): RuntimeSnapshot {
 }
 
 const base: RuntimeConfigDocument = {
-  configVersion: 2, plugins: { repeater: '@x/repeater', rss: '@x/rss', qq: '@x/qq', tg: '@x/tg' },
+  configVersion: 2, plugins: { repeater: '@x/repeater', rss: '@x/rss', qq: '@x/qq', tg: '@x/tg', cache: '@x/cache', 'tg-only': '@x/tg-only',
+    welcome: '@x/welcome', games: '@x/games', old: '@x/old' },
+  disable_plugins: ['old'], welcome: { enabled: false },
   qq: { endpoints: [{ id: 'bot-1' }, { id: 'bot-2' }] }, tg: { endpoints: [{ id: 'news' }] },
   repeater: { threshold: 3 },
 };
@@ -52,10 +72,12 @@ const on: FeatureSelfServiceConfig = { ...DEFAULT_FEATURE_SELF_SERVICE, enabled:
 let current = snapshot();
 
 async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = [],
-  conversations: FeatureOverrideStore = new FeatureOverrideStore()) {
+  conversations: FeatureOverrideStore = new FeatureOverrideStore(), extra = 0) {
   // ADR 0057 §2: the endpoint level lives in the override store (repeater is off on qq/bot-2).
   conversations.seed([{ plugin: 'repeater', key: 'qq/bot-2', enabled: false, patch: {} }]);
-  const state = { document: structuredClone(base), revision: 1 };
+  const document = structuredClone(base);
+  for (let index = 0; index < extra; index += 1) (document.plugins as Record<string, string>)[`extra-${String(index).padStart(2, '0')}`] = '@x/extra';
+  const state = { document, revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
   const configuration = {
     async readProject() { return { revision: `r${state.revision}`, exists: true, value: structuredClone(state.document) }; },
@@ -69,7 +91,7 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
   const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
   for (const [key, userId] of Object.entries(owners)) await roles.store.grant({ level: 'endpoint', key, adapter: key.split('/')[0]!, userId, role: 'owner' });
   for (const userId of globalOwners) await roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId, role: 'owner' });
-  const snap = snapshot();
+  const snap = snapshot({}, extra);
   current = snap;
   const audits: ConsoleAuditEntry[] = [];
   const setGlobalEnabled = vi.fn(async () => undefined);
@@ -77,11 +99,14 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
     config, roles, audit: (entry: ConsoleAuditEntry) => { audits.push(entry); }, pending: new Map(), code: () => '123456',
     context: { configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, stores: { overrides: conversations }, setGlobalEnabled },
   };
-  const run = (actor: FeatureChatActor | undefined, text: string, locale: 'zh-CN' | 'en' = 'zh-CN') =>
-    executeFeatureChat({ tokens: text.split(' ').filter(Boolean), actor, locale }, deps);
+  const run = (actor: FeatureChatActor | undefined, text: string, locale: 'zh-CN' | 'en' = 'zh-CN', clientAdapter?: string) =>
+    executeFeatureChat({ tokens: text.split(' ').filter(Boolean), actor, locale, ...(clientAdapter ? { clientAdapter } : {}) }, deps);
+  /** As the installed command parses it: quote-aware tokens from the message text. */
+  const say = (actor: FeatureChatActor | undefined, text: string) =>
+    executeFeatureChat({ tokens: featureChatTokens({ segments: [{ type: 'text', data: { text } }], args: [] }), actor, locale: 'zh-CN' }, deps);
   const role = (actor: FeatureChatActor | undefined, text: string) =>
     executeRoleChat({ tokens: text.split(' ').filter(Boolean), actor, locale: 'zh-CN' }, deps);
-  return { run, role, conversations, roles, audits, state, patches, setGlobalEnabled, deps };
+  return { run, say, role, conversations, roles, audits, state, patches, setGlobalEnabled, deps };
 }
 
 function actor(options: { user?: string; key?: string; standing?: 'owner' | 'admin' | 'member' } = {}): FeatureChatActor {
@@ -129,7 +154,8 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     await promote(roles);
     const admin = actor({ standing: 'admin' });
     expect(await run(admin, '关闭 rss')).toBe('已保存（会话层），立即生效。');
-    expect(conversations.get('rss', 'qq/bot-1/group:100')).toMatchObject({ enabled: false, updatedBy: 'chat:qq:u1' });
+    expect(conversations.get('rss', 'qq/bot-1/group:100')).toMatchObject({ enabled: false, updatedBy: 'chat:qq:u1',
+      operator: { source: 'chat', adapter: 'qq', userId: 'u1' } });
     expect(audits.at(-1)).toMatchObject({ actor: 'chat:qq:u1', action: 'feature.chat:disable', target: 'conversation:qq/bot-1/group:100', outcome: 'ok',
       detail: { plugin: 'rss', level: 'conversation' } });
     expect(await run(admin, '关闭 rss 账号')).toBe(DENIED);
@@ -229,6 +255,68 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(actor({ user: 'carol', key: 'qq/bot-2/group:9' }), '关闭 rss')).toBe('已保存（会话层），立即生效。');
     expect(await run(actor({ user: 'carol', key: 'qq/bot-2/group:9' }), '关闭 rss 账号')).toBe(DENIED);
     expect(await run(actor({ user: 'carol', key: 'qq/bot-2/group:8' }), '关闭 rss')).toBe(DENIED);
+  });
+
+  it('takes quoted values and the rest of the text as the value of 设置 (#1250)', async () => {
+    const { say, conversations, roles } = await harness();
+    await promote(roles);
+    const admin = actor();
+    expect(featureChatTokens({ segments: [{ type: 'text', data: { text: '设置 repeater greeting "欢迎 {name}" 账号' } }], args: [] }))
+      .toEqual(['设置', 'repeater', 'greeting', { text: '欢迎 {name}', quoted: true }, '账号']);
+    expect(featureChatTokens({ segments: [{ type: 'text', data: { text: '设置 a b \u201C你好 世界\u201D \u300C一 二\u300D \'x y\'' } }], args: [] }))
+      .toEqual(['设置', 'a', 'b', { text: '你好 世界', quoted: true }, { text: '一 二', quoted: true }, { text: 'x y', quoted: true }]);
+    expect(await say(admin, '设置 repeater greeting "欢迎 {name}"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎 {name}' });
+    expect(await say(admin, '设置 repeater greeting \u201C欢迎新人 {name}\u201D')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎新人 {name}' });
+    // Unquoted: everything after the field is the value; a trailing level word is still the level.
+    expect(await say(admin, '设置 repeater greeting 欢迎 大家 光临')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎 大家 光临' });
+    expect(await say(admin, '设置 repeater greeting 欢迎 {name} 账号')).toBe(DENIED);
+    expect(await say(admin, '设置 repeater greeting "会话"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '会话' });
+    // A quoted trailing level word is part of the value, never the level (#1250 review).
+    expect(await say(admin, '设置 repeater greeting 欢迎 "会话"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '欢迎 会话' });
+    expect(await say(admin, '设置 repeater greeting 你好 "账号"')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ greeting: '你好 账号' });
+    // Unquoted, the same trailing word is still the level.
+    expect(await say(admin, '设置 repeater greeting 你好 账号')).toBe(DENIED);
+    // A quoted word in a level position elsewhere is not a level either.
+    expect(await say(admin, '关闭 repeater "会话"')).toContain('用法');
+    expect(await say(admin, '设置 repeater greeting')).toContain('用法');
+  });
+
+  it('lists only chat-facing plugins for this conversation, with configuration and global switches, paginated (#1250)', async () => {
+    const { run } = await harness();
+    const owner = actor({ user: 'boss' });
+    const list = await run(owner, '列表', 'zh-CN', 'icqq');
+    expect(list).toContain('rss：启用');
+    expect(list).toContain('repeater：启用');
+    expect(list).toContain('games：启用');
+    expect(list).toContain('games/rps：启用');
+    expect(list).toContain('welcome：停用（配置 enabled: false）');
+    expect(list).toContain('old：停用（全局停用）');
+    // Adapters, service-only plugins and plugins whose commands target another platform are not listed.
+    for (const hidden of ['qq：', 'tg：', 'cache：', 'tg-only：']) expect(list).not.toContain(hidden);
+    expect(list).not.toContain('第 1/');
+    // The same plugin applies where its adapter matches.
+    expect(await run(owner, '列表', 'zh-CN', 'telegram')).toContain('tg-only：启用');
+    expect(await run(owner, '列表 x')).toContain('用法');
+    expect(await run(owner, '列表 2')).toBe('页码超出范围：共 1 页。请使用「功能 列表 <页码>」。');
+  });
+
+  it('pages a long feature list in the command-menu style', async () => {
+    const { run } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureOverrideStore(), 20);
+    const owner = actor({ user: 'boss' });
+    const first = await run(owner, '列表');
+    expect(first).toContain('第 1/2 页 · 共 27 项');
+    expect(first).toContain('下一页：功能 列表 2');
+    expect(first.split('\n').filter(line => /：(启用|停用)/u.test(line)).length).toBe(15);
+    const second = await run(owner, '列表 2');
+    expect(second).toContain('第 2/2 页 · 共 27 项');
+    expect(second).not.toContain('下一页');
+    expect(second).toContain('你的角色：');
   });
 
   it('requires an explicit confirmation for global switches and restarts', async () => {
@@ -338,5 +426,18 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(resolved).toEqual({ identity: { adapter: 'qq', userId: 'u1' }, conversationKey: 'qq/bot-1/group:100', endpointKey: 'qq/bot-1',
       kind: 'group', context: { conversationKey: 'qq/bot-1/group:100', platform: { standing: 'owner' } } });
     expect(featureChatActor(snapshot(), { conversation: { endpoint: { id: 'qq:bot-1' } }, sender: { id: 'u1' } })).toBeUndefined();
+    // The sender's display name is kept for the override record; a name that only repeats the id is not.
+    expect(featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+      sender: { id: 'u1', name: ' 小明 ' } })?.displayName).toBe('小明');
+    expect(featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+      sender: { id: 'u1', name: 'u1' } })).not.toHaveProperty('displayName');
+  });
+
+  it('records who changed an override from chat and that it came from chat (#1250)', async () => {
+    const { run, conversations, roles } = await harness();
+    await promote(roles);
+    expect(await run({ ...actor(), displayName: '小明' }, '关闭 repeater')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get('repeater', 'qq/bot-1/group:100')).toMatchObject({ updatedBy: 'chat:qq:u1',
+      operator: { source: 'chat', adapter: 'qq', userId: 'u1', displayName: '小明' } });
   });
 });
