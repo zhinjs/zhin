@@ -2,7 +2,8 @@
 /**
  * ADR 0044 §6: runtime code reads adapter capabilities, never platform names.
  *
- * Scans core / agent / ai / adapter runtime sources and the CLI plugin-runtime for platform-name string
+ * Scans core / agent / ai / adapter runtime sources, the instance composition root
+ * (packages/im/zhin/src/instance) and the management gateway (packages/host/gateway/src) for platform-name string
  * literals (`'icqq'`, `"discord"`, ...) and unquoted platform-name object keys (`telegram: ...`,
  * `kook?: ...`). Comments, tests and `.d.ts` files are ignored. A genuine exception must be listed in
  * `scripts/no-platform-branches-allowlist.json` with a reason.

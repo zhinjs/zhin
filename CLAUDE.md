@@ -31,7 +31,7 @@ pnpm --filter @zhin.js/core build
 pnpm vitest run packages/im/core        # @zhin.js/core has no `test` script; run its tests from the root
 
 # Run a single test file
-pnpm vitest run packages/im/core/tests/ai-access.test.ts
+pnpm vitest run packages/im/core/tests/message.test.ts
 ```
 
 Custom lint checks:

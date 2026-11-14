@@ -114,7 +114,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
-| Root Host installers (`*-host-installer.ts`) | `internal` | `@zhin.js/core/runtime` · `@zhin.js/cli` | The database / outbound / component / locale installers belong to `@zhin.js/core/runtime`; the agent, configuration, schedule, restart, protocol (MCP / A2A), speech, and html-renderer installers and Console assembly live in `basic/cli/src/plugin-runtime/`; assembly details may change at any time |
+| Root Host installers (`*-host-installer.ts`) | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | The database / outbound / component / locale installers belong to `@zhin.js/core/runtime`; the agent (`agent/host-installer.ts`), configuration, feature, schedule, restart, protocol (MCP / A2A), speech, and html-renderer installers and Console assembly live in `packages/im/zhin/src/instance/`; assembly details may change at any time |
 | `@zhin.js/harness` (Mailbox / Authority / BudgetLedger / GuardKernel / Journal) | `internal` | `@zhin.js/harness` | ADR 0048 multi-Agent collaboration microkernel, assembled by `@zhin.js/agent`; plugin authors use it through `collaboration` in `agent.json` and the collaboration tools, never as a direct dependency |
 
 ## Deprecated / Migrated

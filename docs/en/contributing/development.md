@@ -118,7 +118,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | --- | --- |
 | IM Send Path (`pnpm check:harness-paths`) | Must not bypass the Adapter.sendMessage unified chain |
 | IM Session SSOT (`pnpm check:im-session-ssot`) | IM scene/session identity resolution uses core SSOT |
-| No Platform Branches (`pnpm check:no-platform-branches`) | Platform name literals and platform-keyed tables (`icqq`, `discord`…) are forbidden in core / agent / ai / adapter `src` and `basic/cli/src/plugin-runtime`; differences must read the adapter capability profile (ADR 0044). Exceptions are listed in `scripts/no-platform-branches-allowlist.json` with a reason |
+| No Platform Branches (`pnpm check:no-platform-branches`) | Platform name literals and platform-keyed tables (`icqq`, `discord`…) are forbidden in core / agent / ai / adapter `src`, the instance composition root `packages/im/zhin/src/instance` and the management gateway `packages/host/gateway/src`; differences must read the adapter capability profile (ADR 0044). Exceptions are listed in `scripts/no-platform-branches-allowlist.json` with a reason |
 | Removed Plugin API (`pnpm check:no-removed-plugin-api`) | Removed Plugin lookup APIs must not reappear in production source |
 
 **AI Layer**

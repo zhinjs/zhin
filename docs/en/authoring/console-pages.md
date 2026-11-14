@@ -619,7 +619,7 @@ flowchart LR
 
 - **Pure Blueprint (`.ts`)**: Node evaluates only the pure-data blueprint descriptor, **completely skipping `esbuild` bundling and `.bundle.js` artifacts**. `GET /console/api/pages` embeds the `blueprint` JSON directly in the page manifest, and `renderConsoleShell` (in `@zhin.js/pagemanager`) renders stat cards, filter forms, action bars, and tables in the browser via `createBlueprintPage` from `@zhin.js/client`.
 - **Heavy-Interaction Static Assets (`.tsx`)**: Only `pages/*/index.tsx` (such as `plugins/adapters/sandbox`) uses static `.bundle.js` mounting or `TypeScriptClientBuilder` bundling; the Node process never calls `import()` on browser React code at runtime. Bare imports on `ALLOWED_ESM_CANONICAL` (`react`, `react-dom`, etc.) are rewritten to `/esm/<enc>.mjs` so the entire Console shares a single React instance.
-- **Routes and Shell**: The Console shell renderer lives in `@zhin.js/pagemanager` (`packages/console/pagemanager/src/shell/page-renderer.ts`) and is wired by `basic/cli/src/plugin-runtime/console/host.ts`. `GET /console` is the page index, `GET /console/api/pages` returns the page manifest, and other paths match pages and serve the Console shell; no match returns 404, insufficient permission 403.
+- **Routes and Shell**: The Console shell renderer lives in `@zhin.js/pagemanager` (`packages/console/pagemanager/src/shell/page-renderer.ts`) and is wired by `packages/im/zhin/src/instance/console/host.ts`. `GET /console` is the page index, `GET /console/api/pages` returns the page manifest, and other paths match pages and serve the Console shell; no match returns 404, insufficient permission 403.
 
 ## Next steps
 

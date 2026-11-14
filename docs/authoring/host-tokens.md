@@ -215,7 +215,7 @@ async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
 - **TTL**：按写入尝试的时刻计算；过期后 `get` 和 `update` 视为不存在；更新会替换原来的 TTL。
 - **数据库支持**：原子状态支持 SQLite、MySQL、PostgreSQL，复用同一个数据库连接。缺少持久服务、数据库未连接，或使用 MongoDB / Redis 时会明确报错，不会退回内存存储；其他方言原有的 `models` 接口不受影响。
 - **热重载**：不要跨热重载保存 Store 对象。已开始的操作会正常完成；旧版本 Store 上的新操作会被拒绝，应在当前执行上下文里重新 `use(databaseHostToken)`。
-- **测试**：`basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts` 用真实运行时验证了 reminder（会话状态与持久目标）和 preferences（用户状态）两个插件的隔离、热重载和进程重建后的恢复；`persistent-state.test.ts` 验证并发、多人 / 账号 / 父频道 / 线程隔离与 TTL；`persistent-state.live.test.ts` 在独立的 MySQL / PostgreSQL 上验证原子更新。合成的发送夹具不代表真实平台的投递验收。
+- **测试**：`packages/im/zhin/tests/instance/persistent-state-runtime.test.ts` 用真实运行时验证了 reminder（会话状态与持久目标）和 preferences（用户状态）两个插件的隔离、热重载和进程重建后的恢复；`persistent-state.test.ts` 验证并发、多人 / 账号 / 父频道 / 线程隔离与 TTL；`persistent-state.live.test.ts` 在独立的 MySQL / PostgreSQL 上验证原子更新。合成的发送夹具不代表真实平台的投递验收。
 :::
 
 ## 内部 token
