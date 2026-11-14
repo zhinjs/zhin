@@ -97,11 +97,26 @@ export function isDotenvProjectPath(relativePath: string): boolean {
   return relativePath.replace(/\\/gu, '/').split('/').some(isDotenvSegment);
 }
 
+/**
+ * Whether one path segment names a dot file or dot directory (`.envrc`, `.npmrc`, `.ssh`, …), also
+ * percent-encoded. Such files commonly hold credentials; no entry of {@link FILE_MANAGER_ALLOWED}
+ * is one, so the project file manager never reads or writes them (the tree already skips them).
+ */
+function isDotSegment(segment: string): boolean {
+  const variants = [segment];
+  try {
+    const decoded = decodeURIComponent(segment);
+    if (decoded !== segment) variants.push(decoded);
+  } catch { /* not percent-encoded */ }
+  return variants.some(variant => variant.startsWith('.') && variant !== '.');
+}
+
 export function isProjectPathAllowed(relativePath: string): boolean {
   if (relativePath.includes('..') || path.isAbsolute(relativePath)) return false;
   if (CONTROL_CHARACTERS.test(relativePath) || isDotenvProjectPath(relativePath)) return false;
   const normalized = relativePath.replace(/\\/gu, '/').replace(/^\.\//u, '');
-  if (normalized.split('/').some((segment) => FILE_MANAGER_BLOCKED.has(segment))) return false;
+  const segments = normalized.split('/');
+  if (segments.some((segment) => FILE_MANAGER_BLOCKED.has(segment) || isDotSegment(segment))) return false;
   return FILE_MANAGER_ALLOWED.some(
     (allowed) => normalized === allowed || normalized.startsWith(`${allowed}/`),
   );

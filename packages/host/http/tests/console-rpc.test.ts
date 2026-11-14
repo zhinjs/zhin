@@ -304,6 +304,25 @@ describe('runtime console RPC', () => {
     const plain = await send(new Error('boom'), 86);
     expect(plain).toMatchObject({ error: 'boom' });
     expect(plain?.data).toBeUndefined();
+    // Any other error with a string `code` (Node, database, a plugin's own) is not a send failure:
+    // it keeps its own message and carries no classified `data`.
+    for (const [index, code] of ['ENOENT', 'SQLITE_BUSY', 'ERR_INVALID_ARG_TYPE', 'my_plugin_error'].entries()) {
+      const coded = Object.assign(new Error(`original message ${code}`), { code });
+      const reply = await send(coded, 90 + index);
+      expect(reply).toMatchObject({ error: `original message ${code}` });
+      expect(reply?.data).toBeUndefined();
+    }
+    // An unknown code is still a send failure when the error carries a disposition or a receipt.
+    expect(await send(Object.assign(new Error('x'), { code: 'brand_new_code', disposition: 'not_sent' }), 95)).toMatchObject({
+      error: CONSOLE_SEND_FAILURE_MESSAGES.failed, data: { code: 'brand_new_code', reason: 'failed', status: 'failed' },
+    });
+    expect(await send(Object.assign(new Error('x'), { code: 'brand_new_code', receipt: { status: 'rejected' } }), 96)).toMatchObject({
+      data: { code: 'brand_new_code', reason: 'platform_rejected', status: 'rejected' },
+    });
+    // A known delivery code without disposition / receipt is classified.
+    expect(await send(Object.assign(new Error('x'), { code: 'rate_limited' }), 97)).toMatchObject({
+      data: { code: 'rate_limited', reason: 'platform_rejected' },
+    });
   });
 
   it('applies the permission map to canonical RPC names', async () => {

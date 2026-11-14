@@ -200,4 +200,28 @@ describe('dotenv files stay out of the project file manager (issue #1250)', () =
       expect(isProjectPathAllowed('MEMORY.md')).toBe(false);
     });
   });
+
+  it('refuses dot files and dot directories anywhere in the path (#1250 review)', async () => {
+    await withProject(async (root) => {
+      await mkdir(path.join(root, 'knowledge', '.private'), { recursive: true });
+      await writeFile(path.join(root, 'knowledge', '.envrc'), 'export TOKEN=fake-envrc-secret\n');
+      await writeFile(path.join(root, 'knowledge', '.npmrc'), '//registry.npmjs.org/:_authToken=fake-npm-secret\n');
+      await writeFile(path.join(root, 'knowledge', '.private', 'notes.md'), 'fake-private');
+      const refused = [
+        'knowledge/.envrc', 'knowledge/.npmrc', 'knowledge/.private/notes.md', 'src/.git-credentials', 'skills/x/.netrc',
+        'knowledge/%2Eenvrc', './knowledge/.npmrc', 'knowledge\\.npmrc', '.npmrc', '.envrc',
+      ];
+      for (const relativePath of refused) {
+        expect(isProjectPathAllowed(relativePath), relativePath).toBe(false);
+        await expect(readProjectFile(root, relativePath), relativePath).rejects.toThrow(/Access denied/u);
+        await expect(saveProjectFile(root, relativePath, 'overwritten'), relativePath).rejects.toThrow(/Access denied/u);
+      }
+      expect(await readFile(path.join(root, 'knowledge', '.envrc'), 'utf8')).toBe('export TOKEN=fake-envrc-secret\n');
+      const tree = JSON.stringify(await buildProjectFileTree(root));
+      expect(tree).not.toMatch(/\.envrc|\.npmrc|\.private/u);
+      // Names that merely contain a dot stay allowed.
+      expect(isProjectPathAllowed('knowledge/a.b.md')).toBe(true);
+      expect(isProjectPathAllowed('knowledge/./faq.md')).toBe(true);
+    });
+  });
 });

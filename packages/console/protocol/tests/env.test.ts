@@ -7,6 +7,7 @@ import {
   ENV_RPC,
   isConsoleEnvFileView,
   isConsoleEnvMaskPlaceholder,
+  ENV_MASK_REVEAL_MIN_LENGTH,
   maskConsoleEnvValue,
   resolveConsoleRpcPermission,
 } from '../src/index.js';
@@ -14,16 +15,20 @@ import {
 const MASK = ENV_MASK_CHAR.repeat(8);
 
 describe('env RPC masking (issue #1250)', () => {
-  it('masks every value: up to 8 characters completely, longer ones keep 2 + 2 characters', () => {
+  it('masks every value: under 16 characters completely, longer ones keep 2 + 2 characters', () => {
+    expect(ENV_MASK_REVEAL_MIN_LENGTH).toBe(16);
     expect(maskConsoleEnvValue('')).toBe('');
     expect(maskConsoleEnvValue('1')).toBe(MASK);
     expect(maskConsoleEnvValue('12345678')).toBe(MASK);
-    expect(maskConsoleEnvValue('123456789')).toBe(`12${MASK}89`);
+    expect(maskConsoleEnvValue('123456789')).toBe(MASK);
+    expect(maskConsoleEnvValue('123456789012345')).toBe(MASK);
+    expect(maskConsoleEnvValue('1234567890123456')).toBe(`12${MASK}56`);
     expect(maskConsoleEnvValue('sk-fake-0123456789abcdef')).toBe(`sk${MASK}ef`);
     // Characters, not UTF-16 units.
-    expect(maskConsoleEnvValue('密钥密钥密钥密钥密钥')).toBe(`密钥${MASK}密钥`);
+    expect(maskConsoleEnvValue('密钥密钥密钥密钥密钥')).toBe(MASK);
+    expect(maskConsoleEnvValue('密钥'.repeat(8))).toBe(`密钥${MASK}密钥`);
     // The mask has a fixed width: it never tells the length.
-    expect(maskConsoleEnvValue('a'.repeat(9)).length).toBe(maskConsoleEnvValue('a'.repeat(900)).length);
+    expect(maskConsoleEnvValue('a'.repeat(16)).length).toBe(maskConsoleEnvValue('a'.repeat(900)).length);
   });
 
   it('recognises mask placeholders, including the older Console mask, but not ordinary values', () => {

@@ -229,7 +229,10 @@ export function authorizeConsoleRpc(
   }
   const missing = rule.kind === 'exact' ? rule.alsoRequires?.find(extra => !grantsAllow(principal.grants, extra, rule.target)) : undefined;
   if (missing) {
-    return Object.freeze({ allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission });
+    return Object.freeze({
+      allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission,
+      reason: grantsDenialReason(principal.grants, missing),
+    });
   }
   return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule) });
 }

@@ -56,16 +56,53 @@ export class McpConnectionError extends Error {
   }
 }
 
+/** A URL path segment that looks like a token (long, random-looking), not a word like `mcp` or `v1`. */
+function tokenLikeSegment(segment: string): boolean {
+  return segment.length >= 24 || (segment.length >= 12 && /\d/u.test(segment) && /[A-Za-z]/u.test(segment));
+}
+
+/**
+ * Secrets the entry itself could put into an error message: header and env values, the stdio
+ * arguments (or the value of `--flag=value`), the URL's userinfo (also when written unencoded,
+ * `https://user:pa/ss@host`) and the token-like segments of its path.
+ */
+function entrySecrets(entry: Pick<McpServerEntry, 'headers' | 'env' | 'url' | 'args'> | undefined): string[] {
+  if (!entry) return [];
+  const values: unknown[] = [...Object.values(entry.headers ?? {}), ...Object.values(entry.env ?? {})];
+  for (const arg of Array.isArray(entry.args) ? entry.args : []) {
+    if (typeof arg !== 'string') continue;
+    const flagValue = /^--?[\w.-]+=(.+)$/su.exec(arg);
+    if (flagValue) values.push(flagValue[1]);
+    else if (!arg.startsWith('-') && arg.length >= 6) values.push(arg);
+  }
+  if (typeof entry.url === 'string') {
+    const authority = /^[a-z][a-z0-9+.-]*:\/\/([^?#\s]*)/iu.exec(entry.url)?.[1] ?? '';
+    const at = authority.lastIndexOf('@');
+    const userinfo = at >= 0 ? authority.slice(0, at) : '';
+    if (userinfo) {
+      values.push(userinfo);
+      for (const part of userinfo.split(':')) if (part.length >= 4) values.push(part);
+    }
+    const rest = at >= 0 ? authority.slice(at + 1) : authority;
+    const path = rest.includes('/') ? rest.slice(rest.indexOf('/')) : '';
+    for (const segment of path.split('/')) {
+      if (!tokenLikeSegment(segment)) continue;
+      values.push(segment);
+      try { values.push(decodeURIComponent(segment)); } catch { /* not percent-encoded */ }
+    }
+  }
+  return [...new Set(values.filter((value): value is string => typeof value === 'string' && value.length >= 4))];
+}
+
 /** Remove secrets the entry or the message itself could carry. */
-export function redactMcpFailureMessage(message: string, entry?: Pick<McpServerEntry, 'headers' | 'env'>): string {
+export function redactMcpFailureMessage(message: string, entry?: Pick<McpServerEntry, 'headers' | 'env'> & Partial<Pick<McpServerEntry, 'url' | 'args'>>): string {
   let text = message;
-  const secrets = [...Object.values(entry?.headers ?? {}), ...Object.values(entry?.env ?? {})]
-    .filter((value): value is string => typeof value === 'string' && value.length >= 4)
-    .sort((left, right) => right.length - left.length);
+  const secrets = entrySecrets(entry).sort((left, right) => right.length - left.length);
   for (const secret of secrets) text = text.split(secret).join('***');
   text = text
-    // URL credentials and query strings / fragments.
+    // URL credentials (also unencoded `user:pa/ss@`) and query strings / fragments.
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, '$1***@')
+    .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]*:[^\s@]*@/giu, '$1***@')
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#]*)[?#][^\s]*/giu, '$1')
     // Bearer tokens and key=value / key: value secrets.
     .replace(/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+/giu, '$1 ***')
@@ -88,7 +125,7 @@ function errorCode(error: unknown): string | undefined {
 /** Classify a connect failure. `exitCode` is the stdio process' exit code when known. */
 export function classifyMcpFailure(
   error: unknown,
-  entry?: Pick<McpServerEntry, 'headers' | 'env' | 'transport'>,
+  entry?: Pick<McpServerEntry, 'headers' | 'env' | 'transport'> & Partial<Pick<McpServerEntry, 'url' | 'args'>>,
   exitCode?: number,
   now: number = Date.now(),
 ): McpConnectionFailure {

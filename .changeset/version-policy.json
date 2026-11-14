@@ -9,7 +9,7 @@
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。"
     },
     {
       "package": "@zhin.js/gateway",
@@ -19,7 +19,7 @@
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options；新增 unknown_rpc 判定与日志、审计拒绝原因码、/console/capabilities 相关公开导出。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options；新增 unknown_rpc 判定与日志、审计拒绝原因码、/console/capabilities 相关公开导出。另经 #1254 review 定为 minor：env:save 拒绝旧协议（整文件保存需 mode:'replace'）、项目文件拒绝 .env 与点文件（files:read .env 被拒），旧 Console 的环境变量保存会失败，需升级 Console。"
     },
     {
       "package": "@zhin.js/agent",

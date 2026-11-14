@@ -34,100 +34,166 @@ export async function writeEnvFile(projectRoot: string, filename: string, conten
 }
 
 // ---------------------------------------------------------------------------------------------
-// Parsing: assignments (one per variable, multi-line quoted values included) and the text around
-// them, so that serialising the segments reproduces the input byte for byte.
+// Parsing. The process reads `.env` with dotenv's `parse`, so the Console's view of the file must be
+// exactly dotenv's: the same assignments, with the same values. `DOTENV_LINE` is dotenv's own line
+// pattern (dotenv 17, `lib/main.js` `LINE`) with two extra capture groups (the separator and the
+// value) and match indices; `scanEnv` runs it the way `parse` does (`\r\n` / `\r` read as `\n`) and
+// maps every match back to the bytes of the file. Anything dotenv does not read as an assignment is
+// text (comments, blank and stray lines). The tests compare this scan with `parse` itself.
 
-const ASSIGNMENT = /^(\s*(?:export\s+)?)([\w.-]+)(\s*=\s*)(.*)$/u;
-const COMMENTED_ASSIGNMENT = /^\s*#\s*(?:export\s+)?([\w.-]+)\s*=(.*)$/u;
+// No `u` flag: the pattern is kept exactly as dotenv has it.
+const DOTENV_LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/dgm;
 const REFERENCE = /^\$\{[^}]+\}$/u;
 
-type Segment =
-  | { kind: 'text'; raw: string }
-  | { kind: 'entry'; before: string; key: string; equals: string; value: string; eol: string };
+/** One assignment dotenv reads. Offsets are into the original content; `[start, end)` are whole lines. */
+interface EnvEntry {
+  readonly key: string;
+  readonly exported: boolean;
+  /** Start of the first line of the assignment and end of its last line (line break included). */
+  readonly start: number;
+  readonly end: number;
+  /** The value as written (`KEY=` part and inline comment excluded), replaced by a new value. */
+  readonly valueStart: number;
+  readonly valueEnd: number;
+  /** The value as written (quotes included). */
+  readonly raw: string;
+  /** The value as the process reads it. */
+  readonly value: string;
+}
 
-/** Whether an unescaped `quote` occurs in `text` from `start` on; returns its index or -1. */
-function closingQuote(text: string, quote: string, start: number): number {
-  for (let index = start; index < text.length; index += 1) {
-    if (text[index] !== quote) continue;
-    let escapes = 0;
-    for (let back = index - 1; back >= 0 && text[back] === '\\'; back -= 1) escapes += 1;
-    if (escapes % 2 === 0) return index;
+interface EnvScan {
+  readonly entries: readonly EnvEntry[];
+  /** Text between assignments: whole lines, in order. */
+  readonly texts: readonly { readonly start: number; readonly end: number }[];
+}
+
+/** dotenv's value rules, applied to the captured value (see `parse` in dotenv's `lib/main.js`). */
+function dotenvValue(captured: string): string {
+  let value = captured.trim();
+  const maybeQuote = value[0];
+  value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2');
+  if (maybeQuote === '"') value = value.replace(/\\n/gu, '\n').replace(/\\r/gu, '\r');
+  return value;
+}
+
+function scanEnv(content: string): EnvScan {
+  // dotenv reads `\r\n` and `\r` as `\n`; `toOriginal[i]` is the offset in `content` of normalised offset `i`.
+  let normalized = '';
+  const toOriginal: number[] = [];
+  for (let index = 0; index < content.length; index += 1) {
+    toOriginal.push(index);
+    if (content[index] === '\r') {
+      normalized += '\n';
+      if (content[index + 1] === '\n') index += 1;
+    } else normalized += content[index];
   }
-  return -1;
-}
+  toOriginal.push(content.length);
 
-function openingQuote(value: string): string | null {
-  return /^["'`]/u.test(value) ? value[0]! : null;
-}
-
-function segments(content: string): Segment[] {
-  const parts = content.split(/(\r\n|\n|\r)/u);
-  const out: Segment[] = [];
-  for (let index = 0; index < parts.length; index += 2) {
-    const line = parts[index]!;
-    let eol = parts[index + 1] ?? '';
-    const match = ASSIGNMENT.exec(line);
-    if (!match) {
-      if (line || eol) out.push({ kind: 'text', raw: line + eol });
-      continue;
+  const entries: EnvEntry[] = [];
+  const texts: { start: number; end: number }[] = [];
+  let cursor = 0;
+  const pattern = new RegExp(DOTENV_LINE.source, DOTENV_LINE.flags);
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(normalized)) !== null) {
+    const indices = match.indices!;
+    const first = match.index + match[0].search(/\S/u);
+    const lineStart = normalized.lastIndexOf('\n', first - 1) + 1;
+    const separatorEnd = indices[2]![1];
+    let valueStart = separatorEnd;
+    let valueEnd = separatorEnd;
+    if (match[3] !== undefined) {
+      const [groupStart, groupEnd] = indices[3]!;
+      const leading = /^\s*/u.exec(match[3])![0];
+      // A value on a line of its own (`KEY=` then `"value"`): replacing it replaces that line break too.
+      valueStart = leading.includes('\n') ? groupStart : groupStart + leading.length;
+      valueEnd = groupStart + match[3].trimEnd().length;
+      if (valueEnd < valueStart) valueEnd = valueStart;
     }
-    let value = match[4]!;
-    const quote = openingQuote(value);
-    if (quote && closingQuote(value, quote, 1) < 0) {
-      while (index + 2 < parts.length) {
-        index += 2;
-        value += eol + parts[index]!;
-        eol = parts[index + 1] ?? '';
-        if (closingQuote(parts[index]!, quote, 0) >= 0) break;
-      }
-    }
-    out.push({ kind: 'entry', before: match[1]!, key: match[2]!, equals: match[3]!, value, eol });
+    const last = Math.max(valueEnd, separatorEnd) - 1;
+    const lineBreak = normalized.indexOf('\n', last);
+    const lineEnd = lineBreak < 0 ? normalized.length : lineBreak + 1;
+    if (lineStart > cursor) texts.push({ start: toOriginal[cursor]!, end: toOriginal[lineStart]! });
+    const rawStart = groupValueStart(match[3], indices[3]);
+    entries.push(Object.freeze({
+      key: match[1]!,
+      exported: /^export\s/u.test(normalized.slice(first, indices[1]![0])),
+      start: toOriginal[lineStart]!,
+      end: toOriginal[lineEnd]!,
+      valueStart: toOriginal[valueStart]!,
+      valueEnd: toOriginal[valueEnd]!,
+      raw: content.slice(toOriginal[rawStart ?? valueStart]!, toOriginal[valueEnd]!),
+      value: dotenvValue(match[3] ?? ''),
+    }));
+    cursor = lineEnd;
   }
-  return out;
+  if (cursor < normalized.length) texts.push({ start: toOriginal[cursor]!, end: content.length });
+  return { entries, texts };
 }
 
-const serialize = (segs: readonly Segment[]): string =>
-  segs.map(seg => seg.kind === 'text' ? seg.raw : seg.before + seg.key + seg.equals + seg.value + seg.eol).join('');
+/** Where the captured value starts once its leading whitespace is left out. */
+function groupValueStart(captured: string | undefined, span: [number, number] | undefined): number | undefined {
+  if (captured === undefined || !span) return undefined;
+  return span[0] + /^\s*/u.exec(captured)![0].length;
+}
 
-/** The value as the process reads it (dotenv's own parser on that one assignment). */
+/** What the process reads from `content`: dotenv's own `parse` (the last assignment of a key wins). */
+function dotenvValues(content: string): Map<string, string> {
+  return new Map(Object.entries(parse(content)));
+}
+
+/** The value as the process reads it (dotenv's own rules on that one assignment). */
 function effectiveValue(key: string, rawValue: string): string {
   return parse(`${key}=${rawValue}`)[key] ?? '';
 }
 
-function maskedVariable(key: string, rawValue: string): ConsoleEnvVariable {
-  const value = effectiveValue(key, rawValue);
+function maskedVariable(entry: EnvEntry): ConsoleEnvVariable {
   return Object.freeze({
-    key,
-    masked: maskConsoleEnvValue(value),
-    length: Array.from(value).length,
-    hasValue: value.length > 0,
-    ...(REFERENCE.test(value) ? { isReference: true as const } : {}),
+    key: entry.key,
+    masked: maskConsoleEnvValue(entry.value),
+    hasValue: entry.value.length > 0,
+    ...(REFERENCE.test(entry.value) ? { isReference: true as const } : {}),
   });
 }
+
+/** A comment that names a key: `# KEY=value`, `## KEY=value`, `#- KEY: value`, `# export KEY=value`. */
+const COMMENTED_ASSIGNMENT = /^\s*#[^\w\r\n]*?(?:export\s+)?([\w.-]+)\s*[=:](.*\S.*)$/u;
+/** Any other sign of a value in a comment: `=` or `:` followed by text (`# old token is: sk-…`). */
+const COMMENTED_VALUE = /[=:](?=\s*\S)/u;
+
+const unquote = (text: string): string => text.trim().replace(/^(["'`])([\s\S]*)\1$/u, '$2');
 
 function textLines(raw: string): ConsoleEnvLine[] {
   return raw.split(/\r\n|\n|\r/u).slice(0, raw.match(/\r\n|\n|\r/u) ? -1 : undefined).map((line): ConsoleEnvLine => {
     if (!line.trim()) return Object.freeze({ kind: 'blank' });
+    if (!/^\s*#/u.test(line)) return Object.freeze({ kind: 'other' });
     const commented = COMMENTED_ASSIGNMENT.exec(line);
-    if (commented) {
-      return Object.freeze({ kind: 'comment', key: commented[1]!, masked: maskConsoleEnvValue(effectiveValue(commented[1]!, commented[2]!.trim())) });
+    if (commented) return Object.freeze({ kind: 'comment', key: commented[1]!, masked: maskConsoleEnvValue(unquote(commented[2]!)) });
+    const separator = COMMENTED_VALUE.exec(line);
+    if (separator) {
+      const head = line.slice(0, separator.index + 1);
+      return Object.freeze({ kind: 'comment', text: `${head} ${maskConsoleEnvValue(unquote(line.slice(separator.index + 1))) || ENV_MASK_CHAR.repeat(ENV_MASK_RUN)}` });
     }
-    if (/^\s*#/u.test(line)) return Object.freeze({ kind: 'comment', text: line });
-    return Object.freeze({ kind: 'other', length: Array.from(line).length });
+    return Object.freeze({ kind: 'comment', text: line });
   });
 }
 
-/** Masked view of `content` (`env:get`); never contains a value, only masks, lengths and key names. */
+/**
+ * Masked view of `content` (`env:get`): exactly the variables dotenv reads, each masked; comments
+ * that carry a value are masked too. Never contains a value, its length, or a line's length.
+ */
 export function maskEnvFileContent(file: string, content: string): ConsoleEnvFileView {
+  const { entries, texts } = scanEnv(content);
   const lines: ConsoleEnvLine[] = [];
   const variables = new Map<string, ConsoleEnvVariable>();
-  for (const seg of segments(content)) {
-    if (seg.kind === 'text') { lines.push(...textLines(seg.raw)); continue; }
-    lines.push(Object.freeze({ kind: 'entry', key: seg.key, ...(/export\s/u.test(seg.before) ? { export: true as const } : {}) }));
+  let text = 0;
+  for (const entry of entries) {
+    while (text < texts.length && texts[text]!.start < entry.start) lines.push(...textLines(content.slice(texts[text]!.start, texts[text++]!.end)));
+    lines.push(Object.freeze({ kind: 'entry', key: entry.key, ...(entry.exported ? { export: true as const } : {}) }));
     // A key assigned twice: the last assignment is the one the process reads; keep first position.
-    variables.set(seg.key, maskedVariable(seg.key, seg.value));
+    variables.set(entry.key, maskedVariable(entry));
   }
-  const order = [...new Set(lines.filter(line => line.kind === 'entry').map(line => (line as { key: string }).key))];
+  while (text < texts.length) lines.push(...textLines(content.slice(texts[text]!.start, texts[text++]!.end)));
+  const order = [...new Set(entries.map(entry => entry.key))];
   const masked = lines.map((line) => {
     switch (line.kind) {
       case 'blank': return '';
@@ -157,16 +223,18 @@ export class EnvVariableNotFoundError extends Error {
   }
 }
 
-/** One variable (its effective assignment) as written in the file. */
+/**
+ * One variable (its effective, i.e. last, assignment) as written in the file: exactly the text
+ * dotenv reads as that variable's value, so it never carries another line of the file.
+ */
 export async function revealEnvVariable(projectRoot: string, filename: string, key: string): Promise<ConsoleEnvRevealResult> {
   if (typeof key !== 'string' || !ENV_KEY_PATTERN.test(key) || key.length > ENV_SAVE_LIMITS.maxKeyLength) {
     throw new EnvChangeError('变量名无效');
   }
   const content = await readDotenvFile(envPath(projectRoot, filename));
-  let value: string | undefined;
-  for (const seg of segments(content)) if (seg.kind === 'entry' && seg.key === key) value = seg.value;
-  if (value === undefined) throw new EnvVariableNotFoundError(filename, key);
-  return Object.freeze({ file: filename, key, value });
+  const entry = scanEnv(content).entries.filter(item => item.key === key).at(-1);
+  if (!entry) throw new EnvVariableNotFoundError(filename, key);
+  return Object.freeze({ file: filename, key, value: entry.raw });
 }
 
 export class EnvChangeError extends Error {
@@ -178,18 +246,30 @@ export class EnvChangeError extends Error {
 }
 
 /**
- * Whether a raw value (as written after `KEY=`) stays one assignment: a value spanning lines must
- * be quoted and end with its closing quote; a quoted value must close exactly at its end.
+ * Whether a raw value (as written after `KEY=`) is read back by dotenv as one assignment of `KEY`
+ * and nothing else: a value spanning lines must be quoted; after a closing quote only spaces or an
+ * inline comment (`# …`) may follow, on the same line. dotenv reads `"x"zz` as the unquoted `"x`
+ * and the next line as a new assignment, so such a value is refused.
  */
 function assignmentProblem(value: string): string | null {
-  const quote = openingQuote(value);
-  if (quote) {
-    const end = closingQuote(value, quote, 1);
-    // Text after the closing quote (an inline comment) must stay on the same line.
-    if (end < 0 || /[\r\n]/u.test(value.slice(end + 1))) return '引号没有闭合，或闭合后还有换行';
-    return null;
+  const written = `K=${value}`;
+  const { entries, texts } = scanEnv(written);
+  const quoted = /^\s*["'`]/u.test(value);
+  if (/[\r\n]/u.test(value) && !/^[ \t]*["'`]/u.test(value)) return '多行值必须用引号包裹';
+  const entry = entries[0];
+  if (entries.length !== 1 || texts.length !== 0 || entry!.key !== 'K' || entry!.end !== written.length) {
+    return quoted ? '引号没有闭合，或闭合引号之后还有注释以外的内容' : '值会被读成多行或多个变量';
   }
-  return /[\r\n]/u.test(value) ? '多行值必须用引号包裹' : null;
+  const tail = written.slice(entry!.valueEnd);
+  if (/[\r\n]/u.test(tail)) return '闭合引号之后还有换行';
+  if (quoted) {
+    const quote = value.trimStart()[0]!;
+    const raw = entry!.raw;
+    if (raw.length < 2 || raw[0] !== quote || raw.at(-1) !== quote || !/^\s*(?:#.*)?$/u.test(tail)) {
+      return '引号没有闭合，或闭合引号之后还有注释以外的内容';
+    }
+  }
+  return null;
 }
 
 /** Validated `env:save` changes; throws {@link EnvChangeError} (nothing is written). */
@@ -221,28 +301,56 @@ export function validateEnvChanges(changes: unknown): readonly ConsoleEnvChange[
   }));
 }
 
-/** Applies validated changes to `content`; every line not naming a changed key keeps its bytes. */
-export function applyEnvChanges(content: string, changes: readonly ConsoleEnvChange[]): string {
-  let segs = segments(content);
-  for (const change of changes) {
-    if ('delete' in change) {
-      segs = segs.filter(seg => seg.kind !== 'entry' || seg.key !== change.key);
-      continue;
-    }
-    let found = false;
-    for (const seg of segs) {
-      if (seg.kind !== 'entry' || seg.key !== change.key) continue;
-      seg.value = change.value;
-      found = true;
-    }
-    if (!found) {
-      const text = serialize(segs);
-      const eol = text.match(/\r\n|\n|\r/u)?.[0] ?? '\n';
-      const separator = text && !/[\r\n]$/u.test(text) ? eol : '';
-      segs = segments(`${text}${separator}${change.key}=${change.value}${eol}`);
+/** `content` with one change applied; every line not naming `change.key` keeps its bytes. */
+function applyEnvChange(content: string, change: ConsoleEnvChange): string {
+  const entries = scanEnv(content).entries.filter(entry => entry.key === change.key);
+  let text = content;
+  // From the last assignment backwards, so earlier offsets stay valid.
+  for (const entry of [...entries].reverse()) {
+    text = 'delete' in change
+      ? text.slice(0, entry.start) + text.slice(entry.end)
+      : text.slice(0, entry.valueStart) + change.value + text.slice(entry.valueEnd);
+  }
+  if ('delete' in change || entries.length) return text;
+  const eol = text.match(/\r\n|\n|\r/u)?.[0] ?? '\n';
+  const separator = text && !/[\r\n]$/u.test(text) ? eol : '';
+  return `${text}${separator}${change.key}=${change.value}${eol}`;
+}
+
+/**
+ * Checks what dotenv reads after the changes: every key not submitted keeps its value (none appears
+ * or disappears), every set key reads as its submitted value and every deleted key is gone.
+ * Throws {@link EnvChangeError} otherwise (the file is not written).
+ */
+function assertOnlySubmittedKeysChanged(before: string, after: string, changes: readonly ConsoleEnvChange[]): void {
+  const old = dotenvValues(before);
+  const next = dotenvValues(after);
+  const submitted = new Map(changes.map(change => [change.key, change]));
+  const problems: string[] = [];
+  for (const key of new Set([...old.keys(), ...next.keys()])) {
+    const change = submitted.get(key);
+    if (!change) {
+      if (old.get(key) !== next.get(key) || old.has(key) !== next.has(key)) problems.push(key);
+    } else if ('delete' in change ? next.has(key) : next.get(key) !== effectiveValue(key, change.value)) {
+      problems.push(key);
     }
   }
-  return serialize(segs);
+  for (const change of changes) {
+    if (!('delete' in change) && !next.has(change.key)) problems.push(change.key);
+  }
+  if (problems.length) {
+    throw new EnvChangeError(`保存会改变未提交的变量或读不回提交的值：${[...new Set(problems)].slice(0, 8).join('、')}；文件没有修改`);
+  }
+}
+
+/**
+ * Applies validated changes to `content`; every line not naming a changed key keeps its bytes.
+ * Throws {@link EnvChangeError} when dotenv would read anything but the submitted changes.
+ */
+export function applyEnvChanges(content: string, changes: readonly ConsoleEnvChange[]): string {
+  const next = changes.reduce(applyEnvChange, content);
+  assertOnlySubmittedKeysChanged(content, next, changes);
+  return next;
 }
 
 /**
@@ -258,10 +366,9 @@ export async function updateEnvVariables(projectRoot: string, filename: string, 
 /** Keys of `content` whose value (or commented value) is a mask placeholder. */
 export function maskedPlaceholderKeys(content: string): readonly string[] {
   const keys = new Set<string>();
-  for (const seg of segments(content)) {
-    if (seg.kind === 'entry' && isConsoleEnvMaskPlaceholder(seg.value)) keys.add(seg.key);
-    if (seg.kind === 'text' && isConsoleEnvMaskPlaceholder(seg.raw)) keys.add('(非变量行)');
-  }
+  const { entries, texts } = scanEnv(content);
+  for (const entry of entries) if (isConsoleEnvMaskPlaceholder(entry.raw)) keys.add(entry.key);
+  for (const text of texts) if (isConsoleEnvMaskPlaceholder(content.slice(text.start, text.end))) keys.add('(非变量行)');
   return [...keys];
 }
 

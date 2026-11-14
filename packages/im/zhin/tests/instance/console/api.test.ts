@@ -496,7 +496,7 @@ describe('console REST routes', () => {
       expect(text).not.toMatch(/fake-private-value|8080/u);
       expect(JSON.parse(text).data).toMatchObject({
         format: 'masked',
-        variables: [{ key: 'FIXTURE_TOKEN', masked: 'fa●●●●●●●●23', length: 23, hasValue: true }, { key: 'PORT', masked: '●●●●●●●●', length: 4 }],
+        variables: [{ key: 'FIXTURE_TOKEN', masked: 'fa●●●●●●●●23', hasValue: true }, { key: 'PORT', masked: '●●●●●●●●', hasValue: true }],
         lines: [{ kind: 'comment', text: '# bot' }, { kind: 'entry', key: 'FIXTURE_TOKEN' }, { kind: 'entry', key: 'PORT' }],
       });
     }

@@ -21,7 +21,7 @@ import { useEnvFiles } from "./hooks.js";
 const maskedView: ConsoleEnvFileView = {
   format: "masked",
   file: ".env",
-  variables: [{ key: "API_KEY", masked: maskConsoleEnvValue("sk-1234567890"), length: 13, hasValue: true }],
+  variables: [{ key: "API_KEY", masked: maskConsoleEnvValue("sk-1234567890"), hasValue: true }],
   lines: [{ kind: "entry", key: "API_KEY" }],
   content: `API_KEY=${maskConsoleEnvValue("sk-1234567890")}\n`,
 };

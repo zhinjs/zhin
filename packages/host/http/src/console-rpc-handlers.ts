@@ -39,7 +39,9 @@ const SEND_FAILURE_STATUSES: ReadonlySet<string> = new Set(['failed', 'rejected'
 /**
  * Structural read of an outbound failure (#1250): Core's `EndpointDeliveryError` carries `code`,
  * `disposition` and the canonical receipt; host/http must not import Core, so only those fields are
- * read. `endpoint not found` is the Endpoint directory's plain error. Anything else is unclassified.
+ * read. `endpoint not found` is the Endpoint directory's plain error. An error counts as a send
+ * failure only when its `code` is a known delivery code or it carries a `disposition` / `receipt`;
+ * anything else (a Node `ENOENT`, a database error, …) is unclassified and keeps its own message.
  */
 export function consoleSendFailure(error: unknown): ConsoleSendFailure | undefined {
   if (!(error instanceof Error)) return undefined;
@@ -49,6 +51,10 @@ export function consoleSendFailure(error: unknown): ConsoleSendFailure | undefin
       ? { code: 'endpoint_not_found', reason: 'endpoint_not_found', status: 'failed' }
       : undefined;
   }
+  // Every known delivery code maps to a reason other than the catch-all `failed`.
+  const knownCode = classifyConsoleSendFailure(record.code) !== 'failed';
+  const delivery = typeof record.disposition === 'string' || (!!record.receipt && typeof record.receipt === 'object');
+  if (!knownCode && !delivery) return undefined;
   const receipt = record.receipt && typeof record.receipt === 'object'
     ? record.receipt as { status?: unknown; failure?: { retryable?: unknown; deliveryUnknown?: unknown } }
     : undefined;
