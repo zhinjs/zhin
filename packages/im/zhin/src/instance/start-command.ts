@@ -912,10 +912,16 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
   startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (可在页面顶部直接输入 HTTP_TOKEN 或访问 ?token=<HTTP_TOKEN>)') : ''}`);
 }
 
-function warnUnsetConfigEnvPlaceholders(
+/**
+ * Warns once about `${VAR}` placeholders whose variable is unset. The business block of an
+ * instance listed in `disable_plugins` (same key as its alias) is skipped: that plugin never
+ * loads, so its unset variables are not a startup problem.
+ */
+export function warnUnsetConfigEnvPlaceholders(
   document: unknown,
   getEnv: (name: string) => string | undefined,
   configFile: string,
+  logger: Pick<ReturnType<typeof getLogger>, 'warn'> = getLogger('setup'),
 ): void {
   const unset = new Set<string>();
   const visit = (value: unknown): void => {
@@ -936,11 +942,21 @@ function warnUnsetConfigEnvPlaceholders(
       for (const item of Object.values(value)) visit(item);
     }
   };
-  visit(document);
+  if (document && typeof document === 'object' && !Array.isArray(document)) {
+    const record = document as Record<string, unknown>;
+    const disabled = new Set(Array.isArray(record.disable_plugins)
+      ? record.disable_plugins.filter((key): key is string => typeof key === 'string')
+      : []);
+    for (const [key, value] of Object.entries(record)) {
+      if (!disabled.has(key)) visit(value);
+    }
+  } else {
+    visit(document);
+  }
   if (unset.size > 0) {
     const vars = [...unset].map(name => `\${${name}}`).join(', ');
     const rel = relative(process.cwd(), configFile) || configFile;
-    getLogger('setup').warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
+    logger.warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
   }
 }
 

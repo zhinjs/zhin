@@ -4,6 +4,8 @@
  */
 import { Command } from 'commander';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
+import { reportHostFailure } from '../utils/host-error.js';
 import {
   type ScheduleJobRecordCli,
   type JobScheduleCli,
@@ -27,16 +29,18 @@ async function requireHost(): Promise<HostHttpConfig> {
   return http;
 }
 
-function requireOk<T>(result: HostFetchResult<T>): T | undefined {
+async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> {
   if (result.ok) return result.data;
-  logger.error(result.status === 404 && result.error === 'assistant.enabled is false'
-    ? '运行中的实例未启用 assistant（assistant.enabled），无法管理调度任务'
-    : (result.error ?? `HTTP ${result.status}`));
+  if (result.status === 404 && result.error === 'assistant.enabled is false') {
+    logger.error('运行中的实例未启用 assistant（assistant.enabled），无法管理调度任务');
+  } else {
+    await reportHostFailure(result, `HTTP ${result.status}`);
+  }
   process.exit(1);
 }
 
 async function mutateJob(action: 'remove' | 'pause' | 'resume', id: string): Promise<void> {
-  requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }));
+  await requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }));
 }
 
 function parseEveryMs(s: string): number {
@@ -76,22 +80,22 @@ function scheduleSummary(s: JobScheduleCli): string {
 const listCommand = new Command('list')
   .description('列出运行中实例的持久化调度任务')
   .action(async () => {
-    const data = requireOk(
+    const data = await requireOk(
       await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
     );
     const jobs = data?.jobs ?? [];
     if (jobs.length === 0) {
-      logger.log('暂无调度任务。使用 zhin schedule add 添加。');
+      output.line('暂无调度任务。使用 zhin schedule add 添加。');
       return;
     }
-    logger.log('\n调度任务\n');
+    output.line('\n调度任务\n');
     for (const j of jobs) {
       const status = j.enabled ? '启用' : '暂停';
       const label = j.label ? ` (${j.label})` : '';
-      logger.log(`  ${j.id}${label}  [${status}]`);
-      logger.log(`    计划:   ${scheduleSummary(j.schedule)}`);
-      logger.log(`    投递:   ${notifySummary(j.notify)}`);
-      logger.log(`    内容:   ${j.action.prompt}`);
+      output.line(`  ${j.id}${label}  [${status}]`);
+      output.line(`    计划:   ${scheduleSummary(j.schedule)}`);
+      output.line(`    投递:   ${notifySummary(j.notify)}`);
+      output.line(`    内容:   ${j.action.prompt}`);
     }
   });
 
@@ -101,7 +105,7 @@ const addCommand = new Command('add')
   .option('--prompt <prompt>', '到点触发时发给 AI 的提示词（必填）')
   .option('-l, --label <label>', '可选标签')
   .option('--kind <kind>', 'solar|lunar|workday|freeDay（默认 solar）', 'solar')
-  .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent）', 'silent')
+  .option('--notify-channel <channel>', '结果投递：silent | log（默认 silent）；im 需要目标会话，只能在聊天中让机器人创建', 'silent')
   .option('--at <iso8601>', '单次执行时间，ISO8601')
   .option('--every <interval>', '固定间隔，如 30m, 1h, 1d')
   .action(async (cronExpression: string | undefined, opts: {
@@ -157,12 +161,12 @@ const addCommand = new Command('add')
       process.exit(1);
     }
 
-    const data = requireOk(await hostPost<{ job?: { id?: string } }>(
+    const data = await requireOk(await hostPost<{ job?: { id?: string } }>(
       await requireHost(),
       '/assistant/jobs',
       { label: opts.label, schedule, prompt, notify },
     ));
-    logger.log(`已添加调度任务: ${data?.job?.id ?? ''}`);
+    output.line(`已添加调度任务: ${data?.job?.id ?? ''}`);
   });
 
 const removeCommand = new Command('remove')
@@ -170,7 +174,7 @@ const removeCommand = new Command('remove')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
     await mutateJob('remove', id);
-    logger.log(`已删除任务: ${id}`);
+    output.line(`已删除任务: ${id}`);
   });
 
 const pauseCommand = new Command('pause')
@@ -178,7 +182,7 @@ const pauseCommand = new Command('pause')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
     await mutateJob('pause', id);
-    logger.log(`已暂停任务: ${id}`);
+    output.line(`已暂停任务: ${id}`);
   });
 
 const resumeCommand = new Command('resume')
@@ -186,7 +190,7 @@ const resumeCommand = new Command('resume')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
     await mutateJob('resume', id);
-    logger.log(`已恢复任务: ${id}`);
+    output.line(`已恢复任务: ${id}`);
   });
 
 export const scheduleCommand = new Command('schedule')

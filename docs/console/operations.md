@@ -103,8 +103,24 @@ console:
         hostFingerprint: SHA256:…             # 强烈建议填写
 ```
 
-- 本地 Shell 需要可选依赖 `node-pty`，SSH 需要 `ssh2`；缺失时对应目标显示「不可用」与安装提示。
+- 本地 Shell 需要可选依赖 `node-pty`，SSH 需要 `ssh2`；缺失时对应目标显示「不可用」与安装提示。构建脚本被 pnpm 跳过时也是这样，见下文。
 - SSH 凭据只来自本地密钥文件或环境变量，从不经过浏览器，也不出现在任何接口响应里。浏览器只能按 `name` 选择目标。
+
+### 原生依赖的构建脚本 {#native-build}
+
+`node-pty`、`ssh2` 以及 `ssh2` 的可选依赖 `cpu-features` 安装时要编译原生模块。pnpm 10 起默认不执行依赖的构建脚本，只提示「Ignored build scripts」（pnpm 11 直接让 `pnpm install` 失败），`node-pty` 装上了却加载不了，本地 Shell 不可用。项目要在 `pnpm-workspace.yaml` 里放行它们：
+
+```yaml
+allowBuilds:
+  node-pty: true
+  ssh2: true
+  cpu-features: true
+```
+
+- `create-zhin-app` 生成的项目已写好这一段；已有项目运行 `zhin migrate`（`--dry-run` 先预览）补齐，已有条目保留，写成 `false` 的不改。
+- pnpm 11 只读 `allowBuilds`，不再读取 `package.json` 的 `pnpm` 字段；pnpm 10.26 之前的版本读 `onlyBuiltDependencies`。项目已有 `onlyBuiltDependencies` 列表（`pnpm-workspace.yaml` 或 `package.json#pnpm`）时，`zhin migrate` 也往里追加。
+- 放行后运行 `pnpm install`（或 `pnpm rebuild node-pty`）重新构建；没有预编译包的平台需要 Python 与 C/C++ 编译工具链。
+- `zhin doctor` 在项目目录里加载网关的 `node-pty`，失败时给出警告和修复命令；项目没装 `@zhin.js/gateway` 时跳过。npm 默认执行构建脚本，失败时用 `npm rebuild node-pty`。
 
 ### 固定 SSH 主机指纹 {#ssh-fingerprint}
 

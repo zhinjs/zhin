@@ -1,7 +1,9 @@
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import {
   diagnoseZhinStackDependencies,
   CREATE_BOT_PACKAGE_MANAGER,
+  GATEWAY_NATIVE_BUILD_DEPENDENCIES,
   getCreateBotBaseDependencies,
   getCreateBotPnpmWorkspaceConfig,
   getRequiredZhinDependenciesForConfig,
@@ -27,7 +29,7 @@ describe('zhin-stack-deps', () => {
     expect(getCreateBotPnpmWorkspaceConfig()).toEqual({
       packages: ['.', 'plugins/*', 'packages/*'],
       strictPeerDependencies: false,
-      allowBuilds: { esbuild: true },
+      allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
     });
   });
 
@@ -85,5 +87,26 @@ describe('zhin-stack-deps', () => {
     );
 
     expect(diagnosis.incompatibleInstalled).toEqual([]);
+  });
+
+  it('allows exactly the packages of the gateway dependency tree that run install scripts (#1250)', () => {
+    // Read the real manifests instead of a hand-kept list: node-pty and ssh2 are gateway
+    // optionalDependencies, cpu-features is an optional dependency of ssh2.
+    const requireFromGateway = createRequire(new URL('../../../host/gateway/package.json', import.meta.url));
+    const gateway = requireFromGateway('./package.json') as { optionalDependencies?: Record<string, string> };
+    const withInstallScripts = (name: string, from: NodeJS.Require): string[] => {
+      const manifest = from(`${name}/package.json`) as { scripts?: Record<string, string>; optionalDependencies?: Record<string, string> };
+      const own = manifest.scripts?.install || manifest.scripts?.preinstall || manifest.scripts?.postinstall ? [name] : [];
+      const nested = createRequire(from.resolve(`${name}/package.json`));
+      return [...own, ...Object.keys(manifest.optionalDependencies ?? {})
+        .filter(dependency => { try { nested.resolve(`${dependency}/package.json`); return true; } catch { return false; } })
+        .flatMap(dependency => withInstallScripts(dependency, nested))];
+    };
+    const expected = Object.keys(gateway.optionalDependencies ?? {}).flatMap(name => withInstallScripts(name, requireFromGateway));
+    expect(expected).toContain('node-pty');
+    expect([...GATEWAY_NATIVE_BUILD_DEPENDENCIES].sort()).toEqual([...new Set(expected)].sort());
+    expect(getCreateBotPnpmWorkspaceConfig().allowBuilds).toMatchObject(
+      Object.fromEntries(GATEWAY_NATIVE_BUILD_DEPENDENCIES.map(name => [name, true])),
+    );
   });
 });
