@@ -116,6 +116,45 @@ it('refuses an explicit loopback --host that serves another project, before send
   expect(requests[0]!.init?.headers).toBeUndefined();
 });
 
+it('refuses an explicit loopback --host that reports no project id, before sending the token (#1250)', async () => {
+  const { file, source, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const requests: { url: string; init?: RequestInit }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok' }));
+    return new Response(JSON.stringify({ data: sourceReply }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(last(output)).toMatchObject({ status: 'project-unverified', message: expect.stringContaining('--allow-unverified-host') });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+  expect(requests.map(request => request.url)).toEqual(['http://127.0.0.1:8068/pub/health']);
+  expect(requests[0]!.init?.headers).toBeUndefined();
+  expect(JSON.stringify(requests)).not.toContain('env-token');
+  expect(await readFile(file, 'utf8')).toBe(source);
+});
+
+it('--allow-unverified-host warns and proceeds against a loopback --host without project id', async () => {
+  const { errors } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const urls: string[] = [];
+  const authorization: (string | null)[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, options?: RequestInit) => {
+    urls.push(String(url));
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok' }));
+    authorization.push(new Headers(options?.headers).get('authorization'));
+    const request = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ data: request.type === 'config:get-source' ? sourceReply : saved() }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068', '--allow-unverified-host');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(urls).toEqual(['http://127.0.0.1:8068/pub/health', 'http://127.0.0.1:8068/api/console/request', 'http://127.0.0.1:8068/api/console/request']);
+  expect(authorization).toEqual(['Bearer env-token', 'Bearer env-token']);
+  expect(errors).toHaveBeenCalledWith(expect.stringContaining('没有报告项目标识'));
+});
+
 it('accepts an explicit loopback --host that reports this project', async () => {
   const { root } = await fixture();
   vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');

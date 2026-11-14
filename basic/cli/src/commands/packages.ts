@@ -20,7 +20,7 @@ import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
-import { normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 
@@ -93,12 +93,17 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
   if (resolved.adapter?.setupHint) output.line(resolved.adapter.setupHint);
 }
 
-interface LiveOptions { live?: string; tokenEnv?: string }
+interface LiveOptions { live?: string; tokenEnv?: string; allowUnverifiedHost?: boolean }
 
-/** `--live` is explicit; a loopback address must still be this project's gateway before the token goes there (#1250). */
-async function liveRequest<T>(live: string, request: Readonly<Record<string, unknown>>, tokenEnv?: string): Promise<T> {
-  if (findConfigFile(process.cwd())) await verifyHostProject(normalizeHostUrl(live), process.cwd());
-  return requestPluginConsole<T>(live, request, tokenEnv);
+/**
+ * `--live` is explicit; a loopback address must still be this project's gateway before the token goes
+ * there (#1250). One that reports no project id is refused unless `--allow-unverified-host`.
+ */
+async function liveRequest<T>(live: string, request: Readonly<Record<string, unknown>>, options: LiveOptions): Promise<T> {
+  if (findConfigFile(process.cwd())) {
+    await verifyHostProject(normalizeHostUrl(live), process.cwd(), { allowUnverifiedHost: options.allowUnverifiedHost === true });
+  }
+  return requestPluginConsole<T>(live, request, options.tokenEnv);
 }
 
 packagesCommand
@@ -106,9 +111,10 @@ packagesCommand
   .description('查看安装、声明、配置、当前 generation 与验证证据')
   .option('--live <host-url>', '从运行中的 Host 读取当前 generation；省略时仅检查本地文件')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, options: LiveOptions) => {
     const state = options.live
-      ? await liveRequest(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options.tokenEnv)
+      ? await liveRequest(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options)
       : await new PluginManagementWorkflow(process.cwd()).inspect(name);
     console.log(JSON.stringify(state, null, 2));
   });
@@ -119,8 +125,9 @@ packagesCommand
   .requiredOption('--live <host-url>', '运行中的 Host URL')
   .requiredOption('--project-revision <revision>', 'status/plan 返回的项目 revision')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, options: LiveOptions & { projectRevision: string }) => {
-    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options.tokenEnv), null, 2));
+    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options), null, 2));
   });
 
 packagesCommand
@@ -128,9 +135,10 @@ packagesCommand
   .description('列出业务检查及副作用，不执行；离线时明确报告未配置验证')
   .option('--live <host-url>', '运行中的 Host URL')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, options: LiveOptions) => {
     const plan = options.live
-      ? await liveRequest(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options.tokenEnv)
+      ? await liveRequest(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options)
       : await new PluginManagementWorkflow(process.cwd()).verificationPlan(name);
     console.log(JSON.stringify(plan, null, 2));
   });
@@ -143,10 +151,11 @@ packagesCommand
   .requiredOption('--project-revision <revision>', '验证计划的项目 revision')
   .requiredOption('--check-revision <revision>', '验证计划的检查摘要')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, checkId: string, options: LiveOptions & { generation: string; projectRevision: string; checkRevision: string }) => {
     const expectedGeneration = Number(options.generation);
     if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) throw new Error('generation must be a nonnegative integer');
-    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options.tokenEnv), null, 2));
+    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options), null, 2));
   });
 
 packagesCommand

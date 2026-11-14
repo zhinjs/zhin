@@ -30,7 +30,7 @@ export function connectableHost(host: string): string {
 
 /** Why the CLI refused to pick a Host for this project (#1250); nothing was sent. */
 export class HostTargetError extends Error {
-  constructor(readonly code: 'gateway-not-running' | 'project-mismatch' | 'invalid-host', message: string) {
+  constructor(readonly code: 'gateway-not-running' | 'project-mismatch' | 'project-unverified' | 'invalid-host', message: string) {
     super(message);
     this.name = 'HostTargetError';
   }
@@ -53,6 +53,11 @@ export interface LoadHostHttpOptions {
   readonly fetch?: typeof fetch;
   /** Where the identity-check warning goes (default stderr). */
   readonly warn?: (message: string) => void;
+  /**
+   * `--allow-unverified-host`: accept a loopback target that reports no project id (older gateway,
+   * `--standalone` instance) with a warning instead of refusing it. A different id is always refused.
+   */
+  readonly allowUnverifiedHost?: boolean;
 }
 
 /** `http://host:port` → `http://host:port/api`; refuses credentials, query and fragment. */
@@ -73,11 +78,17 @@ export function isLoopbackUrl(value: string): boolean {
 
 /**
  * Before a request (and a Console token) goes to an explicit `--host` on this machine: the gateway
- * there must report this project's id on `/pub/health`. A different id is refused; a gateway that
- * reports none (older versions, a `--standalone` instance) is accepted with a warning. Remote hosts
- * are not checked: the operator named them explicitly and they cannot share this checkout's path.
+ * there must report this project's id on `/pub/health`. A different id is refused; so is a target that
+ * reports none (older versions, a `--standalone` instance) unless `allowUnverifiedHost`
+ * (`--allow-unverified-host`) accepts it with a warning. Only the `/pub/health` probe is sent before
+ * that decision, never a token. Remote hosts are not checked: the operator named them explicitly and
+ * they cannot share this checkout's path.
  */
-export async function verifyHostProject(baseUrl: string, projectRoot: string, options: Pick<LoadHostHttpOptions, 'fetch' | 'warn'> = {}): Promise<void> {
+export async function verifyHostProject(
+  baseUrl: string,
+  projectRoot: string,
+  options: Pick<LoadHostHttpOptions, 'fetch' | 'warn' | 'allowUnverifiedHost'> = {},
+): Promise<void> {
   if (!isLoopbackUrl(baseUrl)) return;
   const origin = new URL(baseUrl).origin;
   const warn = options.warn ?? ((message: string) => console.error(message));
@@ -90,7 +101,12 @@ export async function verifyHostProject(baseUrl: string, projectRoot: string, op
     return; // Unreachable: the request itself reports the connection failure.
   }
   if (typeof reported !== 'string') {
-    warn(`! ${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目`);
+    if (!options.allowUnverifiedHost) {
+      throw new HostTargetError('project-unverified',
+        `${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已拒绝，未发送请求和令牌。`
+        + '请升级该网关并用 zhin start 启动本项目；确认目标无误时可加 --allow-unverified-host 继续');
+    }
+    warn(`! ${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已按 --allow-unverified-host 继续`);
     return;
   }
   const expected = projectIdentity(projectRoot);
@@ -142,17 +158,21 @@ export async function loadHostHttpConfig(
 /** `--host <url>` help text shared by the commands that talk to a running Host. */
 export const HOST_OPTION_DESCRIPTION = '显式连接这个 Host 地址（默认只经本项目网关的本地套接字连接；本机地址会先核对项目标识）';
 
+/** `--allow-unverified-host` help text: accept a local target that reports no project id. */
+export const ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION = '本机目标没有报告项目标识（旧版网关或 --standalone 实例）时仍继续（仅警告）；默认拒绝';
+
 /**
  * {@link loadHostHttpConfig} for commands: reports a missing project or a refused target through
  * `report` and exits 1 — nothing is sent in either case.
  */
 export async function requireHostHttpConfig(
-  options: { host?: string },
+  options: { host?: string; allowUnverifiedHost?: boolean },
   report: (message: string) => void,
   cwd = process.cwd(),
 ): Promise<HostHttpConfig> {
   try {
-    const http = await loadHostHttpConfig(cwd, undefined, options.host ? { host: options.host } : {});
+    const http = await loadHostHttpConfig(cwd, undefined,
+      options.host ? { host: options.host, allowUnverifiedHost: options.allowUnverifiedHost === true } : {});
     if (http) return http;
     report('未找到 zhin 配置文件，无法确定 Host API 地址');
   } catch (error) {

@@ -15,6 +15,7 @@ import {
 import {
   hostGet,
   hostPost,
+  ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION,
   HOST_OPTION_DESCRIPTION,
   requireHostHttpConfig,
   type HostFetchResult,
@@ -22,7 +23,8 @@ import {
 } from '../utils/host-http.js';
 
 async function requireHost(): Promise<HostHttpConfig> {
-  return requireHostHttpConfig({ host: scheduleCommand.opts<{ host?: string }>().host }, message => logger.error(message));
+  const { host, allowUnverifiedHost } = scheduleCommand.opts<{ host?: string; allowUnverifiedHost?: boolean }>();
+  return requireHostHttpConfig({ host, allowUnverifiedHost }, message => logger.error(message));
 }
 
 async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> {
@@ -191,6 +193,7 @@ const resumeCommand = new Command('resume')
 
 export const scheduleCommand = new Command('schedule')
   .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .description('持久化调度任务（操作运行中的实例）')
   .addCommand(listCommand)
   .addCommand(addCommand)

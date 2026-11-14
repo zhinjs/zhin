@@ -5,7 +5,7 @@ import {
   type ConsoleConfigSource,
 } from '@zhin.js/console-protocol';
 import { configCheckCommand } from './config-check.js';
-import { gatewayNotRunningMessage, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, gatewayNotRunningMessage, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
@@ -29,7 +29,7 @@ export const CONFIG_EXIT_CODES = Object.freeze({
 } as const);
 
 type Options = {
-  offline?: boolean; host?: string; live?: string; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
+  offline?: boolean; host?: string; live?: string; allowUnverifiedHost?: boolean; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
 };
 type Connection = { host: string; token?: string; tokenEnvironment: string; fetch?: import('@zhin.js/gateway/local').LocalGatewayFetch };
 type Outcome = Readonly<Record<string, unknown> & { status: string; message: string }>;
@@ -74,7 +74,7 @@ async function connection(options: Options): Promise<Connection> {
   if (explicit) {
     // An explicit address on this machine must be this project's gateway before the token goes there (#1250).
     if (findConfigFile(process.cwd())) {
-      try { await verifyHostProject(normalizeHostUrl(explicit), process.cwd()); }
+      try { await verifyHostProject(normalizeHostUrl(explicit), process.cwd(), { allowUnverifiedHost: options.allowUnverifiedHost === true }); }
       catch (error) {
         if (error instanceof HostTargetError) {
           throw new ConfigCommandError({ status: error.code, host: explicit, message: error.message }, CONFIG_EXIT_CODES.error);
@@ -295,6 +295,7 @@ export function createConfigCommand(): Command {
     .option('--offline', '不连接 Host：本地校验后保存（不启动 Runtime、不执行插件 setup，可能执行模块顶层代码），不请求生效')
     .option('--host <url>', '显式连接这个 Host 的 HTTP(S) API 地址（默认只经本项目网关的本地套接字连接；本机地址会先核对项目标识）')
     .addOption(new Option('--live <url>', '--host 的别名（兼容）').hideHelp())
+    .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
     .option('--token-env <name>', 'Console API 令牌所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
     .option('--environment <name>', '--offline 校验时加载 .env.<name>', 'development')
     .option('--reveal', '读取时显示原值（默认按 Schema 打码敏感值）')

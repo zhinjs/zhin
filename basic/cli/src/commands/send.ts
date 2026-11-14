@@ -14,6 +14,7 @@ import {
   listHostEndpoints,
   HOST_OPTION_DESCRIPTION,
   requireHostHttpConfig,
+  ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION,
   type HostEndpointRow,
 } from '../utils/host-http.js';
 
@@ -56,6 +57,7 @@ export const sendCommand = new Command('send')
   .option('-a, --adapter <name>', '适配器名称（icqq、discord 等）；实例只有一个适配器时可省略')
   .option('-e, --endpoint <id>', '指定 Endpoint ID，不传则使用该适配器下第一个在线 Endpoint')
   .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (sceneId: string, contentParts: string[]) => {
     const opts = sendCommand.opts();
     const sceneType = (opts.scene as string) || 'private';
@@ -82,7 +84,7 @@ export const sendCommand = new Command('send')
       process.exit(1);
     }
 
-    const http = await requireHostHttpConfig({ host: opts.host as string | undefined }, message => logger.error(message));
+    const http = await requireHostHttpConfig({ host: opts.host as string | undefined, allowUnverifiedHost: opts.allowUnverifiedHost === true }, message => logger.error(message));
 
     let adapter = adapterOption;
     let endpoint = endpointKey;

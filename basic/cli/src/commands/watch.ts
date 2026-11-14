@@ -2,7 +2,7 @@
  * watch — 连接运行中 Host API，展示 runtime / bots / assistant jobs（TTY 定时刷新）
  */
 import { Command } from 'commander';
-import { HOST_OPTION_DESCRIPTION, hostGet, listHostEndpoints, requireHostHttpConfig } from '../utils/host-http.js';
+import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, HOST_OPTION_DESCRIPTION, hostGet, listHostEndpoints, requireHostHttpConfig } from '../utils/host-http.js';
 import {
   jobRowsFromApi,
   renderWatchText,
@@ -143,7 +143,8 @@ export const watchCommand = new Command('watch')
   .option('--json', 'JSON 输出（适合脚本）')
   .option('--no-clear', '不清屏（便于重定向到文件）')
   .option('--host <url>', HOST_OPTION_DESCRIPTION)
-  .action(async (opts: { interval: string; once?: boolean; json?: boolean; clear?: boolean; host?: string }) => {
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
+  .action(async (opts: { interval: string; once?: boolean; json?: boolean; clear?: boolean; host?: string; allowUnverifiedHost?: boolean }) => {
     const http = await requireHostHttpConfig(opts, message => console.error(message));
 
     const intervalSec = Math.max(1, Number.parseInt(opts.interval, 10) || 3);

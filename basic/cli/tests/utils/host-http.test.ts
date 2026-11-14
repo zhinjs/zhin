@@ -212,6 +212,33 @@ describe('loadHostHttpConfig', () => {
     expect(await loadHostHttpConfig(dir, 'development', { host: 'http://localhost:8068/', fetch: same as never }))
       .toEqual({ baseUrl: 'http://localhost:8068/api', token: '' });
   });
+
+  it('refuses a loopback --host that reports no project id unless --allow-unverified-host (#1250)', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 8068\n  token: bootstrap-token\n');
+    const previous = process.env.ZHIN_CONSOLE_TOKEN;
+    process.env.ZHIN_CONSOLE_TOKEN = 'user-api-token';
+    try {
+      const anonymous = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ success: true, status: 'ok' })));
+      const error = await loadHostHttpConfig(dir, 'development', { host: 'http://127.0.0.1:8068', fetch: anonymous as never })
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(HostTargetError);
+      expect(error).toMatchObject({ code: 'project-unverified', message: expect.stringContaining('--allow-unverified-host') });
+      expect((error as Error).message).toContain('未发送请求和令牌');
+      // Only the health probe went out, and it carried no credential.
+      expect(anonymous.mock.calls.map(([url]) => url)).toEqual(['http://127.0.0.1:8068/pub/health']);
+      expect(JSON.stringify(anonymous.mock.calls[0]![1])).not.toContain('user-api-token');
+      expect((anonymous.mock.calls[0]![1] as RequestInit).headers).toBeUndefined();
+
+      const warn = vi.fn();
+      expect(await loadHostHttpConfig(dir, 'development', { host: 'http://127.0.0.1:8068', fetch: anonymous as never, warn, allowUnverifiedHost: true }))
+        .toEqual({ baseUrl: 'http://127.0.0.1:8068/api', token: 'user-api-token' });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('--allow-unverified-host'));
+    } finally {
+      if (previous === undefined) delete process.env.ZHIN_CONSOLE_TOKEN;
+      else process.env.ZHIN_CONSOLE_TOKEN = previous;
+    }
+  });
 });
 
 describe('verifyHostProject (#1250)', () => {
@@ -223,11 +250,29 @@ describe('verifyHostProject (#1250)', () => {
     await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: fetch as never })).rejects.toBeInstanceOf(HostTargetError);
   });
 
-  it('accepts its own project and warns when the gateway reports no project', async () => {
+  it('accepts its own project', async () => {
     await expect(verifyHostProject('http://[::1]:8068/api', root, { fetch: reply({ project: { id: projectIdentity(root) } }) as never })).resolves.toBeUndefined();
+  });
+
+  it('refuses a loopback target that reports no project id by default', async () => {
     const warn = vi.fn();
-    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: reply({ status: 'ok' }) as never, warn })).resolves.toBeUndefined();
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: reply({ status: 'ok' }) as never, warn }))
+      .rejects.toMatchObject({ code: 'project-unverified', message: expect.stringContaining('没有报告项目标识') });
+    // A non-JSON reply (e.g. a 404 page) reports no id either.
+    const notFound = vi.fn(async () => new Response('Not Found', { status: 404 }));
+    await expect(verifyHostProject('http://localhost:8068/api', root, { fetch: notFound as never }))
+      .rejects.toMatchObject({ code: 'project-unverified' });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns and continues on a target without project id with allowUnverifiedHost', async () => {
+    const warn = vi.fn();
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: reply({ status: 'ok' }) as never, warn, allowUnverifiedHost: true }))
+      .resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('没有报告项目标识'));
+    // The flag never accepts another project's gateway.
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: reply({ project: { id: projectIdentity(`${root}-a`) } }) as never, allowUnverifiedHost: true }))
+      .rejects.toMatchObject({ code: 'project-mismatch' });
   });
 
   it('does not probe remote hosts named explicitly', async () => {

@@ -188,7 +188,7 @@ zhin config check [--fix] [--json] [--strict]
 
 `get` / `set` / `unset` / `list` **默认连接运行中的 Host**（`POST {base}/console/request`）：写入先读取配置版本，再用 `config:patch-project` 一次性提交，由 Host 完成 CAS、Schema 校验、保存和按需生效。CLI 不自己读改写文件，也不重试。
 
-- 连接：未给 `--host` 时只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行（设置了 `ZHIN_CONSOLE_TOKEN` 时以该令牌的身份）。本项目网关没有运行时命令直接失败并提示「本项目的网关未运行（zhin start 启动，或加 --offline 离线读写配置文件）」，**不会**按配置 `http.port` 去连 `127.0.0.1`——那个端口上可能是另一个项目的网关。确需连接其他地址时显式 `--host <url>`：token 取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）；本机地址（`127.0.0.1` / `localhost` / `[::1]`）会先读对方 `/pub/health` 的项目标识，与当前项目不一致就拒绝，不发送请求和令牌。非 loopback 地址携带 token 必须用 HTTPS。`zhin send`、`zhin schedule`、`zhin watch` 与 `zhin packages … --live` 遵循同样的规则（前三个也接受 `--host <url>`）。
+- 连接：未给 `--host` 时只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行（设置了 `ZHIN_CONSOLE_TOKEN` 时以该令牌的身份）。本项目网关没有运行时命令直接失败并提示「本项目的网关未运行（zhin start 启动，或加 --offline 离线读写配置文件）」，**不会**按配置 `http.port` 去连 `127.0.0.1`——那个端口上可能是另一个项目的网关。确需连接其他地址时显式 `--host <url>`：token 取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）；本机地址（`127.0.0.1` / `localhost` / `[::1]`）会先读对方 `/pub/health` 的项目标识，与当前项目不一致就拒绝，不发送请求和令牌；对方**没有报告**项目标识（旧版网关或 `--standalone` 实例）时同样拒绝并以非零状态退出——升级该网关并用 `zhin start` 启动本项目，或在确认目标无误时加 `--allow-unverified-host`（只给出警告后继续；项目标识不一致时该选项不起作用）。非 loopback 地址携带 token 必须用 HTTPS。`zhin send`、`zhin schedule`、`zhin watch` 与 `zhin packages … --live` 遵循同样的规则（前三个也接受 `--host <url>`；以上命令都接受 `--allow-unverified-host`）。
 - **Host 未运行时直接失败，不会回退到离线写文件。** 需要离线操作时显式加 `--offline`：用与 Host 相同的 `patchProject` 规则（版本检查、插件声明不可改、逐段 Schema 校验）在本地校验后保存；不启动 Runtime、不执行插件 `setup`、CLI 不向 Host 发送任何请求，但加载插件声明时会执行模块顶层代码（模块自身可能访问网络）。离线保存不会让运行中的 Host 生效，需要 `--watch config` 或在 Console 中「应用配置」。
 - 读取默认按 Schema 打码：`secret` / `writeOnly` / `hidden` / 密码字段、密钥类键名以及未展开的 `${...}` / `env://` 引用都显示为 `[redacted]`；加 `--reveal` 才输出原值。
 - `get` / `list` / `set` / `unset` 加 `--json` 时只输出一行紧凑 JSON，便于脚本处理；不加时只输出可读文本（`config path`、`config check` 的输出格式见各自说明）。
@@ -483,7 +483,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 
 ## 操作运行中的 Bot
 
-以下命令操作正在运行的 Bot，需要先在项目目录里用 `zhin start` 启动。默认只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行，不需要令牌；本项目网关没有运行时命令直接报「本项目的网关未运行」，不会按 `http.port` 去连本机端口（那里可能是另一个项目的网关）。要连其他地址时加 `--host <url>`：请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人；Console 初始化之后 `http.token` 一律被拒绝），本机地址会先核对对方 `/pub/health` 报告的项目标识，不是本项目就拒绝。
+以下命令操作正在运行的 Bot，需要先在项目目录里用 `zhin start` 启动。默认只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行，不需要令牌；本项目网关没有运行时命令直接报「本项目的网关未运行」，不会按 `http.port` 去连本机端口（那里可能是另一个项目的网关）。要连其他地址时加 `--host <url>`：请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人；Console 初始化之后 `http.token` 一律被拒绝），本机地址会先核对对方 `/pub/health` 报告的项目标识，不是本项目就拒绝；没有报告项目标识（旧版网关或 `--standalone` 实例）时也拒绝，确认目标无误时可加 `--allow-unverified-host` 继续。
 
 ### send：向运行中的 bot 发消息
 
