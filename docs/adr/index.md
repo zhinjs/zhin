@@ -25,6 +25,7 @@ sidebar: false
 | [ADR 0038](./0038-continuous-input-merge.md) | 连续输入合流——高热群与弹幕 | Implemented | `@zhin.js/agent`（入站合流窗口）、`@zhin.js/harness`（Mailbox 合流策略） |
 | [ADR 0039](./0039-group-ops-rules.md) | 动态群管规则——批准一次的违规阶梯 | Implemented | `@zhin.js/agent`（`group-ops/` 违规阶梯与硬闸审批） |
 | [ADR 0040](./0040-controlled-self-change.md) | 受控自我进化——变更草稿、审批生效与重启回报 | Implemented | `@zhin.js/agent/src/self-change/`、`basic/cli` |
+| [ADR 0061](./0061-inbound-message-outcomes.md) | 每条入站消息都有结局与原因——消灭静默失败：有限结局集合与人话模板、`im_message_outcomes` 一行摘要（链接决策审计与 turn trace）、`why` / Console 结局时间线 / `zhin why`、`finally` 提交与 `check:silent-catch` | 提议（Proposed） | `@zhin.js/core`（`plugin-runtime/im/`）、`@zhin.js/agent`（`plugin-runtime/ingress/`、`media/`、`assistant/timer-scheduler.ts`）、`@zhin.js/im-contract`、`@zhin.js/console-protocol`、`basic/cli`、`scripts/check-silent-catch.mjs` |
 
 ### 提示词缓存与上下文 Token 预算
 
