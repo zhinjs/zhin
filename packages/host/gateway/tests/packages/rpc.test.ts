@@ -47,7 +47,8 @@ describe('dispatchGatewayRpc', () => {
     expect(isGatewayRpcType('gateway.instance.status')).toBe(true);
     expect(isGatewayRpcType('config:get')).toBe(false);
     const { dispatch } = setup();
-    expect(await dispatch({ type: 'gateway.instance.reboot' }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'unmapped', status: 403 } });
+    // zhinjs/zhin#1250: a gateway.* type this gateway lacks is unknown, not a refusal.
+    expect(await dispatch({ type: 'gateway.instance.reboot' }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'unknown_rpc', status: 404 } });
   });
 
   it('enforces the permission map per role', async () => {
@@ -76,7 +77,10 @@ describe('dispatchGatewayRpc', () => {
 
   it('returns status, logs and lifecycle results', async () => {
     const { dispatch, instance } = setup();
-    expect(await dispatch({ type: GATEWAY_RPC.STATUS }, testUser('viewer'))).toEqual({ ok: true, data: { instanceId: 'default', state: 'running', pid: 42, lastExitCode: null, lastExitSignal: null, recentRestarts: 0 } });
+    expect(await dispatch({ type: GATEWAY_RPC.STATUS }, testUser('viewer'))).toEqual({ ok: true, data: { instanceId: 'default', state: 'running', pid: 42, lastExitCode: null, lastExitSignal: null, recentRestarts: 0,
+      // #1250: the gateway's own process, labeled, next to the instance's pid.
+      gateway: { role: 'gateway', pid: process.pid, uptime: expect.any(Number), sampledAt: expect.any(Number),
+        memory: { rss: expect.any(Number), heapUsed: expect.any(Number), heapTotal: expect.any(Number), external: expect.any(Number), arrayBuffers: expect.any(Number) } } } });
     expect(await dispatch({ type: GATEWAY_RPC.LOGS, data: { lines: 2 } }, testUser('viewer'))).toMatchObject({ ok: true, data: { lines: [{ line: 'line 0' }, { line: 'line 1' }] } });
     expect(await dispatch({ type: GATEWAY_RPC.LOGS, data: { lines: 0 } }, testUser('viewer'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
     expect(await dispatch({ type: GATEWAY_RPC.STOP }, testUser('admin'))).toMatchObject({ ok: true, data: { state: 'stopped' } });

@@ -5,10 +5,11 @@
  * tools/resources/prompts into the agent's resource pool.
  */
 
-import { getLogger } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
 import { parseMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { McpClientManager } from '../mcp-client/index.js';
+import { classifyMcpFailure, McpConnectionError, type McpConnectionFailure } from '../mcp-client/failure.js';
 import { ResourceRegistry } from './resource-registry.js';
 import type { McpServerEntry, McpResource, McpPrompt, ResourceScope } from './types.js';
 
@@ -40,6 +41,8 @@ export interface McpQualifiedToolInfo {
 export class McpRegistry extends ResourceRegistry<McpServerEntry> {
   private readonly manager = new McpClientManager();
   private readonly connections = new Map<string, McpConnection>();
+  /** Last failed attempt per server (#1250); removed by a successful connect or by `remove`. */
+  private readonly failures = new Map<string, McpConnectionFailure>();
 
   async connect(name: string): Promise<McpConnection> {
     const entry = this.get(name);
@@ -52,7 +55,13 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
       this.disconnect(name);
     }
 
-    const clientConn = await this.manager.connect(entry);
+    let clientConn: Awaited<ReturnType<McpClientManager['connect']>>;
+    try {
+      clientConn = await this.manager.connect(entry);
+    } catch (error) {
+      this.recordFailure(name, error instanceof McpConnectionError ? error.failure : classifyMcpFailure(error, entry));
+      throw error;
+    }
     const connection: McpConnection = {
       name,
       connected: clientConn.isConnected,
@@ -61,7 +70,28 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
       prompts: clientConn.prompts,
     };
     this.connections.set(name, connection);
+    if (connection.connected) this.failures.delete(name);
+    else {
+      this.recordFailure(name, clientConn.failure ?? classifyMcpFailure(
+        new Error('registered but not connected (check SDK or server config)'), entry));
+    }
     return connection;
+  }
+
+  /** Classified reason of the server's last failed connect, if its latest attempt failed. */
+  getLastFailure(name: string): McpConnectionFailure | undefined {
+    return this.failures.get(name);
+  }
+
+  private recordFailure(name: string, failure: McpConnectionFailure): void {
+    this.failures.set(name, failure);
+    logger.warn(formatCompact({
+      op: 'mcp_connect_failed',
+      server: name,
+      category: failure.category,
+      ...(failure.exitCode === undefined ? {} : { exitCode: failure.exitCode }),
+      error: failure.message,
+    }));
   }
 
   /** Lazy-connect all registered servers; per-server failures are logged, not thrown. */
@@ -76,7 +106,7 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
         await onEvent?.({ phase: 'start', serverName: entry.name });
         await this.connect(entry.name);
         if (!this.isConnected(entry.name)) {
-          logger.warn(`MCP server "${entry.name}" is registered but not connected (check SDK or server config)`);
+          // connect() already logged the classified reason.
           await onEvent?.({
             phase: 'finish',
             serverName: entry.name,
@@ -92,8 +122,7 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
           toolNames: this.getToolsFromServer(entry.name).map(tool => tool.name),
         });
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.warn(`MCP server "${entry.name}" connect failed: ${message}`);
+        const message = this.failures.get(entry.name)?.message ?? (err instanceof Error ? err.message : String(err));
         await onEvent?.({ phase: 'error', serverName: entry.name, error: message });
       }
     }
@@ -152,13 +181,17 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
 
   override remove(name: string, scope?: ResourceScope): boolean {
     const ok = super.remove(name, scope);
-    if (ok) this.disconnect(name);
+    if (ok) {
+      this.disconnect(name);
+      this.failures.delete(name);
+    }
     return ok;
   }
 
   override dispose(): void {
     void this.manager.disconnectAll();
     this.connections.clear();
+    this.failures.clear();
     super.dispose();
   }
 }

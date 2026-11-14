@@ -2276,6 +2276,13 @@ describe('IM Runtime', () => {
         expected: { code: 'platform_rejected', disposition: 'not_sent' },
       },
       {
+        // #1250: the failure keeps the Endpoint code, and its message names it instead of a bare generic text.
+        endpointSend: () => { throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'Sandbox Endpoint has no live connection', 'not_sent'); },
+        expected: { code: 'sandbox_delivery_unavailable', disposition: 'not_sent',
+          message: 'Outbound delivery failed (sandbox_delivery_unavailable).',
+          receipt: { status: 'failed', failure: { code: 'sandbox_delivery_unavailable' } } },
+      },
+      {
         endpointSend: () => { throw { protocol: 'onebot-v11', kind: 'protocol', response: { status: 'failed', retcode: 100 } }; },
         expected: { code: 'platform_rejected', disposition: 'rejected' },
       },

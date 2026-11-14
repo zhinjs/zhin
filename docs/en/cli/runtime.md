@@ -60,10 +60,12 @@ zhin start --once --mode test
 | `zhin start` | Says it is already running and shows the status | Starts gateway and instance in the background, waits for the control socket, prints the HTTP address and Console link |
 | `zhin stop [--timeout <ms>]` | Sends `gateway.shutdown`: stops the instance, then the gateway, and waits for the process to exit | Nothing to do (a pre-gateway process with only `.zhin.pid` is still stopped) |
 | `zhin restart` | `gateway.instance.restart`: restarts the instance only | Nothing to do |
-| `zhin restart --gateway` | Stops the background gateway and starts it again with its original options (restart a foreground gateway in its terminal or service manager) | Nothing to do |
+| `zhin restart --gateway` | Stops the background gateway and starts it again with its original options; a foreground gateway (`--foreground`) cannot be restarted in place, see below | Nothing to do |
 | `zhin status [--json]` | Gateway pid, mode, version, HTTP addresses, Console link; instance state (`stopped / starting / running / stopping / backoff / crashed`, pid, generation, last failure and log tail) | Says it is not running, **exit code 3** |
 | `zhin logs [-f] [-n N]` | `gateway.instance.logs`: the last N lines (1–1000, default 200); `-f` polls for new lines | Reads `.zhin/logs/instance.log`; `-f` follows the file |
 | `zhin install / uninstall / update` | Runs the dependency transaction through the gateway: stop instance → package manager → start instance, rolled back on failure; progress is streamed | Runs the same transaction directly in the project |
+
+A foreground gateway (`zhin start --foreground`, the recommended way under systemd, PM2 and containers) is attached to a terminal or a service manager, so `zhin restart --gateway` does not stop it: it explains why, exits with code `1` and prints the replacement command. On Linux it reads the gateway process's environment to identify the service manager: systemd (`INVOCATION_ID`, unit name from the process's cgroup) gets `sudo systemctl restart <unit>` (`systemctl --user restart <unit>` for a user service), PM2 (`pm_id`) gets `pm2 restart <app name>`; otherwise it suggests restarting through your service manager, or pressing Ctrl+C in its terminal and running `zhin start --foreground …` again with the original options. `zhin restart` (instance only) works with a foreground gateway too.
 
 Through the gateway only npm registry packages (`name` / `name@range`) can be installed; git URLs, local paths and `--save-dev` need `zhin stop` first. `zhin update` without package names updates every dependency.
 
