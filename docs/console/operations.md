@@ -51,7 +51,7 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 - **配置文件**：按当前 YAML / JSON 格式查看与编辑 `zhin.config.yml`，保存带修订号，保存失败自动回滚。实例离线时由网关读写。某个插件的配置在它的全局配置页（`/features/global/:plugin`）用表单改，按层级的覆盖在对象页的「功能」页签。
 - **环境变量**：`.env` 文件。可能含机密，所以 `viewer` 没有 `ops.env.read`。
 - **定时任务**：打开时是「全部任务」总览，汇总每个任务的状态、下次运行、最近结果、目标与审批，可按状态筛选；创建、暂停和查看记录在各自的页签：「管理员任务」（`?tab=admin`，按用途创建管理员任务）、「定时提醒」（`?tab=schedule`，插件注册的任务与持久化任务）、「助手任务」（`?tab=assistant`）、「执行记录」（`?tab=history`）。
-- **项目文件**：项目文件树与文本文件编辑；读写 `.env` 与配置文件仍需要对应的 `ops.env.*` / `ops.config.*` 权限。
+- **项目文件**：项目文件树与文本文件编辑，范围是插件源码与约定目录、`package.json` / `tsconfig.json`、配置文件、Agent 引导文件（`AGENTS.md`、`SOUL.md`、`TOOLS.md`、`HEARTBEAT.md`）与知识库目录 `knowledge/`；读写配置文件仍需要 `ops.config.*`。**`.env` 与 `.env.*`（含 `.env.local`、`.env.production` 等）不出现在文件树里，也不能经项目文件读写**（任何大小写、`./`、`..`、URL 编码、尾部斜杠或空格、指向它们的符号链接都会被拒绝），请求会返回错误并提示改用「环境变量」页 `/ops/env`；环境变量在该页管理，权限仍是 `ops.env.read` / `ops.env.write`。
 
 ### 数据库 {#database}
 

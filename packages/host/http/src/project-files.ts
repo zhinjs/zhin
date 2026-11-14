@@ -27,7 +27,13 @@ export const FILE_MANAGER_ALLOWED = Object.freeze([
   'plugin.mjs',
   'plugin.cjs',
   'schema.json',
+  // Agent workspace bootstrap files (`@zhin.js/agent` bootstrap.ts, timer heartbeat) and the
+  // conventional knowledge base directory (`ai.knowledge.baseDir`).
   'AGENTS.md',
+  'SOUL.md',
+  'TOOLS.md',
+  'HEARTBEAT.md',
+  'knowledge',
   'tsconfig.json',
   'zhin.config.yml',
   'zhin.config.yaml',
@@ -35,16 +41,12 @@ export const FILE_MANAGER_ALLOWED = Object.freeze([
   'config.yml',
   'config.yaml',
   'config.json',
-  '.env',
-  '.env.development',
-  '.env.production',
   'README.md',
 ]);
 
 export const FILE_MANAGER_BLOCKED = Object.freeze(new Set([
   'node_modules',
   '.git',
-  '.env.local',
   'data',
   'lib',
   'dist',
@@ -58,8 +60,46 @@ export type FileTreeNode = {
   readonly children?: readonly FileTreeNode[];
 };
 
+/** Dotenv files the environment page (`/ops/env`, `env:*` RPCs) manages. */
+const ENV_FILE_NAMES = Object.freeze(['.env', '.env.development', '.env.production'] as const);
+
+/** Error text for project-file reads and writes that name a dotenv file (issue #1250). */
+export const DOTENV_ACCESS_DENIED_MESSAGE =
+  'Access denied: .env files are not available in the project file manager; '
+  + 'manage environment variables on the Environment variables page (/ops/env)';
+
+// Control characters (NUL included) never name a project file and can truncate a path in native code.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
+
+/**
+ * Whether one path segment names a dotenv file (`.env`, `.env.*`), in every spelling a
+ * filesystem may resolve to it: any letter case, trailing dots / spaces (stripped by Windows),
+ * an NTFS stream suffix (`.env::$DATA`) and percent-encoding.
+ */
+function isDotenvSegment(segment: string): boolean {
+  const variants = [segment];
+  try {
+    const decoded = decodeURIComponent(segment);
+    if (decoded !== segment) variants.push(decoded);
+  } catch { /* not percent-encoded */ }
+  return variants.some((variant) => {
+    const name = variant.split(':')[0]!.replace(/[. ]+$/u, '').toLowerCase();
+    return name === '.env' || name.startsWith('.env.');
+  });
+}
+
+/**
+ * Whether a project-relative path names a dotenv file or goes through one. Dotenv files hold
+ * secrets: the project file manager never lists, reads or writes them (`/ops/env` does).
+ */
+export function isDotenvProjectPath(relativePath: string): boolean {
+  return relativePath.replace(/\\/gu, '/').split('/').some(isDotenvSegment);
+}
+
 export function isProjectPathAllowed(relativePath: string): boolean {
   if (relativePath.includes('..') || path.isAbsolute(relativePath)) return false;
+  if (CONTROL_CHARACTERS.test(relativePath) || isDotenvProjectPath(relativePath)) return false;
   const normalized = relativePath.replace(/\\/gu, '/').replace(/^\.\//u, '');
   if (normalized.split('/').some((segment) => FILE_MANAGER_BLOCKED.has(segment))) return false;
   return FILE_MANAGER_ALLOWED.some(
@@ -94,6 +134,7 @@ export async function readProjectFile(
   projectRoot: string,
   relativePath: string,
 ): Promise<{ content: string; size: number }> {
+  assertNotDotenv(relativePath);
   const absPath = await resolveAllowedPath(projectRoot, relativePath);
   if (!absPath) throw new Error(`Access denied: ${relativePath}`);
   if (!(await pathExists(absPath))) throw new Error(`File not found: ${relativePath}`);
@@ -111,6 +152,7 @@ export async function saveProjectFile(
   relativePath: string,
   content: string,
 ): Promise<void> {
+  assertNotDotenv(relativePath);
   const absPath = await resolveAllowedPath(projectRoot, relativePath);
   if (!absPath) throw new Error(`Access denied: ${relativePath}`);
   await mkdir(path.dirname(absPath), { recursive: true });
@@ -122,17 +164,34 @@ export async function saveProjectFile(
 export async function listEnvFiles(
   projectRoot: string,
 ): Promise<readonly { name: string; exists: boolean }[]> {
-  const names = ['.env', '.env.development', '.env.production'] as const;
-  const result = await Promise.all(names.map(async (name) => {
-    const resolved = await resolveAllowedPath(projectRoot, name);
+  const result = await Promise.all(ENV_FILE_NAMES.map(async (name) => {
+    const resolved = await resolveContainedPath(projectRoot, name, isEnvInventoryTarget);
     return { name, exists: resolved !== null && await pathExists(resolved) };
   }));
   return Object.freeze(result);
 }
 
+function assertNotDotenv(relativePath: string): void {
+  if (isDotenvProjectPath(relativePath)) throw new Error(DOTENV_ACCESS_DENIED_MESSAGE);
+}
+
+/** The env inventory only counts a dotenv file (or link) that stays inside the project and off blocked paths. */
+function isEnvInventoryTarget(relativePath: string): boolean {
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) return false;
+  return !relativePath.replace(/\\/gu, '/').split('/').some((segment) => FILE_MANAGER_BLOCKED.has(segment));
+}
+
+function resolveAllowedPath(projectRoot: string, relativePath: string): Promise<string | null> {
+  return resolveContainedPath(projectRoot, relativePath, isProjectPathAllowed);
+}
+
 /** Resolve existing links, or the nearest existing parent for a new file. */
-async function resolveAllowedPath(projectRoot: string, relativePath: string): Promise<string | null> {
-  if (!isProjectPathAllowed(relativePath)) return null;
+async function resolveContainedPath(
+  projectRoot: string,
+  relativePath: string,
+  allowed: (relativePath: string) => boolean,
+): Promise<string | null> {
+  if (!allowed(relativePath)) return null;
   try {
     const root = await realpath(projectRoot);
     let candidate = path.resolve(root, relativePath);
@@ -143,7 +202,7 @@ async function resolveAllowedPath(projectRoot: string, relativePath: string): Pr
         await lstat(candidate);
         const resolved = path.resolve(await realpath(candidate), ...missing);
         const relative = path.relative(root, resolved);
-        return isProjectPathAllowed(relative) ? resolved : null;
+        return allowed(relative) ? resolved : null;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return null;
         // lstat succeeds for dangling symlinks even though realpath fails.

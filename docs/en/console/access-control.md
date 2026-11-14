@@ -84,7 +84,7 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `ops.database.read` / `ops.database.write` | Database browser (sort, filter, table structure and schema change previews) / record edits |
 | `ops.database.schema` | The SQL console (read-only queries and write SQL) and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited with its literals redacted. See [Database](./operations.md#database) |
 | `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks |
-| `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
+| `ops.files.read` / `ops.files.write` | Project files (reading or writing the configuration file still needs `ops.config.*`; `.env` / `.env.*` are never served as project files and are managed on the environment variables page `/ops/env` under `ops.env.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |
 | `ops.terminal` | Terminal (see [Operations](./operations.md#terminal)) |
 | `iam.view` / `iam.manage` | This group; `iam.manage` also covers the Roles tab of object pages (`chat-roles.*`, checked by scope) |

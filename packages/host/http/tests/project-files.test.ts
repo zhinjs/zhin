@@ -88,3 +88,116 @@ it('checks leaf links and allows a symlinked project root without admitting bloc
     expect(src?.children?.map((entry) => entry.name)).toEqual(['readme.txt']);
   } finally { await rm(fixture, { recursive: true, force: true }); }
 });
+
+describe('dotenv files stay out of the project file manager (issue #1250)', () => {
+  const DOTENV_ERROR = /\.env files are not available in the project file manager.*\/ops\/env/u;
+
+  async function withProject(run: (root: string, fixture: string) => Promise<void>): Promise<void> {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'zhin-project-dotenv-'));
+    const root = path.join(fixture, 'project');
+    try {
+      await mkdir(path.join(root, 'src'), { recursive: true });
+      for (const name of ['.env', '.env.local', '.env.development', '.env.production', '.env.staging']) {
+        await writeFile(path.join(root, name), `SECRET=${name}`);
+      }
+      await run(root, fixture);
+    } finally { await rm(fixture, { recursive: true, force: true }); }
+  }
+
+  it('lists no dotenv file in the tree while the env inventory still sees them', async () => {
+    await withProject(async (root) => {
+      await writeFile(path.join(root, 'src/.env'), 'SECRET=nested');
+      await writeFile(path.join(root, 'src/index.ts'), 'export {};');
+      const tree = await buildProjectFileTree(root);
+      expect(JSON.stringify(tree)).not.toMatch(/\.env/u);
+      expect(tree.find(entry => entry.name === 'src')?.children?.map(entry => entry.name)).toEqual(['index.ts']);
+      expect(await listEnvFiles(root)).toEqual([
+        { name: '.env', exists: true },
+        { name: '.env.development', exists: true },
+        { name: '.env.production', exists: true },
+      ]);
+    });
+  });
+
+  const bypasses = [
+    '.env', '.env.local', '.env.development', '.env.production', '.env.staging',
+    // case
+    '.ENV', '.Env.Local', '.env.PRODUCTION',
+    // leading ./ and backslashes, duplicated separators
+    './.env', '.\\.env', './/.env', 'src/./../.env', 'src\\..\\.env',
+    // parent traversal
+    '../project/.env', 'src/../.env', 'knowledge/../.env',
+    // trailing slash, space, dot, NTFS stream
+    '.env/', '.env ', '.env.', '.env. .', '.env::$DATA', '.env.local ',
+    // URL encoding
+    '%2Eenv', '%2eENV', '.%65nv', '%2Eenv%2Elocal', 'src/%2Eenv', '%2E%2E/.env',
+    // nested in allowed directories
+    'src/.env', 'plugins/demo/.env.production', 'knowledge/.env', 'src/.env/inner.txt',
+    // control characters
+    '.env\u0000.txt', '.env\n',
+  ];
+
+  it.each(bypasses)('refuses to read or write %j', async (relativePath) => {
+    await withProject(async (root) => {
+      expect(isProjectPathAllowed(relativePath)).toBe(false);
+      await expect(readProjectFile(root, relativePath)).rejects.toThrow('Access denied');
+      await expect(saveProjectFile(root, relativePath, 'SECRET=overwritten')).rejects.toThrow('Access denied');
+      for (const name of ['.env', '.env.local', '.env.development', '.env.production', '.env.staging']) {
+        expect(await readFile(path.join(root, name), 'utf8')).toBe(`SECRET=${name}`);
+      }
+      await expect(readFile(path.join(root, 'src/.env'))).rejects.toThrow();
+    });
+  });
+
+  it('names /ops/env in the error for direct dotenv paths', async () => {
+    await withProject(async (root) => {
+      for (const relativePath of ['.env', '.ENV.local', './.env.production', '%2Eenv', '.env ', 'src/.env']) {
+        await expect(readProjectFile(root, relativePath)).rejects.toThrow(DOTENV_ERROR);
+        await expect(saveProjectFile(root, relativePath, 'x')).rejects.toThrow(DOTENV_ERROR);
+      }
+    });
+  });
+
+  it('refuses links that resolve to a dotenv file or directory', async () => {
+    await withProject(async (root, fixture) => {
+      await symlink('../.env', path.join(root, 'src/config.txt'));
+      await symlink(path.join(root, '.env.local'), path.join(root, 'src/absolute.txt'));
+      await symlink(path.join(root, '.env.production'), path.join(root, 'README.md'));
+      await mkdir(path.join(root, '.env.d'));
+      await writeFile(path.join(root, '.env.d/secret.txt'), 'SECRET=dir');
+      await symlink('../.env.d', path.join(root, 'src/envdir'));
+      await symlink(root, path.join(fixture, 'alias'));
+      for (const relativePath of ['src/config.txt', 'src/absolute.txt', 'README.md', 'src/envdir/secret.txt', 'src/envdir/new.txt']) {
+        await expect(readProjectFile(root, relativePath)).rejects.toThrow('Access denied');
+        await expect(saveProjectFile(root, relativePath, 'SECRET=overwritten')).rejects.toThrow('Access denied');
+      }
+      await expect(readProjectFile(path.join(fixture, 'alias'), '.env')).rejects.toThrow(DOTENV_ERROR);
+      expect(await readFile(path.join(root, '.env'), 'utf8')).toBe('SECRET=.env');
+      expect(await readFile(path.join(root, '.env.local'), 'utf8')).toBe('SECRET=.env.local');
+      expect(await readFile(path.join(root, '.env.production'), 'utf8')).toBe('SECRET=.env.production');
+      await expect(readFile(path.join(root, '.env.d/new.txt'))).rejects.toThrow();
+      const tree = JSON.stringify(await buildProjectFileTree(root));
+      expect(tree).not.toContain('config.txt');
+      expect(tree).not.toContain('absolute.txt');
+      expect(tree).not.toContain('README.md');
+      expect(tree).not.toContain('envdir');
+    });
+  });
+
+  it('opens the Agent bootstrap files and the knowledge directory', async () => {
+    await withProject(async (root) => {
+      const paths = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge/faq.md', 'knowledge/guides/setup.txt'];
+      for (const relativePath of paths) {
+        expect(isProjectPathAllowed(relativePath)).toBe(true);
+        await saveProjectFile(root, relativePath, `# ${relativePath}`);
+        await expect(readProjectFile(root, relativePath)).resolves.toMatchObject({ content: `# ${relativePath}` });
+      }
+      const tree = await buildProjectFileTree(root);
+      expect(tree.map(entry => entry.name)).toEqual(expect.arrayContaining(['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge']));
+      const knowledge = tree.find(entry => entry.name === 'knowledge');
+      expect(knowledge?.children?.map(entry => entry.name)).toEqual(['guides', 'faq.md']);
+      expect(isProjectPathAllowed('knowledge/node_modules/x.md')).toBe(false);
+      expect(isProjectPathAllowed('MEMORY.md')).toBe(false);
+    });
+  });
+});

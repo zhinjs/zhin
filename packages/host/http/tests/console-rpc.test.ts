@@ -6,6 +6,10 @@ import {
 import { VIEWER, userPrincipal } from './fixtures/principals.js';
 import { authorizeConsoleHttp } from '../src/access-control.js';
 import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '../src/console-plugin-rpc.js';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { buildProjectFileTree, readProjectFile, saveProjectFile } from '../src/project-files.js';
 
 describe('runtime console RPC', () => {
   it('denies raw configuration to demo before reading secret-bearing storage', async () => {
@@ -567,6 +571,39 @@ describe('runtime console RPC', () => {
       requestId: 22,
       data: { success: true },
     });
+  });
+
+  it('keeps dotenv files out of files:* even for owners and points at the environment page (issue #1250)', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'zhin-rpc-dotenv-'));
+    try {
+      await writeFile(path.join(root, '.env'), 'SECRET=exposed');
+      await writeFile(path.join(root, 'SOUL.md'), '# soul');
+      const ctx = {
+        authScope: 'full' as const,
+        principal: userPrincipal('owner'),
+        listPages: async () => [],
+        listProjectFiles: () => buildProjectFileTree(root),
+        readProjectFile: (filePath: string) => readProjectFile(root, filePath),
+        saveProjectFile: (filePath: string, content: string) => saveProjectFile(root, filePath, content),
+        readEnvFile: async (filename: string) => readFile(path.join(root, filename), 'utf8'),
+      };
+      const tree = await dispatchRuntimeConsoleRpc({ type: 'files:tree', requestId: 40 }, ctx);
+      expect(JSON.stringify(tree)).not.toContain('.env');
+      expect(JSON.stringify(tree)).toContain('SOUL.md');
+      for (const filePath of ['.env', '.ENV', './.env', '.env/', '%2Eenv']) {
+        const read = await dispatchRuntimeConsoleRpc({ type: 'files:read', requestId: 41, filePath }, ctx);
+        expect(JSON.stringify(read)).not.toContain('exposed');
+        expect(pickRpcReply({ type: 'files:read', requestId: 41 }, read)?.error).toMatch(/\/ops\/env/u);
+        const saved = await dispatchRuntimeConsoleRpc({ type: 'files:save', requestId: 42, filePath, content: 'SECRET=planted' }, ctx);
+        expect(pickRpcReply({ type: 'files:save', requestId: 42 }, saved)?.error).toMatch(/\/ops\/env/u);
+      }
+      expect(await readFile(path.join(root, '.env'), 'utf8')).toBe('SECRET=exposed');
+      // The environment page keeps working, behind its own permission.
+      const env = await dispatchRuntimeConsoleRpc({ type: 'env:get', requestId: 43, filename: '.env' }, ctx);
+      expect(pickRpcReply({ type: 'env:get', requestId: 43 }, env)).toMatchObject({ data: { content: 'SECRET=exposed' } });
+      const soul = await dispatchRuntimeConsoleRpc({ type: 'files:read', requestId: 44, filePath: 'SOUL.md' }, ctx);
+      expect(pickRpcReply({ type: 'files:read', requestId: 44 }, soul)).toMatchObject({ data: { content: '# soul' } });
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 
   it('answers schema and db stub RPCs', async () => {    const schema = await dispatchRuntimeConsoleRpc(
