@@ -163,7 +163,7 @@ describe('aiCompletion.completeText', () => {
     expect(opts).toMatchObject({ model: 'main', maxTokens: 200 });
     // No tools are forwarded. The wrapper owns the attempt timer and disables the lower timer.
     expect(opts.requestTimeoutMs).toBe(0);
-    expect(Object.keys(opts).sort()).toEqual(['maxRetries', 'maxTokens', 'model', 'requestTimeoutMs', 'signal', 'temperature']);
+    expect(Object.keys(opts).sort()).toEqual(['maxRetries', 'maxTokens', 'model', 'onResponseStart', 'requestTimeoutMs', 'signal', 'temperature']);
   });
 
   it('uses another binding when asked and rejects unknown bindings', async () => {

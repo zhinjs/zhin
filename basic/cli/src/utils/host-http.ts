@@ -242,15 +242,17 @@ export async function hostPost<T>(
   http: HostHttpConfig,
   apiPath: string,
   body: unknown,
+  timeoutMs = 5_000,
 ): Promise<HostFetchResult<T>> {
-  return hostFetch(http, apiPath, { method: 'POST', body });
+  return hostFetch(http, apiPath, { method: 'POST', body, timeoutMs });
 }
 
 async function hostFetch<T>(
   http: HostHttpConfig,
   apiPath: string,
-  input: Readonly<{ method: 'GET' | 'POST'; body?: unknown }>,
+  input: Readonly<{ method: 'GET' | 'POST'; body?: unknown; timeoutMs?: number }>,
 ): Promise<HostFetchResult<T>> {
+  const timeoutMs = input.timeoutMs ?? 5_000;
   const url = `${http.baseUrl}${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`;
   try {
     const res = await (http.fetch ?? fetch)(url, {
@@ -260,8 +262,8 @@ async function hostFetch<T>(
         ...(input.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
-      // Host 无响应时 5s 超时，避免 watch/send 等命令无限挂起。
-      signal: AbortSignal.timeout(5_000),
+      // Host 无响应时超时（默认 5s），避免 watch/send 等命令无限挂起。
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const body = (await res.json().catch(() => ({}))) as {
       success?: boolean;
@@ -288,7 +290,7 @@ async function hostFetch<T>(
     const connectionCode = errorCode(e);
     const msg =
       err?.name === 'TimeoutError'
-        ? `请求 ${http.baseUrl} 超时（5s 无响应）`
+        ? `请求 ${http.baseUrl} 超时（${Math.round(timeoutMs / 1000)}s 无响应）`
         : connectionCode === 'ECONNREFUSED'
           ? `无法连接 ${http.baseUrl}（请先 zhin start）`
           : (err?.message ?? String(e));

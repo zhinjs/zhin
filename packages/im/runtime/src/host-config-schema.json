@@ -1914,7 +1914,14 @@
                     "number",
                     "string"
                   ],
-                  "description": "Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables."
+                  "description": "Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables."
+                },
+                "firstResponseTimeoutMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Per-attempt wait in ms for the provider's first response (response headers or the first\nstream event). Default 30000. `0` disables. A service that does not answer in time is not\nre-asked on the same model: the attempt fails as `no_response`."
                 },
                 "emptyReplyRetries": {
                   "type": [

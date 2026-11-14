@@ -908,6 +908,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),
+        audit: entry => { http.tokenRegistry?.accessProvider?.audit?.(entry); },
         principal: input => agentHost.resolveInferenceManagementPrincipal({ ...input, hostOwnerId: inference.hostOwnerId, bindings: principalBindings }),
         owners: input => {
           if (input.scope === 'full') return [{ id: inference.hostOwnerId, label: '部署模型', kind: 'host' }];

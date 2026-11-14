@@ -420,7 +420,8 @@ describe('Gemini provider (google sdk)', () => {
       });
       expect(run.message?.stopReason).toBe('stop');
       expect(run.requests).toBe(2);
-      expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+      expect(run.events[0]).toMatchObject({ type: 'timeout', phase: 'request', timeoutMs: 45_000 });
+      expect(run.events[1]).toMatchObject({ type: 'retry', kind: 'timeout' });
       expect(pending).toEqual([]);
     });
 
