@@ -171,13 +171,21 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console SQ
 
   it('changes one attribute with MODIFY and keeps the rest of the column', async () => {
     const plan = await host.console!.applySchema!({ kind: 'alter-column', table: 'zhin_console_modify', column: 'updated', nullable: true });
-    expect(plan.statements[0]).toContain('DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+    // MySQL writes `CURRENT_TIMESTAMP`, MariaDB `current_timestamp()`: the same expression either way.
+    expect(plan.statements[0]).toMatch(/DEFAULT CURRENT_TIMESTAMP(?:\(\))? ON UPDATE CURRENT_TIMESTAMP(?:\(\))?/i);
     await host.console!.applySchema!({ kind: 'alter-column', table: 'zhin_console_modify', column: 'path', nullable: false });
     const rows = await raw.query(`SELECT COLUMN_NAME AS name, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra, COLUMN_COMMENT AS comment, COLLATION_NAME AS coll
       FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'zhin_console_modify' ORDER BY ORDINAL_POSITION`) as Record<string, unknown>[];
     const byName = Object.fromEntries(rows.map(row => [row.name, row]));
-    expect(byName.updated).toMatchObject({ nullable: 'YES', def: 'CURRENT_TIMESTAMP' });
+    // MariaDB reports COLUMN_DEFAULT as SQL (`'C:\\dir'`, `current_timestamp()`); MySQL as the bare value.
+    const literalDefault = (value: unknown) => {
+      const text = String(value);
+      return /^'.*'$/su.test(text) ? text.slice(1, -1).replaceAll("''", "'").replace(/\\(.)/gsu, '$1') : text;
+    };
+    expect(byName.updated).toMatchObject({ nullable: 'YES' });
+    expect(String(byName.updated!.def)).toMatch(/^CURRENT_TIMESTAMP(?:\(\))?$/i);
     expect(String(byName.updated!.extra)).toMatch(/on update CURRENT_TIMESTAMP/i);
-    expect(byName.path).toMatchObject({ nullable: 'NO', def: 'C:\\dir', comment: 'win path', coll: 'utf8mb4_bin' });
+    expect(byName.path).toMatchObject({ nullable: 'NO', comment: 'win path', coll: 'utf8mb4_bin' });
+    expect(literalDefault(byName.path!.def)).toBe('C:\\dir');
   });
 });

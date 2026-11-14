@@ -651,6 +651,16 @@ function createDatabaseConsole(
       if (!db.models.has(name)) db.models.set(name, new RelatedModel(db as never, name as never) as unknown as RawConsoleModel);
     }
   };
+  /** MariaDB has no `max_execution_time`; its statement limit is `max_statement_time` (seconds). Read once. */
+  let mysqlIsMariaDb: boolean | undefined;
+  const mysqlTimeout = async (run: (sql: string) => Promise<unknown>, timeoutMs: number | 'DEFAULT'): Promise<string> => {
+    if (mysqlIsMariaDb === undefined) {
+      const rows = await run('SELECT VERSION() AS v') as Array<{ v?: unknown }> | undefined;
+      mysqlIsMariaDb = /mariadb/iu.test(String(rows?.[0]?.v ?? ''));
+    }
+    if (timeoutMs === 'DEFAULT') return mysqlIsMariaDb ? 'SET SESSION max_statement_time = DEFAULT' : 'SET SESSION max_execution_time = DEFAULT';
+    return mysqlIsMariaDb ? `SET SESSION max_statement_time = ${(timeoutMs / 1000).toFixed(3)}` : `SET SESSION max_execution_time = ${timeoutMs}`;
+  };
   /** Runs `body` in one transaction; `rollback` discards it after collecting the result. */
   const inTransaction = async <T>(body: (trx: ConsoleTransaction) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }, on: ConsoleSqlExecutor = db): Promise<T> => {
     const dialect = requireSql();
@@ -666,11 +676,11 @@ function createDatabaseConsole(
         const timeout = Math.max(1, Math.floor(options.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
         // SET LOCAL ends with the transaction; Console SQL cannot lift it (SET / set_config are refused).
         if (dialect === 'pg') await run(`SET LOCAL statement_timeout = ${timeout}`);
-        if (dialect === 'mysql' && options.readOnly) await run(`SET SESSION max_execution_time = ${timeout}`);
+        if (dialect === 'mysql' && options.readOnly) await run(await mysqlTimeout(run, timeout));
         try {
           result = await body({ run, statement });
         } finally {
-          if (dialect === 'mysql' && options.readOnly) await run('SET SESSION max_execution_time = DEFAULT').catch(() => undefined);
+          if (dialect === 'mysql' && options.readOnly) await run(await mysqlTimeout(run, 'DEFAULT')).catch(() => undefined);
         }
         if (options.rollback) throw discard;
       }, options.readOnly ? { readOnly: true } : undefined);

@@ -224,6 +224,22 @@ describe('MySQL MODIFY COLUMN keeps what the change does not touch', () => {
       .toBe('`c` char(36) NOT NULL DEFAULT (uuid())');
   });
 
+  it('restates MariaDB defaults, which COLUMN_DEFAULT already writes as SQL', () => {
+    const maria = (overrides: Partial<MysqlColumnDefinition>) => column({ mariadb: true, ...overrides });
+    expect(renderMysqlModify(maria({ columnType: 'timestamp', dataType: 'timestamp', defaultValue: 'current_timestamp()', extra: 'on update current_timestamp()' }), { nullable: true }, host))
+      .toBe('`c` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()');
+    // A quoted literal is kept verbatim (not quoted a second time).
+    expect(renderMysqlModify(maria({ defaultValue: "'it''s'" }), { nullable: false }, host)).toBe("`c` varchar(64) NOT NULL DEFAULT 'it''s'");
+    expect(renderMysqlModify(maria({ defaultValue: "'C:\\\\dir'" }), { nullable: false }, host)).toBe("`c` varchar(64) NOT NULL DEFAULT 'C:\\\\dir'");
+    expect(renderMysqlModify(maria({ columnType: 'text', dataType: 'text', defaultValue: "'x'" }), { nullable: true }, host)).toBe("`c` text NULL DEFAULT ('x')");
+    expect(renderMysqlModify(maria({ defaultValue: 'NULL' }), { nullable: true }, host)).toBe('`c` varchar(64) NULL DEFAULT NULL');
+    expect(renderMysqlModify(maria({ columnType: 'int', dataType: 'int', defaultValue: '0' }), { nullable: false }, host)).toBe('`c` int NOT NULL DEFAULT 0');
+    expect(renderMysqlModify(maria({ columnType: 'decimal(5,2)', dataType: 'decimal', defaultValue: '1.50' }), { nullable: true }, host)).toBe('`c` decimal(5,2) NULL DEFAULT 1.50');
+    expect(renderMysqlModify(maria({ columnType: 'char(36)', dataType: 'char', defaultValue: 'uuid()' }), { nullable: true }, host)).toBe('`c` char(36) NULL DEFAULT (uuid())');
+    // On MySQL the same text is a bare literal and is quoted.
+    expect(renderMysqlModify(column({ defaultValue: 'NULL' }), { nullable: true }, host)).toBe("`c` varchar(64) NULL DEFAULT 'NULL'");
+  });
+
   it('escapes backslashes and quotes of literal defaults and comments', () => {
     expect(renderMysqlModify(column({ defaultValue: 'C:\\dir\\x', comment: "a\\b 'c'" }), { nullable: false }, host))
       .toBe("`c` varchar(64) NOT NULL DEFAULT 'C:\\\\dir\\\\x' COMMENT 'a\\\\b ''c'''");
