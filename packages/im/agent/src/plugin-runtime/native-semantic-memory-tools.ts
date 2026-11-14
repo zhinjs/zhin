@@ -24,7 +24,7 @@ import {
   type SemanticRecallOptions,
 } from '../memory/semantic-recall.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
-import { decideMemoryWrite, memoryExpiry, resolveMemoryWriteScope } from '../memory/memory-write-policy.js';
+import { decideMemoryWrite, memoryExpiry, parseMemoryScope, resolveMemoryWriteScope } from '../memory/memory-write-policy.js';
 import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface NativeSemanticMemoryToolFeature {
@@ -182,7 +182,7 @@ async function searchMemory(
   resolveDecision?: NativeSearchDecisionResolver,
 ): Promise<string> {
   const query = requiredString(input.query, 'query');
-  const scope = optionalScope(input.scope);
+  const scope = parseMemoryScope(input.scope);
   const limit = typeof input.limit === 'number' ? Math.max(1, Math.min(20, Math.floor(input.limit))) : 5;
   const decision = resolveSearchDecision(resolveDecision, context);
   const candidateLimit = decision ? 20 : limit;
@@ -293,12 +293,6 @@ function scopeKey(scope: MemoryEntryScope, context: ToolExecutionContext): strin
     throw new Error('Platform-scoped semantic memory requires an IM turn origin');
   }
   return context.origin.platform;
-}
-
-function optionalScope(value: unknown): MemoryEntryScope | undefined {
-  if (value === undefined) return undefined;
-  if (value === 'global' || value === 'platform' || value === 'session' || value === 'user') return value;
-  throw new TypeError('scope must be global, platform, session, or user');
 }
 
 function optionalKind(value: unknown): MemoryEntryKind | undefined {

@@ -20,6 +20,7 @@ export * from './sandbox.js';
 export * from './file-role-policy.js';
 export * from './dangerous-tool-policy.js';
 export * from './policy-facade.js';
+export * from './admin-approvable.js';
 export * from './approval-channel-conflicts.js';
 
 // ── 危险工具硬闸（ADR 0036 切片 E）──────────────────────────────────

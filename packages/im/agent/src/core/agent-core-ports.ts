@@ -202,6 +202,8 @@ export function toolResultToAgentMessage(
   toolCall: ParsedToolCall,
   result: unknown,
   isError: boolean,
+  /** #1250 review: set only for a framework policy denial; see `ToolResultMessage.deniedUnderPolicy`. */
+  deniedUnderPolicy?: string,
 ): AgentMessage {
   const text =
     typeof result === 'string'
@@ -215,6 +217,7 @@ export function toolResultToAgentMessage(
     toolName: toolCall.name,
     content: [{ type: 'text', text: text || (isError ? 'Error' : '') }],
     isError,
+    ...(deniedUnderPolicy ? { deniedUnderPolicy } : {}),
     timestamp: Date.now(),
   };
 }
@@ -420,7 +423,8 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
     state,
   } = params;
   const { host, sessionId, signal, loopHooks } = input;
-  const policyStamp = formatPolicyStamp(approvalPolicySnapshot(host.config));
+  const policySnapshot = approvalPolicySnapshot(host.config);
+  const policyStamp = formatPolicyStamp(policySnapshot);
 
   return {
     executeTool: async (toolCall: ParsedToolCall, _tools: readonly TLlmTool[], _toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
@@ -486,7 +490,8 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           const reason = outcome.status === 'denied' ? `${unexecuted}\n${policyStamp}` : unexecuted;
           recordProgress(resolvedName, effectiveArgs, false);
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason, status: outcome.status, sideEffect });
-          return toolResultToAgentMessage(toolCall, reason, true);
+          return toolResultToAgentMessage(toolCall, reason, true,
+            outcome.status === 'denied' ? policySnapshot.fingerprint : undefined);
         }
         const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
         let modelOutput = outcome.output;

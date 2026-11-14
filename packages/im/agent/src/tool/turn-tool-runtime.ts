@@ -12,7 +12,7 @@ import {
   type ApprovalDenialContext,
   type ApprovalOutcome,
 } from '../session/approval-port.js';
-import { isSecretLikeKey, redactSecretText } from '../decision-events.js';
+import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
@@ -161,7 +161,7 @@ export class TurnToolRuntime {
         actingFor = resolution.member.subjectId;
       }
     }
-    const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
+    const decision = await runTurnToolPolicies({ turn: this.turn, tool, input, provenanceTainted: this.provenance.tainted });
     // File/cwd authorization is asynchronous: cancellation can arrive after
     // the ingress check but before an allowed decision reaches execution.
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -204,7 +204,7 @@ export class TurnToolRuntime {
     } else if (provenanceGate) {
       // #727 M3.3: a high-risk action after lower-trust content always asks
       // first, even when the configured policy would allow it outright.
-      const blocked = this.#approvalBlocked();
+      const blocked = this.#approvalBlocked('intent');
       if (blocked) {
         this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY, `${blocked === 'unattended'
@@ -224,6 +224,11 @@ export class TurnToolRuntime {
         // Never matches a remembered approval: each tainted call is confirmed on its own.
         scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
         purpose: 'intent',
+        // #1250 review: an admin's own answer may cover the call only when the call itself needs no
+        // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
+        ...(!authorizationRequired || (decision.status === 'approval_required' && decision.adminMayApprove)
+          ? { adminMayApprove: true }
+          : { requiresOwner: true }),
         question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
           humanOnly, tool.description),
         signal: this.turn.signal,
@@ -237,9 +242,11 @@ export class TurnToolRuntime {
       if (approval.scope !== 'intent') authorizationRequired = false;
     }
     if (authorizationRequired && decision.status === 'approval_required') {
-      const blocked = this.#approvalBlocked();
+      // #1250 review: some policies only need the initiator to confirm their own intent (memory poisoning guard).
+      const purpose = decision.purpose ?? 'authorization';
+      const blocked = this.#approvalBlocked(purpose);
       if (blocked) {
-        this.#auditApproval(name, decision.policy, 'authorization', { status: 'unavailable', reason: blocked });
+        this.#auditApproval(name, decision.policy, purpose, { status: 'unavailable', reason: blocked });
         return this.#deny(name, toolUseId, decision.policy,
           formatApprovalBlocked(blocked, denial, blocked === 'no_channel' ? 'ApprovalPort unavailable' : undefined), causedBy);
       }
@@ -252,20 +259,25 @@ export class TurnToolRuntime {
           : {}),
         requesterId: actingFor ?? this.turn.principal.subjectId,
         toolName: name,
-        scopeKey: tool.requiresApproval === 'once'
-          ? name
-          : approvalScopeKey(name, effectiveInput),
-        ...(tool.requiresApproval === 'once' || decision.policy === 'exec-policy'
+        // An intent confirmation never matches a remembered approval: each call is confirmed on its own.
+        scopeKey: purpose === 'intent'
+          ? `${decision.policy}:${this.turn.identity.turnId}:${toolUseId}`
+          : tool.requiresApproval === 'once'
+            ? name
+            : approvalScopeKey(name, effectiveInput),
+        ...(purpose !== 'intent' && (tool.requiresApproval === 'once' || decision.policy === 'exec-policy')
           ? { remember: 'session' as const }
           : {}),
-        purpose: 'authorization',
+        purpose,
+        ...(decision.requiresOwner ? { requiresOwner: true } : {}),
+        ...(decision.adminMayApprove ? { adminMayApprove: true } : {}),
         question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-      this.#auditApproval(name, decision.policy, 'authorization', approval);
+      this.#auditApproval(name, decision.policy, purpose, approval);
       // Fail closed if a surface ever answers an authorization request with an intent-only confirmation.
-      if (approval.status !== 'approved' || approval.scope === 'intent') {
+      if (approval.status !== 'approved' || (approval.scope === 'intent' && purpose !== 'intent')) {
         return this.#deny(name, toolUseId, decision.policy, approval.status === 'approved'
           ? formatApprovalBlocked('no_channel', denial, 'only the initiator confirmed; approval needs someone with authority')
           : formatApprovalDenial(approval, denial), causedBy);
@@ -309,9 +321,9 @@ export class TurnToolRuntime {
   }
 
   /** Unattended turns and turns without an approval surface cannot ask anyone (#1250: kept apart for the model). */
-  #approvalBlocked(): ApprovalBlockReason | undefined {
+  #approvalBlocked(purpose: 'authorization' | 'intent'): ApprovalBlockReason | undefined {
     if (this.turn.policy.unattended) return 'unattended';
-    return isApprovalPortAvailable(this.turn.ports.approval) ? undefined : 'no_channel';
+    return isApprovalPortAvailable(this.turn.ports.approval, purpose) ? undefined : 'no_channel';
   }
 
   /** Ordinary and provenance prompts are audited like hard-gate cards (`tool_approval`, channel `turn_prompt`). */
@@ -445,22 +457,9 @@ function formatApprovalQuestion(
     humanOnly || (!command && !path && Object.keys(input).length > 0)
       ? `本次参数：${stableApprovalValue(redactApprovalDisplay(input))}`
       : undefined,
-    reason.startsWith('tool approval policy is ') ? undefined : `风险：${reason}`,
+    // #1250 review: policy reasons can quote the raw command (exec-policy); mask secrets like the arguments.
+    reason.startsWith('tool approval policy is ') ? undefined : `风险：${redactSecretText(reason)}`,
   ].filter((line): line is string => Boolean(line)).join('\n');
-}
-
-/**
- * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
- * token-shaped text are hidden. Execution and the approval scope key still use the exact arguments.
- */
-function redactApprovalDisplay(value: unknown, depth = 0): unknown {
-  if (typeof value === 'string') return redactSecretText(value);
-  if (depth > 8 || value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(item => redactApprovalDisplay(item, depth + 1));
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-    key,
-    isSecretLikeKey(key) && item !== undefined && item !== null && item !== '' ? '[redacted]' : redactApprovalDisplay(item, depth + 1),
-  ]));
 }
 
 const SESSION_MEMORY_PATH = /(?:^|[\\/])data[\\/]memory[\\/]sessions[\\/]([^\\/]+)/;

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { resolve } from 'node:path';
 import { personalSessionIdentity, type PersonalSessionAddress } from '../../personal-session/index.js';
-import { expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
+import { chatRoleHeldAt, expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import {
   approvalOutcomeToDecision,
@@ -237,8 +237,11 @@ export function createRuntimeQuestionPort(
  * - `master`: the sender is the global owner (unchanged).
  * - `owner`: the endpoint owner, asked in this conversation. Only in a shared conversation (or when the
  *   owner is the sender): in somebody else's private chat the owner can never answer.
- * - `initiator`: a zhin `admin` who started this live turn confirms it themselves when no owner can be
- *   asked here. Never for merged, ambient, scene or live-room turns, where the sender did not address the bot.
+ * - `initiator`: a zhin `admin` (held at endpoint level or above, ADR 0056 §2) who started this live turn
+ *   in their private chat confirms it themselves, and only for requests the policy marks admin-approvable
+ *   (`adminMayApprove`; see {@link createRuntimeApprovalPort}). Never in a group or channel (with no owner
+ *   configured there nobody can approve), and never for merged, ambient, scene or live-room turns, where
+ *   the sender did not address the bot.
  * - `none`: nobody with authority can be asked here; the port reports a clear reason instead of waiting.
  */
 export type ImApprover =
@@ -248,12 +251,25 @@ export type ImApprover =
 export interface ImApproverInput {
   readonly senderId?: string;
   readonly isMaster: boolean;
-  /** The sender holds the zhin `admin` role in this conversation (ADR 0056); platform standing never counts. */
+  /**
+   * The sender holds the zhin `admin` role (or higher) at endpoint level or above (ADR 0056 §2:
+   * `chatRoleHeldAt(sender, 'admin', 'endpoint')`). A conversation-level admin or a demoted
+   * conversation owner does not count; platform standing never counts.
+   */
   readonly isAdmin: boolean;
   readonly ownerId?: string;
   readonly scope?: 'private' | 'group' | 'channel';
   /** The sender addressed the bot in this live turn (not merged, ambient, scene or live-room). */
   readonly initiatorPresent: boolean;
+}
+
+/**
+ * #1250 review: whether the sender may act as an `initiator` approver — the zhin `admin` role (or higher) held
+ * at endpoint level or above (ADR 0056 §2). A conversation-level admin, or a conversation owner (who counts as
+ * admin for host trust via `hostChatRole`), does not qualify.
+ */
+export function holdsEndpointAdmin(sender: Parameters<typeof chatRoleHeldAt>[0]): boolean {
+  return chatRoleHeldAt(sender, 'admin', 'endpoint');
 }
 
 export function resolveImApprover(input: ImApproverInput): ImApprover {
@@ -262,7 +278,9 @@ export function resolveImApprover(input: ImApproverInput): ImApprover {
   if (!senderId) return { kind: 'none', reason: 'the sender of this turn is unknown' };
   if (input.isMaster) return { kind: 'master', subjectId: senderId };
   if (ownerId && (ownerId === senderId || input.scope !== 'private')) return { kind: 'owner', subjectId: ownerId };
-  if (input.isAdmin && input.initiatorPresent) return { kind: 'initiator', subjectId: senderId };
+  // #1250 review: admin self-approval only in the admin's own private chat; a group without an owner
+  // configured has nobody who can approve, and no admin stands in for the owner there.
+  if (input.isAdmin && input.initiatorPresent && input.scope === 'private') return { kind: 'initiator', subjectId: senderId };
   return {
     kind: 'none',
     reason: ownerId
@@ -279,7 +297,8 @@ export function createRuntimeApprovalPort(options: {
   readonly interaction?: UserInteraction;
   /**
    * #1250: the approver is the turn's own (non-master) initiator. Only "allow once" / "reject" are offered,
-   * nothing is remembered or recalled, and human-only tools still need the owner.
+   * nothing is remembered or recalled. Only requests marked `adminMayApprove` (and not `requiresOwner` or
+   * `humanOnly`) can be approved this way; an `intent` request without the mark is settled as intent only.
    */
   readonly selfApproval?: boolean;
   /**
@@ -300,8 +319,12 @@ export function createRuntimeApprovalPort(options: {
 }): ApprovalDecisionPort & ApprovalOutcomePort {
   const locale = resolveLocale(options.locale);
   const unavailable = options.unavailableReason ?? 'this conversation cannot show an approval prompt';
+  // #1250 review: availability is per purpose. A port that can only reach the initiator for an intent
+  // confirmation is unavailable to authorization callers (hard gate, tool approval gate), which then fail fast.
+  const available = options.isMaster || options.interaction != null;
   const port: ApprovalDecisionPort & ApprovalOutcomePort = {
-    available: options.isMaster || options.interaction != null || options.intentInteraction != null,
+    available,
+    intentAvailable: available || options.intentInteraction != null,
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
       if (options.isMaster && input.purpose === 'intent' && !input.humanOnly) {
         // #1250: prompt injection in external content must not ride on the master's exemption.
@@ -323,7 +346,15 @@ export function createRuntimeApprovalPort(options: {
         if (input.humanOnly) {
           return { status: 'unavailable', reason: 'this tool needs fresh approval from the bot owner; the requester cannot approve it' };
         }
-        return askOnce(options.interaction, input, locale);
+        // #1250 review: an admin approves only what the policy explicitly marks admin-approvable.
+        if (input.requiresOwner) return { status: 'unavailable', reason: SELF_APPROVAL_NEEDS_OWNER_REASON };
+        if (input.adminMayApprove) return askOnce(options.interaction, input, locale);
+        if (input.purpose === 'intent') {
+          // Like any initiator, the admin may still confirm their own intent; it never stands in for authority.
+          const outcome = await askOnce(options.interaction, input, locale);
+          return outcome.status === 'approved' ? { ...outcome, scope: 'intent' } : outcome;
+        }
+        return { status: 'unavailable', reason: SELF_APPROVAL_NOT_DECLARED_REASON };
       }
       const recalled = input.humanOnly ? undefined : options.memory?.recall(input);
       if (recalled !== undefined) {
@@ -375,6 +406,14 @@ export function createRuntimeApprovalPort(options: {
   };
   return Object.freeze(port);
 }
+
+/** #1250 review: why an admin initiator cannot approve an operation that needs the bot owner. */
+export const SELF_APPROVAL_NEEDS_OWNER_REASON = 'this operation needs approval from the bot owner '
+  + '(sensitive files, shell commands or shared memory); an admin cannot approve it for themselves';
+
+/** #1250 review: why an admin initiator cannot approve an operation that is not declared admin-approvable. */
+export const SELF_APPROVAL_NOT_DECLARED_REASON = 'this operation needs approval from the bot owner; '
+  + 'an admin can only approve operations that are declared admin-approvable';
 
 /** Why a master's high-risk action after external content is refused when they did not address the bot. */
 export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot in this turn (merged or background messages), '

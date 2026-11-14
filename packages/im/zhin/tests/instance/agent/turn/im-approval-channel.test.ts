@@ -3,7 +3,7 @@
  * admin initiator) can answer; anybody else, another conversation, a stale button or a late answer cannot.
  */
 import { RuntimeInteractionCoordinator } from '../../../../../core/src/plugin-runtime/im/interaction-runtime.js';
-import { createRuntimeApprovalPort, resolveImApprover } from '@zhin.js/agent/runtime';
+import { createRuntimeApprovalPort, holdsEndpointAdmin, resolveImApprover } from '@zhin.js/agent/runtime';
 
 type Conversation = { endpoint: { adapter: string; id: string }; kind: 'private' | 'group'; id: string; threadId?: string };
 
@@ -43,6 +43,9 @@ const request = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+/** A request whose policy lets an admin initiator approve it (e.g. a tool tagged `admin_approvable`). */
+const adminRequest = (overrides: Record<string, unknown> = {}) => request({ adminMayApprove: true, ...overrides });
+
 describe('resolveImApprover', () => {
   const base = { senderId: 'alice', isMaster: false, isAdmin: false, scope: 'private' as const, initiatorPresent: true };
 
@@ -53,10 +56,16 @@ describe('resolveImApprover', () => {
     expect(resolveImApprover({ ...base, ownerId: 'alice' })).toEqual({ kind: 'owner', subjectId: 'alice' });
   });
 
-  it('lets a present admin initiator confirm when the owner cannot answer here', () => {
+  it('lets a present admin initiator confirm in their own private chat when the owner cannot answer there', () => {
     expect(resolveImApprover({ ...base, isAdmin: true, ownerId: 'boss' })).toEqual({ kind: 'initiator', subjectId: 'alice' });
     expect(resolveImApprover({ ...base, isAdmin: true })).toEqual({ kind: 'initiator', subjectId: 'alice' });
-    expect(resolveImApprover({ ...base, scope: 'group', isAdmin: true })).toEqual({ kind: 'initiator', subjectId: 'alice' });
+  });
+
+  it('does not fall back to admin self-approval in a group or channel without an owner (#1250 review)', () => {
+    for (const scope of ['group', 'channel'] as const) {
+      expect(resolveImApprover({ ...base, scope, isAdmin: true }))
+        .toMatchObject({ kind: 'none', reason: expect.stringContaining('no bot owner') });
+    }
   });
 
   it('never makes an ordinary member, an absent initiator or an unknown sender an approver', () => {
@@ -67,12 +76,29 @@ describe('resolveImApprover', () => {
   });
 });
 
+describe('holdsEndpointAdmin (#1250 review)', () => {
+  it('requires the admin role held at endpoint level or above', () => {
+    expect(holdsEndpointAdmin({ chatRole: 'admin', chatRoleLevels: { admin: 'endpoint', trusted: 'endpoint' } })).toBe(true);
+    expect(holdsEndpointAdmin({ chatRole: 'admin', chatRoleLevels: { admin: 'adapter' } })).toBe(true);
+    expect(holdsEndpointAdmin({ chatRole: 'owner', chatRoleLevels: { owner: 'endpoint', admin: 'endpoint' } })).toBe(true);
+  });
+
+  it('rejects a conversation-level admin, a demoted conversation owner and a sender without levels', () => {
+    expect(holdsEndpointAdmin({ chatRole: 'admin', chatRoleLevels: { admin: 'conversation' } })).toBe(false);
+    // A conversation owner counts as `admin` for host trust (hostChatRole), but not as an endpoint admin.
+    expect(holdsEndpointAdmin({ chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation' } })).toBe(false);
+    expect(holdsEndpointAdmin({ chatRole: 'admin' })).toBe(false);
+    expect(holdsEndpointAdmin({ chatRole: 'trusted', chatRoleLevels: { trusted: 'global' } })).toBe(false);
+    expect(holdsEndpointAdmin(undefined)).toBe(false);
+  });
+});
+
 describe('initiator self-approval port', () => {
   it('offers only allow-once / reject, accepts 确认 from the initiator and ignores everyone else', async () => {
     const f = setup('alice', conversation('group', 'room'));
     const memory = { recall: vi.fn(() => true), remember: vi.fn() };
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true, memory });
-    const outcome = port.requestApprovalOutcome(request({ conversationScope: 'group' }));
+    const outcome = port.requestApprovalOutcome(adminRequest({ conversationScope: 'group' }));
     await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
     const rendered = JSON.stringify(f.prompts[0]);
     expect(rendered).toContain('只有发起这次请求的人可以回答');
@@ -95,7 +121,7 @@ describe('initiator self-approval port', () => {
     for (const answer of ['取消', 'no']) {
       const f = setup('alice');
       const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
-      const outcome = port.requestApprovalOutcome(request());
+      const outcome = port.requestApprovalOutcome(adminRequest());
       await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
       expect(f.reply('alice', answer)).toBe(true);
       await expect(outcome).resolves.toEqual({ status: 'denied', by: 'user' });
@@ -105,15 +131,40 @@ describe('initiator self-approval port', () => {
   it('does not let the initiator approve a human-only tool', async () => {
     const f = setup('alice');
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
-    await expect(port.requestApprovalOutcome(request({ humanOnly: true })))
+    await expect(port.requestApprovalOutcome(adminRequest({ humanOnly: true })))
       .resolves.toMatchObject({ status: 'unavailable', reason: expect.stringContaining('bot owner') });
     expect(f.prompts).toHaveLength(0);
+  });
+
+  it('does not let the initiator approve what needs the owner, or what is not declared admin-approvable (#1250 review)', async () => {
+    const f = setup('alice');
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
+    // A sensitive file read (.git/config) the file policy routes to the owner, even if also marked admin-approvable.
+    await expect(port.requestApprovalOutcome(request({ toolName: 'read_file', requiresOwner: true })))
+      .resolves.toMatchObject({ status: 'unavailable', reason: expect.stringContaining('admin cannot approve it') });
+    await expect(port.requestApprovalOutcome(adminRequest({ requiresOwner: true })))
+      .resolves.toMatchObject({ status: 'unavailable', reason: expect.stringContaining('bot owner') });
+    // A plugin tool's always / once / on-risk approval, or an auto-mode escalation, without the declaration.
+    await expect(port.requestApprovalOutcome(request({ purpose: 'authorization' })))
+      .resolves.toMatchObject({ status: 'unavailable', reason: expect.stringContaining('declared admin-approvable') });
+    await expect(port.requestApprovalOutcome(request()))
+      .resolves.toMatchObject({ status: 'unavailable' });
+    expect(f.prompts).toHaveLength(0);
+  });
+
+  it('settles an undeclared intent request from the admin as intent only (#1250 review)', async () => {
+    const f = setup('alice');
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
+    const outcome = port.requestApprovalOutcome(request({ purpose: 'intent' }));
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    expect(f.reply('alice', '确认')).toBe(true);
+    await expect(outcome).resolves.toEqual({ status: 'approved', decision: 'approve-once', scope: 'intent' });
   });
 
   it('times out to a non-approval when nobody answers', async () => {
     const f = setup('alice');
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
-    await expect(port.requestApprovalOutcome(request({ timeoutMs: 30 }))).resolves.toEqual({ status: 'timed_out' });
+    await expect(port.requestApprovalOutcome(adminRequest({ timeoutMs: 30 }))).resolves.toEqual({ status: 'timed_out' });
     // A late answer settles nothing.
     expect(f.reply('alice', '确认')).toBe(false);
   });
@@ -121,7 +172,7 @@ describe('initiator self-approval port', () => {
   it('ignores the same sender in another conversation, endpoint or thread', async () => {
     const f = setup('alice', conversation('group', 'room'));
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
-    const outcome = port.requestApprovalOutcome(request());
+    const outcome = port.requestApprovalOutcome(adminRequest());
     await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
     expect(f.reply('alice', '确认', { conversation: { ...f.source.conversation, id: 'other-room' } })).toBe(false);
     expect(f.reply('alice', '确认', { conversation: { ...f.source.conversation, endpoint: { adapter: 'fixture', id: 'other-bot' } } })).toBe(false);
@@ -133,13 +184,13 @@ describe('initiator self-approval port', () => {
   it('does not let a replayed button from an earlier prompt approve a new request', async () => {
     const f = setup('alice');
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
-    const first = port.requestApprovalOutcome(request({ requestId: 'turn:first' }));
+    const first = port.requestApprovalOutcome(adminRequest({ requestId: 'turn:first' }));
     await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
     const [, approveFirst] = buttonPayloads(f.prompts[0]);
     expect(f.reply('alice', '取消')).toBe(true);
     await expect(first).resolves.toEqual({ status: 'denied', by: 'user' });
 
-    const second = port.requestApprovalOutcome(request({ requestId: 'turn:second' }));
+    const second = port.requestApprovalOutcome(adminRequest({ requestId: 'turn:second' }));
     await vi.waitFor(() => expect(f.prompts).toHaveLength(2));
     expect(f.reply('alice', '', { segments: [{ type: 'action', data: { payload: approveFirst } }] })).toBe(false);
     const [, approveSecond] = buttonPayloads(f.prompts[1]);
@@ -157,7 +208,9 @@ describe('initiator intent confirmation when nobody with authority can be asked'
       intentInteraction: f.interaction,
       unavailableReason: 'no bot owner is configured for this account, so nobody can approve it here',
     });
-    expect(port.available).toBe(true);
+    // #1250 review: availability is per purpose; authorization callers see the port as unavailable.
+    expect(port.available).toBe(false);
+    expect(port.intentAvailable).toBe(true);
     await expect(port.requestApprovalOutcome(request({ purpose: 'authorization' })))
       .resolves.toEqual({ status: 'unavailable', reason: 'no bot owner is configured for this account, so nobody can approve it here' });
     await expect(port.requestApprovalOutcome(request({ purpose: 'intent', humanOnly: true })))

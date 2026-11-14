@@ -336,8 +336,16 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 |---|---|
 | 全局 owner（主人） | 主人本人（与之前相同） |
 | 其他人，群聊 / 频道里配置了 Bot 主人 | Bot 主人（与之前相同） |
-| zhin `admin`，且主人无法在此作答（私聊，或未配置主人） | 发起人本人，只能「允许一次 / 拒绝」，不记住、不出现「允许此会话 / 始终允许」；`requiresApproval: 'human'` 的工具仍需主人 |
+| 端点层或以上的 zhin `admin`，在自己的私聊里，且主人无法在此作答 | 发起人本人，只能「允许一次 / 拒绝」，不记住、不出现「允许此会话 / 始终允许」；**只限策略明确标为管理员可批的操作**（见下） |
+| 群聊 / 频道里没有配置 Bot 主人 | 没有人能批准（管理员也不行），直接说明原因；发起人仍可按下一行确认意图 |
 | 其他用户，没有能作答的人 | 只对「读取外部内容后的高危动作」请发起人本人确认**意图**；这一确认不等于授权，工具若还需要普通审批，仍按上表处理（通常拒绝） |
+
+管理员本人能批准的操作（#1250 安全审查）：
+
+- 声明了 `tags: ['admin_approvable']` 的工具（Host 自带的 `schedule_add` 已声明）的普通审批；读过外部内容后这类工具的确认，一次回答同时覆盖意图与授权。
+- 写本会话的 `session` 记忆；写自己的 `user` 记忆前的意图确认（见[语义记忆](#语义记忆)的审批等级）。
+
+其余都需要主人，管理员本人不能批：敏感文件与受保护路径（如读取 `.git/config`、`.env`，文件策略的「需 Owner 确认」）、Shell 命令（exec 策略）、写 `global` / `platform` 记忆（ADR 0056 §2）、未声明 `admin_approvable` 的插件工具（`always` / `once` / `on-risk`）、自动审核 Agent 升级给人的审批、`requiresApproval: 'human'` 与危险工具硬闸。这些请求带 `requiresOwner`，或缺少 `adminMayApprove`，管理员的确认渠道直接返回「需要主人」，不弹提示。会话层 `admin`、被降级的会话层 owner 不算管理员审批人；读过外部内容后，若调用本身需要主人批准，管理员对意图的确认也不会代替主人。
 
 只认同一平台用户 ID、同一会话（同一端点、会话、话题）里的回复：「确认 / 同意 / yes」或「取消 / 拒绝 / no」，或按钮回调；别人回复、别的会话、过期按钮都不算，超时按拒绝处理。合流、旁听、直播间与弹幕回合不请发起人确认。每次确认写决策审计 `tool_approval`（`payload.channel: turn_prompt`，`purpose: intent | authorization`；无人可问记 `tool_approval_unavailable`）。
 
@@ -417,7 +425,7 @@ ai:
 
 - 群成员（`group_member`）只能写自己的 `user` 范围或当前 `session`，不能写 `global` / `platform`；不指定 `scope` 时默认写 `user`。主人和信任成员不指定时仍默认 `global`。
 - 已有的 `user_fact` / `preference` 不能被更低信任级别覆盖，所以群成员改不了主人记下的事实。同级或更高级别写入时以新值为准，旧值进入 `history`。
-- **审批等级（#1250）**：`memory_upsert` 有独立的审批等级，不再一律走普通审批。实时回合里写**发起人自己的 `user` 记忆**直接执行，任何 `execApprovalMode`（包括 `ask`）都不弹审批；`user` 范围的 `scope_key` 永远取自本回合的发起人，模型传的 `scope_key` 等参数一律忽略，所以写不到别人的个人记忆。写 `global` / `platform` / `session`（会话里其他人共享、也可能是别人写的）仍按普通审批（策略名 `memory-scope`）；无人值守回合（定时任务、后台事件）写任何范围都仍需审批；未知 `scope` 直接拒绝。主人和信任成员不指定 `scope` 时默认写 `global`，因此仍需审批——要记个人偏好请让模型写 `user`（工具说明已提示）。同名的插件工具不享受这一等级。
+- **审批等级（#1250）**：`memory_upsert` 有独立的审批等级，不再一律走普通审批。实时回合里写**发起人自己的 `user` 记忆**直接执行，任何 `execApprovalMode`（包括 `ask`）都不弹审批；`user` 范围的 `scope_key` 永远取自本回合的发起人，模型传的 `scope_key` 等参数一律忽略，所以写不到别人的个人记忆。写 `global` / `platform` / `session`（会话里其他人共享、也可能是别人写的）仍按普通审批（策略名 `memory-scope`）；无人值守回合（定时任务、后台事件）写任何范围都仍需审批；未知 `scope` 直接拒绝。本回合读过外部内容（`web_fetch` 等工具结果、群聊背景）、合流回合或旁听回合里，写自己的 `user` 记忆也要先请发起人确认意图（防止外部内容借模型写入记忆）；发起人不在场（合流、旁听）时无人可问，直接拒绝。`global` / `platform` 记忆只有主人能批，`session` 记忆在管理员自己的私聊里可由管理员本人批准。主人和信任成员不指定 `scope` 时默认写 `global`，因此仍需审批——要记个人偏好请让模型写 `user`（工具说明已提示）。同名的插件工具不享受这一等级。
 - `task_state` 一定会过期：默认 24 小时，`ttl_hours` 最多 168 小时；可用 `task_id` 绑定任务，宿主通过 `SemanticMemoryRuntime` 的 `isTaskActive` 告知任务已结束时，这条状态不再被检索到。
 - 文件记忆（`data/memory/**/MEMORY.md`）保持不变，仍可直接阅读；`renderMemoryEntriesMarkdown()` 可把结构化记忆导出为 Markdown。
 

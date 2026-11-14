@@ -61,7 +61,7 @@ export function formatPolicyStamp(snapshot: ApprovalPolicySnapshot): string {
   return `[当时的策略 policy@${snapshot.fingerprint}: ${snapshot.summary}]`;
 }
 
-const STAMP = /\[当时的策略 policy@([0-9a-f]{8})/u;
+const FINGERPRINT = /^[0-9a-f]{8}$/u;
 
 export interface StaleDenial {
   readonly toolName: string;
@@ -71,6 +71,10 @@ export interface StaleDenial {
 /**
  * Denials in `history` decided under another policy that were not followed by a successful call of
  * the same tool. A later success (or a later denial under the current policy) settles a tool.
+ *
+ * Only framework-written denials count (#1250 review): the fingerprint is read from the message's
+ * `deniedUnderPolicy` field, which the agent loop sets on a policy denial. The stamp text in the result
+ * is for the model only; the same text inside a tool's own output (a failed fetch, a web page) is ignored.
  */
 export function findStaleDenials(history: readonly AgentMessage[], current: ApprovalPolicySnapshot): readonly StaleDenial[] {
   const latest = new Map<string, string | undefined>();
@@ -81,8 +85,8 @@ export function findStaleDenials(history: readonly AgentMessage[], current: Appr
       latest.delete(toolName);
       continue;
     }
-    const match = STAMP.exec(textOf(message));
-    if (match) latest.set(toolName, match[1]);
+    const fingerprint = (message as { deniedUnderPolicy?: unknown }).deniedUnderPolicy;
+    if (typeof fingerprint === 'string' && FINGERPRINT.test(fingerprint)) latest.set(toolName, fingerprint);
   }
   return [...latest.entries()]
     .filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== current.fingerprint)
@@ -96,13 +100,6 @@ export function formatPolicyChangedNote(stale: readonly StaleDenial[], current: 
     + `本会话里 ${tools} 的拒绝是在旧策略下做出的，现在可能已经不适用。`
     + '如果用户仍然需要，直接重新尝试调用，以本次的真实结果为准；不要依据旧的拒绝记录告诉用户「做不了」。'
     + '\nApproval policy changed since earlier denials in this conversation; they may no longer apply. Retry when the user still wants it.';
-}
-
-function textOf(message: AgentMessage): string {
-  const content = (message as { content?: unknown }).content;
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map(block => (block && typeof block === 'object' && 'text' in block ? String((block as { text: unknown }).text) : '')).join('\n');
 }
 
 function stableJson(value: unknown): string {

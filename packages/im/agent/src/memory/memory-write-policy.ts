@@ -63,11 +63,16 @@ export function decideMemoryWrite(request: MemoryWriteRequest): MemoryWriteDecis
   return Object.freeze({ allowed: true });
 }
 
-/** The scope a `memory_upsert` call writes: the model's choice, else the trust-level default. */
-export function resolveMemoryWriteScope(raw: unknown, level: InitiatorTrustLevel): MemoryEntryScope {
-  if (raw === undefined) return defaultMemoryScope(level);
+/** A model-supplied memory scope: undefined when omitted; throws on anything that is not a scope. */
+export function parseMemoryScope(raw: unknown): MemoryEntryScope | undefined {
+  if (raw === undefined) return undefined;
   if (raw === 'global' || raw === 'platform' || raw === 'session' || raw === 'user') return raw;
   throw new TypeError('scope must be global, platform, session, or user');
+}
+
+/** The scope a `memory_upsert` call writes: the model's choice, else the trust-level default. */
+export function resolveMemoryWriteScope(raw: unknown, level: InitiatorTrustLevel): MemoryEntryScope {
+  return parseMemoryScope(raw) ?? defaultMemoryScope(level);
 }
 
 /**

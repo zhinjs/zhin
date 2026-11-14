@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { hostChatRole, type AITriggerConfig, type VenueRouteResult, type readOperationSession } from '@zhin.js/core';
+import type { AITriggerConfig, VenueRouteResult, readOperationSession } from '@zhin.js/core';
 import type {
   CapturedEndpointOperation,
   ImRuntime,
@@ -62,6 +62,7 @@ import {
   resolveProductTurnIntent,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  holdsEndpointAdmin,
   resolveImApprover,
   resolveSandboxTurnPolicy,
   runtimePersonalSessionAddress,
@@ -335,7 +336,8 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           const approver = resolveImApprover({
             senderId: message.sender?.id,
             isMaster: senderRoles.isMaster,
-            isAdmin: message.sender?.id ? hostChatRole(message.sender) === 'admin' : false,
+            // #1250 review: admin held at endpoint level or above; a conversation-level admin or demoted owner is not.
+            isAdmin: message.sender?.id ? holdsEndpointAdmin(message.sender) : false,
             ownerId,
             scope: message.conversation.kind,
             initiatorPresent,

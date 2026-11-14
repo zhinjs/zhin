@@ -20,6 +20,8 @@ import { NETWORK_DISABLED_REASON, NETWORK_TOOL_NAMES } from './network-authority
 import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
+import { isAmbientTurn } from '../user-relation-turn.js';
+import { ADMIN_APPROVABLE_TOOL_TAG } from './admin-approvable.js';
 import {
   TRUST_LEVEL_POLICY,
   TRUST_RESTRICTION_REASON,
@@ -120,12 +122,32 @@ export interface ToolPolicyResult extends ToolPolicyDecision {
 export type TurnToolPolicyDecision =
   | Readonly<{ status: 'allowed'; input: Readonly<Record<string, unknown>> }>
   | Readonly<{ status: 'denied'; policy: string; reason: string }>
-  | Readonly<{ status: 'approval_required'; policy: string; reason: string; input: Readonly<Record<string, unknown>> }>;
+  | Readonly<{
+    status: 'approval_required';
+    policy: string;
+    reason: string;
+    input: Readonly<Record<string, unknown>>;
+    /** #1250 review: only the bot owner may approve (sensitive files, shell, shared memory; ADR 0056 §2). */
+    requiresOwner?: true;
+    /** #1250 review: an admin initiator may approve it themselves (allow once). Absent: owner only. */
+    adminMayApprove?: true;
+    /**
+     * #1250 review: the initiator's own confirmation of intent is enough (the approval request is sent
+     * with `purpose: 'intent'` and an intent-only answer settles it). Absent: an authorization is needed.
+     */
+    purpose?: 'intent';
+  }>;
+
 
 export interface TurnToolPolicyInput {
   readonly turn: TurnIngress;
   readonly tool: ToolDescriptor;
   readonly input: Readonly<Record<string, unknown>>;
+  /**
+   * #1250 review: lower-trust content (web pages, other tool results, group background) already entered
+   * this turn. Writes that skip approval for the initiator's own data ask them first instead.
+   */
+  readonly provenanceTainted?: boolean;
 }
 
 /** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
@@ -216,6 +238,8 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
               policy: 'exec-policy',
               reason: exec.reason ?? 'shell command requires approval',
               input: authorizedInput,
+              // Shell authority is the bot owner's (ADR 0056 §2); an admin never approves it.
+              requiresOwner: true,
             });
           }
           return Object.freeze({
@@ -262,6 +286,8 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       policy: 'approval',
       reason: `tool approval policy is ${input.tool.requiresApproval}`,
       input: authorizedInput,
+      ...(input.tool.requiresApproval !== 'human' && input.tool.tags?.includes(ADMIN_APPROVABLE_TOOL_TAG)
+        ? { adminMayApprove: true as const } : {}),
     });
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
@@ -291,13 +317,29 @@ function checkMemoryWriteScope(
   }
   // An unattended turn (scheduled task, background event) has nobody present who asked for the write.
   if (memoryWriteApprovalTier(scope) === 'personal' && !input.turn.policy.unattended) {
-    return Object.freeze({ status: 'allowed', input: authorizedInput });
+    // #1250 review: after external content, in a merged turn or in an ambient turn the write may not be
+    // what the initiator asked for (memory poisoning): the initiator confirms it first, like the provenance gate.
+    const unsure = input.provenanceTainted === true ? 'external content entered this turn'
+      : input.turn.policy.merge ? 'this turn answers several people at once'
+        : isAmbientTurn(input.turn) ? 'nobody addressed the bot in this turn' : undefined;
+    if (!unsure) return Object.freeze({ status: 'allowed', input: authorizedInput });
+    return Object.freeze({
+      status: 'approval_required',
+      policy: MEMORY_SCOPE_POLICY,
+      reason: `writes the initiator's own user memory, but ${unsure}; the initiator confirms the write first`,
+      input: authorizedInput,
+      purpose: 'intent',
+      adminMayApprove: true,
+    });
   }
+  const shared = scope === 'global' || scope === 'platform';
   return Object.freeze({
     status: 'approval_required',
     policy: MEMORY_SCOPE_POLICY,
     reason: `writes ${scope} memory, which other people share; only the initiator's own user memory is written without approval`,
     input: authorizedInput,
+    // ADR 0056 §2: global / platform memory is the bot owner's; session memory may be approved by an admin.
+    ...(shared ? { requiresOwner: true as const } : { adminMayApprove: true as const }),
   });
 }
 
@@ -382,6 +424,8 @@ function turnFilePermissionDecision(
       policy,
       reason: permission.reason ?? `file ${permission.operation} requires approval`,
       input,
+      // Sensitive files are the bot owner's (ADR 0056 §2): an admin never approves them for themselves.
+      requiresOwner: true,
     });
   }
   return undefined;

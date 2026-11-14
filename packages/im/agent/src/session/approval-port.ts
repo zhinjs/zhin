@@ -21,6 +21,16 @@ export interface ApprovalRequestInput {
    * answer, reported as `scope: 'intent'`; that answer never satisfies an authorization requirement.
    */
   purpose?: 'authorization' | 'intent';
+  /**
+   * #1250 review: the policy behind this request needs the bot owner (sensitive files, shell, shared
+   * global / platform memory, ADR 0056 §2). An admin initiator can never approve it for themselves.
+   */
+  requiresOwner?: boolean;
+  /**
+   * #1250 review: the policy explicitly lets an admin initiator approve this request themselves (allow once),
+   * for example a tool declared `admin_approvable`. Default false: everything else needs the bot owner.
+   */
+  adminMayApprove?: boolean;
   question: string;
   timeoutMs?: number;
   /** The adapter must settle promptly and deny when the owning Turn is cancelled. */
@@ -41,6 +51,11 @@ export interface ApprovalDecisionMemory {
 export interface ApprovalPort {
   /** False means this transport cannot make an approval decision for this turn. */
   readonly available?: boolean;
+  /**
+   * #1250 review: true when the port can settle `purpose: 'intent'` confirmations (the initiator confirms
+   * their own intent) even though `available` is false because nobody with authority can be asked.
+   */
+  readonly intentAvailable?: boolean;
   requestApproval(input: ApprovalRequestInput): Promise<boolean>;
   resolveApproval?(requestId: string, approved: boolean): boolean;
 }
@@ -158,6 +173,15 @@ export function approvalAlternativeHint(context: ApprovalDenialContext, offerAlt
   return `${alternative}Tool names such as "${context.toolName}" are not chat commands; never tell the user to type a tool name.`;
 }
 
-export function isApprovalPortAvailable(port: ApprovalPort | undefined): port is ApprovalPort {
-  return Boolean(port && port.available !== false);
+/**
+ * Whether `port` can settle a request of `purpose` (default `authorization`). A port that can only take
+ * the initiator's intent confirmation reports unavailable for authorization requests (#1250 review).
+ */
+export function isApprovalPortAvailable(
+  port: ApprovalPort | undefined,
+  purpose: 'authorization' | 'intent' = 'authorization',
+): port is ApprovalPort {
+  if (!port) return false;
+  if (port.available !== false) return true;
+  return purpose === 'intent' && port.intentAvailable === true;
 }

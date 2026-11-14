@@ -153,8 +153,9 @@ export function createAutoApprovalPort(
           reviewer.remember(input, 'approve-once', 'reviewer');
           return { status: 'approved', decision: 'approve-once' };
         }
-        if (decision === 'ask' || (options.escalateRejections && isApprovalPortAvailable(ask))) {
-          if (!isApprovalPortAvailable(ask)) {
+        const purpose = input.purpose ?? 'authorization';
+        if (decision === 'ask' || (options.escalateRejections && isApprovalPortAvailable(ask, purpose))) {
+          if (!isApprovalPortAvailable(ask, purpose)) {
             return { status: 'unavailable', reason: 'the reviewer escalated to a human, but nobody can be asked here' };
           }
           const outcome = await settleWithinTimeout(requestApprovalOutcome(ask, input), input);
@@ -189,7 +190,7 @@ export function createBypassApprovalPort(ask?: ApprovalPort, options: BypassAppr
     available: true,
     async requestApprovalOutcome(input) {
       if (input.signal.aborted) return { status: 'unavailable', reason: 'approval request cancelled' };
-      if (input.humanOnly || (options.confirmIntent && input.purpose === 'intent')) return isApprovalPortAvailable(ask)
+      if (input.humanOnly || (options.confirmIntent && input.purpose === 'intent')) return isApprovalPortAvailable(ask, input.humanOnly ? 'authorization' : 'intent')
         ? requestApprovalOutcome(ask, input)
         : { status: 'unavailable', reason: 'this tool requires fresh human approval' };
       return { status: 'approved', decision: 'approve-once' };
