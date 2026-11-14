@@ -137,6 +137,13 @@ describe('dotenv files stay out of the project file manager (issue #1250)', () =
     '.env\u0000.txt', '.env\n',
   ];
 
+  it('checks long runs of spaces and dots in linear time (no polynomial backtracking)', () => {
+    const started = performance.now();
+    expect(isProjectPathAllowed(`src/${' '.repeat(100_000)}x.ts`)).toBe(true);
+    expect(isProjectPathAllowed(`.env${'. '.repeat(50_000)}`)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it.each(bypasses)('refuses to read or write %j', async (relativePath) => {
     await withProject(async (root) => {
       expect(isProjectPathAllowed(relativePath)).toBe(false);
