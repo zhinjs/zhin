@@ -10,6 +10,7 @@ import type {
   AttentionSources,
   AttentionToolApproval,
 } from './attention.js';
+import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { buildManagedPluginList } from './plugin-projection.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
@@ -33,7 +34,14 @@ const REVISION_FILES = Object.freeze(['package.json', ...ROOT_CONFIG_FILE_NAMES]
  * read live; plugins, configuration, MCP and logs are meant to be shared through an
  * `AttentionSourceCache` keyed by `revision` (project file mtimes + runtime generation).
  */
-export function createAttentionSources(composition: ConsoleRpcComposition): AttentionSources {
+export interface AttentionSourceOptions {
+  /** Clock for the error-log window (tests). */
+  readonly now?: () => number;
+  /** Hours of error logs counted by the `logs.errors` item; defaults to 24. */
+  readonly errorLogWindowHours?: number;
+}
+
+export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
   const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile } = composition;
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
     if (!snapshots) throw new Error('Runtime snapshots are unavailable');
@@ -96,13 +104,15 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         if (!model || typeof model.select !== 'function') return null;
         // A count query only: never load the error rows to count them.
         if (typeof model.count !== 'function') return null;
-        const where = { level: 'error' };
+        const windowHours = options.errorLogWindowHours ?? DEFAULT_ERROR_LOG_WINDOW_HOURS;
+        const since = new Date((options.now?.() ?? Date.now()) - windowHours * 3_600_000);
+        const where = { level: 'error', timestamp: { $gte: since } };
         const count = await model.count(where);
-        if (count <= 0) return { count: 0, latest: null };
+        if (count <= 0) return { count: 0, latest: null, windowHours };
         const [row] = await model.select('timestamp').where(where).orderBy('timestamp', 'DESC').limit(1);
         const value = row?.timestamp;
         const latest = value instanceof Date ? value.toISOString() : typeof value === 'string' || typeof value === 'number' ? new Date(value).toISOString() : null;
-        return { count, latest };
+        return { count, latest, windowHours };
       },
     } : {}),
     revision: async () => {

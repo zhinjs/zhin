@@ -82,7 +82,7 @@ describe('attention.list sources', () => {
     expect(byKind('tool-approval.pending')[0]).toMatchObject({ severity: 'warning', subject: { approvalId: 'appr-1' }, action: { path: '/ops/schedules?tab=admin' } });
     expect(byKind('mcp.disconnected').map(item => item.subject?.mcpServer)).toEqual(['search']);
     expect(byKind('logs.errors')[0]).toMatchObject({ severity: 'info', since: '2026-11-13T07:00:00.000Z', action: { path: '/logs?level=error' } });
-    expect(byKind('logs.errors')[0]!.title).toBe('日志里有 7 条错误');
+    expect(byKind('logs.errors')[0]!.title).toBe('最近 24 小时日志里有 7 条错误');
 
     const severities = list.items.map(item => item.severity);
     expect(severities).toEqual([...severities].sort((a, b) => ['danger', 'warning', 'info'].indexOf(a) - ['danger', 'warning', 'info'].indexOf(b)));

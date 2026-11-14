@@ -114,10 +114,16 @@ export interface AttentionMcpServer {
   readonly connected: boolean;
 }
 
+/** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
+export const DEFAULT_ERROR_LOG_WINDOW_HOURS = 24;
+
 export interface AttentionErrorLogs {
+  /** Error rows inside the window (not the whole log). */
   readonly count: number;
   /** ISO time of the newest error row. */
   readonly latest: string | null;
+  /** Length of the counted window in hours; the item says which period it covers. */
+  readonly windowHours?: number;
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -263,8 +269,8 @@ const messages = createMessages({
   'mcp.title': { 'zh-CN': 'MCP 服务 {server} 未连接', en: 'MCP server {server} is not connected' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
   'mcp.action': { 'zh-CN': '查看 MCP', en: 'Open MCP' },
-  'logs.title': { 'zh-CN': '日志里有 {count} 条错误', en: 'Errors in the logs: {count}' },
-  'logs.detail': { 'zh-CN': '持久日志统计；清理日志后重新计数。', en: 'Persistent log count; it restarts after logs are cleaned up.' },
+  'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },
+  'logs.detail': { 'zh-CN': '只统计最近 {hours} 小时的错误；更早的错误不再提醒，仍可在错误日志里查看。', en: 'Counts errors from the last {hours} hours only; older errors no longer raise this item and stay in the error log.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
 });
 
@@ -583,8 +589,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       if (logs === null) throw new Error('log store unavailable');
       if (logs.count <= 0) return [];
       const latest = logs.latest ? Date.parse(logs.latest) : Number.NaN;
-      return [{ kind: 'logs.errors', severity: 'info', state: { count: logs.count, latest: logs.latest },
-        title: t('logs.title', { count: logs.count }), detail: t('logs.detail'),
+      const hours = logs.windowHours ?? DEFAULT_ERROR_LOG_WINDOW_HOURS;
+      return [{ kind: 'logs.errors', severity: 'info', state: { count: logs.count, latest: logs.latest, windowHours: hours },
+        title: t('logs.title', { count: logs.count, hours }), detail: t('logs.detail', { hours }),
         action: { label: t('logs.action'), path: ATTENTION_PATHS.errorLogs },
         ...(Number.isNaN(latest) ? {} : { since: latest }) }];
     });

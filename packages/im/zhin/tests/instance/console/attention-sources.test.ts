@@ -74,7 +74,7 @@ describe('attention sources wired to the instance', () => {
     expect(dependencyChecks).toBe(1);
     // One plugin could not be inspected: the plugin source is unavailable as a whole (no partial items).
     expect(list.items.map(item => item.kind)).toEqual(['mcp.disconnected', 'logs.errors']);
-    expect(list.items.find(item => item.kind === 'logs.errors')).toMatchObject({ since: '2026-11-13T07:00:00.000Z', title: '日志里有 3 条错误' });
+    expect(list.items.find(item => item.kind === 'logs.errors')).toMatchObject({ since: '2026-11-13T07:00:00.000Z', title: '最近 24 小时日志里有 3 条错误' });
     expect(list.unavailable).toEqual(['plugins']);
     // The cache revision follows the generation and the project files.
     const before = await sources.revision!();
@@ -118,6 +118,28 @@ describe('attention sources wired to the instance', () => {
     expect(await sources.errorLogs!()).toBeNull();
     expect(selected).toBe(0);
     expect((await collectAttention({ errorLogs: sources.errorLogs }, { allows: () => true })).unavailable).toEqual(['logs']);
+  });
+
+  it('counts only error logs inside the window, so an old error does not keep the item lit', async () => {
+    const now = Date.parse('2026-11-14T12:00:00.000Z');
+    const queries: Record<string, unknown>[] = [];
+    const sources = createAttentionSources({
+      projectRoot: '/nonexistent', pluginLifecycleFile: '/nonexistent/l.json',
+      configuration: { readSource: async () => ({}) },
+      databaseHost: { started: true, models: { get: () => ({
+        count: async (where: Record<string, unknown>) => { queries.push(where); return 0; },
+        select: () => { throw new Error('must not select rows when nothing is in the window'); },
+      }) } },
+    } as unknown as ConsoleRpcComposition, { now: () => now, errorLogWindowHours: 6 });
+    expect(await sources.errorLogs!()).toEqual({ count: 0, latest: null, windowHours: 6 });
+    expect(queries).toEqual([{ level: 'error', timestamp: { $gte: new Date('2026-11-14T06:00:00.000Z') } }]);
+    expect((await collectAttention({ errorLogs: sources.errorLogs }, { allows: () => true })).items).toEqual([]);
+  });
+
+  it('says which period the error-log item covers', async () => {
+    const list = await collectAttention({ errorLogs: async () => ({ count: 2, latest: '2026-11-14T11:00:00.000Z', windowHours: 24 }) }, { allows: () => true });
+    expect(list.items[0]).toMatchObject({ kind: 'logs.errors', title: '最近 24 小时日志里有 2 条错误' });
+    expect(list.items[0]!.detail).toContain('最近 24 小时');
   });
 
   it('reports the log store unavailable when the database has not started', async () => {
