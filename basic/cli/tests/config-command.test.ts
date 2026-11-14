@@ -314,3 +314,50 @@ it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
     else process.env.HTTP_TOKEN = prevHttp;
   }
 });
+
+it('an unknown key says there is no such setting and suggests close ones, without RPC names (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, log_level: 'info', http: { port: 18086 } });
+  await runHuman('set', 'htp.port', '1', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('htp: 没有这个配置项：htp');
+  expect(text).toContain('你是不是想写：http');
+  expect(text).not.toContain('gateway.plugins.declare');
+});
+
+it('an array index past the end explains how to append, in Chinese (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, corsOrigins: ['https://a.example'] } });
+  await runHuman('set', 'http.corsOrigins.3', '"https://b.example"', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('http.corsOrigins.3 超出数组范围（当前有 1 项，下标 0–0）');
+  expect(text).toContain("zhin config set http.corsOrigins '<JSON 数组>'");
+  expect(text).not.toMatch(/out of bounds|Config path/);
+});
+
+it('a rejected request shows the revision evidence only with --debug (#1250)', async () => {
+  const { errors } = await fixture();
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  const stderr = () => errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr()).toContain('Host 拒绝请求：插件声明不能修改');
+  expect(stderr()).not.toContain('expectedRevision=');
+  errors.mockClear();
+  vi.stubEnv('ZHIN_CLI_DEBUG', '1');
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(stderr()).toContain(`expectedRevision=${sourceRevision}`);
+});
+
+it('a broken http.port gives an offline repair hint instead of Invalid URL (#1250)', async () => {
+  const { errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 'abc' } });
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  await runHuman('get', 'http');
+  expect(fetch).not.toHaveBeenCalled();
+  const stderr = errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr).toContain('http.port 无效');
+  expect(stderr).toContain('zhin config set http.port 8068 --offline');
+  expect(stderr).not.toContain('Invalid URL');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+});

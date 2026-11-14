@@ -192,7 +192,8 @@ zhin config check [--fix] [--json] [--strict]
 - **Host 未运行时直接失败，不会回退到离线写文件。** 需要离线操作时显式加 `--offline`：用与 Host 相同的 `patchProject` 规则（版本检查、插件声明不可改、逐段 Schema 校验）在本地校验后保存；不启动 Runtime、不执行插件 `setup`、CLI 不向 Host 发送任何请求，但加载插件声明时会执行模块顶层代码（模块自身可能访问网络）。离线保存不会让运行中的 Host 生效，需要 `--watch config` 或在 Console 中「应用配置」。
 - 读取默认按 Schema 打码：`secret` / `writeOnly` / `hidden` / 密码字段、密钥类键名以及未展开的 `${...}` / `env://` 引用都显示为 `[redacted]`；加 `--reveal` 才输出原值。
 - `get` / `list` / `set` / `unset` 加 `--json` 时只输出一行紧凑 JSON，便于脚本处理；不加时只输出可读文本（`config path`、`config check` 的输出格式见各自说明）。
-- 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。
+- 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。其他失败只显示原因；加全局选项 `--debug` 才在 stderr 附上这两项。
+- 写不进去时给出可读原因：没有这个配置项时列出相近的配置项；数组下标越界时说明当前长度与追加办法（读出整个数组、加上新项后整体写回）。配置里的 `http.port` 已损坏而网关未运行时，提示先用 `--offline` 修复。
 
 退出码是公开契约：
 

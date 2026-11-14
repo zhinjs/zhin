@@ -192,7 +192,8 @@ zhin config check [--fix] [--json] [--strict]
 - **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and the CLI sends no request to the Host, but loading plugin declarations executes module top-level code (which may itself use the network). An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
 - Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
 - With `--json`, `get` / `list` / `set` / `unset` print exactly one line of compact JSON, for scripts; without it they print only human-readable text (`config path` and `config check` have their own formats).
-- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified.
+- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified. Other failures show only the reason; the global `--debug` option adds both to stderr.
+- A write that cannot apply explains why: an unknown key lists the closest settings; an array index past the end states the current length and how to append (read the whole array, add the item, write it back). When `http.port` in the config is broken and no gateway is running, the CLI says to repair it with `--offline` first.
 
 Exit codes are a public contract:
 

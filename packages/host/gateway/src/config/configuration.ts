@@ -15,6 +15,7 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import { declarationKeyMessage, describeArrayPathProblem, unknownConfigKeyMessage } from './patch-path-messages.js';
 import { findProjectLiteralSecrets } from './literal-secrets.js';
 import type { LiteralConfigSecret } from '@zhin.js/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
@@ -278,6 +279,16 @@ export class ConsoleConfigurationStore {
         message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
       });
       if (current.revision !== request.expectedRevision) return await conflict(current);
+      // Array indexes outside the array (or a key where an index belongs) are a usage problem:
+      // answer with an explanation instead of the document layer's internal exception.
+      const arrayProblems = patches.flatMap(patch => {
+        const message = describeArrayPathProblem(current.document, patch.path, patch.op);
+        return message ? [{ path: `$.${patch.path.join('.')}`, message }] : [];
+      });
+      if (arrayProblems.length > 0) {
+        return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(arrayProblems),
+          missingEnv: Object.freeze([]), message: '配置路径无效，未保存' });
+      }
       const candidate = applyConfigPatches(current.document, patches);
       // Chat writes exactly one leaf (C1/C4); scope and leaf shape are proven before values.
       if (mode === 'chat' && patches.length !== 1) throw new ConfigChatAccessError('leaf');
@@ -672,9 +683,10 @@ function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readon
   const errors: Array<{ path: string; message: string }> = [];
   for (const section of new Set(paths.map(path => path[0]!))) {
     if (PROJECT_PATCH_DECLARATION_KEYS.has(section)) {
-      errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请用 gateway.plugins.declare、配置源码或插件管理修改' });
+      errors.push({ path: `$.${section}`, message: declarationKeyMessage(section) });
     } else if (!HOST_CONFIG_KEYS.includes(section) && !declared.has(section)) {
-      errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先用 gateway.plugins.declare 声明' });
+      const known = [...HOST_CONFIG_KEYS, ...declared].filter(key => !PROJECT_PATCH_DECLARATION_KEYS.has(key));
+      errors.push({ path: `$.${section}`, message: unknownConfigKeyMessage(section, known) });
     }
   }
   return errors;

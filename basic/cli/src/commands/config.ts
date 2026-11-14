@@ -10,6 +10,7 @@ import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
 import { parseConfigurationPath } from '@zhin.js/gateway/config';
+import { isCliDebug } from '../utils/cli-flags.js';
 import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**
@@ -41,18 +42,23 @@ class ConfigCommandError extends Error {
 
 const NOT_CONNECTED_MESSAGE = '未连接到运行中的 Host，未发送任何请求，文件未修改；如确认要离线操作，请显式加 --offline';
 
-/** Verification evidence for operators: what to look up before deciding whether to resubmit. */
-function evidence(outcome: Readonly<Record<string, unknown>>): string | undefined {
+/**
+ * Verification evidence for operators: what to look up before deciding whether to resubmit.
+ * Printed with `--debug` (or `ZHIN_CLI_DEBUG=1`) only, and always for an unknown outcome (exit 6),
+ * where the request id is what to look up; `--json` always carries the fields.
+ */
+function evidence(outcome: Readonly<Record<string, unknown>>, unknownOutcome = false): string | undefined {
+  if (!unknownOutcome && !isCliDebug()) return undefined;
   const parts = (['requestId', 'expectedRevision'] as const)
     .filter(key => typeof outcome[key] === 'string').map(key => `${key}=${String(outcome[key])}`);
   return parts.length ? parts.join(' ') : undefined;
 }
 
 /** `--json` prints exactly one compact JSON object; otherwise only the human-readable lines. */
-function emit(outcome: Readonly<Record<string, unknown>>, options: Options, human: string): void {
+function emit(outcome: Readonly<Record<string, unknown>>, options: Options, human: string, unknownOutcome = false): void {
   if (options.json) { console.log(JSON.stringify(outcome)); return; }
   console.log(human);
-  const line = evidence(outcome);
+  const line = evidence(outcome, unknownOutcome);
   if (line) console.error(line);
 }
 
@@ -191,7 +197,7 @@ function patchMessage(result: ConsoleConfigProjectPatchResult, code: number): st
       ...result.current.map(item => `  ${item.path.join('.')}: ${item.value === undefined ? '(不存在)' : JSON.stringify(item.value)}`)].join('\n');
   }
   if (result.status === 'invalid') {
-    return [`${result.message}`, ...result.errors.map(error => `  ${error.path}: ${error.message}`)].join('\n');
+    return [`${result.message}`, ...result.errors.map(error => `  ${error.path.replace(/^\$\.?/u, '') || '(整个配置)'}: ${error.message}`)].join('\n');
   }
   if (result.status === 'unconfirmed') return '结果未知：Host 无法确认是否已保存。请先用 zhin config get 核对，勿重复提交。';
   if (code === CONFIG_EXIT_CODES.ok) return result.application ? '已保存并生效' : result.message;
@@ -239,7 +245,8 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   if (!result) throw transportFailure(new ConsoleRequestUnconfirmedError(requestId), true, { expectedRevision });
   const code = configPatchExitCode(result);
   // Every exit-6 outcome (unconfirmed write, unconfirmed application, unknown group) carries its evidence.
-  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options, patchMessage(result, code));
+  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options, patchMessage(result, code),
+    code === CONFIG_EXIT_CODES.unknown);
   process.exitCode = code;
 }
 
@@ -258,7 +265,7 @@ function run(action: (args: unknown[], options: Options) => Promise<void>) {
       if (options.json) console.log(JSON.stringify(error.outcome));
       else {
         console.error(error.outcome.message);
-        const line = evidence(error.outcome);
+        const line = evidence(error.outcome, error.exitCode === CONFIG_EXIT_CODES.unknown);
         if (line) console.error(line);
       }
       process.exitCode = error.exitCode;
