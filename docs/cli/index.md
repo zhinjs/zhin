@@ -531,6 +531,16 @@ zhin agent info [--json]
 | --- | --- |
 | `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
 
+### ai account：引用 Host 环境变量的模型账号 {#ai-account}
+
+```bash
+zhin ai account add --service <服务 id／名称／内置类型> --env <变量名> [--name <名称>] [--test]
+zhin ai account rename-env <账号> <原变量名> <新变量名> [--reauthorize]
+zhin ai account test <账号 id>
+```
+
+只经本机网关控制套接字执行（需先 `zhin start`），不接受 Console 会话或 `ZHIN_CONSOLE_TOKEN`；只发送变量名，不回显值，写入审计。规则与限制见[账号来源与 Host 环境变量](../ai/providers.md#account-sources)。
+
 ### trace：查看 Agent 回合
 
 需要安装 AI 栈。机器人每处理完一次 AI 对话，就把这一回合的 trace 追加到 `data/agent-traces/<UTC 日期>.jsonl`（一天一个文件）。排查问题时不用再翻 `bot.db` 和 journal：

@@ -125,7 +125,8 @@ it('marks only proven pre-persistence apply rejections as not committed', async 
 
 it('repairs one selected literal template through the Console key payload, opaque preview and authenticated apply', async () => {
   const f = await setup('api-key');
-  const expression = '${PRIVATE_KEY:-synthetic-private-default}';
+  // #1250: a Console owner may reference only *_API_KEY variables.
+  const expression = '${PRIVATE_API_KEY:-synthetic-private-default}';
   try {
     const account = f.graph.accounts.account, service = f.graph.services.service, profile = f.graph.profiles.profile;
     const store = new InferenceCredentialStore({ directory: join(f.directory, 'private'), repository: f.repository });
@@ -149,7 +150,7 @@ it('repairs one selected literal template through the Console key payload, opaqu
       driver: f.definition, retainDriver: () => ({ reference: service.driver, definition: f.definition, release() {} }),
     }).authorize({ target: new URL('https://example.test/v1/messages'), signal: new AbortController().signal });
     expect(grant.token).toBe('synthetic-private-default');
-    expect(lookup).toHaveBeenCalledWith('PRIVATE_KEY');
+    expect(lookup).toHaveBeenCalledWith('PRIVATE_API_KEY');
     expect(JSON.stringify((await f.call('')).payload)).not.toContain('synthetic-private-default');
   } finally { await f.close(); }
 });

@@ -23,6 +23,7 @@ import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
 import { runtimeCommand } from './commands/runtime.js';
 import { traceCommand } from './commands/trace.js';
+import { aiCommand } from './commands/ai.js';
 import { usageCommand } from './commands/usage.js';
 import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
@@ -43,6 +44,7 @@ program
 
 // 注册命令
 program.addCommand(startCommand);
+program.addCommand(aiCommand);
 program.addCommand(stopCommand);
 program.addCommand(restartCommand);
 program.addCommand(statusCommand);

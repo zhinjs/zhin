@@ -5,14 +5,14 @@
  * entries name it `user:local`.
  */
 import { CONSOLE_PERMISSION_LIST } from '@zhin.js/console-protocol';
-import type { ConsoleUserPrincipal } from '@zhin.js/host-http';
+import { LOCAL_SOCKET_CREDENTIAL_ID, LOCAL_SOCKET_USER_ID, type ConsoleUserPrincipal } from '@zhin.js/host-http';
 
 export const LOCAL_OWNER_PRINCIPAL: ConsoleUserPrincipal = Object.freeze({
   kind: 'user',
-  userId: 'local',
+  userId: LOCAL_SOCKET_USER_ID,
   username: 'local',
   displayName: '本机 CLI（网关控制套接字）',
-  credentialId: 'local-socket',
+  credentialId: LOCAL_SOCKET_CREDENTIAL_ID,
   grants: Object.freeze([Object.freeze({ role: 'owner', scope: Object.freeze({ kind: 'global' }), permissions: CONSOLE_PERMISSION_LIST })]),
   roles: Object.freeze(['owner']),
 }) as ConsoleUserPrincipal;

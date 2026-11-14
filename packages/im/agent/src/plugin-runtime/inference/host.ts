@@ -38,6 +38,7 @@ import { InferenceSessionManagement } from './session-management.js';
 import { createInferenceTargetsReader, type InferenceTargetsReader } from './targets.js';
 import { createPersonalSessionDirectory } from './session-directory.js';
 import { createCredentialRequestAccess, type CredentialTransportFact } from './request-access.js';
+import { probeLanguageProfile, type InferenceProbeResult } from './probe.js';
 
 export interface InferenceManagementLease {
   readonly management: InferenceManagementService;
@@ -45,6 +46,8 @@ export interface InferenceManagementLease {
   readonly sessions: InferenceSessionManagement;
   readonly targets?: InferenceTargetsReader;
   readonly authenticationContract: (accountId: string) => Promise<string>;
+  /** One minimal tool-carrying request to a Host language Profile (connectivity test, #1250). */
+  readonly probe?: (input: Readonly<{ profileId: string; signal: AbortSignal }>) => Promise<InferenceProbeResult>;
   release(): void | Promise<void>;
 }
 
@@ -291,7 +294,7 @@ export class HostInference {
           beforeSubmit,
           observe: this.options.observeCredentialTransport,
           network: (submit, retainTransportState) =>
-            this.accounts.bindFetch(
+            this.accounts.observeCalls(account, this.accounts.bindFetch(
               account,
               createProviderNetwork({
                 account,
@@ -303,7 +306,7 @@ export class HostInference {
                 retainTransportState,
               }),
               retainTransportState
-            ),
+            )),
         });
         accesses.set(execution, value);
       }
@@ -516,6 +519,9 @@ export class HostInference {
           ? driver.authentication.oauth!.contractVersion
           : driver.contractVersion;
       },
+      probe: ({ profileId, signal }) =>
+        this.withInferenceScope({ lease, sessionKey: 'console:connectivity-probe', signal },
+          scope => probeLanguageProfile({ client: scope.client, profileId, signal })),
       release: () => lease.release(),
     };
   }

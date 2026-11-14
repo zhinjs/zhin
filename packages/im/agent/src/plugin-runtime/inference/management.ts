@@ -24,23 +24,56 @@ import {
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { createHostDocumentCipher } from '@zhin.js/plugin-runtime';
-import { InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
+import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
 import { createPersonalModelFetch } from './personal-network.js';
 import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js';
 import { DatabaseInferenceRepository } from './repository.js';
+
+/**
+ * Who may make a Host API-key account read a Host environment variable (`env://NAME` account
+ * source, `${NAME}` key expression), or change the service such an account sends it to (#1250):
+ * - absent: a trusted in-process caller (startup `ai.plan.yml` seed, offline migration);
+ * - `local-cli`: the project owner's CLI over the gateway control socket;
+ * - `console-owner`: a global Console owner — only `*_API_KEY` names, only toward a built-in
+ *   service's official address or an already defined service;
+ * - `none`: any other Console user — no Host environment references at all.
+ */
+export type InferenceEnvironmentAuthority = 'local-cli' | 'console-owner' | 'none';
 
 /** Constructed by the authenticated Host route, never accepted from a request body. */
 export interface InferenceManagementPrincipal {
   readonly ownerId: string;
   readonly hostAdministrator: boolean;
+  readonly environmentReferences?: InferenceEnvironmentAuthority;
 }
+/** User-facing reasons (closed set) for a refused Host environment reference. */
+export const INFERENCE_ENVIRONMENT_REFUSALS = Object.freeze({
+  'environment-console-user': 'Console 用户的账号不能引用 Host 环境变量，请直接填写密钥，或由 Host 管理员在本机用命令添加（zhin ai account add）',
+  'environment-name': '只能引用以 _API_KEY 结尾的环境变量（例如 OPENAI_API_KEY）',
+  'environment-service-address': '引用 Host 环境变量的账号只能使用内置服务的官方地址或已存在的服务，不能在这次导入中新建或改成自定义地址',
+  'environment-local-only': '该操作只能由 Host 管理员在本机用 zhin 命令完成',
+  'environment-missing': '新的环境变量在 Host 上未设置或为空',
+  'environment-mismatch': '新变量的值与当前凭据的指纹不一致；确认是同一账号的新密钥后加 --reauthorize 重试',
+  'environment-account': '只有引用环境变量（env://）的 Host API Key 账号可以修改引用名，且原变量名必须一致',
+} as const);
+export type InferenceEnvironmentRefusal = keyof typeof INFERENCE_ENVIRONMENT_REFUSALS;
+
 export class InferenceManagementError extends Error {
   constructor(
-    readonly code: 'invalid-input' | 'forbidden' | 'conflict' | 'unavailable' | 'unsupported'
+    readonly code: 'invalid-input' | 'forbidden' | 'conflict' | 'unavailable' | 'unsupported',
+    /** Closed-set reason with a user-facing message; never carries a value or provider text. */
+    readonly reason?: InferenceEnvironmentRefusal,
   ) {
-    super(`Inference management: ${code}`);
+    super(`Inference management: ${code}${reason ? ` (${reason})` : ''}`);
     this.name = 'InferenceManagementError';
   }
+}
+
+const API_KEY_VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*_API_KEY$/u;
+/** The variable an `env://NAME` source or a `${NAME…}` expression reads. */
+export function environmentVariableName(source: string | EnvironmentExpressionSource): string | undefined {
+  const text = typeof source === 'string' ? source : source.expression;
+  return /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(text)?.[1] ?? /^\$\{([A-Za-z_][A-Za-z0-9_]*)/u.exec(text)?.[1];
 }
 /** A rejected apply carries its original error and proof that no mutation was invoked. */
 export class InferenceApplyRejectedError extends Error {
@@ -114,6 +147,8 @@ export interface InferenceManagementView {
   }>[];
   readonly drivers: readonly InferenceDriverView[];
   readonly purposes?: PurposePolicy;
+  /** What this caller may do with Host environment variables (absent for in-process callers). */
+  readonly environmentReferences?: InferenceEnvironmentAuthority;
 }
 interface PreparedMutation {
   readonly kind: 'graph' | 'credential';
@@ -237,6 +272,7 @@ export class InferenceManagementService {
       deployment,
       drivers,
       ...(principal.hostAdministrator ? { purposes: graph.purposes } : {}),
+      ...(principal.environmentReferences ? { environmentReferences: principal.environmentReferences } : {}),
     };
   }
   async review(
@@ -272,6 +308,7 @@ export class InferenceManagementService {
       validateProfile: (input) => this.#normalizeProfile(input),
     });
     this.#checkEnvironmentSources(reviewed.graph);
+    await this.#checkEnvironmentAuthority(principal, graph, reviewed.graph);
     const dependencies = mutationDependencies({
       before: graph,
       after: reviewed.graph,
@@ -351,6 +388,97 @@ export class InferenceManagementService {
       bindings: reviewed.bindings,
     };
   }
+  /**
+   * `zhin ai account add` (#1250 host-account-add-path): a Host API-key account reading `env://NAME`,
+   * on an existing Host service (id or label) or a new service of a built-in Driver at its default
+   * address. Local CLI only; the value is never read here (it is activated by the first call or a test).
+   */
+  async addEnvironmentAccount(
+    principal: InferenceManagementPrincipal,
+    value: unknown
+  ): Promise<Readonly<{ accountId: string; serviceId: string; createdService: boolean; result: ProviderMutationResult }>> {
+    this.#principal(principal);
+    if (!principal.hostAdministrator || principal.environmentReferences !== 'local-cli')
+      throw new InferenceManagementError('forbidden', 'environment-local-only');
+    const input = record(value);
+    const reference = text(input.service), variable = text(input.env);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(variable)) throw new InferenceManagementError('invalid-input');
+    const label = input.label === undefined ? undefined : text(input.label);
+    const graph = await this.graph();
+    const matches = Object.values(graph.services).filter((service) => service.ownerId === this.options.hostOwnerId
+      && (service.id === reference || service.label === reference));
+    if (matches.length > 1) throw new InferenceManagementError('conflict');
+    const existing = matches[0];
+    const plan = {
+      version: 1,
+      ...(existing ? {} : { services: { service: { driver: reference, options: {}, models: {} } } }),
+      accounts: { account: { service: 'service', ...(label ? { label } : {}), auth: { method: 'api-key', source: `env://${variable}` } } },
+    };
+    const prepared = await this.#review(principal, { plan, ...(existing ? { bindings: { services: { service: existing.id } } } : {}) });
+    const result = await this.apply(principal, { prepared: prepared.prepared, mutationId: `cli-account-add:${randomUUID()}` });
+    return {
+      accountId: prepared.bindings!.accounts.account!,
+      serviceId: prepared.bindings!.services.service!,
+      createdService: !existing,
+      result,
+    };
+  }
+  /** `zhin ai account rename-env` (#1250 account-env-ref-immutable): same account identity, new `env://` variable. */
+  async renameEnvironmentReference(
+    principal: InferenceManagementPrincipal,
+    value: unknown
+  ): Promise<Readonly<{ accountId: string; credential: 'pending' | 'kept' | 'reset'; result: ProviderMutationResult }>> {
+    this.#principal(principal);
+    const authority = principal.environmentReferences;
+    if (!principal.hostAdministrator || (authority !== undefined && authority !== 'local-cli' && authority !== 'console-owner'))
+      throw new InferenceManagementError('forbidden', 'environment-local-only');
+    const input = record(value);
+    const from = text(input.from), to = text(input.to);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(from) || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(to) || from === to)
+      throw new InferenceManagementError('invalid-input');
+    if (input.reauthorize !== undefined && typeof input.reauthorize !== 'boolean') throw new InferenceManagementError('invalid-input');
+    const nextSource = `env://${to}`;
+    this.#authorizeEnvironmentName(principal, nextSource);
+    const graph = await this.graph();
+    const reference = text(input.account);
+    const matches = Object.values(graph.accounts).filter((account) => account.ownerId === this.options.hostOwnerId
+      && (account.id === reference || account.label === reference));
+    if (matches.length > 1) throw new InferenceManagementError('conflict');
+    const account = matches[0];
+    if (!account || account.authentication.method !== 'api-key' || account.authentication.source !== `env://${from}`)
+      throw new InferenceManagementError('invalid-input', 'environment-account');
+    let prepared;
+    try {
+      prepared = await this.options.accounts.prepareEnvironmentRename({ account, nextSource, reauthorize: input.reauthorize === true });
+    } catch (error) {
+      if (error instanceof InferenceAuthenticationError && error.code === 'not-authorized')
+        throw new InferenceManagementError('invalid-input', 'environment-missing');
+      if (error instanceof InferenceAuthenticationError && error.code === 'identity-change')
+        throw new InferenceManagementError('conflict', 'environment-mismatch');
+      throw error;
+    }
+    const next = normalizeProviderGraph({
+      ...graph,
+      revision: graph.revision + 1,
+      accounts: {
+        ...graph.accounts,
+        [account.id]: { ...account, revision: account.revision + 1, authentication: { method: 'api-key', source: nextSource } },
+      },
+    });
+    const credentials = prepared.write ? [prepared.write] : [];
+    const result = await this.options.repository.commit({
+      rootId: this.options.rootId,
+      mutationId: `cli-account-rename-env:${randomUUID()}`,
+      fingerprint: providerPlanFingerprint(next),
+      expectedRevision: graph.revision,
+      graph: next,
+      credentials,
+      result: { ownerId: principal.ownerId, accountId: account.id },
+    });
+    if (result.status === 'committed')
+      await this.options.accounts.committed({ graph: next, removedAccounts: [], credentials });
+    return { accountId: account.id, credential: prepared.outcome, result };
+  }
   async prepareKey(
     principal: InferenceManagementPrincipal,
     value: unknown
@@ -361,6 +489,10 @@ export class InferenceManagementService {
     const account = await this.account(principal, text(input.accountId));
     const graph = await this.graph();
     const service = graph.services[account.serviceId];
+    if (input.source !== undefined || (typeof input.key === 'string' && input.key.includes('${'))) {
+      const material = normalizeApiKeyMaterial(input.source === undefined ? { key: text(input.key) } : { source: environmentExpressionSource(input.source) });
+      if (material.source) this.#authorizeEnvironmentName(principal, material.source);
+    }
     const write = await this.options.accounts.prepareKey({
       account,
       ...(input.source === undefined ? { key: text(input.key) } : { source: environmentExpressionSource(input.source) }),
@@ -744,6 +876,48 @@ export class InferenceManagementService {
         service = account && graph.services[account.serviceId];
       if (!account || !service) throw new InferenceManagementError('invalid-input');
       this.options.authenticationContract(account, service);
+    }
+  }
+  #authorizeEnvironmentName(principal: InferenceManagementPrincipal, source: string | EnvironmentExpressionSource): void {
+    const authority = principal.environmentReferences;
+    if (authority === undefined || authority === 'local-cli') return;
+    if (authority !== 'console-owner') throw new InferenceManagementError('forbidden', 'environment-console-user');
+    const name = environmentVariableName(source);
+    if (!name || !API_KEY_VARIABLE.test(name)) throw new InferenceManagementError('forbidden', 'environment-name');
+  }
+  /** Whether `service` is unchanged from `before` or sits at its built-in Driver's official address. */
+  async #knownServiceAddress(before: ProviderGraph, service: ProviderService): Promise<boolean> {
+    const previous = before.services[service.id];
+    if (previous && providerPlanFingerprint(previous.driver) === providerPlanFingerprint(service.driver)
+      && providerPlanFingerprint(previous.options as JsonObject) === providerPlanFingerprint(service.options as JsonObject)) return true;
+    const options = (service.options ?? {}) as Record<string, unknown>;
+    if (options.headers !== undefined && Object.keys(options.headers as object).length > 0) return false;
+    try {
+      const official = await this.options.resolveService({ driver: service.driver, options: {}, models: {}, requestedModels: [] });
+      const address = (official.options as Record<string, unknown>).baseUrl;
+      return typeof address === 'string' && address === options.baseUrl;
+    } catch {
+      return false; // The Driver has no built-in address: only an existing service may be used.
+    }
+  }
+  /** Host environment references and their destinations need the caller's environment authority. */
+  async #checkEnvironmentAuthority(principal: InferenceManagementPrincipal, before: ProviderGraph, after: ProviderGraph): Promise<void> {
+    const authority = principal.environmentReferences;
+    if (authority === undefined || authority === 'local-cli') return;
+    for (const account of Object.values(after.accounts)) {
+      const source = account.authentication.method === 'api-key' ? account.authentication.source : undefined;
+      if (!source || account.ownerId !== this.options.hostOwnerId) continue;
+      const previous = before.accounts[account.id];
+      const service = after.services[account.serviceId];
+      const previousService = previous && before.services[previous.serviceId];
+      const touched = !previous || previous.authentication.method !== 'api-key' || previous.authentication.source !== source
+        || previous.serviceId !== account.serviceId || !service || !previousService
+        || providerPlanFingerprint(previousService.driver) !== providerPlanFingerprint(service.driver)
+        || providerPlanFingerprint(previousService.options as JsonObject) !== providerPlanFingerprint(service.options as JsonObject);
+      if (!touched) continue;
+      this.#authorizeEnvironmentName(principal, source);
+      if (!service || !(await this.#knownServiceAddress(before, service)))
+        throw new InferenceManagementError('forbidden', 'environment-service-address');
     }
   }
   #checkEnvironmentSources(graph: ProviderGraph): void {

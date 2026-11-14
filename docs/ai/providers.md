@@ -150,6 +150,35 @@ purposes:
 2. **创建账号（Account）**：保存 API Key，或在 Host 订阅账号上开始 OAuth 登录（在供应商页面完成授权后，将最终浏览器回调地址粘贴回 Console；Zhin 不自动启动本地回调监听器）。
 3. **创建 Profile 并绑定用途**：将 Profile 分配给 `chat` 等用途。API Key 与 OAuth token 保存在 Host 私有加密记录中，不会出现在 Profile、Session、提示词或普通管理响应里。
 
+## 账号来源与 Host 环境变量 {#account-sources}
+
+一个账号的密钥有三种来源，各自的限制不同：
+
+| 来源 | 谁能添加 | 能否引用 Host 环境变量 |
+| --- | --- | --- |
+| 首次启动导入 `ai.plan.yml` | 项目文件（只在模型配置为空时导入一次） | 可以：`auth.source: env://NAME`，账号归 Host |
+| 本机命令 `zhin ai account add` | 在项目目录运行 `zhin start` 的 Host 管理员（经本机网关控制套接字；Console 会话、API 令牌都不行） | 可以：任意变量名、已有服务或内置服务的官方地址 |
+| Console「模型」页 | 有 `agent.configure` 的 Console 用户 | 只有**全局 owner** 可以，且变量名必须以 `_API_KEY` 结尾，服务必须是已存在的服务或内置服务类型的官方地址；其他 Console 用户只能直接填写密钥 |
+
+为什么 Console 不能随意引用 Host 环境变量：Host 进程的环境里还有数据库密码、Console 令牌、各平台机器人凭据等。账号引用一个变量，就会把它的值作为 API Key 发给该账号的服务地址；如果任意 Console 用户都能新建“读 `ZHIN_CONSOLE_TOKEN`、发往自建地址”的账号，就等于能读走整个 Host 的机密。因此 Console 侧只允许全局 owner 引用 `*_API_KEY` 并发往已知地址，且引用 env 的账号所用服务被改地址时同样受限；被拒绝时返回明确原因。密钥值不会出现在任何响应、日志、审计或数据库明文中。
+
+```bash
+# 新增一个读取 OPENAI_API_KEY 的 Host 账号（服务可写已有服务的 id／名称，或内置服务类型）
+zhin ai account add --service openai --env OPENAI_API_KEY --name 主账号 --test
+# 修改引用的变量名（账号身份不变）；新值与原凭据不同时需确认重新授权
+zhin ai account rename-env 主账号 OPENAI_API_KEY OPENAI_PROD_API_KEY [--reauthorize]
+# 对账号做一次带工具的最小对话请求
+zhin ai account test <账号 id>
+```
+
+这些命令只经本机网关执行，写入 Console 审计（只记录账号 id 与变量名），不回显值。`rename-env` 也接受全局 owner 的 Console 会话（同样受 `_API_KEY` 规则约束）。
+
+### 账号状态与测试连接
+
+- 引用 `env://` 的 Host 账号在首次实际调用前还没有凭据记录，状态显示「环境变量就绪（待首次使用）」或「环境变量未设置」，而不是「未授权」。
+- 账号卡片的「测试连接」发送一次带工具的最小对话请求（使用绑定为聊天用途或该账号的第一个语言模型配置），显示结果（成功 / 鉴权失败 401·403 / 限流 / 5xx / 超时 / 网络）与时间；成功时顺带完成凭据激活。账号状态还会显示本进程内最近一次真实调用的结果与时间（不保存到数据库，重启后清空）。
+- 「用途」保存前，Console 对新绑定的模型做同样的探测；失败会提示原因，可以确认后仍然保存。
+
 ## 订阅与 API 协议
 
 | Driver | 认证 | 调用合同 |

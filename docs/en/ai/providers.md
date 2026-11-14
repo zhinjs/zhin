@@ -150,6 +150,32 @@ Chat (`chat`), summaries (`compaction`), ambient listening (`ambient`), image pe
 2. **Create an Account**: save an API key, or start an OAuth login on a Host subscription account (finish authorization on the vendor's page, then paste the final browser callback URL back into Console; Zhin does not start a local callback listener automatically).
 3. **Create a Profile and bind purposes**: assign the Profile to purposes such as `chat`. API keys and OAuth tokens are stored in Host-private encrypted records and never appear in Profiles, Sessions, prompts, or ordinary management responses.
 
+## Account sources and Host environment variables {#account-sources}
+
+An account's key comes from one of three sources, each with its own limits:
+
+| Source | Who can add it | May it reference a Host environment variable? |
+| --- | --- | --- |
+| First-start import of `ai.plan.yml` | The project file (imported once, only while the model configuration is empty) | Yes: `auth.source: env://NAME`, owned by the Host |
+| Local command `zhin ai account add` | The Host administrator running `zhin start` in the project (over the local gateway control socket; no Console session or API token) | Yes: any variable, an existing service or a built-in service's official address |
+| Console models page | Console users with `agent.configure` | Only a **global owner**, only variables ending in `_API_KEY`, and only toward an existing service or a built-in service's official address; other Console users enter keys directly |
+
+Why the Console cannot reference arbitrary Host variables: the Host process environment also holds database passwords, Console tokens and bot credentials. An account that references a variable sends its value as an API key to that account's service address, so letting any Console user create an account that reads `ZHIN_CONSOLE_TOKEN` and sends it to a self-hosted address would expose every Host secret. The Console therefore lets only a global owner reference `*_API_KEY` variables toward known addresses (the same applies when the service of an env-backed account changes address), and refusals carry a clear reason. Key values never appear in responses, logs, audit entries or plaintext database rows.
+
+```bash
+zhin ai account add --service openai --env OPENAI_API_KEY --name main --test
+zhin ai account rename-env main OPENAI_API_KEY OPENAI_PROD_API_KEY [--reauthorize]
+zhin ai account test <account id>
+```
+
+These commands run only through the local gateway, are written to the Console audit log (account id and variable names only) and never echo values. `rename-env` also accepts a global owner's Console session (subject to the `_API_KEY` rule).
+
+### Account status and connection tests
+
+- An `env://` Host account has no credential record until its first real call; its status reads "environment variable ready (pending first use)" or "environment variable not set" instead of "not authorized".
+- "Test connection" on an account sends one minimal chat request that carries a tool (using the profile bound to chat, or the account's first language profile) and shows the outcome (ok / auth 401·403 / rate limit / 5xx / timeout / network) and time; a successful test also activates the credential. The status also shows the latest real call in this process (in memory, cleared on restart).
+- Before saving purposes, the Console probes newly bound models the same way; on failure it shows the reason and lets you save anyway.
+
 ## Subscriptions and API protocols
 
 | Driver | Authentication | Call contract |
