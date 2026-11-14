@@ -136,6 +136,38 @@ describe('McpRegistry', () => {
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error', serverName: 'bad', error: 'boom' }));
   });
 
+  it('records a classified, redacted last failure and clears it after a successful connect (#1250)', async () => {
+    connectImpl.mockImplementation(async () => {
+      throw Object.assign(new Error('connect ECONNREFUSED http://user:pw@127.0.0.1:9/mcp?token=abc'), { code: 'ECONNREFUSED' });
+    });
+    const registry = new McpRegistry();
+    registry.add({ name: 'remote', transport: 'streamable-http', url: 'http://127.0.0.1:9/mcp' }, {}, 'test');
+    const onEvent = vi.fn();
+    await registry.ensureConnected(onEvent);
+    const failure = registry.getLastFailure('remote');
+    expect(failure).toMatchObject({ category: 'network' });
+    expect(failure?.message).not.toContain('pw');
+    expect(failure?.message).not.toContain('token=abc');
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error', error: failure?.message }));
+
+    connectImpl.mockImplementation(async () => ({ isConnected: true, tools: [mockTool], resources: [], prompts: [] }));
+    await registry.connect('remote');
+    expect(registry.getLastFailure('remote')).toBeUndefined();
+  });
+
+  it('records the connection-reported failure when the client stays disconnected (SDK missing)', async () => {
+    connectImpl.mockImplementation(async () => ({
+      isConnected: false, tools: [], resources: [], prompts: [],
+      failure: { category: 'sdk_missing', message: '@modelcontextprotocol/sdk not installed — MCP client disabled', at: 1 },
+    }) as never);
+    const registry = new McpRegistry();
+    registry.add({ name: 'noop', transport: 'stdio', command: 'true' }, {}, 'test');
+    await registry.ensureConnected();
+    expect(registry.getLastFailure('noop')).toMatchObject({ category: 'sdk_missing' });
+    registry.remove('noop', 'test');
+    expect(registry.getLastFailure('noop')).toBeUndefined();
+  });
+
   it('listQualifiedTools returns Eve-style catalog entries', async () => {
     const registry = new McpRegistry();
     registry.add({ name: 'fs', transport: 'stdio', command: 'echo', args: [] }, {}, 'test');
