@@ -8,7 +8,7 @@ import {
   createPluginEventChannel,
 } from '@zhin.js/plugin-runtime';
 import { RootRuntime } from '@zhin.js/runtime';
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHostToolApprovalConsoleRpc } from '../../../src/instance/console/tool-approvals.js';
@@ -184,6 +184,66 @@ describe('installAgentHost', () => {
           ],
         })
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads BOT.md instead of AGENTS.md and picks up an edit on the next Root generation (#1250)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-bot-'));
+    const installAt = () => installAgentHost({
+      runtime: {} as never,
+      im: {} as never,
+      projectRoot: root,
+      inference: inferenceFor(root),
+    })(context(new Scope(rootPluginId())));
+    try {
+      await writeFile(join(root, 'SOUL.md'), 'Main persona.');
+      await writeFile(join(root, 'AGENTS.md'), 'Developer rules.');
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v1.');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## BOT.md\nBot rules v1.',
+        contextFiles: [
+          { path: 'SOUL.md', content: 'Main persona.' },
+          { path: 'BOT.md', content: 'Bot rules v1.' },
+        ],
+      }));
+
+      // A Root generation rebuild (what an edited root file triggers) re-runs the installer.
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v2.');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## BOT.md\nBot rules v2.',
+      }));
+
+      // Emptying BOT.md hands the slot back to AGENTS.md.
+      await writeFile(join(root, 'BOT.md'), '  \n');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## AGENTS.md\nDeveloper rules.',
+      }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a data/BOT.md when the root has none instead of dropping both instruction files (#1250)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-data-bot-'));
+    try {
+      await mkdir(join(root, 'data'), { recursive: true });
+      await writeFile(join(root, 'AGENTS.md'), 'Developer rules.');
+      await writeFile(join(root, 'data', 'BOT.md'), 'Bot rules from data.');
+      await installAgentHost({
+        runtime: {} as never,
+        im: {} as never,
+        projectRoot: root,
+        inference: inferenceFor(root),
+      })(context(new Scope(rootPluginId())));
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## BOT.md\nBot rules from data.',
+        contextFiles: [{ path: 'BOT.md', content: 'Bot rules from data.' }],
+      }));
     } finally {
       await rm(root, { recursive: true, force: true });
     }

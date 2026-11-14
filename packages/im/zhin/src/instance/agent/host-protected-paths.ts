@@ -6,8 +6,8 @@ import { resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 /**
  * #1030 P0: the host-owned half of the agent's protected-path set. The agent package ships the
- * conventional names (root config candidates, `package.json`, `schema.json`, `AGENTS.md`, skills
- * dirs); the host knows what only it can know — the project root, the root plugin entry declared
+ * conventional names (root config candidates, `package.json`, `schema.json`, `AGENTS.md`, `BOT.md`,
+ * skills dirs); the host knows what only it can know — the project root, the root plugin entry declared
  * in `package.json#zhin.entry`, where the plugin lifecycle store lives, and the management
  * gateway's actual control endpoint (`ZHIN_GATEWAY_SOCKET`, set by the gateway — including the
  * `os.tmpdir()` fallback for deep roots): whoever connects there acts as the local owner.
@@ -16,8 +16,7 @@ export async function resolveHostProtectedPaths(
   projectRoot: string,
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostProtectedPaths> {
-  // The bot's own instruction file (#1250): changing it needs approval, like the root AGENTS.md.
-  const selfFiles: string[] = ['BOT.md'];
+  const selfFiles: string[] = [];
   try {
     const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as { zhin?: { entry?: unknown } };
     if (typeof manifest.zhin?.entry === 'string' && manifest.zhin.entry.trim()) selfFiles.push(manifest.zhin.entry.trim());

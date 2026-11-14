@@ -40,12 +40,13 @@ export const LOCKFILE_NAMES: readonly string[] = Object.freeze([
 /**
  * List B files directly under the project root.
  *  - root config candidates (`ROOT_CONFIG_FILE_NAMES`), `package.json`, `schema.json`, `AGENTS.md`;
+ *  - `BOT.md`: the bot's own instruction file, read instead of `AGENTS.md` when present (#1250);
  *  - `.pnpmfile.cjs` / `.pnpmfile.js`: runs arbitrary code on the next `pnpm install`;
  *  - `assistant.profile.yml|yaml`: standing routines that run unattended.
  * The root plugin entry (`package.json#zhin.entry`) is host-declared, see {@link HostProtectedPathsInput}.
  */
 export const DEFAULT_SELF_FILES: readonly string[] = Object.freeze([
-  ...ROOT_CONFIG_FILE_NAMES, 'package.json', 'schema.json', 'AGENTS.md',
+  ...ROOT_CONFIG_FILE_NAMES, 'package.json', 'schema.json', 'AGENTS.md', 'BOT.md',
   '.pnpmfile.cjs', '.pnpmfile.js', 'assistant.profile.yml', 'assistant.profile.yaml',
 ]);
 

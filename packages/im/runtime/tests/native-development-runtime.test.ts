@@ -333,6 +333,9 @@ process.stdout.write(JSON.stringify({ first, second }));
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.mts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.cts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'schema.json'))).toBe(false);
+    // Root bootstrap files reload in place through a Root generation (#1250).
+    expect(runtime.requiresProcessRestart(join(root, 'BOT.md'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'AGENTS.md'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, '.env'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, '.env.production'))).toBe(true);
     await runtime.close();

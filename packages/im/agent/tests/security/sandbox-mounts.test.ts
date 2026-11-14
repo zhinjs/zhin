@@ -52,6 +52,17 @@ describe('computeReadOnlyOverlays', () => {
     expect(t['src/index.ts']).toBeUndefined();
   });
 
+  it('binds an existing BOT.md read-only from the default self files, like AGENTS.md (#1250)', async () => {
+    touch('BOT.md', 'bot rules\n');
+    touch('AGENTS.md', 'dev rules\n');
+    const paths = await createHostProtectedPaths({ projectRoot: root });
+    const t = targets(computeReadOnlyOverlays(root, toProtectedPathData(paths)));
+    expect(t['BOT.md']).toBe('bind-file');
+    expect(t['AGENTS.md']).toBe('bind-file');
+    // Without injected data the mounted directory stands in for the project root.
+    expect(targets(computeReadOnlyOverlays(root, undefined))['BOT.md']).toBe('bind-file');
+  });
+
   it('hides an existing .zhin/ behind an empty read-only tmpfs (gateway.db, keys; ADR 0059 §7)', async () => {
     touch('.zhin/gateway.db', 'SECRET');
     touch('.zhin/keys/config-secrets.key', 'KEY');

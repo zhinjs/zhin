@@ -57,6 +57,7 @@ import {
   selfChangeStoreToken,
   type SelfChangeImpactPort,
   type AudioTranscriptionPort,
+  BOT_BOOTSTRAP_FILENAME,
   botBootstrapFilenames,
   hasBotBootstrapFile,
 } from '@zhin.js/agent';
@@ -426,6 +427,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
  * The bot's workspace bootstrap. Bot-facing files are SOUL.md, AGENTS.md and TOOLS.md, or —
  * when the project has a `BOT.md` — SOUL.md, BOT.md and TOOLS.md: `AGENTS.md` then stays
  * developer / coding-agent facing and is not read (#1250 bootstrap-dev-vs-bot).
+ *
+ * `BOT.md` may live in the project root or `data/` (the same places `hasBotBootstrapFile`
+ * accepts); the root copy wins. The other files are read from the root only.
+ *
+ * Reload: the installer runs once per Root generation, so an edited root `BOT.md` is picked up
+ * like `SOUL.md` / `AGENTS.md` — the development watcher sees the untracked root file and rebuilds
+ * the Root. `data/` is not watched; a change there applies on the next rebuild or restart.
  */
 async function loadBootstrap(projectRoot: string): Promise<{
   bootstrapText: string;
@@ -435,20 +443,31 @@ async function loadBootstrap(projectRoot: string): Promise<{
   const contextFiles: ContextFile[] = [];
   let total = 0;
   for (const name of botBootstrapFilenames(await hasBotBootstrapFile(projectRoot))) {
+    const body = await readBootstrapBody(projectRoot, name);
+    if (!body) continue;
+    const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
+    parts.push(`## ${name}\n${chunk}`);
+    contextFiles.push({ path: name, content: chunk });
+    total += chunk.length;
+    if (total >= MAX_BOOTSTRAP_CHARS) break;
+  }
+  return { bootstrapText: parts.join('\n\n'), contextFiles };
+}
+
+/** A bootstrap file's trimmed text, or `''` when it is missing or empty. */
+async function readBootstrapBody(projectRoot: string, name: string): Promise<string> {
+  const candidates = name === BOT_BOOTSTRAP_FILENAME
+    ? [join(projectRoot, name), join(projectRoot, 'data', name)]
+    : [join(projectRoot, name)];
+  for (const candidate of candidates) {
     try {
-      const raw = await readFile(join(projectRoot, name), 'utf8');
-      const body = raw.trim();
-      if (!body) continue;
-      const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
-      parts.push(`## ${name}\n${chunk}`);
-      contextFiles.push({ path: name, content: chunk });
-      total += chunk.length;
-      if (total >= MAX_BOOTSTRAP_CHARS) break;
+      const body = (await readFile(candidate, 'utf8')).trim();
+      if (body) return body;
     } catch {
       /* missing bootstrap files are optional */
     }
   }
-  return { bootstrapText: parts.join('\n\n'), contextFiles };
+  return '';
 }
 
 function truncate(value: string, max: number): string {
