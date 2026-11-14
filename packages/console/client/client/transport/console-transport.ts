@@ -19,6 +19,7 @@ import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
   CONFIG_RPC,
+  ENV_RPC,
   GATEWAY_RPC,
   PLUGIN_RPC,
   ENDPOINT_RPC,
@@ -26,6 +27,10 @@ import {
   GATEWAY_PACKAGES_PROGRESS,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
+  type ConsoleEnvChange,
+  type ConsoleEnvFileView,
+  type ConsoleEnvRevealResult,
+  type ConsoleEnvSaveResult,
   type ConsoleEventData,
   type GatewayPackageOperation,
   type GatewayPackagePlan,
@@ -625,13 +630,30 @@ export class ConsoleTransport {
     });
   }
   async getEnvList() {
-    return this.sendRequest<{ files: Array<{ name: string; exists: boolean }> }>({ type: "env:list" });
+    return this.sendRequest<{ files: Array<{ name: string; exists: boolean }> }>({ type: ENV_RPC.LIST });
   }
+  /**
+   * `env:get`. A Host that masks values (#1250) answers {@link ConsoleEnvFileView} (its `content` is
+   * the masked file); an older Host answers `{ content }` with the file as written.
+   */
   async getEnvFile(filename: string) {
-    return this.sendRequest<{ content: string }>({ type: "env:get", filename });
+    return this.sendRequest<ConsoleEnvFileView | { content: string }>({ type: ENV_RPC.GET, filename });
   }
+  /** `env:reveal`: one variable as written. Needs `ops.env.write` + `ops.env.read`; the Host audits it. */
+  async revealEnvValue(filename: string, key: string) {
+    return this.sendRequest<ConsoleEnvRevealResult>({ type: ENV_RPC.REVEAL, filename, key });
+  }
+  /** `env:save` by key: only the submitted keys change on disk. */
+  async saveEnvChanges(filename: string, changes: readonly ConsoleEnvChange[]) {
+    return this.sendRequest<ConsoleEnvSaveResult>({ type: ENV_RPC.SAVE, filename, changes });
+  }
+  /**
+   * Whole-file `env:save` (`mode: 'replace'`). A Host that masks values refuses content holding mask
+   * placeholders, so saving back what {@link getEnvFile} returned fails there; use
+   * {@link saveEnvChanges} instead.
+   */
   async saveEnvFile(filename: string, content: string) {
-    return this.sendRequest<{ success: boolean; message?: string }>({ type: "env:save", filename, content });
+    return this.sendRequest<{ success: boolean; message?: string }>({ type: ENV_RPC.SAVE, filename, content, mode: "replace" });
   }
   async getFileTree() {
     return this.sendRequest<{ tree: import("./types.js").FileTreeNode[] }>({ type: "files:tree" });

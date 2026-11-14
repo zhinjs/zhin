@@ -17,8 +17,10 @@ import {
   type PendingLogin,
   accountKey,
   authenticationFailure,
+  describePreparationFailure,
   exchangeFailure,
   identity,
+  preparationFailure,
   publicFailure,
   ready,
 } from './account-runtime-helpers.js';
@@ -48,6 +50,9 @@ export async function startAccountLogin(
   const redirectUri = oauth.redirectUri;
   try {
     const current = await ctx.options.credentials.read(input.account);
+    // A confidential client cannot begin without its secret: a missing precondition, not an outage.
+    if (oauth.requiresClientSecret && !current?.payload.client?.clientSecret)
+      throw new InferenceAuthenticationError('client-secret-required');
     const signal = AbortSignal.any([input.signal, controller.signal, ctx.closedSignal]);
     const challenge = await ctx.withFetch(
       { service, account: input.account, definition: lease.definition },
@@ -239,8 +244,12 @@ export async function completeAccountLogin(
             definition: login.definition,
             signal,
           });
-        } catch {
-          ctx.reportCleanup('Account authenticated; read-only preparation is incomplete');
+        } catch (error) {
+          // prepareAccountOAuth already reported a driver preparation failure with its code and status,
+          // and recorded it for the status view this route returns. The committed token stays; the
+          // driver bounds preparation (including any onboarding polls) with its own overall deadline.
+          if (!(error instanceof InferenceAuthenticationError && error.code === 'preparation-failed'))
+            ctx.reportCleanup('Account authenticated; preparation is incomplete');
         }
       }
     } catch (error) {
@@ -264,7 +273,7 @@ export async function completeAccountLogin(
   }
 }
 
-/** Preparation is read-only upstream. Its failure keeps the already committed token, never repeats code exchange. */
+/** Preparation never touches the token bundle. Its failure keeps the already committed token, never repeats code exchange. */
 export async function prepareAccountOAuth(
   ctx: AccountRuntimeContext,
   input: Readonly<{
@@ -284,17 +293,26 @@ export async function prepareAccountOAuth(
     throw new InferenceAuthenticationError('conflict');
   const signal = AbortSignal.any([input.signal, ctx.signal(account), ctx.closedSignal]);
   const bundle = current.payload.credential;
-  const credential = await ctx.withFetch(
-    { service, account, definition, purpose: 'preparation' },
-    (fetch) =>
-      oauth.prepare!({
-        service,
-        credential: bundle,
-        signal,
-        ...(current.payload.client ? { client: current.payload.client } : {}),
-        fetch,
-      })
-  );
+  let credential: Awaited<ReturnType<NonNullable<typeof oauth.prepare>>>;
+  try {
+    credential = await ctx.withFetch(
+      { service, account, definition, purpose: 'preparation' },
+      (fetch) =>
+        oauth.prepare!({
+          service,
+          credential: bundle,
+          signal,
+          ...(current.payload.client ? { client: current.payload.client } : {}),
+          fetch,
+        })
+    );
+  } catch (error) {
+    const failure = preparationFailure(error);
+    if (!failure || signal.aborted) throw error;
+    ctx.preparationFailures.set(accountKey(account), { revision: current.record.revision, failure });
+    ctx.reportCleanup(describePreparationFailure(failure));
+    throw new InferenceAuthenticationError('preparation-failed', failure);
+  }
   signal.throwIfAborted();
   if (
     credential.accessToken !== current.payload.credential.accessToken ||
@@ -305,6 +323,7 @@ export async function prepareAccountOAuth(
   const subject = identity(current).subject;
   if (subject && credential.subject && subject !== credential.subject)
     throw new InferenceAuthenticationError('identity-change');
+  ctx.preparationFailures.delete(accountKey(account));
   await ctx.publish({
     account,
     previous: current,

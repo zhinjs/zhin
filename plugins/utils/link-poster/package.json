@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-link-poster",
   "version": "1.1.28",
-  "description": "Auto-detect link posters for Zhin.js (Plugin Runtime)",
+  "description": "Detects Bilibili, GitHub, Douyin and Xiaohongshu links and renders preview cards.",
+  "keywords": [
+    "zhin.js",
+    "link-preview",
+    "bilibili",
+    "github",
+    "xiaohongshu"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -28,22 +39,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "link-poster",
-    "bilibili",
-    "github",
-    "douyin",
-    "xiaohongshu"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -86,7 +81,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Link Poster",
+      "displayNameI18n": {
+        "zh-CN": "链接海报",
+        "en": "Link Poster"
+      },
+      "descriptionI18n": {
+        "zh-CN": "自动识别 B 站、GitHub、抖音、小红书链接，生成预览卡片。",
+        "en": "Detects Bilibili, GitHub, Douyin and Xiaohongshu links and renders preview cards."
+      },
+      "category": "utility"
+    }
   },
   "peerDependencies": {
     "@zhin.js/middleware": "workspace:^",

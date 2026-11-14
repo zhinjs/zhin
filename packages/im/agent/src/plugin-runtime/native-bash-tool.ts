@@ -6,8 +6,20 @@ import {
   type ToolInvocationPolicy,
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
-import { Sandbox, type SandboxConfig } from '../security/sandbox.js';
-import { computeHiddenOverlays, computeReadOnlyOverlays } from '../security/sandbox-mounts.js';
+import { Sandbox, type SandboxConfig, type SandboxResult } from '../security/sandbox.js';
+import { CONTAINER_STOP_RETRY_MS } from '../security/sandbox-docker.js';
+import { getLogger } from '@zhin.js/logger';
+import {
+  computeHiddenOverlays,
+  computeReadOnlyOverlays,
+  quarantineNewSelfFiles,
+  rootSelfFileNames,
+  selfFileAnchor,
+  snapshotRootSelfFiles,
+  type QuarantinedSelfFile,
+} from '../security/sandbox-mounts.js';
+
+const logger = getLogger('BashTool');
 
 export interface BashExecutionRequest {
   readonly command: string;
@@ -23,6 +35,12 @@ export interface BashExecutionResult {
   readonly blocked?: boolean;
   readonly blockReason?: string;
   readonly timedOut?: boolean;
+  /**
+   * Self files (`BOT.md`, `AGENTS.md`, root config…) the isolated shell created at the project
+   * root that were moved aside after the run (#1250): read-only overlays only cover files that
+   * already existed.
+   */
+  readonly quarantined?: readonly QuarantinedSelfFile[];
 }
 
 export interface BashExecutionPort {
@@ -100,15 +118,110 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
           useDocker: 'always',
           readOnlyOverlays,
         });
-    const result = await sandbox.execute(request.command, {
-      cwd: request.cwd,
-      timeout: request.timeoutMs,
-      // Cancelling the Turn kills the running process group / container.
-      signal: request.signal,
-    });
+    // A writable isolated run can still *create* a self file that had no overlay (a missing file
+    // gets none). Snapshot the project root's self files and quarantine any new one afterwards.
+    // The sandbox settles a stopped (timeout / cancel) run only after the container is confirmed
+    // gone; when that cannot be confirmed the anchor stays tainted (see `taintedAnchors`).
+    // Fail closed: an anchor that cannot be resolved falls back to the raw injected root or the
+    // mounted directory rather than skipping the check.
+    const anchor = !unrestricted && access === 'workspace-write'
+      ? selfFileAnchor(mountDir, filesystem.protectedPaths) ?? filesystem.protectedPaths?.projectRoot ?? mountDir
+      : undefined;
+    const selfNames = rootSelfFileNames(filesystem.protectedPaths);
+    const taint = anchor ? taintedAnchors.get(anchor) : undefined;
+    let quarantined: QuarantinedSelfFile[] = [];
+    // A container of an earlier run on this anchor may still be alive: sweep against its baseline.
+    if (anchor && taint) quarantined = quarantineAndWarn(anchor, selfNames, taint.baseline);
+    const before = anchor ? taint?.baseline ?? snapshotRootSelfFiles(anchor, selfNames) : new Set<string>();
+    let result: BashExecutionResult & Partial<Pick<SandboxResult, 'containerStopConfirmed' | 'containerStopped'>> | undefined;
+    try {
+      result = await sandbox.execute(request.command, {
+        cwd: request.cwd,
+        timeout: request.timeoutMs,
+        // Cancelling the Turn kills the running process group / container.
+        signal: request.signal,
+      });
+    } finally {
+      if (anchor) {
+        quarantined = [...quarantined, ...quarantineAndWarn(anchor, selfNames, before)];
+        if (result?.containerStopConfirmed === false) taintAnchor(anchor, selfNames, before, result.containerStopped);
+      }
+    }
+    const { containerStopConfirmed: _confirmed, containerStopped: _stopped, ...plain } = result;
     request.signal.throwIfAborted();
-    return result;
+    return quarantined.length ? { ...plain, quarantined } : plain;
   }
+}
+
+/**
+ * Anchors with at least one stopped container that could not be confirmed gone. `baseline` is the
+ * self-file snapshot taken before the *first* tainting run (the earliest one: later runs reuse it
+ * as their own "before" and never add to it), and `pending` holds one token per unconfirmed
+ * container. While an anchor is tainted:
+ *  - every isolated run on it first sweeps against `baseline` and uses it as its "before", so a
+ *    file a surviving container recreates is never mistaken for a pre-existing one;
+ *  - a background sweep runs every {@link CONTAINER_STOP_RETRY_MS} (unref'd), so such a file is
+ *    also quarantined between runs.
+ * A token is removed when its container's background stop is confirmed; the taint is cleared —
+ * after a final sweep — only when no token is left. A stop that gives up (after
+ * `CONTAINER_STOP_RETRIES` retries) leaves its token, so the taint stays for the life of the
+ * process. Process-local: a restart drops it.
+ */
+interface AnchorTaint {
+  readonly baseline: ReadonlySet<string>;
+  readonly names: ReadonlySet<string>;
+  readonly pending: Set<symbol>;
+  readonly sweeper: NodeJS.Timeout;
+}
+const taintedAnchors = new Map<string, AnchorTaint>();
+
+function taintAnchor(
+  anchor: string,
+  names: ReadonlySet<string>,
+  baseline: ReadonlySet<string>,
+  stopped: Promise<boolean> | undefined,
+): void {
+  let taint = taintedAnchors.get(anchor);
+  if (!taint) {
+    const sweeper = setInterval(() => { quarantineAndWarn(anchor, names, baseline); }, CONTAINER_STOP_RETRY_MS);
+    sweeper.unref();
+    taint = { baseline, names, pending: new Set(), sweeper };
+    taintedAnchors.set(anchor, taint);
+  }
+  const token = Symbol('unconfirmed-container-stop');
+  taint.pending.add(token);
+  const entry = taint;
+  logger.warn(`Isolated shell container under ${anchor} could not be confirmed stopped; new self files keep being quarantined until it is`);
+  void (stopped ?? Promise.resolve(false)).then((confirmed) => {
+    if (!confirmed) {
+      logger.warn(`Gave up confirming an isolated shell container under ${anchor} stopped; the anchor stays tainted`);
+      return;
+    }
+    entry.pending.delete(token);
+    if (entry.pending.size > 0 || taintedAnchors.get(anchor) !== entry) return;
+    quarantineAndWarn(anchor, entry.names, entry.baseline);
+    clearInterval(entry.sweeper);
+    taintedAnchors.delete(anchor);
+  }).catch(() => undefined);
+}
+
+/** Test seam: whether an anchor is tainted by an unconfirmed container stop. */
+export function isSelfFileAnchorTainted(anchor: string): boolean {
+  return taintedAnchors.has(anchor);
+}
+
+function quarantineAndWarn(
+  anchor: string,
+  names: ReadonlySet<string>,
+  before: ReadonlySet<string>,
+): QuarantinedSelfFile[] {
+  const quarantined = quarantineNewSelfFiles(anchor, names, before);
+  for (const entry of quarantined) {
+    logger.warn(entry.error
+      ? `Isolated shell created self file ${entry.name} under ${anchor}; quarantine failed: ${entry.error}`
+      : `Isolated shell created self file ${entry.name} under ${anchor}; quarantined as ${entry.quarantinedAs}`);
+  }
+  return quarantined;
 }
 
 /** Native generation ToolFeature for shell execution. */
@@ -154,7 +267,7 @@ export class NativeBashToolFeature {
     if (result.blocked) {
       throw new Error(`Command blocked by sandbox: ${result.blockReason ?? 'unknown reason'}`);
     }
-    if (result.timedOut) throw new Error(`Command timed out after ${timeoutMs}ms`);
+    if (result.timedOut) throw new Error(`Command timed out after ${timeoutMs}ms${formatQuarantine(result.quarantined)}`);
     return formatOutput(command, result);
   }
 }
@@ -168,7 +281,19 @@ function formatOutput(command: string, result: BashExecutionResult): string {
     result.stdout.trim() ? `STDOUT:\n${result.stdout.trim()}` : '',
     result.stderr.trim() ? `STDERR:\n${result.stderr.trim()}` : '',
   ].filter(Boolean).join('\n');
-  return `${tag} ${output || '(no output)'}`;
+  return `${tag} ${output || '(no output)'}${formatQuarantine(result.quarantined)}`;
+}
+
+/** Tells the model (and through it the user) which self files the run created were moved aside. */
+function formatQuarantine(quarantined: readonly QuarantinedSelfFile[] | undefined): string {
+  if (!quarantined?.length) return '';
+  const lines = quarantined.map(entry => entry.error
+    ? `- ${entry.name}: could not be quarantined (${entry.error}); it is still in place`
+    : `- ${entry.name} -> ${entry.quarantinedAs}`);
+  return '\nQUARANTINED:\nThe isolated shell may not create host self files (bot instructions, root config). '
+    + 'These new files were moved aside and will not be loaded; ask the user to review them, '
+    + 'or change them through the approved file tools:\n'
+    + lines.join('\n');
 }
 
 function requiredString(value: unknown, name: string): string {

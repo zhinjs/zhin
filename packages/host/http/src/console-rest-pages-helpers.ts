@@ -25,9 +25,16 @@ const INTROSPECTION_PAGE_SIZES = {
   endpoints: 30,
   bindings: 30,
   mcp: 30,
+  'recent-turns': 20,
 } as const;
 
 type IntrospectionKind = keyof typeof INTROSPECTION_PAGE_SIZES;
+
+/** Owning plugin of a capability row (`ConsoleIntrospectionOwner`, #1250): searchable by `q`. */
+const OWNER_FIELDS: ReadonlyArray<(item: unknown) => string | undefined> = [
+  (item) => stringProp(item, 'pluginInstance'),
+  (item) => stringProp(item, 'pluginPackage'),
+];
 
 // ---------------------------------------------------------------------------
 // Runtime snapshot introspection
@@ -41,7 +48,8 @@ export function registerIntrospectionRoutes(
 ): void {
   const collectors: Array<{
     kind: IntrospectionKind;
-    collect: (introspection: ConsoleAgentIntrospection | undefined) => { rows: readonly unknown[]; note?: string };
+    collect: (introspection: ConsoleAgentIntrospection | undefined) =>
+      { rows: readonly unknown[]; note?: string } | Promise<{ rows: readonly unknown[]; note?: string }>;
     fields: Array<(item: unknown) => string | undefined>;
   }> = [
     {
@@ -51,6 +59,7 @@ export function registerIntrospectionRoutes(
         (c) => stringProp(c, 'pattern'),
         (c) => stringProp(c, 'desc'),
         (c) => stringProp(c, 'plugin'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -62,6 +71,7 @@ export function registerIntrospectionRoutes(
         (m) => stringProp(m, 'phase'),
         (m) => stringProp(m, 'target'),
         (m) => stringProp(m, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -71,6 +81,7 @@ export function registerIntrospectionRoutes(
         (c) => stringProp(c, 'name'),
         (c) => stringProp(c, 'owner'),
         (c) => stringProp(c, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -87,11 +98,22 @@ export function registerIntrospectionRoutes(
     },
     {
       kind: 'bindings',
-      collect: (value) => ({ rows: value?.bindings?.() ?? [] }),
+      collect: async (value) => ({ rows: await value?.bindings?.() ?? [] }),
       fields: [
         (a) => stringProp(a, 'name'),
         (a) => stringProp(a, 'provider'),
         (a) => stringProp(a, 'model'),
+        (a) => stringProp(a, 'displayName'),
+      ],
+    },
+    {
+      // #1250: the Agent workbench's recent conversations come from the turn trace archive, newest first.
+      kind: 'recent-turns',
+      collect: async (value) => ({ rows: await value?.recentTurns?.() ?? [] }),
+      fields: [
+        (t) => stringProp(t, 'sessionDisplayName'),
+        (t) => stringProp(t, 'sessionKey'),
+        (t) => stringProp(t, 'status'),
       ],
     },
     {
@@ -101,6 +123,7 @@ export function registerIntrospectionRoutes(
         (t) => stringProp(t, 'name'),
         (t) => stringProp(t, 'source'),
         (t) => stringProp(t, 'description'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -114,6 +137,7 @@ export function registerIntrospectionRoutes(
         (section) => stringProp(section, 'layer'),
         (section) => stringProp(section, 'retention'),
         (section) => stringProp(section, 'source'),
+        ...OWNER_FIELDS,
       ],
     },
     {
@@ -136,7 +160,7 @@ export function registerIntrospectionRoutes(
       const lease = kind === 'endpoints' ? null : ctx.acquireAgentRuntime?.() ?? null;
       try {
         const introspection = lease?.value.introspection;
-        const { rows, note } = collect(introspection);
+        const { rows, note } = await collect(introspection);
         const query = url.searchParams;
         const filter = query.get('filter')?.trim() || undefined;
         const filtered = filterByFields([...rows], filter, fields);

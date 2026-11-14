@@ -63,6 +63,7 @@ import {
 } from './primary-config.js';
 import { isWithin } from './topology-transaction.js';
 import { createLayeredConfigAccessor } from './layered-config.js';
+import { attachProjectFileWatches } from './project-file-watches.js';
 
 export type { RootResourceContext, RootResourceInstaller } from '@zhin.js/plugin-runtime';
 
@@ -162,6 +163,8 @@ export class PluginScopeAssembler {
       scope.provide(runtimeEnvironmentToken, this.environment);
       scope.provide(rootGenerationAdmissionToken, this.#admission);
       const config = this.#primaryConfig;
+      const fileWatches = this.installResources ? attachProjectFileWatches(scope, node.package.root) : undefined;
+      let installing = true;
       await this.installResources?.({
         events: eventChannel.events,
         hasFeature: (feature) => this.#setupFeatureRoots.get(featureId(String(feature)))?.some(root => root.owner === node.id) ?? false,
@@ -177,7 +180,12 @@ export class PluginScopeAssembler {
         admission: this.#admission,
         config,
         addFeature: register,
+        watchProjectFiles: (declaration) => {
+          if (!installing) throw new Error('watchProjectFiles must be called during Root setup');
+          fileWatches?.add(declaration);
+        },
       });
+      installing = false;
     }
     if (node.parent) this.installOwnerScopedHosts(scope, node.id);
 
@@ -419,7 +427,7 @@ function mergePluginMetadata(
   code: PluginDefinition['metadata'],
   owner: PluginId,
 ): PluginDefinition['metadata'] {
-  for (const key of ['displayName', 'icon'] as const) {
+  for (const key of ['displayName', 'displayNameI18n', 'icon'] as const) {
     if (manifest.metadata?.[key] !== undefined && code?.[key] !== undefined) {
       throw new TypeError(`Plugin ${owner} declares metadata.${key} in both manifest and code`);
     }

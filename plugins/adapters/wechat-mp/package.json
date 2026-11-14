@@ -2,7 +2,17 @@
   "name": "@zhin.js/adapter-wechat-mp",
   "version": "1.1.29",
   "type": "module",
-  "description": "Zhin.js WeChat Official Account adapter for Plugin Runtime (HTTP webhook)",
+  "description": "WeChat Official Account adapter: HTTP webhook messaging with signature checks and optional AES encryption.",
+  "keywords": [
+    "zhin.js",
+    "wechat",
+    "微信",
+    "official-account"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
@@ -47,23 +57,6 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "wechat",
-    "weixin",
-    "微信",
-    "official-account",
-    "mp",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -122,6 +115,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "WeChat Official Account Adapter",
+      "displayNameI18n": {
+        "zh-CN": "微信公众号适配器",
+        "en": "WeChat Official Account Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "微信公众号适配器：通过 HTTP Webhook 收发消息，支持签名校验与 AES 加解密。",
+        "en": "WeChat Official Account adapter: HTTP webhook messaging with signature checks and optional AES encryption."
+      },
+      "category": "adapter"
+    }
   }
 }

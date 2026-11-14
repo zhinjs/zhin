@@ -21,7 +21,7 @@ export async function dispatchExtendedConsoleRpc(
   switch (type) {
     case 'schedule:list':
     case 'cron:list':
-      return listSchedule(ctx);
+      return listSchedule(ctx, d);
 
     case 'cron:validate':
       return validateCron(d);

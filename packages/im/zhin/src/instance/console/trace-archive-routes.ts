@@ -93,6 +93,11 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
       model_calls: trace.model_calls.length,
       tool_calls: trace.tool_calls.length,
       total_tokens: trace.usage.total_tokens,
+      // #1250: sub-agent calls are kept apart from the turn's own totals above.
+      ...(trace.subagent_usage ? {
+        subagent_model_calls: trace.subagent_usage.model_calls,
+        subagent_total_tokens: trace.subagent_usage.total_tokens,
+      } : {}),
       termination: trace.termination,
     }));
     return jsonResponse(200, { success: true, data: redact(rows.reverse()) });

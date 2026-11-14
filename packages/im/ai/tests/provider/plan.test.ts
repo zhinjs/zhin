@@ -64,7 +64,7 @@ describe('explicit provider plan compiler', () => {
   it('forbids service target/account identity changes in place', async () => {
     const graph = graphFixture();
     await expect(reviewer(graph)({ version: 1, services: { changed: { driver: 'fixture', options: { baseUrl: 'https://new.example' }, models: graph.services.service.models } } },
-      { services: { changed: 'service' } })).rejects.toThrow('plan-conflict');
+      { services: { changed: 'service' } })).rejects.toThrow('service-origin-change');
     await expect(reviewer(graph)({ version: 1, accounts: { changed: { service: 'existing', auth: { method: 'oauth' } } } },
       { services: { existing: 'service' }, accounts: { changed: 'account' } })).rejects.toThrow('plan-conflict');
   });
@@ -112,22 +112,98 @@ it('compiles and explicitly clears the independent ambient Language purpose', as
 
 it('updates non-identity Service settings in place while requiring new identity for audience changes', async () => {
   const source = graphFixture();
-  const options = { baseUrl: 'https://provider.test/v1', issuer: 'issuer-a', product: 'paid-a', tenant: 'tenant-a', compat: 'old', cache: false };
+  const options = { baseUrl: 'https://provider.test/v1', issuer: 'issuer-a', product: 'paid-a', tenant: 'tenant-a',
+    headers: 'x-org:a', authScheme: 'bearer', compat: 'old', cache: false };
   const graph = normalizeProviderGraph({ ...source, services: { service: { ...source.services.service, options } } });
   const review = (next: typeof options) => reviewProviderPlan({
     graph, ownerId: HOST, hostOwnerId: HOST, input: { version: 1, services: { existing: { driver: graph.services.service.driver, options: next, models: graph.services.service.models } } },
     bindings: { services: { existing: 'service' } }, createId: () => { throw new Error('No identity allocation expected'); },
     resolveService: input => ({ driver: graph.services.service.driver, options: input.options, models: input.models,
-      identity: service => { const value = service.options; return { baseUrl: value.baseUrl, issuer: value.issuer, product: value.product, tenant: value.tenant }; } }),
+      identity: service => { const value = service.options; return { baseUrl: value.baseUrl, issuer: value.issuer, product: value.product, tenant: value.tenant,
+        headers: value.headers, authScheme: value.authScheme }; } }),
   });
   const next = await review({ ...options, compat: 'new', cache: true });
   expect(next.graph.services.service.revision).toBe(2);
   expect(next.graph.accounts.account).toEqual(graph.accounts.account);
   expect(graph.services.service.options.compat).toBe('old');
   expect(next.graph.services.service).not.toHaveProperty('identity');
-  for (const key of ['baseUrl', 'issuer', 'product', 'tenant'] as const) {
+  // Only an origin change of `baseUrl` is service-origin-change; other identity fields stay plan-conflict.
+  for (const key of ['issuer', 'product', 'tenant', 'headers', 'authScheme'] as const) {
     await expect(review({ ...options, [key]: `${options[key]}-changed` })).rejects.toThrow('plan-conflict');
   }
+  // #1250: a referenced Service may fix its URL path, never move to another host.
+  const fixedPath = await review({ ...options, baseUrl: 'https://provider.test/api/v1' });
+  expect(fixedPath.graph.services.service.options.baseUrl).toBe('https://provider.test/api/v1');
+  expect(fixedPath.graph.accounts.account).toEqual(graph.accounts.account);
+  for (const baseUrl of ['https://other.test/v1', 'http://provider.test/v1', 'https://provider.test:8443/v1', 'https://user@provider.test/v1']) {
+    await expect(review({ ...options, baseUrl })).rejects.toThrow('service-origin-change');
+  }
+  await expect(review({ ...options, baseUrl: 'https://provider.test/v1', issuer: 'issuer-b' })).rejects.toThrow('plan-conflict');
+  await expect(review({ ...options, baseUrl: 'https://other.test/v1', tenant: 'tenant-b' })).rejects.toThrow('plan-conflict');
+});
+
+it('#1250 compares referenced Service origins after URL normalization', async () => {
+  const source = graphFixture();
+  const review = async (from: string, to: string) => {
+    const graph = normalizeProviderGraph({ ...source, services: { service: { ...source.services.service, options: { baseUrl: from } } } });
+    return reviewProviderPlan({
+      graph, ownerId: HOST, hostOwnerId: HOST,
+      input: { version: 1, services: { existing: { driver: graph.services.service.driver, options: { baseUrl: to }, models: graph.services.service.models } } },
+      bindings: { services: { existing: 'service' } }, createId: () => { throw new Error('No identity allocation expected'); },
+      resolveService: input => ({ driver: graph.services.service.driver, options: input.options, models: input.models,
+        identity: service => ({ baseUrl: service.options.baseUrl as string }) }),
+    });
+  };
+  const same: readonly (readonly [string, string])[] = [
+    ['https://provider.test/v1', 'https://provider.test:443/v2'], // default port
+    ['http://provider.test/v1', 'http://provider.test:80/v2'],
+    ['https://PROVIDER.test/v1', 'https://provider.TEST/v2'], // letter case
+    ['https://bücher.example/v1', 'https://xn--bcher-kva.example/v2'], // IDN vs punycode
+    ['https://[::1]:8443/v1', 'https://[0:0:0:0:0:0:0:1]:8443/v2'], // IPv6 notation
+    ['https://provider.test./v1', 'https://provider.test/v2'], // trailing dot of the FQDN
+  ];
+  for (const [from, to] of same) {
+    await expect(review(from, to), `${from} -> ${to}`).resolves.toMatchObject({ changes: { services: { updated: ['service'] } } });
+  }
+  const moved: readonly (readonly [string, string])[] = [
+    ['https://provider.test/v1', 'https://provider.test:444/v1'],
+    ['https://provider.test/v1', 'http://provider.test:443/v1'],
+    ['https://bücher.example/v1', 'https://bucher.example/v1'],
+    ['https://[::1]/v1', 'https://[::2]/v1'],
+    ['https://provider.test/v1', 'https://provider.test../v1'],
+    ['https://provider.test/v1', 'not a url'],
+  ];
+  for (const [from, to] of moved) {
+    await expect(review(from, to), `${from} -> ${to}`).rejects.toThrow('service-origin-change');
+  }
+});
+
+it('#1250 lets an unreferenced Service change its address, and still refuses a Driver change', async () => {
+  const source = graphFixture();
+  const graph = normalizeProviderGraph({ ...source, accounts: {}, profiles: {}, purposes: { defaults: {} },
+    services: { service: { ...source.services.service, options: { baseUrl: 'https://byesu.example' } } } });
+  const review = (input: Record<string, unknown>) => reviewProviderPlan({
+    graph, ownerId: HOST, hostOwnerId: HOST, input: { version: 1, services: { existing: input } },
+    bindings: { services: { existing: 'service' } }, createId: kind => `${kind}:new`,
+    resolveService: options => ({ driver: typeof options.driver === 'string' ? { id: options.driver, owner: 'root/providers', contractVersion: '1' } : options.driver,
+      options: options.options, models: options.models,
+      identity: service => ({ baseUrl: service.options.baseUrl as string }) }),
+  });
+  const moved = await review({ driver: graph.services.service.driver, options: { baseUrl: 'https://elsewhere.example/v1' }, models: graph.services.service.models });
+  expect(moved.graph.services.service.options.baseUrl).toBe('https://elsewhere.example/v1');
+  expect(moved.changes.services.updated).toEqual(['service']);
+  // Without referencing accounts only the address is free; other identity changes still need a new Service.
+  const withIssuer = (issuer: string) => reviewProviderPlan({
+    graph: normalizeProviderGraph({ ...graph, services: { service: { ...graph.services.service, options: { baseUrl: 'https://byesu.example', issuer: 'a' } } } }),
+    ownerId: HOST, hostOwnerId: HOST,
+    input: { version: 1, services: { existing: { driver: graph.services.service.driver, options: { baseUrl: 'https://byesu.example', issuer }, models: graph.services.service.models } } },
+    bindings: { services: { existing: 'service' } }, createId: kind => `${kind}:new`,
+    resolveService: options => ({ driver: graph.services.service.driver, options: options.options, models: options.models,
+      identity: service => ({ baseUrl: service.options.baseUrl as string, issuer: service.options.issuer as string }) }),
+  });
+  await expect(withIssuer('b')).rejects.toThrow('plan-conflict');
+  await expect(review({ driver: { id: 'other', owner: 'root/providers', contractVersion: '1' }, options: { baseUrl: 'https://byesu.example' },
+    models: graph.services.service.models })).rejects.toThrow('plan-conflict');
 });
 
 it('rejects undefined or invisible Decision Profiles at save and import (ADR 0047 S3)', async () => {

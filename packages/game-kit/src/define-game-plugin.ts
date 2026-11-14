@@ -139,6 +139,8 @@ export function defineGamePlugin<
           cron: stale.cron ?? DEFAULT_GAME_STALE_CRON,
           description: stale.description
             ?? `Abort stale ${options.name} sessions`,
+          title: `清理超时的「${options.game.title}」对局`,
+          titleI18n: { en: `Abort stale ${options.game.titleI18n?.en ?? options.name} sessions` },
           async execute() {
             await session.abortStale(
               stale.idleMs ?? DEFAULT_GAME_STALE_IDLE_MS,

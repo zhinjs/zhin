@@ -34,11 +34,13 @@ Per-conversation switch: RSS fields are global-only, but the enable switch works
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `rss-add <url>` | 订阅 RSS/Atom 源 | `rss-add https://sspai.com/feed` |
-| `rss-remove <url>` | 取消订阅 | `rss-remove https://sspai.com/feed` |
-| `rss-list` | 查看当前会话的订阅列表 | `rss-list` |
-| `rss-check [url]` | 手动检查更新 | `rss-check` |
-| `rss-preview <url>` | 预览 feed 最新内容（不订阅） | `rss-preview https://rsshub.app/bilibili/hot-search` |
+| `rss add <url>` | 订阅 RSS/Atom 源 | `rss add https://sspai.com/feed` |
+| `rss remove <url>` | 取消订阅 | `rss remove https://sspai.com/feed` |
+| `rss list` | 查看当前会话的订阅列表 | `rss list` |
+| `rss check [url]` | 手动检查更新 | `rss check` |
+| `rss preview <url>` | 预览 feed 最新内容（不订阅） | `rss preview https://rsshub.app/bilibili/hot-search` |
+
+旧的连字符写法（`rss-add`、`rss-list` 等）仍然可用。
 
 订阅管理命令需要真实的 IM 会话来源，不会为无会话调用创建全局订阅。当前支持不含父容器或线程信息的私聊、群聊与频道；当 `conversation.parent` 或 `threadId` 存在时，会明确提示暂不支持该地址，不会丢弃字段后订阅频道本体。
 

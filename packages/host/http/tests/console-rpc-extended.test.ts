@@ -4,6 +4,7 @@ import {
   type ConsoleRpcExtendedCtx,
 } from '../src/console-rpc-extended/index.js';
 import { authorizeConsoleRpc } from '../src/access-control.js';
+import { isConsoleEndpointCapabilityUnsupported } from '@zhin.js/console-protocol';
 import { VIEWER } from './fixtures/principals.js';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
@@ -229,8 +230,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       ).resolves.toEqual({
         data: {
           memory: [
-            { id: 'job-1', cron: '0 0 8 * * *', description: '早安', expression: '0 0 8 * * *', running: true },
-            { id: 'job-2', cron: '0 */5 * * * *', expression: '0 */5 * * * *', running: true },
+            { id: 'job-1', cron: '0 0 8 * * *', description: '早安', kind: 'plugin-internal', displayName: '早安', expression: '0 0 8 * * *', running: true },
+            { id: 'job-2', cron: '0 */5 * * * *', kind: 'plugin-internal', displayName: 'job-2', expression: '0 */5 * * * *', running: true },
           ],
           persistent: [],
           capabilities: { persistent: false },
@@ -248,10 +249,71 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(engine.addJob).not.toHaveBeenCalled();
     });
 
+    it('classifies plugin jobs, localizes titles and reports the last real run (#1250)', async () => {
+      const ctx = makeCtx({
+        scheduleHost: {
+          list: () => [
+            { id: 'rss/poll_feeds', cron: '0 */5 * * * *', description: 'Poll RSS subscriptions', title: '轮询 RSS 订阅',
+              titleI18n: { en: 'Poll RSS feeds' }, kind: 'plugin-internal',
+              lastRun: { startedAt: 1_000, finishedAt: 1_250, status: 'failed', error: 'feed timeout' } },
+            { id: 'reminder/poll', cron: '*/5 * * * * *', title: '扫描到期提醒', kind: 'user-task',
+              lastRun: { startedAt: 2_000, finishedAt: 2_010, status: 'succeeded' } },
+          ],
+        },
+      });
+      const zh = await dispatchExtendedConsoleRpc('schedule:list', {}, ctx) as { data: { memory: Record<string, unknown>[] } };
+      expect(zh.data.memory[0]).toMatchObject({
+        kind: 'plugin-internal', title: '轮询 RSS 订阅', displayName: '轮询 RSS 订阅', titleI18n: { en: 'Poll RSS feeds' },
+        lastExecutedAt: 1_000, lastFinishedAt: 1_250, lastDurationMs: 250, lastStatus: 'failed', lastError: 'feed timeout',
+      });
+      expect(zh.data.memory[1]).toMatchObject({ kind: 'user-task', title: '扫描到期提醒', lastStatus: 'succeeded', lastExecutedAt: 2_000 });
+      expect(zh.data.memory[1]).not.toHaveProperty('lastError');
+      const en = await dispatchExtendedConsoleRpc('schedule:list', { locale: 'en-US' }, ctx) as { data: { memory: Record<string, unknown>[] } };
+      expect(en.data.memory[0]).toMatchObject({ title: 'Poll RSS feeds', displayName: 'Poll RSS feeds' });
+      expect(en.data.memory[1]).toMatchObject({ title: '扫描到期提醒' });
+      const persistent = { listJobs: vi.fn().mockResolvedValue([{ id: 'p1', schedule: { cron: '0 0 9 * * *' }, action: { prompt: 'x' } }]),
+        addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, { ...ctx, resolveScheduleEngine: () => persistent }))
+        .toMatchObject({ data: { persistent: [{ id: 'p1', kind: 'user-task' }] } });
+    });
+
+    it('adds the resolved delivery target and next run to persistent rows (#1250)', async () => {
+      const notify = { channel: 'im', target: { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'gone', sceneId: 'u1', kind: 'private' } } };
+      const persistent = { listJobs: vi.fn().mockResolvedValue([{ id: 'p1', enabled: true, schedule: { kind: 'workday', cron: '0 0 9 * * *' },
+        action: { prompt: 'x' }, notify, state: { nextRunAtMs: 42 } }]), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      const describeScheduleTarget = vi.fn(() => ({ resolved: false, reason: 'endpoint_not_found', display: 'gone（sandbox）· 私聊 u1' }));
+      const result = await dispatchExtendedConsoleRpc('schedule:list', {}, {
+        fullScope: true, projectRoot: '/tmp', scheduleHost: { list: () => [] }, resolveScheduleEngine: () => persistent, describeScheduleTarget,
+      });
+      expect(result).toMatchObject({ data: { persistent: [{ id: 'p1', nextExecution: 42,
+        target: { resolved: false, reason: 'endpoint_not_found', display: 'gone（sandbox）· 私聊 u1' } }] } });
+      expect(describeScheduleTarget).toHaveBeenCalledWith(notify);
+    });
+
     it('rejects invalid create requests before writing to the persistent engine', async () => {
       const engine = { listJobs: vi.fn(), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
       expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '99 99 * * * *', prompt: 'fixture' }, makeCtx({ resolveScheduleEngine: () => engine }))).toMatchObject({ error: expect.stringContaining('Cron 表达式无效') });
       expect(engine.addJob).not.toHaveBeenCalled();
+    });
+
+    it('requires endpoint.operate on the delivery account for a cron:add target (#1250)', async () => {
+      const engine = { listJobs: vi.fn(), addJob: vi.fn(async (job: unknown) => job), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      const canOperateEndpoint = vi.fn((adapter: string, endpoint: string) => adapter === 'sandbox' && endpoint === 'bot-a');
+      const ctx = makeCtx({ resolveScheduleEngine: () => engine, canOperateEndpoint });
+      const scene = (endpointKey: string) => ({ channel: 'im', scene: { platform: 'sandbox', endpointKey, sceneId: 'g1', kind: 'group' } });
+      const add = (target: unknown) => dispatchExtendedConsoleRpc('cron:add', { cronExpression: '0 0 9 * * *', prompt: 'p', context: { target } }, ctx);
+
+      expect(await add(scene('bot-b'))).toMatchObject({ error: expect.stringContaining('endpoint.operate') });
+      expect(await add('sandbox:bot-b:group:g1')).toMatchObject({ error: expect.stringContaining('endpoint.operate') });
+      expect(await add({ channel: 'im' })).toMatchObject({ error: expect.stringContaining('endpointKey') });
+      expect(engine.addJob).not.toHaveBeenCalled();
+
+      expect(await add(scene('bot-a'))).toMatchObject({ data: { success: true } });
+      expect(await add('sandbox:bot-a:group:g1')).toMatchObject({ data: { success: true } });
+      expect(canOperateEndpoint).toHaveBeenCalledWith('sandbox', 'bot-a');
+      // No target: ops.schedule.write (checked by the permission map) is enough.
+      expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '0 0 9 * * *', prompt: 'p' }, ctx)).toMatchObject({ data: { success: true } });
+      expect(engine.addJob).toHaveBeenCalledTimes(3);
     });
 
     it('validates the actual six-field scheduler grammar without creating tasks', async () => {
@@ -873,21 +935,30 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
     });
 
-    it('friends/groups/channels/groupMembers report 该平台不支持 without methods', async () => {
+    it('friends/groups/channels/groupMembers report unsupported status (not an error) without methods', async () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
       const base = { adapter: 'sandbox', endpointKey: 'bot' };
       await expect(
         dispatchExtendedConsoleRpc('endpoint.friends', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持好友列表' });
+      ).resolves.toEqual({ data: {
+        friends: [], count: 0, status: 'unsupported', capability: 'listFriends', message: '当前适配器（sandbox）不支持好友列表',
+      } });
       await expect(
         dispatchExtendedConsoleRpc('endpoint.groups', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群列表' });
-      await expect(
-        dispatchExtendedConsoleRpc('endpoint.channels', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持频道列表' });
+      ).resolves.toEqual({ data: {
+        groups: [], count: 0, status: 'unsupported', capability: 'listGroups', message: '当前适配器（sandbox）不支持群列表',
+      } });
+      const channels = await dispatchExtendedConsoleRpc('endpoint.channels', base, ctx);
+      expect(channels).not.toHaveProperty('error');
+      expect(channels).toEqual({ data: {
+        channels: [], count: 0, status: 'unsupported', capability: 'listChannels', message: '当前适配器（sandbox）不支持频道列表',
+      } });
+      expect(isConsoleEndpointCapabilityUnsupported((channels as { data: unknown }).data)).toBe(true);
       await expect(
         dispatchExtendedConsoleRpc('endpoint.group_members', { ...base, groupId: '888' }, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群成员列表' });
+      ).resolves.toEqual({ data: {
+        members: [], count: 0, status: 'unsupported', capability: 'listGroupMembers', message: '当前适配器（sandbox）不支持群成员列表',
+      } });
     });
 
     it('groups consumes normalized adapter data', async () => {

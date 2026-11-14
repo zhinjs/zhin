@@ -13,14 +13,24 @@ import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupers
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
-import { readEnvFile, writeEnvFile } from './environment-files.js';
+import {
+  readEnvFile,
+  readEnvFileView,
+  replaceEnvFileContent,
+  revealEnvVariable,
+  updateEnvVariables,
+  writeEnvFile,
+} from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import { findProjectLiteralSecrets } from './literal-secrets.js';
+import type { LiteralConfigSecret } from '@zhin.js/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
   assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
   ConfigChatAccessError, type ChatConfigurationScope,
 } from './configuration-chat-policy.js';
 import { isForbiddenConfigurationPathSegment } from './configuration-path.js';
+import { formatSchemaIssue } from './validation-messages.js';
 import {
   assertPatchesInScope,
   normalizeConfigPatchOperations,
@@ -136,6 +146,14 @@ export class ConsoleConfigurationStore {
           [key, configKeyPatch(snapshot.document, key, undefined).path]))),
       });
     });
+  }
+
+  /**
+   * Secret fields of the stored (unexpanded) configuration that hold literals instead of
+   * `${VAR}` references (ADR 0057). Paths only, never values.
+   */
+  readLiteralSecrets(): Promise<readonly LiteralConfigSecret[]> {
+    return this.#afterMutations(async () => findProjectLiteralSecrets(this.#projectRoot, (await this.#document.read()).document));
   }
 
   readDocument(): Promise<Record<string, unknown>> {
@@ -544,6 +562,26 @@ export class ConsoleConfigurationStore {
     return writeEnvFile(this.#projectRoot, filename, content);
   }
 
+  /** Masked view for the Console (`env:get`); never a value. */
+  readEnvironmentView(filename: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvFileView> {
+    return readEnvFileView(this.#projectRoot, filename);
+  }
+
+  /** One variable as written (`env:reveal`); the caller authorizes and audits. */
+  revealEnvironmentVariable(filename: string, key: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvRevealResult> {
+    return revealEnvVariable(this.#projectRoot, filename, key);
+  }
+
+  /** Per-key save (`env:save { changes }`); keys not named keep their lines. */
+  updateEnvironmentVariables(filename: string, changes: unknown): Promise<{ readonly changed: readonly string[] }> {
+    return updateEnvVariables(this.#projectRoot, filename, changes);
+  }
+
+  /** Whole-file save (`env:save { content, mode: 'replace' }`); refused when it holds mask placeholders. */
+  replaceEnvironmentFile(filename: string, content: string): Promise<void> {
+    return replaceEnvFileContent(this.#projectRoot, filename, content);
+  }
+
   async readSchema(pluginName?: string): Promise<unknown> {
     const {document} = await this.#document.read();
     if (pluginName && !HOST_CONFIG_KEYS.includes(pluginName)
@@ -590,15 +628,15 @@ export class ConsoleConfigurationStore {
       for (const issue of candidate.errors) {
         const location = issue.instancePath.replace(/^\/candidate/u, '').split('/').slice(1)
           .map(key => key.replaceAll('~1', '/').replaceAll('~0', '~'));
+        // The message names the field relative to the block, in the project locale (`locale`).
+        const message = formatSchemaIssue(issue, location, document.locale);
         if (issue.keyword === 'required' && typeof issue.params.missingProperty === 'string') {
           location.push(issue.params.missingProperty);
         }
-        errors.push({
-          path: `$${location.map(key => `.${key}`).join('')}`,
-          message: issue.keyword === 'type'
-            ? `类型应为 ${issue.params.type === 'array' ? 'list' : String(issue.params.type)}`
-            : issue.message ?? issue.keyword,
-        });
+        if (issue.keyword === 'additionalProperties' && typeof issue.params.additionalProperty === 'string') {
+          location.push(issue.params.additionalProperty);
+        }
+        errors.push({ path: `$${location.map(key => `.${key}`).join('')}`, message });
       }
     }
     collectEnvironmentReferences(candidate.value, missingEnv, environment);

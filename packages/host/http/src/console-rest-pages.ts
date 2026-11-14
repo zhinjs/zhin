@@ -18,6 +18,15 @@ import {
 } from './marketplace-registry.js';
 import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
+  informativeKeywords,
+  isLocale,
+  normalizePluginCategory,
+  packageAuthorName,
+  pickLocalizedText,
+  readPluginMarketplaceMetadata,
+  type PluginLocalizedText,
+} from '@zhin.js/plugin-runtime';
+import {
   clampPositiveInt,
   decodePathParam,
   logInternalError,
@@ -65,7 +74,10 @@ export interface ConsoleAgentIntrospection {
   commands?(): readonly unknown[];
   middlewares?(): readonly unknown[];
   components?(): readonly unknown[];
-  bindings?(): readonly unknown[];
+  /** Agent bindings with the provider / model they actually run on (may read the provider graph). */
+  bindings?(): readonly unknown[] | Promise<readonly unknown[]>;
+  /** Recent Agent turns from the trace archive, newest first (#1250). */
+  recentTurns?(): readonly unknown[] | Promise<readonly unknown[]>;
   tools?(): readonly unknown[];
   promptSections?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
@@ -356,6 +368,11 @@ function registerLogsRoutes(
   }, { summary: 'Cleanup old system logs', tags: ['console', 'logs'] });
 }
 
+/** Locale-keyed texts from an untrusted registry entry (reuses the published-manifest reader). */
+function localizedTextOf(value: unknown): PluginLocalizedText | undefined {
+  return readPluginMarketplaceMetadata({ metadata: { displayNameI18n: value } }).displayNameI18n;
+}
+
 // ---------------------------------------------------------------------------
 // marketplace（legacy marketplace-rest-api.ts；plugins.json + npmmirror）
 // ---------------------------------------------------------------------------
@@ -390,10 +407,17 @@ function registerMarketplaceRoutes(
       const versions = meta.versions as Record<string, Record<string, unknown>> | undefined;
       const latestInfo = latest && versions ? versions[latest] : undefined;
       const time = meta.time as Record<string, string> | undefined;
+      // Marketplace fields come from the published manifest (`zhin.metadata`); the author is the
+      // package's author / maintainers, never the publishing account (`_npmUser`, a release bot).
+      const market = readPluginMarketplaceMetadata(latestInfo?.zhin);
       return {
         name: meta.name,
         version: latest,
-        description: meta.description || '',
+        ...(market.displayName ? { displayName: market.displayName } : {}),
+        ...(market.displayNameI18n ? { displayNameI18n: market.displayNameI18n } : {}),
+        ...(market.descriptionI18n ? { descriptionI18n: market.descriptionI18n } : {}),
+        ...(market.category ? { category: market.category } : {}),
+        description: (latestInfo?.description as string | undefined) || meta.description || '',
         readme: meta.readme || '',
         license: meta.license || latestInfo?.license || '',
         homepage: meta.homepage || latestInfo?.homepage || '',
@@ -401,11 +425,8 @@ function registerMarketplaceRoutes(
           (meta.repository as { url?: string } | undefined)?.url ||
           (latestInfo?.repository as { url?: string } | undefined)?.url ||
           '',
-        author:
-          typeof meta.author === 'string'
-            ? meta.author
-            : (meta.author as { name?: string } | undefined)?.name || '',
-        keywords: (latestInfo?.keywords as string[]) || [],
+        author: packageAuthorName(latestInfo ?? {}) ?? packageAuthorName(meta) ?? '',
+        keywords: informativeKeywords(latestInfo?.keywords),
         engines: latestInfo?.engines || {},
         peerDependencies: latestInfo?.peerDependencies || {},
         versions: Object.keys(versions || {}),
@@ -421,32 +442,48 @@ function registerMarketplaceRoutes(
       100,
       Math.max(1, parseInt(url.searchParams.get('size') ?? url.searchParams.get('limit') ?? '20', 10) || 20),
     );
-    const category = url.searchParams.get('category') ?? undefined;
+    const rawCategory = url.searchParams.get('category') || undefined;
+    const category = rawCategory === undefined ? undefined : normalizePluginCategory(rawCategory) ?? rawCategory;
     const official = url.searchParams.get('official') ?? undefined;
+    const rawLocale = url.searchParams.get('locale');
+    const locale = isLocale(rawLocale) ? rawLocale : undefined;
     const searchKeyword = q.trim().toLowerCase();
 
     try {
       const allPlugins = (await registry.list()) as readonly Record<string, unknown>[];
-      let plugins = allPlugins.map((p) => ({
+      let plugins = allPlugins.map((p) => {
+        const displayNameI18n = localizedTextOf(p.displayNameI18n);
+        const descriptionI18n = localizedTextOf(p.descriptionI18n);
+        const displayName = typeof p.displayName === 'string' ? p.displayName : '';
+        const description = typeof p.description === 'string' ? p.description : '';
+        return {
         name: p.name,
-        displayName: p.displayName || '',
+        // `locale` resolves the display texts for the caller; translations stay available either way.
+        displayName: locale ? pickLocalizedText(displayNameI18n, locale, displayName) ?? '' : displayName,
+        ...(displayNameI18n ? { displayNameI18n } : {}),
         version: p.version || '',
-        description: p.description || '',
+        description: locale ? pickLocalizedText(descriptionI18n, locale, description) ?? '' : description,
+        ...(descriptionI18n ? { descriptionI18n } : {}),
         author: p.author || '',
         isOfficial: typeof p.name === 'string' && /^@zhin\.js\/[a-z0-9][a-z0-9._-]*$/.test(p.name),
         official: typeof p.name === 'string' && /^@zhin\.js\/[a-z0-9][a-z0-9._-]*$/.test(p.name),
-        category: p.category || 'util',
-        keywords: (p.tags as string[]) || [],
+        category: normalizePluginCategory(p.category) ?? 'utility',
+        keywords: informativeKeywords(p.tags),
         npm: p.npm || `https://www.npmjs.com/package/${p.name}`,
         date: p.lastUpdate || '',
         downloads: p.downloads || { weekly: 0, monthly: 0 },
         readme: p.readme || '',
         license: p.license || '',
-      }));
+        };
+      });
 
       if (searchKeyword) {
         plugins = plugins.filter((p) => {
-          const haystack = [p.name, p.displayName, p.description, ...(p.keywords || [])]
+          const haystack = [
+            p.name, p.displayName, p.description,
+            ...Object.values(p.displayNameI18n ?? {}), ...Object.values(p.descriptionI18n ?? {}),
+            ...p.keywords,
+          ]
             .join(' ')
             .toLowerCase();
           return haystack.includes(searchKeyword);

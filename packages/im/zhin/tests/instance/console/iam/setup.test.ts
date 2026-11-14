@@ -122,7 +122,8 @@ describe('/auth and iam.* after setup', () => {
     const vera = login.body.data.token as string;
     expect((await host.rpc('iam.users.list', {}, vera)).status).toBe(200);
     expect((await host.rpc('iam.users.create', { username: 'x', password: PASSWORD }, vera))).toMatchObject({ status: 403, body: { code: 'forbidden' } });
-    expect((await host.rpc('brand.new', {}, owner))).toMatchObject({ status: 403, body: { code: 'unmapped' } });
+    // zhinjs/zhin#1250: an RPC the Host has no handler for is unknown — not run, not audited.
+    expect((await host.rpc('brand.new', {}, owner))).toMatchObject({ status: 404, body: { success: false, code: 'unknown_rpc', error: 'RPC "brand.new" 不存在' } });
     const token = await host.call('POST', '/auth/tokens', { name: 'script' }, vera);
     expect(token.status).toBe(201);
     const apiToken = token.body.data.token as string;
@@ -132,11 +133,11 @@ describe('/auth and iam.* after setup', () => {
     await host.call('POST', '/auth/tokens/revoke', { id: token.body.data.record.id }, vera);
     expect((await host.call('GET', '/auth/me', undefined, apiToken)).body.data.kind).toBe('anonymous');
     const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
-    const actions = (audit.body.data.entries as Array<{ action: string; outcome: string }>);
+    const actions = (audit.body.data.entries as Array<{ action: string; outcome: string; detail?: Record<string, unknown> }>);
+    expect(actions.some(entry => entry.action === 'rpc:brand.new')).toBe(false);
     expect(actions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ action: 'rpc:iam.users.create', outcome: 'denied' }),
+      expect.objectContaining({ action: 'rpc:iam.users.create', outcome: 'denied', detail: expect.objectContaining({ reason: 'insufficient_permission' }) }),
       expect.objectContaining({ action: 'rpc:iam.users.create', outcome: 'ok' }),
-      expect.objectContaining({ action: 'rpc:brand.new', outcome: 'denied' }),
       expect.objectContaining({ action: 'auth.login', outcome: 'denied' }),
     ]));
     expect(JSON.stringify(audit.body)).not.toContain(PASSWORD);
@@ -153,8 +154,34 @@ describe('/auth and iam.* after setup', () => {
     expect(await host.rpc('plugin.root/missing.deep.status', {}, olga)).toMatchObject({ status: 403, body: { success: false, code: 'forbidden' } });
     const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
     expect(audit.body.data.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ action: 'rpc:plugin.root/missing.deep.status', outcome: 'denied' }),
+      expect.objectContaining({ action: 'rpc:plugin.root/missing.deep.status', outcome: 'denied', detail: expect.objectContaining({ reason: 'no_plugin_handler' }) }),
     ]));
+  });
+
+  it('audits camelCase / action. account method spellings as the canonical write', async () => {
+    const { host, owner } = await initialised();
+    await host.rpc('iam.users.create', { username: 'olga', password: PASSWORD, bindings: [{ role: 'operator' }] }, owner);
+    const olga = (await host.call('POST', '/auth/login', { username: 'olga', password: PASSWORD })).body.data.token as string;
+    // endpoint-writeback is a write (endpoint.manage + ops.config.write) in every spelling: audited even though no plugin answers.
+    for (const type of ['plugin.root/missing.endpointWriteback', 'plugin.root/missing.action.endpointWriteback']) {
+      expect((await host.rpc(type, { ids: ['bot-1'] }, olga)).body).toMatchObject({ success: false });
+    }
+    const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
+    const entries = audit.body.data.entries as Array<{ action: string }>;
+    expect(entries.filter(entry => entry.action === 'rpc:plugin.root/missing.endpoint-writeback')).toHaveLength(2);
+  });
+
+  it('answers the capability read to every signed-in principal (zhinjs/zhin#1250)', async () => {
+    const { host, owner } = await initialised();
+    await host.rpc('iam.users.create', { username: 'nina', password: PASSWORD, bindings: [{ role: 'operator', scope: { kind: 'endpoint', key: 'qq/bot-1' } }] }, owner);
+    const nina = (await host.call('POST', '/auth/login', { username: 'nina', password: PASSWORD })).body.data.token as string;
+    const reply = await host.call('GET', '/console/capabilities', undefined, nina);
+    expect(reply.status).toBe(200);
+    expect(reply.body.data).toMatchObject({ version: 1, complete: true });
+    expect(reply.body.data.rpc).toEqual(expect.arrayContaining(['attention.list', 'ping', 'endpoint.list', 'iam.users.list']));
+    expect(reply.body.data.rpc).not.toContain('gateway.instance.status');
+    expect(reply.body.data.features).toEqual(expect.arrayContaining(['rpc.unknown-code', 'audit.denial-reasons', 'rpc.plugin']));
+    expect((await host.call('GET', '/console/capabilities')).status).toBe(401);
   });
 
   it('changes the password, revoking other sessions, and refuses to remove the last owner over RPC', async () => {

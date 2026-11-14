@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -139,8 +140,8 @@ function resolvePublishCandidate(
 export async function runPrePublishCheck(pluginDir: string): Promise<boolean> {
   logger.info(formatCompact({ cmd: 'pub', op: 'check' }));
   const report = await checkPlugin(pluginDir);
-  logger.log(formatPluginCheckReport(report));
-  logger.log('');
+  output.line(formatPluginCheckReport(report));
+  output.line();
   if (report.errorCount > 0) {
     logger.error('发布前检查未通过：修复上面的错误后重试；确需跳过可加 --skip-check');
     return false;
@@ -208,7 +209,7 @@ export const pubCommand = new Command('pub')
           selected = resolvePublishCandidate(candidates, pluginName);
           if (!selected) {
             logger.error(`未找到插件: ${pluginName}`);
-            logger.log(`可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
+            output.line(`可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
             process.exit(1);
           }
         }
@@ -233,7 +234,7 @@ export const pubCommand = new Command('pub')
       const version = packageJson.version;
 
       logger.info(formatCompact( { cmd: 'pub', op: 'prepare', package: packageName, version }));
-      logger.log('');
+      output.line();
 
       if (packageJson.private === true) {
         logger.error(`${packageName} 的 package.json 设置了 private: true，npm 会拒绝发布`);
@@ -311,8 +312,8 @@ export const pubCommand = new Command('pub')
 
       // 发布插件
       logger.info(formatCompact( { cmd: 'pub', op: 'publish', dry_run: options.dryRun ?? false }));
-      logger.log(`命令: pnpm ${publishArgs.join(' ')}`);
-      logger.log('');
+      output.line(`命令: pnpm ${publishArgs.join(' ')}`);
+      output.line();
 
       try {
         execSync(`pnpm ${publishArgs.join(' ')}`, {
@@ -322,16 +323,16 @@ export const pubCommand = new Command('pub')
 
         if (options.dryRun) {
           logger.success('✓ 试运行完成');
-          logger.log('');
-          logger.log('💡 提示: 移除 --dry-run 参数以实际发布');
+          output.line();
+          output.line('💡 提示: 移除 --dry-run 参数以实际发布');
         } else {
           logger.success(`✓ ${packageName}@${version} 发布成功！`);
-          logger.log('');
-          logger.log('📦 安装命令:');
-          logger.log(`  pnpm add ${packageName}`);
-          logger.log('');
-          logger.log('🔗 npm 链接:');
-          logger.log(`  https://www.npmjs.com/package/${packageName}`);
+          output.line();
+          output.line('📦 安装命令:');
+          output.line(`  pnpm add ${packageName}`);
+          output.line();
+          output.line('🔗 npm 链接:');
+          output.line(`  https://www.npmjs.com/package/${packageName}`);
         }
       } catch (error) {
         logger.error('发布失败');

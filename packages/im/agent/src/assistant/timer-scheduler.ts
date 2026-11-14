@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   ScheduleEngine,
+  getNextRun,
   isHeartbeatEmpty,
   resolveSolarJob,
   resolveLunarJob,
@@ -36,7 +37,7 @@ import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { ScheduleJob, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
-import { type NotificationRouter, resolveEffectiveNotify } from './notification-router.js';
+import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 
 const logger = getLogger('timer-scheduler');
@@ -155,11 +156,20 @@ export interface TimerSchedulerOptions {
   workspaceDir?: string;
 }
 
+/** An enabled job whose next run cannot be computed: it will never fire until fixed. */
+export interface UnschedulableJob {
+  readonly jobId: string;
+  readonly label?: string;
+  readonly reason: 'invalid_schedule' | 'no_next_run' | 'expired';
+  readonly since: number;
+}
+
 export class TimerScheduler {
   readonly #scheduler = new ScheduleEngine();
   private store: ScheduleJobStore;
   private due: TimerDueHandler;
   private disposes = new Map<string, () => void>();
+  readonly #unschedulable = new Map<string, UnschedulableJob>();
   private notifyOnFailure: boolean;
   private router: NotificationRouter;
   private defaultNotify?: import('./types.js').JobNotify;
@@ -194,6 +204,9 @@ export class TimerScheduler {
     const jobs = await this.store.listJobs();
     for (const job of jobs) {
       if (isRuntimeSchedulable(job)) this.registerOne(job);
+      // Self-heal: jobs written before the next run was persisted (or by a profile sync that reset
+      // `state`) have no `nextRunAtMs`; recompute it for every job on start.
+      await this.#syncNextRun(job, { repair: true });
     }
     const count = jobs.filter((j) => isRuntimeSchedulable(j)).length;
     if (count > 0) logger.debug(formatCompact({ schedule_jobs: count }));
@@ -207,6 +220,66 @@ export class TimerScheduler {
     }
     const dispose = registerJobSchedule(this.#scheduler, job, (jobId) => this.runJob(jobId));
     if (dispose) this.disposes.set(job.id, dispose);
+  }
+
+  /** Enabled jobs that cannot fire (no computable next run); the Console lists them as attention. */
+  listUnschedulable(): readonly UnschedulableJob[] {
+    return Object.freeze([...this.#unschedulable.values()]);
+  }
+
+  /** Next fire time of a registered job, or `undefined` when it will not fire. */
+  nextRunAt(job: ScheduleJob, now = Date.now()): number | undefined {
+    if (!job.enabled || !this.disposes.has(job.id)) return undefined;
+    const schedule = job.schedule;
+    if (schedule.kind === 'at') return schedule.atMs > now ? schedule.atMs : undefined;
+    if (schedule.kind === 'every' || schedule.kind === 'scatter') {
+      const next = this.#scheduler.getStatus().find(row => row.id === job.id)?.nextExecution;
+      return next ? next.getTime() : undefined;
+    }
+    try {
+      const resolved = jobScheduleToResolved(schedule);
+      let next = resolved ? getNextRun(resolved, new Date(now)) : null;
+      // Asked while the current fire is running: report the one after it.
+      if (resolved && next && next.getTime() <= now) next = getNextRun(resolved, new Date(now + 1000));
+      return next ? next.getTime() : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Persists `state.nextRunAtMs` (Console 「下次运行」) and tracks enabled jobs that cannot fire.
+   * `repair` logs the start-up self-heal of a job that had no next run recorded.
+   */
+  async #syncNextRun(job: ScheduleJob, options: Readonly<{ repair?: boolean }> = {}): Promise<number | undefined> {
+    const next = this.#trackNextRun(job);
+    if (job.state?.nextRunAtMs !== next) {
+      if (options.repair && next !== undefined && job.state?.nextRunAtMs === undefined) {
+        logger.info(formatCompact({ op: 'schedule_next_run_repaired', job: job.id, next: new Date(next).toISOString() }));
+      }
+      await this.store.updateJobState(job.id, { nextRunAtMs: next });
+    }
+    return next;
+  }
+
+  /** Computes the next run and records / clears the job as unschedulable (no store write). */
+  #trackNextRun(job: ScheduleJob): number | undefined {
+    const next = this.nextRunAt(job);
+    // A one-shot job that already ran is done, not stuck.
+    const finished = job.schedule.kind === 'at' && job.state?.lastExecutedAt !== undefined;
+    if (job.enabled && job.schedule.kind !== 'event' && !finished && next === undefined) {
+      const reason: UnschedulableJob['reason'] = job.schedule.kind === 'at' ? 'expired'
+        : this.disposes.has(job.id) ? 'no_next_run' : 'invalid_schedule';
+      if (this.#unschedulable.get(job.id)?.reason !== reason) {
+        logger.warn(formatCompact({ op: 'schedule_job_unschedulable', job: job.id, kind: job.schedule.kind, reason }));
+        this.#unschedulable.set(job.id, Object.freeze({
+          jobId: job.id, ...(job.label ? { label: job.label } : {}), reason, since: Date.now(),
+        }));
+      }
+    } else {
+      this.#unschedulable.delete(job.id);
+    }
+    return next;
   }
 
   /**
@@ -241,10 +314,15 @@ export class TimerScheduler {
       ...(job.schedule.kind === 'at' ? { scheduledAt: job.schedule.atMs } : {}),
     });
 
+    const lastExecutedAt = Date.now();
+    // The next run is recorded with the outcome, in the same write (#1250).
+    // Paused or removed while it ran: no longer registered, so no next run.
+    const nextRunAtMs = this.#trackNextRun({ ...job, enabled: job.enabled && this.disposes.has(jobId), state: { ...job.state, lastExecutedAt } });
     await this.store.updateJobState(jobId, {
-      lastExecutedAt: Date.now(),
+      lastExecutedAt,
       lastStatus: result.success ? 'ok' : 'error',
       lastError: result.success ? undefined : result.error,
+      nextRunAtMs,
     });
 
     if (!result.success && (job.notifyOnFailure ?? this.notifyOnFailure)) {
@@ -376,14 +454,19 @@ export class TimerScheduler {
       enabled: job.enabled ?? true,
     };
     full.source = job.source ?? 'manual';
+    // An `im` job must carry a complete target: storing one without would fail later (and in SQL
+    // storage while encoding it), long after the caller got its answer.
+    full.notify = parseJobNotify(resolveEffectiveNotify(full.notify, this.defaultNotify));
     await this.store.upsertJob(full);
     if (isRuntimeSchedulable(full)) this.registerOne(full);
-    return full;
+    const next = await this.#syncNextRun(full);
+    return { ...full, state: { ...full.state, nextRunAtMs: next } };
   }
 
   async removeJob(id: string): Promise<boolean> {
     const ok = await this.store.removeJob(id);
     if (!ok) return false;
+    this.#unschedulable.delete(id);
     const dispose = this.disposes.get(id);
     if (dispose) {
       dispose();
@@ -396,12 +479,14 @@ export class TimerScheduler {
     const job = await this.store.getJob(id);
     if (!job) return false;
     job.enabled = false;
+    job.state = { ...job.state, nextRunAtMs: undefined };
     await this.store.upsertJob(job);
     const dispose = this.disposes.get(id);
     if (dispose) {
       dispose();
       this.disposes.delete(id);
     }
+    this.#unschedulable.delete(id);
     return true;
   }
 
@@ -411,6 +496,8 @@ export class TimerScheduler {
     job.enabled = true;
     await this.store.upsertJob(job);
     if (isRuntimeSchedulable(job)) this.registerOne(job);
+    // Resume always recomputes the next run (the paused job had none).
+    await this.#syncNextRun({ ...job, state: { ...job.state, nextRunAtMs: undefined } });
     return true;
   }
 
@@ -423,6 +510,7 @@ export class TimerScheduler {
       try { dispose(); } catch (e) { logger.warn(`Schedule dispose failed for ${id}:`, e); }
     }
     this.disposes.clear();
+    this.#unschedulable.clear();
     this.#scheduler.dispose();
   }
 }

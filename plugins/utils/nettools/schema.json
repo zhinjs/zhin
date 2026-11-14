@@ -17,6 +17,15 @@
       "maximum": 3600,
       "default": 10,
       "description": "Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables)",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "冷却时间（秒）",
+          "description": "每个用户的冷却秒数，所有网络工具命令和工具共用；0 表示不限制"
+        },
+        "en": {
+          "title": "Cooldown (seconds)"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -29,6 +38,15 @@
       "maximum": 30000,
       "default": 8000,
       "description": "Per-attempt timeout for each external HTTP request, in milliseconds",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "请求超时（毫秒）",
+          "description": "每次外部 HTTP 请求的超时"
+        },
+        "en": {
+          "title": "Request timeout (ms)"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -41,6 +59,15 @@
       "maximum": 5,
       "default": 2,
       "description": "Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "重试次数",
+          "description": "网络错误、超时、429 与 5xx 的重试次数（指数退避并加入随机抖动）"
+        },
+        "en": {
+          "title": "Max retries"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -53,6 +80,15 @@
       "maximum": 10,
       "default": 4,
       "description": "Number of check-host.net probe nodes used by ping",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "Ping 探测节点数",
+          "description": "ping 使用的 check-host.net 探测节点数"
+        },
+        "en": {
+          "title": "Ping probe nodes"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -65,6 +101,15 @@
       "maximum": 10000,
       "default": 2000,
       "description": "Wait between ping result polls, in milliseconds",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "Ping 结果轮询间隔（毫秒）",
+          "description": "两次查询 ping 结果之间的等待时间"
+        },
+        "en": {
+          "title": "Ping poll interval (ms)"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -77,6 +122,15 @@
       "maximum": 10,
       "default": 5,
       "description": "Maximum number of ping result polls before reporting partial results",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "Ping 结果最多轮询次数",
+          "description": "超过此次数仍未完成时返回部分结果"
+        },
+        "en": {
+          "title": "Max ping polls"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -99,6 +153,15 @@
         "google"
       ],
       "description": "DNS-over-HTTPS providers in fallback order",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "DoH 服务",
+          "description": "DNS-over-HTTPS 服务，按顺序回退"
+        },
+        "en": {
+          "title": "DoH providers"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -111,6 +174,15 @@
       "maximum": 20,
       "default": 8,
       "description": "Number of registrars shown in a domain price comparison",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "比价显示条数",
+          "description": "域名比价显示的注册商数量"
+        },
+        "en": {
+          "title": "Price list size"
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"

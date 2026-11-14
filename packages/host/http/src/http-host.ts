@@ -30,8 +30,10 @@ import {
   authorizeConsoleHttp,
   authorizeConsoleWebSocket,
   requestMeta,
+  webSocketDenialReason,
   type ConsolePrincipal,
 } from './access-control.js';
+import type { ConsoleDenialReason } from '@zhin.js/console-protocol';
 import type { HttpHostAddress } from './host-options.js';
 
 export type { HttpHostAddress } from './host-options.js';
@@ -301,7 +303,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
       );
     if (!principal) return undefined;
     if (!authorizeConsoleWebSocket(principal, pathname)) {
-      audit(principal, remoteAddress, `ws:${pathname}`, 'denied');
+      audit(principal, remoteAddress, `ws:${pathname}`, 'denied', webSocketDenialReason(principal, pathname));
       return undefined;
     }
     return principal;
@@ -312,6 +314,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     remoteAddress: string | undefined,
     action: string,
     outcome: 'ok' | 'denied' | 'error',
+    reason?: ConsoleDenialReason,
   ): void {
     const sink = tokenRegistry.accessProvider?.audit;
     if (!sink) return;
@@ -320,6 +323,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
         actor: auditActor(principal),
         action,
         outcome,
+        ...(reason ? { detail: { reason } } : {}),
         ...(remoteAddress ? { ip: remoteAddress } : {}),
       });
     } catch { /* audit never breaks a request */ }
@@ -508,7 +512,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     const relative = pathname === apiBase ? '/' : pathname.slice(apiBase.length);
     const decision = authorizeConsoleHttp(principal, method, relative);
     if (!decision.allowed) {
-      if (principal) audit(principal, remoteAddress, `http:${method} ${relative}`, 'denied');
+      if (principal) audit(principal, remoteAddress, `http:${method} ${relative}`, 'denied', decision.reason);
       return { ok: false, status: decision.status, code: decision.code, error: decision.error };
     }
     return { ok: true, ...(principal ? { principal } : {}) };

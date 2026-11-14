@@ -191,8 +191,11 @@ describe('full Agent request tracing', () => {
       expect(trace.origin).toEqual(request.origin);
       expect(trace.requests).toHaveLength(1);
       const captured = trace.requests![0]!;
-      expect(captured).toMatchObject({ provider: h.alias, model: h.modelId, status: 'completed', body_status: bodyStatus });
-      expect(trace.model_calls).toContainEqual(expect.objectContaining({ request_id: captured.request_id }));
+      // #1250: the request records the provider that served it (the binding's service), the same
+      // id its model call carries, not the account alias it was addressed by.
+      expect(captured).toMatchObject({ model: h.modelId, status: 'completed', body_status: bodyStatus });
+      expect(captured.provider).not.toBe(h.alias);
+      expect(trace.model_calls).toContainEqual(expect.objectContaining({ request_id: captured.request_id, provider: captured.provider }));
       if (bodyStatus === 'recorded') {
         expect(JSON.stringify(captured.body)).toContain('Please say Done.');
         expect(captured.body?.system).toContain('Prefer repository-local conventions.');

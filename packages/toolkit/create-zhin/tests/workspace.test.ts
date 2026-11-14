@@ -71,7 +71,11 @@ describe('createWorkspace', () => {
       },
     })
     const soul = await fs.readFile(path.join(projectPath, 'SOUL.md'), 'utf8')
-    const instructions = await fs.readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')
+    const instructions = await fs.readFile(path.join(projectPath, 'BOT.md'), 'utf8')
+    // #1250: AGENTS.md is developer / coding-agent facing; the bot reads BOT.md.
+    const developer = await fs.readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')
+    expect(developer).toContain('BOT.md')
+    expect(developer).not.toContain('You are a helpful AI assistant.')
     const tools = await fs.readFile(path.join(projectPath, 'TOOLS.md'), 'utf8')
     const routines = parse(await fs.readFile(path.join(projectPath, 'assistant.profile.yml.example'), 'utf8'))
 
@@ -231,7 +235,7 @@ describe('createWorkspace', () => {
 
     const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
     expect(workspace.packages).toEqual(['.', 'plugins/*', 'packages/*'])
-    expect(workspace.allowBuilds).toEqual({ esbuild: true })
+    expect(workspace.allowBuilds).toEqual({ esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true })
   })
 
   it('uses the real generated config filename for JSON projects', async () => {
@@ -334,7 +338,8 @@ it('generates English project guidance and examples while retaining config value
   expect((await reviewAIPlan(plan)).graph.purposes.defaults.chat).toBeTruthy();
   const readme=await fs.readFile(path.join(projectPath,'README.md'),'utf8');
   expect(readme).toContain('## 🚀 Quick start'); expect(readme).not.toMatch(/[\u3400-\u9fff]/u);
-  const instructions=await fs.readFile(path.join(projectPath,'AGENTS.md'),'utf8');
+  const instructions=await fs.readFile(path.join(projectPath,'BOT.md'),'utf8');
+  expect(await fs.readFile(path.join(projectPath,'AGENTS.md'),'utf8')).not.toMatch(/[\u3400-\u9fff]/u);
   expect(instructions).toContain('Language: English');
   const hello=await fs.readFile(path.join(projectPath,'commands/hello/index.ts'),'utf8');
   expect(hello).toContain("context.formatCommand('card')"); expect(hello).not.toContain('Try /card');

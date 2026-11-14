@@ -103,7 +103,7 @@ Update the scripts in the project's `package.json`:
 Old scripts that call `zhin runtime start …` keep working (it is an alias for `zhin start --foreground`). What changes is that **a bare `zhin start` now runs in the background**: process managers must pass `--foreground`, otherwise the command returns right after starting the gateway and the service manager concludes the service has exited.
 
 - `--daemon` is still accepted and only means "background" (the default). It no longer means "foreground plus crash restarts": crash restarts apply in every mode.
-- `zhin restart` restarts only the instance; gateway and Console stay up. `zhin restart --gateway` restarts the gateway too (background gateway only).
+- `zhin restart` restarts only the instance; gateway and Console stay up. `zhin restart --gateway` restarts the gateway too (background gateway only; for a foreground gateway it explains why, prints the systemd / PM2 replacement command and exits non-zero).
 - While the gateway runs, `zhin install / uninstall / update` go through it: stop the instance → package manager → start the instance, rolling back on failure. Git URLs, local paths and `--save-dev` require `zhin stop` first.
 - Management commands talk to the gateway over the local control socket `.zhin/gateway.sock` (`0600`) and **must run as the same system user that started the gateway**.
 

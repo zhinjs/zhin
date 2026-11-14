@@ -75,6 +75,11 @@ describe('change_draft tool', () => {
     expect(RESERVED_TOOL_NAMES).toContain('change_draft');
   });
 
+  it('names the root BOT.md alongside AGENTS.md as a writable instruction file (#1250)', async () => {
+    const { tool } = await harness();
+    expect(tool.definition.description).toContain('root BOT.md and root AGENTS.md');
+  });
+
   it('stages a draft with a preview and never touches production', async () => {
     const impact: SelfChangeImpactPort = {
       hostConfigKeys: ['http'],

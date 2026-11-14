@@ -9,6 +9,32 @@ import type { ScheduleJobStore } from './job-store.js';
 import type { JobNotify, ScheduleJob } from './types.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('assistant-profile');
+
+/**
+ * Upsert a profile-declared job without discarding what the scheduler recorded: `state` (last /
+ * next run) and `createdAt` survive a restart. The profile is the declaration source for the
+ * job's definition, including `enabled`; a change of `enabled` is logged.
+ */
+async function upsertProfileJob(store: ScheduleJobStore, job: ScheduleJob): Promise<void> {
+  const existing = await store.getJob(job.id);
+  if (existing) {
+    if (existing.enabled !== job.enabled) {
+      logger.info(formatCompact({
+        op: 'profile_routine_aligned', job: job.id, enabled: job.enabled, previous: existing.enabled,
+      }));
+    }
+    job = {
+      ...job,
+      createdAt: existing.createdAt,
+      // A disabled job has no next run; keep the rest of the recorded state.
+      state: job.enabled ? existing.state : { ...existing.state, nextRunAtMs: undefined },
+    };
+  }
+  await store.upsertJob(job);
+}
 function resolveProfileJobNotify(
   routineNotify: JobNotify | undefined,
   profileDefaults: JobNotify | undefined,
@@ -111,7 +137,8 @@ export async function loadBootstrapWithProfile(
       });
       continue;
     }
-    const disk = diskFiles.find((f) => f.name === name);
+    // `BOT.md` takes the AGENTS.md slot when present (#1250).
+    const disk = diskFiles.find((f) => f.name === name || (name === 'AGENTS.md' && f.name === 'BOT.md'));
     if (disk) merged.push(disk);
   }
 
@@ -173,11 +200,19 @@ export async function syncProfileHeartbeatToStore(
   store: ScheduleJobStore,
   profile: AssistantProfile | null,
 ): Promise<boolean> {
-  const routine = profile?.routines?.heartbeat;
-  if (!routine || routine.enabled === false) return false;
+  if (!profile) return false;
+  const routine = profile.routines?.heartbeat;
+  if (!routine || routine.enabled === false) {
+    // The profile switched the heartbeat off (or no longer declares it): align the persisted job.
+    const existing = await store.getJob(PROFILE_HEARTBEAT_JOB_ID);
+    if (existing?.source === 'profile' && existing.enabled) {
+      await upsertProfileJob(store, { ...existing, enabled: false });
+    }
+    return false;
+  }
 
-  const job = buildHeartbeatJobFromRoutine(routine, profile?.defaults?.notify);
-  await store.upsertJob(job);
+  const job = buildHeartbeatJobFromRoutine(routine, profile.defaults?.notify);
+  await upsertProfileJob(store, job);
   return true;
 }
 
@@ -200,7 +235,7 @@ export async function syncProfileRoutinesToStore(
     if (routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) continue;
     const jobId = profileCronJobId(key);
     const defaultLabel = PROFILE_CRON_LABELS[key] ?? key;
-    await store.upsertJob(buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
+    await upsertProfileJob(store, buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
     synced++;
   }
   return synced;

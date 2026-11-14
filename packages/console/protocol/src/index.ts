@@ -391,16 +391,59 @@ export const ENDPOINT_MANAGEMENT_CAPABILITIES = [
 export type EndpointManagementCapability =
   (typeof ENDPOINT_MANAGEMENT_CAPABILITIES)[number];
 
+/**
+ * Marker on the `data` of `endpoint.friends` / `endpoint.groups` / `endpoint.channels` /
+ * `endpoint.group_members` when the Adapter does not offer that read (#1250). It is not an error:
+ * the list is empty, `count` is 0 and the Console shows the capability as not provided instead of a
+ * read failure. Absent `status` means the read succeeded.
+ */
+export interface ConsoleEndpointCapabilityUnsupported {
+  readonly status: 'unsupported';
+  readonly capability: EndpointManagementCapability;
+  /** Human-readable explanation (Chinese), safe to display. */
+  readonly message: string;
+}
+
+/** `data` of an Endpoint list read: `items` under `key`, plus the unsupported marker when not offered. */
+export type ConsoleEndpointListReply<K extends 'friends' | 'groups' | 'channels' | 'members', T> =
+  | (Readonly<Record<K, readonly T[]>> & { readonly count: number; readonly status?: undefined })
+  | (Readonly<Record<K, readonly never[]>> & { readonly count: 0 } & ConsoleEndpointCapabilityUnsupported);
+
+/** True when an Endpoint list reply says the Adapter does not offer the read. */
+export function isConsoleEndpointCapabilityUnsupported(value: unknown): value is ConsoleEndpointCapabilityUnsupported {
+  return typeof value === 'object' && value !== null
+    && (value as { status?: unknown }).status === 'unsupported'
+    && typeof (value as { capability?: unknown }).capability === 'string';
+}
+
+/**
+ * `failed`: start failed and waits for a person (configuration, interactive login);
+ * `retrying`: start failed, an automatic retry is scheduled (`nextRetryAt`);
+ * `awaiting_assist`: starting, and the login flow waits for a person (LoginAssist).
+ */
 export type ConsoleEndpointPhase =
   | 'pending'
   | 'starting'
+  | 'awaiting_assist'
   | 'online'
   | 'offline'
   | 'reconnecting'
+  | 'retrying'
   | 'failed'
   | 'unconfigured';
 
 export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
+
+/** Why an account start failed (aligned with the MCP client failure categories, #1250). */
+export type ConsoleEndpointFailureCategory = 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+
+export interface ConsoleEndpointFailure {
+  readonly category: ConsoleEndpointFailureCategory;
+  /** Short and redacted (no URL credentials, query strings or credential values); ≤ 200 chars. */
+  readonly message: string;
+  /** Epoch milliseconds of the failed attempt. */
+  readonly at: number;
+}
 
 /** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
@@ -415,6 +458,14 @@ export interface ConsoleEndpointSummary {
   readonly eventDiagnostics?: Readonly<{ buffered: number; dropped: number; dispatchFailures: number }>;
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;
+  /** Start attempts of the background start supervision (0 = none pending). */
+  readonly startAttempt?: number;
+  /** Last failed start (code only, epoch milliseconds) while the account is not online. */
+  readonly startFailure?: Readonly<{ code: string; at: number }>;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
+  /** Classified, redacted reason of the last failed start while the account is not online (#1250). */
+  readonly lastError?: ConsoleEndpointFailure;
   readonly pendingLogin?: boolean;
   /** ADR 0058: step of the unfinished login flow (1-based). */
   readonly loginStep?: Readonly<{ index: number; total: number; title: string }>;
@@ -731,7 +782,14 @@ export * from './plugin-permissions.js';
 export * from './navigation.js';
 export * from './feature.js';
 export * from './chat-roles.js';
+export * from './attention.js';
 export * from './gateway.js';
+export * from './introspection.js';
+export * from './send-failure.js';
+export * from './api-error.js';
+export * from './status.js';
+export * from './capabilities.js';
+export * from './env.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

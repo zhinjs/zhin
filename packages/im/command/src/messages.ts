@@ -11,11 +11,15 @@ export function commandDescription(
 /** Static dictionaries; the caller supplies the operation's language. */
 export const commandMessages = createMessages({
   menuKeyword: { 'zh-CN': '菜单', en: 'menu' },
+  didYouMean: { 'zh-CN': '没有这个指令，你是不是想用：{commands}', en: 'No such command. Did you mean: {commands}?' },
+  suggestionSeparator: { 'zh-CN': '、', en: ', ' },
   progress: { 'zh-CN': '正在处理中，请稍候。', en: 'Working on it, please wait.' },
   invalidPage: { 'zh-CN': '页码必须是正整数。用法：{command} [插件名] --page <页码>', en: 'The page must be a positive integer. Usage: {command} [plugin] --page <page>' },
   missingPlugin: { 'zh-CN': '未找到插件: {plugin}', en: 'Plugin not found: {plugin}' },
   pageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「{command} --page <页码>」。', en: 'Page out of range: {pages} pages available. Use {command} --page <page>.' },
   menuTitle: { 'zh-CN': '=== {plugin} 指令菜单 ===', en: '=== {plugin} command menu ===' },
+  rootMenuTitle: { 'zh-CN': '=== 指令菜单 ===', en: '=== Command menu ===' },
+  rootMenuName: { 'zh-CN': '指令菜单', en: 'Command menu' },
   menuSummary: { 'zh-CN': '第 {page}/{pages} 页 · {commands} 条指令 · {plugins} 个子插件', en: 'Page {page}/{pages} · Commands: {commands} · Plugins: {plugins}' },
   childPlugins: { 'zh-CN': '子插件：', en: 'Plugins:' },
   emptyMenu: { 'zh-CN': '（暂无指令和子插件）', en: '(No commands or plugins)' },

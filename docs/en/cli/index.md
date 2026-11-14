@@ -11,6 +11,8 @@ Day to day, working with Zhin mostly means working with one command, `zhin`: sta
 npx zhin --help        # list every command
 ```
 
+Command results (lists, details) go to stdout without a log prefix, so they can be piped; progress and diagnostics go to stderr. The global `--verbose` option adds the `[time][LEVEL] [CLI]` prefix to diagnostic lines; `--debug` shows the log correlation id when a running instance answers with an internal error, and finds the matching line in the instance log.
+
 ::: tip Running outside a bot project
 Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly. Outside one (for example creating a standalone plugin, or publishing from a plugin directory), npx downloads the npm package named `zhin`:
 
@@ -162,7 +164,7 @@ zhin setup --adapters      # adapters only (add accounts)
 zhin setup --ai            # AI only
 zhin setup -y --adapter sandbox --enable-ai --install   # non-interactive: run only the steps given by flags
 zhin setup --decisions     # optional TypeSafe Jev decision service (needs existing AI config)
-zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / AGENTS.md)
+zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / BOT.md; an existing AGENTS.md without BOT.md is kept as the bot file)
 zhin setup --global        # initialize a global instance in ~/.zhin
 zhin setup --locale en     # set the project language (zh-CN or en); combines with the other options
 ```
@@ -213,7 +215,7 @@ zhin doctor [--fix] [--upgrade-l4]
 zhin doctor --live <host-url> [--json]
 ```
 
-Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. `--live` reads a running Host's readiness report (needs an API token with `status.view` in `ZHIN_CONSOLE_TOKEN`; put a custom `http.base` in the URL path) and `--json` prints it as JSON; exit code `0` when ready, `1` otherwise. See [Production](../operations/production.md). When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards.
+Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. `--live` reads a running Host's readiness report (needs an API token with `status.view` in `ZHIN_CONSOLE_TOKEN`; put a custom `http.base` in the URL path) and `--json` prints it as JSON; exit code `0` when ready, `1` otherwise. See [Production](../operations/production.md). When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards. When the project has `@zhin.js/gateway`, `doctor` also loads the gateway's `node-pty` from the project directory: when that fails (usually because pnpm skipped its build script) it warns with the repair command, and the Console's local terminal is unavailable. See [Build scripts of the native dependencies](../console/operations.md#native-build).
 
 ### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 
@@ -242,9 +244,11 @@ Reuses existing config, environment variables and data in a project, letting you
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan and ends with "nothing was changed"; `--no-install` skips the final `pnpm install`. Dependencies you locked (exact versions such as `1.1.6`, `link:`, `file:`) are kept unless you pass `--include-pinned`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
+Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan and ends with "nothing was changed"; `--no-install` skips the final `pnpm install`. Dependencies move to the newest release on the registry your npm configuration points to (mirrors included): ranges become `^x.y.z`, exact versions stay exact, and `@zhin.js/*` entries in `package.json#pnpm.overrides` are aligned with the dependencies of the target `zhin.js`. Dependencies you locked (exact versions such as `1.1.6`, `link:`, `file:`) are kept unless you pass `--include-pinned`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
 
 In a project directory (one with `zhin.config.*`), `zhin start` needs the CLI and the management gateway in production too, so `zhin migrate` puts `zhin.js`, `@zhin.js/cli` and `@zhin.js/gateway` together in `dependencies`: a package listed only in `devDependencies` moves with its version, a duplicate left in `devDependencies` is removed, and a missing `@zhin.js/gateway` is added (the CLI's dist-tag such as `latest` when it uses one, otherwise the range released together with the running CLI). A `--prod` install therefore keeps everything startup needs. A Plugin package (no project config) keeps the CLI in `devDependencies`. The `zhin runtime migrate` cutover does the same for private (project) packages.
+
+In a pnpm project that declares `@zhin.js/gateway`, `zhin migrate` also adds the gateway's native dependencies `node-pty`, `ssh2` and `cpu-features` to `allowBuilds` in `pnpm-workspace.yaml` (creating the file when missing; existing entries are kept, and an existing `onlyBuiltDependencies` list is appended to), so the install that follows builds them. See [Build scripts of the native dependencies](../console/operations.md#native-build).
 
 `zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, use `zhin migrate instances`, described [below](#migrate-instances). `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
 
@@ -371,7 +375,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-Search the plugin marketplace or show one plugin's details.
+Search the plugin marketplace or show one plugin's details. Details include the author (`author`, or `maintainers` when absent); when the plugin is installed in the current project they also list its commands, Agent tools and config fields (read statically from the convention directories and `schema.json`; no plugin code runs).
 
 ### use-cases: Find a Setup Path by Purpose
 
@@ -502,6 +506,8 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 
 `scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` may be omitted only when the instance has a single adapter; `-e` picks an account ID, defaulting to the adapter's first online account.
 
+A failed send shows the reason (for example no open Sandbox session, an account that is not connected, or a platform refusal). An internal instance error shows only "Internal error"; with `--debug` the CLI shows its log correlation id and finds that line in the last 1000 lines of `zhin logs`.
+
 ### watch: Monitor a Running Instance
 
 ```bash
@@ -529,8 +535,11 @@ zhin schedule resume <id>
 | `--prompt` | Required: the prompt sent to the AI when due |
 | `-l, --label` | Job name |
 | `--kind` | `solar` (default, Gregorian) / `lunar` / `workday` / `freeDay` |
-| `--notify-channel` | `im` / `silent` (default) / `log` |
+| `--notify-channel` | `im` / `silent` (default; `im` when `--target` is given) / `log` |
+| `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why. An explicit target also needs `endpoint.operate` on that account (as `zhin send` / `/message/send` does; the Console `cron:add` RPC too), otherwise 403 `schedule_target_forbidden` |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
+
+`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list).
 
 ### agent: Agent Diagnostics
 
@@ -576,6 +585,10 @@ zhin trace <engagementId>         # a specific collaboration; an id prefix is en
 
 A trace contains: the initiator and role, the session, tokens for each model call, each tool call (argument summary, duration, result size, error or refusing policy), budget extensions and automatic continuation, nested sub-agent turns, per-segment context cost, and the end reason. The output starts by calling out the **first failing step**.
 
+**Triggering message.** Since #1250 a trace also records the message that started the turn: a text excerpt (whitespace collapsed, credentials redacted, cut to 120 characters), the sender id and sender name, the conversation (adapter, Endpoint, conversation kind and id), the message id, and when it was received, how long it waited and queued, and how many messages were merged. A trace file therefore holds fragments of what users said plus their identifiers: anyone who can read `data/agent-traces`, anyone who can run `zhin trace`, and Console accounts or API tokens holding `agent.view` (`/api/agent/traces`, `/api/agent/trace-archive/*`) can see them. Shorten `ZHIN_TRACE_RETENTION_DAYS` if you do not want to keep them.
+
+Model calls of sub-agents (collaborating agents reached by `ask` / `delegate`) are recorded in their nested turns. The parent's "model calls / tokens" line shows the total with a split ("self N, sub-agents M"), and the trace field `subagent_usage` holds the sub-agent part; `ai.usage` logs and usage statistics count every call once. The timeline, `requests` and `model_calls` record one provider for one request (the service actually resolved), shown as the service name (`service · model`), or the model alone when the service configuration cannot be read.
+
 **Retention and redaction.** Traces are kept for 7 days with a 64 MB total cap by default: cleanup runs at startup and every hour after that, first deleting expired date files and then deleting from the oldest day until the total is under the cap (today's file is never deleted for size). Adjust with the `ZHIN_TRACE_RETENTION_DAYS` and `ZHIN_TRACE_MAX_MB` environment variables. A trace stores summaries only: tool results record only their length, not their content; tokens, passwords, `Authorization`, and similar fields in arguments and error messages are replaced with `[redacted]`, and before writing to disk inline credentials (`sk-…`, `Bearer …`, and so on) and secret values from environment variables are scanned once more. The legacy `data/agent-traces/recent.json` is still read.
 
 **Console page.** The "Agent Trace" page in Console (`/console/agent-trace`) reads the same data: session list → turn list → turn detail (model/tool call waterfall, timeline, and raw record), with time filtering, and `?turn=<turnId>` opens a turn directly. Add one page to your project to enable it:
@@ -611,8 +624,13 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `-s, --session <pattern>` | Session key substring, or a glob with `*` |
 | `--json` | JSON output |
 | `--cwd <dir>` / `--dir <dir>` | Project root / trace directory |
+| `--tz <zone>` | IANA zone for day boundaries; defaults to the instance zone (`TZ`, else the system zone) |
+
+Each day also lists model usage merged by "service · model": calls recorded under a service's `services:` and `accounts:` ids become one row, with the service name read from the model configuration in the project database (the model alone when it cannot be read). The session column shows the conversation name recorded in the trace (e.g. `qq · 群 Test`) with a short session key. Input tokens are the provider-reported input of every model call (iterations and sub-agents included), a different basis from the first-request segment estimate below.
 
 Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
+
+**Prompt-cache hint.** Every model call records a request-prefix hash (system prompt + tool definitions, trace field `prefix_hash`). When a service's last 20 or more consecutive calls, across at least 3 sessions, had no cache read (`cache_read_tokens` 0 or not reported) while more than half of the adjacent same-session requests shared their prefix, the report ends with "this service may not support or pass through prompt caching" and shows the same-prefix share as evidence. `zhin doctor` runs the same check over the last 7 days of traces, and the Console usage statistics carry it too (`promptCacheHints` of the `usage-stats` RPC).
 
 ## Exit Codes
 

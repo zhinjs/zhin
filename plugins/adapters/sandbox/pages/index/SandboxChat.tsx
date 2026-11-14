@@ -11,14 +11,16 @@ import {
 import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport.js';
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
+import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
+import { isJsxNode, segmentFallbackText, segmentPreviewText } from './segmentFallback.js';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
-  Wifi, WifiOff, Smile, Image, X, Check, Info, Search,
+  Wifi, WifiOff, Smile, Image, X, Check, Search,
   Video, Music, Plus, PanelRight, ExternalLink, RefreshCw,
   Sparkles, Activity, Wrench, Coins, CircleAlert, Gauge,
   SlidersHorizontal, FolderOpen, ShieldCheck, Network,
   Square, RotateCcw, FileDiff, Terminal, FlaskConical, ChevronDown,
-  FileDown, ListChecks,
+  FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign,
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor.js';
 import HtmlMessage from './HtmlMessage.js';
@@ -97,7 +99,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
     const atSuggestions = [
         { id: 'actor-owner', name: sandboxText(locale, "当前用户") }, { id: 'actor-reviewer', name: sandboxText(locale, "审阅者") },
-        { id: 'actor-operator', name: sandboxText(locale, "协作者") }, { id: 'actor-bot', name: 'Sandbox Agent' }
+        { id: 'actor-operator', name: sandboxText(locale, "协作者") }, { id: endpointId, name: endpointId }
     ]
     const [previewSegments, setPreviewSegments] = useState<MessageSegment[]>([])
     const [composerMode, setComposerMode] = useState<'write' | 'preview'>('write')
@@ -110,6 +112,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [senderName, setSenderName] = useState('Developer')
     const [senderRole, setSenderRole] = useState<'master' | 'admin' | 'member'>('master')
     const [showSenderSettings, setShowSenderSettings] = useState(false)
+    /** Runbar overflow: identity, run settings, inspector and clear live here (#1250). */
+    const [showMoreActions, setShowMoreActions] = useState(false)
+    /** Live binding of the current socket; drives the Host-provided quick commands. */
+    const [readyConnectionId, setReadyConnectionId] = useState<string | undefined>(undefined)
+    const [commandHints, setCommandHints] = useState<SandboxCommandHints | null>(null)
     const [showNewSession, setShowNewSession] = useState(false)
     const [newSessionName, setNewSessionName] = useState('')
     const [newSessionScope, setNewSessionScope] = useState<SandboxScope>('private')
@@ -232,6 +239,19 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     useEffect(() => { fetchFaceList() }, [])
 
+    // Quick commands come from the Host's command index and the endpoint's commandPrefix;
+    // without an answer the composer offers none rather than guessing.
+    useEffect(() => {
+        setCommandHints(null)
+        if (!readyConnectionId || !canExecute) return
+        const controller = new AbortController()
+        void readSandboxCommandHints(readyConnectionId, { type: activeChannel.type, id: activeChannel.id }, locale, controller.signal,
+            socketRequestContextRef.current ?? undefined).then((hints) => {
+            if (!controller.signal.aborted) setCommandHints(hints)
+        })
+        return () => controller.abort()
+    }, [readyConnectionId, canExecute, activeChannel.type, activeChannel.id, locale])
+
     const subscribeToScene = (scene: Pick<Channel, 'id' | 'type'>) => {
         // Old Hosts parse unknown JSON as chat, so control frames require this explicit handshake.
         if (connectionRef.current.protocol !== SANDBOX_SCOPED_PROTOCOL || !connectionRef.current.canExecute) return
@@ -266,6 +286,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             endpointIdRef.current = data.endpoint || data.bot || 'sandbox-bot'
             setBotName(endpointIdRef.current)
             connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
+            setReadyConnectionId(data.connectionId)
             setCanExecute(data.canExecute !== false)
             setTransportNotice(data.canExecute === false ? sandboxText(locale, "当前 Token 只有演示权限，任务运行已禁用。") : null)
             if (data.shellIsolation) {
@@ -579,12 +600,19 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             if (typeof segment === 'string') {
                 return <MarkdownContent key={index} text={segment} className={isSent ? 'zhin-markdown--inverse' : undefined} />
             }
+            // Unrendered JSX (or a segment without data) is read as text with `[button]` labels, never as raw JSON.
+            if (isJsxNode(segment) || !segment.data || typeof segment.data !== 'object') {
+                const fallback = segmentFallbackText(segment)
+                return fallback
+                    ? <MarkdownContent key={index} text={fallback} className={isSent ? 'zhin-markdown--inverse' : undefined} />
+                    : <span key={index} className="sandbox-segment-note">[{String(segment.type)}]</span>
+            }
             const d = segment.data as Record<string, unknown>
             switch (segment.type) {
                 case 'text':
                 case 'markdown':
                 case 'md':
-                    return <MarkdownContent key={index} text={String(d.text ?? d.content ?? '')} className={isSent ? 'zhin-markdown--inverse' : undefined} />
+                    return <MarkdownContent key={index} text={typeof d.text === 'string' ? d.text : typeof d.content === 'string' ? d.content : segmentFallbackText(segment) ?? ''} className={isSent ? 'zhin-markdown--inverse' : undefined} />
                 case 'html':
                     return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')} />
                 case 'code':
@@ -831,8 +859,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         </div>
                     )
                 }
-                default:
-                    return <span key={index} className="sandbox-segment-note">[{segment.type}]</span>
+                default: {
+                    const fallback = segmentFallbackText(segment)
+                    return fallback
+                        ? <MarkdownContent key={index} text={fallback} className={isSent ? 'zhin-markdown--inverse' : undefined} />
+                        : <span key={index} className="sandbox-segment-note">[{segment.type}]</span>
+                }
             }
         })
     }
@@ -1149,20 +1181,44 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         {props.renderConversationDetails
                             ? <button type="button" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={() => setShowConversationDetails((visible) => !visible)}><ListChecks size={14} />{sandboxText(locale, "对话与轨迹")}</button>
                             : <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>}
-                        <button
-                            type="button"
-                            className={cn("sandbox-sender-trigger", showSenderSettings && "active")}
-                            aria-expanded={showSenderSettings}
-                            onClick={() => setShowSenderSettings((visible) => !visible)}
-                            title={locale === 'en' ? 'Simulated sender identity & role' : '模拟发送者身份与角色'}
-                        >
-                            <User size={14} />
-                            <span>{senderName.trim() || senderId.trim() || 'dev-user'}</span>
-                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)}>{senderRole}</em>
-                        </button>
-                        <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
-                        <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
-                        <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
+                        <div className="sandbox-more">
+                            <button
+                                type="button"
+                                className={cn("sandbox-more-trigger", (showMoreActions || showSenderSettings || showRunSettings) && 'active')}
+                                aria-haspopup="menu"
+                                aria-expanded={showMoreActions}
+                                onClick={() => setShowMoreActions((visible) => !visible)}
+                                aria-label={sandboxText(locale, "更多操作")}
+                                title={sandboxText(locale, "更多操作")}
+                            >
+                                <MoreHorizontal size={16} />
+                            </button>
+                            {showMoreActions && (
+                                <>
+                                    <div className="sandbox-more-backdrop" onClick={() => setShowMoreActions(false)} />
+                                    <div className="sandbox-more-menu" role="menu" aria-label={sandboxText(locale, "更多操作")}>
+                                        <button type="button" role="menuitemcheckbox" aria-checked={showSenderSettings}
+                                            onClick={() => { setShowSenderSettings((visible) => !visible); setShowMoreActions(false) }}>
+                                            <User size={14} />
+                                            <span>{sandboxText(locale, "模拟发送者")}</span>
+                                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)}>{senderName.trim() || senderId.trim() || 'dev-user'} · {senderRole}</em>
+                                        </button>
+                                        <button type="button" role="menuitemcheckbox" aria-checked={showRunSettings}
+                                            onClick={() => { setShowRunSettings((visible) => !visible); setShowMoreActions(false) }}>
+                                            <SlidersHorizontal size={14} /><span>{sandboxText(locale, "配置运行环境")}</span>
+                                        </button>
+                                        <button type="button" role="menuitemcheckbox" aria-checked={showInspector} aria-controls="sandbox-run-inspector"
+                                            onClick={() => { setShowInspector(!showInspector); setShowMoreActions(false) }}>
+                                            <PanelRight size={14} /><span>{sandboxText(locale, "切换运行检查器")}</span>
+                                        </button>
+                                        <button type="button" role="menuitem" className="is-danger"
+                                            onClick={() => { setConfirmClear(true); setShowMoreActions(false) }}>
+                                            <Trash2 size={14} /><span>{sandboxText(locale, "清空当前会话")}</span>
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </header>
 
@@ -1328,7 +1384,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             {history.error ? <p role="alert">{history.error} <button type="button" disabled={history.loading} onClick={() => void history.refresh()}>{sandboxText(locale, '重试')}</button></p> : null}
                             {history.hasMore ? <button type="button" disabled={history.loading} onClick={() => void history.loadEarlier()}>{sandboxText(locale, '加载更早记录')}</button> : null}
                         </div> : null}
-                        {channelMessages.length === 0 ? (
+                        {channelMessages.length === 0 && history.loading ? (
+                            // Same full-height box as the empty state, so loaded history does not move the composer under the cursor.
+                            <div className="agent-playground-empty" role="status">
+                                <p>{sandboxText(locale, "正在加载会话记录…")}</p>
+                            </div>
+                        ) : channelMessages.length === 0 ? (
                             <div className="agent-playground-empty">
                                 <span className="agent-playground-empty-mark"><Sparkles size={24} /></span>
                                 <div><h2>{sandboxText(locale, "开始一次可观察的 Agent 运行")}</h2><p>{sandboxText(locale, "发送任务后，回复、工具调用、Token 与异常会在同一会话上下文中关联。")}</p></div>
@@ -1342,7 +1403,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             <div className="agent-playground-message-list">
                                 {channelMessages.map((msg) => {
                                     if (msg.recalledMessageId) return <p key={msg.id} className="agent-playground-history-notice">{sandboxText(locale, '消息已撤回')}</p>
-                                    const isApproval = msg.type === 'received' && msg.interactionReadOnly !== true && msg.content.some((segment) => segment.type === 'keyboard')
+                                    const isApproval = isApprovalPrompt(msg)
                                     return (
                                     <React.Fragment key={JSON.stringify([msg.channelType, msg.channelId, msg.type, msg.id])}>
                                     <article className={cn("agent-playground-message", msg.type === 'sent' ? "is-user" : "is-agent", isApproval && "is-approval")}>
@@ -1388,14 +1449,24 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title={sandboxText(locale, "插入音频 URL")}>
                             <Music size={16} />
                         </button>
+                        <button type="button" className="sandbox-tool-button"
+                            onClick={() => { editorRef.current?.insertAt(endpointId, endpointId); setShowFacePicker(false); setMediaPanel(null) }}
+                            title={sandboxText(locale, "@ 机器人（插入 [@{0}]）", [endpointId])} aria-label={sandboxText(locale, "@ 机器人")}>
+                            <AtSign size={16} />
+                        </button>
                         <div className="sandbox-quick-commands" role="toolbar" aria-label={locale === 'en' ? 'Quick commands' : '快捷命令'}>
-                            {['/help', 'help', 'ping', '/status'].map((cmd) => (
+                            {(commandHints?.quick ?? []).map((cmd) => (
                                 <button
                                     key={cmd}
                                     type="button"
                                     className="sandbox-command-chip"
                                     disabled={!canExecute || directoryStatus.mode === 'loading'}
-                                    onClick={() => runPrompt(cmd)}
+                                    // Keyboard-reachable (WCAG 2.1.1). A mouse click must not keep focus on the chip,
+                                    // and the prefill moves focus into the composer, so Enter sends the draft
+                                    // rather than re-activating the chip after a late layout shift (#1250).
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    // Pre-fill the composer (never overwriting a draft); sending stays an explicit Enter / Send.
+                                    onClick={() => editorRef.current?.setText(cmd)}
                                 >
                                     <Terminal size={11} />
                                     <span>{cmd}</span>
@@ -1512,11 +1583,22 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             <Send size={16} /> {sandboxText(locale, "发送")}</button>
                     </div>
 
-                    {/* Hints */}
-                    <div className="sandbox-hints">
-                        <Info size={12} /> {sandboxText(locale, "快捷操作:")}<span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}<span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}<span className="sandbox-hint-key">```ts</span> {sandboxText(locale, "代码块")}<span className="sandbox-hint-key">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}<span className="sandbox-hint-key">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}<span className="sandbox-hint-key">[video:URL]</span>
-                        <span className="sandbox-hint-key">[audio:URL]</span>
-                    </div>
+                    {/* Hints: collapsed by default so the composer stays one line tall (#1250). */}
+                    <details className="sandbox-hints">
+                        <summary><Keyboard size={12} /> {sandboxText(locale, "快捷操作与语法")}</summary>
+                        <ul>
+                            <li><span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}</li>
+                            <li><span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}</li>
+                            <li><span className="sandbox-hint-key">```ts</span> {sandboxText(locale, "代码块")}</li>
+                            <li><span className="sandbox-hint-key">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}</li>
+                            <li><span className="sandbox-hint-key">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}</li>
+                            <li><span className="sandbox-hint-key">[@{endpointId}]</span> {sandboxText(locale, "@机器人（群聊里唤起机器人，也可点 @ 按钮插入）")}</li>
+                            <li><span className="sandbox-hint-key">[image:URL]</span> <span className="sandbox-hint-key">[video:URL]</span> <span className="sandbox-hint-key">[audio:URL]</span> {sandboxText(locale, "媒体")}</li>
+                            {commandHints && <li><Terminal size={11} /> {commandHints.prefix
+                                ? sandboxText(locale, "命令以 {0} 开头", [commandHints.prefix])
+                                : sandboxText(locale, "命令无需前缀")}</li>}
+                        </ul>
+                    </details>
                 </section>
             </main>
 
@@ -1656,12 +1738,9 @@ function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled
 
 function messageText(segments: readonly MessageSegment[]): string {
     return segments.map((segment) => {
-        const data = segment.data as Record<string, unknown>
-        if (segment.type === 'text' || segment.type === 'markdown' || segment.type === 'md') {
-            return String(data.text ?? data.content ?? '')
-        }
+        const data = (segment.data ?? {}) as Record<string, unknown>
         if (segment.type === 'mention' || segment.type === 'at') return `@${String(data.name ?? data.target ?? '')}`
-        return `[${segment.type}]`
+        return segmentPreviewText(segment)
     }).join(' ').trim()
 }
 

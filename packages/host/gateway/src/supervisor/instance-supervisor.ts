@@ -43,7 +43,10 @@ export interface InstanceStatus {
   readonly pid?: number;
   /** Epoch ms of the current child's `ready`. */
   readonly startedAt?: number;
-  /** Runtime generation reported by the instance in `ready`. */
+  /**
+   * Committed Runtime generation of the current instance: reported in `ready`, then advanced by
+   * every route table the instance publishes after a hot reload commits (#1250).
+   */
   readonly generation?: number;
   /** Protocol version reported by the instance in `ready`. */
   readonly protocolVersion?: number;
@@ -181,6 +184,8 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   #backoffTimer: ReturnType<typeof setTimeout> | undefined;
   #restartTimes: number[] = [];
   #ready: InstanceReadyPayload | undefined;
+  /** Latest committed generation of the current child (`ready`, then each route table). */
+  #generation: number | undefined;
   #startedAt: number | undefined;
   #lastExit: InstanceExit | undefined;
   #lastFailure: InstanceFailure | undefined;
@@ -205,7 +210,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
       state: this.#state,
       ...(child?.process.pid !== undefined ? { pid: child.process.pid } : {}),
       ...(this.#startedAt !== undefined && this.#state === 'running' ? { startedAt: this.#startedAt } : {}),
-      ...(this.#ready?.generation !== undefined ? { generation: this.#ready.generation } : {}),
+      ...(this.#generation !== undefined ? { generation: this.#generation } : {}),
       ...(this.#ready ? { protocolVersion: this.#ready.version } : {}),
       lastExitCode: this.#lastExit?.code ?? null,
       lastExitSignal: this.#lastExit?.signal ?? null,
@@ -279,6 +284,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     const { spawn: spec } = this.#options;
     const output = this.#options.output ?? 'pipe';
     this.#ready = undefined;
+    this.#generation = undefined;
     this.#startedAt = undefined;
     this.#setState('starting');
     let processHandle: ChildProcess;
@@ -370,10 +376,17 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
       }
       child.ready = true;
       this.#ready = message.payload;
+      this.#noteGeneration(message.payload.generation);
       this.#startedAt = Date.now();
       this.#setState('running');
       this.emit('ready', message.payload);
       child.settleStart?.();
+      return;
+    }
+    if (message.type === 'routes') {
+      // The instance republishes its route table on every generation commit (hot reload,
+      // configuration apply); the table carries that generation (#1250).
+      this.#noteGeneration(message.payload.table.generation);
       return;
     }
     if (message.type !== 'restart-request') return;
@@ -389,6 +402,12 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     child.restartIntent = this.#stopIntent;
     this.#setState('stopping');
     void this.#terminate(child, `restart:${message.payload.reason}`);
+  }
+
+  /** Generations only move forward; a late table of an older generation never rolls status back. */
+  #noteGeneration(generation: number | undefined): void {
+    if (generation === undefined) return;
+    if (this.#generation === undefined || generation > this.#generation) this.#generation = generation;
   }
 
   #onExit(child: ChildRecord, code: number | null, signal: NodeJS.Signals | null): void {

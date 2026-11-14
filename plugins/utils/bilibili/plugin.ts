@@ -21,9 +21,6 @@ import { createInMemoryBiliDb, defineBiliTables, type BiliDb } from './src/store
  */
 export default definePlugin<BilibiliConfig>({
   name: 'bilibili',
-  metadata: {
-    displayName: '哔哩哔哩订阅',
-  },
   setup(context) {
     const config = Object.freeze(resolveBilibiliConfig(context.config.get()));
     const database = context.resources.has(databaseHostToken) ? context.resources.use(databaseHostToken) : undefined;
@@ -70,6 +67,7 @@ export default definePlugin<BilibiliConfig>({
         id: 'bilibili/watch',
         cron: config.pollCron,
         description: 'Poll Bilibili live status and UP dynamics',
+        title: '轮询 B 站直播与动态', titleI18n: { en: 'Poll Bilibili live status and dynamics' },
         async execute() {
           // The watcher records and backs off on its own; never fail the job.
           await watcher.tick();

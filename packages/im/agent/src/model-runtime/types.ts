@@ -28,13 +28,31 @@ export interface ModelExecutionCandidate {
 }
 export interface ModelExecutionLease extends ModelExecutionBundle { release(): Promise<void> }
 export type ModelSummarySource = 'runtime' | 'deployment-chat';
-/** A queued child owns this reservation independently of its parent's turn. */
+/**
+ * A queued child owns this reservation independently of its parent's turn.
+ * Each `acquire` opens one child operation (released by its own `release`);
+ * `release` ends the reservation and every child still open. The reservation
+ * also ends when the leased generation retires, so it never holds a reload.
+ */
 export interface ModelDelegationAuthority {
-  acquire(input: Readonly<{ operationId: string; sessionKey: string; epoch?: string; bindingName?: string; signal?: AbortSignal }>): Promise<ModelExecutionScope>;
+  acquire(input: Readonly<{
+    operationId: string;
+    sessionKey: string;
+    epoch?: string;
+    bindingName?: string;
+    /**
+     * Sub-agent: selects its `agent:<key>` purpose when one is configured,
+     * otherwise the chat purpose (#1250 agent-purpose-binding-ignored).
+     */
+    agent?: SubAgentModelKey;
+    signal?: AbortSignal;
+  }>): Promise<ModelExecutionScope>;
   release(): Promise<void>;
 }
 export interface ModelExecutionScope {
   readonly chat: ModelExecutionBundle;
+  /** Purpose `chat` was selected for (`chat` or `agent:<name>`). */
+  readonly purpose?: 'chat' | `agent:${string}`;
   readonly perception?: ModelExecutionCandidate;
   readonly perceptionFallbacks?: readonly ModelExecutionCandidate[];
   readonly summary?: ModelExecutionCandidate;
@@ -64,7 +82,20 @@ export interface ModelContextAcquireInput {
   readonly snapshots: SnapshotReader;
   readonly context: ProviderCallContext;
   readonly bindingName?: string;
+  /** See {@link ModelDelegationAuthority.acquire}: configured `agent:<key>` purpose, else chat. */
+  readonly agent?: SubAgentModelKey;
   readonly signal?: AbortSignal;
+}
+/**
+ * How a sub-agent is looked up in `purposes.agents`: `qualifiedName`
+ * (`<plugin>__<agent>`) first; the bare `name` only when no other sub-agent
+ * shares it and no Agent binding uses it.
+ */
+export interface SubAgentModelKey {
+  readonly name: string;
+  readonly qualifiedName?: string;
+  /** Another sub-agent registered for the turn has the same bare name. */
+  readonly bareNameShared?: boolean;
 }
 export interface ModelRuntimeServiceOptions {
   readonly rootId: string;
@@ -72,6 +103,8 @@ export interface ModelRuntimeServiceOptions {
   /** The actual operation lease; candidate setup cannot acquire an older/latest generation. */
   readonly inferenceFactory: (input: Readonly<{ lease: SnapshotLease; snapshots: SnapshotReader }>) => InferenceRuntime;
   readonly context: (input: ModelTurnResolveInput) => ProviderCallContext | Promise<ProviderCallContext>;
+  /** Agent binding names (`ai.agents.<name>`; `zhin` is implied): `purposes.agents` keys a sub-agent never uses. */
+  readonly bindingNames?: () => Iterable<string>;
 }
 export type ModelRuntimeErrorCode = 'not-prepared' | 'invalid-context' | 'unknown-binding';
 export class ModelRuntimeError extends Error {

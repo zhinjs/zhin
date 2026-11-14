@@ -61,7 +61,12 @@ describe('@zhin.js/plugin-group-suite Console RPC & Declarative Page', () => {
     )) as unknown as GroupSuiteConsoleStatus;
 
     expect(status.checkinCount).toBe(1);
-    expect(status.keywordCount).toBe(2);
+    // teach-list and keyword-list scopes, counted separately and summed (#1250).
+    expect(status.teachCount).toBe(1);
+    expect(status.keywordCount).toBe(1);
+    expect(status.qaCount).toBe(2);
+    expect(status.topCheckins[0]).toMatchObject({ userId: 'u1', userName: 'Alice', user: 'Alice' });
+    expect(status.keywords.map((k) => k.kind).sort()).toEqual(['keyword', 'teach']);
     expect(status.topCheckins).toHaveLength(1);
     expect(status.topCheckins[0]?.userId).toBe('u1');
     expect(status.topCheckins[0]?.totalDays).toBe(1);
@@ -135,11 +140,16 @@ describe('@zhin.js/plugin-group-suite Console RPC & Declarative Page', () => {
     expect(status.topCheckins[0]?.userId).toBe('u1');
     expect(status.topCheckins[0]?.points).toBe(200);
     expect(status.keywordCount).toBe(1);
+    expect(status.teachCount).toBe(0);
+    expect(status.qaCount).toBe(1);
+    expect(status.topCheckins[0]?.user).toBe('u1');
     expect(status.keywords[0]).toEqual({
+      kind: 'keyword',
       groupId: 'g2',
       keyword: 'help',
       reply: 'Here is help',
       creatorId: 'admin',
+      creator: 'admin',
     });
   });
 });

@@ -162,6 +162,14 @@ describe('InvalidationPlanner', () => {
     });
   });
 
+  it.each(['BOT.md', 'AGENTS.md', 'SOUL.md'])('rebuilds the Root for an edited root bootstrap file %s (#1250)', (name) => {
+    const plan = new InvalidationPlanner(ownership()).plan([join('/project', name)]);
+    expect(plan).toMatchObject({
+      kind: 'generation',
+      fallbacks: [{ source: `/project/${name}`, owners: [root] }],
+    });
+  });
+
   it('requires a process restart for workspace dependency state', () => {
     const plan = new InvalidationPlanner(ownership()).plan(['/project/pnpm-lock.yaml']);
     expect(plan.kind).toBe('process');

@@ -109,7 +109,14 @@ export class HandlerIndex {
       const context = { ...base, ...(interaction !== undefined ? { interaction } : {}) } as HandlerContext;
       Object.defineProperty(context, 'session', { enumerable: true, get: () => readOperationSession(authorInput, expectedAdapter) });
       Object.freeze(context);
-      await record.slot.definition.handle.call(context, ...authorArgs);
+      try {
+        await record.slot.definition.handle.call(context, ...authorArgs);
+      } catch (error) {
+        // The runtime may answer an expected refusal (e.g. a UserFacingError) and go on with the
+        // next handler; every other error keeps propagating.
+        if (await options?.recover?.(error, record.owner, authorArgs)) continue;
+        throw error;
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 import { googleProvider, anthropicProvider, openAiProvider } from '../../src/providers/api-key.js';
-import { openCodeGoProvider, openCodeZenProvider, codexProvider } from '../../src/providers/subscriptions.js';
+import { openCodeGoProvider, openCodeZenProvider, codexProvider, claudeSubscriptionProvider } from '../../src/providers/subscriptions.js';
 
 function service<T>(definition: { id: string; serviceSchema: { parse(input: unknown): T } }) {
   return { id: 'service', rootId: 'root', ownerId: 'host:test', revision: 1,
@@ -44,6 +44,25 @@ it.each([openCodeGoProvider, openCodeZenProvider])('keeps the OpenCode $id produ
   expect(new Request(...fetch.mock.calls[0]).url).toBe(`https://opencode.ai/inference${definition.id === 'opencode-go' ? '/go' : ''}/v1/models`);
 });
 
-it('does not advertise an unimplemented subscription catalogue as a working discovery interface', () => {
-  expect(codexProvider.discover).toBeUndefined();
+it('advertises discovery only where a real subscription catalogue exists (Codex), not for Claude subscription', () => {
+  expect(typeof codexProvider.discover).toBe('function');
+  expect(claudeSubscriptionProvider.discover).toBeUndefined();
+});
+
+it('passes a sanitized Retry-After into a rate-limited Codex discovery error and keeps 401 as rejected', async () => {
+  const { ProviderDiscoveryError } = await import('../../src/provider/driver.js');
+  const limited = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ error: 'private remote detail' }, { status: 429, headers: { 'retry-after': '30' } }));
+  let failure: unknown;
+  try { await codexProvider.discover!({ service: service(codexProvider), credentials: credentials(), fetch: limited, signal }); } catch (error) { failure = error; }
+  expect(failure).toBeInstanceOf(ProviderDiscoveryError);
+  expect(failure).toMatchObject({ code: 'rate-limited', status: 429, retryAfterMs: 30_000 });
+  expect(JSON.stringify(failure)).not.toContain('private remote detail');
+  const garbage = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': 'not-a-date' } }));
+  await expect(codexProvider.discover!({ service: service(codexProvider), credentials: credentials(), fetch: garbage, signal })).rejects.toSatisfy(
+    (error: { code?: string; retryAfterMs?: number }) => error.code === 'rate-limited' && error.retryAfterMs === undefined);
+  const rejected = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('', { status: 401, headers: { 'retry-after': '30' } }));
+  await expect(codexProvider.discover!({ service: service(codexProvider), credentials: credentials(), fetch: rejected, signal }))
+    .rejects.toMatchObject({ code: 'rejected', status: 401, message: 'Provider model discovery rejected (401)' });
+  await expect(codexProvider.discover!({ service: service(codexProvider), credentials: credentials(), fetch: rejected, signal }))
+    .rejects.toSatisfy((error: { retryAfterMs?: number }) => error.retryAfterMs === undefined);
 });

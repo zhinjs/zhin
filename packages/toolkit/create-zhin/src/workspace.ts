@@ -169,11 +169,13 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   // Plugin Runtime 项目骨架（对齐 examples/minimal-bot）
   await createRuntimeProjectFiles(projectPath, projectName, options);
 
-  // AI 引导文件（人格 / 工具约定 / 记忆），仅启用 AI 时生成
+  // AI 引导文件（人格 / 工具约定 / 机器人指令与记忆），仅启用 AI 时生成。
+  // 机器人读 BOT.md；AGENTS.md 面向开发者与编码代理，机器人不读（#1250 bootstrap-dev-vs-bot）。
   if (aiEnabled) {
     await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
     await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
-    await fs.writeFile(path.join(projectPath, 'AGENTS.md'), wizardText(locale, 'templates.agentInstructions'));
+    await fs.writeFile(path.join(projectPath, 'BOT.md'), wizardText(locale, 'templates.agentInstructions'));
+    await fs.writeFile(path.join(projectPath, 'AGENTS.md'), wizardText(locale, 'templates.developerAgents'));
     await fs.writeFile(path.join(projectPath, 'assistant.profile.yml.example'), wizardText(locale, 'templates.assistantProfile'));
   }
 

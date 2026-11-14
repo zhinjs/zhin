@@ -3,6 +3,7 @@ export {
   TurnTraceCollector,
   summarizeArgs,
   scrubSecrets,
+  turnTraceTotalUsage,
 } from './turn-trace.js';
 export type {
   TurnTrace,
@@ -16,13 +17,19 @@ export type {
   TurnTraceBudgetExtension,
   TurnTraceTimelineEntry,
   TurnTraceTermination,
+  TurnTraceModelSelection,
+  TurnTraceTrigger,
+  TurnTraceUsageTotals,
 } from './turn-trace.js';
 export {
   createTracingJournal,
   createScopedTraceJournal,
   registerTurnTrace,
   noteTurnTrace,
+  captureSubTurnTracing,
 } from './turn-trace-registry.js';
+export type { SubTurnTrace, SubTurnTracing, TurnTraceSave } from './turn-trace-registry.js';
+export { LOOKUP_CLAIM_PATTERNS, findLookupClaim, claimWithoutToolCall } from './lookup-claim.js';
 export {
   DEFAULT_TURN_TRACE_LIMIT,
   createFileTurnTraceStore,

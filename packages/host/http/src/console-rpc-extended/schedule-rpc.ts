@@ -6,7 +6,32 @@ const CRON_NOT_WIRED =
   '持久化调度未接线：当前 Plugin Runtime ScheduleHost 仅支持插件注册的内存任务（list），' +
   '不支持 add/remove/pause/resume（需要 @zhin.js/agent 持久化调度引擎）';
 
-export function listSchedule(ctx: ConsoleScheduleListCtx): Promise<ExtendedRpcResult> | ExtendedRpcResult {
+/** `titleI18n[locale]` → `titleI18n[language]` → `title`. */
+function localizedTitle(job: ScheduleJobRow, locale: string | undefined): string | undefined {
+  const map = job.titleI18n && typeof job.titleI18n === 'object' ? job.titleI18n : undefined;
+  if (locale && map) {
+    const exact = map[locale];
+    if (typeof exact === 'string' && exact.trim()) return exact.trim();
+    const language = locale.split('-')[0]!;
+    const byLanguage = map[language];
+    if (typeof byLanguage === 'string' && byLanguage.trim()) return byLanguage.trim();
+  }
+  return typeof job.title === 'string' && job.title.trim() ? job.title.trim() : undefined;
+}
+
+function lastRunFields(job: ScheduleJobRow): Record<string, unknown> {
+  const run = job.lastRun;
+  if (!run || typeof run !== 'object' || typeof run.startedAt !== 'number') return {};
+  return {
+    lastExecutedAt: run.startedAt,
+    ...(typeof run.finishedAt === 'number' ? { lastFinishedAt: run.finishedAt, lastDurationMs: Math.max(0, run.finishedAt - run.startedAt) } : {}),
+    lastStatus: run.status === 'failed' ? 'failed' : 'succeeded',
+    ...(run.status === 'failed' && typeof run.error === 'string' ? { lastError: run.error } : {}),
+  };
+}
+
+export function listSchedule(ctx: ConsoleScheduleListCtx, d: Record<string, unknown> = {}): Promise<ExtendedRpcResult> | ExtendedRpcResult {
+  const locale = typeof d.locale === 'string' && d.locale.trim() ? d.locale.trim() : undefined;
   const host = ctx.scheduleHost as { list?: () => unknown } | undefined;
   if (!host || typeof host.list !== 'function') {
     return { error: '调度服务未配置（scheduleHost 未挂载）' };
@@ -18,17 +43,26 @@ export function listSchedule(ctx: ConsoleScheduleListCtx): Promise<ExtendedRpcRe
         !!job && typeof job === 'object'
         && typeof (job as ScheduleJobRow).id === 'string'
         && typeof (job as ScheduleJobRow).cron === 'string')
-      .map((job) => ({
+      .map((job) => {
+        const title = localizedTitle(job, locale);
+        return {
         id: job.id,
         cron: job.cron,
         ...(typeof job.description === 'string' ? { description: job.description } : {}),
+        // #1250: plugin polling is not a user reminder; title is localized, displayName never falls back to a bare id when a title exists.
+        kind: job.kind === 'user-task' ? 'user-task' : 'plugin-internal',
+        ...(title ? { title } : {}),
+        ...(job.titleI18n && typeof job.titleI18n === 'object' ? { titleI18n: job.titleI18n } : {}),
+        displayName: title ?? (typeof job.description === 'string' && job.description ? job.description : job.id),
+        ...lastRunFields(job),
         // console cron 页渲染字段（由 schedule host 提供时透传）
         expression: (job as { expression?: string }).expression ?? job.cron,
         running: (job as { running?: boolean }).running ?? true,
         ...((job as { plugin?: string }).plugin ? { plugin: (job as { plugin?: string }).plugin } : {}),
         ...((job as { nextExecution?: number }).nextExecution
           ? { nextExecution: (job as { nextExecution?: number }).nextExecution } : {}),
-      }));
+        };
+      });
     return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent, capabilities: { persistent: !!ctx.resolveScheduleEngine?.() && ctx.fullScope } } })).catch((error) => ({ error: errorMessage(error) }));
   } catch (error) {
     return { error: errorMessage(error) };
@@ -50,16 +84,36 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       prompt: (job.action as { prompt?: string } | undefined)?.prompt ?? '',
       enabled: job.enabled !== false,
       source: job.source ?? 'manual',
+      // Persistent jobs are created by a person or on their behalf by the Agent.
+      kind: 'user-task',
       createdAt: (job as { createdAt?: number }).createdAt,
       nextExecution: (job.state as { nextRunAtMs?: number } | undefined)?.nextRunAtMs,
       ...((job.notify as { target?: unknown } | undefined)?.target
         ? { context: { target: (job.notify as { target?: unknown }).target } } : {}),
+      // #1250: the resolved delivery target; `resolved: false` = results cannot be delivered.
+      ...(ctx.describeScheduleTarget ? { target: ctx.describeScheduleTarget(job.notify) } : {}),
       lastExecutedAt: (job.state as { lastExecutedAt?: number } | undefined)?.lastExecutedAt,
       lastStatus: (job.state as { lastStatus?: string } | undefined)?.lastStatus,
     }));
   } catch (error) {
     throw new Error(`读取持久化任务失败: ${errorMessage(error)}`);
   }
+}
+
+/** The account (`adapter` / `endpoint`) a schedule delivery target sends from, if it names one. */
+function deliveryAccount(target: unknown): { adapter: string; endpoint: string } | undefined {
+  if (typeof target === 'string') {
+    // `<adapter>:<endpoint>:<kind>:<id>`
+    const [adapter, endpoint] = target.split(':');
+    return adapter && endpoint ? { adapter, endpoint } : undefined;
+  }
+  if (!target || typeof target !== 'object') return undefined;
+  const scene = (target as { scene?: unknown }).scene;
+  if (!scene || typeof scene !== 'object') return undefined;
+  const { platform, endpointKey } = scene as { platform?: unknown; endpointKey?: unknown };
+  return typeof platform === 'string' && platform && typeof endpointKey === 'string' && endpointKey
+    ? { adapter: platform, endpoint: endpointKey }
+    : undefined;
 }
 
 export async function addCron(
@@ -80,6 +134,16 @@ export async function addCron(
   const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
+  // A delivery target sends to that account on every run: `endpoint.operate` there, like
+  // `/message/send`, on top of `ops.schedule.write` (absent check = trusted in-process caller).
+  if (target && ctx.canOperateEndpoint) {
+    const account = deliveryAccount(target);
+    if (!account || !ctx.canOperateEndpoint(account.adapter, account.endpoint)) {
+      return { error: account
+        ? `没有向该账号投递的权限：需要 ${account.adapter} / ${account.endpoint} 上的 endpoint.operate`
+        : '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' };
+    }
+  }
   const job = {
     id: `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     ...(label ? { label } : {}),

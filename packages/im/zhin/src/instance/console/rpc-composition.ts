@@ -32,6 +32,8 @@ export interface ConsoleRpcComposition {
 export interface ConsoleRpcConfigurationPort {
   readSource(): Promise<import('@zhin.js/console-protocol').ConsoleConfigSource>;
   readDocument(): Promise<Record<string, unknown>>;
+  /** Literal secret paths of the stored configuration (ADR 0057); never values. */
+  readLiteralSecrets?(): Promise<readonly { readonly path: readonly string[] }[]>;
   apply?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   replaceSource(
     source: string,
@@ -44,6 +46,11 @@ export interface ConsoleRpcConfigurationPort {
   removeKey(pluginName: string): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   readEnvironmentFile(filename: string): Promise<string>;
   writeEnvironmentFile(filename: string, content: string): Promise<void>;
+  /** Masked `env:get` view (issue #1250); without it `env:get` answers "not configured". */
+  readEnvironmentView?(filename: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvFileView>;
+  revealEnvironmentVariable?(filename: string, key: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvRevealResult>;
+  updateEnvironmentVariables?(filename: string, changes: unknown): Promise<{ readonly changed: readonly string[] }>;
+  replaceEnvironmentFile?(filename: string, content: string): Promise<void>;
   readSchema(pluginName?: string): Promise<unknown>;
   readAllSchemas(): Promise<Record<string, unknown>>;
   validatePluginConfig(pluginName: string, data: unknown): Promise<import('@zhin.js/host-http').PluginConfigValidation>;

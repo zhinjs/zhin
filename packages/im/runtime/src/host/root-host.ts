@@ -9,7 +9,10 @@ import {
   type EnvironmentLayers,
   type EnvironmentLayersPort,
   type HmrCoordinator,
+  type HmrReloadReport,
+  type ManifestFieldChange,
   type InvalidationPlan,
+  type ManifestWarning,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
   type RootConfigUpdateHandler,
@@ -33,6 +36,8 @@ export interface RootHostOptions {
   readonly pluginConfigurationSelection?: RootPluginConfigurationSelection;
   readonly disabledPluginInstanceKeys?: readonly string[];
   readonly watch?: boolean | readonly RuntimeWatchScope[];
+  /** Tolerated manifest problems (dropped marketplace metadata); see `RootRuntimeOptions.onManifestWarning`. */
+  onManifestWarning?(warning: ManifestWarning): void;
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
@@ -40,7 +45,11 @@ export interface RootHostOptions {
     plan: Extract<InvalidationPlan, { kind: 'generation' }>,
     generation: number,
     durationMs: number,
+    /** What the committed generation actually rebuilt; absent when nothing was rebuilt. */
+    report?: HmrReloadReport,
   ): void | Promise<void>;
+  /** A watched `package.json` changed only in fields that do not affect the Runtime; it was ignored. */
+  onManifestIgnored?(change: ManifestFieldChange): void | Promise<void>;
   /**
    * Generation commit 回调（包括初始 start 与后续 HMR/config patch）。
    * 用于 Console `hmr:reload` SSE 推送。
@@ -63,6 +72,7 @@ export class RootHost {
   readonly #onError: NonNullable<RootHostOptions['onError']>;
   readonly #onPlan?: RootHostOptions['onPlan'];
   readonly #onReload?: RootHostOptions['onReload'];
+  readonly #onManifestIgnored?: RootHostOptions['onManifestIgnored'];
   readonly #stopGenerationObservation: () => void;
   #stopHmr?: Dispose;
   #hmr?: HmrCoordinator;
@@ -84,6 +94,7 @@ export class RootHost {
     this.#onError = options.onError ?? (() => undefined);
     this.#onPlan = options.onPlan;
     this.#onReload = options.onReload;
+    this.#onManifestIgnored = options.onManifestIgnored;
     this.runtime = new RootRuntime({
       projectRoot: options.projectRoot,
       modules,
@@ -99,6 +110,7 @@ export class RootHost {
         platform: 'node',
       },
       disabledPluginInstanceKeys: options.disabledPluginInstanceKeys,
+      ...(options.onManifestWarning ? { onManifestWarning: (warning: ManifestWarning) => options.onManifestWarning?.(warning) } : {}),
       onControlError: (error) => {
         void Promise.resolve(this.#onError(error)).catch(() => undefined);
       },
@@ -150,8 +162,9 @@ export class RootHost {
       },
       onError: this.#onError,
       onPlan: this.#onPlan,
-      onReload: (plan, durationMs) =>
-        this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs),
+      onReload: (plan, durationMs, report) =>
+        this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs, report),
+      onManifestIgnored: this.#onManifestIgnored,
     });
     // Without `watch` the module runtime's watcher is a no-op; the coordinator only serves reloadSources().
     this.#stopHmr = hmr.start();

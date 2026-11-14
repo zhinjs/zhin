@@ -3,6 +3,7 @@ import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit'
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import type { ConversationRef, DeliveryReceipt, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { userFacingErrorText } from '@zhin.js/command';
 import {
   MiddlewareIndex,
   isMiddlewareIndex,
@@ -202,6 +203,7 @@ export type InboundSpineStage =
   | 'interactive'
   | 'command'
   | 'agent-ingress'
+  | 'command-suggestion'
   | 'none';
 
 export type InboundCommandObserve = (
@@ -236,6 +238,11 @@ export interface InboundTurnEnvelope {
   runHandlers(): Promise<void>;
   dispatchInteractive(): Promise<MessageDispatchResult | undefined>;
   dispatchCommand(observe: InboundCommandObserve): Promise<MessageDispatchOutcome>;
+  /**
+   * Before an unmatched message goes to the AI ingress: a "did you mean" reply when its
+   * first words resemble a registered command (issue #1250); `undefined` keeps the AI path.
+   */
+  suggestCommand?(): Promise<SendContent | undefined>;
   hasReplied(): boolean;
   findEventHandlerName?(event: string): string | undefined;
 }
@@ -339,11 +346,24 @@ export async function executeInboundTurnSpine(
       ? 'command'
       : 'none';
 
+  let suggestion: { readonly owner: PluginId; readonly content: SendContent } | undefined;
   if (!result.matched && ingressRoute) {
     logger.debug(formatCompact({
       op: 'unmatched',
       conv: formatConversationLog(message.conversation),
     }));
+    let suggested: SendContent | undefined;
+    if (!repliedDuringHandlers && !envelope.hasReplied()) {
+      // A suggestion is a convenience: its failure keeps the ordinary AI path.
+      try { suggested = await envelope.suggestCommand?.(); } catch { suggested = undefined; }
+    }
+    if (suggested !== undefined) {
+      diagnostics?.route('command');
+      suggestion = { owner: requester, content: suggested };
+      stage = 'command-suggestion';
+    }
+  }
+  if (!result.matched && ingressRoute && !suggestion) {
     const handled = await ingressRoute.route(
       message,
       lease,
@@ -357,7 +377,7 @@ export async function executeInboundTurnSpine(
     }
   }
 
-  const response = dispatched?.reply ?? (interactive?.value !== undefined && interactive.owner
+  const response = dispatched?.reply ?? suggestion ?? (interactive?.value !== undefined && interactive.owner
     ? { owner: interactive.owner, content: interactive.value as SendContent }
     : undefined);
   const replied = envelope.hasReplied() || response !== undefined;
@@ -459,6 +479,17 @@ export async function runInboundMiddlewareAndSpine(
           diagnostics?.step('middleware', 'stopped');
           return { dispatch: { matched: true, command: 'middleware', owner } };
         },
+        // #1250: a UserFacingError thrown by a Middleware becomes its reply (normal outbound chain).
+        refuse: (owner, error, downstream): InboundOutcome | undefined => {
+          const text = userFacingErrorText(error, message.locale);
+          if (text === undefined) return undefined;
+          diagnostics?.step('middleware', 'replaced');
+          if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
+          return {
+            dispatch: downstream?.dispatch.matched ? downstream.dispatch : { matched: true, command: 'middleware', owner },
+            reply: { owner, content: text },
+          };
+        },
         replace: (owner, value, downstream): InboundOutcome => {
           diagnostics?.step('middleware', 'replaced');
           if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
@@ -509,6 +540,22 @@ export async function dispatchInboundHandlers({
         });
       }
       return undefined;
+    },
+    // #1250: a UserFacingError thrown by a handler is answered in the event's conversation through
+    // the normal outbound chain; any other error still propagates (and is only logged).
+    recover: async (error, owner) => {
+      const payload = (args[0] as EndpointEvent | undefined)?.payload;
+      const locale = payload instanceof RuntimeMessage ? payload.locale : undefined;
+      const text = userFacingErrorText(error, locale);
+      if (text === undefined) return false;
+      if (payload instanceof RuntimeMessage) {
+        await bindOperationInput(payload, owner, snapshot).$reply(text);
+        return true;
+      }
+      const conversation = (payload as Notice | Request | undefined)?.conversation;
+      if (!conversation) return false;
+      await deliver({ conversation, requester: owner, content: text }, snapshot);
+      return true;
     },
   };
   await index.dispatch(event, args, options);

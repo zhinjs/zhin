@@ -124,7 +124,7 @@ export class ContextSystem {
     const llmModel = selected.model;
     // Captured files decide root presence or absence (including []); never borrow a newer root from disk.
     const rootHandledBySystem = input.contextFiles !== undefined
-      || /(?:^|\n)## AGENTS\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
+      || /(?:^|\n)## (?:AGENTS|BOT)\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
     const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootHandledBySystem });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.

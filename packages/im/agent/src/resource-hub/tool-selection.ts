@@ -125,6 +125,8 @@ export function normalizeTool(input: NormalizableTool, message?: Message): Agent
   if (tool.source) agentTool.source = tool.source;
   if (tool.requiresApproval) agentTool.requiresApproval = tool.requiresApproval;
   if (tool.toModelOutput) agentTool.toModelOutput = tool.toModelOutput;
+  // #1250: keep a read-only declaration so a failed read is not reported as an undone change.
+  if ((tool as { isReadOnly?: boolean }).isReadOnly === true) agentTool.isReadOnly = true;
   const toolTimeout = (tool as { timeout?: number }).timeout;
   if (toolTimeout != null) agentTool.timeout = toolTimeout;
   const toolGeneration = (tool as { generation?: number }).generation;

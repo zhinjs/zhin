@@ -52,7 +52,13 @@ function currentAgentHostToken(): { readonly id: TokenId } | undefined {
 
 export type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
-  listMcpServers(): readonly { name: string; connected: boolean; toolCount: number }[];
+  listMcpServers(): readonly {
+    name: string;
+    connected: boolean;
+    toolCount: number;
+    /** Classified, redacted reason of the last failed connect (Agent ≥ #1250). */
+    lastError?: Readonly<{ category: string; message: string; exitCode?: number; at: number }>;
+  }[];
 };
 
 export function resolveGenerationAgentIntrospection(
@@ -177,5 +183,7 @@ type AssistantRuntime = {
     remove(id: string): Promise<boolean>;
     pause(id: string): Promise<boolean>;
     resume(id: string): Promise<boolean>;
+    unschedulable?(): readonly { jobId: string; label?: string; reason: string; since: number }[];
+    defaultImNotify?(): unknown;
   };
 };

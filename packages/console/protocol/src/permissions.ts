@@ -7,6 +7,7 @@
  */
 import { FEATURE_GLOBAL_SWITCH_PERMISSION, FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
 import { CHAT_ROLES_RPC_PERMISSIONS } from './chat-roles.js';
+import { ATTENTION_RPC_PERMISSIONS } from './attention.js';
 import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
   isConsolePluginPermission,
@@ -226,6 +227,8 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'ping': P.STATUS_VIEW,
   'entries:get': P.STATUS_VIEW,
   'pages:list': P.STATUS_VIEW,
+  // Attention inbox (「需要你处理」): a dashboard read; items are filtered per permission inside.
+  ...ATTENTION_RPC_PERMISSIONS,
   // Raw configuration (CONFIG_RPC)
   'config:get': P.OPS_CONFIG_READ,
   'config:get-all': P.OPS_CONFIG_READ,
@@ -264,6 +267,9 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'env:list': P.OPS_ENV_READ,
   'env:get': P.OPS_ENV_READ,
   'env:save': P.OPS_ENV_WRITE,
+  // One variable as written (issue #1250): the stricter of the two env permissions, and the read
+  // permission as well (`CONSOLE_RPC_ALSO_REQUIRES`); audited like every write-permission RPC.
+  'env:reveal': P.OPS_ENV_WRITE,
   'db:info': P.OPS_DATABASE_READ,
   'db:tables': P.OPS_DATABASE_READ,
   'db:select': P.OPS_DATABASE_READ,
@@ -368,24 +374,87 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   ...GATEWAY_RPC_PERMISSIONS,
 });
 
+/**
+ * Further permissions an RPC needs besides its {@link CONSOLE_RPC_PERMISSIONS} entry, carried on the
+ * resolved rule as `alsoRequires` (each held globally, see {@link ConsoleRpcPermissionRule}).
+ * `env:reveal` shows a secret: it needs both env permissions.
+ */
+export const CONSOLE_RPC_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePermission[]>> = Object.freeze({
+  'env:reveal': Object.freeze<ConsolePermission[]>([P.OPS_ENV_READ]),
+});
+
 /** Adapter account mutations contributed by `defineAdapterConsoleRpc` (`plugin.<id>.endpoint-*`). */
 const ADAPTER_ACCOUNT_METHODS: ReadonlySet<string> = new Set([
   'endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace',
+  // #1250: import a zhin.config.yml account into the persisted accounts / write persisted accounts back to the file.
+  'endpoint-import', 'endpoint-writeback',
 ]);
 
-const pluginRpcPattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-zA-Z][a-zA-Z0-9.-]{0,79})$/u;
+/**
+ * Adapter account methods that need more than `endpoint.manage`: `endpoint-writeback` rewrites the
+ * project configuration file, so it also needs `ops.config.write` (held globally, like every
+ * configuration write) — an account operator alone may not change `zhin.config.yml` (#1250).
+ */
+const ADAPTER_ACCOUNT_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePermission[]>> = Object.freeze({
+  'endpoint-writeback': Object.freeze([P.OPS_CONFIG_WRITE]),
+});
+
+/** Adapter account reads contributed by `defineAdapterConsoleRpc` (#1250 `endpoint-drift`: ids and paths only). */
+const ADAPTER_ACCOUNT_READ_METHODS: ReadonlySet<string> = new Set(['endpoint-drift']);
+
+/** Plugin RPC shape admitted (then delegated) by the gate; the dispatcher answers only normalizable ones. */
+const pluginRpcShapePattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-zA-Z][a-zA-Z0-9.-]{0,79})$/u;
+/** Accepted spellings: `plugin.<id>.<method>` / `plugin.<id>.action.<method>`, method kebab- or camelCase. */
+const pluginRpcPattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.(?:action\.)?([a-zA-Z][a-zA-Z0-9-]{0,79})$/u;
+/** Canonical method name (`parsePluginConsoleRpcType`). */
+const canonicalPluginRpcMethod = /^[a-z][a-z0-9-]{0,63}$/u;
+
+/** A plugin Console RPC type in its one canonical spelling (see {@link normalizePluginConsoleRpcType}). */
+export interface NormalizedPluginConsoleRpcType {
+  /** `plugin.<pluginId>.<method>` with the kebab-case method. */
+  readonly type: string;
+  readonly pluginId: string;
+  /** Kebab-case method (`endpoint-writeback`). */
+  readonly method: string;
+  /** The method as sent (`endpointWriteback`), without any `action.` prefix. */
+  readonly rawMethod: string;
+}
 
 /**
- * Whether `type` is a plugin Console RPC (`plugin.<pluginId>.<method>`). Its method-level
- * permissions are only known to the runtime dispatcher, which authorizes signed-in principals.
+ * The single normalization of a plugin Console RPC type, shared by the permission catalog and the
+ * runtime dispatcher so every spelling the dispatcher answers is authorized and audited as the
+ * same method: strips an `action.` prefix from the method and turns camelCase into kebab-case
+ * (`plugin.root/qq.action.endpointWriteback` → `plugin.root/qq.endpoint-writeback`). Returns null
+ * for anything the dispatcher would not answer.
+ */
+export function normalizePluginConsoleRpcType(type: unknown): NormalizedPluginConsoleRpcType | null {
+  if (typeof type !== 'string' || type.length > 640) return null;
+  const match = pluginRpcPattern.exec(type);
+  if (!match) return null;
+  const pluginId = match[1]!;
+  const rawMethod = match[2]!;
+  const method = rawMethod.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`);
+  if (!canonicalPluginRpcMethod.test(method)) return null;
+  return Object.freeze({ type: `plugin.${pluginId}.${method}`, pluginId, method, rawMethod });
+}
+
+/**
+ * Whether `type` has the shape of a plugin Console RPC (`plugin.<pluginId>.<method>`). Its
+ * method-level permissions are only known to the runtime dispatcher, which authorizes signed-in
+ * principals and answers only types {@link normalizePluginConsoleRpcType} accepts (any other is
+ * denied because no dispatcher answers it).
  */
 export function isPluginConsoleRpcType(type: unknown): type is string {
-  return typeof type === 'string' && type.length <= 640 && pluginRpcPattern.test(type);
+  return typeof type === 'string' && type.length <= 640 && pluginRpcShapePattern.test(type);
 }
 
 export type ConsoleRpcPermissionRule =
-  /** Exactly one permission. */
-  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget }>
+  /**
+   * `permission` at `target`; plus every `alsoRequires` permission held globally (an RPC whose
+   * effect reaches beyond its target, e.g. an account write-back that rewrites the configuration
+   * file). Enforcers must check both.
+   */
+  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget; alsoRequires?: readonly ConsolePermission[] }>
   /**
    * Plugin-contributed RPC: `read` admits the call, `write` is required unless the
    * plugin declares the method read-only (decided by the plugin RPC dispatcher).
@@ -417,12 +486,17 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       if (file === 'env') permission = write ? P.OPS_ENV_WRITE : P.OPS_ENV_READ;
       if (file === 'config') permission = write ? P.OPS_CONFIG_WRITE : P.OPS_CONFIG_READ;
     }
-    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload) });
+    const alsoRequires = Object.hasOwn(CONSOLE_RPC_ALSO_REQUIRES, type) ? CONSOLE_RPC_ALSO_REQUIRES[type]! : undefined;
+    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload), ...(alsoRequires ? { alsoRequires } : {}) });
   }
-  const plugin = pluginRpcPattern.exec(type);
-  if (!plugin) return null;
-  const pluginId = plugin[1]!;
-  const method = plugin[2]!.replace(/^action\./u, '');
+  // Every spelling resolves through the canonical method, so camelCase / `action.` forms carry the
+  // same target, `alsoRequires` and write classification (audit) as the kebab form.
+  if (!isPluginConsoleRpcType(type)) return null;
+  const plugin = normalizePluginConsoleRpcType(type);
+  // Plugin-shaped but not addressable (e.g. a dotted method): no dispatcher answers it, so the
+  // generic rule only lets the gate delegate — and the caller then denies.
+  if (!plugin) return Object.freeze({ kind: 'plugin', read: P.FEATURE_VIEW, write: P.FEATURE_CONFIGURE, target: GLOBAL_TARGET });
+  const { pluginId, method } = plugin;
   if (ADAPTER_ACCOUNT_METHODS.has(method)) {
     const alias = pluginAlias(pluginId);
     const id = firstString(payload, 'id');
@@ -431,9 +505,28 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       : id && method !== 'endpoint-add' && method !== 'endpoint-replace'
         ? Object.freeze({ kind: 'endpoint', adapter: alias, endpoint: id })
         : Object.freeze({ kind: 'adapter', adapter: alias });
-    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_MANAGE, target });
+    const alsoRequires = Object.hasOwn(ADAPTER_ACCOUNT_ALSO_REQUIRES, method) ? ADAPTER_ACCOUNT_ALSO_REQUIRES[method] : undefined;
+    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_MANAGE, target, ...(alsoRequires ? { alsoRequires } : {}) });
+  }
+  if (ADAPTER_ACCOUNT_READ_METHODS.has(method)) {
+    const alias = pluginAlias(pluginId);
+    return Object.freeze({ kind: 'exact', permission: P.ENDPOINT_VIEW,
+      target: alias ? Object.freeze({ kind: 'adapter', adapter: alias }) : GLOBAL_TARGET });
   }
   return Object.freeze({ kind: 'plugin', read: P.FEATURE_VIEW, write: P.FEATURE_CONFIGURE, target: GLOBAL_TARGET });
+}
+
+/**
+ * Whether the grants satisfy a rule's `alsoRequires` (each held globally). True for rules without
+ * any. Callers check the rule's own permission separately.
+ */
+export function grantsAllowAlsoRequired(
+  grants: readonly ConsoleGrant[],
+  rule: ConsoleRpcPermissionRule | null | undefined,
+  levelOf?: ConsolePluginPermissionLevelResolver,
+): boolean {
+  const also = rule?.kind === 'exact' ? rule.alsoRequires ?? [] : [];
+  return also.every(permission => grantsAllow(grants, permission, GLOBAL_TARGET, levelOf));
 }
 
 /** Static form of {@link resolveConsoleRpcPermission} without a payload. */
@@ -467,6 +560,8 @@ const httpRule = (
 /** Every Console `/api` route → required permission (paths relative to the API base). */
 export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Object.freeze([
   httpRule('POST', '/console/request', 'rpc'),
+  // zhinjs/zhin#1250: which RPC types this Host answers (`CONSOLE_CAPABILITIES_PATH`).
+  httpRule('GET', '/console/capabilities', 'authenticated'),
   httpRule('POST', '/auth/login', 'public'),
   httpRule('GET', '/auth/setup', 'bootstrap'),
   httpRule('POST', '/auth/setup', 'bootstrap'),
@@ -490,6 +585,8 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('DELETE', '/logs', P.OPS_DATABASE_WRITE),
   httpRule('POST', '/logs/cleanup', P.OPS_DATABASE_WRITE),
   httpRule('GET', '/messages/diagnostics', P.STATUS_VIEW),
+  // Recent Agent turns (session names, principals, models): Agent data, not status.
+  httpRule('GET', '/introspection/recent-turns', P.AGENT_VIEW),
   httpRule('GET', '/introspection', P.STATUS_VIEW, true),
   httpRule('POST', '/introspection/components/render', P.STATUS_VIEW),
   httpRule('GET', '/commands/permissions', P.STATUS_VIEW),
@@ -504,6 +601,7 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/conversations/results', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/workspaces', P.ENDPOINT_VIEW),
   httpRule('PUT', '/conversations/workspaces', P.ENDPOINT_OPERATE),
+  httpRule('GET', '/conversations/workspaces/commands', P.ENDPOINT_VIEW),
   httpRule('GET', '/interactions/pending', P.ENDPOINT_VIEW),
   httpRule('POST', '/message/send', P.ENDPOINT_OPERATE),
   httpRule('GET', '/data-migrations', P.OPS_DATABASE_READ),

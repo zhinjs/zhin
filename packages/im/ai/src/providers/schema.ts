@@ -111,6 +111,32 @@ export function fixedServiceSchema(baseUrl: string): ProviderSchema<FixedService
   return providerSchema(z.strictObject({ baseUrl: z.literal(baseUrl).default(baseUrl) }));
 }
 
+/** Codex CLI release whose `client_version` the ChatGPT Codex backend is known to answer with a model catalogue
+ * (observed in a working Codex CLI model cache). The backend filters `GET /models` by client version, so this is
+ * the Codex CLI version reported, not the `@zhin.js/ai` package version. Override per Service with `codexClientVersion`. */
+export const CODEX_DEFAULT_CLIENT_VERSION = '0.167.0';
+export interface CodexServiceOptions extends FixedServiceOptions {
+  /** Codex CLI version sent as `client_version` to model discovery; defaults to {@link CODEX_DEFAULT_CLIENT_VERSION}. */
+  readonly codexClientVersion?: string;
+}
+export function codexServiceSchema(baseUrl: string): ProviderSchema<CodexServiceOptions> {
+  return providerSchema(z.strictObject({ baseUrl: z.literal(baseUrl).default(baseUrl),
+    codexClientVersion: z.string().trim().regex(/^\d{1,6}\.\d{1,6}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,64})?$/u).optional()
+      .describe('Codex CLI version reported to model discovery (default 0.167.0)') }));
+}
+/** Google Cloud project ID (string form, e.g. `my-project-123`; optionally `domain:project`), never the numeric project number. */
+const googleCloudProjectId = /^(?:[a-z][a-z0-9.-]{0,62}:)?[a-z][a-z0-9-]{4,28}[a-z0-9]$/u;
+export interface AntigravityServiceOptions extends FixedServiceOptions {
+  /** User-chosen Google Cloud project for Code Assist accounts that have a tier but no managed project
+   * (gemini-cli `GOOGLE_CLOUD_PROJECT`). Sent as `cloudaicompanionProject` during preparation. */
+  readonly projectId?: string;
+}
+export function antigravityServiceSchema(baseUrl: string): ProviderSchema<AntigravityServiceOptions> {
+  return providerSchema(z.strictObject({ baseUrl: z.literal(baseUrl).default(baseUrl),
+    projectId: z.string().trim().regex(googleCloudProjectId).optional()
+      .describe('Google Cloud project ID (e.g. my-project-123, not the numeric project number); only needed when preparation reports project-required') }));
+}
+
 const budget = z.number().int().nonnegative().max(2_147_483_647);
 export const modelParameterShape = z.strictObject({
   temperature: z.number().optional(), maxOutputTokens: z.number().int().positive().optional(),

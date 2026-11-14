@@ -16,7 +16,11 @@
       "default": "0 */5 * * * *",
       "description": "轮询频率 (6 段 Cron 表达式)",
       "x-i18n": {
+        "zh-CN": {
+          "title": "轮询频率"
+        },
         "en": {
+          "title": "Poll schedule",
           "description": "Polling schedule (6-field cron expression)."
         }
       },
@@ -28,6 +32,16 @@
     },
     "maxPerGroup": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "每个会话最多订阅数",
+          "description": "每个会话最多订阅的 feed 数量"
+        },
+        "en": {
+          "title": "Max subscriptions per conversation",
+          "description": "Maximum feeds per conversation."
+        }
+      },
       "default": 30,
       "minimum": 1,
       "maximum": 200,
@@ -39,6 +53,16 @@
     },
     "maxItems": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "单次推送最多条数",
+          "description": "一次推送最多展示的文章条数，其余只提示数量"
+        },
+        "en": {
+          "title": "Items per notification",
+          "description": "Maximum articles listed in one notification; the rest are counted."
+        }
+      },
       "default": 5,
       "minimum": 1,
       "maximum": 20,
@@ -50,6 +74,16 @@
     },
     "timeout": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "抓取超时（毫秒）",
+          "description": "拉取一次 feed 的超时"
+        },
+        "en": {
+          "title": "Fetch timeout (ms)",
+          "description": "Timeout for fetching a feed."
+        }
+      },
       "default": 15000,
       "minimum": 1000,
       "maximum": 60000,
@@ -64,7 +98,11 @@
       "default": false,
       "description": "允许订阅回环/内网地址上的 feed（如自建 RSSHub）。默认拒绝，因为订阅地址来自聊天用户。",
       "x-i18n": {
+        "zh-CN": {
+          "title": "允许内网地址"
+        },
         "en": {
+          "title": "Allow private network",
           "description": "Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users."
         }
       },

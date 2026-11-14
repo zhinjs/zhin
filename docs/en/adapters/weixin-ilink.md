@@ -97,5 +97,4 @@ Reading requires `weixin-ilink:read`; writes require `weixin-ilink:write`. A glo
 
 ## Documentation
 
-- Adapter index: [`plugins/adapters/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md)
-- In-place migration: [`docs/architecture/target-implementation/in-place-migration.md`](https://github.com/zhinjs/zhin/tree/main/plugins/docs/architecture/target-implementation/in-place-migration.md)
+- Adapter README: [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md)

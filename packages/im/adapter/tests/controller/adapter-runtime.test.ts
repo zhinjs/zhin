@@ -271,7 +271,7 @@ describe('Adapter-owned native Endpoint runtime', () => {
     const one = await add(adapter, 'one');
     adapter.connect = endpoint => { endpoint.connected.mockRejectedValue(new Error('private SDK details')); };
     const failed = await adapter.start(one.instanceId, adapter.revision);
-    expect(failed.execution).toEqual({ status: 'failed', code: 'endpoint_execution_failed' });
+    expect(failed.execution).toEqual({ status: 'failed', code: 'endpoint_start_failed' });
     expect(repository.state!.endpoints[0].desiredEnabled).toBe(true);
     expect(JSON.stringify(failed)).not.toContain('private');
     const failure = new Error('unknown commit');

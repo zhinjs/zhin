@@ -1,5 +1,5 @@
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
-import { DAY_MS, buildUsageStats, type UsageBucket, type UsageStats } from '@zhin.js/gateway/usage';
+import { DAY_MS, buildUsageStats, defaultUsageTimeZone, isUsageTimeZone, type UsageBucket, type UsageProviderResolver, type UsageStats, type UsageStatsOptions } from '@zhin.js/gateway/usage';
 
 /**
  * `plugin.root.usage-stats`（`control:read`）：只读的 token 用量统计，给 Console 图表用。
@@ -33,9 +33,11 @@ export interface ResolvedUsageStatsQuery {
   readonly until: number;
   readonly bucket: UsageBucket;
   readonly session?: string;
+  /** Request `timeZone` (IANA) or the instance zone (`TZ`, else the system zone). */
+  readonly timeZone?: string;
 }
 
-export function resolveUsageStatsQuery(input: PluginConsoleRpcInput, now: number): ResolvedUsageStatsQuery {
+export function resolveUsageStatsQuery(input: PluginConsoleRpcInput, now: number, instanceTimeZone?: string): ResolvedUsageStatsQuery {
   const until = optionalTimestamp(input, 'until') ?? now;
   const since = optionalTimestamp(input, 'since') ?? until - USAGE_STATS_DEFAULT_RANGE_MS;
   if (since >= until) invalid('since 必须早于 until');
@@ -47,20 +49,27 @@ export function resolveUsageStatsQuery(input: PluginConsoleRpcInput, now: number
   if (session !== undefined && session !== null && session !== '') {
     if (typeof session !== 'string' || session.length > MAX_SESSION_PATTERN) invalid(`session 必须是不超过 ${MAX_SESSION_PATTERN} 字符的字符串`);
   }
-  return { since, until, bucket, ...(typeof session === 'string' && session ? { session } : {}) };
+  const rawZone = input.timeZone;
+  if (rawZone !== undefined && rawZone !== null && rawZone !== '' && !isUsageTimeZone(rawZone)) invalid('timeZone 必须是 IANA 时区名，如 Asia/Shanghai');
+  const timeZone = typeof rawZone === 'string' && rawZone ? rawZone : instanceTimeZone;
+  return { since, until, bucket, ...(typeof session === 'string' && session ? { session } : {}), ...(timeZone ? { timeZone } : {}) };
 }
 
 /** Normalised cache key from the caller's own fields, so default (`until = now`) requests share an entry. */
 function cacheKey(input: PluginConsoleRpcInput): string {
   const pick = (key: string) => (input[key] === null ? undefined : input[key]);
-  return JSON.stringify([pick('since'), pick('until'), pick('bucket'), pick('session') || undefined]);
+  return JSON.stringify([pick('since'), pick('until'), pick('bucket'), pick('session') || undefined, pick('timeZone') || undefined]);
 }
 
 export interface UsageStatsServiceOptions {
   readonly dir: UsageTraceDirSource;
   readonly now?: () => number;
+  /** Maps recorded provider ids to their service (`服务名 · 模型`, merged rows); read per uncached request. */
+  readonly providerResolver?: () => Promise<UsageProviderResolver | undefined>;
+  /** Instance time zone for buckets when the request names none. */
+  readonly timeZone?: () => string;
   /** Test seam. */
-  readonly build?: (dir: string, query: ResolvedUsageStatsQuery) => Promise<UsageStats>;
+  readonly build?: (dir: string, query: ResolvedUsageStatsQuery, options: UsageStatsOptions) => Promise<UsageStats>;
 }
 
 /** Computes usage stats with a small in-memory result cache (60 s, 32 entries); `dispose()` drops it. */
@@ -76,14 +85,18 @@ export class UsageStatsService {
 
   async stats(input: PluginConsoleRpcInput): Promise<UsageStats> {
     const now = this.#now();
-    const query = resolveUsageStatsQuery(input, now);
+    const query = resolveUsageStatsQuery(input, now, (this.#options.timeZone ?? defaultUsageTimeZone)());
     const dir = this.#options.dir();
     if (!dir) throw new PluginConsoleRpcError('unavailable', '机器人还没启动 AI，暂时没有用量记录');
     const key = `${dir}\n${cacheKey(input)}`;
     const hit = this.#cache.get(key);
     if (hit && now - hit.at < USAGE_STATS_CACHE_TTL_MS) return hit.value;
     this.#cache.delete(key);
-    const value = (this.#options.build ?? buildUsageStats)(dir, query);
+    const value = (async () => {
+      let resolveProvider: UsageProviderResolver | undefined;
+      try { resolveProvider = await this.#options.providerResolver?.(); } catch { resolveProvider = undefined; }
+      return (this.#options.build ?? buildUsageStats)(dir, query, resolveProvider ? { resolveProvider } : {});
+    })();
     this.#cache.set(key, { at: now, value });
     while (this.#cache.size > USAGE_STATS_CACHE_MAX_ENTRIES) this.#cache.delete(this.#cache.keys().next().value!);
     try {

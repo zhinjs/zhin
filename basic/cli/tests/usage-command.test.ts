@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildUsageReport, formatUsageReport, resolveUsageWindow, usageCommand } from '../src/commands/usage.js';
+import { diagnosePromptCache } from '../src/utils/prompt-cache-check.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -90,6 +91,68 @@ describe('zhin usage report (ADR 0043 §6)', () => {
 
   it('registers the report subcommand with its options', () => {
     const report = usageCommand.commands.find(c => c.name() === 'report')!;
-    expect(report.options.map(o => o.long)).toEqual(expect.arrayContaining(['--days', '--since', '--until', '--session', '--json', '--dir']));
+    expect(report.options.map(o => o.long)).toEqual(expect.arrayContaining(['--days', '--since', '--until', '--session', '--json', '--dir', '--tz']));
+  });
+
+  it('shows 服务名 · 模型 rows, readable session names and the day time zone (#1250)', async () => {
+    const svc = 'services:11111111-1111-4111-8111-111111111111';
+    const acc = 'accounts:22222222-2222-4222-8222-222222222222';
+    const hashed = 'personal-session:v1:' + 'c'.repeat(64);
+    const dir = fixture([
+      turn(hashed, [[100]], {
+        model_calls: [
+          { index: 1, provider: svc, model: 'ag/gemini-3.8-flash', prompt_tokens: 100, completion_tokens: 5, total_tokens: 105 },
+          { index: 2, provider: acc, model: 'ag/gemini-3.8-flash', prompt_tokens: 50, completion_tokens: 1, total_tokens: 51 },
+        ],
+        origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: '42', conversation: { name: '测试群' } },
+      }),
+    ]);
+    const resolveProvider = (id: string) => (id === svc || id === acc ? { key: svc, label: 'AG 中转' } : undefined);
+    const report = await buildUsageReport(dir, { resolveProvider, timeZone: 'UTC' });
+    expect(report.time_zone).toBe('UTC');
+    expect(report.days[0]!.models).toEqual([{ display_name: 'AG 中转 · ag/gemini-3.8-flash', calls: 2, input_tokens: 150, output_tokens: 6 }]);
+    expect(report.days[0]!.top_sessions[0]).toMatchObject({ session_key: hashed, display_name: 'qq · 群 测试群' });
+    const text = formatUsageReport(report);
+    expect(text).toContain('| AG 中转 · ag/gemini-3.8-flash | 2 | 150 | 6 |');
+    expect(text).toContain('qq · 群 测试群（personal-session:cccccccc）');
+    expect(text).toContain('时区 UTC');
+    expect(text).not.toContain(svc);
+    // Unresolved: the model alone, still one row.
+    const bare = await buildUsageReport(dir, { timeZone: 'UTC' });
+    expect(bare.days[0]!.models).toEqual([{ display_name: 'ag/gemini-3.8-flash', calls: 2, input_tokens: 150, output_tokens: 6 }]);
+    // Day boundaries follow the zone: 20:00Z is the next day in Shanghai.
+    const late = fixture([turn('s', [[1]], {}, Date.UTC(2026, 9, 28, 20))]);
+    expect((await buildUsageReport(late, { timeZone: 'Asia/Shanghai' })).days[0]!.day).toBe('2026-10-29');
+    expect((await buildUsageReport(late, { timeZone: 'UTC' })).days[0]!.day).toBe('2026-10-28');
+  });
+});
+
+describe('prompt cache hint (#1250 usage-cache-unsupported-hint)', () => {
+  const noCache = (session: string) => JSON.stringify({
+    version: 1, turn_id: `t${Math.random()}`, session_key: session, started_at: T,
+    model_calls: [1, 2].map(index => ({ index, provider: 'services:relay', model: 'm', prompt_tokens: 4000, completion_tokens: 1, total_tokens: 4001, cache_read_tokens: 0, prefix_hash: 'same' })),
+    timeline: [], termination: { status: 'completed' },
+  });
+  const lines = Array.from({ length: 12 }, (_, index) => noCache(`g:${index % 3}`));
+
+  it('zhin usage report says the service may not support prompt caching, with the same-prefix share', async () => {
+    const dir = fixture(lines);
+    const report = await buildUsageReport(dir, { resolveProvider: () => ({ key: 'services:relay', label: '中转站' }) });
+    expect(report.prompt_cache_hints).toHaveLength(1);
+    const text = formatUsageReport(report);
+    expect(text).toContain('提示缓存');
+    expect(text).toContain('中转站：最近连续 24 次请求（3 个会话）没有命中提示缓存');
+    expect(text).toContain('100%（21/21）前缀相同');
+  });
+
+  it('zhin doctor warns from the trace archive only, and stays silent without traces', async () => {
+    const dir = fixture(lines);
+    const checks = await diagnosePromptCache('/nonexistent', { dir, now: T + 1000, loadResolver: async () => () => ({ key: 'services:relay', label: '中转站' }) });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ name: '提示缓存', status: 'warn' });
+    expect(checks[0]!.message).toContain('中转站');
+    expect(await diagnosePromptCache('/nonexistent', { dir: join(dir, 'missing'), now: T })).toEqual([]);
+    const healthy = fixture([turn('g:1', [[1000, 800]])]);
+    expect(await diagnosePromptCache('/nonexistent', { dir: healthy, now: T + 1000 })).toMatchObject([{ status: 'ok' }]);
   });
 });

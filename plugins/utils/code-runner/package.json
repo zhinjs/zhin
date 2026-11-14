@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-code-runner",
   "version": "1.1.20",
-  "description": "Sandboxed code execution plugin for Zhin.js (Plugin Runtime)",
+  "description": "Runs JavaScript, Python and other snippets in a sandbox with a timeout.",
+  "keywords": [
+    "zhin.js",
+    "code-runner",
+    "sandbox",
+    "javascript",
+    "python"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -29,20 +40,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "code-runner",
-    "sandbox",
-    "execute"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "devDependencies": {
@@ -98,7 +95,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Code Runner",
+      "displayNameI18n": {
+        "zh-CN": "代码运行",
+        "en": "Code Runner"
+      },
+      "descriptionI18n": {
+        "zh-CN": "在沙箱中执行 JavaScript、Python 等代码片段，可设超时。",
+        "en": "Runs JavaScript, Python and other snippets in a sandbox with a timeout."
+      },
+      "category": "utility"
+    }
   },
   "dependencies": {
     "@zhin.js/skill": "workspace:*",

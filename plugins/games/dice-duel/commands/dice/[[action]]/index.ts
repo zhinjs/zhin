@@ -4,7 +4,10 @@ import { getDiceHelp, runDiceCommand } from '../../../src/dice-command.js';
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 export default defineCommand({
-  description: 'Dice Duel',
+  description: '骰子对决：掷骰比大小',
+  descriptionI18n: { en: 'Dice Duel: roll and compare' },
+  alias: ['骰子对决'],
+  preferredAliasI18n: { 'zh-CN': '骰子对决' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeDiceAction(String(params.action ?? ''));

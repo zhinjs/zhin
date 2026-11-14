@@ -429,13 +429,21 @@ export const messages = createMessages({
     "zh-CN": "已删除关键词「{keyword}」",
     "en": "Keyword removed: “{keyword}”"
   },
+  "keywordOtherSystem": {
+    "zh-CN": "提示：这里是「关键词回复」（消息包含关键词即回复）。另有一套「teach 问答」（整条消息完全一致才回复），用 teach-list 查看。",
+    "en": "Note: these are keyword replies (any message containing the keyword). Whole-message teach Q&A pairs are a separate list: see teach-list."
+  },
+  "teachOtherSystem": {
+    "zh-CN": "提示：这里是「teach 问答」（整条消息完全一致才回复）。另有一套「关键词回复」（消息包含关键词即回复），用 keyword-list 查看。",
+    "en": "Note: these are teach Q&A pairs (whole-message match). Keyword replies (any message containing the keyword) are a separate list: see keyword-list."
+  },
   "keywordEmpty": {
     "zh-CN": "当前没有设置任何关键词",
     "en": "No keywords configured"
   },
   "keywordList": {
-    "zh-CN": "关键词列表（共 {count} 条）：\n{lines}",
-    "en": "Keywords ({count}):\n{lines}"
+    "zh-CN": "关键词列表（共 {count} 条）：\n{lines}\n{hint}",
+    "en": "Keywords ({count}):\n{lines}\n{hint}"
   },
   "userCheckinEmpty": {
     "zh-CN": "用户 {user} 没有签到记录",

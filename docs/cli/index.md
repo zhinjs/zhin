@@ -11,6 +11,8 @@ description: "zhin 命令行的全部子命令：启动与停止、配置向导�
 npx zhin --help        # 查看全部命令
 ```
 
+命令结果（列表、详情）写到标准输出，不带日志前缀，可以直接管道给其他程序；进度与诊断写到标准错误。全局选项 `--verbose` 让诊断行带上 `[时间][级别] [CLI]` 前缀；`--debug` 在运行中的实例返回内部错误时显示日志关联 id，并从实例日志里找出对应的那一行。
+
 ::: tip 在 Bot 项目外运行
 项目里装了 `@zhin.js/cli`，`npx zhin` 直接用它。在项目外（例如新建独立插件、在插件目录发布），npx 会去 npm 下载名为 `zhin` 的包：
 
@@ -162,7 +164,7 @@ zhin setup --adapters      # 仅配置适配器（添加账号）
 zhin setup --ai            # 仅配置 AI
 zhin setup -y --adapter sandbox --enable-ai --install   # 非交互：只执行参数指定的步骤
 zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
-zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
+zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / BOT.md；已有 AGENTS.md 且无 BOT.md 时沿用 AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 zhin setup --locale en     # 设置项目语言（zh-CN 或 en），可与其他选项组合
 ```
@@ -213,7 +215,7 @@ zhin doctor [--fix] [--upgrade-l4]
 zhin doctor --live <host-url> [--json]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 ### dev：联调本地 zhin 源码与独立插件
 
@@ -242,9 +244,11 @@ zhin onboard [--quick] [--flow quickstart|full]
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并改为 `latest`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并升级。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
+
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有条目保留，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
@@ -371,7 +375,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-搜索插件市场，或查看单个插件的详情。
+搜索插件市场，或查看单个插件的详情。详情含作者（`author`，缺省时取 `maintainers`）；插件已安装到当前项目时，还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
 
 ### use-cases：按用途找到配置入口 {#use-cases}
 
@@ -489,6 +493,8 @@ zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e 
 
 `scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
+发送失败时显示具体原因（例如 Sandbox 会话没有打开、账号未连接、平台拒绝）。实例内部出错时只显示「实例内部错误」；加 `--debug` 会显示日志关联 id，并从 `zhin logs` 的最近 1000 行里找出那一行。
+
 ### watch：监视运行实例
 
 ```bash
@@ -516,8 +522,11 @@ zhin schedule resume <id>
 | `--prompt` | 必填，到时间后发给 AI 的提示词 |
 | `-l, --label` | 任务名称 |
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
-| `--notify-channel` | `im` / `silent`（默认）/ `log` |
+| `--notify-channel` | `im` / `silent`（默认；给了 `--target` 时为 `im`）/ `log` |
+| `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
+
+`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。
 
 ### agent：Agent 诊断
 
@@ -563,6 +572,10 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合、上下文分段开销，以及结束原因。输出开头会单独标出**首个失败步骤**。
 
+**触发消息。** 从 #1250 起，trace 还记录触发这一回合的消息：正文摘录（空白合并、凭据脱敏后截断到 120 个字符）、发送者 id 与发送者名、会话（适配器、Endpoint、会话类型与 id）、消息 id，以及收到时间、等待与排队时长、合流消息数。也就是说 trace 文件里会出现用户发言的片段和身份标识：能读 `data/agent-traces` 目录的人、能运行 `zhin trace` 的人，以及 Console 里有 `agent.view` 权限的账号或 API 令牌（`/api/agent/traces`、`/api/agent/trace-archive/*`）都能看到。不希望留存时缩短 `ZHIN_TRACE_RETENTION_DAYS`。
+
+子 agent（`ask` / `delegate` 的协作 Agent）的模型调用记在其嵌套回合里，父回合的「模型调用 / tokens」汇总写成「合计（自身 N，子 agent M）」，trace 字段 `subagent_usage` 单列子 agent 部分；`ai.usage` 日志与用量统计各算一次，不重复计。时间线、`requests` 与 `model_calls` 对同一次请求记录同一个 provider（实际解析出的服务 ID），显示时换成服务名（`服务名 · 模型`），读不到服务配置时只显示模型名。
+
 **保留与脱敏。** 默认保留 7 天，总大小上限 64 MB：启动时和之后每小时清理一次，先删过期的日期文件，再从最旧的一天删起直到低于上限（当天的文件不会因大小被删）。用环境变量 `ZHIN_TRACE_RETENTION_DAYS`、`ZHIN_TRACE_MAX_MB` 调整。trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`，写盘前还会再扫一遍内联凭据（`sk-…`、`Bearer …` 等）和环境变量里的密钥值。旧版的 `data/agent-traces/recent.json` 仍会被读取。
 
 **Console 页面。** Console 的「Agent Trace」页（`/console/agent-trace`）读取同一份数据：会话列表 → 回合列表 → 回合详情（模型/工具调用瀑布图、时间线和原始记录），可以按时间筛选，`?turn=<turnId>` 直接打开某个回合。项目里放一个页面即可启用：
@@ -598,8 +611,13 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `-s, --session <pattern>` | 会话键子串，或带 `*` 的通配 |
 | `--json` | 输出 JSON |
 | `--cwd <dir>` / `--dir <dir>` | 项目根目录 / 直接指定 trace 目录 |
+| `--tz <zone>` | 按此 IANA 时区划分日期；默认实例时区（`TZ` 环境变量，否则系统时区） |
+
+每天还会列出按「服务名 · 模型」合并的模型用量：同一服务经 `services:` 与 `accounts:` 两种 ID 记录的调用合为一行，服务名读自项目数据库里的模型配置；读不到时只显示模型名。会话列优先显示 trace 里记录的会话名（如 `qq · 群 测试群`），括号里是会话键的短形式。输入 tokens 是每次模型调用上报的输入之和（含多轮迭代与子 Agent），和下面基于首次请求估算的段占比不是同一口径。
 
 每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
+
+**提示缓存提示。** 每次模型调用都会记录请求前缀哈希（system 提示词 + 工具定义，trace 字段 `prefix_hash`）。某个服务最近连续至少 20 次调用、跨至少 3 个会话都没有缓存命中（`cache_read_tokens` 为 0 或未上报），而同一会话相邻请求的前缀有一半以上相同时，报告末尾会提示「该服务可能不支持或未透传 prompt 缓存」，并给出前缀相同的请求比例作为依据。`zhin doctor` 读最近 7 天的 trace 做同样的检查，Console 用量统计（`usage-stats` RPC 的 `promptCacheHints`）也带这条提示。
 
 ## 退出码
 

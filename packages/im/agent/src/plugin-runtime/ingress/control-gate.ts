@@ -7,7 +7,7 @@
  * - 判定只读内存，不依赖审计写成功；状态读不出时控制面自身 fail closed（见 `AiControlPlane`）。
  * - 判定本身出错（不应发生）同样 fail closed：按 `emergency_stop` 处理。
  */
-import { sceneKeyOf, type AiControlPlane, type ControlVerdict, type SessionScope } from '../../index.js';
+import { DECISION_PARENT_KEY, sceneKeyOf, type AiControlPlane, type ControlVerdict, type SessionScope } from '../../index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { DecisionAudit } from './decision-audit.js';
 
@@ -50,7 +50,7 @@ export function checkControlAtOutbound(control: AiControlPlane | undefined, targ
   return judge(() => control.outboundGate(target.platform, sceneKeyOf(target.scope, target.sceneId)));
 }
 
-/** 入站被拦：`control_gate` + `model_skip`，同码。 */
+/** 入站被拦：`control_gate` + `model_skip`（payload `parent: 'control_gate'`），同码。 */
 export function auditControlGate(
   audit: DecisionAudit,
   verdict: Extract<ControlVerdict, { blocked: true }>,
@@ -58,7 +58,7 @@ export function auditControlGate(
 ): void {
   const detail = verdict.level === 'unavailable' ? 'control_state_unavailable' : `${verdict.level}:${verdict.switch}`;
   audit({ kind: 'control_gate', outcome: verdict.outcome, reasonCode: verdict.reasonCode, reasonDetail: detail, payload: { ...payload, stage: 'ingress', level: verdict.level, switch: verdict.switch }, actor: 'policy' });
-  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: verdict.reasonCode, reasonDetail: detail, payload });
+  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: verdict.reasonCode, reasonDetail: detail, payload: { ...payload, [DECISION_PARENT_KEY]: 'control_gate' } });
 }
 
 /** 出站被拦：只写 `control_gate`（`deny`）；调用方随后按「抑制」写 `outbound`。 */

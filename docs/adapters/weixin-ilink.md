@@ -105,4 +105,4 @@ data/weixin-ilink/<id>/credentials.json
 
 ## 文档
 
-- 适配器索引：[`plugins/adapters/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md)
+- 适配器 README：[`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md)

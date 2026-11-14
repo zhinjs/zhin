@@ -3,14 +3,14 @@ import { defineProvider, type ProviderSchema } from '../provider/driver.js';
 import type { ModelDefinition, ProviderService } from '../provider/types.js';
 import { declaredModels, modelContracts } from './api-key.js';
 import { antigravityOAuth } from './oauth.js';
-import { sdkProfileSchema, fixedServiceSchema, type FixedServiceOptions, type StandardModelParameters } from './schema.js';
+import { sdkProfileSchema, antigravityServiceSchema, type AntigravityServiceOptions, type StandardModelParameters } from './schema.js';
 import { ProviderProtocolError, sdkExecution } from './sdk-execution.js';
 import { executionTraits, serviceIdentity } from './traits.js';
 import { EXPERIMENTAL_SUBSCRIPTION_NOTICE } from './support.js';
 
 const baseUrl = 'https://daily-cloudcode-pa.googleapis.com';
 const protocols = [{ name: 'antigravity-generate-content', kind: 'language' }, { name: 'antigravity-images', kind: 'image' }] as const;
-function profileSchema({ model }: Readonly<{ service: ProviderService<FixedServiceOptions>; model: ModelDefinition }>): ProviderSchema<StandardModelParameters> {
+function profileSchema({ model }: Readonly<{ service: ProviderService<AntigravityServiceOptions>; model: ModelDefinition }>): ProviderSchema<StandardModelParameters> {
   if (!protocols.some(protocol => protocol.name === model.protocol && model.kinds.every(kind => kind === protocol.kind))) throw new Error('Invalid Profile protocol');
   return sdkProfileSchema({ family: 'google', model });
 }
@@ -74,11 +74,13 @@ export const antigravityProvider = defineProvider({
   identity: service => serviceIdentity({ product: 'antigravity', service: service.options }),
   modelContracts: modelContracts(protocols),
   describeModel: ({ service, model, profile }) => executionTraits({ family: 'google', service: service.options, parameters: profile.parameters, model }),
-  serviceSchema: fixedServiceSchema(baseUrl), profileSchema,
+  serviceSchema: antigravityServiceSchema(baseUrl), profileSchema,
   authentication: { methods: ['oauth'], oauth: antigravityOAuth },
   targets: () => ({ authentication: ['https://oauth2.googleapis.com/token'], inference: [
     `${baseUrl}/v1internal:generateContent`, `${baseUrl}/v1internal:streamGenerateContent`,
-  ], identity: ['https://www.googleapis.com/oauth2/v1/userinfo'], discovery: ['https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'] }),
+  ], identity: ['https://www.googleapis.com/oauth2/v1/userinfo',
+    // Preparation-only Code Assist onboarding (onboardUser + its long-running operation).
+    'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', 'https://cloudcode-pa.googleapis.com/v1internal/operations'], discovery: ['https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'] }),
   models: service => declaredModels(service, protocols),
   createExecution(input) {
     return sdkExecution(input, {

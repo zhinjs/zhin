@@ -7,11 +7,21 @@ import {
   isMediaToolWithBinaryPayload,
   sanitizeToolResult,
 } from '@zhin.js/ai';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 
 export interface ToolCallRecord {
   tool: string;
   args?: unknown;
   result: unknown;
+  /**
+   * Media the framework attached to this call's result (e.g. images a sub-agent produced for
+   * `ask`, #1250); merged into the reply like media the tool returned itself.
+   */
+  media?: readonly AgentOutputElement[];
+  /** How the call settled; absent on records that predate #1250 (treated as unknown). */
+  status?: 'completed' | 'denied' | 'failed';
+  /** The tool is not declared read-only, so a denial or failure means a write/change did not happen. */
+  sideEffect?: boolean;
 }
 
 const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);

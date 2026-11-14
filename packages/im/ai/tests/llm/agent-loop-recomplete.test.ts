@@ -92,4 +92,37 @@ describe("agentLoop re-completion after a tools-mutating call", () => {
     expect(outcome.requests).toBe(3);
     expect(outcome.finalText).toBe("done");
   });
+
+  it("declares tools loaded inside the re-completion on the next request (#1250)", async () => {
+    const { runtime, requests } = scripted([
+      reply([{ type: "toolCall", id: "call_1", name: "load_tool", arguments: { name: "a" } }], "toolCalls"),
+      reply([{ type: "toolCall", id: "call_2", name: "load_tool", arguments: { name: "b" } }], "toolCalls"),
+      reply([{ type: "text", text: "done" }], "stop"),
+    ]);
+    const loaded: string[] = [];
+    const declared: string[][] = [];
+    const loader = { name: "load_tool", description: "", parameters: z.object({ name: z.string() }) };
+    const original = runtime.stream.bind(runtime);
+    runtime.stream = ((model: never, context: Context, options: never) => {
+      declared.push((context.tools ?? []).map((tool) => tool.name));
+      return original(model, context, options);
+    }) as typeof runtime.stream;
+    for await (const _event of agentLoop(
+      createUserMessage("weather"),
+      { systemPrompt: "", messages: [], tools: [loader] },
+      {
+        model: runtime.model("test", "mock"),
+        transport: runtime,
+        refreshTools: async () => [loader, ...loaded.map((name) => ({ name, description: "", parameters: z.object({}) }))],
+        shouldRecompleteAfterTool: (message) => JSON.stringify(message).includes(MUTATED),
+        executeTool: async (call) => {
+          loaded.push(String((call.arguments as { name: string }).name));
+          return result(call, `Loaded\n${MUTATED}`);
+        },
+      },
+    )) { /* drain */ }
+    expect(requests).toHaveLength(3);
+    expect(declared).toEqual([["load_tool"], ["load_tool", "a"], ["load_tool", "a", "b"]]);
+  });
 });
+

@@ -3,6 +3,8 @@ import {
   childPluginId,
   createToken,
   createCapabilitySlot,
+  featureId,
+  type PluginId,
   rootPluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -1758,8 +1760,50 @@ describe('内置菜单命令', () => {
     const text = result.value as string;
     expect(text).toContain('status');
     expect(text).toContain('QQ 状态');
-    expect(text).toContain('qq.group');
-    expect(text).toContain('提示');
+    // qq.group owns no command: not a menu entry (#1250); it stays reachable by name.
+    expect(text).not.toContain('qq.group');
+    expect(text).not.toContain('提示');
+  });
+
+  it('子插件只列出有可用指令的插件，排除适配器与纯服务插件；根标题不显示内部名 root（#1250）', async () => {
+    const { root, qq, slots, snapshot } = menuSnapshot();
+    const icqq = childPluginId(root, 'icqq');
+    const cache = childPluginId(root, 'cache');
+    const games = childPluginId(root, 'games');
+    const rps = childPluginId(games, 'rps');
+    const node = (id: PluginId, instanceKey: string, parent: PluginId = root, children: PluginId[] = []) => ({
+      id, instanceKey, packageName: `@test/${instanceKey}`, packageRoot: `/project/${instanceKey}`, parent, children });
+    const extra = [
+      createCapabilitySlot({ owner: icqq, feature: featureId('zhin.adapter'), localName: 'icqq', source: '/adapters/icqq.ts', definition: {} }),
+      createCapabilitySlot({ owner: icqq, feature: commandFeatureId, localName: 'login', source: '/commands/login/index.ts',
+        definition: defineCommand({ execute: () => 'ok' }) }),
+      createCapabilitySlot({ owner: rps, feature: commandFeatureId, localName: 'rps', source: '/commands/rps/index.ts',
+        definition: defineCommand({ execute: () => 'ok' }) }),
+      // 31+ commands at the root so the menu lists direct commands and children instead of flattening.
+      ...Array.from({ length: 31 }, (_, i) => createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: `c${i}`,
+        source: `/commands/c${i}/index.ts`, definition: defineCommand({ execute: () => 'ok' }) })),
+    ];
+    const all = [...slots, ...extra];
+    const tree = new Map(snapshot.tree);
+    tree.set(root, { ...tree.get(root)!, children: [qq, icqq, cache, games] });
+    tree.set(icqq, node(icqq, 'icqq'));
+    tree.set(cache, node(cache, 'cache'));
+    tree.set(games, node(games, 'games', root, [rps]));
+    tree.set(rps, node(rps, 'rps', games));
+    const withChildren = { ...snapshot, tree, capabilities: new Map(all.map(slot => [slot.id, slot])) } as RuntimeSnapshot;
+    const index = new CommandIndex(all, withChildren, { keyword: '菜单' });
+    const pages = [1, 2].map(async page => (await index.dispatch({ input: `菜单 --page ${page}` })).value as string);
+    const [first, second] = await Promise.all(pages);
+    expect(first.split('\n')[0]).toBe('=== 指令菜单 ===');
+    expect(first).not.toContain('root');
+    const both = `${first}\n${second}`;
+    expect(both).toContain('  qq  (QQ 适配器)');
+    expect(both).toContain('  games  (games)');
+    expect(both).not.toContain('  icqq  (');
+    expect(both).not.toContain('  cache  (');
+    // A project display name replaces the generic title.
+    tree.set(root, { ...tree.get(root)!, metadata: { displayName: '小智' } });
+    expect(((await index.dispatch({ input: '菜单' })).value as string).split('\n')[0]).toBe('=== 小智 指令菜单 ===');
   });
 
   it('「菜单 qq.group」展示空子插件提示', async () => {

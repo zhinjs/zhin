@@ -430,6 +430,7 @@ my-plugin/
 | `description` | 是 | 给模型看的功能描述 |
 | `inputSchema` | 否 | `Schema.object(...)`（推荐，来自 `zhin.js`）、Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验并填充默认值 |
 | `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always' \| 'human'`，默认 `'on-risk'` |
+| `tags` | 否 | 标签。`admin_approvable`（`ADMIN_APPROVABLE_TOOL_TAG`）表示这个工具的普通审批（`always` / `once` / `on-risk`）在开启 `ai.agent.approval.adminSelfApprove`（默认关闭）时，可以由端点层或以上的 zhin `admin` 在自己的私聊里本人批准一次；不声明时只有主人能批。对 `'human'` 与危险工具不起作用 |
 | `risk` | 否 | `'dangerous' \| 'safe'`；`dangerous` 走危险工具硬闸，见[声明危险工具](#声明危险工具-硬闸) |
 | `riskCategory` | 否 | `'member' \| 'publish' \| 'funds' \| 'identity'`，显示在审批卡片上；`funds` 默认禁用 |
 | `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |

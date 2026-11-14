@@ -475,7 +475,7 @@ With the Command Feature enabled, the built-in command menu responds out of the 
 | `菜单 rss --page 2` | The second page of the `rss` instance menu |
 | `remind --help` | A command's parameters, options, and usage, without executing it |
 
-Plugin names here are **instance keys**, not npm package names. Start with `菜单` or `help` and follow the child plugin names it returns.
+Plugin names here are **instance keys**, not npm package names. Start with `菜单` or `help` and follow the child plugin names it returns. Only plugins whose subtree has a command you may run are listed: adapters and command-less service plugins are left out (`菜单 <instance key>` still shows them). The root menu is titled with the project's display name (`metadata.displayName`), or plain "Command menu".
 
 You can customize the primary menu keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
 
@@ -484,6 +484,15 @@ menuKeyword: help
 ```
 
 Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu.
+
+### Similar-command hints
+
+When a private message, an @mention of the Bot or a prefixed message matches no command but its first words closely resemble a registered command name or alias (for example `rss lst`, `RSS-List`, `gues`), the framework replies "No such command. Did you mean: …" through the normal reply pipeline instead of handing the message to the AI. Matching ignores case, spaces, `-` and `_`; by default it accepts one edit for names of at least 5 characters (3 CJK characters), and shorter names only when they are identical after removing separators. After the name the message may carry at most the command's declared arguments plus one word. Only commands the sender may run are listed. When no name is that close but the first word is the whole first word of a multi-word command (for example `qrcode hello` for `qrcode gen` / `qrcode scan`, at least 3 characters), the commands under that word are listed.
+
+```yaml
+commandSuggestion: false            # disable
+# commandSuggestion: { maxDistance: 2, limit: 5 }
+```
 
 With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
 
@@ -539,6 +548,10 @@ Stopping or reconnecting the account cancels the captured signal. Framework repl
 | Right command, missing or wrong params | Replies with the reason and help |
 | No permission | Replies with a refusal, without help |
 | Success | Replies with `execute`'s return value |
+| `execute` throws a `UserFacingError` | Replies with its `format(locale)` (default `message`) through the normal reply chain |
+| `execute` throws anything else | Nothing about the error is sent; it is logged |
+
+Expected, user-caused refusals (such as "there is already a game running in this channel") can throw `UserFacingError` (`import { UserFacingError } from 'zhin.js/command'`), or a subclass overriding `format(locale)` for localization. Its text is sent to the user as is: never put stack traces, internal ids or raw upstream errors in it. A `UserFacingError` thrown by an inbound middleware (`defineMiddleware`) or an event handler (`defineHandler`) is answered the same way in that conversation (a middleware replies as its own author; a handler replies in the message / notice / request conversation and dispatch continues with the next handler); any other error is only logged, never sent to the user.
 
 Param errors are reported only when the input is clearly a given command: `remind nope` gets an error, while `reminder 3` or ordinary chat isn't treated as a command. Permission checks run before param validation.
 

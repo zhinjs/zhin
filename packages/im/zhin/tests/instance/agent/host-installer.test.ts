@@ -8,7 +8,7 @@ import {
   createPluginEventChannel,
 } from '@zhin.js/plugin-runtime';
 import { RootRuntime } from '@zhin.js/runtime';
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHostToolApprovalConsoleRpc } from '../../../src/instance/console/tool-approvals.js';
@@ -184,6 +184,129 @@ describe('installAgentHost', () => {
           ],
         })
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads BOT.md instead of AGENTS.md and picks up an edit on the next Root generation (#1250)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-bot-'));
+    const installAt = () => installAgentHost({
+      runtime: {} as never,
+      im: {} as never,
+      projectRoot: root,
+      inference: inferenceFor(root),
+    })(context(new Scope(rootPluginId())));
+    try {
+      await writeFile(join(root, 'SOUL.md'), 'Main persona.');
+      await writeFile(join(root, 'AGENTS.md'), 'Developer rules.');
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v1.');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## BOT.md\nBot rules v1.',
+        contextFiles: [
+          { path: 'SOUL.md', content: 'Main persona.' },
+          { path: 'BOT.md', content: 'Bot rules v1.' },
+        ],
+      }));
+
+      // A Root generation rebuild (what an edited root file triggers) re-runs the installer.
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v2.');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## BOT.md\nBot rules v2.',
+      }));
+
+      // Emptying BOT.md hands the slot back to AGENTS.md.
+      await writeFile(join(root, 'BOT.md'), '  \n');
+      await installAt();
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## SOUL.md\nMain persona.\n\n## AGENTS.md\nDeveloper rules.',
+      }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a data/BOT.md: only the project-root BOT.md replaces AGENTS.md (#1250)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-data-bot-'));
+    try {
+      await mkdir(join(root, 'data'), { recursive: true });
+      await writeFile(join(root, 'AGENTS.md'), 'Developer rules.');
+      await writeFile(join(root, 'data', 'BOT.md'), 'Bot rules from data.');
+      await installAgentHost({
+        runtime: {} as never,
+        im: {} as never,
+        projectRoot: root,
+        inference: inferenceFor(root),
+      })(context(new Scope(rootPluginId())));
+      expect(publishHost).toHaveBeenLastCalledWith(expect.objectContaining({
+        bootstrapText: '## AGENTS.md\nDeveloper rules.',
+        contextFiles: [{ path: 'AGENTS.md', content: 'Developer rules.' }],
+      }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('re-reads edited bootstrap files in place through its project file watch (#1250)', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-bootstrap-watch-')));
+    try {
+      await writeFile(join(root, 'AGENTS.md'), 'Rules v1');
+      const watches: Array<{ patterns: readonly string[]; onChange(change: { files: readonly string[] }): void | Promise<void> }> = [];
+      await installAgentHost({
+        runtime: {} as never,
+        im: {} as never,
+        projectRoot: root,
+        inference: inferenceFor(root),
+      })({ ...(context(new Scope(rootPluginId())) as object), watchProjectFiles: (watch: (typeof watches)[number]) => { watches.push(watch); } } as never);
+      expect(watches.map((watch) => watch.patterns)).toEqual([['SOUL.md', 'AGENTS.md', 'TOOLS.md', 'BOT.md']]);
+      const published = publishHost.mock.calls.at(-1)?.[0] as {
+        bootstrap(): { bootstrapContext: string; contextFiles?: readonly { path: string; content: string }[] };
+      };
+      expect(published.bootstrap().bootstrapContext).toBe('## AGENTS.md\nRules v1');
+
+      await writeFile(join(root, 'AGENTS.md'), 'Rules v2');
+      await watches[0]!.onChange({ files: [join(root, 'AGENTS.md')] });
+      expect(published.bootstrap()).toEqual({
+        bootstrapContext: '## AGENTS.md\nRules v2',
+        contextFiles: [{ path: 'AGENTS.md', content: 'Rules v2' }],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('re-reads an edited root BOT.md in place through the same watch (#1250)', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-bootstrap-bot-watch-')));
+    try {
+      await writeFile(join(root, 'AGENTS.md'), 'Developer rules.');
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v1.');
+      const watches: Array<{ patterns: readonly string[]; onChange(change: { files: readonly string[] }): void | Promise<void> }> = [];
+      await installAgentHost({
+        runtime: {} as never,
+        im: {} as never,
+        projectRoot: root,
+        inference: inferenceFor(root),
+      })({ ...(context(new Scope(rootPluginId())) as object), watchProjectFiles: (watch: (typeof watches)[number]) => { watches.push(watch); } } as never);
+      const watch = watches.find((entry) => entry.patterns.includes('BOT.md'));
+      expect(watch).toBeDefined();
+      const published = publishHost.mock.calls.at(-1)?.[0] as {
+        bootstrap(): { bootstrapContext: string; contextFiles?: readonly { path: string; content: string }[] };
+      };
+      expect(published.bootstrap().bootstrapContext).toBe('## BOT.md\nBot rules v1.');
+
+      await writeFile(join(root, 'BOT.md'), 'Bot rules v2.');
+      await watch!.onChange({ files: [join(root, 'BOT.md')] });
+      expect(published.bootstrap()).toEqual({
+        bootstrapContext: '## BOT.md\nBot rules v2.',
+        contextFiles: [{ path: 'BOT.md', content: 'Bot rules v2.' }],
+      });
+
+      // Emptying the root BOT.md hands the slot back to AGENTS.md, still without a new generation.
+      await writeFile(join(root, 'BOT.md'), '  \n');
+      await watch!.onChange({ files: [join(root, 'BOT.md')] });
+      expect(published.bootstrap().bootstrapContext).toBe('## AGENTS.md\nDeveloper rules.');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

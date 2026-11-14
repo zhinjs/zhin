@@ -36,6 +36,11 @@ export {
   authorizeConsoleRpc,
   authorizeConsoleWebSocket,
   globalPermissions,
+  grantsDenialReason,
+  isAuditedRpcDenial,
+  unknownConsoleRpcError,
+  webSocketDenialReason,
+  type AuthorizeConsoleRpcOptions,
   isUserPrincipal,
   isExplicitConsolePrincipal,
   pluginRpcWriteAllowed,
@@ -93,6 +98,8 @@ export {
   type HttpResponseStream,
   type HttpResponseStreamOptions,
 } from '@zhin.js/host-http-contract';
+export { isRuntimeConsoleRpcType, RUNTIME_CONSOLE_RPC_TYPES } from './console-rpc-types.js';
+export { createUnknownRpcLog, unknownRpcLog, type UnknownRpcLog, type UnknownRpcLogEntry } from './unknown-rpc.js';
 export {
   dispatchRuntimeConsoleRpc,
   pickRpcReply,
@@ -106,6 +113,8 @@ export {
   type PluginUpdatePlan,
   type PluginManagementPort,
   type PluginManagementState,
+  type PluginInspectOptions,
+  type PluginDependencyCheck,
   type PluginVerificationResult,
   type PluginVerificationPlan,
   type PluginConfigValidation,
@@ -133,6 +142,7 @@ export {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
   type ConsoleScheduleEngine,
+  type ConsoleScheduleTarget,
   type ConsoleWorkroomProfileControlPort,
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,

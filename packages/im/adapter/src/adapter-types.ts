@@ -89,6 +89,26 @@ export interface AdapterMutationOptions {
   /** Internal request boundary, after validation and immediately before the single CAS. */
   readonly beforeCommit?: () => void;
 }
+/** Why an account start failed, for operators (aligned with the Console MCP failure categories). */
+export type EndpointFailureCategory = 'auth' | 'network' | 'timeout' | 'config' | 'process_exit' | 'unknown';
+/** Last failed start of one account. Raw error text may contain credentials: never stored as is. */
+export interface EndpointStartFailure {
+  readonly code: string;
+  /** Epoch milliseconds. */
+  readonly at: number;
+  /** Classified cause (absent on failures recorded before #1250). */
+  readonly category?: EndpointFailureCategory;
+  /**
+   * Operator text, at most 200 characters, built from `category` and `code` only — never the raw
+   * error text (which may carry credentials; the warn log gets it with credentials masked).
+   */
+  readonly message?: string;
+}
+/**
+ * Background start supervision of one account: `retrying` waits for `nextRetryAt`,
+ * `failed` waits for an explicit start / relogin (configuration errors, interactive login).
+ */
+export type EndpointStartPhase = 'failed' | 'retrying';
 export interface EndpointMetadata extends EndpointDesiredMetadata {
   readonly epoch: number;
   readonly incarnationId?: string;
@@ -97,6 +117,12 @@ export interface EndpointMetadata extends EndpointDesiredMetadata {
   readonly execution?: EndpointExecution;
   readonly retiring?: boolean;
   readonly removed?: boolean;
+  /** Start attempts of the current supervision (0 = none yet or online). */
+  readonly startAttempt: number;
+  readonly startFailure?: EndpointStartFailure;
+  readonly startPhase?: EndpointStartPhase;
+  /** Epoch milliseconds of the next automatic retry. */
+  readonly nextRetryAt?: number;
 }
 export interface EndpointConfigurationView {
   readonly id: string;
@@ -119,6 +145,10 @@ export interface EndpointChildView<E extends AnyEndpoint = AnyEndpoint> {
   readonly open: boolean;
   readonly stopped: boolean;
   readonly startAttempted: boolean;
+  readonly startAttempt: number;
+  readonly startFailure?: EndpointStartFailure;
+  readonly startPhase?: EndpointStartPhase;
+  readonly nextRetryAt?: number;
 }
 
 /** Originating operation retained by a scoped semantic port. */
@@ -150,6 +180,13 @@ export interface EndpointChildLease<E extends AnyEndpoint = AnyEndpoint> {
 
 export const endpointDesiredRepositoryToken = createFeaturePrivateToken<EndpointDesiredRepository>(
   'zhin.adapter.endpoint-desired-repository', featureId('zhin.adapter'), 'Adapter-owned endpoint desired state persistence',
+);
+/**
+ * Stored (never environment-expanded) startup configuration of an Adapter's accounts, used to
+ * compare `zhin.config.yml` `endpoints` with the persisted accounts and to import / write back (#1250).
+ */
+export const endpointConfigSourceToken = createFeaturePrivateToken<import('./endpoint-config-drift.js').EndpointConfigSource>(
+  'zhin.adapter.endpoint-config-source', featureId('zhin.adapter'), 'Stored startup configuration of adapter accounts',
 );
 export const endpointSecretResolverToken = createFeaturePrivateToken<EndpointSecretResolver>(
   'zhin.adapter.endpoint-secret-resolver', featureId('zhin.adapter'), 'Execution-only endpoint credential resolver',

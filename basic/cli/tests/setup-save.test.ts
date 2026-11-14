@@ -65,7 +65,17 @@ describe('setup 配置落盘', () => {
     expect(tools).toContain('执行 `bash` shell 命令时需谨慎');
     expect(tools).toContain('向用户说明并提供替代方案');
     expect(tools).not.toMatch(/常用工具场景|`read_file`|`web_search`|`memory_upsert`/u);
-    expect(fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf8')).toContain('你可通过 memory_store');
+    // #1250: the bot's memory file of a project without one is BOT.md; AGENTS.md is left to developers.
+    expect(fs.readFileSync(path.join(tmp, 'BOT.md'), 'utf8')).toContain('你可通过 memory_store');
+    expect(fs.existsSync(path.join(tmp, 'AGENTS.md'))).toBe(false);
+  });
+
+  it('--bootstrap keeps the bot memory in an existing AGENTS.md instead of shadowing it with BOT.md (#1250)', async () => {
+    fs.writeFileSync(path.join(tmp, 'AGENTS.md'), '# my memory\n');
+    await setupCommand.parseAsync(['node', 'zhin', '--bootstrap', '--yes']);
+    expect(fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf8')).toBe('# my memory\n');
+    expect(fs.existsSync(path.join(tmp, 'BOT.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, 'SOUL.md'))).toBe(true);
   });
 
   it('updates an existing editable configuration and retains unrelated values and comments', async () => {
@@ -130,7 +140,7 @@ describe('setup 配置落盘', () => {
     expect(tools).toContain('Run `bash` shell commands carefully.');
     expect(tools).toContain('Explain permission or dependency failures and offer an alternative.');
     expect(tools).not.toMatch(/Common tasks|`read_file`|`web_search`|`memory_upsert`/u);
-    expect(fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf8')).toContain('You can append');
+    expect(fs.readFileSync(path.join(tmp, 'BOT.md'), 'utf8')).toContain('You can append');
     expect(log.mock.calls.flat().join(' ')).toContain('Zhin configuration wizard');
   });
 

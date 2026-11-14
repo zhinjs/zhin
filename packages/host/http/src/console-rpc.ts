@@ -3,6 +3,7 @@ import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
+  CONSOLE_UNKNOWN_RPC_CODE,
   grantsAllow,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
@@ -12,6 +13,7 @@ import {
   type ConsoleEndpointSummary,
 } from '@zhin.js/console-protocol';
 import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from './access-control.js';
+import { isRuntimeConsoleRpcType } from './console-rpc-types.js';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
 import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 import {
@@ -128,9 +130,21 @@ export interface PluginVerificationResult {
   readonly evidenceI18n?: import('@zhin.js/plugin-runtime').PluginVerificationOutcome['evidenceI18n'];
 }
 
+/** `inspect` options. `dependencies: 'skip'` leaves the project-wide graph check out (`dependencies: 'unchecked'`). */
+export interface PluginInspectOptions {
+  readonly dependencies?: 'check' | 'skip';
+}
+
+/** Result of the project-wide dependency graph check (the same check `inspect` runs per plugin). */
+export type PluginDependencyCheck =
+  | { readonly status: 'passed' }
+  | { readonly status: 'failed'; readonly error: string };
+
 export interface PluginManagementPort {
   explainConfiguration?(instanceKey: string, expectedRevision: string): Promise<ConsoleConfigExplanation>;
-  inspect?(packageName: string): Promise<PluginManagementState>;
+  inspect?(packageName: string, options?: PluginInspectOptions): Promise<PluginManagementState>;
+  /** Runs the project-wide dependency graph check once, for callers that inspect many plugins. */
+  checkDependencies?(): Promise<PluginDependencyCheck>;
   apply?(packageName: string, expectedProjectRevision?: string): Promise<{ readonly requested: boolean; readonly state: PluginManagementState }>;
   verificationPlan?(packageName: string): Promise<PluginVerificationPlan>;
   verify?(packageName: string, checkId: string, expectedGeneration: number | null, expectedProjectRevision: string, expectedCheckRevision: string): Promise<PluginVerificationResult>;
@@ -209,8 +223,21 @@ export type RuntimeConsoleRpcContext = {
   readProjectFile?(filePath: string): Promise<{ content: string; size: number }>;
   saveProjectFile?(filePath: string, content: string): Promise<void>;
   listEnvFiles?(): Promise<readonly { name: string; exists: boolean }[]>;
+  /**
+   * @deprecated Not used any more: `env:get` answers {@link readEnvFileView} only, so the file as
+   * written never reaches the Console (issue #1250).
+   */
   readEnvFile?(filename: string): Promise<string>;
+  /** @deprecated Not used any more: `env:save` writes through {@link updateEnvVariables} / {@link replaceEnvFile}. */
   writeEnvFile?(filename: string, content: string): Promise<void>;
+  /** `env:get`: masked view (key names, masks, lengths; comments and blank lines in place). */
+  readEnvFileView?(filename: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvFileView>;
+  /** `env:reveal`: one variable as written. The route requires `ops.env.write` + `ops.env.read` and audits. */
+  revealEnvVariable?(filename: string, key: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvRevealResult>;
+  /** `env:save { changes }`: validates and writes only the named keys (mask placeholders refused). */
+  updateEnvVariables?(filename: string, changes: unknown): Promise<{ readonly changed: readonly string[] }>;
+  /** `env:save { content, mode: 'replace' }`: whole file; refused when it holds mask placeholders. */
+  replaceEnvFile?(filename: string, content: string): Promise<void>;
   /** Optional schema accessors (plugin schema.json / Runtime schema registry). */
   getSchema?(pluginName?: string): Promise<unknown>;
   getAllSchemas?(): Promise<Record<string, unknown>>;
@@ -288,9 +315,9 @@ export async function dispatchRuntimeConsoleRpc(
   let canOperateEndpoint: ConsoleRpcExtendedCtx['canOperateEndpoint'];
   if (ctx.principal) {
     const principal = ctx.principal;
-    const decision = authorizeConsoleRpc(principal, message as Record<string, unknown>);
+    const decision = authorizeConsoleRpc(principal, message as Record<string, unknown>, { registered: isRuntimeConsoleRpcType });
     if (!decision.allowed) {
-      emit({ requestId, error: decision.error, code: decision.code });
+      emit({ requestId, error: decision.error, code: decision.code, ...(decision.reason ? { reason: decision.reason } : {}) });
       return payloads;
     }
     authorizedEndpoint = scopedAuthorizedEndpoint(principal, decision);
@@ -618,7 +645,7 @@ export async function dispatchRuntimeConsoleRpc(
         });
         return payloads;
       }
-      emit({ requestId, error: `Unknown RPC type: ${type || '<empty>'}` });
+      emit({ requestId, error: `Unknown RPC type: ${type.slice(0, 64) || '<empty>'}`, code: CONSOLE_UNKNOWN_RPC_CODE });
       return payloads;
     }
   }

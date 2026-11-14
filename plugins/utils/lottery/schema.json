@@ -13,6 +13,16 @@
   "properties": {
     "pickCount": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "每注选号数",
+          "description": "每组推荐号码的个数"
+        },
+        "en": {
+          "title": "Numbers per pick",
+          "description": "Numbers in each recommended pick."
+        }
+      },
       "default": 5,
       "minimum": 1,
       "maximum": 10,
@@ -24,6 +34,16 @@
     },
     "scheduleCron": {
       "type": "string",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "定时推荐时间",
+          "description": "定时生成推荐的 6 段 Cron 表达式"
+        },
+        "en": {
+          "title": "Schedule",
+          "description": "6-field cron expression for scheduled recommendations."
+        }
+      },
       "default": "0 0 18 * * *",
       "x-zhin-config": {
         "levels": [
@@ -33,6 +53,16 @@
     },
     "historyLimit": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "历史期数上限",
+          "description": "分析时读取的最多历史开奖期数"
+        },
+        "en": {
+          "title": "History size",
+          "description": "Maximum past draws read for analysis."
+        }
+      },
       "default": 500,
       "minimum": 50,
       "maximum": 2000,
@@ -44,6 +74,16 @@
     },
     "scheduleEnabled": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "启用定时推荐",
+          "description": "按定时推荐时间自动生成并推送推荐"
+        },
+        "en": {
+          "title": "Enable schedule",
+          "description": "Generate and push recommendations on the schedule."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "levels": [
@@ -53,6 +93,16 @@
     },
     "backtestEnabled": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "启用回测",
+          "description": "生成推荐前用历史数据回测模型"
+        },
+        "en": {
+          "title": "Enable backtest",
+          "description": "Backtest the model on past draws before recommending."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "levels": [
@@ -62,6 +112,16 @@
     },
     "backtestWindow": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "回测期数",
+          "description": "回测抽样的最近期数"
+        },
+        "en": {
+          "title": "Backtest window",
+          "description": "Number of recent draws sampled by the backtest."
+        }
+      },
       "default": 50,
       "x-zhin-config": {
         "levels": [
@@ -71,6 +131,16 @@
     },
     "backtestRandomTrials": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "随机对照次数",
+          "description": "回测时随机基线的模拟次数"
+        },
+        "en": {
+          "title": "Random baseline trials",
+          "description": "Simulations of the random baseline in a backtest."
+        }
+      },
       "default": 64,
       "x-zhin-config": {
         "levels": [
@@ -80,6 +150,16 @@
     },
     "backtestMinHistory": {
       "type": "number",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "回测最少历史期数",
+          "description": "历史期数少于此值时不回测"
+        },
+        "en": {
+          "title": "Min backtest history",
+          "description": "Skip the backtest with fewer past draws than this."
+        }
+      },
       "default": 30,
       "x-zhin-config": {
         "levels": [
@@ -89,6 +169,16 @@
     },
     "backtestAdaptive": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "逐期调权模拟",
+          "description": "回测时逐期调整模型权重"
+        },
+        "en": {
+          "title": "Adaptive backtest",
+          "description": "Tune model weights draw by draw during the backtest."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "levels": [
@@ -98,6 +188,16 @@
     },
     "weightPersistEnabled": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "保存模型权重",
+          "description": "模拟或复盘后把权重写入数据库"
+        },
+        "en": {
+          "title": "Persist weights",
+          "description": "Save model weights to the database after simulation or review."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "levels": [
@@ -107,6 +207,16 @@
     },
     "weightHoldoutFallback": {
       "type": "boolean",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "跑输随机时用默认权重",
+          "description": "近期 holdout 表现不如随机时，推荐改用默认权重"
+        },
+        "en": {
+          "title": "Fall back on holdout loss",
+          "description": "Use default weights when the recent holdout performs worse than random."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "levels": [
@@ -116,6 +226,16 @@
     },
     "games": {
       "type": "array",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "启用的玩法",
+          "description": "启用的彩票玩法（快乐8、双色球、大乐透、福彩3D、排列3、排列5）"
+        },
+        "en": {
+          "title": "Games",
+          "description": "Enabled lottery games (KL8, SSQ, DLT, FC3D, PL3, PL5)."
+        }
+      },
       "items": {
         "type": "string"
       },
@@ -136,6 +256,16 @@
     "pushTargets": {
       "type": "array",
       "description": "OutboundHost push destinations for cron/publish reports",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "推送目标",
+          "description": "定时与开奖报告的推送会话"
+        },
+        "en": {
+          "title": "Push targets",
+          "description": "Conversations that receive scheduled and draw reports."
+        }
+      },
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -145,17 +275,49 @@
         ],
         "properties": {
           "adapter": {
-            "type": "string"
+            "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "适配器"
+              },
+              "en": {
+                "title": "Adapter"
+              }
+            }
           },
           "endpointKey": {
-            "type": "string"
+            "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "账号"
+              },
+              "en": {
+                "title": "Endpoint"
+              }
+            }
           },
           "channelType": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "会话类型"
+              },
+              "en": {
+                "title": "Conversation kind"
+              }
+            },
             "default": "private"
           },
           "channelId": {
-            "type": "string"
+            "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "会话 ID"
+              },
+              "en": {
+                "title": "Conversation ID"
+              }
+            }
           }
         }
       },
@@ -168,18 +330,56 @@
     },
     "kl8": {
       "type": "object",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "快乐8"
+        },
+        "en": {
+          "title": "KL8"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "pickCount": {
           "type": "number",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "每组选号数",
+              "description": "快乐8 每组推荐几个号码"
+            },
+            "en": {
+              "title": "Numbers per group",
+              "description": "Numbers in each KL8 group."
+            }
+          },
           "default": 5
         },
         "recommendGroups": {
           "type": "number",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "推荐组数",
+              "description": "快乐8 每次推荐的组数"
+            },
+            "en": {
+              "title": "Groups",
+              "description": "Number of KL8 groups per recommendation."
+            }
+          },
           "default": 3
         },
         "groupStrategies": {
           "type": "array",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "各组策略",
+              "description": "每组使用的选号策略（均衡、热号、冷号）"
+            },
+            "en": {
+              "title": "Group strategies",
+              "description": "Strategy for each group (balanced, hot, cold)."
+            }
+          },
           "items": {
             "type": "string"
           },

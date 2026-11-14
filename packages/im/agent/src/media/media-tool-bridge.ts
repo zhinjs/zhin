@@ -27,6 +27,7 @@ export function extractMediaElementsFromToolCalls(
 ): AgentOutputElement[] {
   const out: AgentOutputElement[] = [];
   for (const tc of toolCalls) {
+    if (tc.media?.length) out.push(...tc.media);
     const obj = parseToolResultObject(tc.result);
     if (!obj) continue;
 

@@ -19,6 +19,8 @@ import type { ReplyPhaseLifecycle } from './reply-phase.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import type { ToolCallRecord } from './tool-calls-user-format.js';
+import { formatUnexecutedToolResult } from './unexecuted-tool-notice.js';
+import { approvalPolicySnapshot, formatPolicyStamp } from '../security/approval-policy-fingerprint.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import type { InteractiveRun } from './interactive-run.js';
 import { createTurnSummaryExecutionResolver } from '../memory/summary-model.js';
@@ -27,6 +29,8 @@ import { LocalImageInspection, type ImageInspectionBudget } from '../media/local
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import { publishReplyImages } from '../media/publish-image-reply.js';
+import { resolveAttachmentRefs } from '../media/agent-attachments.js';
+import { COLLABORATION_TOOL_SOURCE } from '../collaboration/tools.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
@@ -142,6 +146,12 @@ export interface AgentLoopTurnResult {
   /** Explicitly unfinished task; unlike a natural final answer, children must not label it complete. */
   stoppedReason?: string;
   progressive?: { run: ReplyStreamRun; snapshot?: ReplyStreamSnapshot };
+  /**
+   * #1250: side-effect tools that did not run, and the one-line notice for the user. `appended`: already
+   * part of `output` / `reply`. `followup`: a reply was already streamed, so the delivery sends `text` as a
+   * short separate message through the reply chain.
+   */
+  unexecutedNotice?: Readonly<{ tools: readonly string[]; text: string; delivery: 'appended' | 'followup' }>;
   replyPhaseId?: string;
   replyPhaseStopped?: true;
   /** Conversation projection applied only after the durable terminal commits. */
@@ -200,6 +210,8 @@ export function toolResultToAgentMessage(
   toolCall: ParsedToolCall,
   result: unknown,
   isError: boolean,
+  /** #1250 review: set only for a framework policy denial; see `ToolResultMessage.deniedUnderPolicy`. */
+  deniedUnderPolicy?: string,
 ): AgentMessage {
   const text =
     typeof result === 'string'
@@ -213,6 +225,7 @@ export function toolResultToAgentMessage(
     toolName: toolCall.name,
     content: [{ type: 'text', text: text || (isError ? 'Error' : '') }],
     isError,
+    ...(deniedUnderPolicy ? { deniedUnderPolicy } : {}),
     timestamp: Date.now(),
   };
 }
@@ -278,7 +291,11 @@ export function createTurnCompletionRuntime<TLlmTools extends ReturnType<typeof 
   const completionUsage = trackTurnCompletionUsage(
     host.completion,
     host.imageAssets ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal) : undefined,
-    { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies },
+    {
+      turnId: traceTurnId(input.turnContext),
+      recordBodies: host.config.recordRequestBodies,
+      resolveProvider: turnProviderResolver(host),
+    },
     input.interactiveRun,
   );
   const localInspection = host.localAssets ? new LocalImageInspection(
@@ -418,6 +435,8 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
     state,
   } = params;
   const { host, sessionId, signal, loopHooks } = input;
+  const policySnapshot = approvalPolicySnapshot(host.config);
+  const policyStamp = formatPolicyStamp(policySnapshot);
 
   return {
     executeTool: async (toolCall: ParsedToolCall, _tools: readonly TLlmTool[], _toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
@@ -448,9 +467,10 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           turn: input.turnContext,
         });
         if (preDecision.decision === 'deny') {
-          const reason = preDecision.reason;
+          const sideEffect = executableTools.resolve(resolvedName)?.isReadOnly !== true;
+          const reason = formatUnexecutedToolResult(resolvedName, 'denied', preDecision.reason, sideEffect);
           recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason, status: 'denied', sideEffect });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
         if (preDecision.decision === 'modify') {
@@ -474,10 +494,24 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           throw cancellation;
         }
         if (outcome.status !== 'completed') {
-          const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
+          // #1250: say plainly that the call did not run, so the reply cannot claim it did.
+          const sideEffect = outcome.sideEffect ?? tool.isReadOnly !== true;
+          const unexecuted = formatUnexecutedToolResult(resolvedName, outcome.status,
+            outcome.status === 'failed' ? outcome.error : outcome.reason, sideEffect);
+          // #1250: a denial records the policy it was decided under, so a later policy change can retire it.
+          const reason = outcome.status === 'denied' ? `${unexecuted}\n${policyStamp}` : unexecuted;
           recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
-          return toolResultToAgentMessage(toolCall, reason, true);
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason, status: outcome.status, sideEffect });
+          return toolResultToAgentMessage(toolCall, reason, true,
+            outcome.status === 'denied' ? policySnapshot.fingerprint : undefined);
+        }
+        // #1250: `load_tool` succeeds against the session catalog, but this turn's catalog can be
+        // narrower (turn policy); say so instead of leaving the model to rediscover the tool.
+        const unavailable = unavailableLoadedTool(resolvedName, effectiveArgs, outcome.output, deferredController ? catalog : undefined);
+        if (unavailable) {
+          recordProgress(resolvedName, effectiveArgs, false);
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: unavailable });
+          return toolResultToAgentMessage(toolCall, unavailable, true);
         }
         const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
         let modelOutput = outcome.output;
@@ -522,7 +556,9 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         }
         const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
         const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
+        // #1250: media a sub-agent produced comes back with ask / follow_up as attachments.
+        const media = tool.source === COLLABORATION_TOOL_SOURCE ? resolveAttachmentRefs(resultText) : [];
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText, status: 'completed', ...(media.length ? { media } : {}) });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
         return blocks ? { ...result, content: blocks } : result;
@@ -536,9 +572,10 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
               : new Error('Tool execution cancelled');
         }
         const message = err instanceof Error ? err.message : String(err);
-        const failure = `工具「${resolvedName}」执行失败：${message}`;
+        const sideEffect = tool.isReadOnly !== true;
+        const failure = formatUnexecutedToolResult(resolvedName, 'failed', message, sideEffect);
         recordProgress(resolvedName, effectiveArgs, false);
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure, status: 'failed', sideEffect });
         return toolResultToAgentMessage(toolCall, failure, true);
       } finally {
         state.activeTools -= 1;
@@ -574,5 +611,30 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           && block.text.includes('__zhin_tools_mutated__'),
       );
     },
+  };
+}
+
+/** Error text when `load_tool` reported success for a tool this turn's catalog cannot declare. */
+export function unavailableLoadedTool(
+  toolName: string,
+  args: unknown,
+  output: unknown,
+  catalog: readonly { readonly name: string }[] | undefined,
+): string | undefined {
+  if (toolName !== 'load_tool' || !catalog || typeof output !== 'string' || !output.startsWith('Loaded tool')) return undefined;
+  const target = args && typeof args === 'object' ? String((args as Record<string, unknown>).name ?? '') : '';
+  if (!target || catalog.some(item => item.name === target)) return undefined;
+  return `Tool "${target}" cannot be called in this turn: the current turn policy does not allow it. Do not call discover or load_tool for it again; tell the user it is unavailable here.`;
+}
+
+/** Account id of the turn's binding → the service id provider responses report (#1250). */
+function turnProviderResolver(host: Pick<ZhinAgentPrivate, 'getTurnExecution'>): (provider: string) => string | undefined {
+  return (provider) => {
+    try {
+      const binding = host.getTurnExecution().binding;
+      return provider === binding.account.id ? binding.service.id : undefined;
+    } catch {
+      return undefined;
+    }
   };
 }

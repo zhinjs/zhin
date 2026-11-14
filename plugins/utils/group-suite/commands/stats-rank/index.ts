@@ -7,6 +7,8 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   description: '查看本月话唠排行', descriptionI18n: { en: "View this month's most active members" },
+  alias: ['stats rank'],
+  preferredAliasI18n: { 'zh-CN': 'stats rank', en: 'stats rank' },
   execute({ config, input, owner, use, has, locale }) {
     const groupId = resolveGroupId({ ...input, locale });
     const title = groupId ? t(locale, 'statsMonthGroup') : t(locale, 'statsMonthAll');

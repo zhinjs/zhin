@@ -4,7 +4,10 @@ import { getTttHelp, runTttCommand } from '../../../src/ttt-command.js';
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 export default defineCommand({
-  description: 'Tic Tac Toe',
+  description: '井字棋：两人轮流落子',
+  descriptionI18n: { en: 'Tic Tac Toe' },
+  alias: ['井字游戏'],
+  preferredAliasI18n: { 'zh-CN': '井字游戏' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeTttAction(String(params.action ?? ''));

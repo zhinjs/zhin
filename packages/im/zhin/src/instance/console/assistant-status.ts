@@ -21,6 +21,7 @@ import { sessionEventActions, sessionEventQueries, type SessionEventsSource } fr
 import { groupRuleActions, groupRuleQueries, type GroupRulesSource } from './group-rules-rpc.js';
 
 import { UsageStatsService, usageStatsQueries, type UsageTraceDirSource } from './usage-stats-rpc.js';
+import type { ProviderDisplayIndex } from '../inference/provider-display.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -140,7 +141,15 @@ export class AssistantStatus {
   #readSessionEvents: SessionEventsSource = () => undefined;
   #readGroupRules: GroupRulesSource = () => undefined;
   #readUsageTraceDir: UsageTraceDirSource = () => undefined;
-  readonly #usageStats = new UsageStatsService({ dir: () => this.#readUsageTraceDir(), now: () => this.#now() });
+  #readProviderDisplay: () => Promise<ProviderDisplayIndex | undefined> = async () => undefined;
+  readonly #usageStats = new UsageStatsService({
+    dir: () => this.#readUsageTraceDir(),
+    now: () => this.#now(),
+    providerResolver: async () => {
+      const display = await this.#readProviderDisplay();
+      return display ? (provider: string) => display.resolveProvider(provider) : undefined;
+    },
+  });
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -218,6 +227,12 @@ export class AssistantStatus {
   /** The current generation's group rule store (ADR 0039 slice B); the latest route wins. */
   bindGroupRules(read: GroupRulesSource): void {
     this.#readGroupRules = read;
+  }
+
+  /** Provider graph lookups for `usage-stats` display names (#1250); binding drops the result cache. */
+  bindProviderDisplay(read: () => Promise<ProviderDisplayIndex | undefined>): void {
+    this.#usageStats.dispose();
+    this.#readProviderDisplay = read;
   }
 
   /** The current generation's trace archive dir for `usage-stats`; binding (or unbinding) drops the result cache. */

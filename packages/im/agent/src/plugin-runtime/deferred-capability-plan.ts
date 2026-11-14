@@ -95,6 +95,11 @@ export interface DeferredCapabilityPlanOptions {
 
 export interface AgentSkillIntentPrimeResult {
   readonly snapshot: DeferredToolSessionSnapshot;
+  /**
+   * The session snapshot as projected for these capabilities, before priming. With
+   * {@link restoreProjectedOutEntries} it rebuilds the full snapshot to persist.
+   */
+  readonly projected?: DeferredToolSessionSnapshot;
   readonly skill?: SkillDescriptor;
   readonly skills?: readonly SkillDescriptor[];
 }
@@ -112,7 +117,7 @@ export function primeAgentSkillForIntent(options: Readonly<{
 }>): AgentSkillIntentPrimeResult {
   const snapshot = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
   const skill = uniqueBestAgentSkill(options.capabilities.skills, options.intent);
-  if (!skill) return Object.freeze({ snapshot });
+  if (!skill) return Object.freeze({ snapshot, projected: snapshot });
 
   const config = resolveDeferredToolsConfig(options.config);
   const withTools = activateSkill(
@@ -122,7 +127,7 @@ export function primeAgentSkillForIntent(options: Readonly<{
     config.maxLoadedPerSession,
     new Set(config.alwaysLoadedTools),
   );
-  return Object.freeze({ snapshot: withTools, skill });
+  return Object.freeze({ snapshot: withTools, projected: snapshot, skill });
 }
 
 /** Model recommendation never enlarges the immutable, already-authorized projection. */
@@ -144,7 +149,8 @@ export async function primeSkillsForIntent(options: Readonly<{
     return skill ? [skill] : [];
   });
   const config = resolveDeferredToolsConfig(options.config);
-  let snapshot = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
+  const projected = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
+  let snapshot = projected;
   for (const skill of [...skills].reverse()) {
     snapshot = activateSkill(
       snapshot,
@@ -154,7 +160,7 @@ export async function primeSkillsForIntent(options: Readonly<{
       new Set(config.alwaysLoadedTools),
     );
   }
-  return Object.freeze({ snapshot, skill: skills[0], skills: Object.freeze(skills) });
+  return Object.freeze({ snapshot, projected, skill: skills[0], skills: Object.freeze(skills) });
 }
 
 /**
@@ -196,11 +202,13 @@ export function createDeferredCapabilityPlan(
     ...capabilityCatalogMetadata(publicCapabilities),
     alwaysLoaded,
   });
-  let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
+  const storedSnapshot = options.sessionSnapshot;
+  const projectedSnapshot = projectSessionSnapshot(storedSnapshot, projected);
+  let snapshot = projectedSnapshot;
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
     snapshot = next;
-    await options.persistSnapshot(structuredClone(snapshot));
+    await options.persistSnapshot(structuredClone(restoreProjectedOutEntries(storedSnapshot, projectedSnapshot, snapshot)));
   };
 
   const metaCapabilities = createMetaCapabilities({
@@ -236,7 +244,7 @@ export function createDeferredCapabilityPlan(
     load: async (name: string) => {
       if (!publicToolNames.has(name)) return false;
       if (!alwaysLoaded.has(name)) {
-        await persist(touchToolInSnapshot(snapshot, name, config.maxLoadedPerSession));
+        await persist(touchToolInSnapshot(snapshot, name, config.maxLoadedPerSession, logDeferredEviction));
       }
       return true;
     },
@@ -397,6 +405,12 @@ interface MetaCapabilityOptions {
   readonly decision?: AgentDecisionRuntime;
 }
 
+/** Ranked rows first, then keyword rows the ranker did not select; each name once. */
+export function mergeDiscoverRows<T extends { readonly name: string }>(ranked: readonly T[], keyword: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return [...ranked, ...keyword].filter(row => !seen.has(row.name) && (seen.add(row.name), true));
+}
+
 /** Maximum best discover matches auto-loaded for the next model request. */
 export const DISCOVER_SCHEMA_LIMIT = 3;
 
@@ -429,16 +443,18 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         kind === 'tool' ? undefined : rankDecisionCandidates(options.decision, 'skills', query,
           options.skills.map(skill => ({ name: skill.qualifiedName, description: skill.description })), invocation.signal),
       ]) : [];
-      const tools = rankedTools?.applied
+      // #1250: the ranker orders and adds candidates, it never hides keyword hits. An applied ranking
+      // that selects nothing (or only some) used to drop tools whose name matched the query exactly.
+      const tools = mergeDiscoverRows<{ readonly kind: 'tool' | 'skill'; readonly name: string; readonly brief: string }>(rankedTools?.applied
         ? rankedTools.selectedNames.flatMap(name => {
           const item = catalog.find(candidate => candidate.name === name);
           return item ? [{ kind: 'tool' as const, name, brief: item.brief }] : [];
-        }) : fallbackTools;
-      const skills = rankedSkills?.applied
+        }) : [], fallbackTools);
+      const skills = mergeDiscoverRows<{ readonly kind: 'tool' | 'skill'; readonly name: string; readonly brief: string }>(rankedSkills?.applied
         ? rankedSkills.selectedNames.flatMap(name => {
           const skill = options.skills.find(candidate => candidate.qualifiedName === name);
           return skill ? [{ kind: 'skill' as const, name, brief: skill.description }] : [];
-        }) : fallbackSkills;
+        }) : [], fallbackSkills);
       const rows = [...tools, ...skills];
       if (rows.length === 0) return 'No matches.';
       const listing = rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n');
@@ -456,6 +472,7 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         options.getSnapshot(),
         attach.map(entry => entry.name),
         options.maxLoaded,
+        logDeferredEviction,
       ));
       const names = attach.map(entry => entry.name).join(', ');
       return `${listing}\n\nLoaded: ${names}. Use their tool definitions for arguments.\n__zhin_tools_mutated__`;
@@ -469,7 +486,7 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const item = byName.get(name);
       if (!item) return `Tool "${name}" not found in catalog.`;
       if (!options.pinned.has(name)) {
-        await options.persist(touchToolInSnapshot(options.getSnapshot(), name, options.maxLoaded));
+        await options.persist(touchToolInSnapshot(options.getSnapshot(), name, options.maxLoaded, logDeferredEviction));
       }
       return `Loaded tool "${name}". Use its tool definition for arguments.\n__zhin_tools_mutated__`;
     }),
@@ -557,7 +574,38 @@ function activateSkill(
   pinned: ReadonlySet<string>,
 ): DeferredToolSessionSnapshot {
   const toolNames = resolveSkillTools(skill, tools).filter(name => !pinned.has(name));
-  return touchToolsInSnapshot(addSkillToSnapshot(snapshot, skill.qualifiedName), toolNames, maxLoaded);
+  return touchToolsInSnapshot(addSkillToSnapshot(snapshot, skill.qualifiedName), toolNames, maxLoaded, logDeferredEviction);
+}
+
+/** Deferred tools leave the session list only when the cap is exceeded; say which (#1250). */
+function logDeferredEviction(evicted: readonly string[]): void {
+  logger.info(`Deferred tools evicted (earliest loaded, maxLoadedPerSession reached): ${evicted.join(', ')}`);
+}
+
+/**
+ * Re-attaches session entries that this turn's projection hid (narrower turn policy,
+ * another entry Agent, collaboration tools absent) to the snapshot a turn persists.
+ * A turn with a narrower catalog must not erase what the session loaded (#1250
+ * deferred-tools-break-prefix): the next turn with the wider catalog gets the same
+ * tool list back. Hidden entries keep their first-load position.
+ */
+export function restoreProjectedOutEntries(
+  stored: DeferredToolSessionSnapshot,
+  projected: DeferredToolSessionSnapshot,
+  next: DeferredToolSessionSnapshot,
+): DeferredToolSessionSnapshot {
+  const hiddenTools = Object.entries(stored.loadedTools).filter(([name]) => !(name in projected.loadedTools));
+  const hiddenSkills = stored.loadedSkills.filter(name => !projected.loadedSkills.includes(name));
+  if (hiddenTools.length === 0 && hiddenSkills.length === 0) return next;
+  const loadedTools = { ...Object.fromEntries(hiddenTools), ...next.loadedTools };
+  const nextOrder = getLoadedToolNamesInLoadOrder(next);
+  const nextSet = new Set(nextOrder);
+  const hiddenSet = new Set(hiddenTools.map(([name]) => name));
+  const ordered = getLoadedToolNamesInLoadOrder(stored).filter(name => hiddenSet.has(name) || nextSet.has(name));
+  const placed = new Set(ordered);
+  const loadedOrder = [...ordered, ...nextOrder.filter(name => !placed.has(name))];
+  const loadedSkills = [...hiddenSkills, ...next.loadedSkills.filter(name => !hiddenSkills.includes(name))];
+  return { ...next, loadedTools, loadedOrder, loadedSkills };
 }
 
 function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[] {

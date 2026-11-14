@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-game-hub",
   "version": "1.1.28",
-  "description": "Zhin.js 游戏大厅 — 列出已加载的游戏插件 (Plugin Runtime)",
+  "description": "Lists the loaded mini-games with quick start, personal stats and leaderboards.",
+  "keywords": [
+    "zhin.js",
+    "game-hub",
+    "leaderboard",
+    "stats",
+    "游戏大厅"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -92,7 +103,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Game Hub",
+      "displayNameI18n": {
+        "zh-CN": "游戏大厅",
+        "en": "Game Hub"
+      },
+      "descriptionI18n": {
+        "zh-CN": "列出已加载的小游戏，提供快捷开局、个人战绩与排行榜。",
+        "en": "Lists the loaded mini-games with quick start, personal stats and leaderboards."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

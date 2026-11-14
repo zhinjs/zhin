@@ -243,6 +243,27 @@ sandbox: {}
     expect(result.issues.some((i) => i.code.startsWith('endpoints.'))).toBe(false);
   });
 
+  it('unset ${VAR} in the block of a plugin listed in disable_plugins is info, not a warning (#1250)', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
+plugins: {qq: '@zhin.js/adapter-qq', rss: 'rss-plugin'}
+disable_plugins: [qq]
+qq:
+  appid: \${QQ_APPID}
+  endpoints:
+    - secret: \${QQ_SECRET}
+rss:
+  key: \${RSS_KEY}
+`);
+
+    const { issues } = await runConfigCheck(tmpDir, {});
+    const env = issues.filter(issue => issue.code.startsWith('env.'));
+    expect(env.filter(issue => issue.severity === 'warn').map(issue => issue.path)).toEqual(['rss.key']);
+    expect(env.filter(issue => issue.severity === 'info').map(issue => issue.path).sort()).toEqual(['qq.appid', 'qq.endpoints[0].secret']);
+    expect(env.find(issue => issue.path === 'qq.appid')!.message).toContain('插件实例 qq 已停用');
+    expect(summarizeIssues(issues, true).warnings).toBe(issues.filter(issue => issue.severity === 'warn').length);
+  });
+
   it('config check --fix 应写回配置', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 configVersion: 2

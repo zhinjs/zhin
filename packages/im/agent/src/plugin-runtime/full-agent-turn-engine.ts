@@ -8,13 +8,16 @@ import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/i
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import type { DeliveryOutcome } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, TurnIngress } from '../turn/turn-ingress.js';
+import type { AgentLoopTurnResult } from '../core/agent-core-ports.js';
+import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
 import type { SessionSystem } from '../session/session-system.js';
 import {
   createDeferredCapabilityPlan,
   primeSkillsForIntent,
+  restoreProjectedOutEntries,
 } from './deferred-capability-plan.js';
 import type {
   AgentTurnEngine,
@@ -64,8 +67,20 @@ export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): 
     contextFiles: Object.freeze(options.contextFiles.map(file => Object.freeze({ ...file }))),
   } : {}) };
   return Object.freeze({
-    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(captured, context),
+    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(withCurrentBootstrap(captured), context),
   });
+}
+
+function withCurrentBootstrap(options: FullAgentTurnEngineOptions): FullAgentTurnEngineOptions {
+  if (!options.bootstrap) return options;
+  const current = options.bootstrap();
+  return {
+    ...options,
+    bootstrapContext: current.bootstrapContext,
+    contextFiles: current.contextFiles === undefined
+      ? undefined
+      : Object.freeze(current.contextFiles.map(file => Object.freeze({ ...file }))),
+  };
 }
 
 async function* runFullAgentTurn(
@@ -192,12 +207,16 @@ async function* runInteractiveTurn(
     decision: context.decision,
     signal: context.turn.signal,
   });
+  // Entries this turn's projection hides stay in the session snapshot (#1250).
+  const sessionSnapshot = primed.projected
+    ? restoreProjectedOutEntries(snapshot, primed.projected, primed.snapshot)
+    : primed.snapshot;
   if (primed.skill) {
-    await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, primed.snapshot);
+    await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, sessionSnapshot);
   }
   const plan = createDeferredCapabilityPlan({
     capabilities: projected,
-    sessionSnapshot: primed.snapshot,
+    sessionSnapshot,
     config: host.config,
     platform: context.turn.origin.kind === 'im' ? context.turn.origin.platform : undefined,
     toolTier: resolveToolTier(context.turn),
@@ -503,6 +522,7 @@ async function* runInteractiveTurn(
               deliveredMessageIds = messages.map(message => message?.id ?? null);
               deliveredMessageId = messages.find(message => message !== null)?.id;
             }
+            await deliverUnexecutedFollowup(completion.result.unexecutedNotice, reply, context.turn.identity.turnId);
           }
           // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
           recordRelationTurn(host.userProfiles?.relations, context.turn, completion.result);
@@ -581,4 +601,26 @@ async function* runInteractiveTurn(
       }
     }
   }
+}
+
+/**
+ * #1250 owner review: a streamed reply can no longer be extended, so the notice that side-effect tools did
+ * not run goes out as a short follow-up message through the same reply port (the normal outbound chain).
+ * The outcome is recorded on the turn trace either way; a failed follow-up never fails the turn.
+ */
+export async function deliverUnexecutedFollowup(
+  notice: AgentLoopTurnResult['unexecutedNotice'],
+  reply: Pick<NonNullable<TurnIngress['ports']['reply']>, 'send'>,
+  turnId: string,
+): Promise<'followup' | 'failed' | undefined> {
+  if (notice?.delivery !== 'followup') return undefined;
+  let delivered: 'followup' | 'failed' = 'failed';
+  try {
+    const outcome = await reply.send([{ type: 'text', content: notice.text }]);
+    if (outcome.status === 'sent') delivered = 'followup';
+  } catch {
+    // Reported on the trace below; the main reply was already delivered.
+  }
+  noteTurnTrace(turnId, { kind: 'unexecuted_tool_notice', tools: notice.tools, delivered });
+  return delivered;
 }

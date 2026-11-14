@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-repeater",
   "version": "1.1.28",
-  "description": "Repeater plugin for Zhin.js — auto-repeat when group members echo the same content (Plugin Runtime)",
+  "description": "Echoes a message when several group members repeat it in a row.",
+  "keywords": [
+    "zhin.js",
+    "repeater",
+    "echo",
+    "复读机"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -29,22 +39,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "repeater",
-    "echo",
-    "parrot",
-    "chatbot",
-    "im"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -90,7 +84,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Repeater",
+      "displayNameI18n": {
+        "zh-CN": "复读机",
+        "en": "Repeater"
+      },
+      "descriptionI18n": {
+        "zh-CN": "群内连续多人发送相同消息时自动跟读。",
+        "en": "Echoes a message when several group members repeat it in a row."
+      },
+      "category": "entertainment"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

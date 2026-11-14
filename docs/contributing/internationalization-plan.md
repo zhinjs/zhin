@@ -165,6 +165,6 @@ flowchart TD
 - 默认菜单关键词：`packages/im/command/src/provider.ts`
 - 交互文字与按钮：`packages/im/core/src/built/user-interaction.ts`
 - 交互生命周期与入站优先顺序：`packages/im/core/src/plugin-runtime/im/interaction-runtime.ts`、`inbound-runtime.ts`
-- 用户状态及持久化范围：`packages/im/plugin-runtime/src/persistent-state.ts`、`basic/cli/src/plugin-runtime/database-state.ts`
+- 用户状态及持久化范围：`packages/im/plugin-runtime/src/persistent-state.ts`、`packages/im/core/src/plugin-runtime/im/host/database-state.ts`
 - 提醒真实补问链：`plugins/utils/reminder/src/create-reminder.ts`
 - 项目创建共享选项：`packages/toolkit/scaffold-wizard/src/types.ts`

@@ -90,11 +90,11 @@ try {
 
 ### Adapter Admission Switches Atomically with the Snapshot
 
-During a hot reload, platform connections are never torn down before the new generation is ready:
+During a hot reload, platform connections that log in within the grace period are never torn down before the new generation is ready:
 
-1. The candidate `AdapterIndex` completes `start()` and `open()` during `activateNext`, while its `GenerationAdmissionGate` remains closed before `commit`.
+1. The candidate `AdapterIndex` starts its accounts and prepares `open()` during `activateNext`, while its `GenerationAdmissionGate` remains closed before `commit`. Each account's `start()` gets a grace period of about 3 seconds; accounts that have not finished keep starting in the background and join the new generation's admission once online after commit, so a slow account is replaced "old down, then new up".
 2. When `SnapshotStore` publishes the new snapshot, it synchronously opens the new admission gates and closes replaced gates; projections retained across both generations are reused without interruption.
-3. Every configured Endpoint is a required prerequisite: if creating, starting, or opening an Endpoint fails, the candidate generation is rejected and the previous generation keeps serving.
+3. An account's Endpoint start failure does **not** reject the candidate: the new generation commits and the failed account is retried in the background with backoff (except configuration errors and interactive logins, which wait for a person), see [account logins do not hold back readiness](../operations/production.md#account-start). A failure to restore an Adapter's persisted state, or a cancelled transaction, still rejects the candidate and the previous generation keeps serving.
 4. After commit, retired Endpoints drain alongside in-flight snapshot leases and are then closed and stopped by the old generation's disposer. The shared HTTP listener, Console RPC, and SSE streams belong to the Process Host and remain available across reloads.
 
 ## Snapshot Leases: In-Flight Messages Are Not Interrupted

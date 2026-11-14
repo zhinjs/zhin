@@ -1,5 +1,6 @@
 import {
   AGENT_COLLABORATION_RPC,
+  ATTENTION_RPC,
   CONFIG_RPC,
   CONSOLE_BUILTIN_ROLES,
   CONSOLE_PERMISSION_LIST,
@@ -15,7 +16,11 @@ import {
   bindingScopeCovers,
   consoleRpcPermission,
   grantsAllow,
+  grantsAllowAlsoRequired,
   isConsolePermission,
+  isPluginConsoleRpcType,
+  normalizePluginConsoleRpcType,
+  parsePluginConsoleRpcType,
   parseConsoleBindingScope,
   resolveConsoleHttpPermission,
   resolveConsoleWsPermission,
@@ -25,7 +30,7 @@ import {
 
 describe('Console permission catalog (ADR 0049 §3)', () => {
   it('maps every catalogued Console RPC to a known permission', () => {
-    const catalogs = [SIDE_EVENT_RPC, LOGIN_RPC, INBOX_RPC, ENDPOINT_RPC, CONFIG_RPC, PLUGIN_RPC, AGENT_COLLABORATION_RPC, IAM_RPC, ONBOARDING_RPC];
+    const catalogs = [SIDE_EVENT_RPC, LOGIN_RPC, INBOX_RPC, ENDPOINT_RPC, CONFIG_RPC, PLUGIN_RPC, AGENT_COLLABORATION_RPC, IAM_RPC, ONBOARDING_RPC, ATTENTION_RPC];
     for (const catalog of catalogs) {
       for (const type of Object.values(catalog)) {
         expect(CONSOLE_RPC_PERMISSIONS[type], type).toBeDefined();
@@ -48,6 +53,66 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-stop', { data: { id: 'bot-1' } })).toMatchObject({
       permission: 'endpoint.manage', target: { kind: 'endpoint', adapter: 'qq', endpoint: 'bot-1' },
     });
+  });
+
+  it('registers the #1250 configuration file account methods like the other account methods', () => {
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1', start: true } })).toMatchObject({
+      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'endpoint', adapter: 'qq', endpoint: 'bot-1' },
+    });
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } })).toMatchObject({
+      kind: 'exact', permission: 'endpoint.manage', target: { kind: 'adapter', adapter: 'qq' }, alsoRequires: ['ops.config.write'],
+    });
+    // Only the write-back rewrites the configuration file.
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } })).not.toHaveProperty('alsoRequires');
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpoint-drift')).toMatchObject({
+      kind: 'exact', permission: 'endpoint.view', target: { kind: 'adapter', adapter: 'qq' },
+    });
+  });
+
+  it('endpoint-writeback needs ops.config.write globally on top of endpoint.manage (#1250)', () => {
+    const rule = resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } });
+    const accountOperator: ConsoleGrant[] = [{ permissions: ['endpoint.manage'], scope: { kind: 'adapter', key: 'qq' } }];
+    expect(grantsAllowAlsoRequired(accountOperator, rule)).toBe(false);
+    // ops.config.write scoped to the adapter is not enough: configuration writes are global.
+    expect(grantsAllowAlsoRequired([...accountOperator, { permissions: ['ops.config.write'], scope: { kind: 'adapter', key: 'qq' } }], rule)).toBe(false);
+    expect(grantsAllowAlsoRequired([...accountOperator, { permissions: ['ops.config.write'], scope: { kind: 'global' } }], rule)).toBe(true);
+    expect(grantsAllowAlsoRequired(accountOperator, resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } }))).toBe(true);
+  });
+
+  it('normalizes camelCase / action. plugin RPC spellings to the one canonical method', () => {
+    expect(normalizePluginConsoleRpcType('plugin.root/qq.action.endpointWriteback')).toEqual({
+      type: 'plugin.root/qq.endpoint-writeback', pluginId: 'root/qq', method: 'endpoint-writeback', rawMethod: 'endpointWriteback',
+    });
+    expect(normalizePluginConsoleRpcType('plugin.root.status')).toMatchObject({ type: 'plugin.root.status', rawMethod: 'status' });
+    expect(normalizePluginConsoleRpcType('plugin.root.action')).toMatchObject({ method: 'action' });
+    expect(normalizePluginConsoleRpcType('plugin.root/qq.action.endpoint-writeback')?.type).toBe('plugin.root/qq.endpoint-writeback');
+    // The canonical form is exactly what parsePluginConsoleRpcType accepts.
+    expect(parsePluginConsoleRpcType(normalizePluginConsoleRpcType('plugin.root/qq.endpointImport')!.type))
+      .toEqual({ pluginId: 'root/qq', method: 'endpoint-import' });
+    for (const bad of ['plugin.root.EndpointWriteback', 'plugin.root.foo.bar', 'plugin.other.status', 'plugin.root.', 42]) {
+      expect(normalizePluginConsoleRpcType(bad), String(bad)).toBeNull();
+    }
+    // Plugin-shaped but not addressable: only the generic (delegate-then-deny) rule, never account semantics.
+    for (const shaped of ['plugin.root/qq.EndpointWriteback', 'plugin.root/qq.endpoint.writeback']) {
+      expect(isPluginConsoleRpcType(shaped), shaped).toBe(true);
+      expect(resolveConsoleRpcPermission(shaped), shaped).toMatchObject({ kind: 'plugin' });
+    }
+    expect(isPluginConsoleRpcType('plugin.other.status')).toBe(false);
+  });
+
+  it('resolves every spelling of an account method to the same rule, alsoRequires included', () => {
+    const payload = { data: { ids: ['bot-1'], id: 'bot-1' } };
+    const kebab = resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', payload);
+    for (const type of ['plugin.root/qq.endpointWriteback', 'plugin.root/qq.action.endpointWriteback', 'plugin.root/qq.action.endpoint-writeback']) {
+      expect(resolveConsoleRpcPermission(type, payload), type).toEqual(kebab);
+      expect(grantsAllowAlsoRequired([{ permissions: ['endpoint.manage'], scope: { kind: 'global' } }], resolveConsoleRpcPermission(type, payload)), type).toBe(false);
+    }
+    const stop = resolveConsoleRpcPermission('plugin.root/qq.endpoint-stop', payload);
+    expect(stop).toMatchObject({ permission: 'endpoint.manage', target: { kind: 'endpoint', endpoint: 'bot-1' } });
+    for (const type of ['plugin.root/qq.endpointStop', 'plugin.root/qq.action.endpointStop']) {
+      expect(resolveConsoleRpcPermission(type, payload), type).toEqual(stop);
+    }
+    expect(resolveConsoleRpcPermission('plugin.root/qq.endpointDrift')).toEqual(resolveConsoleRpcPermission('plugin.root/qq.endpoint-drift'));
   });
 
   it('refines config:patch by instanceKey and extracts scope targets from payloads', () => {
@@ -158,6 +223,9 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleHttpPermission('POST', '/plugins')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/config')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/introspectionx')).toBeNull();
+    // #1250: recent Agent turns need agent.view, ahead of the /introspection status.view prefix.
+    expect(resolveConsoleHttpPermission('GET', '/introspection/recent-turns')?.permission).toBe('agent.view');
+    expect(resolveConsoleHttpPermission('GET', '/introspection/commands')?.permission).toBe('status.view');
     expect(resolveConsoleHttpPermission('GET', '/console/terminal/targets')?.permission).toBe('ops.terminal');
     expect(resolveConsoleHttpPermission('POST', '/console/terminal/tickets')?.permission).toBe('ops.terminal');
     // Gateway-owned (ADR 0054 §4, ADR 0053 §4).

@@ -244,7 +244,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 账号与会话（对象树） | RPC `endpoint.list` / `endpoint.test`、`login.*`、`feature.get` / `feature.set-*` / `feature.conversations`、`chat-roles.list` / `grant` / `revoke` + 收件箱表 | 全局 / 适配器 / 账号 / 会话四级对象页；账号「聊天」含统一收件箱（消息 / 请求 / 通知），「接入」含连接测试与 LoginAssist 登录待办 |
 | 适配器连接管理 | `plugin.<pluginId>.status` + RPC `endpoint.list` / `endpoint.test` + `login.*` | 由适配器插件提供，嵌在适配器对象页「概览」：连接状态与测试、账号增删改启停；QQ 另有扫码绑定 |
 | 插件 / 插件详情 | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*`、`gateway.packages.*` | 已安装插件的来源、版本与健康状态；详情含版本与依赖、在哪开了、声明与配置、权限、能力清单；安装 / 更新 / 卸载计划与提交、配置校验、诊断 |
-| 插件市场 | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件索引（plugins.json + npmmirror）、核验 latest、检查更新 |
+| 插件市场 | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件索引（plugins.json + npmmirror）、核验 latest、检查更新；搜索带 `locale=zh-CN\|en` 时按语言解析显示名与描述，展示字段见[插件市场元数据](../authoring/plugin-delivery.md#marketplace-metadata) |
 | 功能矩阵 / 全局配置 | RPC `feature.matrix`、`feature.get`、`config:*` | 每个功能在全局与各适配器的开关；插件的全局 Schema 表单 |
 | 配置文件 | RPC `config:get-source` / `config:replace-source` / `config:set` / `config:patch` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置；简单页面用 `config:patch` 按路径写入（见[插件页面](../authoring/console-pages.md#在页面里保存设置-config-patch)） |
 | 运行日志 | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |
@@ -327,7 +327,8 @@ Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 
 - **登录**：用户用用户名和密码登录，得到会话令牌（默认 12 小时滑动过期，最长 30 天）。改密码、禁用或删除用户会立即吊销该用户的全部会话。
 - **API 令牌**：用户可以为自动化签发长期令牌，权限不超过签发人，可单独吊销。命令行工具从 `ZHIN_CONSOLE_TOKEN` 读取。
 - **角色**：内置 `owner`（全部）、`admin`（除终端和用户管理外全部）、`operator`（运营：收发消息、功能配置）、`viewer`（只读）。角色可以绑定到全局、某个适配器或某个账号。
-- **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志。
+- **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志，被拒绝的条目在 `detail.reason` 写明原因（`not_authenticated`、`setup_required`、`unmapped_permission`、`unmapped_route`、`insufficient_permission`、`scope_denied`、`handler_denied`、`no_plugin_handler`）。
+- **未知 RPC**：Host 根本没有的 RPC 类型（没有处理器、也不在权限表）回 `404 { code: 'unknown_rpc' }`，不执行、不算安全拒绝、不写审计（只按类型去重记 debug 日志）；有处理器却漏登记权限的仍按 `unmapped` 拒绝并审计。Console 连接后读一次 `GET /api/console/capabilities`（任何已登录主体，返回 `{ version, rpc, features, complete }`），不调用 Host 没列出的可选 RPC；旧 Host 没有这个接口时，Console 遇到 `unknown_rpc` / 「未登记权限」后本次会话不再调用该 RPC。
 - **离线救援**：`zhin console user create|passwd|disable|enable|list` 直接打开项目数据库，不需要运行中的 Host。
 - **在网关里**（ADR 0054 §3、§7）：登录、初始化向导、`/auth/me`、`iam.*`、`onboarding.update`、终端和审计日志都由管理网关处理，网关自己打开项目数据库（SQLite 为 WAL 模式，与实例共用同一个文件）。实例停止、崩溃或依赖安装期间 Console 仍能登录、初始化、看实例状态与日志；只有实例提供的页面和接口返回 `503`。禁用 / 删除用户、改密码或改角色绑定时，该用户在实例上的实时连接（事件流、WebSocket）随即断开。
 - **引导状态**：`GET {base}/auth/setup` 与（持有 `plugin.manage` 的调用方的）`/auth/me` 带 `onboarding` 字段；RPC `onboarding.update { step: 'ai' | 'adapters' | 'finish', status: 'done' | 'skipped' }` 需要 `plugin.manage`，第 3 步（`ai`）另需 `agent.configure`，第 4 步（`adapters`）另需 `endpoint.manage`（ADR 0053 §2）。依赖安装进度在 Console 事件流上以 `gateway.packages.progress` 推送，也可单独订阅 `GET {base}/gateway/packages/progress`。

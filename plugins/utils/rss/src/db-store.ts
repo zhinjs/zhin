@@ -6,6 +6,7 @@ export {
   type RssModel,
 } from './memory-store.js';
 
+import { decodeTaskTarget, type DeliveryTarget } from 'zhin.js/plugin-runtime';
 import {
   RSS_SEEN_TABLE,
   RSS_SUBS_TABLE,
@@ -31,13 +32,26 @@ export interface RssSubscriptionSummary {
   readonly channelId: string;
   readonly creatorName: string;
   readonly createdAt: string;
+  /** Exact destination, when the row has one (`target_json`); the Console shows it by name. */
+  readonly conversation?: DeliveryTarget;
+}
+
+function readTarget(raw: unknown): DeliveryTarget | undefined {
+  if (raw == null || raw === '') return undefined;
+  try {
+    return decodeTaskTarget(JSON.parse(String(raw)) as Record<string, unknown>);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function listAllSubscriptions(db: RssMemoryDb): Promise<RssSubscriptionSummary[]> {
   const Subs = getRssSubs(db);
   if (!Subs) return [];
   const rows = await Subs.select();
-  return rows.map((row, index) => ({
+  return rows.map((row, index) => {
+    const conversation = readTarget(row.target_json);
+    return {
     id: String(row.id ?? index + 1),
     feedTitle: String(row.feed_title ?? row.feedTitle ?? ''),
     url: String(row.url ?? ''),
@@ -47,5 +61,7 @@ export async function listAllSubscriptions(db: RssMemoryDb): Promise<RssSubscrip
     channelId: String(row.channel_id ?? row.channelId ?? ''),
     creatorName: String(row.creator_name ?? row.creatorName ?? ''),
     createdAt: String(row.created_at ?? row.createdAt ?? ''),
-  }));
+    ...(conversation ? { conversation } : {}),
+    };
+  });
 }

@@ -3,6 +3,7 @@ import {
   authorizeConsoleRpc,
   dispatchRuntimeConsoleRpc,
   HttpBodyError,
+  isAuditedRpcDenial,
   isUserPrincipal,
   jsonResponse,
   loginAuditDetail,
@@ -11,6 +12,8 @@ import {
   readJsonBody,
   rpcAuditDetail,
   rpcAuditTarget,
+  unknownConsoleRpcError,
+  unknownRpcLog,
   unrestrictedConsoleAccess,
   type ConsolePrincipal,
   type ConsoleRpcDecision,
@@ -25,9 +28,24 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
-import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
+import { AttentionObservations, AttentionSourceCache, AttentionWarnings, allowsEndpointAccount, dispatchAttentionConsoleRpc } from './attention.js';
+import { createAttentionSources } from './attention-sources.js';
+import {
+  CONSOLE_CAPABILITIES_PATH,
+  CONSOLE_DENIAL_REASONS,
+  CONSOLE_PERMISSIONS,
+  CONSOLE_UNKNOWN_RPC_CODE,
+  featureScopeTarget,
+  normalizePluginConsoleRpcType,
+  type ConsoleDenialReason,
+  type ConsoleFeatureOverrideOperator,
+} from '@zhin.js/console-protocol';
+import { instanceConsoleCapabilities, isInstanceConsoleRpcType } from './rpc-capabilities.js';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
+import { getLogger } from '@zhin.js/logger';
+
+const attentionLogger = getLogger('console');
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -43,29 +61,47 @@ function rpcPrincipal(http: HttpHost, resolved: ConsolePrincipal | undefined): C
   return resolved ?? (http.tokenRegistry?.hasAnyToken() ? undefined : OPEN_HOST);
 }
 
+/** Writer of Console feature overrides (#1250): the signed-in principal and its display name. */
+export function consoleOverrideOperator(principal: ConsolePrincipal): ConsoleFeatureOverrideOperator {
+  if (principal.kind === 'bootstrap') return Object.freeze({ source: 'console' as const });
+  return Object.freeze({ source: 'console' as const, principalId: principal.userId,
+    ...(principal.displayName || principal.username ? { displayName: principal.displayName || principal.username } : {}) });
+}
+
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
   const { http, base } = options;
   // Console SQL is recorded with its literals redacted by the database Host's own lexer.
   const redactSql = options.databaseHost?.console?.redactSql;
   const auditOptions = redactSql ? { redactSql: (sql: string) => redactSql(sql) } : undefined;
+  const attentionSources = createAttentionSources(options);
+  const attentionObservations = new AttentionObservations();
+  // Raw reads of plugins / config / MCP / logs are shared between requests (15 s or until the
+  // project files or the runtime generation change); filtering below stays per principal.
+  const attentionCache = new AttentionSourceCache({ ...(attentionSources.revision ? { revision: attentionSources.revision } : {}) });
+  const attentionWarnings = new AttentionWarnings(message => attentionLogger.warn(message));
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
     let principal: ConsolePrincipal | undefined;
     let message: Record<string, unknown> = {};
     let decision: ConsoleRpcDecision | undefined;
-    const audit = (outcome: 'ok' | 'denied' | 'error', body?: Record<string, unknown>) => {
+    const audit = (outcome: 'ok' | 'denied' | 'error', body?: Record<string, unknown>, reason?: ConsoleDenialReason) => {
       if (!decision) return;
       if (outcome !== 'denied' && !(decision.allowed && decision.write)) return;
+      // zhinjs/zhin#1250: an RPC the instance does not have is not a security refusal.
+      if (!isAuditedRpcDenial(decision) && !decision.allowed) return;
+      const why = reason ?? (decision.allowed ? undefined : decision.reason);
       try {
         // ADR 0058: login actions also record their result category (never values or messages).
         const login = loginAuditDetail(message.type, body?.data);
+        const detail = login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions);
         http.tokenRegistry?.accessProvider?.audit?.({
           actor: auditActor(principal),
-          action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
+          // Plugin RPCs are audited under their canonical method, whatever spelling was sent.
+          action: `rpc:${normalizePluginConsoleRpcType(message.type)?.type ?? String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
-          detail: login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions),
+          detail: outcome === 'denied' && why ? { ...detail, reason: why } : detail,
           ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }
@@ -81,8 +117,13 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       if (!principal) {
         return jsonResponse(401, { success: false, code: 'unauthorized', error: 'Invalid or missing token', requestId: message.requestId });
       }
-      decision = authorizeConsoleRpc(principal, message);
+      decision = authorizeConsoleRpc(principal, message, { registered: isInstanceConsoleRpcType });
       if (!decision.allowed) {
+        if (decision.code === CONSOLE_UNKNOWN_RPC_CODE) {
+          // Nothing ran and nothing else is disclosed; logged (debug, deduplicated), not audited.
+          unknownRpcLog.note(message.type);
+          return jsonResponse(404, { success: false, code: decision.code, error: decision.error, requestId: message.requestId }, noStore);
+        }
         audit('denied');
         return jsonResponse(403, { success: false, code: decision.code, error: decision.error, requestId: message.requestId });
       }
@@ -98,7 +139,10 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         auditActor(principal),
         // Overrides are environment-expanded: only principals that may edit `.env` themselves
         // (owners, `ops.env.write`) may plant `${…}` / `env://` references through feature.*.
-        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE)));
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE),
+        consoleOverrideOperator(authorizedPrincipal),
+        // Sandbox workspace names are shown where the workspace directory is (`endpoint.view`).
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.ENDPOINT_VIEW)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }
@@ -107,10 +151,23 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
         actor: auditActor(principal),
+        ...(isUserPrincipal(principal) && principal.displayName ? { actorDisplayName: principal.displayName } : {}),
         publishEvent: (type, data) => options.hub.publish(type, data),
       });
       if (chatRolesReply) {
         return reply(chatRolesReply.status, chatRolesReply.body, noStore);
+      }
+      // 「需要你处理」: every item is filtered by what this principal may view.
+      const attentionReply = await dispatchAttentionConsoleRpc(message, {
+        sources: attentionSources,
+        observations: attentionObservations,
+        cache: attentionCache,
+        warnings: attentionWarnings,
+        allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
+        allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
+      });
+      if (attentionReply) {
+        return reply(attentionReply.status, attentionReply.body, noStore);
       }
       // `plugin.<pluginId>.<method>`: the dispatcher authorizes signed-in principals per method
       // (its own, its Page's, or the catalog fallback permission).
@@ -129,13 +186,13 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       });
       if (pluginReply) {
         if (pluginReply.status === 403 && !pluginReply.body.success && pluginReply.body.code === 'forbidden' && !decision.write) {
-          audit('denied');
+          audit('denied', undefined, CONSOLE_DENIAL_REASONS.INSUFFICIENT_PERMISSION);
         }
         return reply(pluginReply.status, pluginReply.body as Record<string, unknown>, noStore);
       }
       if (decision.delegated) {
         // Admitted only for the plugin dispatcher: nothing else may answer it.
-        audit('denied');
+        audit('denied', undefined, CONSOLE_DENIAL_REASONS.NO_PLUGIN_HANDLER);
         return jsonResponse(403, { success: false, code: 'forbidden', error: '没有操作权限', requestId: message.requestId });
       }
       const requestScope = new ConsoleRpcRequestScope(options, {
@@ -158,6 +215,11 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const match = pickRpcReply(message, payloads);
       if (!match) {
         return reply(500, { success: false, error: 'No response' });
+      }
+      if (match.code === CONSOLE_UNKNOWN_RPC_CODE) {
+        // Mapped, but nothing in this instance answers it (e.g. `gateway.*` without a gateway).
+        unknownRpcLog.note(message.type);
+        return reply(404, { success: false, code: CONSOLE_UNKNOWN_RPC_CODE, error: unknownConsoleRpcError(message.type), requestId: match.requestId });
       }
       if (match.error) {
         return reply(400, {
@@ -185,6 +247,16 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
     tags: ['console'],
     description: 'Plugin Runtime Console request envelope: `{ type, data?, requestId? }`.',
   });
+
+  // zhinjs/zhin#1250: the RPC types this instance answers; any signed-in principal (`authenticated`).
+  http.route('GET', `${base}${CONSOLE_CAPABILITIES_PATH}`, () => jsonResponse(200, {
+    success: true,
+    data: instanceConsoleCapabilities(),
+  }, { 'cache-control': 'no-store' }), {
+    summary: 'Console capabilities',
+    tags: ['console'],
+    description: 'Built-in Console RPC types and feature flags this Host answers (`ConsoleCapabilities`).',
+  });
 }
 
 /** `endpoint.list` for an adapter/endpoint-scoped user only shows the accounts it covers. */
@@ -195,10 +267,19 @@ function scopedEndpointList(principal: ConsolePrincipal, type: unknown, data: un
   return {
     ...record,
     endpoints: record.endpoints.filter((entry) => {
-      const item = entry as { adapter?: unknown; name?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
-      const adapter = String(item.endpoint?.adapter ?? item.adapter ?? '');
-      const endpoint = String(item.endpoint?.id ?? item.name ?? '');
-      return principalAllows(principal, 'endpoint.view', { kind: 'endpoint', adapter, endpoint });
+      // The account address the Console authorizes and links with: endpoint bindings are written
+      // as `<adapter>/<name>` of these rows, and scope pages send `{ adapter, endpointKey: name }`.
+      // Transition: bindings written before as `<endpoint.adapter>/<endpoint.id>` (canonical id)
+      // still match the same row (and only that row) — see `endpointAccountTargets`.
+      const item = entry as { adapter?: unknown; name?: unknown; id?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
+      const text = (value: unknown) => typeof value === 'string' && value ? value : undefined;
+      const adapterType = text(item.endpoint?.adapter);
+      const id = text(item.endpoint?.id) ?? text(item.id);
+      const adapter = text(item.adapter) ?? adapterType ?? '';
+      const name = text(item.name) ?? id ?? '';
+      return allowsEndpointAccount((permission, target) => principalAllows(principal, permission, target), 'endpoint.view', {
+        adapter, name, ...(id ? { id } : {}), ...(adapterType ? { adapterType } : {}),
+      });
     }),
   };
 }

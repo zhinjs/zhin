@@ -13,6 +13,9 @@ export {
   openProjectEngagementJournal,
 } from './trace.js';
 
+/** `zhin usage report`: service names for recorded provider ids (#1250). */
+export { loadProviderDisplay } from './provider-display.js';
+
 /** `zhin agent info`; `@zhin.js/agent` is an optional peer of `zhin.js`. */
 export function loadAgentModule(): Promise<typeof import('@zhin.js/agent')> {
   return import('@zhin.js/agent');

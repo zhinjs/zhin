@@ -1,6 +1,73 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "properties": {}
+  "properties": {
+    "provider": {
+      "anyOf": [
+        {
+          "const": "piston",
+          "default": "piston"
+        },
+        {
+          "const": "glot",
+          "default": "glot"
+        }
+      ],
+      "description": "代码运行后端协议：piston（自建 Piston 的 /api/v2/execute）或 glot（glot.io 兼容的 /api/run）",
+      "x-i18n": {
+        "en": {
+          "description": "Backend protocol: piston (a self-hosted Piston /api/v2/execute) or glot (a glot.io-compatible /api/run)."
+        }
+      },
+      "default": "piston",
+      "x-zhin-config": {
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "代码运行后端地址。piston 填完整执行地址（如 http://127.0.0.1:2000/api/v2/execute）；glot 填 run 前缀（如 https://glot.io/api/run）。留空时命令提示未配置；可写 ${CODE_RUNNER_ENDPOINT}",
+      "x-i18n": {
+        "en": {
+          "description": "Backend URL. For piston, the full execute URL (e.g. http://127.0.0.1:2000/api/v2/execute); for glot, the run prefix (e.g. https://glot.io/api/run). Empty means not configured. ${CODE_RUNNER_ENDPOINT} is supported."
+        }
+      },
+      "default": "",
+      "x-zhin-config": {
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "token": {
+      "type": "string",
+      "description": "后端访问令牌（可选），建议写 ${CODE_RUNNER_TOKEN}。piston 作为 Authorization 头原样发送，glot 发送 Authorization: Token <token>",
+      "x-i18n": {
+        "en": {
+          "description": "Optional backend token; prefer ${CODE_RUNNER_TOKEN}. Sent as the raw Authorization header for piston and as \"Authorization: Token <token>\" for glot."
+        }
+      },
+      "writeOnly": true,
+      "x-zhin-secret": true,
+      "x-zhin-config": {
+        "secret": true,
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
+      }
+    }
+  },
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  }
 }

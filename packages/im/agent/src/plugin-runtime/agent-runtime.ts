@@ -333,12 +333,13 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
-      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot() });
+      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) });
       if (models) {
         mediaPerception = modelPort?.createPerception?.(models, request);
-        selected.provider = models.chat.binding.account.id;
+        // One provider id per request everywhere (trace, model_calls, ai.usage, usage rows): the service id (#1250).
+        selected.provider = models.chat.binding.service.id;
         selected.model = models.chat.model.id;
-        logContext.selectedModel = `${models.chat.binding.account.id}/${models.chat.model.id}`;
+        logContext.selectedModel = `${models.chat.binding.service.id}/${models.chat.model.id}`;
       }
       const discovered = await this.#ingress.read({ snapshot: lease.value, owner, isActive: () => active && lease.active,
         turn: request, selectedAgent: selection.agent,
@@ -370,7 +371,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           principal: { ...request.principal, trustLevel: trust.level },
         })
         : undefined;
-      releaseTrace = trace ? registerTurnTrace(trace) : undefined;
+      releaseTrace = trace ? registerTurnTrace(trace, {
+        // Background sub-agent turns can finish after this trace was saved (#1250).
+        save: snapshot => { void this.options.turnTraceStore?.save(snapshot).catch(() => undefined); },
+      }) : undefined;
       activeTrace = trace;
       const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
       const catalog = Object.freeze({
@@ -381,7 +385,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const engine = resolveTurnEngine(lease.value);
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
-      outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot() }, decision => runWithAgentTurnConfiguration(
+      outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) }, decision => runWithAgentTurnConfiguration(
         { activeBinding: selection.binding, models, mediaPerception },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({

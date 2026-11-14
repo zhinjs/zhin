@@ -16,6 +16,8 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
+import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
@@ -24,7 +26,7 @@ import { stampAssistantHeaders, stampDeliveredMessageId } from '../session/parti
 import { buildAgentPromptCacheStreamOptions } from '../config/index.js';
 import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { AgentLoopTurnInput, AgentLoopTurnResult } from './agent-core-ports.js';
+import { traceTurnId, type AgentLoopTurnInput, type AgentLoopTurnResult } from './agent-core-ports.js';
 
 type TurnLlmModel = ReturnType<ZhinAgentPrivate['getTurnExecution']>['model'];
 
@@ -425,6 +427,29 @@ export async function finalizeTurnReplyAndOutput(params: {
   if (!state.phaseSettled) {
     output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart));
   }
+  // #1250: a side-effect tool that was denied or failed must not be reported as done. The framework
+  // always adds one deterministic line (owner review: no keyword guessing). Before anything is
+  // published it is appended to the reply; once a reply was streamed or a phase settled, the delivery
+  // sends it as a short follow-up message through the reply chain.
+  let honestTextReply = textReply;
+  let unexecutedNotice: AgentLoopTurnResult['unexecutedNotice'];
+  if (!stopped) {
+    const unexecuted = unresolvedSideEffectFailures(finalPhaseToolCalls);
+    if (unexecuted.length > 0) {
+      const tools = unexecuted.map(call => call.tool);
+      const text = formatUnexecutedNotice(unexecuted, input.turnContext.input?.locale);
+      if (!state.phaseSettled && !state.replyRun?.offered) {
+        output = [...output, { type: 'text', content: text }];
+        honestTextReply = textReply.trim() ? `${textReply}\n\n${text}` : text;
+        unexecutedNotice = Object.freeze({ tools: Object.freeze(tools), text, delivery: 'appended' as const });
+        noteTurnTrace(traceTurnId(input.turnContext), { kind: 'unexecuted_tool_notice', tools, delivered: 'appended' });
+      } else {
+        unexecutedNotice = Object.freeze({ tools: Object.freeze(tools), text, delivery: 'followup' as const });
+      }
+      logger.info(formatCompact({ op: 'unexecuted_tool_notice', session: sessionId, tools: tools.join(','),
+        delivery: unexecutedNotice.delivery }));
+    }
+  }
   // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
   if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
   let progressive: AgentLoopTurnResult['progressive'];
@@ -442,7 +467,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     }
     if (!progressive && state.replyRun.offered) progressive = { run: state.replyRun };
   }
-  const finalReply = imReply ? renderAgentOutput(output) : textReply;
+  const finalReply = imReply ? renderAgentOutput(output) : honestTextReply;
 
   return {
     output,
@@ -451,6 +476,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     hostReply,
     stopped,
     progressive,
+    ...(unexecutedNotice ? { unexecutedNotice } : {}),
   };
 }
 

@@ -345,7 +345,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             }));
             return;
           }
-          const frame = parseSandboxWsFrame(raw);
+          const frame = parseSandboxWsFrame(raw, {
+            id: this.#options.defaults.id,
+            ...(this.#options.defaults.nickname ? { names: [this.#options.defaults.nickname] } : {}),
+          });
           if (frame.kind === 'invalid') {
             socket.send(JSON.stringify({
               type: 'error', endpoint: target, connectionId,

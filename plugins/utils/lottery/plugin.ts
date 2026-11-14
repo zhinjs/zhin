@@ -36,9 +36,6 @@ export interface LotteryConsoleStatus {
  */
 export default definePlugin<LotteryConfig>({
   name: 'lottery',
-  metadata: {
-    displayName: 'Lottery',
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [lotteryRuntimeStore, pluginConsoleRpcToken],
     injects: [databaseHostToken, outboundHostToken, scheduleHostToken, projectLocaleToken],
@@ -143,6 +140,7 @@ export default definePlugin<LotteryConfig>({
         id: 'lottery/daily_pipeline',
         cron: config.scheduleCron || '0 0 18 * * *',
         description: 'Daily lottery pipeline',
+        title: '每日彩票开奖流程', titleI18n: { en: 'Daily lottery pipeline' },
         async execute() {
           await runLotteryPipeline({
             locale,

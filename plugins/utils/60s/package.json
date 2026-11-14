@@ -1,7 +1,18 @@
 {
   "name": "@zhin.js/plugin-60s",
   "version": "1.1.20",
-  "description": "60s API aggregation plugin for Zhin.js — news, weather, hot searches, utilities (Plugin Runtime)",
+  "description": "Daily news, weather, trending lists, quotes and more — 17 tools for commands and the AI.",
+  "keywords": [
+    "zhin.js",
+    "60s",
+    "news",
+    "weather",
+    "hot-search"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -29,27 +40,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "60s",
-    "news",
-    "weather",
-    "weibo",
-    "zhihu",
-    "douyin",
-    "hot-search",
-    "hitokoto",
-    "api",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -110,6 +100,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "60s API",
+      "displayNameI18n": {
+        "zh-CN": "60 秒 API",
+        "en": "60s API"
+      },
+      "descriptionI18n": {
+        "zh-CN": "新闻早报、天气、各平台热搜、一言等 17 种工具，命令和 AI 都能调用。",
+        "en": "Daily news, weather, trending lists, quotes and more — 17 tools for commands and the AI."
+      },
+      "category": "information"
+    }
   }
 }

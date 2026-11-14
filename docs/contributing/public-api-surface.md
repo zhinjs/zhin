@@ -121,7 +121,7 @@
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
-| Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `@zhin.js/cli` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent、configuration、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `basic/cli/src/plugin-runtime/`；装配细节随时可变 |
+| Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent（`agent/host-installer.ts`）、configuration、feature、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `packages/im/zhin/src/instance/`；装配细节随时可变 |
 | `@zhin.js/harness`（Mailbox / Authority / BudgetLedger / GuardKernel / Journal） | `internal` | `@zhin.js/harness` | ADR 0048 多 Agent 协作微内核，由 `@zhin.js/agent` 装配；插件作者通过 `agent.json` 的 `collaboration` 与协作工具使用，不直接依赖 |
 
 ## Deprecated / 已迁移

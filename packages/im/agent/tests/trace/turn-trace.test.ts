@@ -81,6 +81,34 @@ describe('TurnTraceCollector', () => {
     });
   });
 
+  it('records the trigger message and the wait before the turn started (#1250)', () => {
+    const time = clock(30_000);
+    const trace = collector(time);
+    trace.note({ kind: 'trigger', text: '天气   北京 sk-abcdefghijklmnopqrstuvwxyz0123456789' + 'x'.repeat(300), sender_id: 'u-7',
+      sender_name: 'Alice', conversation: 'private:u-7', message_id: 'm-1', received_at: 5_000, merged_messages: 2, queued_ms: 3_000 });
+    trace.note({ kind: 'trigger', text: 'second trigger is ignored' });
+    const snapshot = trace.snapshot();
+    expect(snapshot.trigger).toMatchObject({ sender_id: 'u-7', sender_name: 'Alice', conversation: 'private:u-7', message_id: 'm-1',
+      received_at: 5_000, wait_before_start_ms: 25_000, merged_messages: 2, queued_ms: 3_000 });
+    expect(snapshot.trigger!.text.startsWith('天气 北京 ')).toBe(true);
+    expect(snapshot.trigger!.text).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
+    expect(snapshot.trigger!.text.length).toBeLessThanOrEqual(121);
+    const text = formatTurnTrace(snapshot);
+    expect(text).toContain('触发消息: "天气 北京');
+    expect(text).toContain('发送者: u-7 (Alice)  会话: private:u-7');
+    expect(text).toContain('收到 → 回合开始: 25.0s（合流 2 条消息，排队等待前一回合 3.0s）');
+  });
+
+  it('shows the pre-start wait as the first timeline line', () => {
+    const time = clock(10_000);
+    const trace = collector(time);
+    trace.note({ kind: 'trigger', text: 'hi', received_at: 7_500 });
+    trace.record({ type: 'iteration_start', iteration: 1 } as TurnEvent);
+    const text = formatTurnTrace(trace.snapshot());
+    const timeline = text.slice(text.indexOf('时间线:'));
+    expect(timeline.split('\n')[1]).toMatch(/^\s+-\s*2\.5s\s+received\s+收到触发消息$/u);
+  });
+
   it('ignores events after the terminal and closes running tools', () => {
     const trace = collector();
     trace.record({ type: 'tool_call', toolName: 'slow', args: {}, toolUseId: 't1' });
@@ -211,5 +239,16 @@ describe('file store', () => {
     expect(await store.latest()).toBeUndefined();
     await writeFile(file, '{not json');
     expect(await store.list()).toEqual([]);
+  });
+
+  it('shows the model without opaque provider graph ids (#1250)', () => {
+    const trace = collector();
+    trace.record({ type: 'usage', provider: 'services:3f0c9a1e-0000-4000-8000-000000000000', model: 'ag/gemini-3.8-flash', usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } } as TurnEvent);
+    trace.record({ type: 'usage', provider: 'openai', model: 'gpt-mini', usage: { promptTokens: 5, completionTokens: 1, totalTokens: 6 } } as TurnEvent);
+    trace.finalize();
+    const text = formatTurnTrace(trace.snapshot());
+    expect(text).toContain('model=ag/gemini-3.8-flash');
+    expect(text).not.toContain('services:3f0c9a1e');
+    expect(text).toContain('model=openai/gpt-mini');
   });
 });

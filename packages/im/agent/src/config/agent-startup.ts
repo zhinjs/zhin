@@ -192,6 +192,8 @@ export interface AgentStartupConfig {
     execAllowlist?: string[];
     /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */
     execApprovalMode?: 'ask' | 'auto' | 'bypass';
+    /** IM 审批选项（#1250）。adminSelfApprove：端点层 admin 能否在自己私聊里本人批准标为管理员可批的操作，默认 false。 */
+    approval?: { adminSelfApprove?: boolean };
     /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
     taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */

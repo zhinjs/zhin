@@ -13,7 +13,7 @@ import { withNoStore } from '../console/no-store.js';
 function principalId(principal: ConsolePrincipal | undefined): { principalId?: string } {
   return isUserPrincipal(principal) ? { principalId: `user:${principal.userId}` } : {};
 }
-import { ProviderError } from '@zhin.js/ai/provider';
+import { ProviderDiscoveryError, ProviderError } from '@zhin.js/ai/provider';
 import {
   PersonalSessionAccessError,
   PersonalSessionMigrationRequiredError,
@@ -77,7 +77,26 @@ function revision(value: unknown): number {
     throw new InferenceManagementError('invalid-input');
   return Number(value);
 }
-function failure(error: unknown): { status: number; code: string } {
+/** Actionable text for refusals the Console user can resolve; other failures stay generic. */
+const FAILURE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  'service-origin-change':
+    '已有账号在用这个服务，服务地址只能改路径（例如补上 /v1），不能换主机、协议或端口：账号的密钥只会发往原来的主机。'
+    + '要换主机，请用「复制为新服务」新建一个服务，再把账号和用途迁移过去。',
+});
+function failureMessage(code: string): string {
+  return FAILURE_MESSAGES[code] ?? '模型服务操作未完成';
+}
+interface RouteFailure {
+  readonly status: number;
+  readonly code: string;
+  /** Safe, enum-like diagnostics only (driver step, upstream HTTP status and reason code). */
+  readonly details?: Readonly<{ preparationCode?: string; reason?: string; upstreamStatus?: number; step?: string; retryAfterMs?: number }>;
+  /** Operator-facing text replacing the generic one when the failure is actionable. */
+  readonly message?: string;
+}
+/** Shown when model discovery succeeds with zero models. */
+const DISCOVERY_EMPTY_HINT = '上游模型目录没有返回可用模型：可以直接手动填写模型 ID 继续配置；Codex 订阅还可以在模型服务配置中调整 codexClientVersion（上游按 Codex CLI 版本过滤模型）后重新读取';
+function failure(error: unknown): RouteFailure {
   if (error instanceof PersonalSessionMigrationRequiredError)
     return { status: 409, code: 'migration-required' };
   if (error instanceof PersonalSessionAccessError) return { status: 403, code: 'forbidden' };
@@ -91,7 +110,7 @@ function failure(error: unknown): { status: number; code: string } {
       status:
         error.code === 'forbidden'
           ? 403
-          : error.code === 'plan-conflict'
+          : error.code === 'plan-conflict' || error.code === 'service-origin-change'
           ? 409
           : error.code === 'driver-unavailable' || error.code === 'driver-contract-mismatch'
           ? 503
@@ -108,6 +127,41 @@ function failure(error: unknown): { status: number; code: string } {
         unsupported: 422,
       }[error.code],
       code: error.code,
+    };
+  if (error instanceof InferenceAuthenticationError && error.code === 'client-secret-required')
+    return {
+      status: 428,
+      code: error.code,
+      details: { reason: 'client-secret-required' },
+      message: '该服务使用机密 OAuth 客户端，登录前需要先为账号设置客户端凭据（client secret）',
+    };
+  if (error instanceof InferenceAuthenticationError && error.code === 'preparation-failed') {
+    const preparation = error.preparation;
+    return {
+      // Failed dependency: the upstream supplier refused or could not complete account preparation.
+      // `code` is fixed for clients; the driver's own code is a separate diagnostic field.
+      status: 424,
+      code: 'preparation-failed',
+      details: {
+        ...(preparation?.code ? { preparationCode: preparation.code } : {}),
+        ...(preparation?.reason ? { reason: preparation.reason } : {}),
+        ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }),
+        ...(preparation?.step ? { step: preparation.step } : {}),
+      },
+      message: preparation?.reason === 'project-required'
+        ? '账号准备未完成：该账号已开通但上游没有为它分配 Google Cloud 项目。请在该模型服务的配置中填写 Google Cloud 项目 ID（projectId，字符串形式如 my-project-123，不是数字项目编号；即 gemini-cli 的 GOOGLE_CLOUD_PROJECT），保存后重新完成准备'
+        : '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
+    };
+  }
+  if (error instanceof ProviderDiscoveryError && error.code === 'rate-limited')
+    return {
+      status: 429,
+      code: 'discovery-rate-limited',
+      details: {
+        upstreamStatus: error.status,
+        ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+      },
+      message: '模型目录请求过于频繁，请稍后重试',
     };
   if (error instanceof InferenceAuthenticationError)
     return {
@@ -196,8 +250,9 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
           return withNoStore(jsonResponse(result.status, {
             success: false,
             code: result.code,
+            ...(result.details ?? {}),
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
-            error: '模型服务操作未完成',
+            error: result.message ?? failureMessage(result.code),
           }));
         } finally {
           request.signal.removeEventListener('abort', abort);
@@ -268,9 +323,14 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   register('POST', '/profile-schema', async ({ lease, principal, request }) =>
     lease.management.profileSchema(principal, await readJsonBody(request))
   );
-  register('POST', '/discover', async ({ lease, principal, request, signal }) =>
-    lease.management.discover(principal, await readJsonBody(request), signal)
-  );
+  register('POST', '/discover', async ({ lease, principal, request, signal }) => {
+    const discovered = await lease.management.discover(principal, await readJsonBody(request), signal);
+    // An empty catalogue is a successful answer, not an error: the Console shows the hint and lets the
+    // operator enter model ids by hand (e.g. when the upstream filters its catalogue by client version).
+    return discovered.observations.length === 0
+      ? { ...discovered, emptyHint: { code: 'discovery-empty', message: DISCOVERY_EMPTY_HINT } }
+      : discovered;
+  });
   register('POST', '/login/begin', async ({ lease, principal, request, signal }) => {
     const body = object(await readJsonBody(request)),
       account = await lease.management.account(principal, text(body.accountId));

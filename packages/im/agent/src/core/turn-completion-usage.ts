@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage, type Usage, type LlmRequestObservation } from '@zhin.js/ai';
 
 import type { UsageEvent } from '../event/turn-event.js';
@@ -14,7 +14,16 @@ import type { InteractiveRun } from './interactive-run.js';
 export function trackTurnCompletionUsage(
   delegate: LlmCompletionPort,
   project?: (message: AssistantMessage, signal?: AbortSignal) => Promise<AssistantMessage>,
-  trace?: Readonly<{ turnId?: string; recordBodies?: boolean }>,
+  trace?: Readonly<{
+    turnId?: string;
+    recordBodies?: boolean;
+    /**
+     * Maps a request's `model.provider` (the account id of the bound profile) to the provider id
+     * responses report (the service id), so the request timeline, `model_calls` and `ai.usage`
+     * record one id for one request (#1250). Unmapped ids are recorded as given.
+     */
+    resolveProvider?: (provider: string) => string | undefined;
+  }>,
   run?: InteractiveRun,
 ): {
   transport: LlmCompletionPort;
@@ -28,11 +37,12 @@ export function trackTurnCompletionUsage(
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
   const pending: UsageEvent[] = [];
   const reported = new WeakSet<object>();
-  const record = (assistant: AssistantMessage, durationMs: number, requestId: string): AssistantMessage => {
+  const record = (assistant: AssistantMessage, durationMs: number, requestId: string, prefixHash?: string): AssistantMessage => {
     const usage = assistant.usage;
     run?.recordUsage(usage.totalTokens);
     pending.push(turnUsageEvent(usage, {
       provider: assistant.provider, model: assistant.model, stopReason: assistant.stopReason, durationMs, requestId,
+      ...(prefixHash ? { prefixHash } : {}),
     }));
     reported.add(assistant);
     total.input += usage.input;
@@ -58,7 +68,8 @@ export function trackTurnCompletionUsage(
     if (stopped) throw new Error(stopped);
     const requestId = randomUUID();
     const started = performance.now();
-    const request = { request_id: requestId, provider: model.provider, model: model.id, started_at: Date.now(), status: 'running' as const };
+    const provider = trace?.resolveProvider?.(model.provider) ?? model.provider;
+    const request = { request_id: requestId, provider, model: model.id, started_at: Date.now(), status: 'running' as const };
     const recordBody = trace?.recordBodies !== false;
     noteTurnTrace(trace?.turnId, { kind: 'model_request', request: {
       ...request, body_status: recordBody ? 'unsupported' : 'disabled',
@@ -85,8 +96,10 @@ export function trackTurnCompletionUsage(
     const durationMs = performance.now() - started;
     noteTurnTrace(trace?.turnId, { kind: 'model_request_end', request_id: requestId,
       status: assistant.stopReason === 'aborted' ? 'cancelled' : assistant.stopReason === 'error' ? 'failed' : 'completed',
-      duration_ms: durationMs, stop_reason: assistant.stopReason });
-    return projectRecorded(record(assistant, durationMs, requestId), options?.signal);
+      duration_ms: durationMs, stop_reason: assistant.stopReason,
+      ...(assistant.provider ? { provider: assistant.provider } : {}),
+      ...(assistant.model ? { model: assistant.model } : {}) });
+    return projectRecorded(record(assistant, durationMs, requestId, requestPrefixHash(context)), options?.signal);
   };
   const forTransport = (target: LlmCompletionPort): LlmCompletionPort => ({
     complete: complete('complete', target),
@@ -108,4 +121,45 @@ export function trackTurnCompletionUsage(
       pending.push(turnUsageEvent(tokens, { provider: provider ?? 'media-perception', model: model ?? 'unknown', stopReason: 'stop' }));
     },
   };
+}
+
+/**
+ * Hash of what a provider prompt cache keys on first: the system prompt and the tool
+ * definitions, in request order (#1250 usage-cache-unsupported-hint). Never the messages.
+ */
+export function requestPrefixHash(context: Readonly<{ systemPrompt?: string; tools?: readonly unknown[] }> | undefined): string | undefined {
+  if (!context) return undefined;
+  try {
+    const hash = createHash('sha256');
+    hash.update(context.systemPrompt ?? '');
+    for (const tool of context.tools ?? []) {
+      hash.update('\u0000');
+      hash.update(stableToolText(tool));
+    }
+    return hash.digest('hex').slice(0, 16);
+  } catch {
+    return undefined;
+  }
+}
+
+function stableToolText(tool: unknown): string {
+  if (!tool || typeof tool !== 'object') return String(tool);
+  const { name, description, parameters } = tool as { name?: unknown; description?: unknown; parameters?: unknown };
+  return `${String(name)}\u0001${String(description ?? '')}\u0001${safeJson(parameters)}`;
+}
+
+function safeJson(value: unknown): string {
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, item: unknown) => {
+      if (typeof item === 'function') return undefined;
+      if (item && typeof item === 'object') {
+        if (seen.has(item)) return '[cycle]';
+        seen.add(item);
+      }
+      return item;
+    }) ?? '';
+  } catch {
+    return '';
+  }
 }

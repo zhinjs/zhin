@@ -4,6 +4,7 @@ import type {
 } from '@zhin.js/host-http';
 import type { AgentConsolePort } from './agent-console.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
+import { describeScheduleTarget, scheduleEndpointLookup } from './schedule-target.js';
 
 export function createExtendedConsoleRpcContext(
   composition: ConsoleRpcComposition,
@@ -24,6 +25,7 @@ export function createExtendedConsoleRpcContext(
     withEndpointLogin,
     databaseHost: databaseHost ? { models: databaseHost.models } : undefined,
     resolveScheduleEngine: () => resolveScheduleEngine(agent),
+    describeScheduleTarget: (notify: unknown) => describeScheduleTarget(notify, scheduleEndpointLookup(im?.endpoints) ?? null),
     loginAssist: im?.loginAssist,
     authenticatedPrincipal: principal,
   });

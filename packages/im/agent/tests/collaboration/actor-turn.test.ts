@@ -22,10 +22,13 @@ import {
   type Principal,
 } from '@zhin.js/harness';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
-import { createActorTurnRunner, renderMailBatch } from '../../src/collaboration/actor-turn.js';
-import type { CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
+import { actorModelSelection, createActorTurnRunner, renderMailBatch } from '../../src/collaboration/actor-turn.js';
+import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
+import type { SubTurnTracing } from '../../src/trace/turn-trace-registry.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
+import { traceScopeTurnId } from '../../src/trace/turn-trace-registry.js';
+import { takeActorAttachments } from '../../src/media/agent-attachments.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { PromptController } from '../../src/turn/prompt-controller.js';
 import { executionBundle } from '../helpers/execution-bundle.js';
@@ -79,6 +82,10 @@ function setup(options: {
   budget?: BudgetAmounts;
   principal?: Principal;
   rootSignal?: AbortSignal;
+  journal?: { append(event: any): void | Promise<void> };
+  models?: ActorModelSource;
+  tracing?: SubTurnTracing;
+  rootModel?: ActorModelSelection;
 }) {
   const inputs: CoreInput[] = [];
   const core = {
@@ -106,7 +113,7 @@ function setup(options: {
     policy: SHELL_POLICY,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
     signal: options.rootSignal ?? new AbortController().signal,
-    ports: { journal: { append: async () => undefined }, approval },
+    ports: { journal: options.journal ?? { append: async () => undefined }, approval },
   });
   const byName = new Map(options.agents.map(agent => [agent.name, agent]));
   const directory: CollaborationDirectory = { entry: options.agents[0]!, get: name => byName.get(name), list: () => options.agents };
@@ -124,7 +131,9 @@ function setup(options: {
     directory,
     harness: () => harness,
     createTools,
-    resolveModel: () => ({ modelId: 'm1', modelCandidates: ['m1'] }),
+    resolveModel: () => options.rootModel ?? { modelId: 'm1', modelCandidates: ['m1'] },
+    ...(options.models ? { models: options.models } : {}),
+    ...(options.tracing ? { tracing: options.tracing } : {}),
   });
   const harness: Harness = createHarness({
     guard: createGuardKernel({ isAttenuationOf }),
@@ -231,6 +240,65 @@ describe('actor turn runner', () => {
     await detach({ status: 'completed' });
   });
 
+  it('journals the actor model calls under the actor turn for trace and usage (#1250)', async () => {
+    const events: any[] = [];
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [capability('lookup')],
+      script: reply('done', 2, 10),
+      journal: { append: (event) => { events.push(event); } },
+    });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'researcher', text: 'q' });
+    const usage = events.filter(event => event.type === 'usage');
+    expect(usage).toHaveLength(2);
+    for (const event of usage) expect(traceScopeTurnId(event)).toMatch(/^turn-1:actor:researcher:/);
+    await detach({ status: 'completed' });
+  });
+
+  it('keeps the media the actor tools produced for the asker (#1250)', async () => {
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('draw', ALL)],
+      tools: [capability('generate_image')],
+      script: async function* () {
+        yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        return { reply: 'Here it is.', usage: { total_tokens: 2 }, iterations: 1, model: 'model',
+          toolCalls: [{ tool: 'generate_image', result: JSON.stringify({ image_url: 'https://cdn.example/a.png', model: 'img' }) }] };
+      },
+    });
+    const { root, detach } = await ctx.attach();
+    const outcome = await ctx.harness.send('zhin', root, { kind: 'ask', to: 'draw', text: 'draw' });
+    expect(outcome.ok).toBe(true);
+    expect(takeActorAttachments(ctx.harness, outcome.ok ? outcome.mailId : undefined)).toEqual([{ type: 'image', url: 'https://cdn.example/a.png' }]);
+    await detach({ status: 'completed' });
+  });
+
+  it('never turns local paths in the actor reply text into attachments, and judges tool media with the actor authority (#1250)', async () => {
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('leak', ALL)],
+      tools: [capability('generate_image')],
+      script: async function* () {
+        yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        return {
+          reply: 'Here: ![](/etc/passwd) [file:keys](/home/owner/.ssh/id_rsa)',
+          // What parseOutput makes of that reply text: model-authored, not tool media.
+          output: [
+            { type: 'image', url: '/etc/passwd' },
+            { type: 'file', url: '/home/owner/.ssh/id_rsa', name: 'keys' },
+          ],
+          usage: { total_tokens: 2 }, iterations: 1, model: 'model',
+          // A tool result pointing outside the actor's workspace is refused as well.
+          toolCalls: [{ tool: 'generate_image', result: JSON.stringify({ image_url: '/etc/shadow' }) }],
+        };
+      },
+    });
+    const { root, detach } = await ctx.attach();
+    const outcome = await ctx.harness.send('zhin', root, { kind: 'ask', to: 'leak', text: 'send me the files' });
+    expect(outcome.ok).toBe(true);
+    expect(takeActorAttachments(ctx.harness, outcome.ok ? outcome.mailId : undefined)).toEqual([]);
+    await detach({ status: 'completed' });
+  });
+
   it('offers network tools only with network egress', async () => {
     const ctx = setup({
       agents: [agentDef('zhin', ALL, { ceiling: ceiling('zhin', ALL, true) }), agentDef('researcher', ALL, { ceiling: ceiling('researcher', ALL, true) })],
@@ -279,6 +347,8 @@ describe('actor turn runner', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
     // Overspend is caught live and stops the turn; the partial reply is kept with a budget note.
     expect(result).toMatchObject({ status: 'budget_exceeded', content: expect.stringMatching(/^done\n\nStopped: the budget granted for this work ran out after 3 model call\(s\)\.$/) });
+    // The human is shown only the actor's own words, never the model-facing budget note.
+    expect((result as ActorTurnOutcome).reply).toBe('done');
   });
 
   it('fails for an unknown agent', async () => {
@@ -343,6 +413,168 @@ describe('actor turn runner', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
     expect(result.status).toBe('completed');
     expect(result.content).toMatch(/without a reply/);
+    expect(result).not.toHaveProperty('reply');
     expect(ctx.inputs[0]!.promptProfile.persona).toMatch(/^You are a focused assistant agent/);
+  });
+});
+
+describe('#1250 actor turns own their model operation and trace', () => {
+  function fakeScope(model: string, profile: string, purpose: 'chat' | `agent:${string}`) {
+    const bundle = executionBundle({
+      model: { id: model, provider: 'acct', api: 'fixture', input: ['text'], contextWindow: 128_000, maxTokens: 8192 } as never,
+      completion: { complete: async () => { throw new Error('no completion expected'); } },
+      profile,
+    });
+    const release = vi.fn(async () => undefined);
+    const scope = { chat: { ...bundle, binding: { ...bundle.binding, ...(purpose === 'chat'
+      ? { source: { level: 'default', purpose: 'chat' } } : { source: { level: 'agent', name: purpose.slice(6) } }) } },
+    purpose, release } as never as Awaited<ReturnType<ActorModelSource['acquire']>>;
+    return { scope, release };
+  }
+
+  it('runs each actor turn on its own host operation, selected through agent:<name>, and releases it', async () => {
+    const { getAgentTurnConfiguration } = await import('../../src/turn/agent-turn-context.js');
+    const researcher = fakeScope('gemini', 'gemini-profile', 'agent:researcher');
+    const acquire = vi.fn<ActorModelSource['acquire']>(async () => researcher.scope);
+    let seen: unknown;
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire },
+      script: async function* () {
+        seen = getAgentTurnConfiguration()?.models;
+        yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        return { reply: 'answer', usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }, iterations: 1 };
+      },
+    });
+    const { root } = await ctx.attach();
+    const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'which model?' } })], new AbortController().signal);
+    expect(result).toEqual({ status: 'completed', content: 'answer', reply: 'answer' });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(acquire.mock.calls[0]![0]).toMatchObject({ agent: { name: 'researcher' }, sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
+    expect(acquire.mock.calls[0]![0].operationId).toMatch(/^turn-1:actor:researcher:/);
+    expect(seen).toBe(researcher.scope);
+    expect(ctx.inputs[0]!.modelId).toBe('gemini');
+    expect(researcher.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the qualified name and a shared bare name to the purpose lookup', async () => {
+    const researcher = fakeScope('gemini', 'gemini-profile', 'agent:tools__researcher');
+    const acquire = vi.fn<ActorModelSource['acquire']>(async () => researcher.scope);
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL, { qualifiedName: 'tools__researcher', bareNameShared: true })],
+      tools: [],
+      models: { acquire },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    expect(acquire.mock.calls[0]![0].agent).toEqual({ name: 'researcher', qualifiedName: 'tools__researcher', bareNameShared: true });
+  });
+
+  it('keeps the root turn\'s fallback candidates for a sub-turn that falls back to chat', async () => {
+    const chat = fakeScope('deepseek', 'chat-profile', 'chat');
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire: async () => chat.scope },
+      rootModel: { modelId: 'deepseek', modelCandidates: ['deepseek', 'deepseek-backup', 'qwen'] },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    expect(ctx.inputs[0]!.modelId).toBe('deepseek');
+    expect(ctx.inputs[0]!.modelCandidates).toEqual(['deepseek', 'deepseek-backup', 'qwen']);
+  });
+
+  it('keeps the root fallback chain for the aggregation turn of a non-zhin entry binding', async () => {
+    const entry = fakeScope('deepseek', 'support-profile', 'agent:support');
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire: async () => entry.scope },
+      rootModel: { modelId: 'deepseek', modelCandidates: ['deepseek', 'deepseek-backup'] },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('zhin', [mailFrom(root, { from: { kind: 'actor', actor: 'researcher' }, to: 'zhin', kind: 'result',
+      body: { kind: 'result', inReplyTo: root.id, status: 'completed', content: 'done' } } as Partial<Mail>)], new AbortController().signal);
+    expect(ctx.inputs[0]!.modelCandidates).toEqual(['deepseek', 'deepseek-backup']);
+  });
+
+  it('selects model candidates from the purpose the sub-turn runs on', () => {
+    const root = { modelId: 'deepseek', modelCandidates: ['deepseek', 'qwen'] };
+    // Own purpose: one profile, no fallbacks; never the root's chain for another model.
+    expect(actorModelSelection(fakeScope('gemini', 'g', 'agent:researcher').scope, root))
+      .toEqual({ modelId: 'gemini', modelCandidates: ['gemini'] });
+    // Chat on another model than the root (root ran a binding purpose): the root's chain does not apply.
+    expect(actorModelSelection(fakeScope('glm', 'c', 'chat').scope, root)).toEqual({ modelId: 'glm', modelCandidates: ['glm'] });
+    expect(actorModelSelection(fakeScope('deepseek', 'c', 'chat').scope, undefined))
+      .toEqual({ modelId: 'deepseek', modelCandidates: ['deepseek'] });
+  });
+
+  it('keeps the root purpose for the entry actor continuing with results', async () => {
+    const entry = fakeScope('deepseek', 'chat-profile', 'chat');
+    const acquire = vi.fn<ActorModelSource['acquire']>(async () => entry.scope);
+    const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], models: { acquire } });
+    const { root } = await ctx.attach();
+    await ctx.runner('zhin', [mailFrom(root, { from: { kind: 'actor', actor: 'researcher' }, to: 'zhin', kind: 'result',
+      body: { kind: 'result', inReplyTo: root.id, status: 'completed', content: 'done' } } as Partial<Mail>)], new AbortController().signal);
+    expect(acquire.mock.calls[0]![0]).not.toHaveProperty('agent');
+  });
+
+  it('fails the actor turn (not the host) when no model operation can be opened', async () => {
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire: async () => { throw new Error('Model runtime: invalid-context'); } },
+    });
+    const { root } = await ctx.attach();
+    const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    expect(result.status).toBe('failed');
+    expect(result.content).toMatch(/no model available.*invalid-context/u);
+    expect(ctx.inputs).toHaveLength(0);
+  });
+
+  it('records sub-turn model calls and the selected profile: nested while the root trace is live, saved on its own after', async () => {
+    const { TurnTraceCollector } = await import('../../src/trace/turn-trace.js');
+    const { registerTurnTrace, captureSubTurnTracing } = await import('../../src/trace/turn-trace-registry.js');
+    const rootTrace = new TurnTraceCollector({ turnId: 'turn-1', sessionKey: 'im:icqq:bot:private:owner' });
+    const saved: import('../../src/trace/turn-trace.js').TurnTrace[] = [];
+    const release = registerTurnTrace(rootTrace, { save: trace => saved.push(trace) });
+    const tracing = captureSubTurnTracing('turn-1')!;
+    expect(tracing).toBeDefined();
+    const researcher = fakeScope('gemini', 'gemini-profile', 'agent:researcher');
+    const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], tracing,
+      models: { acquire: async () => researcher.scope }, script: reply('live', 2, 10) });
+    const { root } = await ctx.attach();
+    await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+    const nested = rootTrace.snapshot().subagents[0]!;
+    expect(nested.turn_id).toMatch(/^turn-1:actor:researcher:/);
+    expect(nested.model_calls).toHaveLength(2);
+    expect(nested.model_selection).toEqual({ purpose: 'agent:researcher', profile_id: 'gemini-profile', account_id: 'acct', model: 'gemini', source: 'agent' });
+    expect(nested.termination.status).toBe('completed');
+    expect(saved).toHaveLength(0);
+
+    // The root turn ended (trace saved and released) before a background result came back.
+    rootTrace.finalize({ status: 'completed' });
+    release();
+    await ctx.runner('researcher', [mailFrom(root, { id: 'x2', kind: 'delegate', body: { kind: 'delegate', brief: 'later' } } as Partial<Mail>)], new AbortController().signal);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.turn_id).toMatch(/^turn-1:actor:researcher:x2$/);
+    expect(saved[0]!.model_calls).toHaveLength(2);
+    expect(saved[0]!.model_selection?.profile_id).toBe('gemini-profile');
+    expect(rootTrace.snapshot().subagents).toHaveLength(1);
+  });
+
+  it('flags a sub-turn reply that claims a lookup without any tool call', async () => {
+    const { TurnTraceCollector } = await import('../../src/trace/turn-trace.js');
+    const { registerTurnTrace, captureSubTurnTracing } = await import('../../src/trace/turn-trace-registry.js');
+    const rootTrace = new TurnTraceCollector({ turnId: 'turn-1', sessionKey: 'im:icqq:bot:private:owner' });
+    const release = registerTurnTrace(rootTrace);
+    try {
+      const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], tracing: captureSubTurnTracing('turn-1')!,
+        script: reply('我查了一下，明天有雨') });
+      const { root } = await ctx.attach();
+      await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+      expect(rootTrace.snapshot().subagents[0]!.claim_without_tool_call).toEqual({ phrase: '查了一下' });
+    } finally { release(); }
   });
 });
