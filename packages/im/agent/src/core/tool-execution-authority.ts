@@ -2,9 +2,9 @@ import type { AgentTool, ToolExecutionCause } from '@zhin.js/ai';
 
 export type AgentCoreToolExecutionOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
-  | Readonly<{ status: 'denied'; reason: string }>
+  | Readonly<{ status: 'denied'; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean }>;
+  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
 
 /** Sole policy + approval + execution authority used by the full Agent Core. */
 export interface ToolExecutionAuthority {

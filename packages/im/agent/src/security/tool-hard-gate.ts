@@ -23,7 +23,7 @@
  *
  * 审计写 `tool_approval` / `tool_hard_gate` / `ops_cooldown`（`ai_decision_events`）；审计写失败不影响判定。
  */
-import type { DecisionEventInput, DecisionReasonCode } from '../decision-events.js';
+import { redactApprovalDisplay, type DecisionEventInput, type DecisionReasonCode } from '../decision-events.js';
 import { approvalActionLabel } from '../tool/approval-presentation.js';
 import {
   isApprovalPortAvailable,
@@ -930,7 +930,9 @@ export function formatHardGateQuestion(
 ): string {
   return [
     `危险操作：${approvalActionLabel(toolName, description)}${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}`,
-    `本次参数：${stableJson(input)}`,
+    // #1250 review: the prompt may be shown in a chat; mask secrets. The Console card and the
+    // same-argument fingerprint keep the exact arguments.
+    `本次参数：${stableJson(redactApprovalDisplay(input))}`,
     entry ? `Console 审批：${entry.id}` : undefined,
     '需逐次确认，超时拒绝。',
   ].filter((line): line is string => Boolean(line)).join('\n');

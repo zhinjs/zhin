@@ -15,7 +15,8 @@ const read = (rel) => readFileSync(path.join(repoRoot, rel), 'utf8');
 // 63: ai.agent.reactions（表情回应限频，避免每轮都表情回应；Fin 2026-10-29）
 // 64: contextHistory（internal，仅代码字段：运行时把 ai.context.historyTokens/maxRecentMessages 交给 Agent；用户配置在 ai.context，不是新的 ai.agent 开关；ADR 0043 §2）
 // 65: masterShellApprovalMode（#1109 已合入：主人私聊隔离 shell 的审批方式，默认 ask）
-const BASELINE = 65;
+// 66: approval（#1250 所有者 review：approval.adminSelfApprove，管理员本人审批开关，默认关）
+const BASELINE = 66;
 
 function schemaAgentKeys() {
   const schema = JSON.parse(read('packages/im/runtime/src/host-config-schema.json'));

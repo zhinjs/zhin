@@ -166,6 +166,12 @@ describe('reason_code registry', () => {
     const start = DECISION_REASON_CODES.indexOf('change_drafted');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('rule_hit_flood'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the #1250 turn-approval code after the ADR 0040 self-change codes', () => {
+    const slice = ['tool_approval_unavailable'];
+    expect(DECISION_REASON_CODES.indexOf('tool_approval_unavailable'))
+      .toBe(DECISION_REASON_CODES.indexOf('change_config_superseded') + 1);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });
 

@@ -57,6 +57,7 @@ import {
   selfChangeStoreToken,
   type SelfChangeImpactPort,
   type AudioTranscriptionPort,
+  describeApprovalChannelConflicts,
 } from '@zhin.js/agent';
 import {
   AgentRuntime,
@@ -84,6 +85,8 @@ import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 import { agentToolApprovalQueueToken } from '../console/tool-approvals.js';
 
 const logger = getLogger('agent');
+/** #1250: each approval/channel conflict is reported once per process, not on every generation reload. */
+const reportedApprovalConflicts = new Set<string>();
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
@@ -427,6 +430,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       'bash',
       options.resolveEndpointOwner ? 'approve' : '',
     ].filter(Boolean).join(',');
+    for (const conflict of describeApprovalChannelConflicts({
+      execApprovalMode: zhinAgent.config.execApprovalMode,
+      confirmHighRisk: zhinAgent.config.injectionGuard?.confirmHighRisk,
+      unattendedChannels: [
+        ...(scheduleTools.length > 0 ? ['定时任务'] : []),
+        ...(assistantEnabled ? ['助理提醒'] : []),
+      ],
+    })) {
+      if (reportedApprovalConflicts.has(conflict)) continue;
+      reportedApprovalConflicts.add(conflict);
+      logger.warn(formatCompact({ op: 'approval_channel_conflict', detail: conflict }));
+    }
     logger.info(
       `ready | ${binding.name}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`

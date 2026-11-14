@@ -115,6 +115,10 @@ export {
   type HostProtectedPaths,
   type HostProtectedPathsInput,
 } from './security/host-config-paths.js';
+export {
+  describeApprovalChannelConflicts,
+  type ApprovalChannelConflictInput,
+} from './security/approval-channel-conflicts.js';
 export { managementCommandText } from './init/command-presentation.js';
 export {
   handleRuntimeManagementCommand,
@@ -696,8 +700,10 @@ export {
 } from './assistant/index.js';
 
 export type {
+  ApprovalBlockReason,
   ApprovalDecision,
   ApprovalDecisionMemory,
+  ApprovalDenialContext,
   ApprovalDecisionPort,
   ApprovalOutcome,
   ApprovalOutcomePort,
@@ -706,6 +712,7 @@ export type {
 } from './session/approval-port.js';
 export {
   approvalOutcomeToDecision,
+  formatApprovalBlocked,
   formatApprovalDenial,
   requestApprovalOutcome,
 } from './session/approval-port.js';

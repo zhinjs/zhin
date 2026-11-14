@@ -62,6 +62,8 @@ import {
   resolveProductTurnIntent,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  holdsEndpointAdmin,
+  resolveImApprover,
   resolveSandboxTurnPolicy,
   runtimePersonalSessionAddress,
   type RuntimeSenderRoles,
@@ -329,22 +331,39 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             projectRoot,
             defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
           });
-          const approverId = senderRoles.isMaster ? message.sender?.id : ownerId;
-          const approvalInteraction = approverId
-            ? im.createInteraction(message, { subjectId: approverId })
+          // #1250: the approver answers on this conversation, bound to their platform user id.
+          const initiatorPresent = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge;
+          const approver = resolveImApprover({
+            senderId: message.sender?.id,
+            isMaster: senderRoles.isMaster,
+            // #1250 review: admin held at endpoint level or above; a conversation-level admin or demoted owner is not.
+            isAdmin: message.sender?.id ? holdsEndpointAdmin(message.sender) : false,
+            ownerId,
+            scope: message.conversation.kind,
+            initiatorPresent,
+            adminSelfApprove: service.getAgentConfig()?.approval?.adminSelfApprove === true,
+          });
+          const approvalInteraction = approver.kind !== 'none'
+            ? im.createInteraction(message, { subjectId: approver.subjectId })
             : undefined;
+          // Nobody with authority here: the live initiator may still confirm their own intent (provenance only).
+          const intentInteraction = approver.kind === 'none' && initiatorPresent && message.sender?.id
+            ? im.createInteraction(message, { subjectId: message.sender.id })
+            : undefined;
+          const imApprovalOptions = {
+            locale: message.locale,
+            interaction: approvalInteraction,
+            selfApproval: approver.kind === 'initiator',
+            ...(intentInteraction ? { intentInteraction } : {}),
+            ...(approver.kind === 'none' ? { unavailableReason: approver.reason } : {}),
+            memory: agent.approvalReviewer,
+          };
           const askApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
+            ...imApprovalOptions,
             isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
+            masterPresent: initiatorPresent,
           });
-          const escalatedApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
-            isMaster: false,
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
-          });
+          const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
           const replyPort = createIngressReplyPort({
             message,
             snapshot,
@@ -424,6 +443,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mode: turnPolicy.shell?.approvalMode
                   ?? service.getAgentConfig()?.execApprovalMode
                   ?? 'auto',
+                masterInitiator: senderRoles.isMaster,
                 auto: createAutoApprovalPort(
                   agent.approvalReviewer,
                   escalatedApprovalPort,

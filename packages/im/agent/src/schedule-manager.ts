@@ -12,6 +12,7 @@ import {
   parseScheduleAddFromToolArgs,
   type ScheduleInvocationContext,
 } from './assistant/schedule-job-service.js';
+import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
 import type { TimerScheduler } from './assistant/timer-scheduler.js';
 import type { TaskExecutionResult } from './task-executor.js';
 
@@ -55,6 +56,7 @@ function registration(
   description: string,
   inputSchema: ToolInputJsonObjectSchema,
   execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
+  tags?: readonly string[],
 ): ScheduleToolRegistration {
   return Object.freeze({
     name,
@@ -62,6 +64,7 @@ function registration(
       description,
       inputSchema,
       execute,
+      ...(tags ? { tags } : {}),
     }),
   });
 }
@@ -120,6 +123,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         }
         return { success: true, id: job.id, message: '已添加调度任务' };
       },
+      // #1250: an admin may confirm creating a scheduled task in their own private chat (allow once).
+      [ADMIN_APPROVABLE_TOOL_TAG],
     ),
     registration(
       'schedule_preview',

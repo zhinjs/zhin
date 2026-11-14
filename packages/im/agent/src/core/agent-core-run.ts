@@ -556,6 +556,7 @@ export async function* runAgentLoopTextTurnRun(
     hostReply,
     stopped,
     progressive,
+    unexecutedNotice,
   } = await finalizeTurnReplyAndOutput({
     input,
     state,
@@ -603,6 +604,7 @@ export async function* runAgentLoopTextTurnRun(
     reply: finalReply,
     output,
     progressive,
+    ...(unexecutedNotice ? { unexecutedNotice } : {}),
     replyPhaseId: state.replyPhaseId,
     ...(state.phaseStopped ? { replyPhaseStopped: true as const } : {}),
     usage,

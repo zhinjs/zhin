@@ -15,6 +15,8 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { ReplyStreamRun } from '../../src/core/reply-stream-run.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { deliveredTextDigest } from '../../src/session/context-provenance.js';
+import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
+import { registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 
 it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts through the complete turn engine', async mode => {
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
@@ -234,4 +236,65 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-r
     }
     expect(projects.every(project => project.mock.calls.length === 1)).toBe(true);
   }
+});
+
+it.each(['sent', 'failed'] as const)('sends the unexecuted-tool notice as a follow-up after a streamed reply (%s) (#1250 owner review)', async sendOutcome => {
+  const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
+  const message = { conversation, id: 'physical' };
+  const output = [{ type: 'message' as const, segments: [{ type: 'text' as const, data: { text: '记住啦，你不能吃香菜' } }] }];
+  const receipt = { status: 'sent' as const, parts: [{ message }], message };
+  const order: string[] = [];
+  const native: CoreReplyStream = { receipt, confirmed: [{ key: 'physical', message, segments: output[0]!.segments }],
+    update: vi.fn(), finish: vi.fn(async () => { order.push('finish'); return receipt; }), cancel: vi.fn(async () => receipt) };
+  const send = vi.fn(async (_outbound: unknown) => {
+    order.push('send');
+    if (sendOutcome === 'failed') throw new Error('endpoint offline');
+    return { status: 'sent' as const };
+  });
+  const turn = createTurnIngress({
+    intent: { kind: 'new' }, identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn-followup' },
+    origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'user', conversation },
+    principal: { subjectId: 'user', roles: ['user'] }, input: { text: '记住我不吃香菜' }, session: { key: 'sandbox:bot:private:user' },
+    policy: { permissions: ['user'], unattended: false }, capabilities: { tools: [], skills: [] }, signal: new AbortController().signal,
+    ports: { journal: { append: async () => undefined }, reply: { send, openStream: () => native } },
+  });
+  const host = { emitter: new ZhinAgentEventEmitter(new AgentEventBus()), config: { deferredTools: {} },
+    rateLimiter: { check: () => ({ allowed: true }) }, usageQuota: new UsageQuota(),
+    contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }), setDeferredToolSnapshot: async () => undefined },
+    promptController: new PromptController('one-at-a-time', 'one-at-a-time'), activeBinding: { providerAlias: 'provider', model: 'model' },
+    toldLedger: { record: vi.fn(), renderBlocks: () => [] }, finalizeActiveTurn: vi.fn() };
+  const engine = createFullAgentTurnEngine({ host: host as never,
+    core: { runText(input: { replyStream: CoreReplyStream }) { return (async function* () {
+      const snapshot = { revision: 1, messages: [{ key: 'message-0', complete: true,
+        segments: [{ key: 'segment-0', complete: true, value: output[0]!.segments[0]! }] }] };
+      yield { type: 'turn_end' as const, output, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+      return { reply: '记住啦，你不能吃香菜', output, usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        path: 'agent' as const, iterations: 2, model: 'model', toolCalls: [], projectConversation: vi.fn(async () => undefined),
+        progressive: { run: new ReplyStreamRun(input.replyStream), snapshot },
+        unexecutedNotice: { tools: ['memory_upsert'], text: '（记忆操作未执行）', delivery: 'followup' as const } };
+    })(); } } as never,
+    sessionSystem: { prepareIngressTurn: async () => ({ sessionKey: turn.session.key, userId: 'user', sessionId: 'session', isNewSession: false,
+      turnUser: { rawContent: '记住我不吃香菜', promptMessages: [createUserMessage('记住我不吃香菜')] } }), touchAfterTurn: async () => undefined } as never,
+    contextSystem: { buildTextTurnContext: async () => ({ userMessages: [createUserMessage('记住我不吃香菜')], personaEnhanced: 'persona',
+      modelCandidates: ['model'], modelId: 'model', providerAlias: 'provider', modelSdk: 'google', turnEnvelope: null }) } as never,
+  });
+  const trace = new TurnTraceCollector({ turnId: 'turn-followup', sessionKey: turn.session.key });
+  const release = registerTurnTrace(trace);
+  try {
+    const stream = engine.run({ turn, capabilities: { generation: 1, owner: rootPluginId(), tools: [], skills: [], agents: [], mcp: [], promptSections: [] },
+      toolCapabilities: [], tools: new TurnToolRuntime(turn, []), selection: { binding: { name: 'zhin', providerAlias: 'provider', model: 'model', mcpServers: [] }, mcpServers: [] } });
+    while (true) {
+      const step = await stream.next();
+      if (!step.done) continue;
+      // A failed follow-up never fails the already delivered turn.
+      await step.value.project();
+      break;
+    }
+  } finally {
+    release();
+  }
+  expect(native.finish).toHaveBeenCalledOnce();
+  expect(send).toHaveBeenCalledExactlyOnceWith([{ type: 'text', content: '（记忆操作未执行）' }]);
+  expect(order).toEqual(['finish', 'send']);
+  expect(trace.snapshot().unexecuted_tool_notice).toEqual({ tools: ['memory_upsert'], delivered: sendOutcome === 'sent' ? 'followup' : 'failed' });
 });

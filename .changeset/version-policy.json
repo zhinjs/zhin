@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。；所有者已批准（zhinjs/zhin#1250）：IM 回合审批渠道与 Agent 行为改进新增公开 API——根入口新增 formatApprovalBlocked、describeApprovalChannelConflicts 及类型 ApprovalBlockReason / ApprovalDenialContext / ApprovalChannelConflictInput；ApprovalRequestInput.purpose、ApprovalOutcome.scope、formatApprovalDenial 可选上下文参数、createBypassApprovalPort 的 confirmIntent 选项；`@zhin.js/agent/security` 新增 MEMORY_SCOPE_POLICY 与审批策略指纹相关导出。"
     },
     {
       "package": "@zhin.js/client",
