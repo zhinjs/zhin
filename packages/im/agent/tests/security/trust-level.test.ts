@@ -118,6 +118,7 @@ describe('trust tiers (#726)', () => {
         status: 'denied',
         policy: TRUST_LEVEL_POLICY,
         reason: TRUST_RESTRICTION_REASON,
+        sideEffect: true,
       });
     }
     expect(bash.execute).not.toHaveBeenCalled();

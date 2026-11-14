@@ -14,6 +14,13 @@
  *   the previous version is kept in the entry's history (newest wins).
  * - `task_state` always expires: it is bound to a task id when one is given
  *   and gets a bounded TTL (default 24h, at most 7 days).
+ *
+ * Approval tier (#1250, {@link memoryWriteApprovalTier}): a write into the initiator's own `user`
+ * memory is personal and needs no approval in any `execApprovalMode`; every other scope (`global`,
+ * `platform`, and `session`, which other people in the conversation share and may have written)
+ * keeps the ordinary approval. The `user` scope key is always the turn principal's own subject id —
+ * the tool derives it from the turn, never from model input — so no call can reach another person's
+ * personal memory.
  */
 import type { MemoryEntryKind, MemoryEntryRecord, MemoryEntryScope, MemoryEntryTrustLevel } from '@zhin.js/ai';
 import type { InitiatorTrustLevel } from '../security/trust-level.js';
@@ -54,6 +61,24 @@ export function decideMemoryWrite(request: MemoryWriteRequest): MemoryWriteDecis
     return deny(`记忆 "${existing.key}" 由更高信任级别写入，当前发起者无权覆盖。`);
   }
   return Object.freeze({ allowed: true });
+}
+
+/** The scope a `memory_upsert` call writes: the model's choice, else the trust-level default. */
+export function resolveMemoryWriteScope(raw: unknown, level: InitiatorTrustLevel): MemoryEntryScope {
+  if (raw === undefined) return defaultMemoryScope(level);
+  if (raw === 'global' || raw === 'platform' || raw === 'session' || raw === 'user') return raw;
+  throw new TypeError('scope must be global, platform, session, or user');
+}
+
+/**
+ * `personal`: the write lands in the initiator's own `user` memory and runs without approval.
+ * `shared`: it can change what other people see or what someone else recorded, so it is approved
+ * like any other side effect.
+ */
+export type MemoryWriteApprovalTier = 'personal' | 'shared';
+
+export function memoryWriteApprovalTier(scope: MemoryEntryScope): MemoryWriteApprovalTier {
+  return scope === 'user' ? 'personal' : 'shared';
 }
 
 /** Default scope when the model omits one: shared memory only for trusted writers. */

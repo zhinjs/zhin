@@ -19,6 +19,8 @@ import type { ReplyPhaseLifecycle } from './reply-phase.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import type { ToolCallRecord } from './tool-calls-user-format.js';
+import { formatUnexecutedToolResult } from './unexecuted-tool-notice.js';
+import { approvalPolicySnapshot, formatPolicyStamp } from '../security/approval-policy-fingerprint.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import type { InteractiveRun } from './interactive-run.js';
 import { createTurnSummaryExecutionResolver } from '../memory/summary-model.js';
@@ -418,6 +420,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
     state,
   } = params;
   const { host, sessionId, signal, loopHooks } = input;
+  const policyStamp = formatPolicyStamp(approvalPolicySnapshot(host.config));
 
   return {
     executeTool: async (toolCall: ParsedToolCall, _tools: readonly TLlmTool[], _toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
@@ -448,9 +451,10 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           turn: input.turnContext,
         });
         if (preDecision.decision === 'deny') {
-          const reason = preDecision.reason;
+          const sideEffect = executableTools.resolve(resolvedName)?.isReadOnly !== true;
+          const reason = formatUnexecutedToolResult(resolvedName, 'denied', preDecision.reason, sideEffect);
           recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason, status: 'denied', sideEffect });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
         if (preDecision.decision === 'modify') {
@@ -474,9 +478,14 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           throw cancellation;
         }
         if (outcome.status !== 'completed') {
-          const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
+          // #1250: say plainly that the call did not run, so the reply cannot claim it did.
+          const sideEffect = outcome.sideEffect ?? tool.isReadOnly !== true;
+          const unexecuted = formatUnexecutedToolResult(resolvedName, outcome.status,
+            outcome.status === 'failed' ? outcome.error : outcome.reason, sideEffect);
+          // #1250: a denial records the policy it was decided under, so a later policy change can retire it.
+          const reason = outcome.status === 'denied' ? `${unexecuted}\n${policyStamp}` : unexecuted;
           recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason, status: outcome.status, sideEffect });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
         const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
@@ -522,7 +531,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         }
         const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
         const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText, status: 'completed' });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
         return blocks ? { ...result, content: blocks } : result;
@@ -536,9 +545,10 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
               : new Error('Tool execution cancelled');
         }
         const message = err instanceof Error ? err.message : String(err);
-        const failure = `工具「${resolvedName}」执行失败：${message}`;
+        const sideEffect = tool.isReadOnly !== true;
+        const failure = formatUnexecutedToolResult(resolvedName, 'failed', message, sideEffect);
         recordProgress(resolvedName, effectiveArgs, false);
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure, status: 'failed', sideEffect });
         return toolResultToAgentMessage(toolCall, failure, true);
       } finally {
         state.activeTools -= 1;

@@ -179,12 +179,17 @@ export function createAutoApprovalPort(
   return Object.freeze(port);
 }
 
-export function createBypassApprovalPort(ask?: ApprovalPort): ApprovalOutcomePort {
+export interface BypassApprovalPortOptions {
+  /** #1250: send `purpose: 'intent'` confirmations to `ask` instead of approving them (master turns). */
+  readonly confirmIntent?: boolean;
+}
+
+export function createBypassApprovalPort(ask?: ApprovalPort, options: BypassApprovalPortOptions = {}): ApprovalOutcomePort {
   const port: ApprovalOutcomePort = {
     available: true,
     async requestApprovalOutcome(input) {
       if (input.signal.aborted) return { status: 'unavailable', reason: 'approval request cancelled' };
-      if (input.humanOnly) return isApprovalPortAvailable(ask)
+      if (input.humanOnly || (options.confirmIntent && input.purpose === 'intent')) return isApprovalPortAvailable(ask)
         ? requestApprovalOutcome(ask, input)
         : { status: 'unavailable', reason: 'this tool requires fresh human approval' };
       return { status: 'approved', decision: 'approve-once' };

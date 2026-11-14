@@ -218,6 +218,7 @@ describe('TurnToolRuntime', () => {
       status: 'denied',
       policy: 'approval',
       reason: expect.stringContaining('approval required, but this conversation has no approval channel (ApprovalPort unavailable)'),
+      sideEffect: true,
     });
     expect(execute).not.toHaveBeenCalled();
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
