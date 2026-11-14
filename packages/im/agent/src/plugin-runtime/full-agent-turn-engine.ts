@@ -15,6 +15,7 @@ import type { SessionSystem } from '../session/session-system.js';
 import {
   createDeferredCapabilityPlan,
   primeSkillsForIntent,
+  restoreProjectedOutEntries,
 } from './deferred-capability-plan.js';
 import type {
   AgentTurnEngine,
@@ -192,12 +193,16 @@ async function* runInteractiveTurn(
     decision: context.decision,
     signal: context.turn.signal,
   });
+  // Entries this turn's projection hides stay in the session snapshot (#1250).
+  const sessionSnapshot = primed.projected
+    ? restoreProjectedOutEntries(snapshot, primed.projected, primed.snapshot)
+    : primed.snapshot;
   if (primed.skill) {
-    await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, primed.snapshot);
+    await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, sessionSnapshot);
   }
   const plan = createDeferredCapabilityPlan({
     capabilities: projected,
-    sessionSnapshot: primed.snapshot,
+    sessionSnapshot,
     config: host.config,
     platform: context.turn.origin.kind === 'im' ? context.turn.origin.platform : undefined,
     toolTier: resolveToolTier(context.turn),

@@ -1,10 +1,11 @@
 /**
  * AGENTS.md 合并链：子目录（近）→ workspace root（远），注入 Turn envelope。
+ * 根目录有 `BOT.md` 时机器人只读 `BOT.md`，不读任何 `AGENTS.md`（#1250 bootstrap-dev-vs-bot）。
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadBootstrapFiles } from '../bootstrap.js';
+import { BOT_BOOTSTRAP_FILENAME, hasBotBootstrapFile, loadBootstrapFiles } from '../bootstrap.js';
 import { scopeBootstrapDocument, type BootstrapScene } from '../bootstrap-scope.js';
 
 async function readAgentsFile(filePath: string): Promise<string | null> {
@@ -45,6 +46,14 @@ export async function collectAgentsInstructionChain(
 
   const entries: AgentsInstructionEntry[] = [];
   const seen = new Set<string>();
+  if (await hasBotBootstrapFile(workspaceRoot)) {
+    // BOT.md replaces the whole AGENTS.md chain for the bot.
+    if (options?.excludeRoot) return entries;
+    const bot = (await loadBootstrapFiles(workspaceRoot)).find(f => f.name === BOT_BOOTSTRAP_FILENAME && !f.missing);
+    const content = bot?.content?.trim();
+    if (bot && content) entries.push({ path: displayAgentsPath(path.resolve(bot.path), workspaceRoot), content });
+    return entries;
+  }
   // The host already carries the root AGENTS.md in the cacheable system prompt; don't send it twice.
   if (options?.excludeRoot) seen.add(normalizeAgentsPath(path.join(workspaceRoot, 'AGENTS.md')));
 

@@ -137,7 +137,8 @@ export async function loadBootstrapWithProfile(
       });
       continue;
     }
-    const disk = diskFiles.find((f) => f.name === name);
+    // `BOT.md` takes the AGENTS.md slot when present (#1250).
+    const disk = diskFiles.find((f) => f.name === name || (name === 'AGENTS.md' && f.name === 'BOT.md'));
     if (disk) merged.push(disk);
   }
 

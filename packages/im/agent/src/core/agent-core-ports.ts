@@ -27,6 +27,8 @@ import { LocalImageInspection, type ImageInspectionBudget } from '../media/local
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import { publishReplyImages } from '../media/publish-image-reply.js';
+import { resolveAttachmentRefs } from '../media/agent-attachments.js';
+import { COLLABORATION_TOOL_SOURCE } from '../collaboration/tools.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
@@ -278,7 +280,11 @@ export function createTurnCompletionRuntime<TLlmTools extends ReturnType<typeof 
   const completionUsage = trackTurnCompletionUsage(
     host.completion,
     host.imageAssets ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal) : undefined,
-    { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies },
+    {
+      turnId: traceTurnId(input.turnContext),
+      recordBodies: host.config.recordRequestBodies,
+      resolveProvider: turnProviderResolver(host),
+    },
     input.interactiveRun,
   );
   const localInspection = host.localAssets ? new LocalImageInspection(
@@ -530,7 +536,9 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         }
         const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
         const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
+        // #1250: media a sub-agent produced comes back with ask / follow_up as attachments.
+        const media = tool.source === COLLABORATION_TOOL_SOURCE ? resolveAttachmentRefs(resultText) : [];
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText, ...(media.length ? { media } : {}) });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
         return blocks ? { ...result, content: blocks } : result;
@@ -598,3 +606,14 @@ export function unavailableLoadedTool(
   return `Tool "${target}" cannot be called in this turn: the current turn policy does not allow it. Do not call discover or load_tool for it again; tell the user it is unavailable here.`;
 }
 
+/** Account id of the turn's binding → the service id provider responses report (#1250). */
+function turnProviderResolver(host: Pick<ZhinAgentPrivate, 'getTurnExecution'>): (provider: string) => string | undefined {
+  return (provider) => {
+    try {
+      const binding = host.getTurnExecution().binding;
+      return provider === binding.account.id ? binding.service.id : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}

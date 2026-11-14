@@ -162,7 +162,7 @@ zhin setup --adapters      # adapters only (add accounts)
 zhin setup --ai            # AI only
 zhin setup -y --adapter sandbox --enable-ai --install   # non-interactive: run only the steps given by flags
 zhin setup --decisions     # optional TypeSafe Jev decision service (needs existing AI config)
-zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / AGENTS.md)
+zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / BOT.md; an existing AGENTS.md without BOT.md is kept as the bot file)
 zhin setup --global        # initialize a global instance in ~/.zhin
 zhin setup --locale en     # set the project language (zh-CN or en); combines with the other options
 ```
@@ -581,6 +581,8 @@ A trace contains: the initiator and role, the session, tokens for each model cal
 
 **Triggering message.** Since #1250 a trace also records the message that started the turn: a text excerpt (whitespace collapsed, credentials redacted, cut to 120 characters), the sender id and sender name, the conversation (adapter, Endpoint, conversation kind and id), the message id, and when it was received, how long it waited and queued, and how many messages were merged. A trace file therefore holds fragments of what users said plus their identifiers: anyone who can read `data/agent-traces`, anyone who can run `zhin trace`, and Console accounts or API tokens holding `agent.view` (`/api/agent/traces`, `/api/agent/trace-archive/*`) can see them. Shorten `ZHIN_TRACE_RETENTION_DAYS` if you do not want to keep them.
 
+Model calls of sub-agents (collaborating agents reached by `ask` / `delegate`) are recorded in their nested turns. The parent's "model calls / tokens" line shows the total with a split ("self N, sub-agents M"), and the trace field `subagent_usage` holds the sub-agent part; `ai.usage` logs and usage statistics count every call once. The timeline, `requests` and `model_calls` record one provider for one request (the service actually resolved), shown as the service name (`service · model`), or the model alone when the service configuration cannot be read.
+
 **Retention and redaction.** Traces are kept for 7 days with a 64 MB total cap by default: cleanup runs at startup and every hour after that, first deleting expired date files and then deleting from the oldest day until the total is under the cap (today's file is never deleted for size). Adjust with the `ZHIN_TRACE_RETENTION_DAYS` and `ZHIN_TRACE_MAX_MB` environment variables. A trace stores summaries only: tool results record only their length, not their content; tokens, passwords, `Authorization`, and similar fields in arguments and error messages are replaced with `[redacted]`, and before writing to disk inline credentials (`sk-…`, `Bearer …`, and so on) and secret values from environment variables are scanned once more. The legacy `data/agent-traces/recent.json` is still read.
 
 **Console page.** The "Agent Trace" page in Console (`/console/agent-trace`) reads the same data: session list → turn list → turn detail (model/tool call waterfall, timeline, and raw record), with time filtering, and `?turn=<turnId>` opens a turn directly. Add one page to your project to enable it:
@@ -621,6 +623,8 @@ zhin usage report --session 'icqq:*:group:*' --json
 Each day also lists model usage merged by "service · model": calls recorded under a service's `services:` and `accounts:` ids become one row, with the service name read from the model configuration in the project database (the model alone when it cannot be read). The session column shows the conversation name recorded in the trace (e.g. `qq · 群 Test`) with a short session key. Input tokens are the provider-reported input of every model call (iterations and sub-agents included), a different basis from the first-request segment estimate below.
 
 Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
+
+**Prompt-cache hint.** Every model call records a request-prefix hash (system prompt + tool definitions, trace field `prefix_hash`). When a service's last 20 or more consecutive calls, across at least 3 sessions, had no cache read (`cache_read_tokens` 0 or not reported) while more than half of the adjacent same-session requests shared their prefix, the report ends with "this service may not support or pass through prompt caching" and shows the same-prefix share as evidence. `zhin doctor` runs the same check over the last 7 days of traces, and the Console usage statistics carry it too (`promptCacheHints` of the `usage-stats` RPC).
 
 ## Exit Codes
 

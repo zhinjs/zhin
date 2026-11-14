@@ -3,6 +3,7 @@ export {
   TurnTraceCollector,
   summarizeArgs,
   scrubSecrets,
+  turnTraceTotalUsage,
 } from './turn-trace.js';
 export type {
   TurnTrace,
@@ -17,6 +18,7 @@ export type {
   TurnTraceTimelineEntry,
   TurnTraceTermination,
   TurnTraceTrigger,
+  TurnTraceUsageTotals,
 } from './turn-trace.js';
 export {
   createTracingJournal,

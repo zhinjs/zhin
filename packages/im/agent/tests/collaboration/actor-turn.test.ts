@@ -26,6 +26,8 @@ import { createActorTurnRunner, renderMailBatch } from '../../src/collaboration/
 import type { CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
+import { traceScopeTurnId } from '../../src/trace/turn-trace-registry.js';
+import { takeActorAttachments } from '../../src/media/agent-attachments.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { PromptController } from '../../src/turn/prompt-controller.js';
 import { executionBundle } from '../helpers/execution-bundle.js';
@@ -79,6 +81,7 @@ function setup(options: {
   budget?: BudgetAmounts;
   principal?: Principal;
   rootSignal?: AbortSignal;
+  journal?: { append(event: any): void | Promise<void> };
 }) {
   const inputs: CoreInput[] = [];
   const core = {
@@ -106,7 +109,7 @@ function setup(options: {
     policy: SHELL_POLICY,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
     signal: options.rootSignal ?? new AbortController().signal,
-    ports: { journal: { append: async () => undefined }, approval },
+    ports: { journal: options.journal ?? { append: async () => undefined }, approval },
   });
   const byName = new Map(options.agents.map(agent => [agent.name, agent]));
   const directory: CollaborationDirectory = { entry: options.agents[0]!, get: name => byName.get(name), list: () => options.agents };
@@ -228,6 +231,39 @@ describe('actor turn runner', () => {
     expect(ctx.bindings[0]!.mail.kind).toBe('ask');
 
     expect(ctx.charges).toEqual([{ modelCalls: 2, tokens: 20 }]);
+    await detach({ status: 'completed' });
+  });
+
+  it('journals the actor model calls under the actor turn for trace and usage (#1250)', async () => {
+    const events: any[] = [];
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [capability('lookup')],
+      script: reply('done', 2, 10),
+      journal: { append: (event) => { events.push(event); } },
+    });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'researcher', text: 'q' });
+    const usage = events.filter(event => event.type === 'usage');
+    expect(usage).toHaveLength(2);
+    for (const event of usage) expect(traceScopeTurnId(event)).toMatch(/^turn-1:actor:researcher:/);
+    await detach({ status: 'completed' });
+  });
+
+  it('keeps the media the actor tools produced for the asker (#1250)', async () => {
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('draw', ALL)],
+      tools: [capability('generate_image')],
+      script: async function* () {
+        yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        return { reply: 'Here it is.', usage: { total_tokens: 2 }, iterations: 1, model: 'model',
+          toolCalls: [{ tool: 'generate_image', result: JSON.stringify({ image_url: 'https://cdn.example/a.png', model: 'img' }) }] };
+      },
+    });
+    const { root, detach } = await ctx.attach();
+    const outcome = await ctx.harness.send('zhin', root, { kind: 'ask', to: 'draw', text: 'draw' });
+    expect(outcome.ok).toBe(true);
+    expect(takeActorAttachments(ctx.harness, outcome.ok ? outcome.mailId : undefined)).toEqual([{ type: 'image', url: 'https://cdn.example/a.png' }]);
     await detach({ status: 'completed' });
   });
 

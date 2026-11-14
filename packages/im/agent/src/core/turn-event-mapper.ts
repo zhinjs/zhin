@@ -6,7 +6,7 @@ import type { TurnEvent, UsageEvent } from '../event/turn-event.js';
 
 export function turnUsageEvent(
   usage: TokenUsage,
-  details: Pick<UsageEvent, 'requestId' | 'provider' | 'model' | 'durationMs' | 'stopReason'> = {},
+  details: Pick<UsageEvent, 'requestId' | 'provider' | 'model' | 'durationMs' | 'stopReason' | 'prefixHash'> = {},
 ): UsageEvent {
   return {
     type: 'usage',

@@ -31,6 +31,9 @@ import {
 import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
+import { diagnosePromptCache } from '../utils/prompt-cache-check.js';
+import { loadProviderResolver } from './usage.js';
+import { botInstructionsFile } from '../utils/bot-bootstrap.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
@@ -317,7 +320,8 @@ export const doctorCommand = new Command('doctor')
       aiEnabledForBootstrap = false;
     }
     if (aiEnabledForBootstrap) {
-    const bootstrapFiles = ['SOUL.md', 'TOOLS.md', 'AGENTS.md'];
+    // The bot reads BOT.md when present, else AGENTS.md (#1250).
+    const bootstrapFiles = ['SOUL.md', 'TOOLS.md', botInstructionsFile(cwd)];
     const missingBootstrap: string[] = [];
     
     for (const file of bootstrapFiles) {
@@ -797,6 +801,11 @@ export const doctorCommand = new Command('doctor')
       results.push(check);
     }
 
+    // 10f. 提示缓存：服务长期没有缓存命中而请求前缀相同（#1250，只读 trace 归档）
+    for (const check of await diagnosePromptCache(cwd, { loadResolver: () => loadProviderResolver(cwd) })) {
+      results.push(check);
+    }
+
     // 打印结果
     console.log('');
     let hasErrors = false;
@@ -860,7 +869,8 @@ async function createMissingBootstrapFiles(cwd: string, files: string[]): Promis
   const templates: Record<string, string> = {
     'SOUL.md': `# Soul\n\n我是一个能力出众、行动导向的 AI 助手。\n`,
     'TOOLS.md': `# Tools Guide\n\n## 工具使用原则\n\n- 低风险操作：直接调用\n- 高风险操作：简要说明理由\n`,
-    'AGENTS.md': `# Agent Memory\n\n这是一个长期记忆文件，用于记录重要信息。\n`
+    'AGENTS.md': `# Agent Memory\n\n这是一个长期记忆文件，用于记录重要信息。\n`,
+    'BOT.md': `# Agent Memory\n\n机器人的指令与长期记忆文件，用于记录重要信息。\n`
   };
   
   for (const file of files) {

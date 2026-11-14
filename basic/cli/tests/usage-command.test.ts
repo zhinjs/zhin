@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildUsageReport, formatUsageReport, resolveUsageWindow, usageCommand } from '../src/commands/usage.js';
+import { diagnosePromptCache } from '../src/utils/prompt-cache-check.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -123,5 +124,35 @@ describe('zhin usage report (ADR 0043 §6)', () => {
     const late = fixture([turn('s', [[1]], {}, Date.UTC(2026, 9, 28, 20))]);
     expect((await buildUsageReport(late, { timeZone: 'Asia/Shanghai' })).days[0]!.day).toBe('2026-10-29');
     expect((await buildUsageReport(late, { timeZone: 'UTC' })).days[0]!.day).toBe('2026-10-28');
+  });
+});
+
+describe('prompt cache hint (#1250 usage-cache-unsupported-hint)', () => {
+  const noCache = (session: string) => JSON.stringify({
+    version: 1, turn_id: `t${Math.random()}`, session_key: session, started_at: T,
+    model_calls: [1, 2].map(index => ({ index, provider: 'services:relay', model: 'm', prompt_tokens: 4000, completion_tokens: 1, total_tokens: 4001, cache_read_tokens: 0, prefix_hash: 'same' })),
+    timeline: [], termination: { status: 'completed' },
+  });
+  const lines = Array.from({ length: 12 }, (_, index) => noCache(`g:${index % 3}`));
+
+  it('zhin usage report says the service may not support prompt caching, with the same-prefix share', async () => {
+    const dir = fixture(lines);
+    const report = await buildUsageReport(dir, { resolveProvider: () => ({ key: 'services:relay', label: '中转站' }) });
+    expect(report.prompt_cache_hints).toHaveLength(1);
+    const text = formatUsageReport(report);
+    expect(text).toContain('提示缓存');
+    expect(text).toContain('中转站：最近连续 24 次请求（3 个会话）没有命中提示缓存');
+    expect(text).toContain('100%（21/21）前缀相同');
+  });
+
+  it('zhin doctor warns from the trace archive only, and stays silent without traces', async () => {
+    const dir = fixture(lines);
+    const checks = await diagnosePromptCache('/nonexistent', { dir, now: T + 1000, loadResolver: async () => () => ({ key: 'services:relay', label: '中转站' }) });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ name: '提示缓存', status: 'warn' });
+    expect(checks[0]!.message).toContain('中转站');
+    expect(await diagnosePromptCache('/nonexistent', { dir: join(dir, 'missing'), now: T })).toEqual([]);
+    const healthy = fixture([turn('g:1', [[1000, 800]])]);
+    expect(await diagnosePromptCache('/nonexistent', { dir: healthy, now: T + 1000 })).toMatchObject([{ status: 'ok' }]);
   });
 });

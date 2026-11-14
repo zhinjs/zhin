@@ -31,6 +31,18 @@ function fixture(files: Record<string, string[]>): string {
 const range = (bucket: 'hour' | 'day' = 'day') => ({ since: NOON - 2 * DAY, until: NOON + DAY, bucket });
 
 describe('buildUsageStats', () => {
+  it('carries prompt-cache hints for services that never hit the cache on a stable prefix (#1250)', async () => {
+    const lines = Array.from({ length: 12 }, (_, index) => JSON.stringify({
+      version: 1, session_key: `icqq:1:group:${index % 3}`, started_at: NOON + index,
+      model_calls: [1, 2].map(() => ({ provider: 'relay', model: 'flash', prompt_tokens: 3000, completion_tokens: 1, cache_read_tokens: 0, prefix_hash: 'p' })),
+    }));
+    const s = await buildUsageStats(fixture({ '2026-10-28.jsonl': lines }), range());
+    expect(s.promptCacheHints).toHaveLength(1);
+    expect(s.promptCacheHints[0]).toMatchObject({ provider: 'relay', zeroCacheCalls: 24, sessions: 3, samePrefixRatio: 1 });
+    const quiet = await buildUsageStats(fixture({ '2026-10-28.jsonl': [turn('icqq:1:group:1', [{ p: 1000, c: 500 }])] }), range());
+    expect(quiet.promptCacheHints).toEqual([]);
+  });
+
   it('aggregates by model, session, segments, cache and zero-fills the series', async () => {
     const dir = fixture({
       '2026-10-28.jsonl': [

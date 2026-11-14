@@ -47,6 +47,8 @@ Zhin.js uses **Agent Harness** ([ADR 0048](../../adr/0048-agent-harness.md)) as 
 | `cancel_delegation` | Withdraw work you delegated (pass the `mailId` returned by `delegate`) |
 | `escalate` | Freeze the Engagement and escalate to the initiating human principal |
 
+**Media from a sub-agent comes back with its reply.** Images, audio, video and files that the agent reached by `ask` / `follow_up` produced with its tools during its turn (e.g. `generate_image`) are returned to the asker as structured attachments by the framework; the sub-agent does not have to repeat URLs in its text. The asker's tool result shows only an attachment note with one-time references; the media joins the asker's reply for this turn and goes out through the normal outbound chain, so the asker does not (and should not) delegate again. At most 8 attachments per reply. Asynchronous `delegate` results carry no attachments yet.
+
 ## 3. Configure Multi-Bot Group Venues (`ai.venues`)
 
 ```yaml

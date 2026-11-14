@@ -49,6 +49,8 @@ Zhin.js 采用 **Agent Harness**（[ADR 0048](../adr/0048-agent-harness.md)）�
 | `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 `mailId`） |
 | `escalate` | 冻结当前 Engagement 并向发起的人类请求裁决 |
 
+**子 Agent 产出的媒体随回复返回。** 被 `ask` / `follow_up` 的 Agent 在自己回合里用工具产出的图片、音频、视频、文件（如 `generate_image`），由框架作为结构化附件随回复交回提问方，不依赖子 Agent 在正文里复述 URL。提问方的工具结果里只出现附件说明与一次性引用；这些媒体并入提问方本回合的回复，经正常出站链发送，提问方不需要（也不应）再委派一次。每次回复最多 8 个附件。`delegate` 的异步结果暂不带附件。
+
 ## 3. 配置多 Bot 群聊场所（`ai.venues`）
 
 在 `zhin.config.yml` 中配置 `ai.venues`，将群场景绑定到多个 Bot Endpoint：

@@ -730,6 +730,7 @@ export {
   buildStableContextFiles, buildStableBootstrapSection,
   loadSoulPersona, loadToolsGuide, loadAgentsMemory,
   STABLE_BOOTSTRAP_FILENAMES,
+  BOT_BOOTSTRAP_FILENAME, BOT_BOOTSTRAP_FILENAMES, botBootstrapFilenames, hasBotBootstrapFile,
 } from './bootstrap.js';
 export {
   scopeBootstrapText,

@@ -24,6 +24,12 @@ describe('resolveHostProtectedPaths (#1030 P0)', () => {
     expect(classifyHostPath(join(root, 'zhin.config.yml'), paths)).toBe('self');
   });
 
+  it('protects the bot instruction file BOT.md like AGENTS.md (#1250)', async () => {
+    const paths = await resolveHostProtectedPaths(root, {});
+    expect(classifyHostPath(join(root, 'BOT.md'), paths)).toBe('self');
+    expect(classifyHostPath(join(root, 'AGENTS.md'), paths)).toBe('self');
+  });
+
   it('denies the plugin lifecycle file wherever ZHIN_PLUGIN_LIFECYCLE_FILE points', async () => {
     const lifecycle = join(root, 'ops', 'lifecycle.json');
     const paths = await resolveHostProtectedPaths(root, { ZHIN_PLUGIN_LIFECYCLE_FILE: lifecycle });
