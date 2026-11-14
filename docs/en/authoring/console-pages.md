@@ -516,6 +516,29 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
 
+## Page UI guidelines
+
+The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for plugin pages they are **recommended**, plus a small set of hard-floor rules.
+
+**Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: once the renderers move to the unified component library (planned, ADR 0063 P2) they follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the 8 standard keys `1`, `2`, `3`, `4`, `6`, `8`, `12` and `16` (the 8-step scale from 0.25 to 4rem); other keys such as `p-5` or `gap-2.5` are off the scale. Why:
+
+- your page looks like part of the same product when it sits next to the Console's own pages;
+- the type scale, spacing, narrow-screen layout changes (tables turning into cards, for example), touch target sizes, focus styles and light/dark mode all come with the components, and your page follows when the Console adjusts its styles later.
+
+The unified component library `@zhin.js/console-ui` and its semantic tokens are **planned (ADR 0063 P1)** and not published yet; until then, hand-written pages use `@zhin.js/client/ui` from "Page UI kit" below.
+
+**Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
+
+**Hard floor (required).** With or without the component library, a plugin page must:
+
+1. never scroll the whole page horizontally, at any width;
+2. keep its content inside the page container and never cover the Console's top bar, navigation, page header or global overlays;
+3. show a visible focus style on interactive elements;
+4. give interactive controls a touch target of at least 44×44px at phone widths;
+5. use the Console's theme tokens for background and text, so it stays readable in both the light and the dark theme.
+
+`zhin plugin check` is planned (ADR 0063 P2) to report deviations from the recommendations as **hints** (warnings, never errors; they do not block a build or publish), each with how to switch to a component or token.
+
 ## Page UI kit
 
 Use `@zhin.js/client/ui` instead of hand-rolled styles: buttons, badges, notices, empty/loading/error states, inline confirmation, form fields, and `usePluginRpc`, which reports loading / empty / error / stale. It reads the Console theme variables (light/dark follow automatically) and does not rely on Tailwind, because remote pages are not scanned by the Console's Tailwind. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for usage and the export list.
