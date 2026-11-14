@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path';
 import type {
   GatewayAuthorizedPackage,
   GatewayInstalledPackage,
+  GatewayInstalledPackageKind,
   GatewayInstanceState,
   GatewayPackageEvent,
   GatewayPackageList,
@@ -208,7 +209,12 @@ export class GatewayPackageService {
       for (const [name, range] of Object.entries(entries as Record<string, unknown>)) {
         if (typeof range !== 'string') continue;
         const catalog = allowlist.get(name)?.kind;
-        packages.push(Object.freeze({ name, range, dependencyType, installedVersion: await this.#installedVersion(name), ...(catalog ? { catalog } : {}) }));
+        const installed = await this.#installedManifest(name);
+        packages.push(Object.freeze({
+          name, range, dependencyType, installedVersion: installed?.version ?? null,
+          ...(installed ? { kind: installed.kind } : {}),
+          ...(catalog ? { catalog } : {}),
+        }));
       }
     }
     packages.sort((a, b) => a.name.localeCompare(b.name));
@@ -514,11 +520,16 @@ export class GatewayPackageService {
     return this.#options.instance?.state ?? 'unmanaged';
   }
 
-  async #installedVersion(name: string): Promise<string | null> {
+  /**
+   * Installed version plus what the package is to Zhin (#1250): `package.json#zhin.type` `plugin`
+   * → `plugin`, `feature` → `feature`, no `zhin` manifest → `library`. Undefined when not installed.
+   */
+  async #installedManifest(name: string): Promise<{ version: string; kind: GatewayInstalledPackageKind } | undefined> {
     try {
-      const manifest = JSON.parse(await readFile(join(this.#root, 'node_modules', ...name.split('/'), 'package.json'), 'utf8')) as { name?: unknown; version?: unknown };
-      return manifest.name === name && typeof manifest.version === 'string' ? manifest.version : null;
-    } catch { return null; }
+      const manifest = JSON.parse(await readFile(join(this.#root, 'node_modules', ...name.split('/'), 'package.json'), 'utf8')) as { name?: unknown; version?: unknown; zhin?: unknown };
+      if (manifest.name !== name || typeof manifest.version !== 'string') return undefined;
+      return { version: manifest.version, kind: installedPackageKind(manifest.zhin) };
+    } catch { return undefined; }
   }
 
   /** Cross-process exclusion (CLI and gateway); separate from the workflow's own lock file. */
@@ -584,4 +595,11 @@ function declarationDetails(error: unknown): { errors?: PluginDeclarationError['
 function failureMessage(error: unknown): string {
   const cause = error instanceof PluginManagementOperationError ? error.cause : error;
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** `package.json#zhin` → what the dependency is to Zhin; anything without a Zhin manifest is a library. */
+export function installedPackageKind(zhin: unknown): GatewayInstalledPackageKind {
+  if (!zhin || typeof zhin !== 'object' || Array.isArray(zhin)) return 'library';
+  const type = (zhin as { type?: unknown }).type;
+  return type === 'plugin' ? 'plugin' : type === 'feature' ? 'feature' : 'library';
 }

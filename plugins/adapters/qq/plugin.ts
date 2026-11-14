@@ -6,9 +6,6 @@ import { cancelQqConsoleBind } from './src/qq-console.js';
 export default definePlugin({
   name: 'qq',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'QQ Official WebSocket Adapter',
-  },
   setup(context) {
     const state = qqRuntimeStateStore.provide(context, createQqRuntimeState());
     return {

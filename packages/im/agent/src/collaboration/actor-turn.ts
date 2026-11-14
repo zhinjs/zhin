@@ -14,7 +14,6 @@ import {
   canCall,
   type ActorId,
   type ActorTurnResult,
-  type ActorTurnRunner,
   type Authority,
   type Harness,
   type Mail,
@@ -48,12 +47,15 @@ import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
-import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
+import { captureSubTurnTracing, createScopedTraceJournal, type SubTurnTrace, type SubTurnTracing } from '../trace/turn-trace-registry.js';
+import type { TurnTraceTermination } from '../trace/turn-trace.js';
+import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
 import type { OutboundMediaAuthority } from '../media/media-normalize.js';
 import type { FileRole } from '../security/file-role-policy.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
-import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
+import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, AgentActorTurnRunner, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
 export interface ActorTurnRunnerOptions {
   readonly host: ZhinAgentPrivate;
@@ -68,6 +70,14 @@ export interface ActorTurnRunnerOptions {
   readonly createTools: CreateCollaborationTools;
   /** Resolved lazily: the root prompt (and model choice) is built after its capability plan. */
   readonly resolveModel: () => ActorModelSelection | undefined;
+  /**
+   * Host-owned model operations, one per actor turn (#1250). Without it actor
+   * turns borrow the root turn's operation (`resolveModel`), which only works
+   * while the root turn is running.
+   */
+  readonly models?: ActorModelSource;
+  /** Sub-turn tracing; captured from the root turn's trace when omitted. */
+  readonly tracing?: SubTurnTracing;
   readonly loopHooks?: PluginAILoopHookRegistry;
   /** Workspace text captured with the engine's generation; never resolve a latest Host value. */
   readonly bootstrapContext?: string;
@@ -87,7 +97,7 @@ export interface ActorTurnRunnerOptions {
 }
 
 const GENERIC_PERSONA = 'You are a focused assistant agent. Do the work you are given carefully and report the result plainly.';
-const EMPTY_REPLY_NOTE = '(the agent finished without a reply)';
+export const EMPTY_REPLY_NOTE = '(the agent finished without a reply)';
 
 /** Harness trust → the agent layer's trust tiers (#726). Strangers get the lowest initiator ceiling. */
 const TRUST_MAP: Readonly<Record<HarnessTrustLevel, InitiatorTrustLevel>> = Object.freeze({
@@ -102,8 +112,11 @@ const TRUST_RANK: Readonly<Record<InitiatorTrustLevel, number>> = Object.freeze(
   owner: 2,
 });
 
-export function createActorTurnRunner(options: ActorTurnRunnerOptions): ActorTurnRunner {
-  return (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => runActorTurn(options, actor, batch, signal);
+export function createActorTurnRunner(options: ActorTurnRunnerOptions): AgentActorTurnRunner {
+  // Captured while the root turn runs: background actor turns still get a trace after it ended.
+  const tracing = options.tracing ?? captureSubTurnTracing(options.rootTurn.identity.turnId);
+  const resolved = tracing ? { ...options, tracing } : options;
+  return (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => runActorTurn(resolved, actor, batch, signal);
 }
 
 async function runActorTurn(
@@ -111,8 +124,8 @@ async function runActorTurn(
   actor: ActorId,
   batch: readonly Mail[],
   signal: AbortSignal,
-): Promise<ActorTurnResult> {
-  const { host, rootTurn } = options;
+): Promise<ActorTurnOutcome> {
+  const { rootTurn } = options;
   const agent = options.directory.get(agentOf(actor));
   if (!agent) return { status: 'failed', content: `unknown agent ${agentOf(actor)}` };
   const mail = batch[batch.length - 1];
@@ -121,8 +134,99 @@ async function runActorTurn(
 
   const remainingCalls = harness.remaining(mail)?.modelCalls ?? Infinity;
   if (remainingCalls <= 0) return { status: 'budget_exceeded', content: 'no budget left' };
-  const model = options.resolveModel();
-  if (!model) return { status: 'failed', content: 'no model available for this turn' };
+  const turnId = `${rootTurn.identity.turnId}:actor:${actor}:${mail.id}`;
+  const rootSessionKey = rootTurn.session.key.replace(/#actor:[^#]+$/u, '');
+  const sessionKey = `${rootSessionKey}#actor:${actor}`;
+  const trace = options.tracing?.open({ turnId, sessionKey, principal: {
+    subjectId: rootTurn.principal.subjectId,
+    ...(rootTurn.principal.displayName ? { displayName: rootTurn.principal.displayName } : {}),
+    roles: rootTurn.principal.roles,
+  } });
+  const entryActor = agent.name === options.directory.entry.name;
+  let models: ModelExecutionScope | undefined;
+  if (options.models) {
+    try {
+      models = await options.models.acquire({
+        ...(entryActor ? {} : { agent: Object.freeze({
+          name: agent.name,
+          ...(agent.qualifiedName ? { qualifiedName: agent.qualifiedName } : {}),
+          ...(agent.bareNameShared ? { bareNameShared: true } : {}),
+        }) }),
+        operationId: turnId,
+        sessionKey,
+        signal: AbortSignal.any([signal, rootTurn.signal]),
+      });
+    } catch (error) {
+      const content = `no model available for this turn: ${error instanceof Error ? error.message : String(error)}`;
+      trace?.close({ status: 'failed', code: 'model_unavailable', reason: content });
+      return { status: 'failed', content };
+    }
+    recordModelSelection(trace, models);
+  }
+  try {
+    return await runActorTurnWithModel(options, { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models });
+  } finally {
+    // Idempotent: a turn that threw before settling still releases its trace slot.
+    trace?.close({ status: 'failed', reason: 'actor turn ended without a result' });
+    await models?.release().catch(() => undefined);
+  }
+}
+
+interface ActorTurnRun {
+  readonly actor: ActorId;
+  readonly batch: readonly Mail[];
+  readonly signal: AbortSignal;
+  readonly agent: NonNullable<ReturnType<CollaborationDirectory['get']>>;
+  readonly mail: Mail;
+  readonly harness: Harness;
+  readonly remainingCalls: number;
+  readonly turnId: string;
+  readonly sessionKey: string;
+  readonly trace?: SubTurnTrace;
+  readonly models?: ModelExecutionScope;
+}
+
+/**
+ * Model ids for an actor turn on its own operation. The selected model leads.
+ * The entry actor runs on the root turn's purpose (chat or `agent:<binding>`),
+ * and a sub-agent without its own purpose on chat: both keep the root turn's
+ * fallback chain when they run the root's model, so a delegated turn degrades
+ * the way the root turn would. A sub-agent purpose (`agent:<key>`) is one
+ * profile without fallbacks and carries none.
+ */
+export function actorModelSelection(
+  models: ModelExecutionScope,
+  root: ActorModelSelection | undefined,
+  entryActor = false,
+): ActorModelSelection {
+  const modelId = models.chat.model.id;
+  const rootPurpose = entryActor || (models.purpose ?? 'chat') === 'chat';
+  const inherited = rootPurpose && root?.modelId === modelId ? root.modelCandidates : [];
+  return { modelId, modelCandidates: [...new Set([modelId, ...inherited])] };
+}
+
+function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExecutionScope): void {
+  const binding = models.chat.binding;
+  const source = binding.source;
+  trace?.note({ kind: 'model_selection', selection: {
+    purpose: models.purpose ?? (source?.level === 'agent' ? `agent:${source.name}` : 'chat'),
+    profile_id: binding.profile.id,
+    account_id: binding.account.id,
+    model: models.chat.model.id,
+    ...(source ? { source: source.level } : {}),
+  } });
+}
+
+async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: ActorTurnRun): Promise<ActorTurnOutcome> {
+  const { host, rootTurn } = options;
+  const { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models } = run;
+  const model: ActorModelSelection | undefined = models
+    ? actorModelSelection(models, options.resolveModel(), agent.name === options.directory.entry.name)
+    : options.resolveModel();
+  if (!model) {
+    trace?.close({ status: 'failed', code: 'model_unavailable' });
+    return { status: 'failed', content: 'no model available for this turn' };
+  }
   const maxIterations = Math.max(1, Math.min(agent.maxIterations ?? host.config.maxSubagentIterations ?? Infinity, remainingCalls));
 
   const authority = mail.authority;
@@ -155,9 +259,6 @@ async function runActorTurn(
 
   const text = renderMailBatch(batch);
   const persona = actorPersona(agent.displayName || agent.name, agent.instructions, agent.name === options.directory.entry.name);
-  const turnId = `${rootTurn.identity.turnId}:actor:${actor}:${mail.id}`;
-  const rootSessionKey = rootTurn.session.key.replace(/#actor:[^#]+$/u, '');
-  const sessionKey = `${rootSessionKey}#actor:${actor}`;
   // Budget is enforced per model request, not only by the iteration cap (invariant 2).
   const budgetStop = new AbortController();
   const turnSignal = AbortSignal.any([signal, rootTurn.signal, budgetStop.signal]);
@@ -219,6 +320,8 @@ async function runActorTurn(
     modelRequests >= allowance.modelCalls || (allowance.tokens > 0 && usageTokens >= allowance.tokens)
   ));
   const onEvent = (event: TurnEvent): void => {
+    // Tool events reach the trace through the scoped journal; model calls only through here.
+    if (event.type === 'usage' || event.type === 'iteration_start') trace?.record(event);
     if (event.type === 'tool_result' || event.type === 'tool_denied' || event.type === 'tool_failed') {
       try {
         void options.onToolCalled?.({
@@ -253,11 +356,18 @@ async function runActorTurn(
     }
   };
 
-  let outcome: ActorTurnResult;
+  let outcome: ActorTurnOutcome;
   let reportedTokens: number | undefined;
   let reportedIterations = 0;
+  // Each actor turn runs on its own model operation when the host provides one;
+  // the root turn's operation closes with the root turn (#1250 delegate-result-lost-after-turn).
+  const withModels = <T>(work: () => Promise<T>): Promise<T> => {
+    if (!models) return work();
+    const { mediaPerception: _rootPerception, ...current } = getAgentTurnConfiguration() ?? {};
+    return runWithAgentTurnConfiguration({ ...current, models }, work);
+  };
   try {
-    const result = await collectAgentLoopTurnRun(options.core.runText({
+    const result = await withModels(() => collectAgentLoopTurnRun(options.core.runText({
       host,
       sessionId: sessionKey,
       rawContent: text,
@@ -274,7 +384,7 @@ async function runActorTurn(
         contextFiles: options.contextFiles,
         agentNickname: host.activeBinding?.nickname,
         modelId: model.modelId,
-        providerAlias: host.getTurnExecution().binding.account.id,
+        providerAlias: models?.chat.binding.account.id ?? host.getTurnExecution().binding.account.id,
       },
       personaEnhanced: persona,
       modelId: model.modelId,
@@ -291,7 +401,7 @@ async function runActorTurn(
       autoContinuation: false,
       interactiveRun: options.interactiveRun,
       generation: rootTurn.identity.generation,
-    }), onEvent);
+    }), onEvent));
     reportedTokens = result.usage?.total_tokens;
     reportedIterations = result.iterations ?? 0;
     // #1250: media the actor's tools produced returns to the asker as structured attachments.
@@ -302,11 +412,15 @@ async function runActorTurn(
       batch.map(item => item.id),
       await authorizeActorAttachments(collectTurnAttachments(result.toolCalls), actorMediaAuthority(policy, trustLevel)),
     );
+    // `content` speaks to the delegating model (notes included); `reply` is the actor's own words only.
+    const reply = result.reply.trim();
     outcome = budgetStop.signal.aborted
-      ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests) }
+      ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests), ...(reply ? { reply } : {}) }
       : turnSignal.aborted
         ? { status: 'cancelled', content: abortReason(turnSignal) }
-        : { status: 'completed', content: result.reply.trim() || EMPTY_REPLY_NOTE };
+        : { status: 'completed', content: reply || EMPTY_REPLY_NOTE, ...(reply ? { reply } : {}) };
+    // Actor turns record no `turn_end`: their reply is checked for an unbacked lookup claim here.
+    if (outcome.status === 'completed' && result.reply.trim()) trace?.note({ kind: 'final_reply', text: result.reply });
   } catch (error) {
     outcome = budgetStop.signal.aborted
       ? { status: 'budget_exceeded', content: budgetNote('', modelRequests) }
@@ -320,14 +434,22 @@ async function runActorTurn(
   const tokens = Math.max(usageTokens, reportedTokens ?? 0);
   if (calls > 0 || tokens > 0) {
     const charged = await harness.charge(mail, { modelCalls: calls, tokens });
-    if (!charged.ok && charged.code === 'budget_exceeded') return { status: 'budget_exceeded', content: outcome.content };
+    if (!charged.ok && charged.code === 'budget_exceeded') outcome = { ...outcome, status: 'budget_exceeded' };
   }
+  trace?.close(traceTermination(outcome));
   return outcome;
 }
 
 const BUDGET_EXHAUSTED = 'budget exhausted';
 
-function budgetNote(reply: string, calls: number): string {
+function traceTermination(outcome: ActorTurnResult): TurnTraceTermination {
+  if (outcome.status === 'completed') return { status: 'completed' };
+  if (outcome.status === 'budget_exceeded') return { status: 'budget_exceeded' };
+  if (outcome.status === 'cancelled') return { status: 'cancelled', ...(outcome.content ? { reason: outcome.content.slice(0, 300) } : {}) };
+  return { status: 'failed', ...(outcome.content ? { reason: outcome.content.slice(0, 300) } : {}) };
+}
+
+export function budgetNote(reply: string, calls: number): string {
   const partial = reply.trim();
   const note = `Stopped: the budget granted for this work ran out after ${calls} model call(s).`;
   return partial ? `${partial}\n\n${note}` : note;

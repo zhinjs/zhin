@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-line",
   "version": "1.1.29",
-  "description": "Zhin.js LINE Messaging API adapter for Plugin Runtime (HTTP webhook)",
+  "description": "LINE adapter: private, group and room messages through the Messaging API webhook.",
+  "keywords": [
+    "zhin.js",
+    "line",
+    "messaging-api",
+    "webhook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,19 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "line",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -133,6 +130,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "LINE Messaging API Adapter",
+      "displayNameI18n": {
+        "zh-CN": "LINE 适配器",
+        "en": "LINE Messaging API Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "LINE 适配器：通过 Messaging API Webhook 收发私聊、群组与多人聊天消息。",
+        "en": "LINE adapter: private, group and room messages through the Messaging API webhook."
+      },
+      "category": "adapter"
+    }
   }
 }

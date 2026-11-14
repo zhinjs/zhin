@@ -23,7 +23,7 @@ import { installAgentPersistence } from '@zhin.js/agent/runtime';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
 import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   createVenueMembershipPort,
@@ -59,6 +59,7 @@ import {
   type AudioTranscriptionPort,
   botBootstrapFilenames,
   hasBotBootstrapFile,
+  describeApprovalChannelConflicts,
 } from '@zhin.js/agent';
 import {
   AgentRuntime,
@@ -86,6 +87,14 @@ import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 import { agentToolApprovalQueueToken } from '../console/tool-approvals.js';
 
 const logger = getLogger('agent');
+/** #1250: each approval/channel conflict is reported once per process, not on every generation reload. */
+const reportedApprovalConflicts = new Set<string>();
+/**
+ * Project-root files the bootstrap is read from: SOUL / AGENTS / TOOLS, plus a root `BOT.md`,
+ * which replaces AGENTS.md when non-empty (`botBootstrapFilenames`). Root only: `data/BOT.md` is
+ * not read, so it is not watched either.
+ */
+const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md', 'BOT.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
@@ -145,7 +154,7 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
-  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -321,7 +330,26 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       error: error instanceof Error ? error.message : String(error),
     })));
     const ingress = new CapabilityIngress();
-    const { bootstrapText, contextFiles } = await loadBootstrap(options.projectRoot);
+    let bootstrap = await loadBootstrap(options.projectRoot);
+    const { bootstrapText, contextFiles } = bootstrap;
+    // #1250: an edited SOUL / AGENTS / TOOLS / BOT file is re-read in place; it no longer rebuilds the
+    // Root generation (and with it every adapter Endpoint). Turns read the current bootstrap.
+    watchProjectFiles?.({
+      patterns: BOOTSTRAP_FILES,
+      async onChange({ files }) {
+        bootstrap = await loadBootstrap(options.projectRoot);
+        logger.info(formatCompact({
+          op: 'agent_bootstrap_reloaded',
+          files: files.map((file) => relative(options.projectRoot, file).split('\\').join('/')).join(','),
+          chars: bootstrap.bootstrapText.length,
+        }));
+      },
+    });
+    const knowledgeRoot = knowledgeIndex ? relative(options.projectRoot, knowledgeIndex.root).split('\\').join('/') : undefined;
+    if (knowledgeIndex && knowledgeRoot && !knowledgeRoot.startsWith('..') && !isAbsolute(knowledgeRoot)) {
+      // The knowledge index reads its directory on search; a change only drops its cache.
+      watchProjectFiles?.({ patterns: [`${knowledgeRoot}/**`], onChange: () => knowledgeIndex.invalidate() });
+    }
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
@@ -358,6 +386,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       bootstrapText,
       contextFiles,
+      bootstrap: () => ({ bootstrapContext: bootstrap.bootstrapText, contextFiles: bootstrap.contextFiles }),
     });
 
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);
@@ -408,6 +437,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       'bash',
       options.resolveEndpointOwner ? 'approve' : '',
     ].filter(Boolean).join(',');
+    for (const conflict of describeApprovalChannelConflicts({
+      execApprovalMode: zhinAgent.config.execApprovalMode,
+      confirmHighRisk: zhinAgent.config.injectionGuard?.confirmHighRisk,
+      unattendedChannels: [
+        ...(scheduleTools.length > 0 ? ['定时任务'] : []),
+        ...(assistantEnabled ? ['助理提醒'] : []),
+      ],
+    })) {
+      if (reportedApprovalConflicts.has(conflict)) continue;
+      reportedApprovalConflicts.add(conflict);
+      logger.warn(formatCompact({ op: 'approval_channel_conflict', detail: conflict }));
+    }
     logger.info(
       `ready | ${binding.name}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
@@ -430,9 +471,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
  * All of them — `BOT.md` included — are read from the project root only; a `data/BOT.md` is
  * ignored, like `hasBotBootstrapFile` ignores it.
  *
- * Reload: the installer runs once per Root generation, so an edited root `BOT.md` is picked up
- * like `SOUL.md` / `AGENTS.md` — the development watcher sees the untracked root file and rebuilds
- * the Root.
+ * Reload: every bootstrap file, a root `BOT.md` included, is watched through `watchProjectFiles`
+ * and re-read in place (no new Root generation); adding, emptying or removing `BOT.md` switches
+ * between AGENTS.md and BOT.md on the next read.
  */
 async function loadBootstrap(projectRoot: string): Promise<{
   bootstrapText: string;

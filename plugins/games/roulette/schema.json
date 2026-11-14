@@ -17,6 +17,15 @@
       "maximum": 12,
       "default": 6,
       "description": "弹巢数量，其中一发是实弹",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "弹巢数"
+        },
+        "en": {
+          "title": "Chambers",
+          "description": "Number of chambers; one of them holds the live round."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -29,6 +38,15 @@
       "maximum": 10,
       "default": 6,
       "description": "单局最多玩家数",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "最多玩家数"
+        },
+        "en": {
+          "title": "Max players",
+          "description": "Maximum players in one game."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -41,6 +59,15 @@
       "maximum": 600,
       "default": 60,
       "description": "轮到的玩家超过这个秒数不开枪，判负",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "回合超时（秒）"
+        },
+        "en": {
+          "title": "Turn timeout (seconds)",
+          "description": "A player who does not pull the trigger within this many seconds loses."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -53,6 +80,15 @@
       "maximum": 3600,
       "default": 300,
       "description": "开局后超过这个秒数仍未开始，自动解散",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "等待开局超时（秒）"
+        },
+        "en": {
+          "title": "Lobby timeout (seconds)",
+          "description": "A lobby that has not started after this many seconds is dissolved."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"
@@ -65,6 +101,15 @@
       "maximum": 3600,
       "default": 60,
       "description": "开启禁言惩罚的群里，输家被禁言的秒数（每个群默认关闭）",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "禁言时长（秒）"
+        },
+        "en": {
+          "title": "Mute duration (seconds)",
+          "description": "Seconds the loser is muted in groups that turned on the mute penalty (off in every group by default)."
+        }
+      },
       "x-zhin-config": {
         "levels": [
           "global"

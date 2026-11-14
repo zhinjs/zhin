@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-roulette",
   "version": "0.1.17",
-  "description": "Zhin.js 俄罗斯轮盘 — 多人轮流开枪，可按群开启禁言惩罚 (Plugin Runtime)",
+  "description": "Group members take turns pulling the trigger; each group can turn on a mute penalty for the loser.",
+  "keywords": [
+    "zhin.js",
+    "roulette",
+    "party-game",
+    "俄罗斯轮盘"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,12 +42,6 @@
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "game",
-    "roulette"
-  ],
   "license": "MIT",
   "dependencies": {
     "@zhin.js/core": "workspace:*",
@@ -93,7 +97,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Russian Roulette",
+      "displayNameI18n": {
+        "zh-CN": "俄罗斯轮盘",
+        "en": "Russian Roulette"
+      },
+      "descriptionI18n": {
+        "zh-CN": "群里多人轮流扣扳机，中弹者输，可按群开启输家禁言惩罚。",
+        "en": "Group members take turns pulling the trigger; each group can turn on a mute penalty for the loser."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

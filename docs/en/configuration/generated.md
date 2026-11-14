@@ -187,6 +187,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | no | `0` | Turns one group may start per minute; 0 = unlimited. |
 | `ai.agent.usageQuota.exemptOwner` | boolean | no | `true` | The owner is never limited. |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for main Agent commands. |
+| `ai.agent.approval` | object | no | — | IM approval options. |
+| `ai.agent.approval.adminSelfApprove` | boolean | no | `false` | Let a zhin admin (held at endpoint level or above) approve, once, in their own private chat, the operations a policy marks admin-approvable (tools tagged admin_approvable such as schedule_add, session memory) when the bot owner cannot answer there. Default false: only the bot owner approves. Never covers sensitive files, shell commands, global/platform memory, human-only or dangerous tools, or groups without an owner. |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | no | — | How tool calls in one model step are scheduled. |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | no | — | Optional model-size hint; an empty string clears the hint. |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |
@@ -1671,8 +1673,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `process-monitor.notifyOnRestart` | boolean | no | `true` | Notify on normal restart. |
 | `process-monitor.notifyOnCrash` | boolean | no | `true` | Notify after a crash restart. |
 | `process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | Notification channel (slice 1 supports webhook only). |
-| `process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | — |
-| `process-monitor.notifyChannels[].target` | string | yes | — | — |
+| `process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | Only webhook is supported for now. |
+| `process-monitor.notifyChannels[].target` | string | yes | — | Webhook URL. |
 
 ### blackjack
 
@@ -1718,11 +1720,11 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `roulette.chambers` | integer | no | `6` | 弹巢数量，其中一发是实弹 |
-| `roulette.maxPlayers` | integer | no | `6` | 单局最多玩家数 |
-| `roulette.turnTimeoutSeconds` | integer | no | `60` | 轮到的玩家超过这个秒数不开枪，判负 |
-| `roulette.lobbyTimeoutSeconds` | integer | no | `300` | 开局后超过这个秒数仍未开始，自动解散 |
-| `roulette.muteSeconds` | integer | no | `60` | 开启禁言惩罚的群里，输家被禁言的秒数（每个群默认关闭） |
+| `roulette.chambers` | integer | no | `6` | Number of chambers; one of them holds the live round. |
+| `roulette.maxPlayers` | integer | no | `6` | Maximum players in one game. |
+| `roulette.turnTimeoutSeconds` | integer | no | `60` | A player who does not pull the trigger within this many seconds loses. |
+| `roulette.lobbyTimeoutSeconds` | integer | no | `300` | A lobby that has not started after this many seconds is dissolved. |
+| `roulette.muteSeconds` | integer | no | `60` | Seconds the loser is muted in groups that turned on the mute penalty (off in every group by default). |
 
 ### rps
 
@@ -2245,7 +2247,7 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
+| `60s.apiBase` | string | no | `"https://60s.viki.moe"` | Base URL of the 60s API service. |
 
 ### answers
 
@@ -2288,22 +2290,22 @@ _This Schema declares no fields._
 | --- | --- | --- | --- | --- |
 | `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | Calendar backend. Tools report that the calendar is disabled when set to none. |
 | `calendar.timezone` | string | no | `"Asia/Manila"` | IANA timezone for interpreting times without offsets and for display. |
-| `calendar.work_day_start` | string | no | `"09:00"` | — |
-| `calendar.work_day_end` | string | no | `"18:00"` | — |
-| `calendar.oauth_redirect_base_url` | string | no | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
-| `calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
+| `calendar.work_day_start` | string | no | `"09:00"` | Daily start time used for free-time lookups (HH:MM). |
+| `calendar.work_day_end` | string | no | `"18:00"` | Daily end time used for free-time lookups (HH:MM). |
+| `calendar.oauth_redirect_base_url` | string | no | `""` | External base URL for the chat authorization callback (such as https://bot.example.com). Uses the local address of the zhin HTTP Host when empty. |
+| `calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | Authorization callback route on the zhin HTTP Host. Adjust it when a reverse proxy or tunnel forwards only some paths. |
 | `calendar.caldav` | object | no | — | — |
 | `calendar.caldav.enabled` | boolean | no | `false` | — |
 | `calendar.caldav.calendar_url` | string | no | `""` | Calendar collection URL. |
 | `calendar.caldav.username` | string | no | `""` | — |
-| `calendar.caldav.password` | string | no | `""` | — |
+| `calendar.caldav.password` | string | no | `""` | Prefer an environment-variable reference. |
 | `calendar.google` | object | no | — | — |
 | `calendar.google.enabled` | boolean | no | `false` | — |
 | `calendar.google.client_id` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
 | `calendar.google.client_secret` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
 | `calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}; obtain using the calendar authorization flow. |
 | `calendar.google.calendar_id` | string | no | `"primary"` | Calendar ID, primary by default; can be set to another calendar ID. |
-| `calendar.google.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
+| `calendar.google.token_file` | string | no | `""` | Optional JSON path that persists the rotated refresh_token (such as data/calendar-google-token.json). |
 | `calendar.microsoft` | object | no | — | — |
 | `calendar.microsoft.enabled` | boolean | no | `false` | — |
 | `calendar.microsoft.client_id` | string | no | `""` | ${MS_GRAPH_CLIENT_ID} |
@@ -2311,7 +2313,7 @@ _This Schema declares no fields._
 | `calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}; obtain using the calendar authorization flow. |
 | `calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant, common by default. |
 | `calendar.microsoft.calendar_id` | string | no | `""` | Empty, primary or me selects the default calendar; otherwise a Graph calendar ID. |
-| `calendar.microsoft.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
+| `calendar.microsoft.token_file` | string | no | `""` | Optional JSON path that persists the rotated refresh_token (such as data/calendar-ms-token.json). |
 
 ### code-runner
 
@@ -2344,8 +2346,8 @@ _This Schema declares no fields._
 | `content-moderation.inbound.enabled` | boolean | no | `true` | — |
 | `content-moderation.inbound.bypass` | array&lt;string&gt; | no | `["owner","platform:admin"]` | Senders matching any of these permit expressions skip inbound review (ADR 0056 §5 built-in DSL, the same evaluator as commands and tools). Moderation is a platform function: the default exempts the zhin owner and platform group owners / admins (platform:admin); [] reviews everyone. |
 | `content-moderation.inbound.whitelist` | object | no | — | — |
-| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
-| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |
+| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | Messages from these users are not reviewed. |
+| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | Messages in these conversations are not reviewed. |
 | `content-moderation.outbound` | object | no | — | — |
 | `content-moderation.outbound.enabled` | boolean | no | `true` | — |
 | `content-moderation.outbound.bypass` | boolean | no | `false` | Skip outbound review when true. |
@@ -2355,19 +2357,19 @@ _This Schema declares no fields._
 | `content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
 | `content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
 | `content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `content-moderation.sources` | array&lt;object&gt; | no | `[]` | — |
+| `content-moderation.sources` | array&lt;object&gt; | no | `[]` | Review sources run in order: local word lists or HTTP review services. |
 | `content-moderation.sources[].id` | string | yes | — | — |
-| `content-moderation.sources[].type` | string: `"local"`, `"http"` | yes | — | — |
+| `content-moderation.sources[].type` | string: `"local"`, `"http"` | yes | — | local is a word list; http is an external review service. |
 | `content-moderation.sources[].enabled` | boolean | no | `true` | — |
-| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | no | — | — |
+| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | no | — | Policy when this source fails; uses the global setting when empty. |
 | `content-moderation.sources[].includeBuiltin` | boolean | no | `true` | Include the built-in graded blocked-word dictionary. |
 | `content-moderation.sources[].words` | array&lt;string \| object&gt; | no | `[]` | Custom words: strings using defaultSeverity, or { word, severity } objects. |
 | `content-moderation.sources[].wordFiles` | array&lt;string&gt; | no | `[]` | Dictionary file; line formats: word, severity:word, or word\|severity. |
 | `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | Default severity for custom words without an explicit severity. |
 | `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | Legacy alias for defaultSeverity. |
-| `content-moderation.sources[].url` | string | no | — | — |
-| `content-moderation.sources[].headers` | object | no | — | — |
-| `content-moderation.sources[].timeoutMs` | number | no | `5000` | — |
+| `content-moderation.sources[].url` | string | no | — | URL of the HTTP review service. |
+| `content-moderation.sources[].headers` | object | no | — | Extra headers sent to the review service. |
+| `content-moderation.sources[].timeoutMs` | number | no | `5000` | Timeout of one review request. |
 | `content-moderation.sources[].forceUpload` | boolean | no | `false` | Download images before uploading them instead of passing the URL. |
 
 ### earthquake
@@ -2404,16 +2406,16 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `group-suite.keywordReply` | boolean | no | `false` | — |
-| `group-suite.basePointsMin` | number | no | `10` | — |
-| `group-suite.basePointsMax` | number | no | `30` | — |
-| `group-suite.streakBonus` | number | no | `5` | — |
-| `group-suite.streakCap` | number | no | `50` | — |
-| `group-suite.rankSize` | number | no | `10` | — |
-| `group-suite.teachMaxPerGroup` | number | no | `200` | — |
-| `group-suite.teachCooldownMs` | number | no | `3000` | — |
+| `group-suite.keywordReply` | boolean | no | `false` | Reply automatically to messages that match the keyword list (global only). |
+| `group-suite.basePointsMin` | number | no | `10` | Lower bound of the random base points for one check-in. |
+| `group-suite.basePointsMax` | number | no | `30` | Upper bound of the random base points for one check-in. |
+| `group-suite.streakBonus` | number | no | `5` | Extra points per consecutive check-in day. |
+| `group-suite.streakCap` | number | no | `50` | Maximum extra points from a check-in streak. |
+| `group-suite.rankSize` | number | no | `10` | Number of members shown on check-in and activity leaderboards. |
+| `group-suite.teachMaxPerGroup` | number | no | `200` | Maximum question-and-answer rules stored per group. |
+| `group-suite.teachCooldownMs` | number | no | `3000` | Minimum interval between two teach commands from the same member. |
 | `group-suite.teachAllowRegex` | boolean | no | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
-| `group-suite.teachPageSize` | number | no | `10` | — |
+| `group-suite.teachPageSize` | number | no | `10` | Rules shown per page by teach-list. |
 | `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | no | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
 | `group-suite.welcomeConversations[].endpoint` | object | yes | — | — |
@@ -2453,27 +2455,27 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `lottery.pickCount` | number | no | `5` | — |
-| `lottery.scheduleCron` | string | no | `"0 0 18 * * *"` | — |
-| `lottery.historyLimit` | number | no | `500` | — |
-| `lottery.scheduleEnabled` | boolean | no | `true` | — |
-| `lottery.backtestEnabled` | boolean | no | `true` | — |
-| `lottery.backtestWindow` | number | no | `50` | — |
-| `lottery.backtestRandomTrials` | number | no | `64` | — |
-| `lottery.backtestMinHistory` | number | no | `30` | — |
-| `lottery.backtestAdaptive` | boolean | no | `true` | — |
-| `lottery.weightPersistEnabled` | boolean | no | `true` | — |
-| `lottery.weightHoldoutFallback` | boolean | no | `true` | — |
-| `lottery.games` | array&lt;string&gt; | no | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
-| `lottery.pushTargets` | array&lt;object&gt; | no | `[]` | OutboundHost push destinations for cron/publish reports |
+| `lottery.pickCount` | number | no | `5` | Numbers in each recommended pick. |
+| `lottery.scheduleCron` | string | no | `"0 0 18 * * *"` | 6-field cron expression for scheduled recommendations. |
+| `lottery.historyLimit` | number | no | `500` | Maximum past draws read for analysis. |
+| `lottery.scheduleEnabled` | boolean | no | `true` | Generate and push recommendations on the schedule. |
+| `lottery.backtestEnabled` | boolean | no | `true` | Backtest the model on past draws before recommending. |
+| `lottery.backtestWindow` | number | no | `50` | Number of recent draws sampled by the backtest. |
+| `lottery.backtestRandomTrials` | number | no | `64` | Simulations of the random baseline in a backtest. |
+| `lottery.backtestMinHistory` | number | no | `30` | Skip the backtest with fewer past draws than this. |
+| `lottery.backtestAdaptive` | boolean | no | `true` | Tune model weights draw by draw during the backtest. |
+| `lottery.weightPersistEnabled` | boolean | no | `true` | Save model weights to the database after simulation or review. |
+| `lottery.weightHoldoutFallback` | boolean | no | `true` | Use default weights when the recent holdout performs worse than random. |
+| `lottery.games` | array&lt;string&gt; | no | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | Enabled lottery games (KL8, SSQ, DLT, FC3D, PL3, PL5). |
+| `lottery.pushTargets` | array&lt;object&gt; | no | `[]` | Conversations that receive scheduled and draw reports. |
 | `lottery.pushTargets[].adapter` | string | yes | — | — |
 | `lottery.pushTargets[].endpointKey` | string | no | — | — |
 | `lottery.pushTargets[].channelType` | string | no | `"private"` | — |
 | `lottery.pushTargets[].channelId` | string | yes | — | — |
 | `lottery.kl8` | object | no | — | — |
-| `lottery.kl8.pickCount` | number | no | `5` | — |
-| `lottery.kl8.recommendGroups` | number | no | `3` | — |
-| `lottery.kl8.groupStrategies` | array&lt;string&gt; | no | `["balanced","hot","cold"]` | — |
+| `lottery.kl8.pickCount` | number | no | `5` | Numbers in each KL8 group. |
+| `lottery.kl8.recommendGroups` | number | no | `3` | Number of KL8 groups per recommendation. |
+| `lottery.kl8.groupStrategies` | array&lt;string&gt; | no | `["balanced","hot","cold"]` | Strategy for each group (balanced, hot, cold). |
 
 ### music
 
@@ -2540,9 +2542,9 @@ _This Schema declares no fields._
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `rss.pollCron` | string | no | `"0 */5 * * * *"` | Polling schedule (6-field cron expression). |
-| `rss.maxPerGroup` | number | no | `30` | — |
-| `rss.maxItems` | number | no | `5` | — |
-| `rss.timeout` | number | no | `15000` | — |
+| `rss.maxPerGroup` | number | no | `30` | Maximum feeds per conversation. |
+| `rss.maxItems` | number | no | `5` | Maximum articles listed in one notification; the rest are counted. |
+| `rss.timeout` | number | no | `15000` | Timeout for fetching a feed. |
 | `rss.allowPrivateNetwork` | boolean | no | `false` | Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users. |
 
 ### short-url

@@ -69,6 +69,22 @@ export default createDeclarativePage<ModerationConsoleStatus>({
           required: true,
         },
       ],
+      // The verdict sits right under the input, localized, with what would actually happen.
+      result: {
+        title: { $i18n: 'decisionI18n' },
+        tone: {
+          $map: { path: 'decision', cases: { allow: 'success', flag: 'warning', block: 'danger' }, default: 'neutral' },
+        },
+        entries: [
+          { label: { zh: '严重度', en: 'Severity' }, value: { $i18n: 'severityI18n' } },
+          { label: { zh: '命中词', en: 'Matched text' }, value: { $path: 'hitsText', fallback: '—' } },
+          { label: { zh: '审核源', en: 'Sources' }, value: { $path: 'sourcesText', fallback: '—' } },
+          {
+            label: { zh: '按当前 actions 配置将执行', en: 'Actions under the current config' },
+            value: { $i18n: 'actionsI18n' },
+          },
+        ],
+      },
     },
   ],
   sections: [
@@ -77,19 +93,19 @@ export default createDeclarativePage<ModerationConsoleStatus>({
       title: { zh: '配置概览', en: 'Configuration Overview' },
       entries: [
         {
-          label: 'Enabled',
+          label: { zh: '已启用', en: 'Enabled' },
           value: {
             $map: {
               path: 'enabled',
-              cases: { true: 'Yes', false: 'No' },
-              default: 'No',
+              cases: { true: { zh: '是', en: 'Yes' }, false: { zh: '否', en: 'No' } },
+              default: { zh: '否', en: 'No' },
             },
           },
         },
-        { label: 'Sensitivity', dataKey: 'sensitivity' },
-        { label: 'Providers Count', dataKey: 'providersCount' },
-        { label: 'Whitelist Count', dataKey: 'whitelistCount' },
-        { label: 'Pending Reviews', dataKey: 'pendingReviewsCount' },
+        { label: { zh: '敏感度等级', en: 'Sensitivity' }, dataKey: 'sensitivity' },
+        { label: { zh: '审核源数量', en: 'Providers' }, dataKey: 'providersCount' },
+        { label: { zh: '白名单条目', en: 'Whitelist entries' }, dataKey: 'whitelistCount' },
+        { label: { zh: '待审群消息', en: 'Pending reviews' }, dataKey: 'pendingReviewsCount' },
       ],
     },
     {

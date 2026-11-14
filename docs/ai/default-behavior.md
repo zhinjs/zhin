@@ -37,7 +37,7 @@
 | 管哪些工具 | `requiresApproval` 要求审批的工具、Shell / 文件策略 | 声明 `risk: 'dangerous'` 的工具、核心名单、`toolHardGate.dangerousTools` |
 | 谁能放行 | 人、审核 Agent，或 `bypass` 直接放行；可以「本会话 / 始终允许」 | 只有本次的新鲜人工批准，或 Console 已批准的同参数卡片；`bypass`、审核 Agent、主人身份、记住的授权都不算 |
 | 被拒之后 | 模型收到拒绝说明 | 本次调用不执行（fail closed）；模型只收到「已拒绝、需人工审批、不要重试」；本回合内同一工具 / 同类危险工具直接拒绝，不再弹审批 |
-| 无人值守回合 | 按策略拒绝 | 直接拒绝，并生成一张 Console 审批卡片；批准后，下一次**同会话同参数**的调用执行一次 |
+| 无人值守回合 | 按策略拒绝（拒绝原因写明是无人值守；IM 实时回合里谁能确认见 [Agent 安全策略](./agent.md#读取外部内容后的高危动作)） | 直接拒绝，并生成一张 Console 审批卡片；批准后，下一次**同会话同参数**的调用执行一次 |
 
 核心名单按类别默认危险：成员管理（踢人、禁言、设管理员、角色、拉人）、内容发布（群公告、频道发帖、精华、置顶、B 站评论）、资金（红包、转账、付款，**默认禁用**，`allowFunds: true` 后仍需审批）、身份（改 Bot 资料、头像、签名、解绑账号）。
 
@@ -132,6 +132,7 @@ ai:
 | `toolBudget` | keep | 常用开关，保留 |
 | `injectionGuard` | keep | 常用开关，保留 |
 | `toolHardGate` | keep | 危险工具硬闸（ADR 0036）；始终开启，只能调严，见下文 |
+| `approval` | keep | IM 回合审批的附加规则；目前只有 `adminSelfApprove`（默认 `false`）：开启后，端点层及以上的 zhin `admin` 可在自己的私聊里本人「允许一次」标为可由管理员批准的请求，需主人确认的请求不受影响（见 [Agent 安全策略](./agent.md)） |
 | `usageQuota` | keep | 常用开关，保留 |
 | `schedule` | keep | 常用开关，保留 |
 | `masterShell` | keep | 常用开关，保留 |

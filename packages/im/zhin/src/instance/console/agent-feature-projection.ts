@@ -4,7 +4,25 @@ import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { isPromptSectionIndex, promptSectionFeatureId } from '@zhin.js/prompt-section';
 import { normalizeDeliveryTarget, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { component, OutboundRenderer } from '@zhin.js/core/runtime';
+import type { ConsoleIntrospectionOwner } from '@zhin.js/console-protocol';
 import { displayConsolePath } from './display-path.js';
+
+/**
+ * Owning plugin of a capability row (#1250): the instance key and package of `owner` in this
+ * generation's plugin tree. Empty when the owner is unknown, so the fields stay optional.
+ */
+export function introspectionOwner(
+  snapshot: RuntimeSnapshot | undefined,
+  owner: PluginId | string | undefined,
+): ConsoleIntrospectionOwner {
+  if (owner === undefined) return {};
+  const node = snapshot?.tree?.get(owner as PluginId);
+  return {
+    owner: String(owner),
+    ...(node?.instanceKey ? { pluginInstance: node.instanceKey } : {}),
+    ...(node?.packageName ? { pluginPackage: node.packageName } : {}),
+  };
+}
 
 export function listGenerationCommands(
   snapshot: RuntimeSnapshot | undefined,
@@ -16,6 +34,7 @@ export function listGenerationCommands(
     pattern: command.name,
     desc: command.description ?? '',
     plugin: displayConsolePath(command.source, projectRoot),
+    ...introspectionOwner(snapshot, command.owner),
     parameters: command.parameters.map((parameter) => ({
       name: parameter.name,
       type: parameter.type,
@@ -43,6 +62,7 @@ export function listGenerationMiddlewares(
   if (!isMiddlewareIndex(index)) return [];
   return index.list().map((middleware) => ({
     name: middleware.name,
+    ...introspectionOwner(snapshot, middleware.owner),
     owner: String(middleware.owner),
     phase: middleware.phase,
     target: middleware.target,
@@ -59,6 +79,7 @@ export function listGenerationComponents(
   if (!isComponentIndex(index)) return [];
   return index.list().map((component) => ({
     name: component.name,
+    ...introspectionOwner(snapshot, component.owner),
     owner: String(component.owner),
     source: displayConsolePath(component.source, projectRoot),
     ...(component.previewProps === undefined ? {} : { previewProps: component.previewProps }),
@@ -113,6 +134,7 @@ export function listGenerationTools(
         name: tool.name,
         source: displayConsolePath(tool.source, projectRoot),
         description: tool.description ?? '',
+        ...introspectionOwner(snapshot, tool.owner),
       });
     }
   }
@@ -130,6 +152,7 @@ export function listGenerationPromptSections(
     name: section.name,
     qualifiedName: section.qualifiedName,
     title: section.title,
+    ...introspectionOwner(snapshot, section.owner),
     owner: String(section.owner),
     layer: section.layer,
     order: section.order,
@@ -144,7 +167,7 @@ export function listGenerationPromptSections(
 }
 
 function isToolIndexLike(value: unknown): value is {
-  list(): { name: string; description?: string; source: string; hidden?: boolean }[];
+  list(): { name: string; description?: string; source: string; hidden?: boolean; owner?: PluginId }[];
 } {
   return !!value && typeof value === 'object'
     && typeof (value as { list?: unknown }).list === 'function';

@@ -46,7 +46,7 @@ it.each(['login', 'video', 'dynamic'])('settles a transient %s startup error bef
   } finally { await harness.stop(); }
 });
 
-it('settles a manual account-start failure and retries only when explicitly requested', async () => {
+it('settles a manual account-start failure, schedules a background retry and retries at once on an explicit start', async () => {
   const configuration: BilibiliEndpointConfig = { id: 'startup', sessdata: 'synthetic-cookie', dynamics: ['1073543151725051921'] };
   let state: EndpointDesiredSnapshot = { revision: 1, endpoints: [{ instanceId: 'startup-instance',
     canonicalId: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'bilibili'), endpointId: 'startup',
@@ -77,7 +77,8 @@ it('settles a manual account-start failure and retries only when explicitly requ
     await harness.start(); harness.open();
     const account = harness.adapter.list()[0];
     expect((await harness.adapter.start(account.instanceId, harness.adapter.revision)).execution.status).toBe('failed');
-    expect(harness.index.describe()[0]).toMatchObject({ transportState: 'stopped', phase: 'offline' });
+    // #1250: the failed account waits for its automatic retry instead of going offline for good.
+    expect(harness.index.describe()[0]).toMatchObject({ transportState: 'stopped', phase: 'retrying', startAttempt: 1 });
     const failedIncarnation = harness.adapter.list()[0].incarnationId;
     const count = fetch.mock.calls.length;
     await Promise.resolve();

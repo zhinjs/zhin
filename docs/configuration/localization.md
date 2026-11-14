@@ -99,6 +99,32 @@ Schema.string().option(['text', 'image'])
 
 生成的 JSON Schema 使用 `x-i18n`；`enumLabels` 按实际枚举值的字符串形式索引。标签不参与校验和保存。外部严格 JSON Schema 校验器需声明支持这一显示注解，不能关闭全部严格校验来绕过它。
 
+`x-i18n` 按 Console 界面语言（`zh-CN` / `en`）分别提供字段的 `title`（表单上的字段名）、`description`（说明）和 `enumLabels`。字段名不写时 Console 直接显示 schema key（如 `teachCooldownMs`），所以面向管理员的插件应同时给出两种语言的标题：
+
+```ts
+teachCooldownMs: Schema.number().default(10_000)
+  .description('同一成员两次教学之间的最短间隔')
+  .i18n({
+    'zh-CN': { title: '教学冷却时间' },
+    en: { title: 'Teach cooldown', description: 'Minimum interval between two teach commands from the same member.' },
+  }),
+```
+
+手写 `schema.json` 时直接在属性上写同样的 `x-i18n` 对象。Console 按以下顺序选择要显示的文字，每一项独立回退：当前界面语言的译文 → Schema 自身的 `title` / `description` → `en` 译文 → 字段 key（仅标题）。也就是说，没有 `x-i18n` 的旧插件显示不变；`description` 写中文、只补 `en` 的写法在中文界面仍显示中文。字段 key 保留在标题旁的次要位置，便于对照配置文件。翻译只影响显示，不改变 key、默认值、校验和保存的值。
+
+插件显示名同样可以翻译。在 `definePlugin({ metadata })` 或 `package.json#zhin.metadata` 中声明 `displayNameI18n`（两处只能写一处，与 `displayName` 相同）：
+
+```ts
+metadata: {
+  displayName: 'Repeater',
+  displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' },
+},
+```
+
+Console 的插件列表、功能矩阵和功能页按界面语言选择显示名，回退顺序为当前语言 → `en` → `displayName` → 实例 key。只接受 `zh-CN` 与 `en` 两个键，值必须是非空字符串。
+
+要发布到 npm 的插件请写在 `package.json#zhin.metadata`：插件市场只能读到发布的 `package.json`，读不到 `definePlugin()` 代码。市场还会读同一位置的 `descriptionI18n`（本地化描述）和 `category`（分类），见[插件交付 · 插件市场元数据](../authoring/plugin-delivery.md#marketplace-metadata)。
+
 平台协议必须立即返回、尚未进入普通消息分发的默认回复，可在已经验签的 `Endpoint` 中调用 `await this.resolveLocale(senderId)`。它复用同一份个人偏好与项目语言，以当前 Endpoint 身份查询；候选或已退役 Endpoint 返回 `undefined`，不会读取用户状态。协议适配器保留本次查询结果，不能从请求参数或平台资料猜测语言。普通消息继续使用 `Message.locale`，无需再次查询。
 
 插件业务验证可为检查提供 `titleI18n`、`effectsI18n`，为结果提供 `summaryI18n`、`evidenceI18n`，键为 `zh-CN` / `en`。副作用和证据译文须与原数组逐项对应且非空，不能用空译文隐藏条目。Console 只选择展示语言；审批仍绑定原检查 ID、运行代和包含完整翻译定义的修订号。

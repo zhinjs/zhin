@@ -90,7 +90,8 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
     if (hardGate.status === 'cancelled') {
       return Object.freeze({ status: 'cancelled', reason: 'Tool execution cancelled' });
     }
-    if (hardGate.status === 'denied') return Object.freeze({ status: 'denied', reason: hardGate.reason });
+    const sideEffect = tool.isReadOnly !== true;
+    if (hardGate.status === 'denied') return Object.freeze({ status: 'denied', reason: hardGate.reason, sideEffect });
     const approvalDenied = hardGate.status === 'approved'
       ? null
       : options.rejectApproval
@@ -114,7 +115,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         journal: options.journal,
         signal: options.signal,
       });
-    if (approvalDenied) return Object.freeze({ status: 'denied', reason: approvalDenied });
+    if (approvalDenied) return Object.freeze({ status: 'denied', reason: approvalDenied, sideEffect });
 
     try {
       const execute = () => runWithCommMessage(
@@ -126,7 +127,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         ? await runWithDeferredTurnController(options.deferredController, execute)
         : await execute();
       if (outcome.denied) {
-        return Object.freeze({ status: 'denied', reason: String(outcome.output) });
+        return Object.freeze({ status: 'denied', reason: String(outcome.output), sideEffect });
       }
       return Object.freeze({
         status: 'completed',
@@ -146,6 +147,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         status: 'failed',
         error: error instanceof Error ? error.message : String(error),
         retryable: false,
+        sideEffect,
       });
     }
   }

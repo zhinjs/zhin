@@ -13,9 +13,6 @@ import {
 
 export default defineGamePlugin<SessionService>({
   name: 'dungeon-expedition',
-  metadata: {
-    displayName: 'Dungeon Expedition',
-  },
   game: {
     commandPath: 'dungeon',
     titleI18n: { en: 'Dungeon Expedition' },

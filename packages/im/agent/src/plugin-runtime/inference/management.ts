@@ -88,6 +88,10 @@ export interface InferenceDriverView {
   readonly authentication: readonly AuthenticationMethod[];
   /** True only when this held declaration implements model discovery. Metadata reads never probe it. */
   readonly discovery: boolean;
+  /** OAuth login needs an account-bound client secret first (confidential client); absent otherwise. */
+  readonly requiresClientSecret?: boolean;
+  /** Unverified model IDs a driver suggests when adding a model; never admitted models. */
+  readonly modelSuggestions?: readonly Readonly<{ id: string; label?: string }>[];
   readonly serviceSchema?: Readonly<Record<string, unknown>>;
   readonly modelContracts: readonly Readonly<{
     protocol: string;

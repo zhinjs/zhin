@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-sandbox",
   "version": "1.1.33",
-  "description": "Zhin.js Sandbox adapter for Plugin Runtime (WebSocket /sandbox)",
+  "description": "Sandbox adapter: a local chat workspace for the Remote Console, for development and testing without a real platform.",
+  "keywords": [
+    "zhin.js",
+    "sandbox",
+    "testing",
+    "development"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -22,21 +32,6 @@
     "README.md",
     "CHANGELOG.md"
   ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "sandbox",
-    "test",
-    "development",
-    "local"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "license": "MIT",
   "repository": {
     "url": "git+https://github.com/zhinjs/zhin.git",
@@ -117,6 +112,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Sandbox Adapter",
+      "displayNameI18n": {
+        "zh-CN": "沙盒适配器",
+        "en": "Sandbox Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "沙盒适配器：为 Remote Console 提供本地会话工作区，用于开发和测试，无需接入真实平台。",
+        "en": "Sandbox adapter: a local chat workspace for the Remote Console, for development and testing without a real platform."
+      },
+      "category": "adapter"
+    }
   }
 }

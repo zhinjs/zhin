@@ -54,6 +54,47 @@ export interface SdkExecutionConfiguration {
   readonly prepareResponse?: (response: Response) => Response;
 }
 
+const STRUCTURED_CONTENT_TYPE = /json|event-stream|x-protobuf|octet-stream|^image\/|^audio\//u;
+const SNIFF_LIMIT = 512;
+
+/**
+ * A 2xx answer to a model request that is not JSON / an event stream (for example a
+ * site's HTML home page when the service address lacks `/v1`) fails clearly instead
+ * of as an opaque SDK parse error (#1250 service-baseurl-immutable). Only untyped or
+ * text answers are sniffed; JSON and streams pass untouched.
+ */
+export async function assertStructuredResponse(response: Response): Promise<void> {
+  if (!response.ok || response.status === 204) return;
+  const type = (response.headers.get('content-type') ?? '').toLowerCase().trim();
+  if (type.includes('html')) throw nonJsonResponse(response);
+  if (STRUCTURED_CONTENT_TYPE.test(type)) return;
+  if (type && !type.startsWith('text/')) return;
+  if (!response.body) return;
+  let head = '';
+  try {
+    const reader = response.clone().body!.getReader();
+    try {
+      const decoder = new TextDecoder();
+      while (head.length < SNIFF_LIMIT) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        head += decoder.decode(chunk.value, { stream: true });
+        if (head.trimStart().length > 0) break;
+      }
+    } finally {
+      // A tee branch's cancel settles only once both branches are done: never await it.
+      void reader.cancel().catch(() => undefined);
+    }
+  } catch {
+    return;
+  }
+  if (head.trimStart().startsWith('<')) throw nonJsonResponse(response);
+}
+
+function nonJsonResponse(response: Response): ProviderResponseError {
+  return new ProviderResponseError({ kind: 'non_json_response', retryable: false, status: response.status });
+}
+
 const authenticationHeaders = ['authorization', 'proxy-authorization', 'x-api-key', 'x-goog-api-key', 'api-key'];
 const explicitGeminiCache = createProviderResourceKey<GeminiContextCacheState>('google.explicit-cache-directory');
 function safeSdkError(error: unknown): unknown {
@@ -168,7 +209,14 @@ export function sdkExecution(
       } });
       transport = createGeminiCachingFetch({ config: service.contextCache, fetch: transport, state });
     }
-    return { combined, token: first.token, fetch: transport };
+    // Checked at the outermost layer: auxiliary requests (context caches) handle their own answers.
+    const inner = transport;
+    const checked: typeof globalThis.fetch = async (url, init) => {
+      const response = await inner(url, init);
+      await assertStructuredResponse(response);
+      return response;
+    };
+    return { combined, token: first.token, fetch: checked };
   }
 
   async function call(request: LanguageRequest, signal: AbortSignal) {

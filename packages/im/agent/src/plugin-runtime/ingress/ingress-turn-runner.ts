@@ -62,6 +62,8 @@ import {
   resolveProductTurnIntent,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  holdsEndpointAdmin,
+  resolveImApprover,
   resolveSandboxTurnPolicy,
   runtimePersonalSessionAddress,
   type RuntimeSenderRoles,
@@ -147,6 +149,8 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
   readonly outcome: TurnOutcome;
   readonly capabilities: TurnCapabilities;
   readonly routed: ReturnType<typeof routeSpecialistAgent>;
+  /** Tool calls the turn itself made (sub-agent turns excluded), for the model-run audit. */
+  readonly toolCalls: number;
 }> {
   const {
     message,
@@ -191,6 +195,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
   const service = agent.service;
   const traceRuntime = agent.traceRuntime;
   const binding = service.getBindingRegistry().requireZhinBinding();
+  let toolCalls = 0;
 
   return runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch }, () =>
     withTriggerTimeout(async (timeoutSignal) => {
@@ -329,22 +334,39 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             projectRoot,
             defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
           });
-          const approverId = senderRoles.isMaster ? message.sender?.id : ownerId;
-          const approvalInteraction = approverId
-            ? im.createInteraction(message, { subjectId: approverId })
+          // #1250: the approver answers on this conversation, bound to their platform user id.
+          const initiatorPresent = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge;
+          const approver = resolveImApprover({
+            senderId: message.sender?.id,
+            isMaster: senderRoles.isMaster,
+            // #1250 review: admin held at endpoint level or above; a conversation-level admin or demoted owner is not.
+            isAdmin: message.sender?.id ? holdsEndpointAdmin(message.sender) : false,
+            ownerId,
+            scope: message.conversation.kind,
+            initiatorPresent,
+            adminSelfApprove: service.getAgentConfig()?.approval?.adminSelfApprove === true,
+          });
+          const approvalInteraction = approver.kind !== 'none'
+            ? im.createInteraction(message, { subjectId: approver.subjectId })
             : undefined;
+          // Nobody with authority here: the live initiator may still confirm their own intent (provenance only).
+          const intentInteraction = approver.kind === 'none' && initiatorPresent && message.sender?.id
+            ? im.createInteraction(message, { subjectId: message.sender.id })
+            : undefined;
+          const imApprovalOptions = {
+            locale: message.locale,
+            interaction: approvalInteraction,
+            selfApproval: approver.kind === 'initiator',
+            ...(intentInteraction ? { intentInteraction } : {}),
+            ...(approver.kind === 'none' ? { unavailableReason: approver.reason } : {}),
+            memory: agent.approvalReviewer,
+          };
           const askApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
+            ...imApprovalOptions,
             isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
+            masterPresent: initiatorPresent,
           });
-          const escalatedApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
-            isMaster: false,
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
-          });
+          const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
           const replyPort = createIngressReplyPort({
             message,
             snapshot,
@@ -424,6 +446,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mode: turnPolicy.shell?.approvalMode
                   ?? service.getAgentConfig()?.execApprovalMode
                   ?? 'auto',
+                masterInitiator: senderRoles.isMaster,
                 auto: createAutoApprovalPort(
                   agent.approvalReviewer,
                   escalatedApprovalPort,
@@ -434,6 +457,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               }),
               question: createRuntimeQuestionPort(im, message),
               reply: replyPort.port,
+              delivery: replyPort.delivery,
             },
           });
           try {
@@ -446,21 +470,32 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mcpServers: liveDanmaku ? [] : binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
-              observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission, {
+              countToolCalls(observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission, {
                 text: message.content,
                 ...(message.sender?.id ? { senderId: message.sender.id } : {}),
                 ...(message.sender?.name ? { senderName: message.sender.name } : {}),
                 conversation: { kind: message.conversation.kind, id: message.conversation.id },
                 ...(message.message?.id ? { messageId: message.message.id } : {}),
                 ...(operationSession?.message.receivedAt !== undefined ? { receivedAt: operationSession.message.receivedAt } : {}),
-              }),
+              }), () => { toolCalls += 1; }),
             );
           } finally {
             replyPort.release();
           }
         }),
       );
-      return { outcome, capabilities, routed };
+      return { outcome, capabilities, routed, toolCalls };
     }, resolveTriggerTimeoutMs(trigger)),
   );
+}
+
+/** Counts the turn's own tool calls (the journal feed carries only this turn's facts). */
+function countToolCalls(
+  observe: ReturnType<typeof observeAgentTurnTrace>,
+  onToolCall: () => void,
+): ReturnType<typeof observeAgentTurnTrace> {
+  return (event) => {
+    if (event.type === 'tool_call') onToolCall();
+    return observe(event);
+  };
 }

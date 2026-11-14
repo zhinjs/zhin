@@ -43,7 +43,9 @@ it('management works with a persistent Database Host while automatic replies are
   expect(await keywordAdd.execute(context as never)).toContain('已添加');
   expect(await keywordList.execute(context as never)).toContain('hello');
   expect(await keywordList.execute(context as never)).toContain('teach-list');
-  expect(rows.size).toBe(1);
+  // The dictionary row plus the plugin-scope index the Console counts keywords from (#1250).
+  expect(rows.size).toBe(2);
+  expect([...rows.keys()].filter(key => key.includes('keyword-conversations'))).toHaveLength(1);
 });
 
 it.each(['ephemeral', 'persistent'])('rejects an oversized UTF-8 dictionary atomically (%s)', async mode => {

@@ -12,6 +12,8 @@ import { redactTraceValue } from '../plugin-runtime/agent-trace-runtime.js';
 import type { ContextBudgetReport } from './context-budget.js';
 import { scrubSecrets } from './trace-redaction.js';
 export { scrubSecrets } from './trace-redaction.js';
+import { renderAgentOutput } from '../outbound/agent-output.js';
+import { claimWithoutToolCall } from './lookup-claim.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
 import { captureRequestBody, DEFAULT_TRACE_MAX_BYTES, RequestBodyTooLargeError, type TurnTraceRequest, type TurnTraceRequestStart } from './request-trace.js';
 
@@ -68,6 +70,17 @@ export interface TurnTraceToolCall {
   readonly error?: string;
   /** Policy that denied the call, for `denied`. */
   readonly policy?: string;
+}
+
+/** Purpose / profile a (sub-)turn's model was selected through. */
+export interface TurnTraceModelSelection {
+  /** `chat` or `agent:<name>`. */
+  readonly purpose: string;
+  readonly profile_id: string;
+  readonly account_id: string;
+  readonly model: string;
+  /** Selection layer (`default`, `agent`, `session`, …) when known. */
+  readonly source?: string;
 }
 
 export interface TurnTraceBudgetExtension {
@@ -155,10 +168,19 @@ export interface TurnTrace {
    * this turn's own `model_calls` / `usage` (#1250). Absent when there are no sub-agents.
    */
   readonly subagent_usage?: TurnTraceUsageTotals;
+  /** Model the turn ran on, when the host selected it for this (sub-)turn (#1250). */
+  readonly model_selection?: TurnTraceModelSelection;
+  /**
+   * The final reply claims a lookup ("查了 / 根据最新 / I checked") but the turn made
+   * no tool call: likely made up (#1250 tool-capability-unverified). Flag only.
+   */
+  readonly claim_without_tool_call?: Readonly<{ phrase: string }>;
   readonly timeline: readonly TurnTraceTimelineEntry[];
   readonly termination: TurnTraceTermination;
   /** Entries dropped because a bounded list was full. */
   readonly dropped: number;
+  /** #1250: side-effect tools that did not run and how the user was told (decision replay). */
+  readonly unexecuted_tool_notice?: Readonly<{ tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>;
 }
 
 /** Facts that are not TurnEvents but belong in the trace. */
@@ -175,6 +197,14 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
   | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
+  | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>
+  /**
+   * Final reply of a turn that does not record `turn_end` (a sub-agent actor turn):
+   * checked for a lookup claim without any tool call, like `turn_end` output.
+   */
+  | Readonly<{ kind: 'final_reply'; text: string }>
+  /** #1250: the user was told that side-effect tools did not run (appended, sent as a follow-up, or that failed). */
+  | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>
   /** The inbound message that started the turn; recorded once (#1250). */
   | Readonly<{ kind: 'trigger'; text: string; sender_id?: string; sender_name?: string; conversation?: string;
       message_id?: string; received_at?: number; merged_messages?: number; queued_ms?: number }>;
@@ -222,6 +252,9 @@ export class TurnTraceCollector {
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
+  #modelSelection: TurnTraceModelSelection | undefined;
+  #claimWithoutToolCall: string | undefined;
+  #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
   #trigger: TurnTraceTrigger | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
@@ -263,6 +296,30 @@ export class TurnTraceCollector {
     this.#children.set(turnId, created);
     this.#addTimeline('subagent_turn', turnId);
     return created;
+  }
+
+  /**
+   * Nests a sub-turn traced by its own collector (a background actor turn that
+   * started inside this turn). Returns false when it cannot be nested any more.
+   */
+  adopt(child: TurnTraceCollector): boolean {
+    if (this.finished || child === this) return false;
+    if (this.#children.has(child.turnId)) return this.#children.get(child.turnId) === child;
+    if (this.#children.size >= MAX_SUBAGENTS) {
+      this.#dropped += 1;
+      return true;
+    }
+    this.#children.set(child.turnId, child);
+    this.#addTimeline('subagent_turn', child.turnId);
+    return true;
+  }
+
+  #checkLookupClaim(reply: string): void {
+    if (this.#claimWithoutToolCall) return;
+    const phrase = claimWithoutToolCall(reply, this.#toolCalls.size);
+    if (!phrase) return;
+    this.#claimWithoutToolCall = phrase;
+    this.#addTimeline('claim_without_tool_call', summarizeText(phrase, 60));
   }
 
   /** Finds this collector or a nested one by turn id. */
@@ -329,6 +386,14 @@ export class TurnTraceCollector {
       if (this.#contextBudget) return;
       this.#contextBudget = note.report;
       this.#addTimeline('context_budget', `~${note.report.total_tokens} tokens (fixed ~${note.report.fixed_tokens})`);
+    } else if (note.kind === 'final_reply') {
+      this.#checkLookupClaim(note.text);
+    } else if (note.kind === 'model_selection') {
+      this.#modelSelection = Object.freeze({ ...note.selection });
+      this.#addTimeline('model_selection', `${note.selection.purpose} → ${note.selection.account_id}/${note.selection.model}`);
+    } else if (note.kind === 'unexecuted_tool_notice') {
+      this.#unexecutedNotice = Object.freeze({ tools: Object.freeze([...note.tools]), delivered: note.delivered });
+      this.#addTimeline('unexecuted_tool_notice', `${note.delivered}: ${note.tools.join(', ')}`);
     } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
@@ -422,9 +487,11 @@ export class TurnTraceCollector {
         this.#addTimeline('tool_cancelled', `${event.toolName}: ${tool.error}`);
         return;
       }
-      case 'turn_end':
+      case 'turn_end': {
+        this.#checkLookupClaim(renderAgentOutput(event.output));
         this.#finish({ status: 'completed' });
         return;
+      }
       case 'error':
         this.#finish({
           status: 'failed',
@@ -491,9 +558,12 @@ export class TurnTraceCollector {
       }),
       subagents: Object.freeze(subagents),
       ...(subagentUsage ? { subagent_usage: subagentUsage } : {}),
+      ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
+      ...(this.#claimWithoutToolCall ? { claim_without_tool_call: Object.freeze({ phrase: this.#claimWithoutToolCall }) } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),
       dropped: this.#dropped,
+      ...(this.#unexecutedNotice ? { unexecuted_tool_notice: this.#unexecutedNotice } : {}),
     });
   }
 

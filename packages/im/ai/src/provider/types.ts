@@ -183,7 +183,9 @@ export interface InferenceClient extends AsyncDisposable {
 
 export type ProviderErrorCode = 'invalid-graph' | 'not-configured' | 'profile-not-found' | 'forbidden'
   | 'stale-reference' | 'unsupported-capability' | 'driver-unavailable' | 'driver-contract-mismatch'
-  | 'operation-closed' | 'multiple-stream-consumers' | 'invalid-plan' | 'plan-conflict';
+  | 'operation-closed' | 'multiple-stream-consumers' | 'invalid-plan' | 'plan-conflict'
+  /** A referenced Service's address would move to another scheme / host / port (#1250). */
+  | 'service-origin-change';
 export class ProviderError extends Error {
   constructor(readonly code: ProviderErrorCode) { super(`AI provider: ${code}`); this.name = 'ProviderError'; }
 }

@@ -333,6 +333,11 @@ function displayName(snapshot: RuntimeSnapshot | undefined, plugin: string): str
   return nodeOf(snapshot, plugin)?.metadata?.displayName ?? plugin;
 }
 
+function displayNameI18n(snapshot: RuntimeSnapshot | undefined, plugin: string): Pick<ConsoleFeatureSummary, 'displayNameI18n'> {
+  const translations = nodeOf(snapshot, plugin)?.metadata?.displayNameI18n;
+  return translations && Object.keys(translations).length ? { displayNameI18n: Object.freeze({ ...translations }) } : {};
+}
+
 function listFeatures(state: State): ConsoleFeatureListResult {
   const adapters = new Set(adapterAliases(state.snapshot));
   const features: ConsoleFeatureSummary[] = [];
@@ -341,7 +346,7 @@ function listFeatures(state: State): ConsoleFeatureListResult {
     let levels: readonly ConsoleFeatureLevel[];
     try { levels = readFeatureLevels(schema); } catch { levels = ['global']; }
     features.push(Object.freeze({
-      plugin, displayName: displayName(state.snapshot, plugin), levels,
+      plugin, displayName: displayName(state.snapshot, plugin), ...displayNameI18n(state.snapshot, plugin), levels,
       hasSchema: businessFields(schema).length > 0, globalEnabled: globallyEnabled(state.document, plugin),
       ...conversationDeclaration(schema),
       ...(adapters.has(plugin) ? { adapter: true } : {}),
@@ -412,7 +417,8 @@ function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixR
         overridden: !!entry });
     }
     const counts = perPlugin.get(feature.plugin);
-    return Object.freeze({ plugin: feature.plugin, displayName: feature.displayName, ...(counts ? { conversationOverrides: counts } : {}),
+    return Object.freeze({ plugin: feature.plugin, displayName: feature.displayName,
+      ...(feature.displayNameI18n ? { displayNameI18n: feature.displayNameI18n } : {}), ...(counts ? { conversationOverrides: counts } : {}),
       global: Object.freeze({ enabled: feature.globalEnabled, overridden: false }), adapters: Object.freeze(adapters) });
   });
   return Object.freeze({

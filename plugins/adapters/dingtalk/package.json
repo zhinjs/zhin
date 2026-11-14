@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
   "version": "1.1.29",
-  "description": "Zhin.js DingTalk (钉钉) adapter for Plugin Runtime (HTTP webhook)",
+  "description": "DingTalk bot adapter: HTTP webhook messaging with signature verification and automatic access-token refresh.",
+  "keywords": [
+    "zhin.js",
+    "dingtalk",
+    "钉钉",
+    "webhook"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,20 +21,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     }
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "dingtalk",
-    "钉钉",
-    "chatbot"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "repository": {
@@ -137,6 +133,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "DingTalk (钉钉) Adapter",
+      "displayNameI18n": {
+        "zh-CN": "钉钉适配器",
+        "en": "DingTalk Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "钉钉机器人适配器：通过 HTTP Webhook 收发消息，签名校验，Access Token 自动刷新。",
+        "en": "DingTalk bot adapter: HTTP webhook messaging with signature verification and automatic access-token refresh."
+      },
+      "category": "adapter"
+    }
   }
 }

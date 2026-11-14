@@ -20,6 +20,7 @@ import {
   type EnvironmentLayers, type EnvironmentLayersPort,
 } from './environment-store.js';
 import type { ProcessInvalidationPlan } from './invalidation-planner.js';
+import type { ManifestWarning } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodePackageResolver } from './package-resolver.js';
 import { immutableConfigSchema } from './plugin-config-schema.js';
@@ -125,6 +126,8 @@ export interface InspectProjectContext {
   readonly onInitialSchemas: (schemas: ReadonlyMap<string, JsonSchema>) => void;
   /** Live committed snapshot for Plugin `configFor` / `isEnabledFor` (ADR 0050). */
   readonly readCommittedSnapshot?: () => RuntimeSnapshot;
+  /** Tolerated manifest problems found while loading packages (see `NodePackageResolverOptions`). */
+  readonly onManifestWarning?: (warning: ManifestWarning) => void;
 }
 
 export async function inspectRuntimeProject(
@@ -136,7 +139,7 @@ export async function inspectRuntimeProject(
   if (document === undefined && ctx.snapshot.generation === 0) await ctx.refreshConfigDocument();
   const activeDocument = document ?? ctx.getConfigDocument();
   const configSnapshot = ctx.getConfigSnapshot();
-  const resolver = await NodePackageResolver.create(ctx.projectRoot);
+  const resolver = await NodePackageResolver.create(ctx.projectRoot, ctx.onManifestWarning ? { onManifestWarning: ctx.onManifestWarning } : {});
   const graph = await new ProjectGraphService(resolver, {
     disabledPluginInstanceKeys: ctx.disabledPluginInstanceKeys,
   }).inspect(ctx.projectRoot, activeDocument, pluginOrder ?? (ctx.snapshot.generation > 0 && activeDocument

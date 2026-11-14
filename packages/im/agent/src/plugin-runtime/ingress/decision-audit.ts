@@ -5,6 +5,7 @@
  * 现有日志 `op` 全部保留，审计是额外的一行结构化记录。
  */
 import {
+  DECISION_PARENT_KEY,
   sceneKeyOf,
   speakBlockReasonCode,
   type DecisionActor,
@@ -18,6 +19,8 @@ import {
   type SpeakBlockReason,
   type TurnOutcome,
 } from '../../index.js';
+import { renderAgentOutput } from '../../outbound/agent-output.js';
+import { claimWithoutToolCall } from '../../trace/lookup-claim.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('agent');
@@ -77,21 +80,26 @@ export function createDecisionAudit(writer: DecisionEventLog | undefined, scope:
 }
 
 /**
- * #995 / #997：会话画像判定 Bot 不能发言 → `speak_gate`（deny）+ `model_skip`（skip），码同源于
+ * #995 / #997：会话画像判定 Bot 不能发言 → `speak_gate`（deny）+ `model_skip`（skip，payload `parent: 'speak_gate'`），码同源于
  * {@link speakBlockReasonCode}；`restricted:` 后缀进 `reason_detail`。
  */
 export function auditCannotSpeak(audit: DecisionAudit, reason: SpeakBlockReason, payload: DecisionPayload = {}): void {
   const { code, detail } = speakBlockReasonCode(reason);
   audit({ kind: 'speak_gate', outcome: 'deny', reasonCode: code, reasonDetail: detail, payload: { ...payload, blocked: reason }, actor: 'policy' });
-  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: code, reasonDetail: detail, payload });
+  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: code, reasonDetail: detail, payload: { ...payload, [DECISION_PARENT_KEY]: 'speak_gate' } });
 }
 
 /** 模型回合结束的一行摘要（不记提示词、不记输出正文）。 */
-export function auditModelRun(audit: DecisionAudit, outcome: TurnOutcome, payload: DecisionPayload = {}): void {
+export function auditModelRun(audit: DecisionAudit, outcome: TurnOutcome, payload: DecisionPayload = {}, toolCalls?: number): void {
   const usage = outcome.usage as Partial<Record<'prompt_tokens' | 'completion_tokens', unknown>> | undefined;
+  // #1250 tool-capability-unverified: a claimed lookup without any tool call is flagged for replay only.
+  const claim = outcome.status === 'completed' && toolCalls !== undefined
+    ? claimWithoutToolCall(renderAgentOutput(outcome.output), toolCalls) : undefined;
   const summary = {
     ...payload,
     status: outcome.status,
+    ...(toolCalls !== undefined ? { toolCalls } : {}),
+    ...(claim ? { claimWithoutToolCall: true, claimPhrase: claim } : {}),
     ...(typeof usage?.prompt_tokens === 'number' ? { inputTokens: usage.prompt_tokens } : {}),
     ...(typeof usage?.completion_tokens === 'number' ? { outputTokens: usage.completion_tokens } : {}),
   };

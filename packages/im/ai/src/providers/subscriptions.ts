@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { defineProvider, type ProviderSchema } from '../provider/driver.js';
 import type { ModelDefinition, ProviderService } from '../provider/types.js';
-import { fixedServiceSchema, sdkProfileSchema, type StandardModelParameters, type FixedServiceOptions } from './schema.js';
+import { fixedServiceSchema, codexServiceSchema, sdkProfileSchema, CODEX_DEFAULT_CLIENT_VERSION, type StandardModelParameters, type FixedServiceOptions, type CodexServiceOptions } from './schema.js';
 import { sdkExecution, ProviderProtocolError } from './sdk-execution.js';
 import { declaredModels, modelContracts } from './api-key.js';
 import { codexOAuth, claudeOAuth } from './oauth.js';
@@ -14,12 +14,18 @@ const version = (require('../../package.json') as { version: string }).version;
 const userAgent = `zhin.js-ai/${version}`;
 
 const codexBase = 'https://chatgpt.com/backend-api/codex';
+/** Public Claude API model IDs offered as unverified suggestions; subscription access is checked only by a real call. */
+const CLAUDE_SUBSCRIPTION_MODEL_SUGGESTIONS = Object.freeze([
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (suggestion)' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (suggestion)' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (suggestion)' },
+].map(item => Object.freeze(item)));
 const codexCacheRouting = 'driver';
 const codexProtocols = [{ name: 'codex-responses', kind: 'language' }] as const;
 const claudeProtocols = [{ name: 'anthropic-messages', kind: 'language' }] as const;
 type ProfileInput = Readonly<{ service: ProviderService<FixedServiceOptions>; model: ModelDefinition }>;
 type CodexParameters = Omit<StandardModelParameters, 'temperature' | 'maxOutputTokens' | 'imageGeneration' | 'safetySettings'>;
-function codexProfileSchema({ model }: ProfileInput): ProviderSchema<CodexParameters> {
+function codexProfileSchema({ model }: Readonly<{ service: ProviderService<CodexServiceOptions>; model: ModelDefinition }>): ProviderSchema<CodexParameters> {
   if (model.protocol !== codexProtocols[0].name || model.kinds.length !== 1 || model.kinds[0] !== 'language') throw new Error('Invalid Profile protocol');
   const schema = sdkProfileSchema({ family: 'openai', model, codex: true });
   return { ...schema, parse(input: unknown) { try { return schema.parse(input); } catch { throw new ProviderProtocolError('unsupported-parameter'); } } };
@@ -35,11 +41,21 @@ export const codexProvider = defineProvider({
   identity: service => serviceIdentity({ product: 'codex-subscription', service: service.options }),
   modelContracts: modelContracts(codexProtocols),
   describeModel: ({ service, model, profile }) => ({ ...executionTraits({ family: 'openai', service: service.options, parameters: profile.parameters, model }), promptCacheRouting: codexCacheRouting }),
-  serviceSchema: fixedServiceSchema(codexBase),
+  serviceSchema: codexServiceSchema(codexBase),
   profileSchema: codexProfileSchema,
   authentication: { methods: ['oauth'], oauth: codexOAuth },
-  targets: () => ({ authentication: ['https://auth.openai.com/oauth'], inference: [codexBase] }),
+  targets: () => ({ authentication: ['https://auth.openai.com/oauth'], inference: [codexBase], discovery: [`${codexBase}/models`] }),
   models: service => declaredModels(service, codexProtocols),
+  // The Codex CLI reads its model picker from `GET {codex base}/models?client_version=…` (openai/codex,
+  // codex-rs/codex-api/src/endpoint/models.rs); the backend filters by client version, so a Codex CLI
+  // version is reported (Service option `codexClientVersion`, default CODEX_DEFAULT_CLIENT_VERSION), never zhin's own.
+  discover: input => discoverModels(input, {
+    endpoint: `${codexBase}/models?client_version=${encodeURIComponent(input.service.options.codexClientVersion ?? CODEX_DEFAULT_CLIENT_VERSION)}`, format: 'codex', bearer: true,
+    headers(grant) {
+      const account = grant.metadata?.chatgptAccountId;
+      return { 'user-agent': userAgent, originator: 'zhin', ...(typeof account === 'string' ? { 'chatgpt-account-id': account } : {}) };
+    },
+  }),
   createExecution(input) {
     return sdkExecution(input, {
       family: 'openai', api: 'responses', sessionHeader: 'session_id', forceStreamingGeneration: true, promptCacheRouting: codexCacheRouting,
@@ -89,6 +105,8 @@ export const claudeSubscriptionProvider = defineProvider({
   authentication: { methods: ['oauth'], oauth: claudeOAuth },
   targets: () => ({ authentication: ['https://api.anthropic.com/v1/oauth'], inference: ['https://api.anthropic.com/v1/messages'] }),
   models: service => declaredModels(service, claudeProtocols),
+  // No catalogue endpoint is confirmed for subscription OAuth tokens, so the Console gets suggestions, not discovery.
+  modelSuggestions: CLAUDE_SUBSCRIPTION_MODEL_SUGGESTIONS,
   createExecution: input => sdkExecution(input, {
     family: 'anthropic', bearer: true,
     credentialTarget: 'https://api.anthropic.com/v1/messages',

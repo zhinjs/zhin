@@ -53,7 +53,7 @@ describe('create-zhin -y 默认值（ADR 0053：最小项目）', () => {
     const workspace = parse(await fs.readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8'));
     expect(workspace).toMatchObject({
       strictPeerDependencies: false,
-      allowBuilds: { esbuild: true },
+      allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
     });
     expect(manifest.engines.node).toBe('>=22.19.0');
   });

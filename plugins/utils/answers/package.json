@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-answers",
   "version": "0.0.17",
-  "description": "Zhin.js 答案之书、趣味选择题与交规小测（原创内容，Plugin Runtime）",
+  "description": "The Book of Answers, fun either-or questions and a driving-theory quiz, all original content.",
+  "keywords": [
+    "zhin.js",
+    "book-of-answers",
+    "quiz",
+    "fun"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -29,20 +39,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "fun",
-    "quiz",
-    "answers"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -89,7 +85,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "答案之书",
+      "displayNameI18n": {
+        "zh-CN": "答案之书",
+        "en": "Book of Answers"
+      },
+      "descriptionI18n": {
+        "zh-CN": "答案之书、趣味选择题与科目一交规小测，题库原创。",
+        "en": "The Book of Answers, fun either-or questions and a driving-theory quiz, all original content."
+      },
+      "category": "entertainment"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

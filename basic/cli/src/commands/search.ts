@@ -1,6 +1,22 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
+import {
+  PLUGIN_CATEGORIES,
+  PLUGIN_CATEGORY_LABELS,
+  informativeKeywords,
+  packageAuthorName,
+  pickLocalizedText,
+  readPluginMarketplaceMetadata,
+} from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
+import {
+  findInstalledPackageRoot,
+  formatConfigField,
+  manifestFeatureNames,
+  packageAuthors,
+  readPackageCapabilities,
+} from '../utils/package-capabilities.js';
 import {
   classifyPackage,
   fetchWeeklyDownloads,
@@ -22,8 +38,7 @@ interface SearchOptions {
  */
 export async function runPluginSearch(keyword: string | undefined, options: SearchOptions) {
   try {
-    logger.info(formatCompact( { cmd: 'search', op: 'search' }));
-    logger.log('');
+    logger.debug(formatCompact( { cmd: 'search', op: 'search' }));
 
     // 构建搜索查询
     let searchQuery = 'zhin';
@@ -47,48 +62,46 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
 
       // 显示结果
       if (filteredResults.length === 0) {
-        logger.warn(formatCompact( { cmd: 'search', op: 'no_results' }));
-        logger.log('');
-        logger.log('💡 提示：');
-        logger.log('  - 尝试使用不同的关键词');
-        logger.log('  - 在 npm 按关键词浏览: https://www.npmjs.com/search?q=keywords%3Azhin.js');
-        logger.log('  - 在 GitHub 搜索: https://github.com/topics/zhin.js');
+        logger.warn('没有找到匹配的插件');
+        output.line('💡 提示：');
+        output.line('  - 尝试使用不同的关键词');
+        output.line('  - 在 npm 按关键词浏览: https://www.npmjs.com/search?q=keywords%3Azhin.js');
+        output.line('  - 在 GitHub 搜索: https://github.com/topics/zhin.js');
         return;
       }
 
-      logger.success(`找到 ${filteredResults.length} 个插件：`);
-      logger.log('');
+      output.line(`找到 ${filteredResults.length} 个插件：`);
+      output.line();
 
       // 显示插件列表
       filteredResults.forEach((pkg, index: number) => {
         const name = pkg.name;
         const version = pkg.version;
-        const description = pkg.description || '无描述';
-        const author = pkg.publisher?.username || '未知';
+        const market = readPluginMarketplaceMetadata(pkg.zhin);
+        const description = pickLocalizedText(market.descriptionI18n, 'zh-CN', pkg.description) || '无描述';
+        // 作者取 package.json 的 author / maintainers；publisher 是发布账号（CI 发布时为机器人），不显示。
+        const author = packageAuthorName(pkg) || '未知';
         const date = pkg.date ? new Date(pkg.date).toLocaleDateString('zh-CN') : '未知';
 
         const badge = formatPackageBadge(classifyPackage(pkg));
 
-        logger.log(`${index + 1}. ${badge} ${name}@${version}`);
-        logger.log(`   ${description}`);
-        logger.log(`   作者: ${author} | 更新: ${date}`);
+        output.line(`${index + 1}. ${badge} ${name}@${version}`);
+        output.line(`   ${description}`);
+        output.line(`   作者: ${author} | 更新: ${date}`);
 
         // 显示安装命令
-        logger.log(`   安装: zhin packages install ${name}`);
-        logger.log('');
+        output.line(`   安装: zhin packages install ${name}`);
+        output.line();
       });
 
-      logger.log('💡 提示：');
-      logger.log('  - 使用 zhin packages info <package> 查看插件详情');
-      logger.log('  - 使用 zhin packages install <package> 安装插件');
-      logger.log('  - 访问 https://www.npmjs.com/search?q=keywords%3Azhin.js 查看完整列表');
+      output.line('💡 提示：');
+      output.line('  - 使用 zhin packages info <package> 查看插件详情');
+      output.line('  - 使用 zhin packages install <package> 安装插件');
+      output.line('  - 访问 https://www.npmjs.com/search?q=keywords%3Azhin.js 查看完整列表');
 
     } catch (error) {
       logger.error('搜索失败，请检查网络连接');
-      logger.log('');
-      logger.log('💡 替代方案：');
-      logger.log('  - 访问 npm: https://www.npmjs.com/search?q=zhin.js');
-      logger.log('  - 访问 GitHub: https://github.com/topics/zhin.js');
+      logger.info('💡 替代方案：\n  - 访问 npm: https://www.npmjs.com/search?q=zhin.js\n  - 访问 GitHub: https://github.com/topics/zhin.js');
       throw error;
     }
 
@@ -103,8 +116,7 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
  */
 export async function runPluginInfo(packageName: string) {
   try {
-    logger.info(formatCompact( { cmd: 'info', op: 'fetch', package: packageName }));
-    logger.log('');
+    logger.debug(formatCompact( { cmd: 'info', op: 'fetch', package: packageName }));
 
     try {
       const info = npmView(packageName);
@@ -112,90 +124,89 @@ export async function runPluginInfo(packageName: string) {
       const badge = formatPackageBadge(classifyPackage(info));
 
       // 显示插件信息
-      logger.success(`插件信息： ${badge}`);
-      logger.log('');
+      output.line(`插件信息： ${badge}`);
+      output.line();
 
-      logger.log(`📦 名称: ${info.name}`);
-      logger.log(`📝 版本: ${info.version}`);
-      logger.log(`📄 描述: ${info.description || '无'}`);
-      logger.log(`👤 作者: ${info.author?.name || info.maintainers?.[0]?.name || '未知'}`);
+      output.line(`📦 名称: ${info.name}`);
+      output.line(`📝 版本: ${info.version}`);
+      const market = readPluginMarketplaceMetadata(info.zhin);
+      const displayName = pickLocalizedText(market.displayNameI18n, 'zh-CN', market.displayName);
+      if (displayName) output.line(`🏷️  显示名称: ${displayName}`);
+      output.line(`📄 描述: ${pickLocalizedText(market.descriptionI18n, 'zh-CN', info.description) || '无'}`);
+      if (market.category) {
+        output.line(`🗂️  分类: ${PLUGIN_CATEGORY_LABELS[market.category]['zh-CN']}（${market.category}）`);
+      }
+      // packageAuthors 取 npm person 字符串 `<` / `(` 之前的部分（CodeQL 安全写法），不显示发布账号。
+      const authors = packageAuthors(info);
+      output.line(`👤 作者: ${authors.length > 0 ? authors.join(', ') : '未知'}`);
       const publishedAt = info.time?.modified ?? info.time?.created;
-      logger.log(`📅 发布时间: ${publishedAt
+      output.line(`📅 发布时间: ${publishedAt
         ? new Date(publishedAt).toLocaleDateString('zh-CN')
         : '未知'}`);
       if (weeklyDownloads !== null) {
-        logger.log(`📈 周下载量: ${weeklyDownloads}`);
+        output.line(`📈 周下载量: ${weeklyDownloads}`);
       }
 
-      const keywords = info.keywords ?? [];
+      const keywords = informativeKeywords(info.keywords);
       if (keywords.length > 0) {
-        logger.log(`🏷️  标签: ${keywords.join(', ')}`);
+        output.line(`🏷️  标签: ${keywords.join(', ')}`);
       }
 
       if (info.homepage) {
-        logger.log(`🏠 主页: ${info.homepage}`);
+        output.line(`🏠 主页: ${info.homepage}`);
       }
 
       if (info.repository?.url) {
-        logger.log(`📂 仓库: ${info.repository.url.replace(/^git\+/, '').replace(/\.git$/, '')}`);
+        output.line(`📂 仓库: ${info.repository.url.replace(/^git\+/, '').replace(/\.git$/, '')}`);
       }
 
       if (info.bugs?.url) {
-        logger.log(`🐛 问题: ${info.bugs.url}`);
+        output.line(`🐛 问题: ${info.bugs.url}`);
       }
 
       if (info.license) {
-        logger.log(`⚖️  许可: ${info.license}`);
+        output.line(`⚖️  许可: ${info.license}`);
       }
 
       // 显示依赖
       const dependencies = { ...(info.dependencies || {}), ...(info.peerDependencies ? Object.fromEntries(Object.entries(info.peerDependencies).map(([k, v]) => [`${k} (peer)`, v])) : {}) };
       const depEntries = Object.entries(dependencies);
       if (depEntries.length > 0) {
-        logger.log('');
-        logger.log('🔗 依赖:');
+        output.line();
+        output.line('🔗 依赖:');
         depEntries.forEach(([dep, ver]) => {
-          logger.log(`   ${dep}: ${ver}`);
+          output.line(`   ${dep}: ${ver}`);
         });
       }
 
-      // Zhin 特定信息
-      if (info.zhin) {
-        logger.log('');
-        logger.log('🎯 Zhin 信息:');
-        if (info.zhin.displayName) {
-          logger.log(`   显示名称: ${info.zhin.displayName}`);
-        }
-        if (info.zhin.category) {
-          logger.log(`   分类: ${info.zhin.category}`);
-        }
-        const features = info.zhin.features ?? [];
-        if (features.length > 0) {
-          logger.log(`   功能: ${features.join(', ')}`);
-        }
+      // Zhin 特定信息（显示名称与分类已在上方按市场元数据展示）
+      const features = manifestFeatureNames((info.zhin as { features?: unknown } | undefined)?.features);
+      if (features.length > 0) {
+        output.line();
+        output.line('🎯 Zhin 信息:');
+        output.line(`   功能: ${features.join(', ')}`);
       }
+
+      await printPackageCapabilities(info.name);
 
       // 官方适配器：追加配置入口提示
       const adapterHint = adapterConfigHintForPackage(info.name);
       if (adapterHint) {
-        logger.log('');
-        logger.log('🧭 适配器配置入口:');
-        logger.log(`   ${adapterHint}`);
+        output.line();
+        output.line('🧭 适配器配置入口:');
+        output.line(`   ${adapterHint}`);
       }
 
       // 显示安装命令
-      logger.log('');
-      logger.log('📥 安装命令:');
-      logger.log(`   zhin packages install ${info.name}`);
-      logger.log(`   # 或`);
-      logger.log(`   pnpm add ${info.name}`);
+      output.line();
+      output.line('📥 安装命令:');
+      output.line(`   zhin packages install ${info.name}`);
+      output.line(`   # 或`);
+      output.line(`   pnpm add ${info.name}`);
 
     } catch (error) {
       logger.error(`未找到插件: ${packageName}`);
-      logger.log('');
-      logger.log('💡 提示：');
-      logger.log('  - 检查插件名称是否正确');
-      logger.log('  - 使用 zhin packages search 搜索插件');
+      logger.info('💡 提示：\n  - 检查插件名称是否正确\n  - 使用 zhin packages search 搜索插件');
       throw error;
     }
 
@@ -205,10 +216,31 @@ export async function runPluginInfo(packageName: string) {
   }
 }
 
+/**
+ * 命令 / Agent 工具 / 配置项（#1250）：从当前项目已安装的包静态读取（约定目录与 schema.json），
+ * 不执行插件代码；未安装时说明如何查看。
+ */
+export async function printPackageCapabilities(packageName: string, cwd = process.cwd()): Promise<void> {
+  const root = findInstalledPackageRoot(packageName, cwd);
+  output.line();
+  if (!root) {
+    output.line('🧩 命令 / Agent 工具 / 配置项: 未安装到当前项目，安装后再运行本命令即可查看');
+    return;
+  }
+  const capabilities = await readPackageCapabilities(root);
+  output.line(`⌨️  命令${capabilities.commands.length ? `（${capabilities.commands.length}）` : ''}:`);
+  output.line(...(capabilities.commands.length ? capabilities.commands.map((command) => `   ${command}`) : ['   无']));
+  output.line(`🛠️  Agent 工具${capabilities.tools.length ? `（${capabilities.tools.length}）` : ''}:`);
+  output.line(...(capabilities.tools.length ? capabilities.tools.map((tool) => `   ${tool}`) : ['   无']));
+  output.line('⚙️  配置项:');
+  if (capabilities.config === null) output.line('   未声明（包内没有 schema.json）');
+  else output.line(...(capabilities.config.length ? capabilities.config.map((field) => `   ${formatConfigField(field)}`) : ['   无']));
+}
+
 export const searchCommand = new Command('search')
   .description('搜索 Zhin.js 插件（等价于 zhin packages search）')
   .argument('[keyword]', '搜索关键词')
-  .option('-c, --category <category>', '按分类搜索 (utility|service|game|adapter|admin|ai)')
+  .option('-c, --category <category>', `按分类搜索 (${PLUGIN_CATEGORIES.join('|')})`)
   .option('-l, --limit <number>', '限制结果数量', '20')
   .option('--official', '仅显示官方插件', false)
   .action(runPluginSearch);

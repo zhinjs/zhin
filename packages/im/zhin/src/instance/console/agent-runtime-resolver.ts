@@ -87,6 +87,15 @@ export function listMcpServerStatus(projectRoot: string, snapshot: RuntimeSnapsh
   return mergeMcpServers(new AgentConfigProjection(projectRoot), snapshot).rows;
 }
 
+/**
+ * Row `status` (#1250), so a "not connected" row always says why:
+ * - `connected`: the Agent holds a live connection;
+ * - `failed`: the last connect failed — `lastError` carries `{ category, message, exitCode?, at }`;
+ * - `idle`: loaded by the Agent but not connected yet (MCP connects lazily, on the first turn that uses it);
+ * - `not_loaded`: in the configuration but not loaded by the running Agent (Agent off, or not reloaded yet).
+ */
+export type McpServerRowStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';
+
 function mergeMcpServers(
   configuration: AgentConfigProjection,
   snapshot: RuntimeSnapshot,
@@ -98,14 +107,20 @@ function mergeMcpServers(
       connected: false,
       toolCount: 0,
       transport: entry.transport,
+      status: 'not_loaded' satisfies McpServerRowStatus,
     });
   }
   const introspection = resolveCurrentAgentIntrospection(snapshot);
   for (const entry of introspection?.listMcpServers() ?? []) {
+    const configured = rows.get(entry.name);
+    const status: McpServerRowStatus = entry.connected ? 'connected' : entry.lastError ? 'failed' : 'idle';
     rows.set(entry.name, {
       name: entry.name,
       connected: entry.connected,
       toolCount: entry.toolCount,
+      ...(configured?.transport === undefined ? {} : { transport: configured.transport }),
+      status,
+      ...(!entry.connected && entry.lastError ? { lastError: entry.lastError } : {}),
     });
   }
   return { rows: [...rows.values()] };

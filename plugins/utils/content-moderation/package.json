@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-content-moderation",
   "version": "1.1.28",
-  "description": "Content moderation plugin for Zhin.js — inbound/outbound multi-source scanning (Plugin Runtime)",
+  "description": "Multi-source scanning of inbound and outbound messages with configurable severity actions.",
+  "keywords": [
+    "zhin.js",
+    "moderation",
+    "content-safety",
+    "filter"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -30,21 +40,6 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
-  },
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "plugin",
-    "moderation",
-    "content-safety",
-    "chatbot",
-    "im"
-  ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
   "dependencies": {
@@ -105,7 +100,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Content Moderation",
+      "displayNameI18n": {
+        "zh-CN": "内容审核",
+        "en": "Content Moderation"
+      },
+      "descriptionI18n": {
+        "zh-CN": "入站 / 出站多源扫描，按可配置的严重程度执行处置动作。",
+        "en": "Multi-source scanning of inbound and outbound messages with configurable severity actions."
+      },
+      "category": "moderation"
+    }
   },
   "peerDependencies": {
     "@zhin.js/middleware": "workspace:^",

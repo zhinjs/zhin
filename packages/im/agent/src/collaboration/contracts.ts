@@ -14,10 +14,26 @@
  * receives the same tools bound to its own mail, so any actor can ask,
  * delegate and tell within its attenuated authority.
  */
-import type { ActorId, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
+import type { ActorId, ActorTurnResult, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
+import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 
-/** Model chosen for the root turn; actor turns reuse it. */
+/**
+ * Host-owned model operations for actor turns (#1250): each actor turn opens
+ * its own operation, independent of the root turn's (which closes when the
+ * root turn ends), selected by `agent:<agent>` when configured, else chat.
+ */
+export interface ActorModelSource {
+  acquire(input: Readonly<{
+    /** Sub-agent purpose key; omitted for the entry actor, which keeps the root turn's purpose. */
+    agent?: SubAgentModelKey;
+    operationId: string;
+    sessionKey: string;
+    signal: AbortSignal;
+  }>): Promise<ModelExecutionScope>;
+}
+
+/** Model chosen for the root turn; actor turns reuse it without an {@link ActorModelSource}. */
 export interface ActorModelSelection {
   readonly modelId: string;
   readonly modelCandidates: readonly string[];
@@ -36,6 +52,10 @@ export interface CollaborationAgent {
   readonly maxIterations?: number;
   /** Default collaboration budget from `agents/<name>/agent.json` `collaboration.budget`. */
   readonly defaultBudget?: Partial<BudgetAmounts>;
+  /** Plugin-qualified name (`<plugin>__<agent>`): the canonical `purposes.agents` key. */
+  readonly qualifiedName?: string;
+  /** Another registered sub-agent has the same bare name (only the first one is in the directory). */
+  readonly bareNameShared?: boolean;
 }
 
 export interface CollaborationDirectory {
@@ -86,3 +106,16 @@ export type CreateCollaborationTools = (
 ) => readonly ToolCapability[];
 
 export { type ActorTurnRunner } from '@zhin.js/harness';
+
+/**
+ * An actor turn's result as the agent host sees it. `content` is what the
+ * delegating model reads back (with model-facing notes such as the budget stop
+ * or empty-reply note); `reply` is only what the actor itself said, the part a
+ * human may be shown. Absent when the actor produced no reply.
+ */
+export interface ActorTurnOutcome extends ActorTurnResult {
+  readonly reply?: string;
+}
+
+/** {@link ActorTurnRunner} that reports the user-facing {@link ActorTurnOutcome.reply}. */
+export type AgentActorTurnRunner = (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => Promise<ActorTurnOutcome>;

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from "../utils/logger.js";
+import { output } from "../utils/output.js";
 import fs from "fs-extra";
 import path from "path";
 import {
@@ -76,7 +77,7 @@ export const buildCommand = new Command("build")
           logger.error(
             "当前目录不是 Zhin workspace 根（需存在 pnpm-workspace.yaml，且 package.json 的 dependencies / devDependencies / peerDependencies 之一声明 zhin.js），且也不满足插件/应用智能构建条件。",
           );
-          logger.log(
+          output.line(
             "若要在 monorepo 根执行 zhin build：请在根 package.json 声明 zhin.js。若你在开发独立插件：请在插件根目录执行，并显式声明 package.json#zhin。",
           );
           process.exit(1);

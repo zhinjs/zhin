@@ -349,6 +349,10 @@ export class HostInference {
             source: lease.value.tree.get(owner)?.packageName ?? String(owner),
             authentication: definition.authentication.methods,
             discovery: typeof definition.discover === 'function',
+            ...(definition.authentication.oauth?.requiresClientSecret ? { requiresClientSecret: true } : {}),
+            ...(definition.modelSuggestions?.length
+              ? { modelSuggestions: definition.modelSuggestions.map(({ id, label }) => ({ id, ...(label ? { label } : {}) })) }
+              : {}),
             ...(definition.serviceSchema.inputSchema
               ? { serviceSchema: definition.serviceSchema.inputSchema }
               : {}),

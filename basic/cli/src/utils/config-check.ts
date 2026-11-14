@@ -46,15 +46,36 @@ function pushIssue(
   issues.push(issue);
 }
 
+/** Instance aliases in `disable_plugins`; each names the top-level business block of that instance. */
+function disabledPluginInstances(config: Record<string, unknown>): ReadonlySet<string> {
+  return new Set(Array.isArray(config.disable_plugins)
+    ? config.disable_plugins.filter((key): key is string => typeof key === 'string')
+    : []);
+}
+
 function collectEnvRefs(
   value: unknown,
   keyPath: string,
   env: Record<string, string | undefined>,
   issues: ConfigIssue[],
+  /** Set while walking the block of a plugin instance listed in `disable_plugins`. */
+  disabledInstance?: string,
 ): void {
   if (typeof value === 'string') {
     expandEnvironmentValue(value, (envKey) => env[envKey], (envKey) => {
       const databaseReference = keyPath === 'database' || keyPath.startsWith('database.');
+      if (disabledInstance !== undefined) {
+        // The plugin never loads while disabled: not a problem now, only before re-enabling it.
+        pushIssue(issues, {
+          severity: 'info',
+          code: 'env.unresolved_disabled_plugin',
+          path: keyPath,
+          message: `环境变量 ${envKey} 未设置（${keyPath}）；插件实例 ${disabledInstance} 已停用（disable_plugins），启用前再设置即可`,
+          fixable: false,
+          fixHint: `启用 ${disabledInstance} 前在 .env 中设置 ${envKey}=...`,
+        });
+        return '';
+      }
       pushIssue(issues, {
         severity: databaseReference ? 'error' : 'warn',
         code: databaseReference ? 'database.env_unresolved' : 'env.unresolved',
@@ -70,12 +91,13 @@ function collectEnvRefs(
     return;
   }
   if (Array.isArray(value)) {
-    value.forEach((item, index) => collectEnvRefs(item, `${keyPath}[${index}]`, env, issues));
+    value.forEach((item, index) => collectEnvRefs(item, `${keyPath}[${index}]`, env, issues, disabledInstance));
     return;
   }
   if (value && typeof value === 'object') {
+    const disabled = keyPath === '' ? disabledPluginInstances(value as Record<string, unknown>) : undefined;
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      collectEnvRefs(nested, keyPath ? `${keyPath}.${key}` : key, env, issues);
+      collectEnvRefs(nested, keyPath ? `${keyPath}.${key}` : key, env, issues, disabled?.has(key) ? key : disabledInstance);
     }
   }
 }

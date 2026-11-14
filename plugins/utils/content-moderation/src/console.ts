@@ -38,6 +38,41 @@ export interface ModerationCheckTextResult {
   readonly categories: readonly string[];
   readonly matchesCount: number;
   readonly message: string;
+  /** Matched text fragments (deduplicated, in order). Optional for older callers. */
+  readonly hits?: readonly string[];
+  /** Sources that flagged the text, with their severity and reason. */
+  readonly flaggedSources?: readonly { readonly sourceId: string; readonly severity: string; readonly reason?: string }[];
+  /** Localized summaries for the Console page (`$i18n`). */
+  readonly decisionI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly severityI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly actionsI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly hitsText?: string;
+  readonly sourcesText?: string;
+}
+
+const DECISION_LABELS: Readonly<Record<ModerationCheckTextResult['decision'], Readonly<Record<'zh-CN' | 'en', string>>>> = {
+  allow: { 'zh-CN': '通过', en: 'Allowed' },
+  flag: { 'zh-CN': '标记（不拦截）', en: 'Flagged (not blocked)' },
+  block: { 'zh-CN': '拦截', en: 'Blocked' },
+};
+const SEVERITY_LABELS: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+  pass: { 'zh-CN': '无风险', en: 'None' },
+  low: { 'zh-CN': '低', en: 'Low' },
+  medium: { 'zh-CN': '中', en: 'Medium' },
+  high: { 'zh-CN': '高', en: 'High' },
+  critical: { 'zh-CN': '严重', en: 'Critical' },
+};
+const ACTION_LABELS: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+  allow: { 'zh-CN': '放行', en: 'allow' },
+  log: { 'zh-CN': '记录日志', en: 'log' },
+  reply: { 'zh-CN': '回复提醒', en: 'reply with a warning' },
+  redact: { 'zh-CN': '打码', en: 'redact' },
+  drop: { 'zh-CN': '丢弃消息', en: 'drop the message' },
+  recall: { 'zh-CN': '撤回消息', en: 'recall the message' },
+};
+
+function labelOf(table: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>>, key: string) {
+  return table[key] ?? { 'zh-CN': key, en: key };
 }
 
 type RuntimeWithUse = {
@@ -117,6 +152,24 @@ async function handleCheckText(
     .filter((source) => source.severity !== 'pass')
     .map((source) => `${source.sourceId}:${source.severity}`);
   const matchesCount = evaluation.matches?.length ?? 0;
+  const hits = [...new Set((evaluation.matches ?? [])
+    .map((match) => text.slice(Math.max(0, match.start), Math.max(0, match.end)))
+    .filter((hit) => hit.length > 0))];
+  const flaggedSources = (evaluation.sources ?? [])
+    .filter((source) => source.severity !== 'pass')
+    .map((source) => ({
+      sourceId: source.sourceId,
+      severity: source.severity,
+      ...(source.reason ? { reason: source.reason } : {}),
+    }));
+  const join = (locale: 'zh-CN' | 'en', values: readonly string[]) => values.join(locale === 'en' ? ', ' : '、');
+  const actionsI18n = {
+    'zh-CN': actions.length ? join('zh-CN', actions.map((action) => labelOf(ACTION_LABELS, action)['zh-CN'])) : '无',
+    en: actions.length ? join('en', actions.map((action) => labelOf(ACTION_LABELS, action).en)) : 'none',
+  };
+  const sourcesText = flaggedSources
+    .map((source) => `${source.sourceId}（${source.severity}${source.reason ? `：${source.reason}` : ''}）`)
+    .join('、');
 
   return {
     passed,
@@ -125,10 +178,17 @@ async function handleCheckText(
     actions: [...actions],
     categories,
     matchesCount,
+    hits,
+    flaggedSources,
+    decisionI18n: DECISION_LABELS[decision],
+    severityI18n: labelOf(SEVERITY_LABELS, severity),
+    actionsI18n,
+    hitsText: hits.join('、'),
+    sourcesText,
     message: passed
       ? 'Passed moderation check (allow)'
       : `Moderation decision: ${decision} (severity: ${severity}, matches: ${matchesCount})`,
-  };
+  } as unknown as PluginConsoleRpcJson;
 }
 
 export function createModerationConsoleRpc(

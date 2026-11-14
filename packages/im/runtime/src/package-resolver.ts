@@ -1,6 +1,6 @@
 import { access, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve } from 'node:path';
-import { parsePackageJson, type PackageJson } from './manifest.js';
+import { parsePackageJson, type ManifestWarning, type PackageJson } from './manifest.js';
 
 export interface ResolvedPackage {
   readonly name: string;
@@ -24,12 +24,39 @@ export class PackageResolutionError extends Error {
   }
 }
 
+export interface NodePackageResolverOptions {
+  /**
+   * Receives tolerated manifest problems (marketplace-only metadata that was dropped). Defaults to
+   * {@link emitManifestWarning} (a Node process warning of type `ZhinManifestWarning`).
+   */
+  readonly onManifestWarning?: (warning: ManifestWarning) => void;
+}
+
+/** Default sink for tolerated manifest problems: a structured Node process warning. */
+export function emitManifestWarning(warning: ManifestWarning): void {
+  process.emitWarning(warning.message, {
+    type: 'ZhinManifestWarning',
+    code: 'ZHIN_MANIFEST_METADATA_DROPPED',
+    detail: JSON.stringify({ package: warning.package, field: warning.field, source: warning.source }),
+  });
+}
+
 export class NodePackageResolver implements PackageResolver {
   readonly #workspaceByName = new Map<string, ResolvedPackage>();
   readonly #cache = new Map<string, ResolvedPackage>();
+  readonly #onManifestWarning: (warning: ManifestWarning) => void;
 
-  static async create(projectRoot: string): Promise<NodePackageResolver> {
-    const resolver = new NodePackageResolver();
+  constructor(options: NodePackageResolverOptions = {}) {
+    this.#onManifestWarning = options.onManifestWarning ?? emitManifestWarning;
+  }
+
+  /**
+   * Loads manifests the way an instance starts: marketplace-only metadata problems are reported
+   * through `onManifestWarning` and dropped instead of failing the load (strict validation stays
+   * with `zhin plugin check` / publishing).
+   */
+  static async create(projectRoot: string, options: NodePackageResolverOptions = {}): Promise<NodePackageResolver> {
+    const resolver = new NodePackageResolver(options);
     const root = await resolver.#readPackage(projectRoot, 'workspace');
     resolver.#workspaceByName.set(root.name, root);
 
@@ -122,7 +149,10 @@ export class NodePackageResolver implements PackageResolver {
     if (cached) return cached;
     const file = join(normalized, 'package.json');
     const content = await readFile(file, 'utf8');
-    const parsedPackageJson = parsePackageJson(JSON.parse(content) as unknown, file);
+    const parsedPackageJson = parsePackageJson(JSON.parse(content) as unknown, file, {
+      metadata: 'lenient',
+      onWarning: this.#onManifestWarning,
+    });
     // An entry-less Plugin has nothing to resolve; it is assembled from its convention directories.
     const declaredEntry = parsedPackageJson.zhin.entry;
     const entry = declaredEntry === undefined

@@ -13,9 +13,6 @@ import { moderationEngineStore } from './src/runtime.js';
 
 export default definePlugin({
   name: 'content-moderation',
-  metadata: {
-    displayName: 'Content Moderation',
-  },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [moderationEngineStore, pluginConsoleRpcToken],
     injects: [

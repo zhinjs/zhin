@@ -9,9 +9,6 @@ import { createBilibiliLiveConsoleRpc } from './src/console.js';
 export default definePlugin({
   name: 'bilibili-live',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
-  metadata: {
-    displayName: 'Bilibili Live Danmaku Adapter (Experimental)',
-  },
   setup(context) {
     return {
       consoleRpc: createBilibiliLiveConsoleRpc(context.resources, () => context.config.get()),

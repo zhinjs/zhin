@@ -93,9 +93,15 @@ function createRpcContext(
     saveProjectFile: (filePath: string, content: string) =>
       saveProjectFile(projectRoot, filePath, content),
     listEnvFiles: () => listEnvFiles(projectRoot),
-    readEnvFile: (filename: string) => configuration.readEnvironmentFile(filename),
-    writeEnvFile: (filename: string, content: string) =>
-      configuration.writeEnvironmentFile(filename, content),
+    // `env:*` never sees the file as written: masked view, single reveal, per-key save (issue #1250).
+    readEnvFileView: configuration.readEnvironmentView
+      ? (filename: string) => configuration.readEnvironmentView!(filename) : undefined,
+    revealEnvVariable: configuration.revealEnvironmentVariable
+      ? (filename: string, key: string) => configuration.revealEnvironmentVariable!(filename, key) : undefined,
+    updateEnvVariables: configuration.updateEnvironmentVariables
+      ? (filename: string, changes: unknown) => configuration.updateEnvironmentVariables!(filename, changes) : undefined,
+    replaceEnvFile: configuration.replaceEnvironmentFile
+      ? (filename: string, content: string) => configuration.replaceEnvironmentFile!(filename, content) : undefined,
     getSchema: (pluginName?: string) => configuration.readSchema(pluginName),
     getAllSchemas: () => configuration.readAllSchemas(),
     validatePluginConfig: (pluginName: string, data: unknown) =>

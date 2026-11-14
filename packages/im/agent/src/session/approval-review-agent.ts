@@ -153,13 +153,16 @@ export function createAutoApprovalPort(
           reviewer.remember(input, 'approve-once', 'reviewer');
           return { status: 'approved', decision: 'approve-once' };
         }
-        if (decision === 'ask' || (options.escalateRejections && isApprovalPortAvailable(ask))) {
-          if (!isApprovalPortAvailable(ask)) {
+        const purpose = input.purpose ?? 'authorization';
+        if (decision === 'ask' || (options.escalateRejections && isApprovalPortAvailable(ask, purpose))) {
+          if (!isApprovalPortAvailable(ask, purpose)) {
             return { status: 'unavailable', reason: 'the reviewer escalated to a human, but nobody can be asked here' };
           }
           const outcome = await settleWithinTimeout(requestApprovalOutcome(ask, input), input);
-          // Only an explicit human answer is remembered; a timeout is not a "no".
-          if (outcome.status === 'approved' || (outcome.status === 'denied' && outcome.by === 'user')) {
+          // Only an explicit human answer is remembered; a timeout is not a "no", and an
+          // initiator-only intent confirmation (#1250) is not an authority's approval.
+          if ((outcome.status === 'approved' && outcome.scope !== 'intent')
+            || (outcome.status === 'denied' && outcome.by === 'user')) {
             reviewer.remember(input, approvalOutcomeToDecision(outcome), 'human');
           }
           return outcome;
@@ -177,12 +180,17 @@ export function createAutoApprovalPort(
   return Object.freeze(port);
 }
 
-export function createBypassApprovalPort(ask?: ApprovalPort): ApprovalOutcomePort {
+export interface BypassApprovalPortOptions {
+  /** #1250: send `purpose: 'intent'` confirmations to `ask` instead of approving them (master turns). */
+  readonly confirmIntent?: boolean;
+}
+
+export function createBypassApprovalPort(ask?: ApprovalPort, options: BypassApprovalPortOptions = {}): ApprovalOutcomePort {
   const port: ApprovalOutcomePort = {
     available: true,
     async requestApprovalOutcome(input) {
       if (input.signal.aborted) return { status: 'unavailable', reason: 'approval request cancelled' };
-      if (input.humanOnly) return isApprovalPortAvailable(ask)
+      if (input.humanOnly || (options.confirmIntent && input.purpose === 'intent')) return isApprovalPortAvailable(ask, input.humanOnly ? 'authorization' : 'intent')
         ? requestApprovalOutcome(ask, input)
         : { status: 'unavailable', reason: 'this tool requires fresh human approval' };
       return { status: 'approved', decision: 'approve-once' };

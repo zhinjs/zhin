@@ -2110,6 +2110,27 @@ describe('IM Runtime', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('passes the start failure through as startFailure and a redacted lastError (#1250)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      adapterConfig: { endpoints: [{ id: 'inline-account' }] },
+      outboundMiddleware: (_envelope, next) => next(),
+    });
+    try {
+      const describe = fixture.adapters.describe.bind(fixture.adapters);
+      const failure = { code: 'E_AUTH', at: 1_700_000_000_000, category: 'auth' as const, message: 'The platform rejected the account credentials (E_AUTH)' };
+      const spy = vi.spyOn(fixture.adapters, 'describe').mockImplementation(() => describe().map(row => ({
+        ...row, connected: false, status: 'offline' as const, phase: 'failed' as const, startAttempt: 1, startFailure: failure })));
+      const row = fixture.im.endpoints.list()[0]!;
+      expect(row).toMatchObject({ startFailure: { code: 'E_AUTH', at: failure.at },
+        lastError: { category: 'auth', message: failure.message, at: failure.at } });
+      expect(row.startFailure).toEqual({ code: 'E_AUTH', at: failure.at });
+      expect(fixture.im.endpoints.get(row.endpoint.adapter, row.endpoint.id)).toMatchObject({ lastError: { category: 'auth' } });
+      // A failure recorded without a category (older Adapter) still yields a lastError from its code.
+      spy.mockImplementation(() => describe().map(row => ({ ...row, startFailure: { code: 'ECONNREFUSED', at: 1 } })));
+      expect(fixture.im.endpoints.list()[0]!.lastError).toEqual({ category: 'unknown', message: 'ECONNREFUSED', at: 1 });
+    } finally { vi.restoreAllMocks(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('roundtrips two same-platform owner/account list identities through get, preview and isolated sends', async () => {
     const firstOwner = childPluginId(rootPluginId(), 'first');
     const secondOwner = childPluginId(rootPluginId(), 'second');
@@ -2311,6 +2332,13 @@ describe('IM Runtime', () => {
       {
         endpointSend: () => { throw new EndpointDeliveryError('platform_rejected', 'not connected', 'not_sent'); },
         expected: { code: 'platform_rejected', disposition: 'not_sent' },
+      },
+      {
+        // #1250: the failure keeps the Endpoint code, and its message names it instead of a bare generic text.
+        endpointSend: () => { throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'Sandbox Endpoint has no live connection', 'not_sent'); },
+        expected: { code: 'sandbox_delivery_unavailable', disposition: 'not_sent',
+          message: 'Outbound delivery failed (sandbox_delivery_unavailable).',
+          receipt: { status: 'failed', failure: { code: 'sandbox_delivery_unavailable' } } },
       },
       {
         endpointSend: () => { throw { protocol: 'onebot-v11', kind: 'protocol', response: { status: 'failed', retcode: 100 } }; },

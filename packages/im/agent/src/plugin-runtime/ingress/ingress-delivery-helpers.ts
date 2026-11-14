@@ -106,9 +106,15 @@ export function resolveApprovalPort(input: Readonly<{
   mode: 'ask' | 'auto' | 'bypass';
   ask: ApprovalPort;
   auto: ApprovalPort;
+  /**
+   * #1250: the turn's initiator is the global master. `bypass` then hands `intent` confirmations
+   * (high-risk actions after external content) to `ask`, which confirms them with the master once.
+   * `auto` is unchanged: its reviewer decides.
+   */
+  masterInitiator?: boolean;
 }>): ApprovalPort {
   if (input.mode === 'auto') return input.auto;
-  if (input.mode === 'bypass') return createBypassApprovalPort(input.ask);
+  if (input.mode === 'bypass') return createBypassApprovalPort(input.ask, input.masterInitiator ? { confirmIntent: true } : {});
   return input.ask;
 }
 

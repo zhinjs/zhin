@@ -113,6 +113,19 @@ const adapterStudioStyles = `
   gap: 8px;
   flex-shrink: 0;
 }
+.zk-root .zk-bot-tile__head-right .zk-switch-row,
+.zhin-console-surface .zk-bot-tile__head-right .zk-switch-row {
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--zk-muted);
+  white-space: nowrap;
+}
+.zk-root .zk-account-editor-host,
+.zhin-console-surface .zk-account-editor-host {
+  display: grid;
+  gap: 14px;
+}
 .zk-root .zk-account-pills,
 .zhin-console-surface .zk-account-pills {
   display: flex;

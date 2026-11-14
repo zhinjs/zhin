@@ -32,7 +32,7 @@ export async function ensureMcpConnectionsForBinding(
         toolNames: mcps.getToolsFromServer(entry.name).map(t => t.name),
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = mcps.getLastFailure(entry.name)?.message ?? (err instanceof Error ? err.message : String(err));
       await onEvent?.({ phase: 'error', serverName: entry.name, error: message });
     }
   }

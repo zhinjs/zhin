@@ -371,7 +371,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           principal: { ...request.principal, trustLevel: trust.level },
         })
         : undefined;
-      releaseTrace = trace ? registerTurnTrace(trace) : undefined;
+      releaseTrace = trace ? registerTurnTrace(trace, {
+        // Background sub-agent turns can finish after this trace was saved (#1250).
+        save: snapshot => { void this.options.turnTraceStore?.save(snapshot).catch(() => undefined); },
+      }) : undefined;
       activeTrace = trace;
       const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
       const catalog = Object.freeze({

@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/plugin-idiom-chain",
   "version": "1.1.28",
-  "description": "Zhin.js 成语接龙 — 四字成语文字接龙 (Plugin Runtime)",
+  "description": "Chinese four-character idiom chaining with same-sound or same-character rules and a built-in dictionary.",
+  "keywords": [
+    "zhin.js",
+    "idiom",
+    "word-chain",
+    "成语接龙"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -80,7 +90,19 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "Idiom Chain",
+      "displayNameI18n": {
+        "zh-CN": "成语接龙",
+        "en": "Idiom Chain"
+      },
+      "descriptionI18n": {
+        "zh-CN": "四字成语文字接龙，支持同音 / 同字规则，内置词库。",
+        "en": "Chinese four-character idiom chaining with same-sound or same-character rules and a built-in dictionary."
+      },
+      "category": "game"
+    }
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",

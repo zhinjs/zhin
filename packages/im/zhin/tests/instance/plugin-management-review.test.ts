@@ -8,6 +8,7 @@ import { installCommand } from '../../../../../basic/cli/src/commands/install.js
 import { installNpmPlugin } from '../../../../../basic/cli/src/commands/packages.js';
 import { resolveInstallRoute } from '../../../../../basic/cli/src/utils/plugin-registry.js';
 import { logger } from '../../../../../basic/cli/src/utils/logger.js';
+import { output as cliOutput } from '../../../../../basic/cli/src/utils/output.js';
 import { registerConsolePluginRoutes } from '../../src/instance/console/plugin-routes.js';
 
 const roots: string[] = [];
@@ -51,7 +52,7 @@ describe('reviewed CLI plugin installation paths', () => {
   it('prints a dependency-only dry run without claiming declaration or configuration changes', async () => {
     const root = await project();
     vi.spyOn(process, 'cwd').mockReturnValue(root);
-    const output = vi.spyOn(logger, 'log').mockImplementation(() => {});
+    const output = vi.spyOn(cliOutput, 'line').mockImplementation(() => {});
     await installNpmPlugin(resolveInstallRoute('reminder'), { dryRun: true, enable: false });
     const plan = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
     expect(plan).toMatchObject({ changes: { packageManifest: 'unchanged', config: 'unchanged' }, restartRequired: false });
@@ -66,7 +67,7 @@ describe('reviewed CLI plugin installation paths', () => {
     const state = await workflow.inspect('telegram');
     const plan = await workflow.planInstall('@zhin.js/adapter-telegram');
     vi.spyOn(PluginManagementWorkflow.prototype, 'install').mockResolvedValue({ plan, state, restartRequired: false });
-    const output = vi.spyOn(logger, 'log').mockImplementation(() => {});
+    const output = vi.spyOn(cliOutput, 'line').mockImplementation(() => {});
     await installNpmPlugin(resolved, {});
     expect(resolved.adapter?.setupHint).toBeTruthy();
     expect(output).toHaveBeenCalledWith(resolved.adapter?.setupHint);

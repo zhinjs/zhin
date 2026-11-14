@@ -80,11 +80,11 @@ Console 的账号存在网关自己的 `.zhin/gateway.db` 里，不在项目数�
 | `plugin.manage` | 安装、更新、卸载插件与依赖；插件全局启停（`disable_plugins`，网关事务）；引导第 3–5 步 |
 | `agent.view` / `agent.configure` | AI 与 Agent 读取 / 写入 |
 | `ops.config.read` / `ops.config.write` | 原始配置文件 |
-| `ops.env.read` / `ops.env.write` | 环境变量文件 |
+| `ops.env.read` / `ops.env.write` | 环境变量文件：读取（只有打码值）/ 保存；逐个显示原文（`env:reveal`）两个都要，并写入审计 |
 | `ops.database.read` / `ops.database.write` | 数据库浏览（按列排序、筛选，查看表结构与结构变更预览）/ 记录增删改 |
 | `ops.database.schema` | SQL 控制台（只读查询与写 SQL）与表结构调整（加/改名/删列、改类型、建表、索引）；默认只有 `owner` 拥有，每条语句（字面量已脱敏）写入审计。见[数据库](./operations.md#database) |
 | `ops.schedule.read` / `ops.schedule.write` | 定时任务（指定 IM 投递目标时还需目标账号上的 `endpoint.operate`） |
-| `ops.files.read` / `ops.files.write` | 项目文件（读写 `.env` 与配置文件仍需要对应的 `ops.env.*` / `ops.config.*`） |
+| `ops.files.read` / `ops.files.write` | 项目文件（读写配置文件仍需要 `ops.config.*`；`.env` / `.env.*` 不经项目文件读写，改在环境变量页 `/ops/env` 用 `ops.env.*` 管理） |
 | `ops.restart` | 实例起停与重启 |
 | `ops.terminal` | 终端（见[运维](./operations.md#terminal)） |
 | `iam.view` / `iam.manage` | 本分组；`iam.manage` 还管对象页「角色」页签（`chat-roles.*`，按作用域检查） |
@@ -126,10 +126,11 @@ Console 的账号存在网关自己的 `.zhin/gateway.db` 里，不在项目数�
 | 登录成功 / 失败、登出、改密码 | 主体、IP |
 | 全部 `iam.*` 写操作 | 用户、角色、绑定、令牌的变化 |
 | 映射为写权限的 RPC | 实例侧的写操作由实例上报，网关写入 |
+| 显示环境变量原文（`env:reveal`） | 文件、变量名、主体；不记录值 |
 | 全部被拒绝的请求 | `outcome: denied` |
 | 终端会话开始 / 结束 | 目标、时长、退出码与原因；不记录输入输出 |
 
-- 主体写作 `bootstrap`、`user:<id>`、`api-token:<id>`；`detail` 只记录 RPC 类型、目标与参数键名，不记录参数值与机密。
+- 主体写作 `bootstrap`、`user:<id>`、`api-token:<id>`；`detail` 只记录 RPC 类型、目标与参数键名，不记录参数值与机密；`env:reveal` / `env:save` 另记文件名与涉及的变量名（`set` / `deleted`）。
 - 保留 180 天，按天清理。
 - 网关不读取 `X-Forwarded-For`：放在反向代理后面时，记录的 IP 是代理地址。
 

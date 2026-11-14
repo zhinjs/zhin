@@ -17,6 +17,7 @@ export type {
   TurnTraceBudgetExtension,
   TurnTraceTimelineEntry,
   TurnTraceTermination,
+  TurnTraceModelSelection,
   TurnTraceTrigger,
   TurnTraceUsageTotals,
 } from './turn-trace.js';
@@ -25,7 +26,10 @@ export {
   createScopedTraceJournal,
   registerTurnTrace,
   noteTurnTrace,
+  captureSubTurnTracing,
 } from './turn-trace-registry.js';
+export type { SubTurnTrace, SubTurnTracing, TurnTraceSave } from './turn-trace-registry.js';
+export { LOOKUP_CLAIM_PATTERNS, findLookupClaim, claimWithoutToolCall } from './lookup-claim.js';
 export {
   DEFAULT_TURN_TRACE_LIMIT,
   createFileTurnTraceStore,

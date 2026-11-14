@@ -1,7 +1,17 @@
 {
   "name": "@zhin.js/adapter-napcat",
   "version": "1.1.29",
-  "description": "Zhin.js NapCat adapter for Plugin Runtime (WebSocket client, OneBot11 + NapCat extensions)",
+  "description": "NapCatQQ adapter: OneBot 11 plus NapCat extension APIs over forward / reverse WebSocket or HTTP.",
+  "keywords": [
+    "zhin.js",
+    "napcat",
+    "onebot11",
+    "qq"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "url": "https://github.com/zhinjs/zhin"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,18 +42,6 @@
     "README.md",
     "CHANGELOG.md",
     "PERMITS.md"
-  ],
-  "keywords": [
-    "zhin",
-    "zhin.js",
-    "bot",
-    "adapter",
-    "napcat",
-    "napneko",
-    "onebot",
-    "onebot11",
-    "qq",
-    "chatbot"
   ],
   "license": "MIT",
   "repository": {
@@ -91,11 +89,6 @@
       "optional": true
     }
   },
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org",
@@ -141,6 +134,18 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": []
+    "plugins": [],
+    "metadata": {
+      "displayName": "NapCat Adapter",
+      "displayNameI18n": {
+        "zh-CN": "NapCat 适配器",
+        "en": "NapCat Adapter"
+      },
+      "descriptionI18n": {
+        "zh-CN": "NapCatQQ 适配器：OneBot 11 加 NapCat 扩展 API，支持正向 / 反向 WebSocket 与 HTTP。",
+        "en": "NapCatQQ adapter: OneBot 11 plus NapCat extension APIs over forward / reverse WebSocket or HTTP."
+      },
+      "category": "adapter"
+    }
   }
 }

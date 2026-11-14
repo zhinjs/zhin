@@ -88,7 +88,10 @@ it.each(['apply', 'finalize'])(
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  }
+  },
+  // Up to two CLI children, each bounded by its own 30 s hang guard in `child()`: the test budget
+  // must cover them, not the 10 s default that a cold tsx start on a busy machine exceeds.
+  70_000
 );
 it('rejects inherited dry-run before a preview can create a key, output, database or backup', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'inference-cli-preview-')));
@@ -114,7 +117,7 @@ it('rejects inherited dry-run before a preview can create a key, output, databas
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 40_000);
 it('executes the actual offline CLI, then boots its finalized Root with authenticated model management and no provider request', async () => {
   const root = await mkdtemp(join(tmpdir(), 'inference-cli-upgrade-')),
     port = await freePort();
