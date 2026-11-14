@@ -1,10 +1,12 @@
+import { stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
-import type { SnapshotLease } from '@zhin.js/plugin-runtime';
+import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import type {
   AttentionEndpoint,
   AttentionErrorLogs,
   AttentionMcpServer,
-  AttentionPluginState,
+  AttentionPluginsRead,
   AttentionSources,
   AttentionToolApproval,
 } from './attention.js';
@@ -23,7 +25,14 @@ interface LogModel {
   count?(where?: Record<string, unknown>): Promise<number>;
 }
 
-/** Wires `attention.list` to the instance's existing runtime state (one read per request). */
+/** Files whose change invalidates cached plugin / configuration reads (with the runtime generation). */
+const REVISION_FILES = Object.freeze(['package.json', ...ROOT_CONFIG_FILE_NAMES]);
+
+/**
+ * Wires `attention.list` to the instance's existing runtime state. Accounts and login tasks are
+ * read live; plugins, configuration, MCP and logs are meant to be shared through an
+ * `AttentionSourceCache` keyed by `revision` (project file mtimes + runtime generation).
+ */
 export function createAttentionSources(composition: ConsoleRpcComposition): AttentionSources {
   const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile } = composition;
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
@@ -35,22 +44,35 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
     ...(im ? {
       loginTasks: () => im.loginAssist.listPending().map(task => ({
         id: task.id, adapter: task.adapter, endpointKey: task.endpointKey, type: task.type, createdAt: task.createdAt,
+        ...(task.endpointIdentity ? { canonicalId: task.endpointIdentity.canonicalId } : {}),
       })),
+      // `adapter` / `name` as `endpoint.list` rows carry them: the Console's account address.
       endpoints: (): readonly AttentionEndpoint[] => im.endpoints.list().map(row => ({
-        adapter: row.endpoint.adapter, name: row.name, connected: row.connected, phase: row.phase, transportState: row.transportState,
+        id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
+        transportState: row.transportState, pendingLogin: row.pendingLogin,
       })),
     } : {}),
     ...(pluginManagement?.inspect && snapshots ? {
-      plugins: async (): Promise<readonly PromiseSettledResult<AttentionPluginState>[]> => {
+      plugins: async (): Promise<AttentionPluginsRead> => {
         const lease = snapshots.acquire();
         let declared: Awaited<ReturnType<typeof buildManagedPluginList>>;
         try { declared = await buildManagedPluginList(projectRoot, pluginLifecycleFile, lease.value); }
         finally { lease.release(); }
         // Only declared (manageable) plugins have a management state; same reads as GET /plugins.
-        return Promise.allSettled(declared.filter(plugin => plugin.manageable).map(plugin => pluginManagement.inspect!(plugin.instanceKey)));
+        const manageable = declared.filter(plugin => plugin.manageable);
+        // The dependency graph is project-wide: check it once here instead of once per inspect.
+        const checkOnce = typeof pluginManagement.checkDependencies === 'function' && manageable.length > 0;
+        const [dependencies, states] = await Promise.all([
+          checkOnce ? pluginManagement.checkDependencies!() : undefined,
+          Promise.allSettled(manageable.map(plugin => checkOnce
+            ? pluginManagement.inspect!(plugin.instanceKey, { dependencies: 'skip' })
+            : pluginManagement.inspect!(plugin.instanceKey))),
+        ]);
+        return { states, ...(dependencies ? { dependencies } : {}) };
       },
     } : {}),
     configuration: Object.freeze({
+      projectRoot,
       source: () => configuration.readSource(),
       ...(configuration.readLiteralSecrets ? { literalSecrets: () => configuration.readLiteralSecrets!() } : {}),
     }),
@@ -72,8 +94,10 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         if (!databaseHost.started) return null;
         const model = databaseHost.models.get('SystemLog') as LogModel | undefined;
         if (!model || typeof model.select !== 'function') return null;
+        // A count query only: never load the error rows to count them.
+        if (typeof model.count !== 'function') return null;
         const where = { level: 'error' };
-        const count = typeof model.count === 'function' ? await model.count(where) : (await model.select('id').where(where)).length;
+        const count = await model.count(where);
         if (count <= 0) return { count: 0, latest: null };
         const [row] = await model.select('timestamp').where(where).orderBy('timestamp', 'DESC').limit(1);
         const value = row?.timestamp;
@@ -81,5 +105,15 @@ export function createAttentionSources(composition: ConsoleRpcComposition): Atte
         return { count, latest };
       },
     } : {}),
+    revision: async () => {
+      let generation = 'none';
+      if (snapshots) {
+        const lease = snapshots.acquire();
+        try { generation = String(lease.value.generation); } finally { lease.release(); }
+      }
+      const files = await Promise.all(REVISION_FILES.map(name => stat(join(projectRoot, name))
+        .then(info => `${info.mtimeMs}:${info.size}`, () => '-')));
+      return `${generation}|${files.join('|')}`;
+    },
   });
 }

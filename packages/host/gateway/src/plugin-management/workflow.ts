@@ -10,7 +10,7 @@ import {
   type SnapshotReader, type PluginNodeSnapshot, type RuntimeSnapshot, type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import type {
-  PluginInstallPlan, PluginManagementPort, PluginManagementState,
+  PluginDependencyCheck, PluginInspectOptions, PluginInstallPlan, PluginManagementPort, PluginManagementState,
   PluginUninstallPlan, PluginUpdatePlan, PluginVerificationResult, PluginVerificationPlan,
 } from '@zhin.js/host-http';
 import { ConsoleConfigurationStore } from '../config/configuration.js';
@@ -242,13 +242,29 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return { revision, projectRevision: createHash('sha256').update(JSON.stringify([source.revision, revision])).digest('hex') };
   }
 
-  async inspect(request: string): Promise<PluginManagementState> {
+  async inspect(request: string, options: PluginInspectOptions = {}): Promise<PluginManagementState> {
     const lease = this.#options.snapshots?.acquire();
-    try { return await this.#inspect(request, lease?.value); }
+    try { return await this.#inspect(request, lease?.value, options); }
     finally { lease?.release(); }
   }
 
-  async #inspect(request: string, snapshot?: RuntimeSnapshot): Promise<PluginManagementState> {
+  /**
+   * The project-wide dependency graph check `inspect` runs for every declared, enabled plugin.
+   * Callers inspecting many plugins (Console attention) run it once here and pass
+   * `{ dependencies: 'skip' }` to `inspect`.
+   */
+  async checkDependencies(): Promise<PluginDependencyCheck> {
+    const configuration = this.#configuration();
+    const document = configuration ? (await configuration.document.read()).document : {};
+    try {
+      await this.#checkDependencies(undefined, document);
+      return Object.freeze({ status: 'passed' as const });
+    } catch (error) {
+      return Object.freeze({ status: 'failed' as const, error: errorMessage(error) });
+    }
+  }
+
+  async #inspect(request: string, snapshot: RuntimeSnapshot | undefined, options: PluginInspectOptions = {}): Promise<PluginManagementState> {
     const { configuration, source, document, declaration, projectRevision } = await this.#configurationObservation(snapshot);
     const entries = declaration.instances;
     const target = await this.#resolveTarget(request, entries);
@@ -264,8 +280,10 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     if (legacy.disabled.length) throw new Error('Legacy plugin lifecycle state detected; run zhin migrate instances');
     const disabled = declaration.disabled.includes(target.instanceKey);
     if (installed.plugin && declared && !disabled) {
-      try { await this.#checkDependencies(undefined, document); dependencies = 'passed'; }
-      catch (error) { dependencies = 'failed'; issues.push(errorMessage(error)); }
+      if (options.dependencies !== 'skip') {
+        try { await this.#checkDependencies(undefined, document); dependencies = 'passed'; }
+        catch (error) { dependencies = 'failed'; issues.push(errorMessage(error)); }
+      }
       validation = await configuration.store.validatePluginConfig(target.instanceKey, config[target.instanceKey] ?? {}, document);
     }
 

@@ -25,7 +25,7 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
-import { AttentionObservations, dispatchAttentionConsoleRpc } from './attention.js';
+import { AttentionObservations, AttentionSourceCache, dispatchAttentionConsoleRpc } from './attention.js';
 import { createAttentionSources } from './attention-sources.js';
 import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
@@ -52,6 +52,9 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   const auditOptions = redactSql ? { redactSql: (sql: string) => redactSql(sql) } : undefined;
   const attentionSources = createAttentionSources(options);
   const attentionObservations = new AttentionObservations();
+  // Raw reads of plugins / config / MCP / logs are shared between requests (15 s or until the
+  // project files or the runtime generation change); filtering below stays per principal.
+  const attentionCache = new AttentionSourceCache({ ...(attentionSources.revision ? { revision: attentionSources.revision } : {}) });
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
@@ -120,6 +123,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const attentionReply = await dispatchAttentionConsoleRpc(message, {
         sources: attentionSources,
         observations: attentionObservations,
+        cache: attentionCache,
         allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
         allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
       });
@@ -209,9 +213,11 @@ function scopedEndpointList(principal: ConsolePrincipal, type: unknown, data: un
   return {
     ...record,
     endpoints: record.endpoints.filter((entry) => {
+      // The account address the Console authorizes and links with: endpoint bindings are written
+      // as `<adapter>/<name>` of these rows, and scope pages send `{ adapter, endpointKey: name }`.
       const item = entry as { adapter?: unknown; name?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
-      const adapter = String(item.endpoint?.adapter ?? item.adapter ?? '');
-      const endpoint = String(item.endpoint?.id ?? item.name ?? '');
+      const adapter = String(item.adapter ?? item.endpoint?.adapter ?? '');
+      const endpoint = String(item.name ?? item.endpoint?.id ?? '');
       return principalAllows(principal, 'endpoint.view', { kind: 'endpoint', adapter, endpoint });
     }),
   };

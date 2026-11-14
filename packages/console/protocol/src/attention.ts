@@ -40,7 +40,10 @@ export type ConsoleAttentionKind =
   | 'endpoint.offline'
   /** A declared plugin is degraded (failed to load / its package is missing / other issues). */
   | 'plugin.error'
-  /** A declared plugin's dependencies or required services are not satisfied. */
+  /**
+   * The project's plugin dependency graph is not satisfied. The check is project-wide, so this is
+   * one item without a `plugin` subject (not one per plugin).
+   */
   | 'plugin.dependencies'
   /** A declared plugin's configuration does not validate or references unset variables. */
   | 'plugin.config'
@@ -65,9 +68,12 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
 
 /** The object an item is about. Absent fields do not apply. */
 export interface ConsoleAttentionSubject {
-  /** Adapter instance alias (Console scope segment). */
+  /** Adapter alias: `adapter` of the account's `endpoint.list` row (Console scope segment). */
   readonly adapter?: string;
-  /** Account name within the adapter (Console scope segment). */
+  /**
+   * Account name: `name` of the account's `endpoint.list` row (Console scope segment); endpoint
+   * role bindings are keyed `<adapter>/<endpointKey>`.
+   */
   readonly endpointKey?: string;
   /** Plugin instance key. */
   readonly plugin?: string;
@@ -84,7 +90,10 @@ export interface ConsoleAttentionAction {
 }
 
 export interface ConsoleAttentionItem {
-  /** Stable fingerprint of `kind` + `subject`: the same problem keeps its id across reads. */
+  /**
+   * Stable identity of `kind` + `subject` (`attentionItemId`): the same problem keeps its id across
+   * reads, and different subjects never share one.
+   */
   readonly id: string;
   /**
    * Fingerprint of the item's current state (counts, issue text, phase …). It changes when the
@@ -119,14 +128,14 @@ export interface ConsoleAttentionList {
   readonly unavailable?: readonly string[];
 }
 
-/** 32-bit FNV-1a, hex; enough to tell items apart, never a security boundary. */
-function fnv1a(text: string): string {
-  let hash = 0x811c9dc5;
+/** 64-bit FNV-1a over UTF-16 code units, 16 hex digits; tells states apart, never a security boundary. */
+function fnv1a64(text: string): string {
+  let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+    hash ^= BigInt(text.charCodeAt(index));
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
   }
-  return hash.toString(16).padStart(8, '0');
+  return hash.toString(16).padStart(16, '0');
 }
 
 function canonical(value: unknown): string {
@@ -140,14 +149,22 @@ function canonical(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-/** `<kind>:<hash of subject>` — independent of key order and of the item's state. */
+/**
+ * `<kind>` or `<kind>:<field>=<value>&…` — the subject itself, fields sorted and values
+ * percent-encoded, so two different subjects never share an id (no hash) and the id does not
+ * depend on key order or on the item's state.
+ */
 export function attentionItemId(kind: ConsoleAttentionKind, subject: ConsoleAttentionSubject = {}): string {
-  return `${kind}:${fnv1a(canonical(subject))}`;
+  const fields = Object.entries(subject as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+  return fields.length ? `${kind}:${fields.join('&')}` : kind;
 }
 
-/** Fingerprint of an item's state (any JSON-like value). */
+/** Fingerprint of an item's state (any JSON-like value): 64-bit, 16 hex digits. */
 export function attentionRevision(state: unknown): string {
-  return fnv1a(canonical(state));
+  return fnv1a64(canonical(state));
 }
 
 const severityRank: Readonly<Record<ConsoleAttentionSeverity, number>> = Object.freeze({ danger: 0, warning: 1, info: 2 });

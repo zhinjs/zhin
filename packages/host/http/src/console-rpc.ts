@@ -128,9 +128,21 @@ export interface PluginVerificationResult {
   readonly evidenceI18n?: import('@zhin.js/plugin-runtime').PluginVerificationOutcome['evidenceI18n'];
 }
 
+/** `inspect` options. `dependencies: 'skip'` leaves the project-wide graph check out (`dependencies: 'unchecked'`). */
+export interface PluginInspectOptions {
+  readonly dependencies?: 'check' | 'skip';
+}
+
+/** Result of the project-wide dependency graph check (the same check `inspect` runs per plugin). */
+export type PluginDependencyCheck =
+  | { readonly status: 'passed' }
+  | { readonly status: 'failed'; readonly error: string };
+
 export interface PluginManagementPort {
   explainConfiguration?(instanceKey: string, expectedRevision: string): Promise<ConsoleConfigExplanation>;
-  inspect?(packageName: string): Promise<PluginManagementState>;
+  inspect?(packageName: string, options?: PluginInspectOptions): Promise<PluginManagementState>;
+  /** Runs the project-wide dependency graph check once, for callers that inspect many plugins. */
+  checkDependencies?(): Promise<PluginDependencyCheck>;
   apply?(packageName: string, expectedProjectRevision?: string): Promise<{ readonly requested: boolean; readonly state: PluginManagementState }>;
   verificationPlan?(packageName: string): Promise<PluginVerificationPlan>;
   verify?(packageName: string, checkId: string, expectedGeneration: number | null, expectedProjectRevision: string, expectedCheckRevision: string): Promise<PluginVerificationResult>;

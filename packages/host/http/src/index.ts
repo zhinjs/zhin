@@ -106,6 +106,8 @@ export {
   type PluginUpdatePlan,
   type PluginManagementPort,
   type PluginManagementState,
+  type PluginInspectOptions,
+  type PluginDependencyCheck,
   type PluginVerificationResult,
   type PluginVerificationPlan,
   type PluginConfigValidation,
