@@ -16,6 +16,8 @@ export const commandMessages = createMessages({
   missingPlugin: { 'zh-CN': '未找到插件: {plugin}', en: 'Plugin not found: {plugin}' },
   pageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「{command} --page <页码>」。', en: 'Page out of range: {pages} pages available. Use {command} --page <page>.' },
   menuTitle: { 'zh-CN': '=== {plugin} 指令菜单 ===', en: '=== {plugin} command menu ===' },
+  rootMenuTitle: { 'zh-CN': '=== 指令菜单 ===', en: '=== Command menu ===' },
+  rootMenuName: { 'zh-CN': '指令菜单', en: 'Command menu' },
   menuSummary: { 'zh-CN': '第 {page}/{pages} 页 · {commands} 条指令 · {plugins} 个子插件', en: 'Page {page}/{pages} · Commands: {commands} · Plugins: {plugins}' },
   childPlugins: { 'zh-CN': '子插件：', en: 'Plugins:' },
   emptyMenu: { 'zh-CN': '（暂无指令和子插件）', en: '(No commands or plugins)' },
