@@ -23,6 +23,7 @@ import {
   ConfigChatAccessError, type ChatConfigurationScope,
 } from './configuration-chat-policy.js';
 import { isForbiddenConfigurationPathSegment } from './configuration-path.js';
+import { formatSchemaIssue } from './validation-messages.js';
 import {
   assertPatchesInScope,
   normalizeConfigPatchOperations,
@@ -600,15 +601,15 @@ export class ConsoleConfigurationStore {
       for (const issue of candidate.errors) {
         const location = issue.instancePath.replace(/^\/candidate/u, '').split('/').slice(1)
           .map(key => key.replaceAll('~1', '/').replaceAll('~0', '~'));
+        // The message names the field relative to the block, in the project locale (`locale`).
+        const message = formatSchemaIssue(issue, location, document.locale);
         if (issue.keyword === 'required' && typeof issue.params.missingProperty === 'string') {
           location.push(issue.params.missingProperty);
         }
-        errors.push({
-          path: `$${location.map(key => `.${key}`).join('')}`,
-          message: issue.keyword === 'type'
-            ? `类型应为 ${issue.params.type === 'array' ? 'list' : String(issue.params.type)}`
-            : issue.message ?? issue.keyword,
-        });
+        if (issue.keyword === 'additionalProperties' && typeof issue.params.additionalProperty === 'string') {
+          location.push(issue.params.additionalProperty);
+        }
+        errors.push({ path: `$${location.map(key => `.${key}`).join('')}`, message });
       }
     }
     collectEnvironmentReferences(candidate.value, missingEnv, environment);
