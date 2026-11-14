@@ -83,6 +83,9 @@ describe('zhin packages info', () => {
     expect(packagePersonName('Jane Doe <jane@example.com> (https://x.dev)')).toBe('Jane Doe');
     expect(packagePersonName({ name: 'Jane' })).toBe('Jane');
     expect(packagePersonName('<only@mail>')).toBeUndefined();
+    // Nested / unbalanced brackets never leave partial markup behind.
+    expect(packagePersonName('Eve <<script>a> (x)')).toBe('Eve');
+    expect(packagePersonName('Bob (site) <bob@x>')).toBe('Bob');
     expect(packageAuthors({ author: 'Jane <j@x>' })).toEqual(['Jane']);
     expect(packageAuthors({ maintainers: ['a <a@x>', { name: 'b' }, 'a <a@x>'] })).toEqual(['a', 'b']);
     expect(packageAuthors({})).toEqual([]);
