@@ -5,7 +5,8 @@ import {
   type ConsoleConfigSource,
 } from '@zhin.js/console-protocol';
 import { configCheckCommand } from './config-check.js';
-import { loadHostHttpConfig } from '../utils/host-http.js';
+import { gatewayNotRunningMessage, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
@@ -70,15 +71,35 @@ async function connection(options: Options): Promise<Connection> {
     ? (process.env.ZHIN_CONSOLE_TOKEN ?? process.env.HTTP_TOKEN)
     : process.env[tokenEnvironment];
   const explicit = options.host ?? options.live;
-  if (explicit) return { host: explicit, token: envToken, tokenEnvironment };
-  const discovered = await loadHostHttpConfig(process.cwd());
-  if (!discovered) {
+  if (explicit) {
+    // An explicit address on this machine must be this project's gateway before the token goes there (#1250).
+    if (findConfigFile(process.cwd())) {
+      try { await verifyHostProject(normalizeHostUrl(explicit), process.cwd()); }
+      catch (error) {
+        if (error instanceof HostTargetError) {
+          throw new ConfigCommandError({ status: error.code, host: explicit, message: error.message }, CONFIG_EXIT_CODES.error);
+        }
+        throw error;
+      }
+    }
+    return { host: explicit, token: envToken, tokenEnvironment };
+  }
+  let discovered: Awaited<ReturnType<typeof loadHostHttpConfig>>;
+  try {
+    discovered = await loadHostHttpConfig(process.cwd());
+  } catch (error) {
+    // No gateway for this project: never fall back to the configured port, where another
+    // project's gateway may answer and receive the token (#1250).
+    if (error instanceof HostTargetError) {
+      throw new ConfigCommandError({ status: 'not-connected', message: gatewayNotRunningMessage({ offline: true }) }, CONFIG_EXIT_CODES.notConnected);
+    }
+    throw error;
+  }
+  if (!discovered?.fetch) {
     throw new ConfigCommandError({ status: 'not-connected',
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);
   }
-  // ZHIN_CONSOLE_TOKEN / HTTP_TOKEN (or --token-env) wins over the project's http.token.
-  if (!discovered.fetch) return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
-  // A running gateway answers over its local socket: as the local owner, or — with an explicit
+  // This project's gateway answers over its local socket: as the local owner, or — with an explicit
   // Console API token (ZHIN_CONSOLE_TOKEN / --token-env) — as that token's principal. The
   // bootstrap HTTP_TOKEN is not a user credential and is not sent.
   const userToken = (tokenEnvironment === 'ZHIN_CONSOLE_TOKEN' ? process.env.ZHIN_CONSOLE_TOKEN : process.env[tokenEnvironment])?.trim()
@@ -272,7 +293,7 @@ export function createConfigCommand(): Command {
   const command = new Command('config')
     .description('通过运行中的 Host 读取/修改配置；--offline 显式离线操作本地文件')
     .option('--offline', '不连接 Host：本地校验后保存（不启动 Runtime、不执行插件 setup，可能执行模块顶层代码），不请求生效')
-    .option('--host <url>', '运行中 Host 的 HTTP(S) API 地址（默认按配置 http.* 推导）')
+    .option('--host <url>', '显式连接这个 Host 的 HTTP(S) API 地址（默认只经本项目网关的本地套接字连接；本机地址会先核对项目标识）')
     .addOption(new Option('--live <url>', '--host 的别名（兼容）').hideHelp())
     .option('--token-env <name>', 'Console API 令牌所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
     .option('--environment <name>', '--offline 校验时加载 .env.<name>', 'development')

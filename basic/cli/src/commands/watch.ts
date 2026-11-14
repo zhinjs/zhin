@@ -2,7 +2,7 @@
  * watch — 连接运行中 Host API，展示 runtime / bots / assistant jobs（TTY 定时刷新）
  */
 import { Command } from 'commander';
-import { hostGet, listHostEndpoints, loadHostHttpConfig } from '../utils/host-http.js';
+import { HOST_OPTION_DESCRIPTION, hostGet, listHostEndpoints, requireHostHttpConfig } from '../utils/host-http.js';
 import {
   jobRowsFromApi,
   renderWatchText,
@@ -142,12 +142,9 @@ export const watchCommand = new Command('watch')
   .option('--once', '拉取一次后退出')
   .option('--json', 'JSON 输出（适合脚本）')
   .option('--no-clear', '不清屏（便于重定向到文件）')
-  .action(async (opts: { interval: string; once?: boolean; json?: boolean; clear?: boolean }) => {
-    const http = await loadHostHttpConfig();
-    if (!http) {
-      console.error('未找到 zhin.config，无法确定 Host API 地址');
-      process.exit(1);
-    }
+  .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .action(async (opts: { interval: string; once?: boolean; json?: boolean; clear?: boolean; host?: string }) => {
+    const http = await requireHostHttpConfig(opts, message => console.error(message));
 
     const intervalSec = Math.max(1, Number.parseInt(opts.interval, 10) || 3);
     const once = opts.once === true || !process.stdout.isTTY || opts.json === true;

@@ -5,3 +5,4 @@ export * from './project/instance-declarations.js';
 export * from './project/legacy-config.js';
 export * from './project/node-requirements.js';
 export * from './project/tsx-module-loader.js';
+export * from './project/identity.js';

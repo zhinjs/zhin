@@ -15,18 +15,14 @@ import {
 import {
   hostGet,
   hostPost,
-  loadHostHttpConfig,
+  HOST_OPTION_DESCRIPTION,
+  requireHostHttpConfig,
   type HostFetchResult,
   type HostHttpConfig,
 } from '../utils/host-http.js';
 
 async function requireHost(): Promise<HostHttpConfig> {
-  const http = await loadHostHttpConfig();
-  if (!http) {
-    logger.error('未找到 zhin 配置文件，无法确定 Host API 地址');
-    process.exit(1);
-  }
-  return http;
+  return requireHostHttpConfig({ host: scheduleCommand.opts<{ host?: string }>().host }, message => logger.error(message));
 }
 
 async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> {
@@ -194,6 +190,7 @@ const resumeCommand = new Command('resume')
   });
 
 export const scheduleCommand = new Command('schedule')
+  .option('--host <url>', HOST_OPTION_DESCRIPTION)
   .description('持久化调度任务（操作运行中的实例）')
   .addCommand(listCommand)
   .addCommand(addCommand)

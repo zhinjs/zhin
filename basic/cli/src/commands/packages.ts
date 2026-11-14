@@ -20,6 +20,8 @@ import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
+import { normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 
 const packagesCommand = new Command('packages')
@@ -93,6 +95,12 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
 
 interface LiveOptions { live?: string; tokenEnv?: string }
 
+/** `--live` is explicit; a loopback address must still be this project's gateway before the token goes there (#1250). */
+async function liveRequest<T>(live: string, request: Readonly<Record<string, unknown>>, tokenEnv?: string): Promise<T> {
+  if (findConfigFile(process.cwd())) await verifyHostProject(normalizeHostUrl(live), process.cwd());
+  return requestPluginConsole<T>(live, request, tokenEnv);
+}
+
 packagesCommand
   .command('status <name>')
   .description('查看安装、声明、配置、当前 generation 与验证证据')
@@ -100,7 +108,7 @@ packagesCommand
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .action(async (name: string, options: LiveOptions) => {
     const state = options.live
-      ? await requestPluginConsole(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options.tokenEnv)
+      ? await liveRequest(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options.tokenEnv)
       : await new PluginManagementWorkflow(process.cwd()).inspect(name);
     console.log(JSON.stringify(state, null, 2));
   });
@@ -112,7 +120,7 @@ packagesCommand
   .requiredOption('--project-revision <revision>', 'status/plan 返回的项目 revision')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .action(async (name: string, options: LiveOptions & { projectRevision: string }) => {
-    console.log(JSON.stringify(await requestPluginConsole(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options.tokenEnv), null, 2));
+    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options.tokenEnv), null, 2));
   });
 
 packagesCommand
@@ -122,7 +130,7 @@ packagesCommand
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .action(async (name: string, options: LiveOptions) => {
     const plan = options.live
-      ? await requestPluginConsole(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options.tokenEnv)
+      ? await liveRequest(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options.tokenEnv)
       : await new PluginManagementWorkflow(process.cwd()).verificationPlan(name);
     console.log(JSON.stringify(plan, null, 2));
   });
@@ -138,7 +146,7 @@ packagesCommand
   .action(async (name: string, checkId: string, options: LiveOptions & { generation: string; projectRevision: string; checkRevision: string }) => {
     const expectedGeneration = Number(options.generation);
     if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) throw new Error('generation must be a nonnegative integer');
-    console.log(JSON.stringify(await requestPluginConsole(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options.tokenEnv), null, 2));
+    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options.tokenEnv), null, 2));
   });
 
 packagesCommand

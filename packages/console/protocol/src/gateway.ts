@@ -296,6 +296,12 @@ export interface GatewayHealth {
   readonly status: 'ok';
   readonly timestamp: string;
   readonly instance: Readonly<{ state: GatewayInstanceState; ready: boolean }>;
+  /**
+   * Which project this gateway serves: a hash of its canonical project root (`projectIdentity` in
+   * `@zhin.js/gateway/project`), never the path itself. The CLI refuses to talk to a gateway on this
+   * machine whose id differs from the project it runs in (#1250). Absent on older gateways.
+   */
+  readonly project?: Readonly<{ id: string }>;
 }
 
 // ---- gateway.instance.* ----

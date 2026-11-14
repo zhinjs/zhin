@@ -2,11 +2,21 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { projectIdentity } from '@zhin.js/gateway/project';
 import { CONFIG_EXIT_CODES, createConfigCommand } from '../src/commands/config.js';
+
+/** Whether this project's gateway "runs": its local-socket fetch delegates to the stubbed global fetch. */
+const gateway = vi.hoisted(() => ({ running: true }));
+vi.mock('@zhin.js/gateway/local', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@zhin.js/gateway/local')>(),
+  probeLocalGateway: async () => (gateway.running ? { ok: true } : undefined),
+  createLocalGatewayFetch: () => ((url: unknown, init?: RequestInit) => globalThis.fetch(url as string, init)),
+}));
 
 const roots: string[] = [];
 const previousExitCode = process.exitCode;
 afterEach(async () => {
+  gateway.running = true;
   process.exitCode = previousExitCode;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -57,17 +67,69 @@ function rawHost(write: (request: Record<string, unknown>) => Response) {
 }
 const last = (output: ReturnType<typeof vi.spyOn>) => JSON.parse(String(output.mock.calls.at(-1)?.[0]));
 
-it('set defaults to the running Host (derived from http.*) and never writes the local file', async () => {
+it('set defaults to this project\'s gateway over its local socket and never writes the local file', async () => {
   const { file, source } = await fixture();
   const fetch = fakeHost();
   await run('set', 'log_level', 'debug');
   expect(await readFile(file, 'utf8')).toBe(source);
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(String(fetch.mock.calls[0]![0])).toBe('http://127.0.0.1:18086/api/console/request');
-  expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer file-token' });
+  // The local owner needs no token: neither http.token nor the bootstrap token is sent.
+  expect(fetch.mock.calls[0]![1]?.headers).not.toHaveProperty('authorization');
   expect(body(fetch, 1)).toMatchObject({ type: 'config:patch-project', expectedRevision: sourceRevision,
     patches: [{ op: 'set', path: ['log_level'], value: 'debug' }] });
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+});
+
+it('without this project\'s gateway it refuses instead of calling the configured port (#1250)', async () => {
+  // Another project's gateway may listen on 127.0.0.1:18086: no request, no token may go there.
+  const { file, source, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  vi.stubEnv('HTTP_TOKEN', 'bootstrap-token');
+  gateway.running = false;
+  const fetch = fakeHost();
+  for (const args of [['get', 'log_level'], ['set', 'log_level', 'debug'], ['unset', 'log_level'], ['list']]) {
+    await run(...args);
+    expect(last(output), args.join(' ')).toMatchObject({ status: 'not-connected', message: expect.stringContaining('本项目的网关未运行') });
+    expect(last(output).message).toContain('--offline');
+    expect(process.exitCode).toBe(CONFIG_EXIT_CODES.notConnected);
+  }
+  expect(fetch).not.toHaveBeenCalled();
+  expect(await readFile(file, 'utf8')).toBe(source);
+});
+
+it('refuses an explicit loopback --host that serves another project, before sending the token (#1250)', async () => {
+  const { root, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const requests: { url: string; init?: RequestInit }[] = [];
+  const otherProject = projectIdentity(join(root, '..', 'another-project'));
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok', project: { id: otherProject } }));
+    return new Response(JSON.stringify({ data: sourceReply }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(last(output)).toMatchObject({ status: 'project-mismatch', message: expect.stringContaining('另一个项目') });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+  expect(requests.map(request => request.url)).toEqual(['http://127.0.0.1:8068/pub/health']);
+  expect(requests[0]!.init?.headers).toBeUndefined();
+});
+
+it('accepts an explicit loopback --host that reports this project', async () => {
+  const { root } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, options?: RequestInit) => {
+    urls.push(String(url));
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ project: { id: projectIdentity(root) } }));
+    const request = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ data: request.type === 'config:get-source' ? sourceReply : saved() }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(urls).toEqual(['http://127.0.0.1:8068/pub/health', 'http://127.0.0.1:8068/api/console/request', 'http://127.0.0.1:8068/api/console/request']);
 });
 
 it('ZHIN_CONSOLE_TOKEN wins over http.token; --host wins over http.* and keeps JSON Pointer paths', async () => {
@@ -241,12 +303,12 @@ it('human mode shows the latest (masked) values of a conflict instead of a JSON 
 });
 
 it.each([['0.0.0.0', 'http://127.0.0.1:18086/api/console/request'], ['::', 'http://[::1]:18086/api/console/request']])(
-  'a wildcard bind address %s derives a loopback connection that may carry the token', async (bind, url) => {
+  'a wildcard bind address %s derives the loopback URL of the local-socket request, without the file token', async (bind, url) => {
     await fixture({ configVersion: 2, plugins: {}, http: { host: bind, port: 18086, token: 'file-token' } });
     const fetch = fakeHost();
     await run('set', 'log_level', 'debug');
     expect(String(fetch.mock.calls[0]![0])).toBe(url);
-    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer file-token' });
+    expect(fetch.mock.calls[0]![1]?.headers).not.toHaveProperty('authorization');
     expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
   });
 
@@ -296,7 +358,7 @@ it('--offline cannot be combined with --host and never touches the network', asy
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
 
-it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
+it('sends HTTP_TOKEN to an explicit --host when ZHIN_CONSOLE_TOKEN is unset', async () => {
   const prevConsole = process.env.ZHIN_CONSOLE_TOKEN;
   const prevHttp = process.env.HTTP_TOKEN;
   delete process.env.ZHIN_CONSOLE_TOKEN;
@@ -304,7 +366,7 @@ it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
   try {
     await fixture({ configVersion: 2, plugins: {}, http: { host: '127.0.0.1', port: 18086 } });
     const fetch = fakeHost();
-    await run('set', 'log_level', 'debug');
+    await run('set', 'log_level', 'debug', '--host', 'https://remote.test');
     expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer env-http-token' });
     expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
   } finally {

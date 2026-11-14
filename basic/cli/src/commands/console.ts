@@ -38,7 +38,7 @@ import {
 } from '@zhin.js/gateway/local';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { openGatewayStore, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
-import { loadHostHttpConfig } from '../utils/host-http.js';
+import { localGatewayFetch } from '../utils/host-http.js';
 import { describeGatewayError, probeGateway } from '../utils/gateway.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
 
@@ -193,17 +193,8 @@ export const defaultConsoleCliIo: ConsoleCliIo = {
     return Buffer.concat(chunks).toString('utf8');
   },
   prompt: questions => inquirer.prompt(questions as never) as never,
-  hostRunning: async projectRoot => {
-    try {
-      const http = await loadHostHttpConfig(projectRoot);
-      if (!http) return false;
-      const origin = new URL(http.baseUrl).origin;
-      const response = await fetch(`${origin}/pub/health`, { signal: AbortSignal.timeout(1500) });
-      return response.ok;
-    } catch {
-      return false;
-    }
-  },
+  // Only this project's gateway counts: probing the configured port could find another project's (#1250).
+  hostRunning: async projectRoot => Boolean(await localGatewayFetch(projectRoot)),
 };
 
 export interface ConsoleInitOptions {

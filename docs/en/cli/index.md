@@ -188,7 +188,7 @@ zhin config check [--fix] [--json] [--strict]
 
 `get` / `set` / `unset` / `list` **talk to the running Host by default** (`POST {base}/console/request`). A write first reads the config revision, then submits one `config:patch-project`; the Host performs the CAS, schema validation, save and any live application. The CLI never does its own read-modify-write and never retries.
 
-- Connection: `--host <url>` wins, and then the token comes only from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). Without `--host` the address is derived from `http.host` / `http.port` / `http.base` (a wildcard bind `0.0.0.0` / `::` connects to `127.0.0.1` / `[::1]`), and only then does an unset variable fall back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
+- Connection: without `--host` the command only uses **this project's gateway** over its local control socket (`.zhin/gateway.sock`), as the local owner (or as the `ZHIN_CONSOLE_TOKEN` principal when that is set). When this project's gateway is not running the command fails with "本项目的网关未运行" (start it with `zhin start`, or pass `--offline`) and does **not** connect to `127.0.0.1:<http.port>`, where another project's gateway may be listening. To reach another address pass `--host <url>` explicitly; the token then comes from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). A loopback `--host` (`127.0.0.1` / `localhost` / `[::1]`) is checked first: if its `/pub/health` reports a different project id the command refuses without sending the request or the token. Sending a token to a non-loopback address requires HTTPS. `zhin send`, `zhin schedule`, `zhin watch` and `zhin packages … --live` follow the same rules (the first three also accept `--host <url>`).
 - **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and the CLI sends no request to the Host, but loading plugin declarations executes module top-level code (which may itself use the network). An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
 - Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
 - With `--json`, `get` / `list` / `set` / `unset` print exactly one line of compact JSON, for scripts; without it they print only human-readable text (`config path` and `config check` have their own formats).
@@ -496,12 +496,12 @@ States returned by `status`:
 
 ## Working with a running bot
 
-These commands talk to a running bot over HTTP, so start it with `zhin start` with the HTTP service enabled first. Requests carry the Console API token from `ZHIN_CONSOLE_TOKEN` (issued in your Console account settings, never more than your own permissions); after Console setup `http.token` is always refused, so without an API token these commands get 401.
+These commands work on a running bot, so start it with `zhin start` in the project directory first. By default they only use **this project's gateway** over its local control socket (`.zhin/gateway.sock`), as the local owner, without a token; when this project's gateway is not running they fail with "本项目的网关未运行" and never connect to the local `http.port` (another project's gateway may be listening there). To reach another address pass `--host <url>`: requests then carry the Console API token from `ZHIN_CONSOLE_TOKEN` (issued in your Console account settings, never more than your own permissions; after Console setup `http.token` is always refused), and a loopback address is first checked against the project id its `/pub/health` reports — a different project is refused.
 
 ### send: Send a Message to a Running Bot
 
 ```bash
-zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
+zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>] [--host <url>]
 ```
 
 `scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` may be omitted only when the instance has a single adapter; `-e` picks an account ID, defaulting to the adapter's first online account.
@@ -511,7 +511,7 @@ A failed send shows the reason (for example no open Sandbox session, an account 
 ### watch: Monitor a Running Instance
 
 ```bash
-zhin watch [-i 3] [--once] [--json] [--no-clear]
+zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 ```
 
 Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--once` fetches once and exits; `--json` suits scripts.
@@ -521,7 +521,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin start` and have `assistant.enabled`.
 
 ```bash
-zhin schedule list
+zhin schedule list [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"

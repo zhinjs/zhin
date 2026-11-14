@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { connectableHost, hostGet, listHostEndpoints, loadHostHttpConfig } from '../../src/utils/host-http.js';
+import {
+  connectableHost, hostGet, HostTargetError, listHostEndpoints, loadHostHttpConfig, normalizeHostUrl, verifyHostProject,
+} from '../../src/utils/host-http.js';
 import { LOCAL_GATEWAY_RPC, LocalControlServer } from '@zhin.js/gateway/local';
+import { projectIdentity } from '@zhin.js/gateway/project';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -113,17 +116,18 @@ describe('loadHostHttpConfig', () => {
     expect(await loadHostHttpConfig(dir)).toBeNull();
   });
 
-  it('resolves the token through .env and lets .env.<environment> override it', async () => {
+  it('resolves the token of an explicit --host through .env and lets .env.<environment> override it', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
     fs.writeFileSync(path.join(dir, 'zhin.config.yml'),
       'http:\n  host: 0.0.0.0\n  port: 9100\n  base: /admin/\n  token: ${ZHIN_TEST_HOST_HTTP_TOKEN}\n');
     fs.writeFileSync(path.join(dir, '.env'), 'ZHIN_TEST_HOST_HTTP_TOKEN="base-token"\n');
-    expect(await loadHostHttpConfig(dir, 'development'))
-      .toEqual({ baseUrl: 'http://127.0.0.1:9100/admin', token: 'base-token' });
+    const host = { host: 'https://bot.example.com/admin/' };
+    expect(await loadHostHttpConfig(dir, 'development', host))
+      .toEqual({ baseUrl: 'https://bot.example.com/admin', token: 'base-token' });
 
     fs.writeFileSync(path.join(dir, '.env.production'), 'ZHIN_TEST_HOST_HTTP_TOKEN=prod-token\n');
-    expect((await loadHostHttpConfig(dir, 'production'))?.token).toBe('prod-token');
-    expect((await loadHostHttpConfig(dir, 'development'))?.token).toBe('base-token');
+    expect((await loadHostHttpConfig(dir, 'production', host))?.token).toBe('prod-token');
+    expect((await loadHostHttpConfig(dir, 'development', host))?.token).toBe('base-token');
   });
 
   it.runIf(process.platform !== 'win32')('uses the local control socket while a gateway runs (no token needed)', async () => {
@@ -177,9 +181,65 @@ describe('loadHostHttpConfig', () => {
     }
   });
 
-  it('falls back to the default listener', async () => {
+  it('never falls back to the configured port when this project\'s gateway is not running (#1250)', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
-    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'log_level: info\n');
-    expect(await loadHostHttpConfig(dir)).toEqual({ baseUrl: 'http://127.0.0.1:8086/api', token: '' });
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 8068\n  token: bootstrap-token\n');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const previous = process.env.ZHIN_CONSOLE_TOKEN;
+    process.env.ZHIN_CONSOLE_TOKEN = 'user-api-token';
+    try {
+      const error = await loadHostHttpConfig(dir).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(HostTargetError);
+      expect(error).toMatchObject({ code: 'gateway-not-running', message: expect.stringContaining('本项目的网关未运行') });
+      expect((error as Error).message).toContain('--host');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.ZHIN_CONSOLE_TOKEN;
+      else process.env.ZHIN_CONSOLE_TOKEN = previous;
+    }
+  });
+
+  it('checks the project of an explicit loopback --host before returning it (#1250)', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 8068\n');
+    const health = (id?: string) => vi.fn(async () => new Response(JSON.stringify({ success: true, status: 'ok', ...(id ? { project: { id } } : {}) })));
+    const other = health(projectIdentity(path.join(dir, 'elsewhere')));
+    await expect(loadHostHttpConfig(dir, 'development', { host: 'http://127.0.0.1:8068', fetch: other as never }))
+      .rejects.toMatchObject({ code: 'project-mismatch' });
+    expect(other).toHaveBeenCalledWith('http://127.0.0.1:8068/pub/health', expect.anything());
+    const same = health(projectIdentity(dir));
+    expect(await loadHostHttpConfig(dir, 'development', { host: 'http://localhost:8068/', fetch: same as never }))
+      .toEqual({ baseUrl: 'http://localhost:8068/api', token: '' });
+  });
+});
+
+describe('verifyHostProject (#1250)', () => {
+  const root = path.join(os.tmpdir(), 'zhin-verify-project');
+  const reply = (body: unknown) => vi.fn(async () => new Response(JSON.stringify(body)));
+
+  it('refuses a loopback gateway of another project', async () => {
+    const fetch = reply({ project: { id: projectIdentity(`${root}-a`) } });
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: fetch as never })).rejects.toBeInstanceOf(HostTargetError);
+  });
+
+  it('accepts its own project and warns when the gateway reports no project', async () => {
+    await expect(verifyHostProject('http://[::1]:8068/api', root, { fetch: reply({ project: { id: projectIdentity(root) } }) as never })).resolves.toBeUndefined();
+    const warn = vi.fn();
+    await expect(verifyHostProject('http://127.0.0.1:8068/api', root, { fetch: reply({ status: 'ok' }) as never, warn })).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('没有报告项目标识'));
+  });
+
+  it('does not probe remote hosts named explicitly', async () => {
+    const fetch = vi.fn();
+    await verifyHostProject('https://bot.example.com/api', root, { fetch: fetch as never });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('normalizes --host and refuses credentials in it', () => {
+    expect(normalizeHostUrl('http://127.0.0.1:8068')).toBe('http://127.0.0.1:8068/api');
+    expect(normalizeHostUrl('https://h.test/custom/')).toBe('https://h.test/custom');
+    expect(() => normalizeHostUrl('http://user:pass@h.test')).toThrow(HostTargetError);
+    expect(() => normalizeHostUrl('ftp://h.test')).toThrow(HostTargetError);
   });
 });
