@@ -58,7 +58,15 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 
 ### 回滚（降级到旧版本） {#rollback}
 
-迁移记录升级为版本 2 时，原版本 1 文件保存在 `.zhin/chat-roles-migration.v1.json`。降级前把它改名回 `.zhin/chat-roles-migration.json`（旧版本读不懂版本 2，会报 malformed）。`chat_roles` 表结构未变，已授予的角色不受影响；旧版本会对配置中再次出现的人员字段重新启动失败。
+迁移记录升级为版本 2 时，原版本 1 文件保存在 `.zhin/chat-roles-migration.v1.json`。降级前把它改名回 `.zhin/chat-roles-migration.json`（旧版本读不懂版本 2，会报 malformed）。旧版本会对配置中再次出现的人员字段重新启动失败。
+
+**人模型（ADR 0060 P2）的回滚：**
+
+- 升级后首次启动时，`chat_roles` 新增可空列 `principal_id`，每条已有授予的身份获得自己的「人」并回填（只处理没有 `principal_id` 的行，可重复执行）；迁移前的全部授予先导出到 `.zhin/backups/chat-roles-<时间>.json`（权限 0600）。新增的 `chat_principals` / `chat_identities` / `chat_principal_console_links` 三张表只新增，不改动旧数据。
+- 过渡期内 `chat_roles` 仍**双写** `adapter` / `user_id`，行 id 仍是 `sha256(level, scope_key, adapter, user_id)`：降级后旧版本按旧列读取与撤销，角色与升级前一致；归并信息（哪些身份是同一个人）在旧版本中不生效，但不会丢失角色。归并后的人在旧版本中只有被授予时所用的那个身份持有该授予。
+- 降级期间旧版本新写入的授予没有 `principal_id`；再次升级时它们按身份归入已有的人，同一个人在同一作用范围有两条授予时保留较高者（从不降级）。
+- 也可以用 `zhin chat-roles export` 先导出，降级再升级后用 `zhin chat-roles import` 合并回去（只新增或提升）。
+- 下一个版本（ADR 0060 P4）会删除 `adapter` / `user_id` 双写列；跨过那个版本后不能再直接降级到 P2 之前。
 
 ## 2. 平台身份不再映射为 zhin 角色 {#mappings}
 

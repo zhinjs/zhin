@@ -107,7 +107,8 @@ export class ChatOwnerClaim {
   /** Opens a claim when no global owner exists (rotating nothing that is already open), closes it otherwise. */
   async refresh(): Promise<void> {
     this.#unsubscribe ??= this.#options.roles.store.subscribe(change => {
-      if (change.level !== 'global') return;
+      // Merges and splits never change whether a global owner exists.
+      if (!('level' in change) || change.level !== 'global') return;
       void this.refresh().catch(() => undefined);
     });
     if (hasGlobalOwner(this.#options.roles) || !this.#options.roles.store.persistent) {

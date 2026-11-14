@@ -247,7 +247,7 @@ export async function executeFeatureChat(
   if (!actor) return messages(locale, 'unknownConversation');
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
   if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
-    && !deps.roles.store.list().some(entry => entry.adapter === actor.identity.adapter && entry.userId === actor.identity.userId && chatRoleIncludes(entry.role, 'admin'))) {
+    && !deps.roles.heldBy(actor.identity).some(entry => chatRoleIncludes(entry.role, 'admin'))) {
     return deniedReply(deps, actor, locale);
   }
   const words = input.tokens.map(token => typeof token === 'string' ? token : undefined);

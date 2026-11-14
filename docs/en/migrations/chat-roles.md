@@ -58,7 +58,15 @@ On a new deployment (no global `owner` at all):
 
 ### Rollback (downgrading) {#rollback}
 
-When the migration record is upgraded to version 2, the original version 1 file is kept as `.zhin/chat-roles-migration.v1.json`. Before downgrading, rename it back to `.zhin/chat-roles-migration.json` (older versions cannot read version 2 and report it as malformed). The `chat_roles` table is unchanged, so granted roles stay; older versions again stop startup on people fields in the configuration.
+When the migration record is upgraded to version 2, the original version 1 file is kept as `.zhin/chat-roles-migration.v1.json`. Before downgrading, rename it back to `.zhin/chat-roles-migration.json` (older versions cannot read version 2 and report it as malformed). Older versions again stop startup on people fields in the configuration.
+
+**Rolling back the person model (ADR 0060 P2):**
+
+- On the first start after the upgrade `chat_roles` gets a nullable `principal_id` column; every existing grant's identity gets its own person and the column is backfilled (only rows without `principal_id`, safe to repeat). All grants are exported first to `.zhin/backups/chat-roles-<time>.json` (mode 0600). The new tables `chat_principals` / `chat_identities` / `chat_principal_console_links` are additive.
+- During the transition `chat_roles` keeps **dual-writing** `adapter` / `user_id` and the row id stays `sha256(level, scope_key, adapter, user_id)`: after a downgrade the older version reads and revokes the same rows and holds the same roles; merges (which identities are one person) do not apply there, but no role is lost. A merged person keeps a grant only on the identity it was granted to.
+- Grants written by the older version have no `principal_id`; on the next upgrade they join the identity's person, and when one person ends up with two grants at one scope the higher one stays (never lowered).
+- Alternatively export with `zhin chat-roles export` first and merge back with `zhin chat-roles import` (adds or raises only).
+- The next release (ADR 0060 P4) drops the dual-written `adapter` / `user_id` columns; past that release you cannot downgrade below P2 directly.
 
 ## 2. Platform standing is no longer mapped into zhin roles {#mappings}
 

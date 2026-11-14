@@ -33,13 +33,14 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import {
-  higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatRole,
+  higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatIdentity, type ChatRole,
 } from '@zhin.js/core';
 import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
 import {
   readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type FeatureConfigLevel, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatPeople } from './chat-people.js';
 
 export const CHAT_ROLE_UPGRADE_GUIDE = 'docs/migrations/chat-roles.md';
 export const CHAT_ROLE_MIGRATION_FILE = join('.zhin', 'chat-roles-migration.json');
@@ -335,7 +336,7 @@ async function applyConfiguredGrant(
     if (classified !== 'platform') return { result: 'skipped', reason: 'unknown-adapter' };
   }
   if (!options.persistent) {
-    return { result: roles.store.seed([{ ...grant, grantedBy: options.grantedBy }]) ? 'memory' : 'kept' };
+    return { result: await roles.store.seed([{ ...grant, grantedBy: options.grantedBy }]) ? 'memory' : 'kept' };
   }
   const existing = roles.store.get(grant.level, grant.key, grant);
   if (existing && higherChatRole(existing.role, grant.role) === existing.role) return { result: 'kept' };
@@ -437,6 +438,19 @@ export async function prepareChatRoleMigration(options: Readonly<{
       }
       for (const entry of imported) {
         if (entry.result === 'written' || entry.result === 'upgraded') auditImport(completeOptions.audit, 'migration', entry, 'ok', { result: entry.result });
+      }
+      // ADR 0060 §4.1: one `ai.trigger.*` id across adapters is one person.
+      const people = new ChatPeople({ store: roles.store, ...(completeOptions.audit ? { audit: () => completeOptions.audit } : {}) });
+      const named = new Map<string, ChatIdentity[]>();
+      for (const entry of imported) {
+        if (!entry.source.startsWith('ai.trigger.') || entry.result === 'skipped') continue;
+        const list = named.get(entry.userId) ?? [];
+        list.push({ adapter: entry.adapter, userId: entry.userId });
+        named.set(entry.userId, list);
+      }
+      for (const identities of named.values()) {
+        await people.mergeConfigured(identities, 'migration:ai.trigger').catch(error =>
+          options.logger.warn(`Chat roles migration: ai.trigger ids not grouped into one person (${(error as Error).message}).`));
       }
       const { memoryOnlyAt: _memoryOnly, ...done } = record_;
       await writeRecord(file, { ...done, status: 'done', completedAt: now(), imported: Object.freeze(imported) }, v1Text);

@@ -171,6 +171,11 @@ export interface MessageSenderRef {
   readonly chatRole?: ChatRole;
   /** Per role, the topmost level it is held at on this conversation's chain. Set by the Runtime only. */
   readonly chatRoleLevels?: ChatRoleLevels;
+  /**
+   * The person the sender's identity belongs to (ADR 0060 §2.3): a stored `cp_…` id, or
+   * `implicit:<alias>:<userId>`. Set by the Runtime only; an adapter's own value is dropped.
+   */
+  readonly chatPrincipal?: string;
 }
 
 export interface IncomingMessage {

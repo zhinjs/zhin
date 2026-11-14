@@ -15,9 +15,12 @@ import {
 } from '@zhin.js/im-contract';
 import { createToken } from '@zhin.js/plugin-runtime';
 import {
-  chatRoleIncludes, chatScopeChain, higherChatRole, isChatIdentity, normalizeChatRoleScope,
+  chatPrincipalOf, chatRoleEntryAppliesTo, chatRoleEntryPrincipalId, chatRoleIncludes, chatScopeChain, higherChatRole,
+  implicitChatPrincipalId, isChatIdentity, normalizeChatRoleScope,
   type ChatIdentity, type ChatRole, type ChatRoleEntry, type ChatRoleService,
 } from './roles.js';
+
+export { implicitChatPrincipalId } from './roles.js';
 
 /** The sender facts the Runtime writes on every inbound message (`sender.chatRole` / `sender.chatRoleLevels`). */
 export interface ChatRoleSenderFacts {
@@ -58,7 +61,7 @@ export type ChatScopeRef =
   | { readonly level: 'conversation'; readonly conversation: ConversationRef };
 
 /**
- * A person (ADR 0060 §2). Until the person model is stored (ADR 0060 P2) every identity is its own
+ * A person (ADR 0060 §2): a stored person has a `cp_…` id; an identity without one is its own
  * implicit single-identity person, with the id `implicit:<alias>:<userId>`.
  */
 export interface ChatPrincipalView {
@@ -68,9 +71,12 @@ export interface ChatPrincipalView {
 }
 
 /** A stored grant was written (`grant`, including a changed role) or removed (`revoke`). */
-export interface ChatRoleChange {
+export interface ChatRoleGrantChange {
   readonly kind: 'grant' | 'revoke';
+  /** The identity the grant was written for. */
   readonly identity: ChatIdentity;
+  /** The person holding the grant (ADR 0060 §2.3). */
+  readonly principalId?: string;
   readonly level: ChatRoleLevel;
   /** Normalized scope key (`''` for global). */
   readonly key: string;
@@ -78,9 +84,26 @@ export interface ChatRoleChange {
   readonly role?: ChatRole;
 }
 
+/**
+ * Who belongs to whom changed (ADR 0060 §2.2): `merge` moved every identity of `from` to
+ * `principalId` (grants kept, the higher one where both held a scope); `split` gave `identities`
+ * their own new person `principalId`, out of `from`.
+ */
+export interface ChatPrincipalChange {
+  readonly kind: 'merge' | 'split';
+  readonly principalId: string;
+  readonly from: string;
+  readonly identities: readonly ChatIdentity[];
+}
+
+/** Role or ownership changes (`ChatRoleReader.subscribe`). */
+export type ChatRoleChange = ChatRoleGrantChange | ChatPrincipalChange;
+
 /** The sender facts of one identity in one conversation (what the Runtime writes on `sender`). */
 export interface ChatRoleFacts {
   readonly identity: ChatIdentity;
+  /** The person the identity belongs to (what the Runtime writes as `sender.chatPrincipal`). */
+  readonly chatPrincipal?: string;
   readonly chatRole?: ChatRole;
   readonly chatRoleLevels?: ChatRoleLevels;
 }
@@ -98,7 +121,7 @@ export interface ChatRoleHoldersOptions {
 export interface ChatRoleReader {
   /** Highest role of a platform identity effective at `scope` (default global). */
   roleOf(identity: ChatIdentity, scope?: ChatScopeRef): ChatRole | undefined;
-  /** The person an identity belongs to (an implicit single-identity person until ADR 0060 P2). */
+  /** The person an identity belongs to (its implicit single-identity person when none is stored). */
   principalOf(identity: ChatIdentity): ChatPrincipalView;
   /** People holding `role` (or a higher one), with their identities — e.g. whom to notify. */
   holders(role: ChatRole, options?: ChatRoleHoldersOptions): readonly ChatPrincipalView[];
@@ -107,7 +130,7 @@ export interface ChatRoleReader {
    * when the conversation cannot be addressed.
    */
   factsOf(conversation: ConversationRef, userId: string): ChatRoleFacts | undefined;
-  /** Grant / revoke notifications; returns the unsubscribe function. */
+  /** Grant / revoke / merge / split notifications; returns the unsubscribe function. */
   subscribe(listener: (change: ChatRoleChange) => void): () => void;
 }
 
@@ -115,11 +138,6 @@ export const chatRolesToken = createToken<ChatRoleReader>(
   'zhin.chat-roles',
   'Read-only chat roles (ADR 0060 §6): roleOf / principalOf / holders / factsOf / subscribe',
 );
-
-/** Id of the implicit single-identity person of `identity`. */
-export function implicitChatPrincipalId(identity: ChatIdentity): string {
-  return `implicit:${identity.adapter}:${identity.userId}`;
-}
 
 export interface ChatRoleReaderOptions {
   /** The role resolution (undefined while the stores are not loaded: nothing is held). */
@@ -145,10 +163,14 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
     } catch { return undefined; }
   };
   const chainOf = (key: string): readonly string[] => key === '' ? [''] : chatScopeChain(key);
-  const view = (identity: ChatIdentity): ChatPrincipalView => Object.freeze({
-    id: implicitChatPrincipalId(identity),
-    identities: Object.freeze([Object.freeze({ adapter: identity.adapter, userId: identity.userId })]),
-  });
+  const view = (identity: ChatIdentity, service: ChatRoleService | undefined): ChatPrincipalView => {
+    const record = service ? chatPrincipalOf(service.store, identity) : undefined;
+    return Object.freeze({
+      id: record?.id ?? implicitChatPrincipalId(identity),
+      ...(record?.displayName ? { displayName: record.displayName } : {}),
+      identities: Object.freeze((record?.identities ?? [identity]).map(held => Object.freeze({ adapter: held.adapter, userId: held.userId }))),
+    });
+  };
   const api: ChatRoleReader = {
     roleOf(identity, scope) {
       const service = options.roles();
@@ -157,7 +179,9 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
       try { return service.roleAt(identity, key); } catch { return undefined; }
     },
     principalOf(identity) {
-      return view(identity);
+      let service: ChatRoleService | undefined;
+      try { service = options.roles(); } catch { service = undefined; }
+      return view(identity, isChatIdentity(identity) ? service : undefined);
     },
     holders(role, holderOptions = {}) {
       const service = options.roles();
@@ -165,16 +189,28 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
       if (!service || key === undefined) return Object.freeze([]);
       const chain = chainOf(key);
       const minimum = holderOptions.level ?? (holderOptions.scope ? 'conversation' : 'global');
-      const seen = new Map<string, ChatPrincipalView>();
+      // Per person, the identities the matching grants count for (ADR 0060 Q10: below global
+      // only those on the scope's adapter), optionally narrowed to one adapter.
+      const seen = new Map<string, { view: ChatPrincipalView; identities: Map<string, ChatIdentity> }>();
       const entries: readonly ChatRoleEntry[] = service.store.list();
       for (const entry of entries) {
         if (!chain.includes(entry.key) || !chatRoleIncludes(entry.role, role)) continue;
         if (LEVEL_INDEX(entry.level as ChatRoleLevel) > LEVEL_INDEX(minimum)) continue;
-        if (holderOptions.adapter !== undefined && entry.adapter !== holderOptions.adapter) continue;
-        const principal = view(entry);
-        if (!seen.has(principal.id)) seen.set(principal.id, principal);
+        const id = chatRoleEntryPrincipalId(entry);
+        const stored = entry.principalId ? service.store.principal?.(entry.principalId) : undefined;
+        const principal = stored
+          ? Object.freeze({ id: stored.id, ...(stored.displayName ? { displayName: stored.displayName } : {}), identities: stored.identities })
+          : view(entry, undefined);
+        const holder = seen.get(id) ?? { view: principal, identities: new Map<string, ChatIdentity>() };
+        for (const identity of principal.identities) {
+          if (!chatRoleEntryAppliesTo(entry, identity)) continue;
+          if (holderOptions.adapter !== undefined && identity.adapter !== holderOptions.adapter) continue;
+          holder.identities.set(`${identity.adapter}\0${identity.userId}`, Object.freeze({ adapter: identity.adapter, userId: identity.userId }));
+        }
+        seen.set(id, holder);
       }
-      return Object.freeze([...seen.values()]);
+      return Object.freeze([...seen.values()].filter(holder => holder.identities.size > 0)
+        .map(holder => Object.freeze({ ...holder.view, identities: Object.freeze([...holder.identities.values()]) })));
     },
     factsOf(conversation, userId) {
       const key = scopeKey({ level: 'conversation', conversation });
@@ -184,7 +220,11 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
       if (!adapter || !isChatIdentity(identity)) return undefined;
       const service = options.roles();
       let entries: readonly ChatRoleEntry[] = [];
-      try { entries = service?.entriesFor(identity, key) ?? []; } catch { entries = []; }
+      let chatPrincipal: string | undefined;
+      try {
+        chatPrincipal = service?.principalOf(identity).id;
+        entries = service?.entriesFor(identity, key) ?? [];
+      } catch { entries = []; }
       let chatRole: ChatRole | undefined;
       const levels: Partial<Record<ChatRoleName, ChatRoleLevel>> = {};
       for (const entry of entries) chatRole = higherChatRole(chatRole, entry.role);
@@ -194,7 +234,8 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
         if (top) levels[candidate] = top.level as ChatRoleLevel;
       }
       const chatRoleLevels = normalizeChatRoleLevels(levels);
-      return Object.freeze({ identity: Object.freeze(identity), ...(chatRole ? { chatRole } : {}), ...(chatRole && chatRoleLevels ? { chatRoleLevels } : {}) });
+      return Object.freeze({ identity: Object.freeze(identity), ...(chatPrincipal ? { chatPrincipal } : {}),
+        ...(chatRole ? { chatRole } : {}), ...(chatRole && chatRoleLevels ? { chatRoleLevels } : {}) });
     },
     subscribe(listener) {
       return options.subscribe ? options.subscribe(listener) : () => undefined;

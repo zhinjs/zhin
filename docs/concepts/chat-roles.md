@@ -95,11 +95,21 @@ interface PlatformStanding {
 
 | 名单 | 现状 | 方向 |
 | --- | --- | --- |
-| 聊天角色 `chat_roles` | 唯一事实来源；身份是「适配器别名 + 用户 id」 | ADR 0060 P2 起在其上增加「人」（一个人可有多个平台身份） |
+| 聊天角色 `chat_roles` | 唯一事实来源；授予属于「人」，一个人可有多个平台身份（ADR 0060 P2） | — |
 | `ai.personalPrincipals` | 仍从配置读取，只表达个人推理配置归谁，不授予角色 | P3 改为「人 ↔ Console 账号」链接，配置字段只作一次性导入 |
 | 适配器 `master` / `trusted`、`ai.trigger.masters` / `trusted` | 只作**种子**：首次启动导入；之后再出现不自动授予，进入 Console「需要你处理」等待确认导入（见[升级指南](../migrations/chat-roles.md)） | 长期作为种子格式支持 |
 | 插件自建名单（`masters` 等） | 不推荐 | 改用 `isOwner` / `hasChatRole` / `chatRolesToken`（见下节） |
-| Console 账号 | 另一个主体体系：Console 权限不等于聊天角色 | P2 起可与聊天中的「人」一对一链接（不传递权限） |
+| Console 账号 | 另一个主体体系：Console 权限不等于聊天角色；可与聊天中的「人」一对一链接（不传递权限，P2） | P3：Console「聊天成员」页与个人推理主体改读链接 |
+
+### 人、平台身份与 Console 链接 {#people}
+
+- **人**（`chat_principals`，id 形如 `cp_…`）持有角色授予；一个**平台身份**（适配器实例别名 + 用户 id，`chat_identities`）至多属于一个人。从未被授予角色、也未绑定的发言者是「隐式单身份人」（id `implicit:<别名>:<用户 id>`），不建行。
+- **全局**授予对这个人的全部平台身份生效；**低于全局**的授予（适配器 / 账号 / 会话层）只对这个人在**该作用范围所属适配器**上的身份生效——在 `qq` 适配器层授予某人 `admin`，他的 Telegram 身份不会因此在 Telegram 上成为 admin。
+- 归并 / 拆分：Console RPC `chat-principals.merge` / `split`（需要涉及的每个适配器上的 `iam.manage`；涉及持有全局角色的人时需要**全局** `iam.manage`）。归并时同一作用范围保留较高的角色，从不降级。
+- **把聊天身份绑定到我**：Console 用户（权限 `self.chat-identity`，所有内置角色默认带）获取一次性绑定码（8 位、10 分钟、单次），在聊天中**私聊**机器人发送 `绑定 <码>`（`bind <code>`）。群聊中发送的正确码立即作废；模拟适配器上不接受；同一身份已属于别人（已链接其他 Console 用户或已有其他身份）时拒绝；绑定会把角色带到另一个身份上时，需要持有全局 `iam.manage` 的 Console 用户生成的码。一个 Console 用户只链接一个人，反之亦然；链接**不传递任何权限**。
+- Console 用户被删除或禁用时，网关通知实例删除其链接（角色不受影响）。授予记录的 `grantedBy` 是已链接的 Console 用户时，Console 显示链接的人名（`grantedByName`）。
+- 入站消息上 Runtime 写入只读的 `sender.chatPrincipal`（人 id）；适配器或插件自带的同名字段被丢弃。最近发言时间与显示名缓存（供 Console 选择器用，不参与鉴权）保留 90 天。
+- 导出 / 导入：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例，需要全局 `iam.manage`；导入只新增或提升，不降级、不删除、不改挂已属于他人的身份）。
 
 第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用实例日志或 `zhin status` 中的一次性认领码，在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。
 

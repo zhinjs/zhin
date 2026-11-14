@@ -285,8 +285,8 @@ const messages = createMessages({
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
   'roles.noOwner.title': { 'zh-CN': '还没有聊天主人（全局 owner）', en: 'There is no chat owner (global owner) yet' },
   'roles.noOwner.detail': {
-    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。在「聊天角色」中授予全局 owner；平台群主不会自动成为 zhin 角色。',
-    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Grant one under Chat roles; platform group owners never become zhin roles automatically.',
+    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。先「把聊天身份绑定到我」（私聊机器人发送「绑定 <码>」），再在「聊天角色」中把自己设为全局 owner；平台群主不会自动成为 zhin 角色。',
+    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
   },
   'roles.noOwner.claim': {
     'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见实例启动日志或 zhin status（一次性，重启轮换）。',

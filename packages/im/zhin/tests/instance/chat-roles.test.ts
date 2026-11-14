@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from '@zhin.js/host-http';
-import { featureScopeTarget } from '@zhin.js/console-protocol';
 import {
   ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
-import { CHAT_ROLES_RPC } from '@zhin.js/console-protocol';
+import { CHAT_ROLES_RPC, featureScopeTarget } from '@zhin.js/console-protocol';
+import { defineChatPrincipalTables } from '../../src/instance/chat-principals.js';
 import { dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 
@@ -45,6 +45,7 @@ describe('chat role storage (ADR 0056)', () => {
     const open = async () => {
       const host = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'bot.db') });
       defineChatRoleTable(host);
+      defineChatPrincipalTables(host);
       await host.start();
       return host;
     };
@@ -160,12 +161,12 @@ describe('owner approval address (ADR 0056 §2)', () => {
     const database = { dialect: 'memory', started: false, models: new Map(), define: () => undefined } as never;
     const host = createFeatureHost({ database, hostConfig: {}, snapshots: () => ({ acquire: () => { throw new Error('unused'); } }) as never });
     // `new ChatRoleStore({ database })` refuses writes it cannot persist: seed like the in-memory migration does.
-    host.roles.store.seed([
+    await host.roles.store.seed([
       { level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'account-owner', role: 'owner' },
       { level: 'global', key: '', adapter: 'tg', userId: 'tg-root', role: 'owner' },
     ]);
     expect(host.resolveEndpointOwner('qq', 'bot-1')).toBeUndefined();
-    host.roles.store.seed([{ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' }]);
+    await host.roles.store.seed([{ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' }]);
     expect(host.resolveEndpointOwner('qq', 'bot-1')).toBe('root');
   });
 });

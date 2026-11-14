@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0060：聊天身份与角色的唯一事实来源——人、平台身份与角色绑定
 
-状态：已接受（Accepted，2026-11-14）。所有者按「决定」一节（原「未决问题」）中的推荐结论定案；P0、P1 已实施，P2–P4 待实施。
+状态：已接受（Accepted，2026-11-14）。所有者按「决定」一节（原「未决问题」）中的推荐结论定案；P0、P1、P2 已实施，P3、P4 待实施。
 
 关联：ADR 0049（Console 访问控制）、ADR 0056（聊天角色）、ADR 0057（配置与状态存放：种子导入）、ADR 0059（Console 账号放 `.zhin/gateway.db`）、ADR 0044（能力画像，不按平台名分支）。来源：issue zhinjs/zhin#1250 的部署反馈（`identity-lists-fragmented`、`chat-role-bootstrap`、`sandbox-console-identity-owner`、`role-grant-identity-picker`）。
 
@@ -312,6 +312,18 @@ export type ChatScopeRef =
 - **认领码的本地出口**：`zhin status` 不经网关读取实例内存，而是读实例写入的 `.zhin/chat-owner-claim.json`（文件权限 0600，仅含码、实例 pid 与时间；有全局 owner、认领成功或实例退出时删除）。状态输出只在该文件属于正在运行的实例时（pid 与网关报告的实例 pid 一致，或写于该实例启动之后）显示该码。
 - **认领防暴力尝试**：同一个码累计 5 次错误后作废并轮换（新码只进日志与本地文件）。
 - **`ChatRoleReader.factsOf`**：在 §6 草案之外增加 `factsOf(conversation, userId)`，返回 Runtime 为该发言者写入 `sender` 的同一组事实（身份、`chatRole`、`chatRoleLevels`），供不在消息上下文中的插件（以及 Sandbox 徽章）复用同一解析；P1 中人视图一律是隐式单身份人（`principalOf` 的 `id` 为 `implicit:<alias>:<userId>`，P2 引入 `cp_` id 后显式人的 id 以表为准）。
+
+### 实施中补充的约定（P2）
+
+- **`chat_roles` 的列与行 id**：`principal_id` 以**可空**列追加（`addColumns`，已有表原地加列；旧版本降级后仍能插入行），加载时为没有 `principal_id`（或指向不存在的人）的行建隐式单身份人并回填——这就是幂等迁移；逻辑主键 `(level, scope_key, principal_id)` 由存储层保证（同一人同一作用范围两行时保留较高者并删除另一行）。行 id 仍是 `sha256(level, scope_key, adapter, user_id)`（双写身份），旧版本因此能按自己的算法读取与撤销同一行；拆分等改变双写身份的操作同时改写行 id。首次迁移前把全部旧行导出到 `.zhin/backups/chat-roles-<时间>.json`。
+- **`chat_identities` 也是发言缓存**：`principal_id` 可空（NULL = 隐式单身份人）。为了「最近发言人」选择器，入站发言者会写一行（同一身份同名同范围 10 分钟内不重复写），另存 `last_scope_key`（最近一次发言的会话键，`chat-identities.recent` 按作用范围筛选用）。90 天未发言：无人归属的行删除，有人归属的行清空显示名与范围缓存。「人」仍只在首次授予 / 绑定 / 归并时建行。
+- **自助绑定的边界**：身份已属于链接了其他 Console 用户、或有多个身份的人时拒绝（改由运营者归并）；绑定会把角色带到另一个身份上（被绑定身份的人有授予，或 Console 用户的人有对该身份生效的授予）时，只有在生成绑定码时持有全局 `iam.manage` 的用户可以完成，防止把 owner 的人「钓」到别人身份上。同一身份 10 分钟内错 5 次锁定到窗口结束。模拟适配器不接受绑定（与认领一致）。
+- **拆分**：被拆出的身份得到新的人；原人的全局授予留下；原人在该身份所属适配器上的低于全局的授予，若原人在该适配器上已无其他身份则随身份迁走（否则无人可用）。
+- **配置种子同一人**：首次导入时，`ai.trigger.*` 中同一个 id 在多个适配器上的身份归并为同一人（只归并「只有这个身份、未链接」的人，不把已有的人并掉；审计为 `link_method: import` 的 `chat-principals.merge`）。
+- **网关通知**：沿用既有的 `principal-revoked`（`reason` 为 `deleted` / `disabled` 时实例删除链接，`password` / `bindings` 不删）；网关在实例未就绪时暂存这两类原因，实例下一次报告路由表时补发（内存中，网关重启即忘；网关重启期间删除的用户留下的链接只是显示缓存，不传递权限）。
+- **导出 / 导入**：经运行中实例的 Console RPC `chat-principals.export` / `chat-principals.import`（全局 `iam.manage`；本地网关套接字下 CLI 以本地 owner 身份调用）。导入时角色绑定到身份**当前**所属的人，不按文件里的人 id 改挂；已属于他人的身份跳过。
+- **授予者显示名（Q12）**：`chat-roles.list` 等返回的条目新增 `grantedByName`（`grantedBy` 为 `user:<id>` / `console:user:<id>` 且已链接时）与 `principalId`。Console 显示属 P3。
+- 新 RPC 之外还加了 `chat-identities.me`（`self.chat-identity`：自己的链接、身份、角色与未用的绑定码到期时间；无全局 owner 且调用者持有全局 `iam.manage` 时返回 `suggestGlobalOwner`，供 §3.1 的「设为全局 owner」流程）。
 
 ## 落盘位置（计划）
 

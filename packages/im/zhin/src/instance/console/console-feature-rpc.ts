@@ -56,6 +56,10 @@ export interface FeatureStores {
   readonly claim?: Pick<import('../chat-owner-claim.js').ChatOwnerClaim, 'active'>;
   /** ADR 0060 §4.2: the role migration record (`chat-roles.imports.*`, `chat-roles.imported` / `import-pending`). */
   readonly chatRoleImports?: import('../chat-role-migration.js').ChatRoleImportBook;
+  /** ADR 0060 §2: people behind chat identities (`chat-principals.*`, `chat-identities.*`). */
+  readonly people?: import('../chat-people.js').ChatPeople;
+  /** ADR 0060 §2.4: open bind codes (`chat-identities.bind-code.create`). */
+  readonly bindCodes?: import('../chat-identity-bind.js').ChatIdentityBindCodes;
 }
 
 function conversationDeclaration(schema: JsonSchema | undefined): { conversationFields: readonly string[]; selfServiceFields: readonly string[] } {

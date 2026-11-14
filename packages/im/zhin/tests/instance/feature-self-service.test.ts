@@ -330,7 +330,7 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     const { deps } = await harness();
     const database = { dialect: 'memory', started: true, models: new Map() } as never;
     const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database }) });
-    roles.store.seed([{ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' }]);
+    await roles.store.seed([{ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' }]);
     expect(roles.store.persistent).toBe(false);
     const reply = await executeRoleChat({ tokens: ['grant', 'dave', 'admin'], actor: actor({ user: 'boss' }), locale: 'zh-CN' }, { ...deps, roles });
     expect(reply).toBe('未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。');

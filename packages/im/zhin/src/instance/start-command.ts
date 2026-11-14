@@ -257,6 +257,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots, projectRoot: options.root,
+    ...(controlChannel ? { gatewayMessages: controlChannel } : {}),
     afterLoad: async (roles, candidate, overrides, audit) => {
       await chatRoleMigration.complete(roles, {
         persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
@@ -266,7 +267,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       await featureOverrideMigration.complete(overrides, candidate);
     },
   });
-  const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
+  const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),

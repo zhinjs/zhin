@@ -52,6 +52,26 @@ const newRoles = (): InstanceChatRoleService => new ChatRoleService({ store: new
 const kinds = (alias: string) => alias === 'sandbox' ? 'simulated' as const : alias === 'qq' ? 'platform' as const : undefined;
 
 describe('prepareChatRoleMigration (ADR 0056 §3)', () => {
+  it('ADR 0060 §4.1: one ai.trigger id on several platform adapters becomes one person (never an established one)', async () => {
+    const root = await project();
+    const { port } = configPort(legacyDocument());
+    const log = logger();
+    const migration = await prepareChatRoleMigration({ projectRoot: root, config: port, expand: document => document, logger: log.logger, now: () => 1 });
+    const roles = newRoles();
+    // `helper` on lab already belongs to a person with a Console link: it must stay separate.
+    await roles.store.grant({ level: 'global', key: '', adapter: 'lab', userId: 'helper', role: 'trusted' });
+    const { ChatPeople } = await import('../../src/instance/chat-people.js');
+    await new ChatPeople({ store: roles.store }).linkConsole({ principal: { adapter: 'lab', userId: 'helper' }, consoleUserId: 'u1', via: 'manual', actor: 'test' });
+    await migration.complete(roles, { persistent: true, adapterKind: alias => alias === 'sandbox' ? 'simulated' : 'platform' });
+    const root_ = (adapter: string) => roles.principalOf({ adapter, userId: 'root' });
+    expect(root_('qq').id).toBe(root_('lab').id);
+    expect(root_('qq').identities).toHaveLength(2);
+    expect(roles.principalOf({ adapter: 'qq', userId: 'helper' }).id).not.toBe(roles.principalOf({ adapter: 'lab', userId: 'helper' }).id);
+    // Grouping grants nothing new: same roles as granted per identity.
+    expect(roles.roleAt({ adapter: 'lab', userId: 'root' }, '')).toBe('owner');
+    expect(roles.roleAt({ adapter: 'sandbox', userId: 'root' }, '')).toBeUndefined();
+  });
+
   it('pending → done: records first, removes the fields, writes grants, then refuses the fields', async () => {
     const root = await project();
     const { port, state } = configPort(legacyDocument());

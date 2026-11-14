@@ -59,9 +59,9 @@ describe('chat role public API (ADR 0060 §6)', () => {
     expect(r.holders('admin', { scope: { level: 'conversation', conversation: conversation() }, level: 'endpoint' }).map(person => person.id))
       .toEqual(['implicit:qq:boss', 'implicit:tg:boss-tg', 'implicit:qq:acct']);
     expect(r.principalOf({ adapter: 'qq', userId: 'x' })).toEqual({ id: implicitChatPrincipalId({ adapter: 'qq', userId: 'x' }), identities: [{ adapter: 'qq', userId: 'x' }] });
-    expect(r.factsOf(conversation(), 'acct')).toEqual({ identity: { adapter: 'qq', userId: 'acct' }, chatRole: 'owner',
+    expect(r.factsOf(conversation(), 'acct')).toEqual({ identity: { adapter: 'qq', userId: 'acct' }, chatPrincipal: 'implicit:qq:acct', chatRole: 'owner',
       chatRoleLevels: { owner: 'endpoint', admin: 'endpoint', trusted: 'endpoint' } });
-    expect(r.factsOf(conversation(), 'stranger')).toEqual({ identity: { adapter: 'qq', userId: 'stranger' } });
+    expect(r.factsOf(conversation(), 'stranger')).toEqual({ identity: { adapter: 'qq', userId: 'stranger' }, chatPrincipal: 'implicit:qq:stranger' });
     const unsubscribe = r.subscribe(() => undefined);
     expect(listeners.size).toBe(1);
     unsubscribe();
@@ -90,5 +90,29 @@ describe('command denial text (ADR 0060 §5.3)', () => {
     // Platform conditions keep their own explanation; other conditions stay generic.
     expect((await renderCommandFeedback(denied('platform:admin'), message(), snapshot))?.content).toBe('无法执行此指令：r');
     expect((await renderCommandFeedback(denied('group'), message(), snapshot))?.content).toBe('没有权限执行此指令。');
+  });
+
+  it('resolves stored people: grants follow the person, below global only on the scope adapter (ADR 0060 Q10)', () => {
+    const person = { id: 'cp_person', displayName: 'Alice', identities: [{ adapter: 'qq', userId: 'a-qq' }, { adapter: 'tg', userId: 'a-tg' }] };
+    const entries: ChatRoleEntry[] = [
+      grant({ principalId: 'cp_person', level: 'global', key: '', adapter: 'qq', userId: 'a-qq', role: 'trusted' }),
+      grant({ principalId: 'cp_person', level: 'adapter', key: 'qq', adapter: 'qq', userId: 'a-qq', role: 'admin' }),
+    ];
+    const service = new ChatRoleService({ store: {
+      list: () => entries,
+      principalOf: identity => person.identities.some(held => held.adapter === identity.adapter && held.userId === identity.userId) ? person : undefined,
+      principal: id => id === person.id ? person : undefined,
+    } });
+    const r = createChatRoleReader({ roles: () => service, conversationKey: () => undefined });
+    // The global grant counts for every identity of the person; the qq adapter grant only on qq.
+    expect(r.roleOf({ adapter: 'tg', userId: 'a-tg' })).toBe('trusted');
+    expect(r.roleOf({ adapter: 'qq', userId: 'a-qq' }, { level: 'adapter', adapter: 'qq' })).toBe('admin');
+    expect(r.roleOf({ adapter: 'tg', userId: 'a-tg' }, { level: 'adapter', adapter: 'tg' })).toBe('trusted');
+    expect(service.roleAt({ adapter: 'tg', userId: 'a-tg' }, 'qq')).toBe('trusted');
+    expect(r.principalOf({ adapter: 'tg', userId: 'a-tg' })).toEqual({ id: 'cp_person', displayName: 'Alice', identities: person.identities });
+    expect(r.holders('trusted')).toEqual([{ id: 'cp_person', displayName: 'Alice', identities: person.identities }]);
+    // Holders of the adapter-level admin: only the identity on that adapter.
+    expect(r.holders('admin', { scope: { level: 'adapter', adapter: 'qq' } })).toEqual([{ id: 'cp_person', displayName: 'Alice', identities: [{ adapter: 'qq', userId: 'a-qq' }] }]);
+    expect(service.ownersOf('qq', 'qq')).toEqual([]);
   });
 });

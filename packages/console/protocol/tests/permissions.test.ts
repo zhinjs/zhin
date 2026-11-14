@@ -129,10 +129,12 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).toContain('iam.view');
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).not.toContain('ops.config.read');
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).not.toContain('ops.env.read');
-    expect(CONSOLE_BUILTIN_ROLES.viewer.permissions.every(p => p.endsWith('.view') || p.endsWith('.read'))).toBe(true);
+    // Reads only, plus the caller's own chat identity link (ADR 0060 Q4).
+    expect(CONSOLE_BUILTIN_ROLES.viewer.permissions.every(p => p.endsWith('.view') || p.endsWith('.read') || p === 'self.chat-identity')).toBe(true);
+    for (const role of Object.values(CONSOLE_BUILTIN_ROLES)) expect(role.permissions).toContain('self.chat-identity');
     expect(CONSOLE_BUILTIN_ROLES.operator.permissions).toEqual([
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure', 'feature.toggle', 'agent.view', 'ops.schedule.read',
-      'plugin.perms.read', 'plugin.perms.operate',
+      'plugin.perms.read', 'plugin.perms.operate', 'self.chat-identity',
     ]);
   });
 

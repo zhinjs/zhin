@@ -5,7 +5,8 @@
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
  * when `features.selfService.enabled` is true.
  */
-import { ChatRoleService, chatRolesToken, createChatRoleReader, type ChatRoleReader } from '@zhin.js/core';
+import { ChatRoleService, chatRolesToken, createChatRoleReader, type ChatIdentitySighting, type ChatRoleReader } from '@zhin.js/core';
+import type { GatewayToInstanceMessage } from '@zhin.js/host-http/bridge';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -14,6 +15,9 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
+import { defineChatPrincipalTables } from './chat-principals.js';
+import { ChatPeople } from './chat-people.js';
+import { ChatIdentityBindCodes, installChatIdentityBind } from './chat-identity-bind.js';
 import { ChatOwnerClaim, installChatOwnerClaim } from './chat-owner-claim.js';
 import { ChatRoleImportBook, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
 import {
@@ -39,7 +43,17 @@ export interface FeatureHostOptions {
    * migration record (ADR 0060 §3.3 / §4.2). Without it neither is offered.
    */
   readonly projectRoot?: string;
+  /**
+   * The gateway control channel (ADR 0054 §3): `principal-revoked` for a deleted / disabled
+   * Console user removes that user's person link (ADR 0060 §2.4). Absent standalone.
+   */
+  readonly gatewayMessages?: Readonly<{ onMessage(listener: (message: GatewayToInstanceMessage) => void): () => void }>;
 }
+
+/** Console user lifecycle reasons that end a person ↔ Console link (`ConsoleCredentialRevocationReason`). */
+const LINK_ENDING_REASONS: ReadonlySet<string> = new Set(['deleted', 'disabled']);
+/** How often the 90-day display name cache is swept (ADR 0060 Q11). */
+const SIGHTING_SWEEP_MS = 24 * 60 * 60_000;
 
 export interface FeatureHost {
   readonly stores: FeatureStores;
@@ -51,6 +65,10 @@ export interface FeatureHost {
   readonly reader: ChatRoleReader;
   /** ADR 0060 §3.3: the first global owner without a Console (open while there is none). */
   readonly claim: ChatOwnerClaim;
+  /** ADR 0060 §2: people behind chat identities. */
+  readonly people: ChatPeople;
+  /** Inbound sightings (`createSenderEnricher({ observe })`): display name cache, recent speakers. */
+  observe(sighting: ChatIdentitySighting): void;
   /** Root resources: the conversation reader, the load step and (when enabled) the chat commands. */
   install(deps: Readonly<{
     context: Omit<FeatureRpcContext, 'authorize' | 'actor' | 'allowedFields' | 'authScope' | 'stores'>;
@@ -65,9 +83,15 @@ export const RECENT_EVENT_WINDOW = 5_000;
 export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   defineFeatureOverrideTable(options.database);
   defineChatRoleTable(options.database);
+  defineChatPrincipalTables(options.database);
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
   const overrides = new FeatureOverrideStore({ database: options.database });
-  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }) });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({
+    database: options.database,
+    ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+    onMigrated: ({ migrated, backup }) => getLogger('chat-roles').info(`聊天角色：${migrated} 条授予已迁移为「人」模型（ADR 0060）`
+      + (backup ? `；迁移前的数据已导出到 ${backup}` : '')),
+  }) });
   // Owner approvals (tool hard gate, self-changes) grant host-wide authority, so only a global
   // owner with an identity on this adapter is asked (ADR 0056 §2); account-level owners are not.
   const resolveEndpointOwner = (alias: string, _endpointId: string): string | undefined => {
@@ -116,6 +140,14 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     : undefined;
   const claim = new ChatOwnerClaim({ roles, ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
     logger: getLogger('chat-roles'), audit: () => audit });
+  const people = new ChatPeople({ store: roles.store, audit: () => audit });
+  const bindCodes = new ChatIdentityBindCodes({ people });
+  options.gatewayMessages?.onMessage(message => {
+    if (message.type !== 'principal-revoked' || !LINK_ENDING_REASONS.has(message.payload.reason ?? '')) return;
+    bindCodes.revoke(message.payload.principalId);
+    void people.consoleUserRemoved(message.payload.principalId, message.payload.reason!)
+      .catch(error => getLogger('chat-roles').warn(`Chat principal link not removed: ${(error as Error).message}`));
+  });
   const reader = createChatRoleReader({
     roles: () => roles,
     conversationKey: conversation => {
@@ -125,7 +157,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     },
     subscribe: listener => roles.store.subscribe(listener),
   });
-  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, claim,
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, claim, people, bindCodes,
     ...(chatRoleImports ? { chatRoleImports } : {}) });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
@@ -143,9 +175,13 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         await options.afterLoad?.(roles, candidate, overrides, audit);
         loaded = true;
         await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
+        const sweep = () => void people.expireSightings().catch(() => undefined);
+        sweep();
+        setInterval(sweep, SIGHTING_SWEEP_MS).unref?.();
       },
     });
     installChatOwnerClaim({ claim, snapshots: options.snapshots() })(context);
+    installChatIdentityBind({ codes: bindCodes, snapshots: options.snapshots() })(context);
     installFeatureSelfService({
       config: selfService, roles, snapshots: options.snapshots(),
       context: { ...deps.context, stores },
@@ -153,5 +189,6 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       ...(deps.audit ? { audit: deps.audit } : {}),
     })(context);
   };
-  return Object.freeze({ stores, roles, reader, claim, resolveEndpointOwner, selfService, install });
+  const observe = (sighting: ChatIdentitySighting) => { if (loaded) people.observe(sighting); };
+  return Object.freeze({ stores, roles, reader, claim, people, observe, resolveEndpointOwner, selfService, install });
 }

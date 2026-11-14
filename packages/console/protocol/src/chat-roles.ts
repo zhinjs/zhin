@@ -62,6 +62,13 @@ export interface ConsoleChatRoleEntry {
   readonly role: ConsoleChatRole;
   readonly source: ConsoleChatRoleSource;
   readonly grantedBy?: string;
+  /**
+   * ADR 0060 Q12: when `grantedBy` is a Console user linked to a person, that person's name (else
+   * the Console display name cached on the link). Display only.
+   */
+  readonly grantedByName?: string;
+  /** The person holding the grant (ADR 0060 §2.3); absent on a `redacted` entry. */
+  readonly principalId?: string;
   readonly grantedAt?: number;
 }
 

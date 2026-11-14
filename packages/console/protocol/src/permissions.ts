@@ -7,6 +7,7 @@
  */
 import { FEATURE_GLOBAL_SWITCH_PERMISSION, FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
 import { CHAT_ROLES_RPC_PERMISSIONS } from './chat-roles.js';
+import { CHAT_PRINCIPALS_RPC_PERMISSIONS } from './chat-principals.js';
 import { ATTENTION_RPC_PERMISSIONS } from './attention.js';
 import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
@@ -48,6 +49,11 @@ export const CONSOLE_PERMISSIONS = Object.freeze({
   IAM_MANAGE: 'iam.manage',
   MCP_ACCESS: 'mcp.access',
   A2A_ACCESS: 'a2a.access',
+  /**
+   * ADR 0060 Q4: link the caller's own chat identity (bind code,「我的聊天身份」). Every built-in
+   * role has it; it only ever reaches the caller's own link.
+   */
+  SELF_CHAT_IDENTITY: 'self.chat-identity',
 } as const);
 
 export type ConsolePermission = (typeof CONSOLE_PERMISSIONS)[keyof typeof CONSOLE_PERMISSIONS];
@@ -95,8 +101,9 @@ export const CONSOLE_WRITE_PERMISSIONS: ReadonlySet<ConsolePermission> = new Set
 export type ConsoleBuiltinRoleName = 'owner' | 'admin' | 'operator' | 'viewer';
 
 const viewerPermissions = CONSOLE_PERMISSION_LIST.filter(permission =>
-  (permission.endsWith('.view') || permission.endsWith('.read'))
-  && permission !== 'ops.config.read' && permission !== 'ops.env.read');
+  ((permission.endsWith('.view') || permission.endsWith('.read'))
+  && permission !== 'ops.config.read' && permission !== 'ops.env.read')
+  || permission === 'self.chat-identity');
 
 export const CONSOLE_BUILTIN_ROLES: Readonly<Record<ConsoleBuiltinRoleName, Readonly<{
   readonly description: string;
@@ -112,6 +119,7 @@ export const CONSOLE_BUILTIN_ROLES: Readonly<Record<ConsoleBuiltinRoleName, Read
     permissions: Object.freeze<ConsolePermission[]>([
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure',
       'feature.toggle', 'agent.view', 'ops.schedule.read', 'plugin.perms.read', 'plugin.perms.operate',
+      'self.chat-identity',
     ]),
   }),
   viewer: Object.freeze({
@@ -260,6 +268,8 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   // to plugin.manage in resolveConsoleRpcPermission.
   ...FEATURE_RPC_PERMISSIONS,
   ...CHAT_ROLES_RPC_PERMISSIONS,
+  // ADR 0060 §2 / §7: people behind chat identities; bind codes need only `self.chat-identity`.
+  ...CHAT_PRINCIPALS_RPC_PERMISSIONS,
   // Project files / environment / database / process
   'files:tree': P.OPS_FILES_READ,
   'files:read': P.OPS_FILES_READ,
@@ -655,7 +665,7 @@ function rpcTarget(type: string, permission: ConsolePermission, payloads: readon
   if (!CONSOLE_SCOPED_PERMISSIONS.has(permission)) return GLOBAL_TARGET;
   // Console accounts and bindings (`iam.*`) are global objects: never scoped.
   if (type.startsWith('iam.')) return GLOBAL_TARGET;
-  if (type.startsWith('feature.') || type.startsWith('chat-roles.')) {
+  if (type.startsWith('feature.') || type.startsWith('chat-roles.') || type.startsWith('chat-principals.') || type.startsWith('chat-identities.')) {
     const level = firstString(payloads, 'level');
     const key = firstString(payloads, 'key');
     if (hasConflict(payloads, 'level') || hasConflict(payloads, 'key')) return GLOBAL_TARGET;

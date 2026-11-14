@@ -95,11 +95,21 @@ Chat roles (`chat_roles`) are the only source of truth. "Who is an admin" used t
 
 | List | Status | Direction |
 | --- | --- | --- |
-| Chat roles `chat_roles` | The only source; an identity is "adapter alias + user id" | From ADR 0060 P2 a "person" groups several platform identities |
+| Chat roles `chat_roles` | The only source; grants belong to a "person" with one or more platform identities (ADR 0060 P2) | — |
 | `ai.personalPrincipals` | Still read from the configuration; says whose personal inference settings these are, grants no role | P3: replaced by the person ↔ Console account link; the field is only imported once |
 | Adapter `master` / `trusted`, `ai.trigger.masters` / `trusted` | **Seeds only**: imported on the first start; when they appear again they are never granted automatically and wait in the Console inbox for review (see the [upgrade guide](../migrations/chat-roles.md)) | Kept as a seed format |
 | Plugin-specific lists (`masters` …) | Discouraged | Use `isOwner` / `hasChatRole` / `chatRolesToken` (next section) |
-| Console accounts | A separate principal system: Console permissions are not chat roles | From P2 linkable one-to-one with a chat person (no permissions carried over) |
+| Console accounts | A separate principal system: Console permissions are not chat roles; linkable one-to-one with a chat person (no permissions carried over, P2) | P3: the Console "Chat members" page and personal inference read the link |
+
+### People, platform identities and Console links {#people}
+
+- A **person** (`chat_principals`, ids like `cp_…`) holds the role grants; a **platform identity** (adapter instance alias + user id, `chat_identities`) belongs to at most one person. A speaker never granted a role nor bound is an "implicit single-identity person" (id `implicit:<alias>:<userId>`) and gets no row.
+- A **global** grant counts for every identity of the person; a grant **below global** (adapter / account / conversation) counts only for the person's identities on **that scope's adapter** — `admin` on the `qq` adapter does not make the person's Telegram identity an admin on Telegram.
+- Merge / split: Console RPC `chat-principals.merge` / `split` (`iam.manage` on every adapter involved; **global** `iam.manage` when a person involved holds a global grant). Merging keeps the higher role per scope and never lowers.
+- **Bind my chat identity**: a Console user (permission `self.chat-identity`, in every built-in role) gets a one-time code (8 symbols, 10 minutes, single use) and sends `bind <code>` (`绑定 <码>`) to the bot in a **private chat**. A correct code sent in a group is revoked; simulation adapters never accept it; an identity that already belongs to someone else (linked to another Console user, or with other identities) is refused; a bind that would carry roles to another identity needs a code created by a holder of global `iam.manage`. One Console user links one person and vice versa; a link carries **no permissions**.
+- When a Console user is deleted or disabled, the gateway tells the instance to drop the link (roles stay). Grants whose `grantedBy` is a linked Console user show the person's name (`grantedByName`) in the Console.
+- The Runtime writes a read-only `sender.chatPrincipal` (person id) on inbound messages; an adapter's or plugin's own value is dropped. Last-seen time and display name cache (for Console pickers, never used for authorization) are kept for 90 days.
+- Export / import: `zhin chat-roles export [file]` / `zhin chat-roles import <file>` (through the running instance, global `iam.manage`; imports only add or raise, never lower, remove or move an identity owned by someone else).
 
 The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code from the instance log or `zhin status` and send `claim <code>` to the bot in a private chat on a real platform (see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
 
