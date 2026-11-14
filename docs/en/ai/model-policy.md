@@ -57,6 +57,37 @@ purposes:
     profile: fast-aux
 ```
 
+## Fallback models
+
+Every language purpose can list fallback models that are tried in order: `chat`, `summary`, `ambient`, `agents.<name>`, `adapters|endpoints.<key>.chat`, `scenes.<key>.chat`, and the existing `perception`. Write a Profile name, or `{ profile, fallbacks }`:
+
+```yaml
+purposes:
+  chat:
+    profile: gemini-free          # primary
+    fallbacks: [cnb, deepseek]    # tried in order
+  summary: { profile: gemini-free, fallbacks: [deepseek] }
+  agents:
+    researcher: { profile: gemini-free, fallbacks: [deepseek] }
+  adapters:
+    qq:
+      chat: { profile: gemini-free, fallbacks: [cnb] }
+  scenes:
+    "github:...":
+      chat: { profile: cnb, fallbacks: [deepseek] }
+```
+
+- **When it switches**: when the model fails because its quota is used up (for example Gemini's free-tier daily quota), the account is out of credit, or the key is rejected (401, `UNAUTHENTICATED`, `API_KEY_INVALID`-style codes). A plain 403 (a gateway refusing for content or region reasons) does not switch. After **2 consecutive timeouts** of the same model within one operation (the model request's own timeout or first-response deadline; a deadline the caller set does not count), the next attempt of that operation goes to the fallback too. Only when at least 2 different operations time out like this within 2 minutes is the model skipped for everyone. A one-off timeout keeps the existing same-model retry. Server 5xx, rate limits and network errors never switch.
+- **Tools never run twice**: the switch happens per model request and continues from the current conversation; tools that already ran in this turn are not run again. A reply that already streamed text to the user does not switch.
+- **Only to a model that can take over**: a fallback is passed over when it does not accept the conversation's images / audio, when the estimated context exceeds its `contextWindow`, or when it cannot continue the open tool loop (Gemini needs `thoughtSignature`, Mistral 9-character tool ids). An Anthropic fallback with thinking but no signed thinking blocks gets that one request without thinking instead of a 400. After a switch, every request checks again that the context still fits; when it no longer does, the next fallback takes over, or the request fails clearly with a context overflow instead of being sent to fail with a 400 (compaction still budgets against the primary model's window; following the fallback's window is a follow-up). A switched request uses the fallback's own output limit and retry / timeout settings, and its usage is recorded under the Profile that answered.
+- **Temporary skip**: a model whose quota ran out is skipped until it resets — the provider's reset hint when it sends one; for daily quotas such as Gemini's, the next midnight Pacific time; other quotas and empty balances 1 hour; rejected keys 15 minutes; timeouts across several operations 5 minutes. The skip state is in memory only; after a restart every model is tried once again.
+- **Writing a purpose replaces its chain**: saving a purpose in Console, importing `ai.plan.yml`, or re-running the wizard (`zhin setup --ai` / scaffold-wizard writes `chat: { profile }` without `fallbacks`) and importing the result replaces that purpose's whole fallback chain. Include `fallbacks` whenever you write a purpose you want to keep them for.
+- **Errors name the path**: a broken chain (unknown Profile, duplicate, the primary itself), or removing a Profile a chain still uses, reports the exact path, for example `purposes.adapters.qq.chat.fallbacks[1]`.
+- **Each layer owns its chain**: a scene or adapter that overrides the chat model uses only the fallbacks written on that layer. Summary and ambient without their own Profile inherit deployment chat and its fallbacks. Image generation and the six decision tasks have no fallbacks; a chat model a person picked for their own Session has none either.
+- **Visible**: a turn that used a fallback is marked 「本轮由备用模型回答」 ("answered by a fallback model") in `zhin trace` (`model_fallbacks`); the Console purposes page can read the models currently skipped and recent switches.
+
+Fallback Profiles must be deployment (Host) Profiles, like the primary. Design details: [ADR 0047 addendum (Chinese)](../../adr/0047-ai-provider-subscriptions-and-decision-models.md#增补用途备用模型1250-chat-purpose-no-fallback2026-11).
+
 ## Selection and scope
 
 One authenticated person has a distinct AI Session in each private chat, group or channel. Changing its model preserves readable history; restoring inheritance removes the explicit selection. Group events remain shared scene context, rather than a single private Session for all participants.
@@ -65,9 +96,9 @@ Chat resolves in this order: **personal Session selection > scene > Endpoint > A
 
 | Scope | Selectable purposes |
 | --- | --- |
-| Deployment | chat, summary, ambient language, perception chain, image, six decisions, Agent roles |
-| Adapter / Endpoint | chat, perception |
-| Scene | chat |
+| Deployment | chat, summary, ambient language, perception (each with optional fallbacks), image, six decisions, Agent roles (optional fallbacks) |
+| Adapter / Endpoint | chat, perception (optional fallbacks) |
+| Scene | chat (optional fallbacks) |
 | Personal Session | chat Profile or inherit |
 
 Summary and ambient language inherit deployment chat when omitted, never personal credentials. The structured `decisions.ambient` purpose is separate. Overrides select Profiles; they do not deep-merge arbitrary connection settings, permissions or SDK options.
