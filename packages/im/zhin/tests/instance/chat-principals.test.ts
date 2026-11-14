@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { createChatRoleReader } from '@zhin.js/core';
 import { authorizeConsoleRpc, type ConsolePrincipal } from '@zhin.js/host-http';
-import { CHAT_PRINCIPALS_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
+import { CHAT_PRINCIPALS_RPC, CHAT_ROLES_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 import {
   CHAT_ROLE_BACKUP_DIRECTORY, ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
@@ -17,6 +17,7 @@ import { ChatPeople } from '../../src/instance/chat-people.js';
 import { CHAT_BIND_MAX_FAILURES, ChatIdentityBindCodes, executeIdentityBind } from '../../src/instance/chat-identity-bind.js';
 import { chatGrantorName, dispatchChatPrincipalsConsoleRpc, type ChatPrincipalsRpcContext } from '../../src/instance/console/chat-principals-rpc.js';
 import { dispatchChatRolesConsoleRpc } from '../../src/instance/console/chat-roles-rpc.js';
+import { instanceConsoleCapabilities, isInstanceConsoleRpcType } from '../../src/instance/console/rpc-capabilities.js';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 const directories: string[] = [];
@@ -383,6 +384,14 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
     expect(authorizeConsoleRpc(scopedManager, { type: CHAT_PRINCIPALS_RPC.LIST, data: { level: 'adapter', key: 'qq' } }).allowed).toBe(true);
     expect(authorizeConsoleRpc(scopedManager, { type: CHAT_PRINCIPALS_RPC.LIST, data: {} }).allowed).toBe(false);
     for (const type of Object.values(CHAT_PRINCIPALS_RPC)) expect(authorizeConsoleRpc(viewer, { type }).code).not.toBe('unknown_rpc');
+  });
+
+  it('is an RPC type the instance answers, listed in its Console capabilities', () => {
+    const rpc = new Set(instanceConsoleCapabilities().rpc);
+    for (const type of [...Object.values(CHAT_PRINCIPALS_RPC), ...Object.values(CHAT_ROLES_RPC)]) {
+      expect(isInstanceConsoleRpcType(type)).toBe(true);
+      expect(rpc.has(type)).toBe(true);
+    }
   });
 });
 
