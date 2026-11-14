@@ -680,6 +680,10 @@ export const doctorCommand = new Command('doctor')
         });
       }
     }
+    if (httpPort === 0) {
+      results.push({ name: 'HTTP 端口', status: 'ok', message: 'http.port 为 0：启动时由系统分配空闲端口' });
+      httpPort = undefined;
+    }
     if (httpPort !== undefined) {
     const port = httpPort;
     try {

@@ -1,7 +1,8 @@
 /**
  * `http.port` (and `http.listeners[].port`): an integer from 1 to 65535, written either as a number
- * or as a `${VAR}` environment reference that expands to one (#1250). Anything else is a
- * configuration error — the Host never falls back to the default port for an invalid value.
+ * or as a `${VAR}` environment reference that expands to one (#1250); `0` keeps its listener meaning
+ * (the system picks a free port — tests and embedded use). Anything else is a configuration error:
+ * the Host never falls back to the default port for an invalid value.
  */
 
 /** Port the Host listens on when `http.port` is not configured (same as the scaffold writes). */
@@ -29,7 +30,7 @@ export function describeInvalidPortValue(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'number') {
     if (!Number.isInteger(value)) return `端口必须是整数，当前值 ${value}`;
-    if (value < 1 || value > 65_535) return `端口必须在 1–65535 之间，当前值 ${value}`;
+    if (value < 0 || value > 65_535) return `端口必须在 1–65535 之间，当前值 ${value}`;
     return undefined;
   }
   if (typeof value === 'string' && ENVIRONMENT_REFERENCE_PATTERN.test(value.trim())) return undefined;
@@ -52,7 +53,7 @@ export function parseHttpPort(value: unknown, field: string, raw?: unknown): num
   } else {
     throw new InvalidHttpPortError(field, value, `端口必须是 1–65535 的整数或 \${VAR} 形式的环境变量引用，当前值 ${show(value)}${fromReference}`);
   }
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new InvalidHttpPortError(field, value, `端口必须在 1–65535 之间，当前值 ${show(value)}${fromReference}`);
   }
   return port;

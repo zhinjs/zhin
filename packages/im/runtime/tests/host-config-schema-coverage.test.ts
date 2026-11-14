@@ -49,11 +49,12 @@ describe('Host configuration field coverage', () => {
   });
 
   it('accepts only 1–65535 integers or whole ${VAR} references as ports (#1250)', () => {
-    for (const port of ['abc', '8081', 0, 65536, 99999, 80.5, 'x${PORT}']) {
+    for (const port of ['abc', '8081', -1, 65536, 99999, 80.5, 'x${PORT}']) {
       expect(parsePluginConfigSchema(hostSchema, { http: { port } }).errors, String(port)).not.toEqual([]);
       expect(parsePluginConfigSchema(hostSchema, { http: { listeners: [{ host: '127.0.0.1', port }] } }).errors, String(port)).not.toEqual([]);
     }
-    for (const port of [1, 8068, 65535, '${PORT}', '${PORT:-8068}']) check({ http: { port } });
+    // 0 keeps its listener meaning: the system picks a free port.
+    for (const port of [0, 1, 8068, 65535, '${PORT}', '${PORT:-8068}']) check({ http: { port } });
   });
 
   it('declares console.loginAssist.captchaHelperUrl (ADR 0058)', () => {

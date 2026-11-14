@@ -24,7 +24,10 @@ describe('http.port', () => {
     expect(describeInvalidPortValue(undefined)).toBeUndefined();
     expect(describeInvalidPortValue('8068')).toContain('当前值 "8068"');
     expect(describeInvalidPortValue(1.5)).toContain('整数');
-    expect(describeInvalidPortValue(0)).toContain('1–65535');
+    expect(describeInvalidPortValue(-1)).toContain('1–65535');
+    // 0: the system picks a free port (tests, embedded hosts).
+    expect(describeInvalidPortValue(0)).toBeUndefined();
+    expect(parseHttpPort(0, 'http.port')).toBe(0);
     expect(parseHttpPort(' 80 ', 'http.port')).toBe(80);
   });
 

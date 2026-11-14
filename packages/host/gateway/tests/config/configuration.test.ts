@@ -250,14 +250,14 @@ describe('http.port accepts only 1–65535 integers or ${VAR} references (#1250)
     expect(await configuration.validatePluginConfig('http', { port: 99999 })).toMatchObject({
       valid: false, errors: [{ path: '$.port', message: '字段 port 不能大于 65535' }],
     });
-    expect(await configuration.validatePluginConfig('http', { port: 0 })).toMatchObject({ valid: false });
+    expect(await configuration.validatePluginConfig('http', { port: -1 })).toMatchObject({ valid: false });
     expect(await configuration.validatePluginConfig('http', { port: 80.5 })).toMatchObject({ valid: false });
     expect(await configuration.validatePluginConfig('http', { port: '8068' })).toMatchObject({ valid: false });
   });
 
   it('accepts integers in range and ${VAR} references', async () => {
     const { store: configuration } = await store();
-    for (const port of [1, 8068, 65535, '${PORT}', '${PORT:-8068}']) {
+    for (const port of [0, 1, 8068, 65535, '${PORT}', '${PORT:-8068}']) {
       expect(await configuration.validatePluginConfig('http', { port })).toMatchObject({ valid: true });
     }
   });

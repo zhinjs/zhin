@@ -24,7 +24,7 @@ outline: [2, 3]
 | `http.readiness.endpoints[].name` | string | 是 | — | — |
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `http.host` | string \| null | 否 | — | 监听地址。 |
-| `http.port` | integer \| string \| null | 否 | — | 监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用。未配置时网关监听 8068。 |
+| `http.port` | integer \| string \| null | 否 | — | 监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用（0 表示由系统分配空闲端口）。未配置时网关监听 8068。 |
 | `http.token` | string \| null | 否 | — | 初始化令牌：创建第一个 Console 所有者之前用于登录初始化向导；之后失效（ADR 0049）。 |
 | `http.corsOrigins` | array \| null | 否 | — | — |
 | `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | 否 | — | 受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。 |

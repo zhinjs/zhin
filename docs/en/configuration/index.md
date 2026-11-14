@@ -192,7 +192,7 @@ http:
   base: /api                 # API mount path
 ```
 
-Without `http.port` the gateway listens on 8068, the value the scaffold writes (early 1.x runtimes defaulted to 8086; projects that set a port are unaffected). `http.port` accepts only an integer from 1 to 65535, or a `${VAR}` reference that expands to one; anything else is refused by `zhin config set`, Console saves and `zhin config check`, and startup fails instead of silently using the default port.
+Without `http.port` the gateway listens on 8068, the value the scaffold writes (early 1.x runtimes defaulted to 8086; projects that set a port are unaffected). `http.port` accepts only an integer from 1 to 65535, or a `${VAR}` reference that expands to one (`0` lets the system pick a free port, for tests); anything else is refused by `zhin config set`, Console saves and `zhin config check`, and startup fails instead of silently using the default port.
 
 Local development can access without `token`; production must set one. `tokens` supports multiple scoped tokens.
 

@@ -24,7 +24,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.readiness.endpoints[].name` | string | yes | — | — |
 | `http.readiness.agents` | array&lt;string&gt; | no | — | Required configured Agent bindings; does not verify model credentials or provider reachability. |
 | `http.host` | string \| null | no | — | 监听地址。 |
-| `http.port` | integer \| string \| null | no | — | Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one. When unset the gateway listens on 8068. |
+| `http.port` | integer \| string \| null | no | — | Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one (0 lets the system pick a free port). When unset the gateway listens on 8068. |
 | `http.token` | string \| null | no | — | Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049). |
 | `http.corsOrigins` | array \| null | no | — | — |
 | `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | no | — | Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal. |
