@@ -1,30 +1,4 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": [
-    {
-      "package": "@zhin.js/database",
-      "type": "minor",
-      "reason": "ADR 0059（网关存储隔离）：Console 账号表移到 .zhin/gateway.db 并自动迁移，PostgreSQL / MySQL 原始 SQL 只用受限账号；公共 API 删除 IAM_DIALECTS / gatewayTableHost()、installConsoleIam 签名改变，新增 denyAttach、console-credential、zhin db console-role 与 zhin console migrate。所有者已批准 minor。"
-    },
-    {
-      "package": "@zhin.js/gateway",
-      "type": "minor",
-      "reason": "ADR 0059（网关存储隔离）：Console 账号表移到 .zhin/gateway.db 并自动迁移，PostgreSQL / MySQL 原始 SQL 只用受限账号；公共 API 删除 IAM_DIALECTS / gatewayTableHost()、installConsoleIam 签名改变，新增 denyAttach、console-credential、zhin db console-role 与 zhin console migrate。所有者已批准 minor。"
-    },
-    {
-      "package": "@zhin.js/core",
-      "type": "minor",
-      "reason": "ADR 0059（网关存储隔离）：Console 账号表移到 .zhin/gateway.db 并自动迁移，PostgreSQL / MySQL 原始 SQL 只用受限账号；公共 API 删除 IAM_DIALECTS / gatewayTableHost()、installConsoleIam 签名改变，新增 denyAttach、console-credential、zhin db console-role 与 zhin console migrate。所有者已批准 minor。"
-    },
-    {
-      "package": "zhin.js",
-      "type": "minor",
-      "reason": "ADR 0059（网关存储隔离）：Console 账号表移到 .zhin/gateway.db 并自动迁移，PostgreSQL / MySQL 原始 SQL 只用受限账号；公共 API 删除 IAM_DIALECTS / gatewayTableHost()、installConsoleIam 签名改变，新增 denyAttach、console-credential、zhin db console-role 与 zhin console migrate。所有者已批准 minor。"
-    },
-    {
-      "package": "@zhin.js/cli",
-      "type": "minor",
-      "reason": "ADR 0059（网关存储隔离）：Console 账号表移到 .zhin/gateway.db 并自动迁移，PostgreSQL / MySQL 原始 SQL 只用受限账号；公共 API 删除 IAM_DIALECTS / gatewayTableHost()、installConsoleIam 签名改变，新增 denyAttach、console-credential、zhin db console-role 与 zhin console migrate。所有者已批准 minor。"
-    }
-  ]
+  "approvedNonPatchReleases": []
 }
