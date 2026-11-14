@@ -230,12 +230,37 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
   if (input.purposes !== undefined) {
     if (!isHost) throw new ProviderError('forbidden');
     const raw = record(input.purposes); keys(raw, ['chat', 'summary', 'ambient', 'perception', 'image', 'decisions', 'agents', 'adapters', 'endpoints', 'scenes']);
-    const profileReference = (entry: unknown): string => {
-      const value = record(entry); keys(value, ['profile']); return reference('profiles', value.profile);
+    /**
+     * A language purpose: a Profile alias string or `{ profile, fallbacks? }` (#1250
+     * chat-purpose-no-fallback). Writing a purpose replaces its whole chain; `null` clears both.
+     */
+    /** An alias reference that names its plan path when it does not resolve (#1250). */
+    const referenceAt = (alias: unknown, path: string): string => {
+      try { return reference('profiles', alias); } catch { throw new ProviderError('invalid-plan', path); }
     };
-    const selection = (entry: unknown, scene = false): Record<string, unknown> => {
+    const languageSelection = (entry: unknown, path: string): { profile: string; fallbacks?: readonly string[] } => {
+      if (typeof entry === 'string') return { profile: referenceAt(entry, path) };
+      let value: Record<string, unknown>;
+      try { value = record(entry); keys(value, ['profile', 'fallbacks']); } catch { throw new ProviderError('invalid-plan', path); }
+      const profile = referenceAt(value.profile, `${path}.profile`);
+      if (value.fallbacks === undefined) return { profile };
+      if (!Array.isArray(value.fallbacks) || value.fallbacks.length === 0) throw new ProviderError('invalid-plan', `${path}.fallbacks`);
+      const fallbacks = (value.fallbacks as unknown[]).map((alias, index) => referenceAt(alias, `${path}.fallbacks[${index}]`));
+      fallbacks.forEach((id, index) => {
+        if (id === profile || fallbacks.indexOf(id) !== index) throw new ProviderError('invalid-plan', `${path}.fallbacks[${index}]`);
+      });
+      return { profile, fallbacks };
+    };
+    /** Graph shape: the primary id under `key`, its chain under `<key>Fallbacks`. */
+    const languageFields = (key: string, entry: unknown, path: string): Record<string, unknown> => {
+      if (entry === undefined) return {};
+      if (entry === null) return { [key]: undefined, [`${key}Fallbacks`]: undefined };
+      const selected = languageSelection(entry, path);
+      return { [key]: selected.profile, [`${key}Fallbacks`]: selected.fallbacks };
+    };
+    const selection = (entry: unknown, path: string, scene = false): Record<string, unknown> => {
       const value = record(entry); keys(value, scene ? ['chat'] : ['chat', 'perception']);
-      return { ...(value.chat !== undefined && value.chat !== null ? { chat: profileReference(value.chat) } : {}),
+      return { ...(value.chat !== undefined && value.chat !== null ? languageFields('chat', value.chat, `${path}.chat`) : {}),
         ...(value.perception !== undefined && value.perception !== null ? { perception: perception(value.perception) } : {}) };
     };
     const perception = (entry: unknown): Record<string, unknown> => {
@@ -244,29 +269,54 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
       return { profile: reference('profiles', value.profile), ...(value.fallbacks !== undefined
         ? { fallbacks: (value.fallbacks as unknown[]).map(alias => reference('profiles', alias)) } : {}) };
     };
-    const mergeValues = (previous: unknown, input: unknown, transform: (value: unknown) => unknown): Record<string, unknown> => {
+    const mergeValues = (previous: unknown, input: unknown, transform: (value: unknown, key: string) => unknown): Record<string, unknown> => {
       const result = Object.assign(Object.create(null), previous) as Record<string, unknown>;
       for (const [key, value] of Object.entries(record(input))) {
         if (value === null) delete result[key];
-        else result[key] = transform(value);
+        else result[key] = transform(value, key);
       }
       return result;
     };
-    purposes = { ...purposes, defaults: { ...purposes.defaults,
-      ...(raw.chat !== undefined ? { chat: raw.chat === null ? undefined : profileReference(raw.chat) } : {}),
-      ...(raw.ambient !== undefined ? { ambient: raw.ambient === null ? undefined : profileReference(raw.ambient) } : {}),
-      ...(raw.summary !== undefined ? { summary: raw.summary === null ? undefined : profileReference(raw.summary) } : {}),
-      ...(raw.image !== undefined ? { image: raw.image === null ? undefined : profileReference(raw.image) } : {}),
-      ...(raw.perception !== undefined ? { perception: raw.perception === null ? undefined : perception(raw.perception) as unknown as PurposePolicy['defaults']['perception'] } : {}) },
+    // `undefined` values are dropped by the final graph normalization (JSON detach).
+    const compact = (value: Record<string, unknown>): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
+    let agentFallbacks: Record<string, unknown> | undefined = purposes.agentFallbacks
+      ? Object.assign(Object.create(null), purposes.agentFallbacks) : undefined;
+    const agentSelections = new Map<string, { profile: string; fallbacks?: readonly string[] }>();
+    if (raw.agents !== undefined) for (const [key, value] of Object.entries(record(raw.agents))) {
+      if (value !== null) agentSelections.set(key, languageSelection(value, `purposes.agents.${key}`));
+    }
+    const agents = raw.agents === undefined ? undefined : mergeValues(purposes.agents, raw.agents, (_entry, key) => agentSelections.get(key)!.profile);
+    if (raw.agents !== undefined) {
+      agentFallbacks ??= Object.create(null) as Record<string, unknown>;
+      for (const [key, value] of Object.entries(record(raw.agents))) {
+        const fallbacks = value === null ? undefined : agentSelections.get(key)?.fallbacks;
+        if (fallbacks) agentFallbacks[key] = fallbacks;
+        else delete agentFallbacks[key];
+      }
+    }
+    purposes = compact({ ...purposes, defaults: compact({ ...purposes.defaults,
+      ...languageFields('chat', raw.chat, 'purposes.chat'),
+      ...languageFields('ambient', raw.ambient, 'purposes.ambient'),
+      ...languageFields('summary', raw.summary, 'purposes.summary'),
+      // Image generation has no fallback chain: a different image model is a different result.
+      ...(raw.image !== undefined ? { image: raw.image === null ? undefined : (() => {
+        if (typeof raw.image !== 'string') {
+          try { keys(record(raw.image), ['profile']); } catch { throw new ProviderError('invalid-plan', 'purposes.image'); }
+        }
+        return languageSelection(raw.image, 'purposes.image').profile;
+      })() } : {}),
+      ...(raw.perception !== undefined ? { perception: raw.perception === null ? undefined : perception(raw.perception) as unknown as PurposePolicy['defaults']['perception'] } : {}) }),
     ...(raw.decisions !== undefined ? { decisions: mergeValues(purposes.decisions, raw.decisions, entry => {
         const value = record(entry);
         return { ...value, ...(value.profile !== undefined ? { profile: reference('profiles', value.profile) } : {}) };
       }) } : {}),
-    ...(raw.agents !== undefined ? { agents: mergeValues(purposes.agents, raw.agents, profileReference) as Record<string, string> } : {}),
-    ...(raw.adapters !== undefined ? { adapters: mergeValues(purposes.adapters, raw.adapters, value => selection(value)) } : {}),
-    ...(raw.endpoints !== undefined ? { endpoints: mergeValues(purposes.endpoints, raw.endpoints, value => selection(value)) } : {}),
-    ...(raw.scenes !== undefined ? { scenes: mergeValues(purposes.scenes, raw.scenes, value => selection(value, true)) } : {}),
-    } as PurposePolicy;
+    ...(agents !== undefined ? { agents: agents as Record<string, string> } : {}),
+    agentFallbacks: agentFallbacks && Object.keys(agentFallbacks).length ? agentFallbacks : undefined,
+    ...(raw.adapters !== undefined ? { adapters: mergeValues(purposes.adapters, raw.adapters, (value, key) => compact(selection(value, `purposes.adapters.${key}`))) } : {}),
+    ...(raw.endpoints !== undefined ? { endpoints: mergeValues(purposes.endpoints, raw.endpoints, (value, key) => compact(selection(value, `purposes.endpoints.${key}`))) } : {}),
+    ...(raw.scenes !== undefined ? { scenes: mergeValues(purposes.scenes, raw.scenes, (value, key) => compact(selection(value, `purposes.scenes.${key}`, true))) } : {}),
+    }) as unknown as PurposePolicy;
   }
   const remove = dictionary(input.remove); keys(remove, ['services', 'accounts', 'profiles']);
   for (const kind of ['profiles', 'accounts', 'services'] as const) {
@@ -297,11 +347,14 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
   const next = normalizeProviderGraph({ rootId: graph.rootId, revision: graph.revision + 1, services, accounts, profiles, purposes });
   // Policy is deployment-owned even if every selected private resource is internally valid.
   const scopedHostProfiles = [...Object.values(next.purposes.adapters ?? {}), ...Object.values(next.purposes.endpoints ?? {})]
-    .flatMap(policy => [policy.chat, policy.perception?.profile, ...(policy.perception?.fallbacks ?? [])]);
-  const hostProfiles = [next.purposes.defaults.chat, next.purposes.defaults.summary, next.purposes.defaults.ambient, next.purposes.defaults.image,
-    next.purposes.defaults.perception?.profile, ...(next.purposes.defaults.perception?.fallbacks ?? []),
+    .flatMap(policy => [policy.chat, ...(policy.chatFallbacks ?? []), policy.perception?.profile, ...(policy.perception?.fallbacks ?? [])]);
+  const defaults = next.purposes.defaults;
+  const hostProfiles = [defaults.chat, ...(defaults.chatFallbacks ?? []), defaults.summary, ...(defaults.summaryFallbacks ?? []),
+    defaults.ambient, ...(defaults.ambientFallbacks ?? []), defaults.image,
+    defaults.perception?.profile, ...(defaults.perception?.fallbacks ?? []),
     ...Object.values(next.purposes.decisions ?? {}).map(policy => policy.profile), ...Object.values(next.purposes.agents ?? {}),
-    ...scopedHostProfiles, ...Object.values(next.purposes.scenes ?? {}).map(policy => policy.chat)];
+    ...Object.values(next.purposes.agentFallbacks ?? {}).flat(),
+    ...scopedHostProfiles, ...Object.values(next.purposes.scenes ?? {}).flatMap(policy => [policy.chat, ...(policy.chatFallbacks ?? [])])];
   if (hostProfiles.some(id => id !== undefined && next.profiles[id].ownerId !== options.hostOwnerId)) throw new ProviderError('forbidden');
   const frozenBindings = Object.freeze({ services: Object.freeze({ ...maps.services }), accounts: Object.freeze({ ...maps.accounts }), profiles: Object.freeze({ ...maps.profiles }) });
   return Object.freeze({ rootId: graph.rootId, ownerId, baseRevision: graph.revision,
@@ -323,15 +376,22 @@ export function changedPurposeProfileIds(before: PurposePolicy, after: PurposePo
       put([...path, 'profile'], value?.profile);
       value?.fallbacks?.forEach((id, index) => put([...path, 'fallbacks', index], id));
     };
+    const chain = (path: readonly string[], ids: readonly string[] | undefined) => ids?.forEach((id, index) => put([...path, index], id));
     for (const key of ['chat', 'summary', 'ambient', 'image'] as const) put(['defaults', key], policy.defaults[key]);
+    for (const key of ['chatFallbacks', 'summaryFallbacks', 'ambientFallbacks'] as const) chain(['defaults', key], policy.defaults[key]);
     perception(['defaults', 'perception'], policy.defaults.perception);
     for (const [name, id] of Object.entries(policy.agents ?? {})) put(['agents', name], id);
+    for (const [name, ids] of Object.entries(policy.agentFallbacks ?? {})) chain(['agentFallbacks', name], ids);
     for (const [task, value] of Object.entries(policy.decisions ?? {})) put(['decisions', task], value.profile);
     for (const kind of ['adapters', 'endpoints'] as const) for (const [key, value] of Object.entries(policy[kind] ?? {})) {
       put([kind, key, 'chat'], value.chat);
+      chain([kind, key, 'chatFallbacks'], value.chatFallbacks);
       perception([kind, key, 'perception'], value.perception);
     }
-    for (const [key, value] of Object.entries(policy.scenes ?? {})) put(['scenes', key, 'chat'], value.chat);
+    for (const [key, value] of Object.entries(policy.scenes ?? {})) {
+      put(['scenes', key, 'chat'], value.chat);
+      chain(['scenes', key, 'chatFallbacks'], value.chatFallbacks);
+    }
     return refs;
   };
   const old = collect(before);

@@ -18,6 +18,8 @@ import type { LlmCompletionPort, StreamOptions } from "./llm-api-runtime.js";
 export type ProviderErrorKind =
   | "rate_limit"
   | "timeout"
+  /** No first response (headers or stream event) within `firstResponseTimeoutMs`: the service hangs. */
+  | "no_response"
   | "server"
   | "network"
   | "empty_response"
@@ -46,6 +48,18 @@ export interface ProviderErrorClassification {
   readonly status?: number;
   /** Server-provided `Retry-After`, in milliseconds. */
   readonly retryAfterMs?: number;
+  /**
+   * `quota_exhausted` only: the exhausted window is a per-day quota (Gemini
+   * `...PerDay...` quota ids, a 429 naming `per day (RPD/TPD)`). Used to pick a
+   * reset time when the provider gives no hint (#1250 chat-purpose-no-fallback).
+   */
+  readonly quotaWindow?: "day";
+  /**
+   * `auth` only: the credential itself was rejected (HTTP 401, `UNAUTHENTICATED`,
+   * `API_KEY_*` / `invalid_api_key`-style codes). A plain 403 can be a gateway's
+   * content or region refusal and is not marked (#1250 chat-purpose-no-fallback).
+   */
+  readonly credential?: true;
 }
 
 export interface ProviderResilienceConfig {
@@ -57,8 +71,14 @@ export interface ProviderResilienceConfig {
   maxDelayMs?: number;
   /** A `Retry-After` longer than this stops retry. Default 30000. */
   maxRetryAfterMs?: number;
-  /** Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. */
+  /** Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables. */
   requestTimeoutMs?: number;
+  /**
+   * Per-attempt wait in ms for the provider's first response (response headers or the first
+   * stream event). Default 30000. `0` disables. A service that does not answer in time is not
+   * re-asked on the same model: the attempt fails as `no_response`.
+   */
+  firstResponseTimeoutMs?: number;
   /**
    * Extra attempts when the model returns neither text nor tool calls (or a tool call
    * without a name). Default 0: the reply is passed through unchanged. Quirk presets
@@ -74,7 +94,8 @@ export const DEFAULT_PROVIDER_RESILIENCE: Readonly<
   baseDelayMs: 1_000,
   maxDelayMs: 10_000,
   maxRetryAfterMs: 30_000,
-  requestTimeoutMs: 180_000,
+  requestTimeoutMs: 120_000,
+  firstResponseTimeoutMs: 30_000,
   emptyReplyRetries: 0,
 });
 
@@ -86,6 +107,14 @@ export type ProviderResilienceEvent =
       kind: ProviderErrorKind;
       delayMs: number;
       error: string;
+    }>
+  /** One attempt hit a timeout (logged by the owner with its turn / purpose context). */
+  | Readonly<{
+      type: "timeout";
+      model: string;
+      attempt: number;
+      phase: "first_response" | "request";
+      timeoutMs: number;
     }>
   | Readonly<{
       type: "give_up";
@@ -117,6 +146,7 @@ export class ProviderRequestError extends Error {
 const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   rate_limit: "模型服务当前限流，请稍后再试",
   timeout: "模型服务响应超时，请稍后再试",
+  no_response: "模型服务无响应，请稍后再试或联系管理员检查模型配置",
   server: "模型服务暂时不可用，请稍后再试",
   network: "连接模型服务失败，请检查网络后再试",
   empty_response: "模型返回了空回复，请换个说法再试",
@@ -184,6 +214,14 @@ class AttemptTimeoutError extends Error {
   constructor(ms: number) {
     super(`Provider request timed out after ${ms}ms`);
     this.name = "AttemptTimeoutError";
+  }
+}
+
+/** The provider sent neither response headers nor a stream event within the first-response window. */
+export class FirstResponseTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Provider sent no response within ${timeoutMs}ms`);
+    this.name = "FirstResponseTimeoutError";
   }
 }
 
@@ -388,6 +426,14 @@ function isBillingError(
   return BILLING_MESSAGE_PATTERN.test(message);
 }
 
+/** Error codes naming a rejected credential (`API_KEY_INVALID`, `invalid_api_key`, Anthropic `authentication_error`). */
+function hasCredentialCode(codes: ReadonlySet<string>): boolean {
+  for (const code of codes) {
+    if (/^api[_-]?key[_-]/i.test(code) || /(?:^|_)api[_-]?key$/i.test(code) || code === "authentication_error" || code === "UNAUTHENTICATED") return true;
+  }
+  return false;
+}
+
 /** A 429 naming a per-day window: `requests per day (RPD)` / `tokens per day (TPD)`. */
 const PER_DAY_LIMIT_PATTERN = /\bper day \((?:RPD|TPD)\)/i;
 
@@ -407,6 +453,9 @@ export function classifyProviderError(
   if (inner instanceof AttemptTimeoutError) {
     return { kind: "timeout", retryable: true };
   }
+  if (inner instanceof FirstResponseTimeoutError) {
+    return { kind: "no_response", retryable: false };
+  }
   if (inner instanceof ProviderFinishError) {
     return { kind: "server", retryable: true };
   }
@@ -425,19 +474,25 @@ export function classifyProviderError(
       (reason) => reason === "API_KEY_INVALID" || reason === "API_KEY_EXPIRED"
     )
   ) {
-    return { kind: "auth", retryable: false, status };
+    return { kind: "auth", retryable: false, status, credential: true };
   }
   // Gemini answers a server-side deadline with 504 DEADLINE_EXCEEDED: a timeout, not an outage.
   if (google?.status === "DEADLINE_EXCEEDED")
     return { kind: "timeout", retryable: true, status };
   if (isDailyQuota(google))
-    return { kind: "quota_exhausted", retryable: false, status };
+    return { kind: "quota_exhausted", retryable: false, status, quotaWindow: "day" };
   // Groq (and OpenAI) name the exhausted window in the 429 message: "... on requests per
   // day (RPD): Limit 1000, Used 1000, Requested 1. Please try again in 1m26s". A daily
   // window does not reopen within any sensible retry; Groq limits are per model, so
   // another candidate may still answer. Per-minute windows (RPM / TPM) stay rate limits.
   if (status === 429 && PER_DAY_LIMIT_PATTERN.test(message)) {
-    return { kind: "quota_exhausted", retryable: false, status };
+    return {
+      kind: "quota_exhausted",
+      retryable: false,
+      status,
+      quotaWindow: "day",
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+    };
   }
 
   if (name === "AbortError") return { kind: "aborted", retryable: false };
@@ -454,7 +509,12 @@ export function classifyProviderError(
     return { kind: "rate_limit", retryable: true, status, retryAfterMs };
   if (status === 408) return { kind: "timeout", retryable: true, status };
   if (status === 401 || status === 403)
-    return { kind: "auth", retryable: false, status };
+    return {
+      kind: "auth",
+      retryable: false,
+      status,
+      ...(status === 401 || hasCredentialCode(codes) ? { credential: true as const } : {}),
+    };
   if (status !== undefined && status >= 500) {
     return { kind: "server", retryable: true, status, retryAfterMs };
   }
@@ -470,8 +530,8 @@ export function classifyProviderError(
     return { kind: "server", retryable: true, retryAfterMs };
   if (rpcStatus === "DEADLINE_EXCEEDED")
     return { kind: "timeout", retryable: true };
-  if (rpcStatus === "UNAUTHENTICATED" || rpcStatus === "PERMISSION_DENIED")
-    return { kind: "auth", retryable: false };
+  if (rpcStatus === "UNAUTHENTICATED") return { kind: "auth", retryable: false, credential: true };
+  if (rpcStatus === "PERMISSION_DENIED") return { kind: "auth", retryable: false };
 
   const code =
     typeof rec.code === "string" ? rec.code : record(rec.cause)?.code;
@@ -618,23 +678,43 @@ export function createResilientCompletionPort(
     call: "complete" | "completeSimple",
     model: Model,
     context: Context,
-    streamOptions: StreamOptions | undefined
+    streamOptions: StreamOptions | undefined,
+    attemptNumber: number
   ): Promise<AssistantMessage> {
     const callerSignal = streamOptions?.signal;
     const timeoutMs =
       streamOptions?.requestTimeoutMs ?? config.requestTimeoutMs;
-    const controller = timeoutMs > 0 ? new AbortController() : undefined;
-    const timer = controller
-      ? timers.setTimeout(
-          () => controller.abort(new AttemptTimeoutError(timeoutMs)),
-          timeoutMs
-        )
-      : undefined;
+    const firstResponseMs = config.firstResponseTimeoutMs;
+    const controller =
+      timeoutMs > 0 || firstResponseMs > 0 ? new AbortController() : undefined;
+    const timer =
+      controller && timeoutMs > 0
+        ? timers.setTimeout(
+            () => controller.abort(new AttemptTimeoutError(timeoutMs)),
+            timeoutMs
+          )
+        : undefined;
+    let firstTimer =
+      controller && firstResponseMs > 0
+        ? timers.setTimeout(
+            () => controller.abort(new FirstResponseTimeoutError(firstResponseMs)),
+            firstResponseMs
+          )
+        : undefined;
+    // The transport reports response headers / the first stream event; text also proves a response.
+    const responded = (): void => {
+      if (firstTimer !== undefined) {
+        timers.clearTimeout(firstTimer);
+        firstTimer = undefined;
+      }
+    };
     const signal = controller
       ? callerSignal
         ? AbortSignal.any([callerSignal, controller.signal])
         : controller.signal
       : callerSignal;
+    const onTextDelta = streamOptions?.onTextDelta;
+    const onResponseStart = streamOptions?.onResponseStart;
     try {
       // This wrapper owns retries; stop the SDK from multiplying them.
       const message = await base[call](model, context, {
@@ -642,16 +722,41 @@ export function createResilientCompletionPort(
         signal,
         maxRetries: 0,
         requestTimeoutMs: 0,
+        onResponseStart: () => {
+          responded();
+          onResponseStart?.();
+        },
+        // Presence of `onTextDelta` selects streaming downstream: never add one.
+        ...(onTextDelta
+          ? {
+              onTextDelta: (text: string) => {
+                responded();
+                onTextDelta(text);
+              },
+            }
+          : {}),
       });
       const invalid = inspectReply(message);
       if (invalid) throw invalid;
       return message;
     } catch (error) {
-      if (controller?.signal.aborted && !callerSignal?.aborted)
-        throw controller.signal.reason;
+      if (controller?.signal.aborted && !callerSignal?.aborted) {
+        const reason: unknown = controller.signal.reason;
+        if (reason instanceof FirstResponseTimeoutError || reason instanceof AttemptTimeoutError) {
+          reportEvent({
+            type: "timeout",
+            model: model.id,
+            attempt: attemptNumber,
+            phase: reason instanceof FirstResponseTimeoutError ? "first_response" : "request",
+            timeoutMs: reason instanceof FirstResponseTimeoutError ? reason.timeoutMs : timeoutMs,
+          });
+        }
+        throw reason;
+      }
       throw error;
     } finally {
       if (timer !== undefined) timers.clearTimeout(timer);
+      if (firstTimer !== undefined) timers.clearTimeout(firstTimer);
     }
   }
 
@@ -673,7 +778,7 @@ export function createResilientCompletionPort(
     while (true) {
       attempts++;
       try {
-        const reply = await attempt(call, model, context, streamOptions);
+        const reply = await attempt(call, model, context, streamOptions, attempts);
         if (
           reply.stopReason === "error" &&
           finishFailureKind(reply.errorMessage) === "safety_block"
@@ -703,6 +808,18 @@ export function createResilientCompletionPort(
             throw new ProviderRequestError(info.kind, attempts, error);
           }
           throw error;
+        }
+        // A hung service is not re-asked on the same model. The failure is reported as `no_response`;
+        // whether to switch models is the caller's decision, where it counts toward the
+        // consecutive-timeout switch like a whole-request timeout (no switching here).
+        if (info.kind === "no_response") {
+          reportEvent({
+            type: "give_up",
+            model: model.id,
+            kind: info.kind,
+            error: message,
+          });
+          throw new ProviderRequestError(info.kind, attempts, error);
         }
         if (!info.retryable && !quotaOrBilling) throw error;
         const isEmpty = error instanceof EmptyResponseError;

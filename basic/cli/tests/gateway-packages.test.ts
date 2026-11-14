@@ -8,6 +8,7 @@ import { GatewayPackageService, type PackageWorkflowPort } from '@zhin.js/gatewa
 import { splitStartArguments } from '../src/commands/lifecycle.js';
 import {
   describeGatewayError,
+  packageEventPrinter,
   probeGateway,
   renderTransactionResult,
   runPackageOperationDirect,
@@ -69,7 +70,7 @@ describe.runIf(process.platform !== 'win32')('dependency transactions from the C
     expect(output.text()).toBe([
       '→ install zod',
       '  · 停止实例',
-      'Packages: +1',
+      '    │ Packages: +1',
       '  · 启动实例',
       '✓ install 完成：zod（实例 running → running）',
       '',
@@ -97,6 +98,39 @@ describe.runIf(process.platform !== 'win32')('dependency transactions from the C
     expect(done.ok).toBe(false);
     expect(output.text()).toContain('失败（阶段 start-instance），已回滚：boom');
     expect(output.text()).toContain('  last line');
+  });
+
+  it('keeps package-manager lines apart from the steps, also across chunks (#1250)', () => {
+    const output = capture();
+    const print = packageEventPrinter(output);
+    print({ type: 'phase', id: 't1', phase: 'package-manager' });
+    print({ type: 'output', id: 't1', stream: 'stdout', chunk: 'Progress: resolved 1\n ERR_PNPM_IGNORED' });
+    print({ type: 'output', id: 't1', stream: 'stdout', chunk: '_BUILDS  Ignored build scripts: esbuild.' });
+    print({ type: 'phase', id: 't1', phase: 'start-instance' });
+    expect(output.text()).toBe([
+      '  · 执行包管理器',
+      '    │ Progress: resolved 1',
+      '    │  ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: esbuild.',
+      '  · 启动实例',
+      '',
+    ].join('\n'));
+  });
+
+  it('reports ignored builds as a hint on a successful install (#1250)', () => {
+    const lines = renderTransactionResult({ ...result(true), ignoredBuilds: ['esbuild'] });
+    expect(lines[0]).toContain('✓ install 完成');
+    expect(lines[1]).toContain('ERR_PNPM_IGNORED_BUILDS');
+    expect(lines[1]).toContain('allowBuilds');
+  });
+
+  it('reports the rollback and the restart separately (#1250)', () => {
+    const failed = { ...result(false), status: 'rollbackFailed' as const, failedPhase: 'package-manager' as const, rollbackError: 'pnpm install exited with code 1' };
+    const restarted = renderTransactionResult(failed).join('\n');
+    expect(restarted).toContain('回滚错误（恢复文件 / 重新安装依赖）：pnpm install exited with code 1');
+    expect(restarted).toContain('实例已重新启动（running）');
+    const down = renderTransactionResult({ ...failed, restartError: 'port in use', instance: { before: 'running', after: 'crashed' } }).join('\n');
+    expect(down).toContain('重新启动实例失败：port in use');
+    expect(down).not.toContain('实例已重新启动');
   });
 
   it('falls back to the direct transaction when no gateway runs', async () => {

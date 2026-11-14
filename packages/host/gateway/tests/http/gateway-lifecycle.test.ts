@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { projectIdentity } from '../../src/project/identity.js';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -91,7 +92,10 @@ describe.runIf(process.platform !== 'win32')('runGateway (long-lived gateway)', 
 
     // Stopping the instance over the socket does not end the gateway.
     expect(await local.request<GatewayInstanceStatus>('gateway.instance.stop')).toMatchObject({ state: 'stopped' });
-    expect((await fetch(`${origin}/pub/health`)).status).toBe(200);
+    const stoppedHealth = await fetch(`${origin}/pub/health`);
+    expect(stoppedHealth.status).toBe(200);
+    // The project id lets the CLI tell this project's gateway from another one on the port (#1250).
+    expect(await stoppedHealth.json()).toMatchObject({ project: { id: projectIdentity(root) } });
     expect(await local.request<GatewayInstanceStatus>('gateway.instance.start')).toMatchObject({ state: 'running' });
     expect(await local.request<GatewayInstanceStatus>('gateway.instance.restart')).toMatchObject({ state: 'running' });
 

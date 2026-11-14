@@ -199,7 +199,13 @@ export function transactionFailure(result: GatewayPackageTransactionResult): str
   const reason = result.error ?? '依赖事务失败';
   return result.status === 'rolledBack'
     ? `${reason}（已回滚${result.failedPhase ? `，失败阶段 ${result.failedPhase}` : ''}）`
-    : `${reason}（回滚未完成${result.rollbackError ? `：${result.rollbackError}` : ''}）`;
+    : `${reason}（回滚未完成${rollbackDetail(result)}）`;
+}
+
+/** Why the rollback did not complete: restoring files / dependencies, restarting the instance, or both. */
+function rollbackDetail(result: GatewayPackageTransactionResult): string {
+  const parts = [result.rollbackError, result.restartError ? `重新启动实例失败：${result.restartError}` : undefined].filter(Boolean);
+  return parts.length ? `：${parts.join('；')}` : '';
 }
 
 /**

@@ -114,7 +114,7 @@ describe('backoff helpers', () => {
   it('documents conservative defaults and ignores invalid overrides', () => {
     expect(resolveProviderResilienceConfig()).toEqual({
       maxRetries: 2, baseDelayMs: 1_000, maxDelayMs: 10_000, maxRetryAfterMs: 30_000,
-      requestTimeoutMs: 180_000, emptyReplyRetries: 0,
+      requestTimeoutMs: 120_000, firstResponseTimeoutMs: 30_000, emptyReplyRetries: 0,
     });
     expect(resolveProviderResilienceConfig({ maxRetries: -1 }, { maxRetries: 1 }).maxRetries).toBe(1);
   });
@@ -156,7 +156,8 @@ describe('createResilientCompletionPort (fault injection)', () => {
     });
     const { resilient, events } = harness([hang, reply('ok')], { requestTimeoutMs: 20 });
     await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'ok' }] });
-    expect(events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+    expect(events[0]).toMatchObject({ type: 'timeout', phase: 'request', timeoutMs: 20 });
+    expect(events[1]).toMatchObject({ type: 'retry', kind: 'timeout' });
   });
 
   it('throws a user-friendly ProviderRequestError when everything fails', async () => {
@@ -246,7 +247,106 @@ describe('injected timers', () => {
       config: { requestTimeoutMs: 60_000 }, timers, sleep: noSleep, random: () => 0.5, onEvent: (e) => events.push(e),
     });
     await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'ok' }] });
-    expect(events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'timeout', phase: 'request', timeoutMs: 60_000, attempt: 1 }),
+      expect.objectContaining({ type: 'retry', kind: 'timeout' }),
+    ]);
+  });
+});
+
+describe('first-response deadline (#1250 model-request-hangs-no-timeout)', () => {
+  /** A provider that never answers: it only settles when its signal aborts. */
+  function silentProvider(onCall?: (options: Parameters<LlmCompletionPort['complete']>[2]) => void) {
+    const calls: number[] = [];
+    const complete: LlmCompletionPort['complete'] = (_m, _c, options) => {
+      calls.push(calls.length + 1);
+      onCall?.(options);
+      return new Promise((_, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      });
+    };
+    return { port: { complete, completeSimple: complete } satisfies LlmCompletionPort, calls };
+  }
+
+  it('fails a silent provider after 30s by default as no_response, without re-asking the same model', async () => {
+    vi.useFakeTimers();
+    try {
+      const { port, calls } = silentProvider();
+      const events: ProviderResilienceEvent[] = [];
+      const resilient = createResilientCompletionPort(port, { sleep: noSleep, onEvent: e => events.push(e) });
+      const result = resilient.complete(model('relay-model'), ctx).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(events).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      const error = await result;
+      expect(error).toBeInstanceOf(ProviderRequestError);
+      expect(error).toMatchObject({ kind: 'no_response', attempts: 1 });
+      expect((error as Error).message).toContain('模型服务无响应');
+      expect(calls).toHaveLength(1);
+      expect(events).toEqual([
+        { type: 'timeout', model: 'relay-model', attempt: 1, phase: 'first_response', timeoutMs: 30_000 },
+        expect.objectContaining({ type: 'give_up', kind: 'no_response' }),
+      ]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('stops the first-response timer once the transport reports a response; the 120s total deadline still applies', async () => {
+    vi.useFakeTimers();
+    try {
+      const started = vi.fn();
+      const { port, calls } = silentProvider(options => { options?.onResponseStart?.(); });
+      const events: ProviderResilienceEvent[] = [];
+      const resilient = createResilientCompletionPort(port, { config: { maxRetries: 0 }, sleep: noSleep, onEvent: e => events.push(e) });
+      const result = resilient.complete(model('a'), ctx, { onResponseStart: started }).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(events).toEqual([]);
+      expect(started).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await result).toMatchObject({ kind: 'timeout', attempts: 1 });
+      expect(calls).toHaveLength(1);
+      expect(events[0]).toEqual({ type: 'timeout', model: 'a', attempt: 1, phase: 'request', timeoutMs: 120_000 });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('counts streamed text as a response and keeps onTextDelta absent when the caller did not stream', async () => {
+    vi.useFakeTimers();
+    try {
+      const seen: Array<boolean> = [];
+      const complete: LlmCompletionPort['complete'] = async (_m, _c, options) => {
+        seen.push(options?.onTextDelta !== undefined);
+        if (options?.onTextDelta) {
+          await new Promise(resolve => setTimeout(resolve, 10_000));
+          options.onTextDelta('hi');
+          await new Promise(resolve => setTimeout(resolve, 40_000));
+        }
+        return reply('hi');
+      };
+      const resilient = createResilientCompletionPort({ complete, completeSimple: complete }, { sleep: noSleep });
+      const streamed = resilient.complete(model('a'), ctx, { onTextDelta: () => {} });
+      await vi.advanceTimersByTimeAsync(50_000);
+      await expect(streamed).resolves.toMatchObject({ content: [{ text: 'hi' }] });
+      await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'hi' }] });
+      expect(seen).toEqual([true, false]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('firstResponseTimeoutMs: 0 disables the first-response deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const { port } = silentProvider();
+      const events: ProviderResilienceEvent[] = [];
+      const resilient = createResilientCompletionPort(port, {
+        config: { firstResponseTimeoutMs: 0, requestTimeoutMs: 50_000, maxRetries: 0 }, sleep: noSleep, onEvent: e => events.push(e) });
+      const result = resilient.complete(model('a'), ctx).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect(await result).toMatchObject({ kind: 'timeout' });
+      expect(events[0]).toMatchObject({ phase: 'request' });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('classifies the first-response error as non-retryable no_response', async () => {
+    const { FirstResponseTimeoutError } = await import('../../src/llm/provider-resilience.js');
+    expect(classifyProviderError(new FirstResponseTimeoutError(30_000))).toEqual({ kind: 'no_response', retryable: false });
   });
 });
 

@@ -51,7 +51,7 @@ pnpm dev          # zhin start --foreground：管理网关 + 你的 Bot，热重
 ```
 
 1. **在 Console 里完成初始化**：打开终端打印的 Console 链接（`https://console.zhin.dev/?apiBaseUrl=…#token=…`，`#` 之后的初始化令牌不会离开浏览器），保持默认 SQLite，创建所有者账号。
-2. **在沙盒里聊天**：打开 `http://127.0.0.1:8068/sandbox`（或 Console 的「会话 → 沙盒」），发送 `/hello`。
+2. **在沙盒里聊天**：在 Console 打开「会话 → 沙盒」，发送 `/hello`。（独立页面 `http://127.0.0.1:8068/sandbox` 只在第 1 步之前免登录可用；创建所有者之后需要 Console API 令牌：顶栏用户名 →「个人设置」（`/account`）签发，粘贴到页面右上角。）
 3. **后台运行**：`npx zhin start`（之后用 `zhin status`、`zhin logs -f`、`zhin stop`）。
 
 完整步骤：[快速开始](./docs/getting-started/index.md) · 遇到环境问题先运行 `npx zhin doctor`。

@@ -18,6 +18,7 @@ export type {
   TurnTraceTimelineEntry,
   TurnTraceTermination,
   TurnTraceModelSelection,
+  TurnTraceModelFallback,
   TurnTraceTrigger,
   TurnTraceUsageTotals,
 } from './turn-trace.js';

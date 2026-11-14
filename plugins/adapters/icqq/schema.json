@@ -141,6 +141,26 @@
         }
       }
     },
+    "logLevel": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "fatal",
+        "mark",
+        "off"
+      ],
+      "default": "warn",
+      "description": "ICQQ SDK 自身日志的级别（默认 warn）；它逐条打印的收发消息原文（recv from / succeed to send）只在 debug 及以下出现，且转义为单行",
+      "x-i18n": {
+        "en": {
+          "description": "Level of the ICQQ SDK's own log lines (default warn). Its per-message lines with the message text (recv from / succeed to send) only appear at debug or below, escaped onto one line."
+        }
+      }
+    },
     "endpoints": {
       "type": "array",
       "minItems": 1,
@@ -281,6 +301,25 @@
             "x-i18n": {
               "en": {
                 "description": "Use the NT login method."
+              }
+            }
+          },
+          "logLevel": {
+            "type": "string",
+            "enum": [
+              "trace",
+              "debug",
+              "info",
+              "warn",
+              "error",
+              "fatal",
+              "mark",
+              "off"
+            ],
+            "description": "ICQQ SDK 自身日志的级别",
+            "x-i18n": {
+              "en": {
+                "description": "Level of the ICQQ SDK's own log lines."
               }
             }
           },

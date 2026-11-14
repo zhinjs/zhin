@@ -3,9 +3,11 @@ import {
   listEnvFiles,
   readProjectFile,
   saveProjectFile,
+  type ConsoleAccess,
   type RuntimeConsoleRpcContext,
   type RuntimeEndpointSendInput,
 } from '@zhin.js/host-http';
+import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
 import {
   acquireGenerationAgentConsole,
   type AgentConsolePort,
@@ -57,6 +59,11 @@ export class ConsoleRpcRequestScope {
   }
 }
 
+/** `ops.env.write` held globally (or unrestricted access): the only grant that may write `.env`. */
+export function environmentWriteAllowed(access: ConsoleAccess | undefined): boolean {
+  return access?.unrestricted === true || access?.permissions.includes(CONSOLE_PERMISSIONS.OPS_ENV_WRITE) === true;
+}
+
 function createRpcContext(
   composition: ConsoleRpcComposition,
   identity: ConsoleRpcRequestIdentity,
@@ -75,6 +82,8 @@ function createRpcContext(
   const principal = identity.authenticatedPrincipal
     ? Object.freeze({ principalId: identity.authenticatedPrincipal.principalId })
     : undefined;
+  // Moving secret literals of a config write into `.env` is an `.env` write (#1250).
+  const authority = Object.freeze({ environmentWrite: environmentWriteAllowed(identity.access) });
   const context: RuntimeConsoleRpcContext = {
     authScope: identity.authScope,
     listPages: () => listPages(consoleRuntime, identity.access),
@@ -82,10 +91,10 @@ function createRpcContext(
     readConfigDocument: () => configuration.readDocument(),
     replaceConfigSource: (source: string, expectedRevision: string) =>
       configuration.replaceSource(source, expectedRevision),
-    setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
-    patchConfig: (request) => configuration.patch(request),
+    setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data, authority),
+    patchConfig: (request) => configuration.patch(request, authority),
     readProjectConfig: configuration.readProject ? request => configuration.readProject!(request) : undefined,
-    patchProjectConfig: configuration.patchProject ? request => configuration.patchProject!(request) : undefined,
+    patchProjectConfig: configuration.patchProject ? request => configuration.patchProject!(request, authority) : undefined,
     applyConfig: configuration.apply ? expectedRevision => configuration.apply!(expectedRevision) : undefined,
     pluginManagement,
     listProjectFiles: () => buildProjectFileTree(projectRoot),

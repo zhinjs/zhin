@@ -80,10 +80,13 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
   for (let index = 0; index < extra; index += 1) (document.plugins as Record<string, string>)[`extra-${String(index).padStart(2, '0')}`] = '@x/extra';
   const state = { document, revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
+  /** Second argument of every configuration write: chat never passes `.env` authority. */
+  const authorities: unknown[] = [];
   const configuration = {
     async readProject() { return { revision: `r${state.revision}`, exists: true, value: structuredClone(state.document) }; },
-    async patch(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult> {
+    async patch(request: ConsoleConfigPatchRequest, authority?: unknown): Promise<ConsoleConfigPatchResult> {
       patches.push(request);
+      authorities.push(authority);
       state.document = applyConfigPatches(state.document, request.patches as never);
       state.revision += 1;
       return { status: 'saved', revision: `r${state.revision}`, restartRequired: false, paths: [], missingEnv: [], message: 'ok' };
@@ -107,7 +110,7 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
     executeFeatureChat({ tokens: featureChatTokens({ segments: [{ type: 'text', data: { text } }], args: [] }), actor, locale: 'zh-CN' }, deps);
   const role = (actor: FeatureChatActor | undefined, text: string) =>
     executeRoleChat({ tokens: text.split(' ').filter(Boolean), actor, locale: 'zh-CN' }, deps);
-  return { run, say, role, conversations, roles, audits, state, patches, setGlobalEnabled, deps };
+  return { run, say, role, conversations, roles, audits, state, patches, authorities, setGlobalEnabled, deps };
 }
 
 function actor(options: { user?: string; key?: string; standing?: 'owner' | 'admin' | 'member' } = {}): FeatureChatActor {
@@ -212,6 +215,15 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(actor({ user: 'root' }), '设置 repeater threshold ["${A:-x}"] 适配器')).toBe(refused);
     expect(conversations.list('conversation')).toEqual([]);
     expect(patches).toEqual([]);
+  });
+
+  it('writes global fields without .env authority, so a secret literal is refused by the store (#1250 security review)', async () => {
+    const { run, roles, patches, authorities } = await harness(on, {}, ['root']);
+    await promote(roles);
+    await run(actor({ user: 'root' }), '设置 repeater threshold 7 全局');
+    expect(patches).toHaveLength(1);
+    // No `{ environmentWrite: true }`: the configuration store refuses to move values into `.env`.
+    expect(authorities).toEqual([undefined]);
   });
 
   it('refuses to enable or change a plugin locked above and names the level', async () => {

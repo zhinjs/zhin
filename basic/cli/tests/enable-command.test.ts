@@ -65,7 +65,13 @@ describe('zhin enable / disable without a gateway', () => {
     const root = await project();
     const log = capture();
     expect(await runPluginEnablement('weather', false, { cwd: root, log })).toBe(1);
-    expect(log.text()).toContain('停用插件失败：插件实例 weather（weather）未在配置中声明');
+    expect(log.text()).toContain('停用插件失败：找不到插件实例 weather（配置中没有声明）');
+    expect(log.text()).not.toContain('zhin install weather');
+    // An official short name gets the official package, never `zhin install reminder` (#1250).
+    const bare = await project({ configVersion: 2, plugins: {} });
+    expect(await runPluginEnablement('reminder', true, { cwd: bare, log })).toBe(1);
+    expect(log.text()).toContain('zhin install @zhin.js/plugin-reminder');
+    expect(log.text()).not.toMatch(/zhin install reminder(?![\w-])/u);
     expect(await runPluginEnablement('http', true, { cwd: root, log })).toBe(1);
     expect(log.text()).toContain('保留配置键');
     const empty = await mkdtemp(path.join(tmpdir(), 'zen-empty-'));

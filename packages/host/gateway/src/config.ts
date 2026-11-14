@@ -11,3 +11,4 @@ export * from './config/environment-files.js';
 export * from './config/literal-secrets.js';
 export * from './config/plugin-package-map.js';
 export * from './config/plugin-schema-catalog.js';
+export { SECRET_ENVIRONMENT_WRITE_REQUIRED, SecretEnvironmentWriteRequiredError } from './config/secret-storage.js';

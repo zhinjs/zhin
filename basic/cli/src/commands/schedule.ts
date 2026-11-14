@@ -3,6 +3,7 @@
  * 调度器在首次启动后以数据库为准，离线改 data/schedule-jobs.json 不会生效，因此不再直接改文件。
  */
 import { Command } from 'commander';
+import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
 import { reportHostFailure } from '../utils/host-error.js';
@@ -18,24 +19,26 @@ import {
 import {
   hostGet,
   hostPost,
-  loadHostHttpConfig,
+  ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION,
+  HOST_OPTION_DESCRIPTION,
+  requireHostHttpConfig,
   type HostFetchResult,
   type HostHttpConfig,
 } from '../utils/host-http.js';
 
 async function requireHost(): Promise<HostHttpConfig> {
-  const http = await loadHostHttpConfig();
-  if (!http) {
-    logger.error('未找到 zhin 配置文件，无法确定 Host API 地址');
-    process.exit(1);
-  }
-  return http;
+  const { host, allowUnverifiedHost } = scheduleCommand.opts<{ host?: string; allowUnverifiedHost?: boolean }>();
+  return requireHostHttpConfig({ host, allowUnverifiedHost }, message => logger.error(message));
 }
 
 async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> {
   if (result.ok) return result.data;
   if (result.status === 404 && result.error === 'assistant.enabled is false') {
-    logger.error('运行中的实例未启用 assistant（assistant.enabled），无法管理调度任务');
+    // Newer instances name the reason in `data` (ConsoleFeatureDisabled, #1250).
+    const disabled = result.detail;
+    logger.error(isConsoleFeatureDisabled(disabled)
+      ? `${disabled.message}；无法管理调度任务`
+      : '运行中的实例未启用 assistant（assistant.enabled），无法管理调度任务');
   } else {
     await reportHostFailure(result, `HTTP ${result.status}`);
   }
@@ -86,6 +89,10 @@ const listCommand = new Command('list')
     const data = await requireOk(
       await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
     );
+    if (isConsoleFeatureDisabled(data)) {
+      logger.error(`${data.message}；无法列出调度任务`);
+      process.exit(1);
+    }
     const jobs = data?.jobs ?? [];
     if (jobs.length === 0) {
       output.line('暂无调度任务。使用 zhin schedule add 添加。');
@@ -203,6 +210,8 @@ const resumeCommand = new Command('resume')
   });
 
 export const scheduleCommand = new Command('schedule')
+  .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .description('持久化调度任务（操作运行中的实例）')
   .addCommand(listCommand)
   .addCommand(addCommand)

@@ -7,8 +7,18 @@ import {
 } from '../src/commands/chat-roles.js';
 import type { HostHttpConfig } from '../src/utils/host-http.js';
 
+// `zhin chat-roles` only talks to this project's gateway (#1250): a stand-in whose local-socket
+// fetch delegates to the stubbed global fetch while `gateway.running` is set.
+const gateway = vi.hoisted(() => ({ running: false }));
+vi.mock('@zhin.js/gateway/local', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@zhin.js/gateway/local')>(),
+  probeLocalGateway: async () => (gateway.running ? { ok: true } : undefined),
+  createLocalGatewayFetch: () => ((url: unknown, init?: RequestInit) => globalThis.fetch(url as string, init)),
+}));
+
 const dirs: string[] = [];
 afterEach(async () => {
+  gateway.running = false;
   vi.restoreAllMocks();
   await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
 });
@@ -75,6 +85,7 @@ describe('zhin chat-roles export|import (ADR 0060 §4.5)', () => {
     vi.spyOn(console, 'log').mockImplementation((line?: unknown) => { stdout.push(String(line)); });
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+    gateway.running = true;
     try {
       await chatRolesCommand.parseAsync(['import', file], { from: 'user' });
     } finally {
@@ -83,5 +94,25 @@ describe('zhin chat-roles export|import (ADR 0060 §4.5)', () => {
     }
     expect(stdout).toEqual(['✓ 已导入：新人 1、身份 1、角色 1、Console 链接 0\n跳过：坏行']);
     expect(stderr.mock.calls.map(call => String(call[0])).join('')).not.toContain('已导入');
+  });
+
+  it('refuses without this project\'s running gateway: reports it and sends nothing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-cli-chat-roles-'));
+    dirs.push(root);
+    const file = join(root, 'good.json');
+    await writeFile(file, JSON.stringify(sample));
+    await writeFile(join(root, 'zhin.config.yml'), 'http:\n  port: 1\n');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`exit ${code}`); }) as never);
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+    try {
+      await expect(chatRolesCommand.parseAsync(['import', file], { from: 'user' })).rejects.toThrow('exit 1');
+    } finally {
+      cwd.mockRestore();
+      vi.unstubAllGlobals();
+    }
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

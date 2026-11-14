@@ -144,7 +144,8 @@ export interface NativeBuildAllowanceOptions {
 
 /**
  * Plans the build-script allowance for the gateway's native dependencies in a pnpm project that
- * declares `@zhin.js/gateway`. Existing entries are kept; only missing ones are appended:
+ * declares `@zhin.js/gateway`. Existing decisions are kept; only missing ones are appended (a
+ * non-boolean value such as pnpm 11's placeholder is replaced):
  * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent, only when the
  *   project is not inside an enclosing pnpm workspace and pnpm 10+ is confirmed — see
  *   {@link findAncestorWorkspaceFile}, {@link confirmsPnpm10});
@@ -256,7 +257,7 @@ export function syncNativeBuildAllowance(
     ));
   }
   for (const name of plan.denied) {
-    console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false，保留（denied by the project, kept; the Console terminal needs node-pty）`));
+    console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false（项目已拒绝），保留；Console 终端需要 node-pty 的原生模块`));
   }
   for (const change of plan.changes) {
     const target = change.setting.startsWith('allowBuilds.')

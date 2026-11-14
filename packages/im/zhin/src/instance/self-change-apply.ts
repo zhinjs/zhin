@@ -251,6 +251,7 @@ export function createSelfChangeConfigPort(configuration: SelfChangeConfiguratio
         const host = (HOST_CONFIG_KEYS as readonly string[]).includes(section);
         let result: ConsoleConfigPatchResult;
         try {
+          // Agent self-change holds no `.env` authority: secret literals are refused (`env-write-required`, #1250).
           result = await configuration.patch({
             ...(host ? {} : { instanceKey: section }), expectedRevision: revision, patches: group,
           });

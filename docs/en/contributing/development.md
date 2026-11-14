@@ -312,5 +312,5 @@ PR fast checks are in `.github/workflows/ci.yml`; full checks are in `.github/wo
 ## Debugging
 
 - **Log level**: Set `log_level` to `debug` in `zhin.config.yml` (default is `info`) to see detailed framework internal logs.
-- **Console logs page**: Runtime logs are written to the `SystemLog` database model via `DatabaseLogTransport`. The Remote Console logs page reads from it. Open [console.zhin.dev](https://console.zhin.dev) in your browser, fill in the API Base URL (e.g. `http://127.0.0.1:8086`) and Bearer Token (`http.token` config) to view.
+- **Console logs page**: Runtime logs are written to the `SystemLog` database model via `DatabaseLogTransport`. The Remote Console logs page reads from it. Open [console.zhin.dev](https://console.zhin.dev) in your browser, fill in the API Base URL (e.g. `http://127.0.0.1:8068`) and Bearer Token (`http.token` config) to view.
 - **Single-package debugging**: `pnpm --filter <pkg> test` with `-t '<test name>'` to filter tests; `pnpm test:watch` to enter watch mode.

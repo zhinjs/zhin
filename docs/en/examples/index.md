@@ -35,7 +35,7 @@ No `commands/` or other directories: register commands directly in the plugin en
 pnpm --filter single-file-bot dev
 ```
 
-Open [Console](https://console.zhin.dev) and set API Base to `http://127.0.0.1:8086`. This example sets no `http.token` and the Host listens on loopback only, so the Console goes straight to the setup wizard; create the owner account, then send **`/hello`** in Sandbox.
+Open [Console](https://console.zhin.dev) and set API Base to `http://127.0.0.1:8068`. This example sets no `http.token` and the Host listens on loopback only, so the Console goes straight to the setup wizard; create the owner account, then send **`/hello`** in Sandbox.
 
 ```text
 single-file-bot/
@@ -118,7 +118,7 @@ pnpm dev:test                # or cd examples/test-bot && pnpm dev
 ```
 
 - Requires Node.js >=22.19; credentials come from that directory's `.env` (template in `.env.example`);
-- in Console, set API Base to `http://127.0.0.1:8086`; the first time, create the owner account with the bootstrap token `test-bot-dev-token`, then sign in with the account;
+- in Console, set API Base to `http://127.0.0.1:8068`; the first time, create the owner account with the bootstrap token `test-bot-dev-token`, then sign in with the account;
 - to run in the background: `pnpm daemon` (that is, `zhin start --mode production --no-watch`, the gateway in the background); check it with `zhin status` / `zhin logs -f` and stop it with `pnpm stop`.
 
 ## Next steps

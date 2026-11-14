@@ -16,7 +16,7 @@ import {
 } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
-import { hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
+import { hostPost, requireHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
 
 /** Where `export` writes without a file argument (also where the instance puts its pre-migration backup). */
 export function defaultChatRolesExportPath(root: string, now = new Date()): string {
@@ -65,13 +65,9 @@ export function chatRolesImportLines(result: ConsoleChatRolesImportResult): read
     ...skipped.map(line => `跳过：${line}`)];
 }
 
-async function requireHost(): Promise<HostHttpConfig> {
-  const http = await loadHostHttpConfig();
-  if (!http) {
-    logger.error('未找到 zhin 配置文件，无法确定 Host API 地址');
-    process.exit(1);
-  }
-  return http;
+/** This project's running gateway only (#1250): a refused target is reported and exits 1, nothing is sent. */
+function requireHost(): Promise<HostHttpConfig> {
+  return requireHostHttpConfig({}, message => logger.error(message));
 }
 
 const exportCommand = new Command('export')

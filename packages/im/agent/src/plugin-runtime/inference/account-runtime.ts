@@ -11,6 +11,7 @@ import type {
   ProviderGraph,
 } from '@zhin.js/ai/provider';
 import {
+  credentialMaterialFingerprint,
   InferenceAuthenticationError,
   type CredentialPayload,
   type OpenCredential,
@@ -19,8 +20,10 @@ import {
 } from './credentials.js';
 import { oauthRefreshDue } from './oauth-refresh-policy.js';
 import {
+  type AccountLastCall,
   type AccountRuntimeContext,
   type AccountRuntimeOptions,
+  classifyAccountCall,
   type AccountStatusView,
   type Flight,
   type LoginChallengeView,
@@ -45,7 +48,7 @@ import {
 } from './account-runtime-oauth.js';
 import { migrateLegacyCredentialFingerprints } from './credential-fingerprint-migration.js';
 
-export type { AccountRuntimeOptions, AccountStatusView, LoginChallengeView } from './account-runtime-helpers.js';
+export type { AccountCallOutcome, AccountLastCall, AccountRuntimeOptions, AccountStatusView, LoginChallengeView } from './account-runtime-helpers.js';
 
 /** Process-owned account authority. Generation-owned Provider handles borrow it; HMR does not disconnect accounts. */
 export class HostAccountRuntime {
@@ -56,6 +59,7 @@ export class HostAccountRuntime {
   readonly #loginStarts = new Map<string, LoginStart>();
   readonly #uncertain = new Set<string>();
   readonly #preparationFailures = new Map<string, Readonly<{ revision: number; failure: InferencePreparationFailure }>>();
+  readonly #lastCalls = new Map<string, AccountLastCall>();
   readonly #fingerprintMigrations = new Map<string, Promise<void>>();
 
   constructor(private readonly options: AccountRuntimeOptions) {}
@@ -68,6 +72,7 @@ export class HostAccountRuntime {
       logins: this.#logins,
       loginStarts: this.#loginStarts,
       preparationFailures: this.#preparationFailures,
+      lastCalls: this.#lastCalls,
       assertOpen: () => this.#assertOpen(),
       verifyAccount: (account) => this.#account(account),
       signal: (account) => this.#signal(account),
@@ -238,6 +243,71 @@ export class HostAccountRuntime {
       retainTransportState?.(active);
       if (active.aborted) return Promise.reject(active.reason);
       return fetch(request, { signal: active });
+    };
+  }
+
+  /**
+   * Records the outcome of real inference requests through `fetch` for the account status view
+   * (#1250 ai-account-status-stale). Only the outcome class, HTTP status and time are kept.
+   */
+  observeCalls(account: ProviderAccount, fetch: typeof globalThis.fetch): typeof globalThis.fetch {
+    const key = accountKey(account);
+    const record = (result: Readonly<{ response?: Response; error?: unknown }>) => {
+      const call = classifyAccountCall(result);
+      if (call) this.#lastCalls.set(key, Object.freeze({ ...call, at: this.options.now?.() ?? Date.now() }));
+    };
+    return async (input, init) => {
+      try {
+        const response = await fetch(input, init);
+        record({ response });
+        return response;
+      } catch (error) {
+        record({ error });
+        throw error;
+      }
+    };
+  }
+
+  /**
+   * Credential write for moving a Host account's `env://` reference to another variable (#1250
+   * account-env-ref-immutable). The account identity stays; only the value source changes. A
+   * matching fingerprint keeps the credential; a different value needs `reauthorize`, which drops
+   * the stored key and fingerprint so the next call activates the new variable. Never returns or
+   * logs the value.
+   */
+  async prepareEnvironmentRename(
+    input: Readonly<{ account: ProviderAccount; nextSource: string; reauthorize: boolean }>
+  ): Promise<Readonly<{ outcome: 'pending' | 'kept' | 'reset'; write?: ProviderCredentialWrite }>> {
+    this.#assertOpen();
+    await this.#account(input.account);
+    if (input.account.ownerId !== this.options.hostOwnerId || input.account.authentication.method !== 'api-key')
+      throw new InferenceAuthenticationError('not-authorized');
+    const value = await this.options.resolveSource(input.nextSource);
+    if (!value?.trim()) throw new InferenceAuthenticationError('not-authorized');
+    const current = await this.options.credentials.read(input.account);
+    if (!current) return { outcome: 'pending' };
+    const fingerprint = credentialMaterialFingerprint(value);
+    if (current.payload.status === 'ready' && current.payload.method === 'api-key'
+      && current.payload.materialFingerprint === fingerprint) return { outcome: 'kept' };
+    if (!input.reauthorize) throw new InferenceAuthenticationError('identity-change');
+    // A `reauthorize` API-key record without an identity is the "not yet resolved" form of an
+    // `env://` account: the next authorization reads the new variable and establishes its
+    // fingerprint as the new identity (resolveAccountEnvironmentKey).
+    const record = await this.options.credentials.seal({
+      account: input.account,
+      revision: current.record.revision + 1,
+      authContractVersion: current.record.authContractVersion,
+      payload: { status: 'reauthorize', method: 'api-key' },
+    });
+    return {
+      outcome: 'reset',
+      write: {
+        accountId: input.account.id,
+        expectedRevision: current.record.revision,
+        expectedIncarnation: input.account.incarnation,
+        expectedAuthContractVersion: current.record.authContractVersion,
+        record,
+      },
     };
   }
 

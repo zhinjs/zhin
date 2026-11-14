@@ -186,7 +186,7 @@ zhin dev unlink glossary                          # 撤销
 
 ## 6. 端口与干净退出
 
-控制面默认监听 `http.host`/`http.port`（未配置时为 `127.0.0.1:8086`）。启动报 `EADDRINUSE` 时先找占用者：
+控制面默认监听 `http.host`/`http.port`（未配置时为 `127.0.0.1:8068`）。启动报 `EADDRINUSE` 时先找占用者：
 
 ```bash
 lsof -nP -iTCP:<端口> -sTCP:LISTEN

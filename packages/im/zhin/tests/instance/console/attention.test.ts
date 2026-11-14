@@ -67,6 +67,8 @@ describe('attention.list sources', () => {
     // The account waiting for a login step is not reported offline twice; stopped / reconnecting ones are not offline problems.
     expect(byKind('endpoint.offline').map(item => item.subject?.endpointKey)).toEqual(['bot']);
     expect(byKind('endpoint.offline')[0]!.action.path).toBe(ATTENTION_PATHS.endpointAccess('qq', 'bot'));
+    // The detail names the transport state in words, not the raw value (#1250).
+    expect(byKind('endpoint.offline')[0]!.detail).toMatch(/^连接状态：已断开。/u);
 
     expect(byKind('plugin.error').map(item => item.subject?.plugin)).toEqual(['weather']);
     expect(byKind('plugin.error')[0]).toMatchObject({ severity: 'danger', detail: 'Declared plugin package is not installed', action: { path: '/plugins/weather' } });
