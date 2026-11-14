@@ -1,5 +1,5 @@
 import Ajv from 'ajv';
-import { builtinAiProviders, googleProvider, openAiProvider, openAiCompatibleProvider, codexProvider } from '../../src/providers/index.js';
+import { builtinAiProviders, googleProvider, openAiProvider, openAiCompatibleProvider, codexProvider, antigravityProvider } from '../../src/providers/index.js';
 
 const ajv = new Ajv({ strict: false, validateFormats: false });
 it.each(builtinAiProviders.map(definition => ({ definition, id: definition.id })))(
@@ -33,6 +33,16 @@ it('describes fixed subscription products separately and rejects unsupported Cod
     expect(validate(input)).toBe(false); expect(() => profile.parse(input)).toThrow('unsupported-parameter');
   }
   expect(() => codexProvider.serviceSchema.parse({ baseUrl: 'https://other.example' })).toThrow();
+});
+
+it('accepts an optional string Google Cloud project id for Antigravity and a Codex CLI client version, described for the Console', () => {
+  expect(antigravityProvider.serviceSchema.parse({ projectId: ' my-project-123 ' })).toMatchObject({ projectId: 'my-project-123' });
+  expect(antigravityProvider.serviceSchema.parse({})).not.toHaveProperty('projectId');
+  // The numeric project number, uppercase or too-short ids are not project ids.
+  for (const invalid of ['123456789012', 'My-Project', 'abc', '', 'project/../x']) expect(() => antigravityProvider.serviceSchema.parse({ projectId: invalid })).toThrow();
+  expect(antigravityProvider.serviceSchema.inputSchema).toMatchObject({ properties: { projectId: { type: 'string' } } });
+  expect(codexProvider.serviceSchema.parse({ codexClientVersion: '0.167.0' })).toMatchObject({ codexClientVersion: '0.167.0' });
+  expect(codexProvider.serviceSchema.inputSchema).toMatchObject({ properties: { codexClientVersion: { type: 'string' } } });
 });
 
 it.each(['authorization', 'x-api-key', 'x-goog-api-key', 'x-auth-token', 'cf-access-client-secret', 'proxy-authorization', 'cookie'])(

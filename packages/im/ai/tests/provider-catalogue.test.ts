@@ -1,5 +1,7 @@
 import { anthropicProvider, googleProvider, openAiCompatibleProvider } from '../src/providers/api-key.js';
 import { driverFixture, callContext, prompt } from './providers/fixtures.js';
+import { claudeSubscriptionProvider, codexProvider } from '../src/providers/subscriptions.js';
+import { CODEX_DEFAULT_CLIENT_VERSION } from '../src/providers/index.js';
 
 function service<S>(definition: { id: string; serviceSchema: { parse(value: unknown): S } }, options: unknown = {}) {
   return { id: 'service', rootId: 'root', ownerId: 'host', revision: 1, driver: { id: definition.id, owner: 'root', contractVersion: '1' },
@@ -45,4 +47,40 @@ it('keeps independent catalogue credentials and transports isolated between Serv
   expect(new Request(...left.mock.calls[0]).url).toBe('https://left.example/v1/models'); expect(new Request(...right.mock.calls[0]).url).toBe('https://right.example/v1/models');
   expect(new Request(...left.mock.calls[0]).headers.get('authorization')).toBe('Bearer left-key');
   expect(new Request(...right.mock.calls[0]).headers.get('authorization')).toBe('Bearer right-key');
+});
+
+it('discovers Codex subscription models from the Codex backend catalogue, keeping only listed models', async () => {
+  const fetch = vi.fn(async () => Response.json({ models: [
+    { slug: 'synthetic-codex', display_name: 'Synthetic Codex', visibility: 'list' },
+    { slug: 'synthetic-hidden', display_name: 'Hidden', visibility: 'hide' },
+  ] }));
+  const grantCredentials = { bindRequest: (input: { request: Request }) => input.request,
+    authorize: async () => ({ token: 'synthetic-oauth', headers: {}, revision: '1', metadata: { chatgptAccountId: 'routing-account' } }) };
+  const observed = await codexProvider.discover!({ service: service(codexProvider), credentials: grantCredentials, fetch, signal });
+  expect(observed).toEqual([{ id: 'synthetic-codex', label: 'Synthetic Codex' }]);
+  const request = new Request(...fetch.mock.calls[0]);
+  const url = new URL(request.url);
+  expect(`${url.origin}${url.pathname}`).toBe('https://chatgpt.com/backend-api/codex/models');
+  expect(url.searchParams.get('client_version')).toBe(CODEX_DEFAULT_CLIENT_VERSION);
+  expect(CODEX_DEFAULT_CLIENT_VERSION).toBe('0.167.0');
+  expect(request.headers.get('authorization')).toBe('Bearer synthetic-oauth');
+  expect(request.headers.get('chatgpt-account-id')).toBe('routing-account');
+  expect(codexProvider.targets(service(codexProvider)).discovery).toEqual(['https://chatgpt.com/backend-api/codex/models']);
+});
+
+it('reports the configured Codex CLI version (codexClientVersion) to discovery, never the @zhin.js/ai version', async () => {
+  const fetch = vi.fn(async () => Response.json({ models: [] }));
+  const grantCredentials = { bindRequest: (input: { request: Request }) => input.request,
+    authorize: async () => ({ token: 'synthetic-oauth', headers: {}, revision: '1' }) };
+  const configured = service(codexProvider, { codexClientVersion: '0.170.1' });
+  expect(await codexProvider.discover!({ service: configured, credentials: grantCredentials, fetch, signal })).toEqual([]);
+  expect(new URL(new Request(...fetch.mock.calls[0]).url).searchParams.get('client_version')).toBe('0.170.1');
+  for (const invalid of ['latest', '0.1', '1.2.3&x=1', '', ' ']) expect(() => codexProvider.serviceSchema.parse({ codexClientVersion: invalid })).toThrow();
+});
+
+it('offers Claude subscription model IDs only as labelled suggestions, without discovery', () => {
+  expect(claudeSubscriptionProvider.discover).toBeUndefined();
+  expect(claudeSubscriptionProvider.models(service(claudeSubscriptionProvider))).toEqual({});
+  expect(claudeSubscriptionProvider.modelSuggestions?.length).toBeGreaterThan(0);
+  for (const suggestion of claudeSubscriptionProvider.modelSuggestions ?? []) expect(suggestion.label).toContain('suggestion');
 });

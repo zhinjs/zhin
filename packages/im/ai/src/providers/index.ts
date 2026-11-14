@@ -4,6 +4,7 @@ export { codexProvider, claudeSubscriptionProvider, openCodeGoProvider, openCode
 export { antigravityProvider } from './antigravity.js';
 export { ProviderAuthenticationError, ProviderPreparationError } from './oauth.js';
 export { ProviderProtocolError } from './errors.js';
+export { CODEX_DEFAULT_CLIENT_VERSION, type CodexServiceOptions, type AntigravityServiceOptions } from './schema.js';
 export {
   MODEL_CAPABILITY_CATALOG,
   inferModelCapabilities,

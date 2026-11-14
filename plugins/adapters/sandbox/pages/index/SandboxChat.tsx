@@ -1384,7 +1384,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             {history.error ? <p role="alert">{history.error} <button type="button" disabled={history.loading} onClick={() => void history.refresh()}>{sandboxText(locale, '重试')}</button></p> : null}
                             {history.hasMore ? <button type="button" disabled={history.loading} onClick={() => void history.loadEarlier()}>{sandboxText(locale, '加载更早记录')}</button> : null}
                         </div> : null}
-                        {channelMessages.length === 0 ? (
+                        {channelMessages.length === 0 && history.loading ? (
+                            // Same full-height box as the empty state, so loaded history does not move the composer under the cursor.
+                            <div className="agent-playground-empty" role="status">
+                                <p>{sandboxText(locale, "正在加载会话记录…")}</p>
+                            </div>
+                        ) : channelMessages.length === 0 ? (
                             <div className="agent-playground-empty">
                                 <span className="agent-playground-empty-mark"><Sparkles size={24} /></span>
                                 <div><h2>{sandboxText(locale, "开始一次可观察的 Agent 运行")}</h2><p>{sandboxText(locale, "发送任务后，回复、工具调用、Token 与异常会在同一会话上下文中关联。")}</p></div>
@@ -1456,7 +1461,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                     type="button"
                                     className="sandbox-command-chip"
                                     disabled={!canExecute || directoryStatus.mode === 'loading'}
-                                    onClick={() => runPrompt(cmd)}
+                                    // Keyboard-reachable (WCAG 2.1.1). A mouse click must not keep focus on the chip,
+                                    // and the prefill moves focus into the composer, so Enter sends the draft
+                                    // rather than re-activating the chip after a late layout shift (#1250).
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    // Pre-fill the composer (never overwriting a draft); sending stays an explicit Enter / Send.
+                                    onClick={() => editorRef.current?.setText(cmd)}
                                 >
                                     <Terminal size={11} />
                                     <span>{cmd}</span>

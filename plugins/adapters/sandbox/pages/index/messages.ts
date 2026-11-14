@@ -124,6 +124,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "编写": "Write",
   "预览": "Preview",
   "清空输入": "Clear input",
+  "正在加载会话记录…": "Loading conversation history…",
   "搜索表情...": "Search emoji…",
   "未找到匹配的表情": "No matching emoji",
   "支持 http(s) 图片链接或 data URL": "Supports HTTP(S) image links or data URLs",
