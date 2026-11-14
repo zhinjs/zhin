@@ -544,7 +544,7 @@ Session 是当前操作的只读视图。账号停止或重连会取消它的 `s
 | `execute` 抛出 `UserFacingError` | 回复它的 `format(locale)`（默认 `message`），经正常回复链发出 |
 | `execute` 抛出其他错误 | 不回复错误内容，只记录日志 |
 
-预期内、由用户造成的拒绝（例如「本频道已有进行中的对局」）可以直接抛出 `UserFacingError`（`import { UserFacingError } from 'zhin.js/command'`），或继承它并覆写 `format(locale)` 做本地化。它的文本会原样发给用户，不要放堆栈、内部 id 或上游原始错误。
+预期内、由用户造成的拒绝（例如「本频道已有进行中的对局」）可以直接抛出 `UserFacingError`（`import { UserFacingError } from 'zhin.js/command'`），或继承它并覆写 `format(locale)` 做本地化。它的文本会原样发给用户，不要放堆栈、内部 id 或上游原始错误。 入站中间件（`defineMiddleware`）与事件处理器（`defineHandler`）抛出的 `UserFacingError` 同样会作为回复发回该会话（中间件的回复作者是该中间件，处理器在消息 / 通知 / 请求的会话里回复后继续下一个处理器）；其他错误只记日志，不会发给用户。
 
 只有能确定是某个命令时才会提示参数错误。例如 `remind nope` 会提示；而 `reminder 3` 或普通聊天不会被当作命令。权限检查先于参数校验。
 

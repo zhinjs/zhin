@@ -3,6 +3,7 @@ import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit'
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import type { ConversationRef, DeliveryReceipt, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { userFacingErrorText } from '@zhin.js/command';
 import {
   MiddlewareIndex,
   isMiddlewareIndex,
@@ -459,6 +460,17 @@ export async function runInboundMiddlewareAndSpine(
           diagnostics?.step('middleware', 'stopped');
           return { dispatch: { matched: true, command: 'middleware', owner } };
         },
+        // #1250: a UserFacingError thrown by a Middleware becomes its reply (normal outbound chain).
+        refuse: (owner, error, downstream): InboundOutcome | undefined => {
+          const text = userFacingErrorText(error, message.locale);
+          if (text === undefined) return undefined;
+          diagnostics?.step('middleware', 'replaced');
+          if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
+          return {
+            dispatch: downstream?.dispatch.matched ? downstream.dispatch : { matched: true, command: 'middleware', owner },
+            reply: { owner, content: text },
+          };
+        },
         replace: (owner, value, downstream): InboundOutcome => {
           diagnostics?.step('middleware', 'replaced');
           if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
@@ -509,6 +521,22 @@ export async function dispatchInboundHandlers({
         });
       }
       return undefined;
+    },
+    // #1250: a UserFacingError thrown by a handler is answered in the event's conversation through
+    // the normal outbound chain; any other error still propagates (and is only logged).
+    recover: async (error, owner) => {
+      const payload = (args[0] as EndpointEvent | undefined)?.payload;
+      const locale = payload instanceof RuntimeMessage ? payload.locale : undefined;
+      const text = userFacingErrorText(error, locale);
+      if (text === undefined) return false;
+      if (payload instanceof RuntimeMessage) {
+        await bindOperationInput(payload, owner, snapshot).$reply(text);
+        return true;
+      }
+      const conversation = (payload as Notice | Request | undefined)?.conversation;
+      if (!conversation) return false;
+      await deliver({ conversation, requester: owner, content: text }, snapshot);
+      return true;
     },
   };
   await index.dispatch(event, args, options);

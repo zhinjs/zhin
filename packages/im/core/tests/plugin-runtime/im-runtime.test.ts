@@ -361,6 +361,43 @@ describe('IM Runtime', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('replies with a UserFacingError thrown by an inbound middleware; internal middleware failures still propagate (#1250)', async () => {
+    const sent: unknown[] = [];
+    let failure: Error = new UserFacingError('今天的签到次数已用完，明天再来吧。');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundMiddleware: () => { throw failure; },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).resolves.toMatchObject({ matched: true, command: 'middleware' });
+      expect(sent).toEqual([expect.objectContaining({ payload: '今天的签到次数已用完，明天再来吧。' })]);
+      failure = new Error('internal: db path /secret');
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toBe(failure);
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('replies with a UserFacingError thrown by a message handler; internal handler failures are not sent (#1250)', async () => {
+    const sent: unknown[] = [];
+    let failure: Error = new UserFacingError('这个群还没有开启关键词回复。');
+    const handled = vi.fn(() => { throw failure; });
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, commandResult: () => undefined, messageHandler: handled,
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, 'hello there'));
+      await vi.waitFor(() => expect(handled).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(JSON.stringify(sent)).toContain('这个群还没有开启关键词回复。'));
+      const before = sent.length;
+      failure = new Error('internal: db path /secret');
+      await receive(fixture.im, fixtureInput(fixture, 'hello again')).catch(() => undefined);
+      await vi.waitFor(() => expect(handled).toHaveBeenCalledTimes(2));
+      await new Promise(resolve => setTimeout(resolve, 20));
+      expect(sent).toHaveLength(before);
+      expect(JSON.stringify(sent)).not.toContain('/secret');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('replies to invalid and denied commands but leaves ordinary chat unmatched', async () => {
     const sent: unknown[] = [];
     const executed = vi.fn(() => 'ok');
@@ -3330,6 +3367,7 @@ async function createFixture(
     peerRegistry?: PeerRegistry;
     inboundDeduper?: Pick<InboundDeduper, 'claim'>;
     inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
+    messageHandler?: (event: unknown) => unknown;
   },
 ) {
   const root = rootPluginId();
@@ -3479,6 +3517,10 @@ async function createFixture(
     [componentFeatureId, new ComponentIndex([resultComponent], view)],
     ...(withMiddleware
       ? [[middlewareFeatureId, new MiddlewareIndex([inbound, outbound], view)] as const]
+      : []),
+    ...(options?.messageHandler
+      ? [[handlerFeatureId, new HandlerIndex([createCapabilitySlot({ owner: root, feature: handlerFeatureId, localName: 'message/receive',
+        source: '/handlers/message/receive/index.ts', definition: defineHandler({ handle: options.messageHandler }) })], view)] as const]
       : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });

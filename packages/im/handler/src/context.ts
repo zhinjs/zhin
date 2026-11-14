@@ -16,4 +16,9 @@ export interface HandlerDispatchOptions {
   readonly signal?: AbortSignal;
   /** Build a user interaction for this dispatch (message or side-event). */
   resolveInteraction?: (event: string, args: readonly unknown[], owner: PluginId) => UserInteraction | undefined;
+  /**
+   * A handler threw `error`: resolve `true` once the runtime answered it (dispatch continues with
+   * the next handler), `false` to let it propagate.
+   */
+  recover?: (error: unknown, owner: PluginId, args: readonly unknown[]) => boolean | Promise<boolean>;
 }

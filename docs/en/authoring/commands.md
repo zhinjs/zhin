@@ -542,7 +542,7 @@ Stopping or reconnecting the account cancels the captured signal. Framework repl
 | `execute` throws a `UserFacingError` | Replies with its `format(locale)` (default `message`) through the normal reply chain |
 | `execute` throws anything else | Nothing about the error is sent; it is logged |
 
-Expected, user-caused refusals (such as "there is already a game running in this channel") can throw `UserFacingError` (`import { UserFacingError } from 'zhin.js/command'`), or a subclass overriding `format(locale)` for localization. Its text is sent to the user as is: never put stack traces, internal ids or raw upstream errors in it.
+Expected, user-caused refusals (such as "there is already a game running in this channel") can throw `UserFacingError` (`import { UserFacingError } from 'zhin.js/command'`), or a subclass overriding `format(locale)` for localization. Its text is sent to the user as is: never put stack traces, internal ids or raw upstream errors in it. A `UserFacingError` thrown by an inbound middleware (`defineMiddleware`) or an event handler (`defineHandler`) is answered the same way in that conversation (a middleware replies as its own author; a handler replies in the message / notice / request conversation and dispatch continues with the next handler); any other error is only logged, never sent to the user.
 
 Param errors are reported only when the input is clearly a given command: `remind nope` gets an error, while `reminder 3` or ordinary chat isn't treated as a command. Permission checks run before param validation.
 
