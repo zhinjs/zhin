@@ -20,7 +20,12 @@ export interface ZhinPluginManifest {
   readonly entry?: string;
   readonly engine?: string;
   readonly runtime?: 'trusted' | 'isolated';
-  readonly metadata?: Readonly<{ displayName?: string; icon?: string }>;
+  readonly metadata?: Readonly<{
+    displayName?: string;
+    /** Console display-name translations keyed by `zh-CN` / `en`. */
+    displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    icon?: string;
+  }>;
   /**
    * When true (default), Root plugins receive official Stable Features
    * (`@zhin.js/adapter|command|component`) from the platform/CLI even if they
@@ -244,12 +249,33 @@ function parsePluginMetadata(value: unknown, source: string, issues: string[]): 
   if (value === undefined) return undefined;
   const record = asRecord(value, source, issues);
   for (const key of Object.keys(record)) {
-    if (key !== 'displayName' && key !== 'icon') issues.push(`${source}.${key} is not supported`);
+    if (key !== 'displayName' && key !== 'displayNameI18n' && key !== 'icon') issues.push(`${source}.${key} is not supported`);
   }
   return Object.freeze({
     ...(record.displayName !== undefined ? { displayName: readString(record, 'displayName', source, issues) } : {}),
+    ...(record.displayNameI18n !== undefined
+      ? { displayNameI18n: parseDisplayNameI18n(record.displayNameI18n, `${source}.displayNameI18n`, issues) }
+      : {}),
     ...(record.icon !== undefined ? { icon: readString(record, 'icon', source, issues) } : {}),
   });
+}
+
+function parseDisplayNameI18n(
+  value: unknown,
+  source: string,
+  issues: string[],
+): Readonly<Partial<Record<'zh-CN' | 'en', string>>> {
+  const record = asRecord(value, source, issues);
+  const result: Partial<Record<'zh-CN' | 'en', string>> = {};
+  for (const key of Object.keys(record)) {
+    if (key !== 'zh-CN' && key !== 'en') {
+      issues.push(`${source}.${key} is not supported (use zh-CN or en)`);
+      continue;
+    }
+    const text = readString(record, key, source, issues);
+    if (text !== undefined) result[key] = text;
+  }
+  return Object.freeze(result);
 }
 
 function parseReferences(

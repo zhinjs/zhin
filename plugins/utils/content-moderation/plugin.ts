@@ -15,6 +15,7 @@ export default definePlugin({
   name: 'content-moderation',
   metadata: {
     displayName: 'Content Moderation',
+    displayNameI18n: { 'zh-CN': '内容审核', en: 'Content Moderation' },
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [moderationEngineStore, pluginConsoleRpcToken],

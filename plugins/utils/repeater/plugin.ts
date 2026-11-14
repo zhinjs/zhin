@@ -7,6 +7,7 @@ export default definePlugin({
   name: 'repeater',
   metadata: {
     displayName: 'Repeater',
+    displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' },
   },
   setup(context) {
     repeaterEngineToken.provide(context, () => new RepeaterEngine());

@@ -262,6 +262,19 @@ describe('flat application Runtime', () => {
     await coordinator.stop();
   });
 
+  it('carries display-name translations from either source and rejects them in both', async () => {
+    const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
+    f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Child' } }));
+    await f.childManifest({ metadata: { displayNameI18n: { 'zh-CN': '子插件', en: 'Child' } } });
+    const runtime = f.runtime();
+    await runtime.start();
+    expect(runtime.snapshot.tree.get('root/child' as never)?.metadata).toEqual({ displayName: 'Child', displayNameI18n: { 'zh-CN': '子插件', en: 'Child' } });
+    const g = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
+    g.definitions.set(join(g.root, 'plugins/child/plugin.ts'), definePlugin({ ...g.child(), metadata: { displayNameI18n: { en: 'Child' } } }));
+    await g.childManifest({ metadata: { displayNameI18n: { en: 'Child' } } });
+    await expect(g.runtime().start()).rejects.toThrow('metadata.displayNameI18n in both');
+  });
+
   it('rejects duplicate metadata even when values match and before executing plugin setup', async () => {
     const f = await fixture({ configVersion: 2, plugins: { child: '@test/child' }, child: { token: 'one' } });
     f.definitions.set(join(f.root, 'plugins/child/plugin.ts'), definePlugin({ ...f.child(), metadata: { displayName: 'Same' } }));

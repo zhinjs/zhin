@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Lark/Feishu (飞书) Adapter',
+    displayNameI18n: { 'zh-CN': '飞书适配器', en: 'Lark/Feishu Adapter' },
   },
   setup(context) {
     return {

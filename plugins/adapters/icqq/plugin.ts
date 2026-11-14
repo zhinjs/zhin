@@ -8,6 +8,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'ICQQ Adapter',
+    displayNameI18n: { 'zh-CN': 'ICQQ 适配器', en: 'ICQQ Adapter' },
   },
   setup(context) {
     const disposeExecRule = registerSensitiveExecCommand(icqqSensitiveExecRule);

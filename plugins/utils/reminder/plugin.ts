@@ -17,7 +17,7 @@ import { reminderServiceToken } from './src/runtime.js';
 
 export default definePlugin<ReminderConfig>({
   name: 'reminder',
-  metadata: { displayName: '持久提醒' },
+  metadata: { displayName: '持久提醒', displayNameI18n: { 'zh-CN': '持久提醒', en: 'Reminders' } },
   requires: [databaseHostToken, outboundHostToken],
   capabilityGraph: definePluginCapabilityGraph({
     provides: [

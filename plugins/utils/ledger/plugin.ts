@@ -13,7 +13,7 @@ import { defineLedgerTables } from './src/store.js';
 
 export default definePlugin<LedgerConfig>({
   name: 'ledger',
-  metadata: { displayName: '记账' },
+  metadata: { displayName: '记账', displayNameI18n: { 'zh-CN': '记账', en: 'Ledger' } },
   requires: [databaseHostToken],
   capabilityGraph: definePluginCapabilityGraph({
     provides: [ledgerServiceStore, pluginConsoleRpcToken],

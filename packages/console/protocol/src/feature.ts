@@ -134,6 +134,8 @@ export interface ConsoleFeatureSummary {
   /** Instance path: the top-level alias (`rss`) or `parent/child` for nested Plugins. */
   readonly plugin: string;
   readonly displayName: string;
+  /** Translations of `displayName` keyed by Console locale (`metadata.displayNameI18n`); absent without any. */
+  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly levels: readonly ConsoleFeatureLevel[];
   /** False for Plugins without business configuration: they only get the three-level switch. */
   readonly hasSchema: boolean;
@@ -161,6 +163,8 @@ export interface ConsoleFeatureMatrixCell {
 export interface ConsoleFeatureMatrixRow {
   readonly plugin: string;
   readonly displayName: string;
+  /** See {@link ConsoleFeatureSummary.displayNameI18n}. */
+  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly global: ConsoleFeatureMatrixCell;
   /** Keyed by adapter instance alias (see {@link ConsoleFeatureMatrixResult.adapters}). */
   readonly adapters: Readonly<Record<string, ConsoleFeatureMatrixCell>>;

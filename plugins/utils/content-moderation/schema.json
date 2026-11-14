@@ -27,24 +27,60 @@
         "properties": {
           "adapter": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "适配器"
+              },
+              "en": {
+                "title": "Adapter"
+              }
+            },
             "minLength": 1
           },
           "endpoint": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "账号"
+              },
+              "en": {
+                "title": "Endpoint"
+              }
+            },
             "minLength": 1
           },
           "account": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "平台账号"
+              },
+              "en": {
+                "title": "Platform account"
+              }
+            },
             "minLength": 1
           },
           "group": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "群"
+              },
+              "en": {
+                "title": "Group"
+              }
+            },
             "minLength": 1
           }
         }
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "群自动审核范围"
+        },
         "en": {
+          "title": "Group moderation scope",
           "description": "Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support."
         }
       },
@@ -59,7 +95,11 @@
       "default": true,
       "description": "总开关",
       "x-i18n": {
+        "zh-CN": {
+          "title": "启用内容审核"
+        },
         "en": {
+          "title": "Enable moderation",
           "description": "Enable moderation."
         }
       },
@@ -78,7 +118,11 @@
       "default": "open",
       "description": "审查源失败时的全局默认策略：open=视为通过，closed=视为 critical",
       "x-i18n": {
+        "zh-CN": {
+          "title": "审查失败策略"
+        },
         "en": {
+          "title": "On review error",
           "description": "Default policy when a review source fails: open treats it as passed; closed treats it as critical."
         }
       },
@@ -95,7 +139,11 @@
       "maxLength": 4,
       "description": "文本打码字符",
       "x-i18n": {
+        "zh-CN": {
+          "title": "打码字符"
+        },
         "en": {
+          "title": "Mask character",
           "description": "Text masking character."
         }
       },
@@ -109,7 +157,11 @@
       "type": "string",
       "description": "reply 动作时的提示文案；省略时按本次消息语言选择默认文案，显式文本保持原样",
       "x-i18n": {
+        "zh-CN": {
+          "title": "提示文案"
+        },
         "en": {
+          "title": "Reply text",
           "description": "Reply text for the reply action. When omitted, use the message language; explicit text is preserved."
         }
       },
@@ -121,10 +173,26 @@
     },
     "inbound": {
       "type": "object",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "入站审查"
+        },
+        "en": {
+          "title": "Inbound review"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
           "type": "boolean",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用入站审查"
+            },
+            "en": {
+              "title": "Enable inbound review"
+            }
+          },
           "default": true
         },
         "bypass": {
@@ -139,17 +207,39 @@
           ],
           "description": "满足任一 permit 表达式的发送者跳过入站审查（ADR 0056 §5 内置 DSL，与命令 / 工具同一评估器）。内容审核是平台功能，默认 zhin owner 或平台群主 / 管理员（platform:admin）；[] 表示都审",
           "x-i18n": {
+            "zh-CN": {
+              "title": "免审发送者"
+            },
             "en": {
+              "title": "Exempt senders",
               "description": "Senders matching any of these permit expressions skip inbound review (ADR 0056 §5 built-in DSL, the same evaluator as commands and tools). Moderation is a platform function: the default exempts the zhin owner and platform group owners / admins (platform:admin); [] reviews everyone."
             }
           }
         },
         "whitelist": {
           "type": "object",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "白名单"
+            },
+            "en": {
+              "title": "Allowlist"
+            }
+          },
           "additionalProperties": false,
           "properties": {
             "userIds": {
               "type": "array",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "用户 ID",
+                  "description": "这些用户发送的消息不审查"
+                },
+                "en": {
+                  "title": "User IDs",
+                  "description": "Messages from these users are not reviewed."
+                }
+              },
               "items": {
                 "type": "string"
               },
@@ -157,6 +247,16 @@
             },
             "conversationIds": {
               "type": "array",
+              "x-i18n": {
+                "zh-CN": {
+                  "title": "会话 ID",
+                  "description": "这些会话中的消息不审查"
+                },
+                "en": {
+                  "title": "Conversation IDs",
+                  "description": "Messages in these conversations are not reviewed."
+                }
+              },
               "items": {
                 "type": "string"
               },
@@ -173,10 +273,26 @@
     },
     "outbound": {
       "type": "object",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "出站审查"
+        },
+        "en": {
+          "title": "Outbound review"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
           "type": "boolean",
+          "x-i18n": {
+            "zh-CN": {
+              "title": "启用出站审查"
+            },
+            "en": {
+              "title": "Enable outbound review"
+            }
+          },
           "default": true
         },
         "bypass": {
@@ -184,7 +300,11 @@
           "default": false,
           "description": "为 true 时跳过出站审查",
           "x-i18n": {
+            "zh-CN": {
+              "title": "跳过出站审查"
+            },
             "en": {
+              "title": "Skip outbound review",
               "description": "Skip outbound review when true."
             }
           }
@@ -202,6 +322,14 @@
       "description": "severity → 动作（字符串或数组）；缺省用偏严默认表",
       "properties": {
         "pass": {
+          "x-i18n": {
+            "zh-CN": {
+              "title": "通过"
+            },
+            "en": {
+              "title": "Pass"
+            }
+          },
           "anyOf": [
             {
               "type": "string",
@@ -232,6 +360,14 @@
           ]
         },
         "low": {
+          "x-i18n": {
+            "zh-CN": {
+              "title": "低"
+            },
+            "en": {
+              "title": "Low"
+            }
+          },
           "anyOf": [
             {
               "type": "string",
@@ -262,6 +398,14 @@
           ]
         },
         "medium": {
+          "x-i18n": {
+            "zh-CN": {
+              "title": "中"
+            },
+            "en": {
+              "title": "Medium"
+            }
+          },
           "anyOf": [
             {
               "type": "string",
@@ -292,6 +436,14 @@
           ]
         },
         "high": {
+          "x-i18n": {
+            "zh-CN": {
+              "title": "高"
+            },
+            "en": {
+              "title": "High"
+            }
+          },
           "anyOf": [
             {
               "type": "string",
@@ -322,6 +474,14 @@
           ]
         },
         "critical": {
+          "x-i18n": {
+            "zh-CN": {
+              "title": "严重"
+            },
+            "en": {
+              "title": "Critical"
+            }
+          },
           "anyOf": [
             {
               "type": "string",
@@ -353,7 +513,11 @@
         }
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "分级处置"
+        },
         "en": {
+          "title": "Actions by severity",
           "description": "Severity-to-action mapping (string or array); uses the stricter default mapping when omitted."
         }
       },
@@ -365,6 +529,16 @@
     },
     "sources": {
       "type": "array",
+      "x-i18n": {
+        "zh-CN": {
+          "title": "审查源",
+          "description": "按顺序执行的审查源：本地词库或 HTTP 审查服务"
+        },
+        "en": {
+          "title": "Review sources",
+          "description": "Review sources run in order: local word lists or HTTP review services."
+        }
+      },
       "default": [],
       "items": {
         "type": "object",
@@ -376,10 +550,28 @@
         "properties": {
           "id": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "标识"
+              },
+              "en": {
+                "title": "ID"
+              }
+            },
             "minLength": 1
           },
           "type": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "类型",
+                "description": "local 为本地词库，http 为外部审查服务"
+              },
+              "en": {
+                "title": "Type",
+                "description": "local is a word list; http is an external review service."
+              }
+            },
             "enum": [
               "local",
               "http"
@@ -387,10 +579,28 @@
           },
           "enabled": {
             "type": "boolean",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "启用"
+              },
+              "en": {
+                "title": "Enabled"
+              }
+            },
             "default": true
           },
           "onError": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "失败策略",
+                "description": "此审查源失败时的策略，未填写时使用全局设置"
+              },
+              "en": {
+                "title": "On error",
+                "description": "Policy when this source fails; uses the global setting when empty."
+              }
+            },
             "enum": [
               "open",
               "closed"
@@ -401,7 +611,11 @@
             "default": true,
             "description": "是否合并内置分级违禁词词库",
             "x-i18n": {
+              "zh-CN": {
+                "title": "合并内置词库"
+              },
               "en": {
+                "title": "Include built-in words",
                 "description": "Include the built-in graded blocked-word dictionary."
               }
             }
@@ -425,14 +639,38 @@
                   "properties": {
                     "word": {
                       "type": "string",
+                      "x-i18n": {
+                        "zh-CN": {
+                          "title": "词"
+                        },
+                        "en": {
+                          "title": "Word"
+                        }
+                      },
                       "minLength": 1
                     },
                     "text": {
                       "type": "string",
+                      "x-i18n": {
+                        "zh-CN": {
+                          "title": "文本"
+                        },
+                        "en": {
+                          "title": "Text"
+                        }
+                      },
                       "minLength": 1
                     },
                     "severity": {
                       "type": "string",
+                      "x-i18n": {
+                        "zh-CN": {
+                          "title": "分级"
+                        },
+                        "en": {
+                          "title": "Severity"
+                        }
+                      },
                       "enum": [
                         "low",
                         "medium",
@@ -445,7 +683,11 @@
               ]
             },
             "x-i18n": {
+              "zh-CN": {
+                "title": "自定义词"
+              },
               "en": {
+                "title": "Custom words",
                 "description": "Custom words: strings using defaultSeverity, or { word, severity } objects."
               }
             }
@@ -458,7 +700,11 @@
             "default": [],
             "description": "词库文件；行格式 word / severity:word / word|severity",
             "x-i18n": {
+              "zh-CN": {
+                "title": "词库文件"
+              },
               "en": {
+                "title": "Word files",
                 "description": "Dictionary file; line formats: word, severity:word, or word|severity."
               }
             }
@@ -474,7 +720,11 @@
             "default": "high",
             "description": "未标注分级的自定义词默认 severity",
             "x-i18n": {
+              "zh-CN": {
+                "title": "默认分级"
+              },
               "en": {
+                "title": "Default severity",
                 "description": "Default severity for custom words without an explicit severity."
               }
             }
@@ -490,22 +740,56 @@
             "default": "high",
             "description": "兼容旧字段，等同 defaultSeverity",
             "x-i18n": {
+              "zh-CN": {
+                "title": "分级（旧字段）"
+              },
               "en": {
+                "title": "Severity (legacy)",
                 "description": "Legacy alias for defaultSeverity."
               }
             }
           },
           "url": {
-            "type": "string"
+            "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "服务地址",
+                "description": "HTTP 审查服务的地址"
+              },
+              "en": {
+                "title": "Service URL",
+                "description": "URL of the HTTP review service."
+              }
+            }
           },
           "headers": {
             "type": "object",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "请求头",
+                "description": "发送给审查服务的附加请求头"
+              },
+              "en": {
+                "title": "Headers",
+                "description": "Extra headers sent to the review service."
+              }
+            },
             "additionalProperties": {
               "type": "string"
             }
           },
           "timeoutMs": {
             "type": "number",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "超时（毫秒）",
+                "description": "单次审查请求的超时"
+              },
+              "en": {
+                "title": "Timeout (ms)",
+                "description": "Timeout of one review request."
+              }
+            },
             "default": 5000,
             "minimum": 500,
             "maximum": 60000
@@ -515,7 +799,11 @@
             "default": false,
             "description": "强制下载图片后上传，不传 URL",
             "x-i18n": {
+              "zh-CN": {
+                "title": "强制上传图片"
+              },
               "en": {
+                "title": "Force image upload",
                 "description": "Download images before uploading them instead of passing the URL."
               }
             }

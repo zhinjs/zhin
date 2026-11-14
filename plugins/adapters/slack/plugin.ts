@@ -6,6 +6,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Slack Adapter',
+    displayNameI18n: { 'zh-CN': 'Slack 适配器', en: 'Slack Adapter' },
   },
   setup(context) {
     return {

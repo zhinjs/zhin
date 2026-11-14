@@ -20,6 +20,7 @@ export default defineGamePlugin<RouletteServices, RouletteSessionRow, Partial<Ro
   name: 'roulette',
   metadata: {
     displayName: 'Russian Roulette',
+    displayNameI18n: { 'zh-CN': '俄罗斯轮盘', en: 'Russian Roulette' },
   },
   game: {
     commandPath: 'roulette',

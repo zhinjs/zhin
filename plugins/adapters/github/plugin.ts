@@ -26,6 +26,7 @@ export default definePlugin({
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'GitHub Adapter',
+    displayNameI18n: { 'zh-CN': 'GitHub 适配器', en: 'GitHub Adapter' },
   },
   setup(context) {
     if (context.resources.has(databaseHostToken)) {

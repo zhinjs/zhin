@@ -36,7 +36,7 @@ my-plugin/
 
 - **插件名**取包名去掉 scope 后的部分：`@scope/foo` → `foo`，`foo` → `foo`。不会去掉 `zhin-plugin-` 之类的前缀。
 - 这个名字同样要满足 `/^[a-z][a-z0-9-]*$/`。不满足（例如 `zhin.js-foo` 含有 `.`）时启动报错，提示你添加带显式 `name` 的 `plugin.ts`。
-- `displayName`、`icon` 写在 `zhin.metadata` 里。
+- `displayName`、`displayNameI18n`、`icon` 写在 `zhin.metadata` 里。
 - 只要声明了 `entry`（或 `exports["./zhin"]`），它就必须存在；只有两者都省略才是无入口插件。目录里有 `plugin.ts` 但没声明入口时，它不会被加载，`zhin plugin check` 会给出警告。
 - 需要 `setup`、内联 `config`、`requires` 或 `capabilityGraph` 时，再添加 `plugin.ts` 并声明 `zhin.entry`。
 
@@ -368,6 +368,7 @@ async setup(context) {
 | 字段 | 作用 |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Console 插件卡片的名称、图标、排序，不影响运行 |
+| `metadata.displayNameI18n` | 按 Console 界面语言显示的名称，如 `{ 'zh-CN': '复读机', en: 'Repeater' }`；见[语言与本地化](../configuration/localization.md#插件如何接入) |
 | `requires` | 必须存在的资源 token 列表，缺失时拒绝启动 |
 | `capabilityGraph` | 使用 `definePluginCapabilityGraph({ provides, injects, features })` 显式声明本插件的能力拓扑（对外提供的 token、注入的 token，以及按 feature 分组的能力项），供静态治理与 Console 可观测使用 |
 
@@ -412,7 +413,7 @@ export default definePlugin({
 - 插件配置的根必须是对象；没有任何字段时可以省略 `properties`，`{}` 也合法。
 - `toJsonSchema()` 导出标准 JSON Schema；`toJSON()` 是内部序列化格式，两者用途不同。
 - `.secret()` 导出 `writeOnly: true` 与 `x-zhin-config.secret` 提示，并禁止为密钥设置默认值；它不会读取环境变量，也不授予任何权限。
-- 描述、选项、隐藏字段、组件类型与 `.effect('reload')` 都写在同一个 Schema 上，Console 从运行时读取。
+- 描述、选项、隐藏字段、组件类型与 `.effect('reload')` 都写在同一个 Schema 上，Console 从运行时读取。字段在 Console 上显示的中英文标题与说明用 `.i18n({ 'zh-CN': { title }, en: { title, description } })` 声明（`schema.json` 中为 `x-i18n`），见[语言与本地化](../configuration/localization.md#插件如何接入)。
 - Console 表单支持基础的嵌套对象、列表和字典。`union`、`intersect`、`tuple` 与 `$ref` 能导出标准校验，但完整的表单编辑尚未支持，Console 会明确报错。
 - 联合类型的默认值写在联合字段上：`Schema.union([...]).default(...)`。分支内部的默认值无法在校验时消歧，导出时会被拒绝；直接作为选项的 `Schema.const(...)` 可以使用。默认值会与所有结构匹配的分支比对，任一匹配密钥分支就拒绝导出；Zhin 不根据范围、步长或选项推断分支，无法排除时保守拒绝。
 - 入口文件在配置预检阶段就会被加载（此时不执行 `setup`），所以入口顶层只做定义，把副作用放进 `setup`。预检时 Zhin 会复制并冻结 Schema 元数据，之后再修改构建器不会生效。

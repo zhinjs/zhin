@@ -16,7 +16,11 @@
       "default": true,
       "description": "是否启用进程监控",
       "x-i18n": {
+        "zh-CN": {
+          "title": "启用进程监控"
+        },
         "en": {
+          "title": "Enable process monitor",
           "description": "Enable process monitoring."
         }
       },
@@ -31,7 +35,11 @@
       "default": true,
       "description": "首次启动时通知",
       "x-i18n": {
+        "zh-CN": {
+          "title": "启动时通知"
+        },
         "en": {
+          "title": "Notify on start",
           "description": "Notify on first startup."
         }
       },
@@ -46,7 +54,11 @@
       "default": true,
       "description": "正常重启时通知",
       "x-i18n": {
+        "zh-CN": {
+          "title": "重启时通知"
+        },
         "en": {
+          "title": "Notify on restart",
           "description": "Notify on normal restart."
         }
       },
@@ -61,7 +73,11 @@
       "default": true,
       "description": "异常崩溃重启时通知",
       "x-i18n": {
+        "zh-CN": {
+          "title": "崩溃时通知"
+        },
         "en": {
+          "title": "Notify on crash",
           "description": "Notify after a crash restart."
         }
       },
@@ -85,17 +101,41 @@
         "properties": {
           "type": {
             "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "渠道类型",
+                "description": "目前只支持 webhook"
+              },
+              "en": {
+                "title": "Channel type",
+                "description": "Only webhook is supported for now."
+              }
+            },
             "enum": [
               "webhook"
             ]
           },
           "target": {
-            "type": "string"
+            "type": "string",
+            "x-i18n": {
+              "zh-CN": {
+                "title": "目标地址",
+                "description": "Webhook 地址"
+              },
+              "en": {
+                "title": "Target",
+                "description": "Webhook URL."
+              }
+            }
           }
         }
       },
       "x-i18n": {
+        "zh-CN": {
+          "title": "通知渠道"
+        },
         "en": {
+          "title": "Notification channels",
           "description": "Notification channel (slice 1 supports webhook only)."
         }
       },

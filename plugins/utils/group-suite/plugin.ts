@@ -21,6 +21,7 @@ export default definePlugin<GroupSuiteConfig>({
   name: 'group-suite',
   metadata: {
     displayName: 'Group Suite',
+    displayNameI18n: { 'zh-CN': '群管套件', en: 'Group Suite' },
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [groupSuiteRuntimeStore, pluginConsoleRpcToken],

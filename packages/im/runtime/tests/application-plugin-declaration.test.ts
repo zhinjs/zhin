@@ -106,6 +106,14 @@ describe('application Plugin declarations', () => {
     expect(parsed.zhin).toMatchObject({ metadata: { displayName: 'Label', icon: 'Bell' } });
     expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { order: 1 } } }, 'fixture')).toThrow('metadata.order');
   });
+
+  it('accepts locale-keyed display names and rejects other locales or empty text', () => {
+    const parsed = parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayName: 'Repeater', displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' } } } }, 'fixture');
+    expect(parsed.zhin).toMatchObject({ metadata: { displayName: 'Repeater', displayNameI18n: { 'zh-CN': '复读机', en: 'Repeater' } } });
+    expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayNameI18n: { ja: 'リピーター' } } } }, 'fixture')).toThrow('displayNameI18n.ja');
+    expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayNameI18n: { en: '' } } } }, 'fixture')).toThrow('displayNameI18n.en');
+    expect(() => parsePackageJson({ name: '@test/plugin', zhin: { ...plugin, metadata: { displayNameI18n: 'Repeater' } } }, 'fixture')).toThrow('displayNameI18n');
+  });
 });
 
 const plugin = { protocol: 1, type: 'plugin', entry: './plugin.ts' };

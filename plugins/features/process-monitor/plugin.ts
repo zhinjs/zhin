@@ -21,6 +21,7 @@ export default definePlugin<ProcessMonitorConfig>({
   name: 'process-monitor',
   metadata: {
     displayName: 'Process Monitor',
+    displayNameI18n: { 'zh-CN': '进程监控', en: 'Process Monitor' },
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [processMonitorStore, pluginConsoleRpcToken],
