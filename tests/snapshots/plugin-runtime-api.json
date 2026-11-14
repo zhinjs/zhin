@@ -446,6 +446,7 @@
     "export * from './isolate/index.js';",
     "export * from './isolation.js';",
     "export * from './layered-config.js';",
+    "export * from './manifest-change.js';",
     "export * from './manifest.js';",
     "export * from './module-runtime.js';",
     "export * from './native-development-runtime.js';",

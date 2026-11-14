@@ -24,7 +24,7 @@
     {
       "package": "@zhin.js/runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：热重载按受影响子树计算重建范围并实现项目文件监视，公开 API 新增 `HmrCoordinator` 的 `watchDebounceMs` 选项、重载报告字段（rebuilt / rebuilt_plugins）与失效计划的 `unrefreshedDependents`。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：热重载按受影响子树计算重建范围并实现项目文件监视，公开 API 新增 `HmrCoordinator` 的 `watchDebounceMs` 选项、重载报告字段（rebuilt / rebuilt_plugins）、失效计划的 `unrefreshedDependents` 与 manifest 字段过滤导出（`manifest-change`）。"
     },
     {
       "package": "@zhin.js/plugin-runtime",
