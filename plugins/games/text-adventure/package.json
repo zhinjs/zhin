@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-text-adventure",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "An interactive story with 31 areas, 15 items and 15 endings.",
   "keywords": [
     "zhin.js",

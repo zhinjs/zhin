@@ -1,5 +1,23 @@
 # @zhin.js/contract
 
+## 1.1.26
+
+### Patch Changes
+
+- Updated dependencies [8c92bda]
+- Updated dependencies [7126d03]
+- Updated dependencies [1d1746e]
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [71aa159]
+- Updated dependencies [ccab2c1]
+- Updated dependencies [b00725c]
+- Updated dependencies [c6b5563]
+- Updated dependencies [f1a9745]
+- Updated dependencies [e0b4e51]
+- Updated dependencies [704c7a4]
+- Updated dependencies [f3910f1]
+  - @zhin.js/console-protocol@1.3.0
+
 ## 1.1.25
 
 ### Patch Changes

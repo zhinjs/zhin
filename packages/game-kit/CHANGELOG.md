@@ -1,5 +1,28 @@
 # @zhin.js/game-shared
 
+## 1.1.29
+
+### Patch Changes
+
+- 7cd299e: 指令执行中抛出的「面向用户」的拒绝不再被静默吞掉（#1250）：`@zhin.js/command` 新增 `UserFacingError`（及 `isUserFacingError` / `userFacingErrorText`，经 `zhin.js/command` 导出），指令分发把它转成该指令的回复，经正常出站链（`$reply`）发出，按发送者语言调用 `format(locale)`；其他错误照旧抛给入站运行时记录日志，不把错误信息或堆栈回给用户。`GameSessionConflictError` 改为继承 `UserFacingError`，群里已有一局「guess」时发「rps 开始」会收到「你在当前频道已有进行中的「guess」对局…」，不再只在适配器日志里出现 `sandbox_gateway_receive_failed`。
+- b56cca9: 定时任务（#1250）：`ScheduleJobRegistration` / `defineSchedule()` 新增可选 `title`、`titleI18n`、`kind`（`plugin-internal` 默认 / `user-task`）；实例 Schedule Host 记录每个任务最近一次实际执行的开始 / 结束时间与成功 / 失败（`lastRun`）。`schedule:list` / `cron:list` 的内存任务行新增可选 `kind`、`title`（按请求 `locale` 解析）、`titleI18n`、`displayName`、`lastExecutedAt`、`lastFinishedAt`、`lastDurationMs`、`lastStatus`、`lastError`，持久任务行新增 `kind: 'user-task'`。官方插件的内部轮询任务补中文标题。
+- Updated dependencies [7cd299e]
+- Updated dependencies [7cd299e]
+- Updated dependencies [9026329]
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [ccab2c1]
+- Updated dependencies [c6b5563]
+- Updated dependencies [e0b4e51]
+- Updated dependencies [7cc703a]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [704c7a4]
+- Updated dependencies [b56cca9]
+- Updated dependencies [07bd3dc]
+  - @zhin.js/core@1.8.0
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/middleware@1.1.19
+  - @zhin.js/feature-kit@1.1.18
+
 ## 1.1.28
 
 ### Patch Changes

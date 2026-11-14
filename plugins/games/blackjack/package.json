@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-blackjack",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Blackjack with hit / stand buttons, integrated with the game hub and its stats.",
   "keywords": [
     "zhin.js",

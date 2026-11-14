@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-reminder",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Persistent personal reminders that survive restarts and are delivered to and managed in their original conversation.",
   "keywords": [
     "zhin.js",

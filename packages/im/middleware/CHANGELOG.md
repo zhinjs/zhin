@@ -1,5 +1,18 @@
 # @zhin.js/middleware
 
+## 1.1.19
+
+### Patch Changes
+
+- 07bd3dc: `UserFacingError` 扩展到中间件与事件处理器（#1250）：入站中间件（`defineMiddleware`）或事件处理器（`defineHandler`）抛出的 `UserFacingError` 会经正常出站链回复到该会话（中间件以自身为回复作者；处理器在消息 / 通知 / 请求的会话里回复，然后继续下一个处理器）；其他错误仍只记日志。新增内部扩展点：`MiddlewareResultPolicy.refuse` 与 `HandlerDispatchOptions.recover`。
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [7cc703a]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/feature-kit@1.1.18
+  - @zhin.js/permission@1.2.2
+
 ## 1.1.18
 
 ### Patch Changes

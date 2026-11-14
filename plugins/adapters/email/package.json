@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-email",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "type": "module",
   "description": "Email adapter: sends over SMTP and polls IMAP, turning a mailbox into a chat channel.",
   "keywords": [

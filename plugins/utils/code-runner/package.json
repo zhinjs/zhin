@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-code-runner",
-  "version": "1.1.20",
+  "version": "1.2.0",
   "description": "Runs JavaScript, Python and other snippets in a sandbox with a timeout.",
   "keywords": [
     "zhin.js",

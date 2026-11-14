@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-slack",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "Slack adapter: Socket Mode by default or the HTTP Events API, with Block Kit messages.",
   "keywords": [
     "zhin.js",

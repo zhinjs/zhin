@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-napcat",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "NapCatQQ adapter: OneBot 11 plus NapCat extension APIs over forward / reverse WebSocket or HTTP.",
   "keywords": [
     "zhin.js",

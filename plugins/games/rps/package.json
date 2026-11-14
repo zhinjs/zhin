@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-rps",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Rock paper scissors, best of three, with game-hub buttons or text commands.",
   "keywords": [
     "zhin.js",

@@ -1,5 +1,19 @@
 # create-zhin-app
 
+## 1.2.3
+
+### Patch Changes
+
+- 0e998fd: 机器人专用引导文件 `BOT.md`（#1250）：项目根目录有非空的 `BOT.md` 时（只认根目录，`data/BOT.md` 不读），机器人只读 `BOT.md`（与 `SOUL.md`、`TOOLS.md`），不再读任何 `AGENTS.md`，`AGENTS.md` 留给开发者与编码代理；没有 `BOT.md` 时行为不变。新项目生成 `BOT.md`（机器人指令与记忆）和面向开发者的 `AGENTS.md`；`zhin setup --bootstrap` / `zhin doctor --fix` 在已有 `AGENTS.md` 且无 `BOT.md` 时继续用 `AGENTS.md`。修改 `BOT.md` 与修改根 `AGENTS.md` 一样需要审批。新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`。
+
+  `BOT.md` 列入 `DEFAULT_SELF_FILES`：`self` 硬闸、未注入项目根时的按名匹配与隔离 shell 的只读挂载都覆盖它，与 `AGENTS.md` 相同。只读挂载只覆盖已存在的文件；隔离 shell（`workspace-write`）运行后，项目根下新出现的自我文件（`BOT.md`、`AGENTS.md`、根配置等）会被改名为 `<文件名>.quarantined-<时间戳>`，记警告日志并在工具结果里报告。Agent 宿主、`hasBotBootstrapFile()` 与 CLI 都只认项目根目录的非空 `BOT.md`。修改根目录 `BOT.md` 与修改 `SOUL.md` / `AGENTS.md` 一样触发 Root 重建并重新读取。
+
+- 8609906: 网关原生依赖的构建脚本（#1250）：pnpm 10+ 默认跳过依赖的构建脚本（pnpm 11 直接让安装失败），`node-pty` 装上却无法加载，Console 本地终端不可用。`create-zhin-app` 生成的 `pnpm-workspace.yaml` 现在在 `allowBuilds` 中放行 `node-pty`、`ssh2`、`cpu-features`（pnpm 11 不再读取 `package.json` 的 `pnpm` 字段，`onlyBuiltDependencies` 也被忽略）；`zhin migrate` 为声明了 `@zhin.js/gateway` 的 pnpm 项目补齐这些条目（已有条目保留、`false` 不改，空的 `allowBuilds:` 也能补齐，已有的 `onlyBuiltDependencies` 列表同样追加，不重排文件中的长字符串；`--dry-run` 只预览）；项目没有 `pnpm-workspace.yaml` 时，只有确认使用 pnpm 10+（`packageManager` 为 pnpm 10 及以上，或 `pnpm --version` ≥ 10）才会创建它——只含 `allowBuilds` 的该文件会让 pnpm 9 报 `packages field missing or empty`，而 pnpm 9 本来就会运行依赖构建脚本，此时只打印提示；项目位于上级目录的 pnpm workspace 内时（向上查找到文件系统根或用户主目录为止）也不在项目中创建该文件（否则它会变成独立的 workspace 根），而是提示把 `allowBuilds` 条目加到上级的 `pnpm-workspace.yaml`；`zhin doctor` 在项目目录的子进程中加载网关的 `node-pty`，失败时警告并给出修复命令，未安装网关时跳过。
+- Updated dependencies [0e998fd]
+- Updated dependencies [8609906]
+- Updated dependencies [7126d03]
+  - @zhin.js/scaffold-wizard@1.2.0
+
 ## 1.2.2
 
 ### Patch Changes

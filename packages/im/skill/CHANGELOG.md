@@ -1,5 +1,16 @@
 # @zhin.js/skill
 
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [7cc703a]
+- Updated dependencies [70ddaf4]
+- Updated dependencies [b56cca9]
+  - @zhin.js/plugin-runtime@1.3.0
+  - @zhin.js/feature-kit@1.1.18
+
 ## 1.1.18
 
 ### Patch Changes

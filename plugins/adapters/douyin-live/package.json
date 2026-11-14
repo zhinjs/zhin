@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-douyin-live",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Douyin live danmaku adapter (experimental, unofficial protocol): reads danmaku in your own live room; listen-only by default.",
   "keywords": [
     "zhin.js",

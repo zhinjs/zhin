@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-bilibili",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Bilibili comment adapter (experimental): QR login, AI-assisted replies to comments on your own videos, dynamics and articles, with Console review before sending.",
   "keywords": [
     "zhin.js",

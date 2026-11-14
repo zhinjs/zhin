@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-repeater",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Echoes a message when several group members repeat it in a row.",
   "keywords": [
     "zhin.js",

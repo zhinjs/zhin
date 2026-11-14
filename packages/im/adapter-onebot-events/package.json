@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-onebot-events",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Shared OneBot v11 / NapCat / icqq raw notice and request to canonical side event mapping for Zhin adapters",
   "type": "module",
   "main": "./lib/index.js",

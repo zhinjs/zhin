@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-ledger",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Per-user expense records with daily, weekly and monthly category summaries, amounts hidden in groups, and an opt-in daily report.",
   "keywords": [
     "zhin.js",

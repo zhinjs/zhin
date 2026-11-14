@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-calendar",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "CalDAV, Google Calendar and Outlook event lookup and creation for the Agent, with authorization done in chat.",
   "keywords": [
     "zhin.js",

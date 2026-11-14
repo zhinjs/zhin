@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-tic-tac-toe",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Two-player tic-tac-toe on any platform, with buttons or 1–9 text moves.",
   "keywords": [
     "zhin.js",

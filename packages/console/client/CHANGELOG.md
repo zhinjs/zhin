@@ -1,5 +1,62 @@
 # @zhin.js/client
 
+## 1.2.0
+
+### Minor Changes
+
+- ab14f22: 适配器 Console 页：新增 headless 账号 API，宿主可以把账号的状态、启停开关和操作并进自己的账号列表（zhinjs/zhin#1250）。`AdapterAccountsProvider` + `useAdapterAccounts()` 返回账号行（状态、开关文字「运行中 / 已停止」、`setEnabled` / `start` / `stop` / `edit` / `remove` / `test`、`can` / `busy` / `disabled`）与 `notice`、迁移确认、`blocked`、`add`、`editing`，内部沿用页面原有的 revision、迁移确认与 `commit_unknown` 处理；`AdapterAccountEditor` 只渲染编辑表单。`AdapterConsolePage` 新增 `renderRow`（每行插槽）与 `hostAccounts`（账号列表、编辑表单与账号提示交给宿主），`ADAPTER_CONSOLE_PAGE_CAPABILITIES` 相应标明。账号卡片的开关改为带文字说明的可键盘操作开关，去掉与开关重复的「启动 / 停止」按钮；账号头像改为适配器显示名首字。需要迁移时提示里加「立即迁移」（确认后提交一次不改字段的更新）并说明迁移后账号以数据库为准、配置文件中的 `endpoints` 不再生效；不能这样迁移的适配器说明会在第一次编辑或启停时确认。页面在弹性 / 网格父容器里撑满宿主内容列，不再缩成一列窄卡片。
+- 252d5dc: `useEnvFiles` 适配打码后的 `env:get`（#1250）：新增 `getView(filename)`（返回 `ConsoleEnvFileView`，旧 Host 返回 `null`）、`reveal(filename, key)`（`env:reveal`，单变量原值，Host 侧校验 `ops.env.write` + `ops.env.read` 并审计）与按键保存 `saveChanges(filename, changes)`（`env:save { changes }`，提交前拒绝打码占位值）；`getFile` 保持可用，在打码 Host 上返回打码后的文本；`saveFile` 改为显式整文件替换（`mode: 'replace'`），含打码占位时会被 Host 拒绝。`ConsoleTransport` 新增 `revealEnvValue` / `saveEnvChanges`，`getEnvFile` 的返回类型改为两种形状的联合。
+
+### Patch Changes
+
+- e0b4e51: 账号（Endpoint）启动不再阻塞实例就绪（#1250）。实例提交 generation 后即就绪；每个账号最多等约 3 秒宽限期，其余在后台继续启动，失败的账号按退避自动重试（5 秒起翻倍，封顶 5 分钟，±20% 抖动，不限次数）。`Endpoint.start()` 合同不变，适配器无需改动。
+
+  行为变化：
+
+  1. 实例 ready 与 `/pub/ready` 返回 200 不再意味着账号在线；需要账号在线才算就绪时用 `http.readiness.endpoints`。网关 `gateway.readyTimeout` 不再覆盖账号登录时间。
+  2. 账号 start 失败不再导致实例启动失败或热重载回滚：改坏账号配置的热重载**会提交**（以前会回滚、旧账号继续在线），旧账号下线，新账号进入 `failed` / `retrying` 并按策略处理。账号停止时清理失败只把该账号标为失败（`endpoint_cleanup_failed`，等待人工处理），不再作为整个 Root 的完整性失败。
+  3. 宽限期内没完成登录的慢账号，热重载从“先上新再下旧”变为“先下旧再上新”；宽限期内完成的不受影响。
+  4. `zhin start --once` 是启动检查：宽限期后最多再等 30 秒，直到每个账号的首次启动尝试有结果；有启用账号处于 `failed` 或 `retrying`（首次尝试已失败）时以非零码退出，`stderr` 以首个失败账号的脱敏报错开头并列出全部失败账号；仍在 `starting` 或等待交互式登录（`awaiting_assist`）的账号不算失败。
+  5. 账号上线前向它发送仍立即失败（`endpoint_inactive`，`not_sent`）。
+  6. 自动重试会产生周期性的 `endpoint_start_failed` 日志（错误类名、错误码、类别与脱敏后的原始报错 `reason`）；配置错误与交互式登录（`login.mode: interactive`，如 ICQQ）不自动重试，等 Console「重新登录」/「启动」，重新登录也会立即唤醒等待中的重试。
+
+  新增：`AdapterEndpointPhase` 的 `failed` / `retrying`，Endpoint 行与 `Adapter.list()` 的 `startAttempt` / `startFailure` / `nextRetryAt`，`Adapter.retryStart()`；core Endpoint 列表把等待登录验证的启动中账号报告为 `awaiting_assist`；需鉴权的 `{api}/system/readiness` 详情新增不参与就绪判断的 `endpoints[]`；Console 协议 `ConsoleEndpointPhase` 新增 `retrying` / `awaiting_assist`，账号页显示「启动中 / 启动失败 / 等待重试」；TTY 启动摘要分 online / starting / failed 列出账号。账号 start 作为 Console 变更执行时，首次尝试失败的执行码由 `endpoint_execution_failed` 改为 `endpoint_start_failed`。
+
+  `AdapterIndex.activate()`（Root generation 交接）按上述规则后台启动；`AdapterIndex.start()` 保留给工具与测试，仍等待每个账号的首次尝试，并以 `Endpoint.start()` 原样抛出的首个错误拒绝（随后停止全部账号，不留后台重试）。
+
+- 627fb5e: 插件市场元数据不再阻止实例启动（#1250 review）：实例加载包时，`zhin.metadata.category` 不在枚举内、`descriptionI18n` 无效、`displayNameI18n` / `descriptionI18n` 含 `zh-CN` / `en` 以外的语言键，只记一条结构化警告（`manifest_metadata_dropped`，带包名与字段）并丢弃该值；`displayNameI18n` 形状错误、空字符串和未知的 `metadata` 键仍然报错。`zhin plugin check` 与发布流程保持严格校验。`parsePackageJson` 新增可选参数 `{ metadata: 'strict' | 'lenient', onWarning }`（默认 strict），`NodePackageResolver.create` / `RootRuntime` / `RootHost` 新增 `onManifestWarning`。
+
+  `zhin search` 识别文档推荐的 keywords `zhin.js`，以及 `zhinjs`、`zhin-plugin`（不区分大小写）和带 `zhin` 清单字段的搜索结果。
+
+  会话选择器：没有 `endpoint.view` 时可以手动填写适配器、账号 ID（规范 endpoint ID，`\0` 表示分隔符）与会话 ID，并提示缺少的权限；没有 Provider 的 `ConversationLabel` / `useConversationDirectory` 共享同一对进行中的请求，并按连接缓存 10 秒。声明式页面动作带 `result` 时，未设置 `result.tone` 则沿用计算出的语气（如 `passed: false` 为 danger），并在内联结果中显示返回的 `message`（结果本身已渲染 `message` 时不重复）。
+
+- b08cff2: 官方插件 Console 页面与命令可用性（#1250 反馈八、九）。
+
+  - `@zhin.js/client` 新增会话选择器与会话显示名：`ConversationPicker`（从机器人账号与最近会话中选择、可搜索、「手动填写（高级）」）、`ConversationLabel`、`useConversationDirectory` / `useSharedConversationDirectory`、`parseConversationAddress`、`formatConversationLabel` 等。数据来自已有的 `endpoint.list` 与 `inbox.recent`，按现有 Console 权限表鉴权（没有 `endpoint.view` 时退回原始 ID 与手动填写）。
+  - 声明式页面（`@zhin.js/console-contract` 与渲染端）新增：表单字段 `type: 'date' | 'time' | 'conversation'`（`conversationKinds`）、列类型 `conversation`、条目 `muted` / `badge`、取值表达式 `$i18n`（按查看者语言取 `{ 'zh-CN', en }`）、动作 `result`（结果紧贴表单内联显示，不再是页顶横幅）。页面构建桩同步支持 `$i18n`。
+  - 群管套件：会话列显示会话名而不是 `["conversation-v1", …]` 键，签到排行显示昵称；问答与关键词按 `teach-list` / `keyword-list` 口径分别统计并合计，持久关键词经插件级索引计入（索引建立前保存的词库在该群下次修改后出现）。持有 `group-suite:read` 的账号可以在页面看到持久关键词的回复内容（与 `teach` 问答表相同）。
+  - RSS：添加订阅用会话选择器选择推送会话并保存精确目标（`target_json`），不再手填平台与目标 ID；订阅列表按会话名显示。旧的 `adapter` / `targetType` / `targetId` 参数仍可用。
+  - 进程监控：区分「本次运行」与「累计（自某日起）」，新增近 24 小时崩溃 / 重启数（状态文件记录带时间戳的事件，旧文件兼容，起点按文件创建时间估算并注明），详情标签全部本地化。
+  - 日历：新建日程使用日期 / 时间选择器（服务端校验 `HH:mm`），删除放到日程列表每一行。
+  - 彩票：显示定时推荐开关；关闭时 Cron 置灰并标注「未启用」。
+  - 内容审核：「检测文本」干跑结果紧贴输入框、本地化显示判定、严重度、命中词、审核源与按当前 `actions` 配置将执行的动作（干跑接口新增可选字段 `hits`、`flaggedSources`、`decisionI18n`、`severityI18n`、`actionsI18n`、`hitsText`、`sourcesText`）。
+  - 成语接龙：帮助与游戏大厅提示中文写法 `接龙 同音` / `接龙 同字`（英文 `pinyin` / `char`），`start_pinyin` / `start_char` 仍可用。
+
+- Updated dependencies [8c92bda]
+- Updated dependencies [7126d03]
+- Updated dependencies [1d1746e]
+- Updated dependencies [e6d7cc1]
+- Updated dependencies [71aa159]
+- Updated dependencies [ccab2c1]
+- Updated dependencies [b00725c]
+- Updated dependencies [c6b5563]
+- Updated dependencies [f1a9745]
+- Updated dependencies [e0b4e51]
+- Updated dependencies [704c7a4]
+- Updated dependencies [f3910f1]
+  - @zhin.js/console-protocol@1.3.0
+  - @zhin.js/contract@1.1.26
+
 ## 1.1.34
 
 ### Patch Changes

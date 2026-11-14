@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-guess-number",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Find the secret number from 1 to 100 in seven tries.",
   "keywords": [
     "zhin.js",

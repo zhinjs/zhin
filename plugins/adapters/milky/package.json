@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-milky",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "Milky protocol adapter: forward WebSocket by default, plus webhook, reverse WS and SSE, for Milky-compatible QQ implementations.",
   "keywords": [
     "zhin.js",

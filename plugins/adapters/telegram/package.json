@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-telegram",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "description": "Telegram Bot API adapter: private and group messages via long-polling getUpdates, no public URL needed.",
   "keywords": [
     "zhin.js",

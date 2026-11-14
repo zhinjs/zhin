@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wechat-mp",
-  "version": "1.1.29",
+  "version": "1.1.30",
   "type": "module",
   "description": "WeChat Official Account adapter: HTTP webhook messaging with signature checks and optional AES encryption.",
   "keywords": [

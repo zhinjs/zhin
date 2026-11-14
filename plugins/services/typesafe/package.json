@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/service-typesafe",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Connects TypeSafe Choice and Score decision models to the inference runtime.",
   "keywords": [
     "zhin.js",

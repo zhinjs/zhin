@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-idiom-chain",
-  "version": "1.1.28",
+  "version": "1.1.29",
   "description": "Chinese four-character idiom chaining with same-sound or same-character rules and a built-in dictionary.",
   "keywords": [
     "zhin.js",
