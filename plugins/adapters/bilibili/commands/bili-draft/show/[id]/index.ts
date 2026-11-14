@@ -3,6 +3,8 @@ import { bilibiliEndpoints, showDraftText } from '@zhin.js/adapter-bilibili';
 
 export default defineCommand({
   description: '查看一条 B 站评论草稿全文', descriptionI18n: { en: 'Read a complete Bilibili comment draft' },
+  alias: ['bili draft show'],
+  preferredAliasI18n: { 'zh-CN': 'bili draft show', en: 'bili draft show' },
   permit: ['owner'],
   params: { id: { type: 'string', description: '列表中方括号内的草稿 ID', descriptionI18n: { en: 'Draft ID shown in square brackets in the list' } } },
   execute(context) {

@@ -135,6 +135,7 @@ function connectionTone(endpoint: ConsoleEndpointSummary | undefined, known: boo
   if (!endpoint) return 'neutral';
   if (endpoint.pendingLogin) return 'warning';
   if (endpoint.connected && endpoint.status === 'online') return 'success';
+  if (endpoint.phase === 'starting' || endpoint.phase === 'awaiting_assist' || endpoint.phase === 'retrying') return 'warning';
   if (endpoint.transportState === 'connecting' || endpoint.transportState === 'reconnecting') return 'warning';
   return 'danger';
 }
@@ -144,6 +145,10 @@ function connectionLabel(endpoint: ConsoleEndpointSummary | undefined, locale: A
   if (!endpoint) return t(locale, '离线');
   if (endpoint.pendingLogin) return t(locale, '等待登录');
   if (endpoint.connected && endpoint.status === 'online') return t(locale, '在线');
+  if (endpoint.phase === 'awaiting_assist') return t(locale, '等待登录');
+  if (endpoint.phase === 'retrying') return t(locale, '启动失败，等待重试');
+  if (endpoint.phase === 'failed') return t(locale, '启动失败');
+  if (endpoint.phase === 'starting') return t(locale, '启动中');
   if (endpoint.transportState === 'connecting') return t(locale, '连接中');
   if (endpoint.transportState === 'reconnecting') return t(locale, '重连中');
   if (endpoint.transportState === 'stopped') return t(locale, '已停止');

@@ -6,6 +6,8 @@ import * as playground from '../pages/index/playgroundState.js';
 import * as transport from '../pages/index/sandboxTransport.js';
 import * as directories from '../pages/index/workspaceDirectory.js';
 import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
+import * as composer from '../pages/index/composerCommands.js';
+import { segmentFallbackText, segmentPreviewText } from '../pages/index/segmentFallback.js';
 
 const file = new URL('../pages/index/SandboxChat.tsx', import.meta.url);
 const source = await readFile(file, 'utf8');
@@ -17,7 +19,7 @@ const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(a
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,
-  senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,
+  senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,commandHints,atSuggestions,
   directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
@@ -49,6 +51,7 @@ function fixture(options: {
   saveCachedAgentTrace?: typeof traces.saveCachedAgentTrace;
   readWorkspaceDirectory?: typeof directories.readWorkspaceDirectory;
   saveWorkspaceConversation?: typeof directories.saveWorkspaceConversation;
+  readSandboxCommandHints?: typeof composer.readSandboxCommandHints;
   legacyState?: ReturnType<typeof playground.createDefaultPlaygroundState>;
 } = {}) {
   const slots: any[] = [], listeners = new Map<string, Set<() => void>>();
@@ -74,6 +77,7 @@ function fixture(options: {
   const bindings = {
     sandboxText, ...traces, ...playground, ...transport,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
+    readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),
     createWorkspaceDirectoryController: (callbacks: Parameters<typeof createWorkspaceDirectoryController>[0]) => createWorkspaceDirectoryController({
       ...callbacks, read: options.readWorkspaceDirectory ?? (async () => null), save: options.saveWorkspaceConversation,
@@ -622,5 +626,85 @@ describe('Sandbox page transport boundary', () => {
         content: [{ type: 'action', data: { id: 'confirm:1', payload: 'confirm:1' } }],
       });
     } finally { f.close(); }
+  });
+});
+
+describe('Sandbox composer quick commands and approval label (#1250)', () => {
+  it('asks the Host for the live binding\'s quick commands per conversation and offers nothing when it cannot answer', async () => {
+    const reads: unknown[][] = [];
+    let answer: composer.SandboxCommandHints | null = { prefix: '/', menu: '/菜单', quick: ['/菜单', '/ping'] };
+    const f = fixture({ readWorkspaceDirectory: async () => null, readSandboxCommandHints: async (...args) => { reads.push(args); return answer; } });
+    try {
+      expect(f.render().commandHints).toBeNull();
+      f.ready();
+      await vi.waitFor(() => expect(f.render().commandHints).toEqual({ prefix: '/', menu: '/菜单', quick: ['/菜单', '/ping'] }));
+      expect(reads[0]!.slice(0, 3)).toEqual(['page-connection', { type: f.view.activeChannel.type, id: f.view.activeChannel.id }, 'zh-CN']);
+      answer = null;
+      f.view.switchChannel({ ...f.view.channels[0], id: 'another-room', type: 'group', name: 'another' });
+      f.render();
+      await vi.waitFor(() => expect(reads.length).toBe(2));
+      expect(f.render().commandHints).toBeNull();
+    } finally { f.close(); }
+  });
+
+  it('reads the Host answer defensively and labels only Host-marked approval prompts', async () => {
+    const respond = (status: number, body: unknown) => vi.stubGlobal('fetch', vi.fn(async () => ({ ok: status < 400, status, json: async () => body })));
+    vi.stubGlobal('window', { location: { origin: 'http://localhost' } });
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    const context = { apiBase: 'http://host', headers: { Authorization: 'Bearer t' } };
+    respond(200, { success: true, data: { prefix: '', menu: '菜单', quick: ['菜单', 3, ''] } });
+    expect(await composer.readSandboxCommandHints('c1', { type: 'group', id: 'room' }, 'zh-CN', undefined, context)).toEqual({ prefix: '', menu: '菜单', quick: ['菜单'] });
+    const url = new URL(String((fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![0]));
+    expect(url.pathname).toBe('/api/conversations/workspaces/commands');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ connectionId: 'c1', type: 'group', id: 'room', locale: 'zh-CN' });
+    for (const [status, body] of [[404, {}], [503, { success: false }], [200, { success: true, data: { quick: [] } }]] as const) {
+      respond(status, body);
+      expect(await composer.readSandboxCommandHints('c1', { type: 'group', id: 'room' }, 'en', undefined, context)).toBeNull();
+    }
+    vi.unstubAllGlobals();
+
+    const keyboard = (data: Record<string, unknown>) => ({ type: 'keyboard', data: { rows: [[{ id: 'a', label: '放弃', payload: 'quit' }]], ...data } });
+    const message = (content: unknown[], extra: Partial<playground.PlaygroundMessage> = {}) => ({ type: 'received' as const, content: content as never, ...extra });
+    // Game cards and menu pages carry keyboards too: no label.
+    expect(composer.isApprovalPrompt(message([{ type: 'markdown', data: { content: '猜数字' } }, keyboard({})]))).toBe(false);
+    expect(composer.isApprovalPrompt(message([keyboard({ purpose: 'approval' })]))).toBe(true);
+    // A text-only approval card that marks its body is recognised as well.
+    expect(composer.isApprovalPrompt(message([{ type: 'text', data: { text: '批准：/approve tap_1', purpose: 'approval' } }]))).toBe(true);
+    expect(composer.isApprovalPrompt(message([keyboard({ purpose: 'approval' })], { interactionReadOnly: true }))).toBe(false);
+    expect(composer.isApprovalPrompt({ ...message([keyboard({ purpose: 'approval' })]), type: 'sent' })).toBe(false);
+  });
+});
+
+describe('Sandbox @bot shortcut and segment fallback (#1250)', () => {
+  it('offers the connected bot as an @ target in the [@name] form the inbound parser reads', async () => {
+    const f = fixture();
+    try {
+      f.ready();
+      // ready.endpoint is the bot id the page knows; the @ list and the @ button both target it.
+      expect(f.render().atSuggestions).toContainEqual({ id: 'stable-bot', name: 'stable-bot' });
+      const source = await readFile(new URL('../pages/index/SandboxChat.tsx', import.meta.url), 'utf8');
+      expect(source).toContain('editorRef.current?.insertAt(endpointId, endpointId)');
+      const editor = await readFile(new URL('../pages/index/RichTextEditor.tsx', import.meta.url), 'utf8');
+      // The editor serializes a mention chip as `[@name]` text plus a mention segment targeting the id.
+      expect(editor).toContain('text += `[@${name}]`');
+    } finally { f.close(); }
+  });
+
+  it('renders markdown source and button labels instead of [type] or raw JSX', () => {
+    const jsx = (type: string, props: Record<string, unknown>) => ({ $jsx: 'zhin.jsx/1', type, props });
+    const card = jsx('markdown', { children: ['## 猜数字\n', jsx('button', { label: '放弃', payload: 'quit' }), jsx('button', { children: '再来' })] });
+    expect(segmentFallbackText(card)).toBe('## 猜数字\n[放弃][再来]');
+    expect(segmentFallbackText({ type: 'markdown', data: { content: '**粗体**' } })).toBe('**粗体**');
+    // Markdown whose content is still an unrendered JSX tree.
+    expect(segmentFallbackText({ type: 'markdown', data: { content: card } })).toBe('## 猜数字\n[放弃][再来]');
+    expect(segmentFallbackText({ type: 'keyboard', data: { rows: [[{ label: '上一页' }, { label: '下一页' }]] } })).toBe('[上一页] [下一页]');
+    expect(segmentFallbackText(jsx('keyboard', { rows: [[{ label: '确认' }]] }))).toBe('[确认]');
+    expect(segmentFallbackText({ type: 'card', data: { title: 'x' } })).toBeUndefined();
+    expect(segmentPreviewText({ type: 'card', data: { title: 'x' } })).toBe('[card]');
+    expect(JSON.stringify([card].map(segmentPreviewText))).not.toContain('$jsx');
+    // Cycles and deep trees stay bounded.
+    let deep: unknown = 'leaf';
+    for (let i = 0; i < 100; i += 1) deep = jsx('span', { children: deep });
+    expect(segmentFallbackText(deep)).toBeUndefined();
   });
 });

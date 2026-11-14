@@ -19,13 +19,58 @@ import {
   defineAgentPromptSection,
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
+import { commandFeatureId } from '@zhin.js/command';
+import { middlewareFeatureId } from '@zhin.js/middleware';
 import {
+  introspectionOwner,
+  listGenerationCommands,
+  listGenerationMiddlewares,
   listGenerationPromptSections,
   listGenerationTools,
   renderGenerationComponent,
 } from '../../../src/instance/console/agent-feature-projection.js';
 
 describe('Agent generation feature projections', () => {
+  it('names the owning plugin instance and package on every capability row (#1250)', () => {
+    const root = rootPluginId();
+    const reminder = childPluginId(root, 'reminder');
+    const node = (id: PluginId, instanceKey: string, packageName: string) => [id, {
+      id, instanceKey, packageName, packageRoot: `/project/node_modules/${packageName}`, children: [],
+    }] as const;
+    const gone = childPluginId(root, 'gone');
+    const snapshot = {
+      root,
+      tree: new Map([node(root, 'root', 'my-bot'), node(reminder, 'reminder', '@zhin.js/plugin-reminder')]),
+      projections: new Map<unknown, unknown>([
+        [commandFeatureId, { $projection: 'zhin.command-index/1', list: () => [
+          { owner: reminder, name: 'remind', source: '/project/node_modules/@zhin.js/plugin-reminder/commands/remind/index.ts', parameters: [] },
+          { owner: gone, name: 'orphan', source: '/project/commands/orphan/index.ts', parameters: [] },
+        ] }],
+        [middlewareFeatureId, { $projection: 'zhin.middleware-index/1', list: () => [
+          { owner: root, name: 'log', phase: 'inbound', target: 'message', order: 0, source: '/project/middlewares/log/index.ts' },
+        ] }],
+        [featureId('zhin.agent-tool'), { list: () => [{ owner: reminder, name: 'remind_list', source: '/project/tools/x.ts' }] }],
+      ]),
+    } as unknown as RuntimeSnapshot;
+
+    const [remind, orphan] = listGenerationCommands(snapshot, '/project');
+    expect(remind).toMatchObject({
+      pattern: 'remind',
+      owner: String(reminder),
+      pluginInstance: 'reminder',
+      pluginPackage: '@zhin.js/plugin-reminder',
+      // The historical `plugin` field stays the source path.
+      plugin: './node_modules/@zhin.js/plugin-reminder/commands/remind/index.ts',
+    });
+    // An owner no longer in the tree keeps only its id; the plugin fields are optional.
+    expect(orphan).toMatchObject({ owner: String(gone) });
+    expect(orphan).not.toHaveProperty('pluginInstance');
+    expect(orphan).not.toHaveProperty('pluginPackage');
+    expect(listGenerationMiddlewares(snapshot, '/project')[0]).toMatchObject({ owner: String(root), pluginInstance: 'root', pluginPackage: 'my-bot' });
+    expect(listGenerationTools(snapshot, '/project')[0]).toMatchObject({ pluginInstance: 'reminder', pluginPackage: '@zhin.js/plugin-reminder' });
+    expect(introspectionOwner(undefined, undefined)).toEqual({});
+  });
+
   it('projects Prompt Section governance metadata without prompt content', () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({

@@ -101,5 +101,7 @@ export class McpClientManager {
 
 export { McpClientConnection } from './connection.js';
 export type { McpClientConnectionState } from './connection.js';
+export { classifyMcpFailure, redactMcpFailureMessage, McpConnectionError } from './failure.js';
+export type { McpConnectionFailure, McpConnectionFailureCategory } from './failure.js';
 export { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo } from './bridge.js';
 export type { McpToolDefinition } from './bridge.js';

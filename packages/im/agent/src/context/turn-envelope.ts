@@ -160,7 +160,10 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     }
     if (typeof display?.commandPrefix === 'string') {
       stable.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
-      if (display.commandMenu) stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
+      if (display.commandMenu) {
+        // #1250: there is no command lookup tool; point to the menu rather than guessing a name.
+        stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}. When you are not sure a command exists or what it is called, tell the user to send this menu instead of naming a command.`);
+      }
     }
     const merged = formatMergedTurnBlock(display?.mergedSenders);
     if (merged) current.push(merged);

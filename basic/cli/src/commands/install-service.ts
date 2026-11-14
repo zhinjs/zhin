@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 
 /**
  * Validate a project name for safe use in shell commands.
@@ -35,7 +36,7 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
   const serviceFile = path.join(cwd, `${projectName}.service`);
   if (!(await fs.pathExists(serviceFile))) {
     logger.error(`未找到服务文件: ${serviceFile}`);
-    logger.log('请使用 create-zhin-app 创建的项目或手动创建 .service 文件');
+    output.line('请使用 create-zhin-app 创建的项目或手动创建 .service 文件');
     process.exit(1);
   }
 
@@ -56,14 +57,14 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
       logger.warn(formatCompact( { cmd: 'service', op: 'daemon_reload_failed' }));
     }
 
-    logger.log('');
+    output.line();
     logger.info(formatCompact( {
       cmd: 'service',
       op: 'hint',
       hint: `enable/start: systemctl --user enable|start ${projectName}.service`,
     }));
-    logger.log('  systemctl --user enable ' + projectName + '.service');
-    logger.log('  systemctl --user start ' + projectName + '.service');
+    output.line('  systemctl --user enable ' + projectName + '.service');
+    output.line('  systemctl --user start ' + projectName + '.service');
     logger.info(formatCompact( {
       cmd: 'service',
       op: 'hint',
@@ -77,12 +78,12 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
   } else {
     const targetPath = `/etc/systemd/system/${projectName}.service`;
     logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '系统级安装需要 root，见下方命令' }));
-    logger.log('');
-    logger.log(`  sudo cp ${serviceFile} ${targetPath}`);
-    logger.log('  sudo systemctl daemon-reload');
-    logger.log('  sudo systemctl enable ' + projectName + '.service');
-    logger.log('  sudo systemctl start ' + projectName + '.service');
-    logger.log('');
+    output.line();
+    output.line(`  sudo cp ${serviceFile} ${targetPath}`);
+    output.line('  sudo systemctl daemon-reload');
+    output.line('  sudo systemctl enable ' + projectName + '.service');
+    output.line('  sudo systemctl start ' + projectName + '.service');
+    output.line();
     logger.info(formatCompact( {
       cmd: 'service',
       op: 'hint',
@@ -111,10 +112,10 @@ async function uninstallSystemd(projectName: string, userMode: boolean): Promise
     logger.success('已卸载用户服务');
   } else {
     logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '手动卸载系统服务，见下方命令' }));
-    logger.log('  sudo systemctl stop ' + projectName + '.service');
-    logger.log('  sudo systemctl disable ' + projectName + '.service');
-    logger.log('  sudo rm /etc/systemd/system/' + projectName + '.service');
-    logger.log('  sudo systemctl daemon-reload');
+    output.line('  sudo systemctl stop ' + projectName + '.service');
+    output.line('  sudo systemctl disable ' + projectName + '.service');
+    output.line('  sudo rm /etc/systemd/system/' + projectName + '.service');
+    output.line('  sudo systemctl daemon-reload');
   }
 }
 
@@ -123,7 +124,7 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
   const plistFile = path.join(cwd, `com.zhinjs.${projectName}.plist`);
   if (!(await fs.pathExists(plistFile))) {
     logger.error(`未找到 launchd 配置: ${plistFile}`);
-    logger.log('请使用 create-zhin-app 创建的项目或手动创建 .plist 文件');
+    output.line('请使用 create-zhin-app 创建的项目或手动创建 .plist 文件');
     process.exit(1);
   }
 
@@ -140,7 +141,7 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
     logger.warn(formatCompact( { cmd: 'service', op: 'launchctl_load_failed', path: targetPath }));
   }
 
-  logger.log('');
+  output.line();
   logger.info(formatCompact( {
     cmd: 'service',
     op: 'hint',
@@ -172,24 +173,24 @@ async function installWindows(cwd: string, projectName: string): Promise<void> {
   const taskXml = path.join(cwd, `${projectName}-task.xml`);
 
   logger.info(formatCompact( { cmd: 'service', op: 'hint', platform: 'windows', hint: '任选安装方式，见下方' }));
-  logger.log('');
+  output.line();
   logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'NSSM' }));
-  logger.log('  1. 安装 NSSM: choco install nssm 或 scoop install nssm');
-  logger.log('  2. 以管理员打开 PowerShell:');
-  logger.log(`     cd "${cwd}"`);
-  logger.log('     .\\install-service.ps1');
-  logger.log('');
+  output.line('  1. 安装 NSSM: choco install nssm 或 scoop install nssm');
+  output.line('  2. 以管理员打开 PowerShell:');
+  output.line(`     cd "${cwd}"`);
+  output.line('     .\\install-service.ps1');
+  output.line();
   logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'schtasks' }));
-  logger.log(`  schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
-  logger.log('');
+  output.line(`  schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
+  output.line();
   logger.info(formatCompact( { cmd: 'service', op: 'hint', method: 'PM2' }));
-  logger.log('  pnpm pm2:start && pm2 startup && pm2 save');
+  output.line('  pnpm pm2:start && pm2 startup && pm2 save');
 }
 
 async function uninstallWindows(projectName: string): Promise<void> {
   logger.info(formatCompact( { cmd: 'service', op: 'hint', hint: '手动卸载，见下方命令' }));
-  logger.log('  NSSM:    nssm stop ' + projectName + ' && nssm remove ' + projectName + ' confirm');
-  logger.log('  计划任务: schtasks /End /TN "' + projectName + '" && schtasks /Delete /TN "' + projectName + '" /F');
+  output.line('  NSSM:    nssm stop ' + projectName + ' && nssm remove ' + projectName + ' confirm');
+  output.line('  计划任务: schtasks /End /TN "' + projectName + '" && schtasks /Delete /TN "' + projectName + '" /F');
 }
 
 // --- status ---
@@ -209,9 +210,9 @@ async function statusLaunchd(projectName: string): Promise<void> {
   try {
     const out = execFileSync('launchctl', ['list'], { encoding: 'utf-8' });
     const filtered = out.split('\n').filter(line => line.includes(`com.zhinjs.${projectName}`)).join('\n');
-    logger.log(filtered || '未找到');
+    output.line(filtered || '未找到');
   } catch {
-    logger.log('服务未加载');
+    output.line('服务未加载');
   }
 }
 

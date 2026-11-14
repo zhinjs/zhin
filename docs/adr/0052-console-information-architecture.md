@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0052：Console 信息架构——状态、功能、运维、访问控制分区
 
-状态：Accepted（2026-11-11）
+状态：Accepted（2026-11-11）；插件页放置规则（插件页面按 `metadata.section` 落到分区、未声明的落到「功能」）由 [ADR 0063](./0063-console-plugin-ui-unification.md) D6 修订：插件页面挂成插件详情页签，Sandbox 例外（D12）。
 
 ## 背景
 

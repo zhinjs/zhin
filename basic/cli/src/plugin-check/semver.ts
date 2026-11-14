@@ -8,6 +8,8 @@ interface SemverModule {
   valid(value: string): string | null;
   validRange(value: string): string | null;
   satisfies(version: string, range: string, options?: { readonly includePrerelease?: boolean }): boolean;
+  minVersion(range: string): { readonly version: string } | null;
+  gt(left: string, right: string): boolean;
 }
 
 const requireFromCli = createRequire(import.meta.url);

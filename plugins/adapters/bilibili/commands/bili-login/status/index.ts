@@ -3,6 +3,8 @@ import { bilibiliEndpoints, loginStatusText } from '@zhin.js/adapter-bilibili';
 
 export default defineCommand({
   description: '查看 B 站登录状态', descriptionI18n: { en: 'Show the Bilibili login status' },
+  alias: ['bili login status'],
+  preferredAliasI18n: { 'zh-CN': 'bili login status', en: 'bili login status' },
   permit: ['owner'],
   execute(context) {
     const { locale } = context;

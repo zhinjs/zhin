@@ -86,6 +86,18 @@ describe('InstanceSupervisor', () => {
     await waitFor(() => supervisor.logs.tail().some((line) => line.line === `marker=${INSTANCE_BRIDGE_PROTOCOL_VERSION}`) || undefined);
   });
 
+  it('reports the generation of the latest route table after hot reloads, not the one in ready (#1250)', async () => {
+    // Out-of-order 4 after 6 must not roll the reported generation back.
+    const supervisor = supervise({ FAKE_ROUTE_GENERATIONS: '2,6,4' });
+    await supervisor.start();
+    await waitFor(() => supervisor.status().generation === 6 || undefined);
+    expect(supervisor.status()).toMatchObject({ state: 'running', generation: 6 });
+    // A restarted instance starts over from its own ready generation.
+    const restarted = supervise();
+    await restarted.start();
+    expect(restarted.status().generation).toBe(1);
+  });
+
   it('rejects an instance that reports an incompatible protocol version and does not restart it', async () => {
     const supervisor = supervise({ FAKE_VERSION: String(INSTANCE_BRIDGE_PROTOCOL_VERSION + 1) });
     await expect(supervisor.start()).rejects.toBeInstanceOf(InstanceProtocolMismatchError);

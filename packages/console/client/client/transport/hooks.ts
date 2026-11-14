@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConsoleClient } from "../console-client-context.js";
 import type { UseConsoleTransportOptions } from "./types.js";
-import type { GatewayPackageTransactionResult } from "@zhin.js/console-protocol";
+import {
+  isConsoleEnvFileView,
+  isConsoleEnvMaskPlaceholder,
+  type ConsoleEnvChange,
+  type ConsoleEnvFileView,
+  type GatewayPackageTransactionResult,
+} from "@zhin.js/console-protocol";
 
 /**
  * 每次连接会话只对同一 key 自动加载一次：失败后不再零退避死循环
@@ -481,6 +487,10 @@ export function useEnvFiles() {
     }
   }, [wsManager]);
 
+  /**
+   * The file as text. On a Host that masks values (#1250) this is the masked file — show it, do not
+   * save it back (use {@link saveChanges}); an older Host returns the file as written.
+   */
   const getFile = useCallback(
     async (filename: string) => {
       const result = await wsManager.getEnvFile(filename);
@@ -489,6 +499,38 @@ export function useEnvFiles() {
     [wsManager],
   );
 
+  /**
+   * The masked view of a file (variables, lines and masked content), or `null` when the Host is
+   * older and only returns the file as text (use {@link getFile} then).
+   */
+  const getView = useCallback(
+    async (filename: string): Promise<ConsoleEnvFileView | null> => {
+      const result = await wsManager.getEnvFile(filename);
+      return isConsoleEnvFileView(result) ? result : null;
+    },
+    [wsManager],
+  );
+
+  /** One variable as written in the file (`env:reveal`; the Host checks permission and audits it). */
+  const reveal = useCallback(
+    async (filename: string, key: string) => (await wsManager.revealEnvValue(filename, key)).value,
+    [wsManager],
+  );
+
+  /**
+   * Saves only the given keys (`env:save { changes }`). A value that is a mask placeholder (a masked
+   * value sent back by mistake) is refused here before anything is sent; the Host refuses it too.
+   */
+  const saveChanges = useCallback(
+    async (filename: string, changes: readonly ConsoleEnvChange[]) => {
+      const masked = changes.find(change => "value" in change && isConsoleEnvMaskPlaceholder(change.value));
+      if (masked) throw new Error(`${masked.key} 的值是打码占位符，不能保存；请先查看原值或输入新值`);
+      return wsManager.saveEnvChanges(filename, changes);
+    },
+    [wsManager],
+  );
+
+  /** Whole-file save (`mode: 'replace'`); refused by a masking Host when the content holds mask placeholders. */
   const saveFile = useCallback(
     async (filename: string, content: string) => wsManager.saveEnvFile(filename, content),
     [wsManager],
@@ -499,8 +541,8 @@ export function useEnvFiles() {
   });
 
   return useMemo(
-    () => ({ files, loading, error, listFiles, getFile, saveFile }),
-    [files, loading, error, listFiles, getFile, saveFile],
+    () => ({ files, loading, error, listFiles, getFile, getView, reveal, saveChanges, saveFile }),
+    [files, loading, error, listFiles, getFile, getView, reveal, saveChanges, saveFile],
   );
 }
 

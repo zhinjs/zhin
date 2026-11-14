@@ -371,6 +371,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.imageStorage.prefix` | string | yes | — | Object directory ending in /; must be covered by the bucket lifecycle. |
 | `ai.personalPrincipals` | object | no | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
+| `commandSuggestion` | boolean \| object | no | — | Reply "no such command, did you mean …" instead of handing a near-miss command (private chat, @mention or prefixed message) to the AI. false disables it. |
 | `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
 | `menuStyle.title` | string | no | — | Menu title. |
 | `menuStyle.subtitle` | string | no | — | Menu subtitle. |

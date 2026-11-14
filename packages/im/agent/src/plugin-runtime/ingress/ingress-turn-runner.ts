@@ -446,7 +446,14 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mcpServers: liveDanmaku ? [] : binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
-              observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
+              observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission, {
+                text: message.content,
+                ...(message.sender?.id ? { senderId: message.sender.id } : {}),
+                ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+                conversation: { kind: message.conversation.kind, id: message.conversation.id },
+                ...(message.message?.id ? { messageId: message.message.id } : {}),
+                ...(operationSession?.message.receivedAt !== undefined ? { receivedAt: operationSession.message.receivedAt } : {}),
+              }),
             );
           } finally {
             replyPort.release();

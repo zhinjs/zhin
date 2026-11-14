@@ -122,6 +122,22 @@ describe('access control decisions', () => {
     expect(authorizeConsoleRpc(adapterOperator, send('tg', 'bot-1')).allowed).toBe(false);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' } }).allowed).toBe(true);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global' } }).allowed).toBe(false);
+    // #1250: endpoint-writeback rewrites zhin.config.yml — endpoint.manage on the adapter is not enough.
+    const writeback = resolveConsoleRpcPermission('plugin.root/qq.endpoint-writeback', { data: { ids: ['bot-1'] } });
+    // An admin bound to the adapter holds endpoint.manage and ops.config.write there, but configuration writes are global.
+    const adapterAdmin = userPrincipal('admin', { kind: 'adapter', key: 'qq' });
+    expect(pluginRpcWriteAllowed(adapterAdmin, writeback)).toBe(false);
+    expect(pluginRpcWriteAllowed(adapterAdmin, resolveConsoleRpcPermission('plugin.root/qq.endpoint-import', { data: { id: 'bot-1' } }))).toBe(true);
+    expect(pluginRpcWriteAllowed(userPrincipal('admin'), writeback)).toBe(true);
+    expect(pluginRpcWriteAllowed(userPrincipal('owner'), writeback)).toBe(true);
+    // camelCase / `action.` spellings resolve to the same rule: same alsoRequires, same write (audited) classification.
+    for (const type of ['plugin.root/qq.endpointWriteback', 'plugin.root/qq.action.endpointWriteback', 'plugin.root/qq.action.endpoint-writeback']) {
+      const message = { type, data: { ids: ['bot-1'] } };
+      expect(resolveConsoleRpcPermission(type, message), type).toEqual(writeback);
+      expect(pluginRpcWriteAllowed(adapterAdmin, resolveConsoleRpcPermission(type, message)), type).toBe(false);
+      expect(pluginRpcWriteAllowed(userPrincipal('admin'), resolveConsoleRpcPermission(type, message)), type).toBe(true);
+      expect(authorizeConsoleRpc(adapterAdmin, message), type).toMatchObject({ allowed: true, delegated: true, write: true, rule: writeback });
+    }
     // The global switch is plugin lifecycle (plugin.manage): a global operator's feature.toggle is not enough.
     const operator = userPrincipal('operator');
     expect(authorizeConsoleRpc(operator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'adapter', key: 'qq' } }).allowed).toBe(true);
@@ -163,8 +179,37 @@ describe('access control decisions', () => {
 
   it('audits only RPC type and key names, never values', () => {
     const detail = rpcAuditDetail({ type: 'env:save', requestId: 1, filename: '.env', content: 'SECRET=value', data: { token: 'x' } });
-    expect(detail).toEqual({ type: 'env:save', keys: ['content', 'filename', 'token'] });
+    expect(detail).toEqual({ type: 'env:save', keys: ['content', 'filename', 'token'], file: '.env', mode: 'replace' });
+    expect(JSON.stringify(detail)).not.toContain('value');
     expect(JSON.stringify(detail)).not.toContain('SECRET');
+  });
+
+  it('records the env file and variable names of env:reveal / env:save, never values (issue #1250)', () => {
+    const reveal = rpcAuditDetail(
+      { type: 'env:reveal', requestId: 1, filename: '.env', key: 'BOT_TOKEN' },
+      { success: true, data: { file: '.env', key: 'BOT_TOKEN', value: 'fake-revealed-secret' } },
+    );
+    expect(reveal).toEqual({ type: 'env:reveal', keys: ['filename', 'key'], file: '.env', key: 'BOT_TOKEN' });
+    const save = rpcAuditDetail({
+      type: 'env:save', requestId: 2, filename: '.env.production',
+      changes: [{ key: 'PORT', value: 'fake-port-value' }, { key: 'OLD', delete: true }, { value: 'fake-orphan' }],
+    });
+    expect(save).toEqual({ type: 'env:save', keys: ['changes', 'filename'], file: '.env.production', set: ['PORT'], deleted: ['OLD'] });
+    expect(JSON.stringify([reveal, save])).not.toMatch(/fake-/u);
+  });
+
+  it('env:reveal needs both env permissions and is audited as a write', () => {
+    const message = { type: 'env:reveal', filename: '.env', key: 'BOT_TOKEN' };
+    expect(authorizeConsoleRpc(userPrincipal('owner'), message)).toMatchObject({ allowed: true, write: true, permission: 'ops.env.write' });
+    expect(authorizeConsoleRpc(userPrincipal('admin'), message)).toMatchObject({ allowed: true, write: true });
+    for (const role of ['viewer', 'operator'] as const) {
+      expect(authorizeConsoleRpc(userPrincipal(role), message)).toMatchObject({ allowed: false, code: 'forbidden' });
+    }
+    const only = (permission: string) => ({ ...userPrincipal('viewer'), grants: [{ role: 'x', scope: { kind: 'global' as const }, permissions: [permission] }] });
+    expect(authorizeConsoleRpc(only('ops.env.read'), message)).toMatchObject({ allowed: false, error: '缺少权限 ops.env.write', reason: 'insufficient_permission' });
+    // The second permission (`alsoRequires`) carries a denial reason as well, for the audit `detail.reason`.
+    expect(authorizeConsoleRpc(only('ops.env.write'), message)).toMatchObject({ allowed: false, error: '缺少权限 ops.env.read', reason: 'insufficient_permission' });
+    expect(authorizeConsoleRpc(only('ops.env.read'), { type: 'env:get', filename: '.env' })).toMatchObject({ allowed: true, write: false });
   });
 });
 

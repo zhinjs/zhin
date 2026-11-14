@@ -31,10 +31,12 @@ export { default } from './provider.js';
 
 export * from './adapter.js';
 export * from './adapter-types.js';
+/** @public #1250: `zhin.config.yml` account entries versus persisted accounts. */
+export * from './endpoint-config-drift.js';
 export { endpointSpec, createEndpointSpecification, isEndpoint } from './endpoint-specification.js';
 export type { Endpoint, EndpointSpecification, EndpointHooks } from './endpoint-specification.js';
 
-export { consoleAccountTarget, ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutation, type AdapterConsoleMutation } from './adapter-runtime-console.js';
+export { consoleAccountTarget, ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutation, type AdapterConsoleMutation, type AdapterConsoleConfigAction } from './adapter-runtime-console.js';
 
 /** @internal Shared request ownership for protocol Clients, without connection/reconnect policy. */
 export { createPendingRpc } from './pending-rpc.js';

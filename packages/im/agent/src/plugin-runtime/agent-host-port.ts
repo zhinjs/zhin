@@ -5,6 +5,7 @@ import type { AgentTraceRuntimeHandle } from './agent-trace-runtime.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
 import type { ScheduleExecutionHistoryPort } from '../schedule-domain/execution-history-store.js';
+import type { McpConnectionFailure } from '../mcp-client/failure.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -30,6 +31,8 @@ export interface AgentHostMcpSummary {
   readonly name: string;
   readonly connected: boolean;
   readonly toolCount: number;
+  /** Classified, redacted reason of the last failed connect while not connected (#1250). */
+  readonly lastError?: McpConnectionFailure;
 }
 
 /** Read-only projection for Console; no concrete ZhinAgent may escape through it. */

@@ -8,6 +8,9 @@
 import type { AgentTool } from '@zhin.js/ai';
 import type { McpServerEntry, McpResource, McpPrompt } from '../resource-hub/types.js';
 import { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo } from './bridge.js';
+import {
+  classifyMcpFailure, McpConfigurationError, McpConnectionError, McpSdkMissingError, type McpConnectionFailure,
+} from './failure.js';
 
 // ── MCP 环境清理 ─────────────────────────────────────────────────────
 
@@ -58,6 +61,8 @@ export interface McpClientConnectionState {
   resources: McpResource[];
   prompts: McpPrompt[];
   error?: string;
+  /** Classified reason of the last failed attempt (#1250); cleared by a successful connect. */
+  failure?: McpConnectionFailure;
 }
 
 export class McpClientConnection {
@@ -81,6 +86,7 @@ export class McpClientConnection {
   get tools(): AgentTool[] { return this.state.tools; }
   get resources(): McpResource[] { return this.state.resources; }
   get prompts(): McpPrompt[] { return this.state.prompts; }
+  get failure(): McpConnectionFailure | undefined { return this.state.failure; }
 
   async connect(): Promise<McpClientConnectionState> {
     if (this.state.connected) return this.state;
@@ -88,7 +94,9 @@ export class McpClientConnection {
     try {
       const sdk = await this.loadSdk();
       if (!sdk) {
-        this.state.error = '@modelcontextprotocol/sdk not installed — MCP client disabled';
+        const missing = new McpSdkMissingError();
+        this.state.error = missing.message;
+        this.state.failure = classifyMcpFailure(missing, this.entry);
         return this.state;
       }
 
@@ -101,10 +109,13 @@ export class McpClientConnection {
       await this.discoverCapabilities();
       this.state.connected = true;
       this.state.error = undefined;
+      this.state.failure = undefined;
     } catch (err: unknown) {
-      this.state.error = err instanceof Error ? err.message : String(err);
+      const failure = classifyMcpFailure(err, this.entry, this.exitCode());
       await this.disconnect();
-      throw err;
+      this.state.error = failure.message;
+      this.state.failure = failure;
+      throw new McpConnectionError(failure, err);
     }
 
     return this.state;
@@ -138,6 +149,14 @@ export class McpClientConnection {
     await this.client.listTools();
   }
 
+  /** Exit code of a stdio server process that already exited (SDK internals, read defensively). */
+  private exitCode(): number | undefined {
+    const child = this.transport && typeof this.transport === 'object'
+      ? (this.transport as { _process?: { exitCode?: unknown } })._process
+      : undefined;
+    return typeof child?.exitCode === 'number' ? child.exitCode : undefined;
+  }
+
   private async loadSdk(): Promise<any> {
     try {
       // Dynamic import — @modelcontextprotocol/sdk is an optional dependency
@@ -151,6 +170,12 @@ export class McpClientConnection {
     const dynamicImport = (specifier: string): Promise<any> =>
       Function('s', 'return import(s)')(specifier);
 
+    if ((this.entry.transport === 'streamable-http' || this.entry.transport === 'sse') && !this.entry.url) {
+      throw new McpConfigurationError(`MCP server "${this.name}" (${this.entry.transport}) has no url`);
+    }
+    if (this.entry.transport === 'stdio' && !this.entry.command) {
+      throw new McpConfigurationError(`MCP server "${this.name}" (stdio) has no command`);
+    }
     switch (this.entry.transport) {
       case 'streamable-http': {
         const mod = await dynamicImport('@modelcontextprotocol/sdk/client/streamableHttp.js');
@@ -173,7 +198,7 @@ export class McpClientConnection {
         });
       }
       default:
-        throw new Error(`Unknown MCP transport: ${this.entry.transport}`);
+        throw new McpConfigurationError(`Unknown MCP transport: ${this.entry.transport}`);
     }
   }
 

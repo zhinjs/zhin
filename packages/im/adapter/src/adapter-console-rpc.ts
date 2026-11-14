@@ -9,6 +9,7 @@ import { readConfigurationPath } from './configuration-fields.js';
  *
  * - `status`：适配器标识、字段元数据、运行中 / 已配置 endpoint、可用动作与平台状态。
  * - Runtime 管理入口将 add/update/start/stop/remove/replace 委派给 exact-owned Adapter，
+ *   `endpoint-drift` / `endpoint-import` / `endpoint-writeback` 比对、导入或写回 `zhin.config.yml` 账号（#1250），
  *   通过私有 repository CAS 保存，不写启动配置或 `.env`，不重建 Root。
  * - 缺少 runtime 目录时仅展示安全配置视图；账号写入明确不可用。
  * - `actions`：适配器按需扩展的只读查询 / 有限动作；动作名只能用小写字母、数字和 `-`。
@@ -35,7 +36,7 @@ import type { EndpointRunningInfo } from './endpoint-commands.js';
 import {
   type ConfiguredEndpointEntry,
 } from './endpoint-configuration.js';
-import { consoleRuntimeView, mutateConsoleAdapter, ownedConsoleAdapter, type AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
+import { consoleConfigDrift, consoleConfigWriteback, consoleRuntimeView, mutateConsoleAdapter, ownedConsoleAdapter, type AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 export type { AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 
 /** 适配器 Console 页面字段选择项。 */
@@ -252,7 +253,8 @@ export function createAdapterConsoleRpc(
 
   for (const name of Object.keys(actions)) {
     if (!ACTION_NAME.test(name)) throw new TypeError(`Invalid adapter console action: ${name}`);
-    if (name === 'status' || ['endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace'].includes(name)) {
+    if (name === 'status' || ['endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace',
+      'endpoint-import', 'endpoint-writeback', 'endpoint-drift'].includes(name)) {
       throw new TypeError(`Reserved adapter console action: ${name}`);
     }
   }
@@ -286,6 +288,15 @@ export function createAdapterConsoleRpc(
       handler: async (input, call) => mutateConsoleAdapter(spec, call, 'remove', input),
     };
   }
+  // #1250: zhin.config.yml accounts versus persisted accounts — import into the directory or write back to the file.
+  methods['endpoint-import'] = {
+    page, ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
+    handler: async (input, call) => mutateConsoleAdapter(spec, call, 'import', input),
+  };
+  methods['endpoint-writeback'] = {
+    page, ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
+    handler: async (input, call) => consoleConfigWriteback(spec, call, input),
+  };
   for (const action of ['update', 'start', 'stop', 'replace'] as const) {
     methods[`endpoint-${action}`] = {
       page, ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
@@ -303,7 +314,14 @@ export function createAdapterConsoleRpc(
   }
 
   const permissions = permissionLevels(readPermission, writePermission, spec.writePermissionLevel ?? 'operate');
-  return definePluginConsoleRpc({ ...definition, ...(permissions.length ? { permissions } : {}), actions: methods });
+  const queries: PluginConsoleRpcDefinition['queries'] = {
+    'endpoint-drift': {
+      page,
+      ...(readPermission ? { requiredPermissions: [readPermission] } : {}),
+      handler: async (_input, call) => consoleConfigDrift(spec, call),
+    },
+  };
+  return definePluginConsoleRpc({ ...definition, queries, ...(permissions.length ? { permissions } : {}), actions: methods });
   async function statusView(call: PluginConsoleRpcCall): Promise<StatusView> {
     const adapter = call.runtime ? ownedConsoleAdapter(spec, call) : undefined;
     if (adapter) {

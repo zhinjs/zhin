@@ -9,6 +9,8 @@ import { rssRuntimeToken } from '../../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '订阅一个 RSS/Atom 源', descriptionI18n: { en: "Subscribe to an RSS/Atom feed" },
+  alias: ['rss add'],
+  preferredAliasI18n: { 'zh-CN': 'rss add', en: 'rss add' },
   params: { url: { type: 'string' } },
   async execute({ params, config, input, use, locale }) {
     const runtime = use(rssRuntimeToken);

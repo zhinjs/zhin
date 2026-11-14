@@ -75,6 +75,27 @@ export interface ConsoleFeatureConversationRef {
   readonly id: string;
 }
 
+/** Where a stored override was last written from (#1250). */
+export type ConsoleFeatureOverrideSource = 'chat' | 'console' | 'cli';
+
+/**
+ * Who last wrote a stored override (adapter / endpoint / conversation level), next to the
+ * legacy `updatedBy` id. Every field but `source` is optional: rows written before #1250 only
+ * yield what their `updatedBy` id encodes (`chat:<adapter>:<userId>` → chat identity,
+ * `user:<id>` → Console principal), and rows written by migrations yield none.
+ */
+export interface ConsoleFeatureOverrideOperator {
+  readonly source: ConsoleFeatureOverrideSource;
+  /** Chat: adapter alias of the speaker's identity. */
+  readonly adapter?: string;
+  /** Chat: platform user id of the speaker. */
+  readonly userId?: string;
+  /** Console / CLI: principal (Console user) id. */
+  readonly principalId?: string;
+  /** Chat sender name or Console user display name, when known at write time. */
+  readonly displayName?: string;
+}
+
 const CONVERSATION_ALIAS = /^[a-z0-9][a-z0-9-]*$/u;
 const CONVERSATION_ENDPOINT_ID = /^[^/~\0]{1,128}$/u;
 // C0 / DEL control characters never appear in a conversation id.
@@ -211,11 +232,13 @@ export interface ConsoleFeatureGetResult {
   readonly sources: Readonly<Record<string, ConsoleFeatureLevel>>;
   readonly enabled: boolean;
   readonly lockedBy?: ConsoleFeatureLock;
-  /** `conversation` level only: the parsed key. */
-  readonly conversation?: ConsoleFeatureConversationRef;
+  /** `conversation` level only: the parsed key, plus its display name when the instance can resolve one. */
+  readonly conversation?: ConsoleFeatureConversationRef & Readonly<{ name?: string }>;
   /** Stored levels (adapter / endpoint / conversation): when / by whom the stored override was last written. */
   readonly updatedAt?: number;
   readonly updatedBy?: string;
+  /** Structured writer of the stored override (who and through what), when known. */
+  readonly operator?: ConsoleFeatureOverrideOperator;
   /**
    * Whether overrides can be saved: false when the project database cannot store them (MongoDB,
    * Redis, memory), in which case writes are refused (503 `feature-overrides-unpersisted`).
@@ -314,6 +337,8 @@ export interface ConsoleFeatureConversationOverrideSummary {
   readonly revision: string;
   readonly updatedAt: number;
   readonly updatedBy?: string;
+  /** Structured writer of the stored override (who and through what), when known. */
+  readonly operator?: ConsoleFeatureOverrideOperator;
 }
 
 export interface ConsoleFeatureConversationSummary extends ConsoleFeatureConversationRef {

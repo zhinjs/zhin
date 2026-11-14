@@ -18,6 +18,7 @@ import {
 } from './install.js';
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
@@ -77,18 +78,18 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
   const cwd = process.cwd();
   const workflow = new PluginManagementWorkflow(cwd);
   if (opts.dryRun) {
-    logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
-    logger.log(`将执行: pnpm ${buildInstallArgs(source, 'npm', {}).join(' ')}`);
-    logger.log(JSON.stringify(await workflow.planInstall(source, { enable: opts.enable }), null, 2));
+    output.line('🧪 dry-run：不会安装依赖，也不会修改配置。');
+    output.line(`将执行: pnpm ${buildInstallArgs(source, 'npm', {}).join(' ')}`);
+    output.line(JSON.stringify(await workflow.planInstall(source, { enable: opts.enable }), null, 2));
     return;
   }
   const result = await workflow.install(source, undefined, undefined, { enable: opts.enable });
   logger.success(`✓ ${result.state.packageName}@${result.state.version ?? 'unknown'} 依赖安装完成`);
-  logger.log(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
-  if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再检查当前 generation。');
+  output.line(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+  if (result.restartRequired) output.line('配置就绪后启动/重启 Host，再检查当前 generation。');
   const hint = adapterConfigHintForPackage(resolved.package);
-  if (hint) logger.log(hint);
-  if (resolved.adapter?.setupHint) logger.log(resolved.adapter.setupHint);
+  if (hint) output.line(hint);
+  if (resolved.adapter?.setupHint) output.line(resolved.adapter.setupHint);
 }
 
 interface LiveOptions { live?: string; tokenEnv?: string }

@@ -3062,6 +3062,40 @@
       "description": "Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu.",
       "x-descriptionZh": "内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。"
     },
+    "commandSuggestion": {
+      "description": "Reply \"no such command, did you mean …\" instead of handing a near-miss command (private chat, @mention or prefixed message) to the AI. false disables it.",
+      "x-descriptionZh": "未命中但与已注册指令名/别名高度相似的消息（私聊、@机器人或带指令前缀）直接回复「没有这个指令，你是不是想用：…」，不交给 AI；false 关闭。",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether suggestions are on (default true).",
+              "x-descriptionZh": "是否开启（默认 true）。"
+            },
+            "maxDistance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2,
+              "description": "Largest edit distance still suggested (default 1; one edit needs a name of at least 5 characters, or 3 CJK characters; two edits need 8).",
+              "x-descriptionZh": "仍给出建议的最大编辑距离（默认 1；1 次编辑要求名称至少 5 个字符或 3 个汉字，2 次编辑要求至少 8 个字符）。"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Most commands listed in one reply (default 3).",
+              "x-descriptionZh": "一次回复最多列出的指令数（默认 3）。"
+            }
+          }
+        }
+      ]
+    },
     "menuStyle": {
       "type": "object",
       "additionalProperties": false,

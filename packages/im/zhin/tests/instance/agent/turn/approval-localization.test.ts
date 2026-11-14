@@ -10,6 +10,10 @@ it.each(['zh-CN', 'en'] as const)('renders approval options once on text-only pl
     async ask(request) {
       const payload = resolveKeyboardSegments(renderUserInteraction(projectUserInteraction(request, undefined, locale), undefined, locale), 'text');
       rendered = JSON.stringify(payload);
+      // The prompt is marked as an approval so a native surface can label it (#1250).
+      expect(request.purpose).toBe('approval');
+      const native = renderUserInteraction(projectUserInteraction(request, undefined, locale), undefined, locale) as { type: string; data: Record<string, unknown> }[];
+      expect(native.find(segment => segment.type === 'keyboard')?.data.purpose).toBe('approval');
       if (request.type !== 'select') throw new Error('Expected a choice');
       expect(request.options.map(option => option.value)).toEqual(['reject', 'approve-once', 'approve-session', 'approve-always']);
       for (const option of request.options) {
