@@ -15,6 +15,7 @@ import {
   type AmbientDecision,
   type EngagementJudge,
 } from './ambient-engagement.js';
+import { DECISION_PARENT_KEY } from '../../decision-events.js';
 import type { ColdFieldMonitor } from './cold-field.js';
 import {
   NO_DECISION_AUDIT,
@@ -188,8 +189,9 @@ export async function considerAmbientEngagement(input: Readonly<{
 }
 
 /**
- * 旁听判定 → `ambient_decision`；没插话时再写一行 `model_skip`。被同场景更新消息顶替（superseded）的
- * 判定与现有日志一致，不记。
+ * 旁听判定 → `ambient_decision`；没插话时再写一行 `model_skip`（payload `parent: 'ambient_decision'`，
+ * 表示它是同一 turn 里那条判定的后果，回放按一条决策展示时可折叠；按 `model_skip` 计数的读取方不受影响）。
+ * 被同场景更新消息顶替（superseded）的判定与现有日志一致，不记。
  */
 export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDecision): void {
   if (decision.kind === 'skipped' && decision.reason === 'superseded') return;
@@ -208,5 +210,5 @@ export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDeci
     ? { decision: decision.kind, reason: decision.reason }
     : { decision: decision.kind, confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) };
   audit({ kind: 'ambient_decision', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload });
-  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload: { source: 'ambient' } });
+  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload: { source: 'ambient', [DECISION_PARENT_KEY]: 'ambient_decision' } });
 }

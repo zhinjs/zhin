@@ -37,6 +37,9 @@ describe('decision audit write path', () => {
       ['model_skip', 'skip', 'cannot_speak_restricted', 'host'],
     ]);
     expect(log.recent()[0]!.actor).toBe('policy');
+    // #1250: the model_skip is the gate's consequence in the same turn, marked with its parent kind.
+    expect(log.recent().map((r) => r.payload.parent)).toEqual([undefined, 'speak_gate', undefined, 'speak_gate']);
+    expect(log.recent()[1]!.payload).toEqual({ source: 'message', parent: 'speak_gate' });
   });
 
   it('ambient: engage → allow; declined / skipped → ambient_not_engaged + model_skip; superseded → nothing', async () => {
@@ -52,6 +55,14 @@ describe('decision audit write path', () => {
       ['ambient_decision', 'skip', 'ambient_not_engaged', 'cooldown'],
       ['model_skip', 'skip', 'ambient_not_engaged', 'cooldown'],
     ]);
+    // #1250：每次没插话的判定仍是两行（读 model_skip 计数的一方不受影响），第二行带 parent 指向同 turn 的判定行。
+    const recent = log.recent();
+    expect(recent.map((r) => r.turnId)).toEqual(['t1', 't1', 't1', 't1', 't1']);
+    expect(recent.filter((r) => r.kind === 'model_skip').map((r) => r.payload)).toEqual([
+      { source: 'ambient', parent: 'ambient_decision' },
+      { source: 'ambient', parent: 'ambient_decision' },
+    ]);
+    expect(recent.filter((r) => r.kind === 'ambient_decision').every((r) => !('parent' in r.payload))).toBe(true);
     // 判定理由可能转述群聊，不入审计。
     expect(JSON.stringify(log.recent())).not.toContain('quote of chat');
   });
