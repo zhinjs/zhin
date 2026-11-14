@@ -56,7 +56,9 @@ describe('adapter Console RPC: endpoint-drift / endpoint-import / endpoint-write
     expect(writeback.requiredPermissions).toEqual(['demo:write']);
     await expect(writeback.handler({ ids: [] }, call)).rejects.toMatchObject({ code: 'invalid_input' });
     const written = await writeback.handler({ ids: ['saved'] }, call) as Record<string, unknown>;
-    expect(written).toMatchObject({ saved: true, revision: 'r2', placeholders: [{ id: 'saved', path: 'token', variable: 'DEMO_SAVED_TOKEN' }] });
+    expect(written).toMatchObject({ saved: true, revision: 'r2', placeholders: [{ id: 'saved', path: 'token', variable: 'DEMO_SAVED_TOKEN' }],
+      // The instance block reloads: every account of this Adapter instance reconnects (#1250 review G5).
+      reconnectsAll: true, message: expect.stringContaining('全部账号会随配置重载重新连接') });
     expect(file.block.endpoints).toEqual([
       { id: 'fresh', token: '${FRESH_TOKEN}', label: 'from-yml' },
       { id: 'saved', token: '${DEMO_SAVED_TOKEN}' },

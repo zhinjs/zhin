@@ -75,11 +75,12 @@ http:
 <a id="account-start"></a>
 **账号登录不阻塞实例就绪。** 实例提交 generation 后即报告就绪，不等待各账号（Endpoint）登录完成：启动时每个账号最多等待约 3 秒的宽限期，宽限期内登录完成的账号照常在就绪前上线，其余账号在后台继续启动。因此 `/pub/ready` 返回 200、`zhin start` 显示实例运行中，都不代表账号已在线；需要某个账号在线才算就绪时，把它写进上面的 `http.readiness.endpoints`。
 
-- 后台启动失败的账号按退避自动重试：首次 5 秒，之后翻倍，最长 5 分钟，带 ±20% 抖动，不限次数；日志每次记一条 `endpoint_start_failed`（只记错误类名与错误码，不记原始报错，避免泄露凭据）。
+- 后台启动失败的账号按退避自动重试：首次 5 秒，之后翻倍，最长 5 分钟，带 ±20% 抖动，不限次数；日志每次记一条 `endpoint_start_failed`，含错误类名、错误码、分类（`category`）和**脱敏后的原始报错** `reason`：该账号的凭据值（凭据类字段名、已解析的 `${VAR}` 引用、适配器声明的凭据字段，如 Bilibili 直播的 `sessdata` / `biliJct` / `buvid3`）、URL 里的用户信息和查询串、24 位以上的类令牌串，以及含 secret / token / password / cookie / credential / api key 的词都会替换成 `***`，最长 200 字。脱敏按已知模式进行，不能保证覆盖 SDK 报错里所有形式的敏感内容；对外分享日志前仍应检查。Console 与接口里的 `startFailure` / `lastError` 只有分类与错误码拼成的固定文案，不含原始报错。
 - 不自动重试：配置错误、不支持的配置，以及交互式登录（`login.mode: interactive`，如 ICQQ 扫码 / 设备锁）——这类账号停在「启动失败」，在 Console 里点「重新登录」或「启动」再试；重新登录也会让等待重试的账号立即重试。
-- 账号启动失败不再让实例启动失败或让热重载回滚：改坏账号配置的热重载会提交，旧账号下线，新账号进入失败并按上面的规则处理。宽限期内没完成登录的慢账号，热重载时变为「先下旧再上新」。
+- 账号启动失败不再让实例启动失败或让热重载回滚：改坏账号配置的热重载**会提交**，旧账号下线，新账号进入失败并按上面的规则处理（以前这种热重载会回滚、旧账号继续在线）。宽限期内没完成登录的慢账号，热重载时变为「先下旧再上新」。
+- 账号停止时清理失败（无法证明旧连接已关闭），只把**该账号**标为启动失败（错误码 `endpoint_cleanup_failed`，不自动重试，等待人工处理），不再作为整个实例的完整性失败。
 - 账号上线前向它发送消息会立即失败（`not_sent`），不会排队。
-- `zhin start --once` 可能在慢账号上线前就退出。
+- `zhin start --once` 是启动检查：宽限期后再最多等 30 秒，直到每个账号的首次启动尝试有了结果；之后有启用的账号处于 `failed`（等待人工处理）或 `retrying`（首次尝试已失败、等待重试）时，以非零退出码退出，`stderr` 以第一个失败账号的脱敏报错开头并列出全部失败账号（如 `zhin: connect ECONNREFUSED 127.0.0.1:1 [napcat/main network, retrying]`）。仍在 `starting`、或正在等待交互式登录（`awaiting_assist`）的账号不算失败。
 
 `GET /api/system/readiness` 的详情里附带 `endpoints[]`（每个账号的 `phase`、`attempt`、`failure`、`nextRetryAt`），仅供排查，不参与就绪判断；`phase` 取值 `pending` / `starting` / `online` / `reconnecting` / `offline` / `retrying`（失败后等待自动重试）/ `failed`（等待人工处理）。Console 的连接列表另有 `awaiting_assist`，表示账号正在等待你完成登录验证。
 

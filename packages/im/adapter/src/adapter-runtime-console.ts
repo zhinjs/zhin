@@ -191,10 +191,13 @@ export async function consoleConfigWriteback(spec: AdapterConsoleSpec, call: Plu
     call.commitStarted?.();
     const result = await adapter.writeBackConfigured(ids.map(id => (id as string).trim()),
       { signal: call.signal, sensitiveFields: sensitiveFields(spec) });
-    return JSON.parse(JSON.stringify({ saved: true, ...result,
+    // Rewriting `<instance>.endpoints` reloads that plugin instance: every account of this Adapter
+    // instance reconnects, not only the written ones.
+    const reconnect = '该 Adapter 实例的全部账号会随配置重载重新连接';
+    return JSON.parse(JSON.stringify({ saved: true, ...result, reconnectsAll: true,
       message: result.placeholders.length
-        ? `已写回配置文件；请在 .env 中设置 ${result.placeholders.map(item => item.variable).join('、')}`
-        : '已写回配置文件' })) as PluginConsoleRpcJson;
+        ? `已写回配置文件，${reconnect}；请在 .env 中设置 ${result.placeholders.map(item => item.variable).join('、')}`
+        : `已写回配置文件，${reconnect}` })) as PluginConsoleRpcJson;
   } catch (error) {
     throw consoleAccountError(error, true);
   }
