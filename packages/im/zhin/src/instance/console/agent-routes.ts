@@ -2,7 +2,8 @@ import { HttpBodyError, readJsonBody, isProjectPathAllowed, type HttpHost, jsonR
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
-import { withGenerationAgentConsole } from './agent-console.js';
+import { agentConsoleDisabledReason, withGenerationAgentConsole } from './agent-console.js';
+import { consoleFeatureDisabled, type ConsoleFeatureDisabledReason } from '@zhin.js/console-protocol';
 import { parseBoundedInteger } from '@zhin.js/gateway/http';
 import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
@@ -65,11 +66,13 @@ export function registerAgentConsoleRoutes(
     tags: ['assistant'],
   });
 
+  // A feature that is off is a state, not a read failure (#1250): 200 with `data.status: 'disabled'`,
+  // the reason and an empty job list.
+  const disabledJobs = (reason: ConsoleFeatureDisabledReason) =>
+    jsonResponse(200, { success: true, data: { ...consoleFeatureDisabled(reason), jobs: [], eventsActive: false } });
   http.route('GET', `${base}/assistant/jobs`, async () => {
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
-      if (!runtime) {
-        return jsonResponse(404, { success: false, error: 'assistant.enabled is false' });
-      }
+      if (!runtime) return disabledJobs('assistant-disabled');
       try {
         // `target`: the resolved delivery target (account display name + conversation), #1250.
         const jobs = withScheduleTargets(await runtime.jobs.list(), endpoints);
@@ -81,9 +84,7 @@ export function registerAgentConsoleRoutes(
         return internalErrorResponse(500, 'assistant_jobs_failed', error);
       }
     });
-    if (!handled) {
-      return jsonResponse(404, { success: false, error: 'assistant.enabled is false' });
-    }
+    if (!handled) return disabledJobs(await agentConsoleDisabledReason(snapshots) ?? 'agent-disabled');
     return handled;
   }, {
     summary: 'List assistant jobs',

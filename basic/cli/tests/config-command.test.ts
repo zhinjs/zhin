@@ -2,11 +2,21 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { projectIdentity } from '@zhin.js/gateway/project';
 import { CONFIG_EXIT_CODES, createConfigCommand } from '../src/commands/config.js';
+
+/** Whether this project's gateway "runs": its local-socket fetch delegates to the stubbed global fetch. */
+const gateway = vi.hoisted(() => ({ running: true }));
+vi.mock('@zhin.js/gateway/local', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@zhin.js/gateway/local')>(),
+  probeLocalGateway: async () => (gateway.running ? { ok: true } : undefined),
+  createLocalGatewayFetch: () => ((url: unknown, init?: RequestInit) => globalThis.fetch(url as string, init)),
+}));
 
 const roots: string[] = [];
 const previousExitCode = process.exitCode;
 afterEach(async () => {
+  gateway.running = true;
   process.exitCode = previousExitCode;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -57,17 +67,108 @@ function rawHost(write: (request: Record<string, unknown>) => Response) {
 }
 const last = (output: ReturnType<typeof vi.spyOn>) => JSON.parse(String(output.mock.calls.at(-1)?.[0]));
 
-it('set defaults to the running Host (derived from http.*) and never writes the local file', async () => {
+it('set defaults to this project\'s gateway over its local socket and never writes the local file', async () => {
   const { file, source } = await fixture();
   const fetch = fakeHost();
   await run('set', 'log_level', 'debug');
   expect(await readFile(file, 'utf8')).toBe(source);
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(String(fetch.mock.calls[0]![0])).toBe('http://127.0.0.1:18086/api/console/request');
-  expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer file-token' });
+  // The local owner needs no token: neither http.token nor the bootstrap token is sent.
+  expect(fetch.mock.calls[0]![1]?.headers).not.toHaveProperty('authorization');
   expect(body(fetch, 1)).toMatchObject({ type: 'config:patch-project', expectedRevision: sourceRevision,
     patches: [{ op: 'set', path: ['log_level'], value: 'debug' }] });
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+});
+
+it('without this project\'s gateway it refuses instead of calling the configured port (#1250)', async () => {
+  // Another project's gateway may listen on 127.0.0.1:18086: no request, no token may go there.
+  const { file, source, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  vi.stubEnv('HTTP_TOKEN', 'bootstrap-token');
+  gateway.running = false;
+  const fetch = fakeHost();
+  for (const args of [['get', 'log_level'], ['set', 'log_level', 'debug'], ['unset', 'log_level'], ['list']]) {
+    await run(...args);
+    expect(last(output), args.join(' ')).toMatchObject({ status: 'not-connected', message: expect.stringContaining('本项目的网关未运行') });
+    expect(last(output).message).toContain('--offline');
+    expect(process.exitCode).toBe(CONFIG_EXIT_CODES.notConnected);
+  }
+  expect(fetch).not.toHaveBeenCalled();
+  expect(await readFile(file, 'utf8')).toBe(source);
+});
+
+it('refuses an explicit loopback --host that serves another project, before sending the token (#1250)', async () => {
+  const { root, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const requests: { url: string; init?: RequestInit }[] = [];
+  const otherProject = projectIdentity(join(root, '..', 'another-project'));
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok', project: { id: otherProject } }));
+    return new Response(JSON.stringify({ data: sourceReply }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(last(output)).toMatchObject({ status: 'project-mismatch', message: expect.stringContaining('另一个项目') });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+  expect(requests.map(request => request.url)).toEqual(['http://127.0.0.1:8068/pub/health']);
+  expect(requests[0]!.init?.headers).toBeUndefined();
+});
+
+it('refuses an explicit loopback --host that reports no project id, before sending the token (#1250)', async () => {
+  const { file, source, output } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const requests: { url: string; init?: RequestInit }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+    requests.push({ url: String(url), init });
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok' }));
+    return new Response(JSON.stringify({ data: sourceReply }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(last(output)).toMatchObject({ status: 'project-unverified', message: expect.stringContaining('--allow-unverified-host') });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+  expect(requests.map(request => request.url)).toEqual(['http://127.0.0.1:8068/pub/health']);
+  expect(requests[0]!.init?.headers).toBeUndefined();
+  expect(JSON.stringify(requests)).not.toContain('env-token');
+  expect(await readFile(file, 'utf8')).toBe(source);
+});
+
+it('--allow-unverified-host warns and proceeds against a loopback --host without project id', async () => {
+  const { errors } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const urls: string[] = [];
+  const authorization: (string | null)[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, options?: RequestInit) => {
+    urls.push(String(url));
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ success: true, status: 'ok' }));
+    authorization.push(new Headers(options?.headers).get('authorization'));
+    const request = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ data: request.type === 'config:get-source' ? sourceReply : saved() }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068', '--allow-unverified-host');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(urls).toEqual(['http://127.0.0.1:8068/pub/health', 'http://127.0.0.1:8068/api/console/request', 'http://127.0.0.1:8068/api/console/request']);
+  expect(authorization).toEqual(['Bearer env-token', 'Bearer env-token']);
+  expect(errors).toHaveBeenCalledWith(expect.stringContaining('没有报告项目标识'));
+});
+
+it('accepts an explicit loopback --host that reports this project', async () => {
+  const { root } = await fixture();
+  vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'env-token');
+  gateway.running = false;
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown, options?: RequestInit) => {
+    urls.push(String(url));
+    if (String(url).endsWith('/pub/health')) return new Response(JSON.stringify({ project: { id: projectIdentity(root) } }));
+    const request = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ data: request.type === 'config:get-source' ? sourceReply : saved() }));
+  }));
+  await run('set', 'log_level', 'debug', '--host', 'http://127.0.0.1:8068');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(urls).toEqual(['http://127.0.0.1:8068/pub/health', 'http://127.0.0.1:8068/api/console/request', 'http://127.0.0.1:8068/api/console/request']);
 });
 
 it('ZHIN_CONSOLE_TOKEN wins over http.token; --host wins over http.* and keeps JSON Pointer paths', async () => {
@@ -241,12 +342,12 @@ it('human mode shows the latest (masked) values of a conflict instead of a JSON 
 });
 
 it.each([['0.0.0.0', 'http://127.0.0.1:18086/api/console/request'], ['::', 'http://[::1]:18086/api/console/request']])(
-  'a wildcard bind address %s derives a loopback connection that may carry the token', async (bind, url) => {
+  'a wildcard bind address %s derives the loopback URL of the local-socket request, without the file token', async (bind, url) => {
     await fixture({ configVersion: 2, plugins: {}, http: { host: bind, port: 18086, token: 'file-token' } });
     const fetch = fakeHost();
     await run('set', 'log_level', 'debug');
     expect(String(fetch.mock.calls[0]![0])).toBe(url);
-    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer file-token' });
+    expect(fetch.mock.calls[0]![1]?.headers).not.toHaveProperty('authorization');
     expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
   });
 
@@ -296,7 +397,7 @@ it('--offline cannot be combined with --host and never touches the network', asy
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
 
-it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
+it('sends HTTP_TOKEN to an explicit --host when ZHIN_CONSOLE_TOKEN is unset', async () => {
   const prevConsole = process.env.ZHIN_CONSOLE_TOKEN;
   const prevHttp = process.env.HTTP_TOKEN;
   delete process.env.ZHIN_CONSOLE_TOKEN;
@@ -304,7 +405,7 @@ it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
   try {
     await fixture({ configVersion: 2, plugins: {}, http: { host: '127.0.0.1', port: 18086 } });
     const fetch = fakeHost();
-    await run('set', 'log_level', 'debug');
+    await run('set', 'log_level', 'debug', '--host', 'https://remote.test');
     expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer env-http-token' });
     expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
   } finally {
@@ -313,4 +414,85 @@ it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
     if (prevHttp === undefined) delete process.env.HTTP_TOKEN;
     else process.env.HTTP_TOKEN = prevHttp;
   }
+});
+
+it('an unknown key says there is no such setting and suggests close ones, without RPC names (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, log_level: 'info', http: { port: 18086 } });
+  await runHuman('set', 'htp.port', '1', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('没有这个配置项，未保存');
+  expect(text).toContain('htp: 没有这个配置项：htp');
+  expect(text).toContain('你是不是想写：http');
+  expect(text).not.toContain('gateway.plugins.declare');
+});
+
+it('an array index past the end explains how to append, in Chinese (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, corsOrigins: ['https://a.example'] } });
+  await runHuman('set', 'http.corsOrigins.3', '"https://b.example"', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('http.corsOrigins.3 超出数组范围（当前有 1 项，下标 0–0）');
+  expect(text).toContain("zhin config set http.corsOrigins '<JSON 数组>'");
+  expect(text).not.toMatch(/out of bounds|Config path/);
+});
+
+it('a rejected request shows the revision evidence only with --debug (#1250)', async () => {
+  const { errors } = await fixture();
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  const stderr = () => errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr()).toContain('Host 拒绝请求：插件声明不能修改');
+  expect(stderr()).not.toContain('expectedRevision=');
+  errors.mockClear();
+  vi.stubEnv('ZHIN_CLI_DEBUG', '1');
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(stderr()).toContain(`expectedRevision=${sourceRevision}`);
+});
+
+it('a broken http.port gives an offline repair hint instead of Invalid URL (#1250)', async () => {
+  const { errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 'abc' } });
+  // No gateway answers on the local socket: a running one would still serve the repair (see host-http).
+  gateway.running = false;
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  await runHuman('get', 'http');
+  expect(fetch).not.toHaveBeenCalled();
+  const stderr = errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr).toContain('http.port 无效');
+  expect(stderr).toContain('zhin config set http.port 8068 --offline');
+  expect(stderr).not.toContain('Invalid URL');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+});
+
+it('config set of a secret writes the value to .env and keeps the ${VAR} reference, never echoing it (#1250)', async () => {
+  const { root, output, errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, token: '${HTTP_TOKEN}' } });
+  await writeFile(join(root, '.env'), 'HTTP_TOKEN=old\n');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+  await runHuman('set', 'http.token', 'super-secret-value', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')).http.token).toBe('${HTTP_TOKEN}');
+  expect(await readFile(join(root, '.env'), 'utf8')).toBe("HTTP_TOKEN='super-secret-value'\n");
+  const printed = [...output.mock.calls, ...errors.mock.calls].map(call => String(call[0])).join('\n');
+  expect(printed).toContain('敏感字段 http.token 的值已写入 .env 的 HTTP_TOKEN，配置中保留 ${HTTP_TOKEN} 引用');
+  expect(printed).not.toContain('super-secret-value');
+});
+
+it('config set --plain writes the literal and warns (#1250)', async () => {
+  const { root, errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, token: '${HTTP_TOKEN}' } });
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+  await runHuman('set', 'http.token', 'plain-on-purpose', '--offline', '--plain');
+  expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')).http.token).toBe('plain-on-purpose');
+  expect(errors.mock.calls.map(call => String(call[0])).join('\n')).toContain('警告：--plain 会把敏感字段的值以明文写进配置文件');
+});
+
+it('config set sends secretStorage plain to the Host only with --plain (#1250)', async () => {
+  await fixture();
+  const fetch = fakeHost();
+  await run('set', 'http.token', 'x');
+  expect(body(fetch, 1)).not.toHaveProperty('secretStorage');
+  const again = fakeHost();
+  await run('set', 'http.token', 'x', '--plain');
+  expect(body(again, 1)).toMatchObject({ secretStorage: 'plain' });
 });

@@ -4,87 +4,57 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。所有者已批准（zhinjs/zhin#1250）：新增类型 `ConsoleFeatureOverrideOperator` / `ConsoleFeatureOverrideSource`，`feature.get` / `feature.conversations` 结果新增可选 `operator` 与会话 `name`；权限表新增 `GET /conversations/workspaces/commands`。同一 minor 内含所有者已批准的 #1250 公开 API 新增：ConsoleEndpointPhase 的 awaiting_assist / retrying、ConsoleEndpointFailure（lastError）与 startAttempt / startFailure / nextRetryAt 字段、attention 条目 `endpoint.config-drift`、ConsoleRpcPermissionRule 的 alsoRequires 与 grantsAllowAlsoRequired()（endpoint-writeback 还需 ops.config.write）。#1250 评审修复：新增导出 normalizePluginConsoleRpcType() / NormalizedPluginConsoleRpcType（插件 Console RPC 方法名的唯一规范化，权限、分发与审计共用）。；所有者已批准（zhinjs/zhin#1250）：`ConsoleAttentionKind` 新增 `schedule.unschedulable`（并入 `CONSOLE_ATTENTION_KINDS`），`ConsoleAttentionSubject` 新增可选 `scheduleJobId`。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：功能未启用状态契约（ConsoleFeatureDisabled / ConsoleFeatureDisabledReason / CONSOLE_FEATURE_DISABLED_MESSAGES / consoleFeatureDisabled() / isConsoleFeatureDisabled()）、功能矩阵行分类与能力（ConsoleFeatureKind、ConsoleFeatureCapabilities，行字段 kind / capabilities / readOnly）、账号传输状态（ConsoleEndpointTransportState、endpointTransportLabel()，ConsoleEndpointSummary.transportLabel）、配置写入 secretStorage 与 envSecrets 字段、/pub/health 的 project.id。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。所有者已批准（zhinjs/zhin#1250）：实例 Console 后端新增 `GET /api/conversations/workspaces/commands`（Sandbox 快捷命令），`feature.get` / `feature.conversations` 返回 `operator` 与会话名；经 `zhin.js/command` 新增导出 `UserFacingError` / `isUserFacingError`。同一 minor 内含所有者已批准的 #1250 公开 API 新增：账号启动与 generation 提交解耦（后台监管、readiness endpoints[]、TTY 启动摘要分组）、实例配置文件端口与 `${VAR}` 账号引用解析、`endpoint.list` / `endpoint.info` 的 lastError、attention 条目 `endpoint.config-drift`。#1250 评审修复：`zhin start --once` 在账号启动失败时非零退出（onceStartFailures / AccountStartupError / waitForFirstStartOutcomes）。；所有者已批准（zhinjs/zhin#1250）：`zhin.js/instance/cli` 新增导出 `loadProviderDisplay`（服务名 · 模型显示）；实例 Console 新增 `/introspection/recent-turns`，`schedule:list` / `GET /assistant/jobs` 返回 `target` 与 `lastRun` 等字段。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批：实例 HTTP API 新增 POST /api/agent/inference/probe、/account/test、/cli/account/add、/cli/account/rename-env（Host env 账号与连接测试），功能矩阵新增根插件行（kind / capabilities / readOnly），Agent / 定时任务读取在 AI 未安装或未启用时返回 feature-disabled 状态而非读取失败。"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数；新增 .env 打码视图、单变量查看与按键保存的公开导出，gateway.packages.list 的 kind 与网关进程样本。；所有者已批准（zhinjs/zhin#1250）：`@zhin.js/gateway/usage` 新增导出 `PromptCacheProbe`、`PromptCacheHint`、`PROMPT_CACHE_HINT_*`、`defaultUsageTimeZone`、`isUsageTimeZone`、`dayKeyOf`、`usageModelDisplayName`、`UsageStatsOptions` 等，`buildUsageStats` / `bucketStartOf` 新增可选参数。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：projectIdentity()（/project）、officialPluginCatalog() / officialPluginCandidates() / undeclaredPluginMessage()（/plugin-management）、pnpm ignored builds 识别（/onboarding：parseIgnoredBuilds、ignoredBuildsHint 等）、dotenvLine() / readDocumentPath()（/config）；/pub/health 报告 project.id。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options；新增 unknown_rpc 判定与日志、审计拒绝原因码、/console/capabilities 相关公开导出。另经 #1254 review 定为 minor：env:save 拒绝旧协议（整文件保存需 mode:'replace'）、项目文件拒绝 .env 与点文件（files:read .env 被拒），旧 Console 的环境变量保存会失败，需升级 Console。；所有者已批准（zhinjs/zhin#1250）：新增类型导出 `ConsoleScheduleTarget`，`listSchedule` 新增可选请求参数（locale）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：DEFAULT_HTTP_PORT、InvalidHttpPortError、ENVIRONMENT_REFERENCE_PATTERN、describeInvalidPortValue()、parseHttpPort()，以及 isGlobalOwnerPrincipal() / isLocalSocketPrincipal() / LOCAL_SOCKET_USER_ID / LOCAL_SOCKET_CREDENTIAL_ID。"
     },
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。；所有者已批准（zhinjs/zhin#1250）：IM 回合审批渠道与 Agent 行为改进新增公开 API——根入口新增 formatApprovalBlocked、describeApprovalChannelConflicts 及类型 ApprovalBlockReason / ApprovalDenialContext / ApprovalChannelConflictInput；ApprovalRequestInput.purpose、ApprovalOutcome.scope、formatApprovalDenial 可选上下文参数、createBypassApprovalPort 的 confirmIntent 选项；`@zhin.js/agent/security` 新增 MEMORY_SCOPE_POLICY 与审批策略指纹相关导出。；所有者已批准（zhinjs/zhin#1250）：新增公开类型导出 `InferencePreparationFailure`，`InferenceAuthenticationError` 新增 `preparation` 字段与错误码 `client-secret-required` / `preparation-failed`，`InferenceDriverView` 新增 `requiresClientSecret` / `modelSuggestions`，`cleanupFailed` 回调接收告警文本。；所有者已批准（zhinjs/zhin#1250）：新增公开导出 captureSubTurnTracing / SubTurnTrace / SubTurnTracing / TurnTraceSave / TurnTraceModelSelection / LOOKUP_CLAIM_PATTERNS / findLookupClaim / claimWithoutToolCall，ModelExecutionScope 新增 purpose，ModelDelegationAuthority 可多次 acquire 并新增可选 agent 字段，TurnTrace 新增 model_selection / claim_without_tool_call（后台委派结果送达、子 Agent 用途绑定、子回合 trace、无工具调用却声称查过的标记）。；所有者已批准（zhinjs/zhin#1250）：新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`（BOT.md，且纳入 `DEFAULT_SELF_FILES` 受保护文件），`@zhin.js/agent/trace` 新增 `turnTraceTotalUsage` / `TurnTraceUsageTotals` 与 trace 字段 `subagent_usage`。"
-    },
-    {
-      "package": "@zhin.js/client",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。所有者已批准（zhinjs/zhin#1250）：新增公开导出——会话选择器与会话目录（ConversationPicker、ConversationLabel、useConversationDirectory、useSharedConversationDirectory、parseConversationAddress、formatConversationLabel 等）与适配器账号 headless API（AdapterAccountsProvider、useAdapterAccounts、AdapterAccountEditor 及相关类型），AdapterConsolePage 新增 renderRow / hostAccounts。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 @zhin.js/agent/runtime 新增公开导出：模型服务连接测试（probeLanguageProfile、InferenceProbeResult、DEFAULT_PROBE_TIMEOUT_MS）、Host 环境变量引用授权（InferenceEnvironmentAuthority、INFERENCE_ENVIRONMENT_REFUSALS、InferenceEnvironmentRefusal、environmentVariableName()）、账号最近调用状态（AccountCallOutcome、AccountLastCall、classifyAccountCall()）；turn trace 新增 model_timeout 记录。"
     },
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增全局 CLI 选项 --verbose / --debug，zhin packages info 新增命令、工具与配置小节。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。"
     },
     {
       "package": "@zhin.js/scaffold-wizard",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 GATEWAY_NATIVE_BUILD_DEPENDENCIES（allowBuilds 放行的网关原生依赖）。"
-    },
-    {
-      "package": "@zhin.js/command",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 `UserFacingError` / `isUserFacingError` / `userFacingErrorText`（指令抛出即转为回复），`CommandIndex` 新增 `suggest()` / `suggestReply()` 与类型 `CommandSuggestionConfig`（近似命令提示）。"
-    },
-    {
-      "package": "@zhin.js/core",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：`zhin.js/command`（`@zhin.js/core/feature/command`）新增导出 `UserFacingError` / `isUserFacingError`；`KeyboardSegmentData` 与 `UserInteractionView` 新增可选字段 `purpose`（审批标记）。所有者已批准 minor（#1250）：Endpoint 列表新增 awaiting_assist 阶段与 startAttempt / startFailure / nextRetryAt；同一 minor 内含 Endpoint 行 lastError（#1250 endpoint-config-drift）"
-    },
-    {
-      "package": "@zhin.js/im-contract",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增类型 `UserInteractionPurpose`，`UserInteractionRequest` 新增可选字段 `purpose: 'approval'`。"
-    },
-    {
-      "package": "@zhin.js/runtime",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：Host 根配置新增 `commandSuggestion`（`false` / `{ enabled, maxDistance, limit }`，写入 host-config-schema 与 Root 保留配置键）。所有者已批准（zhinjs/zhin#1250）：热重载按受影响子树计算重建范围并实现项目文件监视，公开 API 新增 `HmrCoordinator` 的 `watchDebounceMs` 选项、重载报告字段（rebuilt / rebuilt_plugins）、失效计划的 `unrefreshedDependents` 与 manifest 字段过滤导出（`manifest-change`）。所有者已批准公开 API 新增按 minor（#1250）：readiness 新增导出类型 ReadinessEndpoint 与 ReadinessReport.endpoints（需鉴权的就绪详情列出账号启动状态，不参与就绪判断）。npm 上 1.3.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/plugin-runtime",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增根资源上下文契约 `watchProjectFiles({ patterns, onChange })`，Root 安装器可声明读取的项目文件，变化时只通知声明方而不建新 generation。所有者已批准（zhinjs/zhin#1250）：新增插件市场元数据公开导出（PLUGIN_CATEGORIES、PLUGIN_CATEGORY_LABELS、informativeKeywords、packageAuthorName、readPluginMarketplaceMetadata 等），插件 metadata 新增可选 displayNameI18n。；所有者已批准（zhinjs/zhin#1250）：新增类型导出 `ScheduleJobKind`、`ScheduleJobDisplay`、`ScheduleJobLastRun`，`ScheduleJobRegistration` 新增可选 `title` / `titleI18n` / `kind`（定时任务显示与最近一次实际执行）。"
-    },
-    {
-      "package": "@zhin.js/adapter",
-      "type": "minor",
-      "reason": "所有者已批准 minor（#1250）：账号启动改为后台监管，Adapter.activate 不再因账号 start 失败或久等而失败；新增 retryStart、启动状态字段与 failed / retrying 阶段。npm 上旧架构已占用 1.2.0–1.2.2，package.json 先置为 1.2.2 由 minor 升至 1.3.0；同一 minor 内含所有者已批准的 endpoint-config-drift（configDrift / importConfigured / writeBackConfigured、EndpointConfigSource）；#1250 评审修复：EndpointConfigSource.resolveReference、EndpointWritebackPlaceholder.reason、Adapter.configurationCredentialFields / startFailureReason、AdapterIndex.startFailureReason"
-    },
-    {
-      "package": "@zhin.js/console-contract",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：声明式页面契约新增公开导出 pickLocalizedDataValue 与类型 DeclarativeActionResultSpec，取值表达式 `$i18n`，表单字段 date / time / conversation，列类型 conversation，条目 muted / badge，动作 result。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出 formatPnpmAddCommand()、resolvesThroughZhin()，formatAIDependencyFixCommand() / formatZhinStackFixCommand() 新增可选 cwd 参数（依赖修复命令在 workspace 根执行）。"
     },
     {
       "package": "@zhin.js/ai",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：npm 上已有旧架构的 `@zhin.js/ai` 1.2.0–1.5.9（latest 仍为 1.1.56），本地版本号先置为 1.5.9，按 minor 升到第一个空闲的 1.6.0（先例见 docs/contributing/publishing.md 的 core 1.5.16→1.6.0）；同时承接 #1250 各批次新增的公开导出，例如 `ProviderDiscoveryError`、`CODEX_DEFAULT_CLIENT_VERSION`、`CodexServiceOptions` / `AntigravityServiceOptions` 与新的服务配置项。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批模型请求首响应时限：ProviderResilienceConfig 新增 firstResponseTimeoutMs（默认 30000），ProviderErrorKind 新增 no_response，ProviderResilienceEvent 新增 timeout 事件，StreamOptions 新增 onResponseStart；整次请求默认超时由 180000 调整为 120000。npm 上 1.7.0 未被占用。"
     },
     {
-      "package": "@zhin.js/plugin-code-runner",
+      "package": "@zhin.js/logger",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：新增导出 `codeRunnerConfig`、`resolveCodeRunnerBackend`、`CodeRunnerBackend`、`CodeRunnerConfig`、`languageAliases`、`normalizeLanguage`、`supportedLanguages`、`RunResult`（可配置后端与语言别名）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出 escapeLogText()、LOG_CONTENT_MAX_LENGTH、LOG_NEWLINE_MARK（聊天内容转义为单行日志）。"
+    },
+    {
+      "package": "@zhin.js/runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 Host 根配置新增 `ai.agent.providerResilience.firstResponseTimeoutMs`（模型请求首响应时限，写入 host-config-schema），`http.port` / `http.listeners[].port` 的 schema 改为 0–65535 整数或 ${VAR} 引用（先例：commandSuggestion 按 minor）。"
+    },
+    {
+      "package": "@zhin.js/adapter-icqq",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 icqq 适配器配置新增 `logLevel`（SDK 自身日志级别，默认 warn，可在 endpoints[] 单独设置）（先例：commandSuggestion 按 minor）。"
     }
   ]
 }

@@ -26,6 +26,7 @@ import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
 import { createInstallAllowlist, type InstallAllowlist, type MarketCatalogEntry } from '../onboarding/allowlist.js';
 import { InstallOutputRelay, streamEvents } from '../onboarding/install.js';
 import { createStreamingPackageManager, detectPackageManager, type PackageManagerOutput } from '../onboarding/package-manager.js';
+import { dependenciesInPlace, IGNORED_BUILDS_OUTPUT_LIMIT, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
 import { PluginDeclarationError, PluginEnablementError, PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
 import { InstanceStartError, type InstanceFailure, type InstanceState, type InstanceStatus, type InstanceStopOptions } from '../supervisor/instance-supervisor.js';
 import type { InstanceLogLine } from '../supervisor/instance-logs.js';
@@ -156,16 +157,44 @@ export class GatewayPackageService {
   readonly #packageManager: GatewayPackageManager;
   readonly #workflow: PackageWorkflowPort;
   #active: string | undefined;
+  /** Packages whose build scripts pnpm skipped during the running transaction (#1250). */
+  #ignoredBuilds: Set<string> | undefined;
 
   constructor(options: GatewayPackageServiceOptions) {
     this.#root = resolve(options.projectRoot);
     this.#options = options;
     const streaming = createStreamingPackageManager(this.#relay.output);
-    this.#packageManager = options.packageManager ?? ((args, root) => streaming(args, root));
+    this.#packageManager = this.#tolerateIgnoredBuilds(options.packageManager ?? ((args, root) => streaming(args, root)));
     this.#workflow = options.workflow ?? new PluginManagementWorkflow(this.#root, {
       ...options.workflowOptions,
       installDependencies: (args, root) => this.#packageManager(args, root, this.#relay.output),
     });
+  }
+
+  /**
+   * pnpm 11 exits 1 with `ERR_PNPM_IGNORED_BUILDS` after a complete install whose dependency build
+   * scripts were not allowed. With the dependencies in place that exit is recorded (reported as
+   * `ignoredBuilds` with an allowBuilds hint) instead of failing — and rolling back — the transaction.
+   */
+  #tolerateIgnoredBuilds(manager: GatewayPackageManager): GatewayPackageManager {
+    return async (args, root, output) => {
+      let captured = '';
+      const tee: PackageManagerOutput = (stream, chunk) => {
+        captured = (captured + chunk).slice(-IGNORED_BUILDS_OUTPUT_LIMIT);
+        output(stream, chunk);
+      };
+      try {
+        await manager(args, root, tee);
+      } catch (error) {
+        const detail = error && typeof error === 'object'
+          ? ['message', 'stdout', 'stderr'].map(key => Reflect.get(error, key)).filter((value): value is string => typeof value === 'string').join('\n')
+          : String(error);
+        const ignored = parseIgnoredBuilds(`${captured}\n${detail}`);
+        if (!ignored || !await dependenciesInPlace(root, args)) throw error;
+        this.#ignoredBuilds ??= new Set();
+        for (const name of ignored) this.#ignoredBuilds.add(name);
+      }
+    };
   }
 
   /** Id of the running transaction, if any. */
@@ -404,7 +433,9 @@ export class GatewayPackageService {
     let failedPhase: GatewayPackagePhase | undefined;
     let failure: unknown;
     let rollbackFailure: unknown;
+    let restartFailure: unknown;
     let logTail: readonly string[] | undefined;
+    this.#ignoredBuilds = undefined;
     emit({ type: 'start', id, operation, packages: authorized });
     try {
       try {
@@ -438,16 +469,26 @@ export class GatewayPackageService {
               await run(snapshot.hasLockfile ? ['install', '--frozen-lockfile'] : ['install']);
             }
           }
-          if (wasRunning) {
-            enter('restart-instance');
-            await this.#startInstance(instance!, logMark);
-          }
         } catch (error) {
           status = 'rollbackFailed';
           rollbackFailure = error;
         }
+        // A running instance is brought back even when restoring the files or dependencies failed
+        // (#1250): leaving the bot stopped is worse than starting it on what is on disk. A failed
+        // start is reported on its own.
+        if (wasRunning) {
+          enter('restart-instance');
+          try {
+            await this.#startInstance(instance!, logMark);
+          } catch (error) {
+            status = 'rollbackFailed';
+            restartFailure = error;
+            if (error instanceof InstanceStartFailure && !logTail?.length) logTail = error.logTail;
+          }
+        }
       }
       enter('done');
+      const ignoredBuilds = this.#ignoredBuilds ? Object.freeze([...this.#ignoredBuilds]) : undefined;
       const result: GatewayPackageTransactionResult = Object.freeze({
         id,
         operation,
@@ -457,6 +498,8 @@ export class GatewayPackageService {
         ...(failedPhase ? { failedPhase } : {}),
         ...(failure === undefined ? {} : { error: failureMessage(failure), ...declarationDetails(failure) }),
         ...(rollbackFailure === undefined ? {} : { rollbackError: failureMessage(rollbackFailure) }),
+        ...(restartFailure === undefined ? {} : { restartError: failureMessage(restartFailure) }),
+        ...(ignoredBuilds ? { ignoredBuilds } : {}),
         ...(logTail?.length ? { logTail } : {}),
         ...(status === 'succeeded' && extras?.needsConfiguration?.length ? { needsConfiguration: extras.needsConfiguration } : {}),
         ...(status === 'succeeded' && extras?.plugin ? { plugin: extras.plugin } : {}),

@@ -6,7 +6,7 @@ import {
 import { VIEWER, userPrincipal } from './fixtures/principals.js';
 import { authorizeConsoleHttp } from '../src/access-control.js';
 import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '../src/console-plugin-rpc.js';
-import { CONSOLE_SEND_FAILURE_MESSAGES, isConsoleSendFailure } from '@zhin.js/console-protocol';
+import { CONSOLE_SEND_FAILURE_MESSAGES, endpointTransportLabel, isConsoleSendFailure } from '@zhin.js/console-protocol';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -205,6 +205,27 @@ describe('runtime console RPC', () => {
     expect(allowed('POST', '/plugins')).toBe(false);
     expect(allowed('DELETE', '/plugins/icqq')).toBe(false);
     expect(allowed('GET', '/config')).toBe(false);
+  });
+
+  it('adds a readable transportLabel next to the raw transportState (#1250)', async () => {
+    const endpoints = [
+      { name: 'bot', adapter: 'sandbox', connected: true, status: 'online' as const, transportState: 'open' as const },
+      { name: 'qq', adapter: 'qq', connected: false, status: 'offline' as const, transportState: 'reconnecting' as const },
+      { name: 'old', adapter: 'x', connected: false, status: 'offline' as const },
+    ];
+    const ctx = { authScope: 'full' as const, listPages: async () => [], listEndpoints: async () => endpoints,
+      getEndpoint: async () => endpoints[0]! };
+    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint.list', requestId: 70 }, ctx);
+    expect(pickRpcReply({ type: 'endpoint.list', requestId: 70 }, listed)).toMatchObject({ data: { endpoints: [
+      { name: 'bot', transportState: 'open', transportLabel: '已连接' },
+      { name: 'qq', transportState: 'reconnecting', transportLabel: '重连中' },
+      { name: 'old' },
+    ] } });
+    expect((pickRpcReply({ type: 'endpoint.list', requestId: 70 }, listed) as { data: { endpoints: object[] } }).data.endpoints[2]).not.toHaveProperty('transportLabel');
+    const info = await dispatchRuntimeConsoleRpc({ type: 'endpoint.info', requestId: 71, data: { adapter: 'sandbox', endpointKey: 'bot' } }, ctx);
+    expect(pickRpcReply({ type: 'endpoint.info', requestId: 71 }, info)).toMatchObject({ data: { transportLabel: '已连接' } });
+    expect(endpointTransportLabel('open', 'en')).toBe('Connected');
+    expect(endpointTransportLabel('weird')).toBe('状态未知');
   });
 
   it('dispatches canonical endpoint RPCs', async () => {

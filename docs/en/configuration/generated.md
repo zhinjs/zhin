@@ -24,7 +24,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.readiness.endpoints[].name` | string | yes | — | — |
 | `http.readiness.agents` | array&lt;string&gt; | no | — | Required configured Agent bindings; does not verify model credentials or provider reachability. |
 | `http.host` | string \| null | no | — | 监听地址。 |
-| `http.port` | number \| string \| null | no | — | 监听端口。 |
+| `http.port` | integer \| string \| null | no | — | Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one (0 lets the system pick a free port). When unset the gateway listens on 8068. |
 | `http.token` | string \| null | no | — | Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049). |
 | `http.corsOrigins` | array \| null | no | — | — |
 | `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | no | — | Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal. |
@@ -33,7 +33,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.listeners` | array&lt;object&gt; | no | — | — |
 | `http.listeners[].enabled` | boolean \| string | no | — | 是否启用此监听器。 |
 | `http.listeners[].host` | string | no | — | 监听地址。 |
-| `http.listeners[].port` | number \| string | no | — | 监听端口。 |
+| `http.listeners[].port` | integer \| string | no | — | Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one. |
 | `http.listeners[].tls` | `false` \| null \| object | no | — | — |
 | `console` | object | no | — | Console Host features. |
 | `console.terminal` | object | no | — | Console terminal (host shell / SSH) for owners holding ops.terminal; off by default. |
@@ -228,7 +228,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.providerResilience.baseDelayMs` | number \| string | no | — | First backoff delay in ms; doubles each retry. Default 1000. |
 | `ai.agent.providerResilience.maxDelayMs` | number \| string | no | — | Upper bound for one backoff delay in ms. Default 10000. |
 | `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | no | — | A `Retry-After` longer than this stops retry. Default 30000. |
-| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | no | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
+| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | no | — | Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables. |
+| `ai.agent.providerResilience.firstResponseTimeoutMs` | number \| string | no | — | Per-attempt wait in ms for the provider's first response (response headers or the first stream event). Default 30000. `0` disables. A service that does not answer in time is not re-asked on the same model: the attempt fails as `no_response`. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | no | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
 | `ai.agent.deferredTools` | object | no | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | no | — | — |
@@ -900,6 +901,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.autoServer` | boolean | no | `true` | Automatically select the optimal server (default true). |
 | `icqq.qqnt` | boolean | no | `true` | Use the QQNT protocol (default true). |
 | `icqq.ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"warn"` | Level of the ICQQ SDK's own log lines (default warn). Its per-message lines with the message text (recv from / succeed to send) only appear at debug or below, escaped onto one line. |
 | `icqq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `icqq.endpoints[].id` | string | yes | — | QQ uin |
 | `icqq.endpoints[].password` | string | no | — | QQ password for this endpoint. |
@@ -915,6 +917,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.endpoints[].autoServer` | boolean | no | — | Automatically select the optimal server. |
 | `icqq.endpoints[].qqnt` | boolean | no | — | Use the QQNT protocol. |
 | `icqq.endpoints[].ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | — | Level of the ICQQ SDK's own log lines. |
 | `icqq.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
 | `icqq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
 | `icqq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |

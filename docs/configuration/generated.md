@@ -24,7 +24,7 @@ outline: [2, 3]
 | `http.readiness.endpoints[].name` | string | 是 | — | — |
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `http.host` | string \| null | 否 | — | 监听地址。 |
-| `http.port` | number \| string \| null | 否 | — | 监听端口。 |
+| `http.port` | integer \| string \| null | 否 | — | 监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用（0 表示由系统分配空闲端口）。未配置时网关监听 8068。 |
 | `http.token` | string \| null | 否 | — | 初始化令牌：创建第一个 Console 所有者之前用于登录初始化向导；之后失效（ADR 0049）。 |
 | `http.corsOrigins` | array \| null | 否 | — | — |
 | `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | 否 | — | 受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。 |
@@ -33,7 +33,7 @@ outline: [2, 3]
 | `http.listeners` | array&lt;object&gt; | 否 | — | — |
 | `http.listeners[].enabled` | boolean \| string | 否 | — | 是否启用此监听器。 |
 | `http.listeners[].host` | string | 否 | — | 监听地址。 |
-| `http.listeners[].port` | number \| string | 否 | — | 监听端口。 |
+| `http.listeners[].port` | integer \| string | 否 | — | 监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用。 |
 | `http.listeners[].tls` | `false` \| null \| object | 否 | — | — |
 | `console` | object | 否 | — | Console 宿主功能。 |
 | `console.terminal` | object | 否 | — | Console 终端（宿主 Shell / SSH），仅持有 ops.terminal 的所有者可用；默认关闭。 |
@@ -228,7 +228,8 @@ outline: [2, 3]
 | `ai.agent.providerResilience.baseDelayMs` | number \| string | 否 | — | First backoff delay in ms; doubles each retry. Default 1000. |
 | `ai.agent.providerResilience.maxDelayMs` | number \| string | 否 | — | Upper bound for one backoff delay in ms. Default 10000. |
 | `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | 否 | — | A `Retry-After` longer than this stops retry. Default 30000. |
-| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
+| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables. |
+| `ai.agent.providerResilience.firstResponseTimeoutMs` | number \| string | 否 | — | Per-attempt wait in ms for the provider's first response (response headers or the first stream event). Default 30000. `0` disables. A service that does not answer in time is not re-asked on the same model: the attempt fails as `no_response`. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | 否 | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
 | `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |
@@ -900,6 +901,7 @@ outline: [2, 3]
 | `icqq.autoServer` | boolean | 否 | `true` | 是否自动选择最优服务器（默认 true） |
 | `icqq.qqnt` | boolean | 否 | `true` | 是否使用 QQNT 协议（默认 true） |
 | `icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"warn"` | ICQQ SDK 自身日志的级别（默认 warn）；它逐条打印的收发消息原文（recv from / succeed to send）只在 debug 及以下出现，且转义为单行 |
 | `icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `icqq.endpoints[].id` | string | 是 | — | QQ uin |
 | `icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
@@ -915,6 +917,7 @@ outline: [2, 3]
 | `icqq.endpoints[].autoServer` | boolean | 否 | — | 是否自动选择最优服务器 |
 | `icqq.endpoints[].qqnt` | boolean | 否 | — | 是否使用 QQNT 协议 |
 | `icqq.endpoints[].ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | ICQQ SDK 自身日志的级别 |
 | `icqq.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
 | `icqq.endpoints[].notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
 | `icqq.endpoints[].notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |

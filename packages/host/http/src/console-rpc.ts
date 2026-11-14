@@ -534,7 +534,11 @@ export async function dispatchRuntimeConsoleRpc(
     case CONFIG_RPC.PATCH: {
       if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
       const projectPatch = message.type === CONFIG_RPC.PATCH_PROJECT;
-      const { instanceKey, expectedRevision, patches } = message;
+      const { instanceKey, expectedRevision, patches, secretStorage } = message;
+      if (secretStorage !== undefined && secretStorage !== 'env' && secretStorage !== 'plain') {
+        emit({ requestId, error: 'secretStorage 只能是 env 或 plain' });
+        return payloads;
+      }
       if (projectPatch && instanceKey !== undefined) {
         emit({ requestId, error: 'Project patches must not specify instanceKey' });
         return payloads;
@@ -566,6 +570,7 @@ export async function dispatchRuntimeConsoleRpc(
           ...(instanceKey === undefined ? {} : { instanceKey }),
           expectedRevision,
           patches,
+          ...(secretStorage === undefined ? {} : { secretStorage }),
         });
       } catch (error) {
         emit({

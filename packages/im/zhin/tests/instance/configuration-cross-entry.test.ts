@@ -141,7 +141,8 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
     const printed = stdout.mock.calls.length; const errors = stderr.mock.calls.length;
     process.exitCode = undefined;
     await createConfigCommand().parseAsync(['node', 'zhin', ...(mode.json === false ? [] : ['--json']),
-      ...(mode.offline ? ['--offline'] : ['--host', host]), ...args]);
+      // A bare instance Host reports no project id: accepted only with --allow-unverified-host (#1250).
+      ...(mode.offline ? ['--offline'] : ['--host', host, '--allow-unverified-host']), ...args]);
     const lines = stdout.mock.calls.slice(printed).map(call => String(call[0]));
     const parsed = mode.json === false ? undefined : JSON.parse(lines.at(-1)!) as Record<string, unknown>;
     return { code: (process.exitCode ?? 0) as number, data: parsed, stdout: lines, stderr: stderr.mock.calls.slice(errors).map(call => String(call[0])) };

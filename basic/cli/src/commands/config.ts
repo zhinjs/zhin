@@ -5,11 +5,13 @@ import {
   type ConsoleConfigSource,
 } from '@zhin.js/console-protocol';
 import { configCheckCommand } from './config-check.js';
-import { loadHostHttpConfig } from '../utils/host-http.js';
+import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, gatewayNotRunningMessage, HostConfigInvalidError, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
 import { parseConfigurationPath } from '@zhin.js/gateway/config';
+import { isCliDebug } from '../utils/cli-flags.js';
 import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**
@@ -28,7 +30,8 @@ export const CONFIG_EXIT_CODES = Object.freeze({
 } as const);
 
 type Options = {
-  offline?: boolean; host?: string; live?: string; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
+  plain?: boolean;
+  offline?: boolean; host?: string; live?: string; allowUnverifiedHost?: boolean; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
 };
 type Connection = { host: string; token?: string; tokenEnvironment: string; fetch?: import('@zhin.js/gateway/local').LocalGatewayFetch };
 type Outcome = Readonly<Record<string, unknown> & { status: string; message: string }>;
@@ -41,18 +44,23 @@ class ConfigCommandError extends Error {
 
 const NOT_CONNECTED_MESSAGE = '未连接到运行中的 Host，未发送任何请求，文件未修改；如确认要离线操作，请显式加 --offline';
 
-/** Verification evidence for operators: what to look up before deciding whether to resubmit. */
-function evidence(outcome: Readonly<Record<string, unknown>>): string | undefined {
+/**
+ * Verification evidence for operators: what to look up before deciding whether to resubmit.
+ * Printed with `--debug` (or `ZHIN_CLI_DEBUG=1`) only, and always for an unknown outcome (exit 6),
+ * where the request id is what to look up; `--json` always carries the fields.
+ */
+function evidence(outcome: Readonly<Record<string, unknown>>, unknownOutcome = false): string | undefined {
+  if (!unknownOutcome && !isCliDebug()) return undefined;
   const parts = (['requestId', 'expectedRevision'] as const)
     .filter(key => typeof outcome[key] === 'string').map(key => `${key}=${String(outcome[key])}`);
   return parts.length ? parts.join(' ') : undefined;
 }
 
 /** `--json` prints exactly one compact JSON object; otherwise only the human-readable lines. */
-function emit(outcome: Readonly<Record<string, unknown>>, options: Options, human: string): void {
+function emit(outcome: Readonly<Record<string, unknown>>, options: Options, human: string, unknownOutcome = false): void {
   if (options.json) { console.log(JSON.stringify(outcome)); return; }
   console.log(human);
-  const line = evidence(outcome);
+  const line = evidence(outcome, unknownOutcome);
   if (line) console.error(line);
 }
 
@@ -70,15 +78,38 @@ async function connection(options: Options): Promise<Connection> {
     ? (process.env.ZHIN_CONSOLE_TOKEN ?? process.env.HTTP_TOKEN)
     : process.env[tokenEnvironment];
   const explicit = options.host ?? options.live;
-  if (explicit) return { host: explicit, token: envToken, tokenEnvironment };
-  const discovered = await loadHostHttpConfig(process.cwd());
-  if (!discovered) {
+  if (explicit) {
+    // An explicit address on this machine must be this project's gateway before the token goes there (#1250).
+    if (findConfigFile(process.cwd())) {
+      try { await verifyHostProject(normalizeHostUrl(explicit), process.cwd(), { allowUnverifiedHost: options.allowUnverifiedHost === true }); }
+      catch (error) {
+        if (error instanceof HostTargetError) {
+          throw new ConfigCommandError({ status: error.code, host: explicit, message: error.message }, CONFIG_EXIT_CODES.error);
+        }
+        throw error;
+      }
+    }
+    return { host: explicit, token: envToken, tokenEnvironment };
+  }
+  let discovered: Awaited<ReturnType<typeof loadHostHttpConfig>>;
+  try {
+    discovered = await loadHostHttpConfig(process.cwd());
+  } catch (error) {
+    // No gateway for this project: never fall back to the configured port, where another
+    // project's gateway may answer and receive the token (#1250).
+    if (error instanceof HostTargetError) {
+      throw new ConfigCommandError({ status: 'not-connected', message: gatewayNotRunningMessage({ offline: true }) }, CONFIG_EXIT_CODES.notConnected);
+    }
+    if (error instanceof HostConfigInvalidError) {
+      throw new ConfigCommandError({ status: 'config-invalid', message: error.message }, CONFIG_EXIT_CODES.error);
+    }
+    throw error;
+  }
+  if (!discovered?.fetch) {
     throw new ConfigCommandError({ status: 'not-connected',
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);
   }
-  // ZHIN_CONSOLE_TOKEN / HTTP_TOKEN (or --token-env) wins over the project's http.token.
-  if (!discovered.fetch) return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
-  // A running gateway answers over its local socket: as the local owner, or — with an explicit
+  // This project's gateway answers over its local socket: as the local owner, or — with an explicit
   // Console API token (ZHIN_CONSOLE_TOKEN / --token-env) — as that token's principal. The
   // bootstrap HTTP_TOKEN is not a user credential and is not sent.
   const userToken = (tokenEnvironment === 'ZHIN_CONSOLE_TOKEN' ? process.env.ZHIN_CONSOLE_TOKEN : process.env[tokenEnvironment])?.trim()
@@ -184,7 +215,7 @@ function patchMessage(result: ConsoleConfigProjectPatchResult, code: number): st
       ...result.current.map(item => `  ${item.path.join('.')}: ${item.value === undefined ? '(不存在)' : JSON.stringify(item.value)}`)].join('\n');
   }
   if (result.status === 'invalid') {
-    return [`${result.message}`, ...result.errors.map(error => `  ${error.path}: ${error.message}`)].join('\n');
+    return [`${result.message}`, ...result.errors.map(error => `  ${error.path.replace(/^\$\.?/u, '') || '(整个配置)'}: ${error.message}`)].join('\n');
   }
   if (result.status === 'unconfirmed') return '结果未知：Host 无法确认是否已保存。请先用 zhin config get 核对，勿重复提交。';
   if (code === CONFIG_EXIT_CODES.ok) return result.application ? '已保存并生效' : result.message;
@@ -199,17 +230,29 @@ async function readProject(options: Options, path: readonly string[]): Promise<C
   return read<ConsoleConfigProjectRead>(await connection(options), { type: CONFIG_RPC.GET_PROJECT, ...request });
 }
 
+/** Where secret values were stored, one line per field (never the value). */
+function envSecretLines(result: Readonly<Record<string, unknown>>): string[] {
+  const moved = Array.isArray(result.envSecrets) ? result.envSecrets : [];
+  return moved.filter(record).filter(item => strings(item.path) && typeof item.variable === 'string')
+    .map(item => `敏感字段 ${(item.path as string[]).join('.')} 的值已写入 .env 的 ${String(item.variable)}，配置中保留 \${${String(item.variable)}} 引用`);
+}
+
 async function mutate(options: Options, patches: readonly ConsoleConfigPatchOperation[]): Promise<void> {
+  const secretStorage = options.plain ? { secretStorage: 'plain' as const } : {};
+  if (options.plain && !options.json) {
+    console.error('警告：--plain 会把敏感字段的值以明文写进配置文件；建议去掉 --plain，让值写入 .env、配置保留 ${VAR} 引用');
+  }
   if (options.offline) {
     const store = createOfflineConfigurationStore(process.cwd(), options.environment ?? 'development');
     const { revision: expectedRevision } = await store.readProject({ path: [], reveal: true });
-    const result = await store.patchProject({ expectedRevision, patches });
+    const result = await store.patchProject({ expectedRevision, patches, ...secretStorage });
     const code = result.status === 'saved' ? CONFIG_EXIT_CODES.ok : configPatchExitCode(result);
     const outcome = result.status === 'saved'
       ? { status: 'saved', revision: result.revision, paths: result.paths, missingEnv: result.missingEnv, application: 'not-requested',
+        ...(result.envSecrets ? { envSecrets: result.envSecrets } : {}),
         message: '已离线保存；运行中的 Host 只有在 --watch config 或 Console「应用配置」之后才会生效' }
       : result;
-    emit(outcome, options, result.status === 'saved' ? outcome.message as string : patchMessage(result, code));
+    emit(outcome, options, [...envSecretLines(outcome), result.status === 'saved' ? outcome.message as string : patchMessage(result, code)].join('\n'));
     process.exitCode = code;
     return;
   }
@@ -223,7 +266,7 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   let reply: unknown;
   try {
     // Exactly one dispatch; the Host owns read-modify-write against expectedRevision.
-    reply = await requestPluginConsole<unknown>(target.host, { type: CONFIG_RPC.PATCH_PROJECT, expectedRevision, patches },
+    reply = await requestPluginConsole<unknown>(target.host, { type: CONFIG_RPC.PATCH_PROJECT, expectedRevision, patches, ...secretStorage },
       target.tokenEnvironment, { token: target.token, requestId, ...(target.fetch ? { fetch: target.fetch } : {}) });
   } catch (error) {
     throw transportFailure(error, true, { expectedRevision });
@@ -232,7 +275,8 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   if (!result) throw transportFailure(new ConsoleRequestUnconfirmedError(requestId), true, { expectedRevision });
   const code = configPatchExitCode(result);
   // Every exit-6 outcome (unconfirmed write, unconfirmed application, unknown group) carries its evidence.
-  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options, patchMessage(result, code));
+  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options,
+    [...envSecretLines(result), patchMessage(result, code)].join('\n'), code === CONFIG_EXIT_CODES.unknown);
   process.exitCode = code;
 }
 
@@ -251,7 +295,7 @@ function run(action: (args: unknown[], options: Options) => Promise<void>) {
       if (options.json) console.log(JSON.stringify(error.outcome));
       else {
         console.error(error.outcome.message);
-        const line = evidence(error.outcome);
+        const line = evidence(error.outcome, error.exitCode === CONFIG_EXIT_CODES.unknown);
         if (line) console.error(line);
       }
       process.exitCode = error.exitCode;
@@ -272,8 +316,9 @@ export function createConfigCommand(): Command {
   const command = new Command('config')
     .description('通过运行中的 Host 读取/修改配置；--offline 显式离线操作本地文件')
     .option('--offline', '不连接 Host：本地校验后保存（不启动 Runtime、不执行插件 setup，可能执行模块顶层代码），不请求生效')
-    .option('--host <url>', '运行中 Host 的 HTTP(S) API 地址（默认按配置 http.* 推导）')
+    .option('--host <url>', '显式连接这个 Host 的 HTTP(S) API 地址（默认只经本项目网关的本地套接字连接；本机地址会先核对项目标识）')
     .addOption(new Option('--live <url>', '--host 的别名（兼容）').hideHelp())
+    .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
     .option('--token-env <name>', 'Console API 令牌所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
     .option('--environment <name>', '--offline 校验时加载 .env.<name>', 'development')
     .option('--reveal', '读取时显示原值（默认按 Schema 打码敏感值）')
@@ -285,7 +330,8 @@ export function createConfigCommand(): Command {
     .description('获取配置项（敏感值默认打码）')
     .action(run(async ([key], options) => { printRead(await readProject(options, commandPath(String(key))), options, String(key)); })));
   command.addCommand(new Command('set').argument('<key>', '点路径或 JSON Pointer').argument('<value>', 'JSON 值；解析失败时作为字符串')
-    .description('校验、保存并按需生效（Host 未运行时失败，不回退离线）')
+    .description('校验、保存并按需生效（Host 未运行时失败，不回退离线）；敏感字段的值写入 .env，配置保留 ${VAR} 引用')
+    .option('--plain', '把敏感字段（token、密码等）的值以明文写进配置文件（不推荐）')
     .action(run(async ([key, raw], options) => {
       let value: unknown;
       try { value = JSON.parse(String(raw)); } catch { value = String(raw); }

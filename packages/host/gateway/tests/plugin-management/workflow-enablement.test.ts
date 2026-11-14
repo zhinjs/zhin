@@ -64,9 +64,28 @@ describe('enable / disable: disable_plugins of one declared instance', () => {
       await expect(workflow().planSetEnabled(request, false), request).rejects.toMatchObject({ name: 'PluginEnablementError', code: 'reserved' });
     }
     await expect(workflow().planSetEnabled('bot', false)).rejects.toMatchObject({ code: 'root' });
-    await expect(workflow().planSetEnabled('weather', true)).rejects.toMatchObject({ code: 'not-declared', message: expect.stringContaining('zhin install weather') });
+    // Never suggest installing the raw request: `weather` on npm is not ours (#1250).
+    const undeclared = await workflow().planSetEnabled('weather', true).catch((error: unknown) => error);
+    expect(undeclared).toMatchObject({ code: 'not-declared', message: '找不到插件实例 weather（配置中没有声明）' });
+    expect((undeclared as Error).message).not.toContain('zhin install');
     await expect(workflow().planSetEnabled('Not A Package', true)).rejects.toMatchObject({ code: 'invalid-request' });
     await expect(workflow().planSetEnabled('', true)).rejects.toBeInstanceOf(PluginEnablementError);
+  });
+
+  it('suggests only official packages for an undeclared short name (#1250)', async () => {
+    await writeConfig({ configVersion: 2, plugins: {} });
+    const error = await workflow().planSetEnabled('reminder', true).catch((caught: unknown) => caught) as PluginEnablementError;
+    expect(error.code).toBe('not-declared');
+    expect(error.message).toContain('zhin install @zhin.js/plugin-reminder');
+    expect(error.message).not.toMatch(/zhin install reminder(?![\w-])/u);
+    // An official package installed in the project but not declared is a candidate too.
+    await installPlugin('@zhin.js/plugin-weather');
+    expect(await workflow().planSetEnabled('weather', true).catch((caught: unknown) => (caught as Error).message))
+      .toContain('zhin install @zhin.js/plugin-weather');
+    // A third-party package installed under its own name is not.
+    await installPlugin('foo');
+    expect(await workflow().planSetEnabled('foo', true).catch((caught: unknown) => (caught as Error).message))
+      .toBe('找不到插件实例 foo（配置中没有声明）');
   });
 
   it('asks for an exact instance key when a package is declared more than once', async () => {

@@ -10,7 +10,7 @@ import type { IcqqClientEventMap } from './client.js';
 export class IcqqAdapter extends Adapter<IcqqEndpoint, IcqqEndpointConfig, IcqqClientEventMap> {
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationUpdateFields(): readonly string[] {
-    return ['password', 'platform', 'ver', 'dataDir', 'signApiAddr', 'autoReconnect', 'autoServer', 'qqnt', 'ntLogin'];
+    return ['password', 'platform', 'ver', 'dataDir', 'signApiAddr', 'autoReconnect', 'autoServer', 'qqnt', 'ntLogin', 'logLevel'];
   }
   readonly #context: AdapterContext<IcqqEndpointConfig>;
   constructor(context: AdapterContext<IcqqEndpointConfig>) { super(); this.#context = context; }

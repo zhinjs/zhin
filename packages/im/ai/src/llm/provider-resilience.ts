@@ -18,6 +18,8 @@ import type { LlmCompletionPort, StreamOptions } from "./llm-api-runtime.js";
 export type ProviderErrorKind =
   | "rate_limit"
   | "timeout"
+  /** No first response (headers or stream event) within `firstResponseTimeoutMs`: the service hangs. */
+  | "no_response"
   | "server"
   | "network"
   | "empty_response"
@@ -57,8 +59,14 @@ export interface ProviderResilienceConfig {
   maxDelayMs?: number;
   /** A `Retry-After` longer than this stops retry. Default 30000. */
   maxRetryAfterMs?: number;
-  /** Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. */
+  /** Per-attempt timeout in ms (whole streamed completion). Default 120000. `0` disables. */
   requestTimeoutMs?: number;
+  /**
+   * Per-attempt wait in ms for the provider's first response (response headers or the first
+   * stream event). Default 30000. `0` disables. A service that does not answer in time is not
+   * re-asked on the same model: the attempt fails as `no_response`.
+   */
+  firstResponseTimeoutMs?: number;
   /**
    * Extra attempts when the model returns neither text nor tool calls (or a tool call
    * without a name). Default 0: the reply is passed through unchanged. Quirk presets
@@ -74,7 +82,8 @@ export const DEFAULT_PROVIDER_RESILIENCE: Readonly<
   baseDelayMs: 1_000,
   maxDelayMs: 10_000,
   maxRetryAfterMs: 30_000,
-  requestTimeoutMs: 180_000,
+  requestTimeoutMs: 120_000,
+  firstResponseTimeoutMs: 30_000,
   emptyReplyRetries: 0,
 });
 
@@ -86,6 +95,14 @@ export type ProviderResilienceEvent =
       kind: ProviderErrorKind;
       delayMs: number;
       error: string;
+    }>
+  /** One attempt hit a timeout (logged by the owner with its turn / purpose context). */
+  | Readonly<{
+      type: "timeout";
+      model: string;
+      attempt: number;
+      phase: "first_response" | "request";
+      timeoutMs: number;
     }>
   | Readonly<{
       type: "give_up";
@@ -117,6 +134,7 @@ export class ProviderRequestError extends Error {
 const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   rate_limit: "模型服务当前限流，请稍后再试",
   timeout: "模型服务响应超时，请稍后再试",
+  no_response: "模型服务无响应，请稍后再试或联系管理员检查模型配置",
   server: "模型服务暂时不可用，请稍后再试",
   network: "连接模型服务失败，请检查网络后再试",
   empty_response: "模型返回了空回复，请换个说法再试",
@@ -184,6 +202,14 @@ class AttemptTimeoutError extends Error {
   constructor(ms: number) {
     super(`Provider request timed out after ${ms}ms`);
     this.name = "AttemptTimeoutError";
+  }
+}
+
+/** The provider sent neither response headers nor a stream event within the first-response window. */
+export class FirstResponseTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Provider sent no response within ${timeoutMs}ms`);
+    this.name = "FirstResponseTimeoutError";
   }
 }
 
@@ -407,6 +433,9 @@ export function classifyProviderError(
   if (inner instanceof AttemptTimeoutError) {
     return { kind: "timeout", retryable: true };
   }
+  if (inner instanceof FirstResponseTimeoutError) {
+    return { kind: "no_response", retryable: false };
+  }
   if (inner instanceof ProviderFinishError) {
     return { kind: "server", retryable: true };
   }
@@ -618,23 +647,43 @@ export function createResilientCompletionPort(
     call: "complete" | "completeSimple",
     model: Model,
     context: Context,
-    streamOptions: StreamOptions | undefined
+    streamOptions: StreamOptions | undefined,
+    attemptNumber: number
   ): Promise<AssistantMessage> {
     const callerSignal = streamOptions?.signal;
     const timeoutMs =
       streamOptions?.requestTimeoutMs ?? config.requestTimeoutMs;
-    const controller = timeoutMs > 0 ? new AbortController() : undefined;
-    const timer = controller
-      ? timers.setTimeout(
-          () => controller.abort(new AttemptTimeoutError(timeoutMs)),
-          timeoutMs
-        )
-      : undefined;
+    const firstResponseMs = config.firstResponseTimeoutMs;
+    const controller =
+      timeoutMs > 0 || firstResponseMs > 0 ? new AbortController() : undefined;
+    const timer =
+      controller && timeoutMs > 0
+        ? timers.setTimeout(
+            () => controller.abort(new AttemptTimeoutError(timeoutMs)),
+            timeoutMs
+          )
+        : undefined;
+    let firstTimer =
+      controller && firstResponseMs > 0
+        ? timers.setTimeout(
+            () => controller.abort(new FirstResponseTimeoutError(firstResponseMs)),
+            firstResponseMs
+          )
+        : undefined;
+    // The transport reports response headers / the first stream event; text also proves a response.
+    const responded = (): void => {
+      if (firstTimer !== undefined) {
+        timers.clearTimeout(firstTimer);
+        firstTimer = undefined;
+      }
+    };
     const signal = controller
       ? callerSignal
         ? AbortSignal.any([callerSignal, controller.signal])
         : controller.signal
       : callerSignal;
+    const onTextDelta = streamOptions?.onTextDelta;
+    const onResponseStart = streamOptions?.onResponseStart;
     try {
       // This wrapper owns retries; stop the SDK from multiplying them.
       const message = await base[call](model, context, {
@@ -642,16 +691,41 @@ export function createResilientCompletionPort(
         signal,
         maxRetries: 0,
         requestTimeoutMs: 0,
+        onResponseStart: () => {
+          responded();
+          onResponseStart?.();
+        },
+        // Presence of `onTextDelta` selects streaming downstream: never add one.
+        ...(onTextDelta
+          ? {
+              onTextDelta: (text: string) => {
+                responded();
+                onTextDelta(text);
+              },
+            }
+          : {}),
       });
       const invalid = inspectReply(message);
       if (invalid) throw invalid;
       return message;
     } catch (error) {
-      if (controller?.signal.aborted && !callerSignal?.aborted)
-        throw controller.signal.reason;
+      if (controller?.signal.aborted && !callerSignal?.aborted) {
+        const reason: unknown = controller.signal.reason;
+        if (reason instanceof FirstResponseTimeoutError || reason instanceof AttemptTimeoutError) {
+          reportEvent({
+            type: "timeout",
+            model: model.id,
+            attempt: attemptNumber,
+            phase: reason instanceof FirstResponseTimeoutError ? "first_response" : "request",
+            timeoutMs: reason instanceof FirstResponseTimeoutError ? reason.timeoutMs : timeoutMs,
+          });
+        }
+        throw reason;
+      }
       throw error;
     } finally {
       if (timer !== undefined) timers.clearTimeout(timer);
+      if (firstTimer !== undefined) timers.clearTimeout(firstTimer);
     }
   }
 
@@ -673,7 +747,7 @@ export function createResilientCompletionPort(
     while (true) {
       attempts++;
       try {
-        const reply = await attempt(call, model, context, streamOptions);
+        const reply = await attempt(call, model, context, streamOptions, attempts);
         if (
           reply.stopReason === "error" &&
           finishFailureKind(reply.errorMessage) === "safety_block"
@@ -703,6 +777,16 @@ export function createResilientCompletionPort(
             throw new ProviderRequestError(info.kind, attempts, error);
           }
           throw error;
+        }
+        // A hung service is not re-asked on the same model; callers with a fallback chain move on.
+        if (info.kind === "no_response") {
+          reportEvent({
+            type: "give_up",
+            model: model.id,
+            kind: info.kind,
+            error: message,
+          });
+          throw new ProviderRequestError(info.kind, attempts, error);
         }
         if (!info.retryable && !quotaOrBilling) throw error;
         const isEmpty = error instanceof EmptyResponseError;

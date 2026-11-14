@@ -1,9 +1,13 @@
 import {
+  auditActor,
   HttpBodyError,
+  isGlobalOwnerPrincipal,
+  isLocalSocketPrincipal,
   isUserPrincipal,
   jsonResponse,
   readJsonBody,
   type AuthScope,
+  type ConsoleAuditEntry,
   type ConsolePrincipal,
   type HttpHost,
 } from '@zhin.js/host-http';
@@ -24,10 +28,13 @@ import { HostAccountRuntime } from '@zhin.js/agent/runtime';
 import { InferenceAuthenticationError } from '@zhin.js/agent/runtime';
 import { InferenceStoreError } from '@zhin.js/agent/runtime';
 import {
+  INFERENCE_ENVIRONMENT_REFUSALS,
   InferenceManagementError,
   InferenceApplyRejectedError,
+  type InferenceEnvironmentAuthority,
   type InferenceManagementPrincipal,
   type InferenceManagementService,
+  type InferenceProbeResult,
 } from '@zhin.js/agent/runtime';
 import type { InferenceTargetsReader } from '@zhin.js/agent/runtime';
 import type { InferenceSessionManagement } from '@zhin.js/agent/runtime';
@@ -38,7 +45,15 @@ export interface InferenceManagementLease {
   readonly sessions: InferenceSessionManagement;
   readonly targets?: InferenceTargetsReader;
   readonly authenticationContract: (accountId: string) => Promise<string>;
+  readonly probe?: (input: Readonly<{ profileId: string; signal: AbortSignal }>) => Promise<InferenceProbeResult>;
   release(): void | Promise<void>;
+}
+
+/** Which Host environment variables the Console / CLI caller may reference (#1250). */
+export function inferenceEnvironmentAuthority(principal: ConsolePrincipal | undefined): InferenceEnvironmentAuthority {
+  if (isLocalSocketPrincipal(principal)) return 'local-cli';
+  if (isGlobalOwnerPrincipal(principal)) return 'console-owner';
+  return 'none';
 }
 export interface InferenceRouteOptions {
   readonly http: HttpHost;
@@ -55,6 +70,8 @@ export interface InferenceRouteOptions {
   readonly owners: (
     input: Readonly<{ scope: AuthScope; principalId?: string }>
   ) => readonly InferenceOwnerView[];
+  /** Console audit sink; entries carry ids and variable names, never values. */
+  readonly audit?: (entry: ConsoleAuditEntry) => void;
 }
 export interface InferenceOwnerView {
   readonly id: string;
@@ -93,6 +110,8 @@ interface RouteFailure {
   readonly details?: Readonly<{ preparationCode?: string; reason?: string; upstreamStatus?: number; step?: string; retryAfterMs?: number }>;
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
+  /** Why an environment reference was refused (#1250); its text is {@link INFERENCE_ENVIRONMENT_REFUSALS}. */
+  readonly reason?: keyof typeof INFERENCE_ENVIRONMENT_REFUSALS;
 }
 /** Shown when model discovery succeeds with zero models. */
 const DISCOVERY_EMPTY_HINT = '上游模型目录没有返回可用模型：可以直接手动填写模型 ID 继续配置；Codex 订阅还可以在模型服务配置中调整 codexClientVersion（上游按 Codex CLI 版本过滤模型）后重新读取';
@@ -119,6 +138,7 @@ function failure(error: unknown): RouteFailure {
   if (error instanceof HttpBodyError) return { status: error.statusCode, code: 'invalid-input' };
   if (error instanceof InferenceManagementError)
     return {
+      ...(error.reason ? { reason: error.reason } : {}),
       status: {
         'invalid-input': 400,
         forbidden: 403,
@@ -199,6 +219,27 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       tags: ['agent', 'inference'],
     }
   );
+  /** Environment-reference operations are audited (ids and variable names only, never values). */
+  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test']);
+  const record = (
+    principal: ConsolePrincipal | undefined,
+    path: string,
+    outcome: ConsoleAuditEntry['outcome'],
+    detail: Readonly<Record<string, unknown>>,
+    target?: string
+  ) => {
+    try {
+      options.audit?.({
+        actor: auditActor(principal),
+        action: `inference${path.replaceAll('/', '.')}`,
+        outcome,
+        ...(target ? { target: target.slice(0, 512) } : {}),
+        detail,
+      });
+    } catch {
+      /* audit never breaks a request */
+    }
+  };
   const register = (
     method: string,
     path: string,
@@ -209,6 +250,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
         request: Request;
         url: URL;
         signal: AbortSignal;
+        consolePrincipal?: ConsolePrincipal;
       }>
     ) => Promise<unknown>
   ) =>
@@ -225,13 +267,16 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
         let lease: InferenceManagementLease | undefined;
         let operationEntered = false;
         try {
-          const principal = options.principal({
-            scope: 'full',
-            ...principalId(context.principal),
-            ...(url.searchParams.has('owner')
-              ? { requestedOwner: url.searchParams.get('owner')! }
-              : {}),
-          });
+          const principal = {
+            ...options.principal({
+              scope: 'full',
+              ...principalId(context.principal),
+              ...(url.searchParams.has('owner')
+                ? { requestedOwner: url.searchParams.get('owner')! }
+                : {}),
+            }),
+            environmentReferences: inferenceEnvironmentAuthority(context.principal),
+          };
           lease = options.acquire();
           operationEntered = true;
           const data = await operation({
@@ -240,6 +285,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
             request,
             url,
             signal: controller.signal,
+            consolePrincipal: context.principal,
           });
           return withNoStore(jsonResponse(200, { success: true, data }));
         } catch (error) {
@@ -247,12 +293,14 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
           const result = failure(rejected ? error.rejection : error);
           const notCommitted =
             path === '/apply' && (!operationEntered || rejected || error instanceof HttpBodyError);
+          if (audited.has(path)) record(context.principal, path, 'denied', { code: result.code, ...(result.reason ? { reason: result.reason } : {}) });
           return withNoStore(jsonResponse(result.status, {
             success: false,
             code: result.code,
             ...(result.details ?? {}),
+            ...(result.reason ? { reason: result.reason } : {}),
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
-            error: result.message ?? failureMessage(result.code),
+            error: result.reason ? INFERENCE_ENVIRONMENT_REFUSALS[result.reason] : result.message ?? failureMessage(result.code),
           }));
         } finally {
           request.signal.removeEventListener('abort', abort);
@@ -362,6 +410,40 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       signal,
     });
     return lease.accounts.status(account);
+  });
+  register('POST', '/probe', async ({ lease, principal, request, signal }) => {
+    if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
+    if (!lease.probe) throw new InferenceManagementError('unavailable');
+    const body = object(await readJsonBody(request));
+    return lease.probe({ profileId: text(body.profileId), signal });
+  });
+  register('POST', '/account/test', async ({ lease, principal, request, signal, consolePrincipal }) => {
+    const body = object(await readJsonBody(request)),
+      account = await lease.management.account(principal, text(body.accountId));
+    if (!lease.probe) throw new InferenceManagementError('unavailable');
+    const graph = await lease.management.graph();
+    const profiles = Object.values(graph.profiles).filter((profile) => profile.accountId === account.id
+      && profile.ownerId === principal.ownerId && graph.services[account.serviceId]?.models[profile.model]?.kinds.includes('language'));
+    const chat = graph.purposes.defaults.chat;
+    const profile = profiles.find((candidate) => candidate.id === chat) ?? profiles[0];
+    if (!profile) throw new InferenceManagementError('unsupported');
+    const result = await lease.probe({ profileId: profile.id, signal });
+    record(consolePrincipal, '/account/test', result.status === 'ok' ? 'ok' : 'error', { kind: result.kind ?? 'ok', profile: profile.id }, account.id);
+    return { result, status: await lease.accounts.status(account) };
+  });
+  register('POST', '/cli/account/add', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request));
+    const added = await lease.management.addEnvironmentAccount(principal, body);
+    record(consolePrincipal, '/cli/account/add', added.result.status === 'committed' ? 'ok' : 'error',
+      { service: added.serviceId, createdService: added.createdService, env: String(body.env), status: added.result.status }, added.accountId);
+    return added;
+  });
+  register('POST', '/cli/account/rename-env', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request));
+    const renamed = await lease.management.renameEnvironmentReference(principal, body);
+    record(consolePrincipal, '/cli/account/rename-env', renamed.result.status === 'committed' ? 'ok' : 'error',
+      { from: String(body.from), to: String(body.to), credential: renamed.credential, status: renamed.result.status }, renamed.accountId);
+    return renamed;
   });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),

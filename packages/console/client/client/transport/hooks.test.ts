@@ -30,5 +30,7 @@ describe("transactionFailure (install / uninstall / update hooks)", () => {
       .toBe("instance did not start（已回滚，失败阶段 start-instance）");
     expect(transactionFailure({ ...base, ok: false, status: "rollbackFailed", error: "boom", rollbackError: "disk full" } as never))
       .toBe("boom（回滚未完成：disk full）");
+    expect(transactionFailure({ ...base, ok: false, status: "rollbackFailed", error: "boom", rollbackError: "pnpm install exited", restartError: "port in use" } as never))
+      .toBe("boom（回滚未完成：pnpm install exited；重新启动实例失败：port in use）");
   });
 });

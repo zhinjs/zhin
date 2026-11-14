@@ -1,5 +1,8 @@
 import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   diagnoseZhinStackDependencies,
   CREATE_BOT_PACKAGE_MANAGER,
@@ -8,6 +11,8 @@ import {
   getCreateBotPnpmWorkspaceConfig,
   getRequiredZhinDependenciesForConfig,
   packagesNeedingZhinStackFix,
+  formatZhinStackFixCommand,
+  resolvesThroughZhin,
 } from '../src/zhin-stack-deps.js';
 
 describe('zhin-stack-deps', () => {
@@ -108,5 +113,46 @@ describe('zhin-stack-deps', () => {
     expect(getCreateBotPnpmWorkspaceConfig().allowBuilds).toMatchObject(
       Object.fromEntries(GATEWAY_NATIVE_BUILD_DEPENDENCIES.map(name => [name, true])),
     );
+  });
+});
+
+describe('database dependency provided by zhin.js (#1250)', () => {
+  const roots: string[] = [];
+  afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+
+  /** pnpm layout: node_modules/zhin.js → .pnpm/zhin.js@x/node_modules/zhin.js, deps as siblings. */
+  function project(withDatabase: boolean): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-stack-db-'));
+    roots.push(root);
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'bot', dependencies: { 'zhin.js': '^1.2.0' } }));
+    fs.writeFileSync(path.join(root, 'pnpm-workspace.yaml'), "packages:\n  - '.'\n");
+    const store = path.join(root, 'node_modules', '.pnpm', 'zhin.js@1.2.0', 'node_modules');
+    fs.mkdirSync(path.join(store, 'zhin.js'), { recursive: true });
+    fs.writeFileSync(path.join(store, 'zhin.js', 'package.json'), JSON.stringify({ name: 'zhin.js', version: '1.2.0', exports: { '.': './index.js' } }));
+    if (withDatabase) {
+      fs.mkdirSync(path.join(store, '@zhin.js', 'database'), { recursive: true });
+      fs.writeFileSync(path.join(store, '@zhin.js', 'database', 'package.json'), JSON.stringify({ name: '@zhin.js/database', version: '1.2.0', exports: { '.': './index.js' } }));
+    }
+    fs.symlinkSync(path.join(store, 'zhin.js'), path.join(root, 'node_modules', 'zhin.js'), 'dir');
+    return root;
+  }
+
+  const config = { database: { dialect: 'sqlite', filename: './data/bot.db' } };
+
+  it('does not report @zhin.js/database as missing when it resolves through zhin.js', () => {
+    const root = project(true);
+    expect(resolvesThroughZhin(root, '@zhin.js/database')).toBe(true);
+    const diagnosis = diagnoseZhinStackDependencies(root, config);
+    expect(diagnosis.missingFromPackageJson).not.toContain('@zhin.js/database');
+    expect(diagnosis.providedByZhin).toEqual(['@zhin.js/database']);
+    expect(diagnosis.notInstalled).not.toContain('@zhin.js/database');
+  });
+
+  it('still reports it when zhin.js does not bring it, with a fix command that works in a workspace root', () => {
+    const root = project(false);
+    const diagnosis = diagnoseZhinStackDependencies(root, config);
+    expect(diagnosis.missingFromPackageJson).toContain('@zhin.js/database');
+    expect(formatZhinStackFixCommand(packagesNeedingZhinStackFix(diagnosis), diagnosis.required, root)).toMatch(/^pnpm add -w @zhin\.js\/database@/);
+    expect(formatZhinStackFixCommand(['@zhin.js/database'], diagnosis.required)).toMatch(/^pnpm add @zhin\.js\/database@/);
   });
 });

@@ -32,7 +32,7 @@ in the config means one `icqq` plugin + 5 endpoints, not one plugin duplicated f
  slack ────────▶ │  ├─ AdapterIndex (11 endpoints) │
  github ───────▶ │  ├─ Game plugins × 9 (game-kit) │
                  │  ├─ Agent Host (AI chat/tools)  │
- sandbox ──────▶ │  └─ HTTP Host :8086             │
+ sandbox ──────▶ │  └─ HTTP Host :8068             │
                  └───────────┬───────────────────┘
                              │ REST + SSE
                     ┌────────▼────────┐

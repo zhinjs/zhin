@@ -233,3 +233,107 @@ function createStore(root: string, fileName: string): ConsoleConfigurationStore 
     document: createConfigDocument(join(root, fileName)),
   });
 }
+
+describe('http.port accepts only 1–65535 integers or ${VAR} references (#1250)', () => {
+  async function store(): Promise<{ store: ConsoleConfigurationStore; root: string }> {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-http-port-')); tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nhttp:\n  port: 8068\n');
+    return { store: createStore(root, 'zhin.config.yml'), root };
+  }
+
+  it('rejects non-numeric strings, out-of-range and fractional ports with Chinese reasons', async () => {
+    const { store: configuration } = await store();
+    expect(await configuration.validatePluginConfig('http', { port: 'abc' })).toMatchObject({
+      valid: false, errors: [{ path: '$.port', message: '字段 port 只接受数值或 ${VAR} 形式的环境变量引用' }],
+    });
+    expect(await configuration.validatePluginConfig('http', { port: 99999 })).toMatchObject({
+      valid: false, errors: [{ path: '$.port', message: '字段 port 不能大于 65535' }],
+    });
+    expect(await configuration.validatePluginConfig('http', { port: -1 })).toMatchObject({ valid: false });
+    expect(await configuration.validatePluginConfig('http', { port: 80.5 })).toMatchObject({ valid: false });
+    expect(await configuration.validatePluginConfig('http', { port: '8068' })).toMatchObject({ valid: false });
+  });
+
+  it('accepts integers in range and ${VAR} references', async () => {
+    const { store: configuration } = await store();
+    for (const port of [0, 1, 8068, 65535, '${PORT}', '${PORT:-8068}']) {
+      expect(await configuration.validatePluginConfig('http', { port })).toMatchObject({ valid: true });
+    }
+  });
+
+  it('config:patch refuses to save an invalid port and leaves the file unchanged', async () => {
+    const { store: configuration, root } = await store();
+    const before = await readFile(join(root, 'zhin.config.yml'), 'utf8');
+    const { revision } = await configuration.readSource();
+    const result = await configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path: ['http', 'port'], value: 'abc' }] });
+    expect(result).toMatchObject({ status: 'invalid', errors: [{ path: '$.http.port', message: '字段 port 只接受数值或 ${VAR} 形式的环境变量引用' }] });
+    expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).toBe(before);
+  });
+});
+
+describe('secret fields are stored in .env, not in the config file (#1250)', () => {
+  async function project(config: string, env = ''): Promise<{ configuration: ConsoleConfigurationStore; root: string }> {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-secret-storage-')); tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+    await writeFile(join(root, 'zhin.config.yml'), config);
+    if (env) await writeFile(join(root, '.env'), env);
+    return { configuration: new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')), environmentName: 'development' }), root };
+  }
+  const read = (root: string, name: string) => readFile(join(root, name), 'utf8');
+  const set = async (configuration: ConsoleConfigurationStore, path: string[], value: unknown, secretStorage?: 'env' | 'plain') => {
+    const { revision } = await configuration.readSource();
+    return configuration.patchProject({ expectedRevision: revision, patches: [{ op: 'set', path, value }], ...(secretStorage ? { secretStorage } : {}) });
+  };
+
+  it('keeps the existing ${HTTP_TOKEN} reference and replaces the variable in .env', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n  port: 8068\n', '# keep\nHTTP_TOKEN=old-value\nOTHER=1\n');
+    const result = await set(configuration, ['http', 'token'], 'plain-new-token');
+    expect(result).toMatchObject({ status: 'saved', envSecrets: [{ path: ['http', 'token'], variable: 'HTTP_TOKEN' }] });
+    expect(JSON.stringify(result)).not.toContain('plain-new-token');
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('${HTTP_TOKEN}');
+    expect(await read(root, '.env')).toBe("# keep\nHTTP_TOKEN='plain-new-token'\nOTHER=1\n");
+  });
+
+  it('gives a literal (or new) secret a canonical variable, avoiding names that hold other values', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  port: 8068\n', 'HTTP_TOKEN=used-elsewhere\n');
+    const result = await set(configuration, ['http'], { port: 8068, token: 'brand-new' });
+    expect(result).toMatchObject({ status: 'saved', envSecrets: [{ path: ['http', 'token'], variable: 'HTTP_TOKEN_2' }] });
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http).toEqual({ port: 8068, token: '${HTTP_TOKEN_2}' });
+    expect(await read(root, '.env')).toBe("HTTP_TOKEN=used-elsewhere\nHTTP_TOKEN_2='brand-new'\n");
+  });
+
+  it('writes into .env.<environment> when that file defines the variable', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n', 'HTTP_TOKEN=base\n');
+    await writeFile(join(root, '.env.development'), 'HTTP_TOKEN=dev\n');
+    await set(configuration, ['http', 'token'], 'dev-new');
+    expect(await read(root, '.env.development')).toBe("HTTP_TOKEN='dev-new'\n");
+    expect(await read(root, '.env')).toBe('HTTP_TOKEN=base\n');
+  });
+
+  it('stores the literal only when plain storage is requested explicitly', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n', 'HTTP_TOKEN=old\n');
+    const result = await set(configuration, ['http', 'token'], 'literal-on-purpose', 'plain');
+    expect(result).toMatchObject({ status: 'saved' });
+    expect(result).not.toHaveProperty('envSecrets');
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('literal-on-purpose');
+    expect(await read(root, '.env')).toBe('HTTP_TOKEN=old\n');
+  });
+
+  it('leaves .env untouched when the write is invalid, and leaves references and non-secrets alone', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n', 'HTTP_TOKEN=old\n');
+    const invalid = await set(configuration, ['http'], { token: 'new-secret', port: 'abc' });
+    expect(invalid).toMatchObject({ status: 'invalid' });
+    expect(await read(root, '.env')).toBe('HTTP_TOKEN=old\n');
+    expect(await set(configuration, ['http', 'token'], '${OTHER_TOKEN}')).not.toHaveProperty('envSecrets');
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('${OTHER_TOKEN}');
+    expect(await set(configuration, ['http', 'host'], '127.0.0.1')).not.toHaveProperty('envSecrets');
+  });
+
+  it('applies to whole-block writes from the Console (config:set)', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: ${HTTP_TOKEN}\n', 'HTTP_TOKEN=old\n');
+    await configuration.setKey('http', { token: 'from-console', port: 8068 });
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http).toEqual({ token: '${HTTP_TOKEN}', port: 8068 });
+    expect(await read(root, '.env')).toBe("HTTP_TOKEN='from-console'\n");
+  });
+});

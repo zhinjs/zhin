@@ -43,7 +43,7 @@ pnpm dev          # = zhin start --foreground --watch source config
 然后：
 
 1. 打开 [Remote Console](https://console.zhin.dev)
-2. Host 填 `http://127.0.0.1:8086`。本示例未配 `http.token`：创建所有者之前，本机 Host 对所有人开放，Console 会直接进入初始化向导；创建所有者账号后用它登录（Host 只监听 `127.0.0.1`）
+2. Host 填 `http://127.0.0.1:8068`。本示例未配 `http.token`：创建所有者之前，本机 Host 对所有人开放，Console 会直接进入初始化向导；创建所有者账号后用它登录（Host 只监听 `127.0.0.1`）
 3. 进入 **Sandbox / 沙盒**，发送 **`/hello`** 或 **`/status`**
 
 应收到 `Hello from single-file-bot!` 一类回复。编辑 `bot.ts` 会热重载。

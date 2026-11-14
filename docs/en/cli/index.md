@@ -188,11 +188,13 @@ zhin config check [--fix] [--json] [--strict]
 
 `get` / `set` / `unset` / `list` **talk to the running Host by default** (`POST {base}/console/request`). A write first reads the config revision, then submits one `config:patch-project`; the Host performs the CAS, schema validation, save and any live application. The CLI never does its own read-modify-write and never retries.
 
-- Connection: `--host <url>` wins, and then the token comes only from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). Without `--host` the address is derived from `http.host` / `http.port` / `http.base` (a wildcard bind `0.0.0.0` / `::` connects to `127.0.0.1` / `[::1]`), and only then does an unset variable fall back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
+- Connection: without `--host` the command only uses **this project's gateway** over its local control socket (`.zhin/gateway.sock`), as the local owner (or as the `ZHIN_CONSOLE_TOKEN` principal when that is set). When this project's gateway is not running the command fails with "本项目的网关未运行" (start it with `zhin start`, or pass `--offline`) and does **not** connect to `127.0.0.1:<http.port>`, where another project's gateway may be listening. To reach another address pass `--host <url>` explicitly; the token then comes from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). A loopback `--host` (`127.0.0.1` / `localhost` / `[::1]`) is checked first: if its `/pub/health` reports a different project id the command refuses without sending the request or the token. A target that reports **no** project id (an older gateway or a `--standalone` instance) is refused the same way, with a non-zero exit: upgrade that gateway and start this project with `zhin start`, or, if you are sure of the target, pass `--allow-unverified-host` to continue with a warning only (it never accepts a different project id). Sending a token to a non-loopback address requires HTTPS. `zhin send`, `zhin schedule`, `zhin watch` and `zhin packages … --live` follow the same rules (the first three also accept `--host <url>`; all of them accept `--allow-unverified-host`).
 - **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and the CLI sends no request to the Host, but loading plugin declarations executes module top-level code (which may itself use the network). An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
+- Writing a secret field (marked secret / writeOnly / password in the schema, or a token / password-like key) stores the value in the project's `.env` and keeps or puts a `${VAR}` reference in the config: the variable the field already referenced (such as `${HTTP_TOKEN}`), or a name derived from the path (`http.token` → `HTTP_TOKEN`, `_2` on a clash); a variable already defined in `.env.<environment>` is written there. The output names the variable and never echoes the value. Add `--plain` to write the literal into the config file on purpose (a warning is printed). Console saves follow the same rule.
 - Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
 - With `--json`, `get` / `list` / `set` / `unset` print exactly one line of compact JSON, for scripts; without it they print only human-readable text (`config path` and `config check` have their own formats).
-- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified.
+- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified. Other failures show only the reason; the global `--debug` option adds both to stderr.
+- A write that cannot apply explains why: an unknown key lists the closest settings; an array index past the end states the current length and how to append (read the whole array, add the item, write it back). When `http.port` in the config is broken and no gateway is running, the CLI says to repair it with `--offline` first.
 
 Exit codes are a public contract:
 
@@ -248,7 +250,11 @@ Upgrades an older Zhin project to the latest: dependencies, scripts and folder s
 
 In a project directory (one with `zhin.config.*`), `zhin start` needs the CLI and the management gateway in production too, so `zhin migrate` puts `zhin.js`, `@zhin.js/cli` and `@zhin.js/gateway` together in `dependencies`: a package listed only in `devDependencies` moves with its version, a duplicate left in `devDependencies` is removed, and a missing `@zhin.js/gateway` is added (the CLI's dist-tag such as `latest` when it uses one, otherwise the range released together with the running CLI). A `--prod` install therefore keeps everything startup needs. A Plugin package (no project config) keeps the CLI in `devDependencies`. The `zhin runtime migrate` cutover does the same for private (project) packages.
 
-In a pnpm project that declares `@zhin.js/gateway`, `zhin migrate` also adds the gateway's native dependencies `node-pty`, `ssh2` and `cpu-features` to `allowBuilds` in `pnpm-workspace.yaml` (creating the file when missing; existing entries are kept, and an existing `onlyBuiltDependencies` list is appended to), so the install that follows builds them. See [Build scripts of the native dependencies](../console/operations.md#native-build).
+In a pnpm project that declares `@zhin.js/gateway`, `zhin migrate` also adds the gateway's native dependencies `node-pty`, `ssh2` and `cpu-features` to `allowBuilds` in `pnpm-workspace.yaml` (creating the file when missing; existing `true` / `false` values are kept, the `set this to true or false` placeholder pnpm 11 leaves is set to `true`, and an existing `onlyBuiltDependencies` list is appended to), so the install that follows builds them. See [Build scripts of the native dependencies](../console/operations.md#native-build).
+
+pnpm 11 does not install releases younger than one day by default (`minimumReleaseAge`), so a fresh Zhin release would stay at the old version (`Already up to date`). `zhin migrate` therefore lists the upgrade targets as `name@version` under `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` (the form pnpm writes into a new scaffold; entries that already cover a release are not repeated), and after the install reads `node_modules` to list each package's installed version before and after. When a package did not reach its declared version it exits with an error and the cause (release age, a conflicting `overrides` entry, …). `zhin doctor` also warns, with the fix, when an installed version does not satisfy `package.json`.
+
+`zhin migrate` only creates the directories the current scaffold creates (`data/`, `plugins/`), no longer `src/plugins`; `SOUL.md` / `TOOLS.md` / `AGENTS.md` are only added to a project that uses AI (AI enabled in the config, or `@zhin.js/agent` declared); files still on the old Chinese template are upgraded with a `.bak`.
 
 `zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, use `zhin migrate instances`, described [below](#migrate-instances). `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
 
@@ -496,12 +502,12 @@ States returned by `status`:
 
 ## Working with a running bot
 
-These commands talk to a running bot over HTTP, so start it with `zhin start` with the HTTP service enabled first. Requests carry the Console API token from `ZHIN_CONSOLE_TOKEN` (issued in your Console account settings, never more than your own permissions); after Console setup `http.token` is always refused, so without an API token these commands get 401.
+These commands work on a running bot, so start it with `zhin start` in the project directory first. By default they only use **this project's gateway** over its local control socket (`.zhin/gateway.sock`), as the local owner, without a token; when this project's gateway is not running they fail with "本项目的网关未运行" and never connect to the local `http.port` (another project's gateway may be listening there). To reach another address pass `--host <url>`: requests then carry the Console API token from `ZHIN_CONSOLE_TOKEN` (issued in your Console account settings, never more than your own permissions; after Console setup `http.token` is always refused), and a loopback address is first checked against the project id its `/pub/health` reports — a different project is refused, and so is a target that reports no project id (an older gateway or a `--standalone` instance) unless you pass `--allow-unverified-host`.
 
 ### send: Send a Message to a Running Bot
 
 ```bash
-zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
+zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>] [--host <url>]
 ```
 
 `scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` may be omitted only when the instance has a single adapter; `-e` picks an account ID, defaulting to the adapter's first online account.
@@ -511,7 +517,7 @@ A failed send shows the reason (for example no open Sandbox session, an account 
 ### watch: Monitor a Running Instance
 
 ```bash
-zhin watch [-i 3] [--once] [--json] [--no-clear]
+zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 ```
 
 Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--once` fetches once and exits; `--json` suits scripts.
@@ -521,7 +527,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin start` and have `assistant.enabled`.
 
 ```bash
-zhin schedule list
+zhin schedule list [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"

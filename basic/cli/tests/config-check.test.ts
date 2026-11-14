@@ -397,4 +397,31 @@ ai:
     expect(fixes).toContain('removed deprecated ai.agents.vision.priority');
     expect(fixes).toContain('removed deprecated ai.agents.vision.match');
   });
+
+  describe('http.port (#1250)', () => {
+    const portIssues = async (port: unknown, env: Record<string, string | undefined> = {}) => {
+      await fs.writeJson(path.join(tmpDir, 'zhin.config.json'), { configVersion: 2, plugins: {}, http: { port } });
+      return (await runConfigCheck(tmpDir, env)).issues.filter(issue => issue.code === 'http.port_invalid');
+    };
+
+    it('reports non-numeric and out-of-range ports as errors with a Chinese reason and an offline fix', async () => {
+      const [abc] = await portIssues('abc');
+      expect(abc).toMatchObject({ severity: 'error', path: 'http.port' });
+      expect(abc!.message).toContain('端口必须是 1–65535 的整数或 ${VAR} 形式的环境变量引用，当前值 "abc"');
+      expect(abc!.fixHint).toContain('zhin config set http.port 8068 --offline');
+      expect((await portIssues(99999))[0]!.message).toContain('端口必须在 1–65535 之间，当前值 99999');
+    });
+
+    it('the runtime default port is the one the scaffold writes', async () => {
+      const { DEFAULT_HTTP_PORT } = await import('@zhin.js/host-http');
+      const { DEFAULT_CREATE_BOT_HTTP_PORT } = await import('@zhin.js/scaffold-wizard');
+      expect(DEFAULT_HTTP_PORT).toBe(DEFAULT_CREATE_BOT_HTTP_PORT);
+    });
+
+    it('checks what a ${VAR} reference expands to', async () => {
+      expect(await portIssues('${PORT}', { PORT: '8068' })).toEqual([]);
+      expect((await portIssues('${PORT}', { PORT: 'eighty' }))[0]!.message).toContain('（来自 ${PORT}）');
+      expect(await portIssues(8068)).toEqual([]);
+    });
+  });
 });
