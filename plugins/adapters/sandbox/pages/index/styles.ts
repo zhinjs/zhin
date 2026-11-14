@@ -361,6 +361,13 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-more-menu > button[aria-checked="true"] { color: var(--sb-primary); }
 .zhin-sandbox .sandbox-more-menu > button.is-danger { color: var(--sb-danger); }
 .zhin-sandbox .sandbox-more-menu > button > em { margin-left: auto; font-style: normal; }
+.zhin-sandbox .sandbox-more-menu > button > em + em { margin-left: 4px; }
+.zhin-sandbox .sandbox-role-badge.is-simulated { color: var(--sb-muted-fg); }
+.zhin-sandbox .sandbox-speaker-mode { display: grid; gap: 6px; grid-column: 1 / -1; }
+.zhin-sandbox .sandbox-speaker-toggle { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.zhin-sandbox .sandbox-speaker-mode > p { margin: 0; color: var(--sb-muted-fg); font-size: 12px; }
+.zhin-sandbox .sandbox-speaker-setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.zhin-sandbox .sandbox-speaker-setup > em { font-style: normal; color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-hint-key { padding: 1px 6px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-muted); color: var(--sb-fg); font-family: var(--sb-mono); font-size: 12px; line-height: 1.4; }
 .zhin-sandbox .sandbox-hint-text { margin-right: 6px; }
 

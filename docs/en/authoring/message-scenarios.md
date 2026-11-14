@@ -31,7 +31,7 @@ You explicitly supply the full endpoint identity, conversation kind/ID, optional
 
 Executable export requires test configuration, endpoint mapping, nonempty input and explicit assertions. Otherwise you can still export valid scenario JSON. The page does not create skipped tests, empty assertions or purported passing results.
 
-A permission denial can send a reply. Do not infer zero deliveries from `denied`: the test project below replies with `没有权限执行此指令。`, so a denial scenario must include that final payload in its assertion.
+A permission denial can send a reply. Do not infer zero deliveries from `denied`: the test project below (`role(admin)`) replies with `没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。`, so a denial scenario must include that final payload in its assertion.
 
 ## How do I create a runnable independent fixture?
 

@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { Message } from '@zhin.js/core/runtime';
-import { createSenderEnricher } from '@zhin.js/core/runtime';
+import { Message, createSenderEnricher } from '@zhin.js/core/runtime';
 import { ChatRoleService } from '@zhin.js/core';
 import { resolveOwnerForRuntimeMessage } from '@zhin.js/agent/runtime';
 import { ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
@@ -62,7 +61,12 @@ describe('chat role sender identity (ADR 0056)', () => {
     const enrich = createSenderEnricher({ roles: () => roles })!;
     const conversation = state.conversation('one', 'a');
     expect(enrich({ id: 'attacker', name: 'b', platform: { standing: 'member' } }, conversation, state.snapshot))
-      .toEqual({ id: 'attacker', name: 'b', platform: { standing: 'member' } });
+      .toEqual({ id: 'attacker', name: 'b', platform: { standing: 'member' }, chatPrincipal: roles.principalOf({ adapter: 'one', userId: 'attacker' }).id });
+    // ADR 0060 §2.3: an adapter cannot claim to be the owner's person.
+    const ownerPerson = roles.principalOf({ adapter: 'one', userId: 'owner-a' }).id;
+    const spoofed = enrich({ id: 'attacker', chatPrincipal: ownerPerson } as never, conversation, state.snapshot);
+    expect(spoofed?.chatPrincipal).not.toBe(ownerPerson);
+    expect(spoofed?.chatRole).toBeUndefined();
     expect(enrich({ id: 'attacker', chatRole: 'owner' }, conversation, state.snapshot)?.chatRole).toBeUndefined();
     expect(enrich({ id: 'owner-a', name: 'b' }, conversation, state.snapshot)?.chatRole).toBe('owner');
     const unknown = { ...conversation, endpoint: { ...conversation.endpoint, id: 'not-a-real-endpoint' } };
@@ -95,6 +99,6 @@ describe('chat role sender identity (ADR 0056)', () => {
     expect(enrich({ id: 'm' }, state.conversation('two', 'a'), state.snapshot)?.chatRole).toBe('admin');
     // Private chats carry no platform standing and so no mapped role.
     const privateChat = { ...state.conversation('one', 'a'), kind: 'private' as const, id: 'p' };
-    expect(enrich({ id: 'p', platform: { standing: 'owner' } }, privateChat, state.snapshot)).toEqual({ id: 'p' });
+    expect(enrich({ id: 'p', platform: { standing: 'owner' } }, privateChat, state.snapshot)).toEqual({ id: 'p', chatPrincipal: 'implicit:one:p' });
   });
 });

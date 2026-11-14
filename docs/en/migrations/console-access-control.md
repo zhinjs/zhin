@@ -69,7 +69,11 @@ Webhooks and other plugin routes authenticate themselves as well.
 
 ## 5. Personal inference principals
 
-`ai.personalPrincipals` used to bind a token from `http.tokens[].principalId` to a personal inference setup. With `http.tokens` gone, inference management in the Console always acts as the Host administrator (requires `agent.configure`); switching to a personal inference principal from the Console is not available for now.
+`ai.personalPrincipals` used to bind a token from `http.tokens[].principalId` to a personal inference setup. With `http.tokens` gone, personal inference owners come from the link between a chat person and a Console account (ADR 0060 P3):
+
+- On the first start after upgrading, every `user:<id>` entry of `ai.personalPrincipals` is imported as a person (holding the platform identities it lists) linked to Console user `<id>`; **no chat role is granted**. A `rootId` that is not the current project directory (a moved project) no longer fails the start: the entry is imported by adapter alias + `subjectId` with a warning; entries whose adapter is not loaded are imported on a later start. Afterwards the links are the only source; the configuration field only warns "imported, the database decides" and can be deleted.
+- Inference management in the Console still acts as the Host administrator by default (requires `agent.configure`); a linked Console user may switch to the personal inference owner of **their own** linked person (`?owner=<personal owner id>`, only owners that belong to them).
+- Deployments without `ai.personalPrincipals`: link yourself with "Bind my chat identity" in the Console.
 
 ## 6. Console terminal (optional)
 

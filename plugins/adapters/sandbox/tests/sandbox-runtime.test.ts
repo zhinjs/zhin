@@ -176,7 +176,7 @@ describe('sandbox plugin runtime adapter', () => {
       conversation: sandboxConversation('workspace-room', 'group'),
       message: { conversation: sandboxConversation('workspace-room', 'group'), id: 'msg-client-1' },
       content: 'hello sandbox',
-      sender: expect.objectContaining({ id: 'sandbox-user' }),
+      sender: expect.objectContaining({ id: '~sim:sandbox-user' }),
       metadata: expect.objectContaining({
         sandboxAgentRun: {
           workingDirectory: '/workspace/app',
@@ -688,7 +688,7 @@ describe('sandbox plugin runtime adapter', () => {
     expect(receivedPayloads[0]).toMatchObject({
       content: '/kick user-2',
       sender: {
-        id: 'sim-master',
+        id: '~sim:sim-master',
         name: 'Master User',
         platform: { standing: 'owner' },
       },
@@ -696,7 +696,7 @@ describe('sandbox plugin runtime adapter', () => {
     expect(receivedPayloads[1]).toMatchObject({
       content: '/mute user-2',
       sender: {
-        id: 'sim-admin',
+        id: '~sim:sim-admin',
         name: 'Admin User',
         platform: { standing: 'admin' },
       },
@@ -704,7 +704,7 @@ describe('sandbox plugin runtime adapter', () => {
     expect(receivedPayloads[2]).toMatchObject({
       content: 'hi',
       sender: {
-        id: 'sim-member',
+        id: '~sim:sim-member',
         name: 'sim-member',
         platform: { standing: 'member' },
       },

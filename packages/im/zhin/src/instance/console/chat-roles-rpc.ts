@@ -31,6 +31,8 @@ export interface ChatRolesRpcAuthorization {
 
 export interface ChatRolesRpcContext {
   readonly roles?: InstanceChatRoleService;
+  /** ADR 0060 Q12: display name of a `grantedBy` Console user from the person ↔ Console links. */
+  readonly grantorName?: (grantedBy: string) => string | undefined;
   /** Deny by default: without it every call is refused. */
   readonly authorize?: (request: ChatRolesRpcAuthorization) => boolean | Promise<boolean>;
   readonly actor?: string;
@@ -52,17 +54,26 @@ function redactedView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
 }
 
 export function chatRoleView(entry: ChatRoleEntry, grantor?: GrantorNames): ConsoleChatRoleEntry {
-  const grantedByDisplayName = entry.grantedBy ? grantorDisplayName(entry.grantedBy, grantor) : undefined;
+  // One label, two fields: `grantedByName` is canonical; the deprecated `grantedByDisplayName`
+  // (shipped in 1.3.0) always carries the same value. A linked person's name wins.
+  const grantedByName = entry.grantedBy
+    ? grantor?.grantorName?.(entry.grantedBy) ?? grantorDisplayName(entry.grantedBy, grantor)
+    : undefined;
   return Object.freeze({ level: entry.level, key: entry.key, adapter: entry.adapter, userId: entry.userId, role: entry.role, source: entry.source,
+    ...(entry.principalId ? { principalId: entry.principalId } : {}),
     ...(entry.grantedBy ? { grantedBy: entry.grantedBy } : {}),
-    ...(grantedByDisplayName ? { grantedByDisplayName } : {}),
+    ...(grantedByName ? { grantedByName, grantedByDisplayName: grantedByName } : {}),
     ...(entry.grantedAt ? { grantedAt: entry.grantedAt } : {}) });
 }
 
-/** The caller's own audit id and display name (#1250). */
+/**
+ * How a grant's `grantedBy` is labelled: the caller's own audit id and display name (#1250), and
+ * the linked person's name for Console users linked to a chat identity (ADR 0060 Q12).
+ */
 export interface GrantorNames {
   readonly actor?: string;
   readonly actorDisplayName?: string;
+  readonly grantorName?: (grantedBy: string) => string | undefined;
 }
 
 /**
@@ -96,7 +107,8 @@ function readIdentity(input: Record_, scope: string): { adapter: string; userId:
 /** Dispatches `chat-roles.*`; null means the type belongs elsewhere. */
 export async function dispatchChatRolesConsoleRpc(message: Record_, context: ChatRolesRpcContext): Promise<FeatureRpcReply | null> {
   const type = message.type;
-  if (!isConsoleChatRolesRpcType(type)) return null;
+  // `chat-roles.imports.*` (ADR 0060 §4.2) have their own dispatcher with a global gate.
+  if (!isConsoleChatRolesRpcType(type) || type.startsWith('chat-roles.imports.')) return null;
   const input = record(message.data) ? message.data : message;
   try {
     const { level, key } = readScope(input);

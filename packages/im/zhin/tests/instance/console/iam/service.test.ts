@@ -60,6 +60,24 @@ describe('ConsoleIamService', () => {
     await expectIamError(service.deleteRole('builtin:owner'), 'forbidden');
   });
 
+  it('notifies holders when a custom role they hold changes or is deleted (security review: bind codes drop)', async () => {
+    const { service } = await openIam();
+    await service.createOwner({ username: 'alice', password: PASSWORD });
+    const role = await service.createRole({ name: 'ops', permissions: ['iam.manage'] });
+    const bob = await service.createUser({ username: 'bob', password: PASSWORD });
+    const carol = await service.createUser({ username: 'carol', password: PASSWORD });
+    await service.setBindings(bob.id, [{ role: 'ops' }]);
+    const events: { userId: string; reason: string }[] = [];
+    service.onCredentialsRevoked(event => { events.push(event); });
+    await service.updateRole(role.id, { description: 'only text' });
+    expect(events).toEqual([]);
+    await service.updateRole(role.id, { permissions: ['status.view'] });
+    expect(events).toEqual([{ userId: bob.id, reason: 'bindings' }]);
+    await service.deleteRole(role.id);
+    expect(events).toEqual([{ userId: bob.id, reason: 'bindings' }, { userId: bob.id, reason: 'bindings' }]);
+    expect(events.some(event => event.userId === carol.id)).toBe(false);
+  });
+
   it('validates usernames, passwords and unknown permissions', async () => {
     const { service } = await openIam();
     await expectIamError(service.createUser({ username: 'x', password: PASSWORD }), 'invalid_input');
