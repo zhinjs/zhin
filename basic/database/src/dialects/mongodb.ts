@@ -453,8 +453,9 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       cursor = cursor.limit(query.limit);
     }
 
-    if (query.projection) {
-      cursor = cursor.projection(query.projection);
+    // The driver's FindCursor names this `project()` (there is no `projection()` method).
+    if (query.projection && Object.keys(query.projection).length > 0) {
+      cursor = cursor.project(query.projection);
     }
 
     return await cursor.toArray();
