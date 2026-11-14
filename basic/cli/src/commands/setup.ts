@@ -34,6 +34,8 @@ import {
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 
+import { botInstructionsFile } from '../utils/bot-bootstrap.js';
+
 function collectValues(value: string, previous: string[] = []): string[] {
   return previous.includes(value) ? previous : [...previous, value];
 }
@@ -46,7 +48,7 @@ async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN'
   const files = [
     { name: 'SOUL.md', description: wizardText(locale, "AI 人格定义"), template: wizardText(locale, 'templates.setupSoul') },
     { name: 'TOOLS.md', description: wizardText(locale, "工具使用指南"), template: wizardText(locale, 'templates.setupTools') },
-    { name: 'AGENTS.md', description: wizardText(locale, "Agent 长期记忆"), template: wizardText(locale, 'templates.setupAgentMemory') }
+    { name: botInstructionsFile(cwd), description: wizardText(locale, "Agent 长期记忆"), template: wizardText(locale, 'templates.setupAgentMemory') }
   ];
 
   for (const file of files) {

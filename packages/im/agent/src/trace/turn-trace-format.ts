@@ -1,5 +1,5 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
-import type { TurnTrace, TurnTraceToolCall, TurnTraceTrigger } from './turn-trace.js';
+import { turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
 import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
 const STATUS_LABEL: Record<TurnTrace['termination']['status'], string> = {
@@ -22,10 +22,38 @@ const TOOL_MARK: Record<TurnTraceToolCall['status'], string> = {
 export interface FormatTurnTraceOptions {
   /** Include the chronological timeline (default true). */
   readonly timeline?: boolean;
+  /**
+   * Display name of a recorded provider id (`services:` / `accounts:` graph id → the service
+   * label people configured, #1250). Unknown ids fall back to the model name alone.
+   */
+  readonly providerLabel?: (provider: string) => string | undefined;
 }
 
 export function formatTurnTrace(trace: TurnTrace, options: FormatTurnTraceOptions = {}): string {
-  return renderTrace(trace, '', options.timeline ?? true).join('\n');
+  return renderTrace(trace, '', options.timeline ?? true, options.providerLabel).join('\n');
+}
+
+/** `服务名 · 模型` when the provider has a display name; graph ids alone never reach a reader. */
+function modelDisplay(provider: string | undefined, model: string, label?: (provider: string) => string | undefined): string {
+  const name = provider ? safeLabel(label, provider) : undefined;
+  if (name) return `${name} · ${model}`;
+  // Graph ids (`services:<uuid>` / `accounts:<uuid>`) mean nothing to a reader; show the model alone then.
+  const opaque = !provider || /^(services|accounts|profiles):/u.test(provider);
+  return opaque ? model : `${provider}/${model}`;
+}
+
+function safeLabel(label: ((provider: string) => string | undefined) | undefined, provider: string): string | undefined {
+  try {
+    return label?.(provider)?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function timelineDetail(entry: TurnTrace['timeline'][number], label?: (provider: string) => string | undefined): string {
+  if (entry.kind !== 'model_request') return entry.detail;
+  const match = /^(#\d+) ([^/\s]+)\/(.+)$/u.exec(entry.detail);
+  return match ? `${match[1]} ${modelDisplay(match[2], match[3]!, label)}` : entry.detail;
 }
 
 /** One line per trace, newest last. */
@@ -37,11 +65,18 @@ export function formatTurnTraceList(traces: readonly TurnTrace[]): string {
     trace.turn_id,
     trace.session_key,
     `${trace.tool_calls.length} tools`,
-    `${trace.usage.total_tokens} tokens`,
+    trace.subagent_usage?.model_calls
+      ? `${turnTraceTotalUsage(trace).total_tokens} tokens (子 agent ${trace.subagent_usage.total_tokens})`
+      : `${trace.usage.total_tokens} tokens`,
   ].join('  ')).join('\n');
 }
 
-function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): string[] {
+function renderTrace(
+  trace: TurnTrace,
+  indent: string,
+  withTimeline: boolean,
+  providerLabel?: (provider: string) => string | undefined,
+): string[] {
   const lines: string[] = [];
   const termination = trace.termination;
   const failingTool = trace.tool_calls.find(tool => tool.status === 'failed' || tool.status === 'denied');
@@ -61,7 +96,14 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     lines.push(`${indent}  首个失败步骤: ${failingTool.tool_name} ${failingTool.status}${failingTool.error ? ` — ${failingTool.error}` : ''}`);
   }
 
-  lines.push(`${indent}  模型调用 ${trace.model_calls.length} 次，tokens 输入 ${trace.usage.prompt_tokens} / 输出 ${trace.usage.completion_tokens} / 合计 ${trace.usage.total_tokens}`);
+  const sub = trace.subagent_usage;
+  if (sub && sub.model_calls > 0) {
+    // #1250: the parent total includes its sub-agents; say how much is whose.
+    const total = turnTraceTotalUsage(trace);
+    lines.push(`${indent}  模型调用 ${total.model_calls} 次（自身 ${trace.model_calls.length}，子 agent ${sub.model_calls}），tokens 输入 ${total.prompt_tokens} / 输出 ${total.completion_tokens} / 合计 ${total.total_tokens}（自身 ${trace.usage.total_tokens}，子 agent ${sub.total_tokens}）`);
+  } else {
+    lines.push(`${indent}  模型调用 ${trace.model_calls.length} 次，tokens 输入 ${trace.usage.prompt_tokens} / 输出 ${trace.usage.completion_tokens} / 合计 ${trace.usage.total_tokens}`);
+  }
   const cached = trace.model_calls.reduce((sum, call) => sum + (call.cache_read_tokens ?? 0), 0);
   if (cached > 0 && trace.usage.prompt_tokens > 0) {
     lines.push(`${indent}  提示缓存命中 ${cached} tokens（占输入 ${Math.round((cached / trace.usage.prompt_tokens) * 100)}%）`);
@@ -70,9 +112,7 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     const cache = call.cache_read_tokens ? ` cache=${call.cache_read_tokens}` : '';
     const reasoning = call.reasoning_tokens ? ` reasoning=${call.reasoning_tokens}` : '';
     const cacheWrite = call.cache_write_tokens !== undefined ? ` cache_write=${call.cache_write_tokens}` : '';
-    // Graph ids (`services:<uuid>` / `accounts:<uuid>`) mean nothing to a reader; show the model alone then.
-    const opaque = !call.provider || /^(services|accounts|profiles):/u.test(call.provider);
-    const model = call.model ? ` model=${opaque ? call.model : `${call.provider}/${call.model}`}` : '';
+    const model = call.model ? ` model=${modelDisplay(call.provider, call.model, providerLabel)}` : '';
     lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}`);
   }
 
@@ -96,7 +136,7 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
 
   for (const child of trace.subagents) {
     lines.push(`${indent}  子 agent:`);
-    lines.push(...renderTrace(child, `${indent}    `, false));
+    lines.push(...renderTrace(child, `${indent}    `, false, providerLabel));
   }
 
   if (withTimeline && trace.timeline.length > 0) {
@@ -106,7 +146,7 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
       lines.push(`${indent}    -${formatDuration(waited).padStart(7)}  ${'received'.padEnd(14)} 收到触发消息`);
     }
     for (const entry of trace.timeline) {
-      lines.push(`${indent}    +${formatDuration(entry.at_ms).padStart(7)}  ${entry.kind.padEnd(14)} ${entry.detail}`.trimEnd());
+      lines.push(`${indent}    +${formatDuration(entry.at_ms).padStart(7)}  ${entry.kind.padEnd(14)} ${timelineDetail(entry, providerLabel)}`.trimEnd());
     }
   }
   if (trace.dropped > 0) lines.push(`${indent}  (有 ${trace.dropped} 条记录因超出上限被省略)`);

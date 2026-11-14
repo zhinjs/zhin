@@ -49,6 +49,7 @@ import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
+import { collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
@@ -236,6 +237,13 @@ async function runActorTurn(
       return;
     }
     if (event.type !== 'usage') return;
+    // The actor's model calls belong in the root trace (nested under this actor) and in
+    // the usage record; the engine stream only reaches this callback (#1250).
+    try {
+      void Promise.resolve(turn.ports.journal.append(event)).catch(() => undefined);
+    } catch {
+      // Journal telemetry must not break turn execution.
+    }
     modelRequests += 1;
     usageTokens += event.usage.totalTokens;
     if (allowance && (modelRequests > allowance.modelCalls || (allowance.tokens > 0 && usageTokens > allowance.tokens)) && !budgetStop.signal.aborted) {
@@ -284,6 +292,12 @@ async function runActorTurn(
     }), onEvent);
     reportedTokens = result.usage?.total_tokens;
     reportedIterations = result.iterations ?? 0;
+    // #1250: media the actor's tools produced returns to the asker as structured attachments.
+    recordActorAttachments(
+      harness,
+      batch.map(item => item.id),
+      collectTurnAttachments(result.output, result.toolCalls),
+    );
     outcome = budgetStop.signal.aborted
       ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests) }
       : turnSignal.aborted

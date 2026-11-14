@@ -162,7 +162,7 @@ zhin setup --adapters      # 仅配置适配器（添加账号）
 zhin setup --ai            # 仅配置 AI
 zhin setup -y --adapter sandbox --enable-ai --install   # 非交互：只执行参数指定的步骤
 zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
-zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
+zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / BOT.md；已有 AGENTS.md 且无 BOT.md 时沿用 AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 zhin setup --locale en     # 设置项目语言（zh-CN 或 en），可与其他选项组合
 ```
@@ -563,6 +563,8 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合、上下文分段开销，以及结束原因。输出开头会单独标出**首个失败步骤**。
 
+子 agent（`ask` / `delegate` 的协作 Agent）的模型调用记在其嵌套回合里，父回合的「模型调用 / tokens」汇总写成「合计（自身 N，子 agent M）」，trace 字段 `subagent_usage` 单列子 agent 部分；`ai.usage` 日志与用量统计各算一次，不重复计。时间线、`requests` 与 `model_calls` 对同一次请求记录同一个 provider（实际解析出的服务 ID），显示时换成服务名（`服务名 · 模型`），读不到服务配置时只显示模型名。
+
 **保留与脱敏。** 默认保留 7 天，总大小上限 64 MB：启动时和之后每小时清理一次，先删过期的日期文件，再从最旧的一天删起直到低于上限（当天的文件不会因大小被删）。用环境变量 `ZHIN_TRACE_RETENTION_DAYS`、`ZHIN_TRACE_MAX_MB` 调整。trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`，写盘前还会再扫一遍内联凭据（`sk-…`、`Bearer …` 等）和环境变量里的密钥值。旧版的 `data/agent-traces/recent.json` 仍会被读取。
 
 **Console 页面。** Console 的「Agent Trace」页（`/console/agent-trace`）读取同一份数据：会话列表 → 回合列表 → 回合详情（模型/工具调用瀑布图、时间线和原始记录），可以按时间筛选，`?turn=<turnId>` 直接打开某个回合。项目里放一个页面即可启用：
@@ -603,6 +605,8 @@ zhin usage report --session 'icqq:*:group:*' --json
 每天还会列出按「服务名 · 模型」合并的模型用量：同一服务经 `services:` 与 `accounts:` 两种 ID 记录的调用合为一行，服务名读自项目数据库里的模型配置；读不到时只显示模型名。会话列优先显示 trace 里记录的会话名（如 `qq · 群 测试群`），括号里是会话键的短形式。输入 tokens 是每次模型调用上报的输入之和（含多轮迭代与子 Agent），和下面基于首次请求估算的段占比不是同一口径。
 
 每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
+
+**提示缓存提示。** 每次模型调用都会记录请求前缀哈希（system 提示词 + 工具定义，trace 字段 `prefix_hash`）。某个服务最近连续至少 20 次调用、跨至少 3 个会话都没有缓存命中（`cache_read_tokens` 为 0 或未上报），而同一会话相邻请求的前缀有一半以上相同时，报告末尾会提示「该服务可能不支持或未透传 prompt 缓存」，并给出前缀相同的请求比例作为依据。`zhin doctor` 读最近 7 天的 trace 做同样的检查，Console 用量统计（`usage-stats` RPC 的 `promptCacheHints`）也带这条提示。
 
 ## 退出码
 

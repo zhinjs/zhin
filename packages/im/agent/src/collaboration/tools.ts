@@ -18,6 +18,7 @@ import {
   type SendOutcome,
 } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
+import { renderAttachmentNote, takeActorAttachments, type AgentAttachment } from '../media/agent-attachments.js';
 import { renderExternalContent } from '../security/trust-level.js';
 import {
   COLLABORATION_TOOL_NAMES,
@@ -95,6 +96,12 @@ function clip(content: string): string {
     : content;
 }
 
+/** Framework-written attachment lines after the (external) reply text (#1250). */
+function withAttachments(text: string, agent: string, attachments: readonly AgentAttachment[]): string {
+  const note = renderAttachmentNote(agent, attachments);
+  return note ? `${text}\n\n${note}` : text;
+}
+
 function refusal(action: string, outcome: Extract<SendOutcome, { ok: false }>): string {
   const base = `${action} refused (${outcome.code}): ${outcome.reason}`;
   return outcome.escalated ? `${base}. The principal has been asked to decide; do not retry.` : base;
@@ -153,7 +160,11 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         if (!outcome.ok) return refusal('ask', outcome);
         const reply = outcome.reply ?? { status: 'failed' as const, content: '' };
         const content = reply.content.trim() || '(empty reply)';
-        return `agent ${resolved.name} replied (${reply.status}):\n${renderExternalContent('agent_reply', clip(content))}`;
+        return withAttachments(
+          `agent ${resolved.name} replied (${reply.status}):\n${renderExternalContent('agent_reply', clip(content))}`,
+          resolved.name,
+          takeActorAttachments(harness, outcome.mailId),
+        );
       },
     },
     {
@@ -259,7 +270,11 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         const reply = ack.reply ?? ack.result ?? { status: 'completed' as const, content: '' };
         const replyText = reply.content.trim() || '(empty reply)';
         const targetAgent = ack.mail?.to ?? 'peer';
-        return `agent ${targetAgent} replied (${reply.status}, mail ${ack.mailId}):\n${renderExternalContent('agent_reply', clip(replyText))}`;
+        return withAttachments(
+          `agent ${targetAgent} replied (${reply.status}, mail ${ack.mailId}):\n${renderExternalContent('agent_reply', clip(replyText))}`,
+          targetAgent,
+          takeActorAttachments(harness, ack.mailId),
+        );
       },
     },
     {

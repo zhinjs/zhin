@@ -79,24 +79,36 @@ export function getLoadedToolNamesInLoadOrder(snapshot: DeferredToolSessionSnaps
   return [...ordered, ...legacy];
 }
 
+/** Called with the tool names a load evicted because the session exceeded its cap. */
+export type DeferredToolEvictionListener = (evicted: readonly string[]) => void;
+
+/**
+ * Records a deferred tool as loaded in this session. The loaded set only grows
+ * (#1250 deferred-tools-break-prefix): a tool stays in the provider tool list until
+ * the session ends or is compacted, and re-using it never reorders the list. When
+ * the set exceeds `maxLoaded`, the earliest-loaded tools are evicted (the list then
+ * changes once, at its start) and `onEvict` is told which ones.
+ */
 export function touchToolInSnapshot(
   snapshot: DeferredToolSessionSnapshot,
   name: string,
   maxLoaded: number,
+  onEvict?: DeferredToolEvictionListener,
 ): DeferredToolSessionSnapshot {
   const loadedTools = { ...snapshot.loadedTools, [name]: Date.now() };
   const previousOrder = getLoadedToolNamesInLoadOrder(snapshot);
-  const entries = Object.entries(loadedTools);
-  if (entries.length > maxLoaded) {
-    entries.sort((a, b) => a[1] - b[1]);
-    const toRemove = entries.length - maxLoaded;
-    for (let i = 0; i < toRemove; i++) {
-      delete loadedTools[entries[i]![0]!];
-    }
+  const order = previousOrder.includes(name) ? previousOrder : [...previousOrder, name];
+  const limit = Math.max(1, maxLoaded);
+  const evicted: string[] = [];
+  // Evict by first-load order, never the tool being loaded now.
+  for (const candidate of order) {
+    if (order.length - evicted.length <= limit) break;
+    if (candidate === name) continue;
+    evicted.push(candidate);
+    delete loadedTools[candidate];
   }
-  // Existing tools keep their position; a new tool appends. Eviction (least recently
-  // used) removes from the middle, which shifts later tools and costs one cache miss.
-  const loadedOrder = [...previousOrder.filter(existing => existing in loadedTools), ...(name in loadedTools && !previousOrder.includes(name) ? [name] : [])];
+  if (evicted.length > 0) onEvict?.(evicted);
+  const loadedOrder = order.filter(existing => existing in loadedTools);
   return { ...snapshot, loadedTools, loadedOrder };
 }
 
@@ -104,10 +116,11 @@ export function touchToolsInSnapshot(
   snapshot: DeferredToolSessionSnapshot,
   names: Iterable<string>,
   maxLoaded: number,
+  onEvict?: DeferredToolEvictionListener,
 ): DeferredToolSessionSnapshot {
   let next = snapshot;
   for (const name of names) {
-    next = touchToolInSnapshot(next, name, maxLoaded);
+    next = touchToolInSnapshot(next, name, maxLoaded, onEvict);
   }
   return next;
 }

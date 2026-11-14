@@ -107,7 +107,7 @@ export interface AgentTraceModuleView {
   defaultTurnTraceFile(root: string): string;
   createTurnTraceArchive(dir: string, options: { readonly legacyFile?: string; readonly secrets: readonly string[] }): AgentTraceStoreView;
   formatTurnTraceList(traces: readonly unknown[]): string;
-  formatTurnTrace(trace: unknown, options: { readonly timeline: boolean }): string;
+  formatTurnTrace(trace: unknown, options: { readonly timeline: boolean; readonly providerLabel?: (provider: string) => string | undefined }): string;
 }
 
 export interface AgentModuleView {

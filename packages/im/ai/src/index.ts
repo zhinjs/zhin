@@ -328,7 +328,7 @@ export type {
   ContextRepositoryConfig,
   SaveSummaryOptions,
 } from './memory/context-repository.js';
-export type { DeferredToolSessionSnapshot } from './memory/deferred-tool-session.js';
+export type { DeferredToolSessionSnapshot, DeferredToolEvictionListener } from './memory/deferred-tool-session.js';
 export {
   EMPTY_DEFERRED_TOOL_SNAPSHOT,
   getLoadedToolNamesFromSnapshot,

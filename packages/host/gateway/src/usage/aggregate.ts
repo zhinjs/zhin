@@ -9,6 +9,7 @@ import { createReadStream } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PromptCacheProbe, type PromptCacheHint } from './prompt-cache.js';
 
 export const DAY_MS = 86_400_000;
 export const HOUR_MS = 3_600_000;
@@ -182,6 +183,11 @@ export interface UsageStats {
   };
   readonly filesRead: number;
   readonly malformedLines: number;
+  /**
+   * Services that likely do not support or pass through prompt caching (#1250): a long run of
+   * calls without cache reads while adjacent requests shared their prefix. Empty when none.
+   */
+  readonly promptCacheHints: readonly PromptCacheHint[];
 }
 
 export const USAGE_STATS_SESSION_LIMIT = 50;
@@ -353,8 +359,10 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
     return resolved.get(provider);
   };
 
+  const cacheProbe = new PromptCacheProbe({ resolveProvider: resolve });
   const scan = await scanTraces(dir, { since, until, session: query.session }, (trace, startedAt) => {
     turns++;
+    cacheProbe.visit(trace);
     const session = sessions.get(trace.session_key) ?? { ...tally(), turns: 0 };
     session.turns++;
     session.displayName ??= sessionDisplayNameOf(trace);
@@ -445,5 +453,6 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
     },
     filesRead: scan.filesRead,
     malformedLines: scan.malformed,
+    promptCacheHints: cacheProbe.hints(),
   };
 }

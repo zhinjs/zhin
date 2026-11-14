@@ -153,6 +153,11 @@ export interface UsageEvent {
   model?: string;
   durationMs?: number;
   stopReason?: string;
+  /**
+   * Short hash of the request prefix (system prompt + tool definitions), so readers can tell
+   * whether adjacent requests could have hit a prompt cache (#1250).
+   */
+  prefixHash?: string;
   usage: TurnUsage;
 }
 

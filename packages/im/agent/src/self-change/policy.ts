@@ -168,7 +168,7 @@ function posixRelative(value: string): string {
 /**
  * 规范化并校验一个变更目标路径，返回相对项目根的 posix 路径；不允许时抛 {@link SelfChangePathError}。
  *
- * 允许：插件约定目录下的文件、根 `AGENTS.md`、`skills/**`。
+ * 允许：插件约定目录下的文件、根 `AGENTS.md` / `BOT.md`（机器人专用引导文件，#1250）、`skills/**`。
  * 拒绝：绝对路径、`..`、P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*`…），以及
  * 白名单之外的一切（含根配置文件——它们只能经 `configPatch` 改）。
  */
@@ -195,7 +195,7 @@ export function normalizeChangeTarget(target: string, policy: ChangePathPolicyIn
 
 function isAllowedChangeTarget(rel: string, pluginRoots: readonly string[]): boolean {
   const folded = rel.toLowerCase();
-  if (folded === 'agents.md') return true;
+  if (folded === 'agents.md' || folded === 'bot.md') return true;
   if (folded.startsWith('skills/') && folded.length > 'skills/'.length) return true;
   const roots = ['', ...pluginRoots.map(root => posixRelative(root).split('/').filter(s => s && s !== '.').join('/').toLowerCase())];
   for (const root of roots) {

@@ -57,6 +57,8 @@ import {
   selfChangeStoreToken,
   type SelfChangeImpactPort,
   type AudioTranscriptionPort,
+  botBootstrapFilenames,
+  hasBotBootstrapFile,
 } from '@zhin.js/agent';
 import {
   AgentRuntime,
@@ -84,7 +86,6 @@ import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 import { agentToolApprovalQueueToken } from '../console/tool-approvals.js';
 
 const logger = getLogger('agent');
-const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
@@ -421,6 +422,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 }
 
 
+/**
+ * The bot's workspace bootstrap. Bot-facing files are SOUL.md, AGENTS.md and TOOLS.md, or —
+ * when the project has a `BOT.md` — SOUL.md, BOT.md and TOOLS.md: `AGENTS.md` then stays
+ * developer / coding-agent facing and is not read (#1250 bootstrap-dev-vs-bot).
+ */
 async function loadBootstrap(projectRoot: string): Promise<{
   bootstrapText: string;
   contextFiles: readonly ContextFile[];
@@ -428,7 +434,7 @@ async function loadBootstrap(projectRoot: string): Promise<{
   const parts: string[] = [];
   const contextFiles: ContextFile[] = [];
   let total = 0;
-  for (const name of BOOTSTRAP_FILES) {
+  for (const name of botBootstrapFilenames(await hasBotBootstrapFile(projectRoot))) {
     try {
       const raw = await readFile(join(projectRoot, name), 'utf8');
       const body = raw.trim();

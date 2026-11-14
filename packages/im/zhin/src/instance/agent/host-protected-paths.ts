@@ -16,7 +16,8 @@ export async function resolveHostProtectedPaths(
   projectRoot: string,
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<HostProtectedPaths> {
-  const selfFiles: string[] = [];
+  // The bot's own instruction file (#1250): changing it needs approval, like the root AGENTS.md.
+  const selfFiles: string[] = ['BOT.md'];
   try {
     const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as { zhin?: { entry?: unknown } };
     if (typeof manifest.zhin?.entry === 'string' && manifest.zhin.entry.trim()) selfFiles.push(manifest.zhin.entry.trim());

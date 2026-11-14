@@ -7,8 +7,8 @@
 import { join } from 'node:path';
 import { Command } from 'commander';
 import {
-  FIXED_SEGMENTS, dayKeyOf, defaultUsageTimeZone, isOpaqueProviderId, isUsageTimeZone, num, scanTraces,
-  sessionDisplayNameOf, usageModelDisplayName, type UsageProviderResolver,
+  FIXED_SEGMENTS, PromptCacheProbe, dayKeyOf, defaultUsageTimeZone, isOpaqueProviderId, isUsageTimeZone, num, scanTraces,
+  sessionDisplayNameOf, usageModelDisplayName, type PromptCacheHint, type UsageProviderResolver,
 } from '@zhin.js/gateway/usage';
 import { parseTraceTime } from './trace.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
@@ -71,6 +71,8 @@ export interface UsageReport {
   readonly files: number;
   readonly lines: number;
   readonly malformed_lines: number;
+  /** Services that likely do not support or pass through prompt caching (#1250). */
+  readonly prompt_cache_hints: readonly PromptCacheHint[];
 }
 
 /** Nearest-rank percentile over a sorted ascending array. */
@@ -111,7 +113,9 @@ export async function buildUsageReport(dir: string, options: UsageReportOptions 
     return resolved.get(provider);
   };
 
+  const cacheProbe = new PromptCacheProbe({ resolveProvider: serviceOf });
   const scan = await scanTraces(dir, options, (trace, startedAt) => {
+    cacheProbe.visit(trace);
     const day = dayKeyOf(startedAt, timeZone);
     let acc = days.get(day);
     if (!acc) {
@@ -190,7 +194,8 @@ export async function buildUsageReport(dir: string, options: UsageReportOptions 
         .sort((a, b) => b.input_tokens - a.input_tokens),
     };
   });
-  return { time_zone: timeZone, days: result, files: scan.files, lines: scan.lines, malformed_lines: scan.malformed };
+  return { time_zone: timeZone, days: result, files: scan.files, lines: scan.lines, malformed_lines: scan.malformed,
+    prompt_cache_hints: cacheProbe.hints() };
 }
 
 /** Hashed session keys stay identifiable without filling the column. */
@@ -224,8 +229,15 @@ export function formatUsageReport(report: UsageReport): string {
     out.push('', `日期按时区 ${report.time_zone} 划分。输入 tokens = 每次模型调用上报的输入之和（含多轮迭代与子 Agent）。`);
     out.push('', '历史/固定/用户为各回合首次请求的估算占比（固定 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap）；其余段不单列。撞迭代上限 = 出现 last_iteration_nudge 或以 budget_exceeded 结束的回合。');
   }
+  out.push(...formatPromptCacheHints(report.prompt_cache_hints));
   out.push('', `读取 ${report.files} 个文件、${report.lines} 行${report.malformed_lines > 0 ? `，跳过 ${report.malformed_lines} 行损坏记录` : ''}。`);
   return out.join('\n');
+}
+
+/** Lines for `zhin usage report` and `zhin doctor`; empty without hints. */
+export function formatPromptCacheHints(hints: readonly PromptCacheHint[] | undefined): string[] {
+  if (!hints?.length) return [];
+  return ['', '提示缓存', '', ...hints.map(hint => `- ⚠ ${hint.message}`)];
 }
 
 interface UsageReportCommandOptions {
@@ -264,7 +276,7 @@ export function resolveUsageWindow(
 }
 
 /** Service names come from the project's inference graph via its `zhin.js/instance/cli`; optional. */
-async function loadProviderResolver(root: string): Promise<UsageProviderResolver | undefined> {
+export async function loadProviderResolver(root: string): Promise<UsageProviderResolver | undefined> {
   try {
     const instance = await importProjectInstanceCli(root);
     const display = await instance.loadProviderDisplay?.(root);
