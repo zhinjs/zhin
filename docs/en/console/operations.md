@@ -12,7 +12,7 @@ The **Operations** group in the sidebar answers "how is the host doing". The ins
 | Instance (with project dependencies) | `/ops/instance` | `status.view`; dependency list `feature.view` | Start / stop `ops.restart`; dependencies `plugin.manage` |
 | Database | `/ops/database` | `ops.database.read` (browse, sort, filter, table structure) | records `ops.database.write`; SQL console and schema `ops.database.schema` |
 | Configuration file | `/ops/config` | `ops.config.read` | `ops.config.write` |
-| Environment variables | `/ops/env` | `ops.env.read` | `ops.env.write` |
+| Environment variables | `/ops/env` | `ops.env.read` (masked values only) | `ops.env.write`; **Show** (the value as written) needs `ops.env.read` + `ops.env.write` |
 | Scheduled tasks | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |
 | Project files | `/ops/files` | `ops.files.read` | `ops.files.write` |
 | Terminal | `/ops/terminal` | `ops.terminal` (`owner` only) | — |
@@ -49,9 +49,13 @@ If an install receipt is lost (outcome unknown), the page only checks the curren
 
 - **Database**: browse tables, query with conditions, edit rows and the KV store; the SQL console and schema changes are [below](#database). Writes hit the project database directly; there is no undo.
 - **Configuration file**: view and edit `zhin.config.yml` in its current YAML / JSON format; saves carry the revision and roll back on failure. While the instance is offline the gateway reads and writes it. A plugin's settings are edited as a form on its global settings page (`/features/global/:plugin`); per-level overrides are in the Features tab of the object pages.
-- **Environment variables**: the `.env` file. It may contain secrets, which is why `viewer` lacks `ops.env.read`.
+- **Environment variables**: `.env`, `.env.development` and `.env.production`. They may contain secrets, which is why `viewer` lacks `ops.env.read`.
+  - **Masked by default**: the page (`env:get`) only receives each variable's masked value and whether it has a value — never the value itself, nor the length of a value or a line (the mask has a fixed width). Values of 16 characters or more show their first 2 and last 2 characters (for example `sk●●●●●●●●ef`); shorter values are masked completely. Every variable is masked by this rule, whether or not its name looks secret. The variables listed are exactly the ones the process (dotenv) reads: a value with an unterminated quote stays on its own line and never swallows the variables after it. Comments and blank lines keep their place; whatever follows `=` or `:` in a comment (`# KEY=...`, `## OLD_TOKEN=...`, `# token: ...`) is masked, and only comments without either sign are shown as written; a line that is neither a comment nor an assignment is shown as a masked line.
+  - **Show one at a time**: each row's **Show** button calls `env:reveal` for **that one** variable as written in the file (quotes included). It needs both `ops.env.read` and `ops.env.write` (among built-in roles only `owner` / `admin`), and every call is written to the [audit log](./access-control.md#audit) (file, variable name, principal; never the value). A shown value can be hidden again and is cleared when you switch files, save or leave the page.
+  - **Only changed variables are saved**: saving (`env:save { changes }`) submits only the variables you added, changed or deleted; every other line (including secrets that were never shown) stays as it is on disk and is never overwritten with a masked value. A new value that looks like a mask placeholder (three or more `●` in a row, or nothing but `●`) is refused; after the closing quote of a quoted value only spaces or a `# comment` may follow. Before writing, the Host reads the file before and after the change with dotenv; if any variable other than the submitted ones would appear, disappear or change, the whole save is refused and the file is left as it was. Saving a whole file (`env:save { content }`) must declare `mode: "replace"` and is also refused when it contains a mask placeholder — so an older Console that saves back what it was shown fails with a message asking to upgrade.
+  - On an older Host (`env:get` returns the file as written and there is no `env:reveal`) the Console shows the page the old way, with a note that this Host version shows values in plain text.
 - **Scheduled tasks**: opens on the **All tasks** overview, summarizing each task's status, next run, latest result, target and approval, filterable by status; creating, pausing and reading history happen in their own tabs: **Administrator tasks** (`?tab=admin`, create administrator tasks by use case), **Scheduled reminders** (`?tab=schedule`, plugin-registered and persisted tasks), **Assistant tasks** (`?tab=assistant`) and **Execution history** (`?tab=history`).
-- **Project files**: the project file tree and text editing; reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`.
+- **Project files**: the project file tree and text editing, covering plugin sources and convention directories, `package.json` / `tsconfig.json`, the configuration file, the Agent bootstrap files (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `HEARTBEAT.md`) and the `knowledge/` knowledge base; reading or writing the configuration file still needs `ops.config.*`. **`.env` and `.env.*` (including `.env.local`, `.env.production` and so on) never appear in the tree and cannot be read or written as project files** (any letter case, `./`, `..`, URL encoding, a trailing slash or space, or a symbolic link pointing at them is refused); the request fails with an error pointing to the **Environment variables** page `/ops/env`, which is where environment variables are managed, still under `ops.env.read` / `ops.env.write`. Other dot files and dot directories (such as `knowledge/.envrc`, `.npmrc` or `.ssh/`) are never listed, read or written, at any depth.
 
 ### Database {#database}
 
@@ -103,8 +107,24 @@ console:
         hostFingerprint: SHA256:…             # strongly recommended
 ```
 
-- The local shell needs the optional dependency `node-pty`, SSH needs `ssh2`; when missing, the target shows "unavailable" with an install hint.
+- The local shell needs the optional dependency `node-pty`, SSH needs `ssh2`; when missing, the target shows "unavailable" with an install hint. The same happens when pnpm skipped their build scripts; see below.
 - SSH credentials come only from local key files or environment variables; they never pass through the browser and never appear in any response. The browser can only pick a target by `name`.
+
+### Build scripts of the native dependencies {#native-build}
+
+`node-pty`, `ssh2` and `cpu-features` (an optional dependency of `ssh2`) compile a native module when installed. Since pnpm 10, dependency build scripts do not run by default: pnpm only prints "Ignored build scripts" (pnpm 11 fails `pnpm install` outright), so `node-pty` is installed but cannot load and the local shell is unavailable. Allow them in the project's `pnpm-workspace.yaml`:
+
+```yaml
+allowBuilds:
+  node-pty: true
+  ssh2: true
+  cpu-features: true
+```
+
+- Projects created by `create-zhin-app` already contain this. In an existing project, run `zhin migrate` (preview with `--dry-run` first): missing entries are added, existing ones are kept, and an entry set to `false` is left alone.
+- pnpm 11 only reads `allowBuilds` and no longer reads the `pnpm` field of `package.json`; pnpm releases before 10.26 read `onlyBuiltDependencies`. When the project already has an `onlyBuiltDependencies` list (in `pnpm-workspace.yaml` or `package.json#pnpm`), `zhin migrate` appends to it too.
+- After allowing them, run `pnpm install` (or `pnpm rebuild node-pty`) to build. Platforms without prebuilt binaries need Python and a C/C++ toolchain.
+- `zhin doctor` loads the gateway's `node-pty` from the project directory and warns with the repair command when it fails; projects without `@zhin.js/gateway` are skipped. npm runs build scripts by default; use `npm rebuild node-pty` when the build failed.
 
 ### Pinning SSH host fingerprints {#ssh-fingerprint}
 

@@ -4,7 +4,10 @@ import { getChainHelp, runChainCommand } from '../../../src/chain-command.js';
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 export default defineCommand({
-  description: 'Idiom Chain',
+  description: '成语接龙',
+  descriptionI18n: { en: 'Idiom Chain' },
+  alias: ['成语接龙'],
+  preferredAliasI18n: { 'zh-CN': '成语接龙' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeChainAction(String(params.action ?? ''));

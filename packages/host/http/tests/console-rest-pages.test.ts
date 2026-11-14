@@ -504,6 +504,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
       commands: () => [
         { pattern: 'foo', desc: 'foo cmd', plugin: 'core' },
         { pattern: 'bar', desc: 'bar cmd', plugin: 'game' },
+        { pattern: 'remind', desc: 'remind cmd', plugin: './node_modules/x/commands/remind/index.ts', pluginInstance: 'reminder', pluginPackage: '@zhin.js/plugin-reminder' },
       ],
       middlewares: () => [{ name: 'audit', owner: 'root', phase: 'before-dispatch', target: 'inbound', order: 10 }],
       components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card/index.ts' }],
@@ -536,12 +537,18 @@ describe('console-rest-pages introspection', () => {
     const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
     const body = await json(await fetch(`${base}/api/introspection/commands`));
     expect(body.success).toBe(true);
-    expect(body.data).toMatchObject({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
+    expect(body.data).toMatchObject({ page: 1, pageSize: 25, total: 3, totalPages: 1 });
     expect((body.data as { items: unknown[] }).items[0]).toMatchObject({ pattern: 'foo' });
 
     const filtered = await json(await fetch(`${base}/api/introspection/commands?filter=game`));
     expect((filtered.data as { total: number }).total).toBe(1);
     expect((filtered.data as { items: unknown[] }).items[0]).toMatchObject({ pattern: 'bar' });
+
+    // #1250: the owning plugin instance and package are searchable.
+    for (const filter of ['reminder', 'plugin-reminder']) {
+      const byOwner = await json(await fetch(`${base}/api/introspection/commands?filter=${filter}`));
+      expect((byOwner.data as { items: unknown[] }).items).toEqual([expect.objectContaining({ pattern: 'remind', pluginInstance: 'reminder' })]);
+    }
   });
 
   it('GET /api/introspection/endpoints 来自 ctx.getEndpoints', async () => {

@@ -367,6 +367,8 @@ export function devUnlink(projectArg: string, options: Partial<DevLinkOptions> =
  * 模拟 Node 解析：从项目顶层 node_modules 的每个包出发，沿 realpath 读取其
  * dependencies/peer/optional，再逐级向上在祖先 node_modules 里查找，收集可达的 zhin 包
  * realpath。pnpm `.pnpm/` 里不可达的历史残留目录不会误报；指向别处的 `link:`/file: 副本会被发现。
+ * pnpm 的隐藏提升目录 `node_modules/.pnpm/node_modules` 不在任何依赖声明的解析路径上（只是 pnpm 为
+ * 幽灵依赖兜底，升级后常残留旧版本），因此逐级向上查找时跳过它，只看包自身槽位与项目顶层。
  * 返回 name → 不同 realpath（仅含 >=2 个的包）。
  */
 export function findDuplicateZhinInstances(projectDir: string): Map<string, string[]> {
@@ -386,8 +388,11 @@ export function collectZhinInstances(projectDir: string): Map<string, string[]> 
 
   const resolveFrom = (fromDir: string, name: string): string | undefined => {
     for (let dir = fromDir; ; dir = path.dirname(dir)) {
-      const candidate = path.join(dir, 'node_modules', name);
-      if (fs.existsSync(path.join(candidate, 'package.json'))) return fs.realpathSync(candidate);
+      // `<x>/node_modules/node_modules` is never a lookup path; `.pnpm/node_modules` is pnpm's hidden hoist.
+      if (path.basename(dir) !== 'node_modules' && path.basename(dir) !== '.pnpm') {
+        const candidate = path.join(dir, 'node_modules', name);
+        if (fs.existsSync(path.join(candidate, 'package.json'))) return fs.realpathSync(candidate);
+      }
       if (path.dirname(dir) === dir) return undefined;
     }
   };

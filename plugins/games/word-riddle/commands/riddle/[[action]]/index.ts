@@ -4,7 +4,10 @@ import { getRiddleHelp, runRiddleCommand } from '../../../src/riddle-command.js'
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 export default defineCommand({
-  description: 'Word Riddle',
+  description: '猜谜语',
+  descriptionI18n: { en: 'Word Riddle' },
+  alias: ['猜谜语'],
+  preferredAliasI18n: { 'zh-CN': '猜谜语' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeRiddleAction(String(params.action ?? ''));

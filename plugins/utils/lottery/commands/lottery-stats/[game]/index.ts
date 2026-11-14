@@ -13,6 +13,8 @@ import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: '查看单玩法统计',
+  alias: ['lottery stats'],
+  preferredAliasI18n: { 'zh-CN': 'lottery stats', en: 'lottery stats' },
   descriptionI18n: { en: 'Single-game stats snapshot' },
   params: { game: { type: 'string' } },
   async execute({ params, config, use, locale, formatCommand }) {

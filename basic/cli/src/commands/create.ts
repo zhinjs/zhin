@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../utils/logger.js';
+import { output } from '../utils/output.js';
 import {
   CONVENTION_FEATURE_PACKAGES,
   featureApiRange,
@@ -379,11 +380,11 @@ export const createCommand = new Command('create')
       const relativeRoot = path.relative(process.cwd(), result.pluginDirectory) || '.';
       logger.success(`${result.overwritten ? '已覆盖' : '已创建'} ${path.join(relativeRoot, result.file)}`);
       if (result.manifestChanges.length === 0) {
-        logger.log('  package.json 已声明所需 Feature，未修改');
+        output.line('  package.json 已声明所需 Feature，未修改');
       } else {
-        for (const change of result.manifestChanges) logger.log(`  package.json：${change}`);
+        for (const change of result.manifestChanges) output.line(`  package.json：${change}`);
         if (result.manifestChanges.some((change) => change.includes('Dependencies'))) {
-          logger.log('  依赖有变化：请运行 pnpm install');
+          output.line('  依赖有变化：请运行 pnpm install');
         }
       }
     } catch (error) {

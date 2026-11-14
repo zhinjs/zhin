@@ -3,6 +3,7 @@ import { interactionMessages as t } from './interaction-messages.js';
 import type {
   UserInteractionContent,
   UserInteractionOption,
+  UserInteractionPurpose,
   UserInteractionRequest,
 } from '@zhin.js/im-contract';
 import type { SendContent } from '../plugin-runtime/im/contracts.js';
@@ -16,6 +17,8 @@ export interface UserInteractionAction {
 
 export interface UserInteractionView extends UserInteractionContent {
   readonly actions?: readonly UserInteractionAction[];
+  /** Copied from the request; rendered as keyboard `data.purpose` so surfaces can label approvals. */
+  readonly purpose?: UserInteractionPurpose;
 }
 
 export interface UserInteractionProgress extends UserInteractionContent {
@@ -89,6 +92,7 @@ export function renderUserInteraction(
     {
       type: 'keyboard',
       data: {
+        ...(view.purpose ? { purpose: view.purpose } : {}),
         rows: chunk(buttons, 5),
         fallback: {
           hint: t(locale, 'fallback'),
@@ -125,6 +129,7 @@ export function projectUserInteraction(
       : stepDescription || undefined,
     tip: [request.tip, instruction, progress?.tip].filter(Boolean).join('\n'),
     ...(actions ? { actions: Object.freeze(actions) } : {}),
+    ...(request.purpose ? { purpose: request.purpose } : {}),
   });
 }
 

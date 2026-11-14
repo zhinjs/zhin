@@ -80,11 +80,11 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `plugin.manage` | Installing, updating and uninstalling plugins and dependencies; global plugin on / off (`disable_plugins`, a gateway transaction); onboarding steps 3–5 |
 | `agent.view` / `agent.configure` | AI and Agent reads / writes |
 | `ops.config.read` / `ops.config.write` | Raw configuration file |
-| `ops.env.read` / `ops.env.write` | Environment file |
+| `ops.env.read` / `ops.env.write` | Environment files: read (masked values only) / save; showing one value as written (`env:reveal`) needs both and is audited |
 | `ops.database.read` / `ops.database.write` | Database browser (sort, filter, table structure and schema change previews) / record edits |
 | `ops.database.schema` | The SQL console (read-only queries and write SQL) and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited with its literals redacted. See [Database](./operations.md#database) |
 | `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks |
-| `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
+| `ops.files.read` / `ops.files.write` | Project files (reading or writing the configuration file still needs `ops.config.*`; `.env` / `.env.*` are never served as project files and are managed on the environment variables page `/ops/env` under `ops.env.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |
 | `ops.terminal` | Terminal (see [Operations](./operations.md#terminal)) |
 | `iam.view` / `iam.manage` | This group; `iam.manage` also covers the Roles tab of object pages (`chat-roles.*`, checked by scope) |
@@ -126,10 +126,11 @@ On the API tokens page, click **Issue for a user**, pick the user and set a name
 | Sign-in success / failure, sign-out, password change | Principal, IP |
 | Every `iam.*` write | Changes to users, roles, bindings, tokens |
 | RPCs mapped to a write permission | Writes on the instance are reported by the instance and written by the gateway |
+| Showing an environment variable as written (`env:reveal`) | File, variable name, principal; never the value |
 | Every denied request | `outcome: denied` |
 | Terminal session start / end | Target, duration, exit code and reason; never input or output |
 
-- Principals are written as `bootstrap`, `user:<id>` or `api-token:<id>`; `detail` records only the RPC type, target and parameter key names — never parameter values or secrets.
+- Principals are written as `bootstrap`, `user:<id>` or `api-token:<id>`; `detail` records only the RPC type, target and parameter key names — never parameter values or secrets; `env:reveal` / `env:save` also record the file and the variable names involved (`set` / `deleted`).
 - Entries are kept for 180 days and pruned daily.
 - The gateway does not read `X-Forwarded-For`: behind a reverse proxy, the recorded IP is the proxy's.
 

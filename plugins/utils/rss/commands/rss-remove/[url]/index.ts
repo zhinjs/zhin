@@ -8,6 +8,8 @@ import { rssRuntimeToken } from '../../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '取消一个 RSS 订阅', descriptionI18n: { en: "Unsubscribe from an RSS feed" },
+  alias: ['rss remove'],
+  preferredAliasI18n: { 'zh-CN': 'rss remove', en: 'rss remove' },
   params: { url: { type: 'string' } },
   async execute({ params, input, use, locale }) {
     const runtime = use(rssRuntimeToken);

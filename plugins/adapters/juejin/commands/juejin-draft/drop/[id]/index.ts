@@ -3,6 +3,8 @@ import { juejinEndpoints, discardDraftText } from '@zhin.js/adapter-juejin';
 
 export default defineCommand({
   description: '丢弃一条掘金评论草稿（不发送）', descriptionI18n: { en: 'Discard a Juejin comment draft without sending' },
+  alias: ['juejin draft drop'],
+  preferredAliasI18n: { 'zh-CN': 'juejin draft drop', en: 'juejin draft drop' },
   permit: ['owner'],
   params: { id: { type: 'string', description: '列表中方括号内的草稿 ID', descriptionI18n: { en: 'Draft ID shown in square brackets in the list' } } },
   execute(context) {

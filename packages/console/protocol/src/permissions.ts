@@ -267,6 +267,9 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'env:list': P.OPS_ENV_READ,
   'env:get': P.OPS_ENV_READ,
   'env:save': P.OPS_ENV_WRITE,
+  // One variable as written (issue #1250): the stricter of the two env permissions, and the read
+  // permission as well (`CONSOLE_RPC_ALSO_REQUIRES`); audited like every write-permission RPC.
+  'env:reveal': P.OPS_ENV_WRITE,
   'db:info': P.OPS_DATABASE_READ,
   'db:tables': P.OPS_DATABASE_READ,
   'db:select': P.OPS_DATABASE_READ,
@@ -369,6 +372,15 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'onboarding.update': P.PLUGIN_MANAGE,
   // Management gateway (ADR 0054 §4 / §5), handled by the gateway process.
   ...GATEWAY_RPC_PERMISSIONS,
+});
+
+/**
+ * Further permissions an RPC needs besides its {@link CONSOLE_RPC_PERMISSIONS} entry, carried on the
+ * resolved rule as `alsoRequires` (each held globally, see {@link ConsoleRpcPermissionRule}).
+ * `env:reveal` shows a secret: it needs both env permissions.
+ */
+export const CONSOLE_RPC_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePermission[]>> = Object.freeze({
+  'env:reveal': Object.freeze<ConsolePermission[]>([P.OPS_ENV_READ]),
 });
 
 /** Adapter account mutations contributed by `defineAdapterConsoleRpc` (`plugin.<id>.endpoint-*`). */
@@ -474,7 +486,8 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       if (file === 'env') permission = write ? P.OPS_ENV_WRITE : P.OPS_ENV_READ;
       if (file === 'config') permission = write ? P.OPS_CONFIG_WRITE : P.OPS_CONFIG_READ;
     }
-    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload) });
+    const alsoRequires = Object.hasOwn(CONSOLE_RPC_ALSO_REQUIRES, type) ? CONSOLE_RPC_ALSO_REQUIRES[type]! : undefined;
+    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload), ...(alsoRequires ? { alsoRequires } : {}) });
   }
   // Every spelling resolves through the canonical method, so camelCase / `action.` forms carry the
   // same target, `alsoRequires` and write classification (audit) as the kebab form.
@@ -547,6 +560,8 @@ const httpRule = (
 /** Every Console `/api` route → required permission (paths relative to the API base). */
 export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Object.freeze([
   httpRule('POST', '/console/request', 'rpc'),
+  // zhinjs/zhin#1250: which RPC types this Host answers (`CONSOLE_CAPABILITIES_PATH`).
+  httpRule('GET', '/console/capabilities', 'authenticated'),
   httpRule('POST', '/auth/login', 'public'),
   httpRule('GET', '/auth/setup', 'bootstrap'),
   httpRule('POST', '/auth/setup', 'bootstrap'),
@@ -584,6 +599,7 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/conversations/results', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/workspaces', P.ENDPOINT_VIEW),
   httpRule('PUT', '/conversations/workspaces', P.ENDPOINT_OPERATE),
+  httpRule('GET', '/conversations/workspaces/commands', P.ENDPOINT_VIEW),
   httpRule('GET', '/interactions/pending', P.ENDPOINT_VIEW),
   httpRule('POST', '/message/send', P.ENDPOINT_OPERATE),
   httpRule('GET', '/data-migrations', P.OPS_DATABASE_READ),

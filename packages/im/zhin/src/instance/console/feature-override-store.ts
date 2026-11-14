@@ -27,9 +27,17 @@
  * its rows is copied with `level = 'conversation'` unless `feature_overrides` already has a row
  * (or a tombstone) for that key, which makes the copy idempotent. The old table is never written
  * again; it stays in place as a read-only record and may be dropped by hand.
+ *
+ * Writer (#1250): `updated_by` keeps the writer id (`chat:<adapter>:<userId>`, `user:<id>`, …).
+ * A write that knows more about its operator (display name, source chat / console / cli) stores
+ * a JSON object `{"f":1,"by":<id>,"op":{…}}` in the same text column, so no schema change is
+ * needed. Reads accept both forms: a plain id (every row written before #1250, and the legacy
+ * table) yields `updatedBy` plus whatever the id itself encodes; an unreadable value is kept as
+ * the plain id and never fails the load.
  */
 import { createHash } from 'node:crypto';
 import { assertInstanceTable } from '@zhin.js/database';
+import type { ConsoleFeatureOverrideOperator, ConsoleFeatureOverrideSource } from '@zhin.js/console-protocol';
 import {
   featureKeyLevel,
   type DatabaseHost, type DatabaseHostModel, type FeatureConfigLevel, type FeatureConversationOverride, type FeatureConversationOverrideReader,
@@ -80,6 +88,69 @@ export interface FeatureOverrideRow extends FeatureConversationOverride {
   readonly plugin: string;
   readonly level: FeatureOverrideLevel;
   readonly key: string;
+  /** Structured writer, when the write recorded one or the legacy id encodes it. */
+  readonly operator?: ConsoleFeatureOverrideOperator;
+}
+
+export type FeatureOverrideOperator = ConsoleFeatureOverrideOperator;
+
+const SOURCES: ReadonlySet<ConsoleFeatureOverrideSource> = new Set(['chat', 'console', 'cli']);
+const WRITER_FORMAT = 1;
+
+function boundedText(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.replace(/[\u0000-\u001f\u007f]/gu, ' ').trim();
+  return text ? text.slice(0, max) : undefined;
+}
+
+/** Keeps only the known, bounded fields; undefined without a valid source. */
+export function normalizeOverrideOperator(value: unknown): FeatureOverrideOperator | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const input = value as Record<string, unknown>;
+  if (!SOURCES.has(input.source as ConsoleFeatureOverrideSource)) return undefined;
+  const adapter = boundedText(input.adapter, 64);
+  const userId = boundedText(input.userId, 128);
+  const principalId = boundedText(input.principalId, 128);
+  const displayName = boundedText(input.displayName, 64);
+  return Object.freeze({ source: input.source as ConsoleFeatureOverrideSource,
+    ...(adapter ? { adapter } : {}), ...(userId ? { userId } : {}),
+    ...(principalId ? { principalId } : {}), ...(displayName ? { displayName } : {}) });
+}
+
+/** What a pre-#1250 writer id tells about its operator (`migration:*` and unknown ids: nothing). */
+export function operatorFromWriterId(updatedBy: string | undefined): FeatureOverrideOperator | undefined {
+  if (!updatedBy) return undefined;
+  const chat = /^chat:([^:]+):(.+)$/u.exec(updatedBy);
+  if (chat) return normalizeOverrideOperator({ source: 'chat', adapter: chat[1], userId: chat[2] });
+  const user = /^user:(.+)$/u.exec(updatedBy);
+  if (user) return normalizeOverrideOperator({ source: 'console', principalId: user[1] });
+  if (updatedBy === 'bootstrap' || updatedBy.startsWith('api-token:')) return Object.freeze({ source: 'console' as const });
+  return undefined;
+}
+
+/** `updated_by` column value: the plain id, or the structured form when an operator is known. */
+export function encodeOverrideWriter(updatedBy: string | undefined, operator: FeatureOverrideOperator | undefined): string | null {
+  const id = updatedBy ? updatedBy.slice(0, 256) : undefined;
+  const op = normalizeOverrideOperator(operator);
+  if (!op) return id ?? null;
+  return JSON.stringify({ f: WRITER_FORMAT, ...(id ? { by: id } : {}), op });
+}
+
+/** Reads either `updated_by` form; never throws (an unreadable value stays a plain id). */
+export function decodeOverrideWriter(raw: unknown): { readonly updatedBy?: string; readonly operator?: FeatureOverrideOperator } {
+  if (typeof raw !== 'string' || !raw) return {};
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.f === WRITER_FORMAT) {
+        const updatedBy = typeof parsed.by === 'string' && parsed.by ? parsed.by : undefined;
+        const operator = normalizeOverrideOperator(parsed.op) ?? operatorFromWriterId(updatedBy);
+        return { ...(updatedBy ? { updatedBy } : {}), ...(operator ? { operator } : {}) };
+      }
+    } catch { /* not the structured form: a plain id that happens to start with a brace */ }
+  }
+  const operator = operatorFromWriterId(raw);
+  return { updatedBy: raw, ...(operator ? { operator } : {}) };
 }
 
 export type FeatureOverrideWriteResult =
@@ -101,6 +172,8 @@ export interface FeatureOverrideWrite {
   /** Next state from the current one; `null` deletes the override. */
   readonly next: (current: FeatureOverrideRow | undefined) => FeatureOverrideState | null;
   readonly updatedBy?: string;
+  /** Structured writer (#1250); stored with `updatedBy` in the same column. */
+  readonly operator?: FeatureOverrideOperator;
 }
 
 /** Level a stored key addresses; throws for the global key and malformed keys. */
@@ -182,7 +255,7 @@ function parseRow(row: Record<string, unknown>, level: FeatureOverrideLevel | un
     ...(switchedOff ? { enabled: false as const } : {}),
     patch: patch as Record<string, unknown>,
     revision, updatedAt: Number(row.updated_at),
-    ...(typeof row.updated_by === 'string' && row.updated_by ? { updatedBy: row.updated_by } : {}),
+    ...decodeOverrideWriter(row.updated_by),
   });
   return { plugin, key, row: value, revision };
 }
@@ -381,11 +454,12 @@ export class FeatureOverrideStore {
     const revision = currentRevision + 1;
     const updatedAt = this.#now();
     const updatedBy = input.updatedBy ? input.updatedBy.slice(0, 256) : undefined;
+    const operator = normalizeOverrideOperator(input.operator) ?? operatorFromWriterId(updatedBy);
     if (model) {
       // Removal stores a tombstone (empty patch, no switch) that keeps the revision monotonic.
       const row = { plugin: input.plugin, level, key: input.key,
         enabled: next?.enabled === false ? 0 : null, patch: next ? JSON.stringify(next.patch) : '{}',
-        revision, updated_at: updatedAt, updated_by: updatedBy ?? null };
+        revision, updated_at: updatedAt, updated_by: encodeOverrideWriter(updatedBy, normalizeOverrideOperator(input.operator)) };
       await this.#persist(async target => {
         const [stored] = await target.select('revision').where({ id });
         if (Number(stored?.revision ?? 0) !== currentRevision) return false;
@@ -411,6 +485,7 @@ export class FeatureOverrideStore {
       patch: structuredClone(next.patch) as Record<string, unknown>,
       revision, updatedAt,
       ...(updatedBy ? { updatedBy } : {}),
+      ...(operator ? { operator } : {}),
     });
     this.#rows.set(key, value);
     this.#tombstones.delete(key);

@@ -4,37 +4,72 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）。同一 minor 内含所有者已批准的 #1250 公开 API 新增：ConsoleEndpointPhase 的 awaiting_assist / retrying、ConsoleEndpointFailure（lastError）与 startAttempt / startFailure / nextRetryAt 字段、attention 条目 `endpoint.config-drift`、ConsoleRpcPermissionRule 的 alsoRequires 与 grantsAllowAlsoRequired()（endpoint-writeback 还需 ops.config.write）。 #1250 评审修复：新增导出 normalizePluginConsoleRpcType() / NormalizedPluginConsoleRpcType（插件 Console RPC 方法名的唯一规范化，权限、分发与审计共用）。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）；新增 env:reveal / 按键 env:save、unknown_rpc、能力查询、发送失败原因与进程样本等协议类型与导出。所有者已批准（zhinjs/zhin#1250）：新增公开导出 ConsoleIntrospectionOwner、ConsoleSendFailure 与 Console API 错误码契约。所有者已批准（zhinjs/zhin#1250）：新增类型 `ConsoleFeatureOverrideOperator` / `ConsoleFeatureOverrideSource`，`feature.get` / `feature.conversations` 结果新增可选 `operator` 与会话 `name`；权限表新增 `GET /conversations/workspaces/commands`。同一 minor 内含所有者已批准的 #1250 公开 API 新增：ConsoleEndpointPhase 的 awaiting_assist / retrying、ConsoleEndpointFailure（lastError）与 startAttempt / startFailure / nextRetryAt 字段、attention 条目 `endpoint.config-drift`、ConsoleRpcPermissionRule 的 alsoRequires 与 grantsAllowAlsoRequired()（endpoint-writeback 还需 ops.config.write）。#1250 评审修复：新增导出 normalizePluginConsoleRpcType() / NormalizedPluginConsoleRpcType（插件 Console RPC 方法名的唯一规范化，权限、分发与审计共用）。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。同一 minor 内含所有者已批准的 #1250 公开 API 新增：账号启动与 generation 提交解耦（后台监管、readiness endpoints[]、TTY 启动摘要分组）、实例配置文件端口与 `${VAR}` 账号引用解析、`endpoint.list` / `endpoint.info` 的 lastError、attention 条目 `endpoint.config-drift`。 #1250 评审修复：`zhin start --once` 在账号启动失败时非零退出（onceStartFailures / AccountStartupError / waitForFirstStartOutcomes）。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。另经 #1254 review 定为 minor：实例 Console 的 env:save 拒绝旧协议（整文件保存需 mode:'replace'），旧 Console 的环境变量保存会失败，需升级 Console。所有者已批准（zhinjs/zhin#1250）：zhin.js/instance 新增导出 warnUnsetConfigEnvPlaceholders，实例 HTTP API 新增结构化错误码与 errorId。所有者已批准（zhinjs/zhin#1250）：实例 Console 后端新增 `GET /api/conversations/workspaces/commands`（Sandbox 快捷命令），`feature.get` / `feature.conversations` 返回 `operator` 与会话名；经 `zhin.js/command` 新增导出 `UserFacingError` / `isUserFacingError`。同一 minor 内含所有者已批准的 #1250 公开 API 新增：账号启动与 generation 提交解耦（后台监管、readiness endpoints[]、TTY 启动摘要分组）、实例配置文件端口与 `${VAR}` 账号引用解析、`endpoint.list` / `endpoint.info` 的 lastError、attention 条目 `endpoint.config-drift`。#1250 评审修复：`zhin start --once` 在账号启动失败时非零退出（onceStartFailures / AccountStartupError / waitForFirstStartOutcomes）。"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数；新增 .env 打码视图、单变量查看与按键保存的公开导出，gateway.packages.list 的 kind 与网关进程样本。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review、#1250）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options；新增 unknown_rpc 判定与日志、审计拒绝原因码、/console/capabilities 相关公开导出。另经 #1254 review 定为 minor：env:save 拒绝旧协议（整文件保存需 mode:'replace'）、项目文件拒绝 .env 与点文件（files:read .env 被拒），旧 Console 的环境变量保存会失败，需升级 Console。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增 MCP 连接失败类型导出与 introspection 的 status / lastError。所有者已批准（zhinjs/zhin#1250）：新增公开导出 DECISION_PARENT_KEY（决策审计 parent 标记）。所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。"
+    },
+    {
+      "package": "@zhin.js/client",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：useEnvFiles 新增 getView、reveal 与按键保存 saveChanges，ConsoleTransport 新增 env 方法。"
+    },
+    {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增全局 CLI 选项 --verbose / --debug，zhin packages info 新增命令、工具与配置小节。"
+    },
+    {
+      "package": "@zhin.js/scaffold-wizard",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 GATEWAY_NATIVE_BUILD_DEPENDENCIES（allowBuilds 放行的网关原生依赖）。"
+    },
+    {
+      "package": "@zhin.js/command",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 `UserFacingError` / `isUserFacingError` / `userFacingErrorText`（指令抛出即转为回复），`CommandIndex` 新增 `suggest()` / `suggestReply()` 与类型 `CommandSuggestionConfig`（近似命令提示）。"
+    },
+    {
+      "package": "@zhin.js/core",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：`zhin.js/command`（`@zhin.js/core/feature/command`）新增导出 `UserFacingError` / `isUserFacingError`；`KeyboardSegmentData` 与 `UserInteractionView` 新增可选字段 `purpose`（审批标记）。所有者已批准 minor（#1250）：Endpoint 列表新增 awaiting_assist 阶段与 startAttempt / startFailure / nextRetryAt；同一 minor 内含 Endpoint 行 lastError（#1250 endpoint-config-drift）"
+    },
+    {
+      "package": "@zhin.js/im-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增类型 `UserInteractionPurpose`，`UserInteractionRequest` 新增可选字段 `purpose: 'approval'`。"
+    },
+    {
+      "package": "@zhin.js/runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：Host 根配置新增 `commandSuggestion`（`false` / `{ enabled, maxDistance, limit }`，写入 host-config-schema 与 Root 保留配置键）。所有者已批准（zhinjs/zhin#1250）：热重载按受影响子树计算重建范围并实现项目文件监视，公开 API 新增 `HmrCoordinator` 的 `watchDebounceMs` 选项、重载报告字段（rebuilt / rebuilt_plugins）、失效计划的 `unrefreshedDependents` 与 manifest 字段过滤导出（`manifest-change`）。所有者已批准公开 API 新增按 minor（#1250）：readiness 新增导出类型 ReadinessEndpoint 与 ReadinessReport.endpoints（需鉴权的就绪详情列出账号启动状态，不参与就绪判断）。npm 上 1.3.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增根资源上下文契约 `watchProjectFiles({ patterns, onChange })`，Root 安装器可声明读取的项目文件，变化时只通知声明方而不建新 generation。"
     },
     {
       "package": "@zhin.js/adapter",
       "type": "minor",
       "reason": "所有者已批准 minor（#1250）：账号启动改为后台监管，Adapter.activate 不再因账号 start 失败或久等而失败；新增 retryStart、启动状态字段与 failed / retrying 阶段。npm 上旧架构已占用 1.2.0–1.2.2，package.json 先置为 1.2.2 由 minor 升至 1.3.0；同一 minor 内含所有者已批准的 endpoint-config-drift（configDrift / importConfigured / writeBackConfigured、EndpointConfigSource）；#1250 评审修复：EndpointConfigSource.resolveReference、EndpointWritebackPlaceholder.reason、Adapter.configurationCredentialFields / startFailureReason、AdapterIndex.startFailureReason"
-    },
-    {
-      "package": "@zhin.js/core",
-      "type": "minor",
-      "reason": "所有者已批准 minor（#1250）：Endpoint 列表新增 awaiting_assist 阶段与 startAttempt / startFailure / nextRetryAt；同一 minor 内含 Endpoint 行 lastError（#1250 endpoint-config-drift）"
-    },
-    {
-      "package": "@zhin.js/runtime",
-      "type": "minor",
-      "reason": "所有者已批准公开 API 新增按 minor（#1250）：readiness 新增导出类型 ReadinessEndpoint 与 ReadinessReport.endpoints（需鉴权的就绪详情列出账号启动状态，不参与就绪判断）。npm 上 1.3.0 未被占用。"
     }
   ]
 }

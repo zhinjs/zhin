@@ -392,6 +392,31 @@ export type EndpointManagementCapability =
   (typeof ENDPOINT_MANAGEMENT_CAPABILITIES)[number];
 
 /**
+ * Marker on the `data` of `endpoint.friends` / `endpoint.groups` / `endpoint.channels` /
+ * `endpoint.group_members` when the Adapter does not offer that read (#1250). It is not an error:
+ * the list is empty, `count` is 0 and the Console shows the capability as not provided instead of a
+ * read failure. Absent `status` means the read succeeded.
+ */
+export interface ConsoleEndpointCapabilityUnsupported {
+  readonly status: 'unsupported';
+  readonly capability: EndpointManagementCapability;
+  /** Human-readable explanation (Chinese), safe to display. */
+  readonly message: string;
+}
+
+/** `data` of an Endpoint list read: `items` under `key`, plus the unsupported marker when not offered. */
+export type ConsoleEndpointListReply<K extends 'friends' | 'groups' | 'channels' | 'members', T> =
+  | (Readonly<Record<K, readonly T[]>> & { readonly count: number; readonly status?: undefined })
+  | (Readonly<Record<K, readonly never[]>> & { readonly count: 0 } & ConsoleEndpointCapabilityUnsupported);
+
+/** True when an Endpoint list reply says the Adapter does not offer the read. */
+export function isConsoleEndpointCapabilityUnsupported(value: unknown): value is ConsoleEndpointCapabilityUnsupported {
+  return typeof value === 'object' && value !== null
+    && (value as { status?: unknown }).status === 'unsupported'
+    && typeof (value as { capability?: unknown }).capability === 'string';
+}
+
+/**
  * `failed`: start failed and waits for a person (configuration, interactive login);
  * `retrying`: start failed, an automatic retry is scheduled (`nextRetryAt`);
  * `awaiting_assist`: starting, and the login flow waits for a person (LoginAssist).
@@ -759,6 +784,12 @@ export * from './feature.js';
 export * from './chat-roles.js';
 export * from './attention.js';
 export * from './gateway.js';
+export * from './introspection.js';
+export * from './send-failure.js';
+export * from './api-error.js';
+export * from './status.js';
+export * from './capabilities.js';
+export * from './env.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

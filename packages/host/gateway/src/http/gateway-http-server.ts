@@ -23,6 +23,7 @@ import {
   normalizePath,
   requestMeta,
   TokenRegistry,
+  webSocketDenialReason,
   type ConsolePrincipal,
   type HttpHandler,
   type HttpHostAddress,
@@ -45,7 +46,19 @@ import {
   type InstanceWsOpenInfo,
 } from '@zhin.js/host-http/bridge';
 import { createNodeHttpListener, type NodeHttpListener } from '@zhin.js/host-http/node';
-import type { GatewayHealth, GatewayInstanceErrorCode, GatewayInstanceErrorReply, GatewayInstanceState } from '@zhin.js/console-protocol';
+import {
+  CONSOLE_CAPABILITIES_PATH,
+  CONSOLE_FEATURES,
+  GATEWAY_RPC,
+  createConsoleCapabilities,
+  mergeConsoleCapabilities,
+  parseConsoleCapabilities,
+  type ConsoleCapabilities,
+  type GatewayHealth,
+  type GatewayInstanceErrorCode,
+  type GatewayInstanceErrorReply,
+  type GatewayInstanceState,
+} from '@zhin.js/console-protocol';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { databaseBusyResponse, isDatabaseBusyError } from '../database/project-database.js';
 import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc, type GatewayRpcHandler } from './console-rpc.js';
@@ -114,6 +127,8 @@ export class GatewayHttpServer {
   readonly #retryAfter: string;
   readonly #maxBody: number;
   readonly #consoleRpc: GatewayConsoleRpc | undefined;
+  /** The instance connection (and route table) that has no capability route: asked once. */
+  #capabilitiesMissing: { readonly transport: InstanceTransport; readonly revision: number | undefined } | undefined;
   readonly #rpcHandlers = new Set<GatewayRpcHandler>();
   #closed = false;
   #closeResult: Promise<void> | undefined;
@@ -142,6 +157,10 @@ export class GatewayHttpServer {
       router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
       router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
         summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
+        tags: ['console'],
+      });
+      router.route('GET', `${this.apiBase}${CONSOLE_CAPABILITIES_PATH}`, (request, context) => this.#capabilities(request, context), {
+        summary: 'Console capabilities (gateway-owned RPC types merged with the instance\'s)',
         tags: ['console'],
       });
       // Lowest precedence: every path no gateway route claims goes to the instance.
@@ -308,6 +327,34 @@ export class GatewayHttpServer {
   }
 
   /**
+   * `GET {base}/console/capabilities` (zhinjs/zhin#1250): the RPC types the gateway answers itself,
+   * merged with the instance's reply. While the instance is not answering (or predates the route)
+   * the reply says `complete: false`, so the Console reads it again later.
+   */
+  async #capabilities(request: Request, context: RouteContext): Promise<Response> {
+    const own = [...this.#rpcHandlers].flatMap(handler => handler.types?.() ?? []);
+    const gateway = createConsoleCapabilities({
+      rpc: [...(this.#consoleRpc ? Object.values(GATEWAY_RPC) : []), ...own],
+      features: [CONSOLE_FEATURES.UNKNOWN_RPC_CODE, CONSOLE_FEATURES.DENIAL_REASONS, CONSOLE_FEATURES.GATEWAY],
+    });
+    let instance: ConsoleCapabilities = createConsoleCapabilities({ rpc: [], complete: false });
+    const transport = this.#readyTransport();
+    // An instance that predates the route refuses it (and audits that): ask it once per route table.
+    const revision = transport?.routes().revision;
+    const missing = this.#capabilitiesMissing;
+    if (transport && !(missing?.transport === transport && missing.revision === revision)) {
+      try {
+        const response = await this.#forward(request, context);
+        const body = response.ok ? await response.json().catch(() => null) as { data?: unknown } | null : null;
+        const parsed = parseConsoleCapabilities(body?.data);
+        if (parsed) instance = parsed;
+        else if (response.status === 403 || response.status === 404) this.#capabilitiesMissing = { transport, revision };
+      } catch { /* the instance part stays unknown */ }
+    }
+    return jsonResponse(200, { success: true, data: mergeConsoleCapabilities(gateway, instance) }, { 'cache-control': 'no-store' });
+  }
+
+  /**
    * `POST {base}/console/request`: the router authenticated and authorized the route; `gateway.*`
    * types are dispatched here (the dispatcher checks the per-RPC permission), the rest are
    * forwarded to the instance with the body as received.
@@ -443,6 +490,7 @@ export class GatewayHttpServer {
           actor: auditActor(principal),
           action: `ws:${pathname}`,
           outcome: 'denied',
+          detail: { reason: webSocketDenialReason(principal, pathname) },
           ...(request.remoteAddress ? { ip: request.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }

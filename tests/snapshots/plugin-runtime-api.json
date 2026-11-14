@@ -185,6 +185,7 @@
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
     "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
+    "export{UserFacingError,isUserFacingError,userFacingErrorText}from './user-facing-error.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
   ],
@@ -447,6 +448,7 @@
     "export * from './isolate/index.js';",
     "export * from './isolation.js';",
     "export * from './layered-config.js';",
+    "export * from './manifest-change.js';",
     "export * from './manifest.js';",
     "export * from './module-runtime.js';",
     "export * from './native-development-runtime.js';",

@@ -9,6 +9,7 @@ import {
   type WorkspaceConversationInput,
 } from './workspace-conversations.js';
 import { noStore } from './no-store.js';
+import { sandboxQuickCommands } from './sandbox-quick-commands.js';
 
 /** Metadata only: no message replay, migration, expiry, or task execution. */
 export function registerWorkspaceConversationRoutes(options: Readonly<{
@@ -30,6 +31,22 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
       return jsonResponse(200, { success: true, data });
     } catch (error) { return workspaceError(error); }
   }), { summary: 'Read Console conversation workspaces', tags: ['conversations'] });
+
+  // Quick commands of the live Sandbox binding (#1250): no store needed, so it also serves pages in browser fallback.
+  http.route('GET', `${base}/conversations/workspaces/commands`, noStore(async (_request, { url }) => {
+    const connectionId = url.searchParams.get('connectionId');
+    const kind = url.searchParams.get('type') ?? 'private';
+    const id = url.searchParams.get('id');
+    if (!connectionId || (kind !== 'private' && kind !== 'group' && kind !== 'channel') || (id !== null && (!id || id.length > 256))) {
+      return jsonResponse(400, { success: false, code: 'invalid_workspace_query', error: '请提供当前 Sandbox 连接与会话' });
+    }
+    const locale = url.searchParams.get('locale') === 'en' ? 'en' : 'zh-CN';
+    try {
+      const data = await withSandboxWorkspaceScope(snapshots, connectionId, async (scope, snapshot) =>
+        sandboxQuickCommands(scope, snapshot, { kind, id: id ?? scope.ownerId }, locale));
+      return jsonResponse(200, { success: true, data });
+    } catch (error) { return workspaceError(error); }
+  }), { summary: 'Read the Sandbox composer quick commands for one conversation', tags: ['conversations'] });
 
   http.route('PUT', `${base}/conversations/workspaces`, noStore(async (request) => {
     try {

@@ -1,5 +1,7 @@
 import {
+  CONSOLE_DENIAL_REASONS,
   CONSOLE_PERMISSION_LIST,
+  CONSOLE_UNKNOWN_RPC_CODE,
   CONSOLE_WRITE_PERMISSIONS,
   expandPluginPermissions,
   grantsAllow,
@@ -8,6 +10,7 @@ import {
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
   resolveConsoleWsPermission,
+  type ConsoleDenialReason,
   type ConsoleGrant,
   type ConsolePermission,
   type ConsolePluginPermissionInfo,
@@ -156,28 +159,93 @@ export type ConsoleRpcDecision =
        */
       delegated?: true;
     }>
-  | Readonly<{ allowed: false; code: 'setup_required' | 'unmapped' | 'forbidden'; error: string; permission: ConsolePermission | null }>;
+  | Readonly<{
+      allowed: false;
+      /**
+       * `unknown_rpc`: the Host has no handler and no permission entry for the type (zhinjs/zhin#1250).
+       * Nothing runs; it is not a security refusal and callers do not audit it (see
+       * {@link isAuditedRpcDenial}). Every other code is a refusal that is audited.
+       */
+      code: 'setup_required' | 'unmapped' | 'forbidden' | typeof CONSOLE_UNKNOWN_RPC_CODE;
+      error: string;
+      permission: ConsolePermission | null;
+      /** Audit `detail.reason`; absent for `unknown_rpc`. */
+      reason?: ConsoleDenialReason;
+    }>;
+
+export interface AuthorizeConsoleRpcOptions {
+  /**
+   * Whether this Host has a handler for an RPC type that is missing from the permission map. True
+   * (or no predicate) keeps the audited `unmapped` refusal — a handler without a permission entry
+   * is a development error; false answers `unknown_rpc`. Mapped types never consult it.
+   */
+  readonly registered?: (type: string) => boolean;
+}
+
+/** Whether a refused RPC is written to the audit log (`unknown_rpc` is not). */
+export function isAuditedRpcDenial(decision: ConsoleRpcDecision): boolean {
+  return !decision.allowed && decision.code !== CONSOLE_UNKNOWN_RPC_CODE;
+}
+
+/** Error text of an unknown RPC: the (truncated) type and nothing else. */
+export function unknownConsoleRpcError(type: unknown): string {
+  return `RPC "${String(type ?? '').slice(0, 64)}" 不存在`;
+}
 
 /** RPC authorization for one principal and message (deny by default). */
-export function authorizeConsoleRpc(principal: ConsolePrincipal, message: Readonly<Record<string, unknown>>): ConsoleRpcDecision {
+export function authorizeConsoleRpc(
+  principal: ConsolePrincipal,
+  message: Readonly<Record<string, unknown>>,
+  options: AuthorizeConsoleRpcOptions = {},
+): ConsoleRpcDecision {
   const rule = resolveConsoleRpcPermission(message.type, message);
   const permission = rule ? (rule.kind === 'exact' ? rule.permission : rule.read) : null;
   if (principal.kind === 'bootstrap') {
     if (principal.open) {
       return Object.freeze({ allowed: true, rule, permission, write: rule ? isWriteRule(rule) : true });
     }
-    return Object.freeze({ allowed: false, code: 'setup_required', error: '请先完成初始化：创建第一个所有者', permission });
+    return Object.freeze({
+      allowed: false, code: 'setup_required', error: '请先完成初始化：创建第一个所有者', permission,
+      reason: CONSOLE_DENIAL_REASONS.SETUP_REQUIRED,
+    });
   }
   if (!rule) {
-    return Object.freeze({ allowed: false, code: 'unmapped', error: `RPC "${String(message.type ?? '')}" 未登记权限`, permission: null });
+    const type = typeof message.type === 'string' ? message.type : '';
+    if (options.registered && !options.registered(type)) {
+      return Object.freeze({ allowed: false, code: CONSOLE_UNKNOWN_RPC_CODE, error: unknownConsoleRpcError(message.type), permission: null });
+    }
+    return Object.freeze({
+      allowed: false, code: 'unmapped', error: `RPC "${String(message.type ?? '')}" 未登记权限`, permission: null,
+      reason: CONSOLE_DENIAL_REASONS.UNMAPPED_PERMISSION,
+    });
   }
   if (isPluginConsoleRpcType(message.type)) {
     return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule), delegated: true });
   }
   if (!grantsAllow(principal.grants, permission!, rule.target)) {
-    return Object.freeze({ allowed: false, code: 'forbidden', error: `缺少权限 ${permission}`, permission });
+    return Object.freeze({
+      allowed: false, code: 'forbidden', error: `缺少权限 ${permission}`, permission,
+      reason: grantsDenialReason(principal.grants, permission!),
+    });
+  }
+  const missing = rule.kind === 'exact' ? rule.alsoRequires?.find(extra => !grantsAllow(principal.grants, extra, rule.target)) : undefined;
+  if (missing) {
+    return Object.freeze({
+      allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission,
+      reason: grantsDenialReason(principal.grants, missing),
+    });
   }
   return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule) });
+}
+
+/**
+ * Why grants refuse `permission` at a target: `scope_denied` when some binding holds it at another
+ * adapter / endpoint, else `insufficient_permission`.
+ */
+export function grantsDenialReason(grants: readonly ConsoleGrant[], permission: string): ConsoleDenialReason {
+  return grants.some(grant => grant.scope.kind !== 'global' && grant.permissions.includes(permission))
+    ? CONSOLE_DENIAL_REASONS.SCOPE_DENIED
+    : CONSOLE_DENIAL_REASONS.INSUFFICIENT_PERMISSION;
 }
 
 function isWriteRule(rule: ConsoleRpcPermissionRule): boolean {
@@ -198,7 +266,11 @@ export function pluginRpcWriteAllowed(principal: ConsolePrincipal, rule: Console
 
 export type ConsoleHttpDecision =
   | Readonly<{ allowed: true; permission: string | null }>
-  | Readonly<{ allowed: false; status: 401 | 403; code: 'unauthorized' | 'forbidden' | 'setup_required'; error: string; permission: string | null }>;
+  | Readonly<{
+      allowed: false; status: 401 | 403; code: 'unauthorized' | 'forbidden' | 'setup_required'; error: string; permission: string | null;
+      /** Audit `detail.reason`. */
+      reason: ConsoleDenialReason;
+    }>;
 
 /**
  * HTTP authorization of a route under the API base. `principal` is undefined when no valid
@@ -213,24 +285,35 @@ export function authorizeConsoleHttp(
   const permission = rule?.permission ?? null;
   if (rule?.permission === 'public') return Object.freeze({ allowed: true, permission });
   if (!principal) {
-    return Object.freeze({ allowed: false, status: 401, code: 'unauthorized', error: 'Invalid or missing token', permission });
+    return Object.freeze({ allowed: false, status: 401, code: 'unauthorized', error: 'Invalid or missing token', permission, reason: CONSOLE_DENIAL_REASONS.NOT_AUTHENTICATED });
   }
   if (principal.kind === 'bootstrap') {
     if (principal.open || rule?.permission === 'bootstrap') return Object.freeze({ allowed: true, permission });
-    return Object.freeze({ allowed: false, status: 403, code: 'setup_required', error: '初始化令牌只能用于创建第一个所有者', permission });
+    return Object.freeze({ allowed: false, status: 403, code: 'setup_required', error: '初始化令牌只能用于创建第一个所有者', permission, reason: CONSOLE_DENIAL_REASONS.SETUP_REQUIRED });
   }
   if (!rule) {
-    return Object.freeze({ allowed: false, status: 403, code: 'forbidden', error: 'Route is not registered with a Console permission', permission: null });
+    return Object.freeze({ allowed: false, status: 403, code: 'forbidden', error: 'Route is not registered with a Console permission', permission: null, reason: CONSOLE_DENIAL_REASONS.UNMAPPED_ROUTE });
   }
   if (rule.permission === 'rpc' || rule.permission === 'authenticated' || rule.permission === 'bootstrap') {
     return Object.freeze({ allowed: true, permission });
   }
   // Scoped permissions over plain HTTP have no knowable target: a global binding is required.
   if (grantsAllow(principal.grants, rule.permission)) return Object.freeze({ allowed: true, permission });
-  return Object.freeze({ allowed: false, status: 403, code: 'forbidden', error: `缺少权限 ${rule.permission}`, permission });
+  return Object.freeze({
+    allowed: false, status: 403, code: 'forbidden', error: `缺少权限 ${rule.permission}`, permission,
+    reason: CONSOLE_DENIAL_REASONS.INSUFFICIENT_PERMISSION,
+  });
 }
 
 /** WebSocket upgrade authorization for non-bootstrap principals. */
+/** Audit `detail.reason` of a WebSocket {@link authorizeConsoleWebSocket} refused. */
+export function webSocketDenialReason(principal: ConsolePrincipal, pathname: string): ConsoleDenialReason {
+  if (principal.kind === 'bootstrap') return CONSOLE_DENIAL_REASONS.SETUP_REQUIRED;
+  return resolveConsoleWsPermission(pathname) === null
+    ? CONSOLE_DENIAL_REASONS.UNMAPPED_ROUTE
+    : CONSOLE_DENIAL_REASONS.INSUFFICIENT_PERMISSION;
+}
+
 export function authorizeConsoleWebSocket(principal: ConsolePrincipal, pathname: string): boolean {
   // Only the Console's own sockets are host-authenticated; plugin sockets use `auth: 'protocol'`.
   const permission = resolveConsoleWsPermission(pathname);
@@ -318,7 +401,41 @@ export function rpcAuditDetail(
     type: String(message.type ?? '').slice(0, 256),
     keys: Object.freeze([...new Set([...keys, ...data])].slice(0, 64).map(key => key.slice(0, 128))),
     ...databaseStatementDetail(message, reply, options),
+    ...envDetail(message),
   }));
+}
+
+const auditName = (value: unknown, max: number): string | undefined =>
+  typeof value === 'string' && value ? value.slice(0, max) : undefined;
+
+/**
+ * Which dotenv file and variable names an `env:reveal` / `env:save` touched (issue #1250). Never a
+ * value: `changes[].value` and `content` are not read.
+ */
+function envDetail(message: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  if (message.type !== 'env:reveal' && message.type !== 'env:save') return {};
+  const data = message.data && typeof message.data === 'object' && !Array.isArray(message.data) ? message.data as Record<string, unknown> : {};
+  const pick = (key: string) => message[key] ?? data[key];
+  const file = auditName(pick('filename'), 64);
+  if (message.type === 'env:reveal') {
+    const key = auditName(pick('key'), 128);
+    return { ...(file ? { file } : {}), ...(key ? { key } : {}) };
+  }
+  const changes = Array.isArray(pick('changes')) ? pick('changes') as unknown[] : undefined;
+  if (!changes) return { ...(file ? { file } : {}), ...(pick('content') !== undefined ? { mode: 'replace' } : {}) };
+  const set: string[] = [];
+  const deleted: string[] = [];
+  for (const change of changes.slice(0, 64)) {
+    if (!change || typeof change !== 'object') continue;
+    const key = auditName((change as Record<string, unknown>).key, 128);
+    if (key) ((change as Record<string, unknown>).delete === true ? deleted : set).push(key);
+  }
+  return {
+    ...(file ? { file } : {}),
+    set: Object.freeze(set),
+    deleted: Object.freeze(deleted),
+    ...(changes.length > 64 ? { truncated: true } : {}),
+  };
 }
 
 export function rpcAuditTarget(rule: ConsoleRpcPermissionRule | null): string | undefined {

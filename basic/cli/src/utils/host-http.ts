@@ -75,6 +75,12 @@ export interface HostFetchResult<T> {
   status: number;
   data?: T;
   error?: string;
+  /** Classified failure (`ConsoleApiErrorCode`, #1250); absent for transport errors and older instances. */
+  code?: string;
+  /** Log correlation id of an unexpected instance failure (`code: 'internal_error'`). */
+  errorId?: string;
+  /** Structured detail of an expected failure (e.g. a `ConsoleSendFailure`). */
+  detail?: unknown;
 }
 
 /** 带 Bearer 的 GET（路径相对 baseUrl，如 `/stats`） */
@@ -115,11 +121,16 @@ async function hostFetch<T>(
       success?: boolean;
       data?: T;
       error?: string;
+      code?: unknown;
+      errorId?: unknown;
     };
     if (!res.ok) {
       return {
         ok: false,
         status: res.status,
+        ...(typeof body.code === 'string' ? { code: body.code } : {}),
+        ...(typeof body.errorId === 'string' ? { errorId: body.errorId } : {}),
+        ...(body.data !== undefined ? { detail: body.data } : {}),
         error: res.status === 401 && !http.fetch
           ? `${body.error ?? 'HTTP 401'}（Console 初始化后 http.token 失效：在 Console 签发 API 令牌并设置 ZHIN_CONSOLE_TOKEN，或先 zhin start 让命令经本地套接字连接网关）`
           : body.error ?? `HTTP ${res.status}`,

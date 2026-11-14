@@ -29,7 +29,7 @@ zhin console init           # 首次创建 Console 所有者；之后 http.token
 |---|---|
 | `@zhin.js/gateway/iam` | Console 账号、角色、会话、API 令牌、审计与初始化（ADR 0049）：`ConsoleIamService`、`ConsoleSetupService`、`installConsoleIam`、`registerConsoleAuthRoutes`、`dispatchIamRpc`、`importLegacyIamTables` / `revertLegacyIamImport` / `inspectLegacyIamImport`（旧版项目库账号表迁入 gateway.db 与回退，ADR 0059） |
 | `@zhin.js/gateway/terminal` | Console 终端（ADR 0051）：`TerminalService`、`installHostConsoleTerminal`、`parseTerminalConfig` |
-| `@zhin.js/gateway/config` | 原始配置文件与 `.env` 读写：`ConsoleConfigurationStore`、`readEnvFile` / `writeEnvFile`、配置路径与补丁、Console Schema |
+| `@zhin.js/gateway/config` | 原始配置文件与 `.env` 读写：`ConsoleConfigurationStore`、`readEnvFile` / `writeEnvFile`（Host 内部用）、Console 用的打码视图与逐键保存（`readEnvFileView` / `revealEnvVariable` / `updateEnvVariables` / `replaceEnvFileContent`）、配置路径与补丁、Console Schema |
 | `@zhin.js/gateway/plugin-management` | 项目级依赖事务：`PluginManagementWorkflow`、`PluginManagementActivity`、插件用例 |
 | `@zhin.js/gateway/project` | 项目文件工具：`findConfigFile`、`loadRuntimeEnvironmentLayers`、`createTsxModuleLoader`、实例声明迁移、旧配置检测、Node 版本要求 |
 | `@zhin.js/gateway/supervisor` | 实例进程监管 `InstanceSupervisor`：IPC 控制通道（`ready` / `shutdown` / `restart-request`）、崩溃重启与风暴保护、日志采集（环形缓冲 + `.zhin/logs/instance.log` 按大小轮转）；`runSupervisedInstance` 供 `zhin start` 使用 |

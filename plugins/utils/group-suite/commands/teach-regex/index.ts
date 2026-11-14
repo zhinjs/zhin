@@ -7,6 +7,8 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 export default defineCommand<GroupSuiteConfig, string, Message>({
   permit: ['group()', 'trusted'],
   description: '教我正则问答', descriptionI18n: { en: "Teach a regular-expression question and answer pair" },
+  alias: ['teach regex'],
+  preferredAliasI18n: { 'zh-CN': 'teach regex', en: 'teach regex' },
   execute({ config, input, args, owner, use, has, locale }) {
     return teachAdd({ ...input, locale }, groupSuiteConfigFor({ config, has, use }, input), args.join(' '), true, resolveGroupSuiteRuntime({ owner, use }));
   },
