@@ -120,6 +120,21 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=12
+      # MariaDB 10.11 LTS: no utf8mb4_0900 collations before 11.4.
+      mariadb1011:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: zhin_test
+          MYSQL_USER: zhin
+          MYSQL_PASSWORD: zhin
+        ports:
+          - 3309:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
       postgres:
         image: postgres:17
         env:
@@ -255,6 +270,29 @@ jobs:
           ZHIN_TEST_EXTERNAL_DATABASES: '1'
           ZHIN_TEST_MYSQL_HOST: 127.0.0.1
           ZHIN_TEST_MYSQL_PORT: '3308'
+          ZHIN_TEST_MYSQL_USER: zhin
+          ZHIN_TEST_MYSQL_PASSWORD: zhin
+          ZHIN_TEST_MYSQL_DATABASE: zhin_test
+          ZHIN_TEST_MYSQL_ROOT_USER: root
+          ZHIN_TEST_MYSQL_ROOT_PASSWORD: root
+
+      - name: verify the MySQL live suites on mariadb:10.11
+        if: ${{ !cancelled() }}
+        run: >-
+          pnpm exec vitest run
+          basic/database/tests/live-dialects.test.ts
+          basic/database/tests/console-credential.live.test.ts
+          packages/host/gateway/tests/iam/legacy-import.live.test.ts
+          packages/im/zhin/tests/instance/database-gateway-isolation.live.test.ts
+          packages/im/zhin/tests/instance/mysql-startup.live.test.ts
+          packages/im/zhin/tests/instance/database-console-sql.live.test.ts
+          packages/im/zhin/tests/instance/persistent-state.live.test.ts
+          -t "mysql|MySQL"
+        env:
+          NODE_OPTIONS: --throw-deprecation
+          ZHIN_TEST_EXTERNAL_DATABASES: '1'
+          ZHIN_TEST_MYSQL_HOST: 127.0.0.1
+          ZHIN_TEST_MYSQL_PORT: '3309'
           ZHIN_TEST_MYSQL_USER: zhin
           ZHIN_TEST_MYSQL_PASSWORD: zhin
           ZHIN_TEST_MYSQL_DATABASE: zhin_test

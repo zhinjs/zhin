@@ -106,6 +106,7 @@ describe('untrusted candidate CI credential isolation', () => {
       // The other supported MySQL servers share the job; their suites run after the main one.
       mysql80: { image: 'mysql:8.0', ports: ['3307:3306'] },
       mariadb11: { image: 'mariadb:11', ports: ['3308:3306'] },
+      mariadb1011: { image: 'mariadb:10.11', ports: ['3309:3306'] },
       postgres: { image: 'postgres:17' },
       mongodb: { image: 'mongo:7' },
       redis: { image: 'redis:8' },
