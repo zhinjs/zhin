@@ -108,6 +108,8 @@ export interface TurnTrace {
   readonly termination: TurnTraceTermination;
   /** Entries dropped because a bounded list was full. */
   readonly dropped: number;
+  /** #1250: side-effect tools that did not run and how the user was told (decision replay). */
+  readonly unexecuted_tool_notice?: Readonly<{ tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>;
 }
 
 /** Facts that are not TurnEvents but belong in the trace. */
@@ -121,7 +123,9 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'last_iteration_nudge'; iteration: number; limit: number }>
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
-  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>;
+  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
+  /** #1250: the user was told that side-effect tools did not run (appended, sent as a follow-up, or that failed). */
+  | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -166,6 +170,7 @@ export class TurnTraceCollector {
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
+  #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
   #dropped = 0;
@@ -259,6 +264,9 @@ export class TurnTraceCollector {
       if (this.#contextBudget) return;
       this.#contextBudget = note.report;
       this.#addTimeline('context_budget', `~${note.report.total_tokens} tokens (fixed ~${note.report.fixed_tokens})`);
+    } else if (note.kind === 'unexecuted_tool_notice') {
+      this.#unexecutedNotice = Object.freeze({ tools: Object.freeze([...note.tools]), delivered: note.delivered });
+      this.#addTimeline('unexecuted_tool_notice', `${note.delivered}: ${note.tools.join(', ')}`);
     } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
@@ -397,6 +405,7 @@ export class TurnTraceCollector {
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),
       dropped: this.#dropped,
+      ...(this.#unexecutedNotice ? { unexecuted_tool_notice: this.#unexecutedNotice } : {}),
     });
   }
 

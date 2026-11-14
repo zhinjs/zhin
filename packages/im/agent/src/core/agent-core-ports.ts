@@ -144,6 +144,12 @@ export interface AgentLoopTurnResult {
   /** Explicitly unfinished task; unlike a natural final answer, children must not label it complete. */
   stoppedReason?: string;
   progressive?: { run: ReplyStreamRun; snapshot?: ReplyStreamSnapshot };
+  /**
+   * #1250: side-effect tools that did not run, and the one-line notice for the user. `appended`: already
+   * part of `output` / `reply`. `followup`: a reply was already streamed, so the delivery sends `text` as a
+   * short separate message through the reply chain.
+   */
+  unexecutedNotice?: Readonly<{ tools: readonly string[]; text: string; delivery: 'appended' | 'followup' }>;
   replyPhaseId?: string;
   replyPhaseStopped?: true;
   /** Conversation projection applied only after the durable terminal commits. */
