@@ -93,6 +93,10 @@ sandbox:
 Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.content`），保留标题、粗体和代码块；Core 不会先将其转换为纯文字。
 没有在线订阅者时不确认已发送，取消不会补发最终内容。
 
+## 在 Console 管理账号
+
+与其他适配器一样，Sandbox 账号可以在 Console 的账号「接入」页新增、停用、启用和删除（字段：`owner`、`nickname`、`commandPrefix`）。新增后默认停用，需手动启用。查看需要 `sandbox:read`，增删与启停需要 `sandbox:write`。
+
 ## 使用方式
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8068`）

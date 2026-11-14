@@ -78,6 +78,11 @@ sandbox:
       owner: sandbox-user
 ```
 
+
+## Managing accounts in the Console
+
+Like other adapters, Sandbox accounts can be added, stopped, started and removed on the account Access tab in the Console (fields: `owner`, `nickname`, `commandPrefix`). A new account is saved stopped; start it explicitly. Viewing needs `sandbox:read`; adding, removing, starting and stopping need `sandbox:write`.
+
 ## Usage
 
 1. Start the Zhin instance: `pnpm dev` (the terminal will print the Host address, typically `http://127.0.0.1:8068`)

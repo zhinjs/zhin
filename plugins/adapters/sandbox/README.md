@@ -103,6 +103,10 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
 
+## 在 Console 管理账号
+
+Sandbox 与其他适配器一样提供账号管理（`status`、`endpoint-add` / `endpoint-start` / `endpoint-stop` / `endpoint-remove`）：在 Console 的账号「接入」页可以新增、停用、启用和删除 Sandbox 账号，字段为所有者用户 ID（`owner`）、机器人昵称（`nickname`）与命令前缀（`commandPrefix`）。新增的账号保存后处于停用状态，需要手动启用。查看需要 `sandbox:read`（`read` 级别），增删与启停需要 `sandbox:write`（`operate` 级别）。
+
 ## 消息格式（wire 协议）
 
 Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSocket 文本帧是一个 UTF-8 JSON 对象。
