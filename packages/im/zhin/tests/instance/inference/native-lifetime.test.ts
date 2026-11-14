@@ -55,5 +55,6 @@ function runFixture(): Promise<{ code: number | null; signal: NodeJS.Signals | n
 it('keeps real Host SDK, disconnect, discovery and OAuth response cancellation alive through native Fetch GC', async () => {
   const result = await runFixture();
   expect(result.code, result.output).toBe(0);
+  expect(result.signal, result.output).toBeNull();
   expect(result.stdout).toContain('host-native-gc-stream-disconnect-discovery-oauth-passed');
 }, 180_000);

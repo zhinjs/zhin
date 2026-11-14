@@ -36,6 +36,12 @@ export type KeyboardFallback = {
 export type KeyboardSegmentData = {
   rows: ButtonData[][];
   fallback?: KeyboardFallback;
+  /**
+   * Optional presentation marker set by the Host (`UserInteractionRequest.purpose`):
+   * `approval` = a human approval prompt. Surfaces that understand it (Sandbox Console)
+   * label the card; every other renderer ignores it.
+   */
+  purpose?: 'approval';
 };
 export type ActionSegmentData = {
   id: string;

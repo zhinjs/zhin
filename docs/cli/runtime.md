@@ -60,10 +60,12 @@ zhin start --once --mode test
 | `zhin start` | 提示已在运行并显示状态 | 后台启动网关与实例，等到控制套接字就绪后打印 HTTP 地址与 Console 链接 |
 | `zhin stop [--timeout <ms>]` | 发送 `gateway.shutdown`：先停实例再停网关，等待进程退出 | 无事可做（仍兼容旧版只有 `.zhin.pid` 的进程） |
 | `zhin restart` | `gateway.instance.restart`：只重启实例 | 无事可做 |
-| `zhin restart --gateway` | 停止后台网关，再用原启动参数重新启动（前台网关请在其终端或服务管理器里重启） | 无事可做 |
+| `zhin restart --gateway` | 停止后台网关，再用原启动参数重新启动；前台网关（`--foreground`）不能原地重启，见下文 | 无事可做 |
 | `zhin status [--json]` | 网关 pid、模式、版本、HTTP 地址、Console 链接，实例状态（`stopped / starting / running / stopping / backoff / crashed`、pid、generation、最近失败与日志尾部） | 显示未运行，**退出码 3** |
 | `zhin logs [-f] [-n N]` | `gateway.instance.logs`：最近 N 行（1–1000，默认 200）；`-f` 轮询输出新行 | 读取 `.zhin/logs/instance.log`；`-f` 跟随文件 |
 | `zhin install / uninstall / update` | 经网关执行依赖事务：停实例 → 包管理器 → 启实例，失败回滚；进度实时输出 | 直接在项目里执行同一事务 |
+
+前台网关（`zhin start --foreground`，systemd、PM2、容器里的推荐方式）挂在终端或服务管理器上，`zhin restart --gateway` 不会停止它，而是说明原因并以退出码 `1` 结束，同时给出替代命令：在 Linux 上读取网关进程的环境变量识别服务管理器，systemd（`INVOCATION_ID`，单元名取自进程的 cgroup）提示 `sudo systemctl restart <单元>`（用户服务为 `systemctl --user restart <单元>`），PM2（`pm_id`）提示 `pm2 restart <应用名>`；识别不到时提示通过服务管理器重启，或在其终端按 Ctrl+C 后用原启动参数重新执行 `zhin start --foreground …`。只重启实例用 `zhin restart`，前台网关同样支持。
 
 经网关安装只接受 npm 注册表包（`name` / `name@范围`）；git 地址、本地路径与 `--save-dev` 需要先 `zhin stop`。`zhin update` 不带包名时更新全部依赖。
 

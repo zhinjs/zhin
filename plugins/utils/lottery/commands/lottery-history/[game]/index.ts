@@ -7,6 +7,8 @@ import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: '查询历史开奖结果',
+  alias: ['lottery history'],
+  preferredAliasI18n: { 'zh-CN': 'lottery history', en: 'lottery history' },
   descriptionI18n: { en: 'List historical draw results' },
   params: { game: { type: 'string' } },
   async execute({ params, args, use, locale }) {

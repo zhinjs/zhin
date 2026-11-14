@@ -103,7 +103,7 @@ pnpm install
 旧脚本里的 `zhin runtime start …` 不改也能跑（它是 `zhin start --foreground` 的别名）。要注意的是**裸的 `zhin start` 现在默认后台运行**，进程管理器里必须加 `--foreground`，否则命令启动网关后立刻返回，服务管理器会以为服务已经退出。
 
 - `--daemon` 仍然接受，只表示后台运行（即默认行为），不再是「前台 + 崩溃重启」：崩溃重启对所有模式都生效。
-- `zhin restart` 只重启实例，网关与 Console 不中断；`zhin restart --gateway` 连网关一起重启（仅后台网关）。
+- `zhin restart` 只重启实例，网关与 Console 不中断；`zhin restart --gateway` 连网关一起重启（仅后台网关；前台网关会说明原因、给出 systemd / PM2 等替代命令并以非 0 退出）。
 - `zhin install / uninstall / update` 在网关运行时经网关执行：停实例 → 包管理器 → 启实例，失败自动回滚。git 地址、本地路径与 `--save-dev` 需要先 `zhin stop`。
 - 管理命令经本地控制套接字 `.zhin/gateway.sock`（`0600`）与网关通信，**必须以启动网关的同一个系统用户运行**。
 

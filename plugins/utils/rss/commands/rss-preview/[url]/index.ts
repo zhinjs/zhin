@@ -4,6 +4,8 @@ import { fetchFeed, formatFeedPreview, resolveRssConfig, type RssConfig } from '
 
 export default defineCommand<RssConfig>({
   description: '预览一个 RSS 源的最新内容（不订阅）', descriptionI18n: { en: "Preview the latest feed items without subscribing" },
+  alias: ['rss preview'],
+  preferredAliasI18n: { 'zh-CN': 'rss preview', en: 'rss preview' },
   params: { url: { type: 'string' } },
   async execute({ params, config, locale }) {
     const url = String(params.url ?? '').trim();

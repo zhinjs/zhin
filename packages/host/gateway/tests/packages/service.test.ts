@@ -8,6 +8,7 @@ import type { GatewayPackageEvent } from '@zhin.js/console-protocol';
 import {
   GatewayError,
   GatewayPackageService,
+  installedPackageKind,
   type GatewayPackageManager,
   type PackageTransactionInstance,
   type PackageWorkflowPort,
@@ -312,9 +313,24 @@ describe('GatewayPackageService transactions', () => {
     const list = await service().list(testUser('viewer'));
     expect(list.packageManager).toBe('pnpm');
     expect(list.packages).toEqual([
-      { name: 'pg', range: '^8.0.0', dependencyType: 'dependencies', installedVersion: '8.0.0', catalog: 'database-driver' },
-      { name: 'zod', range: '^3.0.0', dependencyType: 'dependencies', installedVersion: '3.0.0', catalog: 'ai' },
+      { name: 'pg', range: '^8.0.0', dependencyType: 'dependencies', installedVersion: '8.0.0', kind: 'library', catalog: 'database-driver' },
+      { name: 'zod', range: '^3.0.0', dependencyType: 'dependencies', installedVersion: '3.0.0', kind: 'library', catalog: 'ai' },
     ]);
+  });
+
+  it('labels each installed dependency as plugin, feature or library from package.json#zhin.type (#1250)', async () => {
+    const manifest = await readJson(join(root, 'package.json'));
+    manifest.dependencies = { ...manifest.dependencies, '@zhin.js/adapter-sandbox': '^1.0.0', '@zhin.js/tool': '^1.0.0', ai: '^5.0.0', 'not-installed': '^1.0.0' };
+    await writeFile(join(root, 'package.json'), JSON.stringify(manifest));
+    await installPlugin('@zhin.js/adapter-sandbox', '1.0.0');
+    await installModule('ai', '5.0.0');
+    const tool = join(root, 'node_modules', '@zhin.js', 'tool');
+    await mkdir(tool, { recursive: true });
+    await writeFile(join(tool, 'package.json'), JSON.stringify({ name: '@zhin.js/tool', version: '1.0.0', zhin: { protocol: 1, type: 'feature' } }));
+    const kinds = Object.fromEntries((await service().list(testUser('viewer'))).packages.map(item => [item.name, item.kind ?? null]));
+    expect(kinds).toMatchObject({ '@zhin.js/adapter-sandbox': 'plugin', '@zhin.js/tool': 'feature', ai: 'library', 'not-installed': null });
+    expect(installedPackageKind(undefined)).toBe('library');
+    expect(installedPackageKind({ type: 'plugin' })).toBe('plugin');
   });
 
   it('plans without changing anything', async () => {

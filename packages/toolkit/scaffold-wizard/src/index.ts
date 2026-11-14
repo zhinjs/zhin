@@ -84,6 +84,7 @@ export {
   ZHIN_STACK_VERSIONS,
   DEFAULT_CREATE_BOT_HTTP_PORT,
   CREATE_BOT_PACKAGE_MANAGER,
+  GATEWAY_NATIVE_BUILD_DEPENDENCIES,
   getCreateBotBaseDependencies,
   getCreateBotPnpmWorkspaceConfig,
   getRequiredZhinDependenciesForConfig,

@@ -56,11 +56,16 @@ export class AgentHostPublicationCoordinator {
         },
       }),
       introspection: Object.freeze({
-        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => Object.freeze({
-          name: entry.name,
-          connected: resourceHub.mcps.isConnected(entry.name),
-          toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
-        })),
+        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => {
+          const connected = resourceHub.mcps.isConnected(entry.name);
+          const lastError = connected ? undefined : resourceHub.mcps.getLastFailure(entry.name);
+          return Object.freeze({
+            name: entry.name,
+            connected,
+            toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
+            ...(lastError ? { lastError } : {}),
+          });
+        }),
       }),
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,

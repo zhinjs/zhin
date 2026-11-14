@@ -167,8 +167,16 @@ async function checkMigrationUpgrade() {
   if (await readFile(manifestFile, 'utf8') !== original) throw new Error('Migration dry-run changed the child manifest');
   await run(process.execPath, [cli, 'migrate', '--no-install'], consumer);
   const migrated = JSON.parse(await readFile(manifestFile, 'utf8'));
-  if (migrated.dependencies[localName] !== 'workspace:*' || migrated.dependencies['zhin.js'] !== 'latest'
+  if (migrated.dependencies[localName] !== 'workspace:*'
     || migrated.scripts.dev !== 'node custom-start.mjs') throw new Error('Migration changed workspace authority or a custom script');
+  // zhinjs/zhin#1250: migrate writes the registry's real version as a caret range (never the
+  // `latest` dist-tag) and never downgrades; offline it keeps the original `^1.1.0`.
+  const migratedCore = /^\^(\d+)\.(\d+)\.(\d+)$/u.exec(migrated.dependencies['zhin.js'] ?? '');
+  const atLeast = (version, [major, minor, patch]) => version[0] !== major ? version[0] > major
+    : version[1] !== minor ? version[1] > minor : version[2] >= patch;
+  if (!migratedCore || !atLeast(migratedCore.slice(1).map(Number), [1, 1, 0])) {
+    throw new Error(`Migration did not write a real caret version for zhin.js: ${migrated.dependencies['zhin.js']}`);
+  }
   await run(process.execPath, [cli, 'migrate'], project);
   const { stdout } = await run(process.execPath, ['--input-type=module', '-e',
     `import { source } from '${localName}'; console.log(source);`], consumer);

@@ -4,6 +4,7 @@ import {
   type ConsoleRpcExtendedCtx,
 } from '../src/console-rpc-extended/index.js';
 import { authorizeConsoleRpc } from '../src/access-control.js';
+import { isConsoleEndpointCapabilityUnsupported } from '@zhin.js/console-protocol';
 import { VIEWER } from './fixtures/principals.js';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
@@ -873,21 +874,30 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
     });
 
-    it('friends/groups/channels/groupMembers report 该平台不支持 without methods', async () => {
+    it('friends/groups/channels/groupMembers report unsupported status (not an error) without methods', async () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
       const base = { adapter: 'sandbox', endpointKey: 'bot' };
       await expect(
         dispatchExtendedConsoleRpc('endpoint.friends', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持好友列表' });
+      ).resolves.toEqual({ data: {
+        friends: [], count: 0, status: 'unsupported', capability: 'listFriends', message: '当前适配器（sandbox）不支持好友列表',
+      } });
       await expect(
         dispatchExtendedConsoleRpc('endpoint.groups', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群列表' });
-      await expect(
-        dispatchExtendedConsoleRpc('endpoint.channels', base, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持频道列表' });
+      ).resolves.toEqual({ data: {
+        groups: [], count: 0, status: 'unsupported', capability: 'listGroups', message: '当前适配器（sandbox）不支持群列表',
+      } });
+      const channels = await dispatchExtendedConsoleRpc('endpoint.channels', base, ctx);
+      expect(channels).not.toHaveProperty('error');
+      expect(channels).toEqual({ data: {
+        channels: [], count: 0, status: 'unsupported', capability: 'listChannels', message: '当前适配器（sandbox）不支持频道列表',
+      } });
+      expect(isConsoleEndpointCapabilityUnsupported((channels as { data: unknown }).data)).toBe(true);
       await expect(
         dispatchExtendedConsoleRpc('endpoint.group_members', { ...base, groupId: '888' }, ctx),
-      ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群成员列表' });
+      ).resolves.toEqual({ data: {
+        members: [], count: 0, status: 'unsupported', capability: 'listGroupMembers', message: '当前适配器（sandbox）不支持群成员列表',
+      } });
     });
 
     it('groups consumes normalized adapter data', async () => {

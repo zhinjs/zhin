@@ -25,7 +25,7 @@ import {
   type RouteContext,
   type TokenRegistry,
 } from '@zhin.js/host-http';
-import { ONBOARDING_RPC, type ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
+import { CONSOLE_DENIAL_REASONS, IAM_RPC, ONBOARDING_RPC, type ConsoleDenialReason, type ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
 import { DEFAULT_ROOT_CONFIG_FILE_NAME } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -404,6 +404,7 @@ const ONBOARDING_STEPS = new Set(['ai', 'adapters', 'finish']);
 export function createGatewayAccountRpc(options: GatewayAccountRpcOptions): GatewayRpcHandler {
   return Object.freeze({
     owns: (type: string) => isIamRpc(type) || type === ONBOARDING_RPC.UPDATE,
+    types: () => [...Object.values(IAM_RPC), ONBOARDING_RPC.UPDATE],
     async handle(message: Readonly<Record<string, unknown>>, context: RouteContext, registry: TokenRegistry): Promise<Response> {
       const noStore = { 'cache-control': 'no-store' };
       const requestId = message.requestId;
@@ -412,27 +413,27 @@ export function createGatewayAccountRpc(options: GatewayAccountRpcOptions): Gate
         return jsonResponse(401, { success: false, code: 'unauthorized', error: 'Invalid or missing token', requestId }, noStore);
       }
       const decision: ConsoleRpcDecision = authorizeConsoleRpc(principal, message);
-      const audit = (outcome: 'ok' | 'denied' | 'error'): void => {
+      const audit = (outcome: 'ok' | 'denied' | 'error', reason?: ConsoleDenialReason): void => {
         try {
           registry.accessProvider?.audit?.({
             actor: auditActor(principal),
             action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
             ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
             outcome,
-            detail: rpcAuditDetail(message),
+            detail: reason ? { ...rpcAuditDetail(message), reason } : rpcAuditDetail(message),
             ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
           });
         } catch { /* audit never breaks a request */ }
       };
       if (!decision.allowed) {
-        audit('denied');
+        audit('denied', decision.reason);
         return jsonResponse(403, { success: false, code: decision.code, error: decision.error, requestId }, noStore);
       }
       const result = isIamRpc(message.type)
         ? await dispatchIamRpc(message, options.iam(), principal)
         : await updateOnboarding(options.onboarding, message, principal);
       if (decision.write) audit(result.status < 400 && result.body.success !== false ? 'ok' : 'error');
-      else if (result.status === 403) audit('denied');
+      else if (result.status === 403) audit('denied', CONSOLE_DENIAL_REASONS.HANDLER_DENIED);
       return jsonResponse(result.status, result.body, { ...noStore, ...result.headers });
     },
   });
