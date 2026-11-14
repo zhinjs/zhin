@@ -14,7 +14,7 @@
         { "zh": "确认代理对 `/api/events` 禁用缓冲并保持长连接。", "en": "Ensure the proxy disables buffering and keeps `/api/events` connections open." }
       ],
       "verification": [
-        { "zh": "执行 `curl -i http://127.0.0.1:8086/pub/health` 应返回成功状态；Console 顶栏应恢复为“已连接”。", "en": "`curl -i http://127.0.0.1:8086/pub/health` should succeed, and the Console header should return to Connected." }
+        { "zh": "执行 `curl -i http://127.0.0.1:8068/pub/health` 应返回成功状态；Console 顶栏应恢复为“已连接”。", "en": "`curl -i http://127.0.0.1:8068/pub/health` should succeed, and the Console header should return to Connected." }
       ]
     },
     {
@@ -30,7 +30,7 @@
         { "zh": "所有者无法登录时，停下 Host，用 `zhin console user passwd <用户名>` 或 `zhin console user enable <用户名>` 离线恢复。", "en": "If no owner can sign in, stop the Host and recover offline with `zhin console user passwd <username>` or `zhin console user enable <username>`." }
       ],
       "verification": [
-        { "zh": "使用 `curl -H \"Authorization: Bearer $ZHIN_CONSOLE_TOKEN\" http://127.0.0.1:8086/api/auth/me` 查看凭据对应的主体与权限。", "en": "Check which principal and permissions a credential resolves to with `curl -H \"Authorization: Bearer $ZHIN_CONSOLE_TOKEN\" http://127.0.0.1:8086/api/auth/me`." }
+        { "zh": "使用 `curl -H \"Authorization: Bearer $ZHIN_CONSOLE_TOKEN\" http://127.0.0.1:8068/api/auth/me` 查看凭据对应的主体与权限。", "en": "Check which principal and permissions a credential resolves to with `curl -H \"Authorization: Bearer $ZHIN_CONSOLE_TOKEN\" http://127.0.0.1:8068/api/auth/me`." }
       ]
     },
     {

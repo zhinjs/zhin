@@ -31,7 +31,7 @@ GitHub 仓库通知。以前是每个平台一个进程一套代码，现在要�
  slack ────────▶ │  ├─ AdapterIndex（11 endpoint）│
  github ───────▶ │  ├─ 游戏插件 × 9（game-kit）    │
                  │  ├─ Agent Host（AI 对话/工具） │
- sandbox ──────▶ │  └─ HTTP Host :8086           │
+ sandbox ──────▶ │  └─ HTTP Host :8068           │
                  └───────────┬───────────────────┘
                              │ REST + SSE
                     ┌────────▼────────┐

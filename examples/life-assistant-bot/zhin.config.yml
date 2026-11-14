@@ -11,7 +11,7 @@ plugins:
 
 # --- HTTP 服务 ---
 http:
-  port: 8086
+  port: 8068
   token: "${HTTP_TOKEN}"
 
 database:

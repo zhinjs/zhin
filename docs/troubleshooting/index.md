@@ -42,7 +42,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- 执行 `curl -i http://127.0.0.1:8086/pub/health` 应返回成功状态；Console 顶栏应恢复为“已连接”。
+- 执行 `curl -i http://127.0.0.1:8068/pub/health` 应返回成功状态；Console 顶栏应恢复为“已连接”。
 
 </section>
 
@@ -66,7 +66,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- 使用 `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8086/api/auth/me` 查看凭据对应的主体与权限。
+- 使用 `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8068/api/auth/me` 查看凭据对应的主体与权限。
 
 </section>
 

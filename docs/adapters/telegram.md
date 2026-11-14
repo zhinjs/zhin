@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=591148d7a15e2112 -->
+<!-- sync-adapter-docs:sha256=8f15d4435c84e80f -->
 
 # @zhin.js/adapter-telegram
 
@@ -121,7 +121,7 @@ telegram:
 configVersion: 2
 http:
   host: 127.0.0.1
-  port: 8086
+  port: 8068
 plugins:
   telegram: "@zhin.js/adapter-telegram"
 telegram:
