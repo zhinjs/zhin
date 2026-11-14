@@ -1,7 +1,8 @@
 /**
  * migrate — 将老版本 Zhin 项目快速升级到最新
  *
- * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖为 latest（精确版本等用户锁定的依赖默认保留）
+ * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖到 registry 上的最新版本（写 ^x.y.z；精确版本保持精确，
+ *   用户锁定的依赖默认保留），并按目标 zhin.js 的依赖对齐 pnpm.overrides 中的 @zhin.js/*
  * - 补全缺失的推荐 scripts、engines
  * - 确保 data、plugins 等目录存在
  * - 执行 pnpm install
@@ -22,6 +23,8 @@ import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gatew
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
+import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
+import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
 
 const cwd = process.cwd();
 
@@ -75,11 +78,29 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
  */
 export function isPinnedSpecifier(specifier: string): boolean {
   const value = specifier.trim();
-  if (/^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(value)) return true;
+  if (isExactVersionSpecifier(value)) return true;
   return /^(?:link:|file:|portal:|npm:|catalog:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(value);
 }
 
-export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean; includePinned?: boolean }): boolean {
+/** An exact version (`1.2.3`, `=1.2.3`, `v1.2.3-beta.1`): an upgrade keeps it exact. */
+export function isExactVersionSpecifier(specifier: string): boolean {
+  return /^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(specifier.trim());
+}
+
+/** Local or referenced override values (`workspace:`, `link:`, `file:`, `$dep`) are the user's own wiring. */
+function isLocalOverride(value: string): boolean {
+  return /^(?:workspace:|link:|file:|portal:|\$|\.{0,2}\/)/.test(value.trim());
+}
+
+export interface UpgradePackageJsonOptions {
+  toLatest: boolean;
+  dryRun: boolean;
+  includePinned?: boolean;
+  /** Registry lookup; defaults to `npm view` against the project's configured registry. */
+  lookup?: RegistryLookup;
+}
+
+export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonOptions): boolean {
   const pkg = fs.readJsonSync(pkgPath);
 
   const zhinDeps = collectZhinDeps(pkg);
@@ -89,7 +110,13 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
   }
 
   let changed = false;
-  const targetVersion = options.toLatest ? 'latest' : 'latest';
+  const lookup = cachedRegistryLookup(options.lookup ?? npmRegistryLookup);
+  /** The specifier an upgrade writes: the registry's latest release, exact when the old one was exact. */
+  const upgradeSpecifier = (dep: string, existing: string): string | undefined => {
+    const release = lookup(dep);
+    if (!release) return undefined;
+    return isExactVersionSpecifier(existing) ? release.version : `^${release.version}`;
+  };
 
   // `zhin start` needs zhin.js, the CLI and the gateway in production: a bot project lists all
   // three under dependencies (older projects had the CLI in devDependencies and no gateway).
@@ -119,7 +146,7 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     }
   }
 
-  for (const { dep, current, inDev } of collectZhinDeps(pkg)) {
+  for (const { dep, inDev } of collectZhinDeps(pkg)) {
     if (added.has(dep)) continue;
     const key = inDev ? 'devDependencies' : 'dependencies';
     const existing = pkg[key]?.[dep];
@@ -128,27 +155,42 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     if (String(existing).startsWith('workspace:')) {
       continue;
     }
-    if (existing === targetVersion) continue;
     if (!options.includePinned && isPinnedSpecifier(String(existing))) {
-      console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（pinned, kept; use --include-pinned to move it to latest）`));
+      console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（pinned, kept; use --include-pinned to upgrade it）`));
       continue;
     }
-    if (options.dryRun) {
-      console.log(chalk.cyan(`  [dry-run] ${dep}: ${existing} → ${targetVersion}`));
-    } else {
-      pkg[key][dep] = targetVersion;
+    const next = upgradeSpecifier(dep, String(existing));
+    if (next === undefined) {
+      console.log(chalk.yellow(`  ! ${dep}: 无法从 registry 查询最新版本，保留 ${existing}（registry lookup failed, kept）`));
+      continue;
     }
-    upgraded.set(dep, targetVersion);
+    if (existing === next) continue;
+    if (options.dryRun) {
+      console.log(chalk.cyan(`  [dry-run] ${dep}: ${existing} → ${next}`));
+    } else {
+      pkg[key][dep] = next;
+    }
+    upgraded.set(dep, next);
     changed = true;
   }
 
   for (const name of added) {
-    const version = name === '@zhin.js/gateway'
-      ? gatewayRangeFor(upgraded.get('@zhin.js/cli') ?? String(pkg.dependencies['@zhin.js/cli']))
-      : pkg.dependencies[name];
+    let version: string;
+    if (name === '@zhin.js/gateway') {
+      version = gatewayRangeFor(upgraded.get('@zhin.js/cli') ?? String(pkg.dependencies['@zhin.js/cli']));
+    } else {
+      // An added package gets the registry's release; offline, the range released with this CLI.
+      const release = lookup(name);
+      version = release
+        ? `^${release.version}`
+        : withScaffoldVersionRanges({ [name]: String(pkg.dependencies[name]) })[name] ?? String(pkg.dependencies[name]);
+      upgraded.set(name, version);
+    }
     pkg.dependencies[name] = version;
     console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} ${name}: + dependencies (${version})`));
   }
+
+  if (syncZhinOverrides(pkg, upgraded, lookup, options.dryRun)) changed = true;
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。
   if (!pkg.scripts) pkg.scripts = {};
@@ -178,6 +220,44 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
 
   if (changed && !options.dryRun) {
     fs.writeJsonSync(pkgPath, pkg, { spaces: 2 });
+  }
+  return changed;
+}
+
+/**
+ * Aligns `pnpm.overrides` entries for `@zhin.js/*` with the target `zhin.js` release: an override
+ * left on an old version would otherwise pin a second copy next to the upgraded one (doctor then
+ * reports duplicate Zhin packages). The target is the upgraded `zhin.js` specifier, or the declared
+ * one when it is an exact version; its registry `dependencies` give the range for each package.
+ * An override for a package `zhin.js` does not depend on follows that package's upgraded
+ * specifier. Local wiring (`workspace:`, `link:`, `file:`, `$ref`) and selector keys
+ * (`a>b`, `name@range`) are left alone.
+ */
+function syncZhinOverrides(pkg: any, upgraded: ReadonlyMap<string, string>, lookup: RegistryLookup, dryRun: boolean): boolean {
+  const overrides = pkg.pnpm?.overrides;
+  if (!overrides || typeof overrides !== 'object') return false;
+  const names = Object.keys(overrides).filter(key => key.startsWith(ZHIN_PACKAGE_PREFIX) && !key.includes('>') && !key.slice(1).includes('@'));
+  if (names.length === 0) return false;
+
+  const declared = String(pkg.dependencies?.[CORE_PACKAGE] ?? pkg.devDependencies?.[CORE_PACKAGE] ?? '');
+  const target = upgraded.get(CORE_PACKAGE) ?? (isExactVersionSpecifier(declared) ? declared.replace(/^=?v?/, '') : undefined);
+  const coreDependencies = target ? lookup(CORE_PACKAGE, target.replace(/^\^/, ''))?.dependencies : undefined;
+  if (target && !coreDependencies) {
+    console.log(chalk.yellow(`  ! pnpm.overrides: 无法查询 zhin.js@${target} 的依赖，未同步（registry lookup failed, overrides kept）`));
+  }
+
+  let changed = false;
+  for (const name of names) {
+    const current = overrides[name];
+    if (typeof current !== 'string' || isLocalOverride(current)) continue;
+    const next = coreDependencies?.[name] ?? upgraded.get(name);
+    if (next === undefined || next === current) continue;
+    if (dryRun) console.log(chalk.cyan(`  [dry-run] pnpm.overrides.${name}: ${current} → ${next}`));
+    else {
+      overrides[name] = next;
+      console.log(chalk.cyan(`  · pnpm.overrides.${name}: ${current} → ${next}`));
+    }
+    changed = true;
   }
   return changed;
 }
@@ -448,7 +528,7 @@ export const migrateCommand = new Command('migrate')
   .description('升级项目依赖、scripts 与目录结构；v1 配置（缺少 configVersion: 2）请用 zhin migrate instances')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
   .option('--no-install', '跳过最后一步依赖安装')
-  .option('--include-pinned', '把精确版本等已锁定的 zhin 依赖也改为 latest（默认保留）', false)
+  .option('--include-pinned', '把精确版本等已锁定的 zhin 依赖也升级到 registry 最新版本（精确版本保持精确；默认保留）', false)
   .addHelpText('after', `
 配置格式迁移 / Config format migration (configVersion 2):
   启动报 "configVersion must be 2" 或检测到 v1 配置时，先停止 Bot，再运行：

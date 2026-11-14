@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { execSync } = vi.hoisted(() => ({ execSync: vi.fn(() => '') }));
 vi.mock('child_process', () => ({ execSync }));
+vi.mock('../src/utils/registry-version.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/utils/registry-version.js')>(),
+  npmRegistryLookup: () => ({ version: '9.4.2', dependencies: {} }),
+}));
 
 let directory: string;
 let previousCwd: string;
@@ -54,7 +58,7 @@ describe('migration installer admission', () => {
     expect(process.exitCode).toBe(0);
     expect(execSync).not.toHaveBeenCalled();
     expect(JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).dependencies)
-      .toEqual({ 'zhin.js': 'latest', '@zhin.js/tool': 'workspace:*' });
+      .toEqual({ 'zhin.js': '^9.4.2', '@zhin.js/tool': 'workspace:*' });
   });
 
   it.each([false, true])('preserves supported npm/pnpm installer selection (pnpm lock: %s)', async pnpm => {
@@ -96,7 +100,8 @@ describe('migrate dry-run and config-version guidance', () => {
     const output = vi.mocked(console.log).mock.calls.map(args => args.join(' ')).join('\n');
     expect(output).toContain('Dry run finished: nothing was changed');
     expect(output).not.toContain('Migration complete');
-    expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 → latest');
+    expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 →');
+    expect(output).toContain('zhin.js: ^1.1.0 → ^9.4.2');
     expect(output).toContain('zhin migrate instances --apply');
     expect(output).not.toContain('synthetic-secret');
     expect(execSync).not.toHaveBeenCalled();

@@ -24,10 +24,32 @@ import {
 import { scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
+// Migration queries the registry; tests answer from a fixed fake registry instead of the network.
+const registry = vi.hoisted(() => ({
+  latest: '9.4.2',
+  zhinDependencies: { '@zhin.js/core': '^9.4.1', '@zhin.js/ai': '^9.4.0' } as Record<string, string>,
+  offline: false,
+  calls: [] as string[],
+}));
+vi.mock('../src/utils/registry-version.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/utils/registry-version.js')>();
+  return {
+    ...actual,
+    npmRegistryLookup: (name: string, spec = 'latest') => {
+      registry.calls.push(`${name}@${spec}`);
+      if (registry.offline) return undefined;
+      const version = spec === 'latest' ? registry.latest : spec;
+      return { version, dependencies: name === 'zhin.js' ? registry.zhinDependencies : {} };
+    },
+  };
+});
+
 let tmp: string;
 let prevCwd: string;
 
 beforeEach(() => {
+  registry.offline = false;
+  registry.calls.length = 0;
   prevCwd = process.cwd();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-cli-test-'));
   process.chdir(tmp);
@@ -110,7 +132,7 @@ describe('migrate', () => {
 
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    expect(pkg.dependencies).toEqual({ 'zhin.js': 'workspace:*', '@zhin.js/agent': 'latest', 'user-library': '^2.0.0' });
+    expect(pkg.dependencies).toEqual({ 'zhin.js': 'workspace:*', '@zhin.js/agent': '^9.4.2', 'user-library': '^2.0.0' });
     expect(pkg.devDependencies).toEqual({ '@zhin.js/core': 'workspace:^', '@zhin.js/ai': 'workspace:~', '@zhin.js/tool': 'workspace:../tool' });
     expect(pkg.scripts).toMatchObject({ dev: 'custom-dev', test: 'custom-test' });
   });
@@ -127,7 +149,8 @@ describe('migrate', () => {
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
     expect(fs.readFileSync(pkgPath, 'utf8')).toBe(original);
     const output = log.mock.calls.flat().join('\n');
-    expect(output).toContain('@zhin.js/agent: ^1.1.0 → latest');
+    expect(output).toContain('@zhin.js/agent: ^1.1.0 → ^9.4.2');
+    expect(output).not.toContain('latest');
     expect(output).not.toContain('zhin.js: workspace:');
   });
 
@@ -146,12 +169,13 @@ describe('migrate', () => {
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
     const preview = log.mock.calls.flat().join('\n');
     expect(preview).toContain('@zhin.js/cli: devDependencies → dependencies (^1.1.20)');
-    expect(preview).toContain('@zhin.js/gateway: + dependencies (latest)');
+    expect(preview).toContain('@zhin.js/cli: ^1.1.20 → ^9.4.2');
+    expect(preview).toContain('@zhin.js/gateway: + dependencies (~9.4.0)');
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).devDependencies['@zhin.js/cli']).toBe('^1.1.20');
 
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    expect(pkg.dependencies).toEqual({ 'zhin.js': 'latest', '@zhin.js/cli': 'latest', '@zhin.js/gateway': 'latest' });
+    expect(pkg.dependencies).toEqual({ 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2', '@zhin.js/gateway': '~9.4.0' });
     expect(pkg.devDependencies).toEqual({ typescript: '^5.0.0' });
   });
 
@@ -224,7 +248,7 @@ describe('migrate', () => {
     const preview = log.mock.calls.flat().join('\n');
     expect(preview).toContain('@zhin.js/cli: devDependencies 中的占位版本 ^0.0.0 已移除');
     expect(preview).not.toContain('@zhin.js/cli: devDependencies 中的重复项已移除');
-    expect(preview).toContain('@zhin.js/cli: + dependencies (latest)');
+    expect(preview).toContain('@zhin.js/cli: + dependencies (^9.4.2)');
   });
 
   it('leaves the CLI of a Plugin package (no project config) in devDependencies', () => {
@@ -239,8 +263,8 @@ describe('migrate', () => {
 
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    expect(pkg.dependencies).toEqual({ 'zhin.js': 'latest' });
-    expect(pkg.devDependencies).toEqual({ '@zhin.js/cli': 'latest' });
+    expect(pkg.dependencies).toEqual({ 'zhin.js': '^9.4.2' });
+    expect(pkg.devDependencies).toEqual({ '@zhin.js/cli': '^9.4.2' });
   });
 
   it('engines.node 写 >=22.19.0', () => {
@@ -253,7 +277,8 @@ describe('migrate', () => {
     expect(changed).toBe(true);
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.engines.node).toBe('>=22.19.0');
-    expect(pkg.dependencies['zhin.js']).toBe('latest');
+    // --include-pinned upgrades an exact version to the registry release and keeps it exact.
+    expect(pkg.dependencies['zhin.js']).toBe('9.4.2');
   });
 
   it('默认保留用户锁定的精确版本、link/file 等依赖，只移动范围版本', () => {
@@ -273,17 +298,106 @@ describe('migrate', () => {
     try {
       upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
       const output = log.mock.calls.map(args => args.join(' ')).join('\n');
-      expect(output).toContain('zhin.js: ^1.1.0 → latest');
-      expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 → latest');
+      expect(output).toContain('zhin.js: ^1.1.0 → ^9.4.2');
+      expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 →');
       expect(output).toContain('@zhin.js/agent-feature: 1.1.6 已锁定');
     } finally { log.mockRestore(); }
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).dependencies).toEqual({
-      'zhin.js': 'latest',
+      'zhin.js': '^9.4.2',
       '@zhin.js/agent-feature': '1.1.6',
       '@zhin.js/calendar': 'link:../calendar',
       '@zhin.js/local': 'file:./vendor/local.tgz',
     });
+  });
+
+  it('--include-pinned writes the registry release, never the dist-tag latest (#1250)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '1.1.0', '@zhin.js/agent': '~1.1.0', '@zhin.js/tool': 'latest' },
+      devDependencies: { '@zhin.js/cli': '=1.1.0' },
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true })).toBe(true);
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('zhin.js: 1.1.0 → 9.4.2');
+    expect(preview).toContain('@zhin.js/agent: ~1.1.0 → ^9.4.2');
+    expect(preview).toContain('@zhin.js/tool: latest → ^9.4.2');
+    expect(preview).toContain('@zhin.js/cli: =1.1.0 → 9.4.2');
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({ 'zhin.js': '9.4.2', '@zhin.js/agent': '^9.4.2', '@zhin.js/tool': '^9.4.2' });
+    expect(pkg.devDependencies).toEqual({ '@zhin.js/cli': '9.4.2' });
+    expect(JSON.stringify(pkg)).not.toContain('latest');
+  });
+
+  it('keeps a dependency and says so when the registry cannot be reached', () => {
+    registry.offline = true;
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', engines: { node: '>=22.19.0' }, dependencies: { 'zhin.js': '^1.1.0' } }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).dependencies).toEqual({ 'zhin.js': '^1.1.0' });
+    expect(log.mock.calls.flat().join('\n')).toContain('zhin.js: 无法从 registry 查询最新版本，保留 ^1.1.0');
+  });
+
+  it('aligns @zhin.js/* in pnpm.overrides with the dependencies of the target zhin.js (#1250)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    const original = JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '^1.1.0', '@zhin.js/cli': '^1.1.0' },
+      pnpm: { overrides: {
+        '@zhin.js/core': '1.1.0',
+        '@zhin.js/ai': '~1.1.0',
+        '@zhin.js/cli': '1.1.0',
+        '@zhin.js/local': 'link:../local',
+        '@zhin.js/unknown': '1.0.0',
+        'zhin.js>@zhin.js/core': '1.1.0',
+        'left-pad': '1.0.0',
+      } },
+    }, null, 2);
+    fs.writeFileSync(pkgPath, original);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
+    expect(fs.readFileSync(pkgPath, 'utf8')).toBe(original);
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('pnpm.overrides.@zhin.js/core: 1.1.0 → ^9.4.1');
+    expect(registry.calls).toContain('zhin.js@9.4.2');
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).pnpm.overrides).toEqual({
+      '@zhin.js/core': '^9.4.1',
+      '@zhin.js/ai': '^9.4.0',
+      // Not a zhin.js dependency: follows its own upgraded specifier.
+      '@zhin.js/cli': '^9.4.2',
+      '@zhin.js/local': 'link:../local',
+      '@zhin.js/unknown': '1.0.0',
+      'zhin.js>@zhin.js/core': '1.1.0',
+      'left-pad': '1.0.0',
+    });
+  });
+
+  it('aligns overrides with a pinned zhin.js that the migration keeps', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '1.2.0' },
+      pnpm: { overrides: { '@zhin.js/core': '1.1.0' } },
+    }, null, 2));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies['zhin.js']).toBe('1.2.0');
+    expect(registry.calls).toContain('zhin.js@1.2.0');
+    expect(pkg.pnpm.overrides['@zhin.js/core']).toBe('^9.4.1');
   });
 
   it('isPinnedSpecifier 区分锁定与跟随上游的写法', () => {
