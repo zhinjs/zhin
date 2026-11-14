@@ -97,6 +97,8 @@ export interface GatewayHttpServerOptions {
    * RPC type on that route is forwarded to the instance unchanged.
    */
   readonly consoleRpc?: GatewayConsoleRpc;
+  /** Reported on `/pub/health` as `project.id` (`projectIdentity(projectRoot)`). */
+  readonly projectId?: string;
 }
 
 const HOP_BY_HOP_HEADERS = Object.freeze([
@@ -129,6 +131,7 @@ export class GatewayHttpServer {
   readonly #consoleRpc: GatewayConsoleRpc | undefined;
   /** The instance connection (and route table) that has no capability route: asked once. */
   #capabilitiesMissing: { readonly transport: InstanceTransport; readonly revision: number | undefined } | undefined;
+  readonly #projectId: string | undefined;
   readonly #rpcHandlers = new Set<GatewayRpcHandler>();
   #closed = false;
   #closeResult: Promise<void> | undefined;
@@ -140,6 +143,7 @@ export class GatewayHttpServer {
     this.#retryAfter = String(Math.max(1, Math.round(options.retryAfterSeconds ?? DEFAULT_GATEWAY_RETRY_AFTER_SECONDS)));
     this.#maxBody = options.maxRequestBodyBytes ?? DEFAULT_GATEWAY_MAX_REQUEST_BODY_BYTES;
     this.#consoleRpc = options.consoleRpc;
+    this.#projectId = options.projectId;
     this.tokenRegistry = options.tokenRegistry ?? new TokenRegistry({ primaryToken: primary.token });
     this.apiBase = normalizePath(primary.apiBase ?? '/api');
     const routerOptions = {
@@ -263,6 +267,7 @@ export class GatewayHttpServer {
       status: 'ok',
       timestamp: new Date().toISOString(),
       instance: { state: this.#instance.state() as GatewayInstanceState, ready: this.#readyTransport() !== undefined },
+      ...(this.#projectId ? { project: { id: this.#projectId } } : {}),
     };
     // Polled by the Console's instance banner: never cached.
     return jsonResponse(200, body, { 'cache-control': 'no-store' });

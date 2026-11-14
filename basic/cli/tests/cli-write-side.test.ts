@@ -25,6 +25,15 @@ import {
 import { scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
+// `zhin schedule` only talks to this project's gateway (#1250): a stand-in whose local-socket
+// fetch delegates to the stubbed global fetch while `gateway.running` is set.
+const gateway = vi.hoisted(() => ({ running: false }));
+vi.mock('@zhin.js/gateway/local', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@zhin.js/gateway/local')>(),
+  probeLocalGateway: async () => (gateway.running ? { ok: true } : undefined),
+  createLocalGatewayFetch: () => ((url: unknown, init?: RequestInit) => globalThis.fetch(url as string, init)),
+}));
+
 // Migration queries the registry; tests answer from a fixed fake registry instead of the network.
 const registry = vi.hoisted(() => ({
   latest: '9.4.2',
@@ -666,10 +675,26 @@ describe('schedule (running Host)', () => {
     }));
   }
   beforeEach(() => {
+    gateway.running = true;
     fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
     stubHost(() => ({ status: 201, body: { success: true, data: { job: { id: 'sched_1' } } } }));
   });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  afterEach(() => { gateway.running = false; vi.unstubAllGlobals(); });
+
+  it('without this project\'s gateway it exits 1 without calling the configured port (#1250)', async () => {
+    gateway.running = false;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+    for (const args of [['list'], ['remove', 'j1'], ['add', '--every', '30m', '--prompt', 'hi']]) {
+      await expect(scheduleCommand.parseAsync(['node', 'zhin', ...args])).rejects.toThrow('process.exit:1');
+    }
+    expect(requests).toHaveLength(0);
+    const text = [...errors.mock.calls, ...stderr.mock.calls].map(call => String(call[0])).join('\n');
+    expect(text).toContain('本项目的网关未运行');
+  });
 
   it('--every + --prompt 通过 Host 添加，且不写 data/schedule-jobs.json', async () => {
     await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m', '--prompt', '检查待办']);

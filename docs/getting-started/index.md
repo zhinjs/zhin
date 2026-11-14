@@ -50,10 +50,10 @@ pnpm dev
 
 任选以下一种方式：
 
-- **方式 A：本地内置 Sandbox（最快）**
-  直接在浏览器打开 `http://127.0.0.1:8068/sandbox`，输入 `/hello` 并发送，立即看到回复。
-- **方式 B：Remote Console**
-  打开侧栏「会话 → 沙盒」，发送 `/hello`。
+- **方式 A：Console 沙盒（推荐）**
+  在上一步登录的 Console 里打开侧栏「会话 → 沙盒」，发送 `/hello`。
+- **方式 B：独立 Sandbox 页面**
+  浏览器打开 `http://127.0.0.1:8068/sandbox`。这个页面不走 Console 登录：完成上一步初始化（创建所有者）之后，`.env` 里的 `HTTP_TOKEN` 已失效，需要一个 Console API 令牌——在 Console 顶栏用户名 →「个人设置」（`/account`）签发，粘贴到页面右上角后点「保存 Token 并重连」，状态变为 `connected` 后再发送 `/hello`。未连接时发送按钮不可用，页面会说明原因。
 
 收到回复即代表完整链路跑通：Sandbox 适配器收到入站消息 → 匹配到 `commands/hello` → 回复经统一出站链路发回。之后接入真实平台，只是在配置里挂载对应的适配器。
 

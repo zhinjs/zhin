@@ -165,7 +165,8 @@ describe('zhin schedule list', () => {
       }] } }),
     }) as unknown as Response));
     const { scheduleCommand } = await import('../src/commands/schedule.js');
-    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    // No gateway for this project: an explicit --host (#1250); the stub reports no project id.
+    await scheduleCommand.parseAsync(['node', 'zhin', '--host', 'http://127.0.0.1:9321', '--allow-unverified-host', 'list']);
     const text = stdout.join('\n');
     expect(text).toContain('  j1 (早报)  [启用]');
     expect(text).toContain('    计划:   every 30m');
@@ -214,6 +215,29 @@ describe('instance failures', () => {
     expect(stdout).toEqual([]);
   });
 
+  it('zhin send without this project\'s gateway exits 1 and sends nothing to the configured port (#1250)', async () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const { sendCommand } = await import('../src/commands/send.js');
+    await expect(sendCommand.parseAsync(['node', 'zhin', '-a', 'sandbox', '-e', 'sandbox', 'sandbox-user', 'hi'])).rejects.toThrow('process.exit:1');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(stderr.join('')).toContain('本项目的网关未运行');
+  });
+
+  it('zhin send refuses a local --host that reports no project id and sends only the health probe (#1250)', async () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
+    const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ success: true, status: 'ok' })));
+    vi.stubGlobal('fetch', fetchSpy);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const { sendCommand } = await import('../src/commands/send.js');
+    await expect(sendCommand.parseAsync(['node', 'zhin', '-a', 'sandbox', '-e', 'sandbox', '--host', 'http://127.0.0.1:9321', 'sandbox-user', 'hi'])).rejects.toThrow('process.exit:1');
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['http://127.0.0.1:9321/pub/health']);
+    expect(JSON.stringify(fetchSpy.mock.calls)).not.toContain('secret');
+    expect(stderr.join('')).toContain('--allow-unverified-host');
+  });
+
   it('zhin send shows the classified delivery failure instead of "Internal error"', async () => {
     fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
     vi.stubGlobal('fetch', vi.fn(async () => ({
@@ -223,7 +247,7 @@ describe('instance failures', () => {
     }) as unknown as Response));
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
     const { sendCommand } = await import('../src/commands/send.js');
-    await expect(sendCommand.parseAsync(['node', 'zhin', '-a', 'sandbox', '-e', 'sandbox', 'sandbox-user', 'hi'])).rejects.toThrow('process.exit:1');
+    await expect(sendCommand.parseAsync(['node', 'zhin', '-a', 'sandbox', '-e', 'sandbox', '--host', 'http://127.0.0.1:9321', '--allow-unverified-host', 'sandbox-user', 'hi'])).rejects.toThrow('process.exit:1');
     const text = stderr.join('');
     expect(text).toContain('没有在线的客户端');
     expect(text).not.toContain('Internal error');

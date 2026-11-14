@@ -18,6 +18,8 @@ import { explainConfigFields } from './config-explanation.js';
 import type { ConsoleConfigExplanation, GatewayPluginConfigurationNeed } from '@zhin.js/console-protocol';
 import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
+import { dependenciesInPlace, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
+import { officialPluginCandidates, undeclaredPluginMessage } from './plugin-candidates.js';
 import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
@@ -44,6 +46,11 @@ export interface PluginManagementOptions {
   readonly requestRestart?: () => void | Promise<void>;
   /** Real package-manager boundary; tests use independent on-disk packages. */
   readonly installDependencies?: (args: readonly string[], projectRoot: string) => Promise<void>;
+  /**
+   * Default package-manager boundary only: pnpm exited with `ERR_PNPM_IGNORED_BUILDS` but the
+   * dependencies are in place. Without this callback that exit still fails the operation.
+   */
+  readonly onIgnoredBuilds?: (packages: readonly string[]) => void;
   readonly lifecycleFile?: string;
 }
 export interface PluginInstallOptions {
@@ -443,8 +450,18 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     else {
       // No shell: on Windows `pnpm.cmd` is resolved and run through `cmd.exe /d /s /c` with quoted arguments.
       const resolved = resolveCommand('pnpm', invocation);
-      await execute(resolved.command, [...resolved.args], { cwd: this.#root, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
-        ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+      try {
+        await execute(resolved.command, [...resolved.args], { cwd: this.#root, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+          ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+      } catch (error) {
+        // pnpm 11: builds the project did not allow are skipped and pnpm exits 1 after a complete install (#1250).
+        const report = this.#options.onIgnoredBuilds;
+        const output = ['stdout', 'stderr'].map(key => (error && typeof error === 'object' ? Reflect.get(error, key) : undefined))
+          .filter((value): value is string => typeof value === 'string').join('\n');
+        const ignored = parseIgnoredBuilds(output);
+        if (!report || !ignored || !await dependenciesInPlace(this.#root, invocation)) throw error;
+        report(ignored);
+      }
     }
   }
 
@@ -590,7 +607,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       target = await this.#resolveTarget(key, entries);
       declared = entries.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
     } catch (error) { throw new PluginEnablementError('invalid-request', errorMessage(error), [], []); }
-    if (!declared) throw new PluginEnablementError('not-declared', `插件实例 ${target.instanceKey}（${target.packageName}）未在配置中声明；先运行 zhin install ${target.packageName}`);
+    // The fallback target is derived from the request itself: never suggest installing it (#1250).
+    if (!declared) throw new PluginEnablementError('not-declared', undeclaredPluginMessage(key, await officialPluginCandidates(key, this.#root)));
     const state = await this.inspect(target.instanceKey);
     if (enabled && (!state.installed || !state.plugin)) {
       throw new PluginEnablementError('not-installed', `${state.packageName} ${state.installed ? `不是可加载的 Plugin 包${state.issues[0] ? `：${state.issues[0]}` : ''}` : '未安装'}；先运行 zhin install ${state.packageName}`);

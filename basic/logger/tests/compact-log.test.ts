@@ -5,6 +5,8 @@ import {
   formatCompact,
   formatCompactLog,
   formatCompactUsage,
+  escapeLogText,
+  LOG_CONTENT_MAX_LENGTH,
   truncatePreview,
 } from '../src/compact-log.js';
 
@@ -53,6 +55,22 @@ describe('compact-log', () => {
 
   it('truncatePreview can opt-in max length', () => {
     expect(truncatePreview('x'.repeat(200), 10)).toBe('xxxxxxxxxx...');
+  });
+
+  it('truncatePreview caps user content at the default length (#1250)', () => {
+    expect(truncatePreview('x'.repeat(LOG_CONTENT_MAX_LENGTH + 50))).toBe(`${'x'.repeat(LOG_CONTENT_MAX_LENGTH)}...`);
+  });
+
+  it('keeps multi-line content on one log line (#1250)', () => {
+    // A forged entry inside a chat message must not start a line of its own.
+    const forged = 'hi\n[10:00:00.000][ERROR] [gateway] owner password reset\r\nbye';
+    expect(truncatePreview(forged)).toBe('hi⏎[10:00:00.000][ERROR] [gateway] owner password reset⏎bye');
+    expect(truncatePreview(forged)).not.toMatch(/[\r\n]/u);
+    expect(escapeLogText('a\u2028b\u2029c')).toBe('a⏎b⏎c');
+  });
+
+  it('escapes ANSI and other control characters but keeps tabs (#1250)', () => {
+    expect(escapeLogText('\u001b[31mred\u001b[0m\tx\u0007')).toBe('\\u001b[31mred\\u001b[0m\tx\\u0007');
   });
 
   it('addCompactUsage', () => {

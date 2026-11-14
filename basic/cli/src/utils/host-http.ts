@@ -4,8 +4,7 @@
 import path from 'path';
 import { resolveHttpConfig } from '@zhin.js/host-http';
 import { createConfigDocument } from '@zhin.js/runtime';
-import { findConfigFile } from '@zhin.js/gateway/project';
-import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
+import { findConfigFile, loadRuntimeEnvironmentLayers, projectIdentity } from '@zhin.js/gateway/project';
 import { createLocalGatewayFetch, probeLocalGateway, type LocalGatewayFetch } from '@zhin.js/gateway/local';
 
 export interface HostHttpConfig {
@@ -29,41 +28,163 @@ export function connectableHost(host: string): string {
   return bare.includes(':') ? `[${bare}]` : bare;
 }
 
+/** Why the CLI refused to pick a Host for this project (#1250); nothing was sent. */
+export class HostTargetError extends Error {
+  constructor(readonly code: 'gateway-not-running' | 'project-mismatch' | 'project-unverified' | 'invalid-host', message: string) {
+    super(message);
+    this.name = 'HostTargetError';
+  }
+}
+
+/** The message when this project's gateway is not running; `offline` mentions `--offline` (zhin config). */
+export function gatewayNotRunningMessage(options: { offline?: boolean } = {}): string {
+  return `本项目的网关未运行（zhin start 启动${options.offline ? '，或加 --offline 离线读写配置文件' : ''}）；`
+    + '未向任何地址发送请求。确需连接其他地址的 Host 时请显式 --host <url>';
+}
+
+export interface LoadHostHttpOptions {
+  /**
+   * An explicit Host URL (`--host`). Without it only this project's own gateway — over its local
+   * control socket — is used: the CLI never derives `http://127.0.0.1:<port>` from the
+   * configuration, where another project's gateway may be listening (#1250).
+   */
+  readonly host?: string;
+  /** `fetch` used for the `/pub/health` identity check (tests). */
+  readonly fetch?: typeof fetch;
+  /** Where the identity-check warning goes (default stderr). */
+  readonly warn?: (message: string) => void;
+  /**
+   * `--allow-unverified-host`: accept a loopback target that reports no project id (older gateway,
+   * `--standalone` instance) with a warning instead of refusing it. A different id is always refused.
+   */
+  readonly allowUnverifiedHost?: boolean;
+}
+
+/** `http://host:port` → `http://host:port/api`; refuses credentials, query and fragment. */
+export function normalizeHostUrl(host: string): string {
+  let url: URL;
+  try { url = new URL(host); } catch { throw new HostTargetError('invalid-host', `无效的 --host 地址：${host}`); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new HostTargetError('invalid-host', '--host 必须是不带凭据、查询和片段的 HTTP(S) 地址');
+  }
+  const path = url.pathname === '/' ? '/api' : url.pathname.replace(/\/+$/u, '');
+  return `${url.origin}${path}`;
+}
+
+export function isLoopbackUrl(value: string): boolean {
+  const hostname = new URL(value).hostname;
+  return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/u.test(hostname);
+}
+
 /**
- * 从项目目录解析 Host API baseUrl 与 Bearer token。
- * Uses the same config document, `.env` + `.env.<environment>` layers and `http` resolver as `zhin runtime start`.
+ * Before a request (and a Console token) goes to an explicit `--host` on this machine: the gateway
+ * there must report this project's id on `/pub/health`. A different id is refused; so is a target that
+ * reports none (older versions, a `--standalone` instance) unless `allowUnverifiedHost`
+ * (`--allow-unverified-host`) accepts it with a warning. Only the `/pub/health` probe is sent before
+ * that decision, never a token. Remote hosts are not checked: the operator named them explicitly and
+ * they cannot share this checkout's path.
+ */
+export async function verifyHostProject(
+  baseUrl: string,
+  projectRoot: string,
+  options: Pick<LoadHostHttpOptions, 'fetch' | 'warn' | 'allowUnverifiedHost'> = {},
+): Promise<void> {
+  if (!isLoopbackUrl(baseUrl)) return;
+  const origin = new URL(baseUrl).origin;
+  const warn = options.warn ?? ((message: string) => console.error(message));
+  let reported: unknown;
+  try {
+    const response = await (options.fetch ?? fetch)(`${origin}/pub/health`, { signal: AbortSignal.timeout(3_000), redirect: 'error' });
+    const body = (await response.json().catch(() => undefined)) as { project?: { id?: unknown } } | undefined;
+    reported = body?.project?.id;
+  } catch {
+    return; // Unreachable: the request itself reports the connection failure.
+  }
+  if (typeof reported !== 'string') {
+    if (!options.allowUnverifiedHost) {
+      throw new HostTargetError('project-unverified',
+        `${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已拒绝，未发送请求和令牌。`
+        + '请升级该网关并用 zhin start 启动本项目；确认目标无误时可加 --allow-unverified-host 继续');
+    }
+    warn(`! ${origin} 没有报告项目标识（旧版网关或 --standalone 实例），无法确认它属于本项目；已按 --allow-unverified-host 继续`);
+    return;
+  }
+  const expected = projectIdentity(projectRoot);
+  if (reported !== expected) {
+    throw new HostTargetError('project-mismatch',
+      `${origin} 上运行的是另一个项目的网关（项目标识 ${reported.slice(0, 12)}…，本项目 ${expected.slice(0, 12)}…）；已拒绝，未发送请求和令牌。`
+      + '请在那个项目的目录里执行，或先 zhin start 启动本项目的网关');
+  }
+}
+
+/**
+ * 从项目目录解析 Host API 连接：本项目网关运行时经本地控制套接字（`.zhin/gateway.sock`）；
+ * 显式 `--host` 时连该地址（本机地址先核对项目标识）；否则抛出 {@link HostTargetError}，
+ * 不再按配置推导 `127.0.0.1:<port>` 并带上令牌（#1250）。返回 null 表示不是 zhin 项目目录。
  */
 export async function loadHostHttpConfig(
   cwd = process.cwd(),
   environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  options: LoadHostHttpOptions = {},
 ): Promise<HostHttpConfig | null> {
   const configFile = findConfigFile(cwd);
   if (!configFile) return null;
 
   const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
-  const http = await resolveHttpConfig(
-    createConfigDocument(path.join(cwd, configFile)),
-    layers.environments?.[environment],
-    cwd,
-  );
+  const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
+  if (options.host) {
+    const baseUrl = normalizeHostUrl(options.host);
+    await verifyHostProject(baseUrl, cwd, options);
+    // After Console setup http.token is rejected (ADR 0049): use a user API token instead.
+    const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
+    return { baseUrl, token: consoleToken || http.token || '' };
+  }
+  const local = await localGatewayFetch(cwd);
+  if (!local) throw new HostTargetError('gateway-not-running', gatewayNotRunningMessage());
+  const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
   const scheme = http.tls ? 'https' : 'http';
   const host = connectableHost(http.host ?? '127.0.0.1');
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
-  const local = await localGatewayFetch(cwd);
-  const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
   return {
+    // Only a label and the URL path over the socket: no TCP connection is made to it.
     baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
-    // After Console setup http.token is rejected (ADR 0049): use a user API token instead. Over
-    // the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
+    // Over the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
     // request as that token's principal); without one the request runs as the local owner.
-    token: local ? consoleToken : consoleToken || http.token || '',
-    ...(local ? { fetch: local } : {}),
+    token: consoleToken,
+    fetch: local,
   };
 }
 
+/** `--host <url>` help text shared by the commands that talk to a running Host. */
+export const HOST_OPTION_DESCRIPTION = '显式连接这个 Host 地址（默认只经本项目网关的本地套接字连接；本机地址会先核对项目标识）';
+
+/** `--allow-unverified-host` help text: accept a local target that reports no project id. */
+export const ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION = '本机目标没有报告项目标识（旧版网关或 --standalone 实例）时仍继续（仅警告）；默认拒绝';
+
 /**
- * The local-socket `fetch` when a gateway runs for `root` (any probe failure — not running,
- * another user's socket — leaves the caller on HTTP with its token).
+ * {@link loadHostHttpConfig} for commands: reports a missing project or a refused target through
+ * `report` and exits 1 — nothing is sent in either case.
+ */
+export async function requireHostHttpConfig(
+  options: { host?: string; allowUnverifiedHost?: boolean },
+  report: (message: string) => void,
+  cwd = process.cwd(),
+): Promise<HostHttpConfig> {
+  try {
+    const http = await loadHostHttpConfig(cwd, undefined,
+      options.host ? { host: options.host, allowUnverifiedHost: options.allowUnverifiedHost === true } : {});
+    if (http) return http;
+    report('未找到 zhin 配置文件，无法确定 Host API 地址');
+  } catch (error) {
+    if (!(error instanceof HostTargetError)) throw error;
+    report(error.message);
+  }
+  process.exit(1);
+}
+
+/**
+ * The local-socket `fetch` when a gateway runs for `root`; undefined otherwise (not running,
+ * another user's socket). Callers must not fall back to a TCP port derived from the config.
  */
 export async function localGatewayFetch(root: string): Promise<LocalGatewayFetch | undefined> {
   const running = await probeLocalGateway({ root }).catch(() => undefined);
