@@ -226,7 +226,7 @@ async function runSwitch(
   if (result.ok) return { result };
   const action = enabled ? '启用' : '停用';
   const text = result.status === 'rollbackFailed'
-    ? `${action} ${plugin} 失败，且回滚未完成：${result.rollbackError ?? '未知错误'}（原因：${result.error ?? '未知错误'}）`
+    ? `${action} ${plugin} 失败，且回滚未完成：${[result.rollbackError, result.restartError ? `重新启动实例失败：${result.restartError}` : undefined].filter(Boolean).join('；') || '未知错误'}（原因：${result.error ?? '未知错误'}）`
     : `${action} ${plugin} 失败，已回滚：${result.error ?? '未知错误'}`;
   return {
     reply: error(500, result.status === 'rollbackFailed' ? 'rollback_failed' : 'transaction_failed', text, type, {

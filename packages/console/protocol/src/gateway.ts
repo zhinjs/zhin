@@ -224,8 +224,19 @@ export interface GatewayPackageTransactionResult {
    */
   readonly errors?: readonly GatewayValidationIssue[];
   readonly missingEnv?: readonly string[];
-  /** Why the rollback did not complete (`rollbackFailed` only). */
+  /** Why restoring the project files or reinstalling the old dependencies failed (`rollbackFailed` only). */
   readonly rollbackError?: string;
+  /**
+   * Why starting the previously running instance again during the rollback failed (`rollbackFailed`
+   * only). The restart is attempted even when {@link rollbackError} is set.
+   */
+  readonly restartError?: string;
+  /**
+   * pnpm skipped these packages' build scripts (`ERR_PNPM_IGNORED_BUILDS`) while the dependencies
+   * themselves were installed: reported as a warning, not as a failure. Empty when pnpm did not
+   * name them. Absent when no build was ignored.
+   */
+  readonly ignoredBuilds?: readonly string[];
   /** Last instance log lines when starting the instance failed. */
   readonly logTail?: readonly string[];
   /**

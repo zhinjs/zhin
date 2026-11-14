@@ -18,6 +18,7 @@ import { explainConfigFields } from './config-explanation.js';
 import type { ConsoleConfigExplanation, GatewayPluginConfigurationNeed } from '@zhin.js/console-protocol';
 import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
+import { dependenciesInPlace, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
 import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
@@ -44,6 +45,11 @@ export interface PluginManagementOptions {
   readonly requestRestart?: () => void | Promise<void>;
   /** Real package-manager boundary; tests use independent on-disk packages. */
   readonly installDependencies?: (args: readonly string[], projectRoot: string) => Promise<void>;
+  /**
+   * Default package-manager boundary only: pnpm exited with `ERR_PNPM_IGNORED_BUILDS` but the
+   * dependencies are in place. Without this callback that exit still fails the operation.
+   */
+  readonly onIgnoredBuilds?: (packages: readonly string[]) => void;
   readonly lifecycleFile?: string;
 }
 export interface PluginInstallOptions {
@@ -443,8 +449,18 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     else {
       // No shell: on Windows `pnpm.cmd` is resolved and run through `cmd.exe /d /s /c` with quoted arguments.
       const resolved = resolveCommand('pnpm', invocation);
-      await execute(resolved.command, [...resolved.args], { cwd: this.#root, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
-        ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+      try {
+        await execute(resolved.command, [...resolved.args], { cwd: this.#root, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+          ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+      } catch (error) {
+        // pnpm 11: builds the project did not allow are skipped and pnpm exits 1 after a complete install (#1250).
+        const report = this.#options.onIgnoredBuilds;
+        const output = ['stdout', 'stderr'].map(key => (error && typeof error === 'object' ? Reflect.get(error, key) : undefined))
+          .filter((value): value is string => typeof value === 'string').join('\n');
+        const ignored = parseIgnoredBuilds(output);
+        if (!report || !ignored || !await dependenciesInPlace(this.#root, invocation)) throw error;
+        report(ignored);
+      }
     }
   }
 

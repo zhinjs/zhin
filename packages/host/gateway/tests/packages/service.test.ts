@@ -245,6 +245,69 @@ describe('GatewayPackageService transactions', () => {
     expect((await readJson(join(root, 'package.json'))).dependencies.pg).toBeUndefined();
   });
 
+  it('starts the previously running instance even when the rollback reinstall fails (#1250)', async () => {
+    // The install fails, then the rollback reinstall fails too (pnpm 11 exit 1): the bot must not stay stopped.
+    const instance = new FakeInstance('running');
+    const pm = fakePackageManager({ fail: args => args[0] === 'install' || args.includes('@zhin.js/agent') });
+    const events: GatewayPackageEvent[] = [];
+    const result = await service({ instance, pm }).install(['@zhin.js/agent'], { principal: owner, onEvent: event => events.push(event) });
+    expect(result).toMatchObject({ ok: false, status: 'rollbackFailed', failedPhase: 'package-manager', rollbackError: 'fake pnpm install failed', instance: { before: 'running', after: 'running' } });
+    expect(result.restartError).toBeUndefined();
+    expect(instance.calls).toEqual(['stop', 'start']);
+    expect(events.filter(event => event.type === 'phase').map(event => (event as { phase: string }).phase))
+      .toEqual(['snapshot', 'stop-instance', 'package-manager', 'rollback', 'restore-files', 'reinstall', 'restart-instance', 'done']);
+  });
+
+  it('reports a failed restart apart from the rollback error', async () => {
+    const instance = new FakeInstance('running', () => 'fail');
+    const pm = fakePackageManager({ fail: args => args[0] === 'install' || args.includes('@zhin.js/agent') });
+    const result = await service({ instance, pm }).install(['@zhin.js/agent'], { principal: owner });
+    expect(result).toMatchObject({ status: 'rollbackFailed', rollbackError: 'fake pnpm install failed', restartError: 'Instance exited unexpectedly (code 1)', logTail: ['boom from instance'] });
+  });
+
+  describe('pnpm ERR_PNPM_IGNORED_BUILDS (#1250)', () => {
+    const IGNORED = ' ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: esbuild@0.25.4, @scope/native@1.0.0.\nRun "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.\n';
+    /** pnpm 11: the install completes, then pnpm exits 1 because build scripts were skipped. */
+    function ignoringBuilds(options: { linked?: boolean; calls?: string[][] } = {}): GatewayPackageManager {
+      const base = fakePackageManager({ calls: options.calls });
+      return async (args, projectRoot, output) => {
+        await base(args, projectRoot, output);
+        if (options.linked !== false) await writeFile(join(projectRoot, 'node_modules', '.modules.yaml'), 'layoutVersion: 5\n');
+        output('stdout', IGNORED);
+        throw new Error(`pnpm ${args[0]} exited with code 1`);
+      };
+    }
+
+    it('keeps an install whose dependencies are in place and reports the skipped builds', async () => {
+      const calls: string[][] = [];
+      const instance = new FakeInstance('running');
+      const result = await service({ instance, pm: ignoringBuilds({ calls }) }).install(['pg'], { principal: owner });
+      expect(result).toMatchObject({ ok: true, status: 'succeeded', ignoredBuilds: ['esbuild', '@scope/native'], instance: { after: 'running' } });
+      expect(calls.map(call => call[0])).toEqual(['add']);
+      expect((await readJson(join(root, 'package.json'))).dependencies.pg).toBeDefined();
+      expect(instance.calls).toEqual(['stop', 'start']);
+    });
+
+    it('still fails when the dependencies are not in place', async () => {
+      const instance = new FakeInstance('running');
+      const result = await service({ instance, pm: ignoringBuilds({ linked: false }) }).install(['pg'], { principal: owner });
+      expect(result).toMatchObject({ ok: false, failedPhase: 'package-manager', error: 'pnpm add exited with code 1' });
+      expect(instance.state).toBe('running');
+    });
+
+    it('does not treat another exit as ignored builds', async () => {
+      const pm: GatewayPackageManager = async (_args, projectRoot, output) => {
+        await mkdir(join(projectRoot, 'node_modules'), { recursive: true });
+        await writeFile(join(projectRoot, 'node_modules', '.modules.yaml'), '');
+        output('stderr', ' ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/nope: Not Found\n');
+        throw new Error('pnpm add exited with code 1');
+      };
+      const result = await service({ pm }).install(['pg'], { principal: owner });
+      expect(result).toMatchObject({ ok: false });
+      expect(result.ignoredBuilds).toBeUndefined();
+    });
+  });
+
   it('restores the root config and lockfile changed by the workflow', async () => {
     const config = await readFile(join(root, 'zhin.config.json'), 'utf8');
     const workflow: PackageWorkflowPort = {

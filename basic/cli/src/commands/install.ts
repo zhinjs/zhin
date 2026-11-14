@@ -7,6 +7,7 @@ import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
+import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { configurationHints, probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
 import {
   applyProjectConfigPlan,
@@ -117,13 +118,15 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       if (!result.ok) process.exit(1);
       return;
     }
-    const result = await new PluginManagementWorkflow(process.cwd()).install(
+    let ignoredBuilds: string[] | undefined;
+    const result = await new PluginManagementWorkflow(process.cwd(), { onIgnoredBuilds: names => { (ignoredBuilds ??= []).push(...names); } }).install(
       pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall)
         ? pluginToInstall : pluginName,
       undefined, undefined,
       { enable: shouldEnable, saveDev: options.saveDev, source: installArgs.at(-1) },
     );
     logger.success(`✓ 依赖安装完成：${result.state.packageName}@${result.state.version ?? 'unknown'}`);
+    if (ignoredBuilds) output.line(`! ${ignoredBuildsHint([...new Set(ignoredBuilds)])}`);
     output.line(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
     if (!result.state.plugin) output.line('该包是普通依赖，不会挂载到 Plugin Runtime。');
     if (result.needsConfiguration) for (const line of configurationHints([result.needsConfiguration])) output.line(line);
