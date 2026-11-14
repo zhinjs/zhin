@@ -4,22 +4,22 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）。；所有者已批准（zhinjs/zhin#1250）：新增类型 `ConsoleFeatureOverrideOperator` / `ConsoleFeatureOverrideSource`，`feature.get` / `feature.conversations` 结果新增可选 `operator` 与会话 `name`；权限表新增 `GET /conversations/workspaces/commands`。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增 Console RPC `attention.list` 及其协议类型与导出（ATTENTION_RPC、ConsoleAttentionItem、attentionItemId、unavailableDetails 等）。；所有者已批准（zhinjs/zhin#1250）：新增类型 `ConsoleFeatureOverrideOperator` / `ConsoleFeatureOverrideSource`，`feature.get` / `feature.conversations` 结果新增可选 `operator` 与会话 `name`；权限表新增 `GET /conversations/workspaces/commands`。；所有者已批准（zhinjs/zhin#1250）：`ConsoleAttentionKind` 新增 `schedule.unschedulable`（并入 `CONSOLE_ATTENTION_KINDS`），`ConsoleAttentionSubject` 新增可选 `scheduleJobId`。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。；所有者已批准（zhinjs/zhin#1250）：实例 Console 后端新增 `GET /api/conversations/workspaces/commands`（Sandbox 快捷命令），`feature.get` / `feature.conversations` 返回 `operator` 与会话名；经 `zhin.js/command` 新增导出 `UserFacingError` / `isUserFacingError`。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：实例 Console 后端新增 `attention.list` RPC（「需要你处理」），`endpoint.list` 账号级过滤改按 adapter + name（过渡期兼容 canonical id）。；所有者已批准（zhinjs/zhin#1250）：实例 Console 后端新增 `GET /api/conversations/workspaces/commands`（Sandbox 快捷命令），`feature.get` / `feature.conversations` 返回 `operator` 与会话名；经 `zhin.js/command` 新增导出 `UserFacingError` / `isUserFacingError`。；所有者已批准（zhinjs/zhin#1250）：`zhin.js/instance/cli` 新增导出 `loadProviderDisplay`（服务名 · 模型显示）；实例 Console 新增 `/introspection/recent-turns`，`schedule:list` / `GET /assistant/jobs` 返回 `target` 与 `lastRun` 等字段。"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：公开类新增方法 ConsoleConfigurationStore.readLiteralSecrets() 与 PluginManagementWorkflow.checkDependencies()，inspect 新增 options 参数。；所有者已批准（zhinjs/zhin#1250）：`@zhin.js/gateway/usage` 新增导出 `PromptCacheProbe`、`PromptCacheHint`、`PROMPT_CACHE_HINT_*`、`defaultUsageTimeZone`、`isUsageTimeZone`、`dayKeyOf`、`usageModelDisplayName`、`UsageStatsOptions` 等，`buildUsageStats` / `bucketStartOf` 新增可选参数。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+      "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。；所有者已批准（zhinjs/zhin#1250）：新增类型导出 `ConsoleScheduleTarget`，`listSchedule` 新增可选请求参数（locale）。"
     },
     {
       "package": "@zhin.js/command",
@@ -44,7 +44,17 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：`@zhin.js/agent/trace` 新增导出类型 `TurnTraceTrigger`，`TurnTrace` 新增可选 `trigger`，`TurnTraceNote` 新增 `trigger` 变体。；所有者已批准（zhinjs/zhin#1250）：新增导出 `BOT_BOOTSTRAP_FILENAME`、`BOT_BOOTSTRAP_FILENAMES`、`botBootstrapFilenames()`、`hasBotBootstrapFile()`（BOT.md，且纳入 `DEFAULT_SELF_FILES` 受保护文件），`@zhin.js/agent/trace` 新增 `turnTraceTotalUsage` / `TurnTraceUsageTotals` 与 trace 字段 `subagent_usage`。"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增类型导出 `ScheduleJobKind`、`ScheduleJobDisplay`、`ScheduleJobLastRun`，`ScheduleJobRegistration` 新增可选 `title` / `titleI18n` / `kind`（定时任务显示与最近一次实际执行）。"
+    },
+    {
+      "package": "@zhin.js/plugin-code-runner",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增导出 `codeRunnerConfig`、`resolveCodeRunnerBackend`、`CodeRunnerBackend`、`CodeRunnerConfig`、`languageAliases`、`normalizeLanguage`、`supportedLanguages`、`RunResult`（可配置后端与语言别名）。"
     }
   ]
 }

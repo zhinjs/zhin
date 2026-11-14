@@ -1,5 +1,5 @@
 ---
-"@zhin.js/agent": patch
+"@zhin.js/agent": minor
 "zhin.js": patch
 "@zhin.js/cli": patch
 "@zhin.js/scaffold-wizard": patch

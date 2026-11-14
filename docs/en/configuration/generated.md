@@ -2317,7 +2317,11 @@ _This Schema declares no fields._
 
 [`plugins/utils/code-runner/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/code-runner/schema.json)
 
-_This Schema declares no fields._
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `code-runner.provider` | `"piston"` \| `"glot"` | no | `"piston"` | Backend protocol: piston (a self-hosted Piston /api/v2/execute) or glot (a glot.io-compatible /api/run). |
+| `code-runner.endpoint` | string | no | `""` | Backend URL. For piston, the full execute URL (e.g. http://127.0.0.1:2000/api/v2/execute); for glot, the run prefix (e.g. https://glot.io/api/run). Empty means not configured. ${CODE_RUNNER_ENDPOINT} is supported. |
+| `code-runner.token` | string | no | — | Optional backend token; prefer ${CODE_RUNNER_TOKEN}. Sent as the raw Authorization header for piston and as "Authorization: Token &lt;token&gt;" for glot. |
 
 ### content-moderation
 
