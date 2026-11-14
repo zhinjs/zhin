@@ -445,7 +445,9 @@ describe('chat-principals.* / chat-identities.* Console RPC (ADR 0060 §7)', () 
     const reader = createChatRoleReader({ roles: () => roles, conversationKey: c => `sandbox/dev/${c.kind}:${c.id}`,
       consolePrincipal: user => store.principals.linkOfConsoleUser(user)?.principalId });
     const room = { endpoint: { id: 'x', adapter: 'sandbox' }, kind: 'private', id: 'r' } as never;
-    expect(reader.consoleSpeaker!(room, 'u-boss')).toEqual({ adapter: 'sandbox', userId: 'console-u-boss' });
+    // u-boss's person holds a global owner grant: only a caller with global iam.manage speaks as it.
+    expect(reader.consoleSpeaker!(room, 'u-boss')).toBeUndefined();
+    expect(reader.consoleSpeaker!(room, 'u-boss', { canManageGlobal: true })).toEqual({ adapter: 'sandbox', userId: 'console-u-boss' });
     expect(reader.consoleSpeaker!(room, 'u-nobody')).toBeUndefined();
     // Typing the owner's sandbox id as a simulated sender never resolves the role.
     expect(reader.factsOf(room, '~sim:console-u-boss')).toBeUndefined();

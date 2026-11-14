@@ -6,7 +6,7 @@ import { createEndpointSpecification, endpointSpec, type Endpoint, type Endpoint
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { principalAllows, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import { hostChatRole, type CapabilityId, type ChatRoleReader } from 'zhin.js';
 import { EndpointDeliveryError, type PlatformStandingLevel } from '@zhin.js/im-contract';
@@ -156,16 +156,23 @@ export function sandboxSenderRoleFacts(reader: ChatRoleReader | undefined, conve
   };
 }
 
+/** Why 「以我的聊天身份发言」 was not used for a message (`asMeUnavailable` on the echo). */
+export type SandboxAsMeUnavailableReason = 'no-console-user' | 'no-identity' | 'needs-global-iam';
+
 interface SandboxConsoleUser {
   readonly userId: string;
   readonly displayName?: string;
+  /** Holds global `iam.manage`: may speak as a linked person who holds a global grant (ADR 0060 §5.4). */
+  readonly canManageGlobal: boolean;
 }
 
 /** The signed-in Console user behind a socket (sessions and API tokens); none for the bootstrap principal or standalone. */
 export function sandboxConsoleUser(principal: WsConnection['principal']): SandboxConsoleUser | undefined {
   if (!principal || (principal.kind !== 'user' && principal.kind !== 'api-token')) return undefined;
   if (typeof principal.userId !== 'string' || !principal.userId) return undefined;
-  return Object.freeze({ userId: principal.userId, ...(principal.displayName ? { displayName: principal.displayName } : {}) });
+  let canManageGlobal = false;
+  try { canManageGlobal = principalAllows(principal, 'iam.manage'); } catch { canManageGlobal = false; }
+  return Object.freeze({ userId: principal.userId, ...(principal.displayName ? { displayName: principal.displayName } : {}), canManageGlobal });
 }
 
 /**
@@ -529,14 +536,21 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   /**
    * ADR 0060 §5.4: the identity a message speaks as. Only on request, only for a signed-in Console
    * user, and only an identity of the person linked to that user on this adapter (`consoleSpeaker`).
+   * A person who holds a global grant is spoken as only by a caller with global `iam.manage`;
+   * otherwise the message goes out as a simulated, role-less sender (`needs-global-iam`), the
+   * same rule `chat-identities.simulated.ensure` applies when it creates the identity.
    */
   #speaker(asMe: boolean, user: SandboxConsoleUser | undefined, conversation: Parameters<ChatRoleReader['factsOf']>[0]):
-    { readonly identity?: { readonly adapter: string; readonly userId: string }; readonly unavailable?: 'no-console-user' | 'no-identity' } {
+    { readonly identity?: { readonly adapter: string; readonly userId: string }; readonly unavailable?: SandboxAsMeUnavailableReason } {
     if (!asMe) return {};
     if (!user) return { unavailable: 'no-console-user' };
-    let identity: { readonly adapter: string; readonly userId: string } | undefined;
-    try { identity = this.#options.chatRoles?.consoleSpeaker?.(conversation, user.userId); } catch { identity = undefined; }
-    return identity ? { identity } : { unavailable: 'no-identity' };
+    const speaker = (canManageGlobal: boolean) => {
+      try { return this.#options.chatRoles?.consoleSpeaker?.(conversation, user.userId, { canManageGlobal }); } catch { return undefined; }
+    };
+    const identity = speaker(user.canManageGlobal);
+    if (identity) return { identity };
+    // Tell 「no identity yet」 apart from 「the person holds global grants」.
+    return { unavailable: !user.canManageGlobal && speaker(true) ? 'needs-global-iam' : 'no-identity' };
   }
 
   #ensurePlaceholder(name: string, owner: string): void {

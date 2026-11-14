@@ -87,8 +87,8 @@ async function fixture() {
   return { connect, sent };
 }
 
-const user = (userId: string, displayName = 'Owner'): Principal => ({ kind: 'user', userId, username: userId, displayName,
-  credentialId: 'c', grants: [], roles: [] });
+const user = (userId: string, displayName = 'Owner', globalIam = false): Principal => ({ kind: 'user', userId, username: userId, displayName,
+  credentialId: 'c', grants: globalIam ? [{ scope: { kind: 'global' }, permissions: ['iam.manage'] }] : [], roles: [] } as Principal);
 
 describe('Sandbox speaker identity (ADR 0060 §5.4)', () => {
   it('a typed owner id is simulated: reserved id, no zhin role, lowest trust (negative)', async () => {
@@ -112,11 +112,22 @@ describe('Sandbox speaker identity (ADR 0060 §5.4)', () => {
 
   it('「以我的聊天身份发言」 speaks as the linked person and resolves its role', async () => {
     const { connect, sent } = await fixture();
-    const client = await connect(user('u-owner'));
+    const client = await connect(user('u-owner', 'Owner', true));
     expect(client.frames.find(frame => frame.type === 'ready')).toMatchObject({ consoleUser: true });
     const { sender, echo } = await sent(client, { asMe: true, senderId: 'ignored', senderName: 'ignored' });
     expect(sender).toMatchObject({ id: 'console-u-owner', name: 'Owner' });
     expect(echo).toMatchObject({ senderId: 'console-u-owner', simulated: false, senderChatRole: 'owner', senderTrustLevel: 'owner' });
+  });
+
+  it('security review: a linked person with a global grant speaks only for a caller with global iam.manage (negative)', async () => {
+    const { connect, sent } = await fixture();
+    // The link exists (e.g. the person received the global grant after the identity was created),
+    // but this Console user lacks global iam.manage: simulated, role-less, with the reason.
+    const client = await connect(user('u-owner', 'Owner', false));
+    const { sender, echo } = await sent(client, { asMe: true, senderId: 'me' });
+    expect(sender.id).toBe('~sim:me');
+    expect(echo).toMatchObject({ simulated: true, asMeUnavailable: 'needs-global-iam', senderTrustLevel: 'group_member' });
+    expect(echo.senderChatRole).toBeUndefined();
   });
 
   it('asMe without a linked identity, or without a signed-in user, falls back to a simulated sender (negative)', async () => {
@@ -141,7 +152,7 @@ describe('Sandbox speaker identity (ADR 0060 §5.4)', () => {
     expect(parse({ type: 'private', id: 'r', content: 'x', asMe: 'yes' }).asMe).toBeUndefined();
     expect(sandboxSimulatedSenderId('a')).toBe('~sim:a');
     expect(sandboxSimulatedSenderId('~sim:a')).toBe('~sim:a');
-    expect(sandboxConsoleUser({ kind: 'api-token', userId: 'u', username: 'u', displayName: '', credentialId: 'c', grants: [], roles: [] })).toEqual({ userId: 'u' });
+    expect(sandboxConsoleUser({ kind: 'api-token', userId: 'u', username: 'u', displayName: '', credentialId: 'c', grants: [], roles: [] })).toEqual({ userId: 'u', canManageGlobal: false });
   });
 });
 

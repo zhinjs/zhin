@@ -167,6 +167,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
   const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations, conversationNames, claim, people, bindCodes,
+    chatRoleAudit: () => audit,
     ...(chatRoleImports ? { chatRoleImports } : {}),
     ...(options.personalPrincipalImports ? { personalPrincipalImports: options.personalPrincipalImports } : {}) });
   let loaded = false;

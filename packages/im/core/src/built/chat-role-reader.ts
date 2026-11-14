@@ -138,8 +138,18 @@ export interface ChatRoleReader {
    * not linked or the person has no identity on that adapter. A local simulation (the Console
    * Sandbox) speaks as it for an authenticated Console user who chose 「以我的聊天身份发言」.
    * Optional for readers built before P3.
+   *
+   * When the linked person holds a global grant, it counts for every identity of the person, so
+   * the identity is returned only with `canManageGlobal: true` (the Console caller holds global
+   * `iam.manage`); otherwise undefined — the same rule as `chat-identities.simulated.ensure`.
    */
-  consoleSpeaker?(conversation: ConversationRef, consoleUserId: string): ChatIdentity | undefined;
+  consoleSpeaker?(conversation: ConversationRef, consoleUserId: string, options?: ChatConsoleSpeakerOptions): ChatIdentity | undefined;
+}
+
+/** What the Console caller behind {@link ChatRoleReader.consoleSpeaker} may do. */
+export interface ChatConsoleSpeakerOptions {
+  /** The caller holds global `iam.manage`; required to speak as a person who holds a global grant. */
+  readonly canManageGlobal?: boolean;
 }
 
 export const chatRolesToken = createToken<ChatRoleReader>(
@@ -250,7 +260,7 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
     subscribe(listener) {
       return options.subscribe ? options.subscribe(listener) : () => undefined;
     },
-    consoleSpeaker(conversation, consoleUserId) {
+    consoleSpeaker(conversation, consoleUserId, speakerOptions) {
       if (typeof consoleUserId !== 'string' || !consoleUserId || !options.consolePrincipal) return undefined;
       const key = scopeKey({ level: 'conversation', conversation });
       if (key === undefined) return undefined;
@@ -260,6 +270,9 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
       let service: ChatRoleService | undefined;
       try { principalId = options.consolePrincipal(consoleUserId); service = options.roles(); } catch { return undefined; }
       if (!principalId || !service) return undefined;
+      // A link must never be worth the person's global grants (ADR 0060 §5.4, security review).
+      if (speakerOptions?.canManageGlobal !== true
+        && service.store.list().some(entry => entry.level === 'global' && chatRoleEntryPrincipalId(entry) === principalId)) return undefined;
       const held = service.store.principal?.(principalId)?.identities.find(identity => identity.adapter === adapter && isChatIdentity(identity));
       return held ? Object.freeze({ adapter: held.adapter, userId: held.userId }) : undefined;
     },

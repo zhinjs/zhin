@@ -113,6 +113,33 @@ describe('ai.personalPrincipals import (ADR 0060 §4.1, P3)', () => {
     expect((await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.list' }, { ...context, authorizeGlobal: () => false }))!.status).toBe(403);
   });
 
+  it('re-review: a project that never had entries records its first import, so a first entry added later waits', async () => {
+    const { store, people, logger, book, root } = await setup();
+    await book.run({ seeds: [], people, logger });
+    expect(JSON.parse(await readFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), 'utf8'))).toMatchObject({ version: 1, entries: [], migratedAt: 100 });
+    const state = await book.run({ seeds: [seed('user:u-new', '40004')], people, logger });
+    expect(state.entries).toMatchObject([{ subjectId: '40004', status: 'pending', reason: 'needs-confirmation' }]);
+    expect(store.principals.linkOfConsoleUser('u-new')).toBeUndefined();
+  });
+
+  it('re-review: ignore, import and acknowledge of personal links are audited with the actor', async () => {
+    const { people, logger, book, root, roles } = await setup();
+    await book.run({ seeds: [], people, logger });
+    await book.run({ seeds: [seed('user:u1', '50005'), seed('user:u2', '60006')], people, logger });
+    const imports = new ChatRoleImportBook({ projectRoot: root, roles: () => roles, adapterKind: () => () => 'platform' });
+    const audit: Record<string, any>[] = [];
+    const context = { imports, personal: book, people, roles, authorizeGlobal: () => true, actor: 'user:root', audit: (entry: any) => { audit.push(entry); } };
+    const pending = ((await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.list' }, context))!.body.data as any).personalPending;
+    await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.resolve', data: { decision: 'ignore', id: pending[0].id } }, context);
+    await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.resolve', data: { decision: 'import', id: pending[1].id } }, context);
+    await dispatchChatRoleImportsConsoleRpc({ type: 'chat-roles.imports.resolve', data: { decision: 'acknowledge' } }, context);
+    expect(audit.map(entry => [entry.actor, entry.action, entry.detail?.decision])).toEqual([
+      ['user:root', 'chat-roles.import', 'ignore'],
+      ['user:root', 'chat-roles.import', 'import'],
+      ['user:root', 'chat-roles.import', 'acknowledge'],
+    ]);
+  });
+
   it('security review: after the first import, new or changed entries wait for confirmation', async () => {
     const { store, people, logger, book } = await setup();
     await book.run({ seeds: [seed('user:u1', '10001')], people, logger });

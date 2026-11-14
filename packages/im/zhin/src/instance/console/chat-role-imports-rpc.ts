@@ -17,7 +17,7 @@ import {
 } from '@zhin.js/console-protocol';
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from '../chat-roles.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
-import type { ChatRoleImportBook } from '../chat-role-migration.js';
+import type { ChatRoleAudit, ChatRoleImportBook } from '../chat-role-migration.js';
 import { personalPrincipalPending, type PersonalPrincipalImportBook } from '../chat-personal-principals.js';
 import type { ChatPeople } from '../chat-people.js';
 import { FeatureRpcError, type FeatureRpcReply } from './console-feature-rpc.js';
@@ -32,6 +32,8 @@ export interface ChatRoleImportsRpcContext {
   /** Whether the caller holds `iam.manage` globally. Deny by default. */
   readonly authorizeGlobal?: () => boolean | Promise<boolean>;
   readonly actor?: string;
+  /** Audits the decisions on `ai.personalPrincipals` links (`ignore`, `import`, `acknowledge`). */
+  readonly audit?: ChatRoleAudit;
   readonly publishEvent?: (type: string, data: unknown) => void;
 }
 
@@ -70,14 +72,15 @@ export async function dispatchChatRoleImportsConsoleRpc(message: Record<string, 
       const actor = context.actor ?? 'console';
       if (decision === 'acknowledge') {
         const status = await imports.acknowledge(actor);
-        const personal = context.personal ? await context.personal.acknowledge(actor) : 'unchanged';
+        const personal = context.personal ? await context.personal.acknowledge(actor, context.audit) : 'unchanged';
         data = Object.freeze({ status: status === 'saved' || personal === 'saved' ? 'acknowledged' as const : 'unchanged' as const });
       } else if (decision === 'import' || decision === 'ignore') {
         if (typeof input.id !== 'string' || !/^[0-9a-f]{24}$/u.test(input.id)) throw new FeatureRpcError(400, 'id 必须是导入候选的 id');
         const resolution = await imports.resolve({ id: input.id, decision, actor });
         if (resolution.status === 'not-found' && context.personal && context.people) {
           // ADR 0060 §4.1: a waiting `ai.personalPrincipals` link (no role is granted).
-          const personal = await context.personal.resolve({ id: input.id, decision, people: context.people, actor });
+          const personal = await context.personal.resolve({ id: input.id, decision, people: context.people, actor,
+            ...(context.audit ? { audit: context.audit } : {}) });
           if (personal.status !== 'not-found') {
             data = Object.freeze(personal.status === 'ignored' ? { status: 'ignored' as const }
               : { status: 'imported' as const, result: personal.status === 'imported' ? 'written' as const : 'skipped' as const,

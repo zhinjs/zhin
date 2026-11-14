@@ -2,6 +2,8 @@
 "zhin.js": patch
 "@zhin.js/console-protocol": patch
 "@zhin.js/gateway": patch
+"@zhin.js/core": patch
+"@zhin.js/adapter-sandbox": patch
 ---
 
 聊天身份安全复核（ADR 0060）：链接一个人等于拿到这个人的全局授予，因此凡是建立或扩大链接的路径，只要目标人持有角色，就必须由全局 `iam.manage` 持有者完成。
@@ -18,3 +20,5 @@
 - **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
 - **非全局管理者**：看不到链接、暗示链接的 `linkMethod`、指向 Console 用户的 `createdBy` 与从链接得出的授予者名。
 - **`chat-principals.import`**：导入的授予记为导入者授予，忽略文件里的 `grantedBy`。
+- **Sandbox 发言复核**：「以我的聊天身份发言」时，若链接的人持有全局角色而 Console 用户没有全局 `iam.manage`，按模拟身份（无角色）发送，回显 `asMeUnavailable: 'needs-global-iam'`；`ChatRoleReader.consoleSpeaker` 新增可选参数 `{ canManageGlobal }`。
+- **`ai.personalPrincipals` 首次导入**：没有任何条目的项目也记录首次导入，之后加入的条目等待确认；对待确认链接的「导入」「忽略」「确认已读」均写入审计。

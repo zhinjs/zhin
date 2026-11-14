@@ -281,11 +281,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       });
       await featureOverrideMigration.complete(overrides, candidate);
       // ADR 0060 §4.1 (P3): `ai.personalPrincipals` → people + Console links (no roles), once.
+      // Runs without seeds too: that records the first import, so entries added later wait for
+      // confirmation (security review).
       const seeds = agentHost?.personalPrincipalSeeds(candidate) ?? [];
-      if (seeds.length) {
-        await personalPrincipalImports.run({ seeds, people: featureHost.people, logger: getLogger('chat-roles'), ...(audit ? { audit } : {}) })
-          .catch(error => getLogger('chat-roles').warn(`ai.personalPrincipals 导入失败：${(error as Error).message}`));
-      }
+      await personalPrincipalImports.run({ seeds, people: featureHost.people, logger: getLogger('chat-roles'), ...(audit ? { audit } : {}) })
+        .catch(error => getLogger('chat-roles').warn(`ai.personalPrincipals 导入失败：${(error as Error).message}`));
     },
   });
   chatPeopleRef.current = featureHost.people;

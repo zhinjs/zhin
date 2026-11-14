@@ -7,7 +7,7 @@ import { getSandboxApiBase, getSandboxAuthHeaders, type SandboxRequestContext } 
 export type SandboxSpeakerMode = 'me' | 'simulated';
 
 /** Why 「以我的聊天身份发言」 could not be used for a message (`asMeUnavailable` on the echo). */
-export type SandboxAsMeUnavailable = 'no-console-user' | 'no-identity';
+export type SandboxAsMeUnavailable = 'no-console-user' | 'no-identity' | 'needs-global-iam';
 
 /** The server's answer for the last message this page sent. */
 export interface SandboxServerSpeaker {
@@ -24,7 +24,8 @@ export interface SandboxServerSpeaker {
 export function readServerSpeaker(frame: Readonly<Record<string, unknown>>): SandboxServerSpeaker | null {
   if (typeof frame.senderId !== 'string' || typeof frame.senderTrustLevel !== 'string') return null;
   const simulated = frame.simulated === true;
-  const unavailable = frame.asMeUnavailable === 'no-console-user' || frame.asMeUnavailable === 'no-identity' ? frame.asMeUnavailable : undefined;
+  const unavailable = frame.asMeUnavailable === 'no-console-user' || frame.asMeUnavailable === 'no-identity' || frame.asMeUnavailable === 'needs-global-iam'
+    ? frame.asMeUnavailable : undefined;
   return Object.freeze({
     senderId: frame.senderId,
     displaySenderId: typeof frame.displaySenderId === 'string' && frame.displaySenderId ? frame.displaySenderId : frame.senderId,

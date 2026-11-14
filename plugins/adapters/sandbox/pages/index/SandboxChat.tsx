@@ -1262,6 +1262,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                     ? sandboxText(locale, "以链接到你 Console 账号的聊天身份发言，角色按你的聊天角色解析。")
                                     : sandboxText(locale, "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。")}
                             </p>
+                            {asMe && serverRole?.asMeUnavailable === 'needs-global-iam' && (
+                                <div className="sandbox-speaker-setup" role="status">
+                                    <span>{sandboxText(locale, "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送。")}</span>
+                                </div>
+                            )}
                             {asMe && serverRole?.asMeUnavailable === 'no-identity' && (
                                 <div className="sandbox-speaker-setup" role="status">
                                     <span>{sandboxText(locale, "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。")}</span>

@@ -104,6 +104,21 @@ describe('simulated senders and the Console speaker (ADR 0060 §5.4)', () => {
     const { reader: unlinked } = reader([]);
     expect(unlinked.consoleSpeaker!(conversation(), 'u1')).toBeUndefined();
   });
+
+  it('consoleSpeaker needs canManageGlobal when the linked person holds a global grant (security review)', () => {
+    const person = { id: 'cp_me', identities: [{ adapter: 'qq', userId: 'q1' }] };
+    const entries: ChatRoleEntry[] = [];
+    const service = new ChatRoleService({ store: { list: () => entries, principal: (id: string) => id === person.id ? person : undefined } });
+    const r = createChatRoleReader({ roles: () => service, conversationKey: c => `qq/bot-1/${c.kind}:${c.id}`, consolePrincipal: () => 'cp_me' });
+    // A grant below global does not change anything.
+    entries.push(grant({ level: 'adapter', key: 'qq', adapter: 'qq', userId: 'q1', principalId: 'cp_me', role: 'admin' }));
+    expect(r.consoleSpeaker!(conversation(), 'u1')).toEqual({ adapter: 'qq', userId: 'q1' });
+    // The person receives a global grant later: no speaker without global iam.manage.
+    entries.push(grant({ level: 'global', key: '', adapter: 'qq', userId: 'q1', principalId: 'cp_me', role: 'owner' }));
+    expect(r.consoleSpeaker!(conversation(), 'u1')).toBeUndefined();
+    expect(r.consoleSpeaker!(conversation(), 'u1', { canManageGlobal: false })).toBeUndefined();
+    expect(r.consoleSpeaker!(conversation(), 'u1', { canManageGlobal: true })).toEqual({ adapter: 'qq', userId: 'q1' });
+  });
 });
 
 describe('command denial text (ADR 0060 §5.3)', () => {

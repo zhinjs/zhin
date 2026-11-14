@@ -178,6 +178,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
         ...(options.featureStores?.personalPrincipalImports ? { personal: options.featureStores.personalPrincipalImports } : {}),
         ...(options.featureStores?.people ? { people: options.featureStores.people } : {}),
+        audit: entry => options.featureStores?.chatRoleAudit?.()?.(entry),
         authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),

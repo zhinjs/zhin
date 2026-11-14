@@ -347,9 +347,11 @@ export type ChatScopeRef =
   - 实例不读取网关账号库，所以复核依据的是「最近一次已知状态」；绑定码 10 分钟有效。
 - **`chat-identities.simulated.ensure`**：调用者链接的人持有全局授予时，需要全局 `iam.manage`；否则**拒绝**（403，提示改用模拟身份），不改为「无角色身份」。
   - 选拒绝，是为了不让同一个人名下出现一个看似属于他、却没有他角色的身份。
+  - 同一规则也作用于**发言时**：被链接的人之后才获得全局授予时，已存在的 Sandbox 身份同样受限。`ChatRoleReader.consoleSpeaker(conversation, consoleUserId, { canManageGlobal })` 在这个人持有全局授予、而调用者没有全局 `iam.manage` 时不返回身份；Sandbox 改按模拟身份（无角色）发送，并在回显中给出 `asMeUnavailable: 'needs-global-iam'`。
 - **`ai.personalPrincipals`**：
   - 永不自动链接到持有授予的人：既不把 Console 用户链接到这样的人，也不往已链接且持有授予的人名下加身份。这类条目记为 `pending` / `needs-confirmation`。
-  - 一次性首次导入（记录中的 `migratedAt`）之后，新增或修改的条目一律等待确认；首次导入时留下的 `unknown-adapter` 条目会继续重试，但仍受上一条约束。
+  - 一次性首次导入（记录中的 `migratedAt`）之后，新增或修改的条目一律等待确认；首次导入时留下的 `unknown-adapter` 条目会继续重试，但仍受上一条约束。没有任何条目的项目启动时也会写入 `migratedAt`，所以之后第一次加进去的条目同样等待确认。
+  - 「导入」「忽略」「确认已读」都以操作者身份写入审计（`chat-roles.import`，`decision`）。
   - 待确认条目由全局 `iam.manage` 持有者经 `chat-roles.imports.list`（`personalPending`）与 `chat-roles.imports.resolve` 的 `import` / `ignore` 处理，并列入「需要你处理」的 `chat-roles.import-pending`。
   - 需要关系型项目数据库（sqlite / mysql / pg），否则不导入。
 - **认领码**：

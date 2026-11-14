@@ -62,6 +62,8 @@ export interface FeatureStores {
   readonly bindCodes?: import('../chat-identity-bind.js').ChatIdentityBindCodes;
   /** ADR 0060 §4.1 (P3): the `ai.personalPrincipals` import record. */
   readonly personalPrincipalImports?: import('../chat-personal-principals.js').PersonalPrincipalImportBook;
+  /** The instance audit sink of the current generation (chat role decisions made in the Console). */
+  readonly chatRoleAudit?: () => import('../chat-role-migration.js').ChatRoleAudit | undefined;
   /** Display names of conversation keys the instance can resolve (#1250); best effort, missing keys have none. */
   readonly conversationNames?: (keys: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 }

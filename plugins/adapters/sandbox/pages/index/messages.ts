@@ -11,6 +11,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "以链接到你 Console 账号的聊天身份发言，角色按你的聊天角色解析。": "Messages use the chat identity linked to your Console account; roles resolve from your chat roles.",
   "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。": "Simulated, no role: a typed sender id only simulates someone else and resolves no zhin role.",
   "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。": "You have no chat identity on the Sandbox yet; the last message was sent as a simulated sender.",
+  "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送。": "The chat identity linked to you holds a global role; speaking as it needs global iam.manage, so the last message was sent as a simulated sender without roles.",
   "在 Sandbox 上创建我的聊天身份": "Create my chat identity on the Sandbox",
   "已创建，下一条消息生效。": "Created; it applies from the next message.",
   "当前 Host 不支持，请升级。": "This Host does not support it; please upgrade.",

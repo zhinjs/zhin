@@ -165,7 +165,14 @@ export class PersonalPrincipalImportBook {
     return this.#run(async () => {
       const record = await readImportRecord(this.#file);
       const known = new Map(record.entries.map(entry => [entry.id, entry] as const));
-      if (!input.seeds.length) return Object.freeze({ entries: record.entries, ...(record.acknowledgedAt ? { acknowledgedAt: record.acknowledgedAt } : {}) });
+      if (!input.seeds.length) {
+        // A project without entries has had its first import too: an entry added later waits for
+        // confirmation instead of being linked as a "first import" (security review).
+        if (record.migratedAt === undefined && input.people.store.persistent) {
+          await writeImportRecord(this.#file, { ...record, migratedAt: this.#now() });
+        }
+        return Object.freeze({ entries: record.entries, ...(record.acknowledgedAt ? { acknowledgedAt: record.acknowledgedAt } : {}) });
+      }
       if (!input.people.store.persistent) {
         input.logger.warn('ai.personalPrincipals 未导入：项目数据库不能保存聊天身份（需要 sqlite / mysql / pg），仍按配置读取不到个人推理主体');
         return Object.freeze({ entries: record.entries });
@@ -255,6 +262,9 @@ export class PersonalPrincipalImportBook {
       } else {
         const outcome = await input.people.importPersonalPrincipal({ consoleUserId: entry.consoleUserId,
           identities: [{ adapter: entry.adapter, userId: entry.subjectId }], actor: 'import:ai.personalPrincipals', confirmedBy: input.actor });
+        try { input.audit?.({ actor: input.actor, action: 'chat-roles.import', target: 'personal-principals', outcome: 'ok',
+          detail: Object.freeze({ decision: 'import', consoleUserId: entry.consoleUserId, identity: `${entry.adapter}:${entry.subjectId}`,
+            ...(outcome.principalId ? { principalId: outcome.principalId } : {}), ...(outcome.ownedElsewhere.length ? { skipped: 'owned-elsewhere' } : {}) }) }); } catch { /* never breaks */ }
         const elsewhere = outcome.ownedElsewhere.length > 0;
         const { reason: _reason, ...rest } = entry;
         next = Object.freeze({ ...rest, ...(outcome.principalId ? { principalId: outcome.principalId } : {}), at,
