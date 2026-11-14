@@ -145,7 +145,15 @@ describe('metadata-only config explanations through the actual Runtime and file 
       await pause.entered;
       if (kind === 'file') await f.save({ count: 8 });
       else if (kind === 'project') { const path = join(f.root, 'package.json'); const pkg = JSON.parse(await readFile(path, 'utf8')); await writeFile(path, JSON.stringify({ ...pkg, version: '1.0.1' })); }
-      else { const previous = f.runtime.snapshot.generation; reloaded = f.runtime.reload(childPluginId(rootPluginId(), 'demo')); await vi.waitFor(() => expect(f.runtime.snapshot.generation).toBeGreaterThan(previous)); }
+      else {
+        // Wait for the commit itself, not for a wall-clock poll: under load the reload can take longer than vi.waitFor's 1 s.
+        const previous = f.runtime.snapshot.generation;
+        let unsubscribe!: () => void;
+        const committed = new Promise<void>(resolve => { unsubscribe = f.runtime.onGenerationCommit(() => resolve()); });
+        reloaded = f.runtime.reload(childPluginId(rootPluginId(), 'demo'));
+        try { await Promise.race([committed, reloaded]); } finally { unsubscribe(); }
+        expect(f.runtime.snapshot.generation).toBeGreaterThan(previous);
+      }
       pause.release(); expect(await observed).toBeInstanceOf(Error); expect(String(await observed)).toContain('重新读取文件版本'); await reloaded;
       if (kind === 'generation') expect((await f.explain()).projection).toBe('supported');
     } finally { pause.release(); pause.spy.mockRestore(); await reloaded; }
