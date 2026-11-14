@@ -227,6 +227,10 @@ export function authorizeConsoleRpc(
       reason: grantsDenialReason(principal.grants, permission!),
     });
   }
+  const missing = rule.kind === 'exact' ? rule.alsoRequires?.find(extra => !grantsAllow(principal.grants, extra, rule.target)) : undefined;
+  if (missing) {
+    return Object.freeze({ allowed: false, code: 'forbidden', error: `缺少权限 ${missing}`, permission });
+  }
   return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule) });
 }
 
@@ -393,7 +397,41 @@ export function rpcAuditDetail(
     type: String(message.type ?? '').slice(0, 256),
     keys: Object.freeze([...new Set([...keys, ...data])].slice(0, 64).map(key => key.slice(0, 128))),
     ...databaseStatementDetail(message, reply, options),
+    ...envDetail(message),
   }));
+}
+
+const auditName = (value: unknown, max: number): string | undefined =>
+  typeof value === 'string' && value ? value.slice(0, max) : undefined;
+
+/**
+ * Which dotenv file and variable names an `env:reveal` / `env:save` touched (issue #1250). Never a
+ * value: `changes[].value` and `content` are not read.
+ */
+function envDetail(message: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  if (message.type !== 'env:reveal' && message.type !== 'env:save') return {};
+  const data = message.data && typeof message.data === 'object' && !Array.isArray(message.data) ? message.data as Record<string, unknown> : {};
+  const pick = (key: string) => message[key] ?? data[key];
+  const file = auditName(pick('filename'), 64);
+  if (message.type === 'env:reveal') {
+    const key = auditName(pick('key'), 128);
+    return { ...(file ? { file } : {}), ...(key ? { key } : {}) };
+  }
+  const changes = Array.isArray(pick('changes')) ? pick('changes') as unknown[] : undefined;
+  if (!changes) return { ...(file ? { file } : {}), ...(pick('content') !== undefined ? { mode: 'replace' } : {}) };
+  const set: string[] = [];
+  const deleted: string[] = [];
+  for (const change of changes.slice(0, 64)) {
+    if (!change || typeof change !== 'object') continue;
+    const key = auditName((change as Record<string, unknown>).key, 128);
+    if (key) ((change as Record<string, unknown>).delete === true ? deleted : set).push(key);
+  }
+  return {
+    ...(file ? { file } : {}),
+    set: Object.freeze(set),
+    deleted: Object.freeze(deleted),
+    ...(changes.length > 64 ? { truncated: true } : {}),
+  };
 }
 
 export function rpcAuditTarget(rule: ConsoleRpcPermissionRule | null): string | undefined {

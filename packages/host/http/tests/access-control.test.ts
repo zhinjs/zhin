@@ -163,8 +163,36 @@ describe('access control decisions', () => {
 
   it('audits only RPC type and key names, never values', () => {
     const detail = rpcAuditDetail({ type: 'env:save', requestId: 1, filename: '.env', content: 'SECRET=value', data: { token: 'x' } });
-    expect(detail).toEqual({ type: 'env:save', keys: ['content', 'filename', 'token'] });
+    expect(detail).toEqual({ type: 'env:save', keys: ['content', 'filename', 'token'], file: '.env', mode: 'replace' });
+    expect(JSON.stringify(detail)).not.toContain('value');
     expect(JSON.stringify(detail)).not.toContain('SECRET');
+  });
+
+  it('records the env file and variable names of env:reveal / env:save, never values (issue #1250)', () => {
+    const reveal = rpcAuditDetail(
+      { type: 'env:reveal', requestId: 1, filename: '.env', key: 'BOT_TOKEN' },
+      { success: true, data: { file: '.env', key: 'BOT_TOKEN', value: 'fake-revealed-secret' } },
+    );
+    expect(reveal).toEqual({ type: 'env:reveal', keys: ['filename', 'key'], file: '.env', key: 'BOT_TOKEN' });
+    const save = rpcAuditDetail({
+      type: 'env:save', requestId: 2, filename: '.env.production',
+      changes: [{ key: 'PORT', value: 'fake-port-value' }, { key: 'OLD', delete: true }, { value: 'fake-orphan' }],
+    });
+    expect(save).toEqual({ type: 'env:save', keys: ['changes', 'filename'], file: '.env.production', set: ['PORT'], deleted: ['OLD'] });
+    expect(JSON.stringify([reveal, save])).not.toMatch(/fake-/u);
+  });
+
+  it('env:reveal needs both env permissions and is audited as a write', () => {
+    const message = { type: 'env:reveal', filename: '.env', key: 'BOT_TOKEN' };
+    expect(authorizeConsoleRpc(userPrincipal('owner'), message)).toMatchObject({ allowed: true, write: true, permission: 'ops.env.write' });
+    expect(authorizeConsoleRpc(userPrincipal('admin'), message)).toMatchObject({ allowed: true, write: true });
+    for (const role of ['viewer', 'operator'] as const) {
+      expect(authorizeConsoleRpc(userPrincipal(role), message)).toMatchObject({ allowed: false, code: 'forbidden' });
+    }
+    const only = (permission: string) => ({ ...userPrincipal('viewer'), grants: [{ role: 'x', scope: { kind: 'global' as const }, permissions: [permission] }] });
+    expect(authorizeConsoleRpc(only('ops.env.read'), message)).toMatchObject({ allowed: false, error: '缺少权限 ops.env.write' });
+    expect(authorizeConsoleRpc(only('ops.env.write'), message)).toMatchObject({ allowed: false, error: '缺少权限 ops.env.read' });
+    expect(authorizeConsoleRpc(only('ops.env.read'), { type: 'env:get', filename: '.env' })).toMatchObject({ allowed: true, write: false });
   });
 });
 

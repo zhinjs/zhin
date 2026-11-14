@@ -267,6 +267,9 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'env:list': P.OPS_ENV_READ,
   'env:get': P.OPS_ENV_READ,
   'env:save': P.OPS_ENV_WRITE,
+  // One variable as written (issue #1250): the stricter of the two env permissions, and the read
+  // permission as well (`CONSOLE_RPC_ALSO_REQUIRES`); audited like every write-permission RPC.
+  'env:reveal': P.OPS_ENV_WRITE,
   'db:info': P.OPS_DATABASE_READ,
   'db:tables': P.OPS_DATABASE_READ,
   'db:select': P.OPS_DATABASE_READ,
@@ -371,6 +374,14 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   ...GATEWAY_RPC_PERMISSIONS,
 });
 
+/**
+ * Further permissions an RPC needs besides its {@link CONSOLE_RPC_PERMISSIONS} entry (all must be
+ * held at the RPC's target). `env:reveal` shows a secret: it needs both env permissions.
+ */
+export const CONSOLE_RPC_ALSO_REQUIRES: Readonly<Record<string, readonly ConsolePermission[]>> = Object.freeze({
+  'env:reveal': Object.freeze<ConsolePermission[]>([P.OPS_ENV_READ]),
+});
+
 /** Adapter account mutations contributed by `defineAdapterConsoleRpc` (`plugin.<id>.endpoint-*`). */
 const ADAPTER_ACCOUNT_METHODS: ReadonlySet<string> = new Set([
   'endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace',
@@ -387,8 +398,8 @@ export function isPluginConsoleRpcType(type: unknown): type is string {
 }
 
 export type ConsoleRpcPermissionRule =
-  /** Exactly one permission. */
-  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget }>
+  /** Exactly one permission (plus `alsoRequires`, when listed, all at the same target). */
+  | Readonly<{ kind: 'exact'; permission: ConsolePermission; target: ConsoleScopeTarget; alsoRequires?: readonly ConsolePermission[] }>
   /**
    * Plugin-contributed RPC: `read` admits the call, `write` is required unless the
    * plugin declares the method read-only (decided by the plugin RPC dispatcher).
@@ -420,7 +431,8 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       if (file === 'env') permission = write ? P.OPS_ENV_WRITE : P.OPS_ENV_READ;
       if (file === 'config') permission = write ? P.OPS_CONFIG_WRITE : P.OPS_CONFIG_READ;
     }
-    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload) });
+    const alsoRequires = Object.hasOwn(CONSOLE_RPC_ALSO_REQUIRES, type) ? CONSOLE_RPC_ALSO_REQUIRES[type]! : undefined;
+    return Object.freeze({ kind: 'exact', permission, target: rpcTarget(type, permission, payload), ...(alsoRequires ? { alsoRequires } : {}) });
   }
   const plugin = pluginRpcPattern.exec(type);
   if (!plugin) return null;
