@@ -149,7 +149,7 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
     id: implicitChatPrincipalId(identity),
     identities: Object.freeze([Object.freeze({ adapter: identity.adapter, userId: identity.userId })]),
   });
-  return Object.freeze({
+  const api: ChatRoleReader = {
     roleOf(identity, scope) {
       const service = options.roles();
       const key = scopeKey(scope);
@@ -199,5 +199,6 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
     subscribe(listener) {
       return options.subscribe ? options.subscribe(listener) : () => undefined;
     },
-  });
+  };
+  return Object.freeze(api);
 }
