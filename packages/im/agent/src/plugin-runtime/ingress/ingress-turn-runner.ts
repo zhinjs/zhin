@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AITriggerConfig, VenueRouteResult, readOperationSession } from '@zhin.js/core';
+import { hostChatRole, type AITriggerConfig, type VenueRouteResult, type readOperationSession } from '@zhin.js/core';
 import type {
   CapturedEndpointOperation,
   ImRuntime,
@@ -62,6 +62,7 @@ import {
   resolveProductTurnIntent,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  resolveImApprover,
   resolveSandboxTurnPolicy,
   runtimePersonalSessionAddress,
   type RuntimeSenderRoles,
@@ -329,22 +330,36 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             projectRoot,
             defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
           });
-          const approverId = senderRoles.isMaster ? message.sender?.id : ownerId;
-          const approvalInteraction = approverId
-            ? im.createInteraction(message, { subjectId: approverId })
+          // #1250: the approver answers on this conversation, bound to their platform user id.
+          const initiatorPresent = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge;
+          const approver = resolveImApprover({
+            senderId: message.sender?.id,
+            isMaster: senderRoles.isMaster,
+            isAdmin: message.sender?.id ? hostChatRole(message.sender) === 'admin' : false,
+            ownerId,
+            scope: message.conversation.kind,
+            initiatorPresent,
+          });
+          const approvalInteraction = approver.kind !== 'none'
+            ? im.createInteraction(message, { subjectId: approver.subjectId })
             : undefined;
+          // Nobody with authority here: the live initiator may still confirm their own intent (provenance only).
+          const intentInteraction = approver.kind === 'none' && initiatorPresent && message.sender?.id
+            ? im.createInteraction(message, { subjectId: message.sender.id })
+            : undefined;
+          const imApprovalOptions = {
+            locale: message.locale,
+            interaction: approvalInteraction,
+            selfApproval: approver.kind === 'initiator',
+            ...(intentInteraction ? { intentInteraction } : {}),
+            ...(approver.kind === 'none' ? { unavailableReason: approver.reason } : {}),
+            memory: agent.approvalReviewer,
+          };
           const askApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
+            ...imApprovalOptions,
             isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
           });
-          const escalatedApprovalPort = createRuntimeApprovalPort({
-            locale: message.locale,
-            isMaster: false,
-            interaction: approvalInteraction,
-            memory: agent.approvalReviewer,
-          });
+          const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
           const replyPort = createIngressReplyPort({
             message,
             snapshot,

@@ -158,8 +158,10 @@ export function createAutoApprovalPort(
             return { status: 'unavailable', reason: 'the reviewer escalated to a human, but nobody can be asked here' };
           }
           const outcome = await settleWithinTimeout(requestApprovalOutcome(ask, input), input);
-          // Only an explicit human answer is remembered; a timeout is not a "no".
-          if (outcome.status === 'approved' || (outcome.status === 'denied' && outcome.by === 'user')) {
+          // Only an explicit human answer is remembered; a timeout is not a "no", and an
+          // initiator-only intent confirmation (#1250) is not an authority's approval.
+          if ((outcome.status === 'approved' && outcome.scope !== 'intent')
+            || (outcome.status === 'denied' && outcome.by === 'user')) {
             reviewer.remember(input, approvalOutcomeToDecision(outcome), 'human');
           }
           return outcome;

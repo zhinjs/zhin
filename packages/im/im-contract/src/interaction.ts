@@ -13,7 +13,12 @@ export interface UserInteractionControl {
   readonly signal?: AbortSignal;
 }
 
-interface UserInteractionRequestBase extends UserInteractionContent, UserInteractionControl {}
+/** What a prompt is for, so a surface can present it accordingly (`approval`: an operation confirmation). */
+export type UserInteractionPurpose = 'approval';
+
+interface UserInteractionRequestBase extends UserInteractionContent, UserInteractionControl {
+  readonly purpose?: UserInteractionPurpose;
+}
 
 export interface UserInteractionTextRequest extends UserInteractionRequestBase {
   readonly type: 'text';

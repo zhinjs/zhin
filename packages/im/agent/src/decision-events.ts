@@ -186,6 +186,8 @@ export const DECISION_REASON_CODES = [
   // Configuration outcome/ownership requires manual verification; neither implies emergency stop.
   'change_config_unconfirmed',
   'change_config_superseded',
+  // #1250：回合内审批（普通审批 / 读取外部内容后的确认）无人可问：无人值守回合，或会话没有审批渠道
+  'tool_approval_unavailable',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 
@@ -361,6 +363,13 @@ const SECRET_VALUE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 
 function normalizeKey(key: string): string {
   return key.replaceAll('-', '').replaceAll('_', '').toLowerCase();
+}
+
+/** Masks token-shaped text (bearer / API keys / cookies) without truncating; for display surfaces. */
+export function redactSecretText(value: string): string {
+  let text = value;
+  for (const [pattern, replacement] of SECRET_VALUE_PATTERNS) text = text.replace(pattern, replacement);
+  return text;
 }
 
 function redactString(value: string): string {

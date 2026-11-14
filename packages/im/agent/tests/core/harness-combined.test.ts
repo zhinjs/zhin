@@ -65,7 +65,7 @@ describe('deferred auto-load × typed approvals (H2 + H4)', () => {
     expect(outcome).toEqual({
       status: 'denied',
       policy: 'approval',
-      reason: formatApprovalDenial({ status: 'timed_out' }),
+      reason: formatApprovalDenial({ status: 'timed_out' }, { toolName: 'plugin_action' }),
     });
     expect(execute).not.toHaveBeenCalled();
   });
