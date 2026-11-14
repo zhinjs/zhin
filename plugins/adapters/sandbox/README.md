@@ -83,7 +83,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 ## 使用方式
 
-1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
+1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8068`）
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，用 Console 账号登录（首次连接用 `http.token` / `HTTP_TOKEN` 创建所有者）
 3. 连接后在 Console 侧栏「试聊一下」（`/sandbox`）发送消息
 

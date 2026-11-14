@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ed3033b7a9a77962 -->
+<!-- sync-adapter-docs:sha256=071e074c0d7d3d06 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -93,10 +93,6 @@ sandbox:
 Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.content`），保留标题、粗体和代码块；Core 不会先将其转换为纯文字。
 没有在线订阅者时不确认已发送，取消不会补发最终内容。
 
-## 在 Console 管理账号
-
-与其他适配器一样，Sandbox 账号可以在 Console 的账号「接入」页新增、停用、启用和删除（字段：`owner`、`nickname`、`commandPrefix`）。新增后默认停用，需手动启用。查看需要 `sandbox:read`，增删与启停需要 `sandbox:write`。
-
 ## 使用方式
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8068`）
@@ -118,6 +114,10 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 
 每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
+
+## 在 Console 管理账号
+
+Sandbox 与其他适配器一样提供账号管理（`status`、`endpoint-add` / `endpoint-start` / `endpoint-stop` / `endpoint-remove`）：在 Console 的账号「接入」页可以新增、停用、启用和删除 Sandbox 账号，字段为所有者用户 ID（`owner`）、机器人昵称（`nickname`）与命令前缀（`commandPrefix`）。新增的账号保存后处于停用状态，需要手动启用。查看需要 `sandbox:read`（`read` 级别），增删与启停需要 `sandbox:write`（`operate` 级别）。
 
 ## 消息格式（wire 协议）
 
