@@ -42,6 +42,7 @@ it('management works with a persistent Database Host while automatic replies are
   const context = { config: resolveGroupSuiteConfig({}), input, params: { keyword: 'hi' }, args: ['hello'], use: () => host };
   expect(await keywordAdd.execute(context as never)).toContain('已添加');
   expect(await keywordList.execute(context as never)).toContain('hello');
+  expect(await keywordList.execute(context as never)).toContain('teach-list');
   expect(rows.size).toBe(1);
 });
 

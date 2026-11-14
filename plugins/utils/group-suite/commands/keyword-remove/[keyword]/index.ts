@@ -6,7 +6,7 @@ import { keywordsForCommand } from '../../../src/keywords.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   permit: ['group()', 'trusted'],
-  description: '删除当前群关键词自动回复', descriptionI18n: { en: "Delete a keyword reply in this group" },
+  description: '删除当前群关键词自动回复（teach 问答用 forget 删除）', descriptionI18n: { en: "Delete a keyword reply in this group (use forget for teach Q&A pairs)" },
   params: { keyword: { type: 'string' } },
   async execute(context) {
     const keyword = String(context.params.keyword ?? '');
