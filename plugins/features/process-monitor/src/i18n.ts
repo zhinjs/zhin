@@ -49,6 +49,18 @@ export const messages = createMessages({
     "zh-CN": "🖥️  主机: {host}",
     "en": "🖥️  Host: {host}"
   },
+  "since": {
+    "zh-CN": "📅 以上累计自 {date} 起{estimated}",
+    "en": "📅 Totals above since {date}{estimated}"
+  },
+  "sinceEstimated": {
+    "zh-CN": "（按状态文件创建时间估算）",
+    "en": " (estimated from the state file)"
+  },
+  "last24h": {
+    "zh-CN": "🕒 近 24 小时: 崩溃 {crashes} 次，重启 {restarts} 次",
+    "en": "🕒 Last 24 hours: {crashes} crashes, {restarts} restarts"
+  },
   "platform": {
     "zh-CN": "💻 平台: {platform}",
     "en": "💻 Platform: {platform}"

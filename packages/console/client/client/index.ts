@@ -136,10 +136,39 @@ export {
   type DeclarativeStatSpec,
   type DeclarativeActionSpec,
   type DeclarativeActionFieldSpec,
+  type DeclarativeActionResultSpec,
   type DeclarativeColumnSpec,
   type DeclarativeSectionSpec,
   type DeclarativeI18nText,
 } from './ui/declarative-page.js';
+export {
+  ConversationPicker,
+  ConversationLabel,
+  filterConversationOptions,
+  conversationPickerStyles,
+  type ConversationPickerProps,
+  type ConversationLabelProps,
+  type ConversationOption,
+} from './ui/conversation-picker.js';
+export {
+  useConversationDirectory,
+  useSharedConversationDirectory,
+  ConversationDirectoryContext,
+  buildConversationDirectory,
+  parseConversationAddress,
+  serializeConversationAddress,
+  conversationAddressKey,
+  conversationKindLabel,
+  formatConversationLabel,
+  endpointShortName,
+  type ConversationAddress,
+  type ConversationKind,
+  type ConversationDirectory,
+  type ConversationDirectoryAccount,
+  type ConversationDirectoryEntry,
+  type ConversationDescription,
+  type ConversationDirectoryState,
+} from './ui/conversation-directory.js';
 export { adapterConsoleStyles } from './adapter-console/styles.js';
 
 export {

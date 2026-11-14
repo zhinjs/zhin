@@ -79,7 +79,12 @@ export default definePlugin<GroupSuiteConfig>({
       configFor: target => context.configFor(target as Parameters<typeof context.configFor>[0]),
     });
     return {
-      consoleRpc: createGroupSuiteConsoleRpc(runtime),
+      consoleRpc: createGroupSuiteConsoleRpc(runtime, {
+        // Persistent keywords live in the Database Host state; the Console reads them via the keyword index.
+        keywordState: () => context.resources.has(databaseHostToken)
+          ? context.resources.use(databaseHostToken).state
+          : undefined,
+      }),
     };
   },
 });

@@ -10,6 +10,8 @@ export interface RssSubscriptionItem {
   readonly channelId: string;
   readonly creatorName: string;
   readonly createdAt: string;
+  /** Exact destination; shown by its display name. */
+  readonly conversation?: unknown;
   readonly [key: string]: unknown;
 }
 
@@ -70,26 +72,15 @@ export default definePageBlueprint<RssConsoleStatus>({
           type: 'text',
         },
         {
-          key: 'adapter',
-          label: { zh: '推送平台', en: 'Adapter' },
-          type: 'text',
-          defaultValue: 'sandbox',
-        },
-        {
-          key: 'targetType',
-          label: { zh: '目标类型', en: 'Target Type' },
-          type: 'select',
-          defaultValue: 'group',
-          options: [
-            { value: 'group', label: { zh: '群聊 (group)', en: 'Group' } },
-            { value: 'private', label: { zh: '私聊 (private)', en: 'Private' } },
-          ],
-        },
-        {
-          key: 'targetId',
-          label: { zh: '推送目标 ID', en: 'Target ID' },
-          type: 'text',
-          defaultValue: 'console',
+          // Accounts and recent conversations, with manual entry as an advanced option.
+          key: 'conversation',
+          label: { zh: '推送到会话', en: 'Deliver to' },
+          type: 'conversation',
+          required: true,
+          hint: {
+            zh: '从机器人账号的最近会话中选择；找不到时用「手动填写（高级）」输入群号或用户 ID',
+            en: 'Pick one of the bot’s recent conversations, or use “Enter manually (advanced)” for a group or user ID',
+          },
         },
       ],
     },
@@ -127,8 +118,7 @@ export default definePageBlueprint<RssConsoleStatus>({
       columns: [
         { key: 'feedTitle', label: { zh: '标题', en: 'Feed Title' } },
         { key: 'url', label: { zh: '订阅地址', en: 'URL' } },
-        { key: 'adapterName', label: { zh: '适配器', en: 'Adapter' } },
-        { key: 'channelId', label: { zh: '会话 ID', en: 'Channel ID' } },
+        { key: 'conversation', label: { zh: '推送会话', en: 'Delivers to' }, type: 'conversation' },
         { key: 'createdAt', label: { zh: '创建时间', en: 'Created At' } },
       ],
     },

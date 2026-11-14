@@ -1,8 +1,8 @@
 import { messages as t } from './i18n.js';
-import { createDeliveryTarget, databaseHostToken, type Token } from 'zhin.js';
+import { createDeliveryTarget, databaseHostToken, type DeliveryTarget, type PluginStateStore, type Token } from 'zhin.js';
 import type { GroupSuiteConfig } from './config.js';
 import type { ConversationInput } from './conversation-scope.js';
-import { requireConversation } from './conversation-scope.js';
+import { conversationKey, requireConversation } from './conversation-scope.js';
 import { keywordStore } from './keyword-store.js';
 import { resolveGroupSuiteRuntime } from './runtime-state.js';
 
@@ -38,18 +38,49 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
     try { return context.use(databaseHostToken).state; }
     catch (cause) { throw new KeywordStorageRequirementError(t(context.locale ?? input?.locale, 'keywordStorage'), { cause }); }
   })();
-  const state = hostState.forConversation(createDeliveryTarget({ conversation: target }));
+  const canonical = createDeliveryTarget({ conversation: target });
+  const state = hostState.forConversation(canonical);
   return {
     read: async () => (await state.get<KeywordRows>('keywords')) ?? [],
     update: async (updater: (current: Map<string, string>) => void) => {
-      await state.update<KeywordRows>('keywords', current => {
+      const saved = await state.update<KeywordRows>('keywords', current => {
         const next = new Map(current ?? []);
         updater(next);
         assertLimit(next, context.locale ?? input?.locale);
         return [...next.entries()];
       });
+      // Best effort: the dictionary is already saved; a failed index write only hides it from the Console.
+      try { await updateKeywordIndex(hostState, canonical, (saved?.length ?? 0) > 0); } catch { /* see above */ }
     },
   };
+}
+
+/**
+ * Plugin-scope list of the conversations that have persistent keywords, so the Console can count
+ * and list them (per-conversation state cannot be enumerated). Keywords saved before this index
+ * existed appear once their group edits its keywords again.
+ */
+export const KEYWORD_INDEX_KEY = 'keyword-conversations';
+const MAX_INDEXED_CONVERSATIONS = 1000;
+
+export async function readKeywordIndex(state: PluginStateStore): Promise<readonly DeliveryTarget[]> {
+  const raw = await state.get<readonly DeliveryTarget[]>(KEYWORD_INDEX_KEY);
+  const targets: DeliveryTarget[] = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    try { targets.push(createDeliveryTarget({ conversation: item })); } catch { /* skip malformed */ }
+  }
+  return targets;
+}
+
+async function updateKeywordIndex(state: PluginStateStore, target: DeliveryTarget, present: boolean): Promise<void> {
+  const key = conversationKey(target);
+  await state.update<readonly DeliveryTarget[]>(KEYWORD_INDEX_KEY, current => {
+    const list = (Array.isArray(current) ? current : []).filter(item => {
+      try { return conversationKey(createDeliveryTarget({ conversation: item })) !== key; } catch { return false; }
+    });
+    if (present) list.push(target);
+    return list.slice(-MAX_INDEXED_CONVERSATIONS);
+  });
 }
 
 /** Management commands surface a storage requirement instead of inventing an empty dictionary. */

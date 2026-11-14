@@ -1,6 +1,7 @@
 import { defineGamePlugin, type InMemoryGameDb } from '@zhin.js/game-kit';
 import { defineHostTables } from './src/models.js';
 import { gameServicesToken } from './src/runtime-store.js';
+import { CHAIN_QUICK_START } from './src/chain-command.js';
 import {
   createServices,
   type ChainDatabase,
@@ -22,13 +23,14 @@ export default defineGamePlugin<SessionService>({
     commandPath: 'chain',
     titleI18n: { en: 'Chinese Idiom Chain' },
     descriptionI18n: { en: 'Connect Chinese idioms by sound or character' },
-    quickStartI18n: { en: 'start_pinyin' },
+    quickStartI18n: { en: CHAIN_QUICK_START.en },
     id: 'chain',
     title: '成语接龙',
     icon: '📜',
     description: '四字成语接龙（同音/同字）',
     commandPrefix: '/接龙',
-    quickStart: 'start_pinyin',
+    // Chinese action words (`/接龙 同音`); `start_pinyin` / `start_char` remain accepted.
+    quickStart: CHAIN_QUICK_START['zh-CN'],
     aliases: ['chain'],
     menus: [
       { id: 'start_pinyin', label: '🎮 同音接龙' },
