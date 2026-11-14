@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9ea19b5017cb5e78 -->
+<!-- sync-adapter-docs:sha256=ed3033b7a9a77962 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -162,6 +162,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 
 - 帧内容不是 JSON 时，整段文本按一条纯文本消息处理。
 - 消息的发送者固定为 endpoint 的 `owner`。
+- **@ 提及**：文本里的 `[@名称]` 解析为 `mention` 段。名称等于 endpoint 的 `id`（如 `sandbox-bot`）或配置的 `nickname`（不区分大小写）时视为 @ 机器人：群聊里 `[@sandbox-bot] /help` 会被识别为对机器人说话，且命令文本去掉这段提及（`/help`）；其他名称保留为 `@名称`。从输入框 @ 选择器插入的 `mention` 段若带的是机器人名称，也会改写成机器人 `id`。
 - **按钮回传**：`content` 中的 `{ "type": "action", "data": { "id": "...", "payload": "..." } }` 段会作为交互动作交给命令或 Agent；只填 `id` 或 `payload` 时，另一个取相同的值。消息里没有文本时，`payload` 作为消息文本。
 
 `agentRun` 字段：
