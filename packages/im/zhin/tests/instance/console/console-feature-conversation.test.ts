@@ -6,6 +6,7 @@ import {
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import { dispatchFeatureConsoleRpc, type FeatureRpcAuthorization, type FeatureRpcContext } from '../../../src/instance/console/console-feature-rpc.js';
 import { FeatureOverrideStore } from '../../../src/instance/console/feature-override-store.js';
+import { consoleOverrideOperator } from '../../../src/instance/console/rpc-route.js';
 
 const root = rootPluginId();
 const repeater = childPluginId(root, 'repeater');
@@ -44,7 +45,7 @@ const base: RuntimeConfigDocument = {
   repeater: { threshold: 3, cooldown: 10 },
 };
 
-async function harness(options: Partial<FeatureRpcContext> = {}) {
+async function harness(options: Partial<FeatureRpcContext> = {}, storeExtras: Partial<NonNullable<FeatureRpcContext['stores']>> = {}) {
   const state = { document: structuredClone(base), revision: 1 };
   const configuration = {
     async readProject() { return { revision: `r${state.revision}`, exists: true, value: structuredClone(state.document) }; },
@@ -63,7 +64,7 @@ async function harness(options: Partial<FeatureRpcContext> = {}) {
   const context: FeatureRpcContext = {
     authScope: 'full', authorize: request => { authorized.push(request); return true; }, configuration,
     snapshots: { acquire: () => ({ value: snap, release() {} }) as never },
-    stores: { overrides: conversations, recentConversations: async () => [{ key: 'qq/bot-1/group:7', name: 'Seven', lastActiveAt: 5 }, { key: 'not a key' }] },
+    stores: { overrides: conversations, recentConversations: async () => [{ key: 'qq/bot-1/group:7', name: 'Seven', lastActiveAt: 5 }, { key: 'not a key' }], ...storeExtras },
     publishEvent: type => { events.push(type); }, actor: 'user:u1', ...options,
   };
   const call = async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data }, context);
@@ -159,6 +160,39 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
     const matrix = (await call('feature.matrix', {}))!.body.data as any;
     expect(matrix.conversationOverrides).toEqual({ qq: { 'bot-1': 2 } });
     expect(matrix.rows.find((row: any) => row.plugin === 'rss').conversationOverrides).toEqual({ qq: { 'bot-1': 2 } });
+  });
+
+  it('returns who changed an override, through what, and the conversation name when resolvable (#1250)', async () => {
+    const asked: string[][] = [];
+    const { call } = await harness({ operator: { source: 'console', principalId: 'u1', displayName: 'Alice' } }, {
+      conversationNames: async keys => { asked.push([...keys]); return new Map(keys.filter(key => key === g1).map(key => [key, '测试群'])); },
+    });
+    await call('feature.set-enabled', { plugin: 'repeater', level: 'conversation', key: g1, enabled: false });
+    const read = (await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data as any;
+    expect(read).toMatchObject({ updatedBy: 'user:u1', operator: { source: 'console', principalId: 'u1', displayName: 'Alice' },
+      conversation: { adapter: 'qq', endpointId: 'bot-1', kind: 'group', id: '1001', name: '测试群' } });
+    const list = (await call('feature.conversations', {}))!.body.data as any;
+    const byKey = Object.fromEntries(list.conversations.map((item: any) => [item.key, item]));
+    expect(byKey[g1]).toMatchObject({ name: '测试群', overrides: [{ plugin: 'repeater', enabled: false, updatedBy: 'user:u1',
+      operator: { source: 'console', principalId: 'u1', displayName: 'Alice' } }] });
+    // Names already known (recent conversations) are not looked up again.
+    expect(asked.at(-1)).not.toContain('qq/bot-1/group:7');
+    expect(byKey['qq/bot-1/group:7']).toMatchObject({ name: 'Seven' });
+    // Names are best effort: a failing resolver leaves the answers intact.
+    const failing = await harness({}, { conversationNames: async () => { throw new Error('store down'); } });
+    await failing.call('feature.set-enabled', { plugin: 'repeater', level: 'conversation', key: g1, enabled: false });
+    const plain = (await failing.call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data as any;
+    expect(plain.conversation).not.toHaveProperty('name');
+    // Without a structured operator, the legacy id still tells the Console principal.
+    expect(plain.operator).toEqual({ source: 'console', principalId: 'u1' });
+    expect((await failing.call('feature.conversations', {}))!.status).toBe(200);
+  });
+
+  it('describes the Console writer from the signed-in principal (#1250)', () => {
+    const user = { kind: 'user' as const, userId: 'u1', username: 'alice', displayName: 'Alice', credentialId: 's', grants: [], roles: [] };
+    expect(consoleOverrideOperator(user)).toEqual({ source: 'console', principalId: 'u1', displayName: 'Alice' });
+    expect(consoleOverrideOperator({ ...user, kind: 'api-token', displayName: '' })).toEqual({ source: 'console', principalId: 'u1', displayName: 'alice' });
+    expect(consoleOverrideOperator({ kind: 'bootstrap', open: true })).toEqual({ source: 'console' });
   });
 
   it('reports whether overrides persist and refuses writes a database cannot persist (ADR 0057 §2)', async () => {

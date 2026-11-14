@@ -16,6 +16,12 @@ function fixture(renderer?: HtmlRendererHost, html: 'image' | 'text' = 'image', 
     owner: root, feature: commandFeatureId, localName: 'ping', source: '/commands/ping/index.ts',
     definition: defineCommand({ description: '测试连通性 <安全> & "可读"', execute: () => 'pong' }),
   });
+  // Menu children are plugins with a command the sender may run (#1250): music owns one; `empty` has none.
+  const play = createCapabilitySlot({
+    owner: child, feature: commandFeatureId, localName: 'play', source: '/music/commands/play/index.ts',
+    definition: defineCommand({ description: '播放', execute: () => 'playing' }),
+  });
+  const empty = childPluginId(root, 'empty');
   const adapter = createCapabilitySlot({
     owner: root, feature: featureId('zhin.adapter'), localName: 'test', source: '/adapters/test/index.ts',
     definition: { segments: { html, outboundMedia: media } },
@@ -25,14 +31,15 @@ function fixture(renderer?: HtmlRendererHost, html: 'image' | 'text' = 'image', 
   const snapshot: RuntimeSnapshot = {
     root, generation: 1,
     tree: new Map([
-      [root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/project', children: [child] }],
+      [root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/project', children: [child, empty] }],
       [child, { id: child, parent: root, instanceKey: 'music', packageName: 'music', packageRoot: '/music',
         children: [], metadata: { displayName: '<img src=x onerror=alert(1)>' } }],
+      [empty, { id: empty, parent: root, instanceKey: 'empty', packageName: 'empty', packageRoot: '/empty', children: [] }],
     ]),
-    config: new Map([[root, {}], [child, {}]]), resources: new Map([[root, resources]]),
-    capabilities: new Map([[command.id, command], [adapter.id, adapter]]), projections: new Map(),
+    config: new Map([[root, {}], [child, {}], [empty, {}]]), resources: new Map([[root, resources]]),
+    capabilities: new Map([[command.id, command], [play.id, play], [adapter.id, adapter]]), projections: new Map(),
   };
-  const index = new CommandIndex([command], snapshot, { keyword: '帮助' });
+  const index = new CommandIndex([command, play], snapshot, { keyword: '帮助' });
   const conversation: ConversationRef = { endpoint: { id: adapter.id, adapter: 'test' }, kind: 'private', id: 'user' };
   return { index, snapshot, conversation, resources };
 }
@@ -47,7 +54,7 @@ function rendererFixture() {
 it('keeps the existing text menu when the renderer host is absent', async () => {
   const { index, snapshot, conversation } = fixture();
   const result = await index.dispatch({ input: '帮助', commandPrefix: '/' });
-  expect(result.value).toBe('=== root 指令菜单 ===\n\n  /ping  - 测试连通性 <安全> & "可读"\n\n子插件：\n  music  (<img src=x onerror=alert(1)>)\n\n提示：使用「/帮助 <插件名>」查看子插件的指令');
+  expect(result.value).toBe('=== 指令菜单 ===\n\n  /ping  - 测试连通性 <安全> & "可读"\n\n子插件：\n  music  (<img src=x onerror=alert(1)>)\n\n提示：使用「/帮助 <插件名>」查看子插件的指令');
   expect((await projectOutboundPayload(result.value, conversation, snapshot)).payload).toBe(result.value);
 });
 
@@ -57,7 +64,7 @@ it('renders the real command menu through the outbound pipeline and escapes meta
   const result = await index.dispatch({ input: '帮助', commandPrefix: '/' });
   expect(result.value).toMatchObject({ type: 'html', data: {
     fileName: 'command-menu.png', width: 1080, html: expect.stringContaining('/ping'),
-    text: expect.stringContaining('=== root 指令菜单 ==='),
+    text: expect.stringContaining('=== 指令菜单 ==='),
   } });
   const projected = await projectOutboundPayload(result.value, conversation, snapshot);
   expect(projected.payload).toEqual([{ type: 'image', data: { media: {
@@ -88,8 +95,8 @@ it.each(['failed', 'unavailable', 'text', 'url-only'] as const)('preserves exact
 
 it('renders empty child menus and keeps unknown plugin responses as text', async () => {
   const { index } = fixture(rendererFixture());
-  expect((await index.dispatch({ input: '帮助 music' })).value).toMatchObject({ type: 'html', data: {
-    html: expect.stringContaining('暂无指令和子插件'), text: expect.stringContaining('=== music 指令菜单 ==='),
+  expect((await index.dispatch({ input: '帮助 empty' })).value).toMatchObject({ type: 'html', data: {
+    html: expect.stringContaining('暂无指令和子插件'), text: expect.stringContaining('=== empty 指令菜单 ==='),
   } });
   expect((await index.dispatch({ input: '帮助 missing' })).value).toBe('未找到插件: missing');
 });
@@ -109,17 +116,21 @@ function largeFixture(commandCount: number, pluginCount: number, renderer?: Html
     definition: defineCommand({ description: `功能 ${i}`, execute: () => { throw new Error('Menu must not execute a command'); } }),
   }));
   const tree = new Map(base.snapshot.tree);
+  const pluginCommands: typeof commands = [];
   const children = Array.from({ length: pluginCount }, (_, i) => {
     const instanceKey = `plugin-${String(i).padStart(3, '0')}`;
     const id = childPluginId(root, instanceKey);
     tree.set(id, { id, instanceKey, parent: root, packageName: instanceKey, packageRoot: `/${instanceKey}`, children: [] });
+    // A menu child must own a runnable command (#1250).
+    pluginCommands.push(createCapabilitySlot({ owner: id, feature: commandFeatureId, localName: `run-${instanceKey}`, source: `/${instanceKey}/commands/run/index.ts`,
+      definition: defineCommand({ execute: () => { throw new Error('Menu must not execute a command'); } }) }));
     return id;
   });
   tree.set(root, { ...tree.get(root)!, children });
-  const capabilities = new Map(base.snapshot.capabilities);
-  for (const slot of commands) capabilities.set(slot.id, slot);
+  const capabilities = new Map([...base.snapshot.capabilities].filter(([, slot]) => slot.owner === root));
+  for (const slot of [...commands, ...pluginCommands]) capabilities.set(slot.id, slot);
   const snapshot = { ...base.snapshot, tree, capabilities };
-  return { ...base, snapshot, index: new CommandIndex(commands, snapshot, { keyword: '帮助' }) };
+  return { ...base, snapshot, index: new CommandIndex([...commands, ...pluginCommands], snapshot, { keyword: '帮助' }) };
 }
 
 it.each([[95, 100], [0, 100], [100, 0]])('paginates %i commands and %i plugins without omission or duplication', async (commandCount, pluginCount) => {
@@ -191,7 +202,7 @@ it('applies safe appearance settings from root configuration without changing te
   } }]]) };
   const { value } = await index.dispatch({ input: '帮助', commandPrefix: '', snapshot: operation });
   expect(value).toMatchObject({ type: 'html', data: {
-    html: expect.stringContaining('知音 &lt;Atlas&gt;'), text: expect.stringContaining('=== root 指令菜单 ==='),
+    html: expect.stringContaining('知音 &lt;Atlas&gt;'), text: expect.stringContaining('=== 指令菜单 ==='),
   } });
   const html = (value as { data: { html: string } }).data.html;
   expect(html).toContain('--accent:#dcad75');
@@ -213,7 +224,7 @@ it('uses copied page data for an asynchronous Root presenter without executing c
   resources.set(commandMenuPresentationToken.id, presenter);
   const result = await index.dispatch({ input: '帮助 --page 2', commandPrefix: '/', snapshot: snapshot });
   const reply = await commandMenuReply(result, { commands: index, snapshot: snapshot, conversation: conversation, prefix: '/' });
-  expect(reply).toEqual(jsx('text', { children: 'root: /cmd-030,/cmd-031,/cmd-032,/cmd-033,/cmd-034' }));
+  expect(reply).toEqual(jsx('text', { children: '指令菜单: /cmd-030,/cmd-031,/cmd-032,/cmd-033,/cmd-034' }));
   const { page } = presenter.mock.calls[0]![0];
   expect(page).toMatchObject({ page: 2, pages: 2, commandTotal: 35, pluginTotal: 2,
     plugins: [{ name: 'plugin-000' }, { name: 'plugin-001' }] });

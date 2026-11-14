@@ -11,6 +11,7 @@
  */
 import { randomInt } from 'node:crypto';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
+import { operationClientAdapter } from '@zhin.js/feature-kit';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import {
   createMessages, parseFeatureConversationKey, parseFeatureResolutionKey,
@@ -48,6 +49,8 @@ export interface FeatureChatActor {
   readonly kind: 'group' | 'private' | 'channel';
   /** The sender's platform standing in this message (informational; never a zhin role). */
   readonly context: ChatRoleContext;
+  /** The sender's display name in this message, when the platform reports one (recorded on writes). */
+  readonly displayName?: string;
 }
 
 /** Resolves who sent the command and where; undefined outside a keyed conversation. */
@@ -56,12 +59,16 @@ export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'pro
   // Chat commands act on a conversation; an unkeyable conversation (endpoint-level fallback) has none.
   if (!subject || !parseFeatureConversationKey(subject.context.conversationKey)) return undefined;
   const parsed = parseFeatureResolutionKey(subject.context.conversationKey);
+  const sender = record(message) && record(message.sender) ? message.sender : undefined;
+  const displayName = typeof sender?.name === 'string' && sender.name.trim() && sender.name !== subject.identity.userId
+    ? sender.name.trim() : undefined;
   return Object.freeze({
     identity: subject.identity,
     conversationKey: subject.context.conversationKey,
     endpointKey: `${parsed.adapter}/${parsed.endpointId}`,
     kind: parsed.conversation!.kind,
     context: subject.context,
+    ...(displayName ? { displayName } : {}),
   });
 }
 
@@ -100,8 +107,8 @@ const messages = createMessages({
   unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   privateConversation: { 'zh-CN': '私聊的会话级覆盖只能在 Console 修改；可指定层级（账号 / 适配器 / 全局）。', en: 'Private conversation overrides are Console-only; pass a level (endpoint / adapter / global).' },
   usage: {
-    'zh-CN': '用法：功能 列表 | 开启 <插件> [层级] | 关闭 <插件> [层级] | 设置 <插件> <字段> <值> [层级] | 重置 <插件> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
-    en: 'Usage: feature list | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global',
+    'zh-CN': '用法：功能 列表 [页码] | 开启 <插件> [层级] | 关闭 <插件> [层级] | 设置 <插件> <字段> <值> [层级] | 重置 <插件> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局。含空格的值可用引号包裹，如 "欢迎 新朋友"',
+    en: 'Usage: feature list [page] | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global. Quote values with spaces, e.g. "Welcome aboard"',
   },
   roleUsage: {
     'zh-CN': '用法：角色 列表 | 授予 <用户> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
@@ -135,6 +142,12 @@ const messages = createMessages({
   listLine: { 'zh-CN': '{plugin}：{state}{source}', en: '{plugin}: {state}{source}' },
   lockedBy: { 'zh-CN': '（{level}层停用，已锁定）', en: ' (disabled at {level}, locked)' },
   disabledHere: { 'zh-CN': '（会话层停用）', en: ' (disabled at conversation)' },
+  globallyDisabled: { 'zh-CN': '（全局停用）', en: ' (disabled globally)' },
+  configDisabled: { 'zh-CN': '（配置 enabled: false）', en: ' (enabled: false in its configuration)' },
+  listPage: { 'zh-CN': '第 {page}/{pages} 页 · 共 {total} 项', en: 'Page {page}/{pages} · {total} items' },
+  listNext: { 'zh-CN': '下一页：功能 列表 {page}', en: 'Next page: feature list {page}' },
+  listPageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「功能 列表 <页码>」。', en: 'Page out of range: {pages} pages available. Use feature list <page>.' },
+  listEmpty: { 'zh-CN': '（本会话没有可管理的功能）', en: '(No features to manage in this conversation)' },
   overridden: { 'zh-CN': '（会话层有字段覆盖）', en: ' (conversation field overrides)' },
   yourRoles: { 'zh-CN': '你的角色：{roles}', en: 'Your roles: {roles}' },
   none: { 'zh-CN': '无', en: 'none' },
@@ -226,9 +239,67 @@ function auditor(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, prefix: 
   };
 }
 
+/** One `feature.list` row as the chat list reads it. */
+interface FeatureListItem {
+  readonly plugin: string;
+  readonly adapter?: boolean;
+  readonly globalEnabled?: boolean;
+}
+
+const FEATURE_LIST_PAGE_SIZE = 15;
+
+/** Capabilities a chat user perceives: replies to commands, message middlewares and event handlers. */
+const CHAT_FACING_FEATURES: ReadonlySet<string> = new Set([String(commandFeatureId), 'zhin.middleware', 'zhin.handler']);
+
+/**
+ * What `功能 列表` shows for one message, from the current generation:
+ * - `chatFacing`: instance paths (`a`, `a/b`) owning a command / middleware / handler that applies to
+ *   `clientAdapter` (no adapter restriction, or the same native adapter), plus their ancestors (whose
+ *   switch also turns those off). Service-only plugins and plugins for other platforms are absent.
+ * - `configDisabled`: instances whose own configuration says `enabled: false`.
+ * Undefined when no snapshot is available (nothing is filtered then).
+ */
+function chatListView(deps: FeatureSelfServiceDeps, clientAdapter: string | undefined):
+  { readonly chatFacing: ReadonlySet<string>; readonly configDisabled: ReadonlySet<string> } | undefined {
+  const lease = deps.context.snapshots?.acquire();
+  if (!lease) return undefined;
+  try {
+    const snapshot = lease.value;
+    const pathOf = (id: PluginId): string[] | undefined => {
+      const path: string[] = [];
+      for (let node = snapshot.tree.get(id); node && node.id !== snapshot.root; node = node.parent ? snapshot.tree.get(node.parent) : undefined) {
+        path.unshift(node.instanceKey);
+      }
+      return path.length ? path : undefined;
+    };
+    const chatFacing = new Set<string>();
+    for (const slot of snapshot.capabilities.values()) {
+      if (!CHAT_FACING_FEATURES.has(String(slot.feature))) continue;
+      const adapter = (slot.definition as { readonly adapter?: unknown } | undefined)?.adapter;
+      if (typeof adapter === 'string' && adapter && clientAdapter !== undefined && adapter !== clientAdapter) continue;
+      const path = pathOf(slot.owner);
+      if (!path) continue;
+      for (let depth = 1; depth <= path.length; depth += 1) chatFacing.add(path.slice(0, depth).join('/'));
+    }
+    const configDisabled = new Set<string>();
+    for (const [id, config] of snapshot.config) {
+      if (!record(config) || config.enabled !== false) continue;
+      const path = pathOf(id);
+      if (path) configDisabled.add(path.join('/'));
+    }
+    return { chatFacing, configDisabled };
+  } finally {
+    lease.release();
+  }
+}
+
 /** Runs one `功能` / `feature` invocation and returns the reply text. */
 export async function executeFeatureChat(
-  input: Readonly<{ tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale }>,
+  input: Readonly<{
+    tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale;
+    /** The message's native client adapter: `功能 列表` hides plugins whose chat capabilities all target another one. */
+    clientAdapter?: string;
+  }>,
   deps: FeatureSelfServiceDeps,
 ): Promise<string> {
   const { locale, actor } = input;
@@ -247,6 +318,9 @@ export async function executeFeatureChat(
     ...base,
     authScope: 'chat',
     actor: actorName(actor),
+    // #1250: the Console shows who changed an override and that it came from chat.
+    operator: Object.freeze({ source: 'chat' as const, adapter: actor.identity.adapter, userId: actor.identity.userId,
+      ...(actor.displayName ? { displayName: actor.displayName } : {}) }),
     authorize: request => request.type === 'feature.list' || administers(request.key ?? ''),
     allowedFields: (schema, level) => chatAllowedFields(schema, level),
   };
@@ -284,20 +358,41 @@ export async function executeFeatureChat(
 
   switch (sub) {
     case 'list': {
+      const pageWord = words[1];
+      const page = pageWord === undefined ? 1 : /^[1-9]\d{0,5}$/u.test(pageWord) ? Number(pageWord) : NaN;
+      if (!Number.isInteger(page) || words.length > 2) return messages(locale, 'usage');
       const listed = await call('feature.list', {});
-      const features = ((listed?.body as Record<string, any>)?.data?.features ?? []) as { plugin: string }[];
-      const lines = [messages(locale, 'listHeader')];
+      const features = ((listed?.body as Record<string, any>)?.data?.features ?? []) as FeatureListItem[];
+      const view = chatListView(deps, input.clientAdapter);
+      const lines: string[] = [];
       for (const feature of features) {
+        // Adapters are transports, not chat features: never listed (their switches stay in the Console).
+        if (feature.adapter) continue;
+        // `disable_plugins`: never loaded, so nothing below can be read; say so instead of a blank state.
+        if (feature.globalEnabled === false) {
+          lines.push(messages(locale, 'listLine', { plugin: feature.plugin, state: messages(locale, 'disabledWord'), source: messages(locale, 'globallyDisabled') }));
+          continue;
+        }
+        if (view && !view.chatFacing.has(feature.plugin)) continue;
         const got = await call('feature.get', { plugin: feature.plugin, level: 'conversation', key: actor.conversationKey });
         const data = (got?.body as Record<string, any>)?.data as { enabled?: boolean; lockedBy?: FeatureConfigLevel; values?: Record<string, unknown> } | undefined;
         if (!data) continue;
-        const source = data.lockedBy ? messages(locale, 'lockedBy', { level: levelName(locale, data.lockedBy) })
+        const configOff = view?.configDisabled.has(feature.plugin) === true;
+        const enabled = data.enabled === true && !configOff;
+        const source = data.lockedBy ? messages(locale, data.lockedBy === 'global' ? 'globallyDisabled' : 'lockedBy', { level: levelName(locale, data.lockedBy) })
           : data.enabled === false ? messages(locale, 'disabledHere')
-            : Object.keys(data.values ?? {}).length ? messages(locale, 'overridden') : '';
-        lines.push(messages(locale, 'listLine', { plugin: feature.plugin, state: messages(locale, data.enabled ? 'enabledWord' : 'disabledWord'), source }));
+            : configOff ? messages(locale, 'configDisabled')
+              : Object.keys(data.values ?? {}).length ? messages(locale, 'overridden') : '';
+        lines.push(messages(locale, 'listLine', { plugin: feature.plugin, state: messages(locale, enabled ? 'enabledWord' : 'disabledWord'), source }));
       }
-      lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
-      return lines.join('\n');
+      const pages = Math.max(1, Math.ceil(lines.length / FEATURE_LIST_PAGE_SIZE));
+      if (page > pages) return messages(locale, 'listPageOutOfRange', { pages });
+      const out = [messages(locale, 'listHeader')];
+      if (pages > 1) out.push(messages(locale, 'listPage', { page, pages, total: lines.length }));
+      out.push(...(lines.length ? lines.slice((page - 1) * FEATURE_LIST_PAGE_SIZE, page * FEATURE_LIST_PAGE_SIZE) : [messages(locale, 'listEmpty')]));
+      if (page < pages) out.push(messages(locale, 'listNext', { page: page + 1 }));
+      out.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
+      return out.join('\n');
     }
     case 'enable':
     case 'disable': {
@@ -334,9 +429,13 @@ export async function executeFeatureChat(
       return describe(reply, pending.plugin, 'global');
     }
     case 'set': {
-      const [, plugin, field, raw, levelWord] = words;
+      // `设置 <插件> <字段> <值…> [层级]`: the value is the rest of the text after the field; a trailing
+      // level word is the level only when something precedes it (quote a value ending in a level word).
+      const [, plugin, field, ...rest] = words;
+      const levelWord = rest.length > 1 && rest.at(-1) !== undefined && LEVEL_WORDS[rest.at(-1)!.toLowerCase()] ? rest.pop() : undefined;
+      const raw = rest.length && rest.every(word => word !== undefined) ? rest.join(' ') : undefined;
       const level = pickLevel(levelWord);
-      if (!plugin || !field || raw === undefined || level === null || words.length > 5) return messages(locale, 'usage');
+      if (!plugin || !field || raw === undefined || level === null) return messages(locale, 'usage');
       const parsed = parseValue(raw);
       if (!parsed) return messages(locale, 'value');
       // Configuration files are environment-expanded: chat never plants `${…}` / `env://` at any level.
@@ -486,13 +585,43 @@ export async function executeRoleChat(
   return status === 'saved' ? messages(locale, 'saved', { level: levelName(locale, level) }) : messages(locale, 'unchanged');
 }
 
-/** Text tokens and mentioned users from the command's remaining segments. */
+/** Opening quote → closing quote: ASCII, Chinese curly quotes and corner brackets. */
+const QUOTE_PAIRS: Readonly<Record<string, string>> = Object.freeze({
+  '"': '"', "'": "'", '\u201C': '\u201D', '\u2018': '\u2019', '\u300C': '\u300D', '\u300E': '\u300F',
+});
+
+/**
+ * Whitespace-separated words; a word starting with a quote runs to its closing quote and keeps the
+ * whitespace inside (`"欢迎 {name}"` → `欢迎 {name}`). An unclosed quote keeps the rest of the text.
+ */
+function splitQuotedWords(text: string): string[] {
+  const words: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    while (index < text.length && /\s/u.test(text[index]!)) index++;
+    if (index >= text.length) break;
+    const close = QUOTE_PAIRS[text[index]!];
+    if (close !== undefined) {
+      const end = text.indexOf(close, index + 1);
+      words.push(end === -1 ? text.slice(index + 1) : text.slice(index + 1, end));
+      index = end === -1 ? text.length : end + 1;
+      continue;
+    }
+    let end = index;
+    while (end < text.length && !/\s/u.test(text[end]!)) end++;
+    words.push(text.slice(index, end));
+    index = end;
+  }
+  return words;
+}
+
+/** Text tokens (quote-aware) and mentioned users from the command's remaining segments. */
 export function featureChatTokens(command: Pick<CommandContext, 'segments' | 'args'>): readonly FeatureChatToken[] {
   const tokens: FeatureChatToken[] = [];
   for (const segment of command.segments) {
     const type = typeof segment.type === 'string' ? segment.type : segment.type.name;
     if (type === 'text' && typeof segment.data.text === 'string') {
-      tokens.push(...segment.data.text.split(/\s+/u).filter(Boolean));
+      tokens.push(...splitQuotedWords(segment.data.text));
     } else if (type === 'at' || type === 'mention') {
       const user = segment.data.target ?? segment.data.user_id ?? segment.data.qq ?? segment.data.id;
       if (typeof user === 'string' || typeof user === 'number') tokens.push(Object.freeze({ user: String(user) }));
@@ -520,8 +649,11 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
       if (actor) options.onActor?.(actor);
       return actor;
     };
-    const run = (command: CommandContext, execute: typeof executeFeatureChat) =>
-      execute({ tokens: featureChatTokens(command), actor: actorOf(command), locale: command.locale }, { ...options, pending });
+    const run = (command: CommandContext, execute: typeof executeFeatureChat) => {
+      const clientAdapter = operationClientAdapter(command.input);
+      return execute({ tokens: featureChatTokens(command), actor: actorOf(command), locale: command.locale,
+        ...(clientAdapter ? { clientAdapter } : {}) }, { ...options, pending });
+    };
     context.addFeature(commandFeatureId, 'feature', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
       alias: ['功能'], options: {},

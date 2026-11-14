@@ -45,6 +45,7 @@ import {
   CommandIndex,
   commandFeatureId,
   defineCommand,
+  UserFacingError,
 } from '@zhin.js/command';
 import {
   ComponentIndex,
@@ -209,6 +210,25 @@ describe('IM Runtime', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('records a native-button menu page as readable history, never as serialized JSX (#1250)', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 60,
+      adapterSegments: { interactive: 'native', markdown: 'native' },
+    });
+    const input = fixtureInput(fixture, '/菜单');
+    try {
+      await receive(fixture.im, input);
+      expect(JSON.stringify(sent.at(-1))).toContain('keyboard');
+      const context = await fixture.im.readConversationContext(input.conversation, 'consumer', 10);
+      const history = context.blocks.map(block => block.text).join('\n');
+      expect(history).toContain('第 1/3 页');
+      expect(history).toContain('[上一页][下一页]');
+      expect(history).not.toContain('$jsx');
+      expect(history).not.toContain('[markdown]');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('navigates menu pages through scoped native callbacks and disables boundary buttons', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
@@ -322,6 +342,22 @@ describe('IM Runtime', () => {
       expect(JSON.stringify(sent.at(-1))).toContain('music 指令菜单');
       expect(JSON.stringify(sent.at(-1))).toContain('第 2/3 页');
       expect(JSON.stringify(sent.at(-1))).toContain('/帮助 music --page 3');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('replies with a UserFacingError through the outbound chain and keeps internal failures out of the reply (#1250)', async () => {
+    const sent: unknown[] = [];
+    let failure: Error = new UserFacingError('你在当前频道已有进行中的「guess」对局，请先结束它，再开始「rps」。');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw failure; },
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).resolves.toMatchObject({ matched: true, status: 'executed' });
+      expect(sent).toHaveLength(1);
+      expect(JSON.stringify(sent[0])).toContain('已有进行中的「guess」对局');
+      failure = new Error('internal: db path /secret');
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toBe(failure);
+      expect(sent).toHaveLength(1);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
