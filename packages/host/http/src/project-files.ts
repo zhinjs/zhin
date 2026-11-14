@@ -73,6 +73,16 @@ export const DOTENV_ACCESS_DENIED_MESSAGE =
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
 
 /**
+ * Strips trailing dots and spaces (what Windows drops from a file name). A linear scan: the
+ * equivalent `/[. ]+$/` backtracks quadratically on long runs of spaces (CodeQL js/polynomial-redos).
+ */
+function trimTrailingDotsAndSpaces(value: string): string {
+  let end = value.length;
+  while (end > 0 && (value[end - 1] === '.' || value[end - 1] === ' ')) end -= 1;
+  return value.slice(0, end);
+}
+
+/**
  * Whether one path segment names a dotenv file (`.env`, `.env.*`), in every spelling a
  * filesystem may resolve to it: any letter case, trailing dots / spaces (stripped by Windows),
  * an NTFS stream suffix (`.env::$DATA`) and percent-encoding.
@@ -84,7 +94,7 @@ function isDotenvSegment(segment: string): boolean {
     if (decoded !== segment) variants.push(decoded);
   } catch { /* not percent-encoded */ }
   return variants.some((variant) => {
-    const name = variant.split(':')[0]!.replace(/[. ]+$/u, '').toLowerCase();
+    const name = trimTrailingDotsAndSpaces(variant.split(':')[0]!).toLowerCase();
     return name === '.env' || name.startsWith('.env.');
   });
 }
