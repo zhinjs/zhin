@@ -101,7 +101,15 @@ it('answers an expected delivery failure with a classified code and a Chinese re
   });
 
   const unknown = await start(vi.fn(async () => { throw new EndpointDeliveryError('delivery_unconfirmed', 'timeout', 'unknown'); }));
-  expect(await (await unknown.post(valid)).json()).toMatchObject({ code: 'delivery_failed', data: { reason: 'delivery_unknown', status: 'unknown' } });
+  // An unknown outcome may already be delivered: its own top-level code, never `delivery_failed` (which clients may retry).
+  const unknownResponse = await unknown.post(valid);
+  expect(unknownResponse.status).toBe(502);
+  expect(await unknownResponse.json()).toEqual({
+    success: false,
+    code: 'delivery_unknown',
+    error: CONSOLE_SEND_FAILURE_MESSAGES.delivery_unknown,
+    data: { code: 'delivery_unconfirmed', reason: 'delivery_unknown', status: 'unknown' },
+  });
 });
 
 it('names the invalid argument in a structured 400', async () => {

@@ -26,6 +26,19 @@ describe('registry version lookup', () => {
     expect(npmRegistryLookup('@zhin.js/missing', '1.0.0')).toBeUndefined();
   });
 
+  it('never runs npm for a package name or spec that is not a plain npm name / version (shell injection on Windows)', () => {
+    execFileSync.mockReturnValue('{"version":"1.3.0"}');
+    for (const name of ['@zhin.js/x&calc', 'zhin.js|calc', 'a b', '@zhin.js/x"', 'x;rm', '../x', 'X', '@scope/', `a${'b'.repeat(214)}`]) {
+      expect(npmRegistryLookup(name), name).toBeUndefined();
+    }
+    for (const spec of ['1.0.0&calc', '^1.0.0', '>1 <2', '1.0.0|x']) {
+      expect(npmRegistryLookup('zhin.js', spec), spec).toBeUndefined();
+    }
+    expect(execFileSync).not.toHaveBeenCalled();
+    expect(npmRegistryLookup('@zhin.js/adapter-qq_bot.v2~x', '1.2.0-beta.1')).toEqual({ version: '1.3.0', dependencies: {} });
+    expect(execFileSync).toHaveBeenCalledTimes(1);
+  });
+
   it('queries each package once per run', () => {
     const lookup = vi.fn(() => ({ version: '1.0.0', dependencies: {} }));
     const cached = cachedRegistryLookup(lookup);

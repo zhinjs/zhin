@@ -22,8 +22,14 @@ export type ConsoleApiErrorCode =
   | 'unavailable'
   /** No Endpoint with that adapter / key exists. */
   | 'endpoint_not_found'
-  /** The message was not delivered; `data` is a `ConsoleSendFailure`. */
+  /** The message was not delivered (safe to retry); `data` is a `ConsoleSendFailure`. HTTP 502. */
   | 'delivery_failed'
+  /**
+   * The delivery outcome is unknown: the platform may have accepted the message (`data` is a
+   * `ConsoleSendFailure` with `reason: 'delivery_unknown'`, `status: 'unknown'`). HTTP 502 like
+   * `delivery_failed`, but kept apart so a client does not retry it blindly and send twice.
+   */
+  | 'delivery_unknown'
   /** `notify.channel: im` without a target conversation. */
   | 'notify_target_missing';
 

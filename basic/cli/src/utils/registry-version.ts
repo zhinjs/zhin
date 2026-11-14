@@ -31,10 +31,27 @@ export function parseNpmViewRelease(output: string): RegistryRelease | undefined
 }
 
 /**
+ * npm package names (validate-npm-package-name rules for new packages): optional lowercase
+ * `@scope/`, URL-safe characters only, at most 214 characters. Names come from the user's
+ * `package.json` and reach a shell on Windows, so anything else is never queried.
+ */
+const NPM_PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
+
+/** A dist-tag or exact version: no shell metacharacters (cmd.exe treats `^ < > | &` specially). */
+const NPM_VIEW_SPEC = /^[0-9A-Za-z.+-]+$/u;
+
+export function isValidNpmPackageName(name: string): boolean {
+  return name.length <= 214 && NPM_PACKAGE_NAME.test(name);
+}
+
+/**
  * Queries the registry the project's npm configuration points to (mirrors included) with
  * `npm view`. Failures (offline, unknown package, timeout) yield `undefined`, never a throw.
+ * An invalid package name or spec is never queried (on Windows `npm` runs through a shell, so
+ * `@zhin.js/x&calc` would otherwise run a command) and yields `undefined` as well.
  */
 export const npmRegistryLookup: RegistryLookup = (name, spec = 'latest') => {
+  if (!isValidNpmPackageName(name) || !NPM_VIEW_SPEC.test(spec)) return undefined;
   try {
     const output = execFileSync('npm', ['view', `${name}@${spec}`, 'version', 'dependencies', '--json'], {
       encoding: 'utf-8',

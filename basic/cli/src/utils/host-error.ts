@@ -7,15 +7,19 @@
  * in the instance log (over the gateway, or from `.zhin/logs/instance.log`).
  */
 import { existsSync } from 'node:fs';
-import { GATEWAY_RPC, type GatewayInstanceLogs } from '@zhin.js/console-protocol';
+import { CONSOLE_ERROR_ID_PATTERN, GATEWAY_RPC, type GatewayInstanceLogs } from '@zhin.js/console-protocol';
 import { defaultInstanceLogFile } from '@zhin.js/gateway/supervisor';
 import { isCliDebug } from './cli-flags.js';
 import { probeGateway, readFileTail, withGateway } from './gateway.js';
 import type { HostFetchResult } from './host-http.js';
 import { logger } from './logger.js';
 
-/** Lines of the newest instance log (up to 1000) that mention `errorId`. */
+/**
+ * Lines of the newest instance log (up to 1000) that mention `errorId`. The id comes from the
+ * response body, so anything but a well-formed correlation id (`err_` + 12 hex) is not searched.
+ */
 export async function findInstanceLogLines(root: string, errorId: string): Promise<string[]> {
+  if (!CONSOLE_ERROR_ID_PATTERN.test(errorId)) return [];
   const matches = (lines: readonly string[]) => lines.filter((line) => line.includes(errorId));
   try {
     if (await probeGateway({ root })) {

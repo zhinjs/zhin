@@ -153,9 +153,10 @@ describe('metadata-only config explanations through the actual Runtime and file 
         const committed = new Promise<void>(done => { stop = f.runtime.onGenerationCommit(({ current }) => { if (current.snapshot.generation > previous) done(); }); });
         try {
           reloaded = f.runtime.reload(childPluginId(rootPluginId(), 'demo'));
-          await Promise.race([committed, reloaded.then(() => committed)]);
+          // A reload that settles without committing fails here at once instead of hanging to the test timeout.
+          await Promise.race([committed, reloaded]);
         } finally { stop?.(); }
-        expect(f.runtime.snapshot.generation).toBeGreaterThan(previous);
+        expect(f.runtime.snapshot.generation, 'reload settled without committing a new generation').toBeGreaterThan(previous);
       }
       pause.release(); expect(await observed).toBeInstanceOf(Error); expect(String(await observed)).toContain('重新读取文件版本'); await reloaded;
       if (kind === 'generation') expect((await f.explain()).projection).toBe('supported');

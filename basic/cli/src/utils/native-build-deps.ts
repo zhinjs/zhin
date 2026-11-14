@@ -7,7 +7,7 @@
  * `pnpm-workspace.yaml` (it ignores the `pnpm` field of `package.json`), pnpm 10.0–10.25 only
  * through `onlyBuiltDependencies`. Without the allowance `node-pty` installs without its binding.
  */
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
@@ -42,6 +42,49 @@ function pinsPnpmWithoutAllowBuilds(pkg: Record<string, any>): boolean {
   return match !== null && Number(match[1]) < ALLOW_BUILDS_MIN_PNPM10_MINOR;
 }
 
+/** Reads the installed pnpm version (`pnpm --version`); undefined when pnpm cannot be run. */
+export type PnpmVersionProbe = (dir: string) => string | undefined;
+
+let installedPnpmVersion: { readonly value: string | undefined } | undefined;
+
+/** `pnpm --version` in `dir`, run once per process. */
+export const readInstalledPnpmVersion: PnpmVersionProbe = dir => {
+  if (installedPnpmVersion) return installedPnpmVersion.value;
+  let value: string | undefined;
+  try {
+    // Fixed arguments only: on Windows pnpm is a `.cmd` shim, which Node runs only through a shell.
+    value = execFileSync('pnpm', ['--version'], {
+      cwd: dir,
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+      shell: process.platform === 'win32',
+    }).trim() || undefined;
+  } catch {
+    value = undefined;
+  }
+  installedPnpmVersion = { value };
+  return value;
+};
+
+function majorOf(version: string): number | undefined {
+  const match = /^v?(\d+)\./u.exec(version.trim());
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * The project installs with pnpm 10 or newer: `packageManager` pins pnpm 10+, or (no pnpm pinned)
+ * the installed `pnpm --version` is 10+. A `pnpm-workspace.yaml` holding only `allowBuilds` breaks
+ * pnpm 9 (`packages field missing or empty`), so the file is created only when this holds.
+ */
+export function confirmsPnpm10(dir: string, pkg: Record<string, any>, probe: PnpmVersionProbe = readInstalledPnpmVersion): boolean {
+  const pinned = /^pnpm@(.+)$/u.exec(String(pkg.packageManager ?? ''));
+  const version = pinned ? pinned[1] : probe(dir);
+  const major = version === undefined ? undefined : majorOf(version);
+  return major !== undefined && major >= 10;
+}
+
 export interface NativeBuildAllowanceChange {
   readonly file: typeof WORKSPACE_FILE | 'package.json';
   /** Setting path, e.g. `allowBuilds.node-pty` or `onlyBuiltDependencies`. */
@@ -53,30 +96,51 @@ export interface NativeBuildAllowancePlan {
   readonly changes: readonly NativeBuildAllowanceChange[];
   /** Entries the user explicitly denied (`allowBuilds.<name>: false`); left as they are. */
   readonly denied: readonly string[];
+  /**
+   * `pnpm-workspace.yaml` is missing and pnpm 10+ is not confirmed, so it was not planned (pnpm 9
+   * runs dependency build scripts anyway); the caller prints a hint instead.
+   */
+  readonly workspaceSkipped: boolean;
   /** Writes the workspace file (the caller writes `package.json`, already updated in `pkg`). */
   apply(): void;
+}
+
+export interface NativeBuildAllowanceOptions {
+  /** Installed pnpm version, consulted when `packageManager` does not pin pnpm. */
+  readonly pnpmVersion?: PnpmVersionProbe;
 }
 
 /**
  * Plans the build-script allowance for the gateway's native dependencies in a pnpm project that
  * declares `@zhin.js/gateway`. Existing entries are kept; only missing ones are appended:
- * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent);
+ * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent, only once pnpm 10+
+ *   is confirmed — see {@link confirmsPnpm10});
  * - `onlyBuiltDependencies` in `pnpm-workspace.yaml` when that list exists or the project pins
  *   pnpm < 10.26, and in `package.json#pnpm.onlyBuiltDependencies` when that list exists
  *   (mutated in `pkg`; never created — pnpm 11 warns about the `pnpm` field).
  * Returns undefined when nothing applies (no gateway, not pnpm, unreadable workspace file).
  */
-export function planNativeBuildAllowance(dir: string, pkg: Record<string, any>): NativeBuildAllowancePlan | undefined {
+export function planNativeBuildAllowance(
+  dir: string,
+  pkg: Record<string, any>,
+  options: NativeBuildAllowanceOptions = {},
+): NativeBuildAllowancePlan | undefined {
   if (!declaresGateway(pkg) || !usesPnpm(dir, pkg)) return undefined;
   const workspacePath = path.join(dir, WORKSPACE_FILE);
   const exists = fs.existsSync(workspacePath);
+  const workspaceSkipped = !exists && !confirmsPnpm10(dir, pkg, options.pnpmVersion);
   const doc = exists ? parseDocument(fs.readFileSync(workspacePath, 'utf8')) : new Document({});
   if (doc.errors.length > 0 || (doc.contents !== null && !isMap(doc.contents))) return undefined;
 
   const changes: NativeBuildAllowanceChange[] = [];
   const denied: string[] = [];
-  const allowBuilds = doc.get('allowBuilds');
-  if (allowBuilds === undefined || allowBuilds === null || isMap(allowBuilds)) {
+  let allowBuilds = workspaceSkipped ? undefined : doc.get('allowBuilds', true);
+  // An empty `allowBuilds:` key holds a null scalar, which `setIn` cannot descend into.
+  if (allowBuilds === null || (isScalar(allowBuilds) && allowBuilds.value === null)) {
+    allowBuilds = doc.createNode({});
+    doc.set('allowBuilds', allowBuilds);
+  }
+  if (!workspaceSkipped && (allowBuilds === undefined || isMap(allowBuilds))) {
     for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
       const current = doc.getIn(['allowBuilds', name]);
       if (current === false) denied.push(name);
@@ -86,8 +150,8 @@ export function planNativeBuildAllowance(dir: string, pkg: Record<string, any>):
     }
   }
 
-  let workspaceList = doc.get('onlyBuiltDependencies');
-  if (workspaceList === undefined && pinsPnpmWithoutAllowBuilds(pkg)) {
+  let workspaceList = workspaceSkipped ? undefined : doc.get('onlyBuiltDependencies');
+  if (!workspaceSkipped && (workspaceList === undefined || workspaceList === null) && pinsPnpmWithoutAllowBuilds(pkg)) {
     workspaceList = doc.createNode([]);
     doc.set('onlyBuiltDependencies', workspaceList);
   }
@@ -113,8 +177,10 @@ export function planNativeBuildAllowance(dir: string, pkg: Record<string, any>):
   return {
     changes,
     denied,
+    workspaceSkipped,
     apply() {
-      if (workspaceChanged) fs.writeFileSync(workspacePath, doc.toString());
+      // lineWidth 0: keep long strings on one line instead of reflowing the user's file.
+      if (workspaceChanged) fs.writeFileSync(workspacePath, doc.toString({ lineWidth: 0 }));
     },
   };
 }
@@ -123,9 +189,21 @@ export function planNativeBuildAllowance(dir: string, pkg: Record<string, any>):
  * `zhin migrate` step: appends the missing allowances (dry-run only prints them). Returns whether
  * `package.json` content changed (the workspace file is written here).
  */
-export function syncNativeBuildAllowance(dir: string, pkg: Record<string, any>, dryRun: boolean): boolean {
-  const plan = planNativeBuildAllowance(dir, pkg);
+export function syncNativeBuildAllowance(
+  dir: string,
+  pkg: Record<string, any>,
+  dryRun: boolean,
+  options: NativeBuildAllowanceOptions = {},
+): boolean {
+  const plan = planNativeBuildAllowance(dir, pkg, options);
   if (!plan) return false;
+  if (plan.workspaceSkipped) {
+    console.log(chalk.gray(
+      `  · 未确认 pnpm >= 10，未创建 ${WORKSPACE_FILE}（pnpm 9 本身会运行依赖构建脚本；升级到 pnpm 10+ 后再运行 zhin migrate，`
+      + `或手动在 ${WORKSPACE_FILE} 加入 allowBuilds: { ${GATEWAY_NATIVE_BUILD_DEPENDENCIES.join(': true, ')}: true }）`
+      + `（pnpm 10+ not confirmed, ${WORKSPACE_FILE} not created）`,
+    ));
+  }
   for (const name of plan.denied) {
     console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false，保留（denied by the project, kept; the Console terminal needs node-pty）`));
   }

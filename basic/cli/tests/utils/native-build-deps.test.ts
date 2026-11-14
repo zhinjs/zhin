@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { nativeModuleFixCommand, probeGatewayNativeModule, usesPnpm } from '../../src/utils/native-build-deps.js';
+import { confirmsPnpm10, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, usesPnpm } from '../../src/utils/native-build-deps.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -66,5 +66,44 @@ describe('nativeModuleFixCommand', () => {
     fs.writeFileSync(path.join(root, 'package-lock.json'), '{}');
     expect(nativeModuleFixCommand(root, {})).toContain('npm rebuild node-pty');
     expect(nativeModuleFixCommand(root, { packageManager: 'pnpm@11.27.1' })).toContain('pnpm rebuild node-pty');
+  });
+});
+
+describe('creating pnpm-workspace.yaml needs pnpm 10+', () => {
+  const gatewayProject = (manifest: Record<string, unknown> = {}) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-plan-'));
+    roots.push(root);
+    return { root, pkg: { name: 'bot', dependencies: { '@zhin.js/gateway': '^1.0.0' }, ...manifest } };
+  };
+
+  it('reads packageManager first, then the installed pnpm version', () => {
+    const never = () => { throw new Error('not consulted'); };
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@10.0.0' }, never)).toBe(true);
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@11.2.0+sha512.abc' }, never)).toBe(true);
+    expect(confirmsPnpm10('.', { packageManager: 'pnpm@9.15.4' }, never)).toBe(false);
+    expect(confirmsPnpm10('.', {}, () => '10.12.1')).toBe(true);
+    expect(confirmsPnpm10('.', {}, () => '9.0.2')).toBe(false);
+    expect(confirmsPnpm10('.', {}, () => undefined)).toBe(false);
+  });
+
+  it('skips the workspace file when pnpm 10+ is not confirmed, and plans it otherwise', () => {
+    const unknown = gatewayProject();
+    const skipped = planNativeBuildAllowance(unknown.root, unknown.pkg, { pnpmVersion: () => undefined });
+    expect(skipped).toMatchObject({ workspaceSkipped: true, changes: [] });
+    skipped!.apply();
+    expect(fs.existsSync(path.join(unknown.root, 'pnpm-workspace.yaml'))).toBe(false);
+
+    const pnpm10 = gatewayProject();
+    const planned = planNativeBuildAllowance(pnpm10.root, pnpm10.pkg, { pnpmVersion: () => '10.30.0' });
+    expect(planned?.workspaceSkipped).toBe(false);
+    planned!.apply();
+    expect(fs.readFileSync(path.join(pnpm10.root, 'pnpm-workspace.yaml'), 'utf8')).toContain('node-pty: true');
+  });
+
+  it('still extends package.json#pnpm.onlyBuiltDependencies without a workspace file', () => {
+    const { root, pkg } = gatewayProject({ pnpm: { onlyBuiltDependencies: ['esbuild'] } });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '9.0.2' });
+    expect(plan?.workspaceSkipped).toBe(true);
+    expect(plan?.changes.map(change => change.file)).toEqual(['package.json', 'package.json', 'package.json']);
   });
 });

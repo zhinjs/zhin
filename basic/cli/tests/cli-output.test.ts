@@ -198,6 +198,10 @@ describe('instance failures', () => {
     expect(await findInstanceLogLines(tmp, 'err_0123456789ab')).toEqual([
       '[10:00:01.000][WARN] [console] console_message_send_failed | errorId: err_0123456789ab | error: socket closed',
     ]);
+    // The id comes from the response body: a malformed one (here matching every line) is not searched.
+    for (const errorId of ['', ']', '[', 'err_0123456789a', 'err_0123456789abX', 'console']) {
+      expect(await findInstanceLogLines(tmp, errorId), errorId).toEqual([]);
+    }
     setCliFlags({ debug: true });
     await reportHostFailure(internal, 'x', tmp);
     const text = stderr.join('');

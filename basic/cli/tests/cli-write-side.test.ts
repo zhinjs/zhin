@@ -20,6 +20,7 @@ import {
   upgradeBootstrapFiles,
   upgradePackageJson,
   isPinnedSpecifier,
+  isNewerThanRelease,
 } from '../src/commands/migrate.js';
 import { scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
@@ -400,6 +401,54 @@ describe('migrate', () => {
     expect(pkg.pnpm.overrides['@zhin.js/core']).toBe('^9.4.1');
   });
 
+  it('syncs a stale override even when zhin.js is already at the registry latest (#1250)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2' },
+      pnpm: { overrides: { '@zhin.js/core': '4.0.0', '@zhin.js/cli': '4.0.0' } },
+    }, null, 2));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false })).toBe(true);
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({ 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2' });
+    expect(pkg.pnpm.overrides).toEqual({ '@zhin.js/core': '^9.4.1', '@zhin.js/cli': '^9.4.2' });
+  });
+
+  it.each([
+    ['a prerelease of the next major', '^10.0.0-beta.3', false],
+    ['a range ahead of a lagging mirror', '^9.9.0', false],
+    ['a newer pinned release (--include-pinned)', '9.5.0', true],
+  ])('never downgrades %s to the registry latest', (_label, existing, includePinned) => {
+    const pkgPath = path.join(tmp, 'package.json');
+    const original = JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': existing, '@zhin.js/agent': existing },
+    }, null, 2);
+    fs.writeFileSync(pkgPath, original);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned })).toBe(false);
+    expect(fs.readFileSync(pkgPath, 'utf8')).toBe(original);
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain(`zhin.js: ${existing} 不低于 registry 最新版本 9.4.2，保留`);
+    expect(output).toContain(`@zhin.js/agent: ${existing} 不低于 registry 最新版本 9.4.2，保留`);
+  });
+
+  it('isNewerThanRelease compares the lowest admitted version with the registry latest', () => {
+    expect(isNewerThanRelease('^9.4.2', '9.4.2')).toBe(false);
+    expect(isNewerThanRelease('^9.0.0', '9.4.2')).toBe(false);
+    expect(isNewerThanRelease('~9.5.0', '9.4.2')).toBe(true);
+    expect(isNewerThanRelease('9.4.3-rc.1', '9.4.2')).toBe(true);
+    expect(isNewerThanRelease('9.4.2-rc.1', '9.4.2')).toBe(false);
+    for (const opaque of ['latest', 'next', 'link:../x', 'github:zhinjs/zhin', '*']) {
+      expect(isNewerThanRelease(opaque, '9.4.2'), opaque).toBe(false);
+    }
+  });
+
   it('isPinnedSpecifier 区分锁定与跟随上游的写法', () => {
     for (const pinned of ['1.1.6', '=1.2.3', 'v1.0.0', '1.2.0-beta.1', 'link:../x', 'file:../x', 'npm:zhin.js@1.0.0', 'github:zhinjs/zhin', 'https://x/y.tgz', './vendor/x.tgz']) {
       expect(isPinnedSpecifier(pinned), pinned).toBe(true);
@@ -547,6 +596,31 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     expect(workspace().allowBuilds).toEqual({ 'node-pty': false, ssh2: true, 'cpu-features': true });
     expect(log.mock.calls.flat().join('\n')).toContain('allowBuilds.node-pty 为 false，保留');
+  });
+
+  it('does not create pnpm-workspace.yaml unless pnpm 10+ is confirmed (pnpm 9 rejects a file without packages)', () => {
+    const pkgPath = botPackage({ packageManager: 'pnpm@9.15.4' });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(fs.existsSync(path.join(tmp, 'pnpm-workspace.yaml'))).toBe(false);
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain('未确认 pnpm >= 10，未创建 pnpm-workspace.yaml');
+    expect(output).not.toContain('allowBuilds.node-pty: true');
+  });
+
+  it('fills an empty allowBuilds key and keeps long strings on one line', () => {
+    const pkgPath = botPackage();
+    const long = 'x'.repeat(120);
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), `packages:\n  - '.'\ncatalog:\n  foo: "${long} ${long}"\nallowBuilds:\n`);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const written = fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain(`  foo: "${long} ${long}"\n`);
+    expect(workspace()).toEqual({
+      packages: ['.'],
+      catalog: { foo: `${long} ${long}` },
+      allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
+    });
   });
 
   it('appends to existing onlyBuiltDependencies lists, and adds one for pnpm releases before allowBuilds', () => {

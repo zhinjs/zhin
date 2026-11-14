@@ -65,9 +65,13 @@ export function registerMessageSendRoutes(options: Readonly<{
         op: 'console_message_send_failed', adapter, endpoint: endpointKey, code: failure.code, reason: failure.reason,
         error: error instanceof Error ? error.message : String(error),
       }));
-      return failure.reason === 'endpoint_not_found'
-        ? expectedErrorResponse(404, 'endpoint_not_found', CONSOLE_SEND_FAILURE_MESSAGES.endpoint_not_found, failure)
-        : expectedErrorResponse(502, 'delivery_failed', CONSOLE_SEND_FAILURE_MESSAGES[failure.reason], failure);
+      if (failure.reason === 'endpoint_not_found') {
+        return expectedErrorResponse(404, 'endpoint_not_found', CONSOLE_SEND_FAILURE_MESSAGES.endpoint_not_found, failure);
+      }
+      // An unknown outcome may already be on the platform: its own code, so a client never treats
+      // it as a failed send it may retry (502 like any other delivery failure).
+      const code = failure.reason === 'delivery_unknown' ? 'delivery_unknown' : 'delivery_failed';
+      return expectedErrorResponse(502, code, CONSOLE_SEND_FAILURE_MESSAGES[failure.reason], failure);
     }
   }, {
     summary: 'Send a message through an Endpoint',
