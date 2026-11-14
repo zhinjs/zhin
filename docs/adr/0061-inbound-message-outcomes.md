@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0061：每条入站消息都有结局与原因——消灭静默失败
 
-状态：已接受（Accepted，2026-11-14）。所有者决定：「未决问题」全部按推荐处理，见文末「决定」；另增一条与 ADR 0062 共同的决定（IM 回合审批接入 `ToolApprovalQueue`，§5.1）。
+状态：已接受（Accepted，2026-11-14）。所有者决定：「未决问题」全部按推荐处理，见文末「决定」；另增一条与 ADR 0062 共同的决定（IM 回合审批接入 `ToolApprovalQueue`，§5.1），以及两条审批卡细化决定（意图确认卡与外部内容后的 owner 确认，§5.1，按 zhinjs/zhin#1261 评审意见的推荐处理）。
 
 关联：ADR 0008（`conversation_events` 是会话事件的权威表）、ADR 0019（安装体积分层：默认安装不含 `@zhin.js/agent`）、ADR 0036（决策审计 `ai_decision_events` 与 Console 决策回放）、ADR 0038（连续输入合流）、ADR 0048（Agent Harness：Mailbox 准入）、ADR 0049（Console 权限映射）、ADR 0050 / 0055（功能开关：被关掉的插件的命令“在这里不存在”）、ADR 0056（聊天角色 `owner` / `admin` / `trusted`）、[ADR 0062](./0062-one-path-per-task.md)（每件事只留一条路；R4 与本 ADR §5.1 的审批队列共同决定）。来源：issue zhinjs/zhin#1250 中“没反应、看不出原因”一类反馈（命令错误被吞、`Internal error`、审批被拒却说成功、模型请求挂起无日志、插话不说话看不出原因、定时任务静默不触发、`unaddressed-message-no-record`、`inbound-media-reject-reason-opaque`、`reminder-confirm-captures-chat` 等）。
 
@@ -305,14 +305,18 @@ sidebar: false
 决定：
 
 - **实现方式**：不改 `requestApprovalOutcome`。把 `ToolHardGate.#awaitApproval` 中“会话提问 / 队列等待 / 计时 / 取消四路竞速、先结算者生效、另一方经 `AbortController` 撤回或以 `queue.resolve` 结算”的逻辑抽成 `security/` 下一个共用函数，硬闸改为调用它；`turn-tool-runtime.ts` 的 `approval_required` 与来源可疑两个分支也调用它，队列同样取自 `options.approvalQueue`。
-- **只在真的发出提问时建卡**：`createRuntimeApprovalPort`（`plugin-runtime/ingress/request-ports.ts`）对 owner 的非 humanOnly 请求直接返回 `approve-always`，命中记住的授权（`ApprovalDecisionMemory.recall`）时直接返回已记住的结论——这两种情况不发提问，**也不建卡**。卡由端口在即将发出提问（`interaction.ask`）之前回调创建（例如 `ApprovalRequestInput` 增加一个建卡回调），不在 `turn-tool-runtime` 里预先建卡。
+- **只在真的发出提问时建卡**：`createRuntimeApprovalPort`（`plugin-runtime/ingress/request-ports.ts`）对 owner 的非 humanOnly 请求直接返回 `approve-always`，命中记住的授权（`ApprovalDecisionMemory.recall`）时直接返回已记住的结论——这两种情况不发提问，**也不建卡**。卡由端口在即将发出提问之前回调创建（例如 `ApprovalRequestInput` 增加一个建卡回调），不在 `turn-tool-runtime` 里预先建卡。建卡回调必须覆盖 `createRuntimeApprovalPort` 的**每一条**提问路径：`interaction.ask` 与 zhinjs/zhin#1261 引入的 `askOnce` 路径都要回调；以后新增提问路径同样适用。
+- **例外：读过外部内容之后的高风险操作**（所有者决定，按 zhinjs/zhin#1261 评审意见的推荐）：“owner 的非 humanOnly 请求直接 `approve-always`、不发提问、不建卡”有一个例外——回合已读入外部内容后，`ask` / `bypass` 模式下的高风险操作仍向 owner 发一次性确认：不记住（不写 `ApprovalDecisionMemory`）、超时即拒绝、owner 不在场即拒绝。这次提问照上一条建卡，卡为 `turn_prompt`、`purpose: 'intent'`（见下条）。
 - **卡的种类**：`ToolApprovalEntry` 增加 `kind: 'hard_gate' | 'turn_prompt'`（缺省按 `hard_gate` 读，兼容现有卡）。IM 审批通道 `tool-approval-im-channel.ts` 的 `onEnqueue` 只投递 `hard_gate` 卡，`approve <id>` / `deny <id>` 也只接受 `hard_gate` 卡；`turn_prompt` 卡只出现在 Console「需要你处理」。这样审批人范围不因接入队列而扩大，也不会把每一个普通确认都私聊推给审批人名单。
-- **Console 结算的语义**：队列的结算接口是 `resolve(id, approved: boolean, decidedBy, …)`，只有是 / 否。Console 批准一张 `turn_prompt` 卡等于**仅本次批准**（`approve-once`），拒绝等于仅本次拒绝，都**不写入** `ApprovalDecisionMemory`；“总是允许 / 总是拒绝”只能在会话里回答。
+- **卡的用途 `purpose`**（所有者决定，按 zhinjs/zhin#1261 评审意见的推荐）：`turn_prompt` 卡带上审批请求的 `purpose`。
+  - `purpose: 'approval'`：普通确认，Console 可代为批准 / 拒绝，语义见下条（仅本次）。
+  - `purpose: 'intent'`：来源可疑（provenance）调用由发起人确认自己的意图（`scope: 'intent'`）。Console 只读展示，标注「需要发起人在会话里确认」，**不能**在 Console 批准或拒绝——Console 操作者不是发起人，无法替发起人确认其意图。只确认了意图的结论永远不满足授权（不能当作审批通过）。卡随会话提问结算（发起人回答、超时、回合取消）。
+- **Console 结算的语义**：队列的结算接口是 `resolve(id, approved: boolean, decidedBy, …)`，只有是 / 否。Console 批准一张 `purpose: 'approval'` 的 `turn_prompt` 卡等于**仅本次批准**（`approve-once`），拒绝等于仅本次拒绝，都**不写入** `ApprovalDecisionMemory`；“总是允许 / 总是拒绝”只能在会话里回答。
 - **生命周期**：“批准后由下一次同指纹调用消费”（`consumeApproved` / `markConsumed`）与默认 5 分钟 TTL（`DEFAULT_TOOL_APPROVAL_TTL_MS`）**只适用 `hard_gate` 卡**。`turn_prompt` 卡与会话提问同生共死：提问超时、回合取消、会话里先回答时卡随之结算（`timeout` / `turn_cancelled` / `approval_port`）；Console 先结算时直接唤醒正在等待的回合，结果不留给下一次调用消费。
 - **任一处批准或拒绝即生效，另一处同步失效**：会话里先回答，Console 卡片显示“已在聊天中处理”并不可再操作；Console 先处理，会话里的待确认提问被撤回（`interactions` 结算为已处理，之后的回答不再被当作确认吃掉），并在会话里说明结果。
 - **审批权限不变**：会话内确认仍按现有 `ApprovalPort` 规则判定谁的回答算数；Console 端按工具审批的现有权限；硬闸卡仍是 humanOnly、一次一卡。普通群（审批人群除外）里不能用 `approve <id>` / `deny <id>` 结算任何卡；但回合内的 humanOnly 提问本来就发在触发它的会话里，在群里被有权的人回答时照常结算，记 `decidedBy: 'approval_port'`。
-- **无人值守仍然失败关闭，不等 Console**：无人值守回合或会话端口不可用时，`turn-tool-runtime` 今天在提问之前就拒绝（`approval required but ApprovalPort unavailable`），这一点不变——回合立即以 `approval_unavailable`（`reason: unattended` / `no_channel`）结束，绝不阻塞等待 Console。此时没有会话提问，所以普通确认不建 `turn_prompt` 卡；硬闸照今天的行为在拒绝前已入队留卡。留了卡时结局带 facet `approval_card_left`（发起人人话追加“已留下审批卡，在 Console 批准后重试即可”），之后同参数的重试由 `consumeApproved` 消费这张已批准的卡。
-- **结局与审计**：两处任一结算都写同一条 `tool_approval` 审计，消息结局按 §1.2 取 `approval_denied` / `approval_timeout` / `approval_unavailable`。
+- **无人值守仍然失败关闭，不等 Console**：无人值守回合或会话端口不可用时，`turn-tool-runtime` 今天在提问之前就拒绝（`approval required but ApprovalPort unavailable`），这一点不变——回合立即以 `approval_unavailable`（`reason: unattended` / `no_channel`）结束，绝不阻塞等待 Console。此时没有会话提问，所以普通确认不建 `turn_prompt` 卡；端口给出的 `unavailable` 今天是自由文本原因（审批人无法解析、master 不在场、humanOnly 不能自批等），一律映射为结局 `reason: no_channel`，原文保留在结局 `facets` 与审计 `reasonDetail` 里，不为每种文本新增 `reason`；硬闸照今天的行为在拒绝前已入队留卡。留了卡时结局带 facet `approval_card_left`（发起人人话追加“已留下审批卡，在 Console 批准后重试即可”），之后同参数的重试由 `consumeApproved` 消费这张已批准的卡。
+- **结局与审计**：两处任一结算都写同一条 `tool_approval` 审计——队列结算与现有的 `#auditApproval` 合起来，每次提问只产生**一条** `tool_approval` 审计记录，不重复写；消息结局按 §1.2 取 `approval_denied` / `approval_timeout` / `approval_unavailable`。
 - 这同时是 ADR 0062 R4（一个意图只对应一个后端操作）在审批上的落实：审批只有一个后端（队列），聊天与 Console 都是它的前端。
 
 实施归入 P2（见 §6），属于 `@zhin.js/agent` minor 与 `@zhin.js/console-protocol` / Console 前端的 minor。
@@ -375,6 +379,11 @@ sidebar: false
 另有一条与 ADR 0062 共同的决定：
 
 13. **IM 回合审批接入 `ToolApprovalQueue`**：IM 会话内确认与 Console「需要你处理」里的工具审批共用同一个队列，任一处批准即生效、另一处同步失效（所有者在 PR #1253 的讨论中同意的推荐）。只在真的发出提问时建卡；普通确认的卡（`turn_prompt`）只进 Console、批准即仅本次、随会话提问结算；无人值守回合仍立即失败关闭。细节见 §5.1，实施归入 P2。
+
+另有两条审批卡细化决定（所有者按 zhinjs/zhin#1261 评审意见的推荐处理）：
+
+14. **意图确认卡只读**：`turn_prompt` 卡带审批 `purpose`；`purpose: 'intent'`（来源可疑调用、发起人确认自己的意图，`scope: 'intent'`）的卡在 Console 只读、标注「需要发起人在会话里确认」，不能在 Console 批准 / 拒绝；只确认意图的结论永不满足授权。`purpose: 'approval'` 的卡仍由 Console 按仅本次结算（§5.1）。
+15. **读过外部内容后的 owner 确认**：owner 的非 humanOnly 请求免提问、不建卡的规则有例外——回合读过外部内容后，`ask` / `bypass` 下的高风险操作向 owner 发一次性确认（不记住、超时即拒、owner 不在场即拒），这次提问按第 14 条建 `purpose: 'intent'` 的 `turn_prompt` 卡（§5.1）。
 
 ## 落盘位置（计划）
 
