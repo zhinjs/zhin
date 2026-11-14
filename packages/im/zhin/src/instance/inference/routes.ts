@@ -13,7 +13,7 @@ import { withNoStore } from '../console/no-store.js';
 function principalId(principal: ConsolePrincipal | undefined): { principalId?: string } {
   return isUserPrincipal(principal) ? { principalId: `user:${principal.userId}` } : {};
 }
-import { ProviderError } from '@zhin.js/ai/provider';
+import { ProviderDiscoveryError, ProviderError } from '@zhin.js/ai/provider';
 import {
   PersonalSessionAccessError,
   PersonalSessionMigrationRequiredError,
@@ -81,7 +81,7 @@ interface RouteFailure {
   readonly status: number;
   readonly code: string;
   /** Safe, enum-like diagnostics only (driver step, upstream HTTP status and reason code). */
-  readonly details?: Readonly<{ reason?: string; upstreamStatus?: number; step?: string }>;
+  readonly details?: Readonly<{ preparationCode?: string; reason?: string; upstreamStatus?: number; step?: string; retryAfterMs?: number }>;
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
 }
@@ -128,9 +128,11 @@ function failure(error: unknown): RouteFailure {
     const preparation = error.preparation;
     return {
       // Failed dependency: the upstream supplier refused or could not complete account preparation.
+      // `code` is fixed for clients; the driver's own code is a separate diagnostic field.
       status: 424,
-      code: preparation?.code ?? error.code,
+      code: 'preparation-failed',
       details: {
+        ...(preparation?.code ? { preparationCode: preparation.code } : {}),
         ...(preparation?.reason ? { reason: preparation.reason } : {}),
         ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }),
         ...(preparation?.step ? { step: preparation.step } : {}),
@@ -138,6 +140,16 @@ function failure(error: unknown): RouteFailure {
       message: '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
     };
   }
+  if (error instanceof ProviderDiscoveryError && error.code === 'rate-limited')
+    return {
+      status: 429,
+      code: 'discovery-rate-limited',
+      details: {
+        upstreamStatus: error.status,
+        ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+      },
+      message: '模型目录请求过于频繁，请稍后重试',
+    };
   if (error instanceof InferenceAuthenticationError)
     return {
       status: ['conflict', 'identity-change'].includes(error.code)

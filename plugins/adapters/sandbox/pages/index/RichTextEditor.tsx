@@ -19,7 +19,7 @@ export interface RichTextEditorProps {
 export interface RichTextEditorRef {
     focus: () => void
     clear: () => void
-    /** Replace the draft with plain text and put the caret at its end (quick commands pre-fill, never send). */
+    /** Quick-command prefill: fills an empty draft, otherwise inserts at the caret without deleting the draft; never sends. */
     setText: (text: string) => void
     insertFace: (faceId: number) => void
     insertImage: (url: string) => void
@@ -238,18 +238,48 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             }
         }
 
+        // Quick-command prefill (#1250). An empty composer gets the command; a non-empty draft
+        // (text, images, faces, mentions) is never overwritten: the command is inserted at the
+        // caret, or at the start when the caret is outside the editor. `insertText` keeps the
+        // browser undo stack; the Range fallback dispatches `input` so state stays in sync.
         const setText = (text: string) => {
             const editor = editorRef.current
             if (!editor) return
-            editor.textContent = text
-            editor.focus()
+            const draftIsEmpty = (editor.textContent ?? '').trim() === ''
+                && editor.querySelector('img, [data-type], [data-url], [contenteditable="false"]') === null
             const selection = window.getSelection()
-            if (selection) {
-                const range = document.createRange()
+            const caretInEditor = !!selection && selection.rangeCount > 0
+                && editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+            editor.focus()
+            if (!selection) return
+            const range = document.createRange()
+            let insertion = text
+            if (draftIsEmpty) {
+                // Only whitespace / <br> placeholders: replace them with the command.
                 range.selectNodeContents(editor)
-                range.collapse(false)
+            } else if (caretInEditor) {
+                // Collapse a selection to its end so no selected draft content is replaced.
+                const current = selection.getRangeAt(0)
+                range.setStart(current.endContainer, current.endOffset)
+                range.collapse(true)
+            } else {
+                range.setStart(editor, 0)
+                range.collapse(true)
+                insertion = `${text} `
+            }
+            selection.removeAllRanges()
+            selection.addRange(range)
+            // execCommand is deprecated but remains the only undo-preserving insertion API for contentEditable.
+            const inserted = typeof document.execCommand === 'function' && document.execCommand('insertText', false, insertion)
+            if (!inserted) {
+                const node = document.createTextNode(insertion)
+                range.deleteContents()
+                range.insertNode(node)
+                range.setStartAfter(node)
+                range.collapse(true)
                 selection.removeAllRanges()
                 selection.addRange(range)
+                editor.dispatchEvent(new Event('input', { bubbles: true }))
             }
             handleChange()
         }

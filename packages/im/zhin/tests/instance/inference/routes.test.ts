@@ -180,6 +180,24 @@ it('maps a missing client secret to 428 and a failed driver preparation to 424 w
     expect(begun.payload.error).toContain('client secret');
     const prepared = await post('/login/prepare', { accountId: 'account', expectedRevision: 2 });
     expect(prepared.status).toBe(424);
-    expect(prepared.payload).toMatchObject({ success: false, code: 'project-unavailable', upstreamStatus: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' });
+    expect(prepared.payload).toMatchObject({ success: false, code: 'preparation-failed', preparationCode: 'project-unavailable',
+      upstreamStatus: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' });
+  } finally { await http.close(); }
+});
+
+it('maps a rate-limited model discovery to 429 with the sanitized Retry-After delay', async () => {
+  const { ProviderDiscoveryError } = await import('@zhin.js/ai/provider');
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
+  const management = { discover: vi.fn(async () => { throw new ProviderDiscoveryError(429, 30_000); }) };
+  registerInferenceRoutes({ http, base: '/api',
+    acquire: () => ({ management, accounts: {}, sessions: {}, authenticationContract: async () => '1', release: () => {} }) as never,
+    owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
+    principal: input => resolveInferenceManagementPrincipal({ ...input, hostOwnerId: 'host', bindings: {} }) });
+  const { origin } = await http.listen();
+  try {
+    const response = await fetch(`${origin}/api/agent/inference/discover`, { method: 'POST',
+      headers: { authorization: 'Bearer operator-fixture', 'content-type': 'application/json' }, body: JSON.stringify({ accountId: 'account' }) });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ success: false, code: 'discovery-rate-limited', upstreamStatus: 429, retryAfterMs: 30_000 });
   } finally { await http.close(); }
 });

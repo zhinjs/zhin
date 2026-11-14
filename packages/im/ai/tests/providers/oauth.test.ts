@@ -180,12 +180,113 @@ describe('Antigravity Code Assist preparation', () => {
       .mockResolvedValueOnce(Response.json({ name: 'operations/x', done: true, error: { code: 9, status: 'FAILED_PRECONDITION' } }));
     await expect(oauth.prepare!({ service: antigravityService, signal, fetch: failedOperation, client, credential }))
       .rejects.toMatchObject({ code: 'project-unavailable', reason: 'FAILED_PRECONDITION', step: 'onboard-operation' });
+    // gemini-cli parity: without an `isDefault` tier the legacy tier is onboarded; no project then reports the ineligibility reason.
     const ineligible = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
-      .mockResolvedValueOnce(Response.json({ ineligibleTiers: [{ reasonCode: 'INELIGIBLE_ACCOUNT', reasonMessage: 'PRIVATE' }] }));
-    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: ineligible, client, credential }))
-      .rejects.toMatchObject({ code: 'project-unavailable', status: 200, reason: 'INELIGIBLE_ACCOUNT', step: 'load-code-assist' });
-    expect(ineligible).toHaveBeenCalledTimes(2);
+      .mockResolvedValueOnce(Response.json({ ineligibleTiers: [{ reasonCode: 'INELIGIBLE_ACCOUNT', reasonMessage: 'PRIVATE' }] }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: {} }));
+    let failure: unknown;
+    try { await oauth.prepare!({ service: antigravityService, signal, fetch: ineligible, client, credential }); } catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'project-unavailable', status: 200, reason: 'INELIGIBLE_ACCOUNT', step: 'onboard-operation' });
+    expect(String((failure as Error).message)).not.toContain('PRIVATE');
+    expect(ineligible).toHaveBeenCalledTimes(3);
+    expect(bodies(ineligible)[2]).toEqual({ url: 'https://cloudcode-pa.googleapis.com/v1internal:onboardUser', method: 'POST',
+      body: { tierId: 'legacy-tier', metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' } } });
+  });
+
+  it('falls back to the legacy tier like gemini-cli when no tier is marked default', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'standard-tier' }] }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: { cloudaicompanionProject: { id: 'legacy-project' } } }));
+    expect((await oauth.prepare!({ service: antigravityService, signal, fetch, client, credential })).metadata?.projectId).toBe('legacy-project');
+    expect(bodies(fetch)[2]?.body).toMatchObject({ tierId: 'legacy-tier' });
+  });
+
+  it('reports a default tier without an id as no-default-tier instead of onboarding', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ isDefault: true }] }));
+    await expect(antigravityOAuth.prepare!({ service: antigravityService, signal, fetch, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', status: 200, reason: 'no-default-tier', step: 'load-code-assist' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports VALIDATION_REQUIRED as validation-required without onboarding or leaking the validation URL', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }], ineligibleTiers: [{
+        reasonCode: 'VALIDATION_REQUIRED', reasonMessage: 'PRIVATE', validationUrl: 'https://accounts.example/validate?private-token' }] }));
+    let failure: unknown;
+    try { await antigravityOAuth.prepare!({ service: antigravityService, signal, fetch, client, credential }); } catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'project-unavailable', status: 200, reason: 'validation-required', step: 'load-code-assist' });
+    expect(JSON.stringify(failure)).not.toContain('private-token');
+    expect(String((failure as Error).message)).not.toContain('private-token');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['operations/..', 'operations/.', 'operations/a/../b', 'operations/', 'operations/_'])(
+    'never polls an unsafe operation name (%s) and re-submits onboardUser instead', async name => {
+      const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 1 });
+      const fetch = vi.fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+        .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+        .mockResolvedValueOnce(Response.json({ name, done: false }))
+        .mockResolvedValueOnce(Response.json({ done: true, response: { cloudaicompanionProject: 'project' } }));
+      expect((await oauth.prepare!({ service: antigravityService, signal, fetch, client, credential })).metadata?.projectId).toBe('project');
+      expect(bodies(fetch).map(call => `${call.method} ${call.url}`).slice(2)).toEqual([
+        'POST https://cloudcode-pa.googleapis.com/v1internal:onboardUser',
+        'POST https://cloudcode-pa.googleapis.com/v1internal:onboardUser',
+      ]);
+    });
+
+  it('accepts a regular operation name containing dots', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 1 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/onboard.v1-2', done: false }))
+      .mockResolvedValueOnce(Response.json({ done: true, response: { cloudaicompanionProject: 'project' } }));
+    await oauth.prepare!({ service: antigravityService, signal, fetch, client, credential });
+    expect(String(fetch.mock.calls[3]?.[0])).toBe('https://cloudcode-pa.googleapis.com/v1internal/operations/onboard.v1-2');
+  });
+
+  const hanging: typeof globalThis.fetch = (_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+  });
+
+  it('bounds each upstream request with its own timeout', async () => {
+    const oauth = createAntigravityOAuth({ requestTimeoutMs: 20 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockImplementationOnce(hanging);
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', reason: 'request-timeout', step: 'load-code-assist' });
+    const identity = vi.fn<typeof globalThis.fetch>().mockImplementationOnce(hanging);
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch: identity, client, credential }))
+      .rejects.toMatchObject({ code: 'identity-unavailable', reason: 'request-timeout', step: 'identity' });
+  });
+
+  it('bounds the whole preparation, including onboarding polls, with an overall deadline', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 10, maxPollAttempts: 10_000, overallTimeoutMs: 80 });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ allowedTiers: [{ id: 'free-tier', isDefault: true }] }))
+      .mockImplementation(async () => Response.json({ name: 'operations/slow', done: false }));
+    await expect(oauth.prepare!({ service: antigravityService, signal, fetch, client, credential }))
+      .rejects.toMatchObject({ code: 'project-unavailable', reason: 'preparation-timeout' });
+    expect(fetch.mock.calls.length).toBeLessThan(100);
+  });
+
+  it('propagates the caller abort itself rather than a timeout diagnostic', async () => {
+    const controller = new AbortController();
+    const reason = new Error('synthetic caller abort');
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementationOnce((url, init) => {
+      queueMicrotask(() => controller.abort(reason));
+      return hanging(url, init);
+    });
+    await expect(antigravityOAuth.prepare!({ service: antigravityService, signal: controller.signal, fetch, client, credential })).rejects.toBe(reason);
   });
 
   it('declares that the Antigravity client needs a client secret and refuses to begin without one', async () => {

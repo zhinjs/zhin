@@ -233,12 +233,20 @@ function googleErrorReason(value: unknown): string | undefined {
 const CODE_ASSIST_BASE = 'https://cloudcode-pa.googleapis.com/v1internal';
 /** Client metadata shape used by the official open-source Code Assist client (google-gemini/gemini-cli). */
 const CODE_ASSIST_METADATA = Object.freeze({ ideType: 'IDE_UNSPECIFIED', platform: 'PLATFORM_UNSPECIFIED', pluginType: 'GEMINI' });
+/** Tier gemini-cli onboards when `allowedTiers` has no `isDefault` entry (`UserTierId.LEGACY`, code_assist/setup.ts `getOnboardTier`). */
+const CODE_ASSIST_LEGACY_TIER = 'legacy-tier';
+/** Long-running operation names are a single `operations/<id>` segment: no `/`, no dot-only (`.` / `..`) id. */
+const OPERATION_NAME = /^operations\/(?=[A-Za-z0-9_.-]*[A-Za-z0-9])[A-Za-z0-9_-][A-Za-z0-9_.-]{0,255}$/u;
 
 export interface AntigravityPreparationOptions {
   /** Delay between long-running onboarding polls. */
   readonly pollIntervalMs?: number;
   /** Bounded number of polls after the initial onboardUser call. */
   readonly maxPollAttempts?: number;
+  /** Deadline for the whole preparation (identity, loadCodeAssist, onboarding and polling). */
+  readonly overallTimeoutMs?: number;
+  /** Deadline for each upstream request, including reading its body. */
+  readonly requestTimeoutMs?: number;
 }
 
 function projectIdOf(value: unknown): string | undefined {
@@ -260,6 +268,8 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 export function createAntigravityOAuth(options: AntigravityPreparationOptions = {}): OAuthAuthentication<FixedServiceOptions> {
   const pollIntervalMs = options.pollIntervalMs ?? 5_000;
   const maxPollAttempts = options.maxPollAttempts ?? 12;
+  const overallTimeoutMs = options.overallTimeoutMs ?? 90_000;
+  const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
   return {
     ...antigravityCodeOAuth,
     async complete(input) {
@@ -267,11 +277,19 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
     },
     async prepare({ credential, fetch, signal }) {
       signal.throwIfAborted();
+      // The caller's abort propagates unchanged; our own deadlines become sanitized preparation failures.
+      const deadline = AbortSignal.any([signal, AbortSignal.timeout(overallTimeoutMs)]);
+      const requestSignal = () => AbortSignal.any([deadline, AbortSignal.timeout(requestTimeoutMs)]);
+      const timeoutReason = (request: AbortSignal): string | undefined => {
+        signal.throwIfAborted();
+        return deadline.aborted ? 'preparation-timeout' : request.aborted ? 'request-timeout' : undefined;
+      };
       const headers = { authorization: `Bearer ${credential.accessToken}`, accept: 'application/json' };
       let identity: Record<string, unknown>;
       let status: number | undefined;
+      const identitySignal = requestSignal();
       try {
-        const response = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', { headers, signal, redirect: 'error' });
+        const response = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', { headers, signal: identitySignal, redirect: 'error' });
         status = response.status;
         if (!response.ok) {
           throw new ProviderPreparationError('identity-unavailable', { status: response.status, reason: googleErrorReason(await response.json().catch(() => undefined)), step: 'identity' });
@@ -279,24 +297,29 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
         identity = tokenRecord(await response.json());
         if (typeof identity.id !== 'string' || !identity.id) throw new ProviderPreparationError('identity-unavailable', { status: response.status, reason: 'missing-subject', step: 'identity' });
       } catch (error) {
-        signal.throwIfAborted();
-        if (error instanceof ProviderPreparationError) throw error;
-        throw new ProviderPreparationError('identity-unavailable', status === undefined ? { reason: 'transport', step: 'identity' } : { status, reason: 'invalid-response', step: 'identity' });
+        const timeout = timeoutReason(identitySignal);
+        if (error instanceof ProviderPreparationError && !timeout) throw error;
+        throw new ProviderPreparationError('identity-unavailable', timeout ? { ...(status === undefined ? {} : { status }), reason: timeout, step: 'identity' }
+          : status === undefined ? { reason: 'transport', step: 'identity' } : { status, reason: 'invalid-response', step: 'identity' });
       }
 
-      /** One Code Assist call; non-2xx and transport failures become project-unavailable with status/reason. */
+      /** One Code Assist call; non-2xx, transport failures and timeouts become project-unavailable with status/reason. */
       const call = async (step: ProviderPreparationStep, url: string, body?: unknown): Promise<Record<string, unknown>> => {
+        const request = requestSignal();
         let response: Response;
         try {
           response = await fetch(url, body === undefined
-            ? { method: 'GET', headers, signal, redirect: 'error' }
-            : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal, redirect: 'error' });
+            ? { method: 'GET', headers, signal: request, redirect: 'error' }
+            : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: request, redirect: 'error' });
         } catch {
-          signal.throwIfAborted();
-          throw new ProviderPreparationError('project-unavailable', { reason: 'transport', step });
+          throw new ProviderPreparationError('project-unavailable', { reason: timeoutReason(request) ?? 'transport', step });
         }
         let value: unknown;
-        try { value = await response.json(); } catch { value = undefined; }
+        try { value = await response.json(); } catch {
+          const timeout = timeoutReason(request);
+          if (timeout) throw new ProviderPreparationError('project-unavailable', { status: response.status, reason: timeout, step });
+          value = undefined;
+        }
         if (!response.ok) throw new ProviderPreparationError('project-unavailable', { status: response.status, reason: googleErrorReason(value), step });
         if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderPreparationError('project-unavailable', { status: response.status, reason: 'invalid-response', step });
         return value as Record<string, unknown>;
@@ -309,18 +332,28 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
         const ineligibleReason = ineligible.map(tier => tier && typeof tier === 'object' && 'reasonCode' in tier ? safeReasonCode(tier.reasonCode) : undefined).find(Boolean);
         // An already-onboarded account without a managed project needs a user-chosen Cloud project, which this driver does not configure.
         if (loaded.currentTier) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'project-required', step: 'load-code-assist' });
+        // gemini-cli `validateLoadCodeAssistResponse`: the account must first be verified in a browser
+        // (`ineligibleTiers[].reasonCode === 'VALIDATION_REQUIRED'` with a `validationUrl`); onboarding is not attempted.
+        // The validation URL itself is never surfaced.
+        if (ineligible.some(tier => !!tier && typeof tier === 'object' && (tier as Record<string, unknown>).reasonCode === 'VALIDATION_REQUIRED'
+          && typeof (tier as Record<string, unknown>).validationUrl === 'string' && !!(tier as Record<string, unknown>).validationUrl)) {
+          throw new ProviderPreparationError('project-unavailable', { status: 200, reason: 'validation-required', step: 'load-code-assist' });
+        }
         const tiers = Array.isArray(loaded.allowedTiers) ? loaded.allowedTiers as unknown[] : [];
         const tier = tiers.find((item): item is Record<string, unknown> => !!item && typeof item === 'object' && (item as Record<string, unknown>).isDefault === true);
-        const tierId = tier && typeof tier.id === 'string' && tier.id ? tier.id : undefined;
+        // gemini-cli `getOnboardTier`: without an `isDefault` tier it onboards the legacy tier.
+        const tierId = tier ? typeof tier.id === 'string' && tier.id ? tier.id : undefined : CODE_ASSIST_LEGACY_TIER;
         if (!tierId) throw new ProviderPreparationError('project-unavailable', { status: 200, reason: ineligibleReason ?? 'no-default-tier', step: 'load-code-assist' });
         // No user-chosen Cloud project is configured: the free tier uses a Google-managed project
-        // (naming one there is rejected upstream); other tiers report project-required below.
+        // (naming one there is rejected upstream); other tiers report project-required (or the ineligibility reason) below.
         const request = { tierId, metadata: CODE_ASSIST_METADATA };
         let operation = await call('onboard-user', `${CODE_ASSIST_BASE}:onboardUser`, request);
         for (let attempt = 0; operation.done !== true; attempt++) {
           if (attempt >= maxPollAttempts) throw new ProviderPreparationError('project-unavailable', { reason: 'onboarding-timeout', step: 'onboard-operation' });
-          await abortableDelay(pollIntervalMs, signal);
-          const name = typeof operation.name === 'string' && /^operations\/[A-Za-z0-9_.-]+$/u.test(operation.name) ? operation.name : undefined;
+          try { await abortableDelay(pollIntervalMs, deadline); } catch {
+            throw new ProviderPreparationError('project-unavailable', { reason: timeoutReason(deadline) ?? 'preparation-timeout', step: 'onboard-operation' });
+          }
+          const name = typeof operation.name === 'string' && OPERATION_NAME.test(operation.name) ? operation.name : undefined;
           // Prefer polling the named long-running operation; repeat onboardUser when no operation name is returned.
           operation = name
             ? await call('onboard-operation', `${CODE_ASSIST_BASE}/${name}`)

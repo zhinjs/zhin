@@ -76,6 +76,22 @@ export interface OAuthChallenge {
   /** Host-private material, never sent to Console or exported. */
   readonly privateState: JsonObject;
 }
+/** A refused model-catalogue request: upstream HTTP status and, for 429, a bounded Retry-After only — never the response body.
+ * `rejected` (other 4xx, e.g. 401/403), `rate-limited` (429), `unavailable` (5xx and anything else). */
+export class ProviderDiscoveryError extends Error {
+  readonly code: 'rejected' | 'rate-limited' | 'unavailable';
+  readonly status: number;
+  readonly retryAfterMs?: number;
+  constructor(status: number, retryAfterMs?: number) {
+    super(`Provider model discovery rejected (${status})`);
+    this.name = 'ProviderDiscoveryError';
+    this.status = status;
+    this.code = status === 429 ? 'rate-limited' : status >= 400 && status < 500 ? 'rejected' : 'unavailable';
+    if (status === 429 && retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0)
+      this.retryAfterMs = Math.min(Math.round(retryAfterMs), 86_400_000);
+  }
+}
+
 export interface OAuthAuthentication<S = JsonObject> {
   readonly contractVersion: string;
   /** Product callback contract, not a request-body redirect or an HTTP listener. */

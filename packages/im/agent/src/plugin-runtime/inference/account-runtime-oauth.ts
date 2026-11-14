@@ -245,7 +245,9 @@ export async function completeAccountLogin(
             signal,
           });
         } catch (error) {
-          // prepareAccountOAuth already reported a driver preparation failure with its code and status.
+          // prepareAccountOAuth already reported a driver preparation failure with its code and status,
+          // and recorded it for the status view this route returns. The committed token stays; the
+          // driver bounds preparation (including any onboarding polls) with its own overall deadline.
           if (!(error instanceof InferenceAuthenticationError && error.code === 'preparation-failed'))
             ctx.reportCleanup('Account authenticated; preparation is incomplete');
         }
@@ -307,6 +309,7 @@ export async function prepareAccountOAuth(
   } catch (error) {
     const failure = preparationFailure(error);
     if (!failure || signal.aborted) throw error;
+    ctx.preparationFailures.set(accountKey(account), { revision: current.record.revision, failure });
     ctx.reportCleanup(describePreparationFailure(failure));
     throw new InferenceAuthenticationError('preparation-failed', failure);
   }
@@ -320,6 +323,7 @@ export async function prepareAccountOAuth(
   const subject = identity(current).subject;
   if (subject && credential.subject && subject !== credential.subject)
     throw new InferenceAuthenticationError('identity-change');
+  ctx.preparationFailures.delete(accountKey(account));
   await ctx.publish({
     account,
     previous: current,

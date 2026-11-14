@@ -76,6 +76,9 @@ export interface AccountStatusView {
   readonly status: CredentialPayload['status'] | 'authenticated';
   readonly revision: number;
   readonly preparation?: 'required' | 'ready';
+  /** Last failed preparation of the current credential revision (process-local, sanitized codes and HTTP status only),
+   * so the Console can explain it without retrying. Absent after a successful preparation or a new credential. */
+  readonly preparationFailure?: Readonly<{ code: string; reason?: string; upstreamStatus?: number; step?: string }>;
   readonly failure?: OAuthExchangeFailure;
   readonly source?: 'environment-expression';
   /** Present only while a private account-wide authentication cooldown is active. */
@@ -95,6 +98,8 @@ export interface AccountRuntimeContext {
   readonly uncertain: Set<string>;
   readonly logins: Map<string, PendingLogin>;
   readonly loginStarts: Map<string, LoginStart>;
+  /** Last preparation failure per account key, bound to the credential revision it was observed on. */
+  readonly preparationFailures: Map<string, Readonly<{ revision: number; failure: InferencePreparationFailure }>>;
   assertOpen(): void;
   verifyAccount(account: ProviderAccount): Promise<{ service: ProviderService }>;
   signal(account: ProviderAccount): AbortSignal;
@@ -220,10 +225,18 @@ export async function readAccountStatus(
     open.payload.method === 'oauth' &&
     open.payload.credential.preparation?.status === 'required'
   ) {
+    const last = ctx.preparationFailures.get(accountKey(account));
+    const failure = last && last.revision === open.record.revision ? last.failure : undefined;
     return {
       status: 'authenticated',
       preparation: 'required',
       revision: open.record.revision,
+      ...(failure ? { preparationFailure: {
+        code: failure.code,
+        ...(failure.reason ? { reason: failure.reason } : {}),
+        ...(failure.status === undefined ? {} : { upstreamStatus: failure.status }),
+        ...(failure.step ? { step: failure.step } : {}),
+      } } : {}),
     };
   }
   return {

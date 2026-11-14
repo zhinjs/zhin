@@ -160,11 +160,21 @@ it('reports a driver preparation failure with its code and upstream status, neve
     const signal = new AbortController().signal, login = await fixture.host.beginLogin({ account: fixture.account, signal });
     await fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
     expect(warnings).toEqual(['Account preparation failed: code=project-unavailable step=onboard-user upstreamStatus=403 reason=SERVICE_DISABLED']);
+    // /login/complete answers 200 with this status view: the failure is visible without calling prepare again.
+    const preparationFailure = { code: 'project-unavailable', upstreamStatus: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' };
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'authenticated', preparation: 'required', revision: 2, preparationFailure });
     await expect(fixture.host.prepareLogin({ account: fixture.account, expectedRevision: 2, signal })).rejects.toMatchObject({
       code: 'preparation-failed', preparation: { code: 'project-unavailable', status: 403, reason: 'SERVICE_DISABLED', step: 'onboard-user' } });
     expect(warnings).toHaveLength(2);
     expect(warnings.join('\n')).not.toContain('private-synthetic-token'); expect(warnings.join('\n')).not.toContain('logged-in');
-    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'authenticated', preparation: 'required', revision: 2 });
+    const view = await fixture.host.status(fixture.account);
+    expect(view).toEqual({ status: 'authenticated', preparation: 'required', revision: 2, preparationFailure });
+    expect(JSON.stringify(view)).not.toContain('private-synthetic-token');
+    // A successful preparation clears the stored failure.
+    fixture.prepare.mockReset();
+    fixture.prepare.mockImplementation(async ({ credential }) => ({ ...credential, preparation: { status: 'ready' as const } }));
+    await fixture.host.prepareLogin({ account: fixture.account, expectedRevision: 2, signal });
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'ready', revision: 3 });
   } finally { await fixture.close(); }
 });
 

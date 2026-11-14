@@ -15,6 +15,7 @@ import {
   type CredentialPayload,
   type OpenCredential,
   type ApiKeyMaterial,
+  type InferencePreparationFailure,
 } from './credentials.js';
 import { oauthRefreshDue } from './oauth-refresh-policy.js';
 import {
@@ -54,6 +55,7 @@ export class HostAccountRuntime {
   readonly #logins = new Map<string, PendingLogin>();
   readonly #loginStarts = new Map<string, LoginStart>();
   readonly #uncertain = new Set<string>();
+  readonly #preparationFailures = new Map<string, Readonly<{ revision: number; failure: InferencePreparationFailure }>>();
   readonly #fingerprintMigrations = new Map<string, Promise<void>>();
 
   constructor(private readonly options: AccountRuntimeOptions) {}
@@ -65,6 +67,7 @@ export class HostAccountRuntime {
       uncertain: this.#uncertain,
       logins: this.#logins,
       loginStarts: this.#loginStarts,
+      preparationFailures: this.#preparationFailures,
       assertOpen: () => this.#assertOpen(),
       verifyAccount: (account) => this.#account(account),
       signal: (account) => this.#signal(account),

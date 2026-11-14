@@ -1400,10 +1400,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                     type="button"
                                     className="sandbox-command-chip"
                                     disabled={!canExecute || directoryStatus.mode === 'loading'}
-                                    // Never focusable: a late layout shift must not leave a chip that Enter re-activates (#1250).
-                                    tabIndex={-1}
+                                    // Keyboard-reachable (WCAG 2.1.1). A mouse click must not keep focus on the chip,
+                                    // and the prefill moves focus into the composer, so Enter sends the draft
+                                    // rather than re-activating the chip after a late layout shift (#1250).
                                     onMouseDown={(event) => event.preventDefault()}
-                                    // Pre-fill the composer; sending stays an explicit Enter / Send.
+                                    // Pre-fill the composer (never overwriting a draft); sending stays an explicit Enter / Send.
                                     onClick={() => editorRef.current?.setText(cmd)}
                                 >
                                     <Terminal size={11} />

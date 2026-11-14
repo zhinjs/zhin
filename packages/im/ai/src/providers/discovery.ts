@@ -1,4 +1,5 @@
-import type { CredentialGrant, ProviderDiscoveryOptions, ProviderModelObservation } from '../provider/driver.js';
+import { ProviderDiscoveryError, type CredentialGrant, type ProviderDiscoveryOptions, type ProviderModelObservation } from '../provider/driver.js';
+import { parseRetryAfterMs } from '../llm/provider-resilience.js';
 import type { StandardServiceOptions } from './schema.js';
 
 interface CatalogueProtocol {
@@ -38,7 +39,11 @@ export async function discoverModels(input: ProviderDiscoveryOptions<StandardSer
     let body: Record<string, unknown>;
     try {
       const response = await input.fetch(request);
-      if (!response.ok) throw new Error(`Provider model discovery rejected (${response.status})`);
+      if (!response.ok) {
+        // Only the status and, on 429, the parsed Retry-After delay leave; the body is never read.
+        throw new ProviderDiscoveryError(response.status, response.status === 429
+          ? parseRetryAfterMs(response.headers.get('retry-after') ?? undefined) : undefined);
+      }
       body = record(await response.json());
     } finally { callRequests.delete(preparedRequest); callRequests.delete(request); }
     const items = body[protocol.format === 'google' || protocol.format === 'codex' ? 'models' : 'data'];
