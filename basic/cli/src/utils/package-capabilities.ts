@@ -13,7 +13,11 @@ export type PackagePerson = string | { readonly name?: unknown; readonly email?:
 /** Display name of a package person; `undefined` when it names nobody. */
 export function packagePersonName(person: PackagePerson): string | undefined {
   if (typeof person === 'string') {
-    const name = person.replace(/<[^>]*>/g, '').replace(/\([^)]*\)/g, '').trim();
+    // npm's person string is `Name <email> (url)`: the name is everything before the first
+    // `<` or `(`. Taking that prefix (rather than deleting the bracketed parts) leaves no
+    // partially removed markup behind; this is terminal text, never HTML.
+    const cut = person.search(/[<(]/u);
+    const name = (cut === -1 ? person : person.slice(0, cut)).trim();
     return name || undefined;
   }
   if (person && typeof person === 'object' && typeof person.name === 'string' && person.name.trim()) {
