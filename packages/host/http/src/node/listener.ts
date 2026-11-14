@@ -21,6 +21,7 @@ import { WebSocketServer } from 'ws';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { HttpRequestInfo, WsUpgradeDecision, WsUpgradeRequest } from '../http-host.js';
 import type { HttpHostAddress, HttpHostTlsOptions } from '../host-options.js';
+import { DEFAULT_HTTP_PORT } from '../port.js';
 import { compileTrustProxy, resolveClientAddress, type TrustProxySetting } from '../trust-proxy.js';
 import { createNodeRequest, nodeRequestHeaders, writeNodeResponse, wrapNodeWebSocket } from './node-http.js';
 
@@ -52,7 +53,7 @@ export interface NodeHttpListener {
 /** A Node listener over {@link NodeHttpListenerOptions.handle} / `upgrade`. */
 export function createNodeHttpListener(options: NodeHttpListenerOptions): NodeHttpListener {
   const host = options.host ?? '127.0.0.1';
-  const port = options.port ?? 8086;
+  const port = options.port ?? DEFAULT_HTTP_PORT;
   const secure = options.tls !== undefined;
   let address: HttpHostAddress | undefined;
   let closed = false;

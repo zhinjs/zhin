@@ -67,11 +67,15 @@
         },
         "port": {
           "type": [
-            "number",
+            "integer",
             "string",
             "null"
           ],
-          "description": "监听端口。"
+          "minimum": 0,
+          "maximum": 65535,
+          "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$",
+          "description": "Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one (0 lets the system pick a free port). When unset the gateway listens on 8068.",
+          "x-descriptionZh": "监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用（0 表示由系统分配空闲端口）。未配置时网关监听 8068。"
         },
         "token": {
           "type": [
@@ -204,10 +208,14 @@
               },
               "port": {
                 "type": [
-                  "number",
+                  "integer",
                   "string"
                 ],
-                "description": "监听端口。"
+                "minimum": 0,
+                "maximum": 65535,
+                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$",
+                "description": "Listening port: an integer from 1 to 65535, or a ${VAR} environment reference that expands to one.",
+                "x-descriptionZh": "监听端口：1–65535 的整数，或展开后为该范围整数的 ${VAR} 环境变量引用。"
               },
               "tls": {
                 "anyOf": [

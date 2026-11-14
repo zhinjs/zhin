@@ -2,7 +2,7 @@
  * 读取 zhin.config + .env，连接运行中 Host API（`zhin send` / `zhin watch` / `zhin schedule` 共用）
  */
 import path from 'path';
-import { resolveHttpConfig } from '@zhin.js/host-http';
+import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile, loadRuntimeEnvironmentLayers, projectIdentity } from '@zhin.js/gateway/project';
 import { createLocalGatewayFetch, probeLocalGateway, type LocalGatewayFetch } from '@zhin.js/gateway/local';
@@ -118,6 +118,17 @@ export async function verifyHostProject(
 }
 
 /**
+ * The project's `http.*` configuration cannot be used to reach the Host (an invalid `http.port`)
+ * and no gateway answers on the local socket. The message says how to repair it (#1250).
+ */
+export class HostConfigInvalidError extends Error {
+  constructor(readonly configFile: string, readonly cause: InvalidHttpPortError) {
+    super(`${configFile} 的 ${cause.message}。无法据此连接 Host；先离线修复：zhin config set ${cause.field.startsWith('http.listeners') ? cause.field : 'http.port'} ${DEFAULT_HTTP_PORT} --offline（或直接编辑 ${configFile}；用 \${VAR} 引用时检查 .env），然后 zhin restart`);
+    this.name = 'HostConfigInvalidError';
+  }
+}
+
+/**
  * 从项目目录解析 Host API 连接：本项目网关运行时经本地控制套接字（`.zhin/gateway.sock`）；
  * 显式 `--host` 时连该地址（本机地址先核对项目标识）；否则抛出 {@link HostTargetError}，
  * 不再按配置推导 `127.0.0.1:<port>` 并带上令牌（#1250）。返回 null 表示不是 zhin 项目目录。
@@ -132,22 +143,36 @@ export async function loadHostHttpConfig(
 
   const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
   const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
+  const resolveHttp = () => resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
   if (options.host) {
     const baseUrl = normalizeHostUrl(options.host);
     await verifyHostProject(baseUrl, cwd, options);
-    // After Console setup http.token is rejected (ADR 0049): use a user API token instead.
-    const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
+    // After Console setup http.token is rejected (ADR 0049): use a user API token instead. An invalid
+    // local http.port does not matter for an explicit address.
+    const http = await resolveHttp().catch((error: unknown) => {
+      if (error instanceof InvalidHttpPortError) return {} as Awaited<ReturnType<typeof resolveHttpConfig>>;
+      throw error;
+    });
     return { baseUrl, token: consoleToken || http.token || '' };
   }
   const local = await localGatewayFetch(cwd);
+  let http: Awaited<ReturnType<typeof resolveHttpConfig>>;
+  try {
+    http = await resolveHttp();
+  } catch (error) {
+    if (!(error instanceof InvalidHttpPortError)) throw error;
+    // A running gateway still answers over its local socket, where the URL only carries the path:
+    // keep config commands working so the port can be repaired through the gateway.
+    if (!local) throw new HostConfigInvalidError(configFile, error);
+    http = {};
+  }
   if (!local) throw new HostTargetError('gateway-not-running', gatewayNotRunningMessage());
-  const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
   const scheme = http.tls ? 'https' : 'http';
   const host = connectableHost(http.host ?? '127.0.0.1');
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
   return {
     // Only a label and the URL path over the socket: no TCP connection is made to it.
-    baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
+    baseUrl: `${scheme}://${host}:${http.port ?? DEFAULT_HTTP_PORT}/${base}`,
     // Over the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
     // request as that token's principal); without one the request runs as the local owner.
     token: consoleToken,
@@ -176,7 +201,7 @@ export async function requireHostHttpConfig(
     if (http) return http;
     report('未找到 zhin 配置文件，无法确定 Host API 地址');
   } catch (error) {
-    if (!(error instanceof HostTargetError)) throw error;
+    if (!(error instanceof HostTargetError) && !(error instanceof HostConfigInvalidError)) throw error;
     report(error.message);
   }
   process.exit(1);

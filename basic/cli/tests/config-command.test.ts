@@ -415,3 +415,82 @@ it('sends HTTP_TOKEN to an explicit --host when ZHIN_CONSOLE_TOKEN is unset', as
     else process.env.HTTP_TOKEN = prevHttp;
   }
 });
+
+it('an unknown key says there is no such setting and suggests close ones, without RPC names (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, log_level: 'info', http: { port: 18086 } });
+  await runHuman('set', 'htp.port', '1', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('没有这个配置项，未保存');
+  expect(text).toContain('htp: 没有这个配置项：htp');
+  expect(text).toContain('你是不是想写：http');
+  expect(text).not.toContain('gateway.plugins.declare');
+});
+
+it('an array index past the end explains how to append, in Chinese (#1250)', async () => {
+  const { output } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, corsOrigins: ['https://a.example'] } });
+  await runHuman('set', 'http.corsOrigins.3', '"https://b.example"', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.invalid);
+  const text = output.mock.calls.map(call => String(call[0])).join('\n');
+  expect(text).toContain('http.corsOrigins.3 超出数组范围（当前有 1 项，下标 0–0）');
+  expect(text).toContain("zhin config set http.corsOrigins '<JSON 数组>'");
+  expect(text).not.toMatch(/out of bounds|Config path/);
+});
+
+it('a rejected request shows the revision evidence only with --debug (#1250)', async () => {
+  const { errors } = await fixture();
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  const stderr = () => errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr()).toContain('Host 拒绝请求：插件声明不能修改');
+  expect(stderr()).not.toContain('expectedRevision=');
+  errors.mockClear();
+  vi.stubEnv('ZHIN_CLI_DEBUG', '1');
+  rawHost(request => new Response(JSON.stringify({ error: '插件声明不能修改', requestId: request.requestId }), { status: 400 }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(stderr()).toContain(`expectedRevision=${sourceRevision}`);
+});
+
+it('a broken http.port gives an offline repair hint instead of Invalid URL (#1250)', async () => {
+  const { errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 'abc' } });
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  await runHuman('get', 'http');
+  expect(fetch).not.toHaveBeenCalled();
+  const stderr = errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr).toContain('http.port 无效');
+  expect(stderr).toContain('zhin config set http.port 8068 --offline');
+  expect(stderr).not.toContain('Invalid URL');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+});
+
+it('config set of a secret writes the value to .env and keeps the ${VAR} reference, never echoing it (#1250)', async () => {
+  const { root, output, errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, token: '${HTTP_TOKEN}' } });
+  await writeFile(join(root, '.env'), 'HTTP_TOKEN=old\n');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+  await runHuman('set', 'http.token', 'super-secret-value', '--offline');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')).http.token).toBe('${HTTP_TOKEN}');
+  expect(await readFile(join(root, '.env'), 'utf8')).toBe("HTTP_TOKEN='super-secret-value'\n");
+  const printed = [...output.mock.calls, ...errors.mock.calls].map(call => String(call[0])).join('\n');
+  expect(printed).toContain('敏感字段 http.token 的值已写入 .env 的 HTTP_TOKEN，配置中保留 ${HTTP_TOKEN} 引用');
+  expect(printed).not.toContain('super-secret-value');
+});
+
+it('config set --plain writes the literal and warns (#1250)', async () => {
+  const { root, errors } = await fixture({ configVersion: 2, plugins: {}, http: { port: 18086, token: '${HTTP_TOKEN}' } });
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bot', zhin: { protocol: 1, type: 'plugin' } }));
+  await runHuman('set', 'http.token', 'plain-on-purpose', '--offline', '--plain');
+  expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')).http.token).toBe('plain-on-purpose');
+  expect(errors.mock.calls.map(call => String(call[0])).join('\n')).toContain('警告：--plain 会把敏感字段的值以明文写进配置文件');
+});
+
+it('config set sends secretStorage plain to the Host only with --plain (#1250)', async () => {
+  await fixture();
+  const fetch = fakeHost();
+  await run('set', 'http.token', 'x');
+  expect(body(fetch, 1)).not.toHaveProperty('secretStorage');
+  const again = fakeHost();
+  await run('set', 'http.token', 'x', '--plain');
+  expect(body(again, 1)).toMatchObject({ secretStorage: 'plain' });
+});

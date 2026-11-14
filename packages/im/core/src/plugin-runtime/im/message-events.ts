@@ -175,6 +175,30 @@ export function previewMessageContent(content: unknown): string {
 }
 
 /**
+ * Branded SendContent wrappers (#1250): a component call (`component('status-card', props)`, not yet
+ * rendered) reads as its text children, or `[name] title` / `[name]`, never as serialized JSON;
+ * untrusted content reads as the content it wraps; raw platform payloads as `[raw]`.
+ */
+function flattenBrandedContent(record: Record<string, unknown>, depth: number): string | undefined {
+  switch (record.$content) {
+    case 'zhin.component-call/1': {
+      const name = typeof record.name === 'string' && record.name ? record.name : 'component';
+      const props = record.props && typeof record.props === 'object' ? record.props as Record<string, unknown> : {};
+      const children = props.children === undefined ? '' : flattenNode(props.children, depth + 1).trim();
+      if (children) return children;
+      const title = ['title', 'text', 'label'].map(key => props[key]).find((value): value is string => typeof value === 'string' && value.trim() !== '');
+      return title ? `[${name}] ${title.trim()}` : `[${name}]`;
+    }
+    case 'zhin.untrusted-content/1':
+      return flattenNode(record.content, depth + 1);
+    case 'zhin.raw-content/1':
+      return '[raw]';
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Flattens any SendContent-like value to display text; non-text segments become `[type]`.
  * Markdown keeps its source text, buttons (keyboard rows and JSX `<button>`) become `[label]`, and
  * unrendered JSX is read through its children, never serialized as an object.
@@ -207,6 +231,8 @@ function flattenNode(content: unknown, depth: number): string {
       return `[${record.type}]`;
     }
     if (typeof record.text === 'string') return record.text;
+    const branded = flattenBrandedContent(record, depth);
+    if (branded !== undefined) return branded;
     try {
       return JSON.stringify(content) ?? '';
     } catch {

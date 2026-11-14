@@ -445,6 +445,20 @@ export interface ConsoleEndpointFailure {
   readonly at: number;
 }
 
+/** Raw transport state an Adapter reports for an Endpoint. */
+export type ConsoleEndpointTransportState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
+
+const ENDPOINT_TRANSPORT_LABELS: Readonly<Record<'zh-CN' | 'en', Readonly<Record<ConsoleEndpointTransportState, string>>>> = Object.freeze({
+  'zh-CN': Object.freeze({ idle: '未连接', connecting: '连接中', open: '已连接', reconnecting: '重连中', closed: '已断开', stopped: '已停用', unknown: '状态未知' }),
+  en: Object.freeze({ idle: 'Not connected', connecting: 'Connecting', open: 'Connected', reconnecting: 'Reconnecting', closed: 'Disconnected', stopped: 'Stopped', unknown: 'Unknown' }),
+});
+
+/** Readable text of an Endpoint transport state (`open` → `已连接`); unknown values map to the unknown label. */
+export function endpointTransportLabel(state: string | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+  const labels = ENDPOINT_TRANSPORT_LABELS[locale] ?? ENDPOINT_TRANSPORT_LABELS['zh-CN'];
+  return labels[(state ?? 'unknown') as ConsoleEndpointTransportState] ?? labels.unknown;
+}
+
 /** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
   /** Canonical target for projection and message correlation, independent of display names. */
@@ -454,7 +468,9 @@ export interface ConsoleEndpointSummary {
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
   readonly admitted?: boolean;
-  readonly transportState?: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
+  readonly transportState?: ConsoleEndpointTransportState;
+  /** Readable (Chinese) text of `transportState`, e.g. `已连接` for `open` (#1250); absent from older Hosts. */
+  readonly transportLabel?: string;
   readonly eventDiagnostics?: Readonly<{ buffered: number; dropped: number; dispatchFailures: number }>;
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;
@@ -575,6 +591,12 @@ export interface ConsoleConfigPatchRequest {
   readonly instanceKey?: string;
   readonly expectedRevision: string;
   readonly patches: readonly ConsoleConfigPatchOperation[];
+  /**
+   * Where literal values of schema-marked secret fields are stored. `env` (default): in the
+   * project's `.env`, the config keeping a `${VAR}` reference (the field's existing reference
+   * name, or a canonical one such as `HTTP_TOKEN`). `plain`: written into the config file as given.
+   */
+  readonly secretStorage?: 'env' | 'plain';
 }
 
 /** Transport-only metadata. No configuration values, expanded environment or private resources. */
@@ -641,6 +663,8 @@ export type ConsoleConfigPatchResult =
     paths: readonly (readonly string[])[];
     /** Environment references in the written sections that are not defined yet (warning only). */
     missingEnv: readonly string[];
+    /** Secret fields whose written value was stored in `.env` as `variable` (the config holds `${variable}`). Never values. */
+    envSecrets?: readonly Readonly<{ path: readonly string[]; variable: string }>[];
     message: string;
   }>
   | Readonly<{

@@ -30,17 +30,19 @@ import {
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
+import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
 import { diagnosePromptCache } from '../utils/prompt-cache-check.js';
 import { loadProviderResolver } from './usage.js';
 import { botInstructionsFile } from '../utils/bot-bootstrap.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
-import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
+import { findConfigFile, loadRuntimeEnvironmentLayers, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { diagnoseApprovalChannelConfig } from '../utils/approval-config-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
+import { compareInstalledVersions, declaredZhinDependencies, detectPnpmMajor, explainVersionMismatch } from '../utils/installed-versions.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
@@ -396,7 +398,7 @@ export const doctorCommand = new Command('doctor')
         const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, config as Record<string, unknown>, pkg);
         const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
         if (zhinFixPackages.length > 0) {
-          const fixCmd = formatZhinStackFixCommand(zhinFixPackages, zhinDiagnosis.required);
+          const fixCmd = formatZhinStackFixCommand(zhinFixPackages, zhinDiagnosis.required, cwd);
           const detailParts = [
             zhinDiagnosis.missingFromPackageJson.length > 0
               ? `缺少: ${zhinDiagnosis.missingFromPackageJson.join(', ')}`
@@ -445,6 +447,26 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
+    // 5c. 已安装版本与 package.json 声明一致（pnpm 11 的 minimumReleaseAge 会让新版本装不上，#1250）
+    if (fs.existsSync(projectPackagePath) && fs.existsSync(path.join(cwd, 'node_modules'))) {
+      try {
+        const pkg = await readProjectPackage();
+        const mismatched = compareInstalledVersions(cwd, declaredZhinDependencies(pkg))
+          .filter(row => row.status === 'mismatch');
+        if (mismatched.length > 0) {
+          const pnpmMajor = detectPnpmMajor(cwd);
+          results.push({
+            name: 'Zhin 已安装版本',
+            status: 'warn',
+            message: mismatched.map(row => `${row.name} 已安装 ${row.after}，不满足 package.json 声明的 ${row.declared}`).join('；'),
+            fix: `${explainVersionMismatch(cwd, pkg, mismatched[0]!, pnpmMajor)}；修复后运行 pnpm install`,
+          });
+        }
+      } catch {
+        // package.json 不可读：上面的 package.json 检查已报告
+      }
+    }
+
     // 6. 检查 AI 依赖（zhin.js 1.1.x：配置启用 AI 时需单独安装 agent 栈）
     if (existingConfig && !configParseFailed) {
       try {
@@ -462,7 +484,7 @@ export const doctorCommand = new Command('doctor')
               : '';
 
             if (fixPackages.length > 0) {
-              const fixCmd = formatAIDependencyFixCommand(fixPackages, aiDiagnosis.required);
+              const fixCmd = formatAIDependencyFixCommand(fixPackages, aiDiagnosis.required, cwd);
               const detailParts = [
                 aiDiagnosis.missingFromPackageJson.length > 0
                   ? `缺少: ${aiDiagnosis.missingFromPackageJson.join(', ')}`
@@ -650,48 +672,57 @@ export const doctorCommand = new Command('doctor')
     // 本项目的管理网关（ADR 0054）：端口检查与 HTTP_TOKEN 检查都要知道它是否在运行
     const gateway = await probeGateway({ root: cwd }).catch(() => undefined);
 
-    // 8. 检查端口占用（读取已加载配置的 http.port，默认 8086）
-    let httpPort = 8086;
-    try {
-      const configForPort: Record<string, unknown> | null = loadedConfig
-        ?? (existingConfig ? await readConfig(path.join(cwd, existingConfig)) as Record<string, unknown> : null);
-      const http = configForPort?.http;
-      if (http && typeof http === 'object' && !Array.isArray(http)
-        && typeof (http as Record<string, unknown>).port === 'number') {
-        httpPort = (http as Record<string, unknown>).port as number;
+    // 8. 检查端口占用：按启动时的方式解析 http.port（展开 .env 中的 ${VAR}；未配置时为默认端口）
+    let httpPort: number | undefined = DEFAULT_HTTP_PORT;
+    if (existingConfig && !configParseFailed) {
+      const resolved = await resolveEffectiveHttpPort(cwd, existingConfig);
+      if (resolved.status === 'ok') httpPort = resolved.port ?? DEFAULT_HTTP_PORT;
+      else {
+        httpPort = undefined;
+        results.push({
+          name: 'HTTP 端口',
+          status: 'error',
+          message: resolved.message,
+          fix: `zhin config set http.port ${DEFAULT_HTTP_PORT} --offline（或在 .env 中把引用的变量设为 1–65535 的整数）`,
+        });
       }
-    } catch {
-      // 配置不可读时使用默认端口
     }
-    try {
-      const { stdout } = await execAsync(`lsof -i:${httpPort} || (ss -lntp | grep :${httpPort}) 2>/dev/null`);
-      if (stdout.trim() && gateway?.gateway.ports.includes(httpPort)) {
-        // Held by this project's own gateway: that is the expected listener, not a conflict.
+    if (httpPort === 0) {
+      results.push({ name: 'HTTP 端口', status: 'ok', message: 'http.port 为 0：启动时由系统分配空闲端口' });
+      httpPort = undefined;
+    }
+    if (httpPort !== undefined) {
+      const port = httpPort;
+      try {
+        const { stdout } = await execAsync(`lsof -i:${port} || (ss -lntp | grep :${port}) 2>/dev/null`);
+        if (stdout.trim() && gateway?.gateway.ports.includes(port)) {
+          // Held by this project's own gateway: that is the expected listener, not a conflict.
+          results.push({
+            name: `端口 ${port}`,
+            status: 'ok',
+            message: `由本项目的管理网关监听（pid ${gateway.gateway.pid}）`,
+          });
+        } else if (stdout.trim()) {
+          results.push({
+            name: `端口 ${port}`,
+            status: 'warn',
+            message: '已被占用',
+            fix: `若是 zhin 进程，先正常停止（运行 zhin stop，或在其终端按 Ctrl+C）；否则用 lsof -i:${port} 找到进程后 kill <pid>（SIGTERM），或在 zhin.config.yml 修改 http.port 换用其他端口`
+          });
+        } else {
+          results.push({
+            name: `端口 ${port}`,
+            status: 'ok',
+            message: '可用'
+          });
+        }
+      } catch {
         results.push({
-          name: `端口 ${httpPort}`,
-          status: 'ok',
-          message: `由本项目的管理网关监听（pid ${gateway.gateway.pid}）`,
-        });
-      } else if (stdout.trim()) {
-        results.push({
-          name: `端口 ${httpPort}`,
-          status: 'warn',
-          message: '已被占用',
-          fix: `若是 zhin 进程，先正常停止（运行 zhin stop，或在其终端按 Ctrl+C）；否则用 lsof -i:${httpPort} 找到进程后 kill <pid>（SIGTERM），或在 zhin.config.yml 修改 http.port 换用其他端口`
-        });
-      } else {
-        results.push({
-          name: `端口 ${httpPort}`,
+          name: `端口 ${port}`,
           status: 'ok',
           message: '可用'
         });
       }
-    } catch {
-      results.push({
-        name: `端口 ${httpPort}`,
-        status: 'ok',
-        message: '可用'
-      });
     }
 
     // 9. 检查 TypeScript
@@ -891,6 +922,26 @@ function extractConfigErrorLine(err: unknown): number | null {
   const message = err instanceof Error ? err.message : String(err);
   const match = /line (\d+)/i.exec(message) ?? /at line (\d+)/i.exec(message);
   return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * `http.port` as the gateway resolves it at startup: `${VAR}` expanded from the process environment
+ * and the project's `.env` layers, validated (1–65535). `port` is undefined when not configured.
+ */
+export async function resolveEffectiveHttpPort(
+  cwd: string,
+  configFile: string,
+  environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
+): Promise<{ status: 'ok'; port: number | undefined } | { status: 'invalid'; message: string }> {
+  try {
+    const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
+    const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
+    return { status: 'ok', port: http.port };
+  } catch (error) {
+    if (error instanceof InvalidHttpPortError) return { status: 'invalid', message: `${error.message}；网关会拒绝启动` };
+    // Other http.* problems (TLS files, listeners) are not this check's business.
+    return { status: 'ok', port: undefined };
+  }
 }
 
 export async function createDefaultConfig(cwd: string): Promise<void> {
