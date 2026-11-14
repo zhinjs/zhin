@@ -17,6 +17,7 @@ import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 import { declarationKeyMessage, describeArrayPathProblem, unknownConfigKeyMessage } from './patch-path-messages.js';
 import { findProjectLiteralSecrets } from './literal-secrets.js';
+import { planSecretExternalization, writeSecretAssignments } from './secret-storage.js';
 import type { LiteralConfigSecret } from '@zhin.js/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
@@ -181,12 +182,23 @@ export class ConsoleConfigurationStore {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       await this.#assertUnambiguousKey(current.document, pluginName);
-      const prepared = await this.#document.prepare(current, [
-        configKeyPatch(current.document, pluginName, data),
-      ]);
-      readApplicationPluginDeclaration(prepared.document);
-      await this.#validatePrepared(prepared);
-      const committed = await prepared.commit();
+      const patches = [configKeyPatch(current.document, pluginName, data)];
+      // Literal values of secret fields go to `.env`; the block keeps `${VAR}` references (#1250).
+      const plan = await planSecretExternalization(this.#projectRoot, this.#environmentName(), current.document,
+        applyConfigPatches(current.document, patches), patches.map(patch => patch.path));
+      if (plan.errors.length > 0) throw new Error(plan.errors.map(error => error.message).join('；'));
+      patches.push(...plan.patches);
+      const restoreEnvironment = await writeSecretAssignments(this.#projectRoot, this.#environmentName(), plan.assignments);
+      let committed;
+      try {
+        const prepared = await this.#document.prepare(current, patches);
+        readApplicationPluginDeclaration(prepared.document);
+        await this.#validatePrepared(prepared);
+        committed = await prepared.commit();
+      } catch (error) {
+        await restoreEnvironment();
+        throw error;
+      }
       return this.#applySaved(HOST_CONFIG_KEYS.includes(pluginName), committed.revision);
     });
   }
@@ -222,7 +234,8 @@ export class ConsoleConfigurationStore {
    */
   patchProject(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult> {
     return this.#serialize(async () => {
-      try { return await this.#patchCore({ expectedRevision: request.expectedRevision, patches: request.patches }, 'project'); }
+      try { return await this.#patchCore({ expectedRevision: request.expectedRevision, patches: request.patches,
+        ...(request.secretStorage === undefined ? {} : { secretStorage: request.secretStorage }) }, 'project'); }
       catch (error) {
         if (!(error instanceof ConfigCommitUnconfirmedError)) throw error;
         // The file may already hold the candidate. Do not retry or roll back.
@@ -252,9 +265,11 @@ export class ConsoleConfigurationStore {
   /** Shared single-CAS write: `scoped` keeps the page allowlist; `project` is the trusted full path. */
   async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project' | 'chat'): Promise<ConsoleConfigPatchResult> {
     let phase: 'prepare' | 'commit' | 'committed' = 'prepare';
+    // Restores `.env` when secrets were moved there but the config write does not happen.
+    let restoreEnvironment: (() => Promise<void>) | undefined;
     try {
       const instanceKey = request.instanceKey;
-      const patches = normalizeConfigPatchOperations(request.patches);
+      let patches = normalizeConfigPatchOperations(request.patches);
       const current = await this.#document.read();
       if (mode === 'scoped') {
         const declared = instanceKey === undefined
@@ -289,7 +304,26 @@ export class ConsoleConfigurationStore {
         return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(arrayProblems),
           missingEnv: Object.freeze([]), message: '配置路径无效，未保存' });
       }
-      const candidate = applyConfigPatches(current.document, patches);
+      let candidate = applyConfigPatches(current.document, patches);
+      // Secret fields keep `${VAR}` references: a literal written here goes to `.env` (#1250),
+      // unless the caller explicitly asked for plain storage. Chat writes never carry literals
+      // into secret fields (they are refused by the chat policy).
+      let envSecrets: readonly { readonly path: readonly string[]; readonly variable: string }[] = [];
+      let secretAssignments: Awaited<ReturnType<typeof planSecretExternalization>>['assignments'] = [];
+      if (mode !== 'chat' && request.secretStorage !== 'plain') {
+        const plan = await planSecretExternalization(this.#projectRoot, this.#environmentName(), current.document, candidate,
+          patches.filter(patch => patch.op === 'set').map(patch => patch.path));
+        if (plan.errors.length > 0) {
+          return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(plan.errors),
+            missingEnv: Object.freeze([]), message: '配置校验失败，未保存' });
+        }
+        if (plan.patches.length > 0) {
+          patches = Object.freeze([...patches, ...plan.patches]);
+          candidate = applyConfigPatches(current.document, patches);
+          secretAssignments = plan.assignments;
+          envSecrets = Object.freeze(plan.assignments.map(item => Object.freeze({ path: item.path, variable: item.variable })));
+        }
+      }
       // Chat writes exactly one leaf (C1/C4); scope and leaf shape are proven before values.
       if (mode === 'chat' && patches.length !== 1) throw new ConfigChatAccessError('leaf');
       if (mode === 'chat') for (const patch of patches) {
@@ -323,6 +357,7 @@ export class ConsoleConfigurationStore {
         for (const error of validation.errors) errors.push({ path: `$.${section}${error.path.slice(1)}`, message: error.message });
         for (const name of validation.missingEnv) missingEnv.add(name);
       }
+      for (const { variable } of envSecrets) missingEnv.delete(variable);
       if (errors.length > 0) {
         return Object.freeze({
           status: 'invalid',
@@ -333,6 +368,7 @@ export class ConsoleConfigurationStore {
         });
       }
       let committed;
+      restoreEnvironment = await writeSecretAssignments(this.#projectRoot, this.#environmentName(), secretAssignments);
       try {
         const prepared = await this.#document.prepare(current, patches);
         readApplicationPluginDeclaration(prepared.document);
@@ -342,6 +378,7 @@ export class ConsoleConfigurationStore {
           // Runtime validation may report cross-field constraints without a
           // structured path. Preserve the invalid contract at the document
           // boundary; arbitrary issue strings can contain private values.
+          await restoreEnvironment();
           return Object.freeze({ status: 'invalid', revision: current.revision,
             errors: Object.freeze([Object.freeze({ path: '$', message: '完整配置未通过运行校验' })]),
             missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
@@ -356,6 +393,7 @@ export class ConsoleConfigurationStore {
           }
         }
       } catch (error) {
+        if (phase === 'prepare') await restoreEnvironment();
         if (error instanceof ConfigDocumentConflictError) return await conflict(await this.#document.read());
         throw error;
       }
@@ -367,6 +405,7 @@ export class ConsoleConfigurationStore {
         ...applied,
         paths,
         missingEnv: Object.freeze([...missingEnv].sort()),
+        ...(envSecrets.length > 0 ? { envSecrets } : {}),
         message: applied.applicationError === 'superseded' ? '配置已保存，但该次生效申请已被替代'
           : applied.applicationError === 'invalid' ? '配置已保存，但配置校验失败，未生效'
           : applied.applicationError ? '配置已保存，生效结果未确认' : applied.restartRequired

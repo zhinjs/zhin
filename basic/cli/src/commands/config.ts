@@ -29,6 +29,7 @@ export const CONFIG_EXIT_CODES = Object.freeze({
 } as const);
 
 type Options = {
+  plain?: boolean;
   offline?: boolean; host?: string; live?: string; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
 };
 type Connection = { host: string; token?: string; tokenEnvironment: string; fetch?: import('@zhin.js/gateway/local').LocalGatewayFetch };
@@ -212,17 +213,29 @@ async function readProject(options: Options, path: readonly string[]): Promise<C
   return read<ConsoleConfigProjectRead>(await connection(options), { type: CONFIG_RPC.GET_PROJECT, ...request });
 }
 
+/** Where secret values were stored, one line per field (never the value). */
+function envSecretLines(result: Readonly<Record<string, unknown>>): string[] {
+  const moved = Array.isArray(result.envSecrets) ? result.envSecrets : [];
+  return moved.filter(record).filter(item => strings(item.path) && typeof item.variable === 'string')
+    .map(item => `敏感字段 ${(item.path as string[]).join('.')} 的值已写入 .env 的 ${String(item.variable)}，配置中保留 \${${String(item.variable)}} 引用`);
+}
+
 async function mutate(options: Options, patches: readonly ConsoleConfigPatchOperation[]): Promise<void> {
+  const secretStorage = options.plain ? { secretStorage: 'plain' as const } : {};
+  if (options.plain && !options.json) {
+    console.error('警告：--plain 会把敏感字段的值以明文写进配置文件；建议去掉 --plain，让值写入 .env、配置保留 ${VAR} 引用');
+  }
   if (options.offline) {
     const store = createOfflineConfigurationStore(process.cwd(), options.environment ?? 'development');
     const { revision: expectedRevision } = await store.readProject({ path: [], reveal: true });
-    const result = await store.patchProject({ expectedRevision, patches });
+    const result = await store.patchProject({ expectedRevision, patches, ...secretStorage });
     const code = result.status === 'saved' ? CONFIG_EXIT_CODES.ok : configPatchExitCode(result);
     const outcome = result.status === 'saved'
       ? { status: 'saved', revision: result.revision, paths: result.paths, missingEnv: result.missingEnv, application: 'not-requested',
+        ...(result.envSecrets ? { envSecrets: result.envSecrets } : {}),
         message: '已离线保存；运行中的 Host 只有在 --watch config 或 Console「应用配置」之后才会生效' }
       : result;
-    emit(outcome, options, result.status === 'saved' ? outcome.message as string : patchMessage(result, code));
+    emit(outcome, options, [...envSecretLines(outcome), result.status === 'saved' ? outcome.message as string : patchMessage(result, code)].join('\n'));
     process.exitCode = code;
     return;
   }
@@ -236,7 +249,7 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   let reply: unknown;
   try {
     // Exactly one dispatch; the Host owns read-modify-write against expectedRevision.
-    reply = await requestPluginConsole<unknown>(target.host, { type: CONFIG_RPC.PATCH_PROJECT, expectedRevision, patches },
+    reply = await requestPluginConsole<unknown>(target.host, { type: CONFIG_RPC.PATCH_PROJECT, expectedRevision, patches, ...secretStorage },
       target.tokenEnvironment, { token: target.token, requestId, ...(target.fetch ? { fetch: target.fetch } : {}) });
   } catch (error) {
     throw transportFailure(error, true, { expectedRevision });
@@ -245,8 +258,8 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   if (!result) throw transportFailure(new ConsoleRequestUnconfirmedError(requestId), true, { expectedRevision });
   const code = configPatchExitCode(result);
   // Every exit-6 outcome (unconfirmed write, unconfirmed application, unknown group) carries its evidence.
-  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options, patchMessage(result, code),
-    code === CONFIG_EXIT_CODES.unknown);
+  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options,
+    [...envSecretLines(result), patchMessage(result, code)].join('\n'), code === CONFIG_EXIT_CODES.unknown);
   process.exitCode = code;
 }
 
@@ -299,7 +312,8 @@ export function createConfigCommand(): Command {
     .description('获取配置项（敏感值默认打码）')
     .action(run(async ([key], options) => { printRead(await readProject(options, commandPath(String(key))), options, String(key)); })));
   command.addCommand(new Command('set').argument('<key>', '点路径或 JSON Pointer').argument('<value>', 'JSON 值；解析失败时作为字符串')
-    .description('校验、保存并按需生效（Host 未运行时失败，不回退离线）')
+    .description('校验、保存并按需生效（Host 未运行时失败，不回退离线）；敏感字段的值写入 .env，配置保留 ${VAR} 引用')
+    .option('--plain', '把敏感字段（token、密码等）的值以明文写进配置文件（不推荐）')
     .action(run(async ([key, raw], options) => {
       let value: unknown;
       try { value = JSON.parse(String(raw)); } catch { value = String(raw); }

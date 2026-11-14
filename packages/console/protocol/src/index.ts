@@ -524,6 +524,12 @@ export interface ConsoleConfigPatchRequest {
   readonly instanceKey?: string;
   readonly expectedRevision: string;
   readonly patches: readonly ConsoleConfigPatchOperation[];
+  /**
+   * Where literal values of schema-marked secret fields are stored. `env` (default): in the
+   * project's `.env`, the config keeping a `${VAR}` reference (the field's existing reference
+   * name, or a canonical one such as `HTTP_TOKEN`). `plain`: written into the config file as given.
+   */
+  readonly secretStorage?: 'env' | 'plain';
 }
 
 /** Transport-only metadata. No configuration values, expanded environment or private resources. */
@@ -590,6 +596,8 @@ export type ConsoleConfigPatchResult =
     paths: readonly (readonly string[])[];
     /** Environment references in the written sections that are not defined yet (warning only). */
     missingEnv: readonly string[];
+    /** Secret fields whose written value was stored in `.env` as `variable` (the config holds `${variable}`). Never values. */
+    envSecrets?: readonly Readonly<{ path: readonly string[]; variable: string }>[];
     message: string;
   }>
   | Readonly<{

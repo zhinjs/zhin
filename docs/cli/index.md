@@ -190,6 +190,7 @@ zhin config check [--fix] [--json] [--strict]
 
 - 连接：`--host <url>` 优先，token 只取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）。未给 `--host` 时按配置 `http.host` / `http.port` / `http.base` 推导地址（监听地址 `0.0.0.0` / `::` 会改连 `127.0.0.1` / `[::1]`），此时环境变量未设置才回退到配置 `http.token`。非 loopback 地址携带 token 必须用 HTTPS。
 - **Host 未运行时直接失败，不会回退到离线写文件。** 需要离线操作时显式加 `--offline`：用与 Host 相同的 `patchProject` 规则（版本检查、插件声明不可改、逐段 Schema 校验）在本地校验后保存；不启动 Runtime、不执行插件 `setup`、CLI 不向 Host 发送任何请求，但加载插件声明时会执行模块顶层代码（模块自身可能访问网络）。离线保存不会让运行中的 Host 生效，需要 `--watch config` 或在 Console 中「应用配置」。
+- 写敏感字段（Schema 标为 secret / writeOnly / password，或 token、密码类键名）时，值写进项目 `.env`，配置里保留或改为 `${VAR}` 引用：沿用该字段原来引用的变量名（如 `${HTTP_TOKEN}`），原来不是引用时按路径生成（`http.token` → `HTTP_TOKEN`，重名时加 `_2`）；`.env.<环境>` 已定义该变量时写到那里。输出只说明写到了哪个变量，从不回显值。确实要明文写进配置文件时加 `--plain`（会打印警告）。Console 保存配置走同一规则。
 - 读取默认按 Schema 打码：`secret` / `writeOnly` / `hidden` / 密码字段、密钥类键名以及未展开的 `${...}` / `env://` 引用都显示为 `[redacted]`；加 `--reveal` 才输出原值。
 - `get` / `list` / `set` / `unset` 加 `--json` 时只输出一行紧凑 JSON，便于脚本处理；不加时只输出可读文本（`config path`、`config check` 的输出格式见各自说明）。
 - 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。其他失败只显示原因；加全局选项 `--debug` 才在 stderr 附上这两项。
