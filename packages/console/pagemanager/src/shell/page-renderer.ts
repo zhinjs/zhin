@@ -5,8 +5,12 @@ import {
   inferPageCategory,
   pageModuleScript,
   sandboxFallbackScript,
+  STANDALONE_TOKEN_PLACEHOLDER,
   standaloneTokenBootstrapScript,
 } from './page-renderer-helpers.js';
+
+/** Tooltip of the token box: where an API token comes from (the bootstrap token is refused after setup). */
+const SANDBOX_TOKEN_TITLE = escapeHtml('在 Console 顶栏用户名 →「个人设置」（/account）签发 API 令牌');
 
 export type { ConsoleIndexPage, PageShellDescriptor } from './page-renderer-helpers.js';
 
@@ -275,6 +279,16 @@ export const BASE_STYLE = `
     cursor: pointer;
   }
   .quick-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .sandbox-notice {
+    padding: 0.6rem 0.85rem;
+    border-top: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--foreground);
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .sandbox-notice[hidden] { display: none; }
+  .composer input:disabled, .composer button:disabled, .quick-chip:disabled { opacity: 0.5; cursor: not-allowed; }
   .composer {
     display: flex;
     gap: 0.5rem;
@@ -547,7 +561,7 @@ export function renderConsoleIndex(pages: readonly ConsoleIndexPage[]): string {
     <strong>Zhin Console</strong>
     <span class="status" id="ws-status">ready</span>
     <form class="token-bar" id="token-form">
-      <input id="token-input" type="password" placeholder="HTTP_TOKEN (可选)" autocomplete="off" />
+      <input id="token-input" type="password" placeholder="${STANDALONE_TOKEN_PLACEHOLDER}" title="${SANDBOX_TOKEN_TITLE}" autocomplete="off" />
       <button type="submit">保存 Token</button>
       <button type="button" class="secondary" id="token-clear">清除</button>
     </form>
@@ -621,7 +635,7 @@ export function renderPageShell(
     <code class="route-badge">${escapeHtml(page.route)}</code>
     <span class="status" id="ws-status">connecting…</span>
     <form class="token-bar" id="token-form">
-      <input id="token-input" type="password" placeholder="HTTP_TOKEN (可选)" autocomplete="off" />
+      <input id="token-input" type="password" placeholder="${STANDALONE_TOKEN_PLACEHOLDER}" title="${SANDBOX_TOKEN_TITLE}" autocomplete="off" />
       <button type="submit">保存 Token 并重连</button>
       <button type="button" class="secondary" id="token-clear">清除</button>
     </form>

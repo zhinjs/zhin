@@ -50,10 +50,10 @@ Every step can be skipped: set up AI later under **AI & models**, and connect ch
 
 Pick either way:
 
-- **Option A: Local built-in Sandbox (fastest)**
-  Open `http://127.0.0.1:8068/sandbox` directly in your browser, send `/hello`, and see the reply immediately.
-- **Option B: Remote Console**
-  Open **Conversations → Sandbox** in the sidebar and send `/hello`.
+- **Option A: Console Sandbox (recommended)**
+  In the Console you signed in to in the previous step, open **Conversations → Sandbox** in the sidebar and send `/hello`.
+- **Option B: Standalone Sandbox page**
+  Open `http://127.0.0.1:8068/sandbox` in your browser. This page does not use the Console sign-in: once setup created the owner, the `HTTP_TOKEN` in `.env` is refused, so it needs a Console API token — issue one under your user name → **Personal settings** (`/account`) in the Console, paste it into the box at the top right and click save; when the status reads `connected`, send `/hello`. While it is not connected the send button is disabled and the page says why.
 
 A reply means the whole pipeline works: the Sandbox adapter received the inbound message → matched `commands/hello` → sent the reply back through the unified outbound pipeline. Connecting a real platform later just mounts that platform's adapter in config.
 

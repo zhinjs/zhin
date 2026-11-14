@@ -909,7 +909,7 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
   const startup = getLogger('setup');
   const consoleUrl = createRemoteConsoleUrl(httpOrigin);
   startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required — 见 .env 中的 HTTP_TOKEN)') : ''}`);
-  startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (可在页面顶部直接输入 HTTP_TOKEN 或访问 ?token=<HTTP_TOKEN>)') : ''}`);
+  startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (Console 初始化前可在页面顶部输入 HTTP_TOKEN；初始化后改填 Console API 令牌，或在 Console「会话 → 沙盒」里聊天)') : ''}`);
 }
 
 /**

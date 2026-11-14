@@ -108,6 +108,18 @@ if (tokenClear && tokenInput) {
 </script>`;
 }
 
+/**
+ * What the standalone sandbox page needs to connect (#1250). Shown while it is not connected; the
+ * bootstrap HTTP_TOKEN only works before the Console has an owner.
+ */
+export const SANDBOX_AUTH_HELP = '连接需要有「操作账号」（endpoint.operate）权限的 Console API 令牌：'
+  + '在 Console 顶栏用户名 →「个人设置」（/account）签发，粘贴到右上角后点「保存 Token 并重连」。'
+  + 'Console 初始化之前也可以用 .env 中的 HTTP_TOKEN（初始化后失效）。'
+  + '不想配置令牌时，直接在 Console 的「会话 → 沙盒」里发送。';
+
+/** Placeholder of the token box on standalone pages: an API token, not the bootstrap token (#1250). */
+export const STANDALONE_TOKEN_PLACEHOLDER = 'Console API 令牌';
+
 export function sandboxFallbackScript(): string {
   return `<script type="module">
 const root = document.getElementById('app') || document.getElementById('root');
@@ -138,9 +150,10 @@ root.innerHTML = \`
       <button type="button" class="quick-chip" data-quick-cmd="ping">ping</button>
       <button type="button" class="quick-chip" data-quick-cmd="status">status</button>
     </div>
+    <div class="sandbox-notice" id="sandbox-notice" role="status" hidden></div>
     <form class="composer" id="chat-form">
-      <input id="chat-input" placeholder="发送到 /sandbox …" autocomplete="off" />
-      <button type="submit">发送</button>
+      <input id="chat-input" placeholder="发送到 /sandbox …" autocomplete="off" disabled />
+      <button type="submit" id="chat-send" disabled>发送</button>
     </form>
   </div>
 \`;
@@ -148,6 +161,8 @@ const log = document.getElementById('chat-messages');
 const status = document.getElementById('ws-status');
 const form = document.getElementById('chat-form');
 const input = document.getElementById('chat-input');
+const sendButton = document.getElementById('chat-send');
+const notice = document.getElementById('sandbox-notice');
 const tokenForm = document.getElementById('token-form');
 const tokenInput = document.getElementById('token-input');
 const tokenClear = document.getElementById('token-clear');
@@ -393,7 +408,11 @@ function upsertBubble(kind, data, fallbackText) {
 }
 
 function sendOutboundText(text, isAction = false) {
-  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!text) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    setConnected(false, '未连接到 /sandbox，消息没有发送。' + SANDBOX_AUTH_HELP);
+    return;
+  }
   const senderId = (senderIdInput?.value || '').trim() || 'dev-user';
   const senderName = (senderNameInput?.value || '').trim() || 'Developer';
   const senderRole = senderRoleSelect?.value || 'master';
@@ -432,18 +451,45 @@ for (const chip of quickButtons) {
 }
 
 let ws;
+// #1250: without an open socket nothing can be sent — say so and why, instead of dropping the
+// message silently. After Console setup the bootstrap HTTP_TOKEN is refused: a Console API token
+// (with endpoint.operate) is needed, or the Console's own Sandbox page.
+const SANDBOX_AUTH_HELP = ${JSON.stringify(SANDBOX_AUTH_HELP)};
+function setConnected(connected, reason) {
+  if (input) input.disabled = !connected;
+  if (sendButton) sendButton.disabled = !connected;
+  for (const chip of quickButtons) chip.disabled = !connected;
+  if (!notice) return;
+  notice.hidden = connected;
+  notice.textContent = connected ? '' : reason;
+}
 function connectWs() {
   if (ws) {
     try { ws.close(); } catch {}
   }
   status.textContent = 'connecting…';
-  ws = new WebSocket(resolveSandboxWsUrl());
-  ws.addEventListener('open', () => {
+  setConnected(false, '正在连接 /sandbox …');
+  const socket = new WebSocket(resolveSandboxWsUrl());
+  ws = socket;
+  let opened = false;
+  socket.addEventListener('open', () => {
+    if (ws !== socket) return;
+    opened = true;
     status.textContent = 'connected';
+    setConnected(true, '');
     updateChannelBadge(true);
   });
-  ws.addEventListener('close', () => { status.textContent = 'disconnected'; });
-  ws.addEventListener('error', () => { status.textContent = 'error (请在右上角输入 .env 中的 HTTP_TOKEN 后重连)'; });
+  socket.addEventListener('close', () => {
+    if (ws !== socket) return;
+    status.textContent = 'disconnected';
+    setConnected(false, opened
+      ? '与 /sandbox 的连接已断开，消息无法发送。刷新页面或在右上角点「保存 Token 并重连」。'
+      : '未连接到 /sandbox，消息无法发送。' + SANDBOX_AUTH_HELP);
+  });
+  socket.addEventListener('error', () => {
+    if (ws !== socket) return;
+    status.textContent = 'disconnected';
+  });
   ws.addEventListener('message', (event) => {
     try {
       const data = JSON.parse(String(event.data));
@@ -476,7 +522,12 @@ if (tokenClear && tokenInput) {
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   const text = input.value.trim();
-  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!text) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    // Keep the text: it was not sent.
+    setConnected(false, '未连接到 /sandbox，消息没有发送。' + SANDBOX_AUTH_HELP);
+    return;
+  }
   sendOutboundText(text, false);
   input.value = '';
 });

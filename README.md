@@ -51,7 +51,7 @@ pnpm dev          # zhin start --foreground: management gateway + your bot, hot 
 ```
 
 1. **Finish setup in the Console**: open the Console link printed in the terminal (`https://console.zhin.dev/?apiBaseUrl=…#token=…`; the bootstrap token after `#` never leaves your browser). Keep the default SQLite database and create the owner account.
-2. **Chat with the Sandbox**: open `http://127.0.0.1:8068/sandbox` (or **Conversations → Sandbox** in the Console) and send `/hello`.
+2. **Chat with the Sandbox**: in the Console, open **Conversations → Sandbox** and send `/hello`. (The standalone page `http://127.0.0.1:8068/sandbox` works without signing in only before step 1; once the owner exists it needs a Console API token, issued under your user name → **Personal settings** (`/account`) and pasted into the box at the top right.)
 3. **Run it in the background**: `npx zhin start` (then `zhin status`, `zhin logs -f`, `zhin stop`).
 
 Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Something wrong? Run `npx zhin doctor`.
