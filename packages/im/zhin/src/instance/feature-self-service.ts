@@ -91,9 +91,12 @@ const messages = createMessages({
   description: { 'zh-CN': '管理本会话（及有权限的上级）的功能开关与配置', en: 'Manage feature switches and settings for this conversation (and scopes you administer)' },
   roleDescription: { 'zh-CN': '查看与授予 / 撤销聊天角色（owner / admin / trusted）', en: 'List, grant and revoke chat roles (owner / admin / trusted)' },
   disabled: { 'zh-CN': '群内功能自助未开启（features.selfService.enabled）。', en: 'In-chat feature self-service is off (features.selfService.enabled).' },
-  denied: { 'zh-CN': '你在该范围没有 admin 角色。', en: 'You do not hold the admin role at that scope.' },
+  denied: { 'zh-CN': '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You do not hold the admin role at that scope. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
+  // ADR 0060 §5.3: platform standing is not a zhin role; say where roles come from.
+  deniedStanding: { 'zh-CN': '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You are a group owner / admin on the platform, but that is not a zhin role; this scope needs the zhin admin role. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
+  noOwnerHint: { 'zh-CN': '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见实例启动日志或 zhin status）。', en: 'This bot has no owner yet: the deployer can send 「claim <code>」 to it in a private chat (the code is in the instance log or zhin status).' },
   roleDenied: { 'zh-CN': '你在该范围的角色不足以授予或撤销 {role}。', en: 'Your role at that scope cannot grant or revoke {role}.' },
-  ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销。', en: 'Only an owner at a higher level can grant or revoke owner.' },
+  ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。', en: 'Only an owner at a higher level can grant or revoke owner; global owners are granted on the Console "Chat roles" page.' },
   peerDenied: {
     'zh-CN': '对方在该范围已是 {role}，与你同级；只有更高的角色或更高层的 {role} 才能修改或撤销。',
     en: 'That user already holds {role} at that scope, the same as you; only a higher role, or {role} held at a higher level, can change or revoke it.',
@@ -111,8 +114,8 @@ const messages = createMessages({
     en: 'Usage: feature list [page] | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global. Quote values with spaces, e.g. "Welcome aboard"',
   },
   roleUsage: {
-    'zh-CN': '用法：角色 列表 | 授予 <用户> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
-    en: 'Usage: role list | grant <user> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
+    'zh-CN': '用法：角色 列表 | 授予 <用户|#人 id 前缀> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
+    en: 'Usage: role list | grant <user|#person-id-prefix> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
   },
   locked: { 'zh-CN': '{plugin} 已在{level}层停用，下级不能开启或修改开关。', en: '{plugin} is disabled at the {level} level; levels below it cannot enable or change it.' },
   saved: { 'zh-CN': '已保存（{level}层），立即生效。', en: 'Saved ({level} level), effective now.' },
@@ -153,7 +156,10 @@ const messages = createMessages({
   none: { 'zh-CN': '无', en: 'none' },
   rolesHeader: { 'zh-CN': '本会话生效的聊天角色：', en: 'Chat roles effective in this conversation:' },
   roleLine: { 'zh-CN': '{role} @ {level} {scope}：{user}（{source}）', en: '{role} @ {level} {scope}: {user} ({source})' },
-  userMissing: { 'zh-CN': '请 @ 用户或给出用户 id。', en: 'Mention a user or give a user id.' },
+  userMissing: { 'zh-CN': '请 @ 用户、给出用户 id，或用 #<人 id 前缀> 引用一个人。', en: 'Mention a user, give a user id, or refer to a person with #<person id prefix>.' },
+  principalNotFound: { 'zh-CN': '没有 id 以 {prefix} 开头的人。', en: 'No person has an id starting with {prefix}.' },
+  principalAmbiguous: { 'zh-CN': '有多个人的 id 以 {prefix} 开头，请多写几位。', en: 'Several people have ids starting with {prefix}; give more characters.' },
+  principalNoIdentity: { 'zh-CN': '这个人在适配器 {adapter} 上没有身份；低于全局的角色只对本适配器上的身份生效。', en: 'This person has no identity on adapter {adapter}; roles below global only count for identities on that adapter.' },
   levelConversation: { 'zh-CN': '会话', en: 'conversation' },
   levelEndpoint: { 'zh-CN': '账号', en: 'endpoint' },
   levelAdapter: { 'zh-CN': '适配器', en: 'adapter' },
@@ -257,6 +263,14 @@ function auditor(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, prefix: 
   };
 }
 
+/** ADR 0060 §5.3: the denial says where roles come from, and tells platform group owners / admins their standing is not a zhin role. */
+function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, locale: Locale): string {
+  const standing = actor.context.platform?.standing;
+  const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
+  const ownerless = !deps.roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+  return ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply;
+}
+
 /** One `feature.list` row as the chat list reads it. */
 interface FeatureListItem {
   readonly plugin: string;
@@ -325,8 +339,8 @@ export async function executeFeatureChat(
   if (!actor) return messages(locale, 'unknownConversation');
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
   if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
-    && !deps.roles.store.list().some(entry => entry.adapter === actor.identity.adapter && entry.userId === actor.identity.userId && chatRoleIncludes(entry.role, 'admin'))) {
-    return messages(locale, 'denied');
+    && !deps.roles.heldBy(actor.identity).some(entry => chatRoleIncludes(entry.role, 'admin'))) {
+    return deniedReply(deps, actor, locale);
   }
   const words = input.tokens.map(tokenText);
   const sub = SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
@@ -571,13 +585,24 @@ export async function executeRoleChat(
   const user = input.tokens[1];
   const userId = typeof user === 'object' ? ('user' in user ? user.user : user.text) : user;
   if (!userId) return messages(locale, 'userMissing');
+  // ADR 0060 §7: `#<person id prefix>` names a person (grant the same person across platforms).
+  const person = typeof user === 'string' && user.startsWith('#') ? resolvePersonRef(deps.roles.store, user.slice(1)) : undefined;
+  if (person && 'error' in person) return messages(locale, person.error, { prefix: person.prefix });
   const role = ROLE_WORDS[(words[2] ?? '').toLowerCase()];
   const level = levelAt(input.tokens, 3);
   if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return messages(locale, 'roleUsage');
   const audit = auditor(deps, actor, 'chat-roles.chat');
   if (level === 'conversation' && actor.kind === 'private') return messages(locale, 'privateConversation');
   const scope = scopeAt(actor, level);
-  const target = { adapter: actor.identity.adapter, userId: String(userId) };
+  let target: ChatIdentity = { adapter: actor.identity.adapter, userId: String(userId) };
+  if (person) {
+    // The grant goes to the person through one of its identities: below global only one on the
+    // scope's adapter counts (ADR 0060 Q10); globally any (the actor's adapter first).
+    const local = person.identities.find(identity => identity.adapter === actor.identity.adapter);
+    const chosen = level === 'global' ? local ?? person.identities[0] : local;
+    if (!chosen) return messages(locale, 'principalNoIdentity', { adapter: actor.identity.adapter });
+    target = { adapter: chosen.adapter, userId: chosen.userId };
+  }
   if (!isChatIdentity(target)) return messages(locale, 'userMissing');
   const current = deps.roles.store.get(level, scope, target);
   // A revoke with nothing stored is checked like handling the named role (no silent "unchanged" for outsiders).
@@ -602,6 +627,26 @@ export async function executeRoleChat(
   audit(sub, level, scope, 'ok', { role });
   if (status === 'saved') deps.publishEvent?.('chat-roles:updated', { level, key: scope });
   return status === 'saved' ? messages(locale, 'saved', { level: levelName(locale, level) }) : messages(locale, 'unchanged');
+}
+
+/** Shortest person id prefix accepted after `#` (without `cp_`). */
+const PERSON_PREFIX_MIN = 4;
+
+/**
+ * `#cp_ab12…` / `#ab12…`: the stored person whose id starts with the prefix — only when exactly one
+ * does (a prefix shorter than {@link PERSON_PREFIX_MIN} symbols never matches).
+ */
+export function resolvePersonRef(store: InstanceChatRoleService['store'], raw: string):
+  { readonly id: string; readonly identities: readonly ChatIdentity[] } | { readonly error: 'principalNotFound' | 'principalAmbiguous'; readonly prefix: string } {
+  const text = raw.trim().toLowerCase();
+  const prefix = text.startsWith('cp_') ? text : `cp_${text}`;
+  const shown = `#${prefix}`;
+  if (prefix.length < 3 + PERSON_PREFIX_MIN || !/^cp_[a-z2-7]+$/u.test(prefix)) return { error: 'principalNotFound', prefix: shown };
+  const matches = store.principals.principals().filter(person => person.id.startsWith(prefix));
+  if (matches.length === 0) return { error: 'principalNotFound', prefix: shown };
+  if (matches.length > 1) return { error: 'principalAmbiguous', prefix: shown };
+  const id = matches[0]!.id;
+  return { id, identities: store.principals.identitiesOf(id).map(identity => ({ adapter: identity.adapter, userId: identity.userId })) };
 }
 
 /** Opening quote → closing quote: ASCII, Chinese curly quotes and corner brackets. */

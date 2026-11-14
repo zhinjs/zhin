@@ -6,7 +6,7 @@ import { isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import type { OperationSession } from '@zhin.js/feature-kit';
 import type { CapabilityId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
-  createChatRoleSenderEnricher, type ChatRoleService,
+  createChatRoleSenderEnricher, type ChatIdentitySighting, type ChatRoleService,
 } from '../../../built/roles.js';
 import type { ImRuntime } from '../im-runtime.js';
 
@@ -15,6 +15,8 @@ export type ConfigurationChatAuthorizer = (session: OperationSession<string>, ad
 export interface SenderEnricherOptions {
   /** Chat role resolution of the instance; undefined while it is not available. */
   readonly roles: () => ChatRoleService | undefined;
+  /** Every addressable sender (ADR 0060 §2.2 `last_seen_at` / display name cache); errors are ignored. */
+  readonly observe?: (sighting: ChatIdentitySighting) => void;
 }
 
 /** `ImRuntime` `enrichSender` option over the chat role model. */

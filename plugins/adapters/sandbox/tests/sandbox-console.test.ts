@@ -158,7 +158,7 @@ async function createProject(): Promise<string> {
   const pageFiles = [
     'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx', 'index/HtmlMessage.tsx',
     'index/messages.ts', 'index/styles.ts', 'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
-    'index/workspaceDirectory.ts', 'index/workspaceDirectoryState.ts', 'index/composerCommands.ts', 'index/segmentFallback.ts',
+    'index/workspaceDirectory.ts', 'index/workspaceDirectoryState.ts', 'index/composerCommands.ts', 'index/chatIdentity.ts', 'index/segmentFallback.ts',
     'index/ConversationRecoveryPanel.tsx', 'index/conversationRecovery.ts', 'index/useSandboxHistory.ts',
   ];
   for (const name of pageFiles) {

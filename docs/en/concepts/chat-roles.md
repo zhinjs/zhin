@@ -89,6 +89,32 @@ Management:
 Feature switches and subscriptions are zhin functions, so a platform group owner / admin needs a granted zhin role: an owner sends `role grant @owner admin` in chat, or grants it in the conversation page's **Roles** tab in the Console.
 :::
 
+## The single source of "who is an admin" (ADR 0060) {#single-source}
+
+Chat roles (`chat_roles`) are the only source of truth. "Who is an admin" used to live in five places; status and direction:
+
+| List | Status | Direction |
+| --- | --- | --- |
+| Chat roles `chat_roles` | The only source; grants belong to a "person" with one or more platform identities (ADR 0060 P2) | — |
+| `ai.personalPrincipals` | Imported once as person ↔ Console account links (no role, P3); afterwards personal inference owners come only from the links and the field only warns "imported, the database decides" | P4: removed from the schema (warned and ignored when present) |
+| Adapter `master` / `trusted`, `ai.trigger.masters` / `trusted` | **Seeds only**: imported on the first start; when they appear again they are never granted automatically and wait in the Console inbox for review (see the [upgrade guide](../migrations/chat-roles.md)) | Kept as a seed format |
+| Plugin-specific lists (`masters` …) | Discouraged | Use `isOwner` / `hasChatRole` / `chatRolesToken` (next section) |
+| Console accounts | A separate principal system: Console permissions are not chat roles; linkable one-to-one with a chat person (no permissions carried over). The Console "Chat members" page, the Sandbox "speak as my chat identity" switch and personal inference owners all read this link (P3) | — |
+
+### People, platform identities and Console links {#people}
+
+- A **person** (`chat_principals`, ids like `cp_…`) holds the role grants; a **platform identity** (adapter instance alias + user id, `chat_identities`) belongs to at most one person. A speaker never granted a role nor bound is an "implicit single-identity person" (id `implicit:<alias>:<userId>`) and gets no row.
+- A **global** grant counts for every identity of the person; a grant **below global** (adapter / account / conversation) counts only for the person's identities on **that scope's adapter** — `admin` on the `qq` adapter does not make the person's Telegram identity an admin on Telegram.
+- Merge / split: Console RPC `chat-principals.merge` / `split` (`iam.manage` on every adapter involved; **global** `iam.manage` when a person involved holds a global grant). Merging keeps the higher role per scope and never lowers.
+- **Bind my chat identity**: a Console user (permission `self.chat-identity`, in every built-in role) gets a one-time code (8 symbols, 10 minutes, single use) and sends `bind <code>` (`绑定 <码>`) to the bot in a **private chat**. A correct code sent in a group is revoked; simulation adapters never accept it; an identity that already belongs to someone else (linked to another Console user, or with other identities) is refused; a bind that would carry roles to another identity needs a code created by a holder of global `iam.manage`. One Console user links one person and vice versa; a link carries **no permissions**.
+- When a Console user is deleted or disabled, the gateway tells the instance to drop the link (roles stay). Grants whose `grantedBy` is a linked Console user show the person's name (`grantedByName`) in the Console.
+- The Runtime writes a read-only `sender.chatPrincipal` (person id) on inbound messages; an adapter's or plugin's own value is dropped. Last-seen time and display name cache (for Console pickers, never used for authorization) are kept for 90 days.
+- **Sandbox speakers**: the Console Sandbox speaks "as my chat identity" by default — the server takes the Console user on the connection, finds the identity of the person linked to them on the Sandbox and resolves that person's grants (a global owner is owner in the Sandbox too). Without a Sandbox identity the page offers "Create my chat identity on the Sandbox" (`chat-identities.simulated.ensure`, simulation adapters only). With the switch off, a sender id typed by the client is always **simulated, no role**: the server writes it as the reserved id `~sim:<id>` (ids starting with `~` are not chat identities and can never hold, receive or resolve a role) with the lowest trust tier; typing an owner's id never makes you owner. Without a Console user (the bootstrap token, `--standalone`) every message is simulated.
+- The `role grant` target in chat accepts `#<person id prefix>` (e.g. `#cp_ab12cd`, when the prefix is unique) besides an @mention or user id, to grant a global role to the same person across platforms.
+- Export / import: `zhin chat-roles export [file]` / `zhin chat-roles import <file>` (through the running instance, global `iam.manage`; imports only add or raise, never lower, remove or move an identity owned by someone else).
+
+The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code from the instance log or `zhin status` and send `claim <code>` to the bot in a private chat on a real platform (see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
+
 ## In code
 
 ```ts
@@ -112,9 +138,29 @@ export default defineCommand({
 
 List entries are ANDed; comma-separated values inside one entry are ORed. When unmet:
 
-- A command takes the existing denial path; `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role and conversation conditions keep the generic sentence; the command menu lists only commands the sender can run here.
+- A command takes the existing denial path; `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (ask the owner / the Console Chat roles page — never which role is missing or who holds it), and tell a group owner / admin that platform standing is not a zhin role (ADR 0060 §5.3); conversation conditions keep the generic sentence; the command menu lists only commands the sender can run here.
 - Agent tools / skills are never disclosed for the turn and are checked again at execution (with the sender's current role and the Bot's standing read again).
 - Middleware is skipped for that message and the chain continues (the Bot standing is read from the cache only; missing or expired counts as unknown). Permits therefore do not suit enforcement middleware that must act on every message (moderation, rate limits).
 - A button callback does not run and the clicker gets the reason.
 
-At runtime read `message.sender.chatRole`, `message.sender.chatRoleLevels` and `message.sender.platform`; `@zhin.js/core` provides `chatRoleIncludes(held, required)`, `chatRoleHeldAt(sender, role, level)`, `hostChatRole(sender)`, `expandChatRole(role)` and `chatRolesFromMessage(message)`; the Bot's standing comes from `AdapterIndex.selfStanding(endpointId, conversation)`. To upgrade from the old spelling see [Upgrading to chat roles](../migrations/chat-roles.md).
+At runtime read `message.sender.chatRole`, `message.sender.chatRoleLevels` and `message.sender.platform`.
+
+Plugins read chat roles from `zhin.js` (ADR 0060 §6) — **do not keep your own `masters` / admin lists**:
+
+```ts
+import { chatRolesToken, hasChatRole, isOwner } from 'zhin.js';
+
+isOwner(message.sender);                          // the host owner (global owner)
+isOwner(message.sender, { level: 'endpoint' });   // owner of this account or above
+hasChatRole(message.sender, 'admin');             // admin (or owner) on this conversation's chain
+
+// Outside a message (schedules, webhooks, notifications): read-only
+const roles = context.resources.use(chatRolesToken);   // in definePlugin setup (capability contexts: context.use)
+const owners = roles.holders('owner', { adapter: 'qq' });   // global owners and their identities
+roles.roleOf({ adapter: 'qq', userId: '10001' });          // an identity's role at the global level
+roles.subscribe(change => { /* grant / revoke */ });
+```
+
+Commands and tools still prefer declarative `permit` (such as `owner@global`); `isOwner` / `hasChatRole` are for code branches. Writes go only through the Console and the chat commands (thresholds and audit).
+
+`@zhin.js/core` also provides `chatRoleIncludes(held, required)`, `chatRoleHeldAt(sender, role, level)`, `hostChatRole(sender)`, `expandChatRole(role)` and `chatRolesFromMessage(message)`; the Bot's standing comes from `AdapterIndex.selfStanding(endpointId, conversation)`. To upgrade from the old spelling see [Upgrading to chat roles](../migrations/chat-roles.md).

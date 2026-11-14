@@ -3,6 +3,17 @@ export type SandboxLocale = 'zh-CN' | 'en';
 /** Authored interface copy only; unknown/user text is returned unchanged. */
 export const sandboxEnglish: Readonly<Record<string, string>> = {
   "刷新会话目录": "Refresh conversations",
+  "我的聊天身份": "My chat identity",
+  "客户端自填的发送者不解析 zhin 角色": "A sender id typed by the client never resolves a zhin role",
+  "模拟身份，无角色": "Simulated, no role",
+  "以我的聊天身份发言": "Speak as my chat identity",
+  "当前连接没有 Console 用户（未登录或 --standalone），所有消息都按模拟身份处理，不解析 zhin 角色。": "This connection has no Console user (not signed in, or --standalone): every message is simulated and resolves no zhin role.",
+  "以链接到你 Console 账号的聊天身份发言，角色按你的聊天角色解析。": "Messages use the chat identity linked to your Console account; roles resolve from your chat roles.",
+  "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。": "Simulated, no role: a typed sender id only simulates someone else and resolves no zhin role.",
+  "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。": "You have no chat identity on the Sandbox yet; the last message was sent as a simulated sender.",
+  "在 Sandbox 上创建我的聊天身份": "Create my chat identity on the Sandbox",
+  "已创建，下一条消息生效。": "Created; it applies from the next message.",
+  "当前 Host 不支持，请升级。": "This Host does not support it; please upgrade.",
   "正在读取会话目录": "Loading conversations",
   "Host 会话目录": "Host conversations",
   "会话目录": "Conversations",

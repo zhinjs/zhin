@@ -6,6 +6,7 @@ import {
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { FeatureOverrideStore } from '../../src/instance/console/feature-override-store.js';
+import { ChatPeople } from '../../src/instance/chat-people.js';
 import {
   ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
@@ -119,7 +120,11 @@ function actor(options: { user?: string; key?: string; standing?: 'owner' | 'adm
   };
 }
 
-const DENIED = '你在该范围没有 admin 角色。';
+const DENIED = '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
+/** ADR 0060 §5.3: group owners / admins are told their platform standing is not a zhin role. */
+const DENIED_STANDING = '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。';
+const NO_OWNER_HINT = '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见实例启动日志或 zhin status）。';
+const OWNER_DENIED = 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。';
 
 /** zhin roles come only from grants: make `user` a conversation admin (ADR 0056 §4, revised 2026-11-12). */
 async function promote(roles: InstanceChatRoleService, user = 'u1', key = 'qq/bot-1/group:100') {
@@ -138,14 +143,16 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
 
   it('refuses senders without zhin admin at the scope; platform group owners / admins get nothing', async () => {
     const { run, conversations } = await harness();
-    expect(await run(actor({ standing: 'member' }), '关闭 rss')).toBe(DENIED);
-    // Platform standing is a separate dimension and never becomes a zhin role.
-    expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(DENIED);
-    expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(DENIED);
+    // No global owner yet: the denial also points at the claim code (ADR 0060 §3.3).
+    expect(await run(actor({ standing: 'member' }), '关闭 rss')).toBe(`${DENIED}\n${NO_OWNER_HINT}`);
+    // Platform standing is a separate dimension and never becomes a zhin role; the reply says so (ADR 0060 §5.3).
+    expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(`${DENIED_STANDING}\n${NO_OWNER_HINT}`);
+    expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(`${DENIED_STANDING}\n${NO_OWNER_HINT}`);
     expect(conversations.list('conversation')).toEqual([]);
-    // trusted is not enough.
+    // trusted is not enough; with a global owner the claim hint is gone.
     const trusted = await harness();
     await trusted.roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 't', role: 'trusted' });
+    await trusted.roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'boss', role: 'owner' });
     expect(await trusted.run(actor({ user: 't' }), '关闭 rss')).toBe(DENIED);
   });
 
@@ -243,7 +250,7 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(alice, '关闭 rss 适配器')).toBe('已保存（适配器层），立即生效。');
     expect(conversations.get('rss', 'qq')).toMatchObject({ level: 'adapter', enabled: false });
     expect(await run(alice, '关闭 rss 全局')).toBe(DENIED);
-    expect(await run(actor({ user: 'alice', key: 'tg/news/group:1' }), '关闭 rss')).toBe(DENIED);
+    expect(await run(actor({ user: 'alice', key: 'tg/news/group:1' }), '关闭 rss')).toBe(`${DENIED}\n${NO_OWNER_HINT}`);
     expect(conversations.list('conversation')).toHaveLength(1);
   });
 
@@ -348,9 +355,9 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     // The stored endpoint owner may grant owner below the endpoint, not at it.
     const owner = actor({ user: 'boss' });
     expect(await role(owner, '授予 frank owner')).toBe('已保存（会话层），立即生效。');
-    expect(await role(owner, '授予 frank owner 账号')).toBe('owner 只能由更高层的 owner 授予或撤销。');
+    expect(await role(owner, '授予 frank owner 账号')).toBe(OWNER_DENIED);
     // A conversation owner cannot grant owner in its own conversation (needs an owner above).
-    expect(await role(actor({ user: 'frank' }), '授予 gina owner')).toBe('owner 只能由更高层的 owner 授予或撤销。');
+    expect(await role(actor({ user: 'frank' }), '授予 gina owner')).toBe(OWNER_DENIED);
     expect(await role(actor({ user: 'frank' }), '授予 gina admin')).toBe('已保存（会话层），立即生效。');
     const tokens = featureChatTokens({ segments: [{ type: 'text', data: { text: '撤销 ' } }, { type: 'at', data: { user_id: 'dave' } }, { type: 'text', data: { text: ' admin' } }], args: [] });
     expect(tokens).toEqual(['撤销', { user: 'dave' }, 'admin']);
@@ -412,7 +419,7 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     const { deps } = await harness();
     const database = { dialect: 'memory', started: true, models: new Map() } as never;
     const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database }) });
-    roles.store.seed([{ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' }]);
+    await roles.store.seed([{ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' }]);
     expect(roles.store.persistent).toBe(false);
     const reply = await executeRoleChat({ tokens: ['grant', 'dave', 'admin'], actor: actor({ user: 'boss' }), locale: 'zh-CN' }, { ...deps, roles });
     expect(reply).toBe('未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。');
@@ -439,5 +446,41 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(await run({ ...actor(), displayName: '小明' }, '关闭 repeater')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')).toMatchObject({ updatedBy: 'chat:qq:u1',
       operator: { source: 'chat', adapter: 'qq', userId: 'u1', displayName: '小明' } });
+  });
+});
+
+describe('角色 授予 #<person id prefix> (ADR 0060 §7)', () => {
+  it('grants one person by id prefix; below global only through an identity on the actor\'s adapter', async () => {
+    const { role, roles } = await harness(on, {}, ['root']);
+    await roles.store.grant({ level: 'adapter', key: 'tg', adapter: 'tg', userId: 'alice-tg', role: 'trusted' });
+    const people = new ChatPeople({ store: roles.store });
+    await people.merge({ into: { adapter: 'tg', userId: 'alice-tg' }, from: { adapter: 'qq', userId: 'alice' }, actor: 'user:op' });
+    const id = roles.principalOf({ adapter: 'qq', userId: 'alice' }).id;
+    const owner = actor({ user: 'root' });
+    expect(await role(owner, `授予 #${id.slice(0, 9)} admin 全局`)).toBe('已保存（全局层），立即生效。');
+    // The global grant reaches every identity of that person.
+    expect(roles.roleAt({ adapter: 'tg', userId: 'alice-tg' }, 'tg/news/group:1')).toBe('admin');
+    expect(roles.roleAt({ adapter: 'qq', userId: 'alice' }, 'qq/bot-1/group:100')).toBe('admin');
+    // `cp_` may be omitted.
+    expect(await role(owner, `撤销 #${id.slice(3, 9)} admin 全局`)).toBe('已保存（全局层），立即生效。');
+    expect(roles.roleAt({ adapter: 'tg', userId: 'alice-tg' }, '')).toBeUndefined();
+  });
+
+  it('refuses unknown, too short, ambiguous prefixes and people without an identity on this adapter (negative)', async () => {
+    const { role, roles } = await harness(on, {}, ['root']);
+    const owner = actor({ user: 'root' });
+    expect(await role(owner, '授予 #cp_zzzzzzz admin 全局')).toBe('没有 id 以 #cp_zzzzzzz 开头的人。');
+    expect(await role(owner, '授予 #cp_a admin 全局')).toBe('没有 id 以 #cp_a 开头的人。');
+    await roles.store.grant({ level: 'adapter', key: 'tg', adapter: 'tg', userId: 'only-tg', role: 'trusted' });
+    const id = roles.principalOf({ adapter: 'tg', userId: 'only-tg' }).id;
+    expect(await role(owner, `授予 #${id} admin 适配器`)).toBe('这个人在适配器 qq 上没有身份；低于全局的角色只对本适配器上的身份生效。');
+    expect(roles.store.list().filter(entry => entry.role === 'admin')).toEqual([]);
+    // An ambiguous prefix is refused, never resolved to one of the matches.
+    await roles.store.exclusive(async () => {
+      await roles.store.principals.createPrincipal({ id: `cp_abcd${'a'.repeat(22)}` });
+      await roles.store.principals.createPrincipal({ id: `cp_abcd${'b'.repeat(22)}` });
+    });
+    expect(await role(owner, '授予 #cp_abcd admin 全局')).toBe('有多个人的 id 以 #cp_abcd 开头，请多写几位。');
+    expect(roles.store.list().filter(entry => entry.role === 'admin')).toEqual([]);
   });
 });

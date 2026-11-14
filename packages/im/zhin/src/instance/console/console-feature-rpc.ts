@@ -52,6 +52,16 @@ export interface FeatureStores {
   readonly roles?: import('../chat-roles.js').InstanceChatRoleService;
   /** Known recent conversations (keys), newest first; best effort. */
   readonly recentConversations?: (limit: number) => Promise<readonly FeatureRecentConversation[]>;
+  /** ADR 0060 §3.3: whether a claim code is open (no global owner yet). */
+  readonly claim?: Pick<import('../chat-owner-claim.js').ChatOwnerClaim, 'active'>;
+  /** ADR 0060 §4.2: the role migration record (`chat-roles.imports.*`, `chat-roles.imported` / `import-pending`). */
+  readonly chatRoleImports?: import('../chat-role-migration.js').ChatRoleImportBook;
+  /** ADR 0060 §2: people behind chat identities (`chat-principals.*`, `chat-identities.*`). */
+  readonly people?: import('../chat-people.js').ChatPeople;
+  /** ADR 0060 §2.4: open bind codes (`chat-identities.bind-code.create`). */
+  readonly bindCodes?: import('../chat-identity-bind.js').ChatIdentityBindCodes;
+  /** ADR 0060 §4.1 (P3): the `ai.personalPrincipals` import record. */
+  readonly personalPrincipalImports?: import('../chat-personal-principals.js').PersonalPrincipalImportBook;
   /** Display names of conversation keys the instance can resolve (#1250); best effort, missing keys have none. */
   readonly conversationNames?: (keys: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 }

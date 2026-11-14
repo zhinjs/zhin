@@ -178,6 +178,11 @@ export interface SandboxParsedMessage {
   senderId?: string;
   senderName?: string;
   senderRole?: SandboxSenderRole;
+  /**
+   * ADR 0060 §5.4: speak as the chat identity linked to the authenticated Console user instead of
+   * `senderId`. The server decides; without such an identity the message is simulated.
+   */
+  asMe?: boolean;
 }
 
 export type SandboxInboundEnvelope = SandboxParsedMessage;
@@ -193,6 +198,7 @@ interface SandboxWirePayload {
   senderId?: unknown;
   senderName?: unknown;
   senderRole?: unknown;
+  asMe?: unknown;
 }
 
 function readSandboxWirePayload(raw: string): SandboxWirePayload & { op?: unknown; conversation?: unknown } {
@@ -361,7 +367,19 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string, sel
     ...(senderId ? { senderId } : {}),
     ...(senderName ? { senderName } : {}),
     ...(senderRole ? { senderRole } : {}),
+    ...(payload.asMe === true ? { asMe: true } : {}),
   };
+}
+
+/**
+ * ADR 0060 §5.4: a client-chosen sender id becomes a reserved simulated id (`~sim:<id>`). Ids
+ * starting with `~` are never chat identities (`isChatIdentity`), so a simulated sender holds no
+ * zhin role whatever id it types — including the id of an owner.
+ */
+export const SANDBOX_SIMULATED_PREFIX = '~sim:';
+
+export function sandboxSimulatedSenderId(clientId: string): string {
+  return clientId.startsWith(SANDBOX_SIMULATED_PREFIX) ? clientId : `${SANDBOX_SIMULATED_PREFIX}${clientId}`;
 }
 
 /**

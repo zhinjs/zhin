@@ -76,10 +76,20 @@ export interface ChatIdentity {
   readonly userId: string;
 }
 
+/**
+ * ADR 0060 §5.4: sender ids starting with `~` are reserved for **simulated** speakers (a local
+ * simulation such as the Console Sandbox writes a client-chosen id as `~sim:<id>`). They are not
+ * chat identities: they never hold, receive or resolve a role, never belong to a person and are
+ * never recorded as recent speakers — so typing someone's id into a simulation cannot borrow
+ * their role.
+ */
+const RESERVED_SENDER_PREFIX = '~';
+
 export function isChatIdentity(value: unknown): value is ChatIdentity {
   const identity = value as Partial<ChatIdentity> | undefined;
   return !!identity && typeof identity.adapter === 'string' && ADAPTER_ALIAS.test(identity.adapter)
-    && typeof identity.userId === 'string' && identity.userId.length > 0 && identity.userId.length <= 256 && !CONTROL.test(identity.userId);
+    && typeof identity.userId === 'string' && identity.userId.length > 0 && identity.userId.length <= 256 && !CONTROL.test(identity.userId)
+    && !identity.userId.startsWith(RESERVED_SENDER_PREFIX);
 }
 
 /** Validates `level` + `key` and returns the normalized scope key; throws TypeError. */
@@ -124,6 +134,12 @@ export function chatScopeLevel(key: string): FeatureConfigLevel {
 export type ChatRoleSourceKind = 'grant';
 
 export interface ChatRoleEntry extends ChatIdentity {
+  /**
+   * The person holding the grant (ADR 0060 §2.3). `adapter` / `userId` are the identity the grant
+   * was written for (kept for rollback); absent on entries without a stored person, which belong
+   * to the implicit single-identity person of `adapter` / `userId`.
+   */
+  readonly principalId?: string;
   readonly level: FeatureConfigLevel;
   /** Normalized scope key (`''` for global). */
   readonly key: string;
@@ -142,9 +158,54 @@ export interface ChatRoleContext {
   readonly platform?: PlatformStanding;
 }
 
+/** A stored person (ADR 0060 §2.1) and its platform identities. */
+export interface ChatPrincipalRecord {
+  readonly id: string;
+  readonly displayName?: string;
+  readonly identities: readonly ChatIdentity[];
+}
+
 /** Stored grants (the instance's `chat_roles` table, held in memory). */
 export interface ChatRoleGrantStore {
   list(): readonly ChatRoleEntry[];
+  /**
+   * The stored person an identity belongs to (ADR 0060 §2.2); undefined: the identity is its own
+   * implicit single-identity person.
+   */
+  principalOf?(identity: ChatIdentity): ChatPrincipalRecord | undefined;
+  /** A stored person by id. */
+  principal?(id: string): ChatPrincipalRecord | undefined;
+}
+
+/** Id of the implicit single-identity person of `identity` (no stored person yet). */
+export function implicitChatPrincipalId(identity: ChatIdentity): string {
+  return `implicit:${identity.adapter}:${identity.userId}`;
+}
+
+/** The person of an identity: the stored one, else its implicit single-identity person. */
+export function chatPrincipalOf(store: ChatRoleGrantStore, identity: ChatIdentity): ChatPrincipalRecord {
+  const stored = store.principalOf?.(identity);
+  if (stored) return stored;
+  return Object.freeze({ id: implicitChatPrincipalId(identity),
+    identities: Object.freeze([Object.freeze({ adapter: identity.adapter, userId: identity.userId })]) });
+}
+
+/** Id of the person holding `entry`. */
+export function chatRoleEntryPrincipalId(entry: ChatRoleEntry): string {
+  return entry.principalId ?? implicitChatPrincipalId(entry);
+}
+
+/** Adapter alias a scope key belongs to (`undefined` for global). */
+export function chatScopeAdapter(key: string): string | undefined {
+  return key === '' ? undefined : chatScopeChain(key)[1];
+}
+
+/**
+ * ADR 0060 §2.3 / Q10: a grant below global only counts for the person's identities on the
+ * scope's own adapter; a global grant counts for every identity of the person.
+ */
+export function chatRoleEntryAppliesTo(entry: Pick<ChatRoleEntry, 'key'>, identity: ChatIdentity): boolean {
+  return entry.key === '' || chatScopeAdapter(entry.key) === identity.adapter;
 }
 
 /** Effective roles of one sender in one conversation. */
@@ -184,10 +245,29 @@ export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantSt
     this.store = options.store;
   }
 
-  /** Entries of `identity` effective at `scopeKey` (own scope and every ancestor). */
+  /** The person `identity` belongs to (ADR 0060 §2): stored, else its implicit single-identity person. */
+  principalOf(identity: ChatIdentity): ChatPrincipalRecord {
+    return chatPrincipalOf(this.store, identity);
+  }
+
+  /**
+   * Every stored entry of the person `identity` belongs to that counts for `identity` (any scope):
+   * global grants and grants at scopes of the identity's own adapter (ADR 0060 Q10).
+   */
+  heldBy(identity: ChatIdentity): readonly ChatRoleEntry[] {
+    // A reserved (simulated) or malformed sender id holds nothing, whatever is stored (ADR 0060 §5.4).
+    if (!isChatIdentity(identity)) return Object.freeze([]);
+    const principal = this.principalOf(identity).id;
+    return Object.freeze(this.store.list().filter(entry => chatRoleEntryPrincipalId(entry) === principal && chatRoleEntryAppliesTo(entry, identity)));
+  }
+
+  /**
+   * Entries of `identity` effective at `scopeKey` (own scope and every ancestor): the grants of
+   * the person it belongs to, below global only those on the identity's own adapter (ADR 0060 Q10).
+   */
   entriesFor(identity: ChatIdentity, scopeKey: string): readonly ChatRoleEntry[] {
     const chain = chatScopeChain(scopeKey);
-    const stored = this.store.list().filter(entry => entry.adapter === identity.adapter && entry.userId === identity.userId && chain.includes(entry.key));
+    const stored = this.heldBy(identity).filter(entry => chain.includes(entry.key));
     return Object.freeze([...stored].sort((left, right) => chain.indexOf(left.key) - chain.indexOf(right.key)));
   }
 
@@ -235,9 +315,18 @@ export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantSt
   ownersOf(scopeKey: string, adapter: string): readonly string[] {
     const chain = chatScopeChain(scopeKey);
     const owners = this.store.list()
-      .filter(entry => entry.role === 'owner' && entry.adapter === adapter && chain.includes(entry.key))
+      .filter(entry => entry.role === 'owner' && chain.includes(entry.key))
       .sort((left, right) => chain.indexOf(right.key) - chain.indexOf(left.key));
-    return Object.freeze([...new Set(owners.map(entry => entry.userId))]);
+    const userIds: string[] = [];
+    for (const entry of owners) {
+      // The person's identities on `adapter` (a stored person's, else the grant's own identity).
+      const principal = entry.principalId ? this.store.principal?.(entry.principalId) : undefined;
+      for (const identity of principal?.identities ?? [{ adapter: entry.adapter, userId: entry.userId }]) {
+        if (identity.adapter !== adapter || !chatRoleEntryAppliesTo(entry, identity)) continue;
+        if (!userIds.includes(identity.userId)) userIds.push(identity.userId);
+      }
+    }
+    return Object.freeze(userIds);
   }
 }
 
@@ -292,9 +381,20 @@ export function chatRoleMessageContext(
 
 export interface ChatRoleSenderFields {
   readonly id: string;
+  readonly name?: string;
   readonly platform?: PlatformStanding;
   readonly chatRole?: ChatRole;
   readonly chatRoleLevels?: ChatRoleLevels;
+  /** The person the sender's identity belongs to (ADR 0060 §2.3). Set by the Runtime only. */
+  readonly chatPrincipal?: string;
+}
+
+/** One inbound sighting of an identity (ADR 0060 §2.2 `last_seen_at`; never used for authorization). */
+export interface ChatIdentitySighting {
+  readonly identity: ChatIdentity;
+  /** The conversation key (or the endpoint key when the conversation cannot be keyed). */
+  readonly scopeKey: string;
+  readonly displayName?: string;
 }
 
 /**
@@ -304,12 +404,18 @@ export interface ChatRoleSenderFields {
  */
 export function createChatRoleSenderEnricher(options: Readonly<{
   roles: () => ChatRoleService | undefined;
+  /** Told about every addressable sender (display name cache, recent speakers); errors are ignored. */
+  observe?: (sighting: ChatIdentitySighting) => void;
 }>) {
   return <TSender extends ChatRoleSenderFields>(
     sender: TSender | undefined, conversation: ConversationRef, snapshot?: RuntimeSnapshot,
   ): TSender | undefined => {
     if (!sender?.id) return sender;
-    const { chatRole: _spoofed, chatRoleLevels: _spoofedLevels, platform: _reported, ...rest } = sender as TSender & Record<string, unknown>;
+    // Adapters and plugins never set the Runtime's facts: `chatRole`, `chatRoleLevels` and
+    // `chatPrincipal` they supply are dropped (ADR 0060 §2.3).
+    const {
+      chatRole: _spoofed, chatRoleLevels: _spoofedLevels, chatPrincipal: _spoofedPrincipal, platform: _reported, ...rest
+    } = sender as TSender & Record<string, unknown>;
     const platform = conversation.kind === 'private' ? undefined : platformStandingOf(sender);
     const base = { ...rest, ...(platform ? { platform } : {}) } as unknown as TSender;
     const service = options.roles();
@@ -317,11 +423,20 @@ export function createChatRoleSenderEnricher(options: Readonly<{
     const subject = chatRoleMessageContext(snapshot, { conversation, sender: base });
     if (!subject) return Object.freeze(base);
     let entries: readonly ChatRoleEntry[];
+    let principal: string | undefined;
     try {
+      principal = service.principalOf(subject.identity).id;
       entries = service.entriesFor(subject.identity, subject.context.conversationKey);
     } catch { entries = []; }
+    if (options.observe) {
+      try {
+        const name = typeof base.name === 'string' && base.name ? base.name : undefined;
+        options.observe(Object.freeze({ identity: subject.identity, scopeKey: subject.context.conversationKey, ...(name ? { displayName: name } : {}) }));
+      } catch { /* a sighting never breaks a message */ }
+    }
     const role = highest(entries);
-    return Object.freeze({ ...base, ...(role ? { chatRole: role, chatRoleLevels: chatRoleLevelsOf(entries) } : {}) });
+    return Object.freeze({ ...base, ...(principal ? { chatPrincipal: principal } : {}),
+      ...(role ? { chatRole: role, chatRoleLevels: chatRoleLevelsOf(entries) } : {}) });
   };
 }
 
