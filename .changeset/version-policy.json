@@ -20,6 +20,11 @@
       "package": "@zhin.js/host-http",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1253 review）：新增公开类型导出 PluginInspectOptions、PluginDependencyCheck，PluginManagementPort 新增 checkDependencies / inspect options。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：新增公开导出 captureSubTurnTracing / SubTurnTrace / SubTurnTracing / TurnTraceSave / TurnTraceModelSelection，ModelExecutionScope 新增 purpose，ModelDelegationAuthority 可多次 acquire（后台委派结果送达与子回合 trace）。"
     }
   ]
 }

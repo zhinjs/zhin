@@ -19,6 +19,7 @@ import {
 } from '../../media/index.js';
 import { toolRequesterRoleToFileRole } from '../../security/file-role-policy.js';
 import type {
+  DeliveryPort,
   ReplyPort,
   TurnAccessContext,
   TurnOutcome,
@@ -96,6 +97,12 @@ export interface CreateIngressReplyPortInput {
  */
 export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
   readonly port: ReplyPort;
+  /**
+   * Proactive messages to the original conversation after the turn (background
+   * collaboration results, #1250): Runtime outbound port, unified send chain,
+   * never the message's reply scope (which closes with the turn).
+   */
+  readonly delivery: DeliveryPort;
   readonly release: () => void;
 } {
   const {
@@ -279,8 +286,51 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
     },
   };
 
+  const delivery: DeliveryPort = {
+    deliver: async (intent, deliverySignal) => {
+      deliverySignal.throwIfAborted();
+      const outcome = await sendOutputMessages(intent.output, {
+        render: messageOutput => flattenOutputElements([...messageOutput]),
+        send: async (messageOutput) => {
+          if (hooks.outboundBlocked('proactive')) {
+            auditOutbound(audit, { status: 'suppressed' }, { control: true, proactive: true });
+            return { status: 'suppressed' as const };
+          }
+          // No message to react to once the turn ended.
+          if (reactionOf(messageOutput) !== undefined) return { status: 'suppressed' as const };
+          const content = await publishOutboundElements(
+            [...messageOutput],
+            effectiveAdapter || undefined,
+            resolveOutboundCapabilities(effectiveAdapter, platformCapabilities),
+            mediaAuthority,
+          );
+          if (content.length === 0) return { status: 'suppressed' as const };
+          deliverySignal.throwIfAborted();
+          let sent: Awaited<ReturnType<typeof deliveryOutcomeFromReceipt>>;
+          try {
+            sent = deliveryOutcomeFromReceipt(await im.send({
+              conversation: replyConversation,
+              requester,
+              locale: message.locale,
+              content: untrustedContent(content, mediaTrust),
+            }));
+          } catch (error) {
+            auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false }, { proactive: true });
+            throw error;
+          }
+          auditOutbound(audit, sent, { segments: content.length, proactive: true, parentTurnId: intent.parentTurnId });
+          if (sent.status === 'sent') hooks.markSpoke();
+          return sent;
+        },
+      });
+      logger.debug(formatCompact({ op: 'proactive_delivery_outcome', status: outcome.status, sessionKey }));
+      return outcome;
+    },
+  };
+
   return {
     port,
+    delivery,
     release: () => replyOperation?.release(),
   };
 }

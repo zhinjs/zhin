@@ -434,6 +434,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               }),
               question: createRuntimeQuestionPort(im, message),
               reply: replyPort.port,
+              delivery: replyPort.delivery,
             },
           });
           try {

@@ -16,13 +16,16 @@ export type {
   TurnTraceBudgetExtension,
   TurnTraceTimelineEntry,
   TurnTraceTermination,
+  TurnTraceModelSelection,
 } from './turn-trace.js';
 export {
   createTracingJournal,
   createScopedTraceJournal,
   registerTurnTrace,
   noteTurnTrace,
+  captureSubTurnTracing,
 } from './turn-trace-registry.js';
+export type { SubTurnTrace, SubTurnTracing, TurnTraceSave } from './turn-trace-registry.js';
 export {
   DEFAULT_TURN_TRACE_LIMIT,
   createFileTurnTraceStore,

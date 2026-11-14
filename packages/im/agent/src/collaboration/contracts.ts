@@ -16,8 +16,22 @@
  */
 import type { ActorId, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
+import type { ModelExecutionScope } from '../model-runtime/types.js';
 
-/** Model chosen for the root turn; actor turns reuse it. */
+/**
+ * Host-owned model operations for actor turns (#1250): each actor turn opens
+ * its own operation, independent of the root turn's (which closes when the
+ * root turn ends).
+ */
+export interface ActorModelSource {
+  acquire(input: Readonly<{
+    operationId: string;
+    sessionKey: string;
+    signal: AbortSignal;
+  }>): Promise<ModelExecutionScope>;
+}
+
+/** Model chosen for the root turn; actor turns reuse it without an {@link ActorModelSource}. */
 export interface ActorModelSelection {
   readonly modelId: string;
   readonly modelCandidates: readonly string[];

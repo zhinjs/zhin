@@ -87,7 +87,7 @@ export class ModelRuntimeService {
         } }));
       }
       let release: Promise<void> | undefined;
-      return Object.freeze({ chat, ...(summary ? { summary } : {}),
+      return Object.freeze({ chat, purpose, ...(summary ? { summary } : {}),
         ...(perception[0] ? { perception: perception[0] } : {}),
         ...(perception.length > 1 ? { perceptionFallbacks: Object.freeze(perception.slice(1)) } : {}),
         graph: scope.graph, context: scope.context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
@@ -98,22 +98,35 @@ export class ModelRuntimeService {
           scope.signal.throwIfAborted();
           // Synchronous retention precedes any queueing/metadata awaits.
           const retained = input.snapshots.retain(input.lease);
-          let child: Promise<ModelExecutionScope> | undefined;
-          let childScope: ModelExecutionScope | undefined;
+          const children = new Set<Promise<ModelExecutionScope>>();
           let closed: Promise<void> | undefined;
           const close = (): Promise<void> => closed ??= (async () => {
-            try { await child?.catch(() => undefined); await childScope?.release(); }
-            finally { retained.release(); }
+            retained.retirementSignal.removeEventListener('abort', onRetired);
+            try {
+              await Promise.allSettled([...children].map(async child => (await child).release()));
+            } finally { retained.release(); }
           })();
+          // The host bounds the reservation: a retired generation never waits for delegated work.
+          const onRetired = () => { void close().catch(() => undefined); };
+          if (retained.retirementSignal.aborted) onRetired();
+          else retained.retirementSignal.addEventListener('abort', onRetired, { once: true });
           return Object.freeze({
             acquire: (childInput: Parameters<ModelDelegationAuthority['acquire']>[0]) => {
-              if (closed || child) throw new ModelRuntimeError('invalid-context');
-              child = this.#acquire({ lease: retained, snapshots: input.snapshots,
+              if (closed || !retained.active) throw new ModelRuntimeError('invalid-context');
+              const child: Promise<ModelExecutionScope> = this.#acquire({ lease: retained, snapshots: input.snapshots,
                 context: { ...context, operationId: childInput.operationId, sessionKey: childInput.sessionKey,
                   ...(childInput.epoch !== undefined ? { epoch: childInput.epoch } : {}) },
                 bindingName: childInput.bindingName, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
-              }, true).then(acquired => { childScope = acquired; return acquired; });
-              return child.then(acquired => Object.freeze({ ...acquired, release: close }));
+              }, true).then(acquired => {
+                let childRelease: Promise<void> | undefined;
+                return Object.freeze({ ...acquired, release: () => childRelease ??= (async () => {
+                  children.delete(child);
+                  await acquired.release();
+                })() });
+              });
+              children.add(child);
+              void child.catch(() => children.delete(child));
+              return child;
             },
             release: close,
           });

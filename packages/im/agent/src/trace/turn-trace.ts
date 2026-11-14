@@ -67,6 +67,17 @@ export interface TurnTraceToolCall {
   readonly policy?: string;
 }
 
+/** Purpose / profile a (sub-)turn's model was selected through. */
+export interface TurnTraceModelSelection {
+  /** `chat` or `agent:<name>`. */
+  readonly purpose: string;
+  readonly profile_id: string;
+  readonly account_id: string;
+  readonly model: string;
+  /** Selection layer (`default`, `agent`, `session`, …) when known. */
+  readonly source?: string;
+}
+
 export interface TurnTraceBudgetExtension {
   readonly from: number;
   readonly to: number;
@@ -104,6 +115,8 @@ export interface TurnTrace {
   readonly budget: Readonly<{ extensions: readonly TurnTraceBudgetExtension[]; continuations: number }>;
   /** Nested actor turns (`<root>:actor:<actor>:<mail>`). */
   readonly subagents: readonly TurnTrace[];
+  /** Model the turn ran on, when the host selected it for this (sub-)turn (#1250). */
+  readonly model_selection?: TurnTraceModelSelection;
   readonly timeline: readonly TurnTraceTimelineEntry[];
   readonly termination: TurnTraceTermination;
   /** Entries dropped because a bounded list was full. */
@@ -121,7 +134,8 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'last_iteration_nudge'; iteration: number; limit: number }>
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
-  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>;
+  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>
+  | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -166,6 +180,7 @@ export class TurnTraceCollector {
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
+  #modelSelection: TurnTraceModelSelection | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
   #dropped = 0;
@@ -205,6 +220,22 @@ export class TurnTraceCollector {
     this.#children.set(turnId, created);
     this.#addTimeline('subagent_turn', turnId);
     return created;
+  }
+
+  /**
+   * Nests a sub-turn traced by its own collector (a background actor turn that
+   * started inside this turn). Returns false when it cannot be nested any more.
+   */
+  adopt(child: TurnTraceCollector): boolean {
+    if (this.finished || child === this) return false;
+    if (this.#children.has(child.turnId)) return this.#children.get(child.turnId) === child;
+    if (this.#children.size >= MAX_SUBAGENTS) {
+      this.#dropped += 1;
+      return true;
+    }
+    this.#children.set(child.turnId, child);
+    this.#addTimeline('subagent_turn', child.turnId);
+    return true;
   }
 
   /** Finds this collector or a nested one by turn id. */
@@ -259,6 +290,9 @@ export class TurnTraceCollector {
       if (this.#contextBudget) return;
       this.#contextBudget = note.report;
       this.#addTimeline('context_budget', `~${note.report.total_tokens} tokens (fixed ~${note.report.fixed_tokens})`);
+    } else if (note.kind === 'model_selection') {
+      this.#modelSelection = Object.freeze({ ...note.selection });
+      this.#addTimeline('model_selection', `${note.selection.purpose} → ${note.selection.account_id}/${note.selection.model}`);
     } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
@@ -394,6 +428,7 @@ export class TurnTraceCollector {
         continuations: this.#continuations,
       }),
       subagents: Object.freeze([...this.#children.values()].map(child => child.snapshot())),
+      ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),
       dropped: this.#dropped,

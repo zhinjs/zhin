@@ -7,9 +7,13 @@
  * engagement and the turn gets the collaboration tools bound to that Mail.
  * Other agents run as actor turns of the same harness. Delegated work may
  * outlive the turn; its results come back as turns of the entry actor on the
- * session lane, whose replies are delivered to the human through this turn's
- * reply port. Guard escalations are told to the human the same way. Without
- * peers (or outside a Mail turn) nothing is added (D3).
+ * session lane, whose replies are delivered to the human as proactive messages
+ * to the original conversation through the Runtime outbound port (the turn's
+ * `delivery` port): the message's reply scope closes with the root turn.
+ * Guard escalations are told to the human the same way. Actor turns run on
+ * their own model operations (a delegation the host bounds), never on the root
+ * turn's, which closes when the root turn ends (#1250). Without peers (or
+ * outside a Mail turn) nothing is added (D3).
  */
 import type { VenueProjector } from '@zhin.js/core';
 import type {
@@ -19,6 +23,7 @@ import type {
   Mail,
 } from '@zhin.js/harness';
 import { AsyncResource } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
 import type { AgentCore } from '../core/agent-core.js';
 import type { InteractiveRun } from '../core/interactive-run.js';
@@ -33,7 +38,10 @@ import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
 import { currentMailTurn } from './mail-turn-context.js';
 import { createCollaborationTools } from './tools.js';
-import type { ActorModelSelection, CollaborationDirectory } from './contracts.js';
+import type { ActorModelSelection, ActorModelSource, CollaborationDirectory } from './contracts.js';
+import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+import type { ModelDelegationAuthority } from '../model-runtime/types.js';
 
 export { DEFAULT_ENGAGEMENT_BUDGET } from './host-mailbox.js';
 
@@ -103,13 +111,20 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     catalogTools,
   });
   const reply = turn.ports.reply;
+  const background = createBackgroundTeller(turn);
+  // Tools of actor turns can escalate after the root turn ended: its reply scope
+  // is closed then, so the notice goes out as a proactive message instead.
   const tell = async (text: string): Promise<void> => {
-    if (!reply || turn.policy.unattended) return;
-    try {
-      await reply.send([{ type: 'text', content: text }]);
-    } catch (error) {
-      logger.warn(`collaboration reply failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (turn.policy.unattended) return;
+    if (reply) {
+      try {
+        await reply.send([{ type: 'text', content: text }]);
+        return;
+      } catch (error) {
+        logger.debug(`collaboration reply unavailable, delivering proactively: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
+    await background.tell(text, AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
   };
   const onEscalate = async (reason: string): Promise<string> => {
     await tell(`需要你来决定：${reason}`);
@@ -128,6 +143,14 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     await mailTurn.mailbox.recordToolCalled(info);
   };
 
+  const delegation = retainModelDelegation();
+  const models: ActorModelSource | undefined = delegation ? Object.freeze({
+    acquire: (request: Parameters<ActorModelSource['acquire']>[0]) => delegation.acquire({
+      operationId: request.operationId,
+      sessionKey: request.sessionKey,
+      signal: request.signal,
+    }),
+  }) : undefined;
   const runner = createActorTurnRunner({
     host: input.host,
     core: input.core,
@@ -137,6 +160,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     harness: () => harness,
     createTools: createCollaborationTools,
     resolveModel: input.resolveModel,
+    ...(models ? { models } : {}),
     loopHooks: input.loopHooks,
     bootstrapContext: input.bootstrapContext,
     contextFiles: input.contextFiles,
@@ -156,14 +180,16 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
       const result = await runner(actor, batch, signal);
       // The entry actor continuing with delegated results speaks to the human directly.
-      if (actor === directory.entry.name && batch.every((mail) => mail.body.kind === 'result') && result.content?.trim()) {
-        await tell(result.content.trim());
+      if (actor === directory.entry.name && batch.every((mail) => mail.body.kind === 'result')) {
+        await background.deliverResult(result, signal);
       }
       return result;
     }),
     onEscalate: AsyncResource.bind(async (notice: EscalationNotice) => {
-      await tell(`协作已暂停，需要你来决定：${notice.reason}`);
+      await background.tell(`协作已暂停，需要你来决定：${notice.reason}`, AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
     }),
+    // The delegation reservation lives as long as the engagement (the host bounds both).
+    ...(delegation ? { onClosed: () => { void delegation.release().catch(() => undefined); } } : {}),
   });
   const tools = createCollaborationTools(
     { harness, directory, actor: directory.entry.name, mail: root },
@@ -178,4 +204,86 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     async finish() {},
   };
   return Object.freeze(collaboration);
+}
+
+const BACKGROUND_DELIVERY_TIMEOUT_MS = 30_000;
+
+/** Retains the root turn's model operation for actor turns that outlive it; absent outside a model turn. */
+function retainModelDelegation(): ModelDelegationAuthority | undefined {
+  const models = getAgentTurnConfiguration()?.models;
+  if (!models) return undefined;
+  try {
+    return models.retainDelegation();
+  } catch (error) {
+    logger.warn(`collaboration model delegation unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+}
+
+function backgroundFailureNotice(locale: string | undefined): string {
+  return locale?.toLowerCase().startsWith('en')
+    ? 'A background task failed: its result could not be delivered. Please try again.'
+    : '后台任务失败：结果没能发出来，请稍后再试。';
+}
+
+/**
+ * Speaks to the human after the root turn ended: a proactive message to the
+ * original conversation through the turn's `delivery` port (Runtime outbound
+ * port, unified send chain). Falls back to the reply port for hosts without a
+ * delivery port. Never throws.
+ */
+export function createBackgroundTeller(turn: TurnIngress) {
+  const send = async (text: string, signal: AbortSignal): Promise<boolean> => {
+    const output: AgentOutputElement[] = [{ type: 'text', content: text }];
+    try {
+      const delivery = turn.ports.delivery;
+      if (delivery) {
+        const outcome = await delivery.deliver({
+          intentId: randomUUID(),
+          parentTurnId: turn.identity.turnId,
+          target: Object.freeze({ conversation: 'origin' }),
+          output,
+        }, signal);
+        if (outcome.status === 'sent') return true;
+        logger.warn(`collaboration delivery not sent: ${outcome.status}${'code' in outcome ? ` (${outcome.code})` : ''}`);
+        return false;
+      }
+      if (!turn.ports.reply) {
+        logger.warn('collaboration delivery failed: the turn has no delivery port');
+        return false;
+      }
+      await turn.ports.reply.send(output);
+      return true;
+    } catch (error) {
+      logger.warn(`collaboration delivery failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  };
+  const notifyFailure = async (signal: AbortSignal): Promise<void> => {
+    await send(backgroundFailureNotice(turn.input.locale), signal);
+  };
+  return Object.freeze({
+    async tell(text: string, signal: AbortSignal): Promise<void> {
+      if (turn.policy.unattended) return;
+      await send(text, signal);
+    },
+    /** Result of the entry actor continuing with delegated results; a failure still tells the human. */
+    async deliverResult(result: ActorTurnResult, actorSignal: AbortSignal): Promise<void> {
+      if (turn.policy.unattended) return;
+      // Delivery outlives a cancelled actor turn only briefly; the host bounds it.
+      const signal = AbortSignal.any([AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS), ...(actorSignal.aborted ? [] : [actorSignal])]);
+      const content = result.content?.trim();
+      if (result.status === 'completed' && content) {
+        if (await send(content, signal)) return;
+        await notifyFailure(AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
+        return;
+      }
+      if (result.status === 'cancelled') {
+        logger.debug(`background collaboration result cancelled: ${content ?? ''}`);
+        return;
+      }
+      logger.warn(`background collaboration result failed: ${result.status}${content ? ` ${content.slice(0, 200)}` : ''}`);
+      await notifyFailure(signal);
+    },
+  });
 }

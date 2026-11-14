@@ -28,13 +28,26 @@ export interface ModelExecutionCandidate {
 }
 export interface ModelExecutionLease extends ModelExecutionBundle { release(): Promise<void> }
 export type ModelSummarySource = 'runtime' | 'deployment-chat';
-/** A queued child owns this reservation independently of its parent's turn. */
+/**
+ * A queued child owns this reservation independently of its parent's turn.
+ * Each `acquire` opens one child operation (released by its own `release`);
+ * `release` ends the reservation and every child still open. The reservation
+ * also ends when the leased generation retires, so it never holds a reload.
+ */
 export interface ModelDelegationAuthority {
-  acquire(input: Readonly<{ operationId: string; sessionKey: string; epoch?: string; bindingName?: string; signal?: AbortSignal }>): Promise<ModelExecutionScope>;
+  acquire(input: Readonly<{
+    operationId: string;
+    sessionKey: string;
+    epoch?: string;
+    bindingName?: string;
+    signal?: AbortSignal;
+  }>): Promise<ModelExecutionScope>;
   release(): Promise<void>;
 }
 export interface ModelExecutionScope {
   readonly chat: ModelExecutionBundle;
+  /** Purpose `chat` was selected for (`chat` or `agent:<name>`). */
+  readonly purpose?: 'chat' | `agent:${string}`;
   readonly perception?: ModelExecutionCandidate;
   readonly perceptionFallbacks?: readonly ModelExecutionCandidate[];
   readonly summary?: ModelExecutionCandidate;
