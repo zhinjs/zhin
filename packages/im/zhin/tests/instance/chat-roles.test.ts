@@ -101,6 +101,24 @@ describe('chat-roles.* Console RPC', () => {
     expect((await dispatchChatRolesConsoleRpc({ type: 'chat-roles.list', data: { level: 'global' } }, {}))!.status).toBe(403);
   });
 
+  it('labels grantors the instance can name without reading other Console accounts (#1250)', async () => {
+    const { roles } = await service();
+    await roles.store.grant({ level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq', userId: 'other', role: 'trusted', grantedBy: 'user:someone-else' });
+    await roles.store.grant({ level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq', userId: 'chatty', role: 'trusted', grantedBy: 'chat:qq:42' });
+    const context = { roles, actor: 'user:ab068515', actorDisplayName: 'Alice',
+      authorize: (request: { level: string; key?: string }) => principalAllows(scoped, 'iam.manage', featureScopeTarget(request.level, request.key)) };
+    const granted = await dispatchChatRolesConsoleRpc({ type: 'chat-roles.grant', data: { level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq', userId: 'x', role: 'admin' } }, context);
+    expect(granted).toMatchObject({ body: { data: { entry: { grantedBy: 'user:ab068515', grantedByDisplayName: 'Alice' } } } });
+    const listed = (await dispatchChatRolesConsoleRpc({ type: 'chat-roles.list', data: { level: 'conversation', key: 'qq/bot-1/group:1' } }, context))!
+      .body.data as { roles: Record<string, unknown>[] };
+    const byUser = Object.fromEntries(listed.roles.map(entry => [entry.userId, entry]));
+    expect(byUser.x).toMatchObject({ grantedByDisplayName: 'Alice' });
+    expect(byUser.chatty).toMatchObject({ grantedBy: 'chat:qq:42', grantedByDisplayName: 'qq 用户 42' });
+    // Another Console account stays unresolved: the instance never reads the gateway's account store.
+    expect(byUser.other).toMatchObject({ grantedBy: 'user:someone-else' });
+    expect(byUser.other).not.toHaveProperty('grantedByDisplayName');
+  });
+
   it('needs global iam.manage for anything touching owner; scoped callers see inherited entries redacted', async () => {
     const { roles } = await service();
     await roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' });

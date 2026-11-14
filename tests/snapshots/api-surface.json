@@ -40,6 +40,7 @@
     "export type{ImageAssetPublisher,PublishedImage,R2ImageStorageConfig}from './media/image-assets.js';",
     "export type{McpClientConnectionState,McpToolDefinition}from './mcp-client/index.js';",
     "export type{McpConnection,ResourceScope,ResourceEntry,Tool,Message,PrincipalRole,ToolScope,FileRole,ToolParametersSchema,PropertySchema,ToolJsonSchema,Skill,SkillMetadata,SubAgentDef,AgentPreset,McpServerEntry,McpResource,McpPrompt,AIHook,AIHookEvent as OrchestratorHookEvent,AIHookEventType as OrchestratorHookEventType,AIHookHandler as OrchestratorHookHandler,ToolHookDecision,PostToolHookDecision,PreToolUseEvent,PostToolUseEvent,PreToolUseHandler,PostToolUseHandler,PreToolUseHook,PostToolUseHook,ToolHook,}from './resource-hub/index.js';",
+    "export type{McpConnectionFailure,McpConnectionFailureCategory}from './mcp-client/index.js';",
     "export type{MediaPerception,MediaPerceptionPort,PerceptionMediaKind,ResolvedPerceptionConfig}from './media/index.js';",
     "export type{MemoryLayerBudgets,MemoryPromptOptions,MemoryLayersInput,LoadedMemoryLayers,MemoryWriteScope,MemoryWriteDecision,}from './memory-layers.js';",
     "export type{ModelHarnessRow,ResolvedModelHarness,ModelHarnessConfig}from './config/model-harness.js';",
