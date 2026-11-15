@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type {
   GatewayAuthorizedPackage,
   GatewayInstalledPackage,
@@ -391,10 +392,15 @@ export class GatewayPackageService {
     });
   }
 
-  /** Exact versions go through the workflow (verified); bare names / `'all'` run the manager's update. */
+  /**
+   * Exact versions go through the workflow (verified); bare names / `'all'` run the manager's update.
+   * In a pnpm workspace (`pnpm-workspace.yaml` lists `packages`) the manager's update runs with `-r`,
+   * so local workspace packages (e.g. `plugins/*`) move with the root (#1250).
+   */
   update(packages: readonly unknown[] | 'all', options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
     return this.#transaction('update', packages, options, async (ctx, authorized) => {
-      if (packages === 'all') { await ctx.run(['update']); return; }
+      const recursive = await isPnpmWorkspace(this.#root) ? ['-r'] : [];
+      if (packages === 'all') { await ctx.run(['update', ...recursive]); return; }
       const ranged = authorized.filter(item => item.version === undefined).map(item => item.name);
       for (const item of authorized) {
         if (item.version === undefined) continue;
@@ -402,7 +408,7 @@ export class GatewayPackageService {
         if (declared) await ctx.workflow.update(item.name, item.version);
         else await ctx.workflow.install(item.spec, undefined, undefined, { enable: false });
       }
-      if (ranged.length) await ctx.run(['update', ...ranged]);
+      if (ranged.length) await ctx.run(['update', ...recursive, ...ranged]);
     });
   }
 
@@ -735,4 +741,14 @@ export function installedPackageKind(zhin: unknown): GatewayInstalledPackageKind
   if (!zhin || typeof zhin !== 'object' || Array.isArray(zhin)) return 'library';
   const type = (zhin as { type?: unknown }).type;
   return type === 'plugin' ? 'plugin' : type === 'feature' ? 'feature' : 'library';
+}
+
+/** Whether `root` is a pnpm workspace with member packages (`pnpm-workspace.yaml#packages` non-empty). */
+async function isPnpmWorkspace(root: string): Promise<boolean> {
+  try {
+    const parsed = parseYaml(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8')) as { packages?: unknown } | null;
+    return Array.isArray(parsed?.packages) && parsed.packages.some(entry => typeof entry === 'string' && entry.trim() !== '');
+  } catch {
+    return false;
+  }
 }

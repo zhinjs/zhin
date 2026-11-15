@@ -15,7 +15,7 @@ import {
   type InferenceProbeResult,
 } from '@zhin.js/agent/runtime';
 import { join } from 'node:path';
-import { registerInferenceRoutes } from '../../../src/instance/inference/routes.js';
+import { createConnectionTestLimiter, registerInferenceRoutes } from '../../../src/instance/inference/routes.js';
 import { installTestConsoleUsers } from '../utils/console-users.js';
 import { setupInferenceManagement } from './fixtures.js';
 
@@ -263,4 +263,31 @@ it('rate-limits connection tests per account: 6 per minute across /account/test 
     now += 30_000;
     expect((await f.call('/account/test', { accountId: 'account' }, 'owner')).status).toBe(200);
   } finally { await f.close(); }
+});
+
+it('counts only existing profiles on /probe: unknown ids are never rate-limited keys (#1250 b15)', async () => {
+  const f = await setup();
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      expect((await f.call('/probe', { profileId: `missing-${index}` }, 'owner')).status).not.toBe(429);
+    }
+    // The real account still has its whole budget.
+    for (let index = 0; index < 6; index += 1) expect((await f.call('/probe', { profileId: 'profile' }, 'owner')).status).toBe(200);
+    expect((await f.call('/probe', { profileId: 'profile' }, 'owner')).status).toBe(429);
+  } finally { await f.close(); }
+});
+
+it('bounds the connection-test limiter: beyond maxKeys the key with the oldest test is dropped (#1250 b15)', () => {
+  let now = 0;
+  const limit = createConnectionTestLimiter({ limit: 1, windowMs: 60_000, maxKeys: 2, now: () => now });
+  limit('a');
+  now += 1;
+  limit('b');
+  now += 1;
+  expect(() => limit('a')).toThrow('Connection test rate limited');
+  limit('c'); // the map is full: `a` (last test at 0) is dropped
+  now += 1;
+  // `a` was dropped, so it may be tested again (dropping `b` now); `c` is still tracked.
+  expect(() => limit('a')).not.toThrow();
+  expect(() => limit('c')).toThrow('Connection test rate limited');
 });

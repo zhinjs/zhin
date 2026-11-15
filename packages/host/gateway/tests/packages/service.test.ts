@@ -358,6 +358,19 @@ describe('GatewayPackageService transactions', () => {
     expect(instance.calls.filter(call => call === 'start')).toHaveLength(5);
   });
 
+  it('updates every workspace package (-r) when pnpm-workspace.yaml lists packages (#1250)', async () => {
+    const calls: string[][] = [];
+    const packages = service({ pm: fakePackageManager({ calls }) });
+    // Settings only (no packages): not a multi-package workspace.
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'allowBuilds:\n  esbuild: true\n');
+    await packages.update('all', { principal: owner });
+    await writeFile(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    await packages.update('all', { principal: owner });
+    await packages.update(['zod'], { principal: owner });
+    expect(calls.map(call => call.join(' '))).toEqual(['update', 'update -r', 'update -r zod']);
+    await rm(join(root, 'pnpm-workspace.yaml'), { force: true });
+  });
+
   it('passes removeDependency: false to the workflow on uninstall', async () => {
     const seen: unknown[] = [];
     const workflow: PackageWorkflowPort = {

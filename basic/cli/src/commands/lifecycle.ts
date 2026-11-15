@@ -32,6 +32,8 @@ import {
 } from '../utils/gateway.js';
 import { getProcessStatus, stopProcess } from '../utils/process.js';
 import { describeForegroundGatewayRestart, detectProcessManager, readProcessContext } from '../utils/process-manager.js';
+import { formatGatewayVersionSkew, gatewayVersionSkew, installedGatewayVersion } from '../utils/gateway-version.js';
+import { readRuntimeState, renderRuntimeState, runtimeStateUnavailable } from '../utils/runtime-state.js';
 import { runtimeCommand } from './runtime.js';
 
 /**
@@ -160,22 +162,35 @@ export const restartCommand = new Command('restart')
   });
 
 export const statusCommand = new Command('status')
-  .description('查看网关与实例状态（网关未运行时退出码为 3）')
-  .option('--json', '以 JSON 输出')
-  .addHelpText('after', '\nExit codes:\n  0  网关正在运行（实例状态见输出）\n  1  查询失败\n  3  网关未运行（LSB「program is not running」）')
+  .description('查看网关、实例、适配器账号、MCP 服务与待处理事项（网关未运行时退出码为 3）')
+  .option('--json', '以 JSON 输出（含 endpoints、mcp、attention；读取失败的项为 { available: false, error }）')
+  .addHelpText('after', '\nExit codes:\n  0  网关正在运行（实例与运行状态见输出；读不到的运行状态显示「无法读取」）\n  1  查询失败\n  3  网关未运行（LSB「program is not running」）')
   .action(async (options: { json?: boolean }) => {
     const { root } = target();
     try {
       const running = await probeGateway({ root });
       // ADR 0060 §3.3: the claim code of the running instance (only while there is no chat owner).
       const claim = running?.instance.state === 'running' ? await readChatOwnerClaim(root, running.instance) : undefined;
+      // #1250: accounts, MCP servers and the attention inbox over the local socket, each with a deadline.
+      const runtime = running
+        ? running.instance.state === 'running' ? await readRuntimeState(root) : runtimeStateUnavailable('实例未运行')
+        : undefined;
+      const installedVersion = running ? installedGatewayVersion(root) : undefined;
+      const skew = running ? gatewayVersionSkew(running.gateway, installedVersion) : undefined;
       if (options.json) {
         process.stdout.write(`${JSON.stringify(running
-          ? { gateway: { running: true, ...running.gateway }, instance: running.instance, consoleInitialized: running.consoleInitialized,
-            ...(claim ? { chatOwnerClaim: { code: claim.code, createdAt: claim.createdAt } } : {}) }
+          ? { gateway: { running: true, ...running.gateway, ...(installedVersion ? { installedVersion } : {}), ...(skew ? { versionSkew: skew } : {}) },
+            instance: running.instance, consoleInitialized: running.consoleInitialized,
+            ...(claim ? { chatOwnerClaim: { code: claim.code, createdAt: claim.createdAt } } : {}),
+            endpoints: runtime!.endpoints, mcp: runtime!.mcp, attention: runtime!.attention }
           : { gateway: { running: false }, instance: null }, null, 2)}\n`);
       } else if (running) {
-        process.stdout.write(`${[...renderStatus(running), ...(claim ? renderChatOwnerClaim(claim) : [])].join('\n')}\n`);
+        process.stdout.write(`${[
+          ...renderStatus(running),
+          ...(skew ? formatGatewayVersionSkew(skew) : []),
+          ...renderRuntimeState(runtime!),
+          ...(claim ? renderChatOwnerClaim(claim) : []),
+        ].join('\n')}\n`);
       } else {
         process.stdout.write('网关：未运行（zhin start 启动）\n');
       }
@@ -262,9 +277,31 @@ export const updateCommand = new Command('update')
     const request = { operation: 'update' as const, packages: packages.length ? packages : 'all' as const };
     try {
       const running = await probeGateway({ root });
+      const before = installedGatewayVersion(root);
       const result = running
         ? await runPackageOperationViaGateway({ root }, request)
         : await runPackageOperationDirect({ root }, request);
       if (!result.ok) process.exitCode = 1;
+      for (const line of updateGatewayNotice(running?.gateway, before, installedGatewayVersion(root))) process.stdout.write(`${line}\n`);
     } catch (error) { fail(error); }
   });
+
+/**
+ * What `zhin update` says about the gateway afterwards (#1250): the update replaced
+ * `@zhin.js/gateway` but the running gateway keeps its old code until it is restarted. Without a
+ * running gateway the next `zhin start` simply loads the new version.
+ */
+export function updateGatewayNotice(
+  gateway: Readonly<{ pid: number; mode: 'foreground' | 'daemon'; version: string }> | undefined,
+  before: string | undefined,
+  after: string | undefined,
+): string[] {
+  if (!after || before === after) {
+    // Unchanged package; a gateway already behind the installed one still needs the restart.
+    const skew = gateway ? gatewayVersionSkew(gateway, after) : undefined;
+    return skew ? formatGatewayVersionSkew(skew) : [];
+  }
+  if (!gateway) return [`@zhin.js/gateway：${before ?? '未安装'} → ${after}；下次 zhin start 会使用新版本`];
+  const skew = gatewayVersionSkew(gateway, after);
+  return skew ? [`@zhin.js/gateway：${before ?? '未安装'} → ${after}`, ...formatGatewayVersionSkew(skew)] : [];
+}
