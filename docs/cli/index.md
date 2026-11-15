@@ -45,6 +45,8 @@ npx zhin --help        # 查看全部命令
 
 下面按用途分组列出全部命令。
 
+命令输出里的日期时间一律是本机时区的 `2026-11-15 00:15:56`（24 小时制，只有日期时为 `2026-11-15`），中英文界面相同：ISO 顺序在各地都不会读错，也能按文本排序，与 `zhin usage report` 的日期一致。
+
 ## 运行
 
 ### start / stop / restart / status / logs：网关与实例
@@ -155,7 +157,7 @@ zhin console user create <用户名> [--role viewer] [--display-name <显示名>
 zhin console user passwd <用户名> [--password-stdin]
 zhin console user disable <用户名>
 zhin console user enable <用户名>
-zhin console user list
+zhin console user list [--json]
 zhin console migrate [--revert]
 ```
 
@@ -167,7 +169,7 @@ Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
-- **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
+- **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户名、显示名、状态、角色绑定和**用户 id**（`ai.personalPrincipals` 的键写 `user:<用户 id>`），`--json` 输出 `{ users: [{ id, username, displayName, disabled, roles }] }`。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
 - **`init --reset-store`**：`.zhin/gateway.db` 丢失或被替换（项目数据库的标记 `zhin_gateway_store` 指向另一个 store）时 Console 保持关闭；确认放弃原有账号后用它重置（需先 `zhin stop`，会要求确认，`--yes` 跳过），重置记入新的审计日志，然后继续初始化。
 - **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。
 - `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
@@ -582,12 +584,14 @@ zhin schedule resume <id>
 需要安装 AI 栈（`@zhin.js/agent` + `zod` + `ai`）。
 
 ```bash
-zhin agent info [--json]
+zhin agent info [--json] [--locale zh-CN|en]
 ```
 
 | 命令 | 作用 |
 | --- | --- |
-| `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
+| `info` | 按来源列出 Agent 能力与命名 Agent（工具、技能、Hook 等）：**项目根目录**的约定目录（`tools/`、`skills/`、`agents/*/tools` …，即应用插件本身）、**本地插件**（`plugins/`）与**已安装的插件**（`node_modules` 中带 `package.json#zhin` 清单的包）。合计行之下给出每个来源的包数、工具数与技能数；`--json` 的 `bySource` 是同样的分组。框架内置工具与 MCP 工具不是项目文件，不在统计内，运行时实际可用的工具数看 `zhin trace` |
+
+输出语言取项目的 `locale`（`zhin.config.yml` 根级，默认中文），`--locale` 可临时指定；帮助文字为中英双语。
 
 ### ai account：引用 Host 环境变量的模型账号 {#ai-account}
 
@@ -618,7 +622,7 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 | 选项 | 作用 |
 | --- | --- |
-| `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数 |
+| `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数。会话显示为与 `zhin usage report` 相同的可读名称加短键（如 `sandbox · 私聊 Developer（personal-session:ab12cd34）`），没有记录来源时显示短键；`--json` 保留完整的 `session_key`，并加上 `session_display_name` |
 | `--sessions` | 每个会话一行：回合数、最近一次时间与状态、累计 token |
 | `--engagements` | 改为读取多 Agent 协作记录（数据库 `engagement_events` 表，需要 SQLite、MySQL 或 PostgreSQL）：配合 `--list` 列出最近的协作，否则显示最近一次或指定协作的参与者、消息跳数、黑板与预算。见[多 Agent 协作与场所](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | 只看这个会话（sessionKey），会自动按列表输出 |

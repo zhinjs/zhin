@@ -28,7 +28,8 @@ import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime
 import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { turnModelPortToken } from '../model-runtime/turn-resource.js';
-import { traceModelFallback, turnUsageTarget } from '../model-runtime/purpose-fallback.js';
+import { traceModelFallback, traceModelSelection, turnUsageTarget } from '../model-runtime/purpose-fallback.js';
+import { specialistModelKey } from './inference/targets.js';
 import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -334,7 +335,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
-      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) });
+      // A turn routed to a specialist runs on its `agent:<key>` purpose (#1250 agent-purpose-binding-ignored).
+      const specialist = specialistModelKey(lease.value, selection.agent);
+      models = await modelPort?.acquire({ request, binding: selection.binding, ...(specialist ? { agent: specialist } : {}),
+        lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) });
       if (models) {
         mediaPerception = modelPort?.createPerception?.(models, request);
         // One provider id per request everywhere (trace, model_calls, ai.usage, usage rows): the service id (#1250).
@@ -377,6 +381,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         save: snapshot => { void this.options.turnTraceStore?.save(snapshot).catch(() => undefined); },
       }) : undefined;
       activeTrace = trace;
+      if (trace && models) trace.note({ kind: 'model_selection', selection: traceModelSelection(models, specialist) });
       // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the turn trace.
       // Usage rows record the Profile that actually answered.
       models?.observeModelFallback?.(event => {

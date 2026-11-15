@@ -496,14 +496,29 @@ export const consoleUserActions = {
       io.log(`${user.username} 已${disabled ? '禁用' : '启用'}`);
     });
   },
-  async list(projectRoot: string, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin) {
+  /**
+   * Lists the users with their id (`ai.personalPrincipals` keys are `user:<id>`, #1250); `--json`
+   * prints `{ users: [{ id, username, displayName, disabled, roles }] }`.
+   */
+  async list(projectRoot: string, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin, options: Readonly<{ json?: boolean }> = {}) {
     return withProject(projectRoot, open, io, async users => {
       const all = await users.list();
-      if (!all.length) io.log('（还没有用户，运行 zhin console init 初始化）');
-      for (const user of all) {
-        const roles = user.bindings.map(binding => binding.scope.kind === 'global' ? binding.role : `${binding.role}@${binding.scope.kind}:${binding.scope.key}`);
-        io.log(`${user.username}\t${user.displayName}\t${user.disabled ? 'disabled' : 'enabled'}\t${roles.join(',') || '-'}`);
+      const rolesOf = (user: ConsoleUserView) => user.bindings.map(binding => binding.scope.kind === 'global' ? binding.role : `${binding.role}@${binding.scope.kind}:${binding.scope.key}`);
+      if (options.json) {
+        io.log(JSON.stringify({ users: all.map(user => ({ id: user.id, username: user.username, displayName: user.displayName,
+          disabled: user.disabled, roles: rolesOf(user) })) }, null, 2));
+        return;
       }
+      if (!all.length) {
+        io.log('（还没有用户，运行 zhin console init 初始化）');
+        return;
+      }
+      io.log('用户名\t显示名\t状态\t角色\t用户 id');
+      for (const user of all) {
+        io.log(`${user.username}\t${user.displayName}\t${user.disabled ? '已禁用' : '启用'}\t${rolesOf(user).join(',') || '-'}\t${user.id}`);
+      }
+      io.log('');
+      io.log('需要用户 id 的地方（如 ai.personalPrincipals 的键）写 user:<用户 id>。');
     });
   },
 };
@@ -670,9 +685,11 @@ userCommand.command('disable <username>').description('禁用用户').action(asy
 userCommand.command('enable <username>').description('启用用户').action(async (username: string) => {
   finish(await consoleUserActions.setDisabled(process.cwd(), username, false));
 });
-userCommand.command('list').description('列出用户').action(async () => {
-  finish(await consoleUserActions.list(process.cwd()));
-});
+userCommand.command('list').description('列出用户（含用户 id）')
+  .option('--json', '以 JSON 输出（供脚本使用）')
+  .action(async (raw: { json?: boolean }) => {
+    finish(await consoleUserActions.list(process.cwd(), defaultConsoleCliIo, openConsoleAdmin, { json: raw.json === true }));
+  });
 
 const migrateCommand = new Command('migrate')
   .description('把旧版存在项目数据库里的 Console 账号表迁入 .zhin/gateway.db（ADR 0059；网关启动时也会自动执行）')

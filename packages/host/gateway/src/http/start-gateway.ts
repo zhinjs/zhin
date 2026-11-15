@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
+import { personalPrincipalKeyHints, personalPrincipalKeysOf } from '../iam/personal-principal-keys.js';
 import { projectIdentity } from '../project/identity.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
@@ -228,6 +229,10 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       // store marker is there (normally written at connect time already).
       let markerChecked = false;
       supervisor.on('state', (status: { readonly state: string }) => {
+        if (status.state === 'running') {
+          const started = gatewayConsole;
+          if (started) void reportPersonalPrincipalKeys(options.projectRoot, started);
+        }
         if (markerChecked || status.state !== 'running') return;
         markerChecked = true;
         void gatewayConsole?.ensureStoreMarker();
@@ -281,6 +286,27 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       return closeResult;
     },
   });
+}
+
+/**
+ * `ai.personalPrincipals` keys that name no Console user: the instance cannot tell which id was
+ * meant (it never reads gateway.db), so the gateway suggests the key (#1250). The suggestion names
+ * Console users, so it goes to the **gateway's own** log (its stderr in the foreground,
+ * `.zhin/logs/gateway.log` in the background), never into the instance log, which Console users
+ * holding `status.view` can read. Best effort; never fails the start.
+ */
+async function reportPersonalPrincipalKeys(projectRoot: string, gatewayConsole: GatewayConsole): Promise<void> {
+  try {
+    const file = findConfigFile(projectRoot);
+    if (!file) return;
+    const keys = personalPrincipalKeysOf((await createConfigDocument(join(projectRoot, file)).read()).document);
+    if (!keys.length) return;
+    const iam = gatewayConsole.iam();
+    if (!iam) return;
+    for (const hint of personalPrincipalKeyHints(keys, await iam.listUsers())) logger.warn(hint);
+  } catch {
+    // The Console store may not be open yet; the next start reports it.
+  }
 }
 
 /** Thrown when the gateway would serve an open Host on a network address. */

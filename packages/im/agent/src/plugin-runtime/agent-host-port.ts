@@ -24,6 +24,12 @@ export interface AgentHostPort {
  */
 export interface AgentHostProtocolPort {
   listBindings(): readonly ResolvedAgentBinding[];
+  /**
+   * Names configured under `ai.agents` (`zhin` included), without names only discovered from
+   * `agents/<name>/` files: the binding names the model runtime keeps sub-agents' purpose keys
+   * apart from (#1250 batch 21). Management views use it to report what the runtime does.
+   */
+  listConfiguredBindingNames?(): readonly string[];
   execute(bindingName: string, request: TurnRequest): Promise<TurnOutcome>;
 }
 

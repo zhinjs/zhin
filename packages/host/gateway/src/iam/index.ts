@@ -31,6 +31,7 @@ export {
   type SetupEnvFilePort,
   type SetupStatus,
 } from './setup-service.js';
+export { personalPrincipalKeyHints, personalPrincipalKeysOf } from './personal-principal-keys.js';
 export { defineConsoleIamTables, IAM_TABLE_DEFINITIONS, IAM_TABLES, type IamTableHost } from './tables.js';
 export {
   importLegacyIamTables,

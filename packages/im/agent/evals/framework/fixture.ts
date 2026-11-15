@@ -376,6 +376,13 @@ export interface EvalCase {
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   /**
+   * Model purposes (#1250 agent-purpose-binding-ignored), by model id of the scripted service (`scripted-model` or
+   * one of `models`): a sub-agent binding (`agents.<key>`, Console 用途 → Agent) and an adapter chat override for
+   * the eval platform (`adapterChat`, `purposes.adapters.eval.chat`). The turn context carries the adapter key as
+   * Host ingress does for an IM conversation.
+   */
+  readonly purposes?: Readonly<{ agents?: Readonly<Record<string, string>>; adapterChat?: string }>;
+  /**
    * Session ops written before the first turn, as an operator would via Console
    * (`AiSessionOps.set`, ADR 0037). E.g. `{ defaults: { ops: { cooldownMs: 0 } } }`
    * turns off the group-ops approval cooldown (slice E) for a case that is not about it.

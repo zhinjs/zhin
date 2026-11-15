@@ -22,7 +22,7 @@
     "export type{AgentOutputElement}from './outbound/agent-output.js';",
     "export type{AgentPromptSectionDefinition,AgentPromptSectionInput,PromptProfile,PromptSectionDescriptor,PromptSectionLayer,PromptSectionRetention,}from '@zhin.js/prompt-section';",
     "export type{AgentRole,AgentRoleConfig,}from './resource-hub/role-configs.js';",
-    "export type{AgentSurfaceInfoReport,AgentSurfacePluginInfo,AgentSurfaceWorkspaceAgentInfo,}from './discovery/agent-surface-info.js';",
+    "export type{AgentSurfaceCounts,AgentSurfaceInfoReport,AgentSurfacePluginInfo,AgentSurfaceSource,AgentSurfaceWorkspaceAgentInfo,}from './discovery/agent-surface-info.js';",
     "export type{AgentTurnConfiguration,AgentTurnRequest}from './zhin-agent/index.js';",
     "export type{AgentsInstructionEntry}from './context/agents-instruction.js';",
     "export type{AiCompletion,AiCompletionInput,AiCompletionResult,AiCompletionUntrustedInput,AiCompletionUsageShare,UsageSubject,}from './plugin-runtime/ai-completion.js';",

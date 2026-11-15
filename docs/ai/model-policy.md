@@ -94,6 +94,20 @@ purposes:
 
 聊天解析顺序是：**个人 Session 明确选择 > 场景 > Endpoint > Adapter > 部署聊天**。角色任务使用明确的 `agents.<name>` Profile；选择 Host 角色模型不把私人调用者提升成 Host 管理员。
 
+### 子 Agent 的模型优先级
+
+`ask` / `delegate` / `follow_up` 拉起的子 Agent 回合按下面的顺序选模型（#1250）：
+
+1. **子 Agent 绑定**：生效的 `purposes.agents.<key>`（Console「用途 → Agent」）。先按插件限定名 `<插件>__<agent>` 找，再按裸名找（裸名只在没有别的子 Agent 同名、也没有同名 Agent 绑定时生效）。项目自己的 `agents/<name>/` 与同名的 `ai.agents.<name>` 是同一个 Agent，`purposes.agents.<name>` 对它生效；插件里同名的子 Agent 不会拿到绑定的键，请用限定名配置。
+2. **适配器 / Endpoint / 场景的聊天覆盖**（以及个人 Session 的明确选择）：只在子 Agent 没有生效的绑定时才用，顺序同上面的聊天解析顺序。
+3. **部署聊天**（`purposes.chat`）。
+
+也就是说，给子 Agent 显式绑定的模型优先于 `purposes.adapters.<adapter>.chat` 等渠道级覆盖；汇总回合（入口 Agent 继续处理结果）沿用主回合的用途。
+
+**被路由到的专家 Agent 同样适用**：消息被路由给某个专家 Agent 时（`@planner …`、Endpoint 的首选 Agent、声明了该平台的 Agent），这一轮的入口 Agent 就是它。主回合和它这次协作里的汇总回合按它的 `purposes.agents.<key>` 选模型；它没有生效的键时沿用绑定的用途（`zhin` 即聊天）。
+
+回合与子回合 trace 的 `model_selection` 写出实际用的用途（`purpose`）、Profile、选中这一层（`source`：`agent` / `adapter` / `endpoint` / `scene` / `session` / `default`）及其键（`source_key`），以及查了哪个 Agent 的键（`agent`）。`agent` 有值而 `purpose` 是 `chat`，表示这个 Agent 没有生效的绑定。Console 的「用途效果」与提醒按同一规则判断某个键是否生效。
+
 可覆盖范围固定：
 
 | 层级 | 可选择的用途 |

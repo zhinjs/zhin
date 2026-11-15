@@ -1,4 +1,5 @@
 /** `zhin watch` 纯函数（可单测） */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 
 export interface WatchProcessMemory {
   rss?: number;
@@ -141,7 +142,7 @@ export function formatJobSchedule(schedule: Record<string, unknown> | undefined)
     return `every ${Math.round(ms / 1000)}s`;
   }
   if (kind === 'at' && schedule.atMs != null) {
-    return `at ${new Date(Number(schedule.atMs)).toISOString().slice(0, 16).replace('T', ' ')}`;
+    return `at ${formatDateTime(Number(schedule.atMs)).slice(0, 16)}`;
   }
   if (kind === 'event') {
     const src = schedule.source ? String(schedule.source) : 'event';
@@ -196,7 +197,7 @@ export function renderWatchText(options: {
   error?: string;
 }): string {
   const lines: string[] = [];
-  const ts = options.fetchedAt.toLocaleTimeString('zh-CN', { hour12: false });
+  const ts = formatDateTime(options.fetchedAt, undefined, { part: 'time' });
   lines.push(`Zhin watch  ${options.baseUrl}  @ ${ts}`);
   lines.push('─'.repeat(72));
 

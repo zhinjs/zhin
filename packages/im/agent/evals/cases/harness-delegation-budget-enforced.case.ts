@@ -2,6 +2,9 @@ import { defineEvalCase } from '../framework/index.js';
 
 // ADR 0048 §3.4 invariant 2: a delegation is funded from the delegator's remaining budget; the
 // delegatee cannot exceed its grant. The branch ends budget_exceeded and still reports back.
+// The one-call grant comes from researcher's author configuration (`collaboration.budget`), which
+// the delegation budget floor never raises; a budget the model itself writes into `ask` is
+// raised to one complete answer (#1250 batch 21, owner decision), see harness-delegation-budget-floor.
 export default defineEvalCase({
   id: 'harness-delegation-budget-enforced',
   description: 'A delegatee granted one model call is stopped after it, and the delegator still answers the human.',
@@ -9,11 +12,12 @@ export default defineEvalCase({
   tags: ['collaboration', 'long-task', 'quota'],
   inbound: { text: '让 researcher 把所有版本的发布日期都查一遍', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'lookup_docs', result: 'v1: 2024-01' }],
-  agents: [{ name: 'researcher', description: 'Looks things up; read-only.', tools: ['lookup_docs'] }],
+  agents: [{ name: 'researcher', description: 'Looks things up; read-only.', tools: ['lookup_docs'],
+    collaboration: { budget: { modelCalls: 1 } } }],
   // The entry agent blocks on `ask`. researcher is granted one model call, which its first request spends; the
   // second step is a trap that must never be requested (the follow-up after the tool result is over budget).
   script: [
-    { toolCalls: [{ name: 'ask', args: { agent: 'researcher', question: 'List the release date of every version.', budget: { modelCalls: 1 } } }] },
+    { toolCalls: [{ name: 'ask', args: { agent: 'researcher', question: 'List the release date of every version.' } }] },
     { actor: 'researcher', toolCalls: [{ name: 'lookup_docs', args: { query: 'v1 release' } }] },
     { actor: 'researcher', toolCalls: [{ name: 'lookup_docs', args: { query: 'v2 release' } }] },
     { text: 'researcher 的预算用完了，只查到 v1 是 2024 年 1 月发布的，要继续查吗？' },

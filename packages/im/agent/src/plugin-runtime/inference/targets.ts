@@ -12,6 +12,7 @@ import {
 import type { StructuredDatabase } from '@zhin.js/database';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { inferencePolicyKeys } from './turn-context.js';
+import type { SubAgentModelKey } from '../../model-runtime/types.js';
 
 export interface InferenceEndpointAddress {
   readonly rootId: string;
@@ -36,8 +37,9 @@ export interface InferenceTargets {
   /**
    * Sub-agents (`agents/<name>/` of plugins) a `purposes.agents.<key>` model choice can name (#1270).
    * `qualifiedName` (`<plugin>__<agent>`) always works; `kind` says whether the bare `name` does too:
-   * `bare` (unique and no binding uses it), `shared` (several sub-agents have it) or `binding`
-   * (an Agent binding has that name, so the key belongs to the binding).
+   * `bare` (unique and no binding uses it, or the project's own sub-agent, whose qualified name is
+   * the bare name), `shared` (several sub-agents have it) or `binding` (an Agent binding has that
+   * name, so the key belongs to the binding).
    */
   readonly subAgents: readonly SubAgentTarget[];
   readonly adaptersAvailable: boolean;
@@ -74,7 +76,11 @@ export interface AgentPurposeTargets {
 /** Reads the binding names and the sub-agent list of `snapshot`; empty lists when the Agent is absent. */
 export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurposeTargets {
   const agentHost = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as AgentHostPort | undefined;
-  const bindingNames = ['zhin', ...(agentHost?.protocol.listBindings().map(binding => binding.name) ?? [])];
+  // The runtime's binding names (configured `ai.agents` only, #1250 batch 21): a name merely
+  // discovered from `agents/<name>/` is a sub-agent, and its key must not read as a binding's.
+  const configured = agentHost?.protocol.listConfiguredBindingNames?.()
+    ?? agentHost?.protocol.listBindings().map(binding => binding.name) ?? [];
+  const bindingNames = ['zhin', ...configured];
   const index = snapshot.projections.get(agentFeatureId);
   const descriptors = isAgentIndex(index) ? index.list() : [];
   const counts = new Map<string, number>();
@@ -84,10 +90,30 @@ export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurpose
     .map((agent): SubAgentTarget => Object.freeze({
       qualifiedName: agent.qualifiedName,
       name: agent.name,
-      kind: bindings.has(agent.name) ? 'binding' : (counts.get(agent.name) ?? 0) > 1 ? 'shared' : 'bare',
+      // The project's own sub-agent: its qualified name is the bare name, which always reaches it
+      // (an `ai.agents.<name>` binding of that name is the same agent, #1250 batch 21).
+      kind: agent.qualifiedName === agent.name && agent.name !== 'zhin' ? 'bare'
+        : bindings.has(agent.name) ? 'binding' : (counts.get(agent.name) ?? 0) > 1 ? 'shared' : 'bare',
     }))
     .sort((a, b) => (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0));
   return Object.freeze({ bindingNames: Object.freeze([...new Set(bindingNames)]), subAgents: Object.freeze(subAgents) });
+}
+
+/**
+ * `purposes.agents` lookup key of the specialist a turn was routed to (`selection.agent`: its
+ * qualified name, or a bare name), from the generation's agent list (#1250 agent-purpose-binding-ignored).
+ * `undefined` when no agent of that name is listed: the turn is then the binding itself (e.g. a
+ * configured `ai.agents.support` run through `protocol.execute`) and runs on the binding's purpose.
+ */
+export function specialistModelKey(snapshot: RuntimeSnapshot, agent: string | undefined): SubAgentModelKey | undefined {
+  const selected = agent?.trim();
+  if (!selected || selected === 'zhin') return undefined;
+  const index = snapshot.projections.get(agentFeatureId);
+  const descriptors = isAgentIndex(index) ? index.list() : [];
+  const found = descriptors.find(item => item.qualifiedName === selected) ?? descriptors.find(item => item.name === selected);
+  if (!found) return undefined;
+  const shared = descriptors.filter(item => item.name === found.name).length > 1;
+  return Object.freeze({ name: found.name, qualifiedName: found.qualifiedName, ...(shared ? { bareNameShared: true } : {}) });
 }
 
 export type InferenceTargetsReader = (page?: InferenceTargetPage) => Promise<InferenceTargets>;
