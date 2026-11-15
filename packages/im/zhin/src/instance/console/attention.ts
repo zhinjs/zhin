@@ -8,6 +8,7 @@
  * | `endpoint.offline` | Endpoint registry (offline, not stopped, no login task; or start `failed` / `retrying`, with `lastError`) | `endpoint.view` on that account |
  * | `endpoint.config-drift` | `zhin.config.yml` `endpoints` vs persisted accounts (#1250) | `endpoint.view` on that adapter instance |
  * | `plugin.error` / `plugin.config` | plugin management `inspect` of declared plugins | `feature.view` |
+ * | `command.conflict` | Command index routes skipped because another registration holds them (#1250) | `feature.view` |
  * | `plugin.dependencies` | one project-wide dependency graph check per read (one item, not one per plugin) | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
@@ -196,6 +197,26 @@ export interface AttentionIneffectiveConfig {
   readonly agents?: readonly string[];
 }
 
+/** One side of a command route conflict (#1250); mirrors `CommandRouteClaimant` of `@zhin.js/command`. */
+export interface AttentionCommandClaimant {
+  /** Plugin instance key. */
+  readonly plugin: string;
+  /** Command display name. */
+  readonly command: string;
+  /** Plugin-local path, as `disabledCommands` takes it. */
+  readonly localPath: string;
+  readonly kind: 'command' | 'alias' | 'shortcut';
+  /** Alias or shortcut text. */
+  readonly entry?: string;
+}
+
+/** A command route two registrations claim: `skipped` lost it, `kept` holds it (#1250). */
+export interface AttentionCommandConflict {
+  readonly route: string;
+  readonly skipped: AttentionCommandClaimant;
+  readonly kept: AttentionCommandClaimant;
+}
+
 /** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
 export const DEFAULT_ERROR_LOG_WINDOW_HOURS = 24;
 
@@ -246,6 +267,8 @@ export interface AttentionSources {
   readonly endpoints?: () => readonly AttentionEndpoint[] | Promise<readonly AttentionEndpoint[]>;
   readonly endpointConfigDrift?: () => Promise<readonly AttentionEndpointDrift[]>;
   readonly plugins?: () => Promise<AttentionPluginsRead>;
+  /** Command routes skipped because another registration holds them (#1250); read live. */
+  readonly commandConflicts?: () => readonly AttentionCommandConflict[];
   readonly configuration?: AttentionConfiguration;
   /** `undefined` when the Agent (and its queue) is not running. */
   readonly toolApprovals?: () => readonly AttentionToolApproval[] | undefined;
@@ -276,7 +299,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'commands' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -511,6 +534,18 @@ const messages = createMessages({
   'plugin.config.title': { 'zh-CN': '插件 {plugin} 的配置需要修正', en: 'Configuration of plugin {plugin} needs fixing' },
   'plugin.missingEnv': { 'zh-CN': '未设置的环境变量：{names}', en: 'Unset environment variables: {names}' },
   'plugin.action': { 'zh-CN': '查看插件', en: 'Open plugin' },
+  'command.title.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」与插件 {other} 重名，没有注册', en: 'Command "{command}" of plugin {plugin} clashes with plugin {other} and was not registered' },
+  'command.title.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」已被占用，已跳过该别名', en: 'Alias "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.title.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」已被占用，已跳过', en: 'Shortcut "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.holder.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」', en: 'command "{command}" of plugin {plugin}' },
+  'command.holder.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」', en: 'alias "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.holder.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」', en: 'shortcut "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.detail.command': { 'zh-CN': '「{route}」已由{holder}使用，先注册的保留，{plugin} 的这条命令（连同它的别名）没有注册。', en: '"{route}" is already used by {holder}; the earlier registration keeps it, so this command of {plugin} (and its aliases) is not registered.' },
+  'command.detail.entry': { 'zh-CN': '「{route}」已由{holder}使用，只跳过了这个{what}，命令本身照常可用。', en: '"{route}" is already used by {holder}; only this {what} was skipped, the command itself still works.' },
+  'command.what.alias': { 'zh-CN': '别名', en: 'alias' },
+  'command.what.shortcut': { 'zh-CN': '快捷方式', en: 'shortcut' },
+  'command.advice': { 'zh-CN': '建议让其中一个插件改名（或给 {plugin} 配置 commandNamespace），或在配置里禁用其中一条：{plugin} 的 disabledCommands: [{path}]，或 {other} 的 disabledCommands: [{otherPath}]；也可以停用其中一个插件。', en: 'Rename one of them (or give {plugin} a commandNamespace), or disable one in the configuration: disabledCommands: [{path}] on {plugin}, or disabledCommands: [{otherPath}] on {other}; or disable one of the plugins.' },
+  'command.advice.same': { 'zh-CN': '两条都属于插件 {plugin}：请修改其中一条命令的名称、别名或快捷方式，或用 disabledCommands 禁用其一。', en: 'Both belong to plugin {plugin}: rename one command, alias or shortcut, or disable one with disabledCommands.' },
   'config.invalid.title': { 'zh-CN': '配置文件无法读取', en: 'The configuration file cannot be read' },
   'config.invalid.detail': { 'zh-CN': '{where}：{kind}。修正文件后重新读取。', en: '{where}: {kind}. Fix the file and reload.' },
   'config.invalid.file': { 'zh-CN': '配置文件', en: 'Configuration file' },
@@ -903,6 +938,30 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         detail: t('drift.detail', { parts: parts.join(locale === 'en' ? '; ' : '；') }),
         action: { label: t('drift.action'), path: ATTENTION_PATHS.adapterAccounts(drift.instanceKey) },
         visible: allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'adapter', adapter: drift.instanceKey })),
+      };
+    }));
+  }
+
+  // #1250: command routes another registration already holds (the instance keeps running).
+  if (sources.commandConflicts && allows(P.FEATURE_VIEW)) {
+    await read('commands', () => sources.commandConflicts!().map((conflict): AttentionDraft => {
+      const { skipped, kept, route } = conflict;
+      const display = (side: AttentionCommandClaimant) => ({ plugin: side.plugin, command: side.command, entry: side.entry ?? '' });
+      const holder = t(`command.holder.${kept.kind}`, display(kept));
+      const detail = skipped.kind === 'command'
+        ? t('command.detail.command', { route, holder, plugin: skipped.plugin })
+        : t('command.detail.entry', { route, holder, what: t(`command.what.${skipped.kind}`) });
+      const advice = skipped.plugin === kept.plugin
+        ? t('command.advice.same', { plugin: skipped.plugin })
+        : t('command.advice', { plugin: skipped.plugin, other: kept.plugin, path: skipped.localPath || route, otherPath: kept.localPath || route });
+      return {
+        kind: 'command.conflict', severity: 'warning',
+        subject: { plugin: skipped.plugin, commandRoute: route },
+        state: { skipped, kept },
+        title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: kept.plugin }),
+        detail: `${detail}${locale === 'en' ? ' ' : ''}${advice}`,
+        action: { label: t('plugin.action'), path: ATTENTION_PATHS.plugin(skipped.plugin) },
+        reason: { category: 'config', code: `command-${skipped.kind}-conflict` },
       };
     }));
   }

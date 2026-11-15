@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { commandFeatureId, isCommandIndex, type CommandRouteClaimant } from '@zhin.js/command';
 import type {
+  AttentionCommandClaimant,
+  AttentionCommandConflict,
   AttentionEndpoint,
   AttentionEndpointDrift,
   AttentionErrorLogs,
@@ -131,6 +134,15 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         return { states, ...(dependencies ? { dependencies } : {}) };
       },
     } : {}),
+    ...(snapshots ? {
+      // #1250: routes the Command index skipped because another registration holds them.
+      commandConflicts: (): readonly AttentionCommandConflict[] => withLease(lease => {
+        const index = lease.value.projections.get(commandFeatureId);
+        return isCommandIndex(index)
+          ? index.conflicts().map(conflict => ({ route: conflict.route, skipped: claimant(conflict.skipped), kept: claimant(conflict.kept) }))
+          : [];
+      }),
+    } : {}),
     configuration: Object.freeze({
       projectRoot,
       source: () => configuration.readSource(),
@@ -238,6 +250,11 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       return `${generation}|${files.join('|')}`;
     },
   });
+}
+
+function claimant(side: CommandRouteClaimant): AttentionCommandClaimant {
+  return { plugin: side.plugin, command: side.command, localPath: side.localPath, kind: side.kind,
+    ...(side.entry !== undefined ? { entry: side.entry } : {}) };
 }
 
 function isFailure(value: unknown): value is { category: string; message: string; at?: number; exitCode?: number } {

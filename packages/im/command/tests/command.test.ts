@@ -477,7 +477,9 @@ describe('Command Feature', () => {
     await expect(index.execute('gh pr next')).resolves.toBe('dynamic:next');
   });
 
-  it('rejects dynamic routes that differ only by parameter metadata', () => {
+  // #1250: overlapping routes used to throw and fail the whole projection (the instance); now the
+  // earlier registration keeps the route and the later one is skipped and reported.
+  it('skips and reports dynamic routes that differ only by parameter metadata', () => {
     const owner = rootPluginId();
     const dynamicSlot = (name: string, type: 'string' | 'number') => createCapabilitySlot({
       owner,
@@ -492,10 +494,16 @@ describe('Command Feature', () => {
     const title = dynamicSlot('title', 'string');
     const number = dynamicSlot('number', 'number');
 
-    expect(() => new CommandIndex(
+    const index = new CommandIndex(
       [title, number],
       snapshotFor(owner, [title, number]),
-    )).toThrow(/Duplicate Command route/);
+    );
+    // Same plugin: the plugin-local path orders them ($number before $title).
+    expect(index.list().map(command => command.id)).toEqual([number.id]);
+    expect(index.conflicts()).toEqual([expect.objectContaining({
+      skipped: expect.objectContaining({ capability: title.id, kind: 'command' }),
+      kept: expect.objectContaining({ capability: number.id, kind: 'command' }),
+    })]);
   });
 
   it('replaces all local static segments via a global alias', async () => {
@@ -906,10 +914,16 @@ describe('Command Feature', () => {
       source: '/commands/other/index.ts',
       definition: defineCommand({ alias: ['zan'], execute: () => 'b' }),
     });
-    expect(() => new CommandIndex(
+    const aliasIndex = new CommandIndex(
       [primary, aliasClash],
       snapshotFor(owner, [primary, aliasClash]),
-    )).toThrow(/Duplicate Command route "zan"/);
+    );
+    expect(aliasIndex.list().map(command => [command.name, command.alias])).toEqual(expect.arrayContaining([['other', undefined], ['zan', undefined]]));
+    expect(aliasIndex.conflicts()).toEqual([expect.objectContaining({
+      route: 'zan',
+      skipped: expect.objectContaining({ command: 'other', kind: 'alias', entry: 'zan' }),
+      kept: expect.objectContaining({ command: 'zan', kind: 'command' }),
+    })]);
 
     const shortcutClash = createCapabilitySlot({
       owner,
@@ -921,10 +935,16 @@ describe('Command Feature', () => {
         execute: () => 'c',
       }),
     });
-    expect(() => new CommandIndex(
+    const shortcutIndex = new CommandIndex(
       [primary, shortcutClash],
       snapshotFor(owner, [primary, shortcutClash]),
-    )).toThrow(/Duplicate Command route "zan"/);
+    );
+    expect(shortcutIndex.list().find(command => command.name === 'hello')?.shortcut).toBeUndefined();
+    expect(shortcutIndex.conflicts()).toEqual([expect.objectContaining({
+      route: 'zan',
+      skipped: expect.objectContaining({ command: 'hello', kind: 'shortcut', entry: 'zan' }),
+      kept: expect.objectContaining({ command: 'zan', kind: 'command' }),
+    })]);
 
     expect(() => {
       const bad = createCapabilitySlot({
@@ -1021,16 +1041,22 @@ describe('Command Feature', () => {
     await expect(index.dispatch({ input: 'child.status' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
-  it('rejects the same user route published by different owners', () => {
+  it('keeps the earlier owner of a user route published by different owners and reports the later one', () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
     const rootSlot = slotFor(root, 'status');
     const childSlot = slotFor(child, 'status');
 
-    expect(() => new CommandIndex(
+    const index = new CommandIndex(
       [rootSlot, childSlot],
       snapshotWithOwners([child], [rootSlot, childSlot]),
-    )).toThrow(/Duplicate Command route "status"/);
+    );
+    expect(index.list().map(command => command.owner)).toEqual([root]);
+    expect(index.conflicts()).toEqual([expect.objectContaining({
+      route: 'status',
+      skipped: expect.objectContaining({ owner: child, plugin: 'child', command: 'status', kind: 'command' }),
+      kept: expect.objectContaining({ owner: root, plugin: 'root', command: 'status', kind: 'command' }),
+    })]);
   });
 
   it('uses only an explicitly configured plugin commandNamespace', async () => {
@@ -2021,18 +2047,22 @@ describe('central command argument declarations', () => {
     { x: { type: 'string' as const }, y: { type: 'string' as const, default: 'fallback' } },
     { x: { type: 'string' as const }, rest: { type: 'word' as const, rest: true, optional: true } },
     { rest: { type: 'word' as const, rest: true } },
-  ])('rejects declaration and directory route overlaps at every accepted arity: %j', (params) => {
+  ])('skips and reports declaration and directory route overlaps at every accepted arity: %j', (params) => {
     const owner = rootPluginId();
     const declared = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params, execute() {} }) });
     const dynamic = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
-    expect(() => new CommandIndex([declared, dynamic], snapshotFor(owner, [declared, dynamic]))).toThrow('Duplicate Command route');
+    const index = new CommandIndex([declared, dynamic], snapshotFor(owner, [declared, dynamic]));
+    expect(index.list().map(command => command.id)).toEqual([declared.id]);
+    expect(index.conflicts()).toEqual([expect.objectContaining({ skipped: expect.objectContaining({ capability: dynamic.id }), kept: expect.objectContaining({ capability: declared.id }) })]);
   });
 
-  it('rejects rest overlaps beyond the minimum arity', () => {
+  it('skips and reports rest overlaps beyond the minimum arity', () => {
     const owner = rootPluginId();
     const rest = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params: { values: { type: 'word', rest: true } }, execute() {} }) });
     const fixed = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' }, second: { type: 'string' }, third: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
-    expect(() => new CommandIndex([rest, fixed], snapshotFor(owner, [rest, fixed]))).toThrow('Duplicate Command route');
+    const index = new CommandIndex([rest, fixed], snapshotFor(owner, [rest, fixed]));
+    expect(index.list().map(command => command.id)).toEqual([rest.id]);
+    expect(index.conflicts()).toEqual([expect.objectContaining({ skipped: expect.objectContaining({ capability: fixed.id }), kept: expect.objectContaining({ capability: rest.id }) })]);
   });
 
   it('rejects undefined dynamic defaults before executing business code', async () => {
@@ -2143,11 +2173,13 @@ describe('central command argument declarations', () => {
 });
 
 
-it('rejects identical user route shapes across declaration and dynamic directory styles', () => {
+it('skips and reports identical user route shapes across declaration and dynamic directory styles', () => {
   const owner = rootPluginId();
   const first = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params: { id: { type: 'integer' } }, execute() {} }) });
   const second = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'integer' } }, execute() {} }), $parameter: { name: 'id', type: 'integer' } as const } });
-  expect(() => new CommandIndex([first, second], snapshotFor(owner, [first, second]))).toThrow('Duplicate Command route');
+  const index = new CommandIndex([first, second], snapshotFor(owner, [first, second]));
+  expect(index.list().map(command => command.id)).toEqual([first.id]);
+  expect(index.conflicts()).toEqual([expect.objectContaining({ skipped: expect.objectContaining({ capability: second.id }), kept: expect.objectContaining({ capability: first.id }) })]);
 });
 
 

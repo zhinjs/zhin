@@ -60,6 +60,12 @@ export type ConsoleAttentionKind =
   | 'plugin.dependencies'
   /** A declared plugin's configuration does not validate or references unset variables. */
   | 'plugin.config'
+  /**
+   * Two registrations claim the same command route (#1250): the later command (primary route) or
+   * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` is the
+   * plugin that lost it, `subject.commandRoute` the route. Visible with `feature.view`.
+   */
+  | 'command.conflict'
   /** The project configuration file cannot be read or parsed. */
   | 'config.invalid'
   /** The last configuration change was not applied (failed / blocked / unconfirmed). */
@@ -105,7 +111,7 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
-  'inference.account', 'config.ineffective',
+  'inference.account', 'config.ineffective', 'command.conflict',
 ]);
 
 /**
@@ -132,6 +138,7 @@ export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentio
   'chat-roles.import-pending': 'iam.manage',
   'inference.account': 'agent.view',
   'config.ineffective': 'agent.view',
+  'command.conflict': 'feature.view',
 });
 
 /** The object an item is about. Absent fields do not apply. */
@@ -154,6 +161,8 @@ export interface ConsoleAttentionSubject {
   readonly inferenceAccount?: string;
   /** Configuration path of an ineffective setting (e.g. `purposes.agents.planner`, #1270). */
   readonly configPath?: string;
+  /** Command route a `command.conflict` is about (words separated by spaces, #1250). */
+  readonly commandRoute?: string;
 }
 
 /**

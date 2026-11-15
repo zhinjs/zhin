@@ -507,6 +507,28 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it('lists a command route conflict of the running instance as a warning (#1250 duplicate-command-route)', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [] },
+      attention: {
+        available: true,
+        items: [{
+          kind: 'command.conflict', severity: 'warning', source: 'commands',
+          title: '插件 game-hub 的命令「排行」与插件 group-suite 重名，没有注册',
+          detail: '「排行」已由插件 group-suite 的命令「排行」使用，先注册的保留。建议让其中一个插件改名',
+        }],
+        unavailable: [],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：插件 game-hub 的命令「排行」与插件 group-suite 重名，没有注册: 「排行」已由插件 group-suite 的命令「排行」使用');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('warns when the attention list cannot be read', async () => {
     runningGateway.current = gatewayInfo(true);
     const { output, directory } = await runDoctor(() => {});
