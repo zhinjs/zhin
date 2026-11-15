@@ -45,6 +45,18 @@ const CREATE_MESSAGES = {
     'zh-CN': '  连不上？运行 {v0}',
     en: '  Cannot connect? Run {v0}',
   },
+  'create.port.zhinGateway': {
+    'zh-CN': '端口 {v0} 已被另一个 Zhin 网关占用（同一台机器上的其他项目），新项目改用端口 {v1}（http.port）。',
+    en: 'Port {v0} is used by another Zhin gateway (another project on this machine); the new project uses port {v1} (http.port).',
+  },
+  'create.port.other': {
+    'zh-CN': '端口 {v0} 已被其他程序占用，新项目改用端口 {v1}（http.port）。',
+    en: 'Port {v0} is used by another program; the new project uses port {v1} (http.port).',
+  },
+  'create.port.noneFree': {
+    'zh-CN': '端口 {v0} 已被占用，附近也没有空闲端口；仍写入 {v0}，启动前请在配置里修改 http.port。',
+    en: 'Port {v0} is in use and no nearby port is free; keeping {v0}. Change http.port in the configuration before starting.',
+  },
   'create.done.docs': { 'zh-CN': '  文档：{v0}', en: '  Docs: {v0}' },
 } as const satisfies Record<string, Record<CreateLocale, string>>;
 

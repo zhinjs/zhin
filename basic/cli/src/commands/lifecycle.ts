@@ -11,11 +11,11 @@ import { Command } from 'commander';
 import type { GatewayInstanceLogs, GatewayInstanceStatus } from '@zhin.js/console-protocol';
 import { GATEWAY_RPC } from '@zhin.js/console-protocol';
 import { LOCAL_GATEWAY_RPC, type LocalGatewayInfoResult } from '@zhin.js/gateway/local';
-import { consoleLink, loadGatewayHttpConfig } from '@zhin.js/gateway/server';
 import { defaultInstanceLogFile, isSupervisedInstanceProcess } from '@zhin.js/gateway/supervisor';
 import { formatStartOptionHelp, parseStartOptions } from '@zhin.js/runtime';
 import { readChatOwnerClaim, renderChatOwnerClaim } from '../utils/chat-owner-claim.js';
 import {
+  consoleSetupToken,
   describeGatewayError,
   describeInstance,
   probeGateway,
@@ -32,6 +32,7 @@ import {
 } from '../utils/gateway.js';
 import { getProcessStatus, stopProcess } from '../utils/process.js';
 import { describeForegroundGatewayRestart, detectProcessManager, readProcessContext } from '../utils/process-manager.js';
+import { serviceStopAdviceFor } from '../utils/service-definition.js';
 import { formatGatewayVersionSkew, gatewayVersionSkew, installedGatewayVersion } from '../utils/gateway-version.js';
 import { readRuntimeState, renderRuntimeState, runtimeStateUnavailable } from '../utils/runtime-state.js';
 import { runtimeCommand } from './runtime.js';
@@ -63,12 +64,13 @@ export function splitStartArguments(args: readonly string[]): { readonly foregro
   return { foreground, rest };
 }
 
-async function printConsoleHint(root: string, status: LocalGatewayInfoResult, environment: string, output: Output): Promise<void> {
-  const origin = status.gateway.origins[0];
-  if (!origin || status.consoleInitialized || process.stdout.isTTY !== true) return;
-  // ADR 0053 §1: the bootstrap token goes after `#`, and only to an interactive terminal.
-  const token = await loadGatewayHttpConfig(root, environment).then((config) => config.token, () => undefined);
-  if (token) output.out(`  初始化 Console：${consoleLink(origin, token)}\n`);
+/** The bootstrap token for the Console link of a running gateway (its own start options pick the environment). */
+function setupTokenFor(root: string, status: LocalGatewayInfoResult, environment?: string): Promise<string | undefined> {
+  let name = environment;
+  if (name === undefined) {
+    try { name = parseStartOptions(status.gateway.args).environment; } catch { name = 'development'; }
+  }
+  return consoleSetupToken(root, status, name);
 }
 
 export const startCommand = new Command('start')
@@ -94,12 +96,13 @@ export const startCommand = new Command('start')
       const parsed = parseStartOptions(rest);
       const running = await probeGateway({ root });
       if (running) {
-        process.stdout.write(`网关已在运行。\n${renderStatus(running).join('\n')}\n`);
+        const setupToken = await setupTokenFor(root, running);
+        process.stdout.write(`网关已在运行。\n${renderStatus(running, Date.now(), { setupToken }).join('\n')}\n`);
         return;
       }
       const started = await startGatewayDaemon({ root, args: rest });
-      process.stdout.write(`✓ 网关已在后台启动（pid ${started.pid}）\n${renderStatus(started.status).join('\n')}\n`);
-      await printConsoleHint(root, started.status, parsed.environment, processOutput);
+      const setupToken = await setupTokenFor(root, started.status, parsed.environment);
+      process.stdout.write(`✓ 网关已在后台启动（pid ${started.pid}）\n${renderStatus(started.status, Date.now(), { setupToken }).join('\n')}\n`);
       process.stdout.write(`日志：zhin logs -f（网关自身输出：${started.logFile}）；停止：zhin stop\n`);
     } catch (error) { fail(error); }
   });
@@ -122,12 +125,20 @@ export const stopCommand = new Command('stop')
         process.stdout.write('网关未运行，无需停止。\n');
         return;
       }
+      // ADR 0062 §2: a gateway run by a system service (zhin service install).
+      const advice = await serviceStopAdviceFor(root, running);
+      if (advice.refuse) {
+        process.stderr.write(`zhin: ${advice.lines.join('\n')}\n`);
+        process.exitCode = 1;
+        return;
+      }
       await withGateway({ root }, (client) => client.request(LOCAL_GATEWAY_RPC.SHUTDOWN, undefined, { timeoutMs: 10_000 }));
       process.stdout.write(`正在停止网关（pid ${running.gateway.pid}）…\n`);
       if (!await waitForGatewayExit({ root }, running.gateway.pid, Number(options.timeout) || 60_000)) {
         throw new Error(`网关 ${running.gateway.pid} 在超时内没有退出`);
       }
       process.stdout.write('✓ 网关与实例已停止\n');
+      for (const line of advice.lines) process.stdout.write(`${line}\n`);
     } catch (error) { fail(error); }
   });
 
@@ -157,7 +168,8 @@ export const restartCommand = new Command('restart')
       await withGateway({ root }, (client) => client.request(LOCAL_GATEWAY_RPC.SHUTDOWN, undefined, { timeoutMs: 10_000 }));
       if (!await waitForGatewayExit({ root }, running.gateway.pid)) throw new Error(`网关 ${running.gateway.pid} 在超时内没有退出`);
       const started = await startGatewayDaemon({ root, args: running.gateway.args });
-      process.stdout.write(`✓ 网关已重启（pid ${started.pid}）\n${renderStatus(started.status).join('\n')}\n`);
+      const setupToken = await setupTokenFor(root, started.status);
+      process.stdout.write(`✓ 网关已重启（pid ${started.pid}）\n${renderStatus(started.status, Date.now(), { setupToken }).join('\n')}\n`);
     } catch (error) { fail(error); }
   });
 
@@ -185,8 +197,9 @@ export const statusCommand = new Command('status')
             endpoints: runtime!.endpoints, mcp: runtime!.mcp, attention: runtime!.attention }
           : { gateway: { running: false }, instance: null }, null, 2)}\n`);
       } else if (running) {
+        const setupToken = await setupTokenFor(root, running);
         process.stdout.write(`${[
-          ...renderStatus(running),
+          ...renderStatus(running, Date.now(), { setupToken }),
           ...(skew ? formatGatewayVersionSkew(skew) : []),
           ...renderRuntimeState(runtime!),
           ...(claim ? renderChatOwnerClaim(claim) : []),

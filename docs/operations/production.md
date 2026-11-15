@@ -189,12 +189,15 @@ zhin status          # 网关与实例状态；未运行时退出码 3
 zhin logs -f         # 实例日志
 zhin stop
 
-# Linux：安装用户级 systemd 服务
+# 开机自启：按当前系统生成并安装服务（Linux 用 --user 安装用户级 systemd）
 zhin service install --user
 zhin service status --user
+zhin service stop --user    # 停止后不会被立即拉起；zhin service start 再启动
 ```
 
-macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重启策略：使用 systemd、launchd、Kubernetes 或 PM2 时，让外部 supervisor 管理前台网关（`--foreground`）；只有直接裸机运行时才用后台的 `zhin start`。
+macOS 使用不带 `--user` 的同一组命令（launchd）。`zhin service install` 是托管与开机自启的唯一推荐方式：服务文件现场生成，写入当前 `node` 与项目 CLI 的绝对路径，只在异常退出时重启，详见 [CLI 参考](../cli/index.md#service)。只保留一层进程重启策略：使用 systemd、launchd 或 Kubernetes 时，让外部 supervisor 管理前台网关（`--foreground`）；只有直接裸机运行时才用后台的 `zhin start`。
+
+高级用法：已有 PM2 环境时，可以用 `create-zhin-app --with pm2` 创建项目（生成 `ecosystem.config.cjs` 与 `pm2:*` 脚本）；Docker 见上文模板。
 
 网关（ADR 0054）常驻并监管实例：Console 重启、依赖变化、实例崩溃都由网关在进程内重启实例，崩溃风暴后实例停在 `crashed` 而网关保持在线（Console 可看日志、可重新启动）。网关只在 SIGTERM / `zhin stop` 时以退出码 0 结束，启动失败时非零；外部 supervisor 只需在网关异常退出时重新拉起。退出码与 systemd 示例见 [zhin start](../cli/runtime.md#退出码)。
 

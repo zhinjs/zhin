@@ -67,7 +67,7 @@ Every onboarding step is a method of the same service; the CLI and the Web are t
 | 1, 2 | `zhin console init`; non-interactive: `printf '%s\n' "$PASSWORD" \| zhin console init --yes --owner admin --password-stdin` (optionally `--database <dialect> --database-<field> <value>`) |
 | 3 | `zhin setup --ai` |
 | 4 | `zhin setup --adapters` |
-| Status | `zhin console init --status` |
+| Status | `zhin console init --status` (`--status --json` for scripts) |
 
 ## Related
 

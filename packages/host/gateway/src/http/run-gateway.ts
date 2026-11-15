@@ -21,7 +21,7 @@ import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requi
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
 import { captureTerminalState, isForegroundProcessGroup } from '../supervisor/terminal-state.js';
-import { startGateway, type RunningGateway } from './start-gateway.js';
+import { loadGatewayHttpConfig, startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
 export const INSTANCE_INTERACTIVE_ENV = 'ZHIN_INSTANCE_INTERACTIVE';
@@ -63,6 +63,16 @@ export function gatewayVersion(): string {
 export function consoleLink(origin: string, token?: string): string {
   const url = `${REMOTE_CONSOLE_ORIGIN}/?apiBaseUrl=${encodeURIComponent(origin)}`;
   return token ? `${url}#token=${encodeURIComponent(token)}` : url;
+}
+
+/** The Console link carrying the bootstrap token (`http.token`), or undefined when none resolves. */
+export async function consoleSetupLink(root: string, origin: string, environment: string): Promise<string | undefined> {
+  try {
+    const token = (await loadGatewayHttpConfig(root, environment)).token?.trim();
+    return token ? consoleLink(origin, token) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -229,7 +239,15 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
     op: 'gateway_listening', pid: process.pid, ...(origin ? { http: origin } : {}),
     ...(socketPath ? { socket: socketPath } : {}), log: logFile,
   }));
-  if (origin && !options.once) logger.info(`Console: ${consoleLink(origin)}`);
+  if (origin && !options.once) {
+    logger.info(`Console: ${consoleLink(origin)}`);
+    // ADR 0053 §1 / #1250: before the first owner exists, an interactive terminal gets the setup
+    // link with the bootstrap token after `#`. Written to the terminal only, never to a log file.
+    const setupLink = interactive && !gateway.http.tokenRegistry.initialized()
+      ? await consoleSetupLink(root, origin, options.environment)
+      : undefined;
+    if (setupLink) process.stdout.write(`Console 尚未初始化，打开此链接完成初始化（令牌在 # 之后，不会发给 console.zhin.dev）：\n  ${setupLink}\n`);
+  }
 
   let interrupted = 0;
   const onSignal = (signal: NodeJS.Signals): void => {

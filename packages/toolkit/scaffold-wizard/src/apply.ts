@@ -345,7 +345,7 @@ export function buildRuntimeConfigDocument(options: InitOptions): Record<string,
 
   doc.http = {
     token: '${HTTP_TOKEN}',
-    port: DEFAULT_CREATE_BOT_HTTP_PORT,
+    port: options.httpPort ?? DEFAULT_CREATE_BOT_HTTP_PORT,
     base: '/api',
     corsOrigins: ['https://console.zhin.dev'],
   };
