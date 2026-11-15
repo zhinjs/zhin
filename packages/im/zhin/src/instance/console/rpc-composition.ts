@@ -27,6 +27,10 @@ export interface ConsoleRpcComposition {
   readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
   /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
+  /** Agent Host facts for attention (#1270): model accounts needing an operator, ineffective purposes. */
+  readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
+  /** Instance runtime failure journal (#1270): reasons kept across restarts. */
+  readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
 }
 
 /**

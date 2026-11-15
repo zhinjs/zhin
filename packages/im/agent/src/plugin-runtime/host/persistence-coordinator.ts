@@ -1,4 +1,4 @@
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
 import {
   databaseRootHostToken,
@@ -68,7 +68,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     const rules = foundation.agent.getGroupRules?.();
     if (!rules?.persistent) return;
     await rules.prune(DEFAULT_GROUP_RULE_RETENTION_DAYS).catch(() => {
-      getLogger('agent').warn('op=group_rule_prune status=failed; 群管规则保留期清理失败');
+      getLogger('agent').warn(formatCompact({ op: 'group_rule_prune', status: 'failed', detail: '群管规则保留期清理失败' }));
     });
   };
   // ADR 0041 §6: 场景成员事实按保留期 / 每会话上限清理（启动 + 每 6 小时）；失败只记日志。
@@ -87,7 +87,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
   } else {
-    getLogger('agent').warn('op=structured_storage status=unsupported; 结构化用量与任务存储需要 SQLite、MySQL 或 PostgreSQL');
+    getLogger('agent').warn(formatCompact({ op: 'structured_storage', status: 'unsupported', detail: '结构化用量与任务存储需要 SQLite、MySQL 或 PostgreSQL' }));
   }
   if (!sessionsInDatabase) foundation.agent.markMemoryPersistenceReady();
   // Register cleanup during setup — root lifecycle is sealed before activateNext runs.
@@ -98,11 +98,11 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   let off = () => {};
   const pruneTraceArchive = async () => {
     try { await pruneTraces?.(); }
-    catch { getLogger('agent').warn('op=trace_prune status=failed; 轨迹保留期清理失败'); }
+    catch { getLogger('agent').warn(formatCompact({ op: 'trace_prune', status: 'failed', detail: '轨迹保留期清理失败' })); }
   };
   const pruneEngagementJournal = async () => {
     try { await foundation.engagementJournal?.prune(Date.now()); }
-    catch { getLogger('agent').warn('op=engagement_journal_prune status=failed; 协作事件日志清理失败'); }
+    catch { getLogger('agent').warn(formatCompact({ op: 'engagement_journal_prune', status: 'failed', detail: '协作事件日志清理失败' })); }
   };
   lifecycle.add(async () => {
     stopped = true;
@@ -158,7 +158,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       if (scenes) stopSceneFactPruning = scenes.startPruning();
       // Timers only become live after the fully migrated generation is published.
       pendingStart = foundation.schedule.start().catch(() => {
-        getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
+        getLogger('agent').warn(formatCompact({ op: 'schedule_start', status: 'failed', detail: '定时任务启动失败' }));
       });
       // The history owner coalesces cleanup and owns its errors; driver IO cannot gate publication or shutdown.
       foundation.schedule.history.housekeeping();
@@ -176,7 +176,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
           if (pendingPrune) return;
           pendingPrune = Promise.all([
             usage?.prune().catch(() => {
-              getLogger('agent').warn('op=usage_prune status=failed; 用量保留期清理失败');
+              getLogger('agent').warn(formatCompact({ op: 'usage_prune', status: 'failed', detail: '用量保留期清理失败' }));
             }),
             // Never rejects for database errors (only logs); see DecisionEventLog.prune.
             decisions()?.prune(auditRetentionDays),

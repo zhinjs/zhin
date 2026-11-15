@@ -7,6 +7,7 @@ import type { PluginManagementState } from '@zhin.js/host-http';
 import { createAttentionSources } from '../../../src/instance/console/attention-sources.js';
 import { collectAttention } from '../../../src/instance/console/attention.js';
 import type { ConsoleRpcComposition } from '../../../src/instance/console/rpc-composition.js';
+import { RuntimeFailureJournal } from '../../../src/instance/console/runtime-failures.js';
 
 const roots: string[] = [];
 const stores: SnapshotStore[] = [];
@@ -84,6 +85,53 @@ describe('attention sources wired to the instance', () => {
     expect(await sources.revision!()).toBe(before);
     await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ configVersion: 2, plugins: { weather: 'weather-pkg' } }));
     expect(await sources.revision!()).not.toBe(before);
+  });
+
+  it('restores failure reasons from the runtime failure journal, and lists ineffective purposes and model accounts (#1270)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-attention-journal-'));
+    roots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'root', zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ configVersion: 2, ai: { mcpServers: [{ name: 'search', transport: 'stdio' }] } }));
+    const before = RuntimeFailureJournal.open(root, { now: () => 100 });
+    before.record({ source: 'mcp', subject: 'search', code: 'connect-failed', category: 'config', message: 'command not found: npx', at: 90 });
+    before.record({ source: 'endpoint', subject: 'github/zhin-dev', code: 'start-failed', category: 'auth', message: 'Bad credentials', at: 80 });
+    await before.close();
+    const runtimeFailures = RuntimeFailureJournal.open(root);
+    const sources = createAttentionSources({
+      projectRoot: root,
+      pluginLifecycleFile: join(root, 'plugin-lifecycle.json'),
+      snapshots: snapshots(),
+      configuration: { readSource: async () => ({}) },
+      im: { loginAssist: { listPending: () => [] }, endpoints: { list: () => [
+        { id: 'x', adapter: 'github', name: 'zhin-dev', connected: false, phase: 'offline', transportState: 'closed', pendingLogin: false },
+      ] } },
+      runtimeFailures,
+      agentInsights: {
+        providerDisplay: async () => undefined, recentTraces: async () => [],
+        accountAttention: async () => [{ accountId: 'accounts:a', label: 'Codex', serviceLabel: 'Codex', state: 'reauthorize', revision: 2 }],
+        purposeEffects: async () => ({
+          'agents.planner': { status: 'effective', target: 'binding', ignoredAgents: ['tools__planner'], reason: 'binding-name' },
+          'agents.typo': { status: 'ignored', reason: 'no-target' },
+          'agents.tools__reviewer': { status: 'effective', target: 'sub-agent', agents: ['tools__reviewer'] },
+        }),
+      },
+    } as unknown as ConsoleRpcComposition);
+    expect(sources.ready!()).toBe(true);
+    const list = await collectAttention(sources, { allows: () => true });
+    const item = (id: string) => list.items.find(entry => entry.id === id);
+    expect(item('mcp.disconnected:mcpServer=search')?.detail).toContain('最近一次连接失败（config）：command not found: npx（重启前记录）');
+    expect(item('endpoint.offline:adapter=github&endpointKey=zhin-dev')?.reason).toMatchObject({ category: 'auth', restored: true });
+    expect(item('inference.account:inferenceAccount=accounts%3Aa')?.title).toBe('模型账号 Codex 需要重新登录');
+    expect(list.items.filter(entry => entry.kind === 'config.ineffective').map(entry => [entry.subject?.configPath, entry.reason?.code]))
+      .toEqual([['purposes.agents.planner', 'binding-name'], ['purposes.agents.typo', 'no-target']]);
+  });
+
+  it('is not ready while the Root refuses generation operations', () => {
+    const sources = createAttentionSources({
+      projectRoot: '/nowhere', pluginLifecycleFile: '/nowhere/x.json', configuration: { readSource: async () => ({}) },
+      snapshots: { acquire: () => { throw new Error('Root is not accepting generation operations (idle)'); } },
+    } as unknown as ConsoleRpcComposition);
+    expect(sources.ready!()).toBe(false);
   });
 
   it('checks the project dependency graph once for N plugins and reports one item when it fails', async () => {

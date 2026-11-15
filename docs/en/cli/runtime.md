@@ -61,13 +61,19 @@ zhin start --once --mode test
 | `zhin stop [--timeout <ms>]` | Sends `gateway.shutdown`: stops the instance, then the gateway, and waits for the process to exit | Nothing to do (a pre-gateway process with only `.zhin.pid` is still stopped) |
 | `zhin restart` | `gateway.instance.restart`: restarts the instance only | Nothing to do |
 | `zhin restart --gateway` | Stops the background gateway and starts it again with its original options; a foreground gateway (`--foreground`) cannot be restarted in place, see below | Nothing to do |
-| `zhin status [--json]` | Gateway pid, mode, version, HTTP addresses, Console link; instance state (`stopped / starting / running / stopping / backoff / crashed`, pid, generation, last failure and log tail) | Says it is not running, **exit code 3** |
-| `zhin logs [-f] [-n N]` | `gateway.instance.logs`: the last N lines (1–1000, default 200); `-f` polls for new lines | Reads `.zhin/logs/instance.log`; `-f` follows the file |
+| `zhin status [--json]` | Gateway pid, mode, version, HTTP addresses, Console link; instance state (`stopped / starting / running / stopping / backoff / crashed`, pid, generation, last failure and log tail); while the instance runs, whether each adapter account is online, the MCP server states and the number of attention items (see below) | Says it is not running, **exit code 3** |
+| `zhin logs [-f] [-n N]` | `gateway.instance.logs`: the last N lines (1–1000, default 200); `-f` polls for new lines; with `--level` / `--since` / `--until` / `--grep` / `--name` it searches the log files (see the [CLI reference](./index.md)) | Reads `.zhin/logs/instance.log`; `-f` follows the file |
 | `zhin install / uninstall / update` | Runs the dependency transaction through the gateway: stop instance → package manager → start instance, rolled back on failure; progress is streamed | Runs the same transaction directly in the project |
 
-A foreground gateway (`zhin start --foreground`, the recommended way under systemd, PM2 and containers) is attached to a terminal or a service manager, so `zhin restart --gateway` does not stop it: it explains why, exits with code `1` and prints the replacement command. On Linux it reads the gateway process's environment to identify the service manager: systemd (`INVOCATION_ID`, unit name from the process's cgroup) gets `sudo systemctl restart <unit>` (`systemctl --user restart <unit>` for a user service), PM2 (`pm_id`) gets `pm2 restart <app name>`; otherwise it suggests restarting through your service manager, or pressing Ctrl+C in its terminal and running `zhin start --foreground …` again with the original options. `zhin restart` (instance only) works with a foreground gateway too.
+A foreground gateway (`zhin start --foreground`, the recommended way under systemd, PM2, launchd and containers) is attached to a terminal or a service manager, so `zhin restart --gateway` does not stop it: it explains why, exits with code `1` and prints the replacement command. On Linux it reads the gateway process's environment to identify the service manager: systemd (`INVOCATION_ID`, unit name from the process's cgroup) gets `sudo systemctl restart <unit>` (`systemctl --user restart <unit>` for a user service), PM2 (`pm_id`) gets `pm2 restart <app name>`; on macOS it finds the launchd job running the gateway process in `launchctl list` (`zhin service install` uses the label `com.zhinjs.<project name>`, the process's `XPC_SERVICE_NAME`) and prints `launchctl kickstart -k gui/<uid>/<label>`; otherwise it suggests restarting through your service manager, or pressing Ctrl+C in its terminal and running `zhin start --foreground …` again with the original options. `zhin restart` (instance only) works with a foreground gateway too.
 
-Through the gateway only npm registry packages (`name` / `name@range`) can be installed; git URLs, local paths and `--save-dev` need `zhin stop` first. `zhin update` without package names updates every dependency.
+Through the gateway only npm registry packages (`name` / `name@range`) can be installed; git URLs, local paths and `--save-dev` need `zhin stop` first. `zhin update` without package names updates every dependency; in a pnpm workspace (`pnpm-workspace.yaml` lists `packages`) it runs `pnpm update -r`, so local workspace plugins are updated too.
+
+### Runtime state and gateway version {#runtime-state}
+
+While the instance runs, `zhin status` reads `endpoint.list`, `GET /api/introspection/mcp` and `attention.list` over the local control socket (as the local owner) and shows whether each adapter account is online (with its phase and last failure when offline), each MCP server's state and how many Console attention items are waiting. Each read waits at most 5 seconds; a read that fails (timeout, older instance, missing permission) shows 「无法读取（reason）」 on that line and does not change the exit code. In `--json` they are `endpoints`, `mcp` and `attention`, shaped `{ "available": true, "items": [...] }`, or `{ "available": false, "error": "…" }` when unreadable; `attention` also has `unavailable` (sources that could not be read).
+
+After a dependency upgrade the running gateway keeps its old version until it restarts (`zhin restart` only restarts the instance). `zhin status` and `zhin doctor` compare the running gateway's version with the `@zhin.js/gateway` a restart would load (the one next to the project's `@zhin.js/cli`) and print the exact restart command when they differ: `zhin restart --gateway` for a background gateway, the systemd / PM2 / launchd command above for a managed one; in `--json` these are `gateway.installedVersion` and `gateway.versionSkew`. `zhin update` prints the same notice at the end when the gateway package version changed.
 
 ### Local control socket
 
@@ -180,12 +186,12 @@ A missing `ready` (60 seconds by default) counts as a failed start. `--once` ign
 [Service]
 Type=simple
 WorkingDirectory=/srv/my-bot
-ExecStart=/usr/bin/env npx zhin start --foreground --mode production --no-watch
-Restart=always
+ExecStart="/home/bot/.nvm/versions/node/v24.11.0/bin/node" "/srv/my-bot/node_modules/@zhin.js/cli/bin/zhin.js" "start" "--foreground" "--mode" "production"
+Restart=on-failure
 RestartSec=10s
 ```
 
-The service manager owns the gateway; the gateway restarts the instance, and after a crash storm the instance stays `crashed` while the gateway stays online, so `Restart=always` only applies when the gateway itself exits. `zhin service install` and the scaffolded service files use the same command.
+The service manager owns the gateway; the gateway restarts the instance, and after a crash storm the instance stays `crashed` while the gateway stays online. The gateway exits with 0 only on `zhin stop` / SIGTERM, so `Restart=on-failure` restarts it after a failure and leaves it stopped after `zhin stop`. Do not write this file by hand: `zhin service install` generates it with this machine's `node` and CLI paths.
 
 ### Orphan protection
 

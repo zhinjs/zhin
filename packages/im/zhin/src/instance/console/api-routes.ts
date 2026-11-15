@@ -60,6 +60,8 @@ export interface RegisterConsoleRoutesOptions {
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
   /** Effective provider bindings and recent turns for the Agent workbench (#1250). */
   readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
+  /** Instance runtime failure journal (#1270). */
+  readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -143,6 +145,8 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
     ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
     ...(options.featureStores ? { featureStores: options.featureStores } : {}),
+    ...(options.agentInsights ? { agentInsights: options.agentInsights } : {}),
+    ...(options.runtimeFailures ? { runtimeFailures: options.runtimeFailures } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
   registerAgentConsoleRoutes({ http, base, snapshots, projectRoot, ...(im ? { im } : {}) });

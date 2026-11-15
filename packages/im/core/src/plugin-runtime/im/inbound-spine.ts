@@ -43,6 +43,8 @@ import type {
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type { MessageDispatchOutcome } from './message-dispatcher.js';
 import { formatConversationLog } from './message-events.js';
+import { enterInboundOutcomeStage, reportInboundOutcome } from './inbound-outcome-ledger.js';
+import type { MessageOutcomeCandidate } from './message-outcome.js';
 export {
   arbitrateRoomInboundDeduplication,
   buildRoomInboundRouteInput,
@@ -59,14 +61,31 @@ export interface IngressRoute {
     lease: SnapshotLease,
     requester: PluginId,
     conversationSequence: number | undefined,
-  ): Promise<boolean>;
+  ): Promise<boolean | IngressRouteResult>;
   shouldRouteBeforeDispatch?(message: Message): boolean;
   route(
     message: Message,
     lease: SnapshotLease,
     requester: PluginId,
     conversationSequence: number | undefined,
-  ): Promise<boolean>;
+  ): Promise<boolean | IngressRouteResult>;
+}
+
+/**
+ * ADR 0061 §4.1: what an ingress route returns besides "handled". `outcome` is reported to the
+ * message's outcome ledger; a route may also report directly with `reportInboundOutcome`.
+ * @public
+ */
+export interface IngressRouteResult {
+  readonly handled: boolean;
+  readonly outcome?: MessageOutcomeCandidate;
+}
+
+/** Normalizes the legacy boolean and the structured route result. */
+export function readIngressRouteResult(message: Message, result: boolean | IngressRouteResult | undefined): boolean {
+  if (result === undefined || typeof result === 'boolean') return result === true;
+  if (result.outcome) reportInboundOutcome(message, result.outcome);
+  return result.handled === true;
 }
 
 export const ingressRouteToken = createToken<IngressRoute>('zhin.im.ingress-route');
@@ -288,12 +307,13 @@ export async function executeInboundTurnSpine(
   };
   const ingressRoute = envelope.ingressRoute ?? resolveIngressRoute(lease.value);
 
-  const preRouted = await ingressRoute?.preRoute?.(
+  if (ingressRoute?.preRoute) enterInboundOutcomeStage(message, 'agent_gate');
+  const preRouted = readIngressRouteResult(message, await ingressRoute?.preRoute?.(
     message,
     lease,
     requester,
     conversationSequence,
-  ) === true;
+  ));
   if (preRouted) {
     diagnostics?.route('agent');
     const dispatch = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
@@ -308,12 +328,13 @@ export async function executeInboundTurnSpine(
   }
 
   if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
-    const handled = await ingressRoute.route(
+    enterInboundOutcomeStage(message, 'agent_gate');
+    const handled = readIngressRouteResult(message, await ingressRoute.route(
       message,
       lease,
       requester,
       conversationSequence,
-    );
+    ));
     if (handled) {
       diagnostics?.route('agent');
       const dispatch = Object.freeze({ matched: true, command: 'ai', owner: requester });
@@ -329,16 +350,31 @@ export async function executeInboundTurnSpine(
   }
 
   const repliedBeforeHandlers = envelope.hasReplied();
+  enterInboundOutcomeStage(message, 'handlers');
   diagnostics?.step('handlers', 'started');
   await envelope.runHandlers();
   diagnostics?.step('handlers', 'completed');
   const repliedDuringHandlers = !repliedBeforeHandlers && envelope.hasReplied();
 
   const interactive = await envelope.dispatchInteractive();
-  if (interactive) diagnostics?.route('interaction');
+  if (interactive) {
+    diagnostics?.route('interaction');
+    reportInboundOutcome(message, { outcome: 'interaction_answered', reason: 'button', stage: 'interaction',
+      ...(interactive.owner ? { owner: interactive.owner } : {}) });
+  }
+  if (!interactive) enterInboundOutcomeStage(message, 'command');
+  let commandMiss: 'prefix_mismatch' | 'empty_input' | 'unmatched' | undefined;
   const dispatched = interactive
     ? undefined
-    : await envelope.dispatchCommand((stage, status) => diagnostics?.step(stage, status));
+    : await envelope.dispatchCommand((stage, status) => {
+      diagnostics?.step(stage, status);
+      if (status === 'mismatch') commandMiss = 'prefix_mismatch';
+      else if (status === 'empty_input') commandMiss = 'empty_input';
+      else if (status === 'commands_unavailable') {
+        reportInboundOutcome(message, { outcome: 'feature_disabled', reason: 'commands_unavailable', stage: 'command' });
+      }
+    });
+  if (dispatched) reportCommandOutcome(message, dispatched.dispatch);
   let result: MessageDispatchResult = interactive ?? dispatched!.dispatch;
   let stage: InboundSpineStage = interactive
     ? 'interactive'
@@ -359,17 +395,19 @@ export async function executeInboundTurnSpine(
     }
     if (suggested !== undefined) {
       diagnostics?.route('command');
+      reportInboundOutcome(message, { outcome: 'suggested', reason: 'near_miss', stage: 'suggestion', owner: requester });
       suggestion = { owner: requester, content: suggested };
       stage = 'command-suggestion';
     }
   }
   if (!result.matched && ingressRoute && !suggestion) {
-    const handled = await ingressRoute.route(
+    enterInboundOutcomeStage(message, 'agent_gate');
+    const handled = readIngressRouteResult(message, await ingressRoute.route(
       message,
       lease,
       requester,
       conversationSequence,
-    );
+    ));
     if (handled) {
       diagnostics?.route('agent');
       result = Object.freeze({ matched: true, command: 'ai', owner: requester });
@@ -405,6 +443,8 @@ export async function executeInboundTurnSpine(
     });
   } else if (repliedDuringHandlers) {
     stage = 'handlers';
+    reportInboundOutcome(message, { outcome: 'handler_replied', reason: 'handler', stage: 'handlers',
+      ...(envelope.findEventHandlerName?.('message.receive') ? { owner: envelope.findEventHandlerName('message.receive') } : {}) });
     const handlerName = envelope.findEventHandlerName?.('message.receive') ?? 'message.receive';
     await control?.reportDispatch({
       matched: true,
@@ -418,6 +458,16 @@ export async function executeInboundTurnSpine(
       path: 'none',
       replied,
     });
+    // ADR 0061 P1/P2: nothing claimed the message. An ingress route reports its own, more
+    // specific reason first (`not_addressed` ties keep the earlier one); this is the fallback.
+    if (!result.matched && !suggestion) {
+      reportInboundOutcome(message, {
+        outcome: 'not_addressed',
+        reason: commandMiss === 'prefix_mismatch' || commandMiss === 'empty_input' ? commandMiss
+          : isAddressedMessage(message) ? 'no_command' : 'no_command_not_ambient',
+        stage: 'command',
+      });
+    }
   }
 
   return finish(result, stage, replied, response);
@@ -426,7 +476,7 @@ export async function executeInboundTurnSpine(
 export type InboundInteractionPort = Pick<
   RuntimeInteractionCoordinator<GenerationAdmissionGate>,
   'create' | 'createForMessage' | 'createFromUnknown' | 'dispatch' | 'resolveClaim'
-> & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer'>>;
+> & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer' | 'resolveClaimDetailed'>>;
 
 export interface InboundOutcome {
   readonly dispatch: MessageDispatchResult;
@@ -471,10 +521,15 @@ export async function runInboundMiddlewareAndSpine(
   const terminal = (control?: InboundTerminalControl): Promise<InboundOutcome> =>
     executeInboundTurnSpine(envelope, control);
   const middleware = gatedMiddlewareIndex(message, lease.value);
-  if (isMiddlewareIndex(middleware)) diagnostics?.step('middleware', 'entered');
+  if (isMiddlewareIndex(middleware)) {
+    enterInboundOutcomeStage(message, 'middleware');
+    diagnostics?.step('middleware', 'entered');
+  }
   const outcome = isMiddlewareIndex(middleware)
     ? await middleware.runInbound(message, terminal, {
         stop: (owner): InboundOutcome => {
+          reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware',
+            visibility: 'admin', owner });
           diagnostics?.route('middleware');
           diagnostics?.step('middleware', 'stopped');
           return { dispatch: { matched: true, command: 'middleware', owner } };
@@ -483,6 +538,7 @@ export async function runInboundMiddlewareAndSpine(
         refuse: (owner, error, downstream): InboundOutcome | undefined => {
           const text = userFacingErrorText(error, message.locale);
           if (text === undefined) return undefined;
+          reportInboundOutcome(message, { outcome: 'refused', reason: 'user_facing_error', stage: 'middleware', owner });
           diagnostics?.step('middleware', 'replaced');
           if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
           return {
@@ -491,6 +547,7 @@ export async function runInboundMiddlewareAndSpine(
           };
         },
         replace: (owner, value, downstream): InboundOutcome => {
+          reportInboundOutcome(message, { outcome: 'handler_replied', reason: 'middleware', stage: 'middleware', owner });
           diagnostics?.step('middleware', 'replaced');
           if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
           return {
@@ -549,6 +606,7 @@ export async function dispatchInboundHandlers({
       const text = userFacingErrorText(error, locale);
       if (text === undefined) return false;
       if (payload instanceof RuntimeMessage) {
+        reportInboundOutcome(payload, { outcome: 'refused', reason: 'user_facing_error', stage: 'handlers', owner });
         await bindOperationInput(payload, owner, snapshot).$reply(text);
         return true;
       }
@@ -685,4 +743,40 @@ export function withEndpointEventPayload<TPayload, TClient, TName extends string
     [operationInputBinding]: (owner: PluginId, snapshot: RuntimeSnapshot) =>
       withEndpointEventPayload(source, bindOperationInput(payload, owner, snapshot)),
   });
+}
+
+/**
+ * ADR 0061 §1: a private chat, a mention, the command prefix, or a reply (to the bot; the outbound
+ * ledger check happens in the inbound runtime, which passes `repliedToBot`).
+ */
+export function isAddressedMessage(message: Pick<Message, 'conversation' | 'mentioned' | 'content' | 'commandPrefix'>, repliedToBot = false): boolean {
+  if (message.conversation.kind === 'private' || message.mentioned === true || repliedToBot) return true;
+  const prefix = message.commandPrefix;
+  return typeof prefix === 'string' && prefix.length > 0 && message.content.trim().startsWith(prefix);
+}
+
+/** Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). */
+function reportCommandOutcome(message: Message, result: MessageDispatchResult): void {
+  if (!result.matched) return;
+  const base = { stage: 'command' as const, ...(result.command ? { command: result.command } : {}), ...(result.owner ? { owner: result.owner } : {}) };
+  const refused = (result as { refused?: unknown }).refused === true;
+  switch (result.status) {
+    case 'invalid':
+      reportInboundOutcome(message, { ...base, outcome: 'invalid_input', reason: 'invalid',
+        ...(result.issues?.length ? { detail: result.issues.map(issue => `${issue.field}: ${issue.message}`).join('; ') } : {}) });
+      return;
+    case 'denied': {
+      const permit = (result as { denial?: { permit?: string } }).denial?.permit;
+      const category = typeof permit === 'string' && permit ? permit.split(/[:.]/u)[0] : undefined;
+      reportInboundOutcome(message, { ...base, outcome: 'permission_denied', reason: category ? `denied:${category}` : 'denied' });
+      return;
+    }
+    case 'limited':
+      reportInboundOutcome(message, { ...base, outcome: 'rate_limited', reason: result.limit?.reason ?? 'limited' });
+      return;
+    default:
+      reportInboundOutcome(message, refused
+        ? { ...base, outcome: 'refused', reason: 'user_facing_error' }
+        : { ...base, outcome: 'command_replied', reason: result.menu ? 'menu' : 'executed' });
+  }
 }

@@ -40,9 +40,14 @@ import { findConfigFile, loadRuntimeEnvironmentLayers, readConfig } from '@zhin.
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { diagnoseApprovalChannelConfig } from '../utils/approval-config-check.js';
-import { findDuplicateZhinInstances } from '../utils/dev-link.js';
+import { describeDuplicateZhinInstances, formatDuplicateZhinInstances } from '../utils/dev-link.js';
+import { formatGatewayVersionSkew, gatewayVersionSkew, installedGatewayVersion } from '../utils/gateway-version.js';
+import {
+  formatRecordedFailure, readRuntimeFailureJournal, readRuntimeState, RUNTIME_FAILURES_FILE, type RuntimeState,
+} from '../utils/runtime-state.js';
 import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
-import { compareInstalledVersions, declaredZhinDependencies, detectPnpmMajor, explainVersionMismatch } from '../utils/installed-versions.js';
+import { describePortOwner, findLegacyServiceFiles, legacyServiceFilesCheck } from '../utils/doctor-project-checks.js';
+import { compareInstalledVersions, declaredZhinDependencies, detectPnpmMajor, explainVersionMismatch, installedSatisfies } from '../utils/installed-versions.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
@@ -53,7 +58,7 @@ const CONSOLE_URL = 'https://console.zhin.dev';
 const TROUBLESHOOTING_URL = 'https://zhin.js.org/troubleshooting/';
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 
-interface CheckResult {
+export interface CheckResult {
   name: string;
   /** `info`: worth knowing, nothing to fix (not counted as a warning). */
   status: 'ok' | 'info' | 'warn' | 'error';
@@ -635,14 +640,18 @@ export const doctorCommand = new Command('doctor')
     // 7b. 同名 zhin 包是否解析到多份实例（Token / instanceof 不互通，generation 会硬错误）
     if (fs.existsSync(nodeModulesPath)) {
       try {
-        const duplicates = findDuplicateZhinInstances(cwd);
+        const duplicates = describeDuplicateZhinInstances(cwd);
         if (duplicates.size > 0) {
-          const detail = [...duplicates].map(([name, dirs]) => `${name} ×${dirs.length}`).join(', ');
+          // #1250: name who pulls in each copy (like `pnpm why`) and the concrete edit.
+          const { lines, fixes } = formatDuplicateZhinInstances(duplicates);
           results.push({
             name: 'Zhin 包单实例',
             status: 'warn',
-            message: `同名包解析到多个物理位置: ${detail}`,
-            fix: '用 pnpm add 接入的独立插件请先 pnpm remove，改用 zhin dev link <插件目录>；联调本地源码请运行 zhin dev link <zhin 源码路径>；否则统一版本后运行 pnpm dedupe（详见 authoring/local-dev）',
+            message: `同名包解析到多个物理位置：${lines.join('；')}`,
+            fix: [
+              ...fixes,
+              '用 pnpm add 接入的独立插件请先 pnpm remove，改用 zhin dev link <插件目录>；联调本地源码请运行 zhin dev link <zhin 源码路径>；否则统一版本后运行 pnpm dedupe（详见 authoring/local-dev）',
+            ].join('；'),
           });
         } else {
           results.push({ name: 'Zhin 包单实例', status: 'ok', message: '每个 zhin 包只解析到一份实例' });
@@ -674,9 +683,11 @@ export const doctorCommand = new Command('doctor')
 
     // 8. 检查端口占用：按启动时的方式解析 http.port（展开 .env 中的 ${VAR}；未配置时为默认端口）
     let httpPort: number | undefined = DEFAULT_HTTP_PORT;
+    let httpTls = false;
+    let httpHost: string | undefined;
     if (existingConfig && !configParseFailed) {
       const resolved = await resolveEffectiveHttpPort(cwd, existingConfig);
-      if (resolved.status === 'ok') httpPort = resolved.port ?? DEFAULT_HTTP_PORT;
+      if (resolved.status === 'ok') { httpPort = resolved.port ?? DEFAULT_HTTP_PORT; httpTls = resolved.tls === true; httpHost = resolved.host; }
       else {
         httpPort = undefined;
         results.push({
@@ -703,12 +714,8 @@ export const doctorCommand = new Command('doctor')
             message: `由本项目的管理网关监听（pid ${gateway.gateway.pid}）`,
           });
         } else if (stdout.trim()) {
-          results.push({
-            name: `端口 ${port}`,
-            status: 'warn',
-            message: '已被占用',
-            fix: `若是 zhin 进程，先正常停止（运行 zhin stop，或在其终端按 Ctrl+C）；否则用 lsof -i:${port} 找到进程后 kill <pid>（SIGTERM），或在 zhin.config.yml 修改 http.port 换用其他端口`
-          });
+          // #1250: ask the occupant's /pub/health (no credentials) whether it is a Zhin gateway, and whose.
+          results.push({ name: `端口 ${port}`, ...await describePortOwner(port, cwd, { tls: httpTls, ...(httpHost ? { host: httpHost } : {}) }) });
         } else {
           results.push({
             name: `端口 ${port}`,
@@ -725,23 +732,15 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    // 9. 检查 TypeScript
+    // 8b. 旧版脚手架留在项目根目录的服务文件（ADR 0062 §2）：只提示，不删除
+    const legacyServiceFiles = legacyServiceFilesCheck(findLegacyServiceFiles(cwd));
+    if (legacyServiceFiles) results.push({ name: '旧服务文件', ...legacyServiceFiles });
+
+    // 9. 检查 TypeScript：项目自己装的版本（node_modules），不是 PATH 上的全局 tsc（#1250）
     if (fs.existsSync(path.join(cwd, 'tsconfig.json'))) {
-      try {
-        const { stdout } = await execAsync('tsc --version');
-        results.push({
-          name: 'TypeScript',
-          status: 'ok',
-          message: stdout.trim()
-        });
-      } catch {
-        results.push({
-          name: 'TypeScript',
-          status: 'warn',
-          message: '未安装',
-          fix: 'pnpm add -D typescript'
-        });
-      }
+      const pkg = await readProjectPackage().catch(() => ({} as Record<string, any>));
+      const globalTsc = async () => execAsync('tsc --version').then(({ stdout }) => stdout.trim(), () => undefined);
+      results.push(await diagnoseTypeScript(cwd, pkg, globalTsc));
     }
 
     // 10. 检查环境变量文件
@@ -871,6 +870,19 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
+    // 10d'. 运行状态（#1250）：网关运行时列出 Console「需要你处理」与读不到的来源；
+    // 未运行时读实例的失败记录（.zhin/runtime-failures.json），作为「上次运行」显示。
+    if (gateway) {
+      const skew = gatewayVersionSkew(gateway.gateway, installedGatewayVersion(cwd));
+      if (skew) {
+        const [message, restart] = formatGatewayVersionSkew(skew);
+        results.push({ name: '网关版本', status: 'warn', message: message!, fix: restart!.trim().replace(/^重启网关：/u, '') });
+      }
+      if (gateway.instance.state === 'running') results.push(...runtimeHealthResults(await readRuntimeState(cwd)));
+    } else {
+      results.push(...lastRunResults(cwd));
+    }
+
     // 10e. Console 账号存储 .zhin/gateway.db 与 Console SQL 受限账号（ADR 0059）
     for (const check of await diagnoseGatewayStorage(cwd, { fix: options.fix === true, gatewayRunning: gateway !== undefined })) {
       results.push(check);
@@ -883,37 +895,121 @@ export const doctorCommand = new Command('doctor')
 
     // 打印结果
     console.log('');
-    let hasErrors = false;
-    let hasWarnings = false;
-
     for (const result of results) {
       const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
       const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
-      
       console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
-      
-      if (result.fix && !options.fix) {
-        console.log(`   ${chalk.gray('修复:')} ${chalk.cyan(result.fix)}`);
+      // With --fix, an item --fix handled says so in its message; the others still show how to fix them.
+      if (result.fix && (!options.fix || !isAutoFixNote(result.fix))) {
+        console.log(`   ${chalk.gray(options.fix ? '需手动修复:' : '修复:')} ${chalk.cyan(result.fix)}`);
       }
-      
-      if (result.status === 'error') hasErrors = true;
-      if (result.status === 'warn') hasWarnings = true;
     }
-
     console.log('');
-    
-    if (hasErrors) {
-      console.log(chalk.red('❌ 发现严重问题，请修复后再运行'));
-      process.exit(1);
-    } else if (hasWarnings) {
-      console.log(chalk.yellow('⚠️  发现警告，建议修复以获得最佳体验'));
-      if (!options.fix) {
-        console.log(chalk.gray('提示: 运行 ') + chalk.cyan('zhin doctor --fix') + chalk.gray(' 自动修复可修复的问题'));
-      }
-    } else {
-      console.log(chalk.green('✅ 所有检查通过！'));
+    const summary = summarizeDoctorResults(results, options.fix === true);
+    for (const line of summary.lines) {
+      const color = summary.level === 'error' ? chalk.red : summary.level === 'warn' ? chalk.yellow : chalk.green;
+      console.log(line.startsWith('提示') ? chalk.gray(line) : color(line));
     }
+    if (summary.level === 'error') process.exit(1);
   });
+
+/** A `fix` text that only says what `--fix` did or will do (`将写入…`, `已补全…`). */
+function isAutoFixNote(fix: string): boolean {
+  return /^(?:将|已)/u.test(fix);
+}
+
+/**
+ * The closing lines of `zhin doctor` (#1250): 「所有检查通过」 only when nothing is a warning or an
+ * error; with `--fix`, says how many items it fixed and that the remaining ones need a manual
+ * step, instead of repeating 「建议修复」 when nothing could be fixed automatically.
+ */
+export function summarizeDoctorResults(
+  results: readonly Pick<CheckResult, 'status' | 'fix'>[],
+  fix: boolean,
+): { readonly level: 'ok' | 'warn' | 'error'; readonly lines: readonly string[] } {
+  const problems = results.filter(result => result.status === 'warn' || result.status === 'error');
+  const errors = problems.filter(result => result.status === 'error').length;
+  if (problems.length === 0) return { level: 'ok', lines: ['✅ 所有检查通过！'] };
+  const level = errors > 0 ? 'error' : 'warn';
+  const head = errors > 0 ? `❌ 发现 ${errors} 个严重问题，请修复后再运行` : `⚠️  发现 ${problems.length} 项警告，建议修复以获得最佳体验`;
+  if (!fix) return { level, lines: [head, '提示: 运行 zhin doctor --fix 自动修复可修复的问题'] };
+  const autoFixed = problems.filter(result => result.fix !== undefined && isAutoFixNote(result.fix)).length;
+  const manual = problems.length - autoFixed;
+  if (autoFixed === 0) {
+    return { level, lines: [head, `以上 ${problems.length} 项都不能自动修复：请按各项「需手动修复」的说明处理`] };
+  }
+  return { level, lines: [head, `--fix 已处理 ${autoFixed} 项${manual ? `；其余 ${manual} 项需要手动修复（见各项说明）` : '；重跑 zhin doctor 确认'}`] };
+}
+
+/**
+ * The project's own TypeScript (`node_modules/typescript`), with the range package.json declares
+ * (#1250 `doctor-typescript-global`); a global `tsc` on PATH is only mentioned, never reported as
+ * the project's version.
+ */
+export async function diagnoseTypeScript(
+  cwd: string,
+  pkg: Record<string, any>,
+  globalTsc: () => Promise<string | undefined>,
+): Promise<CheckResult> {
+  const declared: unknown = pkg.devDependencies?.typescript ?? pkg.dependencies?.typescript;
+  const declaredText = typeof declared === 'string' ? `，package.json 声明 ${declared}` : '';
+  let installed: string | undefined;
+  try {
+    installed = (JSON.parse(fs.readFileSync(path.join(cwd, 'node_modules', 'typescript', 'package.json'), 'utf8')) as { version?: unknown }).version as string | undefined;
+  } catch { installed = undefined; }
+  if (typeof installed === 'string') {
+    const satisfied = typeof declared === 'string' ? installedSatisfies(installed, declared) : undefined;
+    if (satisfied === false) {
+      return { name: 'TypeScript', status: 'warn', message: `项目安装的是 ${installed}${declaredText}，不在声明范围内`, fix: 'pnpm install' };
+    }
+    return { name: 'TypeScript', status: 'ok', message: `${installed}（项目 node_modules${declaredText}）` };
+  }
+  const global = await globalTsc();
+  if (typeof declared === 'string') {
+    return { name: 'TypeScript', status: 'warn', message: `package.json 声明了 typescript ${declared}，但 node_modules 中没有安装${global ? `（PATH 上的全局 tsc 是 ${global}，不代表项目版本）` : ''}`, fix: 'pnpm install' };
+  }
+  if (global) {
+    return { name: 'TypeScript', status: 'info', message: `项目未安装 typescript；PATH 上的全局 tsc 是 ${global}，不代表项目使用的版本（需要时 pnpm add -D typescript）` };
+  }
+  return { name: 'TypeScript', status: 'warn', message: '未安装', fix: 'pnpm add -D typescript' };
+}
+
+/** Doctor results for a running instance: each attention item and each unreadable source is a warning. */
+export function runtimeHealthResults(state: RuntimeState): CheckResult[] {
+  const results: CheckResult[] = [];
+  if (!state.attention.available) {
+    results.push({ name: '运行状态', status: 'warn', message: `无法读取 Console「需要你处理」：${state.attention.error}`, fix: 'zhin status 查看网关与实例；zhin logs 查看日志' });
+    return results;
+  }
+  for (const item of state.attention.items) {
+    if (item.severity === 'info') {
+      results.push({ name: `需要你处理：${item.title}`, status: 'info', message: item.detail || item.kind });
+      continue;
+    }
+    results.push({ name: `需要你处理：${item.title}`, status: 'warn', message: item.detail || item.kind, fix: '在 Console「需要你处理」中处理（zhin status 查看账号与 MCP 状态）' });
+  }
+  for (const source of state.attention.unavailable) {
+    results.push({ name: '运行状态', status: 'warn', message: `来源「${source.source}」暂时无法读取${source.reason ? `（${source.reason}）` : ''}，待处理列表可能不完整`, fix: 'zhin logs 查看实例日志' });
+  }
+  if (state.attention.items.length === 0 && state.attention.unavailable.length === 0) {
+    results.push({ name: '运行状态', status: 'ok', message: 'Console「需要你处理」为空' });
+  }
+  return results;
+}
+
+/**
+ * Without a running gateway: the failures recorded during the last run in
+ * `.zhin/runtime-failures.json` (written by zhin.js's `RuntimeFailureJournal`,
+ * `src/instance/console/runtime-failures.ts`, #1270 batch 14). No file, no results.
+ */
+export function lastRunResults(cwd: string): CheckResult[] {
+  const journal = readRuntimeFailureJournal(cwd);
+  if (!journal) return [];
+  if ('error' in journal) return [{ name: '上次运行', status: 'warn', message: `无法读取 ${RUNTIME_FAILURES_FILE}：${journal.error}` }];
+  return journal.entries.map(entry => ({
+    name: '上次运行', status: 'warn' as const, message: formatRecordedFailure(entry), fix: 'zhin start 启动后用 zhin status 确认是否恢复；zhin logs 查看详情',
+  }));
+}
 
 /** 从 YAML/JSON 解析错误中提取行号（yaml 的 YAMLParseError 带 linePos，其余从 message 正则兜底） */
 function extractConfigErrorLine(err: unknown): number | null {
@@ -932,11 +1028,11 @@ export async function resolveEffectiveHttpPort(
   cwd: string,
   configFile: string,
   environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
-): Promise<{ status: 'ok'; port: number | undefined } | { status: 'invalid'; message: string }> {
+): Promise<{ status: 'ok'; port: number | undefined; tls?: boolean; host?: string } | { status: 'invalid'; message: string }> {
   try {
     const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
     const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
-    return { status: 'ok', port: http.port };
+    return { status: 'ok', port: http.port, ...(http.tls ? { tls: true } : {}), ...(typeof http.host === 'string' ? { host: http.host } : {}) };
   } catch (error) {
     if (error instanceof InvalidHttpPortError) return { status: 'invalid', message: `${error.message}；网关会拒绝启动` };
     // Other http.* problems (TLS files, listeners) are not this check's business.

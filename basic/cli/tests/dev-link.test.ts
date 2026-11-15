@@ -8,7 +8,9 @@ import {
   detectZhinPackages,
   devLink,
   devUnlink,
+  describeDuplicateZhinInstances,
   findDuplicateZhinInstances,
+  formatDuplicateZhinInstances,
   readWorkspaceEntries,
   resolveWorkspaceClosure,
 } from '../src/utils/dev-link.js';
@@ -239,5 +241,37 @@ describe('duplicate zhin instance detection', () => {
     top('zhin.js', npmCopy);
     top('plug', plugin);
     expect([...findDuplicateZhinInstances(project).keys()]).toEqual(['zhin.js']);
+  });
+
+  it('names who requires each copy: the root project and a workspace member with its specifier (#1250)', () => {
+    const current = store('zhin.js@1.4.0', 'zhin.js', { version: '1.4.0' });
+    const old = store('zhin.js@1.2.0', 'zhin.js', { version: '1.2.0' });
+    pkg(project, { name: 'bot', dependencies: { 'zhin.js': '^1.4.0', foo: 'workspace:*' } });
+    fs.writeFileSync(path.join(project, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const member = path.join(project, 'plugins/foo');
+    pkg(member, { name: 'foo', dependencies: { 'zhin.js': '~1.2.0' } });
+    top('zhin.js', current);
+    top('foo', member);
+    fs.mkdirSync(path.join(member, 'node_modules'), { recursive: true });
+    fs.symlinkSync(old, path.join(member, 'node_modules', 'zhin.js'), 'dir');
+    const described = describeDuplicateZhinInstances(project);
+    expect([...described.keys()]).toEqual(['zhin.js']);
+    const { lines, fixes } = formatDuplicateZhinInstances(described);
+    expect(lines).toEqual(['zhin.js ×2：1.2.0 ← plugins/foo ("~1.2.0")；1.4.0 ← 根项目']);
+    expect(fixes).toEqual(['把 plugins/foo/package.json 的 zhin.js 改成 ^1.4.0（或运行 zhin migrate，一并升级工作区里的包）']);
+  });
+
+  it('finds a workspace member\'s copy even when the root does not depend on the member', () => {
+    const current = store('zhin.js@1.4.0', 'zhin.js', { version: '1.4.0' });
+    const old = store('zhin.js@1.2.0', 'zhin.js', { version: '1.2.0' });
+    pkg(project, { name: 'bot', dependencies: { 'zhin.js': '^1.4.0' } });
+    fs.writeFileSync(path.join(project, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const member = path.join(project, 'plugins/bar');
+    pkg(member, { name: 'bar', dependencies: { 'zhin.js': '1.2.0' } });
+    top('zhin.js', current);
+    fs.mkdirSync(path.join(member, 'node_modules'), { recursive: true });
+    fs.symlinkSync(old, path.join(member, 'node_modules', 'zhin.js'), 'dir');
+    const { lines } = formatDuplicateZhinInstances(describeDuplicateZhinInstances(project));
+    expect(lines).toEqual(['zhin.js ×2：1.2.0 ← plugins/bar ("1.2.0")；1.4.0 ← 根项目']);
   });
 });

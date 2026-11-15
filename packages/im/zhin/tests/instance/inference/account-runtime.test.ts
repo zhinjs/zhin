@@ -7,7 +7,8 @@ import type {
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { DatabaseInferenceRepository } from '@zhin.js/agent/runtime';
 import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, type CredentialPayload, type EnvironmentExpressionSource } from '@zhin.js/agent/runtime';
-import { HostAccountRuntime } from '@zhin.js/agent/runtime';
+import { HostAccountRuntime, type InferenceFailureJournal } from '@zhin.js/agent/runtime';
+import { RuntimeFailureJournal } from '../../../src/instance/console/runtime-failures.js';
 import { expandEnvironmentValue } from '@zhin.js/runtime';
 
 function deferred<T>() {
@@ -60,7 +61,7 @@ it('retains material identity when an environment expression resolves to a diffe
     } finally { await rebuilt.close(); }
   } finally { await fixture.close(); }
 });
-async function setup(method: 'api-key' | 'oauth' | 'none', source?: string, extra: { cleanupFailed?: (message: string) => void; requiresClientSecret?: boolean } = {}) {
+async function setup(method: 'api-key' | 'oauth' | 'none', source?: string, extra: { cleanupFailed?: (message: string) => void; requiresClientSecret?: boolean; failureJournal?: () => InferenceFailureJournal } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-account-'));
   const db = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'state.sqlite') });
   const repo = new DatabaseInferenceRepository({ database: db, normalizeGraph: value => structuredClone(value) as ProviderGraph });
@@ -89,7 +90,8 @@ async function setup(method: 'api-key' | 'oauth' | 'none', source?: string, extr
   const runtime = () => new HostAccountRuntime({ hostOwnerId: 'host', repository: repo, credentials: store, drivers: { acquire: async () => lease() },
     fetch: () => vi.fn(async () => new Response('{}')),
     allowTarget: ({ target }) => target.origin === 'https://provider.example', resolveSource, now: () => 1000,
-    ...(extra.cleanupFailed ? { cleanupFailed: extra.cleanupFailed } : {}) });
+    ...(extra.cleanupFailed ? { cleanupFailed: extra.cleanupFailed } : {}),
+    ...(extra.failureJournal ? { failureJournal: extra.failureJournal() } : {}) });
   const host = runtime();
   const execution: ProviderExecutionContext = { binding: { graphRevision: 1, account, service,
     model: { id: 'model', kinds: ['language'], protocol: 'fixture' },
@@ -181,6 +183,88 @@ it('reports a driver preparation failure with its code and upstream status, neve
     fixture.prepare.mockImplementation(async ({ credential }) => ({ ...credential, preparation: { status: 'ready' as const } }));
     await fixture.host.prepareLogin({ account: fixture.account, expectedRevision: 2, signal });
     expect(await fixture.host.status(fixture.account)).toEqual({ status: 'ready', revision: 3 });
+  } finally { await fixture.close(); }
+});
+
+it('writes a preparation failure through the runtime failure journal and restores it after a restart (#1270)', async () => {
+  const journalDir = await mkdtemp(join(tmpdir(), 'inference-journal-'));
+  const file = join(journalDir, 'runtime-failures.json');
+  let journal = new RuntimeFailureJournal(file, { now: () => 1000 });
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  fixture.complete.mockResolvedValue({ accessToken: 'logged-in', refreshToken: 'login-refresh', expiresAt: 5000, preparation: { status: 'required' } });
+  fixture.prepare.mockRejectedValue(Object.assign(new Error('Provider account preparation: project-unavailable'), {
+    name: 'ProviderPreparationError', code: 'project-unavailable', status: 200, reason: 'UNSUPPORTED_CLIENT', step: 'onboard-operation' }));
+  try {
+    const signal = new AbortController().signal, login = await fixture.host.beginLogin({ account: fixture.account, signal });
+    await fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+    expect(journal.get('account', 'account')).toMatchObject({ code: 'project-unavailable', category: 'preparation',
+      step: 'onboard-operation', reason: 'UNSUPPORTED_CLIENT', upstreamStatus: 200, credentialRevision: 2, count: 1 });
+    await journal.close();
+    // Restart: a new process-local runtime has no memory of the failure; the journal still has it.
+    journal = new RuntimeFailureJournal(file, { now: () => 2000 });
+    const restarted = fixture.runtime();
+    try {
+      expect(await restarted.status(fixture.account)).toEqual({ status: 'authenticated', preparation: 'required', revision: 2,
+        preparationFailure: { code: 'project-unavailable', upstreamStatus: 200, reason: 'UNSUPPORTED_CLIENT', step: 'onboard-operation', restored: true, at: 1000 } });
+      // A success clears it.
+      fixture.prepare.mockReset();
+      fixture.prepare.mockImplementation(async ({ credential }) => ({ ...credential, preparation: { status: 'ready' as const } }));
+      await restarted.prepareLogin({ account: fixture.account, expectedRevision: 2, signal });
+      expect(journal.get('account', 'account')).toBeUndefined();
+    } finally { await restarted.close(); }
+  } finally { await fixture.close(); await rm(journalDir, { recursive: true, force: true }); }
+});
+
+it('journals the latest failed model call of an account and clears it on the next success (#1270)', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  const fixture = await setup('api-key', undefined, { failureJournal: () => journal });
+  try {
+    const responses = [new Response('', { status: 429 }), new Response('{}', { status: 200 })];
+    const observed = fixture.host.observeCalls(fixture.account, async () => responses.shift()!);
+    await observed('https://provider.example/v1');
+    expect(journal.get('model', 'account')).toMatchObject({ code: 'rate-limit', upstreamStatus: 429,
+      message: 'Model call failed: outcome=rate-limit upstreamStatus=429' });
+    await observed('https://provider.example/v1');
+    expect(journal.get('model', 'account')).toBeUndefined();
+  } finally { await fixture.close(); }
+});
+
+it('clears journaled failures of the old credential when a new one is published (re-login, #1270)', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  try {
+    journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 0 });
+    journal.record({ source: 'model', subject: 'account', code: 'auth', category: 'auth', message: 'x', upstreamStatus: 401 });
+    const signal = new AbortController().signal, login = await fixture.host.beginLogin({ account: fixture.account, signal });
+    await fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+    expect((await fixture.host.status(fixture.account)).revision).toBeGreaterThan(0);
+    expect(journal.list()).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
+it('keeps the journaled model failure across a periodic token refresh of the same identity (#1278)', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  try {
+    await fixture.seed({ accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1 });
+    journal.record({ source: 'model', subject: 'account', code: 'rate-limit', category: 'rate-limit', message: 'x', upstreamStatus: 429 });
+    expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'new-access' });
+    expect(fixture.refresh).toHaveBeenCalledOnce();
+    expect((await fixture.host.status(fixture.account)).revision).toBeGreaterThan(1);
+    expect(journal.get('model', 'account')).toMatchObject({ code: 'rate-limit', upstreamStatus: 429 });
+  } finally { await fixture.close(); }
+});
+
+it('ignores a journaled preparation failure of another credential revision', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 1 });
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  try {
+    await fixture.seed({ accessToken: 'a', refreshToken: 'r', expiresAt: 5000, preparation: { status: 'required' } });
+    // The seeded credential is revision 1: matches.
+    expect((await fixture.host.status(fixture.account)).preparationFailure).toMatchObject({ code: 'project-unavailable' });
+    journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 7 });
+    expect((await fixture.host.status(fixture.account)).preparationFailure).toBeUndefined();
   } finally { await fixture.close(); }
 });
 

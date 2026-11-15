@@ -42,17 +42,21 @@ export async function createPersonalReminder(
     const checkCancel = (value: string) => {
       if (value.trim().toLowerCase() === (locale === 'en' ? 'cancel' : '取消')) throw new ReminderCreationCancelled();
     };
-    const ask = async (stage: 'time' | 'body' | 'confirmation', title: string, description: string, maxLength: number): Promise<string> => {
+    const ask = async (stage: 'time' | 'body' | 'confirmation', title: string, description: string, maxLength: number,
+      answer?: Readonly<{ pattern: RegExp; invalidText: string }>): Promise<string> => {
       checkDeadline();
       const stepDeadline = steps.get(stage) ?? Date.now() + STEP_TIMEOUT;
       steps.set(stage, stepDeadline);
       const remaining = Math.min(deadline, stepDeadline) - Date.now();
       if (remaining <= 0) throw new ReminderCreationDeadline();
-      const answer = (await interaction.ask({ type: 'text', title, description,
-        tip: t(locale, 'answerTip'), maxLength,
+      // ADR 0061 P5: only the person who started the reminder answers; an invalid answer re-sends
+      // the prompt at most once (Core), so chatting meanwhile is not answered with the whole prompt again.
+      const reply = (await interaction.ask({ type: 'text', title, description,
+        tip: t(locale, 'answerTip'), maxLength, answeredBy: 'target',
+        ...(answer ? { pattern: answer.pattern, invalidText: answer.invalidText } : {}),
         timeout: remaining, timeoutText, signal: context.signal,
       })).trim();
-      checkDeadline(); checkCancel(answer); return answer;
+      checkDeadline(); checkCancel(reply); return reply;
     };
     let expression = parameters.when?.trim();
     if (expression) checkCancel(expression);
@@ -89,12 +93,10 @@ export async function createPersonalReminder(
       : await context.input.$replyFrom!(context.owner.id, previewContent);
     checkDeadline();
     if (!receipt || typeof receipt !== 'object' || !('status' in receipt) || receipt.status !== 'sent') throw new ReminderPreviewDeliveryError();
-    let confirmError = '';
-    while (true) {
-      const answer = await ask('confirmation', t(locale, 'askConfirm'), [confirmError, t(locale, 'confirmHelp')].filter(Boolean).join('\n'), 500);
-      if (answer.toLowerCase() === (locale === 'en' ? 'confirm' : '确认')) break;
-      confirmError = t(locale, 'confirmInvalid');
-    }
+    // Only the explicit confirmation or cancellation word answers; Core keeps waiting on anything else.
+    const confirmation = locale === 'en' ? /^\s*(?:confirm|cancel)\s*$/iu : /^\s*(?:确认|取消)\s*$/u;
+    await ask('confirmation', t(locale, 'askConfirm'), t(locale, 'confirmHelp'), 500,
+      { pattern: confirmation, invalidText: t(locale, 'confirmInvalid') });
     checkDeadline();
     if (parsed.at <= Date.now()) return `${t(locale, 'expired')} ${restart}`;
     const service = context.use(reminderServiceToken);

@@ -6,12 +6,26 @@ import { operationInputBinding, operationInputSignal, operationInputResources, o
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
+import { inboundOutcomeSink, type InboundOutcomeSink } from './inbound-outcome-ledger.js';
 import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 import type { OutboundMediaTrust } from '../../built/outbound-media-trust.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
 export type { MediaRef, Segment };
+
+const facades = new WeakSet<object>();
+
+/** A frozen `{ report, enter }` port over an outcome sink (idempotent for an existing facade). */
+export function inboundOutcomeFacade(sink: InboundOutcomeSink): InboundOutcomeSink {
+  if (facades.has(sink)) return sink;
+  const facade: InboundOutcomeSink = Object.freeze({
+    report: (candidate: Parameters<InboundOutcomeSink['report']>[0]) => sink.report(candidate),
+    enter: (stage: Parameters<InboundOutcomeSink['enter']>[0]) => sink.enter(stage),
+  });
+  facades.add(facade);
+  return facade;
+}
 
 /** Internal send binding retained by one inbound operation; never a wire/config field. */
 export const operationEndpoint = Symbol('zhin.im.operation-endpoint');
@@ -341,6 +355,11 @@ export interface RuntimeMessageOperation {
   readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
   readonly presentation?: RuntimeMessagePresentation;
+  /**
+   * ADR 0061: report port of this message's outcome ledger, shared by every author view. Only
+   * `report` / `enter` are kept (a frozen facade); settling stays with the inbound runtime.
+   */
+  readonly outcomes?: InboundOutcomeSink;
 }
 
 /** Canonical runtime message with optional plugin-owned extensions. */
@@ -370,7 +389,9 @@ export class RuntimeMessage implements MessageBase {
   /** Core owns these immutable facts; author rebinding shares them and the captured operation. */
   constructor(facts: RuntimeMessageFacts, operation: RuntimeMessageOperation) {
     this.#facts = Object.freeze(facts);
-    this.#operation = Object.freeze(operation);
+    // Never hand the ledger itself to views: plugins only get the report port (no `settle`).
+    const outcomes = operation.outcomes;
+    this.#operation = Object.freeze(outcomes ? { ...operation, outcomes: inboundOutcomeFacade(outcomes) } : operation);
     const { conversation, content, sender, segments, message, endpointId, mentioned, replyTo } = facts;
     const { reply } = operation;
     this.conversation = conversation;
@@ -479,6 +500,11 @@ export class RuntimeMessage implements MessageBase {
   [operationInputSignal](): AbortSignal | undefined {
     this.#operation.assertActive?.();
     return this.#operation.signal;
+  }
+
+  /** @internal The inbound outcome ledger (ADR 0061); reports after settlement are ignored by it. */
+  [inboundOutcomeSink](): InboundOutcomeSink | undefined {
+    return this.#operation.outcomes;
   }
 
   /** @internal The command/handler author's actual leased operation. */

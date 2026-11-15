@@ -1,7 +1,7 @@
 import { readOperationSession } from '@zhin.js/core';
 import type { ModelAvailabilityRegistry } from '@zhin.js/ai';
 import { providerPurposeSelections, type InferenceOperationScope } from '@zhin.js/ai/provider';
-import type { ImRuntime, Message } from '@zhin.js/core/runtime';
+import { reportInboundOutcome, resolveAmbientSwitch, type ImRuntime, type Message, type MessageOutcomeCandidate } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
 import { createInvocationCompletion, invocationModel, resolvePurposeExecution } from '../../model-runtime/index.js';
@@ -144,11 +144,27 @@ export async function considerAmbientEngagement(input: Readonly<{
     audit = NO_DECISION_AUDIT,
   } = input;
   let { botName } = input;
-  if (message.conversation.kind !== 'group' || conversationSequence === undefined) return null;
+  // ADR 0061 P2: every early return records why the message got no interjection.
+  const notAddressed = (reason: string, detail?: string): null => {
+    reportInboundOutcome(message, { outcome: 'not_addressed', reason, stage: 'ambient', ...(detail ? { detail } : {}) });
+    return null;
+  };
+  if (message.conversation.kind !== 'group' || conversationSequence === undefined) return notAddressed('no_command_not_ambient');
   const text = message.content.trim();
   const trigger = agent.service.getTriggerConfig();
-  if (!text || trigger?.enabled === false || hasIgnoredTriggerPrefix(text, trigger)) return null;
-  if (!ambientEngagement?.enabledFor(platform, message.conversation.id)) return null;
+  if (!text) return notAddressed('empty_input');
+  if (trigger?.enabled === false) return notAddressed('trigger_disabled');
+  if (hasIgnoredTriggerPrefix(text, trigger)) return notAddressed('ignored_trigger_prefix');
+  // ADR 0062 §23: the file allowlist is the global default; stored feature overrides decide below it.
+  const ambientSwitch = resolveAmbientSwitch(lease.value, message, ambientEngagement?.enabledFor(platform, message.conversation.id) === true);
+  if (!ambientEngagement) {
+    return notAddressed('no_command_not_ambient', 'interjection is not configured: the configuration has no ai.trigger.ambient section');
+  }
+  if (!ambientSwitch.enabled) {
+    return notAddressed('no_command_not_ambient', ambientSwitch.source === 'global'
+      ? 'this group is not in ai.trigger.ambient.conversations and no feature switch turns interjection on'
+      : `interjection is switched off for this group by the ${ambientSwitch.source}-level feature switch`);
+  }
   const source = readOperationSession(message);
   if (source) {
     const operation = im.endpoints.captureOperation({
@@ -197,6 +213,7 @@ export async function considerAmbientEngagement(input: Readonly<{
       }),
     }));
   }
+  if (decision.kind !== 'engage') reportInboundOutcome(message, ambientSilentOutcome(decision));
   return decision.kind === 'engage' ? { content: text } : null;
 }
 
@@ -223,4 +240,12 @@ export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDeci
     : { decision: decision.kind, confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) };
   audit({ kind: 'ambient_decision', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload });
   audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload: { source: 'ambient', [DECISION_PARENT_KEY]: 'ambient_decision' } });
+}
+
+/** ADR 0061 §1.3 `ambient_silent`: the judge's (or throttle's) reason, never the message text. */
+export function ambientSilentOutcome(decision: Exclude<AmbientDecision, { kind: 'engage' }>): MessageOutcomeCandidate {
+  if (decision.kind === 'skipped') return { outcome: 'ambient_silent', reason: decision.reason, stage: 'ambient' };
+  return { outcome: 'ambient_silent', reason: 'ambient_not_engaged', stage: 'ambient',
+    ...(decision.kind === 'shadow' ? { facets: ['ambient_shadow'] } : {}),
+    ...(decision.judgment.source ? { detail: `confidence ${decision.judgment.confidence}, source ${decision.judgment.source}` } : {}) };
 }

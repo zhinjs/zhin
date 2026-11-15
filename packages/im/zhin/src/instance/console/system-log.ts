@@ -1,4 +1,4 @@
-import { addTransport, removeTransport, type LogTransport } from '@zhin.js/logger';
+import { addTransport, parseLogLine, removeTransport, type LogTransport } from '@zhin.js/logger';
 import {
   defineSystemLogTable,
   insertSystemLogRow,
@@ -35,9 +35,7 @@ export const DEFAULT_SYSTEM_LOG_CONFIG: SystemLogStoreConfig = Object.freeze({
 
 const ANSI_ESCAPE = String.fromCharCode(27);
 const ANSI_REGEX = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*[mGKHF]`, 'g');
-/** Current DefaultFormatter: `[HH:mm:ss.SSS][LEVEL] [name] message`. */
-const CURRENT_LOG_LINE_REGEX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\]\[(\w+)\](?: \[([^\[\]]+)\])? ([\s\S]*)$/;
-/** Accept persisted/older formatters without changing their existing contract. */
+/** Accept persisted/older formatters without changing their existing contract (the current one goes through `parseLogLine`). */
 const LOG_LINE_REGEX = /\[[\d-]+ [\d:.]+\] \[(\w+)\] \[([^\[\]]+)\]: ([\s\S]+)/;
 
 const LEVEL_ALIASES: Readonly<Record<string, 'debug' | 'info' | 'warn' | 'error'>> = {
@@ -71,16 +69,19 @@ export class SystemLogDatabaseTransport implements LogTransport {
   }
 
   write(formatted: string): void {
-    const plain = formatted.replace(ANSI_REGEX, '');
-    const match = plain.match(CURRENT_LOG_LINE_REGEX) ?? plain.match(LOG_LINE_REGEX);
-    if (!match) return;
-    const level = mapFormattedLevel(match[1] ?? '');
+    // DefaultFormatter output (with or without the date, #1250), else an older format.
+    const current = parseLogLine(formatted);
+    const legacy = current ? undefined : formatted.replace(ANSI_REGEX, '').match(LOG_LINE_REGEX);
+    if (!current && !legacy) return;
+    const level = current
+      ? (current.level === 'silent' ? undefined : current.level)
+      : mapFormattedLevel(legacy![1] ?? '');
     if (!level) return; // OFF / 未识别级别不落库
-    const name = match[2] ?? '';
+    const name = current ? current.category ?? '' : legacy![2] ?? '';
     const row = {
       level,
       name,
-      message: (match[3] ?? '').trim(),
+      message: (current ? current.message : legacy![3] ?? '').trim(),
       source: name.split(':')[0] ?? name,
       timestamp: new Date(),
     };

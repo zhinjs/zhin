@@ -2,7 +2,8 @@ import type { EndpointChildLease, EndpointEvent, PeerRegistry } from '@zhin.js/a
 import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
 import type { OperationResourceView } from '@zhin.js/feature-kit';
 import { normalizePlatformStanding, type DeliveryReceipt, type UserInteraction } from '@zhin.js/im-contract';
-import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import { createErrorId, formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import { redactSecretText } from '@zhin.js/kernel';
 import type {
   CapabilityId,
   GenerationAdmissionGate,
@@ -16,6 +17,7 @@ import type { EndpointEventContext } from '../../side-event/base.js';
 import type { IncomingSystemEvent, SystemEvent } from '../../system-event.js';
 import {
   RuntimeMessage,
+  inboundOutcomeFacade,
   operationEndpoint,
   type CaptureEndpointOperationInput,
   type CapturedEndpointOperation,
@@ -36,6 +38,7 @@ import {
   dispatchInboundInteractive,
   handlers,
   interactionResult,
+  isAddressedMessage,
   messageLocale,
   resolveIngressRoute,
   resolveRoomMembership,
@@ -45,6 +48,8 @@ import {
   type InboundOutcome,
 } from './inbound-spine.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
+import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-ledger.js';
+import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
 import {
@@ -59,6 +64,8 @@ interface InboundRuntimeContext {
   readonly commandExecution?: CommandExecutionBudget;
   runCommandOperation?<T>(controller: CommandOperationController, operation: () => T): T;
   readonly diagnostics?: RuntimeMessageDiagnostics;
+  /** ADR 0061: settled inbound outcomes (process-local log). Absent: outcomes are only logged. */
+  readonly outcomes?: Pick<MessageOutcomeLog, 'record'>;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
   createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
@@ -140,16 +147,48 @@ export class InboundRuntime {
     admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult> {
     const receivedAt = Date.now();
+    // ADR 0061 §4.1: one ledger per message, settled exactly once in `finally`.
+    const ledger = new InboundOutcomeLedger({
+      conversation: { ...source.payload?.conversation, endpoint: { id: source.endpoint.id, adapter: source.endpoint.adapter } },
+      // A malformed event without a payload still settles an outcome (the code below then throws).
+      ...(typeof source.payload?.sender?.id === 'string' ? { senderId: source.payload.sender.id } : {}),
+      ...(typeof source.payload?.message?.id === 'string' ? { messageId: source.payload.message.id } : {}),
+      receivedAt,
+    });
+    let failure: unknown;
+    let failed = false;
     const lease = this.context.acquire();
     let active = true;
     let commandOperation: CommandOperationController | undefined;
     let endpointLease: EndpointChildLease | undefined;
+    /** Drains the operation, releases leases and settles the outcome; a drain failure is a failure. */
+    const close = async (): Promise<void> => {
+      try { await commandOperation?.finish(); }
+      catch (error) {
+        // Without an earlier failure the drain failure is this message's failure and propagates;
+        // with one, it is only logged and the original exception is the one the caller sees.
+        if (failed) {
+          logger.warn(formatCompact({ op: 'inbound_operation_finish_failed', error: logSafeError(error) }));
+        } else {
+          failed = true;
+          failure = error;
+          throw error;
+        }
+      } finally {
+        active = false;
+        try { endpointLease?.release(); } finally {
+          this.context.release(lease);
+          this.#settleOutcome(ledger, failed, failure);
+        }
+      }
+    };
     try {
       const adapter = source.endpoint.id as CapabilityId;
       this.context.diagnostics?.begin(lease.value.generation, {
         ...source.payload.conversation,
         endpoint: { id: source.endpoint.id, adapter: source.endpoint.adapter },
       }, source.payload.message?.id);
+      ledger.linkDiagnostic(this.context.diagnostics?.currentId());
       const adapters = requireAdapters(lease.value);
       const requester = adapters.owner(adapter);
       endpointLease = adapters.acquireInbound(adapter, source.client);
@@ -191,6 +230,7 @@ export class InboundRuntime {
       const origin = classified?.origin;
       this.context.diagnostics?.step('origin', origin ?? 'unclassified');
       if (origin === 'self') {
+        ledger.report({ outcome: 'ignored_self', reason: 'self_echo', stage: 'ingress' });
         this.context.diagnostics?.route('self_echo');
         logger.debug(formatCompact({
           op: 'self_echo',
@@ -207,6 +247,9 @@ export class InboundRuntime {
           ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
         });
         if (!readiness.ready) {
+          ledger.markAddressed(input.mentioned === true || conversation.kind === 'private');
+          ledger.report({ outcome: 'dropped_unready', reason: 'venue_unready', stage: 'ingress',
+            detail: readiness.unreadyEndpoints?.join(',') ?? '' });
           logger.warn(formatCompact({
             op: 'venue_unready',
             conv: formatConversationLog(conversation),
@@ -236,6 +279,8 @@ export class InboundRuntime {
         },
       });
       const mentioned = routedTarget ? true : input.mentioned;
+      ledger.markAddressed(conversation.kind === 'private' || mentioned === true
+        || (input.replyTo?.id !== undefined && this.context.resolveReplyTarget?.(conversation, input.replyTo.id) !== undefined));
       const locale = await messageLocale(lease.value, conversation, enrichedSender?.id);
       let operationReplied = false;
       const operationReply: RuntimeMessageOperation['reply'] = (content, replyRequester = requester, targetConversation) => {
@@ -263,8 +308,15 @@ export class InboundRuntime {
           }, lease.value);
           // A held Message may reply from another async caller while its operation is
           // draining. Restore that Message's private controller, not the caller's scope.
-          return commandOperation && this.context.runCommandOperation
+          const delivery = commandOperation && this.context.runCommandOperation
             ? this.context.runCommandOperation(commandOperation, deliver) : deliver();
+          return Promise.resolve(delivery).then((receipt) => {
+            if (receipt && receipt.status !== 'sent') {
+              ledger.report({ outcome: 'delivery_failed', reason: receipt.failure?.code ?? receipt.status, stage: 'delivery',
+                ...(receipt.failure?.deliveryUnknown ? { facets: ['delivery_unknown'] } : {}) });
+            }
+            return receipt;
+          });
         };
       commandOperation = this.context.commandExecution?.openOperation({
         snapshot: lease.value, conversation, senderId: enrichedSender?.id,
@@ -332,6 +384,7 @@ export class InboundRuntime {
               boundEndpoint.assertActive();
             },
             ...(origin ? { origin } : {}),
+            outcomes: inboundOutcomeFacade(ledger),
             presentation: {
               locale,
               resolveCommands: (message) => this.#dispatcher.commandEnvironment(message, lease.value),
@@ -341,7 +394,9 @@ export class InboundRuntime {
         const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
+        ledger.markAddressed(isAddressedMessage(message));
         if (recordOnly === 'duplicate') {
+          ledger.report({ outcome: 'dropped_duplicate', reason: 'duplicate', stage: 'ingress' });
           this.context.diagnostics?.route('duplicate');
           logger.debug(formatCompact({
             op: 'inbound_duplicate',
@@ -351,6 +406,7 @@ export class InboundRuntime {
           return result;
         }
         if (recordOnly === 'dedup_error') {
+          ledger.report({ outcome: 'dropped_dedup_error', reason: 'dedup_error', stage: 'ingress' });
           this.context.diagnostics?.route('dedup_error');
           this.context.publish({
             direction: 'inbound',
@@ -363,6 +419,7 @@ export class InboundRuntime {
           return result;
         }
         if (origin === 'member' || origin === 'peer_bot') {
+          ledger.report({ outcome: 'ignored_bot', reason: origin, stage: 'ingress' });
           this.context.diagnostics?.route('bot_origin');
           logger.debug(formatCompact({
             op: 'bot_origin_recorded',
@@ -380,11 +437,17 @@ export class InboundRuntime {
           });
           return result;
         }
+        ledger.enter('interaction');
         const claimed = await this.context.inboundClaim?.(message) === true;
+        const claim = claimed ? undefined : this.#resolveClaim(message);
         if (claimed) {
+          ledger.report({ outcome: 'interaction_answered', reason: 'prompt', stage: 'interaction' });
           this.context.diagnostics?.route('interaction');
           result = interactionResult(requester);
-        } else if (this.context.interactions.resolveClaim(message)) {
+        } else if (claim) {
+          ledger.report(claim.answerLike
+            ? { outcome: 'interaction_answered', reason: 'prompt', stage: 'interaction', ...(claim.owner ? { owner: claim.owner } : {}) }
+            : { outcome: 'interaction_consumed', reason: 'prompt_captured', stage: 'interaction', ...(claim.owner ? { owner: claim.owner } : {}) });
           this.context.diagnostics?.route('interaction');
           if (input.message) this.context.markInteractionAnswer?.(input.message);
           result = interactionResult(requester);
@@ -456,12 +519,55 @@ export class InboundRuntime {
       };
       return commandOperation && this.context.runCommandOperation
         ? await this.context.runCommandOperation(commandOperation, execute) : await execute();
+    } catch (error) {
+      failed = true;
+      failure = error;
+      throw error;
     } finally {
-      try { await commandOperation?.finish(); }
-      finally {
-        active = false;
-        try { endpointLease?.release(); } finally { this.context.release(lease); }
+      await close();
+    }
+  }
+
+  /** Claim resolution with the answer classification, when the coordinator offers it. */
+  #resolveClaim(message: Message): { answerLike: boolean; owner?: string } | undefined {
+    const interactions = this.context.interactions;
+    if (typeof interactions.resolveClaimDetailed === 'function') return interactions.resolveClaimDetailed(message) || undefined;
+    return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
+  }
+
+  /** Settles the ledger once (ADR 0061 §4.1); never throws over the original failure. */
+  #settleOutcome(ledger: InboundOutcomeLedger, failed: boolean, failure: unknown): void {
+    let record: MessageOutcomeRecord;
+    try {
+      if (failed) {
+        const errorId = createErrorId();
+        record = ledger.settle({ error: { errorId, ...(failure instanceof Error ? { name: failure.name, message: failure.message } : { message: String(failure) }) } });
+        let conv: string;
+        try { conv = formatConversationLog(record.conversation); } catch { conv = 'unknown'; }
+        logger.error(formatCompact({ op: 'inbound_internal_error', errorId, conv,
+          messageId: record.messageId, stage: record.stage,
+          error: logSafeError(failure) }));
+      } else {
+        record = ledger.settle();
       }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'test' && !failed) throw error;
+      return;
+    }
+    try {
+      this.context.diagnostics?.outcome(record);
+      this.context.outcomes?.record(record);
+    } catch { /* silent-ok: observer — the outcome projection never changes the message's result */ }
+    let conv: string;
+    try { conv = formatConversationLog(record.conversation); } catch { conv = 'unknown'; }
+    const fields = { op: 'inbound_outcome', conv, messageId: record.messageId,
+      outcome: record.outcome, reason: record.reason, stage: record.stage, addressed: record.addressed, errorId: record.errorId };
+    if (record.outcome === 'unrecorded') {
+      logger.warn(formatCompact({ ...fields, op: 'inbound_outcome_unrecorded', lastStage: record.lastStage }));
+    } else if (!record.addressed && QUIET_MESSAGE_OUTCOMES.has(record.outcome)) {
+      logger.debug(formatCompact(fields));
+    } else {
+      logger.info(formatCompact(fields));
     }
   }
 
@@ -567,4 +673,13 @@ function adapterSender(sender: MessageSenderRef | undefined): MessageSenderRef |
     ...(sender.name !== undefined ? { name: sender.name } : {}),
     ...(platform ? { platform } : {}),
   });
+}
+
+const MAX_LOGGED_ERROR_CHARS = 500;
+
+/** Error text for the instance log: secrets masked (decision audit patterns), one line, bounded. */
+function logSafeError(failure: unknown): string {
+  const text = redactSecretText(failure instanceof Error ? failure.message : String(failure)).replace(/\p{Cc}+/gu, ' ').trim();
+  const chars = [...text];
+  return chars.length > MAX_LOGGED_ERROR_CHARS ? `${chars.slice(0, MAX_LOGGED_ERROR_CHARS - 1).join('')}…` : text;
 }

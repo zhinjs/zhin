@@ -22,6 +22,7 @@ import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { agentToolApprovalQueueToken } from './tool-approvals.js';
+import { endpointFailureSubject, syncEndpointFailures, syncMcpFailures } from './runtime-failures.js';
 
 type LogSelection = PromiseLike<readonly { readonly timestamp?: unknown }[]> & {
   where(where: Record<string, unknown>): LogSelection;
@@ -49,7 +50,12 @@ export interface AttentionSourceOptions {
 }
 
 export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
-  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores } = composition;
+  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores, agentInsights, runtimeFailures } = composition;
+  /** Mirrors a live failure into the journal, then fills in a reason the live row lost (restart). */
+  const journalReason = (source: 'endpoint' | 'mcp', subject: string) => {
+    const entry = runtimeFailures?.get(source, subject);
+    return entry ? { category: entry.category, message: entry.message, at: entry.lastAt, ...(entry.restored ? { restored: true } : {}) } : undefined;
+  };
   const withLease = <T>(run: (lease: SnapshotLease) => T): T => {
     if (!snapshots) throw new Error('Runtime snapshots are unavailable');
     const lease = snapshots.acquire();
@@ -62,12 +68,22 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         ...(task.endpointIdentity ? { canonicalId: task.endpointIdentity.canonicalId } : {}),
       })),
       // `adapter` / `name` as `endpoint.list` rows carry them: the Console's account address.
-      endpoints: (): readonly AttentionEndpoint[] => im.endpoints.list().map(row => ({
-        id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
-        ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
-        transportState: row.transportState, pendingLogin: row.pendingLogin,
-        ...(row.lastError ? { lastError: { category: row.lastError.category, message: row.lastError.message } } : {}),
-      })),
+      endpoints: (): readonly AttentionEndpoint[] => {
+        const list = im.endpoints.list();
+        if (runtimeFailures) syncEndpointFailures(runtimeFailures, list);
+        return list.map(row => {
+          // #1270: after a restart the live row has no failure yet; the journal still says why.
+          const lastError = row.lastError
+            ? { category: row.lastError.category, message: row.lastError.message, at: row.lastError.at }
+            : row.connected ? undefined : journalReason('endpoint', endpointFailureSubject(row.adapter, row.name));
+          return {
+            id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
+            ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
+            transportState: row.transportState, pendingLogin: row.pendingLogin,
+            ...(lastError ? { lastError } : {}),
+          };
+        });
+      },
     } : {}),
     ...(snapshots ? {
       // #1250: zhin.config.yml `endpoints` versus persisted accounts, per adapter (ids / kinds only).
@@ -131,9 +147,18 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       }),
     } : {}),
     ...(snapshots ? {
-      mcpServers: (): readonly AttentionMcpServer[] => withLease(lease => listMcpServerStatus(projectRoot, lease.value)
-        .filter(row => typeof row.name === 'string')
-        .map(row => ({ name: row.name as string, connected: row.connected === true }))),
+      mcpServers: (): readonly AttentionMcpServer[] => withLease(lease => {
+        const rows = listMcpServerStatus(projectRoot, lease.value)
+          .filter(row => typeof row.name === 'string')
+          .map(row => ({ name: row.name as string, connected: row.connected === true,
+            ...(isFailure(row.lastError) ? { lastError: row.lastError } : {}) }));
+        if (runtimeFailures) syncMcpFailures(runtimeFailures, rows);
+        return rows.map((row): AttentionMcpServer => {
+          if (row.connected || row.lastError) return row;
+          const restored = journalReason('mcp', row.name);
+          return restored ? { ...row, lastError: restored, ...(restored.restored ? { restored: true } : {}) } : row;
+        });
+      }),
     } : {}),
     ...(snapshots ? {
       unschedulableJobs: () => withLease(lease => resolveCurrentAgentConsole(lease.value)?.assistant?.jobs.unschedulable?.()),
@@ -178,6 +203,30 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         };
       },
     } : {}),
+    ...(agentInsights?.accountAttention ? {
+      inferenceAccounts: () => agentInsights.accountAttention!(),
+    } : {}),
+    ...(agentInsights?.purposeEffects && snapshots ? {
+      // #1270: a sub-agent model choice the runtime ignores (it falls back to chat).
+      ineffectiveConfig: async () => {
+        const lease = snapshots.acquire();
+        let effects: Awaited<ReturnType<NonNullable<typeof agentInsights.purposeEffects>>>;
+        try { effects = await agentInsights.purposeEffects!(lease); } finally { lease.release(); }
+        return Object.entries(effects).flatMap(([key, effect]) => {
+          if (effect.status === 'ignored' && effect.reason) {
+            return [{ path: `purposes.${key}`, reason: effect.reason, ...(effect.agents?.length ? { agents: effect.agents } : {}) }];
+          }
+          if (effect.ignoredAgents?.length) return [{ path: `purposes.${key}`, reason: 'binding-name' as const, agents: effect.ignoredAgents }];
+          return [];
+        });
+      },
+    } : {}),
+    ...(snapshots ? {
+      // #1270: the Root refuses generation operations until it runs (and while it stops).
+      ready: () => {
+        try { snapshots.acquire().release(); return true; } catch { return false; }
+      },
+    } : {}),
     revision: async () => {
       let generation = 'none';
       if (snapshots) {
@@ -189,4 +238,9 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       return `${generation}|${files.join('|')}`;
     },
   });
+}
+
+function isFailure(value: unknown): value is { category: string; message: string; at?: number; exitCode?: number } {
+  return !!value && typeof value === 'object' && typeof (value as { category?: unknown }).category === 'string'
+    && typeof (value as { message?: unknown }).message === 'string';
 }

@@ -36,6 +36,9 @@ export function assertUserInteractionRequest(request: UserInteractionRequest): v
   if (request.timeout !== undefined && (!Number.isFinite(request.timeout) || request.timeout <= 0)) {
     throw new RangeError('User interaction timeout must be a positive finite number');
   }
+  if (request.answeredBy !== undefined && request.answeredBy !== 'target' && request.answeredBy !== 'anyone') {
+    throw new TypeError("User interaction answeredBy must be 'target' or 'anyone'");
+  }
   if (request.type === 'text' && !validRange(request.minLength, request.maxLength)) {
     throw new RangeError('User interaction text length range is invalid');
   }

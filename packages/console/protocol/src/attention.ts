@@ -68,8 +68,24 @@ export type ConsoleAttentionKind =
   | 'config.literal-secrets'
   /** A dangerous tool call waits for an owner's approval (ADR 0036). */
   | 'tool-approval.pending'
-  /** A configured MCP server is not connected. */
+  /**
+   * A configured MCP server is not connected; `detail` (and `reason`) carry the classified, redacted
+   * reason of its last failed connect when there is one (#1270).
+   */
   | 'mcp.disconnected'
+  /**
+   * A Host model account needs an operator (#1270): it must sign in again (`reauthorize`), was
+   * disconnected, its last sign-in has an unknown outcome (`uncertain`), or it is signed in but its
+   * read-only preparation failed (`preparation-failed`, with step / reason / upstream status).
+   * Visible with `agent.view`.
+   */
+  | 'inference.account'
+  /**
+   * A saved setting has no effect at run time (#1270), e.g. a `purposes.agents.<key>` model choice
+   * that belongs to an Agent binding, is ambiguous or matches no sub-agent, so the sub-agent runs on
+   * the chat model. Visible with `agent.view`.
+   */
+  | 'config.ineffective'
   /** The persistent log store holds error entries. */
   | 'logs.errors'
   /** An enabled persistent schedule job has no computable next run: it will never fire (#1250). */
@@ -89,7 +105,34 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
+  'inference.account', 'config.ineffective',
 ]);
+
+/**
+ * Permission an operator needs to see items of each kind (checked by the Host on top of the RPC's
+ * `status.view`). Account items are checked on the account's endpoint target; `tool-approval.pending`
+ * accepts either plugin permission level `tool_approvals:read` or `ops:approve`.
+ */
+export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentionKind, string>> = Object.freeze({
+  'login.pending': 'endpoint.view',
+  'endpoint.offline': 'endpoint.view',
+  'endpoint.config-drift': 'endpoint.view',
+  'plugin.error': 'feature.view',
+  'plugin.dependencies': 'feature.view',
+  'plugin.config': 'feature.view',
+  'config.invalid': 'ops.config.read',
+  'config.apply-failed': 'ops.config.read',
+  'config.literal-secrets': 'ops.config.read',
+  'tool-approval.pending': 'tool_approvals:read',
+  'mcp.disconnected': 'status.view',
+  'logs.errors': 'status.view',
+  'schedule.unschedulable': 'ops.schedule.read',
+  'chat-roles.no-owner': 'iam.manage',
+  'chat-roles.imported': 'iam.manage',
+  'chat-roles.import-pending': 'iam.manage',
+  'inference.account': 'agent.view',
+  'config.ineffective': 'agent.view',
+});
 
 /** The object an item is about. Absent fields do not apply. */
 export interface ConsoleAttentionSubject {
@@ -107,6 +150,31 @@ export interface ConsoleAttentionSubject {
   readonly loginTaskId?: string;
   /** Persistent schedule job id. */
   readonly scheduleJobId?: string;
+  /** Host model account id (`accounts:<id>` key of the inference graph, #1270). */
+  readonly inferenceAccount?: string;
+  /** Configuration path of an ineffective setting (e.g. `purposes.agents.planner`, #1270). */
+  readonly configPath?: string;
+}
+
+/**
+ * Structured reason of an item (#1270): the same facts as `detail`, as codes a Console may render
+ * itself. Never carries an upstream message body, a URL or a credential; `message` is redacted.
+ */
+export interface ConsoleAttentionReason {
+  /** Failure category (`auth`, `network`, `timeout`, `config`, `process_exit`, `preparation`, …). */
+  readonly category?: string;
+  /** Stable code (e.g. `preparation-failed`, `reauthorize`, `binding-name`). */
+  readonly code?: string;
+  readonly step?: string;
+  /** Sanitized upstream reason code (e.g. `UNSUPPORTED_CLIENT`). */
+  readonly reason?: string;
+  readonly upstreamStatus?: number;
+  /** Redacted, at most 200 characters. */
+  readonly message?: string;
+  /** The fact was recorded before the instance last restarted (「重启前记录」), from the runtime failure journal. */
+  readonly restored?: boolean;
+  /** ISO time the failure was last observed. */
+  readonly at?: string;
 }
 
 export interface ConsoleAttentionAction {
@@ -138,6 +206,8 @@ export interface ConsoleAttentionItem {
   readonly action: ConsoleAttentionAction;
   /** Runtime source that reported it (`login-assist`, `endpoints`, `plugins`, `config`, …). */
   readonly source: string;
+  /** Structured reason (added later, #1270; older Hosts omit it). */
+  readonly reason?: ConsoleAttentionReason;
 }
 
 export interface ConsoleAttentionListRequest {
@@ -145,6 +215,12 @@ export interface ConsoleAttentionListRequest {
 }
 
 export interface ConsoleAttentionList {
+  /**
+   * `starting`: the instance is still starting (its runtime does not accept reads yet); `items` is
+   * empty and no source was read, which is not the same as "nothing to do" (#1270). Absent or
+   * `ready` otherwise; older Hosts omit it.
+   */
+  readonly status?: 'ready' | 'starting';
   readonly items: readonly ConsoleAttentionItem[];
   /** ISO time the Host gathered the list. */
   readonly generatedAt: string;
@@ -218,4 +294,49 @@ export function compareAttentionItems(a: Pick<ConsoleAttentionItem, 'severity' |
   const time = (Number.isNaN(at) ? Infinity : at) - (Number.isNaN(bt) ? Infinity : bt);
   if (time !== 0 && !Number.isNaN(time)) return time;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+// ---------------------------------------------------------------- runtime failure journal
+
+/** Instance runtime failure journal, relative to the project root (#1270). */
+export const RUNTIME_FAILURES_FILE = '.zhin/runtime-failures.json';
+
+/** What a runtime failure is about (#1270). */
+export type ConsoleRuntimeFailureSource = 'account' | 'endpoint' | 'mcp' | 'model';
+
+/**
+ * One entry of `.zhin/runtime-failures.json` (#1270): the latest failure of one subject, kept until
+ * that subject succeeds again, so its reason survives an instance restart. Written by the instance
+ * only (never in `gateway.db`, ADR 0059). `message` is redacted; no field carries a credential.
+ */
+export interface ConsoleRuntimeFailure {
+  readonly source: ConsoleRuntimeFailureSource;
+  /**
+   * Subject id within its source: an inference account id (`account` / `model`), `<adapter>/<name>`
+   * of an Endpoint, or an MCP server name.
+   */
+  readonly subject: string;
+  /** Stable failure code (e.g. `preparation-failed`, `start-failed`, `connect-failed`, `rate-limit`). */
+  readonly code: string;
+  readonly step?: string;
+  /** Sanitized upstream or local reason code. */
+  readonly reason?: string;
+  /** Coarse category (`auth`, `network`, `timeout`, `config`, `process_exit`, `preparation`, `server`, …). */
+  readonly category: string;
+  /** Redacted, at most 200 characters. */
+  readonly message: string;
+  readonly upstreamStatus?: number;
+  /** Credential revision the failure was observed on (`account`): a newer credential voids it. */
+  readonly credentialRevision?: number;
+  /** Epoch milliseconds of the first and the latest observation since the subject last succeeded. */
+  readonly firstAt: number;
+  readonly lastAt: number;
+  /** Observations since the subject last succeeded. */
+  readonly count: number;
+}
+
+/** Shape of `.zhin/runtime-failures.json`. */
+export interface ConsoleRuntimeFailureJournal {
+  readonly version: 1;
+  readonly entries: readonly ConsoleRuntimeFailure[];
 }

@@ -8,6 +8,7 @@ import {
   getDatabasePersistenceLabel,
 } from './utils.js';
 import {
+  DEFAULT_CREATE_BOT_HTTP_PORT,
   wizardText,
   getAdapterSetupNotes,
   formatAIDependencyHint,
@@ -19,6 +20,8 @@ import { ensurePnpmInstalled, installDependencies, runPostInstallDoctor } from '
 import { assertCreateNodeVersion } from './node-requirement.js';
 import { parseCreateArgs, type CreateArgs } from './args.js';
 import { renderCreateSummary, resolveCreateOptions } from './flow.js';
+import { createText } from './messages.js';
+import { chooseHttpPort, describePortChoice } from './port.js';
 
 async function main() {
   assertCreateNodeVersion();
@@ -49,9 +52,15 @@ async function main() {
       process.exit(1);
     }
 
+    // #1250 scaffold-port-collision: a project already running on this machine keeps its port.
+    const portChoice = await chooseHttpPort(DEFAULT_CREATE_BOT_HTTP_PORT);
+    options.httpPort = portChoice.port;
+    const portNotice = describePortChoice(portChoice, (key, values) => createText(locale, key, values));
+    if (portNotice) console.log(chalk.yellow(portNotice));
+
     console.log(chalk.blue(wizardText(locale, "正在创建 pnpm workspace 项目 {v0}...", [realName])));
     
-    await createWorkspace(projectPath, realName, options);
+    await createWorkspace(projectPath, realName, options, { pm2: args.with.includes('pm2') });
     
     console.log(chalk.green(wizardText(locale, "✓ 项目结构创建成功！")));
     console.log('');

@@ -6,7 +6,7 @@ import {
   createProfileReference, providerPurposeSelections,
   type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createInvocationCompletion, invocationModel } from './completion.js';
 import type { ModelExecutionBundle } from './types.js';
 
@@ -21,8 +21,8 @@ export class ModelFallbackLog {
 
   record = (event: ModelFallbackEvent): void => {
     this.#events.push(event);
-    logger.warn(`${MODEL_FALLBACK_NOTICE}: purpose=${event.purpose} ${event.from.accountId}/${event.from.model} → `
-      + `${event.to.accountId}/${event.to.model} reason=${event.reason} phase=${event.phase}`);
+    logger.warn(formatCompact({ op: 'model_fallback', purpose: event.purpose, from: `${event.from.accountId}/${event.from.model}`,
+      to: `${event.to.accountId}/${event.to.model}`, reason: event.reason, phase: event.phase, detail: MODEL_FALLBACK_NOTICE }));
     for (const listener of this.#listeners) {
       try { listener(event); } catch { /* Observers never change the answer. */ }
     }

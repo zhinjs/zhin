@@ -3,6 +3,7 @@ import {
   type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
 import { createInvocationCompletion, invocationModel } from './completion.js';
+import { subAgentPurposeEffect } from './purpose-effect.js';
 import { ModelFallbackLog, resolvePurposeExecution, selectedPurposeProfileId } from './purpose-fallback.js';
 import { modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent } from '@zhin.js/ai';
 import { getLogger } from '@zhin.js/logger';
@@ -52,21 +53,17 @@ export function selectLanguagePurpose(
   const agent = input.agent;
   if (agent && agent.name !== 'zhin') {
     const agents = graph.purposes.agents ?? {};
-    const configured = (key: string) => Object.hasOwn(agents, key) && Boolean(agents[key]);
-    const qualified = agent.qualifiedName?.trim();
-    if (qualified && configured(qualified)) {
-      if (!bindingNames.has(qualified)) return `agent:${qualified}`;
-      logger.warn(`sub-agent ${qualified}: purposes.agents.${qualified} belongs to the Agent binding of that name; using chat`);
-    } else if (configured(agent.name)) {
-      if (bindingNames.has(agent.name)) {
-        logger.warn(`sub-agent ${agent.name}: purposes.agents.${agent.name} belongs to the Agent binding of that name; `
-          + `key the sub-agent by its qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
-      } else if (agent.bareNameShared) {
-        logger.warn(`sub-agent ${agent.name}: purposes.agents.${agent.name} is ambiguous (several sub-agents share the name); `
+    const configured = new Set(Object.keys(agents).filter(key => Boolean(agents[key])));
+    const effect = subAgentPurposeEffect(configured, agent, bindingNames);
+    if (effect.status === 'effective') return `agent:${effect.key}`;
+    if (effect.status === 'ignored') {
+      const qualified = agent.qualifiedName?.trim();
+      const label = qualified && effect.key === qualified ? qualified : agent.name;
+      logger.warn(effect.reason === 'binding-name'
+        ? `sub-agent ${label}: purposes.agents.${effect.key} belongs to the Agent binding of that name; `
+          + (effect.key === qualified ? 'using chat' : `key the sub-agent by its qualified name${qualified ? ` (${qualified})` : ''}; using chat`)
+        : `sub-agent ${agent.name}: purposes.agents.${effect.key} is ambiguous (several sub-agents share the name); `
           + `key it by the qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
-      } else {
-        return `agent:${agent.name}`;
-      }
     }
     return 'chat';
   }

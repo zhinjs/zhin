@@ -2,64 +2,69 @@
   "defaultReleaseType": "patch",
   "approvedNonPatchReleases": [
     {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。"
+    },
+    {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：功能未启用状态契约（ConsoleFeatureDisabled / ConsoleFeatureDisabledReason / CONSOLE_FEATURE_DISABLED_MESSAGES / consoleFeatureDisabled() / isConsoleFeatureDisabled()）、功能矩阵行分类与能力（ConsoleFeatureKind、ConsoleFeatureCapabilities，行字段 kind / capabilities / readOnly）、账号传输状态（ConsoleEndpointTransportState、endpointTransportLabel()，ConsoleEndpointSummary.transportLabel）、配置写入 secretStorage 与 envSecrets 字段、/pub/health 的 project.id；配置补丁 invalid 结果新增可选 code: 'env-write-required'。；所有者已批准（zhinjs/zhin#1250）：ADR 0060 新增公开导出 `CHAT_PRINCIPALS_RPC`、`CHAT_PRINCIPALS_RPC_PERMISSIONS`、`isConsoleChatPrincipalsRpcType` 与人 / 平台身份 / 绑定码 / 导出导入 / 配置导入的协议类型，权限 `self.chat-identity`，attention 条目 `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending`，`ConsoleChatRoleEntry` 新增可选 `grantedByName` / `principalId`，`chat-roles.imports.list` 新增可选 `personalPending`（`ConsoleChatPersonalLinkCandidate`），`ConsoleChatRoleImportSkipReason` 新增 `owned-elsewhere`。npm 上 1.4.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批 GatewayPluginEnablement 新增可选 apply / restartReason / restartDetail，新增导出类型 GatewayPluginApplyMode、GatewayPluginRestartReason，GatewayPackagePhase 新增 apply-hot。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 ConsoleErrorDetails / ConsoleErrorNextStep / isConsoleErrorNextStep()、CONSOLE_ATTENTION_KIND_PERMISSIONS、ConsoleAttentionReason、RUNTIME_FAILURES_FILE / ConsoleRuntimeFailure / ConsoleRuntimeFailureJournal / ConsoleRuntimeFailureSource，attention 新增 inference.account / config.ineffective 与 status: starting。npm 上 1.5.0 未被占用。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批：实例 HTTP API 新增 POST /api/agent/inference/probe、/account/test、/cli/account/add、/cli/account/rename-env（Host env 账号与连接测试），功能矩阵新增根插件行（kind / capabilities / readOnly），Agent / 定时任务读取在 AI 未安装或未启用时返回 feature-disabled 状态而非读取失败。；所有者已批准（zhinjs/zhin#1250）：ADR 0060 聊天身份与角色——实例新增表 `chat_principals` / `chat_identities` / `chat_principal_console_links` 与 `chat_roles.principal_id`，新 Console RPC `chat-roles.imports.*`、`chat-principals.*`、`chat-identities.*`，认领码与聊天侧 `认领` / `绑定`，「需要你处理」新增 `chat-roles.*` 条目，`ai.personalPrincipals` 改为导入链接。npm 上 1.4.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批实例在 ready.features 声明 plugins.apply，并按网关请求在当前进程内换代应用插件启停（不重启实例）。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0062 §23）：「功能 开启 / 关闭 / 重置 插话」与 feature.get / set-enabled / remove-override 支持保留功能 @ambient（适配器 / 账号 / 会话层插话开关）"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：projectIdentity()（/project）、officialPluginCatalog() / officialPluginCandidates() / undeclaredPluginMessage()（/plugin-management）、pnpm ignored builds 识别（/onboarding：parseIgnoredBuilds、ignoredBuildsHint 等）、dotenvLine() / readDocumentPath()（/config）；/pub/health 报告 project.id；安全复核新增 SECRET_ENVIRONMENT_WRITE_REQUIRED / SecretEnvironmentWriteRequiredError（/config），ConsoleConfigurationStore 的 setKey / patch / patchProject 新增可选写入授权参数 { environmentWrite }。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批普通插件启停热生效——启停事务在实例运行时改为写配置后经 plugins.apply 热应用，新增事务阶段 apply-hot 与结果字段 plugin.apply / restartReason / restartDetail；新增公开 API InstanceSupervisor.supportsPluginApply / applyPlugin()、InstancePluginApplyResult、DEFAULT_PLUGIN_APPLY_TIMEOUT_MS、PluginManagementWorkflow.hotToggleBlocker()，PackageTransactionInstance / PackageWorkflowPort 新增可选成员。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增公开导出 consoleSetupLink()（/server）与 SetupDatabaseApplyResult 类型（/iam）；ConsoleSetupService.applyDatabase() 返回值新增 changed，选择与当前一致的数据库时不写配置、不提示、不重启（restartRequired: false），gateway.console.setup.database 与 POST /auth/setup/database 的回复相应新增 changed；前台网关在 Console 未初始化时向终端打印带 #token= 的初始化链接。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 lookupClaimsOf() / TraceLookupClaim，UsageStats 新增 totals.claimsWithoutToolCall / unexecutedToolNotices 与 byModel[].claimsWithoutToolCall。npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出：DEFAULT_HTTP_PORT、InvalidHttpPortError、ENVIRONMENT_REFERENCE_PATTERN、describeInvalidPortValue()、parseHttpPort()，以及 isGlobalOwnerPrincipal() / isLocalSocketPrincipal() / LOCAL_SOCKET_USER_ID / LOCAL_SOCKET_CREDENTIAL_ID。"
-    },
-    {
-      "package": "@zhin.js/agent",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 @zhin.js/agent/runtime 新增公开导出：模型服务连接测试（probeLanguageProfile、InferenceProbeResult、DEFAULT_PROBE_TIMEOUT_MS）、Host 环境变量引用授权（InferenceEnvironmentAuthority、INFERENCE_ENVIRONMENT_REFUSALS、InferenceEnvironmentRefusal、environmentVariableName()）、账号最近调用状态（AccountCallOutcome、AccountLastCall、classifyAccountCall()）；turn trace 新增 model_timeout 记录。；所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——聊天、摘要、旁听、Agent 角色与 Adapter / 场景覆盖按各自备用链在额度用完 / 余额不足 / 鉴权失败时换用备用模型（不重放已执行工具）；新增导出 resolvePurposeExecution、ModelFallbackLog、traceModelFallback、selectedPurposeProfileId、turnUsageTarget，ModelRuntimeService 新增 modelAvailability 访问器，ModelExecutionScope 新增可选 modelFallbacks / observeModelFallback，ModelRuntimeServiceOptions 新增 modelAvailability，回合 trace 新增 model_fallbacks 与 TurnTraceModelFallback，管理视图 InferenceManagementView 新增只读 modelAvailability。；所有者已批准（zhinjs/zhin#1250）：新增公开导出 `personalOwnersOfIdentities`、`chatIdentityOfPersonalOwner`、`LinkedChatIdentity`；`HostInferenceOptions.personalOwners` 与 `resolveInferenceManagementPrincipal` 的 `bindings` 可为函数（ADR 0060 P3：个人推理主体读链接表）。npm 上 1.5.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/cli",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。；所有者已批准（zhinjs/zhin#1250）：新增命令 `zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`，`zhin status`（含 `--json` 的 `chatOwnerClaim`）在没有全局 owner 时显示认领码。npm 上 1.5.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/scaffold-wizard",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出 formatPnpmAddCommand()、resolvesThroughZhin()，formatAIDependencyFixCommand() / formatZhinStackFixCommand() 新增可选 cwd 参数（依赖修复命令在 workspace 根执行）。"
-    },
-    {
-      "package": "@zhin.js/ai",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批模型请求首响应时限：ProviderResilienceConfig 新增 firstResponseTimeoutMs（默认 30000），ProviderErrorKind 新增 no_response，ProviderResilienceEvent 新增 timeout 事件，StreamOptions 新增 onResponseStart；整次请求默认超时由 180000 调整为 120000。npm 上 1.7.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：chat-purpose-no-fallback（第 13 批）——所有语言用途支持备用模型：导入提案的 chat / summary / ambient / agents.<key> / adapters|endpoints.<key>.chat / scenes.<key>.chat 接受 `{ profile, fallbacks }`，配置图新增同级字段 chatFallbacks / summaryFallbacks / ambientFallbacks / agentFallbacks；新增公开导出 createFallbackCompletionPort、ModelAvailabilityRegistry、modelAvailability、modelFallbackFailure、modelFallbackResetAt、nextPacificMidnight、MODEL_FALLBACK_NOTICE、CONSECUTIVE_TIMEOUTS_TO_SWITCH、TIMEOUT_FALLBACK_COOLDOWN_MS、TIMEOUT_GLOBAL_OPERATIONS、TIMEOUT_GLOBAL_WINDOW_MS、fallbackTranscriptFit、requiredInputModalities、estimateRequestTokens 及相关类型，ProviderErrorClassification 新增可选 quotaWindow / credential，ProviderError 新增可选 path（校验错误指明配置路径）；连续 2 次超时切换备用模型（#1270）。"
-    },
-    {
-      "package": "@zhin.js/logger",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增公开导出 escapeLogText()、LOG_CONTENT_MAX_LENGTH、LOG_NEWLINE_MARK（聊天内容转义为单行日志）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批控制通道新增可选消息 plugins.apply / plugins.apply.result 与 ready.features（协议版本仍为 3），新增公开导出 INSTANCE_BRIDGE_FEATURES、InstanceBridgeFeature、PluginApplyPayload、PluginApplyResultPayload、PluginApplyOutcome、GatewayPluginApplyMessage、InstancePluginApplyResultMessage，InstanceReadyDetails 新增可选 features。npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 Host 根配置新增 `ai.agent.providerResilience.firstResponseTimeoutMs`（模型请求首响应时限，写入 host-config-schema），`http.port` / `http.listeners[].port` 的 schema 改为 0–65535 整数或 ${VAR} 引用（先例：commandSuggestion 按 minor）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批插件清单新增可选字段 package.json#zhin.toggle（\"hot\" | \"restart\"，ZhinPluginManifest.toggle），声明启停是否需要重启实例。npm 上 1.5.0 未被占用。"
     },
     {
-      "package": "@zhin.js/adapter-icqq",
+      "package": "@zhin.js/scaffold-wizard",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批 icqq 适配器配置新增 `logLevel`（SDK 自身日志级别，默认 warn，可在 endpoints[] 单独设置）（先例：commandSuggestion 按 minor）。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 19a 批 InitOptions 新增可选 httpPort（生成配置的 http.port，脚手架遇到端口占用时改用空闲端口）；删除不再使用的 templates.systemd / templates.windowsService 模板文本，项目 README 模板改为推荐 zhin service install。npm 上 1.4.0 未被占用。"
+    },
+    {
+      "package": "create-zhin-app",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 19a 批（ADR 0062 §2）脚手架默认不再生成 systemd / launchd / Windows 服务文件与 PM2（devDependency、ecosystem.config.cjs、pm2:* 脚本），新增 --with pm2 选项；8068 被占用时改用其后第一个空闲端口并说明占用者是否为 Zhin 网关。npm 上 1.3.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效"
+    },
+    {
+      "package": "@zhin.js/logger",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 §5）：新增公开导出 createErrorId()、ERROR_ID_PATTERN（Console API 与消息结局 internal_error 共用的错误号）。npm 上 1.3.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`DefaultFormatter` 在 stdout 不是终端时（文件、管道、网关托管的实例日志）时间戳带日期 `[YYYY-MM-DD HH:mm:ss.SSS]`，终端里不变；新增构造参数 `{ date?: boolean }`（`DefaultFormatterOptions`）与公开导出 `parseLogLine()` / `ParsedLogLine`。npm 上 1.3.0 未被占用。"
     },
     {
       "package": "@zhin.js/core",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：ADR 0060 聊天身份与角色新增公开 API——`isOwner`、`hasChatRole`、只读 `chatRolesToken` / `ChatRoleReader`（`roleOf` / `principalOf` / `holders` / `factsOf` / `subscribe`，可选 `consoleSpeaker`）、`createChatRoleReader`、`implicitChatPrincipalId` 及相关类型；入站消息新增 Runtime 写入的只读 `sender.chatPrincipal`。npm 上 1.9.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P1/P2/P5、ADR 0062 §23）：新增入站消息结局公开导出 MESSAGE_OUTCOMES / MessageOutcome / MessageOutcomeCandidate / MessageOutcomeRecord / messageOutcomePriority / formatMessageOutcome / MESSAGE_OUTCOME_TEMPLATES 等、InboundOutcomeLedger、MessageOutcomeLog、reportInboundOutcome、enterInboundOutcomeStage、onUnrecordedInboundOutcome，ImRuntime.messageOutcomes 读取器，RuntimeMessageDiagnostic.outcome，IngressRoute.route / preRoute 可返回 IngressRouteResult，交互态 resolveClaimDetailed 与 answeredBy，群插话功能开关 AMBIENT_FEATURE_ID / resolveAmbientSwitch / resolveAmbientSwitchAt。npm 上 1.10.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/kernel",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P1）：redactDecisionPayload / redactSecretText / redactApprovalDisplay / isSecretLikeKey / isPromptPayloadKey 从 @zhin.js/agent 下移为 kernel 公开导出（新增类型 RedactablePayload），供 Core 的消息结局脱敏使用。npm 上 1.2.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/im-contract",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P5）：UserInteractionControl 新增可选 answeredBy: 'target' | 'anyone'（谁的回答算数）。npm 上 1.3.0 未被占用。"
     },
     {
       "package": "@zhin.js/pagemanager",

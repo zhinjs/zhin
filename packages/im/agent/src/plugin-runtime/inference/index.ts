@@ -5,6 +5,7 @@ export * from './credential-fingerprint-migration.js';
 export * from './credentials.js';
 export * from './current-operation.js';
 export * from './environment-source.js';
+export * from './failure-journal.js';
 export * from './headless-host.js';
 export * from './host-identity.js';
 export * from './host.js';

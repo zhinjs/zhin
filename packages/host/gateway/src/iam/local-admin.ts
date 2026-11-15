@@ -72,9 +72,11 @@ export function createLocalConsoleAdmin(options: LocalConsoleAdminOptions): Loca
         return setup.testDatabase({ dialect: input.dialect, connection: input.connection });
       case LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DATABASE: {
         const applied = await setup.applyDatabase({ dialect: input.dialect, connection: input.connection });
+        // The database in use was chosen again: nothing written, so no switch and no restart (#1250).
+        if (!applied.changed) return { notice: '', switched: false, restarting: false, changed: false };
         const { restarting } = await options.switchDatabase();
         audit('auth.setup.database');
-        return { notice: applied.notice, switched: true, restarting };
+        return { notice: applied.notice, switched: true, restarting, changed: true };
       }
       case LOCAL_GATEWAY_RPC.CONSOLE_SETUP_OWNER: {
         const { user } = await setup.createOwner({ username: input.username, password: input.password, displayName: input.displayName });

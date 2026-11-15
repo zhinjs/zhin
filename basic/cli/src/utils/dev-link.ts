@@ -22,6 +22,7 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { readApplicationPluginDeclaration, readSourcePluginOrder } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
+import { listWorkspacePackageDirs } from './workspace-packages.js';
 
 export const STATE_DIR = '.zhin-local';
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const;
@@ -379,12 +380,65 @@ export function findDuplicateZhinInstances(projectDir: string): Map<string, stri
   return duplicates;
 }
 
+/** Who requires one copy of a Zhin package: a dependent (label) and the specifier it declares. */
+export interface ZhinInstanceDependent {
+  /** `根项目`, a workspace member path (`plugins/foo`), or `name@version` of an installed package. */
+  readonly by: string;
+  readonly specifier?: string;
+  /** The root project or a directory of it outside node_modules (its package.json is the user's to edit). */
+  readonly local: boolean;
+}
+
+export interface ZhinInstanceCopy {
+  readonly dir: string;
+  readonly version?: string;
+  readonly requiredBy: readonly ZhinInstanceDependent[];
+}
+
 /** 项目依赖树中可达的每个 zhin 包 → 它解析到的物理位置（realpath，已排序）。 */
 export function collectZhinInstances(projectDir: string): Map<string, string[]> {
+  const instances = new Map<string, string[]>();
+  for (const [name, copies] of collectZhinInstanceGraph(projectDir)) instances.set(name, copies.map(copy => copy.dir));
+  return instances;
+}
+
+/**
+ * Like {@link findDuplicateZhinInstances}, with each copy's version and who requires it (#1250):
+ * the root project, a pnpm workspace member (`plugins/foo`) or another installed package, with the
+ * specifier it declares — what `pnpm why` would answer.
+ */
+export function describeDuplicateZhinInstances(projectDir: string): Map<string, ZhinInstanceCopy[]> {
+  const duplicates = new Map<string, ZhinInstanceCopy[]>();
+  for (const [name, copies] of collectZhinInstanceGraph(projectDir)) if (copies.length > 1) duplicates.set(name, copies);
+  return duplicates;
+}
+
+/** Every reachable Zhin package → its copies (sorted by realpath) with version and dependents. */
+export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinInstanceCopy[]> {
   const root = path.join(projectDir, 'node_modules');
   if (!fs.existsSync(root)) return new Map();
-  const found = new Map<string, Set<string>>();
+  const found = new Map<string, Map<string, { version?: string; requiredBy: Map<string, ZhinInstanceDependent> }>>();
   const seen = new Set<string>();
+  const projectReal = fs.realpathSync(projectDir);
+  const nodeModulesSegment = `${path.sep}node_modules${path.sep}`;
+  const labelOf = (realDir: string, manifest: Manifest): { by: string; local: boolean } => {
+    if (realDir === projectReal) return { by: '根项目', local: true };
+    const relative = path.relative(projectReal, realDir);
+    // A directory of the project outside node_modules: a workspace member or a linked local package.
+    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative) && !`${path.sep}${relative}${path.sep}`.includes(nodeModulesSegment)) {
+      return { by: relative.split(path.sep).join('/'), local: true };
+    }
+    return { by: typeof manifest.name === 'string' ? `${manifest.name}${typeof manifest.version === 'string' ? `@${manifest.version}` : ''}` : realDir, local: false };
+  };
+  const record = (name: string, copyDir: string, version: string | undefined, dependent?: ZhinInstanceDependent): void => {
+    if (!found.has(name)) found.set(name, new Map());
+    const copies = found.get(name)!;
+    if (!copies.has(copyDir)) copies.set(copyDir, { ...(version ? { version } : {}), requiredBy: new Map() });
+    if (dependent) copies.get(copyDir)!.requiredBy.set(`${dependent.by}\0${dependent.specifier ?? ''}`, dependent);
+  };
+  const readManifest = (dir: string): Manifest | undefined => {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { return undefined; }
+  };
 
   const resolveFrom = (fromDir: string, name: string): string | undefined => {
     for (let dir = fromDir; ; dir = path.dirname(dir)) {
@@ -396,23 +450,37 @@ export function collectZhinInstances(projectDir: string): Map<string, string[]> 
       if (path.dirname(dir) === dir) return undefined;
     }
   };
-  const visit = (realDir: string): void => {
+  /** Follows `realDir`'s dependencies; `edgesOnly` records them without counting `realDir` itself. */
+  const visit = (realDir: string, edgesOnly = false): void => {
     if (seen.has(realDir)) return;
     seen.add(realDir);
-    let manifest: Manifest;
-    try { manifest = JSON.parse(fs.readFileSync(path.join(realDir, 'package.json'), 'utf8')); } catch { return; }
-    if (typeof manifest.name === 'string' && isZhinPackage(manifest.name)) {
-      if (!found.has(manifest.name)) found.set(manifest.name, new Set());
-      found.get(manifest.name)!.add(realDir);
+    const manifest = readManifest(realDir);
+    if (!manifest) return;
+    if (!edgesOnly && typeof manifest.name === 'string' && isZhinPackage(manifest.name)) {
+      record(manifest.name, realDir, typeof manifest.version === 'string' ? manifest.version : undefined);
     }
+    const dependent = labelOf(realDir, manifest);
     for (const field of CLOSURE_FIELDS) {
-      for (const dep of Object.keys(manifest[field] ?? {})) {
+      for (const [dep, specifier] of Object.entries(manifest[field] ?? {})) {
         const resolved = resolveFrom(realDir, dep);
-        if (resolved) visit(resolved);
+        if (!resolved) continue;
+        if (isZhinPackage(dep)) {
+          const target = readManifest(resolved);
+          record(dep, resolved, typeof target?.version === 'string' ? target.version : undefined,
+            { ...dependent, ...(typeof specifier === 'string' ? { specifier } : {}) });
+        }
+        visit(resolved);
       }
     }
   };
 
+  // The root project and the pnpm workspace members declare what they require (edges only: the
+  // root is not a copy of anything; a member that is itself a Zhin package is reached through its
+  // dependents like any other copy).
+  visit(projectReal, true);
+  for (const member of listWorkspacePackageDirs(projectDir)) {
+    try { visit(fs.realpathSync(member), true); } catch { /* vanished */ }
+  }
   const top: string[] = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (entry.name.startsWith('.')) continue;
@@ -424,7 +492,42 @@ export function collectZhinInstances(projectDir: string): Map<string, string[]> 
     const dir = path.join(root, name);
     if (fs.existsSync(path.join(dir, 'package.json'))) visit(fs.realpathSync(dir));
   }
-  const instances = new Map<string, string[]>();
-  for (const [name, dirs] of [...found].sort(([a], [b]) => a.localeCompare(b))) instances.set(name, [...dirs].sort());
-  return instances;
+  const graph = new Map<string, ZhinInstanceCopy[]>();
+  for (const [name, copies] of [...found].sort(([a], [b]) => a.localeCompare(b))) {
+    graph.set(name, [...copies].sort(([a], [b]) => a.localeCompare(b)).map(([dir, copy]) => ({
+      dir, ...(copy.version ? { version: copy.version } : {}), requiredBy: [...copy.requiredBy.values()],
+    })));
+  }
+  return graph;
+}
+
+/**
+ * One doctor line per duplicated package, e.g.
+ * `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`, and the concrete fix.
+ */
+export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, readonly ZhinInstanceCopy[]>): { lines: string[]; fixes: string[] } {
+  const lines: string[] = [];
+  const fixes = new Set<string>();
+  for (const [name, copies] of duplicates) {
+    const parts = copies.map(copy => {
+      const by = copy.requiredBy.length
+        ? copy.requiredBy.map(dependent => (dependent.by === '根项目' || !dependent.specifier ? dependent.by : `${dependent.by} ("${dependent.specifier}")`)).join('、')
+        : '（未声明的提升依赖）';
+      return `${copy.version ?? '?'} ← ${by}`;
+    });
+    lines.push(`${name} ×${copies.length}：${parts.join('；')}`);
+    const rootCopy = copies.find(copy => copy.requiredBy.some(dependent => dependent.by === '根项目'));
+    const target = rootCopy?.version ? `^${rootCopy.version}` : '与根项目相同的版本';
+    for (const copy of copies) {
+      if (copy === rootCopy) continue;
+      for (const dependent of copy.requiredBy) {
+        if (dependent.by === '根项目') continue;
+        fixes.add(dependent.local
+          // A project directory (workspace member): its own package.json pins the other copy.
+          ? `把 ${dependent.by}/package.json 的 ${name} 改成 ${target}（或运行 zhin migrate，一并升级工作区里的包）`
+          : `${dependent.by} 依赖 ${name}@${dependent.specifier ?? '?'}：升级该包，或运行 zhin migrate 后 pnpm dedupe`);
+      }
+    }
+  }
+  return { lines, fixes: [...fixes] };
 }

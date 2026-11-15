@@ -6,7 +6,7 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   description: '查看积分排行榜', descriptionI18n: { en: "View the points leaderboard" },
-  alias: ['checkin rank'],
+  alias: ['checkin rank', '排行', '积分排行'],
   execute({ config, input, owner, use, has, locale }) {
     return pointsRank({ ...input, locale }, groupSuiteConfigFor({ config, has, use }, input), resolveGroupSuiteRuntime({ owner, use }));
   },
