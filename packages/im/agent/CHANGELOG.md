@@ -1,5 +1,35 @@
 # @zhin.js/agent
 
+## 1.6.0
+
+### Minor Changes
+
+- efa87bf: 失败原因看得见（#1270 第 14 批）：账号准备失败与模型调用失败通过新的 `failureJournal` 端口（`InferenceFailureJournal`）写入实例的运行时失败记录，重启后在凭据版本一致时恢复显示（`preparationFailure.restored`）；新增纯函数 `subAgentPurposeEffect()` / `purposeKeyEffects()` 与 `inferencePurposeEffects()`，管理视图新增 `purposeEffects`（`agents.<key>` 是否生效及原因 `binding-name` / `ambiguous` / `no-target`），目标列表新增 `subAgents`（`readAgentPurposeTargets()`）；`HostInference` 新增 `accountAttention()`、`purposeEffects()` 与 `pruneFailureJournal()`；新增 `pruneInferenceFailures()`：账号被删、断开或凭据版本变化时清掉对应的旧记录。
+- 816c3f3: #1250 第 18 批：入站消息结局与群聊插话（ADR 0061 P1/P2/P5、ADR 0062 §23）。
+
+  - 每条入站消息在处理结束时恰好得到一个结局（`InboundOutcomeLedger`，`finally` 提交）：命令、中间件、处理器、交互态、准入、去重、近似指令、发送失败与 Agent 入口都上报候选，按优先级取主结局，其余记为 facets；抛错记为 `internal_error` 并带错误号（`err_` + 12 位十六进制，`createErrorId` 移入 `@zhin.js/logger`），原样重新抛出。结局不存消息正文，管理员补充 ≤ 200 字并按决策审计同一套规则脱敏（`redactDecisionPayload` 下移到 `@zhin.js/kernel`，Agent 原名再导出）。
+  - 结局保存在进程内（2000 条 / 24 小时，静默结局每会话每分钟超过 30 条时聚合），附在消息诊断记录上（`RuntimeMessageDiagnostic.outcome`），并写一行实例日志 `op=inbound_outcome`。
+  - 没被 @、不是指令、本群又没开插话的群消息记 `not_addressed`（`unaddressed-message-no-record`）；旁听判定不插话记 `ambient_silent`；控制面 / 禁言记 `filtered_by_policy`。
+  - 群插话纳入功能开关：`ai.trigger.ambient.conversations` 是全局默认值，适配器 / 账号 / 会话层开关存进 `feature_overrides`；群管理员可在群里发「功能 关闭 / 开启 / 重置 插话」（`ambient-allowlist-only`）。
+  - 交互态：提问可声明 `answeredBy: 'target' | 'anyone'`（默认 `target`）；回答无效时提示最多重发一次。提醒插件的确认步骤只接受「确认」/「取消」，期间的闲聊不再让整段确认提示反复出现（`reminder-confirm-captures-chat`）。
+  - group-suite：`mypoints` 增加中文别名「积分」「我的积分」，`rank` 增加「排行」「积分排行」（`group-suite-zh-alias-partial`）。
+
+### Patch Changes
+
+- d21754f: 日志写法统一（zhinjs/zhin#1250 第 19b 批）：Agent 的存储与清理失败日志由 `op=usage_persist status=failed; 说明` 改为与其余日志相同的 `usage_persist | status: failed | detail: 说明`，备用模型切换日志改为 `model_fallback | purpose: … | from: … | to: … | reason: … | phase: …`。实例的 Console 系统日志改用 `@zhin.js/logger` 的 `parseLogLine`，带日期的新格式与旧格式的行都能落库。
+- Updated dependencies [efa87bf]
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+  - @zhin.js/ai@1.7.1
+  - @zhin.js/core@1.10.0
+  - @zhin.js/kernel@1.2.0
+  - @zhin.js/logger@1.3.0
+  - @zhin.js/im-contract@1.3.0
+  - @zhin.js/database@1.2.2
+  - @zhin.js/adapter@1.3.2
+  - @zhin.js/tool@1.1.22
+  - @zhin.js/harness@1.0.1
+
 ## 1.5.0
 
 ### Minor Changes
