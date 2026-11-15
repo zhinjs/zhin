@@ -53,8 +53,9 @@ describe('public Skill hint (#1250 b27)', () => {
     it('scores only the longest matching keyword, without summing many matches', () => {
       const many = skill('many', ['deploy', 'docker', 'server', 'build', 'release']);
       const precise = skill('precise', ['docker deploy']);
+      // `many` matches five keywords but scores only its longest one, so it ranks below `precise`.
       expect(suggestPublicSkillsForIntent([many, precise], 'docker deploy to the server, then build a release').map(entry => entry.name))
-        .toEqual(['precise']);
+        .toEqual(['precise', 'many']);
     });
 
     it('only the first keywords count, and over-long keywords are ignored', () => {
@@ -62,6 +63,46 @@ describe('public Skill hint (#1250 b27)', () => {
       expect(suggestPublicSkillsForIntent([late], 'deploy now')).toEqual([]);
       const long = skill('long', ['x'.repeat(40)]);
       expect(suggestPublicSkillsForIntent([long], `${'x'.repeat(40)} please`)).toEqual([]);
+    });
+  });
+
+  describe('adversarial keywords (#1292 review)', () => {
+    const legit = skill('legit', ['翻译', 'translate']);
+    const evil = (keywords: readonly string[]) => skill('evil', keywords);
+    const names = (skills: readonly SkillDescriptor[]) => skills.map(entry => entry.name);
+
+    it('spaces inside a CJK keyword do not inflate its score', () => {
+      expect(names(suggestPublicSkillsForIntent([evil(['我 的']), legit], '帮我翻译我的文章'))).toEqual(['legit']);
+      expect(names(suggestPublicSkillsForIntent([evil(['帮 我 翻']), legit], '帮我翻译'))).toEqual(['legit']);
+      // `部 署` scores like `部署` (2), so the name order decides and `a-plain` comes first.
+      const spaced = skill('z-spaced', ['部 署']);
+      const plain = skill('a-plain', ['部署']);
+      expect(names(suggestPublicSkillsForIntent([spaced, plain], '帮我部署服务'))).toEqual(['a-plain', 'z-spaced']);
+    });
+
+    const hijacks = [
+      '能不能帮我', '帮我看看', '你好啊', '可以吗', '谢谢你', '我的', '的话', '了吗',
+      '???', '。。。', '123', '😀😀😀', 'hi!', "what's",
+    ];
+    for (const keyword of hijacks) {
+      it(`"${keyword}" cannot push the legitimate Skill out of the hint`, () => {
+        for (const text of [`${keyword}帮我翻译我的文章`, `帮我翻译我的文章${keyword}`, `${keyword} translate this, ${keyword}`]) {
+          const suggested = names(suggestPublicSkillsForIntent([evil([keyword]), legit], text));
+          expect(suggested, text).toContain('legit');
+          expect(suggested, text).not.toContain('evil');
+        }
+      });
+
+      it(`"${keyword}" never triggers a hint in small talk`, () => {
+        for (const text of ['你好', '谢谢', keyword, `你好${keyword}`, `${keyword} 谢谢`, `hi ${keyword}`]) {
+          expect(suggestPublicSkillsForIntent([evil([keyword]), legit], text), text).toEqual([]);
+        }
+      });
+    }
+
+    it('a higher-scoring Skill does not push a matching one out of the hint', () => {
+      const broad = skill('broad', ['翻译这篇文章']);
+      expect(names(suggestPublicSkillsForIntent([broad, legit], '帮我翻译这篇文章'))).toEqual(['broad', 'legit']);
     });
   });
 

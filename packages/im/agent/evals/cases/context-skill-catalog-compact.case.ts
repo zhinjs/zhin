@@ -50,7 +50,7 @@ export default defineEvalCase({
       'internal routing notes', 'Background that only matters once loaded',
     ],
     modelInputNotContains: ['WEEKLY-REPORT-INSTRUCTIONS', 'RELEASE-NOTES-INSTRUCTIONS', 'GITHUB-INSTRUCTIONS'],
-    contextBudget: { maxSegmentTokens: { skill_catalog: 200 } },
+    contextBudget: { maxSegmentTokens: { skill_catalog: 130 } },
     modelSteps: 1,
   },
 });
