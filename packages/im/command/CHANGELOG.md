@@ -1,5 +1,12 @@
 # @zhin.js/command
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [816c3f3]
+  - @zhin.js/im-contract@1.3.0
+
 ## 1.3.0
 
 ### Minor Changes
