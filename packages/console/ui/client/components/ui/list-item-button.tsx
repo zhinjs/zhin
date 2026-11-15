@@ -16,9 +16,8 @@ const ListItemButton = forwardRef<HTMLButtonElement, ListItemButtonProps>(
       ref={ref}
       type={type}
       className={cn(
-        "cursor-pointer text-left max-md:min-h-11 disabled:cursor-not-allowed disabled:opacity-50",
-        "focus-visible:outline focus-visible:outline-[length:var(--console-focus-width)] focus-visible:outline-offset-2 focus-visible:outline-ring",
-        className,
+        "cursor-pointer text-left min-h-touch-min disabled:cursor-not-allowed disabled:opacity-50",
+                className,
       )}
       {...props}
     />

@@ -28,7 +28,8 @@ if (mode === 'build') {
   // matrix run in Full validation and the explicit release batch.
   const checks = ['check:architecture', 'check:dependency-policy', 'check:release-plan', 'check:harness-paths',
     'check:no-removed-plugin-api', 'check:api-surface', 'check:plugin-runtime-api', 'check:feature-peers', 'check:doc-links',
-    'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest'];
+    'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest',
+    'check:console-ui-styles'];
   const { spawn } = await import('node:child_process');
   const queue = [...checks];
   const runCheck = command => new Promise((resolve, reject) => {

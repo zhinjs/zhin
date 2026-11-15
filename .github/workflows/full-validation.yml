@@ -609,6 +609,10 @@ jobs:
       - name: test docs journeys
         run: pnpm test:docs:e2e:run
 
+      # ADR 0063 D20: the @zhin.js/console-ui gallery must pass the layout audit (gate).
+      - name: audit the console-ui gallery layout
+        run: pnpm check:console-ui-audit
+
       # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
       # cancels the whole run instead of letting the other jobs finish for nothing.
       - name: cancel the rest of this run

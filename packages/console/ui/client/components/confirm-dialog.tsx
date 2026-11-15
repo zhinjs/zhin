@@ -70,7 +70,7 @@ export function ConfirmDialog({
         <DialogHeader>
           <div className="flex items-start gap-3">
             <span className={cn('console-confirm-icon', variant === 'destructive' && 'is-destructive')} aria-hidden="true">
-              <Icon className="h-5 w-5" />
+              <Icon className="size-5" />
             </span>
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle>{title}</DialogTitle>
@@ -80,8 +80,8 @@ export function ConfirmDialog({
         </DialogHeader>
         {children}
         {confirmText != null && confirmText !== '' && (
-          <div className="space-y-1.5">
-            <label htmlFor={inputId} className="block text-sm text-muted-foreground">
+          <div className="space-y-2">
+            <label htmlFor={inputId} className="block text-body text-muted-foreground">
               {i18n.t("confirm.typeToConfirm", [confirmText])}
             </label>
             <Input
@@ -98,11 +98,11 @@ export function ConfirmDialog({
           </div>
         )}
         {error && (
-          <p role="alert" className="text-sm text-destructive break-words">
+          <p role="alert" className="text-body text-destructive break-words">
             {i18n.t("confirm.notCompleted", [error])}
           </p>
         )}
-        <DialogFooter className="gap-2 border-t border-[color:var(--console-border-subtle)] pt-3">
+        <DialogFooter className="border-t border-border/70 pt-3">
           <DialogClose asChild>
             <Button variant="outline" size="sm">{cancelLabel ?? i18n.t("confirm.cancel")}</Button>
           </DialogClose>

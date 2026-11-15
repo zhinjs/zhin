@@ -22,13 +22,25 @@
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/tokens.css",
     "./exports.json": "./dist/exports.json",
+    "./theme.css": "./dist/theme.css",
+    "./custom-media.css": "./dist/custom-media.css",
+    "./scale.json": "./dist/scale.json",
+    "./tokens": "./tokens/tokens.mjs",
+    "./scale": "./tokens/scale.mjs",
+    "./stylelint": "./lint/stylelint-config.mjs",
+    "./stylelint-plugin": "./lint/stylelint-plugin.mjs",
+    "./eslint": "./lint/eslint-plugin.mjs",
+    "./tailwind-classes": "./lint/tailwind-classes.mjs",
+    "./audit": "./audit/index.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
     "clean": "rimraf dist",
     "test": "vitest run --root ../../.. packages/console/ui/tests",
-    "test:visual": "playwright test --config visual/playwright.config.ts"
+    "test:visual": "playwright test --config visual/playwright.config.ts console-ui.spec.ts",
+    "test:audit": "playwright test --config visual/playwright.config.ts audit.spec.ts",
+    "lint:css": "stylelint \"client/styles/**/*.css\" && node tokens/generate.mjs --check"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -39,7 +51,21 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "@playwright/test": ">=1.50",
+    "esbuild": ">=0.25",
+    "stylelint": ">=16"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    },
+    "esbuild": {
+      "optional": true
+    },
+    "stylelint": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
@@ -49,11 +75,15 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "rimraf": "^6.1.4",
+    "stylelint": "17.16.0",
     "tailwindcss": "4.3.3",
     "typescript": "^6.0.3"
   },
   "files": [
     "dist",
+    "tokens",
+    "lint",
+    "audit",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -77,6 +107,16 @@
       "./styles.css": "./dist/styles.css",
       "./tokens.css": "./dist/tokens.css",
       "./exports.json": "./dist/exports.json",
+      "./theme.css": "./dist/theme.css",
+      "./custom-media.css": "./dist/custom-media.css",
+      "./scale.json": "./dist/scale.json",
+      "./tokens": "./tokens/tokens.mjs",
+      "./scale": "./tokens/scale.mjs",
+      "./stylelint": "./lint/stylelint-config.mjs",
+      "./stylelint-plugin": "./lint/stylelint-plugin.mjs",
+      "./eslint": "./lint/eslint-plugin.mjs",
+      "./tailwind-classes": "./lint/tailwind-classes.mjs",
+      "./audit": "./audit/index.mjs",
       "./package.json": "./package.json"
     }
   },
