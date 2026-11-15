@@ -1,5 +1,14 @@
 # @zhin.js/adapter
 
+## 1.3.2
+
+### Patch Changes
+
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+  - @zhin.js/logger@1.3.0
+  - @zhin.js/im-contract@1.3.0
+
 ## 1.3.1
 
 ### Patch Changes

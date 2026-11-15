@@ -1,5 +1,13 @@
 # @zhin.js/database
 
+## 1.2.2
+
+### Patch Changes
+
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+  - @zhin.js/logger@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes
