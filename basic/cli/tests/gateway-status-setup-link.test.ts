@@ -17,7 +17,9 @@ describe('Console setup link after zhin start (#1250 start-bg-no-setup-link)', (
   it('prints one link carrying the bootstrap token before the first owner exists', () => {
     const lines = renderStatus(status(false), 0, { setupToken: 'boot+strap' });
     expect(lines).toContain('  Console 尚未初始化，打开此链接完成初始化：https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=boot%2Bstrap');
-    expect(lines.filter((line) => line.includes('https://console.zhin.dev'))).toHaveLength(1);
+    const consoleLinks = lines.flatMap((line) => line.match(/https:\/\/\S+/gu) ?? [])
+      .filter((href) => new URL(href).origin === 'https://console.zhin.dev');
+    expect(consoleLinks).toHaveLength(1);
     expect(lines.join('\n')).not.toContain('HTTP_TOKEN');
   });
 
