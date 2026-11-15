@@ -250,7 +250,13 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const [inlineNotices, setInlineNotices] = useState<{ emoji: boolean; parse: boolean }>({ emoji: false, parse: false })
     const fetchFaceList = async () => {
-        try { const res = await fetch('https://face.viki.moe/metadata.json'); setFaceList(await res.json()) }
+        try {
+            const res = await fetch('https://face.viki.moe/metadata.json')
+            const body: unknown = res.ok ? await res.json() : undefined
+            // A failed or malformed response must not break the page (the face picker just stays empty).
+            if (!Array.isArray(body)) throw new Error(`unexpected face list response (${res.status})`)
+            setFaceList(body as Face[])
+        }
         catch (err) { console.error('[Sandbox] Failed to fetch face list:', err); setInlineNotices((n) => ({ ...n, emoji: true })) }
     }
 
@@ -1806,10 +1812,10 @@ ${sandboxStyles}`}</style>
     )
 }
 
-/** Up to 1180px the conversation list is a drawer (see the workspace styles), so it needs a toggle. */
-const DRAWER_LAYOUT_QUERY = '(max-width: 1180px)'
+/** Below the Console `lg` breakpoint (64rem) the conversation list is a drawer (see the workspace styles), so it needs a toggle. */
+const DRAWER_LAYOUT_QUERY = '(width < 64rem)'
 /** On phones the run bar keeps only the run state, Stop and 「更多」; the rest moves into the menu (D18 第 7 条). */
-const COMPACT_RUNBAR_QUERY = '(max-width: 767px)'
+const COMPACT_RUNBAR_QUERY = '(width < 48rem)'
 function useMediaQuery(media: string): boolean {
     const [matches, setMatches] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function'
         && window.matchMedia(media).matches)

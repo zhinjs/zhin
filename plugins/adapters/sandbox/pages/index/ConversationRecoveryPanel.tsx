@@ -43,7 +43,7 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
       try {
         const data = await readPendingInteractions(connectionId, sessionKey, controller.signal, current.context);
         if (!active()) return;
-        const pending = data?.pending ?? [];
+        const pending = Array.isArray(data?.pending) ? data.pending : [];
         const retired = data ? current.interactions.filter(previous => !pending.some(next => next.generation === previous.generation && next.id === previous.id)) : [];
         if (data) current.interactions = pending;
         setPending(pending);
@@ -107,7 +107,7 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
     return current.results;
   };
 
-  const results = page?.results.filter(result => resultDeliveryStatus(result) !== 'sent') ?? [];
+  const results = (Array.isArray(page?.results) ? page.results : []).filter(result => resultDeliveryStatus(result) !== 'sent');
   if (!pending.length && !results.length && !pendingError && !resultError && !page?.hasMore) return null;
   return <div className="agent-playground-recovery" hidden={props.hidden}>
     {pendingError ? <p role="alert">{pendingError} <Button type="button" size="sm" variant="outline" onClick={() => void reloadPending(true)}>{sandboxText(locale, '重试')}</Button></p> : null}

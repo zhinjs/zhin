@@ -58,7 +58,7 @@ describe('Sandbox page on @zhin.js/console-ui (ADR 0063 D13 step 2)', () => {
     const all = buttons(html);
     expect(all.length).toBeGreaterThan(10);
     // Button / Input carry console-control; ListItemButton rows carry its 44px tap target; tabs are Radix triggers.
-    const unmanaged = all.filter((attributes) => !/console-control|max-md:min-h-11|role="tab"/u.test(attributes));
+    const unmanaged = all.filter((attributes) => !/console-control|max-md:min-h-11|min-h-touch-min|role="tab"/u.test(attributes));
     expect(unmanaged).toEqual([]);
     expect(html).not.toMatch(/<select\b/u);
   });
@@ -88,7 +88,7 @@ describe('Sandbox page on @zhin.js/console-ui (ADR 0063 D13 step 2)', () => {
   });
 
   it('never covers the Console shell: the drawers are positioned inside the workbench', () => {
-    expect(sandboxStyles).toMatch(/@media \(max-width: 1180px\)[\s\S]*?\.agent-playground-sessions\.channel-sidebar \{ position: absolute;/u);
+    expect(sandboxStyles).toMatch(/@media \(width < 64rem\)[\s\S]*?\.agent-playground-sessions\.channel-sidebar \{ position: absolute;/u);
     expect(sandboxStyles).toMatch(/\.zhin-sandbox \.channel-overlay \{ position: absolute;/u);
     expect(sandboxStyles).not.toMatch(/position:\s*fixed/u);
   });

@@ -100,7 +100,7 @@ export function renderSmartValue(
     if (type === 'link' || /^https?:\/\/\S+$/iu.test(text)) {
       return (
         <ContentStack direction="row" gap="tight">
-          <a href={text} target="_blank" rel="noopener noreferrer">{text}</a>
+          <a className="console-touch" href={text} target="_blank" rel="noopener noreferrer">{text}</a>
           <CopyValueButton copyKey={copyKey} text={text} copy={copy} t={t} />
         </ContentStack>
       );

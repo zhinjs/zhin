@@ -9,6 +9,10 @@
  * 审计模块：--audit-module <路径或包名>，或环境变量 ZHIN_PLUGIN_UI_AUDIT_MODULE，
  * 默认 @zhin.js/console-ui/audit。默认模块尚未提供时只打印提示并以 0 退出；加 --require-audit
  * 或显式指定模块时，加载不到即失败。
+ *
+ * 挂载模块：声明式蓝图、适配器页与评论审批页由 Console 渲染器渲染，审计需要渲染器的挂载模块
+ * （ADR 0063 P2）。--mount-module <路径>，或环境变量 ZHIN_UI_AUDIT_MOUNT_MODULE，默认
+ * packages/console/client/audit/mount-plugin-page.tsx（相对仓库根目录）。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -26,6 +30,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 export const DEFAULT_AUDIT_MODULE = '@zhin.js/console-ui/audit';
 export const AUDIT_WIDTHS = Object.freeze([375, 768, 1280, 1920]);
 export const AUDIT_THEMES = Object.freeze(['light', 'dark']);
+/** Renderer mount module of @zhin.js/client (renders blueprints, adapter and comment review pages). */
+export const DEFAULT_MOUNT_MODULE = 'packages/console/client/audit/mount-plugin-page.tsx';
 
 /** Pages of an official plugin: `pages/<name>/index.(ts|tsx|js|jsx)`. */
 export function listPluginPages(pluginDirectory) {
@@ -39,9 +45,10 @@ export function listPluginPages(pluginDirectory) {
 }
 
 /** The request handed to `auditPluginPages()`. */
-export function buildAuditRequest(root, plugins) {
+export function buildAuditRequest(root, plugins, mountModule) {
   return {
     repoRoot: root,
+    ...(mountModule ? { mountModule } : {}),
     widths: [...AUDIT_WIDTHS],
     themes: [...AUDIT_THEMES],
     plugins: plugins.map((plugin) => {
@@ -73,11 +80,11 @@ async function importAuditModule(specifier) {
 
 /**
  * Runs the gate. Returns the process exit code.
- * @param {{ argv?: string[], env?: NodeJS.ProcessEnv, root?: string, log?: (line: string) => void, error?: (line: string) => void }} options
+ * @param {{ argv?: string[], env?: NodeJS.ProcessEnv, root?: string, log?: (line: string) => void, error?: (line: string) => void, defaultAuditModule?: string }} options
  */
-export async function runPluginUiAudit({ argv = process.argv.slice(2), env = process.env, root = repoRoot, log = console.log, error = console.error } = {}) {
+export async function runPluginUiAudit({ argv = process.argv.slice(2), env = process.env, root = repoRoot, log = console.log, error = console.error, defaultAuditModule = DEFAULT_AUDIT_MODULE } = {}) {
   const moduleFlag = argv.indexOf('--audit-module');
-  const specifier = moduleFlag >= 0 ? argv[moduleFlag + 1] : env.ZHIN_PLUGIN_UI_AUDIT_MODULE || DEFAULT_AUDIT_MODULE;
+  const specifier = moduleFlag >= 0 ? argv[moduleFlag + 1] : env.ZHIN_PLUGIN_UI_AUDIT_MODULE || defaultAuditModule;
   // An explicitly named module must load; only the default one may be absent (until P1b ships it).
   const requireAudit = argv.includes('--require-audit') || moduleFlag >= 0 || Boolean(env.ZHIN_PLUGIN_UI_AUDIT_MODULE);
 
@@ -104,7 +111,15 @@ export async function runPluginUiAudit({ argv = process.argv.slice(2), env = pro
     return 0;
   }
 
-  const result = await auditModule.auditPluginPages(buildAuditRequest(root, plugins));
+  const mountFlag = argv.indexOf('--mount-module');
+  const explicitMount = mountFlag >= 0 ? argv[mountFlag + 1] : env.ZHIN_UI_AUDIT_MOUNT_MODULE;
+  // The default mount module is used when the repository has it; a named one must exist.
+  const mountModule = explicitMount || (fs.existsSync(path.resolve(root, DEFAULT_MOUNT_MODULE)) ? DEFAULT_MOUNT_MODULE : undefined);
+  if (mountModule && !fs.existsSync(path.resolve(root, mountModule))) {
+    error(`Plugin UI audit: FAILED — 挂载模块 ${mountModule} 不存在`);
+    return 1;
+  }
+  const result = await auditModule.auditPluginPages(buildAuditRequest(root, plugins, mountModule));
   const outcome = evaluateAuditUiGate(gate, result, plugins);
   writeStepSummary(formatUiGateSummary('官方插件页面 UI 审计（Playwright 全项）', outcome), env);
   for (const item of outcome.reported) log(`  report only: ${item.plugin} ${item.message}`);

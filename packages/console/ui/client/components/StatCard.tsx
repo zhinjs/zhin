@@ -1,10 +1,10 @@
-import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { createElement, isValidElement, type ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '../cn.js'
 
 export interface StatCardProps {
   /** A Lucide icon component, an element, or an image URL (declarative stats, ADR 0063 P2). */
-  icon?: LucideIcon | ReactElement | string
+  icon?: LucideIcon | ReactNode
   label: ReactNode
   value: ReactNode
   /** After the value, in label size (e.g. 「ms」). */
@@ -56,7 +56,8 @@ function statIcon(icon: StatCardProps['icon']): ReactNode {
   if (icon == null || icon === '') return null
   if (typeof icon === 'string') return <img src={icon} alt="" className="console-stat-icon" />
   if (isValidElement(icon)) return icon
-  return createElement(icon as LucideIcon, { 'aria-hidden': true })
+  if (typeof icon === 'function' || (typeof icon === 'object' && '$$typeof' in icon)) return createElement(icon as LucideIcon, { 'aria-hidden': true })
+  return icon as ReactNode
 }
 
 export function StatGrid({ children, label, ...data }: { children: ReactNode; label: string; [data: `data-${string}`]: string | undefined }) {

@@ -1157,10 +1157,10 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                     {image && isImageSource(image) && <MediaPreview src={image} alt={t(locale, '{0}（账号 {1}）', loginTypeLabel(task.type, locale), task.endpointKey)} />}
                     <ContentStack gap="tight">
                       {message && <p>{message}</p>}
-                      {image && !isImageSource(image) && isLink(image) && <a href={image} target="_blank" rel="noreferrer">{image}</a>}
+                      {image && !isImageSource(image) && isLink(image) && <a className="console-touch" href={image} target="_blank" rel="noreferrer">{image}</a>}
                       {url && (
                         <ContentStack direction="row" gap="tight" align="center">
-                          <a href={url} target="_blank" rel="noreferrer">{url}</a>
+                          <a className="console-touch" href={url} target="_blank" rel="noreferrer">{url}</a>
                           {task.type === 'slider' && (
                             <Button asChild variant="outline" size="sm"><a href={url} target="_blank" rel="noreferrer">{t(locale, '打开滑块验证页面')}</a></Button>
                           )}
@@ -1236,7 +1236,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             {bindImage && <MediaPreview src={bindImage} alt={t(locale, '二维码')} />}
             <ContentStack gap="tight">
               <p className="console-form-field-hint">{bindMessage ?? t(locale, '等待手机 QQ 扫码确认…')}</p>
-              {bindUrl && <a href={bindUrl} target="_blank" rel="noreferrer">{bindUrl}</a>}
+              {bindUrl && <a className="console-touch" href={bindUrl} target="_blank" rel="noreferrer">{bindUrl}</a>}
             </ContentStack>
           </ContentStack>
         )}
@@ -1276,7 +1276,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                   <strong>{row.endpointId}</strong>
                   {(row.enabled || row.retiring) && <ToneBadge tone={row.state.tone}>{row.state.label}</ToneBadge>}
                   {row.execution && <ToneBadge tone={row.execution.tone}>{row.execution.label}</ToneBadge>}
-                  {row.pendingLogin && <ToneBadge tone="warning">{t(locale, '待验证')} · <a href="#adapter-logins">{t(locale, '前往验证')}</a></ToneBadge>}
+                  {row.pendingLogin && <ToneBadge tone="warning">{t(locale, '待验证')} · <a className="console-touch" href="#adapter-logins">{t(locale, '前往验证')}</a></ToneBadge>}
                   {row.lastTest && row.lastTest.latencyMs !== undefined && (
                     <ToneBadge tone={row.lastTest.connected ? 'success' : 'danger'}>{row.lastTest.latencyMs} ms</ToneBadge>
                   )}
@@ -1565,7 +1565,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                     <NoticeBlock tone={result.tone === 'error' ? 'danger' : 'success'}>
                       <ContentStack gap="tight">
                         {result.message}
-                        {result.url && <a href={result.url} target="_blank" rel="noreferrer">{result.url}</a>}
+                        {result.url && <a className="console-touch" href={result.url} target="_blank" rel="noreferrer">{result.url}</a>}
                         {result.image && <MediaPreview src={result.image} alt={t(locale, '操作返回的图片')} />}
                         {result.details && <KeyValueList columns={1} items={Object.entries(result.details).map(([key, value]) => ({ key, label: key, value: String(value) }))} />}
                       </ContentStack>
@@ -1598,7 +1598,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
           <ContentStack direction="row" gap="tight">
             {showAccounts && (
               <Button asChild variant="ghost" size="sm">
-                <a href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>
+                <a className="console-touch" href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>
                   {t(locale, '账号')} <ToneBadge tone="neutral">{runtime?.endpoints.length ?? status.configured.length}</ToneBadge>
                 </a>
               </Button>
@@ -1614,7 +1614,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {notice && showAccounts && (
         <NoticeBlock tone={notice.kind === 'error' ? 'danger' : 'success'} onDismiss={() => setNotice(undefined)} dismissLabel={t(locale, '关闭')}>
           {notice.message}
-          {notice.url && <> · <a href={notice.url} target="_blank" rel="noreferrer">{notice.url}</a></>}
+          {notice.url && <> · <a className="console-touch" href={notice.url} target="_blank" rel="noreferrer">{notice.url}</a></>}
           {/* 二维码必须黑码白底才能被扫描；MediaPreview 固定白底。 */}
           {notice.image && <MediaPreview src={notice.image} alt={t(locale, '操作返回的图片')} />}
         </NoticeBlock>
@@ -1701,7 +1701,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             items={sidebarExtraEntries.map(([key, value]) => ({
               key,
               label: key,
-              value: typeof value === 'string' && isLink(value) ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === 'boolean' ? t(locale, value ? '已开启' : '已关闭') : String(value),
+              value: typeof value === 'string' && isLink(value) ? <a className="console-touch" href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === 'boolean' ? t(locale, value ? '已开启' : '已关闭') : String(value),
             }))}
           />
         </Section>

@@ -58,12 +58,12 @@ function staticGate(root: string) {
 }
 
 describe('official plugin UI gate list', () => {
-  it('the repository list covers every official plugin with pages, Sandbox pending with a reason', () => {
+  it('the repository list covers every official plugin with pages, all gated (ADR 0063 P2 acceptance)', () => {
     const { gate, problems } = readUiGate(repoRoot);
     expect(problems).toEqual([]);
     expect(validateUiGate(gate, listOfficialPluginsWithPages(repoRoot))).toEqual([]);
-    expect(gate.pending.map((entry: { plugin: string }) => entry.plugin)).toEqual(['plugins/adapters/sandbox']);
-    expect(gate.pending[0].reason).toMatch(/D13/u);
+    expect(gate.pending).toEqual([]);
+    expect(gate.gated).toContain('plugins/adapters/sandbox');
   });
 
   it('every gated repository plugin passes rules 1–6', () => {
@@ -142,6 +142,10 @@ describe('audit gate (pnpm check:plugin-ui-audit)', () => {
 
   it('fails when a gated plugin was not audited or the result is malformed', () => {
     expect(evaluateAuditUiGate(gate, { pages: [] }, ['plugins/utils/clean']).errors[0].message).toMatch(/没有返回/u);
+    // Returned but not mounted (e.g. a blueprint without the renderer mount module) is not a pass.
+    const unmounted = evaluateAuditUiGate(gate, { pages: [{ plugin: 'plugins/utils/clean', page: 'index', mounted: false, skipped: 'needs a mount module', violations: [] }] }, ['plugins/utils/clean']);
+    expect(unmounted.errors[0].message).toMatch(/没有挂载.*needs a mount module/u);
+    expect(evaluateAuditUiGate(gate, { pages: [{ plugin: 'plugins/utils/dirty', page: 'index', mounted: false, violations: [] }] }, []).reported).toHaveLength(1);
     expect(evaluateAuditUiGate(gate, { nope: true }, []).errors[0].message).toMatch(/pages/u);
     expect(evaluateAuditUiGate(gate, { pages: [{ plugin: 'p', page: 'i', violations: [], exemptions: [{ check: 'x', reason: '' }] }] }, []).errors[0].message).toMatch(/reason/u);
   });
@@ -175,10 +179,12 @@ describe('audit gate (pnpm check:plugin-ui-audit)', () => {
     const root = fixtureRepo(gate);
     const logs: string[] = [];
     const env = { GITHUB_STEP_SUMMARY: path.join(root, 'summary.md') };
-    expect(await runPluginUiAudit({ argv: [], env, root, log: (line) => logs.push(line), error: (line) => logs.push(line) })).toBe(0);
+    // @zhin.js/console-ui/audit exists since P1b; stand in a missing default module.
+    const defaultAuditModule = '@zhin.js/missing-ui-audit';
+    expect(await runPluginUiAudit({ argv: [], env, root, defaultAuditModule, log: (line) => logs.push(line), error: (line) => logs.push(line) })).toBe(0);
     expect(logs.join('\n')).toMatch(/skipped/u);
     expect(fs.readFileSync(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain('已跳过');
-    expect(await runPluginUiAudit({ argv: ['--require-audit'], env: {}, root, log: () => {}, error: () => {} })).toBe(1);
+    expect(await runPluginUiAudit({ argv: ['--require-audit'], env: {}, root, defaultAuditModule, log: () => {}, error: () => {} })).toBe(1);
     expect(await runPluginUiAudit({ argv: ['--audit-module', './missing-audit.mjs'], env: {}, root, log: () => {}, error: () => {} })).toBe(1);
   });
 });

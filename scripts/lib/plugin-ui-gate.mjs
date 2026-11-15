@@ -136,7 +136,7 @@ export function evaluateStaticUiGate(gate, reports, formatFinding) {
  * Shape `auditPluginPages()` of `@zhin.js/console-ui` must resolve to (see docs/authoring/console-pages.md).
  * @typedef {{ check: string, width: number, theme: 'light' | 'dark', message: string, selector?: string }} AuditViolation
  * @typedef {{ check: string, reason: string, selector?: string }} AuditExemption
- * @typedef {{ plugin: string, page: string, violations: AuditViolation[], exemptions?: AuditExemption[] }} AuditPageResult
+ * @typedef {{ plugin: string, page: string, mounted?: boolean, skipped?: string, violations: AuditViolation[], exemptions?: AuditExemption[] }} AuditPageResult
  */
 
 /** Validates the audit result shape; returns the problems (empty when valid). */
@@ -178,6 +178,10 @@ export function evaluateAuditUiGate(gate, result, expectedPlugins) {
   for (const page of result.pages) {
     const status = gateStatus(gate, page.plugin);
     const target = status === 'gated' ? errors : reported;
+    // A page that was not mounted was not audited: for a gated plugin that is an error, not a pass.
+    if (page.skipped || page.mounted === false) {
+      target.push({ plugin: page.plugin, check: 'mount', message: `${page.page} 没有挂载，未被审计${page.skipped ? `：${page.skipped}` : ''}` });
+    }
     for (const violation of page.violations) {
       const where = [violation.width ? `${violation.width}px` : '', violation.theme ?? ''].filter(Boolean).join(' ');
       target.push({ plugin: page.plugin, check: violation.check, message: `${page.page} [${violation.check}${where ? ` ${where}` : ''}] ${violation.message}${violation.selector ? `（${violation.selector}）` : ''}` });

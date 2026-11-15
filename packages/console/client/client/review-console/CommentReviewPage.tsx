@@ -124,7 +124,7 @@ export function DraftCard({ draft, endpoint, session }: { draft: ReviewDraftBase
             <span>{spec.draftResource(draft, t)}</span>
             <span aria-hidden="true">·</span>
             <span>{ago(draft.createdAt, t)}</span>
-            <a href={draft.url} target="_blank" rel="noreferrer">{t(spec.openLabel ?? '查看原评论')}</a>
+            <a className="console-touch" href={draft.url} target="_blank" rel="noreferrer">{t(spec.openLabel ?? '查看原评论')}</a>
           </ContentStack>
           {draft.interrupted && (
             <NoticeBlock tone="warning">
@@ -410,7 +410,7 @@ export function CommentReviewSession({ spec }: { spec: AnySpec }) {
       {notice && (
         <NoticeBlock tone={notice.tone} onDismiss={() => setNotice(undefined)} dismissLabel={t('关闭')}>
           {notice.message}
-          {notice.link && <> · <a href={notice.link} target="_blank" rel="noreferrer">{t('查看')}</a></>}
+          {notice.link && <> · <a className="console-touch" href={notice.link} target="_blank" rel="noreferrer">{t('查看')}</a></>}
         </NoticeBlock>
       )}
       {resource.state === 'loading' && <LoadingBlock label={t('加载中…')} />}

@@ -22,6 +22,7 @@
     "plugins/adapters/onebot11",
     "plugins/adapters/onebot12",
     "plugins/adapters/qq",
+    "plugins/adapters/sandbox",
     "plugins/adapters/satori",
     "plugins/adapters/slack",
     "plugins/adapters/telegram",
@@ -40,10 +41,5 @@
     "plugins/utils/rss",
     "plugins/utils/short-url"
   ],
-  "pending": [
-    {
-      "plugin": "plugins/adapters/sandbox",
-      "reason": "ADR 0063 D13 两步完成后加入：先把 agent-playground.css / im-workspace.css 移进插件由页面自行注入，再把 Sandbox 的 .tsx 改写到 @zhin.js/console-ui 组件上；工作区确需的个别写法只能逐条行内豁免。由 Sandbox 迁移负责移入 gated。"
-    }
-  ]
+  "pending": []
 }

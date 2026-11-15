@@ -223,9 +223,19 @@ function collect({ scale, checks, contentSelector, pageType }) {
     if (rect.width === 0 && rect.height === 0) return true;
     return false;
   };
-  const srOnly = (element) => {
+  const srOnlySelf = (element) => {
     const style = getComputedStyle(element);
     return (style.position === 'absolute' && (style.clip !== 'auto' || style.clipPath.startsWith('inset(50%'))) || (element.getBoundingClientRect().width <= 1 && element.getBoundingClientRect().height <= 1);
+  };
+  // Visually hidden itself or inside a visually hidden ancestor (e.g. the header row of a table in
+  // card mode, whose sort buttons stay in the accessibility tree but are not on screen).
+  const srCache = new Map();
+  const srOnly = (element) => {
+    if (!element || element === document.body) return false;
+    if (srCache.has(element)) return srCache.get(element);
+    const value = srOnlySelf(element) || srOnly(element.parentElement);
+    srCache.set(element, value);
+    return value;
   };
 
   const elements = [...document.body.querySelectorAll('*')].filter((element) =>

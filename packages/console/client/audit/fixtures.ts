@@ -180,6 +180,8 @@ export function installFixtureHost(host: FixtureHost): void {
       if (type === 'inbox.recent') return reply({ messages: [] });
       return reply({});
     }
-    return reply({});
+    // Any other endpoint (agent traces, Sandbox history, external metadata) does not exist here: answer
+    // like an unavailable feature, so pages show their empty / unavailable state instead of fake data.
+    return Response.json({ success: false, error: 'not available in the audit fixture' }, { status: 404 });
   }) as typeof fetch;
 }
