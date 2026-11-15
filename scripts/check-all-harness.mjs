@@ -101,7 +101,7 @@ const checks = [
   {
     name: 'Plugin UI Audit',
     command: 'pnpm check:plugin-ui-audit',
-    description: '官方插件页面的 Playwright 全项审计门禁（ADR 0063；审计工具未就绪时跳过）',
+    description: '官方插件页面的 Playwright 全项审计门禁（ADR 0063；默认用 @zhin.js/client 的渲染器挂载模块，需先构建 @zhin.js/console-ui 并装好 Chromium）',
   },
   {
     name: 'Plugin Capability Publish',

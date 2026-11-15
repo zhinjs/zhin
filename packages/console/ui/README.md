@@ -28,7 +28,7 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | --- | --- |
 | 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
 | 页面与通用组件 | `PageShell`（`width`：`reading` / `data` / `full`）、`PageHeader`（`menuActions` / `moreActions`）、`Section`、`Grid`、`ListDetail`、`StatusBadge`/`isAttentionStatus`、`MoreMenu`、`RowActions`、`PageActions`、`ConfirmDialog`/`useConfirm`、`StatCard`/`StatGrid`/`MiniRingGauge`、`EmptyState`、`ErrorAlert`、`InfoHint`、`RefreshControl` |
-| 内容区块（P2） | `ContentSection`、`ContentStack`、`ContentGrid`（`auto-fit` 弹性网格，`min="stat"` 在窄容器里两列）、`MetricCard`、`FormField`、`KeyValueList`、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`、`CodeText`、`JsonBlock`、`MediaPreview`、`ResponsiveTable`（容器窄于 40rem 时显示卡片）、`RecordCard` |
+| 内容区块（P2） | `ContentStack`、`FormField`、`KeyValueList`、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`、`CodeText`、`JsonBlock`、`MediaPreview`、`RecordCard`（`Card` + `KeyValueList`）、`LoadingBlock`；分区、网格、统计卡片与表格卡片直接用上面的 `Section`、`Grid`、`StatGrid` / `StatCard`、`Table` |
 | 容器宽度 | `useContainerAtLeast`、`CONSOLE_BREAKPOINTS_REM`、`syncTableCellLabels` |
 | 页面外壳接口 | `usePageChrome({ title, description, actions, refresh, menuActions, moreActions })`、`PageChromeProvider`、`createPageChromeStore`、`usePageChromeState`、`PageChromeActions` |
 | 语言 | `ConsoleUiI18nProvider`、`useConsoleUiI18n`、`createConsoleUiI18n`、`ConsoleUiText`、`CONSOLE_UI_MESSAGES`、`CONSOLE_UI_LOCALES` |
@@ -118,7 +118,7 @@ export default function Feeds() {
 
 ## 内容区块
 
-外壳负责页头，页面只放内容区块。区块按**自己所在容器**的宽度切换布局（`@container`，不看视口）：`ContentGrid` 用 `repeat(auto-fit, minmax(…, 1fr))`，统计卡片在窄容器里两列；`KeyValueList` 在窄容器里一列；`ResponsiveTable` 同时放表格和每行一张 `RecordCard`，容器窄于 40rem 时只显示卡片；`Disclosure` 默认收起，用于原始 ID、JSON 这类默认不显示的内容（D15、D18）。
+外壳负责页头，页面只放内容。内容区块补充 P1b 的布局组件而不重复它们：分区用 `Section`，网格用 `Grid`（统计卡片用 `StatGrid` + `StatCard`，`StatCard` 可带 `unit`、`badge`、`footer`），表格用 `Table`（自身宽度小于 40rem 时每行变卡片）。区块按**所在 `.console-cq` 容器**的宽度切换布局（`@container console`，不看视口），只用语义令牌：`KeyValueList` 在窄容器里一列；`RecordCard` 是 `Card` + 一列 `KeyValueList`，用于账号、连接这类记录卡片；`Disclosure` 默认收起，用于原始 ID、JSON 这类默认不显示的内容（D15、D18）；`LoadingBlock` 是带 `role="status"` 的骨架行。
 
 ## 共享模块版本
 

@@ -116,7 +116,7 @@ const { migration } = useAdapterAccounts();
 
 ```tsx
 import { usePluginRpc, useLocale } from '@zhin.js/client';
-import { Button, ContentSection, ErrorAlert, Skeleton, usePageChrome } from '@zhin.js/console-ui';
+import { Button, ErrorAlert, Section, Skeleton, usePageChrome } from '@zhin.js/console-ui';
 
 export default function Page() {
   const { t } = useLocale();
@@ -128,7 +128,7 @@ export default function Page() {
   });
   if (status.state === 'loading') return <Skeleton className="h-4 w-full" />;
   if (status.state === 'error') return <ErrorAlert error={t('读取状态失败，请稍后重试。')} technicalDetail={status.error?.message} onRetry={() => void status.refresh()} />;
-  return <ContentSection title={t('账号')}>…</ContentSection>;
+  return <Section title={t('账号')}>…</Section>;
 }
 ```
 
@@ -167,16 +167,16 @@ export default function Page() {
 | `Select` | `SelectField`（`options` / `value` / `onValueChange`，Radix 下拉）；长列表用 `SearchableSelectField` |
 | `Modal` / `Drawer` | `Dialog` / `Sheet` |
 | `ConfirmButton` | `Button variant="destructive-outline"` + `ConfirmDialog`（或 `useConfirm()`） |
-| `Card` / `Section` / `Stack` / `Grid` | `Card`、`ContentSection`、`ContentStack`、`ContentGrid` |
+| `Card` / `Section` / `Stack` / `Grid` | `Card`、`Section`、`ContentStack`、`Grid` |
 | `Tabs` / `Input` / `Textarea` / `Switch` / `Checkbox` / `RadioGroup` | 同名组件（Radix 版本：`onValueChange` / `onCheckedChange`） |
-| `Notice` / `ErrorState` / `EmptyState` / `LoadingState` | `Alert`、`ErrorAlert`、`EmptyState`、`Skeleton` |
-| `StatCard` / `StatGrid` / `ProgressBar` / `Sparkline` / `Timeline` / `DescriptionList` / `JsonView` | `MetricCard` / `ContentGrid min="stat"`、`ProgressMeter`、`Sparkline`、`Timeline`、`KeyValueList`、`JsonBlock`（放进 `Disclosure`） |
+| `Notice` / `ErrorState` / `EmptyState` / `LoadingState` | `Alert`、`ErrorAlert`、`EmptyState`、`LoadingBlock` |
+| `StatCard` / `StatGrid` / `ProgressBar` / `Sparkline` / `Timeline` / `DescriptionList` / `JsonView` | `StatCard` / `StatGrid`、`ProgressMeter`、`Sparkline`、`Timeline`、`KeyValueList`、`JsonBlock`（放进 `Disclosure`） |
 | `PluginPage`、`PageHeader` | 无对应组件：页头由页面外壳负责，手写页面用 `usePageChrome({ actions, refresh })` |
 | `pluginUiStyles`、`adapterConsoleStyles`、`conversationPickerStyles` | 无：样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供（`adapterConsoleStyles` / `conversationPickerStyles` 弃用期内是空字符串） |
 
 ### 布局审计的挂载模块
 
-`audit/mount-plugin-page.tsx`（仓库内，不随包发布）导出 `mountPluginPage({ element, pageModule, pageName, theme, renderInShell })`，供 `@zhin.js/console-ui/audit` 的 `auditPluginPages` 渲染声明式蓝图页、适配器页和评论审批页：设 `ZHIN_UI_AUDIT_MOUNT_MODULE=packages/console/client/audit/mount-plugin-page.tsx`。它不连 Host：`audit/fixtures.ts` 替换 `window.fetch`，`plugin.<id>.status` 返回夹具数据（蓝图页按蓝图读取的 `dataKey` / 表达式路径 / 表格列类型生成样例，表格三行；适配器页一个在线账号；评论审批页一个账号一条待审草稿），`endpoint.list` / `login.list` / 其他 RPC 返回固定样例或 `{}`。
+`audit/mount-plugin-page.tsx`（仓库内，不随包发布）导出 `mountPluginPage({ element, pageModule, pageName, theme, renderInShell })`，供 `@zhin.js/console-ui/audit` 的 `auditPluginPages` 渲染声明式蓝图页、适配器页和评论审批页：设 `ZHIN_UI_AUDIT_MOUNT_MODULE=packages/console/client/audit/mount-plugin-page.tsx`。它不连 Host：`audit/fixtures.ts` 替换 `window.fetch`，`plugin.<id>.status` 返回夹具数据（蓝图页按蓝图读取的 `dataKey` / 表达式路径 / 表格列类型生成样例，表格三行；适配器页一个在线账号；评论审批页一个账号一条待审草稿），`endpoint.list` / `login.list` / 其他 RPC 返回固定样例或 `{}`，其他 HTTP 接口（Agent Trace、Sandbox 历史、外部资源）返回 404，页面显示「不可用」状态。`pnpm check:plugin-ui-audit` 默认使用这个模块。
 
 ## 评论审批页
 

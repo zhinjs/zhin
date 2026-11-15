@@ -519,7 +519,7 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 
 ## Page UI guidelines
 
-The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for third-party plugin pages they are **recommended**, plus a small set of hard-floor rules; the official plugins in this repository (zhinjs/zhin `plugins/**`) **follow them in full** from ADR 0063 P2 (planned) and serve as reference implementations from then on (see the end of this section).
+The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for third-party plugin pages they are **recommended**, plus a small set of hard-floor rules; the official plugins in this repository (zhinjs/zhin `plugins/**`) **follow them in full** since ADR 0063 P2 and serve as reference implementations (see the end of this section).
 
 **Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: the renderers now use the unified component library (ADR 0063 P2) and follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the 8 standard keys `1`, `2`, `3`, `4`, `6`, `8`, `12` and `16` (the 8-step scale from 0.25 to 4rem); other keys such as `p-5` or `gap-2.5` are off the scale. Why:
 
@@ -542,7 +542,7 @@ Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b): spacin
 
 `zhin plugin check` reports deviations from the recommendations as **hints** (never errors; they do not block a build or publish), each with how to switch to a component or token; see "Page checks in `zhin plugin check`" below.
 
-**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: `zhin plugin check` rules 1–6 and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors in zhinjs/zhin CI for the official plugins on the gate list, just as for the Console's own pages (plugins not yet on it are only reported). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Once P2 is complete, look at the official plugins' pages when writing your own; until then some official pages still use the old `zk-` components and should not be copied.
+**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: `zhin plugin check` rules 1–6 and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors in zhinjs/zhin CI for the official plugins on the gate list, just as for the Console's own pages (plugins not yet on it are only reported). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Every official plugin with pages is on the gate list (ADR 0063 P2 acceptance), so you can look at them when writing your own pages.
 
 ### Page checks in `zhin plugin check` {#plugin-check-pages}
 
@@ -570,8 +570,8 @@ Use `// zhin-ui-ignore 4: …` in scripts and `/* zhin-ui-ignore 4: … */` in s
 
 **The gate for official plugins.** The official plugins in this repository treat these checks as errors in CI:
 
-- The gate list is [`scripts/plugin-ui-gate.json`](https://github.com/zhinjs/zhin/blob/main/scripts/plugin-ui-gate.json): violations of plugins in `gated` fail, plugins in `pending` are only reported and state the condition for joining; every official plugin with `pages/` must be in one of them. A plugin moves to `gated` once its pages use `@zhin.js/console-ui`; declarative blueprints, adapter pages and comment review pages are rendered by the Console and comply with the renderer migration, so they join as soon as the check passes.
-- `pnpm check:plugin` runs rules 1–6 (in the PR contracts stage) and `pnpm check:plugin-ui-audit` runs the full Playwright audit (the audit tool comes from `@zhin.js/console-ui` and is skipped until it is available). Both use the same list and list violations and every waiver by plugin and check in the run summary.
+- The gate list is [`scripts/plugin-ui-gate.json`](https://github.com/zhinjs/zhin/blob/main/scripts/plugin-ui-gate.json): violations of plugins in `gated` fail, plugins in `pending` are only reported and state the condition for joining; every official plugin with `pages/` must be in one of them. All official plugins are now in `gated` and `pending` is empty (ADR 0063 P2 acceptance); a new official plugin with pages joins `gated` directly.
+- `pnpm check:plugin` runs rules 1–6 (in the PR contracts stage) and `pnpm check:plugin-ui-audit` runs the full Playwright audit (in full validation; the audit tool is `@zhin.js/console-ui/audit` and needs `@zhin.js/console-ui` built; declarative blueprints, adapter pages and comment review pages are rendered by the `@zhin.js/client` renderer mount module `packages/console/client/audit/mount-plugin-page.tsx`, replaceable with `--mount-module` or `ZHIN_UI_AUDIT_MOUNT_MODULE`; a gated page that fails to mount fails the gate). Both use the same list and list violations and every waiver by plugin and check in the run summary.
 - The list cannot switch a check off for a plugin or a file; waivers are only the inline comments above, reviewed with the PR.
 
 ## Page shell and components {#page-shell}
@@ -589,7 +589,7 @@ Plugin pages do not draw their own header or container. **The Console renders th
 
 ```tsx
 import { useLocale, usePluginRpc } from '@zhin.js/client';
-import { Button, ContentSection, usePageChrome } from '@zhin.js/console-ui';
+import { Button, Section, usePageChrome } from '@zhin.js/console-ui';
 
 export default function Feeds() {
   const { t } = useLocale();
@@ -598,11 +598,20 @@ export default function Feeds() {
     actions: <Button size="sm" variant="outline" onClick={() => void status.refresh()}>{t('立即抓取')}</Button>,
     refresh: { onRefresh: status.refresh, updatedAt: status.lastSuccessAt ?? null, refreshing: status.refreshing },
   });
-  return <ContentSection title={t('订阅')}>…</ContentSection>;
+  return <Section title={t('订阅')}>…</Section>;
 }
 ```
 
-A page that writes its own `<h1>`, `PageHeader` or `PluginPage` breaks the rule (`zhin plugin check` reports it). The full component list is in the [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md); its content blocks (`ContentSection`, `ContentGrid`, `KeyValueList`, `ResponsiveTable`, `Disclosure`, …) switch layout by the width of their own container: a flexible stat card grid, tables turning into cards in a narrow container, raw IDs and JSON collapsed by default.
+A page that writes its own `<h1>`, `PageHeader` or `PluginPage` breaks the rule (`zhin plugin check` reports it). The full component list is in the [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md); its layout components and content blocks switch layout by the width of **their own container** (container queries, not the viewport):
+
+- **Page and sections**: `PageShell` `width` tells reading / form pages (`reading`, 60rem) from data pages (`data`, 120rem, the default) and full-width pages (`full`, i.e. `definePage({ fullWidth: true })`); sections use `Section` (an `<h2>` title, one description, section actions), card grids `Grid` (`auto-fit`, `min` is the narrowest column), statistics `StatGrid` + `StatCard` (two per row in a narrow container; `StatCard` takes a unit, a badge and a footer such as a progress meter), list + detail `ListDetail` (side by side from 90rem, otherwise the detail opens in a side sheet).
+- **Tables**: below 40rem of its own width `Table` turns every row into a card, each cell labelled with its column; `priority="secondary"` columns are left out of the cards, and nothing scrolls sideways.
+- **Actions**: header actions go through `usePageChrome({ menuActions, moreActions })` or `PageActions` (folded into 「更多」 below 40rem), row actions through `RowActions` (one labelled main action, the rest in the `MoreMenu`); every action has a visible label, and dangerous ones are outline buttons with a confirmation dialog.
+- **Overlays and touch**: selects, popovers and dialogs are bottom drawers at phone width; interactive controls are at least 44px there (checkboxes, radios, switches and inline links get a larger hit area with `.console-touch`).
+- **Status**: `StatusBadge` only colors states that need attention; normal ones are muted.
+- **Content blocks** (P2): `ContentStack`, `FormField`, `KeyValueList` (one column in a narrow container), `ProgressMeter`, `Sparkline`, `Timeline`, `Disclosure` (raw IDs and JSON collapsed by default), `CodeText`, `JsonBlock`, `MediaPreview`, `RecordCard` (`Card` + `KeyValueList`) and `LoadingBlock`. They complement the components above without repeating them: sections, grids, stat cards and table cards are the P1b components.
+
+The rules live in the components, and tokens and breakpoints are defined once in `tokens/tokens.mjs`; `@zhin.js/console-ui`'s own styles are held to them by the shared stylelint / ESLint rules (`@zhin.js/console-ui/stylelint`, `@zhin.js/console-ui/eslint`), which plugins can enable for their own styles too.
 
 ### Upgrading from @zhin.js/client/ui {#upgrade-client-ui}
 

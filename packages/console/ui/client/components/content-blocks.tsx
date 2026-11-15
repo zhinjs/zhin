@@ -49,7 +49,7 @@ export interface FormFieldProps {
   readonly required?: boolean
   /** `id` of the control, so the label is clickable. */
   readonly htmlFor?: string
-  /** Spans the whole row of a `ContentGrid`. */
+  /** Spans the whole row of a `Grid`. */
   readonly full?: boolean
   readonly className?: string
   readonly children?: ReactNode
