@@ -39,10 +39,10 @@ describe('previewUpdate', () => {
     const preview = await previewUpdate(root, [], { publishedVersions: lookup });
     expect(preview.recursive).toBe(true);
     expect(preview.members).toEqual([
-      { path: '.', name: 'bot', notDeclared: [], unknown: ['gone'],
+      { path: '.', name: 'bot', notDeclared: [], unknown: ['gone'], overridden: [],
         changes: [{ name: 'zhin.js', range: '^1.4.0', current: '1.4.0', target: '1.4.2', latestOutsideRange: '2.0.0' }] },
       // The member's zhin.js resolves from the root node_modules.
-      { path: 'plugins/foo', name: 'foo', notDeclared: [], unknown: [],
+      { path: 'plugins/foo', name: 'foo', notDeclared: [], unknown: [], overridden: [],
         changes: [{ name: 'zhin.js', range: '^1.3.0', current: '1.4.0', target: '1.4.2', latestOutsideRange: '2.0.0' }] },
     ]);
     expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toBe(before);
@@ -55,6 +55,31 @@ describe('previewUpdate', () => {
     expect(preview.members[1]).toMatchObject({ notDeclared: [], changes: [] });
     expect(splitUpdateSpec('@zhin.js/core@1.2.3')).toEqual({ name: '@zhin.js/core', version: '1.2.3' });
     expect(splitUpdateSpec('@zhin.js/core')).toEqual({ name: '@zhin.js/core' });
+  });
+
+  it('shows overridden packages at the override version and says what it cannot evaluate', async () => {
+    write('package.json', { name: 'bot', dependencies: { 'zhin.js': '^1.3.0', left: '^1.0.0' }, pnpm: { overrides: { left: 'link:../left', 'zhin.js': '1.4.0' } } });
+    // The workspace file wins on the same key; `$name` points at the root's own specifier.
+    write('pnpm-workspace.yaml', "packages:\n  - '!**/test/**'\n  - plugins/*\noverrides:\n  zhin.js: '$zhin.js'\n  '@zhin.js/core': '~1.9.0'\n  'foo>bar': '1.0.0'\n");
+    const preview = await previewUpdate(root, [], { publishedVersions: lookup });
+    expect(preview.conditionalOverrides).toEqual(['foo>bar: 1.0.0']);
+    expect(preview.members[0]).toMatchObject({
+      overridden: ['left（link:../left）'],
+      changes: [{ name: 'zhin.js', current: '1.4.0', target: '1.4.2', override: '$zhin.js' }],
+    });
+    expect(preview.members[1]!.changes).toEqual([
+      { name: '@zhin.js/core', range: '~1.9.0', current: '1.8.0', target: '1.9.1', override: '~1.9.0' },
+      { name: 'zhin.js', range: '^1.3.0', current: '1.4.0', target: '1.4.2', override: '$zhin.js', latestOutsideRange: '2.0.0' },
+    ]);
+    const lines = renderUpdatePreview(preview, false);
+    expect(lines.some(line => line.includes('1.8.0 → 1.9.1（overrides：~1.9.0）'))).toBe(true);
+    expect(lines).toContain('  由 overrides 决定、无法预览：left（link:../left）');
+    expect(lines.some(line => line.includes('带条件的 overrides 没有计入预览') && line.includes('foo>bar'))).toBe(true);
+  });
+
+  it('treats any workspace packages entry as recursive, like the gateway', async () => {
+    write('pnpm-workspace.yaml', "packages:\n  - '!plugins/foo'\n");
+    expect((await previewUpdate(root, [], { publishedVersions: lookup })).recursive).toBe(true);
   });
 
   it('renders the plan and says nothing is changed', async () => {

@@ -66,11 +66,11 @@ zhin logs [-f] [-n <N>] [--level debug|info|warn|error] [--since <时间>] [--un
 `zhin logs` 不带过滤条件时显示最近 `-n` 行（默认 200，最多 1000）。带上过滤条件时，依次搜索 `.zhin/logs/instance.log` 和轮转文件 `instance.log.1`…，不受网关 1000 行缓冲的限制，`-n` 表示最近多少行匹配的日志（最多 100000）：
 
 - `--level warn`：WARN 及以上（ERROR）；
-- `--since` / `--until`：`10m`、`1h`、`2d`（距现在），`09:00`（今天），`2026-11-15 09:00`（本地时间），或带时区的 ISO 时间；升级前写入的行只有时间、没有日期，会被跳过并在末尾说明条数；
+- `--since` / `--until`：`10m`、`1h`、`2d`（距现在），`09:00`（今天），`2026-11-15 09:00`，或带时区的 ISO 时间。日志行本身不带时区偏移，行里的时间和不带时区的写法都按运行 `zhin logs` 那台机器的本地时区解释（与写日志的实例在同一台机器、同一时区时才一致）；升级前写入的行只有时间、没有日期，会被跳过并在末尾说明条数；
 - `--grep`：包含该文字的行，不区分大小写；
 - `--name`：行首 `[来源]` 段，`icqq` 也匹配 `icqq:12345`。日志不记录插件名，按插件看日志就用它的日志来源。
 
-堆栈等续行跟随它上面那条日志。`-f` 可以和过滤条件同用，只输出匹配的新行。日志是文本格式，没有 `--json`。
+堆栈等续行跟随它上面那条日志；`--grep` 命中续行时，会先输出它所属的那条日志行。`-f` 可以和过滤条件同用，只输出匹配的新行。日志是文本格式，没有 `--json`。
 
 ```bash
 # 早上 9 点前后有没有执行定时任务、有没有报错
@@ -237,7 +237,7 @@ zhin doctor --live <host-url> [--json]
 
 检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项，不能自动修复的项仍列出「需手动修复」的方法，一项也修不了时会明确说明；有任何警告时不显示「所有检查通过」。网关运行时，Console「需要你处理」的每一项和暂时读不到的来源都列为警告，运行中网关与已安装的 `@zhin.js/gateway` 版本不一致时给出重启命令；网关未运行时读取 `.zhin/runtime-failures.json`，把其中记录的失败显示为「上次运行」：这个文件由实例（zhin.js）在运行中记下模型账号、适配器账号和 MCP 服务的最近一次失败，恢复后删除；还没有记录、或实例版本尚不写这个文件时，这一项不显示，也不报错。TypeScript 一项读取项目自己安装的版本（`node_modules/typescript`）和 `package.json` 声明的范围，不看 PATH 上的全局 `tsc`。「Zhin 包单实例」列出每个副本由谁依赖，例如 `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`，并给出具体修复（改哪个 `package.json`，或运行 `zhin migrate`）。`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
-HTTP 端口被占用、又不是本项目经控制套接字能连上的网关时，`doctor` 向 `http://127.0.0.1:<端口>/pub/health` 发一次不带任何凭据的请求，区分「另一个项目的 Zhin 网关」「本项目的另一个网关（控制套接字不可用）」「不经网关运行的 Zhin 实例」和其他程序；是别的项目的网关时，用它报告的项目标识与监听进程的工作目录比对，写出是哪个项目目录（pid），修复建议是到那里运行 `zhin stop` 或修改 `http.port`。项目根目录里还留着旧版脚手架生成的服务文件（`*.service`、`*.plist`、`install-service.ps1`、`*-task.xml`，内容提到 zhin 的）时，「旧服务文件」一项提示可以删除，改用 `zhin service install`；`ecosystem.config.*` 只在用 PM2 托管时需要。这一项只是提示（不计为警告），`doctor` 和 `--fix` 都不会删除文件。
+HTTP 端口被占用、又不是本项目经控制套接字能连上的网关时，`doctor` 按配置的 `http.host` 与 TLS（`0.0.0.0` / `::` 换成回环地址）向 `<http|https>://<host>:<端口>/pub/health` 发一次不带任何凭据的请求，区分「另一个项目的 Zhin 网关」「本项目的另一个网关（控制套接字不可用）」「不经网关运行的 Zhin 实例」和其他程序（连接被拒、TLS 握手失败——例如自签证书——或超时时报「无法确认占用者」）；是别的项目的网关时，用它报告的项目标识与监听进程的工作目录比对，写出是哪个项目目录（pid），修复建议是到那里运行 `zhin stop` 或修改 `http.port`。项目根目录里还留着旧版脚手架生成的服务文件（按 `package.json` 的 `name`：`<name>.service`、`com.zhinjs.<name>.plist`、`install-service.ps1`、`<name>-task.xml`）时，「旧服务文件」一项提示可以删除，改用 `zhin service install`；`ecosystem.config.*` 只在 `package.json` 里没有 `pm2` 依赖、也没有 `pm2:*` 脚本时才提示。这一项只是提示（不计为警告），`doctor` 和 `--fix` 都不会删除文件。
 
 ### dev：联调本地 zhin 源码与独立插件
 
@@ -394,7 +394,7 @@ zhin update [包名 | 包名@精确版本 ...] [--dry-run]
 
 不带包名时更新全部依赖（`pnpm update`；pnpm 工作区里是 `pnpm update -r`，工作区成员一起更新）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
 
-`--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
+`--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides` 里按包名写的项按 override 的版本显示；`link:` 等无法预览的 override 和带条件的 override（`a>b`、`name@<2`）在输出里单独说明。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
 
 ### search / info：发现插件
 
@@ -475,7 +475,7 @@ zhin packages update [source] [--local]
 
 `--local`（`-l`）安装到项目的 `.zhin/packages/`，而不是全局。
 
-`zhin packages list` 分组列出项目 `package.json` 里的依赖：适配器、插件、Zhin 框架与功能包（`zhin.js`、`package.json#zhin.type` 为 `feature` 的包）、其他依赖、已声明但未安装，最后是技能包；`--json` 输出 `{ packages, skillPacks }`。类别按已安装包的 `package.json#zhin` 判断，与 Console 插件页相同。
+`zhin packages list` 分组列出项目 `package.json` 里的依赖（在子目录里运行时向上找到项目根目录）：适配器、插件、Zhin 框架与功能包（`zhin.js`、`package.json#zhin.type` 为 `feature` 的包）、其他依赖、已声明但未安装，最后是技能包；`--json` 输出 `{ packages, skillPacks }`。类别按已安装包的 `package.json#zhin` 判断，与 Console 插件页相同。
 
 npm 插件请用 `zhin install` / `zhin search` / `zhin info`（[ADR 0062](../adr/0062-one-path-per-task.md) 第 11 项）。`zhin packages install <npm 包>`、`zhin packages search`、`zhin packages info` 仍然可用、行为不变，但会提示已弃用，将在后续版本删除。
 

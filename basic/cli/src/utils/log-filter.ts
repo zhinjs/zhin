@@ -86,6 +86,8 @@ export class LogLineFilter {
   /** The current entry is shown (structural filters and, when given, the text). */
   #entryShown = false;
   #inEntry = false;
+  /** The current entry's line while it passes but has not been printed (for a `--grep` hit below it). */
+  #entryHeader: string | undefined;
   #undated = 0;
 
   constructor(options: LogFilterOptions) {
@@ -98,21 +100,35 @@ export class LogLineFilter {
   get undatedSkipped(): number { return this.#undated; }
 
   /**
-   * Whether `line` is shown. `capturedAt` (epoch ms) is the time the gateway captured it, used
-   * when the line itself carries no date.
+   * The lines to print for `line`: none, the line itself, or — when `--grep` hits a continuation
+   * line of an entry whose own line did not match — that entry's line first, then this one.
+   * `capturedAt` (epoch ms) is the time the gateway captured it, used when the line itself
+   * carries no date.
    */
-  accept(line: string, capturedAt?: number): boolean {
+  take(line: string, capturedAt?: number): readonly string[] {
     const textMatches = this.#grep === undefined || line.replace(ANSI, '').toLowerCase().includes(this.#grep);
     const entry = parseLogLine(line);
     if (!entry) {
       // Before any entry: only a text filter can say anything about it.
-      if (!this.#inEntry) return !this.#structural && textMatches;
-      return this.#entryShown || (this.#entryPasses && this.#grep !== undefined && textMatches);
+      if (!this.#inEntry) return !this.#structural && textMatches ? [line] : [];
+      if (this.#entryShown) return [line];
+      if (!(this.#entryPasses && this.#grep !== undefined && textMatches)) return [];
+      // The entry this line belongs to, once, so the hit keeps its time, level and source.
+      if (this.#entryHeader === undefined) return [line];
+      const header = this.#entryHeader;
+      this.#entryHeader = undefined;
+      return [header, line];
     }
     this.#inEntry = true;
     this.#entryPasses = this.#passes(entry, capturedAt);
     this.#entryShown = this.#entryPasses && textMatches;
-    return this.#entryShown;
+    this.#entryHeader = this.#entryPasses && !this.#entryShown ? line : undefined;
+    return this.#entryShown ? [line] : [];
+  }
+
+  /** Whether `line` itself is shown (the entry line {@link take} may add is left out). */
+  accept(line: string, capturedAt?: number): boolean {
+    return this.take(line, capturedAt).at(-1) === line;
   }
 
   #passes(entry: NonNullable<ReturnType<typeof parseLogLine>>, capturedAt: number | undefined): boolean {
@@ -146,18 +162,35 @@ export interface FilteredHistory {
   readonly matched: number;
 }
 
-/** Reads `files` in order and keeps the last `limit` lines the filter accepts. */
+/** Keeps the newest `capacity` items in a fixed ring (no shifting). */
+class Ring {
+  readonly #items: string[];
+  #next = 0;
+  #size = 0;
+  constructor(readonly capacity: number) { this.#items = new Array<string>(capacity); }
+  push(item: string): void {
+    this.#items[this.#next] = item;
+    this.#next = (this.#next + 1) % this.capacity;
+    if (this.#size < this.capacity) this.#size += 1;
+  }
+  toArray(): string[] {
+    const start = (this.#next - this.#size + this.capacity) % this.capacity;
+    return Array.from({ length: this.#size }, (_, index) => this.#items[(start + index) % this.capacity]!);
+  }
+}
+
+/** Reads `files` in order and keeps the last `limit` lines the filter prints. */
 export async function readFilteredHistory(files: readonly string[], filter: LogLineFilter, limit: number): Promise<FilteredHistory> {
-  const kept: string[] = [];
+  const kept = new Ring(Math.max(1, limit));
   let matched = 0;
   for (const file of files) {
     const lines = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
     for await (const line of lines) {
-      if (!filter.accept(line)) continue;
-      matched += 1;
-      kept.push(line);
-      if (kept.length > limit) kept.shift();
+      for (const shown of filter.take(line)) {
+        matched += 1;
+        kept.push(shown);
+      }
     }
   }
-  return { lines: kept, matched };
+  return { lines: kept.toArray(), matched };
 }

@@ -684,9 +684,10 @@ export const doctorCommand = new Command('doctor')
     // 8. 检查端口占用：按启动时的方式解析 http.port（展开 .env 中的 ${VAR}；未配置时为默认端口）
     let httpPort: number | undefined = DEFAULT_HTTP_PORT;
     let httpTls = false;
+    let httpHost: string | undefined;
     if (existingConfig && !configParseFailed) {
       const resolved = await resolveEffectiveHttpPort(cwd, existingConfig);
-      if (resolved.status === 'ok') { httpPort = resolved.port ?? DEFAULT_HTTP_PORT; httpTls = resolved.tls === true; }
+      if (resolved.status === 'ok') { httpPort = resolved.port ?? DEFAULT_HTTP_PORT; httpTls = resolved.tls === true; httpHost = resolved.host; }
       else {
         httpPort = undefined;
         results.push({
@@ -714,7 +715,7 @@ export const doctorCommand = new Command('doctor')
           });
         } else if (stdout.trim()) {
           // #1250: ask the occupant's /pub/health (no credentials) whether it is a Zhin gateway, and whose.
-          results.push({ name: `端口 ${port}`, ...await describePortOwner(port, cwd, { tls: httpTls }) });
+          results.push({ name: `端口 ${port}`, ...await describePortOwner(port, cwd, { tls: httpTls, ...(httpHost ? { host: httpHost } : {}) }) });
         } else {
           results.push({
             name: `端口 ${port}`,
@@ -1027,11 +1028,11 @@ export async function resolveEffectiveHttpPort(
   cwd: string,
   configFile: string,
   environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
-): Promise<{ status: 'ok'; port: number | undefined; tls?: boolean } | { status: 'invalid'; message: string }> {
+): Promise<{ status: 'ok'; port: number | undefined; tls?: boolean; host?: string } | { status: 'invalid'; message: string }> {
   try {
     const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
     const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
-    return { status: 'ok', port: http.port, ...(http.tls ? { tls: true } : {}) };
+    return { status: 'ok', port: http.port, ...(http.tls ? { tls: true } : {}), ...(typeof http.host === 'string' ? { host: http.host } : {}) };
   } catch (error) {
     if (error instanceof InvalidHttpPortError) return { status: 'invalid', message: `${error.message}；网关会拒绝启动` };
     // Other http.* problems (TLS files, listeners) are not this check's business.

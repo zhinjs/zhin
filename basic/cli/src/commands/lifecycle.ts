@@ -240,7 +240,7 @@ async function followFile(file: string, output: Output, pollMs: number, filter?:
       if (!filter) { output.out(buffer.toString('utf8')); continue; }
       const lines = (pending + buffer.toString('utf8')).split('\n');
       pending = lines.pop() ?? '';
-      for (const line of lines) if (filter.accept(line)) output.out(`${line}\n`);
+      for (const line of lines) for (const shown of filter.take(line)) output.out(`${shown}\n`);
     } finally { await handle.close(); }
   }
 }
@@ -284,7 +284,8 @@ export const logsCommand = new Command('logs')
     '过滤说明：',
     '  日志行的格式是 [日期 时间][级别] [名称] 内容；堆栈等续行跟随它上面的那一条。',
     '  日志不记录插件名，按来源过滤用 --name（行首的 [名称]）。',
-    '  升级前写入的行只有时间、没有日期，--since / --until 会跳过它们。',
+    '  日志行不带时区偏移：行里的时间与不带时区的 --since / --until 都按本机时区解释。',
+    '  升级前写入的行只有时间、没有日期，--since / --until 会跳过它们；--grep 命中续行时先输出它所属的日志行。',
     '  带过滤条件时依次读取实例日志文件（默认 .zhin/logs/instance.log）及轮转文件 .1、.2…（不受 1000 行缓冲限制）。',
   ].join('\n'))
   .action(async (options: LogsOptions) => {
@@ -328,8 +329,8 @@ export const logsCommand = new Command('logs')
           for (const line of logs.lines) {
             if (line.seq <= last) continue;
             last = line.seq;
-            if (filter && !filter.accept(line.line, line.time)) continue;
-            (line.stream === 'stderr' ? output.err : output.out)(`${line.line}\n`);
+            const write = line.stream === 'stderr' ? output.err : output.out;
+            for (const shown of filter ? filter.take(line.line, line.time) : [line.line]) write(`${shown}\n`);
           }
         };
         if (filter && files.length > 0) {
@@ -340,15 +341,16 @@ export const logsCommand = new Command('logs')
           reportFiltered(history.matched, history.lines.length);
         } else if (filter) {
           // No log file (custom location): filter the gateway's buffer, using its capture times.
-          const kept: GatewayInstanceLogs['lines'][number][] = [];
+          const kept: { stream: 'stdout' | 'stderr'; text: string }[] = [];
           let matched = 0;
           for (const line of (await read(MAX_LINES)).lines) {
             last = line.seq;
-            if (!filter.accept(line.line, line.time)) continue;
-            matched += 1;
-            kept.push(line);
+            for (const text of filter.take(line.line, line.time)) {
+              matched += 1;
+              kept.push({ stream: line.stream, text });
+            }
           }
-          for (const line of kept.slice(-lines)) (line.stream === 'stderr' ? output.err : output.out)(`${line.line}\n`);
+          for (const line of kept.slice(-lines)) (line.stream === 'stderr' ? output.err : output.out)(`${line.text}\n`);
           reportFiltered(matched, Math.min(matched, lines));
         } else {
           print(await read(lines));

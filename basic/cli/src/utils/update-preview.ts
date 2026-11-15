@@ -11,6 +11,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { semver } from '../plugin-check/semver.js';
 import { readInstalledPackageVersion } from './installed-versions.js';
 import { isValidNpmPackageName } from './registry-version.js';
@@ -30,6 +31,8 @@ export interface UpdatePreviewChange {
   readonly target: string;
   /** Newest published version when it is outside the range (not installed by `zhin update`). */
   readonly latestOutsideRange?: string;
+  /** The pnpm override that decides the version instead of `range`. */
+  readonly override?: string;
 }
 
 export interface UpdatePreviewMember {
@@ -41,12 +44,42 @@ export interface UpdatePreviewMember {
   readonly unknown: readonly string[];
   /** Requested packages this member does not declare. */
   readonly notDeclared: readonly string[];
+  /** Packages pinned by an override the preview cannot evaluate (`link:`, `npm:` aliases, …), with it. */
+  readonly overridden: readonly string[];
 }
 
 export interface UpdatePreview {
   /** `update -r`: the pnpm workspace members move with the root. */
   readonly recursive: boolean;
   readonly members: readonly UpdatePreviewMember[];
+  /** Conditional override keys (`a>b`, `name@<2`) the preview does not apply. */
+  readonly conditionalOverrides: readonly string[];
+}
+
+/**
+ * pnpm overrides of the root: `package.json#pnpm.overrides` and `pnpm-workspace.yaml#overrides`
+ * (the workspace file wins on the same key). Only plain `name` keys are applied by the preview.
+ */
+export function readPnpmOverrides(root: string): { readonly plain: ReadonlyMap<string, string>; readonly conditional: readonly string[] } {
+  const merged = new Map<string, string>();
+  const add = (entries: unknown): void => {
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return;
+    for (const [key, value] of Object.entries(entries as Record<string, unknown>)) {
+      if (typeof value === 'string') merged.set(key, value);
+    }
+  };
+  const manifest = readManifest(root);
+  add((manifest?.pnpm as { overrides?: unknown } | undefined)?.overrides);
+  try { add((parseYaml(fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8')) as { overrides?: unknown } | null)?.overrides); }
+  catch { /* no workspace file */ }
+  const plain = new Map<string, string>();
+  const conditional: string[] = [];
+  for (const [key, value] of merged) {
+    // `@scope/name` is plain; `a>b` and `name@<2` (a selector after the name) are conditional.
+    if (key.includes('>') || key.slice(1).includes('@')) conditional.push(`${key}: ${value}`);
+    else plain.set(key, value);
+  }
+  return { plain, conditional: conditional.sort() };
 }
 
 interface Manifest { name?: unknown; [field: string]: unknown }
@@ -114,7 +147,10 @@ export async function previewUpdate(
   packages: readonly string[],
   options: { readonly publishedVersions?: PublishedVersions; readonly concurrency?: number } = {},
 ): Promise<UpdatePreview> {
-  const recursive = workspacePackageGlobs(root).some(glob => !glob.startsWith('!'));
+  // Same rule as the gateway's update transaction (`isPnpmWorkspace`): any `packages` entry means `update -r`.
+  const recursive = workspacePackageGlobs(root).length > 0;
+  const overrides = readPnpmOverrides(root);
+  const rootDeclared = declared(readManifest(root) ?? {});
   const requested = packages.map(splitUpdateSpec);
   const dirs = [root, ...(recursive ? listWorkspacePackageDirs(root) : [])];
   const lookup = options.publishedVersions ?? npmPublishedVersions;
@@ -143,7 +179,19 @@ export async function previewUpdate(
         work.push({ name: item.name, range });
       }
     }
-    const considered = work.filter(item => item.exact !== undefined || semver.validRange(item.range) !== null);
+    const overridden: string[] = [];
+    const considered: { name: string; range: string; exact?: string; override?: string }[] = [];
+    for (const item of work) {
+      const raw = overrides.plain.get(item.name);
+      if (raw !== undefined) {
+        // `$name` refers to the root's own specifier of that package.
+        const spec = raw.startsWith('$') ? rootDeclared.get(raw.slice(1)) ?? raw : raw;
+        if (semver.validRange(spec) === null) { overridden.push(`${item.name}（${raw}）`); continue; }
+        considered.push({ name: item.name, range: spec, ...(semver.valid(spec) ? { exact: spec } : {}), override: raw });
+        continue;
+      }
+      if (item.exact !== undefined || semver.validRange(item.range) !== null) considered.push(item);
+    }
     const unknown: string[] = [];
     const changes = (await mapLimited(considered, options.concurrency ?? 8, async (item): Promise<UpdatePreviewChange | undefined> => {
       const current = readInstalledPackageVersion(dir, item.name) ?? (isRoot ? undefined : readInstalledPackageVersion(root, item.name));
@@ -156,6 +204,7 @@ export async function previewUpdate(
       const latest = stable.at(-1);
       return {
         name: item.name, range: item.range, current, target,
+        ...(item.override !== undefined ? { override: item.override } : {}),
         ...(!item.exact && latest && latest !== target && semver.gt(latest, target) ? { latestOutsideRange: latest } : {}),
       };
     })).filter((change): change is UpdatePreviewChange => change !== undefined);
@@ -164,10 +213,10 @@ export async function previewUpdate(
     members.push({
       path: isRoot ? '.' : path.relative(root, dir).split(path.sep).join('/'),
       name: typeof manifest.name === 'string' ? manifest.name : undefined,
-      changes, unknown, notDeclared,
+      changes, unknown, notDeclared, overridden: overridden.sort(),
     });
   }
-  return { recursive, members };
+  return { recursive, members, conditionalOverrides: overrides.conditional };
 }
 
 /** Readable lines of a preview. */
@@ -186,10 +235,15 @@ export function renderUpdatePreview(preview: UpdatePreview, gatewayRunning: bool
     for (const change of member.changes) {
       total += 1;
       const outside = change.latestOutsideRange ? `；最新 ${change.latestOutsideRange} 超出范围，不会升级` : '';
-      lines.push(`  ${change.name.padEnd(width)}  ${change.current ?? '未安装'} → ${change.target}（${change.range}${outside}）`);
+      const rule = change.override !== undefined ? `overrides：${change.override}` : change.range;
+      lines.push(`  ${change.name.padEnd(width)}  ${change.current ?? '未安装'} → ${change.target}（${rule}${outside}）`);
     }
     if (member.unknown.length) lines.push(`  无法从 registry 查询：${member.unknown.join('、')}`);
     if (member.notDeclared.length) lines.push(`  未声明：${member.notDeclared.join('、')}`);
+    if (member.overridden.length) lines.push(`  由 overrides 决定、无法预览：${member.overridden.join('、')}`);
+  }
+  if (preview.conditionalOverrides.length) {
+    lines.push('', `带条件的 overrides 没有计入预览（实际安装时仍然生效）：${preview.conditionalOverrides.join('、')}`);
   }
   lines.push('');
   lines.push(total === 0

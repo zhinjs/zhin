@@ -45,7 +45,7 @@ describe('LogLineFilter', () => {
     '[2026-11-15 09:00:03.000][DEBUG] [icqq] raw frame',
     '[09:00:04.000][ERROR] [schedule] written before the upgrade',
   ];
-  const run = (filter: LogLineFilter) => lines.filter(line => filter.accept(line));
+  const run = (filter: LogLineFilter) => lines.flatMap(line => filter.take(line));
 
   it('keeps level and above, with the continuation lines of a kept entry', () => {
     expect(run(new LogLineFilter({ level: 'warn' }))).toEqual([lines[2], lines[3], lines[4], lines[6]]);
@@ -70,9 +70,13 @@ describe('LogLineFilter', () => {
 
   it('matches text case-insensitively, also in continuation lines and before any entry', () => {
     expect(run(new LogLineFilter({ grep: 'WEATHER' }))).toEqual([lines[2], lines[3]]);
-    expect(run(new LogLineFilter({ grep: 'job.js' }))).toEqual([lines[3]]);
+    // A hit in a continuation line brings the entry it belongs to along (once).
+    expect(run(new LogLineFilter({ grep: 'job.js' }))).toEqual([lines[2], lines[3]]);
     expect(run(new LogLineFilter({ grep: 'third-party' }))).toEqual([lines[0]]);
-    expect(run(new LogLineFilter({ grep: 'job.js', level: 'error' }))).toEqual([lines[3]]);
+    expect(run(new LogLineFilter({ grep: 'job.js', level: 'error' }))).toEqual([lines[2], lines[3]]);
+    const twice = new LogLineFilter({ grep: 'at ' });
+    expect(['[2026-11-15 09:00:00.000][ERROR] [a] boom', '  at one', '  at two'].flatMap(line => twice.take(line)))
+      .toEqual(['[2026-11-15 09:00:00.000][ERROR] [a] boom', '  at one', '  at two']);
     expect(run(new LogLineFilter({ grep: 'job.js', level: 'warn', name: 'icqq' }))).toEqual([]);
   });
 });
@@ -94,4 +98,23 @@ describe('readFilteredHistory', () => {
     const last = await readFilteredHistory(files, new LogLineFilter({ level: 'warn' }), 2);
     expect(last).toEqual({ lines: [expect.stringContaining('second'), expect.stringContaining('newest')], matched: 3 });
   });
+
+  // 100 MB with -n 100000 took ~56 s while the kept lines were shifted one by one.
+  it('scans 600k lines with a large -n in reasonable time', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-log-filter-perf-'));
+    const file = path.join(dir, 'instance.log');
+    const chunk: string[] = [];
+    for (let index = 0; index < 600_000; index += 1) {
+      chunk.push(`[2026-11-15 09:${String(Math.floor(index / 10_000) % 60).padStart(2, '0')}:00.000][${index % 3 ? 'INFO' : 'WARN'}] [icqq:1] message number ${index} with some padding text to look like a real line`);
+    }
+    fs.writeFileSync(file, `${chunk.join('\n')}\n`);
+    const started = performance.now();
+    const history = await readFilteredHistory([file], new LogLineFilter({ level: 'warn', grep: 'number' }), 100_000);
+    const elapsed = performance.now() - started;
+    expect(history.matched).toBe(200_000);
+    expect(history.lines).toHaveLength(100_000);
+    expect(history.lines[0]).toContain('message number 300000 ');
+    expect(history.lines.at(-1)).toContain('message number 599997 ');
+    expect(elapsed).toBeLessThan(20_000);
+  }, 60_000);
 });

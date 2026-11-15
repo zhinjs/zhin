@@ -10,6 +10,7 @@ import {
   describePortOwner,
   findLegacyServiceFiles,
   legacyServiceFilesCheck,
+  probeOrigin,
   probePortHealth,
 } from '../../src/utils/doctor-project-checks.js';
 
@@ -18,23 +19,32 @@ beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-doctor-che
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('legacy service files', () => {
-  it('lists Zhin service files in the project root without touching them', () => {
-    for (const [name, text] of [
-      ['bot.service', 'ExecStart=npx zhin start'],
-      ['com.zhinjs.bot.plist', '<string>zhin</string>'],
-      ['install-service.ps1', 'nssm install bot npx zhin start'],
-      ['bot-task.xml', '<Description>Zhin.js Endpoint</Description>'],
-      ['ecosystem.config.cjs', "script: 'node_modules/.bin/zhin'"],
-      ['other.service', 'ExecStart=/usr/bin/nginx'],
-    ]) fs.writeFileSync(path.join(root, name!), text!);
+  const write = (name: string, text = 'x') => fs.writeFileSync(path.join(root, name), text);
+
+  it('lists only the file names older scaffolds wrote, without touching them', () => {
+    write('package.json', JSON.stringify({ name: 'bot' }));
+    for (const name of ['bot.service', 'com.zhinjs.bot.plist', 'install-service.ps1', 'bot-task.xml', 'ecosystem.config.cjs']) write(name);
+    // Same suffixes, other names: not the scaffold's, even when they mention zhin.
+    write('other.service', 'ExecStart=npx zhin start');
+    write('com.example.zhin.plist', '<string>zhin</string>');
     const files = findLegacyServiceFiles(root);
     expect(files).toEqual({ service: ['bot-task.xml', 'bot.service', 'com.zhinjs.bot.plist', 'install-service.ps1'], pm2: ['ecosystem.config.cjs'] });
     const check = legacyServiceFilesCheck(files)!;
     expect(check.status).toBe('info');
     expect(check.message).toContain('zhin service install');
-    expect(check.message).toContain('只在用 PM2 托管时需要');
+    expect(check.message).toContain('PM2 配置');
     expect(fs.existsSync(path.join(root, 'bot.service'))).toBe(true);
     expect(legacyServiceFilesCheck(findLegacyServiceFiles(path.join(root, 'none')))).toBeUndefined();
+  });
+
+  it('leaves ecosystem.config.* alone while the project uses PM2', () => {
+    write('ecosystem.config.cjs');
+    write('package.json', JSON.stringify({ name: 'bot', devDependencies: { pm2: '^6.0.0' } }));
+    expect(findLegacyServiceFiles(root).pm2).toEqual([]);
+    write('package.json', JSON.stringify({ name: 'bot', scripts: { 'pm2:start': 'pm2 start ecosystem.config.cjs' } }));
+    expect(findLegacyServiceFiles(root).pm2).toEqual([]);
+    write('package.json', JSON.stringify({ name: 'bot' }));
+    expect(findLegacyServiceFiles(root).pm2).toEqual(['ecosystem.config.cjs']);
   });
 });
 
@@ -70,7 +80,21 @@ describe('port owner', () => {
     expect((await describePortOwner(1, root, as(gatewayBody('f'.repeat(32))))).message).toBe('已被另一个项目的 Zhin 网关占用（无法确定是哪个项目）');
     expect((await describePortOwner(1, root, as(gatewayBody()))).message).toContain('旧版，未报告项目标识');
     expect((await describePortOwner(1, root, as({ success: true, status: 'ok', timestamp: 'now' }))).message).toContain('Zhin 实例');
-    const refused = { fetch: (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch };
-    expect((await describePortOwner(1, root, refused)).message).toContain('不是 Zhin 网关');
+    expect((await describePortOwner(1, root, as('<html>nginx</html>'))).message).toContain('不是 Zhin 网关');
+    // Refused, a self-signed certificate, a timeout: nothing is known about the occupant.
+    const refused = { fetch: (async () => { throw new TypeError('fetch failed', { cause: new Error('self-signed certificate') }); }) as unknown as typeof fetch };
+    const unknown = await describePortOwner(1, root, { ...refused, tls: true });
+    expect(unknown.message).toContain('无法确认占用者');
+    expect(unknown.message).toContain('https://127.0.0.1:1/pub/health');
+    expect(unknown.message).not.toContain('不是 Zhin 网关');
+  });
+
+  it('probes the configured host, with wildcards on loopback', () => {
+    expect(probeOrigin(8068)).toBe('http://127.0.0.1:8068');
+    expect(probeOrigin(8068, { host: '0.0.0.0', tls: true })).toBe('https://127.0.0.1:8068');
+    expect(probeOrigin(8068, { host: '::' })).toBe('http://[::1]:8068');
+    expect(probeOrigin(8068, { host: '[::]' })).toBe('http://[::1]:8068');
+    expect(probeOrigin(8068, { host: '192.168.1.5' })).toBe('http://192.168.1.5:8068');
+    expect(probeOrigin(8068, { host: 'fe80::1' })).toBe('http://[fe80::1]:8068');
   });
 });

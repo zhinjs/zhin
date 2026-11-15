@@ -19,7 +19,7 @@ import {
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
-import { listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
+import { findProjectRoot, listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
 import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
@@ -189,9 +189,11 @@ packagesCommand
   .option('-l, --local', '技能包只列项目本地（.zhin/packages/）')
   .option('--json', '以 JSON 输出（{ packages, skillPacks }）')
   .action((opts: { local?: boolean; json?: boolean }) => {
+    // From a subdirectory (plugins/foo) too: the project root, not the current directory.
+    const projectRoot = findProjectRoot(process.cwd());
     const roots = opts.local
-      ? [resolvePackagesRoot(true)]
-      : [resolvePackagesRoot(false), resolvePackagesRoot(true)];
+      ? [resolvePackagesRoot(true, projectRoot)]
+      : [resolvePackagesRoot(false, projectRoot), resolvePackagesRoot(true, projectRoot)];
     const seen = new Set<string>();
     const skillPacks: SkillPackEntry[] = [];
     for (const root of roots) {
@@ -202,7 +204,7 @@ packagesCommand
       }
     }
     // #1250: this used to print only the skill packs ("（无已安装 zhin-package）" next to 40 plugins).
-    const packages = listProjectPackages(process.cwd());
+    const packages = listProjectPackages(projectRoot);
     if (opts.json) {
       output.line(JSON.stringify({ packages, skillPacks }, null, 2));
       return;
