@@ -85,6 +85,11 @@
       "package": "@zhin.js/client",
       "type": "minor",
       "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：DeclarativePageView、AdapterConsolePage、CommentReviewPage 改用 @zhin.js/console-ui，只渲染内容区块并经 usePageChrome 把页头交给外壳（无外壳时自绘），删除首字母方块（蓝图 mark 忽略并告警一次），danger 动作改为 destructive-outline 加确认对话框，去掉原生 select 与注入的 zk- 样式（删除 adapter-console/styles.ts、review-console/styles.ts）；非 UI 导出（usePluginRpc、usePluginData、useRpcResource、useLocale、detectLocale、translate、formatClock、resolvePluginId 等、DeclarativePageView、createDeclarativePage、DataTable）迁到根入口，新增 DECLARATIVE_PAGE_CAPABILITIES，ADAPTER_CONSOLE_PAGE_CAPABILITIES 新增 pageChrome；@zhin.js/client/ui 改为弃用的再导出层（首次使用告警一次），adapterConsoleStyles / conversationPickerStyles 弃用期内为空字符串。"
+    },
+    {
+      "package": "@zhin.js/adapter-sandbox",
+      "type": "minor",
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：Sandbox 会话页按 D13 两步迁移——Console 中只服务 Sandbox 的样式搬进插件由页面注入，页面改用 @zhin.js/console-ui 组件（新增 peerDependency @zhin.js/console-ui）、definePage({ fullWidth: true }) 与外壳页头（usePageChrome）。"
     }
   ]
 }
