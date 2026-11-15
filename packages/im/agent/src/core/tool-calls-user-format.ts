@@ -22,6 +22,8 @@ export interface ToolCallRecord {
   status?: 'completed' | 'denied' | 'failed';
   /** The tool is not declared read-only, so a denial or failure means a write/change did not happen. */
   sideEffect?: boolean;
+  /** #1250 batch 26: the tool ran and reported a failure in its result; part of it may have taken effect. */
+  reported?: boolean;
 }
 
 const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);

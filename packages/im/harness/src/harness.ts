@@ -584,7 +584,7 @@ export function createHarness(options: HarnessOptions): Harness {
         ok: false,
         accepted: false,
         code: 'frozen',
-        reason: `collaboration is paused for the human to decide: ${state.frozen.reason}`,
+        reason: `collaboration for this engagement has stopped: ${state.frozen.reason}`,
         escalated: true,
       };
     }

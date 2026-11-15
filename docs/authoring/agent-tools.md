@@ -44,6 +44,7 @@ export default defineAgentTool({
 
 - `description` 和 `inputSchema` 是**写给模型看的**：清楚地说明这个工具做什么、参数是什么，模型才会在正确的时机调用它。
 - `execute` 的返回值会交给模型，由模型组织成回复。
+- 失败时抛出错误，或返回带非空 `error` 字段的对象（`{ error: '…' }`；MCP 工具的 `isError: true` 同样算）：两者都按失败记录（trace、用量统计记失败，实例日志写一条脱敏 warn）。抛错表示操作没有完成；返回的失败结果可能已经部分生效，模型会读到脱敏后的完整返回值（经过 `toModelOutput`，提示、候选项等字段都在）和「是否已部分生效不确定」的说明，回复末尾的提示也相应写成「…操作报告失败，是否已部分生效不确定」。`error: null` / `''` 之类不算失败，结果里同时带 `ok: true` / `success: true` 也不算。
 
 ### 参数 Schema 写法
 
