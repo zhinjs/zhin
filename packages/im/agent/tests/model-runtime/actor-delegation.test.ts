@@ -119,6 +119,18 @@ describe('#1250 actor turns run on their own delegated model operations', () => 
     await unkeyed.release();
   });
 
+  it('a configured binding run by name selects agent:<binding> without a sub-agent warning (#1250 batch 21)', async () => {
+    const warn = vi.spyOn(getLogger('ai.model-runtime'), 'warn');
+    const f = modelRuntimeFixture({ bindingNames: ['support'] });
+    f.update(withAgentProfile(f, { support: 'other' }));
+    // AgentRuntime passes no specialist key for a binding that is not a listed agent (specialistModelKey → undefined).
+    const scope = await f.acquire({ adapterKey: 'sandbox' }, 'support');
+    expect([scope.chat.binding.profile.id, scope.purpose]).toEqual(['other', 'agent:support']);
+    expect(warn).not.toHaveBeenCalled();
+    await scope.release();
+    warn.mockRestore();
+  });
+
   it('looks a sub-agent up by its qualified name first', async () => {
     const f = modelRuntimeFixture();
     f.update(withAgentProfile(f, { 'tools-plugin__researcher': 'other', researcher: 'text' }));

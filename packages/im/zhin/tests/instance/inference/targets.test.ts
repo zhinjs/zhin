@@ -171,7 +171,9 @@ it('derives the purpose key of a routed specialist from the agent list (#1250 ba
   try {
     expect(specialistModelKey(lease.value, 'planner')).toEqual({ name: 'planner', qualifiedName: 'planner' });
     expect(specialistModelKey(lease.value, 'a__evaluator')).toEqual({ name: 'evaluator', qualifiedName: 'a__evaluator', bareNameShared: true });
-    expect(specialistModelKey(lease.value, 'tools__ghost')).toEqual({ name: 'ghost', qualifiedName: 'tools__ghost' });
+    // Not a listed agent: the turn is the binding itself (never a truncated key such as `t`).
+    expect(specialistModelKey(lease.value, 'tools__ghost')).toBeUndefined();
+    expect(specialistModelKey(lease.value, 'support')).toBeUndefined();
     expect(specialistModelKey(lease.value, 'zhin')).toBeUndefined();
     expect(specialistModelKey(lease.value, undefined)).toBeUndefined();
   } finally {

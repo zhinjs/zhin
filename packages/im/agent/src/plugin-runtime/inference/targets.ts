@@ -102,6 +102,8 @@ export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurpose
 /**
  * `purposes.agents` lookup key of the specialist a turn was routed to (`selection.agent`: its
  * qualified name, or a bare name), from the generation's agent list (#1250 agent-purpose-binding-ignored).
+ * `undefined` when no agent of that name is listed: the turn is then the binding itself (e.g. a
+ * configured `ai.agents.support` run through `protocol.execute`) and runs on the binding's purpose.
  */
 export function specialistModelKey(snapshot: RuntimeSnapshot, agent: string | undefined): SubAgentModelKey | undefined {
   const selected = agent?.trim();
@@ -109,9 +111,9 @@ export function specialistModelKey(snapshot: RuntimeSnapshot, agent: string | un
   const index = snapshot.projections.get(agentFeatureId);
   const descriptors = isAgentIndex(index) ? index.list() : [];
   const found = descriptors.find(item => item.qualifiedName === selected) ?? descriptors.find(item => item.name === selected);
-  const name = found?.name ?? selected.slice(selected.lastIndexOf('__') + (selected.includes('__') ? 2 : 0));
-  const shared = descriptors.filter(item => item.name === name).length > 1;
-  return Object.freeze({ name, qualifiedName: found?.qualifiedName ?? selected, ...(shared ? { bareNameShared: true } : {}) });
+  if (!found) return undefined;
+  const shared = descriptors.filter(item => item.name === found.name).length > 1;
+  return Object.freeze({ name: found.name, qualifiedName: found.qualifiedName, ...(shared ? { bareNameShared: true } : {}) });
 }
 
 export type InferenceTargetsReader = (page?: InferenceTargetPage) => Promise<InferenceTargets>;

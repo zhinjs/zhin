@@ -64,11 +64,13 @@ export function selectLanguagePurpose(
     if (effect.status === 'ignored') {
       const qualified = agent.qualifiedName?.trim();
       const label = qualified && effect.key === qualified ? qualified : agent.name;
+      // A sub-agent (no binding name) falls back to chat; a routed specialist to its turn's binding.
+      const fallback = "using the turn's binding purpose";
       logger.warn(effect.reason === 'binding-name'
         ? `sub-agent ${label}: purposes.agents.${effect.key} belongs to the Agent binding of that name; `
-          + (effect.key === qualified ? 'using chat' : `key the sub-agent by its qualified name${qualified ? ` (${qualified})` : ''}; using chat`)
+          + (effect.key === qualified ? fallback : `key the sub-agent by its qualified name${qualified ? ` (${qualified})` : ''}; ${fallback}`)
         : `sub-agent ${agent.name}: purposes.agents.${effect.key} is ambiguous (several sub-agents share the name); `
-          + `key it by the qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
+          + `key it by the qualified name${qualified ? ` (${qualified})` : ''}; ${fallback}`);
     }
     // Without a usable key of its own: a sub-agent (no binding name) runs on chat; a turn routed to a
     // specialist keeps its binding's purpose.

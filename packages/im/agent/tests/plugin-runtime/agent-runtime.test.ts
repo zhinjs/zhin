@@ -137,6 +137,26 @@ describe('leased turn model execution', () => {
     } finally { await agent.dispose(); await fixture.mcp.stop(); await store.close(); }
   });
 
+  it('runs a configured binding executed by name on the binding, not as a specialist (#1250 batch 21)', async () => {
+    const fixture = await createFixture();
+    const h = createProviderHarness({ sdk: 'anthropic' });
+    const scope = await executionScope({ chat: executionBundle({ model: h.model, completion: h.runtime }) });
+    const state = stateWithEngine(fixture.snapshot, async function* () { throw new Error('engine stop'); });
+    const root = new Map(state.resources.get(state.root));
+    const acquire = vi.fn(async () => scope);
+    root.set(turnModelPortToken.id, { acquire });
+    const store = new SnapshotStore({ ...state, resources: new Map(state.resources).set(state.root, root) });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      // protocol.execute('support') selects the configured `ai.agents.support` binding and names it as the agent.
+      await runtime.execute(fixture.child, externalRequest('binding-by-name'), { ...selection([], 'support'), agent: 'support' });
+      expect(acquire).toHaveBeenCalledOnce();
+      const input = (acquire.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+      expect(input).not.toHaveProperty('agent');
+      expect(input.binding).toMatchObject({ name: 'support' });
+    } finally { await fixture.mcp.stop(); await store.close(); }
+  });
+
   it('releases the selected model when the engine fails without trying another model', async () => {
     const fixture = await createFixture();
     const release = vi.fn(async () => undefined);
