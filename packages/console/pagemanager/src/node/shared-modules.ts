@@ -251,7 +251,10 @@ export function importedNames(code: string, specifier: string): string[] {
   const names = new Set<string>();
   for (const match of code.matchAll(pattern)) {
     for (const entry of match[1]!.split(",")) {
-      const name = entry.trim().replace(/^type\s+/u, "").split(/\s+as\s+/u)[0]?.trim();
+      // Tokenise instead of matching `\s+as\s+`: that pattern backtracks polynomially on long whitespace runs.
+      const tokens = entry.split(/\s+/u).filter(Boolean);
+      if (tokens[0] === "type") tokens.shift();
+      const name = tokens[0];
       if (name && IDENTIFIER.test(name) && name !== "default") names.add(name);
     }
   }

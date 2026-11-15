@@ -193,6 +193,14 @@ describe('page bundles and /esm URLs', () => {
     expect(importedNames(code, CONSOLE_UI_MODULE)).toEqual(['Badge', 'Button', 'Card', 'Table']);
   });
 
+  it('parses import specifiers in linear time on long whitespace runs (no polynomial backtracking)', () => {
+    const tabs = '\t'.repeat(50_000);
+    const code = `import { Button${tabs}as${tabs}Btn, type${tabs}Card,${tabs} } from "${CONSOLE_UI_MODULE}";`;
+    const started = performance.now();
+    expect(importedNames(code, CONSOLE_UI_MODULE)).toEqual(['Button', 'Card']);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it('takes the peer range from the page package and resolves workspace:^ to the installed version', async () => {
     const root = await temp();
     const pluginDir = join(root, 'plugins/rss');
