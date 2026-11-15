@@ -35,6 +35,7 @@ import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
+import { redactSecretText } from '../decision-events.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
@@ -515,6 +516,22 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
             ? signal.reason
             : new DOMException(outcome.reason, 'AbortError');
           throw cancellation;
+        }
+        if (outcome.status === 'failed' && outcome.reported) {
+          // #1250 batch 26: the tool ran and reported a failure in its result. The model sees all of it
+          // (hints, candidates), through the tool's own toModelOutput and redacted, and is not told
+          // that nothing changed: part of it may already have taken effect.
+          const sideEffect = outcome.sideEffect ?? tool.isReadOnly !== true;
+          let shown: string;
+          try {
+            shown = redactSecretText(await applyToolToModelOutput(tool, outcome.output, effectiveArgs));
+          } catch {
+            shown = redactSecretText(outcome.error);
+          }
+          const text = formatUnexecutedToolResult(resolvedName, 'reported', shown || outcome.error, sideEffect);
+          recordProgress(resolvedName, effectiveArgs, false);
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: text, status: 'failed', sideEffect, reported: true });
+          return toolResultToAgentMessage(toolCall, text, true);
         }
         if (outcome.status !== 'completed') {
           // #1250: say plainly that the call did not run, so the reply cannot claim it did.

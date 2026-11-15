@@ -4,7 +4,11 @@ export type AgentCoreToolExecutionOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
   | Readonly<{ status: 'denied'; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
+  | Readonly<{
+    status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean;
+    /** #1250 batch 26: the tool ran and returned this failure (`{ error }`, MCP `isError`); `output` is what it returned. */
+    reported?: boolean; output?: unknown;
+  }>;
 
 /** Sole policy + approval + execution authority used by the full Agent Core. */
 export interface ToolExecutionAuthority {

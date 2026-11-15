@@ -102,6 +102,8 @@ export type CreateCollaborationTools = (
     owner: ToolCapability['owner'];
     onEscalate?: (reason: string) => Promise<string>;
     onVenueTell?: (venue: string, content: string) => Promise<void>;
+    /** Called when a send of this actor is refused because the guard stopped the engagement (#1250). */
+    onStopped?: () => void;
   }>,
 ) => readonly ToolCapability[];
 

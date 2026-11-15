@@ -66,6 +66,15 @@ const SECRET_VALUE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{8,}/g, REDACTED],
   [/\b(?:ghp|gho|ghs|ghu|ghr|github_pat|xox[abpr])_[A-Za-z0-9_]{8,}/g, REDACTED],
   [/\b(?:SESSDATA|bili_jct|cookie)\s*[=:]\s*[^;\s]+/gi, REDACTED],
+  // JSON fields: `"token":"…"`, `"api_key": "…"` (#1250 batch 26: tool outputs reach logs).
+  [new RegExp(`("[A-Za-z0-9_-]*${SECRET_NAME}[A-Za-z0-9_-]*"\\s*:\\s*)"(?:[^"\\\\]|\\\\.)*"`, 'gi'), `$1"${REDACTED}"`],
+  // YAML / prose fields: `api_key: …`, `password: '…'`; a bare number (`max_tokens: 100`) is not a secret.
+  [new RegExp(`\\b([A-Za-z0-9_]*${SECRET_NAME}[A-Za-z0-9_]*\\s*:\\s*)(["'])(?:(?!\\2).)+\\2`, 'gi'), `$1$2${REDACTED}$2`],
+  [new RegExp(`\\b([A-Za-z0-9_]*${SECRET_NAME}[A-Za-z0-9_]*\\s*:\\s*)(?![\\d.]+(?![^\\s,;}\\]]))(?!["'\\[{]|\\[redacted\\])[^\\s,;"'}\\]]+`, 'gi'), `$1${REDACTED}`],
+  // URL query keys: `?key=…`, `&key=…`.
+  [/([?&]key=)[^&\s#"']+/gi, `$1${REDACTED}`],
+  // Telegram Bot API paths: `/bot<id>:<token>/`.
+  [/\/bot(\d+):[A-Za-z0-9_-]{20,}/g, `/bot$1:${REDACTED}`],
 ];
 
 function normalizeKey(key: string): string {
