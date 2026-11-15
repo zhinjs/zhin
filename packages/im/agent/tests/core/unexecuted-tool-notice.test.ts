@@ -23,6 +23,15 @@ describe('unexecuted tool notice helpers (#1250)', () => {
     expect(failed).not.toContain('不要说已经完成');
   });
 
+  it('does not claim a reported failure changed nothing (#1250 batch 26)', () => {
+    const reported = formatUnexecutedToolResult('voice_tts', 'reported', '{"error":"语音合成失败","hint":"改用文字"}', true);
+    expect(reported).toContain('是否已部分生效不确定');
+    expect(reported).toContain('"hint":"改用文字"');
+    expect(reported).toContain('不要说已经完成');
+    expect(reported).not.toContain('没有生效');
+    expect(reported).not.toContain('未执行');
+  });
+
   it('keeps only side-effect failures that were not completed later', () => {
     expect(unresolvedSideEffectFailures([
       { tool: 'memory_upsert', result: 'x', status: 'denied', sideEffect: true },
@@ -38,7 +47,17 @@ describe('unexecuted tool notice helpers (#1250)', () => {
     expect(formatUnexecutedNotice([call('memory_upsert')])).toBe('（记忆操作未执行）');
     expect(formatUnexecutedNotice([call('schedule_add'), call('memory_upsert')])).toBe('（提醒、记忆等操作未执行）');
     expect(formatUnexecutedNotice([call('memory_upsert'), call('memory_delete')])).toBe('（记忆操作未执行）');
-    expect(formatUnexecutedNotice([call('save_pref')])).toBe('（「save_pref」操作未执行）');
+    // #1250 batch 26: a tool of no known kind is never named.
+    expect(formatUnexecutedNotice([call('save_pref')])).toBe('（部分操作未执行）');
+    expect(formatUnexecutedNotice([call('mcp__home__toggle'), call('write_file')])).toBe('（文件等操作未执行）');
+    expect(formatUnexecutedNotice([call('change_draft'), call('write_file')])).toBe('（配置、文件等操作未执行）');
+    expect(formatUnexecutedNotice([call('home_light_on')], 'en')).toBe('(Not done: some actions.)');
+    expect(formatUnexecutedNotice([call('voice_tts')])).toBe('（语音操作未执行）');
+    // A failure the tool reported itself may be partly done: a weaker line.
+    const reported = (tool: string) => ({ ...call(tool), status: 'failed' as const, reported: true });
+    expect(formatUnexecutedNotice([reported('voice_tts')])).toBe('（语音操作报告失败，是否已部分生效不确定）');
+    expect(formatUnexecutedNotice([call('write_file'), reported('mcp__x__y')])).toBe('（文件操作未执行；部分操作报告失败，是否已部分生效不确定）');
+    expect(formatUnexecutedNotice([reported('voice_tts')], 'en')).toBe('(Reported as failed, may be partly done: voice.)');
     expect(formatUnexecutedNotice([call('write_file'), call('bash')], 'en')).toBe('(Not done: files, commands.)');
   });
 });
@@ -82,7 +101,8 @@ describe('final reply after a failed side-effect tool (#1250)', () => {
     agent = createAgent(llm, ['save_pref']);
     const output = JSON.stringify(await agent.process('记住：我不吃香菜', message(), [failingTool('save_pref', false)]));
     expect(output).toContain('记住啦');
-    expect(output).toContain('（「save_pref」操作未执行）');
+    expect(output).toContain('（部分操作未执行）');
+    expect(output).not.toContain('save_pref');
     const toolResult = JSON.stringify(llm.calls.at(-1)?.context.messages);
     expect(toolResult).toContain('未执行成功');
   });
@@ -93,7 +113,8 @@ describe('final reply after a failed side-effect tool (#1250)', () => {
     agent = createAgent(llm, ['save_pref']);
     const output = JSON.stringify(await agent.process('记住：我不吃香菜', message(), [failingTool('save_pref', false)]));
     expect(output).toContain('没能记住');
-    expect(output).toContain('（「save_pref」操作未执行）');
+    expect(output).toContain('（部分操作未执行）');
+    expect(output).not.toContain('save_pref');
   });
 
   it('appends the line when the reply merely contains a refusal word (#1250 counterexample)', async () => {

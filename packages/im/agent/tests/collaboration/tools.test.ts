@@ -291,7 +291,7 @@ describe('collaboration tools: ask', () => {
     const { tools, escalations } = await setup([ceiling('zhin', ALL, only(['researcher'])), ceiling('researcher'), ceiling('writer')]);
     const out = await call(tools, 'ask', { agent: 'writer', question: 'q' });
     expect(out).toMatch(/^ask refused \(contact_not_allowed\)/);
-    expect(out).not.toMatch(/principal has been asked/);
+    expect(out).not.toMatch(/has stopped at its limit/);
     expect(escalations).toEqual([]);
   });
 
@@ -306,7 +306,8 @@ describe('collaboration tools: ask', () => {
     });
     await call(tools, 'ask', { agent: 'researcher', question: 'q' });
     expect(inner).toMatch(/^ask refused \(wait_cycle\)/);
-    expect(inner).toMatch(/principal has been asked to decide/);
+    expect(inner).toMatch(/Collaboration for this request has stopped/);
+    expect(inner).not.toMatch(/principal has been asked/);
     expect(escalations.map((e) => e.code)).toEqual(['wait_cycle']);
   });
 });

@@ -187,6 +187,7 @@ async function* runInteractiveTurn(
     host,
     core: options.core,
     turn: context.turn,
+    sessionId: prep.sessionId,
     capabilities: { ...context.capabilities, tools: context.toolCapabilities },
     entry: entryAgentName,
     resolveModel: () => actorModel.current,

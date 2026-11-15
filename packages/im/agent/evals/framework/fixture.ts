@@ -256,7 +256,7 @@ export interface EvalExpectations {
   readonly contextBudget?: EvalContextBudgetExpectation;
   /**
    * Tool events that stream consumers must see, in order, as `type:toolName`
-   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
+   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`, `tool_failed:voice_tts`).
    */
   readonly streamToolEvents?: readonly string[];
   /** Statuses of every self-change in the store after the run, oldest first (seeded ones included). */

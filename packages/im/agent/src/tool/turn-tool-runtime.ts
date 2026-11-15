@@ -42,6 +42,7 @@ import {
 import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import type { OpsCooldownView } from '../security/ops-cooldown.js';
 import { ON_BEHALF_OF_ARG, resolveOnBehalfOf } from '../turn/merged-principal.js';
+import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.js';
 
 /** `TurnToolOutcome.denied.policy` for a merged-turn call that failed its `onBehalfOf` re-check. */
 export const MERGE_ON_BEHALF_POLICY = 'merge-on-behalf';
@@ -54,7 +55,11 @@ export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
   | Readonly<{ status: 'denied'; policy: string; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
+  | Readonly<{
+    status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean;
+    /** #1250 batch 26: the tool ran and returned this failure (`{ error }`, MCP `isError`); `output` is what it returned. */
+    reported?: boolean; output?: unknown;
+  }>;
 
 export interface TurnToolRuntimeOptions {
   /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
@@ -301,6 +306,15 @@ export class TurnToolRuntime {
       const output = await tool.execute(effectiveInput, { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) });
       this.#observeOutput(tool, effectiveInput, output);
       const durationMs = Date.now() - startedAt;
+      // #1250: a tool that returned `{ error }` (or an MCP `isError` result) failed, even though it did not throw.
+      const errorResult = toolErrorResultMessage(output);
+      if (errorResult !== undefined) {
+        const redacted = logToolErrorResult(name, errorResult);
+        await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: redacted, durationMs }, causedBy);
+        if (this.turn.signal.aborted) return this.#cancelledOutcome();
+        return Object.freeze({ status: 'failed', error: errorResult, retryable: false, sideEffect: tool.readOnly !== true,
+          reported: true, output });
+      }
       // A tool that ignores cancellation may already have committed side effects.
       // Record its real settlement so the audit trail never invites an unsafe retry.
       await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId,
