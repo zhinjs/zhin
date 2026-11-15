@@ -53,6 +53,7 @@ Using `examples/minimal-bot/package.json` as an example:
 | `engine` | String, optional | Engine version constraint, e.g., `"^1.0.0"` |
 | `runtime` | `"trusted"` or `"isolated"`, optional | Whether to load this plugin in an isolated runtime |
 | `platformFeatures` | Boolean, optional | Default `true`; whether the Root inherits platform Stable Features (see "platformFeatures Inheritance" below) |
+| `toggle` | `"hot"` / `"restart"`, optional | Default `"hot"`: enabling or disabling the plugin while the instance runs only commits a new generation, no instance restart; `"restart"` makes the gateway restart the instance instead |
 | `features` | Array | Feature capability packages this package depends on: `{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `metadata` | Object, optional | Static `displayName` and `icon`; the same field cannot also be declared in code |
 | `plugins` | Legacy array | Must be empty or absent in an application Root; use the v2 main configuration |

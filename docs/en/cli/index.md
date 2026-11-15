@@ -373,7 +373,9 @@ Adds an installed, declared plugin instance to `disable_plugins` in the config f
 
 | Situation | Result |
 | --- | --- |
-| Gateway running (`zhin start`) | Runs as a gateway transaction: back up the config → stop the instance → write `disable_plugins` → start the instance and wait for ready. If it fails to start, the config file is restored and the previous instance started again (the package manager never runs). Needs `plugin.manage`; the local socket counts as the owner |
+| Gateway running (`zhin start`), instance running | Applied in place by a gateway transaction: back up the config → write `disable_plugins` → apply it in the running instance (one new generation: disabling retires all of the instance's commands, middlewares, tools, pages and other capabilities, enabling assembles and commits them). The instance is not restarted and adapters don't log in again; the output says "applied in place, instance not restarted". Needs `plugin.manage`; the local socket counts as the owner |
+| When a restart is still needed | If the plugin declares `"restart"` in `package.json#zhin.toggle`, ships a native module, the project's dependencies or lockfile changed after the instance started, the instance is too old, or the in-place apply fails, it falls back to: stop the instance → start it and wait for ready, and the output names the reason. If it fails to start, the config file is restored and the previous instance started again (the package manager never runs) |
+| Gateway running, instance not running | Only writes the config; the change applies when the instance next starts |
 | No gateway | Writes the config file directly; the change applies at the next `zhin start` |
 | Already in the requested state | Exits successfully without changing the config or restarting the instance |
 | Undeclared, a reserved key (`http`, `plugins`, …) or the project's root plugin | Error, exit code 1 |
