@@ -41,6 +41,7 @@ import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-t
 import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
 import { createNativeWebToolFeatures } from '../../src/plugin-runtime/native-web-tools.js';
+import { createNativeKnowledgeToolFeature, MarkdownKnowledgeIndex } from '../../src/plugin-runtime/native-knowledge-tool.js';
 import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { createNativeSelfChangeToolFeatures } from '../../src/plugin-runtime/native-self-change-tools.js';
@@ -131,11 +132,15 @@ export interface RunEvalCaseOptions {
 
 export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOptions = {}): Promise<EvalRunRecord> {
   const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
+  // #1250 b27: `ai.knowledge.baseDir` stand-in, outside the workspace so file policy is unaffected.
+  const knowledgeRoot = definition.knowledge ? await createWorkspace(definition.knowledge) : undefined;
   try {
     const clock = options.clock ?? createFakeClock();
-    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock), options.imageAssets);
+    const knowledgeIndex = knowledgeRoot ? new MarkdownKnowledgeIndex(knowledgeRoot) : undefined;
+    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock), options.imageAssets, knowledgeIndex);
   } finally {
     if (workspace) await rm(workspace, { recursive: true, force: true });
+    if (knowledgeRoot) await rm(knowledgeRoot, { recursive: true, force: true });
   }
 }
 
@@ -145,6 +150,7 @@ async function runInWorkspace(
   clock: EvalClock,
   liveModel: ScriptedModel | undefined,
   imageAssets?: ImageAssetPublisher,
+  knowledgeIndex?: MarkdownKnowledgeIndex,
 ): Promise<EvalRunRecord> {
   const inboundList: readonly EvalInbound[] = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
   /** ADR 0048 H3 mid-turn delivery hook, bound once the mailbox exists. */
@@ -211,6 +217,7 @@ async function runInWorkspace(
     sessionSystem,
     contextSystem,
     ...(bootstrapContext ? { bootstrapContext } : {}),
+    ...(knowledgeIndex ? { knowledgeIndex } : {}),
   });
 
   const mailbox = new HostMailbox({ config: normalizeMailboxConfig(definition.agentConfig?.mailbox) });
@@ -257,6 +264,7 @@ async function runInWorkspace(
   try {
     const native = await nativeCapabilities(
       definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs, selfChange,
+      knowledgeIndex,
     );
     const tools = [
       ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
@@ -843,8 +851,9 @@ async function nativeCapabilities(
   executed: EvalToolInvocation[],
   rawOutputs: string[],
   selfChange?: EvalSelfChange,
+  knowledgeIndex?: MarkdownKnowledgeIndex,
 ): Promise<{ tools: ToolCapability[]; available: NativeAvailability }> {
-  if (names.length === 0) return { tools: [], available: () => true };
+  if (names.length === 0 && !knowledgeIndex) return { tools: [], available: () => true };
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
   const memoryFeatures = semanticMemory ? createNativeSemanticMemoryToolFeatures(semanticMemory) : [];
@@ -854,8 +863,12 @@ async function nativeCapabilities(
   const selfChangeFeatures = selfChange
     ? createNativeSelfChangeToolFeatures({ store: () => selfChange.store, approvals: () => selfChange.approvals })
     : [];
-  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures, ...web, ...selfChangeFeatures]
-    .filter((feature) => names.includes(feature.name as EvalNativeTool));
+  const features = [
+    ...[bash, ...createNativeFileToolFeatures(), ...memoryFeatures, ...web, ...selfChangeFeatures]
+      .filter((feature) => names.includes(feature.name as EvalNativeTool)),
+    // Published whenever the case configures a knowledge base, as the host does.
+    ...(knowledgeIndex ? [createNativeKnowledgeToolFeature(knowledgeIndex)] : []),
+  ];
   const slots = features.map((feature) => createCapabilitySlot({
     owner,
     feature: feature.feature,

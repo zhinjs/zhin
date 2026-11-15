@@ -172,7 +172,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       lifecycle.add(releasePeer);
     }
     // #1030 P0: tell the file/bash policy where the project root is and which files only a person may change.
-    const hostProtectedPaths = await resolveHostProtectedPaths(options.projectRoot);
+    const knowledgeDir = typeof aiConfig.knowledge?.baseDir === 'string' ? aiConfig.knowledge.baseDir : undefined;
+    const hostProtectedPaths = await resolveHostProtectedPaths(options.projectRoot, process.env, knowledgeDir ? { knowledgeDir } : {});
     resources.provide(hostProtectedPathsToken, hostProtectedPaths);
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);

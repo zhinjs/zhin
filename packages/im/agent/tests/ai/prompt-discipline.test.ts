@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildRichSystemPrompt } from '../../src/prompt/system-prompt.js';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { REQUEST_SECURITY_BOUNDARY } from '../../src/prompt/rules/security.js';
+import { SKILL_CATALOG_BUDGET_CHARS } from '../../src/skill/capability-catalog.js';
 
 describe('Prompt discipline block', () => {
   it('direct-tool prompt 应包含固定纪律规则', () => {
@@ -86,5 +87,24 @@ describe('Prompt discipline block', () => {
     expect(prompt).toContain(' - demo:');
     expect(prompt).not.toContain('<skill available');
     expect(prompt).not.toContain('full active xml');
+  });
+
+  it('toolSearch §8 catalog keeps Use when / Triggers / <keywords> and shares the catalog budget (#1250 b27)', () => {
+    const skill = (name: string, extra = '') => `<skill available="true"><name>${name}</name><description>`
+      + `Prepare ${name} documents for the project. Use when asked about ${name}. ${'Long background. '.repeat(30)}Triggers: 写${name}, ${name} 文档.`
+      + `</description>${extra}</skill>`;
+    const xml = `<available_skills>${skill('github', '<keywords>PR 描述, 提 PR</keywords>')}`
+      + `${Array.from({ length: 30 }, (_, index) => skill(`s${String(index).padStart(2, '0')}`)).join('')}`
+      + '<skill available="false" requires="bins:gh"><name>zz-offline</name><description>Offline.</description></skill></available_skills>';
+    const prompt = buildRichSystemPrompt({
+      config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: xml, activeSkillsContext: '', bootstrapContext: '',
+    });
+    const catalog = prompt.slice(prompt.indexOf('# Skills (catalog)'));
+    const lines = catalog.split('\n').filter(line => line.startsWith(' - '));
+    expect(lines.find(line => line.startsWith(' - github:'))).toContain('Triggers: 写github, github 文档, PR 描述, 提 PR');
+    expect(lines.find(line => line.startsWith(' - github:'))).toContain('Use when asked about github');
+    expect(catalog).not.toContain('Long background');
+    expect(lines.at(-1)).toBe(' - zz-offline (unavailable; needs bins:gh)');
+    expect(lines.slice(0, -1).reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(SKILL_CATALOG_BUDGET_CHARS);
   });
 });

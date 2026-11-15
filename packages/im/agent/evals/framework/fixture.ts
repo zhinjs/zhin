@@ -355,6 +355,11 @@ export interface EvalCase {
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
   /**
+   * Knowledge base files (relative path → content), as under `ai.knowledge.baseDir`: the driver
+   * publishes `knowledge_search` over them and hands the index to the turn engine (#1250 b27).
+   */
+  readonly knowledge?: Readonly<Record<string, string>>;
+  /**
    * Load SOUL.md / AGENTS.md / TOOLS.md from the cwd into the system-prompt bootstrap section the way the
    * CLI host does (`## <name>` blocks), so prompt measurements match production.
    */
