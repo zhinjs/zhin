@@ -45,6 +45,54 @@ export interface ConsoleApiErrorBody<TData = unknown> {
   /** Log correlation id of an unexpected failure (`code: 'internal_error'`). */
   readonly errorId?: string;
   readonly data?: TData;
+  /**
+   * Safe, enum-like diagnostics of an expected failure (#1270): which step failed, the upstream
+   * reason code and HTTP status, and how long to wait before retrying. Added later; older
+   * instances omit it.
+   */
+  readonly details?: ConsoleErrorDetails;
+  /** What the operator can do about it, when the Host knows (added later; may be absent). */
+  readonly nextStep?: ConsoleErrorNextStep;
+}
+
+/**
+ * Diagnostics of an expected failure (#1270). Every field is a short code or number — never an
+ * upstream message, a URL, a header or a credential.
+ */
+export interface ConsoleErrorDetails {
+  /** Driver / runtime step that failed (e.g. `identity`, `load-code-assist`, `onboard-operation`). */
+  readonly step?: string;
+  /** Sanitized upstream or local reason code (e.g. `UNSUPPORTED_CLIENT`, `project-required`, `transport`). */
+  readonly reason?: string;
+  /** HTTP status the upstream service answered with. */
+  readonly upstreamStatus?: number;
+  /** Milliseconds to wait before the operation may be retried. */
+  readonly retryAfterMs?: number;
+  /** Offending configuration path (e.g. `purposes.agents.planner`). */
+  readonly path?: string;
+  /** Driver-specific failure code (e.g. `project-unavailable`), separate from the fixed `code`. */
+  readonly preparationCode?: string;
+}
+
+/**
+ * The next step of a failure (#1270):
+ * - `action`: something done in the Console; `action` is a stable id (`login`, `set-project-id`,
+ *   `set-client-secret`, `retry`, `verify-account`, `edit-config` …) a Console maps to its own UI,
+ *   `path` an optional Console route.
+ * - `command`: a `zhin …` command to run in the project directory.
+ * `label` is a short Chinese text for Consoles that do not know the id.
+ */
+export type ConsoleErrorNextStep =
+  | Readonly<{ kind: 'action'; action: string; label: string; path?: string }>
+  | Readonly<{ kind: 'command'; command: string; label: string }>;
+
+/** True for a {@link ConsoleErrorNextStep} value. */
+export function isConsoleErrorNextStep(value: unknown): value is ConsoleErrorNextStep {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as { kind?: unknown; action?: unknown; command?: unknown; label?: unknown };
+  if (typeof record.label !== 'string') return false;
+  return (record.kind === 'action' && typeof record.action === 'string')
+    || (record.kind === 'command' && typeof record.command === 'string');
 }
 
 /** True for a JSON body shaped like {@link ConsoleApiErrorBody}. */

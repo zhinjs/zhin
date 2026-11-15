@@ -69,6 +69,7 @@ import { messageLocale } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
 import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
+import { MessageOutcomeLog, type MessageOutcomeReader } from './inbound-outcome-ledger.js';
 import { createChatRoleSenderEnricher } from '../../built/roles.js';
 
 /**
@@ -117,6 +118,13 @@ export class ImRuntime implements OutboundMessageService {
   readonly #commandExecution = new CommandExecutionBudget();
   readonly #commandOperation = new AsyncLocalStorage<CommandOperationController>();
   readonly #messageDiagnostics = new RuntimeMessageDiagnostics();
+  readonly #messageOutcomes = new MessageOutcomeLog();
+  /** ADR 0061: settled inbound message outcomes (process memory, 2000 rows / 24 h). */
+  readonly messageOutcomes: MessageOutcomeReader = Object.freeze({
+    persistent: false,
+    list: (query?: Parameters<MessageOutcomeReader['list']>[0]) => this.#messageOutcomes.list(query),
+    get: (id: string) => this.#messageOutcomes.get(id),
+  });
   readonly messageDiagnostics: RuntimeMessageDiagnosticsReader = Object.freeze({
     list: (options?: Parameters<RuntimeMessageDiagnosticsReader['list']>[0]) => this.#messageDiagnostics.list(options),
     get: (id: string) => this.#messageDiagnostics.get(id),
@@ -166,6 +174,7 @@ export class ImRuntime implements OutboundMessageService {
       commandExecution: this.#commandExecution,
       runCommandOperation: (controller, operation) => this.#commandOperation.run(controller, operation),
       diagnostics: this.#messageDiagnostics,
+      outcomes: this.#messageOutcomes,
       interactions: this.#interactions,
       captureOperation: input => this.endpoints.captureOperation(input),
       createOperationResources: input => {

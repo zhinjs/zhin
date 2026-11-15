@@ -254,7 +254,18 @@ export class HostAccountRuntime {
     const key = accountKey(account);
     const record = (result: Readonly<{ response?: Response; error?: unknown }>) => {
       const call = classifyAccountCall(result);
-      if (call) this.#lastCalls.set(key, Object.freeze({ ...call, at: this.options.now?.() ?? Date.now() }));
+      if (!call) return;
+      const at = this.options.now?.() ?? Date.now();
+      this.#lastCalls.set(key, Object.freeze({ ...call, at }));
+      // #1270: the latest failed model call survives a restart in the runtime failure journal.
+      try {
+        if (call.outcome === 'ok') this.options.failureJournal?.clear('model', account.id);
+        else this.options.failureJournal?.record({
+          source: 'model', subject: account.id, code: call.outcome, category: call.outcome,
+          message: `Model call failed: outcome=${call.outcome}${call.status === undefined ? '' : ` upstreamStatus=${call.status}`}`,
+          ...(call.status === undefined ? {} : { upstreamStatus: call.status }), at,
+        });
+      } catch { /* the journal never breaks a model call */ }
     };
     return async (input, init) => {
       try {
@@ -670,9 +681,23 @@ export class HostAccountRuntime {
       previous: OpenCredential | undefined;
       authContractVersion: string;
       payload: CredentialPayload;
+      refresh?: boolean;
     }>
   ): Promise<OpenCredential> {
-    return publishAccountCredential(this.#context(), input);
+    const { refresh, ...write } = input;
+    const published = await publishAccountCredential(this.#context(), write);
+    // #1270: a new credential (login, disconnect, another key or re-authorization) voids the
+    // journaled failures of the old one, so nothing reads them as current. A periodic token
+    // refresh of the same identity is not a new credential: its failures stay (#1278).
+    if (!refresh && published.record.revision !== input.previous?.record.revision && !sameCredentialIdentity(input.previous, input.payload)) {
+      try {
+        const journal = this.options.failureJournal;
+        const entry = journal?.get('account', input.account.id);
+        if (entry && entry.credentialRevision !== published.record.revision) journal!.clear('account', input.account.id);
+        journal?.clear('model', input.account.id);
+      } catch { /* the journal never breaks a credential write */ }
+    }
+    return published;
   }
 
   #signal(account: ProviderAccount): AbortSignal {
@@ -710,4 +735,12 @@ export class HostAccountRuntime {
       this.#reportCleanup('Provider lease cleanup failed');
     }
   }
+}
+
+/** Ready → ready with the same method, subject and key fingerprint: a token refresh or preparation, not a new credential. */
+function sameCredentialIdentity(previous: OpenCredential | undefined, next: CredentialPayload): boolean {
+  const before = previous?.payload;
+  if (!before || before.status !== 'ready' || next.status !== 'ready' || before.method !== next.method) return false;
+  const prior = identity(previous), after = identity({ ...previous!, payload: next });
+  return prior.subject === after.subject && prior.materialFingerprint === after.materialFingerprint;
 }

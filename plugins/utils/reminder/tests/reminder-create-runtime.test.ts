@@ -118,6 +118,24 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
+  it('re-sends the confirmation prompt at most once while the sender keeps chatting (reminder-confirm-captures-chat)', async () => {
+    const f = await fixture();
+    try {
+      const pending = f.receive('/remind create 10分钟后 喝水');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const prompts = () => f.sent.filter(item => JSON.stringify(item.payload).includes('确认创建')).length;
+      expect(prompts()).toBe(1);
+      await f.receive('今天谁去吃饭');
+      await vi.waitFor(() => expect(prompts()).toBe(2));
+      await f.receive('哈哈');
+      await f.receive('好吧');
+      expect(prompts()).toBe(2);
+      expect(f.added).not.toHaveBeenCalled();
+      await f.receive('确认'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+    } finally { await f.close(); }
+  });
+
   it('requires confirmation even with complete arguments and creates exactly one personal task', async () => {
     const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
