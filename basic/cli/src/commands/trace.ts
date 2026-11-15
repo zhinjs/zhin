@@ -4,6 +4,8 @@
  * graph from `engagement_events` (ADR 0048 H5).
  */
 import { Command } from 'commander';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
+import { sessionDisplayNameOf, sessionLabelOf } from '@zhin.js/gateway/usage';
 import { importProjectInstanceCli, type InstanceCliModule } from '../utils/project-instance.js';
 
 interface TraceCommandOptions {
@@ -33,6 +35,11 @@ export function parseTraceTime(value: string | undefined, now = Date.now()): num
   const parsed = Date.parse(text);
   if (Number.isNaN(parsed)) throw new Error(`无法解析时间：${value}（示例：2h、7d、2026-10-14、2026-10-14T08:00）`);
   return parsed;
+}
+
+function withSessionDisplayName(trace: unknown): unknown {
+  const name = sessionDisplayNameOf(trace);
+  return name && trace && typeof trace === 'object' ? { ...trace, session_display_name: name } : trace;
 }
 
 export const traceCommand = new Command('trace')
@@ -146,14 +153,18 @@ export const traceCommand = new Command('trace')
       if (options.json) console.log(JSON.stringify(sessions, null, 2));
       else if (sessions.length === 0) console.log(`没有 trace 记录（${dir}）。`);
       else for (const s of sessions) {
-        console.log(`${s.session_key}  ${s.turns} 回合  最近 ${new Date(s.last_started_at).toLocaleString()}  ${s.last_status}  ${s.total_tokens} tokens`);
+        console.log(`${s.session_key}  ${s.turns} 回合  最近 ${formatDateTime(s.last_started_at)}  ${s.last_status}  ${s.total_tokens} tokens`);
       }
       return;
     }
 
     if (options.list || options.session || options.since || options.until) {
       const traces = await store.query(filter);
-      console.log(options.json ? JSON.stringify(traces, null, 2) : mod.formatTurnTraceList(traces));
+      // Readable conversation as in `zhin usage report` (#1250); `--json` keeps the full session_key
+      // and adds that name as `session_display_name`.
+      console.log(options.json
+        ? JSON.stringify(traces.map(trace => withSessionDisplayName(trace)), null, 2)
+        : mod.formatTurnTraceList(traces, { sessionLabel: trace => sessionLabelOf(trace) }));
       return;
     }
 

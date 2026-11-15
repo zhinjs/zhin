@@ -2,6 +2,7 @@
  * 持久化调度任务 CLI — 通过运行中 Host 的 `/assistant/jobs` 操作。
  * 调度器在首次启动后以数据库为准，离线改 data/schedule-jobs.json 不会生效，因此不再直接改文件。
  */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { Command } from 'commander';
 import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
@@ -71,7 +72,7 @@ function notifySummary(notify: ScheduleJobRecordCli['notify']): string {
 }
 
 function scheduleSummary(s: JobScheduleCli): string {
-  if (s.kind === 'at') return `at ${new Date(s.atMs).toISOString()}`;
+  if (s.kind === 'at') return `at ${formatDateTime(s.atMs)}`;
   if (s.kind === 'every') {
     const m = s.everyMs / (60 * 1000);
     if (m < 60) return `every ${m}m`;

@@ -9,6 +9,7 @@ import { createReadStream } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { PromptCacheProbe, type PromptCacheHint } from './prompt-cache.js';
 
 export const DAY_MS = 86_400_000;
@@ -270,12 +271,8 @@ function nextBucket(start: number, bucket: UsageBucket, timeZone?: string): numb
 
 /** `YYYY-MM-DD` of `ms` in `timeZone` (default: the process zone). */
 export function dayKeyOf(ms: number, timeZone?: string): string {
-  if (!timeZone) {
-    const d = new Date(ms);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-  const w = wallClock(ms, timeZone);
-  return `${w.year}-${String(w.month).padStart(2, '0')}-${String(w.day).padStart(2, '0')}`;
+  // The CLI's shared date format (#1250 cli-datetime-us-locale).
+  return formatDateTime(ms, undefined, { part: 'date', ...(timeZone ? { timeZone } : {}) });
 }
 
 /** Ids minted by the provider graph (`services:<uuid>` …) carry no meaning for a reader. */
@@ -312,6 +309,23 @@ export function sessionDisplayNameOf(trace: any): string | undefined {
   if (origin.kind === 'mcp') return 'MCP';
   if (origin.kind === 'internal') return `内部 ${String(origin.source ?? '')}`.trim();
   return undefined;
+}
+
+/** Hashed session keys (`personal-session:v1:<sha>`) shortened to `personal-session:<8 hex>`; others unchanged. */
+export function shortSessionKey(key: string): string {
+  const hashed = /^([a-z-]+):v\d+:([0-9a-f]{16,})$/u.exec(key);
+  return hashed ? `${hashed[1]}:${hashed[2]!.slice(0, 8)}` : key;
+}
+
+/**
+ * `sandbox · 私聊 Developer（personal-session:ab12cd34）` — the conversation `zhin usage report`
+ * shows, with the short key to tell sessions apart; just the (short) key without a recorded origin.
+ */
+export function sessionLabelOf(trace: any): string | undefined {
+  const key = typeof trace?.session_key === 'string' ? trace.session_key : undefined;
+  const name = sessionDisplayNameOf(trace);
+  if (!key) return name;
+  return name ? `${name}（${shortSessionKey(key)}）` : shortSessionKey(key);
 }
 
 /** `platform:endpoint:scope:sceneId`; other shapes keep whatever parts they have. */

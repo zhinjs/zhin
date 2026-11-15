@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import yaml from 'yaml';
 import { diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { findConfigFile, readConfig, saveConfig } from '../../../packages/host/gateway/src/project/config-file.js';
 import { configCommand } from '../src/commands/config.js';
 import { createDefaultConfig } from '../src/commands/doctor.js';
@@ -950,7 +951,9 @@ describe('schedule (running Host)', () => {
     expect(output).toContain('⚠ 无效：目标账号不存在（gone（sandbox）· 私聊 u1）');
     expect(output).toContain('⚠ 无（不会触发）');
     expect(output).toContain('sandbox-bot（sandbox）· 私聊 u1');
-    expect(output).toContain(new Date(Date.UTC(2026, 10, 16, 0)).toLocaleString());
+    // `YYYY-MM-DD HH:mm:ss`, 24-hour, local time (#1250 cli-datetime-us-locale).
+    expect(output).toContain(`下次:   ${formatDateTime(Date.UTC(2026, 10, 16, 0))}`);
+    expect(output).not.toMatch(/\b[AP]M\b/u);
   });
 
   it('--target 格式无效时不发请求 (#1250)', async () => {
