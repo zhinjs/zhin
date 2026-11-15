@@ -141,7 +141,10 @@ describe('leased turn model execution', () => {
     const fixture = await createFixture();
     const h = createProviderHarness({ sdk: 'anthropic' });
     const scope = await executionScope({ chat: executionBundle({ model: h.model, completion: h.runtime }) });
-    const state = stateWithEngine(fixture.snapshot, async function* () { throw new Error('engine stop'); });
+    const state = stateWithEngine(fixture.snapshot, async function* () {
+      yield { type: 'text_delta', delta: 'partial' };
+      throw new Error('engine stop');
+    });
     const root = new Map(state.resources.get(state.root));
     const acquire = vi.fn(async () => scope);
     root.set(turnModelPortToken.id, { acquire });
