@@ -308,8 +308,20 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await say(admin, '设置 repeater greeting')).toContain('用法');
   });
 
+  it('refuses to switch interjection on while the configuration has no ai.trigger.ambient (review of #1281)', async () => {
+    const { run, conversations, roles } = await harness();
+    await promote(roles);
+    const admin = actor();
+    expect(await run(admin, '开启 插话')).toBe('插话未在配置中启用（缺少 ai.trigger.ambient），请先在配置里开启；未保存。');
+    expect(await run(admin, '关闭 插话')).toBe('插话未在配置中启用（缺少 ai.trigger.ambient），请先在配置里开启；未保存。');
+    expect(await run(admin, 'enable ambient', 'en')).toBe('Interjection is not enabled in the configuration (no ai.trigger.ambient); enable it there first. Not saved.');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toBeUndefined();
+    expect(await run(admin, '列表')).toContain('插话：停用（配置中未启用插话：缺少 ai.trigger.ambient）');
+  });
+
   it('switches group interjection per conversation as a feature, locked from above (ADR 0062 §23)', async () => {
-    const { run, conversations, roles, audits } = await harness();
+    const { run, conversations, roles, audits, state } = await harness();
+    (state.document as Record<string, unknown>).ai = { trigger: { ambient: {} } };
     await promote(roles);
     const admin = actor();
     expect(await run(admin, '列表')).toContain('插话：停用');
@@ -349,8 +361,26 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await get('qq/bot-1/group:100')).toMatchObject({ enabled: false });
   });
 
+  it('marks interjection as disabled and locked at global in feature.get without the configuration section (review of #1281)', async () => {
+    const overrides = new FeatureOverrideStore();
+    overrides.seed([{ plugin: AMBIENT_FEATURE_ID, key: 'qq/bot-1/group:100', patch: { engage: true } }]);
+    const context = {
+      authScope: 'test', authorize: () => true,
+      configuration: { async readProject() { return { revision: 'r1', exists: true, value: structuredClone(base) }; } },
+      snapshots: { acquire: () => ({ value: snapshot(), release() {} }) },
+      stores: { overrides },
+    } as never;
+    const data = { plugin: AMBIENT_FEATURE_ID, level: 'conversation', key: 'qq/bot-1/group:100' };
+    const got = await dispatchFeatureConsoleRpc({ type: 'feature.get', data }, context);
+    expect(got!.body.data).toMatchObject({ enabled: false, lockedBy: 'global' });
+    const set = await dispatchFeatureConsoleRpc({ type: 'feature.set-enabled', data: { ...data, enabled: true } }, context);
+    expect(set).toMatchObject({ status: 409, body: { success: false, code: 'ambient-not-configured' } });
+    expect(String(set!.body.error)).toContain('ai.trigger.ambient');
+  });
+
   it('keeps a locked level\'s switch on reset and reports success, like a Plugin (review of #1281)', async () => {
-    const { run, conversations, roles } = await harness();
+    const { run, conversations, roles, state } = await harness();
+    (state.document as Record<string, unknown>).ai = { trigger: { ambient: {} } };
     await promote(roles);
     const admin = actor();
     expect(await run(admin, '关闭 插话')).toBe('已保存（会话层），立即生效。');

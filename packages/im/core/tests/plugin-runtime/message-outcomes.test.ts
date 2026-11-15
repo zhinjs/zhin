@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AMBIENT_FEATURE_ID,
+  inboundOutcomeSink,
   resolveAmbientSwitchAt,
   InboundOutcomeLedger,
   MESSAGE_OUTCOMES,
@@ -316,5 +317,20 @@ describe('unrecorded listeners (review of #1281)', () => {
       ledger.settle();
       expect(seen).toEqual(['agent_gate']);
     } finally { stop(); }
+  });
+});
+
+describe('message views only expose the report port (review of #1281)', () => {
+  it('returns a frozen { report, enter } facade; a cast settle cannot change the outcome', () => {
+    const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+    const message = new Message({ conversation, content: 'hi' }, { generation: 1, reply: async () => ({ status: 'sent' }), outcomes: ledger });
+    const port = (message as unknown as Record<symbol, () => unknown>)[inboundOutcomeSink]!() as Record<string, unknown>;
+    expect(port).not.toBe(ledger);
+    expect(Object.isFrozen(port)).toBe(true);
+    expect(Object.keys(port).sort()).toEqual(['enter', 'report']);
+    expect(typeof (port as { settle?: unknown }).settle).toBe('undefined');
+    expect(() => (port as unknown as InboundOutcomeLedger).settle()).toThrow(TypeError);
+    reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'command' });
+    expect(ledger.settle().outcome).toBe('command_replied');
   });
 });

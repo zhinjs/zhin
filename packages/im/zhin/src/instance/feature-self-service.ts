@@ -166,6 +166,11 @@ const messages = createMessages({
   levelAdapter: { 'zh-CN': '适配器', en: 'adapter' },
   levelGlobal: { 'zh-CN': '全局', en: 'global' },
   ambientName: { 'zh-CN': '插话', en: 'ambient' },
+  ambientNotConfigured: {
+    'zh-CN': '插话未在配置中启用（缺少 ai.trigger.ambient），请先在配置里开启；未保存。',
+    en: 'Interjection is not enabled in the configuration (no ai.trigger.ambient); enable it there first. Not saved.',
+  },
+  ambientNotConfiguredState: { 'zh-CN': '（配置中未启用插话：缺少 ai.trigger.ambient）', en: ' (not enabled in the configuration: no ai.trigger.ambient)' },
   ambientGlobal: {
     'zh-CN': '插话的全局默认值在配置 ai.trigger.ambient 中设置（Console「AI → 插话」）；聊天里可以按会话 / 账号 / 适配器开关。',
     en: 'The global interjection default is ai.trigger.ambient in the configuration (Console "AI → Ambient"); in chat switch it per conversation / endpoint / adapter.',
@@ -374,6 +379,7 @@ export async function executeFeatureChat(
     if (!reply) return messages(locale, 'usage');
     const body = reply.body as Record<string, any>;
     if (!body.success) {
+      if (body.code === 'ambient-not-configured') return messages(locale, 'ambientNotConfigured');
       if (body.code === 'locked') return messages(locale, 'locked', { plugin, level: levelName(locale, body.lockedBy) });
       if (body.code === 'environment-reference') return messages(locale, 'environmentReference');
       if (body.code === 'field-not-allowed') return messages(locale, 'fieldDenied', { field: String(body.field) });
@@ -435,7 +441,8 @@ export async function executeFeatureChat(
         if (data) {
           lines.push(messages(locale, 'listLine', { plugin: messages(locale, 'ambientName'),
             state: messages(locale, data.enabled ? 'enabledWord' : 'disabledWord'),
-            source: data.lockedBy ? messages(locale, 'lockedBy', { level: levelName(locale, data.lockedBy) }) : '' }));
+            source: data.lockedBy === 'global' ? messages(locale, 'ambientNotConfiguredState')
+              : data.lockedBy ? messages(locale, 'lockedBy', { level: levelName(locale, data.lockedBy) }) : '' }));
         }
       }
       const pages = Math.max(1, Math.ceil(lines.length / FEATURE_LIST_PAGE_SIZE));

@@ -17,6 +17,7 @@ import type { EndpointEventContext } from '../../side-event/base.js';
 import type { IncomingSystemEvent, SystemEvent } from '../../system-event.js';
 import {
   RuntimeMessage,
+  inboundOutcomeFacade,
   operationEndpoint,
   type CaptureEndpointOperationInput,
   type CapturedEndpointOperation,
@@ -164,8 +165,15 @@ export class InboundRuntime {
     const close = async (): Promise<void> => {
       try { await commandOperation?.finish(); }
       catch (error) {
-        if (!failed) { failed = true; failure = error; }
-        throw error;
+        // Without an earlier failure the drain failure is this message's failure and propagates;
+        // with one, it is only logged and the original exception is the one the caller sees.
+        if (failed) {
+          logger.warn(formatCompact({ op: 'inbound_operation_finish_failed', error: logSafeError(error) }));
+        } else {
+          failed = true;
+          failure = error;
+          throw error;
+        }
       } finally {
         active = false;
         try { endpointLease?.release(); } finally {
@@ -376,7 +384,7 @@ export class InboundRuntime {
               boundEndpoint.assertActive();
             },
             ...(origin ? { origin } : {}),
-            outcomes: ledger,
+            outcomes: inboundOutcomeFacade(ledger),
             presentation: {
               locale,
               resolveCommands: (message) => this.#dispatcher.commandEnvironment(message, lease.value),

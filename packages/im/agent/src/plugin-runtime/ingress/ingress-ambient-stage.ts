@@ -157,8 +157,13 @@ export async function considerAmbientEngagement(input: Readonly<{
   if (hasIgnoredTriggerPrefix(text, trigger)) return notAddressed('ignored_trigger_prefix');
   // ADR 0062 §23: the file allowlist is the global default; stored feature overrides decide below it.
   const ambientSwitch = resolveAmbientSwitch(lease.value, message, ambientEngagement?.enabledFor(platform, message.conversation.id) === true);
-  if (!ambientEngagement || !ambientSwitch.enabled) {
-    return notAddressed('no_command_not_ambient', ambientSwitch.source === 'global' ? undefined : `ambient off at ${ambientSwitch.source}`);
+  if (!ambientEngagement) {
+    return notAddressed('no_command_not_ambient', 'interjection is not configured: the configuration has no ai.trigger.ambient section');
+  }
+  if (!ambientSwitch.enabled) {
+    return notAddressed('no_command_not_ambient', ambientSwitch.source === 'global'
+      ? 'this group is not in ai.trigger.ambient.conversations and no feature switch turns interjection on'
+      : `interjection is switched off for this group by the ${ambientSwitch.source}-level feature switch`);
   }
   const source = readOperationSession(message);
   if (source) {

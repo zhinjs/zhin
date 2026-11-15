@@ -915,6 +915,16 @@ describe('inbound message outcomes from the Agent ingress (ADR 0061 P2)', () => 
       expect(handled).toBe(false);
       expect(record).toMatchObject({ outcome: 'not_addressed', reason: 'no_command_not_ambient', stage: 'ambient', reply: 'no' });
       expect(f.executeLeased).not.toHaveBeenCalled();
+      expect(record.detail).toContain('no ai.trigger.ambient');
+    } finally { await f.close(); }
+  });
+
+  it('says why a configured but unlisted group got no interjection (review of #1281)', async () => {
+    const f = outcomeFixture({ ambient: { conversations: ['icqq:other-room'] } });
+    try {
+      const { record } = await f.run('我的积分');
+      expect(record).toMatchObject({ outcome: 'not_addressed', reason: 'no_command_not_ambient' });
+      expect(record.detail).toContain('not in ai.trigger.ambient.conversations');
     } finally { await f.close(); }
   });
 

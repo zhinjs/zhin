@@ -825,6 +825,16 @@ async function withConversationName(result: ConsoleFeatureGetResult, context: Fe
  * of the reserved feature {@link AMBIENT_FEATURE_ID}: `enabled: false` (off, locks lower levels)
  * or `patch.engage: true` (on). Only switch reads and writes are served (no fields).
  */
+/** Whether the configuration has an `ai.trigger.ambient` section: without it the Agent never interjects. */
+function ambientConfigured(document: RuntimeConfigDocument): boolean {
+  const ai = record(document.ai) ? document.ai : undefined;
+  const trigger = ai && record(ai.trigger) ? ai.trigger : undefined;
+  return !!trigger && record(trigger.ambient);
+}
+
+/** Refusal of an interjection switch while interjection is not configured at all. */
+export const AMBIENT_NOT_CONFIGURED_MESSAGE = '插话未在配置中启用（缺少 ai.trigger.ambient），请先在配置里开启';
+
 function ambientGlobalEnabled(document: RuntimeConfigDocument, snapshot: RuntimeSnapshot | undefined, key: string | undefined): boolean {
   const ai = record(document.ai) ? document.ai : undefined;
   const trigger = ai && record(ai.trigger) ? ai.trigger : undefined;
@@ -858,7 +868,11 @@ async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, contex
   await store.refresh();
   if (type === 'feature.get') {
     return readState(context, state => {
-      const resolved = resolveAmbientSwitchAt(store, key, ambientGlobalEnabled(state.document, state.snapshot, key), level === 'global' ? undefined : level);
+      // Without the configuration section nothing below can switch interjection on: report it as
+      // disabled and locked at the global level, so the Console and `功能 列表` show why.
+      const configured = ambientConfigured(state.document);
+      const switchState = resolveAmbientSwitchAt(store, key, ambientGlobalEnabled(state.document, state.snapshot, key), level === 'global' ? undefined : level);
+      const resolved = configured ? switchState : { enabled: false, source: 'global' as const, ...(level !== 'global' ? { lockedBy: 'global' as const } : {}) };
       const row = key ? store.get(AMBIENT_FEATURE_ID, key) : undefined;
       const ref = level === 'conversation' && key ? parseFeatureConversationKey(key) : undefined;
       return Object.freeze({
@@ -880,6 +894,10 @@ async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, contex
   }
   if (type !== 'feature.set-enabled' && type !== 'feature.remove-override') invalid('插话只支持开关，没有可设置的字段');
   if (type === 'feature.set-enabled' && typeof input.enabled !== 'boolean') invalid('enabled 必须是布尔值');
+  if (type === 'feature.set-enabled') {
+    const configured = await readState(context, state => ambientConfigured(state.document));
+    if (!configured) throw new FeatureRpcError(409, AMBIENT_NOT_CONFIGURED_MESSAGE, { code: 'ambient-not-configured', lockedBy: 'global' });
+  }
   const lockedBy = resolveAmbientSwitchAt(store, key, false, level).lockedBy;
   // As for Plugins: below a disabled level the switch cannot change, but a reset still succeeds and
   // keeps this level's stored switch (only the explicit "on" is cleared).

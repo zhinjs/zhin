@@ -5376,6 +5376,22 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     } finally { spy.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('keeps the original exception when the operation also fails to finish (review of #1281)', async () => {
+    const { CommandExecutionBudget } = await import('@zhin.js/command/internal/execution');
+    const open = CommandExecutionBudget.prototype.openOperation;
+    const spy = vi.spyOn(CommandExecutionBudget.prototype, 'openOperation').mockImplementation(function (this: InstanceType<typeof CommandExecutionBudget>, input) {
+      const controller = open.call(this, input);
+      return Object.freeze({ ...controller, finish: async () => { await controller.finish(); throw new Error('drain failed'); } });
+    });
+    const original = new Error('command failed first');
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false, commandResult: () => { throw original; } });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toBe(original);
+      expect(latest(fixture)).toMatchObject({ outcome: 'internal_error', reason: 'command_threw' });
+      expect(latest(fixture)!.detail).toContain('command failed first');
+    } finally { spy.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('settles an outcome even for an event without a payload (review of #1281)', async () => {
     const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
     try {
