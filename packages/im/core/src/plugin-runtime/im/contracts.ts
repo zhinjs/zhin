@@ -288,6 +288,11 @@ export interface InboundSecretGuard {
     conversation: ConversationRef;
     snapshot: RuntimeSnapshot;
   }>): InboundSecretMatch | undefined;
+  /**
+   * Whether a native platform event (`platform.receive`) carries the secret. Such an event is not
+   * dispatched to native Handlers: its payload is platform-shaped, so it cannot be redacted reliably.
+   */
+  inspectNative?(payload: unknown): boolean;
 }
 
 export interface InboundSecretMatch {
@@ -297,6 +302,11 @@ export interface InboundSecretMatch {
   readonly redacted: string;
   /** Handles the message; the returned content is replied through the normal send chain by the root Plugin. */
   handle(message: Message): Promise<SendContent | undefined> | SendContent | undefined;
+  /**
+   * The message is dropped before {@link handle} (not ready, another bot or one of ours posted it, dedup
+   * failure): a secret it carries was still seen by others, so the guard revokes it.
+   */
+  discard?(): Promise<void> | void;
 }
 
 export interface MessageDispatchResult {

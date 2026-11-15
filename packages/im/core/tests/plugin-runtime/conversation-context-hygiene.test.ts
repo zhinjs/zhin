@@ -8,6 +8,7 @@ import {
   CONVERSATION_CONTEXT_MAX_AGE_MS,
   ConversationRuntime,
 } from '../../src/plugin-runtime/im/conversation-runtime.js';
+import { registerChatOwnerClaimCode } from '@zhin.js/kernel';
 
 const conversation = {
   endpoint: { id: 'bot-1', adapter: 'memory' },
@@ -159,7 +160,9 @@ describe('ConversationRuntime context hygiene', () => {
     expect(JSON.stringify(context.blocks)).not.toContain('已经完成一部分');
   });
 
-  it('records a claim-shaped message with its code masked (ADR 0060 §3.3 backstop, #1250)', async () => {
+  it('records an open claim code masked (ADR 0060 §3.3 backstop, #1250)', async () => {
+    const unregister = registerChatOwnerClaimCode('ABCD2345');
+    try {
     const store = new MemoryConversationEventStore();
     const runtime = new ConversationRuntime(store);
     await runtime.recordIncoming({ conversation, content: '认领 ABCD2345', message: { conversation, id: 'c1' } } as never, { id: 'user-1' });
@@ -170,6 +173,7 @@ describe('ConversationRuntime context hygiene', () => {
     expect(stored).not.toContain('ABCD2345');
     expect(stored).toContain('认领 ***');
     expect(stored).toContain('我想认领这个任务');
+    } finally { unregister(); }
   });
 });
 

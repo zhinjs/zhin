@@ -366,11 +366,14 @@ export type ChatScopeRef =
 
 根因：`认领` / `claim` 原是普通根命令，要带适配器的命令前缀才触发，而所有提示都写「私聊发送『认领 <码>』」。配了 `commandPrefix` 的账号上，按提示发送的消息没有匹配到命令，整条消息（含认领码）作为普通聊天交给了外部模型，并进入会话历史与 trace；用户也得不到任何反馈。
 
-- **精确形态**：`matchChatOwnerClaimText`（`@zhin.js/kernel`）——整条消息去掉首尾空白后，关键词 `认领` / `claim`（不分大小写）是第一个词，后接空白与**恰好一个词**（`^(认领|claim)\s+\S+$`）。容忍：命令前缀（含词形前缀）、关键词前至多 3 个标点（`#`、`/`、`「`）、码前后至多 3 个标点（`<码>`、`」`，照抄提示时常见）。群聊开头的 @ 提及先去掉（与命令匹配一致）。关键词不在开头（`我想认领这个任务`、`请认领 X`）、紧跟其他字（`认领了`）、后面不止一个词（`claim this task`）都是普通聊天。
-- **最早处理**：Core 的 `ImRuntimeOptions.inboundSecret`（`InboundSecretGuard`）在入站构造消息后、写调试日志之前识别；实例装配 `createChatOwnerClaimGuard`。命中的消息只交给认领处理器：不写会话历史，不经中间件、事件处理器、命令、交互提示与 Agent，日志与消息事件流只出现 `认领 ***`，结局记为 `command_replied`（`reason: secret`，命令 `claim`）。去重、机器人来源等判定照旧（重复投递不回复）。
-- **适用范围**：认领开启时任何会话都接手（群聊里的正确码照旧作废轮换；Sandbox 拒绝）；已有全局 owner 或认领未开启时入站一律不拦截（此时不存在有效的码，拦截不防泄露，只会误伤如私聊「claim reward」），这类文字照常走命令或 Agent；写入端兜底脱敏仍然生效。带前缀的 `#认领 <码>` 命令保留。
+- **按当前码识别，不按格式猜**：只在认领开启期间（尚无全局 owner、有关系型数据库）生效。消息（命令匹配用的文本：群聊开头的 @ 提及已去掉）只要**含有当前有效的认领码**就被接手，不论写法——比较规则与 `sameCode` 一致（不分大小写、忽略空白与 `-`），另外忽略零宽字符与软连字符、也按 NFKC 形式比较（`containsChatOwnerClaimCode`，`@zhin.js/kernel`）。因此 `认领:码`、`認領 码`、`ｃｌａｉｍ 码`、`认领码`、`认领 码 谢谢`、`ABCD 2345`、`认领 码!!!!` 都算命中。
+- **形态只用于私聊里的错码**：私聊中形如「认领 / claim + 一个词」（`matchChatOwnerClaimText`：关键词是第一个词，后面恰好一个词；容忍命令前缀、关键词前至多 3 个标点、码前后至多 3 个标点）但码不对的消息，同样由认领处理器回复「不正确」并计入错误次数（用法说明见 `formatOwnerClaimUsage`）。不含当前码的群聊消息一律放行：`claim it`、`认领 任务` 照常进 Agent。
+- **最早处理**：Core 的 `ImRuntimeOptions.inboundSecret`（`InboundSecretGuard`）在入站构造消息后、写调试日志之前识别；实例装配 `createChatOwnerClaimGuard`。命中的消息只交给认领处理器：不写会话历史，不经中间件、事件处理器、命令、交互提示与 Agent，日志与消息事件流只出现 `认领 ***`，结局记为 `command_replied`（`reason: secret`，命令 `claim`）。私聊进入认领；群聊中的当前码作废轮换并回复「只接受私聊」；Sandbox 拒绝。
+- **被丢弃的消息也作废码**：在交给处理器之前就被丢弃的消息——会话未就绪（`dropped_unready`）、其他机器人或本项目另一账号发送（`peer_bot` / `member`）、去重失败——若含当前码，同样不记录，并立即作废轮换（`InboundSecretMatch.discard`）：这些消息别人已经看到，而没有认领流程会消费它。重复投递（另一账号处理同一条消息）不作废。
+- **原生事件 `platform.receive` 的边界**：派发原生事件前也调用守卫（`InboundSecretGuard.inspectNative`，检查载荷里的全部字符串）；含当前码的原生事件**不派发给原生 Handler**（只记一条不含正文的调试日志）。选择不派发而不是脱敏后派发：原生载荷是平台自定义结构，文本可能在任意字段、以任意编码出现，无法可靠脱敏；同一条消息的规范化 `message.receive` 仍会被认领处理器正常处理，原生 Handler 少看到的只是这一条带码事件。
+- **写入端兜底只脱敏真实码**：会话记录（`conversation_events`、Agent 会话消息）与 trace（`scrubSecrets`）写入前用 `redactChatOwnerClaimText` 把**当前开启的认领码**（实例轮换时 `registerChatOwnerClaimCode` 登记）替换为 `***`。认领未开启（含已有全局 owner）时不做任何替换：此时不存在有效的码，按形态脱敏只会把普通聊天（`claim it`）存成 `claim ***`。已作废的旧码不再是秘密，不追溯已落盘的记录。
+- **有 owner 之后**：入站不再拦截任何消息，带前缀的 `#认领 xxx` 照常匹配到命令并回复「当前不接受认领」，不带前缀的照常进 Agent。
 - **保留不变**：只接受真实平台私聊、sandbox 不接受、同一码连错 5 次轮换且同一发送者窗口内至多计 2 次、码只用一次。
-- **写入端兜底**：会话记录（`conversation_events`、Agent 会话消息）与 trace（`scrubSecrets`）写入前用 `redactChatOwnerClaimText` 把认领形态行里的码替换为 `***`；不追溯已落盘的记录。
 
 ## 落盘位置（计划）
 

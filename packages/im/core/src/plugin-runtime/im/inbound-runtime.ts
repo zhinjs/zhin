@@ -254,6 +254,7 @@ export class InboundRuntime {
           ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
         });
         if (!readiness.ready) {
+          await this.#discardSecret(secret);
           ledger.markAddressed(input.mentioned === true || conversation.kind === 'private');
           ledger.report({ outcome: 'dropped_unready', reason: 'venue_unready', stage: 'ingress',
             detail: readiness.unreadyEndpoints?.join(',') ?? '' });
@@ -414,6 +415,7 @@ export class InboundRuntime {
           return result;
         }
         if (recordOnly === 'dedup_error') {
+          await this.#discardSecret(secret);
           ledger.report({ outcome: 'dropped_dedup_error', reason: 'dedup_error', stage: 'ingress' });
           this.context.diagnostics?.route('dedup_error');
           this.context.publish({
@@ -427,6 +429,7 @@ export class InboundRuntime {
           return result;
         }
         if (origin === 'member' || origin === 'peer_bot') {
+          await this.#discardSecret(secret);
           ledger.report({ outcome: 'ignored_bot', reason: origin, stage: 'ingress' });
           this.context.diagnostics?.route('bot_origin');
           logger.debug(formatCompact({
@@ -569,6 +572,23 @@ export class InboundRuntime {
     }
   }
 
+  #nativeCarriesSecret(payload: unknown): boolean {
+    const inspect = this.context.inboundSecret?.inspectNative;
+    if (!inspect) return false;
+    try { return inspect.call(this.context.inboundSecret, payload) === true; } catch (error) {
+      // Fail closed: an event that cannot be inspected is not dispatched while a secret is open.
+      logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
+      return true;
+    }
+  }
+
+  /** A dropped message's secret is revoked; a failing guard is logged, never the message's failure. */
+  async #discardSecret(secret: InboundSecretMatch | undefined): Promise<void> {
+    try { await secret?.discard?.(); } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_discard_failed', error: logSafeError(error) }));
+    }
+  }
+
   /** Claim resolution with the answer classification, when the coordinator offers it. */
   #resolveClaim(message: Message): { answerLike: boolean; owner?: string } | undefined {
     const interactions = this.context.interactions;
@@ -667,6 +687,11 @@ export class InboundRuntime {
   }
 
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
+    if (event.name === 'platform.receive' && this.#nativeCarriesSecret(event.payload)) {
+      // ADR 0060 §3.3: a native event carrying the claim code never reaches native Handlers.
+      logger.debug(formatCompact({ op: 'native_secret_withheld', endpoint: String(event.endpoint.id) }));
+      return;
+    }
     let active = true;
     const lease = this.context.acquire();
     let endpointLease: EndpointChildLease | undefined;

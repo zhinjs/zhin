@@ -173,7 +173,7 @@ export function serializeAgentMessage(
   };
 }
 
-/** Backstop (ADR 0060 §3.3): a claim-shaped user text keeps its keyword, never its code. */
+/** Backstop (ADR 0060 §3.3): an open chat-owner claim code in a user text is stored as `***`. */
 function redactClaimText(message: AgentMessage): AgentMessage {
   if (message.role !== 'user') return message;
   const user = message as UserMessage;

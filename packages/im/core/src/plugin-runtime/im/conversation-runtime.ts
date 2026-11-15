@@ -152,7 +152,7 @@ export class ConversationRuntime {
         actor: sender
           ? Object.freeze({ id: sender.id, ...(sender.name ? { displayName: sender.name } : {}) })
           : UNKNOWN_SENDER,
-        // Backstop (ADR 0060 §3.3): a claim-shaped text keeps its keyword, never its code.
+        // Backstop (ADR 0060 §3.3): an open chat-owner claim code is stored as `***`.
         segments: Object.freeze(input.segments?.length
           ? input.segments.map(redactClaimSegment)
           : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]),

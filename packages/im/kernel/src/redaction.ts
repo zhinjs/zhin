@@ -87,12 +87,6 @@ export function redactSecretText(value: string): string {
  */
 const CHAT_OWNER_CLAIM_TEXT = /^[^\p{L}\p{N}\s]{0,3}\s*(认领|claim)\s+[^\p{L}\p{N}\s]{0,3}(\S+?)[^\p{L}\p{N}\s]{0,3}$/iu;
 /**
- * Every line of that shape inside a longer text, also after leading mentions (`@bot `) — the
- * writer-side backstop, which does not know the conversation's prefix.
- */
-const CHAT_OWNER_CLAIM_LINE = /^(\s*(?:@\S+\s+)*[^\p{L}\p{N}\s]{0,3}\s*(?:认领|claim)\s+)\S+(\s*)$/gimu;
-
-/**
  * Whether `text` is a chat-owner claim message, and its keyword (as typed) and code. `prefix` (the
  * adapter's command prefix, which may be a word) may precede the keyword; the bare form matches too.
  * A message where the keyword is not the first word (`我想认领这个任务`, `请认领 X`), is followed by no
@@ -108,9 +102,53 @@ export function matchChatOwnerClaimText(text: string, prefix = ''): Readonly<{ k
   return undefined;
 }
 
-/** Replaces the code of every claim-shaped line with `***` (conversation records, traces, logs). */
+/** What may sit between the symbols of a code someone typed: whitespace, `-`, soft hyphens, zero-width characters. */
+const CLAIM_CODE_GAP = '[\\s\\-\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]*';
+
+/**
+ * Matches `code` the way the claim compares codes (letter case, whitespace and `-` ignored), also when
+ * zero-width characters split it; applied to the text as written and to its NFKC form (full-width letters).
+ */
+function claimCodePattern(code: string, flags: string): RegExp | undefined {
+  const symbols = [...code.toUpperCase().replace(/[\s-]/gu, '')];
+  if (symbols.length === 0) return undefined;
+  return new RegExp(symbols.map(symbol => symbol.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join(CLAIM_CODE_GAP), flags);
+}
+
+/** Whether `text` carries `code` anywhere (ADR 0060 §3.3: how inbound recognizes the current claim code). */
+export function containsChatOwnerClaimCode(text: string, code: string): boolean {
+  const pattern = claimCodePattern(code, 'iu');
+  if (!pattern || !text) return false;
+  return pattern.test(text) || pattern.test(text.normalize('NFKC'));
+}
+
+/** Codes of the claims open in this process (normally at most one). */
+const openClaimCodes = new Set<{ readonly code: string }>();
+
+/**
+ * Registers an open claim code for {@link redactChatOwnerClaimText}; the returned function unregisters it.
+ * The claim registers its current code on every rotation and unregisters it when it closes.
+ */
+export function registerChatOwnerClaimCode(code: string): () => void {
+  const entry = Object.freeze({ code });
+  openClaimCodes.add(entry);
+  return () => { openClaimCodes.delete(entry); };
+}
+
+/**
+ * Writer-side backstop (conversation records, Agent session messages, traces): every occurrence of a
+ * currently open claim code becomes `***`. Without an open claim nothing is changed — no valid code exists.
+ */
 export function redactChatOwnerClaimText(text: string): string {
-  return text.includes('认领') || /claim/iu.test(text) ? text.replace(CHAT_OWNER_CLAIM_LINE, '$1***$2') : text;
+  if (openClaimCodes.size === 0 || !text) return text;
+  let result = text;
+  for (const { code } of openClaimCodes) {
+    const probe = claimCodePattern(code, 'iu');
+    if (!probe) continue;
+    if (probe.test(result)) result = result.replace(claimCodePattern(code, 'giu')!, '***');
+    else if (probe.test(result.normalize('NFKC'))) result = result.normalize('NFKC').replace(claimCodePattern(code, 'giu')!, '***');
+  }
+  return result;
 }
 
 /**

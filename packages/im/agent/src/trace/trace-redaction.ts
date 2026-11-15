@@ -8,8 +8,8 @@ const INLINE_SECRET_RULES: ReadonlyArray<readonly [RegExp, string]> = [
 ];
 
 /**
- * Masks credentials that appear inline in free text (error messages, string args), and the code of a
- * chat-owner claim message (ADR 0060 §3.3 backstop: such messages never reach a turn).
+ * Masks credentials that appear inline in free text (error messages, string args), and an open
+ * chat-owner claim code (ADR 0060 §3.3 backstop: messages carrying it never reach a turn).
  */
 export function scrubSecrets(text: string): string {
   return redactChatOwnerClaimText(INLINE_SECRET_RULES.reduce((current, [pattern, replacement]) => current.replace(pattern, replacement), text));

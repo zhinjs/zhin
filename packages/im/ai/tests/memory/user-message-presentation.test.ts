@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { registerChatOwnerClaimCode } from '@zhin.js/kernel';
 import { createPromptContextBlock } from '../../src/memory/prompt-context.js';
 import { agentMessagesToAiSdk } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
@@ -22,10 +23,14 @@ describe('user-message-presentation', () => {
     scope: 'group' as const,
   };
 
-  it('stores a claim-shaped user message with its code masked (ADR 0060 §3.3 backstop, #1250)', () => {
+  it('stores an open claim code masked (ADR 0060 §3.3 backstop, #1250)', () => {
+    const unregister = registerChatOwnerClaimCode('ABCD2345');
+    try {
     expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).not.toContain('ABCD2345');
     expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).toContain('认领 ***');
-    expect(serializeAgentMessage(createUserMessage('我想认领这个任务', undefined, 1, actor)).payload).toContain('我想认领这个任务');
+    expect(serializeAgentMessage(createUserMessage('claim it', undefined, 1, actor)).payload).toContain('claim it');
+    } finally { unregister(); }
+    expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).toContain('认领 ABCD2345');
   });
 
   it('strips an origin-bearing prefix back to the canonical body and round-trips origin', () => {

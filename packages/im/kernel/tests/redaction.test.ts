@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSecretLikeKey, matchChatOwnerClaimText, redactChatOwnerClaimText, redactDecisionPayload, redactSecretText } from '../src/index.js';
+import { containsChatOwnerClaimCode, isSecretLikeKey, matchChatOwnerClaimText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
 
 describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
   it('masks secret keys, omits prompts and hides token-shaped text', () => {
@@ -42,13 +42,26 @@ describe('chat-owner claim text (ADR 0060 §3.3, zhinjs/zhin#1250)', () => {
     expect(matchChatOwnerClaimText('bot 认领 ABCD2345')).toBeUndefined();
   });
 
-  it('redacts the code of claim-shaped lines only', () => {
-    expect(redactChatOwnerClaimText('认领 ABCD2345')).toBe('认领 ***');
-    expect(redactChatOwnerClaimText(' #claim abcd2345 ')).toBe(' #claim *** ');
-    expect(redactChatOwnerClaimText('@bot 认领 ABCD2345')).toBe('@bot 认领 ***');
-    expect(redactChatOwnerClaimText('hello\n认领 ABCD2345\nbye')).toBe('hello\n认领 ***\nbye');
-    for (const text of ['我想认领这个任务', '认领了', 'claim this task', '请认领 ABCD2345', 'no claim here']) {
-      expect(redactChatOwnerClaimText(text)).toBe(text);
+  it('finds the current code however it is written', () => {
+    for (const text of ['认领 ABCD2345', '认领:ABCD2345', '認領 ABCD2345', 'ｃｌａｉｍ ａｂｃｄ２３４５', '认领码ABCD2345',
+      '认领 ABCD2345 谢谢', '认领 ABCD 2345', '认领 abcd-2345!!!!', '认领 AB\u200BCD2345', '@bot 认领 ABCD2345']) {
+      expect(containsChatOwnerClaimCode(text, 'ABCD2345'), text).toBe(true);
     }
+    for (const text of ['认领 ABCD2346', 'claim it', '我想认领这个任务', '']) expect(containsChatOwnerClaimCode(text, 'ABCD2345'), text).toBe(false);
+  });
+
+  it('redacts only a currently open code, and nothing without one', () => {
+    expect(redactChatOwnerClaimText('认领 ABCD2345')).toBe('认领 ABCD2345');
+    expect(redactChatOwnerClaimText('claim it')).toBe('claim it');
+    const unregister = registerChatOwnerClaimCode('ABCD2345');
+    try {
+      expect(redactChatOwnerClaimText('认领 ABCD2345')).toBe('认领 ***');
+      expect(redactChatOwnerClaimText('#claim abcd-2345!!!')).toBe('#claim ***!!!');
+      expect(redactChatOwnerClaimText('hello\n认领 ABCD 2345\nbye')).toBe('hello\n认领 ***\nbye');
+      expect(redactChatOwnerClaimText('ｃｌａｉｍ ＡＢＣＤ２３４５')).toBe('claim ***');
+      // Ordinary chat, and a wrong code, are kept as written.
+      for (const text of ['claim it', '认领 任务', '认领 ZZZZ9999']) expect(redactChatOwnerClaimText(text)).toBe(text);
+    } finally { unregister(); }
+    expect(redactChatOwnerClaimText('认领 ABCD2345')).toBe('认领 ABCD2345');
   });
 });

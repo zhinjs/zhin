@@ -5,9 +5,10 @@
  * event stream, diagnostics, outcomes or the log. Ordinary chat that mentions 认领 still reaches the Agent.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint } from '@zhin.js/adapter';
+import { Adapter, AdapterIndex, createPeerRegistry, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint } from '@zhin.js/adapter';
 import { ImRuntime, ingressRouteToken, type IngressRoute } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
+import { containsChatOwnerClaimCode } from '@zhin.js/kernel';
 import { addTransport, removeTransport, setLevel, getLogger } from '@zhin.js/logger';
 import {
   SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId,
@@ -43,7 +44,9 @@ async function setup() {
   const appended: unknown[] = [];
   const append = events.append.bind(events);
   events.append = async event => { appended.push(event); return append(event); };
-  const im = new ImRuntime({ conversationEvents: events, inboundSecret: createChatOwnerClaimGuard({ claim }) });
+  const peers = createPeerRegistry();
+  peers.declareExternal('qq', 'other-bot');
+  const im = new ImRuntime({ conversationEvents: events, peerRegistry: peers, inboundSecret: createChatOwnerClaimGuard({ claim }) });
   const agent = vi.fn<IngressRoute['route']>(async () => true);
   const route: IngressRoute = { route: agent };
   const adapters = { qq: new TestAdapter(), sandbox: new TestAdapter() };
@@ -74,11 +77,11 @@ async function setup() {
   cleanups.push(async () => { removeTransport(transport); unsubscribe(); await index.stop(); await store.close(); await claim.dispose(); });
   const endpointOf = (name: 'qq' | 'sandbox') => adapters[name].getEndpoint(adapters[name].list()[0]!.instanceId)!;
   let sequence = 0;
-  const send = async (name: 'qq' | 'sandbox', kind: 'private' | 'group', content: string, sender = 'alice') => {
+  const send = async (name: 'qq' | 'sandbox', kind: 'private' | 'group', content: string, sender = 'alice', segments?: readonly object[]) => {
     const endpoint = endpointOf(name);
     const before = endpoint.sent.length;
     const conversation = { endpoint: { id: name, adapter: name }, kind, id: kind === 'private' ? sender : 'room' };
-    await endpoint[endpointSpec].events.message({ conversation, content, endpointId: name === 'qq' ? 'bot' : 'sim', sender: { id: sender }, event: {},
+    await endpoint[endpointSpec].events.message({ conversation, content, ...(segments ? { segments } : {}), endpointId: name === 'qq' ? 'bot' : 'sim', sender: { id: sender }, event: {},
       message: { conversation, id: `m${(sequence += 1)}` } });
     return endpoint.sent.slice(before).map(payload => JSON.stringify(payload)).join('\n');
   };
@@ -87,7 +90,9 @@ async function setup() {
     appended,
     published, logs, diagnostics: im.messageDiagnostics.list(), outcomes: im.messageOutcomes.list(),
   });
-  return { im, appended, claim, roles, agent, send, kept, published, logs };
+  /** Whether anything kept carries `code`, however written. */
+  const leaked = async (code = CODE) => containsChatOwnerClaimCode(await kept(), code);
+  return { im, appended, claim, roles, agent, send, kept, leaked, published, logs };
 }
 
 describe('claim-shaped messages at inbound (#1250)', () => {
@@ -108,13 +113,14 @@ describe('claim-shaped messages at inbound (#1250)', () => {
   });
 
   it.each([
-    ['without the prefix', 'private', `认领 ZZZZ9999`, '不正确'],
-    ['with the prefix', 'private', `#认领 ZZZZ9999`, '不正确'],
-    ['without the prefix', 'group', `认领 ZZZZ9999`, '只接受私聊'],
-    ['with the prefix', 'group', `#认领 ZZZZ9999`, '只接受私聊'],
-  ] as const)('a wrong code %s in a %s chat is answered, not sent to the Agent', async (_label, kind, text, answer) => {
+    ['without the prefix', `认领 ZZZZ9999`],
+    ['with the prefix', `#认领 ZZZZ9999`],
+  ])('a wrong code %s in a private chat is answered and counted, not sent to the Agent', async (_label, text) => {
     const { send, agent, kept, roles, claim } = await setup();
-    expect(await send('qq', kind, text)).toContain(answer);
+    expect(await send('qq', 'private', text)).toContain('不正确');
+    expect(await send('qq', 'private', text)).toContain('不正确');
+    // Counted: the sender is locked after two wrong codes.
+    expect(await send('qq', 'private', text)).toContain('错误次数过多');
     expect(agent).not.toHaveBeenCalled();
     expect(hasGlobalOwner(roles)).toBe(false);
     expect(claim.active).toBe(true);
@@ -122,13 +128,64 @@ describe('claim-shaped messages at inbound (#1250)', () => {
   });
 
   it.each([
+    ['without the prefix', `认领 ZZZZ9999`],
+    ['with the prefix', `#认领 ZZZZ9999`],
+    ['claim it', 'claim it'],
+    ['认领 任务', '认领 任务'],
+  ])('in a group, text without the current code (%s) goes to the Agent while a claim is open', async (_label, text) => {
+    const { send, agent, claim } = await setup();
+    expect(await send('qq', 'group', text)).toBe('');
+    expect(agent).toHaveBeenCalledTimes(1);
+    expect(claim.active).toBe(true);
+  });
+
+  it.each([
+    ['认领:码', `认领:${CODE}`],
+    ['traditional 認領', `認領 ${CODE}`],
+    ['full-width', `ｃｌａｉｍ ａａａａ２２２２`],
+    ['认领码', `认领码${CODE}`],
+    ['trailing words', `认领 ${CODE} 谢谢`],
+    ['split code', `认领 AAAA 2222`],
+    ['trailing punctuation', `认领 ${CODE}!!!!`],
+    ['zero-width characters', `认领 AA\u200BAA\u200D2222`],
+    ['lower case with a hyphen', `claim aaaa-2222`],
+  ])('a private message carrying the current code (%s) claims, and nothing keeps the code', async (_label, text) => {
+    const { send, agent, leaked, roles } = await setup();
+    expect(await send('qq', 'private', text)).toContain('认领成功');
+    expect(hasGlobalOwner(roles)).toBe(true);
+    expect(agent).not.toHaveBeenCalled();
+    expect(await leaked()).toBe(false);
+  });
+
+  it('a group message that @mentions the bot and carries the code burns it', async () => {
+    const { send, agent, leaked, claim } = await setup();
+    const reply = await send('qq', 'group', `@bot 认领 ${CODE}`, 'alice',
+      [{ type: 'mention', data: { target: 'bot' } }, { type: 'text', data: { text: ` 认领 ${CODE}` } }]);
+    expect(reply).toContain('只接受私聊');
+    expect(agent).not.toHaveBeenCalled();
+    expect(await leaked()).toBe(false);
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+  });
+
+  it('a peer bot posting the code in a group burns it without a reply or a record', async () => {
+    const { send, agent, leaked, claim, appended } = await setup();
+    expect(await send('qq', 'group', `认领 ${CODE}`, 'other-bot')).toBe('');
+    expect(agent).not.toHaveBeenCalled();
+    expect(appended).toHaveLength(0);
+    expect(await leaked()).toBe(false);
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.active).toBe(true);
+  });
+
+  it.each([
     ['without the prefix', `认领 ${CODE}`],
     ['with the prefix', `#认领 ${CODE}`],
   ])('a correct code %s in a group is burnt and kept from the Agent', async (_label, text) => {
-    const { send, agent, kept, roles } = await setup();
+    const { send, agent, leaked, roles } = await setup();
     expect(await send('qq', 'group', text)).toContain('只接受私聊');
     expect(agent).not.toHaveBeenCalled();
-    expect(await kept()).not.toContain(CODE);
+    expect(await leaked()).toBe(false);
     // Burnt: the code no longer works in private either; the new one does.
     expect(await send('qq', 'private', `认领 ${CODE}`)).toContain('不正确');
     expect(await send('qq', 'private', `认领 ${NEXT}`, 'bob')).toContain('认领成功');
@@ -162,7 +219,7 @@ describe('claim-shaped messages at inbound (#1250)', () => {
   });
 
   it('after a global owner exists nothing is taken: claim-shaped text reaches the Agent as usual', async () => {
-    const { send, agent, roles, claim } = await setup();
+    const { send, agent, roles, claim, kept } = await setup();
     await roles.store.grant({ level: 'global', key: '', adapter: 'tg', userId: 'boss', role: 'owner' });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(claim.active).toBe(false);
@@ -171,5 +228,19 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     expect(String(agent.mock.calls[0]![0].content)).toBe('claim reward');
     await send('qq', 'group', '认领 任务');
     expect(agent).toHaveBeenCalledTimes(2);
+    // The prefixed form is not taken either: it reaches the command dispatcher (here no commands: the Agent).
+    await send('qq', 'private', '#认领 xxx');
+    expect(agent).toHaveBeenCalledTimes(3);
+    // Nothing to redact without an open claim.
+    expect(await kept()).toContain('#认领 xxx');
+  });
+
+  it('a native platform event carrying the open code is withheld from native Handlers', async () => {
+    const { claim } = await setup();
+    const guard = createChatOwnerClaimGuard({ claim });
+    expect(guard.inspectNative?.({ message: { elements: [{ type: 'text', text: `认领 ${CODE}` }] } })).toBe(true);
+    expect(guard.inspectNative?.({ message: { elements: [{ type: 'text', text: 'claim it' }] } })).toBe(false);
+    await claim.close();
+    expect(guard.inspectNative?.({ text: `认领 ${CODE}` })).toBe(false);
   });
 });
