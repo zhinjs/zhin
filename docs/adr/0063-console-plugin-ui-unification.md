@@ -311,7 +311,7 @@ sidebar: false
 
 ## 分阶段计划
 
-版本级别按 `.changeset/version-policy.json`：默认是 patch，minor 及以上需要所有者批准。新包首发为 minor（`0.1.0` 起，进入正式发布时转为 `1.0.0`）。删除 `@zhin.js/client/ui` 子路径和 `zk-` 类名虽然对第三方手写页面是破坏性的，但所有者决定**走 minor，不等 major**（D11）：P2 发布时弃用并告警，至少经过一个 minor 的弃用期（与 ADR 0062 Q0b「至少告警一个 minor」的节奏一致），在之后的 minor（P4）中删除。`@zhin.js/client/ui` 不在 `public-api-surface` 的 `stable` 清单中，所以不受「`stable` 入口到 major 才删除」的限制。
+版本级别按 `.changeset/version-policy.json`：默认是 patch，minor 及以上需要所有者批准。新包 `@zhin.js/console-ui` **直接以 `1.0.0` 首发**（2026-11-15 所有者决定，原计划从 `0.1.0` 起）：插件以 `peerDependencies`（`workspace:^`）声明它，0.x 下每次 minor 都会超出插件声明的范围，changesets 会把所有声明它的插件连带升为 major；从 1.0.0 起，1.x 内的 minor 都在 `^1` 范围内。`package.json` 记 `1.0.0-0`，由一个 patch changeset 升到 `1.0.0`（默认的 patch 级别，不需要额外批准）。删除 `@zhin.js/client/ui` 子路径和 `zk-` 类名虽然对第三方手写页面是破坏性的，但所有者决定**走 minor，不等 major**（D11）：P2 发布时弃用并告警，至少经过一个 minor 的弃用期（与 ADR 0062 Q0b「至少告警一个 minor」的节奏一致），在之后的 minor（P4）中删除。`@zhin.js/client/ui` 不在 `public-api-surface` 的 `stable` 清单中，所以不受「`stable` 入口到 major 才删除」的限制。
 
 | 阶段 | 内容 | 涉及的包 | 版本 | 验收 |
 | --- | --- | --- | --- | --- |
