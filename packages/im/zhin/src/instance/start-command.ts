@@ -601,6 +601,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   const runtimeFailureSources = {
     journal: runtimeFailures,
+    ...(agentHost ? { prune: () => agentHost.pruneFailureJournal() } : {}),
     endpoints: () => im.endpoints.list(),
     mcpServers: () => {
       const lease = host.runtime.snapshots.acquire();
@@ -677,7 +678,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     try {
       disposeReadiness();
       stopRuntimeFailureSync();
-      syncRuntimeFailures(runtimeFailureSources);
+      syncRuntimeFailures({ journal: runtimeFailures, endpoints: runtimeFailureSources.endpoints, mcpServers: runtimeFailureSources.mcpServers });
       disposeConsoleControlPlane();
       consoleTerminal?.close();
       await consoleIam?.dispose();
@@ -871,6 +872,8 @@ interface ConfiguredAgentHost {
   personalPrincipalSeeds(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot | undefined): readonly import('./chat-personal-principals.js').PersonalPrincipalSeed[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
+  /** Drops journaled account / model failures that are no longer current (#1270). */
+  pruneFailureJournal(): Promise<void>;
   /** Host model accounts that need an operator (#1270). */
   accountAttention(): Promise<readonly import('./console/module.js').InferenceAccountAttentionRow[]>;
   /** Effect of each `purposes.agents` key in the generation of `lease` (#1270). */
@@ -993,6 +996,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
     })),
     ambientModels: input => inference.ambientModels(input),
     accountAttention: () => inference.accountAttention(),
+    pruneFailureJournal: () => inference.pruneFailureJournal(),
     purposeEffects: lease => inference.purposeEffects(lease),
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');

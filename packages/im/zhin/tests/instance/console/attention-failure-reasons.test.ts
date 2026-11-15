@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CONSOLE_ATTENTION_KINDS, CONSOLE_ATTENTION_KIND_PERMISSIONS, grantsAllow, type ConsoleGrant, type ConsoleScopeTarget } from '@zhin.js/console-protocol';
 import {
+  AttentionSourceCache,
   AttentionWarnings,
+  attentionFailureReason,
   collectAttention,
   preparationHint,
   type AttentionSources,
@@ -120,5 +122,93 @@ describe('attention.list failure reasons (#1270)', () => {
     expect(preparationHint({ reason: 'transport' })).toBe('retry');
     expect(preparationHint({ reason: 'UNAVAILABLE', upstreamStatus: 503 })).toBe('retry');
     expect(preparationHint({ reason: 'PERMISSION_DENIED', upstreamStatus: 403 })).toBe('other');
+  });
+
+  // Review of #1278: every sample that used to pass through unmasked.
+  it.each([
+    ['{"access_token":"ya29.a0AfH6SMBx","refresh_token":"1//0gLx"}', '{"access_token":***,"refresh_token":***}'],
+    ['GET https://generativelanguage.googleapis.com/v1/models?key=AIzaSyDUMMYDUMMYDUMMYDUMMY failed', 'GET https://generativelanguage.googleapis.com/v1/models?*** failed'],
+    ['GET /v1/models?key=AIzaSyDUMMYDUMMYDUMMYDUMMY failed', 'GET …/models?key=*** failed'],
+    ['request failed with Cookie: session=abc123; theme=dark', 'request failed with Cookie: ***'],
+    ['invalid key sk-proj-abcdef123456 rejected', 'invalid key *** rejected'],
+    ['Authorization: sk-abc123456', 'Authorization: ***'],
+    ['authorization=Token abc123', 'authorization=Token ***'],
+    ["x-api-key: 'abc'", 'x-api-key: ***'],
+    ['api_key=abc&other=1', 'api_key=***&other=1'],
+    ['secret: s3cr3t, password=hunter2', 'secret: ***, password=***'],
+    ['leaked AIzaSyDUMMYDUMMYDUMMYDUMMYXX here', 'leaked *** here'],
+    ['opaque abcdefghijklmnopqrstuvwxyz0123 value', 'opaque *** value'],
+  ])('masks %s', (input, expected) => {
+    expect(attentionFailureReason(new Error(input))).toBe(expected);
+  });
+
+  it('keeps ordinary codes and statuses readable', () => {
+    expect(attentionFailureReason('Account preparation failed: code=project-unavailable step=onboard-operation upstreamStatus=200 reason=UNSUPPORTED_CLIENT'))
+      .toBe('Account preparation failed: code=project-unavailable step=onboard-operation upstreamStatus=200 reason=UNSUPPORTED_CLIENT');
+    expect(attentionFailureReason('connect ECONNREFUSED 127.0.0.1:443')).toBe('connect ECONNREFUSED 127.0.0.1:443');
+  });
+
+  // Review of #1278: the server filters every kind by the permission CONSOLE_ATTENTION_KIND_PERMISSIONS names.
+  function sourcesForEveryKind(): AttentionSources {
+    return {
+      loginTasks: () => [{ id: 'login-1', adapter: 'icqq', endpointKey: '10001', type: 'qrcode', createdAt: NOW - 1 }],
+      endpoints: () => [{ adapter: 'qq', name: 'bot', connected: false, phase: 'offline', transportState: 'closed' }],
+      endpointConfigDrift: async () => [{ instanceKey: 'qq', adapter: 'qq', configOnly: ['a'], savedOnly: [], changed: [] }],
+      plugins: async () => ({
+        dependencies: { status: 'failed', error: 'Missing service: database' },
+        states: [
+          { status: 'fulfilled', value: { instanceKey: 'weather', status: 'degraded', dependencies: 'passed', disabled: false, issues: ['broken'],
+            validation: { valid: false, errors: [{ path: 'key', message: 'required' }], missingEnv: [] } } },
+        ],
+      }),
+      configuration: {
+        source: async () => { throw Object.assign(new Error('bad'), { code: 'EACCES' }); },
+      },
+      toolApprovals: () => [{ id: 'appr-1', toolName: 'group_kick', sessionKey: 's', createdAt: NOW - 1 }],
+      mcpServers: () => [{ name: 'search', connected: false }],
+      unschedulableJobs: () => [{ jobId: 'job-1', reason: 'no_next_run', since: NOW - 1 }],
+      errorLogs: async () => ({ count: 1, latest: new Date(NOW).toISOString() }),
+      chatRoles: async () => ({ hasGlobalOwner: false, claimOpen: false,
+        imported: { at: NOW - 1, entries: [{ source: 'qq.owner', adapter: 'qq', userId: '1', role: 'owner', level: 'global', result: 'granted' }] },
+        pending: [{ id: 'p1', source: 'qq.admins', adapter: 'qq', userId: '2', role: 'admin', seenAt: NOW - 1 }] }),
+      inferenceAccounts: async () => [{ accountId: 'accounts:a', label: 'A', serviceLabel: 'S', state: 'reauthorize', revision: 1 }],
+      ineffectiveConfig: async () => [{ path: 'purposes.agents.typo', reason: 'no-target' }],
+    };
+  }
+
+  it('produces every kind for a principal holding every permission', async () => {
+    const kinds = new Set((await collectAttention(sourcesForEveryKind(), { allows: owner, now: () => NOW })).items.map(item => item.kind));
+    // config.invalid and config.apply-failed come from the same read; this fixture makes the file unreadable.
+    expect([...CONSOLE_ATTENTION_KINDS].filter(kind => !kinds.has(kind)).sort()).toEqual(['config.apply-failed', 'config.literal-secrets']);
+  });
+
+  it.each(Object.entries(CONSOLE_ATTENTION_KIND_PERMISSIONS))('lists %s only with %s', async (kind, permission) => {
+    const only = (granted: (name: string) => boolean) => collectAttention(sourcesForEveryKind(), {
+      allows: name => granted(name), allowsPluginPermission: name => granted(name), now: () => NOW });
+    const kindsWith = new Set((await only(name => name === permission)).items.map(item => item.kind));
+    // `tool-approval.pending` also accepts the other approval level, `ops:approve`.
+    const alternatives = kind === 'tool-approval.pending' ? [permission, 'ops:approve'] : [permission];
+    const kindsWithout = new Set((await only(name => !alternatives.includes(name))).items.map(item => item.kind));
+    if (kind !== 'config.apply-failed' && kind !== 'config.literal-secrets') expect(kindsWith.has(kind as never)).toBe(true);
+    expect(kindsWithout.has(kind as never)).toBe(false);
+  });
+
+  it('hides config.ineffective and inference.account from a principal without agent.view', async () => {
+    const list = await collectAttention(sourcesForEveryKind(), { allows: name => name !== 'agent.view', now: () => NOW });
+    expect(list.items.some(item => item.kind === 'config.ineffective' || item.kind === 'inference.account')).toBe(false);
+    expect(list.unavailable).toBeUndefined();
+  });
+
+  it('shares the model account read between requests through the 15 s cache', async () => {
+    let reads = 0;
+    let clock = NOW;
+    const sources: AttentionSources = { inferenceAccounts: async () => { reads += 1; return []; } };
+    const cache = new AttentionSourceCache({ now: () => clock });
+    await collectAttention(sources, { allows: owner, cache });
+    await collectAttention(sources, { allows: owner, cache });
+    expect(reads).toBe(1);
+    clock += 15_000;
+    await collectAttention(sources, { allows: owner, cache });
+    expect(reads).toBe(2);
   });
 });

@@ -41,7 +41,7 @@ export {
   defineFeatureOverrideTable, FeatureOverrideStore, FeatureOverrideStorageUnavailableError, FEATURE_OVERRIDE_TABLE,
 } from './feature-override-store.js';
 export {
-  MAX_RUNTIME_FAILURES, RuntimeFailureJournal, endpointFailureSubject, readRuntimeFailureFile, startRuntimeFailureSync,
+  MAX_RUNTIME_FAILURES, RUNTIME_FAILURE_ABSENT_GRACE_MS, RuntimeFailureJournal, endpointFailureSubject, readRuntimeFailureFile, startRuntimeFailureSync,
   syncEndpointFailures, syncMcpFailures, syncRuntimeFailures,
   type RuntimeFailureEndpointRow, type RuntimeFailureEntry, type RuntimeFailureJournalOptions, type RuntimeFailureMcpRow,
   type RuntimeFailureReport, type RuntimeFailureSyncOptions,

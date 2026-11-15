@@ -10,8 +10,9 @@
  * `.zhin/gateway.db` (ADR 0059). Messages are redacted with {@link attentionFailureReason}; no
  * entry carries a credential, an upstream body, a URL with user info or an absolute path.
  */
-import { readFileSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { lstatSync, readFileSync } from 'node:fs';
+import { lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   RUNTIME_FAILURES_FILE,
@@ -25,6 +26,8 @@ const SOURCES: ReadonlySet<string> = new Set(['account', 'endpoint', 'mcp', 'mod
 const CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u;
 /** Bound on the file: the oldest entries are dropped first. */
 export const MAX_RUNTIME_FAILURES = 500;
+/** How long an Endpoint / MCP subject may be missing from its list before its entry is dropped. */
+export const RUNTIME_FAILURE_ABSENT_GRACE_MS = 10 * 60_000;
 
 export interface RuntimeFailureReport {
   readonly source: ConsoleRuntimeFailureSource;
@@ -88,7 +91,11 @@ function parseEntry(value: unknown): ConsoleRuntimeFailure | undefined {
 /** Reads `.zhin/runtime-failures.json`; a missing or unreadable file is an empty journal. */
 export function readRuntimeFailureFile(file: string): readonly ConsoleRuntimeFailure[] {
   let text: string;
-  try { text = readFileSync(file, 'utf8'); } catch { return []; }
+  try {
+    // Never follow a planted link out of `.zhin/`.
+    if (!lstatSync(file).isFile()) return [];
+    text = readFileSync(file, 'utf8');
+  } catch { return []; }
   try {
     const document = JSON.parse(text) as Partial<ConsoleRuntimeFailureJournal>;
     if (!document || document.version !== 1 || !Array.isArray(document.entries)) return [];
@@ -101,6 +108,8 @@ export function readRuntimeFailureFile(file: string): readonly ConsoleRuntimeFai
 export class RuntimeFailureJournal {
   readonly file: string;
   readonly #entries = new Map<string, RuntimeFailureEntry>();
+  /** When each entry's subject was first seen missing by {@link retain} (process-local). */
+  readonly #absentSince = new Map<string, number>();
   readonly #now: () => number;
   readonly #warn: (message: string) => void;
   #writing: Promise<void> | undefined;
@@ -159,14 +168,29 @@ export class RuntimeFailureJournal {
 
   /** Forgets the subject's failure after a success; never throws. */
   clear(source: ConsoleRuntimeFailureSource, subject: string): void {
+    this.#absentSince.delete(key(source, subject));
     if (this.#entries.delete(key(source, subject))) this.#schedule();
   }
 
-  /** Forgets every entry of `source` whose subject `keep` rejects (e.g. removed accounts). */
-  retain(source: ConsoleRuntimeFailureSource, keep: (subject: string) => boolean): void {
+  /**
+   * Forgets entries of `source` whose subject `keep` rejects. With `graceMs` (default
+   * {@link RUNTIME_FAILURE_ABSENT_GRACE_MS}) an entry goes only after its subject has been missing
+   * for that long without interruption, so a subject that briefly drops out of its list (a hot
+   * reload, an Agent generation switch) keeps its reason, 「重启前记录」 included. `graceMs: 0`
+   * forgets at once (a subject known to be removed, e.g. an account deleted from the graph).
+   */
+  retain(source: ConsoleRuntimeFailureSource, keep: (subject: string) => boolean, options: Readonly<{ graceMs?: number }> = {}): void {
+    const grace = options.graceMs ?? RUNTIME_FAILURE_ABSENT_GRACE_MS;
+    const now = this.#now();
     let changed = false;
     for (const [id, entry] of this.#entries) {
-      if (entry.source === source && !keep(entry.subject)) { this.#entries.delete(id); changed = true; }
+      if (entry.source !== source) continue;
+      if (keep(entry.subject)) { this.#absentSince.delete(id); continue; }
+      const since = this.#absentSince.get(id) ?? now;
+      if (grace > 0 && now - since < grace) { this.#absentSince.set(id, since); continue; }
+      this.#entries.delete(id);
+      this.#absentSince.delete(id);
+      changed = true;
     }
     if (changed) this.#schedule();
   }
@@ -209,20 +233,32 @@ export class RuntimeFailureJournal {
   async #write(): Promise<void> {
     const entries = [...this.#entries.values()].map(({ restored: _restored, ...entry }) => entry);
     const document: ConsoleRuntimeFailureJournal = { version: 1, entries };
-    const temporary = `${this.file}.${process.pid}.tmp`;
+    // Unpredictable name, created exclusively (`wx`): a pre-placed file or link is never written through.
+    const temporary = `${this.file}.${randomBytes(8).toString('hex')}.tmp`;
     try {
+      await assertNotLink(this.file);
       if (!entries.length) {
         await rm(this.file, { force: true });
         return;
       }
       await mkdir(dirname(this.file), { recursive: true });
-      await writeFile(temporary, `${JSON.stringify(document, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+      await writeFile(temporary, `${JSON.stringify(document, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
       await rename(temporary, this.file);
     } catch (error) {
       await rm(temporary, { force: true }).catch(() => undefined);
       this.#warn(`runtime failure journal not written: ${attentionFailureReason(error)}`);
     }
   }
+}
+
+/** Refuses a journal path that is a symbolic link (or anything but a regular file); a missing file is fine. */
+async function assertNotLink(file: string): Promise<void> {
+  let info;
+  try { info = await lstat(file); } catch (error) {
+    if ((error as { code?: unknown }).code === 'ENOENT') return;
+    throw error;
+  }
+  if (!info.isFile()) throw new Error(`${RUNTIME_FAILURES_FILE} is not a regular file (symbolic link refused)`);
 }
 
 // ---------------------------------------------------------------- polled sources
@@ -247,7 +283,7 @@ export const endpointFailureSubject = (adapter: string, name: string) => `${adap
 
 /**
  * Mirrors the Endpoint start failures into the journal: a failed row records (once per failed
- * attempt), a connected row clears, a row that no longer exists is forgotten. A row that is merely
+ * attempt), a connected row clears, a row missing from the list for longer than the grace period is forgotten. A row that is merely
  * offline without a new failure keeps its entry (its reason is still the latest one).
  */
 export function syncEndpointFailures(journal: RuntimeFailureJournal, rows: readonly RuntimeFailureEndpointRow[]): void {
@@ -284,6 +320,8 @@ export interface RuntimeFailureSyncOptions {
   readonly endpoints?: () => readonly RuntimeFailureEndpointRow[];
   /** Current MCP rows; may throw while the runtime is not ready (the round is skipped). */
   readonly mcpServers?: () => readonly RuntimeFailureMcpRow[];
+  /** Drops journaled account / model failures that are no longer current (`HostInference.pruneFailureJournal`). */
+  readonly prune?: () => Promise<void>;
   /** Default 30 s. */
   readonly intervalMs?: number;
 }
@@ -296,6 +334,7 @@ export function syncRuntimeFailures(options: Omit<RuntimeFailureSyncOptions, 'in
   if (options.mcpServers) {
     try { syncMcpFailures(options.journal, options.mcpServers()); } catch { /* not ready */ }
   }
+  if (options.prune) void options.prune().catch(() => undefined);
 }
 
 /** Mirrors the polled sources into the journal every `intervalMs` (unref'd); returns the stop function. */

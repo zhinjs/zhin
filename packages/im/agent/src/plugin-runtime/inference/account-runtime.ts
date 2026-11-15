@@ -683,7 +683,18 @@ export class HostAccountRuntime {
       payload: CredentialPayload;
     }>
   ): Promise<OpenCredential> {
-    return publishAccountCredential(this.#context(), input);
+    const published = await publishAccountCredential(this.#context(), input);
+    // #1270: a new credential revision (re-login, disconnect, refresh) voids the journaled failures
+    // of the old one, so nothing reads them as current.
+    if (published.record.revision !== input.previous?.record.revision) {
+      try {
+        const journal = this.options.failureJournal;
+        const entry = journal?.get('account', input.account.id);
+        if (entry && entry.credentialRevision !== published.record.revision) journal!.clear('account', input.account.id);
+        journal?.clear('model', input.account.id);
+      } catch { /* the journal never breaks a credential write */ }
+    }
+    return published;
   }
 
   #signal(account: ProviderAccount): AbortSignal {

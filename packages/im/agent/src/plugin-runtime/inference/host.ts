@@ -32,7 +32,7 @@ import { HostAccountRuntime } from './account-runtime.js';
 import { createProviderNetwork, matchesProviderTarget } from './network.js';
 import { InferenceManagementService, InferenceManagementError, inferencePurposeEffects, type InferencePurposeEffect } from './management.js';
 import type { AccountStatusView } from './account-runtime-helpers.js';
-import type { InferenceFailureJournal } from './failure-journal.js';
+import { pruneInferenceFailures, type InferenceFailureJournal } from './failure-journal.js';
 import { projectProviderSupport } from './support-metadata.js';
 import { InferenceSessionRepository } from './session-state.js';
 import { resolveInferenceTurnContext } from './turn-context.js';
@@ -149,10 +149,33 @@ export class HostInference {
     });
   }
 
+  /**
+   * Drops journaled account / model failures that are no longer current (#1270): accounts removed
+   * from the graph, and account entries of another credential revision than the stored one.
+   */
+  async pruneFailureJournal(): Promise<void> {
+    const journal = this.options.failureJournal;
+    if (!journal) return;
+    const graph = await this.repository.readGraph({ rootId: this.rootId });
+    if (!graph) return;
+    pruneInferenceFailures(journal, await this.accounts.statuses({ graph, accounts: Object.values(graph.accounts) }));
+  }
+
+  #pruneFailureJournal(graph: Readonly<{ accounts: Readonly<Record<string, unknown>> }>): void {
+    const journal = this.options.failureJournal;
+    if (!journal?.retain) return;
+    const exists = (subject: string) => Object.hasOwn(graph.accounts, subject);
+    try {
+      journal.retain('account', exists, { graceMs: 0 });
+      journal.retain('model', exists, { graceMs: 0 });
+    } catch { /* never breaks a read */ }
+  }
+
   /** Host-owned accounts that need an operator (#1270); empty while inference storage is unavailable. */
   async accountAttention(): Promise<readonly InferenceAccountAttention[]> {
     const graph = await this.repository.readGraph({ rootId: this.rootId });
     if (!graph) return [];
+    this.#pruneFailureJournal(graph);
     const accounts = Object.values(graph.accounts).filter(account => account.ownerId === this.hostOwnerId);
     const statuses = await this.accounts.statuses({ graph, accounts });
     const rows: InferenceAccountAttention[] = [];

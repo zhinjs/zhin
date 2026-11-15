@@ -1,10 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RUNTIME_FAILURES_FILE } from '@zhin.js/console-protocol';
+import { pruneInferenceFailures } from '@zhin.js/agent/runtime';
 import {
   MAX_RUNTIME_FAILURES,
+  RUNTIME_FAILURE_ABSENT_GRACE_MS,
   RuntimeFailureJournal,
   readRuntimeFailureFile,
   syncEndpointFailures,
@@ -94,9 +96,78 @@ describe('RuntimeFailureJournal (#1270)', () => {
 
     syncMcpFailures(journal, [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 10 } }]);
     expect(journal.get('mcp', 'search')).toMatchObject({ code: 'connect-failed', category: 'network' });
-    syncMcpFailures(journal, []);
+    syncMcpFailures(journal, [{ name: 'search', connected: true }]);
     expect(journal.get('mcp', 'search')).toBeUndefined();
     // A source that cannot be read (the Root is starting) is skipped.
     expect(() => syncRuntimeFailures({ journal, endpoints: () => { throw new Error('not ready'); } })).not.toThrow();
+  });
+
+  it('keeps the entry of a subject that only briefly drops out of its list (hot reload), restored ones included', async () => {
+    const root = project();
+    let clock = 1_000;
+    const before = RuntimeFailureJournal.open(root, { now: () => clock });
+    before.record({ source: 'mcp', subject: 'github', code: 'connect-failed', category: 'auth', message: 'HTTP 401', at: 900 });
+    before.record({ source: 'endpoint', subject: 'qq/bot', code: 'start-failed', category: 'network', message: 'ECONNRESET', at: 950 });
+    await before.close();
+    const journal = RuntimeFailureJournal.open(root, { now: () => clock });
+    // A generation switch: the lists are empty for a moment.
+    syncMcpFailures(journal, []);
+    syncEndpointFailures(journal, []);
+    expect(journal.get('mcp', 'github')).toMatchObject({ restored: true });
+    expect(journal.get('endpoint', 'qq/bot')).toMatchObject({ restored: true });
+    // Back within the grace period: nothing is lost, and a later absence starts a new period.
+    clock += RUNTIME_FAILURE_ABSENT_GRACE_MS - 1;
+    syncMcpFailures(journal, [{ name: 'github', connected: false }]);
+    expect(journal.get('mcp', 'github')?.restored).toBe(true);
+    clock += 10;
+    syncMcpFailures(journal, []);
+    expect(journal.get('mcp', 'github')).toBeDefined();
+    // Gone for longer than the grace period: forgotten.
+    clock += RUNTIME_FAILURE_ABSENT_GRACE_MS;
+    syncEndpointFailures(journal, []);
+    syncMcpFailures(journal, []);
+    expect(journal.get('endpoint', 'qq/bot')).toBeUndefined();
+    expect(journal.get('mcp', 'github')).toBeUndefined();
+  });
+
+  it('drops account and model entries that are no longer current (deleted, signed out, another credential revision)', () => {
+    const journal = new RuntimeFailureJournal(join(project(), RUNTIME_FAILURES_FILE));
+    const preparation = (subject: string, credentialRevision: number) => journal.record({ source: 'account', subject, code: 'project-unavailable',
+      category: 'preparation', message: 'x', credentialRevision });
+    const model = (subject: string) => journal.record({ source: 'model', subject, code: 'rate-limit', category: 'rate-limit', message: 'x' });
+    preparation('current', 2); model('current');
+    preparation('deleted', 1); model('deleted');
+    preparation('relogged', 2);
+    preparation('disconnected', 3); model('disconnected');
+    pruneInferenceFailures(journal, {
+      current: { status: 'authenticated', preparation: 'required', revision: 2 },
+      relogged: { status: 'authenticated', preparation: 'required', revision: 4 },
+      disconnected: { status: 'disconnected', revision: 4 },
+    });
+    expect(journal.list().map(entry => `${entry.source}:${entry.subject}`).sort()).toEqual(['account:current', 'model:current']);
+  });
+
+  it('never writes through a symbolic link and uses an exclusive, unpredictable temporary file', async () => {
+    const root = project();
+    mkdirSync(join(root, '.zhin'), { recursive: true });
+    const target = join(root, 'elsewhere.json');
+    writeFileSync(target, 'untouched');
+    symlinkSync(target, join(root, RUNTIME_FAILURES_FILE));
+    const warnings: string[] = [];
+    const journal = RuntimeFailureJournal.open(root, { warn: message => warnings.push(message) });
+    expect(journal.list()).toEqual([]);
+    journal.record({ source: 'mcp', subject: 'x', code: 'connect-failed', category: 'network', message: 'down' });
+    await journal.flush();
+    expect(readFileSync(target, 'utf8')).toBe('untouched');
+    expect(lstatSync(join(root, RUNTIME_FAILURES_FILE)).isSymbolicLink()).toBe(true);
+    expect(warnings).toEqual([expect.stringContaining('symbolic link refused')]);
+    rmSync(join(root, RUNTIME_FAILURES_FILE));
+    // A pre-placed `<file>.<pid>.tmp` no longer matters: the name is random and created with `wx`.
+    writeFileSync(join(root, `${RUNTIME_FAILURES_FILE}.${process.pid}.tmp`), 'planted');
+    journal.record({ source: 'mcp', subject: 'y', code: 'connect-failed', category: 'network', message: 'down again' });
+    await journal.flush();
+    expect(JSON.parse(readFileSync(join(root, RUNTIME_FAILURES_FILE), 'utf8')).entries).toHaveLength(2);
+    expect(readFileSync(join(root, `${RUNTIME_FAILURES_FILE}.${process.pid}.tmp`), 'utf8')).toBe('planted');
+    expect(lstatSync(join(root, RUNTIME_FAILURES_FILE)).mode & 0o777).toBe(0o600);
   });
 });

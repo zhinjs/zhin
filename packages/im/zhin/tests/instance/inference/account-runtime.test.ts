@@ -229,6 +229,19 @@ it('journals the latest failed model call of an account and clears it on the nex
   } finally { await fixture.close(); }
 });
 
+it('clears journaled failures of the old credential when a new one is published (re-login, #1270)', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  try {
+    journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 0 });
+    journal.record({ source: 'model', subject: 'account', code: 'auth', category: 'auth', message: 'x', upstreamStatus: 401 });
+    const signal = new AbortController().signal, login = await fixture.host.beginLogin({ account: fixture.account, signal });
+    await fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+    expect((await fixture.host.status(fixture.account)).revision).toBeGreaterThan(0);
+    expect(journal.list()).toEqual([]);
+  } finally { await fixture.close(); }
+});
+
 it('ignores a journaled preparation failure of another credential revision', async () => {
   const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
   journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 1 });

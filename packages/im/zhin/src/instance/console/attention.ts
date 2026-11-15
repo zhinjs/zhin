@@ -309,21 +309,41 @@ export function allowsEndpointAccount(allows: AttentionAllows, permission: strin
 
 const MAX_REASON = 200;
 
+/** Key names whose value is a credential (also matched inside longer names such as `x-api-key`). */
+const CREDENTIAL_KEY = String.raw`[\w-]*(?:authorization|cookie|token|secret|password|passwd|credential|api[-_]?key|access[-_]?key|private[-_]?key|key)[\w-]*`;
+const CREDENTIAL_PAIR = new RegExp(
+  String.raw`(["']?)\b(${CREDENTIAL_KEY})\1(\s*[=:]\s*)(?:(Bearer|Basic|Token)\s+)?("[^"]*"|'[^']*'|[^\s,;&"']+)`, 'giu');
+
 /**
- * A short, sanitized explanation of a failure for operators: the first line of its message with
- * absolute paths reduced to their last segment and credentials (`Bearer …`, `token=…`, URL user
- * info) masked.
+ * A short, sanitized explanation of a failure for operators — the only redaction applied before a
+ * reason is shown or written to `.zhin/runtime-failures.json` (#1270). Same rules as the Adapter's
+ * start-failure redaction, plus path shortening: the first line of the message; URL user info and
+ * query strings removed; values of credential-like keys (`authorization`, `cookie`, `key`,
+ * `api_key`, `access_token`, `refresh_token`, `secret`, `password`, `token` …, quoted JSON keys
+ * included) masked, with or without an `Authorization` scheme; whole `Cookie:` headers masked;
+ * bare `sk-…` / `AIza…` keys and runs of 24+ token characters with a digit masked; absolute paths reduced to
+ * their last segment.
  */
 export function attentionFailureReason(error: unknown): string {
   const record = error && typeof error === 'object' ? error as { message?: unknown } : undefined;
   const raw = typeof error === 'string' ? error : typeof record?.message === 'string' ? record.message : '';
   let text = (raw.split(/\r?\n/u).find(line => line.trim()) ?? '').trim();
   text = text
-    .replace(/\b(Bearer|Basic)\s+[^\s,;]+/giu, '$1 ***')
-    .replace(/\b([\w-]*(?:token|secret|password|passwd|api[-_]?key|access[-_]?key|credential)[\w-]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/giu, '$1$2***')
+    // URL user info and query / fragment.
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, '$1***@')
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#'"`]*)[?#][^\s'"`]*/giu, '$1?***')
+    // Whole cookie headers: every `name=value` of them is a credential.
+    .replace(/\b((?:set-)?cookie)(\s*:\s*)[^\r\n]*/giu, '$1$2***')
+    .replace(/\b(Bearer|Basic)\s+(?!\*\*\*)[^\s,;"']+/giu, '$1 ***')
+    .replace(CREDENTIAL_PAIR, (_match, quote: string, key: string, separator: string, scheme: string | undefined, value: string) =>
+      `${quote}${key}${quote}${separator}${scheme ? `${scheme} ` : ''}${value === '***' ? value : '***'}`)
+    // Bare provider keys and long token-like runs.
+    .replace(/\bsk-[A-Za-z0-9_-]{6,}/gu, '***')
+    .replace(/\bAIza[0-9A-Za-z_-]{10,}/gu, '***')
     .replace(/(?:\b[A-Za-z]:\\|\\\\)[^\s'"`]*/gu, path => `…\\${path.split(/[\\/]/u).filter(Boolean).pop() ?? ''}`)
-    .replace(/(^|[\s'"`(=])((?:\/[^\s'"`/)]+)+\/?)/gu, (_match, before: string, path: string) => `${before}…/${path.split('/').filter(Boolean).pop() ?? ''}`);
+    .replace(/(^|[\s'"`(=])((?:\/[^\s'"`/)]+)+\/?)/gu, (_match, before: string, path: string) => `${before}…/${path.split('/').filter(Boolean).pop() ?? ''}`)
+    // Token-like: 24+ token characters with at least one digit (plain hyphenated codes stay readable).
+    .replace(/(?=[A-Za-z0-9_\-+/=]*\d)[A-Za-z0-9_\-+/=]{24,}/gu, '***');
   if (!text) return 'unknown error';
   return text.length > MAX_REASON ? `${text.slice(0, MAX_REASON - 1)}…` : text;
 }
@@ -376,7 +396,7 @@ export function isAttentionNotReady(error: unknown): boolean {
 // ---------------------------------------------------------------- shared reads
 
 /** Sources whose raw reads are shared between requests (the rest are live and cheap). */
-export type AttentionCachedSource = 'plugins' | 'config' | 'mcp' | 'logs';
+export type AttentionCachedSource = 'plugins' | 'config' | 'mcp' | 'logs' | 'inference' | 'agent-config';
 
 export interface AttentionSourceCacheOptions {
   /** How long a raw read is reused (default 15 s). */
@@ -1048,7 +1068,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
 
   // #1270: Host model accounts that need an operator.
   if (sources.inferenceAccounts && allows(P.AGENT_VIEW)) {
-    await read('inference', async () => (await sources.inferenceAccounts!()).map((account): AttentionDraft => {
+    await read('inference', async () => (await shared('inference', sources.inferenceAccounts!)).map((account): AttentionDraft => {
       const name = account.label || account.accountId;
       const action = { label: t('inference.action'), path: ATTENTION_PATHS.inferenceAccount(account.accountId) };
       const subject = { inferenceAccount: account.accountId };
@@ -1095,7 +1115,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
 
   // #1270: saved settings the runtime ignores (e.g. a sub-agent model choice that falls back to chat).
   if (sources.ineffectiveConfig && allows(P.AGENT_VIEW)) {
-    await read('agent-config', async () => (await sources.ineffectiveConfig!()).map((entry): AttentionDraft => ({
+    await read('agent-config', async () => (await shared('agent-config', sources.ineffectiveConfig!)).map((entry): AttentionDraft => ({
       kind: 'config.ineffective', severity: 'warning', subject: { configPath: entry.path },
       state: { reason: entry.reason, agents: entry.agents ?? [] },
       title: t('ineffective.title', { path: entry.path }),
