@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-onebot12",
-  "version": "1.1.31",
+  "version": "1.1.32",
   "description": "OneBot 12 adapter: forward WebSocket client, plus HTTP webhook and reverse WS.",
   "keywords": [
     "zhin.js",

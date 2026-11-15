@@ -1,5 +1,22 @@
 # @zhin.js/pagemanager
 
+## 1.2.0
+
+### Minor Changes
+
+- 941d534: `definePage()` 新增 `keywords`（ADR 0063 决策 3）：命令面板搜索别名，可以是一组，也可以按 `zh-CN` / `en` 分语言（例如 `{ 'zh-CN': ['抽奖'], en: ['lottery'] }`）；`definePage` 校验并去重，`@zhin.js/page` 原样透传。`keywords` 和 `section` 走同一路径：register 包装与 `@zhin.js/client` 的 `resolveEntryRegister` 写进路由 `meta.keywords`，Host 的 `/entries` 在每条 entry 顶层与 `meta` 中都带上 `keywords`；每条 entry 另带所属插件的 `packageName` 和 `pluginDescription`（插件 package.json 的 `description`），供 Console 命令面板按插件名与说明搜索插件页面。
+- 941d534: Console 共享模块版本核对（ADR 0063 D3）：`@zhin.js/console-ui` 与 React 一样由 Console 提供单例，插件页面打包时不再打进去（`@zhin.js/console-ui/cn` 并入根导入，`styles.css` / `tokens.css` 的导入变为空模块）。页面的 `/esm/@zhin.js~console-ui.mjs` 地址带上插件 `peerDependencies` 中的范围、插件包名和用到的具名导出；代理模块拿 Console 在 `globalThis.__ZHIN_CONSOLE_SHARED_MODULE_VERSIONS__` 登记的版本比对：主版本不兼容时明确报错，版本偏低时在控制台告警并记录到 `__ZHIN_CONSOLE_SHARED_MODULE_ISSUES__`（同时派发 `zhin:console-shared-module-issue` 事件），缺少的具名导出按名字报出、调用时抛错，不再静默给出 `undefined`。`zhin.js` 的 `/esm/*` 把查询参数交给 pagemanager。
+
+### Patch Changes
+
+- Updated dependencies [941d534]
+- Updated dependencies [0e6a82f]
+  - @zhin.js/console-contract@1.3.0
+  - @zhin.js/page@1.2.0
+  - @zhin.js/contract@1.1.28
+  - @zhin.js/runtime@1.5.0
+  - @zhin.js/layout@1.1.21
+
 ## 1.1.29
 
 ### Patch Changes
