@@ -44,6 +44,7 @@ Save, then ask the bot in a DM "What's the weather in Berlin?" — the AI calls 
 
 - `description` and `inputSchema` are **written for the model**: say clearly what the tool does and what the parameters are, so it gets called at the right moment.
 - Whatever `execute` returns goes back to the model, which turns it into a reply.
+- To fail, throw, or return an object with a non-empty `error` field (`{ error: '…' }`; an MCP tool's `isError: true` counts too): both are recorded as failed (trace and usage stats count a failure, and one redacted warn line goes to the instance log), and the model reads a failed result. `error: null` / `''` and the like are not failures, nor is a result that also says `ok: true` / `success: true`.
 
 ### Parameter Schema styles
 

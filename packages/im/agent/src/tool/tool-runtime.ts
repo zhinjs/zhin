@@ -20,12 +20,13 @@ import {
   type ToolPolicyResult,
   type ToolPolicyLayerRecord,
 } from '../security/policy-facade.js';
-import type { ToolCallEvent, ToolResultEvent } from '../event/turn-event.js';
+import type { ToolCallEvent, ToolFailedEvent, ToolResultEvent } from '../event/turn-event.js';
 import { captureToolImages } from '../media/tool-image-results.js';
 import { localImageScopeFromMessage, type LocalImageAssetStore, type LocalImageScope } from '../media/local-image-assets.js';
+import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.js';
 
 export interface ToolRuntimeJournalPort {
-  append(event: ToolCallEvent | ToolResultEvent): void | Promise<void>;
+  append(event: ToolCallEvent | ToolResultEvent | ToolFailedEvent): void | Promise<void>;
 }
 
 // ── 类型定义 ───────────────────────────────────────────────────────
@@ -51,6 +52,8 @@ export interface ToolExecutionOutcome {
   readonly output: unknown;
   readonly durationMs: number;
   readonly denied?: string;
+  /** #1250: the error the tool reported in its result (`{ error }`, MCP `isError`); journaled as `tool_failed`. */
+  readonly failed?: string;
   readonly policyAudit: readonly ToolPolicyLayerRecord[];
 }
 
@@ -168,7 +171,15 @@ export class ToolRuntime {
     output = await captureToolImages(output, ctx.localAssets,
       ctx.localAssetScope ?? localImageScopeFromMessage(ctx.commMessage, ctx.sessionId), toolName);
 
-    // 7. Journal: tool_result
+    // 7. #1250: an error result is a failure even though the tool did not throw.
+    const failed = toolErrorResultMessage(output);
+    if (failed !== undefined) {
+      const redacted = logToolErrorResult(toolName, failed);
+      await ctx.journal?.append({ type: 'tool_failed', toolName, toolUseId: call.toolCallId, error: redacted, durationMs });
+      return { output, durationMs, failed, policyAudit };
+    }
+
+    // 8. Journal: tool_result
     await emitToolResult(ctx, toolName, output, call.toolCallId, durationMs);
 
     return { output, durationMs, policyAudit };

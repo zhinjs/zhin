@@ -213,7 +213,8 @@ ai:
 - **一项委派一条线**：对某个 Agent 的 `delegate` 还没出结果时，再 `ask` 同一个 Agent 会被拒绝（`delegation_in_progress`），提示等结果自动回来，或用 `follow_up`（带那封委派的 `mail_id`）补充指令；`follow_up` 只用来补充或修改指令，不用来催。
 - **少走冤枉路**：子 Agent 的提示要求能直接回答就直接回答，不为用不到的工具搜索；在按需工具目录里连续 3 次搜不到（`discover` / `load_tool` / `load_skill`）会收到一次「换个办法或直接回答」的提示。
 - **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
-- **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后自动冻结 Engagement 并 `escalate`。
+- **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后冻结 Engagement：本次请求的协作到此为止，无法恢复。拦截原因只写进 `ai.collaboration` warn 日志和协作 journal，不发到聊天；主 Agent 回合还在进行时，由它在最终回复里用一句话交代，后台协作被停止时只发一句「后台任务已停止：这次请求的协作次数到了上限。」
+- **一条请求一条结论**：子 Agent 的内部结局（失败、预算用完、取消）回到主 Agent 时，如果同一子 Agent 已为主 Agent 完成过其他子回合（例如同一委派的 `follow_up`）、本次请求已经告诉过用户一次失败、或协作已被拦截停止，这些结局只留在 trace，不再另发消息。
 - **身份来自传输**：消息发送方由框架填写，正文里自称"主人"或"审核员"无效。
 
 ## 会话与会话树

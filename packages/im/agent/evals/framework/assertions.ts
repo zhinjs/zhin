@@ -149,7 +149,7 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   }
   if (expect.streamToolEvents !== undefined) {
     const seen = run.events
-      .filter((event) => event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_denied')
+      .filter((event) => event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_denied' || event.type === 'tool_failed')
       .map((event) => `${event.type}:${(event as { toolName: string }).toolName}`);
     if (seen.join(',') !== expect.streamToolEvents.join(',')) {
       fail('streamToolEvents', `expected stream tool events [${expect.streamToolEvents.join(', ')}], got [${seen.join(', ')}]`);

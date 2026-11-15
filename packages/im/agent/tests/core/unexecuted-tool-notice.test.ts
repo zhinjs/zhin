@@ -39,6 +39,7 @@ describe('unexecuted tool notice helpers (#1250)', () => {
     expect(formatUnexecutedNotice([call('schedule_add'), call('memory_upsert')])).toBe('（提醒、记忆等操作未执行）');
     expect(formatUnexecutedNotice([call('memory_upsert'), call('memory_delete')])).toBe('（记忆操作未执行）');
     expect(formatUnexecutedNotice([call('save_pref')])).toBe('（「save_pref」操作未执行）');
+    expect(formatUnexecutedNotice([call('voice_tts')])).toBe('（语音操作未执行）');
     expect(formatUnexecutedNotice([call('write_file'), call('bash')], 'en')).toBe('(Not done: files, commands.)');
   });
 });

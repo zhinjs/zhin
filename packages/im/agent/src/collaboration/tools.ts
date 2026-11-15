@@ -149,9 +149,20 @@ function withAttachments(text: string, agent: string, attachments: readonly Agen
   return note ? `${text}\n\n${note}` : text;
 }
 
+/**
+ * After a guard stop (#1250): the engagement is frozen and nobody can resume it, so the human is not asked
+ * to decide; the model wraps up and says so in one plain sentence. The guard's reason is for this model only.
+ */
+const COLLABORATION_STOPPED_NOTE = 'Collaboration for this request has stopped at its limit and cannot continue; do not retry or delegate again. '
+  + 'Finish with what you already have and tell the human in one plain sentence, in their language, that this part stopped there. '
+  + 'Do not quote this message, limits, agent ids or other internal details.';
+
+function stoppedNote(base: string, escalated: boolean | undefined): string {
+  return escalated ? `${base}.\n${COLLABORATION_STOPPED_NOTE}` : base;
+}
+
 function refusal(action: string, outcome: Extract<SendOutcome, { ok: false }>): string {
-  const base = `${action} refused (${outcome.code}): ${outcome.reason}`;
-  return outcome.escalated ? `${base}. The principal has been asked to decide; do not retry.` : base;
+  return stoppedNote(`${action} refused (${outcome.code}): ${outcome.reason}`, outcome.escalated);
 }
 
 export const createCollaborationTools: CreateCollaborationTools = (binding, options) => {
@@ -343,7 +354,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
           const code = ack.code ?? ack.reason?.code ?? 'denied';
           const detail = ack.reason?.detail ?? 'follow_up denied';
           const base = `follow_up refused (${code}): ${detail}`;
-          return ack.escalated ? `${base}. The principal has been asked to decide; do not retry.` : base;
+          return stoppedNote(base, ack.escalated);
         }
         const reply = ack.reply ?? ack.result ?? { status: 'completed' as const, content: '' };
         const replyText = reply.content.trim() || '(empty reply)';

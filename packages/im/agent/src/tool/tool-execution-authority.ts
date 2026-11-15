@@ -129,6 +129,9 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
       if (outcome.denied) {
         return Object.freeze({ status: 'denied', reason: String(outcome.output), sideEffect });
       }
+      if (outcome.failed !== undefined) {
+        return Object.freeze({ status: 'failed', error: outcome.failed, retryable: false, sideEffect });
+      }
       return Object.freeze({
         status: 'completed',
         output: outcome.output,

@@ -51,7 +51,7 @@ export function unresolvedSideEffectFailures(calls: readonly ToolCallRecord[]): 
 }
 
 /** Action kinds named in the notice, so the user knows what was not done without seeing tool names. */
-type UnexecutedActionKind = 'reminder' | 'memory' | 'config' | 'file' | 'command' | 'message';
+type UnexecutedActionKind = 'reminder' | 'memory' | 'config' | 'file' | 'command' | 'voice' | 'message';
 
 const ACTION_KIND_PATTERNS: ReadonlyArray<readonly [UnexecutedActionKind, RegExp]> = [
   ['reminder', /schedule|cron|remind|timer|alarm/i],
@@ -59,6 +59,8 @@ const ACTION_KIND_PATTERNS: ReadonlyArray<readonly [UnexecutedActionKind, RegExp
   ['config', /config|setting|install|plugin/i],
   ['command', /^(?:bash|shell|exec)(?:_|$)/i],
   ['file', /file|dir/i],
+  // #1250: speech tools report failure in their result (`voice_tts`); name the kind, not the tool.
+  ['voice', /^voice_|tts|speech/i],
   ['message', /send|message|post|notice|announce|reply|forward/i],
 ];
 
@@ -68,6 +70,7 @@ const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<
   config: { 'zh-CN': '配置', en: 'configuration' },
   command: { 'zh-CN': '命令', en: 'commands' },
   file: { 'zh-CN': '文件', en: 'files' },
+  voice: { 'zh-CN': '语音', en: 'voice' },
   message: { 'zh-CN': '消息发送', en: 'messages' },
 };
 

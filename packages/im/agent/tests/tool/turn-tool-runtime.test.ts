@@ -7,6 +7,8 @@ import { MessageAliasTable } from '@zhin.js/ai';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
+import { toolErrorResultMessage } from '../../src/tool/tool-error-result.js';
+import { getLogger } from '@zhin.js/logger';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import * as policyFacade from '../../src/security/policy-facade.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
@@ -915,6 +917,65 @@ describe('TurnToolRuntime host-protected paths come from the Turn (#1030 P0)', (
       await rm(rootA, { recursive: true, force: true });
       await rm(rootB, { recursive: true, force: true });
     }
+  });
+});
+
+describe('TurnToolRuntime error results (#1250 tool-error-result-marked-ok)', () => {
+  it('records a returned { error } as a failed call, with a redacted warn log line', async () => {
+    const warn = vi.spyOn(getLogger('ToolSystem'), 'warn').mockImplementation(() => undefined);
+    try {
+      const execute = vi.fn<ToolCapability['execute']>(async () => ({ error: '语音合成失败: request api_key=sk-abcdefghijklmnopqrstuvwxyz123456 rejected' }));
+      const { turn, events } = fixture();
+      const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'voice_tts')]);
+      const outcome = await runtime.execute('voice_tts', { text: '你好' }, 'tts-1');
+      expect(outcome).toMatchObject({ status: 'failed', retryable: false, sideEffect: true });
+      expect(outcome.status === 'failed' && outcome.error).toContain('语音合成失败');
+      expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_failed']);
+      const failed = events.find(event => event.type === 'tool_failed') as Extract<TurnEvent, { type: 'tool_failed' }>;
+      expect(failed.error).toContain('语音合成失败');
+      expect(failed.error).not.toContain('sk-abcdefghijklmnopqrstuvwxyz123456');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('voice_tts');
+      expect(String(warn.mock.calls[0]![0])).not.toContain('sk-abcdefghijklmnopqrstuvwxyz123456');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('records an MCP isError result as failed, with its text', async () => {
+    const execute = vi.fn<ToolCapability['execute']>(async () => ({ isError: true, content: [{ type: 'text', text: 'upstream 503' }] }));
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'mcp_lookup')]);
+    await expect(runtime.execute('mcp_lookup', {}, 'mcp-1')).resolves.toMatchObject({ status: 'failed', error: 'upstream 503' });
+    expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_failed']);
+  });
+
+  it.each([
+    ['error: null', { text: 'ok', error: null }],
+    ['empty error', { text: 'ok', error: '' }],
+    ['error: false', { error: false, value: 1 }],
+    ['ok: true with an error note', { ok: true, error: 'one row skipped' }],
+    ['an array', [{ error: 'x' }]],
+    ['a string', 'error: looks like text'],
+    ['isError: false', { isError: false, content: [] }],
+  ])('keeps a normal result completed (%s)', async (_label, output) => {
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(async () => output, 'never', 'lookup')]);
+    await expect(runtime.execute('lookup', {}, 'ok-1')).resolves.toMatchObject({ status: 'completed', output });
+    expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_result']);
+  });
+});
+
+describe('toolErrorResultMessage', () => {
+  it('reads string, Error and message-object errors, and nothing else', () => {
+    expect(toolErrorResultMessage({ error: '  boom  ' })).toBe('boom');
+    expect(toolErrorResultMessage({ error: new Error('bad input') })).toBe('bad input');
+    expect(toolErrorResultMessage({ error: { message: 'quota' } })).toBe('quota');
+    expect(toolErrorResultMessage({ error: {} })).toBeUndefined();
+    expect(toolErrorResultMessage({ error: 0 })).toBeUndefined();
+    expect(toolErrorResultMessage({ success: true, error: 'x' })).toBeUndefined();
+    expect(toolErrorResultMessage(null)).toBeUndefined();
+    expect(toolErrorResultMessage({ isError: true })).toBe('the tool reported an error');
   });
 });
 
