@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0063：Console 与插件页面 UI 统一——一套组件库、一个页面外壳
 
-状态：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
+状态：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定，「本仓库的官方插件完整遵守全部规则」也是所有者给出的决定（2026-11-14：「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」，见 D19）；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
 
 关联：
 - [ADR 0062](./0062-one-path-per-task.md) 第 24 项 / Q24（插件页面只放插件自己的领域视图，挂成插件详情下的页签）。本 ADR 是它的补充：第 24 项定了「挂在哪」，本 ADR 定「长成什么样」。
@@ -112,7 +112,7 @@ sidebar: false
   1. 使用原生 `<select>`（JSX 中的 `<select`，或 `React.createElement('select')`）；
   2. 自定义页头：页面中出现 `<h1>`，或从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage`；
   3. 固定宽度：在页面根容器上写 `max-width` / `width` 的固定像素值，或在 `definePage` 之外自己设置内容宽度。
-  P4 之后，第 2 条中「从 `@zhin.js/client/ui` 引入」会因为子路径被删除而直接构建失败；其余仍保持为警告，避免误伤第三方插件里的合理用法。官方插件在 CI 中把这些警告当作错误（`pnpm check:plugin`）。
+  P4 之后，第 2 条中「从 `@zhin.js/client/ui` 引入」会因为子路径被删除而直接构建失败；其余仍保持为警告，避免误伤第三方插件里的合理用法。这三条和 D20 的第 4–6 条一起在 P2 上线，对第三方插件始终只是警告。本仓库的官方插件在 CI 中把它们当作错误（`pnpm check:plugin`）：P2 之前只出报告，从 P2 起按插件逐个生效（见 D19「本仓库的官方插件」）。
 - **文档只示范统一组件。** `docs/authoring/console-pages.md` 的「页面 UI 套件」一节改为介绍 `@zhin.js/console-ui` 和页面外壳；删除 `zk-` 写法的示例；新增「页面外壳负责什么、插件负责什么」一节，并按 ADR 0062 第 24 项增加「什么时候不该写插件页面」。`@zhin.js/client` README 中的 UI 套件清单改为指向新包。
 
 ### 5. 危险操作的样式
@@ -130,9 +130,9 @@ sidebar: false
 
 ## 增补：设计规则（console#111）
 
-增补日期：2026-11-14。来源：zhinjs/console#111（正文与两条补充评论：信息密度与视觉层级；响应式、弹性布局与间距；组件级的间距、边框、圆角、阴影）。所有者的指示是：这套规则覆盖整个 Console，**对 Console 自身是强制的**；插件页面**推荐**使用 Console 自己的、符合规则的组件，组合 `@zhin.js/console-ui` 的组件、继承它的令牌，这样自动符合类型尺度、间距、响应式和深浅色。插件可以超出组件库自己设计界面，但应当尽量遵守这些规则，只有一组很小的硬性底线（D19）必须遵守。
+增补日期：2026-11-14。来源：zhinjs/console#111（正文与两条补充评论：信息密度与视觉层级；响应式、弹性布局与间距；组件级的间距、边框、圆角、阴影）。所有者的指示是：这套规则覆盖整个 Console，**对 Console 自身是强制的**；插件页面**推荐**使用 Console 自己的、符合规则的组件，组合 `@zhin.js/console-ui` 的组件、继承它的令牌，这样自动符合类型尺度、间距、响应式和深浅色。插件可以超出组件库自己设计界面，但应当尽量遵守这些规则，只有一组很小的硬性底线（D19）必须遵守。以上分寸只针对第三方插件：**本仓库的官方插件必须完整遵守这些规则**，作为给开发者的参考实现（所有者决定，见 D19「本仓库的官方插件」）。
 
-本增补新增 D15–D22，和前面的决策一样默认按推荐执行。实测数据、根因和各项取值的依据见 console#111，这里不再重复，只写规则本身；下文的「按尺寸取值」表是规范的一部分，所以保留。D15–D18 对 Console 自带页面、页面外壳和 `@zhin.js/console-ui` 是「必须」；对插件页面是「应当」：使用组件库和页面外壳的插件页面（包括所有声明式页面）自动继承，不需要插件自己实现。
+本增补新增 D15–D22，和前面的决策一样默认按推荐执行。实测数据、根因和各项取值的依据见 console#111，这里不再重复，只写规则本身；下文的「按尺寸取值」表是规范的一部分，所以保留。D15–D18 对 Console 自带页面、页面外壳和 `@zhin.js/console-ui` 是「必须」；对插件页面是「应当」（本仓库的官方插件是「必须」，见 D19）：使用组件库和页面外壳的插件页面（包括所有声明式页面）自动继承，不需要插件自己实现。
 
 ### 7. 信息呈现规则（D15）
 
@@ -231,7 +231,7 @@ sidebar: false
 
 偏离推荐的常见写法（`zhin plugin check` 会给出提示，见 D20）：写原始的 `font-size`、`font-weight`、`border-radius`、`box-shadow`、`padding`、`margin`、`gap` 数值；Tailwind 任意值（`p-[…]`、`rounded-[…]` 等）或默认 `shadow-*`；用原生 `<button>`、`<input>`、`<select>`、`<textarea>`、`<table>`、`<dialog>` 代替对应组件；自己写断点。组件库缺少需要的组件时，欢迎向 `@zhin.js/console-ui` 提需求或 PR。
 
-**允许自定义。** 插件可以超出组件库，自己设计界面（例如 Sandbox 这类工作区页面、图表、画布、游戏），但应当尽量遵守 D15–D18，并优先使用语义令牌而不是自己的数值。D13 中 Sandbox 自带的样式属于这种情况，不需要白名单。
+**允许自定义。** 插件可以超出组件库，自己设计界面（例如 Sandbox 这类工作区页面、图表、画布、游戏），但应当尽量遵守 D15–D18，并优先使用语义令牌而不是自己的数值。D13 中 Sandbox 自带的样式属于这种情况，不需要白名单；但 Sandbox 是官方插件，按下文「本仓库的官方插件」，它在 D13 的两步完成后加入 CI 门禁，此后自带样式同样要通过第 1–6 条（工作区页面确需的个别写法只能逐条豁免）。
 
 **硬性底线（必须）。** 无论是否使用组件库，插件页面都必须满足下面几条，因为违反它们会破坏外壳或让用户无法使用：
 
@@ -243,21 +243,31 @@ sidebar: false
 
 外壳负责尽量兜底（插件内容区作为独立的层叠上下文，`isolation: isolate`，并约束内容区宽度），但兜底不能替代插件自己遵守底线。
 
+上面的「推荐 / 允许自定义 / 硬性底线」是对第三方插件的要求。
+
+**本仓库的官方插件：完整遵守全部规则（所有者决定，2026-11-14）。** 所有者的原话是「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」。所以 `plugins/**` 下的官方插件页面是给开发者的参考实现，D15–D19 对它们和对 Console 自身一样是「必须」，不是「应当」：
+
+1. **CI 中为错误的检查**：D8 的第 1–3 条（原生 `<select>`、自定义页头、固定宽度）、D20 的第 4–6 条（原始样式数值、尺度外的 Tailwind 类名、非组件库的基础控件）和 D19 硬性底线的 Playwright 审计，在 zhinjs/zhin CI 中对官方插件都是**错误**，不通过即失败。Playwright 审计中底线以外的各项（D20 第 3 条）对官方插件页面出报告，违反 D15–D18 的地方在代码评审中按「必须」处理。
+2. **分阶段**：相关工具上线、官方页面迁移完成之前只出报告。`zhin plugin check` 第 1–6 条和 zhinjs/zhin CI 中的 Playwright 底线审计在 **P2** 上线（插件页面在 P2 迁移到 `@zhin.js/console-ui`）；某个官方插件的页面迁移完成后，它就加入门禁名单，上面这些检查对它由只出报告改为 CI 错误；P2 验收时所有官方插件都在门禁名单中。P4 不改变这个门禁。
+3. **例外**：默认没有例外。官方插件只能对某一条具体检查豁免，而且必须写在源码中被豁免的位置，用带说明的忽略注释写明检查项和理由（例如「忽略第 6 条：画布内的原生 `<button>`，焦点和触控尺寸已自行满足底线」），随 PR 一起评审；不接受按插件或按文件整体关闭检查。CI 摘要列出所有豁免。注释的具体写法（以及 Playwright 底线审计的豁免如何标注）在 P2 确定，保持最小。
+
+第三方插件不受这一条影响：第 1–6 条对它们始终只是提示，硬性底线是「必须」，但除提示外没有强制手段。
+
 ### 12. 约束手段（D20）
 
 在 D8 的基础上增加三处，规则的允许值都来自 D17 生成的同一份清单：
 
 1. **zhinjs/console 与 `@zhin.js/console-ui`：stylelint 和 Tailwind 主题（Console 中违反即为错误）。** stylelint 禁止 `font-size`、`font-weight`、`border-radius`、`box-shadow`、`border-width`、`padding`、`margin`、`gap` 写字面值（`0` 和 `var(--console-…)` 除外）、禁止不在 `@custom-media` 清单里的媒体查询、只允许外壳文件写 `@media`；生成的 Tailwind 主题把 `padding`、`margin`、`gap`、`space-*` 限制在 8 个间距键加 `0` 和 `px`，并只保留尺度内的圆角、阴影、字号、字重和断点；任意值（`p-[…]` 等）不由主题拦截，由 ESLint 禁止，ESLint 同时禁止 Tailwind 默认 `shadow-*` 和尺度外的间距类名（例如 `p-5`、`gap-2.5`）。尺寸类工具（`w-*`、`h-*`、`size-*`、`inset-*`、`min-*` / `max-*`）不受间距尺度限制，例如 44px 触控尺寸用的 `h-11` 仍然可用；主题如何把它们和间距分开在 P1 确定，但这一要求现在就定下。两个仓库的 CI 都跑。
-2. **`zhin plugin check` 新增三条提示（接在 D8 的三条之后）**，检查插件的 `pages/**`。这三条**只是提示（警告），永远不会升级为错误**，也不阻止构建和发布；每条提示都说明它的含义和对齐方法：
+2. **`zhin plugin check` 新增三条提示（接在 D8 的三条之后）**，检查插件的 `pages/**`。`zhin plugin check` 对这三条**只给提示（警告），永远不会升级为错误**，也不阻止插件的构建和发布（本仓库官方插件的 CI 另行把它们当作错误，见下）；每条提示都说明它的含义和对齐方法：
    4. **原始样式数值**：`style` 属性、CSS 文件或 CSS-in-JS 中，字号、字重、圆角、阴影、内边距、外边距、间隔写了字面值。含义：这个值不跟随 Console 的尺度和按尺寸取值，换设备或 Console 调整令牌时会和周围不一致。对齐：改用对应组件，或改用第二层语义令牌（例如 `var(--console-card-padding)`）。
    5. **尺度外的 Tailwind 类名**：任意值（`p-[…]`、`rounded-[…]`、`text-[…]` 这类）、尺度外的间距键（例如 `p-5`、`gap-2.5`）或 Tailwind 默认的 `shadow-*`。含义同上。对齐：改用生成主题中的档位（间距键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`，见 D17 的对应表；圆角 `0`–`4` / `full`；阴影 `e1`–`e3`），或改用组件。
    6. **非组件库的基础控件**：JSX 中的原生 `<button>`、`<input>`、`<textarea>`、`<table>`、`<dialog>`（`<select>` 已由 D8 第 1 条覆盖）。含义：这些控件没有 Console 的触控尺寸、焦点环、深浅色和窄容器下的布局切换，需要插件自己保证 D19 的底线。对齐：换成 `@zhin.js/console-ui` 的 `Button`、`Input`、`Textarea`、`Table`、`Dialog`；确实要自定义时，可以忽略这条提示，但要自己满足底线。
    这三条在 P2 上线（那时 `@zhin.js/console-ui` 已发布、有可替换的组件）。硬性底线（D19）大多只能在运行时判断，静态检查不覆盖，由 zhinjs/zhin CI 中的 Playwright 底线审计检查官方插件页面（见第 3 条）；`zhin plugin check` 只在能静态识别时（例如写死的 `position: fixed` 加大 `z-index`）给出提示。
 
-   **本仓库的官方插件**：D19 的硬性底线（由 zhinjs/zhin CI 中的 Playwright 底线审计检查）从 P2 起在 CI 中是**错误**，不通过即失败，P2 之前只出报告；第 4–6 条对官方插件同样**只提示、不阻塞**，CI 在运行摘要中按插件和规则统计提示数量，用于跟踪趋势、逐步减少。
+   **本仓库的官方插件**：D8 的第 1–3 条、这里的第 4–6 条和 D19 的硬性底线（由 zhinjs/zhin CI 中的 Playwright 底线审计检查）在 CI 中都是**错误**，不通过即失败；P2 之前只出报告，从 P2 起官方插件的页面迁移完成一个就加入门禁一个，P2 验收时全部生效；豁免只能是带理由、经评审的行内忽略注释（见 D19「本仓库的官方插件」）。CI 在运行摘要中按插件和规则列出违规与豁免。
 3. **Playwright 布局审计，分两处跑。** 都在 375 / 768 / 1280 / 1920 四个宽度、深浅两种主题下逐个元素读取计算样式：
    - **zhinjs/console 的 CI** 审计 Console 自带页面，检查下面全部各项；
-   - **zhinjs/zhin 的 CI**（官方插件在这个仓库）审计官方插件的 Console 页面，只把 D19 的硬性底线作为门禁：P2 之前只出报告，从 P2 起不通过即为 CI 错误；其余各项只出报告。
+   - **zhinjs/zhin 的 CI**（官方插件在这个仓库）审计官方插件的 Console 页面，把 D19 的硬性底线作为门禁：P2 之前只出报告，从 P2 起不通过即为 CI 错误；其余各项出报告，违反 D15–D18 的地方在代码评审中按「必须」处理（见 D19「本仓库的官方插件」）。
 
    检查项：
    - 字号不超过 5 种、字重不超过 3 种，且都在尺度内；`padding`、`gap`、`border-radius`、`box-shadow`、`border-width` 的计算值都在基础尺度内；
@@ -279,14 +289,14 @@ sidebar: false
 | 阶段 | 页面收敛 |
 | --- | --- |
 | P1b | 所有页面的全局项：类型尺度、间距、圆角、边框、阴影、页面边距、两种内容宽度（Console 页面标注 `reading` / `data`）、触控尺寸、页头「更多」菜单 |
-| P2 | 插件页面（随渲染器迁移自动获得）：统计卡片弹性网格、窄容器下表格变卡片、原始 ID 和 JSON 默认隐藏（群管套件等，信息设计本身仍按 #1262）、Sandbox 页头不被挤出屏幕；`zhin plugin check` 第 4–6 条以提示上线；zhinjs/zhin CI 中的 Playwright 底线审计对官方插件页面由只出报告改为 CI 错误。Console 页面：AI 与模型（模型页改表格、未被引用的模型合并成可折叠分组、用途页先显示在用的用途、未设置的决策槽收进「高级」、宽屏列表 + 详情双栏） |
+| P2 | 插件页面（随渲染器迁移自动获得）：统计卡片弹性网格、窄容器下表格变卡片、原始 ID 和 JSON 默认隐藏（群管套件等，信息设计本身仍按 #1262）、Sandbox 页头不被挤出屏幕；`zhin plugin check` 第 1–6 条上线（对第三方插件只提示）；官方插件页面迁移完成后逐个加入门禁，第 1–6 条和 zhinjs/zhin CI 中的 Playwright 底线审计对它们由只出报告改为 CI 错误，P2 验收时全部官方插件在门禁中。Console 页面：AI 与模型（模型页改表格、未被引用的模型合并成可折叠分组、用途页先显示在用的用途、未设置的决策槽收进「高级」、宽屏列表 + 详情双栏） |
 | P3 | 定时任务（用户任务与系统任务分开、系统任务默认折叠、类型如实显示、「全部」包含助手任务）；插件页（与插件详情页签一起，按 `console-plugins-page-layout` 执行）；首页（按 `console-dashboard-feed` 执行） |
-| P4 | 删除旧令牌别名（与 `--zk-*` 一起）；zhinjs/console CI 的审计对所有 Console 页面作为全项门禁；官方插件页面的底线门禁（自 P2 起，zhinjs/zhin CI）不变；`zhin plugin check` 第 4–6 条仍然只是提示，在 CI 摘要中计数 |
+| P4 | 删除旧令牌别名（与 `--zk-*` 一起）；zhinjs/console CI 的审计对所有 Console 页面作为全项门禁；官方插件的门禁（第 1–6 条与 D19 底线，自 P2 起，zhinjs/zhin CI）不变；`zhin plugin check` 对第三方插件仍然只是提示 |
 
 ### 14. 对前文的修订（D22）
 
 - **决策 6「不在本 ADR 范围」**：「新的设计语言或视觉改版」仍不在范围内——颜色和组件外形以 Console 当前视觉为准；但字号、字重、间距、圆角、边框、阴影的**收敛到尺度**属于本增补的范围。「Console 业务页面自己的布局」仍由 Console 决定，但必须遵守 D15–D19。「插件页自身的信息设计」仍由 #1262 和 ADR 0062 第 24 项处理，修复应当遵守 D15。
-- **D8**：D8 第 1–3 条保持原样，官方插件在 CI 中仍视为错误，本增补不改变它们。增补新增的 UI 规则中，**只有 D19 的硬性底线**对官方插件是 CI 错误（zhinjs/zhin CI 中的 Playwright 底线审计，自 P2 起）；D20 第 4–6 条对第三方和官方插件都只提示，官方插件的提示数量进入 CI 摘要。
+- **D8**：D8 第 1–3 条的检查内容不变，对第三方插件仍是警告。官方插件完整遵守全部规则（所有者决定，见 D19「本仓库的官方插件」）：D8 第 1–3 条、D20 第 4–6 条和 D19 硬性底线的 Playwright 审计对官方插件都是 CI 错误；它们和第 4–6 条一起在 P2 上线（原计划 D8 的三条检查在 P4 上线），P2 之前只出报告；豁免只能是带理由、经评审的行内忽略注释，默认没有。
 - **D4 与 D19 的关系**：页面外壳仍是插件页面的必选项（D4 不变）；D19 放宽的是外壳内部内容区的样式。
 - **背景第 1 节「本 ADR 不规定具体宽度」**：改为由 D16 规定两种内容宽度（`reading` 60rem、`data` 120rem）；`--console-content-max` 不再是固定的 90rem，而是外壳按页面类型解析出的值；D20 的审计按这两个宽度检查（1920px 下数据页占视口 85% 以上）。
 - **分阶段计划**：P1 拆成 P1a / P1b（D21）；P1 的验收「Console 自带页面外观不变」只适用于 P1a。
@@ -307,9 +317,9 @@ sidebar: false
 | --- | --- | --- | --- | --- |
 | P0 ADR | 本 ADR；索引登记；设计规则增补（D15–D22） | `docs/adr` | — | 所有者确认 D1–D10、D12–D22（D11 已定） |
 | P1 组件包与外壳（P1a；P1b 令牌与组件规则见 D21） | 新建 `packages/console/ui`（`@zhin.js/console-ui`）：从 Console 迁入 `components/ui/*`、`PageShell`、`PageHeader`、确认对话框、状态卡、空状态、错误提示、`RefreshControl`、`usePageChrome`、`destructive-outline` 变体；令牌移入 `tokens.css`，产出 `styles.css`；视觉回归用例。Console 改为从包中引入，`--zk-*` 改为别名；pagemanager 把包加入 `HOST_PROXIED_MODULES`；`definePage` 增加 `keywords` | `@zhin.js/console-ui`（新）、`@zhin.js/pagemanager`、`@zhin.js/page`、`@zhin.js/console-contract`、zhinjs/console | 新包 minor；pagemanager / page / contract minor；Console minor | P1a：Console 自带页面外观不变（视觉回归无差异）；P1b：三层令牌与生成的 Tailwind 主题上线，stylelint / ESLint 与 Playwright 审计上线，视觉回归基线逐页评审后更新；Console 构建不再依赖 `remote-entry-style-contract.ts` 中的类名 |
-| P2 迁移官方页面 | `DeclarativePageView`、`AdapterConsolePage`、`CommentReviewPage` 改用新组件，只渲染内容区块，页头交给外壳；`variant: 'danger'` 改为描边加确认；删除首字母方块；`AdapterConsolePage.tsx:122`、`:1469` 的原生 `<select>` 换成新下拉；`adapter-console/styles.ts`、`review-console/styles.ts` 随渲染器迁移删除。**Sandbox 分两步**（见 D13）：先把 zhinjs/console 中只服务 Sandbox 的 `agent-playground.css`（1872 行）和 `im-workspace.css`（256 行）移进 Sandbox 插件，由插件页面自己注入样式；然后逐步把 2314 行的 Sandbox `.tsx` 改写到 `@zhin.js/console-ui` 组件上；两步完成后才删除 `remote-entry-style-contract.ts`。非 UI 导出按 D14 迁到 `@zhin.js/client` 根入口；`@zhin.js/client/ui` 保留为弃用的再导出层，`zk-` 类名标记弃用（首次使用时控制台告警一次）；发布升级对照表 | `@zhin.js/client`、`@zhin.js/adapter-sandbox`、zhinjs/console | minor（client、Console、sandbox） | 任意插件页和 Console 自带页并排打开，深浅色下内容宽度、页头结构、下拉框、按钮样式一致；插件页中没有原生 `<select>`；`remote-entry-style-contract.ts` 已删除（Sandbox 两步完成后） |
+| P2 迁移官方页面 | `DeclarativePageView`、`AdapterConsolePage`、`CommentReviewPage` 改用新组件，只渲染内容区块，页头交给外壳；`variant: 'danger'` 改为描边加确认；删除首字母方块；`AdapterConsolePage.tsx:122`、`:1469` 的原生 `<select>` 换成新下拉；`adapter-console/styles.ts`、`review-console/styles.ts` 随渲染器迁移删除。**Sandbox 分两步**（见 D13）：先把 zhinjs/console 中只服务 Sandbox 的 `agent-playground.css`（1872 行）和 `im-workspace.css`（256 行）移进 Sandbox 插件，由插件页面自己注入样式；然后逐步把 2314 行的 Sandbox `.tsx` 改写到 `@zhin.js/console-ui` 组件上；两步完成后才删除 `remote-entry-style-contract.ts`。非 UI 导出按 D14 迁到 `@zhin.js/client` 根入口；`@zhin.js/client/ui` 保留为弃用的再导出层，`zk-` 类名标记弃用（首次使用时控制台告警一次）；发布升级对照表；`zhin plugin check` 第 1–6 条上线（对第三方插件只提示），官方插件迁移完成后逐个加入 CI 门禁（第 1–6 条与 D19 底线审计为错误，见 D19「本仓库的官方插件」） | `@zhin.js/client`、`@zhin.js/adapter-sandbox`、`@zhin.js/cli`、zhinjs/console | minor（client、Console、sandbox、cli） | 任意插件页和 Console 自带页并排打开，深浅色下内容宽度、页头结构、下拉框、按钮样式一致；插件页中没有原生 `<select>`；`remote-entry-style-contract.ts` 已删除（Sandbox 两步完成后）；所有官方插件都在门禁名单中，`check:plugin` 第 1–6 条与 D19 底线审计通过（豁免只限带理由的行内注释） |
 | P3 导航与命令面板 | 插件详情页加页签，插件页面挂到 `/plugins/<插件名>/<页面名>`，适配器页挂到适配器对象页；顶栏「功能」只保留 Console 功能页；旧顶层路径重定向；命令面板按插件名、包名、页面标题、`keywords` 索引插件页；官方插件补 `keywords`（例如彩票推荐补「抽奖」） | zhinjs/console、`@zhin.js/client`（路由注册）、官方插件 | Console minor；官方插件 patch | 命令面板能搜到所有插件页面（含别名，有测试）；顶栏「功能」菜单里没有插件页面 |
-| P4 检查与删除 | `zhin plugin check` 三条警告；官方插件 CI 中视为错误；文档只示范统一组件；在 P2 之后至少一个 minor 的弃用期结束后，删除 `@zhin.js/client/ui` 再导出层、`zk-` 组件与样式（`ui/components.tsx`、`ui/styles.ts`、`adapter-console/styles.ts`、`review-console/styles.ts`）、`zk-` 类名、`--zk-*` 别名、蓝图 `mark` 字段和旧顶层路径重定向 | `@zhin.js/cli`、`@zhin.js/client`、`docs/authoring/console-pages.md` | 检查与文档：`@zhin.js/cli` minor；删除：`@zhin.js/client` minor（弃用期 ≥ 1 个 minor） | 新写的插件页不使用 `zk-`；`check:plugin` 对官方插件第 1–3 条零警告；第 4–6 条在 CI 摘要中计数 |
+| P4 检查与删除 | 文档只示范统一组件；`zhin plugin check` 第 1–6 条与官方插件门禁自 P2 起已生效，P4 不改变；在 P2 之后至少一个 minor 的弃用期结束后，删除 `@zhin.js/client/ui` 再导出层、`zk-` 组件与样式（`ui/components.tsx`、`ui/styles.ts`、`adapter-console/styles.ts`、`review-console/styles.ts`）、`zk-` 类名、`--zk-*` 别名、蓝图 `mark` 字段和旧顶层路径重定向 | `@zhin.js/client`、`docs/authoring/console-pages.md` | 删除：`@zhin.js/client` minor（弃用期 ≥ 1 个 minor） | 新写的插件页不使用 `zk-`；官方插件仍通过第 1–6 条与 D19 底线审计（自 P2 起的 CI 门禁） |
 
 ### 升级对照表（`@zhin.js/client/ui` 的去向）
 
@@ -350,7 +360,7 @@ P2、P3、P4 各自的页面收敛项和检查见 D21 的表格。P1 和 P2 可�
 | D5 | 刷新控件 | 统一的 `RefreshControl`（Radix 下拉），Console 与插件页共用 | 各页保留自己的刷新控件 | 删除原生 `zk-refresh-select` |
 | D6 | 导航 | 插件页按 ADR 0062 第 24 项挂成插件详情页签；顶栏「功能」只列 Console 自己的功能页；修订 ADR 0052 的插件页放置规则；旧路径重定向至少保留一个 minor 周期；Sandbox 例外见 D12 | 插件页继续进顶栏分区 | 插件的 `metadata.section` 弃用 |
 | D7 | 命令面板 | 按插件名、包名、页面标题、插件说明和新增的 `definePage({ keywords })` 别名索引插件页 | 只按页面标题索引 | `definePage` 元数据增加一个字段 |
-| D8 | 约束手段 | `zhin plugin check` 对原生 `<select>`、自定义页头、固定宽度给出警告，官方插件在 CI 中视为错误；`console-pages.md` 只示范统一组件 | 只写成文档约定 | 新增三条检查 |
+| D8 | 约束手段 | `zhin plugin check` 对原生 `<select>`、自定义页头、固定宽度给出警告，官方插件在 CI 中视为错误（P2 上线，之前只出报告，见 D19、D22）；`console-pages.md` 只示范统一组件 | 只写成文档约定 | 新增三条检查 |
 | D9 | 危险操作 | 描边按钮（`destructive-outline`）加确认对话框，实心红色只用于确认按钮；蓝图的 `danger` 动作自动补确认 | 保留实心危险按钮 | RSS 等页面的危险按钮样式改变，无需改插件 |
 | D10 | 分阶段与版本 | P0 ADR → P1 抽包与外壳 → P2 迁移官方页面 → P3 导航与命令面板 → P4 检查与删除；新包 minor；删除 `zk-` 也走 minor（见 D11） | 一次性切换 | 见「分阶段计划」 |
 | D11 | `zk-` 删除的版本级别 | **所有者决定**（2026-11-14，「zk 不用大版本删除，minor 就可以」）：`zk-` 套件、`@zhin.js/client/ui` 子路径、`--zk-*` 别名和蓝图 `mark` 字段在 minor 中删除；P2 发布时弃用（首次使用告警一次、文档标注），至少经过一个 minor 的弃用期后在 P4 的 minor 中删除 | 等到下一个 major 再删除（原推荐） | 第三方手写页面需在弃用期内迁移；升级文档给出对照表 |
@@ -361,10 +371,10 @@ P2、P3、P4 各自的页面收敛项和检查见 D21 的表格。P1 和 P2 可�
 | D16 | 令牌三层与规范名 | 基础尺度（字号 ≤ 5 级、字重 ≤ 3 种、`space-1`–`8`、`r-0`–`4` / `full`、`hairline` / `focus`、`e-0`–`3`、断点 `sm` / `md` / `lg` / `xl`、内容宽度 `reading` / `data`）→ 组件语义令牌 → 按尺寸取值；CSS 变量统一 `--console-` 前缀；旧令牌弃用期内为别名 | 继续用现有的 4 种间距令牌和 Tailwind 默认尺度 | Console 与组件库的样式逐步改写 |
 | D17 | 单一事实来源 | 令牌只在 `@zhin.js/console-ui` 定义一次，生成 `tokens.css`、Tailwind 主题、`@custom-media`、stylelint / `plugin check` / Playwright 的允许值；Console 也消费它；Tailwind 主题只暴露尺度内的值；间距保留与 8 档同值的 Tailwind 默认键 `1`/`2`/`3`/`4`/`6`/`8`/`12`/`16`，删除其余键，不做类名改写 | Console 与组件库各自维护令牌；保留 Tailwind 默认尺度 | 生成物不得手改 |
 | D18 | 响应式模型 | 间距取自第三层「按尺寸取值」表；组件用容器查询，`@media` 断点只给全局外壳；弹性页面边距与两种内容宽度（所有页面默认 `data`）；`auto-fit` 网格；容器 ≥ 90rem 时列表 + 详情双栏；窄于 40rem 时表格变卡片；手机 44px、不挤出视口、无整页横向滚动 | 按视口断点逐页切换 | 组件库提供网格和列表 + 详情组件 |
-| D19 | 插件页面的样式 | **所有者决定**：插件页面推荐（应当）使用 `@zhin.js/console-ui` 组件和语义令牌，从而自动符合尺度、响应式和深浅色；允许超出组件库自定义界面；硬性底线（必须）只有：无整页横向滚动、不溢出页面容器也不覆盖外壳、可见焦点、手机触控 ≥ 44px、背景与文字使用 Console 主题令牌、在深浅两种主题下都可读 | 插件页面强制只用组件库和语义令牌 | 第三方插件不会因样式被拒；官方插件页面由审计检查底线 |
-| D20 | 约束手段 | Console 与组件库：stylelint、生成的 Tailwind 主题、ESLint 禁任意值；`zhin plugin check` 第 4–6 条（原始样式数值、Tailwind 任意值、非组件库基础控件）**只提示、永不升级为错误**，每条说明含义和对齐方法；Playwright 在 375 / 768 / 1280 / 1920 审计：zhinjs/console CI 审计 Console 页面（全项门禁），zhinjs/zhin CI 审计官方插件页面（底线，自 P2 起为 CI 错误，之前只出报告）；本仓库官方插件的第 4–6 条只提示并在 CI 摘要中计数 | 只写成文档约定；对插件页面也强制报错 | 新增三条提示、两个仓库各加 lint、Console 加审计 |
+| D19 | 插件页面的样式 | **所有者决定**：插件页面推荐（应当）使用 `@zhin.js/console-ui` 组件和语义令牌，从而自动符合尺度、响应式和深浅色；允许超出组件库自定义界面；硬性底线（必须）只有：无整页横向滚动、不溢出页面容器也不覆盖外壳、可见焦点、手机触控 ≥ 44px、背景与文字使用 Console 主题令牌、在深浅两种主题下都可读；以上针对第三方插件。**所有者决定**：本仓库的官方插件完整遵守 D15–D19，作为参考实现；D8 第 1–3 条、D20 第 4–6 条和底线审计对官方插件是 CI 错误，自 P2 起逐个插件生效，之前只出报告；豁免只能是写明检查项和理由、经评审的行内忽略注释，默认没有，写法在 P2 确定 | 插件页面强制只用组件库和语义令牌；官方插件也只推荐 | 第三方插件不会因样式被拒；官方插件页面由静态检查和底线审计在 CI 中拦截 |
+| D20 | 约束手段 | Console 与组件库：stylelint、生成的 Tailwind 主题、ESLint 禁任意值；`zhin plugin check` 第 4–6 条（原始样式数值、Tailwind 任意值、非组件库基础控件）**只提示、永不升级为错误**，每条说明含义和对齐方法；Playwright 在 375 / 768 / 1280 / 1920 审计：zhinjs/console CI 审计 Console 页面（全项门禁），zhinjs/zhin CI 审计官方插件页面（底线，自 P2 起为 CI 错误，之前只出报告）；本仓库官方插件的第 1–6 条自 P2 起同样是 CI 错误（见 D19） | 只写成文档约定；对插件页面也强制报错 | 新增三条提示、两个仓库各加 lint、Console 加审计 |
 | D21 | 与分阶段计划的对应 | 令牌工作并入 P1，拆成 P1a（只迁移）和 P1b（令牌与组件规则，有意改变外观，基线逐页评审）；页面收敛：P1b 全局项，P2 插件页面与 AI 与模型，P3 定时任务、插件页、首页，P4 删除旧令牌别名并让审计全面门禁 | 令牌工作单独作为新阶段 | P1 验收「外观不变」只适用于 P1a |
-| D22 | 对前文的修订 | 决策 6 的范围、D8（第 1–3 条不变；新增 UI 规则中只有 D19 底线对官方插件是 CI 错误，第 4–6 条只提示并计数）；背景第 1 节的宽度说明、P1 拆分；D4 页面外壳仍是插件页面的必选项 | — | 见「对前文的修订」 |
+| D22 | 对前文的修订 | 决策 6 的范围、D8（第 1–3 条检查内容不变，改为与第 4–6 条一起在 P2 上线；官方插件的第 1–6 条和 D19 底线都是 CI 错误，自 P2 起）；背景第 1 节的宽度说明、P1 拆分；D4 页面外壳仍是插件页面的必选项 | — | 见「对前文的修订」 |
 
 ### 与推荐的差异
 
@@ -375,6 +385,7 @@ P2、P3、P4 各自的页面收敛项和检查见 D21 的表格。P1 和 P2 可�
 3. 组件包必须由 Console 提供单例并自带编译好的 CSS（D3），否则手写 `.tsx` 页面会各自打包不同版本的组件，`remote-entry-style-contract.ts` 也删不掉；共享模块目前没有版本握手，需要新建（D3）。
 4. 评审后补充：Sandbox 继续留在顶栏「会话」分区（D12），它的样式先搬进插件再改写（D13），`@zhin.js/client/ui` 中的非 UI 导出有明确去向（D14）。
 5. 增补（zhinjs/console#111）：console#111 建议「插件不能自己写圆角、阴影、内边距」；所有者改为对插件页面只推荐、不强制，只保留会破坏外壳或用户的硬性底线，`zhin plugin check` 对偏离推荐的写法只提示、永不升级为错误（D19、D20）。对 Console 自身，这些规则仍然是强制的。
+6. 增补的后续决定：所有者决定本仓库的官方插件完整遵守全部规则（「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」）。D8 第 1–3 条、D20 第 4–6 条和 D19 底线审计对官方插件都是 CI 错误，自 P2 起生效，之前只出报告；豁免只能是带理由、经评审的行内忽略注释（D19、D20、D22）。第三方插件不变。
 
 ## 落盘位置（计划）
 
