@@ -58,7 +58,7 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 | IM 组装 | `@zhin.js/core`（含 `handler`、`actor` 与 `@zhin.js/core/runtime`） | 组合 Adapter、Command、Component、Middleware、多 Bot 同场 Venue、入站脊柱（`inbound-spine`）与 Database/Outbound/Inbox Host |
 | Agent Harness | `@zhin.js/harness` | Actor 邮局（Mail / Mailbox / Engagement）、权限单调衰减、预算守恒、GuardKernel 与 Engagement Journal（ADR 0048） |
 | Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime`） | 统一信箱入站脊柱（`unified-mailbox-spine`）、ZhinAgent、多模型编排、安全沙箱、MCP 与 Agent/Inference Host |
-| Console | `@zhin.js/console-protocol`、`@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/pagemanager`、`@zhin.js/client` | RPC/事件协议常量、Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderPageShell` / `renderConsoleIndex`） |
+| Console | `@zhin.js/console-protocol`、`@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/pagemanager`、`@zhin.js/client`、`@zhin.js/console-ui` | RPC/事件协议常量、Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderPageShell` / `renderConsoleIndex`） |
 | 门面与运行时 | `zhin.js`（含 `zhin.js/instance` 实例装配根）、`@zhin.js/runtime`（含 `config-file` / `isolate` 子路径）、`@zhin.js/gateway`、`@zhin.js/cli` | 公共入口、generation 编排、Root Host 与进程生命周期；HTTP/Protocol/Speech/HTML-Renderer Host 由 `zhin.js/instance` 装配；CLI 管理项目并按项目解析实例入口 |
 
 `pnpm check:architecture` 强制依赖方向。`packages/im/zhin/src/instance/`（`zhin.js/instance`，ADR 0054 §0）是唯一
