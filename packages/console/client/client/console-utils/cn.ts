@@ -1,6 +1,5 @@
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+/**
+ * `cn()` lives in `@zhin.js/console-ui` (ADR 0063 决策 1); re-exported here so existing
+ * `import { cn } from '@zhin.js/client'` keeps working.
+ */
+export { cn } from "@zhin.js/console-ui/cn";

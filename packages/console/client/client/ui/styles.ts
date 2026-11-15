@@ -2,6 +2,10 @@
  * 插件页与 Console 通用 UI 套件样式（一份字符串，用 `<style>{pluginUiStyles}</style>` 注入）。
  * 只使用 Console 主题变量（带回退值），不依赖 Tailwind 工具类，类名统一 `zk-` 前缀。
  * 暗色由 Console 切换 `.dark` 时变量自动变化，自适应桌面与移动端。
+ *
+ * 弃用（ADR 0063）：令牌只在 `@zhin.js/console-ui` 的 `tokens.css` 定义一次；下面的 `--zk-*`
+ * 只是指向这些令牌的别名，括号里的回退值仅在页面没有加载令牌时生效，P4 与 `zk-` 一起删除。
+ * 没有对应令牌的几项（`--zk-text-xs`、`--zk-control-lg`、`--zk-font-mono` 与派生色）保持原值。
  */
 export const pluginUiStyles = `
 .zk-root, .zhin-console-surface {
@@ -21,7 +25,7 @@ export const pluginUiStyles = `
   --zk-warning-soft: hsl(var(--status-warning, 35 88% 36%) / .12);
   --zk-danger: hsl(var(--status-danger, 0 72% 46%));
   --zk-info: hsl(var(--status-info, 217 78% 52%));
-  --zk-radius-xs: 6px;
+  --zk-radius-xs: var(--console-radius-sm, 6px);
   --zk-radius-sm: var(--console-radius-sm, 8px);
   --zk-radius-md: var(--console-radius-md, 12px);
   --zk-radius-lg: var(--console-radius-lg, 18px);
