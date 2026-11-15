@@ -23,6 +23,7 @@ export {
   upsertDotenv,
   type ConsoleSetupServiceOptions,
   type SetupConfigPort,
+  type SetupDatabaseApplyResult,
   type SetupDatabaseField,
   type SetupDatabaseInput,
   type SetupDatabaseSummary,

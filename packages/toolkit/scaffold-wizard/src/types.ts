@@ -13,6 +13,8 @@ export interface InitOptions {
   config?: 'json' | 'yaml';
   yes?: boolean;
   httpToken?: string;
+  /** `http.port` of the generated config; default `DEFAULT_CREATE_BOT_HTTP_PORT` (8068). */
+  httpPort?: number;
   database?: DatabaseConfig;
   ai?: AISetupConfig;
   adapters?: AdapterSetupResult;

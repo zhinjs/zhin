@@ -95,15 +95,28 @@ Scaffolded projects already have these conventional scripts:
 }
 ```
 
-### service: System Service
+### service: System Service {#service}
 
 ```bash
 zhin service install [--user]
-zhin service uninstall [--user]
+zhin service start|stop|restart [--user]
 zhin service status [--user]
+zhin service uninstall [--user]
 ```
 
-Installs a start-on-boot / supervised service. `--user` uses user-level systemd on Linux; `status` works on Linux and macOS only. The service runs the gateway in the foreground (`zhin start --foreground --mode production --no-watch`); the gateway restarts the instance.
+The one recommended way to run the bot as a service and start it on boot ([ADR 0062 §2](../../adr/0062-one-path-per-task.md), Chinese). `install` generates the service file for the current system: a systemd unit on Linux (`--user` installs and enables a user unit; without it the unit goes to `.zhin/service/` and the `sudo` commands are printed), `~/Library/LaunchAgents/com.zhinjs.<project>.plist` loaded with `launchctl bootstrap` on macOS, and a Task Scheduler XML plus `schtasks` / NSSM commands on Windows.
+
+The file records the **current** absolute `node` path and the project's `node_modules/@zhin.js/cli/bin/zhin.js`, without `npx`, so a Node installed by nvm / fnm / volta starts at boot; run `zhin service install` again after changing Node versions or moving the project. The service runs the gateway in the foreground (`zhin start --foreground --mode production`) and **restarts it only after a failure** (systemd `Restart=on-failure`, launchd `KeepAlive.SuccessfulExit=false`): after `zhin stop` or `zhin service stop` the bot stays stopped until the next boot / login or `zhin service start`.
+
+When `zhin stop` meets a foreground gateway run by a service: with a legacy service file (`Restart=always` / `KeepAlive: true`, which would start the gateway again at once) it refuses and points to `zhin service stop` or a fresh `zhin service install`; with a current file it stops and says when the bot starts again. The scaffold no longer writes service files; the `.service`, `.plist`, `install-service.ps1` and `*-task.xml` files in older project roots are unused and can be deleted.
+
+Service files cannot contain control characters: `zhin service install` fails when the project path contains a newline or similar. The commands printed for you to copy are quoted for their shell (POSIX single quotes on Linux / macOS, PowerShell single quotes on Windows), and a target service file that is a symbolic link is not written.
+
+Windows limitations (unchanged in this release):
+- The scheduled task uses the `InteractiveToken` logon type, so **it does not start after boot until a user logs on**; use NSSM when the bot must run without a logged-on user.
+- The task's `RestartOnFailure` only retries when the task **fails to start**; a gateway that crashes while running is not started again.
+- `zhin service stop` uses `schtasks /End`, which **terminates** the process: the gateway cannot stop the instance gracefully.
+- NSSM installs a Windows service; `zhin service start|stop|restart` only control the scheduled task, so manage the NSSM service with `nssm start|stop|restart <name>`.
 
 ### db: restricted account of the Console SQL editor {#db}
 
@@ -116,7 +129,7 @@ On PostgreSQL / MySQL the Console SQL editor runs only on a separately logged-in
 ### console: Setup and User Management {#console}
 
 ```bash
-zhin console init [--status] [--reset-store]
+zhin console init [--status [--json]] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <username>] [--display-name <name>] [--password-stdin] [-y]
@@ -131,7 +144,7 @@ zhin console migrate [--revert]
 Console users, roles, sessions, API tokens and the audit log live in the gateway's own `.zhin/gateway.db` ([ADR 0049](../../adr/0049-console-rbac.md), [ADR 0059](../../adr/0059-gateway-storage-isolation.md)), not in the project database. These commands do the same as the Console's setup wizard and Access pages — use them on a server, in a container build, or when a password is lost.
 
 - **Who runs them**: while the project's gateway runs, the commands go to it over the local control socket `.zhin/gateway.sock` (a connection counts as the local owner), so a database switch or a new owner takes effect at once. Without a gateway they open `.zhin/gateway.db` directly (offline setup and rescue), after moving over the account tables an earlier version left in the project database. A socket that belongs to another system user or does not answer is an error; the command never edits files behind the gateway's back.
-- **`init`** has two steps: choose the database (the current configuration, usually SQLite, is kept by default), then create the first owner. Without flags it asks interactively; `--status` prints the setup state as JSON. Once an owner exists it fails — use `zhin console user` instead.
+- **`init`** has two steps: choose the database (the current configuration, usually SQLite, is kept by default), then create the first owner. Without flags it asks interactively; `--status` describes the setup state and the current database in a few lines, and `--status --json` prints it as JSON for scripts. Choosing the database already in use (for example `--database sqlite` on the default SQLite) writes nothing, shows no migration notice and does not restart the instance. Once an owner exists it fails — use `zhin console user` instead.
   - `--database <dialect>` switches database; pass connection fields as `--database-filename`, `--database-host`, `--database-port`, `--database-user`, `--database-database`, `--database-url`, `--database-db-name`, `--database-mode` and so on. The CLI tests the connection first, then writes the configuration and puts secret fields in `.env`.
   - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.

@@ -38,7 +38,7 @@ zhin schedule list|add|remove|pause|resume  # 管理运行中实例的持久化�
 zhin --help               # 全部命令
 ```
 
-命令分五组：运行（`start` / `stop` / `restart` / `status` / `logs` / `console`）、插件开发（`new` / `create` / `build` / `pub` / `install` / `uninstall` / `update` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service install` / `service uninstall` / `service status`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
+命令分五组：运行（`start` / `stop` / `restart` / `status` / `logs` / `console`）、插件开发（`new` / `create` / `build` / `pub` / `install` / `uninstall` / `update` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service install` / `service start` / `service stop` / `service restart` / `service status` / `service uninstall`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
 
 ## 进程模型与退出码
 

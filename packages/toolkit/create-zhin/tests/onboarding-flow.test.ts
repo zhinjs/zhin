@@ -61,8 +61,15 @@ describe('parseCreateArgs', () => {
   it('defaults to no optional steps', () => {
     expect(parseCreateArgs(['my-bot'])).toEqual({
       projectName: 'my-bot', yes: false, skipInstall: false, template: undefined, configFormat: undefined,
-      devSkills: undefined, database: undefined, adapters: undefined, ai: false,
+      devSkills: undefined, database: undefined, adapters: undefined, ai: false, with: [],
     });
+  });
+
+  it('reads --with pm2 (ADR 0062 §2) and rejects other values', () => {
+    expect(parseCreateArgs(['--with', 'pm2']).with).toEqual(['pm2']);
+    expect(parseCreateArgs(['--with=pm2', '--with', 'pm2']).with).toEqual(['pm2']);
+    expect(() => parseCreateArgs(['--with', 'docker'])).toThrow('--with');
+    expect(() => parseCreateArgs(['--with'])).toThrow('--with');
   });
 
   it('reads template, config format, dev skills, database, adapters and AI flags', () => {

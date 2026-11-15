@@ -77,7 +77,11 @@ describe('deploy/huggingface template', () => {
 
   describe.runIf(process.platform !== 'win32')('start.sh', () => {
     /** Runs start.sh against a fake `zhin` that records its calls and the environment of `start`. */
-    function run(env: Record<string, string>) {
+    /**
+     * `legacyCli`: a @zhin.js/cli before 1.6 — `--json` is an unknown option (exit 1) and
+     * `console init --status` prints the JSON itself.
+     */
+    function run(env: Record<string, string>, options: { legacyCli?: boolean } = {}) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-hf-start-'));
       try {
         fs.mkdirSync(path.join(dir, 'node_modules/.bin'), { recursive: true });
@@ -87,7 +91,12 @@ describe('deploy/huggingface template', () => {
           '#!/bin/sh',
           'echo "$*" >> calls.log',
           'case "$*" in',
-          '  "console init --status") echo \'{ "setupRequired": true }\' ;;',
+          ...(options.legacyCli
+            ? [
+              '  "console init --status --json") echo "error: unknown option \'--json\'" >&2; exit 1 ;;',
+              '  "console init --status") echo \'{ "setupRequired": true }\' ;;',
+            ]
+            : ['  "console init --status --json") echo \'{ "setupRequired": true }\' ;;']),
           '  "console user list") : ;;',
           '  start*) env > start-env.log ;;',
           '  *) cat > /dev/null ;;',
@@ -132,6 +141,14 @@ describe('deploy/huggingface template', () => {
       expect(token).toMatch(/^[\w-]{43}$/u);
       expect(result.output).not.toContain(token!);
       expect(result.startEnv).not.toMatch(/^(?:OWNER|DEMO)_PASSWORD=/mu);
+    });
+
+    it('falls back to the JSON of an older CLI that does not know --json', () => {
+      const result = run({ OWNER_PASSWORD: 'long-enough-pass' }, { legacyCli: true });
+      expect(result.status).toBe(0);
+      expect(result.calls.split('\n')).toEqual(expect.arrayContaining(['console init --status --json', 'console init --status']));
+      expect(result.calls).toContain('console init --yes --owner maintainer --password-stdin');
+      expect(result.output).not.toContain('unknown option');
     });
 
     it('starts with the HTTP_TOKEN secret alone (setup finished in the Console)', () => {
