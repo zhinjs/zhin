@@ -144,7 +144,6 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     ['traditional 認領', `認領 ${CODE}`],
     ['full-width', `ｃｌａｉｍ ａａａａ２２２２`],
     ['认领码', `认领码${CODE}`],
-    ['trailing words', `认领 ${CODE} 谢谢`],
     ['split code', `认领 AAAA 2222`],
     ['trailing punctuation', `认领 ${CODE}!!!!`],
     ['zero-width characters', `认领 AA\u200BAA\u200D2222`],
@@ -155,6 +154,22 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     expect(hasGlobalOwner(roles)).toBe(true);
     expect(agent).not.toHaveBeenCalled();
     expect(await leaked()).toBe(false);
+  });
+
+  it.each([
+    ['trailing words', `认领 ${CODE} 谢谢`],
+    ['a long word carrying the code', `认领 ${'Z'.repeat(400)}${CODE}ZZZZ`],
+    ['the command with a long word', `#认领 ${'Z'.repeat(400)}${CODE}`],
+    ['many candidates, not claim-shaped', `${Array.from({ length: 300 }, (_, index) => `Z${String(index).padStart(3, '2')}ZZZZ`).join(' ')} ${CODE}`],
+  ])('a private message carrying the code among other text (%s) revokes it and does not claim (#1289 review)', async (_label, text) => {
+    const { send, agent, leaked, roles, claim } = await setup();
+    expect(await send('qq', 'private', text)).toContain('码已作废');
+    expect(hasGlobalOwner(roles)).toBe(false);
+    expect(agent).not.toHaveBeenCalled();
+    expect(await leaked()).toBe(false);
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+    expect(await send('qq', 'private', `认领 ${NEXT}`, 'bob')).toContain('认领成功');
   });
 
   it('a group message that @mentions the bot and carries the code burns it', async () => {
