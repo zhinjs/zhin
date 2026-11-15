@@ -5,11 +5,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '../../cn.js'
 
 const buttonVariants = cva(
-  "console-control inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--console-radius-md)] border border-transparent text-[length:var(--console-text-body)] font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "console-control inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control border border-transparent text-body font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border-[hsl(var(--primary-action-border))] bg-[hsl(var(--primary-action))] text-[hsl(var(--primary-action-foreground))] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-action)/0.72)]",
+        default: "border-primary-action-border bg-primary-action text-primary-action-foreground hover:border-primary hover:bg-primary-action/72",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline: "border-[color:var(--console-border-strong)] bg-card text-foreground hover:bg-[var(--console-surface-hover)]",
         // Page-level entry to a dangerous action (ADR 0063 决策 5): the outline button with destructive text.
@@ -20,10 +20,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-[var(--console-control-height)] px-3.5 py-1.5",
-        sm: "h-[var(--console-control-height-sm)] rounded-[var(--console-radius-md)] px-3 text-[length:var(--console-text-body-sm)]",
-        lg: "h-[var(--console-control-height-lg)] rounded-[var(--console-radius-md)] px-5",
-        icon: "h-[var(--console-control-height)] w-[var(--console-control-height)] shrink-0",
+        default: "h-control px-3",
+        sm: "h-control-compact px-3 text-label",
+        lg: "h-control px-4",
+        icon: "size-control shrink-0",
       },
     },
     defaultVariants: {
@@ -46,6 +46,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : "button"
     return (
       <Comp
+        data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}

@@ -1,12 +1,8 @@
 /*
- * @zhin.js/console-ui — document base the components rely on (moved from the Console's
- * client/style.css and design-system.css; P1a: no value changes).
+ * @zhin.js/console-ui — document base the components rely on. Values come from the tokens only
+ * (ADR 0063 D16): type scale, at most three weights, the focus ring.
  */
 @layer base {
-  html {
-    font-size: 100%;
-  }
-
   * {
     border-color: hsl(var(--border));
     -webkit-font-smoothing: antialiased;
@@ -26,17 +22,17 @@
     text-rendering: optimizeLegibility;
   }
 
-  *:focus-visible {
-    outline: var(--console-focus-width) solid hsl(var(--ring));
-    outline-offset: 2px;
+  /* Preflight's `bolder` would add a fourth weight (700). */
+  b, strong {
+    font-weight: var(--console-weight-strong);
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  th {
+    font-weight: var(--console-weight-medium);
+  }
+
+  *:focus-visible {
+    outline: var(--console-focus-ring);
+    outline-offset: var(--console-focus-ring-offset);
   }
 }

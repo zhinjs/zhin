@@ -20,8 +20,8 @@ export function EmptyState({ icon: Icon, title, description, className, compact 
   const i18n = useConsoleUiI18n()
   if (compact) {
     return (
-      <div className={cn('flex flex-col items-center gap-2 py-8 text-center', className)}>
-        {Icon && <Icon className="w-8 h-8 text-muted-foreground opacity-30" />}
+      <div className={cn('console-empty', className)} data-compact="">
+        {Icon && <Icon className="size-8 text-muted-foreground opacity-30" />}
         <p className="console-text-body text-muted-foreground">{title || i18n.t("empty.noData")}</p>
         {description && <p className="console-text-label text-muted-foreground">{description}</p>}
       </div>
@@ -29,8 +29,8 @@ export function EmptyState({ icon: Icon, title, description, className, compact 
   }
 
   return (
-    <div className={cn('flex flex-col items-center gap-3 py-12 text-center', className)}>
-      {Icon && <Icon className="w-12 h-12 text-muted-foreground opacity-30" />}
+    <div className={cn('console-empty', className)}>
+      {Icon && <Icon className="size-12 text-muted-foreground opacity-30" />}
       {title && <h3 className="console-section-title">{title}</h3>}
       <p className="console-text-body text-muted-foreground max-w-sm">{description || i18n.t("empty.noData")}</p>
     </div>

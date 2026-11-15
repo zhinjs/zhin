@@ -34,5 +34,23 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(dialog.getByRole('button', { name: '删除' })).toBeDisabled();
       await expect(page).toHaveScreenshot(`dialog-${theme}.png`);
     });
+
+    test.describe('phone width (375px)', () => {
+      test.use({ viewport: { width: 375, height: 812 } });
+
+      test('header actions fold into 「更多」, table rows become cards', async ({ page }) => {
+        const header = page.locator('.console-page-header');
+        await expect(header.getByRole('button', { name: '新建订阅' })).toBeVisible();
+        await expect(header.getByRole('button', { name: '导入' })).toHaveCount(0);
+        await expect(header.getByRole('button', { name: '更多' })).toBeVisible();
+        await expect(page).toHaveScreenshot(`gallery-mobile-${theme}.png`, { fullPage: true });
+      });
+
+      test('select opens as a bottom drawer', async ({ page }) => {
+        await page.getByRole('combobox', { name: '筛选' }).click();
+        await expect(page.getByRole('option', { name: '已暂停' })).toBeVisible();
+        await expect(page).toHaveScreenshot(`select-mobile-${theme}.png`);
+      });
+    });
   });
 }

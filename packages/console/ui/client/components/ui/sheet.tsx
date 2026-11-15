@@ -19,7 +19,7 @@ const SheetOverlay = forwardRef<
   <SheetPrimitive.Overlay
     ref={ref}
     className={cn(
-      "console-sheet-overlay data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "console-sheet-overlay",
       className
     )}
     {...props}
@@ -40,12 +40,13 @@ const SheetContent = forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       data-side={side}
+      data-slot="sheet"
       className={cn("console-sheet-content outline-none", className)}
       {...props}
     >
       {children}
       <SheetPrimitive.Close className="console-dialog-close disabled:pointer-events-none">
-        <X className="h-4 w-4" />
+        <X className="size-4" />
         <span className="sr-only"><ConsoleUiText id="dialog.close" /></span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
@@ -86,7 +87,7 @@ const SheetDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Description
     ref={ref}
-    className={cn("text-[length:var(--console-text-body)] text-muted-foreground", className)}
+    className={cn("text-body text-muted-foreground", className)}
     {...props}
   />
 ))

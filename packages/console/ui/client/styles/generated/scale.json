@@ -1,0 +1,619 @@
+{
+  "$comment": "Generated from @zhin.js/console-ui tokens/tokens.mjs by tokens/generate.mjs (ADR 0063 D17). Do not edit.",
+  "breakpoints": {
+    "sm": "40rem",
+    "md": "48rem",
+    "lg": "64rem",
+    "xl": "90rem"
+  },
+  "text": {
+    "label": "0.8125rem",
+    "body": "0.875rem",
+    "section": "1rem",
+    "title": "1.375rem",
+    "display": "1.75rem"
+  },
+  "weight": {
+    "regular": "400",
+    "medium": "500",
+    "strong": "600"
+  },
+  "space": {
+    "space-1": {
+      "value": "0.25rem",
+      "tailwind": "1"
+    },
+    "space-2": {
+      "value": "0.5rem",
+      "tailwind": "2"
+    },
+    "space-3": {
+      "value": "0.75rem",
+      "tailwind": "3"
+    },
+    "space-4": {
+      "value": "1rem",
+      "tailwind": "4"
+    },
+    "space-5": {
+      "value": "1.5rem",
+      "tailwind": "6"
+    },
+    "space-6": {
+      "value": "2rem",
+      "tailwind": "8"
+    },
+    "space-7": {
+      "value": "3rem",
+      "tailwind": "12"
+    },
+    "space-8": {
+      "value": "4rem",
+      "tailwind": "16"
+    }
+  },
+  "radius": {
+    "r-0": "0rem",
+    "r-1": "0.375rem",
+    "r-2": "0.625rem",
+    "r-3": "0.875rem",
+    "r-4": "1.125rem",
+    "r-full": "9999px"
+  },
+  "border": {
+    "hairline": "1px",
+    "focus": "2px"
+  },
+  "elevation": [
+    "e-0",
+    "e-1",
+    "e-2",
+    "e-3"
+  ],
+  "contentWidth": {
+    "reading": "60rem",
+    "data": "120rem"
+  },
+  "touchTarget": "2.75rem",
+  "semantic": {
+    "page-padding-inline": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-3",
+      "sm": "space-4",
+      "lg": "clamp(space-4, 2.5vw, space-6)"
+    },
+    "page-padding-block": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-4",
+      "sm": "space-5",
+      "lg": "space-6"
+    },
+    "section-gap": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-4",
+      "sm": "space-5",
+      "lg": "space-6"
+    },
+    "stack-gap": {
+      "kind": "space",
+      "base": "space-2",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "inline-gap": {
+      "kind": "space",
+      "base": "space-2",
+      "sm": "space-2",
+      "lg": "space-2"
+    },
+    "heading-gap": {
+      "kind": "space",
+      "base": "space-1",
+      "sm": "space-1",
+      "lg": "space-1"
+    },
+    "card-padding": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-4",
+      "lg": "space-4"
+    },
+    "card-padding-wide": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-4",
+      "lg": "space-5"
+    },
+    "card-radius": {
+      "kind": "radius",
+      "base": "r-2",
+      "sm": "r-3",
+      "lg": "r-3"
+    },
+    "card-edge-radius": {
+      "kind": "radius",
+      "base": "r-0",
+      "sm": "r-3",
+      "lg": "r-3"
+    },
+    "card-border": {
+      "kind": "border",
+      "base": "hairline",
+      "sm": "hairline",
+      "lg": "hairline"
+    },
+    "card-elevation": {
+      "kind": "elevation",
+      "base": "e-0",
+      "sm": "e-0",
+      "lg": "e-0"
+    },
+    "card-hover-elevation": {
+      "kind": "elevation",
+      "base": "e-0",
+      "sm": "e-0",
+      "lg": "e-1"
+    },
+    "grid-gap": {
+      "kind": "space",
+      "base": "space-2",
+      "sm": "space-3",
+      "lg": "space-4"
+    },
+    "list-row-padding": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-2",
+      "lg": "space-2"
+    },
+    "list-row-padding-inline": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "control-height": {
+      "kind": "size",
+      "base": "2.75rem",
+      "sm": "2.25rem",
+      "lg": "2.25rem"
+    },
+    "control-height-compact": {
+      "kind": "size",
+      "base": "2.75rem",
+      "sm": "2.25rem",
+      "lg": "2rem"
+    },
+    "control-radius": {
+      "kind": "radius",
+      "base": "r-2",
+      "sm": "r-2",
+      "lg": "r-2"
+    },
+    "check-radius": {
+      "kind": "radius",
+      "base": "r-1",
+      "sm": "r-1",
+      "lg": "r-1"
+    },
+    "segment-radius": {
+      "kind": "radius",
+      "base": "r-1",
+      "sm": "r-1",
+      "lg": "r-1"
+    },
+    "control-padding-inline": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "control-gap": {
+      "kind": "space",
+      "base": "space-2",
+      "sm": "space-2",
+      "lg": "space-2"
+    },
+    "control-border": {
+      "kind": "border",
+      "base": "hairline",
+      "sm": "hairline",
+      "lg": "hairline"
+    },
+    "touch-min": {
+      "kind": "size",
+      "base": "2.75rem",
+      "sm": "0rem",
+      "lg": "0rem"
+    },
+    "badge-height": {
+      "kind": "size",
+      "base": "1.25rem",
+      "sm": "1.25rem",
+      "lg": "1.25rem"
+    },
+    "badge-radius": {
+      "kind": "radius",
+      "base": "r-full",
+      "sm": "r-full",
+      "lg": "r-full"
+    },
+    "badge-padding-inline": {
+      "kind": "space",
+      "base": "space-2",
+      "sm": "space-2",
+      "lg": "space-2"
+    },
+    "popover-radius": {
+      "kind": "radius",
+      "scope": "viewport",
+      "base": "r-4 r-4 r-0 r-0",
+      "sm": "r-3",
+      "lg": "r-3"
+    },
+    "popover-item-radius": {
+      "kind": "radius",
+      "scope": "viewport",
+      "base": "r-3",
+      "sm": "r-2",
+      "lg": "r-2"
+    },
+    "popover-padding": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-1",
+      "sm": "space-1",
+      "lg": "space-1"
+    },
+    "popover-elevation": {
+      "kind": "elevation",
+      "scope": "viewport",
+      "base": "e-3",
+      "sm": "e-2",
+      "lg": "e-2"
+    },
+    "dialog-radius": {
+      "kind": "radius",
+      "scope": "viewport",
+      "base": "r-4 r-4 r-0 r-0",
+      "sm": "r-4",
+      "lg": "r-4"
+    },
+    "dialog-padding": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-4",
+      "sm": "space-5",
+      "lg": "space-5"
+    },
+    "dialog-elevation": {
+      "kind": "elevation",
+      "scope": "viewport",
+      "base": "e-3",
+      "sm": "e-3",
+      "lg": "e-3"
+    },
+    "dialog-close-clearance": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "space-7",
+      "sm": "space-7",
+      "lg": "space-7"
+    },
+    "sheet-radius": {
+      "kind": "radius",
+      "scope": "viewport",
+      "base": "r-4",
+      "sm": "r-4",
+      "lg": "r-4"
+    },
+    "focus-ring-width": {
+      "kind": "border",
+      "scope": "viewport",
+      "base": "focus",
+      "sm": "focus",
+      "lg": "focus"
+    },
+    "focus-ring-offset": {
+      "kind": "space",
+      "scope": "viewport",
+      "base": "2px",
+      "sm": "2px",
+      "lg": "2px"
+    }
+  },
+  "tailwind": {
+    "spacingKeys": [
+      "0",
+      "px",
+      "1",
+      "2",
+      "3",
+      "4",
+      "6",
+      "8",
+      "12",
+      "16"
+    ],
+    "sizingKeys": [
+      "0",
+      "0.5",
+      "1",
+      "1.5",
+      "2",
+      "2.5",
+      "3",
+      "3.5",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "14",
+      "16",
+      "20",
+      "24",
+      "28",
+      "32",
+      "36",
+      "40",
+      "44",
+      "48",
+      "52",
+      "56",
+      "60",
+      "64",
+      "72",
+      "80",
+      "96",
+      "control",
+      "control-compact",
+      "touch",
+      "touch-min",
+      "badge"
+    ],
+    "radiusKeys": [
+      "none",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "full",
+      "card",
+      "card-edge",
+      "control",
+      "check",
+      "segment",
+      "badge",
+      "popover",
+      "popover-item",
+      "dialog",
+      "sheet"
+    ],
+    "shadowKeys": [
+      "none",
+      "e1",
+      "e2",
+      "e3",
+      "card",
+      "card-hover",
+      "popover",
+      "dialog"
+    ],
+    "textKeys": [
+      "label",
+      "body",
+      "section",
+      "title",
+      "display"
+    ],
+    "fontWeightKeys": [
+      "regular",
+      "medium",
+      "strong"
+    ],
+    "breakpointKeys": [
+      "sm",
+      "md",
+      "lg",
+      "xl"
+    ],
+    "borderWidthKeys": [
+      "0",
+      "px",
+      "hairline",
+      "focus"
+    ]
+  },
+  "css": {
+    "baseTokens": [
+      "--console-text-label",
+      "--console-leading-label",
+      "--console-text-body",
+      "--console-leading-body",
+      "--console-text-section",
+      "--console-leading-section",
+      "--console-text-title",
+      "--console-leading-title",
+      "--console-text-display",
+      "--console-leading-display",
+      "--console-weight-regular",
+      "--console-weight-medium",
+      "--console-weight-strong",
+      "--console-space-1",
+      "--console-space-2",
+      "--console-space-3",
+      "--console-space-4",
+      "--console-space-5",
+      "--console-space-6",
+      "--console-space-7",
+      "--console-space-8",
+      "--console-radius-0",
+      "--console-radius-1",
+      "--console-radius-2",
+      "--console-radius-3",
+      "--console-radius-4",
+      "--console-radius-full",
+      "--console-border-hairline",
+      "--console-border-focus",
+      "--console-elevation-0",
+      "--console-elevation-1",
+      "--console-elevation-2",
+      "--console-elevation-3",
+      "--console-bp-sm",
+      "--console-bp-md",
+      "--console-bp-lg",
+      "--console-bp-xl",
+      "--console-content-reading",
+      "--console-content-data",
+      "--console-touch-target",
+      "--console-font-sans",
+      "--console-font-mono",
+      "--console-line-code",
+      "--console-leading-code",
+      "--console-shadow-color",
+      "--console-ease-out",
+      "--console-duration-page",
+      "--console-duration-fast",
+      "--console-surface-raised",
+      "--console-surface-muted",
+      "--console-surface-inset",
+      "--console-surface-hover",
+      "--console-surface-active",
+      "--console-border-subtle",
+      "--console-border-default",
+      "--console-border-strong",
+      "--console-shadow-ring"
+    ],
+    "semanticTokens": [
+      "--console-page-padding-inline",
+      "--console-page-padding-block",
+      "--console-section-gap",
+      "--console-stack-gap",
+      "--console-inline-gap",
+      "--console-heading-gap",
+      "--console-card-padding",
+      "--console-card-padding-wide",
+      "--console-card-radius",
+      "--console-card-edge-radius",
+      "--console-card-border",
+      "--console-card-elevation",
+      "--console-card-hover-elevation",
+      "--console-grid-gap",
+      "--console-list-row-padding",
+      "--console-list-row-padding-inline",
+      "--console-control-height",
+      "--console-control-height-compact",
+      "--console-control-radius",
+      "--console-check-radius",
+      "--console-segment-radius",
+      "--console-control-padding-inline",
+      "--console-control-gap",
+      "--console-control-border",
+      "--console-touch-min",
+      "--console-badge-height",
+      "--console-badge-radius",
+      "--console-badge-padding-inline",
+      "--console-popover-radius",
+      "--console-popover-item-radius",
+      "--console-popover-padding",
+      "--console-popover-elevation",
+      "--console-dialog-radius",
+      "--console-dialog-padding",
+      "--console-dialog-elevation",
+      "--console-dialog-close-clearance",
+      "--console-sheet-radius",
+      "--console-focus-ring-width",
+      "--console-focus-ring-offset",
+      "--console-focus-ring",
+      "--console-content-max"
+    ],
+    "aliasTokens": [
+      "--console-radius-sm",
+      "--console-radius-md",
+      "--console-radius-lg",
+      "--console-radius-xl",
+      "--console-radius-2xl",
+      "--console-shadow-xs",
+      "--console-shadow-sm",
+      "--console-shadow-md",
+      "--console-shadow-lg",
+      "--console-shadow-xl",
+      "--console-shadow-panel",
+      "--console-shadow-hover",
+      "--console-shadow-button",
+      "--console-space-page-x",
+      "--console-space-page-y",
+      "--console-space-section",
+      "--console-space-stack",
+      "--console-space-card",
+      "--console-space-card-sm",
+      "--console-control-height-sm",
+      "--console-control-height-lg",
+      "--console-border-width",
+      "--console-focus-width",
+      "--console-text-caption",
+      "--console-text-code",
+      "--console-text-body-sm",
+      "--console-text-section-sm",
+      "--console-text-title-compact",
+      "--radius"
+    ],
+    "customMedia": {
+      "--console-sm": "(min-width: 40rem)",
+      "--console-below-sm": "(width < 40rem)",
+      "--console-md": "(min-width: 48rem)",
+      "--console-below-md": "(width < 48rem)",
+      "--console-lg": "(min-width: 64rem)",
+      "--console-below-lg": "(width < 64rem)",
+      "--console-xl": "(min-width: 90rem)",
+      "--console-below-xl": "(width < 90rem)"
+    },
+    "mediaParams": [
+      "(min-width: 40rem)",
+      "(width >= 40rem)",
+      "(width < 40rem)",
+      "(min-width: 48rem)",
+      "(width >= 48rem)",
+      "(width < 48rem)",
+      "(min-width: 64rem)",
+      "(width >= 64rem)",
+      "(width < 64rem)",
+      "(min-width: 90rem)",
+      "(width >= 90rem)",
+      "(width < 90rem)",
+      "(prefers-reduced-motion: reduce)",
+      "(prefers-reduced-motion: no-preference)",
+      "(prefers-color-scheme: dark)",
+      "(prefers-color-scheme: light)",
+      "(prefers-contrast: more)",
+      "(forced-colors: active)",
+      "(hover: hover)",
+      "(pointer: coarse)",
+      "print"
+    ],
+    "containerParams": [
+      "(width < 40rem)",
+      "(40rem <= width < 64rem)",
+      "(width >= 64rem)",
+      "(min-width: 40rem)",
+      "(width >= 40rem)",
+      "(min-width: 48rem)",
+      "(width >= 48rem)",
+      "(width < 48rem)",
+      "(min-width: 64rem)",
+      "(width < 64rem)",
+      "(min-width: 90rem)",
+      "(width >= 90rem)",
+      "(width < 90rem)"
+    ]
+  }
+}
