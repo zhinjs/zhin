@@ -177,6 +177,9 @@ describe('attention.list failure reasons (#1270)', () => {
         pending: [{ id: 'p1', source: 'qq.admins', adapter: 'qq', userId: '2', role: 'admin', seenAt: NOW - 1 }] }),
       inferenceAccounts: async () => [{ accountId: 'accounts:a', label: 'A', serviceLabel: 'S', state: 'reauthorize', revision: 1 }],
       ineffectiveConfig: async () => [{ path: 'purposes.agents.typo', reason: 'no-target' }],
+      commandConflicts: () => [{ route: '排行',
+        skipped: { plugin: 'game-hub', owner: 'root/game-hub', command: '排行', localPath: '排行', kind: 'command' },
+        kept: { plugin: 'group-suite', owner: 'root/group-suite', command: '排行', localPath: '排行', kind: 'command' } }],
     };
   }
 

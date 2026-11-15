@@ -60,6 +60,14 @@ export type ConsoleAttentionKind =
   | 'plugin.dependencies'
   /** A declared plugin's configuration does not validate or references unset variables. */
   | 'plugin.config'
+  /**
+   * Two registrations claim the same command route (#1250): the later command (primary route) or
+   * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` (instance key) and
+   * `subject.pluginId` (full id) name the plugin that lost it, `subject.commandRoute` the route, `subject.command` / `commandKind` the
+   * skipped command and which of its routes. `danger` when a later plugin's command took an earlier
+   * plugin's alias or shortcut. Visible with `feature.view`.
+   */
+  | 'command.conflict'
   /** The project configuration file cannot be read or parsed. */
   | 'config.invalid'
   /** The last configuration change was not applied (failed / blocked / unconfirmed). */
@@ -105,7 +113,7 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
-  'inference.account', 'config.ineffective',
+  'inference.account', 'config.ineffective', 'command.conflict',
 ]);
 
 /**
@@ -132,6 +140,7 @@ export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentio
   'chat-roles.import-pending': 'iam.manage',
   'inference.account': 'agent.view',
   'config.ineffective': 'agent.view',
+  'command.conflict': 'feature.view',
 });
 
 /** The object an item is about. Absent fields do not apply. */
@@ -154,6 +163,17 @@ export interface ConsoleAttentionSubject {
   readonly inferenceAccount?: string;
   /** Configuration path of an ineffective setting (e.g. `purposes.agents.planner`, #1270). */
   readonly configPath?: string;
+  /** Command route a `command.conflict` is about (words separated by spaces, #1250). */
+  readonly commandRoute?: string;
+  /** Display name of the command whose route a `command.conflict` skipped (#1250). */
+  readonly command?: string;
+  /** Which of its routes was skipped: `command` (the whole command), `alias` or `shortcut` (#1250). */
+  readonly commandKind?: string;
+  /**
+   * Full plugin id of `plugin` (`command.conflict`, #1250): instance keys can repeat under different
+   * parent plugins, so the id keeps such items apart.
+   */
+  readonly pluginId?: string;
 }
 
 /**

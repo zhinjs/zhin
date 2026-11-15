@@ -1021,16 +1021,25 @@ describe('Command Feature', () => {
     await expect(index.dispatch({ input: 'child.status' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
-  it('rejects the same user route published by different owners', () => {
+  // #1250: across plugins the route no longer throws (that failed the whole instance): the
+  // earlier plugin keeps it and the later one is skipped and reported. Same-plugin collisions
+  // above still throw.
+  it('keeps the earlier owner of a user route published by different owners and reports the later one', () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
     const rootSlot = slotFor(root, 'status');
     const childSlot = slotFor(child, 'status');
 
-    expect(() => new CommandIndex(
+    const index = new CommandIndex(
       [rootSlot, childSlot],
       snapshotWithOwners([child], [rootSlot, childSlot]),
-    )).toThrow(/Duplicate Command route "status"/);
+    );
+    expect(index.list().map(command => command.owner)).toEqual([root]);
+    expect(index.conflicts()).toEqual([expect.objectContaining({
+      route: 'status',
+      skipped: expect.objectContaining({ owner: child, plugin: 'child', command: 'status', kind: 'command' }),
+      kept: expect.objectContaining({ owner: root, plugin: 'root', root: true, command: 'status', kind: 'command' }),
+    })]);
   });
 
   it('uses only an explicitly configured plugin commandNamespace', async () => {
