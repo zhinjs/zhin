@@ -43,30 +43,28 @@ export const sandboxStyles = `
 }
 .zhin-sandbox *, .zhin-sandbox *::before, .zhin-sandbox *::after { box-sizing: border-box; }
 .zhin-sandbox :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, pre) { margin: 0; }
-.zhin-sandbox :where(button, input, select, textarea) { font: inherit; color: inherit; }
-.zhin-sandbox :where(a) { color: var(--sb-primary); text-underline-offset: 3px; overflow-wrap: anywhere; }
-.zhin-sandbox :where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--sb-ring); outline-offset: 2px; }
+.zhin-sandbox :where(button, input, select, textarea):where(:not(.console-control, [data-state])) { font: inherit; color: inherit; }
+.zhin-sandbox :where(a):where(:not(.console-control, [data-state])) { color: var(--sb-primary); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.zhin-sandbox :where(button, a, input, select, textarea, summary):focus-visible:where(:not(.console-control, [data-state])) { outline: 2px solid var(--sb-ring); outline-offset: 2px; }
 .zhin-sandbox [hidden] { display: none !important; }
 
 /* ---------- Shell ---------- */
 .zhin-sandbox.agent-playground-shell { position: relative; display: grid; grid-template-columns: 232px minmax(0,1fr); width: 100%; height: calc(100dvh - 72px); min-height: 520px; overflow: hidden; isolation: isolate; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-lg); background: var(--sb-bg); }
 
 /* ---------- Shared controls ---------- */
-.zhin-sandbox button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-bg); color: var(--sb-fg); font-size: 13px; line-height: 1.4; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
-.zhin-sandbox button:hover:not(:disabled) { background: var(--sb-accent); }
-.zhin-sandbox button:disabled { opacity: .5; cursor: not-allowed; }
-.zhin-sandbox button.primary, .zhin-sandbox .sandbox-send, .zhin-sandbox .sandbox-submit { background: var(--sb-primary); color: var(--sb-primary-fg); border-color: var(--sb-primary); }
-.zhin-sandbox button.primary:hover:not(:disabled), .zhin-sandbox .sandbox-send:hover:not(:disabled), .zhin-sandbox .sandbox-submit:hover:not(:disabled) { background: var(--sb-primary); opacity: .9; }
-.zhin-sandbox button.danger { background: var(--sb-danger); color: var(--sb-danger-fg); border-color: var(--sb-danger); }
-.zhin-sandbox button.danger:hover:not(:disabled) { background: var(--sb-danger); opacity: .9; }
-.zhin-sandbox :where(input:not([type="checkbox"]), select) { width: 100%; min-width: 0; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-input); border-radius: var(--sb-radius-sm); background: var(--sb-bg); color: var(--sb-fg); font-size: 13px; line-height: 1.5; }
-.zhin-sandbox :where(input, select):disabled { opacity: .6; cursor: not-allowed; background: var(--sb-muted); }
-.zhin-sandbox :where(input)::placeholder { color: var(--sb-muted-fg); }
-.zhin-sandbox .sandbox-input { width: 100%; }
+.zhin-sandbox button:where(:not(.console-control, [data-state])) { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-bg); color: var(--sb-fg); font-size: 13px; line-height: 1.4; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
+.zhin-sandbox button:hover:not(:disabled):where(:not(.console-control, [data-state])) { background: var(--sb-accent); }
+.zhin-sandbox button:disabled:where(:not(.console-control, [data-state])) { opacity: .5; cursor: not-allowed; }
+.zhin-sandbox button.primary:where(:not(.console-control, [data-state])) { background: var(--sb-primary); color: var(--sb-primary-fg); border-color: var(--sb-primary); }
+.zhin-sandbox button.primary:hover:not(:disabled):where(:not(.console-control, [data-state])) { background: var(--sb-primary); opacity: .9; }
+.zhin-sandbox button.danger:where(:not(.console-control, [data-state])) { background: var(--sb-danger); color: var(--sb-danger-fg); border-color: var(--sb-danger); }
+.zhin-sandbox button.danger:hover:not(:disabled):where(:not(.console-control, [data-state])) { background: var(--sb-danger); opacity: .9; }
+.zhin-sandbox :where(input:not([type="checkbox"]), select):where(:not(.console-control, [data-state])) { width: 100%; min-width: 0; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-input); border-radius: var(--sb-radius-sm); background: var(--sb-bg); color: var(--sb-fg); font-size: 13px; line-height: 1.5; }
+.zhin-sandbox :where(input, select):disabled:where(:not(.console-control, [data-state])) { opacity: .6; cursor: not-allowed; background: var(--sb-muted); }
+.zhin-sandbox :where(input):where(:not(.console-control, [data-state]))::placeholder { color: var(--sb-muted-fg); }
 .zhin-sandbox .is-spinning { animation: sandbox-spin 1s linear infinite; }
 
 /* ---------- Mobile bar and overlays (hidden on wide screens) ---------- */
-.zhin-sandbox .agent-playground-mobilebar { display: none; }
 .zhin-sandbox .agent-playground-inspector-overlay, .zhin-sandbox .channel-overlay { display: none; }
 
 /* ---------- Sessions sidebar ---------- */
@@ -83,7 +81,7 @@ export const sandboxStyles = `
 .zhin-sandbox .is-online { color: var(--sb-ok); }
 .zhin-sandbox .agent-playground-section-label { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px 16px; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-section-label span:nth-child(2) { font-variant-numeric: tabular-nums; }
-.zhin-sandbox .agent-playground-section-label button { margin-left: auto; min-height: 28px; min-width: 28px; padding: 4px; background: transparent; border-color: transparent; color: var(--sb-muted-fg); }
+.zhin-sandbox .agent-playground-section-label button:where(:not(.console-control, [data-state])) { margin-left: auto; min-height: 28px; min-width: 28px; padding: 4px; background: transparent; border-color: transparent; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-session-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 10px; scrollbar-width: thin; }
 .zhin-sandbox .agent-playground-session { position: relative; width: 100%; justify-content: flex-start; gap: 10px; margin: 2px 0; padding: 9px 10px; border: 0; border-radius: var(--sb-radius-md); background: transparent; text-align: left; }
 .zhin-sandbox .agent-playground-session:hover:not(:disabled) { background: var(--sb-bg); }
@@ -95,12 +93,10 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-session-scope { margin-top: 2px; font-size: 12px; color: var(--sb-muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zhin-sandbox .agent-playground-unread { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--sb-danger); color: var(--sb-danger-fg); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .zhin-sandbox .agent-playground-new-session { padding: 10px 12px; border-top: 1px solid var(--sb-border-soft); }
-.zhin-sandbox .agent-playground-add { width: 100%; min-height: 36px; border: 1px dashed var(--sb-primary-line); background: var(--sb-primary-soft); color: var(--sb-primary); font-weight: 600; }
-.zhin-sandbox .agent-playground-add:hover:not(:disabled) { border-style: solid; background: var(--sb-primary-soft); }
 .zhin-sandbox .agent-playground-new-form { display: grid; gap: 8px; }
 .zhin-sandbox .agent-playground-scope-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border-radius: var(--sb-radius-md); background: var(--sb-muted); }
-.zhin-sandbox .agent-playground-scope-picker button { min-height: 30px; padding: 4px; border: 0; background: transparent; color: var(--sb-muted-fg); font-size: 12px; }
-.zhin-sandbox .agent-playground-scope-picker button.active { background: var(--sb-bg); color: var(--sb-fg); box-shadow: 0 1px 4px var(--sb-shadow); }
+.zhin-sandbox .agent-playground-scope-picker button:where(:not(.console-control, [data-state])) { min-height: 30px; padding: 4px; border: 0; background: transparent; color: var(--sb-muted-fg); font-size: 12px; }
+.zhin-sandbox .agent-playground-scope-picker button.active:where(:not(.console-control, [data-state])) { background: var(--sb-bg); color: var(--sb-fg); box-shadow: 0 1px 4px var(--sb-shadow); }
 .zhin-sandbox .agent-playground-new-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .zhin-sandbox .agent-playground-endpoint { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 10px 16px 12px; border-top: 1px solid var(--sb-border-soft); font-size: 12px; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-endpoint strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sb-mono); font-size: 12px; font-weight: 500; color: var(--sb-fg); }
@@ -112,61 +108,43 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-run-identity > div { flex: 1; min-width: 0; }
 .zhin-sandbox .agent-playground-run-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border: 1px solid var(--sb-primary-line); border-radius: var(--sb-radius-md); background: var(--sb-primary-soft); color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-run-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.zhin-sandbox .agent-playground-run-title h1 { min-width: 0; max-width: 100%; overflow: hidden; font-size: 16px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.zhin-sandbox .agent-playground-run-title h2 { min-width: 0; max-width: 100%; overflow: hidden; font-size: 16px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .zhin-sandbox .agent-playground-run-title span { flex-shrink: 0; padding: 1px 8px; border: 1px solid var(--sb-border); border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-run-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; max-width: 100%; margin-left: auto; }
-.zhin-sandbox .agent-playground-run-actions > a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); color: var(--sb-muted-fg); font-size: 13px; text-decoration: none; }
-.zhin-sandbox .agent-playground-run-actions > a:hover { background: var(--sb-accent); color: var(--sb-fg); }
-.zhin-sandbox .agent-playground-run-actions > button { color: var(--sb-muted-fg); }
-.zhin-sandbox .agent-playground-run-actions > button:hover:not(:disabled) { border-color: var(--sb-primary-line); color: var(--sb-primary); }
-.zhin-sandbox .agent-playground-run-actions > button.active { border-color: var(--sb-primary-line); background: var(--sb-primary-soft); color: var(--sb-primary); }
-.zhin-sandbox .agent-playground-run-actions > .agent-playground-stop { background: var(--sb-danger-soft); border-color: var(--sb-danger-line); color: var(--sb-danger); }
-.zhin-sandbox .agent-playground-run-actions > .agent-playground-stop:hover:not(:disabled) { background: var(--sb-danger-soft); border-color: var(--sb-danger); color: var(--sb-danger); }
+.zhin-sandbox .agent-playground-run-actions > a:where(:not(.console-control, [data-state])) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); color: var(--sb-muted-fg); font-size: 13px; text-decoration: none; }
+.zhin-sandbox .agent-playground-run-actions > a:hover:where(:not(.console-control, [data-state])) { background: var(--sb-accent); color: var(--sb-fg); }
+.zhin-sandbox .agent-playground-run-actions > button:where(:not(.console-control, [data-state])) { color: var(--sb-muted-fg); }
+.zhin-sandbox .agent-playground-run-actions > button:hover:not(:disabled):where(:not(.console-control, [data-state])) { border-color: var(--sb-primary-line); color: var(--sb-primary); }
+.zhin-sandbox .agent-playground-run-actions > button.active:where(:not(.console-control, [data-state])) { border-color: var(--sb-primary-line); background: var(--sb-primary-soft); color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-run-state { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; color: var(--sb-muted-fg); font-size: 13px; white-space: nowrap; }
 .zhin-sandbox .agent-playground-run-state.is-running { color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-run-state.is-running svg { animation: sandbox-breathe 1.5s ease-in-out infinite; }
 .zhin-sandbox .agent-playground-run-state.has-problem { color: var(--sb-danger); }
 
 /* ---------- Banners and run settings ---------- */
-.zhin-sandbox .agent-playground-confirm { display: flex; align-items: center; gap: 8px 10px; padding: 10px 20px; border-bottom: 1px solid var(--sb-danger-line); background: var(--sb-danger-soft); color: var(--sb-fg); font-size: 13px; }
-.zhin-sandbox .agent-playground-confirm > div { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
-.zhin-sandbox .agent-playground-confirm > div > span { color: var(--sb-muted-fg); }
-.zhin-sandbox .agent-playground-confirm button { min-height: 32px; padding: 4px 12px; background: var(--sb-bg); }
-.zhin-sandbox .sandbox-notice { display: flex; align-items: flex-start; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--sb-warn-line); background: var(--sb-warn-soft); color: var(--sb-fg); font-size: 13px; }
-.zhin-sandbox .sandbox-notice > svg { flex-shrink: 0; margin-top: 3px; color: var(--sb-warn); }
-.zhin-sandbox .sandbox-notice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.zhin-sandbox .sandbox-notice button { min-height: 28px; padding: 2px 10px; background: transparent; }
 .zhin-sandbox .agent-playground-run-settings { position: relative; z-index: 3; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--sb-border-soft); background: var(--sb-sidebar); }
-.zhin-sandbox .agent-playground-run-settings label { display: flex; flex: 1 1 140px; flex-direction: column; gap: 5px; min-width: 0; }
+.zhin-sandbox .agent-playground-run-settings label, .zhin-sandbox .agent-playground-run-settings .sandbox-field { display: flex; flex: 1 1 140px; flex-direction: column; gap: 5px; min-width: 0; }
 .zhin-sandbox .agent-playground-run-settings .agent-playground-directory-field { flex-basis: 100%; }
-.zhin-sandbox .agent-playground-run-settings label > span { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--sb-muted-fg); }
+.zhin-sandbox .agent-playground-run-settings label > span, .zhin-sandbox .agent-playground-run-settings .sandbox-field > span { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-run-settings > p { display: flex; flex-basis: 100%; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--sb-warn); }
 .zhin-sandbox .agent-playground-run-settings > p > svg { flex-shrink: 0; margin-top: 3px; }
 .zhin-sandbox .agent-playground-network-toggle { position: relative; flex: none !important; flex-direction: row !important; align-items: center; gap: 10px !important; }
-.zhin-sandbox .agent-playground-network-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.zhin-sandbox .agent-playground-network-toggle i { position: relative; display: block; width: 36px; height: 20px; border: 1px solid var(--sb-input); border-radius: 999px; background: var(--sb-muted); cursor: pointer; transition: background-color .16s ease, border-color .16s ease; }
-.zhin-sandbox .agent-playground-network-toggle i::after { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--sb-bg); box-shadow: 0 1px 3px var(--sb-shadow); content: ""; transition: transform .16s ease; }
-.zhin-sandbox .agent-playground-network-toggle input:checked + i { border-color: var(--sb-primary); background: var(--sb-primary); }
-.zhin-sandbox .agent-playground-network-toggle input:checked + i::after { transform: translateX(16px); }
-.zhin-sandbox .agent-playground-network-toggle input:disabled + i { opacity: .6; cursor: not-allowed; }
-.zhin-sandbox .agent-playground-network-toggle input:focus-visible + i { outline: 2px solid var(--sb-ring); outline-offset: 2px; }
 
 /* ---------- Conversation ---------- */
 .zhin-sandbox .agent-playground-conversation { position: relative; flex: 1; display: flex; min-height: 0; overflow: hidden; }
 .zhin-sandbox .agent-playground-message-scroll { flex: 1; min-width: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px 20px; scrollbar-gutter: stable; scrollbar-width: thin; }
 .zhin-sandbox .agent-playground-conversation-details { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
-.zhin-sandbox .agent-playground-details-back { margin-bottom: 12px; border-color: transparent; background: transparent; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-history-navigation, .zhin-sandbox .agent-playground-history-notice { padding: 8px 16px; font-size: 12px; text-align: center; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-history-navigation p[role=alert] { color: var(--sb-danger); overflow-wrap: anywhere; }
-.zhin-sandbox .agent-playground-history-navigation button { min-height: 32px; border-color: transparent; background: transparent; color: var(--sb-primary); }
+.zhin-sandbox .agent-playground-history-navigation button:where(:not(.console-control, [data-state])) { min-height: 32px; border-color: transparent; background: transparent; color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-empty { display: grid; width: min(100%, 42rem); min-height: 100%; align-content: center; margin: 0 auto; padding: 32px 0; text-align: center; }
 .zhin-sandbox .agent-playground-empty-mark { width: 56px; height: 56px; margin: 0 auto 18px; border: 1px solid var(--sb-primary-line); border-radius: var(--sb-radius-lg); }
 .zhin-sandbox .agent-playground-empty h2 { font-size: clamp(18px, 2.2vw, 24px); font-weight: 700; letter-spacing: -.025em; margin-bottom: 8px; }
 .zhin-sandbox .agent-playground-empty p { max-width: 48ch; margin: 0 auto; color: var(--sb-muted-fg); font-size: 14px; line-height: 1.7; }
 .zhin-sandbox .agent-playground-prompts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 22px; }
-.zhin-sandbox .agent-playground-prompts button { flex-direction: column; align-items: flex-start; justify-content: flex-start; min-height: 64px; padding: 12px; border-radius: var(--sb-radius-md); font-size: 13px; text-align: left; }
-.zhin-sandbox .agent-playground-prompts button::after { margin-top: auto; color: var(--sb-primary); content: "\\2197"; }
-.zhin-sandbox .agent-playground-prompts button:hover:not(:disabled) { border-color: var(--sb-primary-line); background: var(--sb-muted); }
+.zhin-sandbox .agent-playground-prompts button:where(:not(.console-control, [data-state])) { flex-direction: column; align-items: flex-start; justify-content: flex-start; min-height: 64px; padding: 12px; border-radius: var(--sb-radius-md); font-size: 13px; text-align: left; }
+.zhin-sandbox .agent-playground-prompts button:where(:not(.console-control, [data-state]))::after { margin-top: auto; color: var(--sb-primary); content: "\\2197"; }
+.zhin-sandbox .agent-playground-prompts button:hover:not(:disabled):where(:not(.console-control, [data-state])) { border-color: var(--sb-primary-line); background: var(--sb-muted); }
 .zhin-sandbox .agent-playground-message-list { display: flex; flex-direction: column; gap: 18px; width: min(100%, 52rem); margin: 0 auto; padding-bottom: 12px; }
 .zhin-sandbox .agent-playground-message { display: flex; align-items: flex-start; gap: 10px; }
 .zhin-sandbox .agent-playground-message.is-user { flex-direction: row-reverse; }
@@ -188,9 +166,9 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-message.is-approval .agent-playground-message-meta span:last-of-type { padding: 0 8px; border: 1px solid var(--sb-warn-line); border-radius: 999px; font-weight: 600; }
 .zhin-sandbox .agent-playground-approval-actions { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--sb-warn-line); }
 .zhin-sandbox .agent-playground-approval-actions > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.zhin-sandbox .agent-playground-approval-actions button { min-height: 34px; font-weight: 600; }
-.zhin-sandbox .agent-playground-approval-actions button.is-primary { background: var(--sb-primary); border-color: var(--sb-primary); color: var(--sb-primary-fg); }
-.zhin-sandbox .agent-playground-approval-actions button.is-danger { background: var(--sb-danger-soft); border-color: var(--sb-danger-line); color: var(--sb-danger); }
+.zhin-sandbox .agent-playground-approval-actions button:where(:not(.console-control, [data-state])) { min-height: 34px; font-weight: 600; }
+.zhin-sandbox .agent-playground-approval-actions button.is-primary:where(:not(.console-control, [data-state])) { background: var(--sb-primary); border-color: var(--sb-primary); color: var(--sb-primary-fg); }
+.zhin-sandbox .agent-playground-approval-actions button.is-danger:where(:not(.console-control, [data-state])) { background: var(--sb-danger-soft); border-color: var(--sb-danger-line); color: var(--sb-danger); }
 .zhin-sandbox .agent-playground-approval-actions small { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--sb-primary); }
 
 /* ---------- Message segments (formerly Tailwind utilities) ---------- */
@@ -226,7 +204,7 @@ export const sandboxStyles = `
 .zhin-sandbox .im-markdown-list > li + li { margin-top: 3px; }
 .zhin-sandbox .im-markdown-list > li::marker { color: var(--sb-muted-fg); }
 .zhin-sandbox .zhin-markdown-task { display: flex; align-items: baseline; gap: 8px; margin-left: -22px; list-style: none; }
-.zhin-sandbox .zhin-markdown-task input { flex-shrink: 0; width: 14px; height: 14px; min-height: 0; margin: 0; padding: 0; accent-color: var(--sb-primary); transform: translateY(2px); }
+.zhin-sandbox .zhin-markdown-task input:where(:not(.console-control, [data-state])) { flex-shrink: 0; width: 14px; height: 14px; min-height: 0; margin: 0; padding: 0; accent-color: var(--sb-primary); transform: translateY(2px); }
 .zhin-sandbox .zhin-markdown-rule { width: 100%; margin: 6px 0; border: 0; border-top: 1px solid var(--sb-border); }
 .zhin-sandbox .im-inline-code { padding: 1px 6px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-muted); font-family: var(--sb-mono); font-size: 13px; }
 .zhin-sandbox .im-message-link { color: var(--sb-primary); }
@@ -243,8 +221,8 @@ export const sandboxStyles = `
 .zhin-sandbox .zhin-code-streaming { color: hsl(151 48% 63%); font-size: 12px; }
 .zhin-sandbox .zhin-code-streaming::before { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: currentColor; content: ""; animation: sandbox-breathe 1.2s ease-in-out infinite; }
 .zhin-sandbox .zhin-code-actions { display: flex; gap: 2px; margin-left: auto; }
-.zhin-sandbox .zhin-code-actions button, .zhin-sandbox .zhin-code-expand { min-height: 28px; border: 0; border-radius: var(--sb-radius-sm); background: transparent; color: hsl(210 14% 76%); font-size: 12px; }
-.zhin-sandbox .zhin-code-actions button:hover:not(:disabled), .zhin-sandbox .zhin-code-expand:hover:not(:disabled) { background: hsl(215 18% 21%); color: hsl(0 0% 100%); }
+.zhin-sandbox .zhin-code-actions button:where(:not(.console-control, [data-state])), .zhin-sandbox .zhin-code-expand { min-height: 28px; border: 0; border-radius: var(--sb-radius-sm); background: transparent; color: hsl(210 14% 76%); font-size: 12px; }
+.zhin-sandbox .zhin-code-actions button:hover:not(:disabled):where(:not(.console-control, [data-state])), .zhin-sandbox .zhin-code-expand:hover:not(:disabled) { background: hsl(215 18% 21%); color: hsl(0 0% 100%); }
 .zhin-sandbox .zhin-code-pre { max-width: 100%; overflow: auto; padding: 8px 0 10px; font: inherit; font-size: 13px; line-height: 1.65; tab-size: 2; }
 .zhin-sandbox .zhin-code-pre--wrap .zhin-code-line-content { white-space: pre-wrap; overflow-wrap: anywhere; }
 .zhin-sandbox .zhin-code-line { display: table-row; }
@@ -264,9 +242,9 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-recovery summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; cursor: pointer; }
 .zhin-sandbox .agent-playground-recovery time { margin-left: auto; font-size: 12px; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-recovery details[open] summary { margin-bottom: 14px; }
-.zhin-sandbox .agent-playground-recovery details > a { display: inline-flex; margin: 8px 12px 0 0; }
+.zhin-sandbox .agent-playground-recovery details > a:where(:not(.console-control, [data-state])) { display: inline-flex; margin: 8px 12px 0 0; }
 .zhin-sandbox .agent-playground-recovery > p[role=alert] { color: var(--sb-danger); overflow-wrap: anywhere; }
-.zhin-sandbox .agent-playground-recovery > button, .zhin-sandbox .agent-playground-recovery > p > button { color: var(--sb-primary); }
+.zhin-sandbox .agent-playground-recovery > button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-recovery > p > button:where(:not(.console-control, [data-state])) { color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-main:has(> .agent-playground-recovery:not([hidden])) .agent-playground-empty { display: none; }
 
 /* ---------- Inline run card ---------- */
@@ -282,8 +260,8 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-inline-run-copy h3 { font-size: 14px; font-weight: 700; }
 .zhin-sandbox .agent-playground-inline-run-copy p { display: -webkit-box; margin-top: 3px; overflow: hidden; font-size: 12px; line-height: 1.5; color: var(--sb-muted-fg); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .zhin-sandbox .agent-playground-inline-run-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.zhin-sandbox .agent-playground-inline-run-actions button { min-height: 30px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.zhin-sandbox .agent-playground-inline-run-actions button.is-stop { background: var(--sb-danger-soft); border-color: var(--sb-danger-line); color: var(--sb-danger); }
+.zhin-sandbox .agent-playground-inline-run-actions button:where(:not(.console-control, [data-state])) { min-height: 30px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+.zhin-sandbox .agent-playground-inline-run-actions button.is-stop:where(:not(.console-control, [data-state])) { background: var(--sb-danger-soft); border-color: var(--sb-danger-line); color: var(--sb-danger); }
 .zhin-sandbox .agent-playground-inline-run-metrics { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); margin: 0; border-top: 1px solid var(--sb-border); border-bottom: 1px solid var(--sb-border); background: var(--sb-muted); font-variant-numeric: tabular-nums; }
 .zhin-sandbox .agent-playground-inline-run-metrics > div { display: flex; align-items: baseline; justify-content: center; gap: 5px; min-width: 0; padding: 7px 6px; border-right: 1px solid var(--sb-border); }
 .zhin-sandbox .agent-playground-inline-run-metrics > div:last-child { border-right: 0; }
@@ -304,24 +282,17 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-inline-run-steps li.is-failed > span, .zhin-sandbox .agent-playground-inline-run-steps li.is-denied > span { color: var(--sb-danger); }
 .zhin-sandbox .agent-playground-inline-run-empty { padding: 12px 16px; font-size: 12px; text-align: center; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-inline-run footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 14px 8px 16px; }
-.zhin-sandbox .agent-playground-inline-run footer button { min-height: 30px; padding: 2px 6px; border: 0; background: transparent; color: var(--sb-muted-fg); font-size: 12px; }
-.zhin-sandbox .agent-playground-inline-run footer button:hover:not(:disabled) { color: var(--sb-primary); }
-.zhin-sandbox .agent-playground-inline-run footer button:first-child svg { transition: transform .15s ease; }
-.zhin-sandbox .agent-playground-inline-run footer button:first-child[aria-expanded="true"] svg { transform: rotate(180deg); }
+.zhin-sandbox .agent-playground-inline-run footer button:where(:not(.console-control, [data-state])) { min-height: 30px; padding: 2px 6px; border: 0; background: transparent; color: var(--sb-muted-fg); font-size: 12px; }
+.zhin-sandbox .agent-playground-inline-run footer button:hover:not(:disabled):where(:not(.console-control, [data-state])) { color: var(--sb-primary); }
+.zhin-sandbox .agent-playground-inline-run footer button:first-child:where(:not(.console-control, [data-state])) svg { transition: transform .15s ease; }
+.zhin-sandbox .agent-playground-inline-run footer button:first-child[aria-expanded="true"]:where(:not(.console-control, [data-state])) svg { transform: rotate(180deg); }
 
 /* ---------- Composer ---------- */
 .zhin-sandbox .agent-playground-composer { position: relative; z-index: 2; display: grid; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--sb-border-soft); background: var(--sb-bg); }
 .zhin-sandbox .sandbox-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .zhin-sandbox .sandbox-toolbar-spacer { flex: 1; min-width: 16px; }
-.zhin-sandbox .sandbox-tool-button { width: 34px; padding: 4px; color: var(--sb-muted-fg); }
-.zhin-sandbox .sandbox-tool-button.is-active { background: var(--sb-primary); border-color: var(--sb-primary); color: var(--sb-primary-fg); }
-.zhin-sandbox .sandbox-tool-button.is-active:hover:not(:disabled) { background: var(--sb-primary); opacity: .9; }
-.zhin-sandbox .sandbox-composer-tabs { display: inline-flex; flex-shrink: 0; gap: 2px; padding: 3px; border-radius: var(--sb-radius-md); background: var(--sb-muted); }
-.zhin-sandbox .sandbox-composer-tabs button { min-height: 28px; padding: 2px 10px; border-color: transparent; background: transparent; color: var(--sb-muted-fg); font-size: 12px; white-space: nowrap; }
-.zhin-sandbox .sandbox-composer-tabs button.active { background: var(--sb-bg); color: var(--sb-fg); box-shadow: 0 1px 4px var(--sb-shadow); }
 .zhin-sandbox .sandbox-panel { display: grid; gap: 8px; max-height: 256px; overflow-y: auto; padding: 12px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-md); background: var(--sb-muted); }
 .zhin-sandbox .sandbox-panel-hint { font-size: 12px; color: var(--sb-muted-fg); }
-.zhin-sandbox .sandbox-panel .sandbox-submit { justify-self: start; }
 .zhin-sandbox .sandbox-face-grid { display: grid; grid-template-columns: repeat(8, minmax(0,1fr)); gap: 4px; }
 .zhin-sandbox .sandbox-face-button { width: 100%; min-width: 0; height: 40px; padding: 0; }
 .zhin-sandbox .sandbox-face-img { width: 32px; height: 32px; }
@@ -329,7 +300,6 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-empty-hint > svg { opacity: .5; }
 .zhin-sandbox .sandbox-editor-row { display: flex; align-items: flex-start; gap: 8px; }
 .zhin-sandbox .sandbox-editor-wrap { position: relative; flex: 1; min-width: 0; }
-.zhin-sandbox .sandbox-send { min-height: 44px; padding: 8px 16px; font-weight: 600; }
 .zhin-sandbox [contenteditable="true"] { min-height: 44px; padding: 10px 12px; background: var(--sb-muted); border: 1px solid var(--sb-input); border-radius: var(--sb-radius-md); line-height: 1.6; overflow-y: auto; outline: none; }
 .zhin-sandbox [contenteditable="true"]:focus-visible { border-color: var(--sb-ring); outline: 2px solid var(--sb-ring); outline-offset: 1px; }
 .zhin-sandbox [contenteditable="true"]:empty::before { content: attr(data-placeholder); color: var(--sb-muted-fg); pointer-events: none; }
@@ -351,25 +321,12 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-hints > summary:hover { color: var(--sb-fg); }
 .zhin-sandbox .sandbox-hints > ul { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; }
 .zhin-sandbox .sandbox-hints li { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.zhin-sandbox .sandbox-more { position: relative; display: inline-flex; }
-.zhin-sandbox .sandbox-more-trigger { color: var(--sb-muted-fg); }
-.zhin-sandbox .sandbox-more-trigger.active { border-color: var(--sb-primary-line); background: var(--sb-primary-soft); color: var(--sb-primary); }
-.zhin-sandbox .sandbox-more-backdrop { position: fixed; inset: 0; z-index: 40; }
-.zhin-sandbox .sandbox-more-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 41; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }
-.zhin-sandbox .sandbox-more-menu > button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; width: 100%; padding: 8px 10px; border: 0; background: transparent; color: var(--sb-fg); font-size: 13px; text-align: left; }
-.zhin-sandbox .sandbox-more-menu > button:hover { background: var(--sb-accent); }
-.zhin-sandbox .sandbox-more-menu > button[aria-checked="true"] { color: var(--sb-primary); }
-.zhin-sandbox .sandbox-more-menu > button.is-danger { color: var(--sb-danger); }
-.zhin-sandbox .sandbox-more-menu > button > em { margin-left: auto; font-style: normal; }
-.zhin-sandbox .sandbox-more-menu > button > em + em { margin-left: 4px; }
-.zhin-sandbox .sandbox-role-badge.is-simulated { color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-speaker-mode { display: grid; gap: 6px; grid-column: 1 / -1; }
 .zhin-sandbox .sandbox-speaker-toggle { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .zhin-sandbox .sandbox-speaker-mode > p { margin: 0; color: var(--sb-muted-fg); font-size: 12px; }
 .zhin-sandbox .sandbox-speaker-setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
 .zhin-sandbox .sandbox-speaker-setup > em { font-style: normal; color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-hint-key { padding: 1px 6px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-muted); color: var(--sb-fg); font-family: var(--sb-mono); font-size: 12px; line-height: 1.4; }
-.zhin-sandbox .sandbox-hint-text { margin-right: 6px; }
 
 /* ---------- Inspector ---------- */
 .zhin-sandbox .agent-playground-inspector { position: absolute; right: 0; top: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; width: min(360px, 90%); min-width: 0; overflow-y: auto; background: var(--sb-sidebar); border-left: 1px solid var(--sb-border); box-shadow: -12px 0 32px var(--sb-shadow); scrollbar-width: thin; }
@@ -377,11 +334,7 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-inspector-head > div:last-child { display: flex; gap: 6px; }
 .zhin-sandbox .agent-playground-inspector-head > div:first-child > span { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--sb-primary); }
 .zhin-sandbox .agent-playground-inspector-head h2 { font-size: 15px; font-weight: 700; }
-.zhin-sandbox .agent-playground-inspector-head button { width: 34px; padding: 0; color: var(--sb-muted-fg); }
-.zhin-sandbox .agent-playground-inspector-tabs { display: grid; flex-shrink: 0; grid-template-columns: 1fr 1.35fr; gap: 4px; margin: 10px 12px 0; padding: 3px; border: 1px solid var(--sb-border-soft); border-radius: var(--sb-radius-md); background: var(--sb-bg); }
-.zhin-sandbox .agent-playground-inspector-tabs button { min-width: 0; min-height: 32px; border-color: transparent; background: transparent; color: var(--sb-muted-fg); font-size: 12px; font-weight: 600; }
-.zhin-sandbox .agent-playground-inspector-tabs button.active { background: var(--sb-muted); border-color: var(--sb-border); color: var(--sb-fg); }
-.zhin-sandbox .agent-playground-inspector-tabs button span { min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--sb-accent); color: var(--sb-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.zhin-sandbox .agent-playground-inspector-head button:where(:not(.console-control, [data-state])) { width: 34px; padding: 0; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-inspector-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .zhin-sandbox .agent-playground-inspector-section { padding: 14px; border-bottom: 1px solid var(--sb-border-soft); }
 .zhin-sandbox .agent-playground-inspector-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 650; }
@@ -437,16 +390,16 @@ export const sandboxStyles = `
 .zhin-sandbox .agent-playground-task-list dd { font-size: 12px; font-variant-numeric: tabular-nums; }
 .zhin-sandbox .agent-playground-artifact-list article { overflow: hidden; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-md); background: var(--sb-bg); }
 .zhin-sandbox .agent-playground-artifact-list article.is-expanded { border-color: var(--sb-primary-line); }
-.zhin-sandbox .agent-playground-artifact-list article > button { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 0; background: transparent; text-align: left; }
+.zhin-sandbox .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 0; background: transparent; text-align: left; }
 .zhin-sandbox .agent-playground-artifact-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--sb-primary-line); border-radius: var(--sb-radius-sm); background: var(--sb-primary-soft); color: var(--sb-primary); }
-.zhin-sandbox .agent-playground-artifact-list article > button > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
+.zhin-sandbox .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
 .zhin-sandbox .agent-playground-artifact-list strong, .zhin-sandbox .agent-playground-artifact-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zhin-sandbox .agent-playground-artifact-list strong { font-size: 13px; font-weight: 600; }
 .zhin-sandbox .agent-playground-artifact-list small, .zhin-sandbox .agent-playground-artifact-list em { font-size: 12px; font-style: normal; color: var(--sb-muted-fg); }
 .zhin-sandbox .agent-playground-artifact-list article.is-completed em { color: var(--sb-ok); }
 .zhin-sandbox .agent-playground-artifact-list article.is-failed em, .zhin-sandbox .agent-playground-artifact-list article.is-denied em { color: var(--sb-danger); }
-.zhin-sandbox .agent-playground-artifact-list article > button > svg { color: var(--sb-muted-fg); transition: transform .16s ease; }
-.zhin-sandbox .agent-playground-artifact-list article.is-expanded > button > svg { transform: rotate(180deg); }
+.zhin-sandbox .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) > svg { color: var(--sb-muted-fg); transition: transform .16s ease; }
+.zhin-sandbox .agent-playground-artifact-list article.is-expanded > button:where(:not(.console-control, [data-state])) > svg { transform: rotate(180deg); }
 .zhin-sandbox .agent-playground-artifact-detail { display: grid; gap: 8px; padding: 0 10px 10px 46px; font-size: 12px; }
 .zhin-sandbox .agent-playground-artifact-detail > code { font-family: var(--sb-mono); font-size: 12px; color: var(--sb-muted-fg); overflow-wrap: anywhere; }
 .zhin-sandbox .agent-playground-artifact-detail pre { max-height: 240px; overflow: auto; padding: 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-muted); font-family: var(--sb-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
@@ -461,7 +414,75 @@ export const sandboxStyles = `
 @keyframes sandbox-breathe { 0%, 100% { opacity: .5; transform: scale(.92); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes sandbox-pulse { from { opacity: .25; transform: translateY(1px); } to { opacity: 1; transform: translateY(-1px); } }
 
+/* ---------- @zhin.js/console-ui components inside the workbench (ADR 0063 D13 step 2) ----------
+ * Buttons, inputs, selects, switches, tabs, menus and dialogs come from the component library; the element
+ * rules above skip them (:where(:not(.console-control, [data-state]))), so they keep the Console look.
+ * Only layout lives here. */
+.zhin-sandbox .agent-playground-section-label > :nth-child(3) { margin-left: auto; }
+.zhin-sandbox .agent-playground-run-settings label.sandbox-speaker-toggle { flex: none; flex-direction: row; align-items: center; }
+.zhin-sandbox .agent-playground-network-toggle { min-height: 36px; }
+.zhin-sandbox .sandbox-block-button { width: 100%; }
+.zhin-sandbox .sandbox-details-back { margin-bottom: 16px; }
+.zhin-sandbox .sandbox-alert { display: flex; flex: none; align-items: center; gap: 12px; width: auto; margin: 12px 20px 0; }
+.zhin-sandbox .sandbox-alert-copy { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.zhin-sandbox .sandbox-inspector-tabs { display: grid; flex-shrink: 0; grid-template-columns: 1fr 1.35fr; margin: 10px 12px 0; }
+.zhin-sandbox .sandbox-inspector-tabs > * { gap: 6px; min-width: 0; }
+.zhin-sandbox .sandbox-tab-count { min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--sb-accent); color: var(--sb-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.zhin-sandbox .agent-playground-inspector-head > div:last-child { gap: 4px; }
+.zhin-sandbox .agent-playground-approval-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.zhin-sandbox .agent-playground-inline-run-actions, .zhin-sandbox .agent-playground-inline-run footer { gap: 6px; }
+.zhin-sandbox .sandbox-editor-row > .console-control { flex-shrink: 0; align-self: flex-end; }
+/* Inside the Console shell the page header sits above the workbench (ADR 0063 决策 2). */
+.zhin-sandbox.agent-playground-shell.is-hosted { height: calc(100dvh - var(--console-header-h, 4.5rem) - var(--console-page-header-h, 4.5rem) - var(--console-space-page-y, 2rem) - 1rem); }
+
+/* ---------- Simulated sender, quick commands and rich cards ---------- */
+.zhin-sandbox .sandbox-role-switcher { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.zhin-sandbox .sandbox-role-switcher > .sandbox-role-option { min-height: 32px; padding: 4px 10px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: transparent; color: inherit; font-size: 12px; }
+.zhin-sandbox .sandbox-role-switcher > .sandbox-role-option.active { border-color: var(--sb-primary-line); background: var(--sb-primary-soft); color: var(--sb-primary); font-weight: 600; }
+.zhin-sandbox .sandbox-sender-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.zhin-sandbox .sandbox-quick-commands { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: 6px; }
+.zhin-sandbox .sandbox-quick-commands > .sandbox-command-chip { min-height: 28px; gap: 4px; padding: 2px 10px; border: 1px solid var(--sb-border); border-radius: 999px; background: transparent; color: inherit; font-size: 12px; }
+.zhin-sandbox .sandbox-quick-commands > .sandbox-command-chip:hover:not(:disabled) { border-color: var(--sb-primary-line); background: var(--sb-primary-soft); }
+.zhin-sandbox .sandbox-rich-card { max-width: 440px; margin-top: 6px; overflow: hidden; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-md); background: var(--sb-muted); }
+.zhin-sandbox .sandbox-rich-card-image { display: block; width: 100%; max-height: 200px; object-fit: cover; }
+.zhin-sandbox .sandbox-rich-card-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.zhin-sandbox .sandbox-rich-card-title { font-size: 14px; font-weight: 600; }
+.zhin-sandbox .sandbox-rich-card-subtitle, .zhin-sandbox .sandbox-rich-card-field dt { font-size: 12px; color: var(--sb-muted-fg); }
+.zhin-sandbox .sandbox-rich-card-desc { font-size: 13px; }
+.zhin-sandbox .sandbox-rich-card-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 4px 0 0; }
+.zhin-sandbox .sandbox-rich-card-field { padding: 4px 8px; border-radius: var(--sb-radius-sm); background: var(--sb-bg); }
+.zhin-sandbox .sandbox-rich-card-field dd { margin: 0; font-size: 12px; font-weight: 500; }
+.zhin-sandbox .sandbox-share-card { display: flex; align-items: center; gap: 10px; max-width: 440px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-md); background: var(--sb-muted); }
+.zhin-sandbox .sandbox-share-card-thumb { flex-shrink: 0; width: 52px; height: 52px; border-radius: var(--sb-radius-sm); object-fit: cover; }
+.zhin-sandbox .sandbox-share-card-main { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.zhin-sandbox .sandbox-share-card-title { font-size: 13px; font-weight: 600; }
+.zhin-sandbox .sandbox-share-card-desc, .zhin-sandbox .sandbox-share-card-url { overflow: hidden; color: var(--sb-muted-fg); font-size: 12px; text-overflow: ellipsis; }
+.zhin-sandbox .sandbox-share-card-url { white-space: nowrap; }
+
 /* ---------- Responsive ---------- */
+@media (min-width: 1181px) {
+  .zhin-sandbox .agent-playground-mobilebar { display: none; }
+}
+/* Up to 1180px the conversation list is a drawer (workspace styles); the bar holds its toggle. */
+@media (max-width: 1180px) {
+  .zhin-sandbox .agent-playground-mobilebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--sb-border); background: var(--sb-bg); }
+  /* One column: the list is a drawer and the inspector an overlay (the workspace styles place the bar and main). */
+  .zhin-sandbox.agent-playground-shell, .zhin-sandbox.agent-playground-shell.has-inspector { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); }
+  /* The drawer stays inside the workbench and never covers the Console shell (D19). */
+  .zhin-sandbox .agent-playground-sessions.channel-sidebar { position: absolute; z-index: 40; height: auto; }
+  .zhin-sandbox .channel-overlay { position: absolute; z-index: 35; }
+}
+/* Phones: every control of the workbench is at least 44px tall (D18 第 7 条 / D19). */
+@media (max-width: 767px) {
+  .zhin-sandbox .sandbox-quick-commands > .sandbox-command-chip, .zhin-sandbox .sandbox-role-switcher > .sandbox-role-option { min-height: 44px; }
+  .zhin-sandbox [role="tablist"] { height: auto; }
+  .zhin-sandbox [role="tab"] { min-height: 44px; }
+  .zhin-sandbox .agent-playground-network-toggle, .zhin-sandbox .agent-playground-run-settings label.sandbox-speaker-toggle { min-height: 44px; }
+}
+@media (min-width: 1280px) {
+  .zhin-sandbox.agent-playground-shell.has-inspector { grid-template-rows: minmax(0, 1fr); }
+  .zhin-sandbox .agent-playground-inspector { min-height: 0; }
+}
 @media (min-width: 1280px) {
   .zhin-sandbox.agent-playground-shell.has-inspector { grid-template-columns: 232px minmax(0,1fr) 330px; }
   .zhin-sandbox .agent-playground-inspector { position: static; width: auto; box-shadow: none; }
@@ -476,15 +497,9 @@ export const sandboxStyles = `
 }
 @media (max-width: 767px) {
   .zhin-sandbox.agent-playground-shell { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); height: calc(100dvh - 92px); min-height: 480px; border-radius: var(--sb-radius-md); }
-  .zhin-sandbox button, .zhin-sandbox .agent-playground-run-actions > a { min-height: 44px; min-width: 44px; }
-  .zhin-sandbox :where(input:not([type="checkbox"]), select) { min-height: 44px; font-size: 16px; }
+  .zhin-sandbox button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-run-actions > a:where(:not(.console-control, [data-state])) { min-height: 44px; min-width: 44px; }
+  .zhin-sandbox :where(input:not([type="checkbox"]), select):where(:not(.console-control, [data-state])) { min-height: 44px; font-size: 16px; }
   .zhin-sandbox .agent-playground-network-toggle { min-height: 44px; }
-  .zhin-sandbox .agent-playground-network-toggle i { width: 44px; height: 26px; }
-  .zhin-sandbox .agent-playground-network-toggle i::after { width: 20px; height: 20px; }
-  .zhin-sandbox .agent-playground-network-toggle input:checked + i::after { transform: translateX(18px); }
-  .zhin-sandbox .agent-playground-mobilebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--sb-border); background: var(--sb-bg); }
-  .zhin-sandbox .agent-playground-mobilebar strong { font-size: 14px; }
-  .zhin-sandbox .agent-playground-mobilebar button { min-height: 44px; padding: 6px 10px; border-color: transparent; background: transparent; color: var(--sb-muted-fg); font-size: 13px; }
   .zhin-sandbox .agent-playground-sessions { display: none; position: absolute; inset: 0 auto 0 0; z-index: 40; width: min(300px, 88%); box-shadow: 12px 0 32px var(--sb-shadow); }
   .zhin-sandbox .agent-playground-sessions.show { display: flex; }
   .zhin-sandbox .channel-overlay { display: block; position: absolute; inset: 0; z-index: 35; background: var(--sb-overlay); }
@@ -492,8 +507,7 @@ export const sandboxStyles = `
   /* In a column the 14rem flex-basis would become the identity row height. */
   .zhin-sandbox .agent-playground-run-identity { flex: 0 0 auto; width: 100%; }
   .zhin-sandbox .agent-playground-run-actions { flex-wrap: wrap; justify-content: flex-start; margin-left: 0; max-width: 100%; }
-  .zhin-sandbox .sandbox-more-menu { right: auto; left: 0; }
-  .zhin-sandbox .agent-playground-run-actions > a, .zhin-sandbox .agent-playground-run-actions > button { flex-shrink: 0; white-space: nowrap; width: auto; font-size: 13px; }
+  .zhin-sandbox .agent-playground-run-actions > a:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-run-actions > button:where(:not(.console-control, [data-state])) { flex-shrink: 0; white-space: nowrap; width: auto; font-size: 13px; }
   .zhin-sandbox .agent-playground-run-title span { display: none; }
   .zhin-sandbox .agent-playground-message-scroll { padding: 16px 10px; }
   .zhin-sandbox .agent-playground-message-main { max-width: calc(100% - 40px); }
@@ -501,19 +515,16 @@ export const sandboxStyles = `
   .zhin-sandbox .agent-playground-message-content { padding: 8px 12px; }
   .zhin-sandbox .agent-playground-composer { padding: 10px 12px; }
   .zhin-sandbox .sandbox-toolbar-spacer { display: none; }
-  .zhin-sandbox .sandbox-composer-tabs button { padding: 4px 12px; }
   .zhin-sandbox .sandbox-face-grid { grid-template-columns: repeat(6, minmax(0,1fr)); }
   .zhin-sandbox .sandbox-face-button { height: 44px; }
   .zhin-sandbox .sandbox-hints { display: none; }
-  .zhin-sandbox .agent-playground-confirm, .zhin-sandbox .sandbox-notice { padding: 10px 12px; flex-wrap: wrap; }
-  .zhin-sandbox .agent-playground-confirm > div { flex-basis: 100%; }
   .zhin-sandbox .agent-playground-run-settings { max-height: 256px; overflow-y: auto; padding: 12px; }
   .zhin-sandbox .agent-playground-empty { padding: 20px 0; }
   .zhin-sandbox .agent-playground-prompts { grid-template-columns: 1fr; }
   .zhin-sandbox .agent-playground-inline-run { margin-left: 0; }
   .zhin-sandbox .agent-playground-inline-run-head { grid-template-columns: auto minmax(0,1fr); }
   .zhin-sandbox .agent-playground-inline-run-actions { grid-column: 1 / -1; justify-content: flex-start; }
-  .zhin-sandbox .agent-playground-scope-picker button, .zhin-sandbox .agent-playground-section-label button, .zhin-sandbox .agent-playground-inspector-tabs button, .zhin-sandbox .sandbox-composer-tabs button, .zhin-sandbox .agent-playground-confirm button, .zhin-sandbox .agent-playground-inline-run-actions button, .zhin-sandbox .agent-playground-inline-run footer button, .zhin-sandbox .zhin-code-actions button, .zhin-sandbox .zhin-code-expand, .zhin-sandbox .sandbox-notice button, .zhin-sandbox .agent-playground-history-navigation button, .zhin-sandbox .agent-playground-inspector-head button, .zhin-sandbox .sandbox-tool-button { min-height: 44px; min-width: 44px; }
+  .zhin-sandbox .agent-playground-scope-picker button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-section-label button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-inline-run-actions button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-inline-run footer button:where(:not(.console-control, [data-state])), .zhin-sandbox .zhin-code-actions button:where(:not(.console-control, [data-state])), .zhin-sandbox .zhin-code-expand, .zhin-sandbox .agent-playground-history-navigation button:where(:not(.console-control, [data-state])), .zhin-sandbox .agent-playground-inspector-head button:where(:not(.console-control, [data-state])) { min-height: 44px; min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .zhin-sandbox *, .zhin-sandbox *::before, .zhin-sandbox *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

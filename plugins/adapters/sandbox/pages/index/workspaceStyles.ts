@@ -8,6 +8,9 @@
  * the one the Console produced: every selector is scoped to the page with `:where(.zhin-sandbox)`, which
  * adds no specificity, and the rules stay unlayered as they were in the Console.
  * Plain CSS: no Tailwind utilities, `@apply` or theme functions. Values read the Console theme tokens.
+ * Step 2 (the page renders `@zhin.js/console-ui`): element rules skip library controls with
+ * `:where(:not(.console-control, [data-state]))` (no added specificity), rules for markup the page no longer
+ * renders were removed, and `styles.ts` adds the layout for the components.
  */
 export const workspaceStyles = `
 /* ---- from zhinjs/console console-ui/src/agent-playground.css ---- */
@@ -42,24 +45,6 @@ export const workspaceStyles = `
   padding: 1rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-details-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  margin-bottom: 1rem;
-  border: 0;
-  border-radius: var(--console-radius-sm);
-  background: transparent;
-  padding: 0.375rem 0.5rem;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-}
-
-:where(.zhin-sandbox) .agent-playground-details-back:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--foreground));
-}
-
 :where(.zhin-sandbox) .agent-playground-recovery {
   display: grid;
   flex: none;
@@ -84,12 +69,10 @@ export const workspaceStyles = `
 :where(.zhin-sandbox) .agent-playground-recovery summary { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; align-items: baseline; cursor: pointer; }
 :where(.zhin-sandbox) .agent-playground-recovery time { margin-left: auto; font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
 :where(.zhin-sandbox) .agent-playground-recovery details[open] summary { margin-bottom: 0.875rem; }
-:where(.zhin-sandbox) .agent-playground-recovery details > a { display: inline-flex; margin: 0.5rem 0.75rem 0 0; color: hsl(var(--primary)); }
+:where(.zhin-sandbox) .agent-playground-recovery details > a:where(:not(.console-control, [data-state])) { display: inline-flex; margin: 0.5rem 0.75rem 0 0; color: hsl(var(--primary)); }
 :where(.zhin-sandbox) .agent-playground-recovery > p[role=alert],
 :where(.zhin-sandbox) .agent-playground-history-navigation p[role=alert] { color: hsl(var(--destructive)); overflow-wrap: anywhere; }
-:where(.zhin-sandbox) .agent-playground-recovery > button,
-:where(.zhin-sandbox) .agent-playground-recovery > p > button,
-:where(.zhin-sandbox) .agent-playground-history-navigation button { padding: 0.375rem 0.625rem; border-radius: var(--console-radius-sm); color: hsl(var(--primary)); cursor: pointer; }
+:where(.zhin-sandbox) .agent-playground-recovery > button:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-recovery > p > button:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-history-navigation button:where(:not(.console-control, [data-state])) { padding: 0.375rem 0.625rem; border-radius: var(--console-radius-sm); color: hsl(var(--primary)); cursor: pointer; }
 :where(.zhin-sandbox) .agent-playground-history-navigation { padding: 0.5rem 1rem; font-size: var(--console-text-label); }
 :where(.zhin-sandbox) .agent-playground-history-notice { padding: 0.5rem 1rem; color: hsl(var(--muted-foreground)); text-align: center; font-size: var(--console-text-label); }
 :where(.zhin-sandbox) .agent-playground-main:has(> .agent-playground-recovery:not([hidden])) .agent-playground-empty { display: none; }
@@ -125,7 +108,7 @@ export const workspaceStyles = `
 
 :where(.zhin-sandbox) .agent-playground-brand h2,
 :where(.zhin-sandbox) .agent-playground-inspector-head h2,
-:where(.zhin-sandbox) .agent-playground-run-title h1,
+:where(.zhin-sandbox) .agent-playground-run-title h2,
 :where(.zhin-sandbox) .agent-playground-empty h2 {
   margin: 0;
   letter-spacing: -0.025em;
@@ -256,33 +239,12 @@ export const workspaceStyles = `
   border-top: 1px solid hsl(var(--playground-line) / 0.56);
 }
 
-:where(.zhin-sandbox) .agent-playground-add {
-  display: flex;
-  width: 100%;
-  min-height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.42rem;
-  border: 1px dashed hsl(var(--playground-accent) / 0.3);
-  border-radius: 0.68rem;
-  background: hsl(var(--playground-accent) / 0.045);
-  color: hsl(var(--playground-accent));
-  font-size: var(--console-text-label);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-:where(.zhin-sandbox) .agent-playground-add:hover {
-  border-style: solid;
-  background: hsl(var(--playground-accent) / 0.09);
-}
-
 :where(.zhin-sandbox) .agent-playground-new-form {
   display: grid;
   gap: 0.5rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-new-form > input {
+:where(.zhin-sandbox) .agent-playground-new-form > input:where(:not(.console-control, [data-state])) {
   min-width: 0;
   height: 2.15rem;
   padding: 0 0.65rem;
@@ -294,7 +256,7 @@ export const workspaceStyles = `
   font-size: var(--console-text-label);
 }
 
-:where(.zhin-sandbox) .agent-playground-new-form > input:focus {
+:where(.zhin-sandbox) .agent-playground-new-form > input:focus:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.65);
   box-shadow: 0 0 0 3px hsl(var(--playground-accent) / 0.1);
 }
@@ -308,8 +270,7 @@ export const workspaceStyles = `
   background: hsl(var(--muted));
 }
 
-:where(.zhin-sandbox) .agent-playground-scope-picker button,
-:where(.zhin-sandbox) .agent-playground-new-actions button {
+:where(.zhin-sandbox) .agent-playground-scope-picker button:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-new-actions button:where(:not(.console-control, [data-state])) {
   border: 0;
   border-radius: 0.42rem;
   background: transparent;
@@ -318,11 +279,11 @@ export const workspaceStyles = `
   cursor: pointer;
 }
 
-:where(.zhin-sandbox) .agent-playground-scope-picker button {
+:where(.zhin-sandbox) .agent-playground-scope-picker button:where(:not(.console-control, [data-state])) {
   min-height: 1.65rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-scope-picker button.active {
+:where(.zhin-sandbox) .agent-playground-scope-picker button.active:where(:not(.console-control, [data-state])) {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   box-shadow: 0 1px 5px hsl(var(--im-shadow) / 0.1);
@@ -334,12 +295,12 @@ export const workspaceStyles = `
   gap: 0.3rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-new-actions button {
+:where(.zhin-sandbox) .agent-playground-new-actions button:where(:not(.console-control, [data-state])) {
   min-height: 1.8rem;
   padding: 0 0.65rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-new-actions button.primary {
+:where(.zhin-sandbox) .agent-playground-new-actions button.primary:where(:not(.console-control, [data-state])) {
   background: hsl(var(--playground-accent));
   color: hsl(var(--playground-accent-foreground));
 }
@@ -420,7 +381,7 @@ export const workspaceStyles = `
   gap: 0.5rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-run-title h1 {
+:where(.zhin-sandbox) .agent-playground-run-title h2 {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -462,9 +423,7 @@ export const workspaceStyles = `
   gap: 0.28rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-run-actions a,
-:where(.zhin-sandbox) .agent-playground-run-actions button,
-:where(.zhin-sandbox) .agent-playground-inspector-head button {
+:where(.zhin-sandbox) .agent-playground-run-actions a:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-actions button:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-inspector-head button:where(:not(.console-control, [data-state])) {
   display: inline-flex;
   min-width: 2rem;
   height: 2rem;
@@ -481,15 +440,13 @@ export const workspaceStyles = `
   cursor: pointer;
 }
 
-:where(.zhin-sandbox) .agent-playground-run-actions a:hover,
-:where(.zhin-sandbox) .agent-playground-run-actions button:hover,
-:where(.zhin-sandbox) .agent-playground-inspector-head button:hover {
+:where(.zhin-sandbox) .agent-playground-run-actions a:hover:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-actions button:hover:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-inspector-head button:hover:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.32);
   color: hsl(var(--playground-accent));
   background: hsl(var(--playground-accent) / 0.05);
 }
 
-:where(.zhin-sandbox) .agent-playground-run-actions button.active {
+:where(.zhin-sandbox) .agent-playground-run-actions button.active:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.32);
   background: hsl(var(--playground-accent-soft));
   color: hsl(var(--playground-accent));
@@ -515,59 +472,6 @@ export const workspaceStyles = `
 
 :where(.zhin-sandbox) .agent-playground-run-state.has-problem {
   color: hsl(8 58% 47%);
-}
-
-:where(.zhin-sandbox) .agent-playground-run-actions .agent-playground-stop {
-  border-color: hsl(8 62% 52% / 0.24);
-  color: hsl(8 58% 46%);
-}
-
-:where(.zhin-sandbox) .agent-playground-run-actions .agent-playground-stop:hover {
-  border-color: hsl(8 62% 52% / 0.42);
-  background: hsl(8 72% 52% / 0.07);
-  color: hsl(8 64% 42%);
-}
-
-:where(.zhin-sandbox) .agent-playground-confirm {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid hsl(8 62% 52% / 0.2);
-  background: hsl(8 70% 96%);
-  color: hsl(8 38% 28%);
-  font-size: var(--console-text-label);
-}
-
-.dark :where(.zhin-sandbox) .agent-playground-confirm {
-  background: hsl(8 24% 14%);
-  color: hsl(8 50% 77%);
-}
-
-:where(.zhin-sandbox) .agent-playground-confirm > div {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-}
-
-:where(.zhin-sandbox) .agent-playground-confirm span { opacity: 0.72; }
-
-:where(.zhin-sandbox) .agent-playground-confirm button {
-  min-height: 1.85rem;
-  padding: 0 0.65rem;
-  border: 1px solid currentColor;
-  border-radius: 0.5rem;
-  background: transparent;
-  color: inherit;
-  font-size: var(--console-text-label);
-  cursor: pointer;
-}
-
-:where(.zhin-sandbox) .agent-playground-confirm button.danger {
-  border-color: hsl(var(--destructive));
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
 }
 
 :where(.zhin-sandbox) .agent-playground-run-settings {
@@ -603,9 +507,7 @@ export const workspaceStyles = `
   font-weight: 650;
 }
 
-:where(.zhin-sandbox) .agent-playground-run-settings input[type="text"],
-:where(.zhin-sandbox) .agent-playground-run-settings input:not([type]),
-:where(.zhin-sandbox) .agent-playground-run-settings select {
+:where(.zhin-sandbox) .agent-playground-run-settings input[type="text"]:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-settings input:not([type]):where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-settings select:where(:not(.console-control, [data-state])) {
   width: 100%;
   min-width: 0;
   height: 2rem;
@@ -618,13 +520,12 @@ export const workspaceStyles = `
   font-size: var(--console-text-label);
 }
 
-:where(.zhin-sandbox) .agent-playground-run-settings input:focus,
-:where(.zhin-sandbox) .agent-playground-run-settings select:focus {
+:where(.zhin-sandbox) .agent-playground-run-settings input:focus:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-settings select:focus:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.55);
   box-shadow: 0 0 0 3px hsl(var(--playground-accent) / 0.08);
 }
 
-:where(.zhin-sandbox) .agent-playground-run-settings select:disabled {
+:where(.zhin-sandbox) .agent-playground-run-settings select:disabled:where(:not(.console-control, [data-state])) {
   opacity: 0.58;
   cursor: not-allowed;
 }
@@ -635,7 +536,7 @@ export const workspaceStyles = `
   padding-bottom: 0.2rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-network-toggle input {
+:where(.zhin-sandbox) .agent-playground-network-toggle input:where(:not(.console-control, [data-state])) {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -667,16 +568,16 @@ export const workspaceStyles = `
   transition: transform 160ms ease;
 }
 
-:where(.zhin-sandbox) .agent-playground-network-toggle input:checked + i {
+:where(.zhin-sandbox) .agent-playground-network-toggle input:checked:where(:not(.console-control, [data-state])) + i {
   border-color: hsl(var(--playground-accent) / 0.45);
   background: hsl(var(--playground-accent));
 }
 
-:where(.zhin-sandbox) .agent-playground-network-toggle input:checked + i::after {
+:where(.zhin-sandbox) .agent-playground-network-toggle input:checked:where(:not(.console-control, [data-state])) + i::after {
   transform: translateX(0.96rem);
 }
 
-:where(.zhin-sandbox) .agent-playground-network-toggle input:focus-visible + i {
+:where(.zhin-sandbox) .agent-playground-network-toggle input:focus-visible:where(:not(.console-control, [data-state])) + i {
   outline: 2px solid hsl(var(--playground-accent));
   outline-offset: 2px;
 }
@@ -744,7 +645,7 @@ export const workspaceStyles = `
   gap: 0.55rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-prompts button {
+:where(.zhin-sandbox) .agent-playground-prompts button:where(:not(.console-control, [data-state])) {
   min-height: 4rem;
   padding: 0.72rem;
   border: 1px solid hsl(var(--border));
@@ -758,14 +659,14 @@ export const workspaceStyles = `
   transition: border-color 160ms ease, background-color 160ms ease;
 }
 
-:where(.zhin-sandbox) .agent-playground-prompts button::after {
+:where(.zhin-sandbox) .agent-playground-prompts button:where(:not(.console-control, [data-state]))::after {
   display: block;
   margin-top: 0.45rem;
   color: hsl(var(--playground-accent));
   content: "↗";
 }
 
-:where(.zhin-sandbox) .agent-playground-prompts button:hover {
+:where(.zhin-sandbox) .agent-playground-prompts button:hover:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.3);
   background: hsl(var(--muted));
 }
@@ -890,7 +791,7 @@ export const workspaceStyles = `
   gap: 0.4rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-approval-actions button {
+:where(.zhin-sandbox) .agent-playground-approval-actions button:where(:not(.console-control, [data-state])) {
   min-height: 1.95rem;
   padding: 0 0.65rem;
   border: 1px solid hsl(var(--border));
@@ -903,24 +804,24 @@ export const workspaceStyles = `
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
-:where(.zhin-sandbox) .agent-playground-approval-actions button:hover:not(:disabled) {
+:where(.zhin-sandbox) .agent-playground-approval-actions button:hover:not(:disabled):where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.38);
   color: hsl(var(--playground-accent));
   transform: translateY(-1px);
 }
 
-:where(.zhin-sandbox) .agent-playground-approval-actions button.is-primary {
+:where(.zhin-sandbox) .agent-playground-approval-actions button.is-primary:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.36);
   background: hsl(var(--playground-accent));
   color: hsl(var(--playground-accent-foreground));
 }
 
-:where(.zhin-sandbox) .agent-playground-approval-actions button.is-danger {
+:where(.zhin-sandbox) .agent-playground-approval-actions button.is-danger:where(:not(.console-control, [data-state])) {
   border-color: hsl(8 62% 52% / 0.25);
   color: hsl(8 58% 46%);
 }
 
-:where(.zhin-sandbox) .agent-playground-approval-actions button:disabled {
+:where(.zhin-sandbox) .agent-playground-approval-actions button:disabled:where(:not(.console-control, [data-state])) {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -1032,8 +933,7 @@ export const workspaceStyles = `
   gap: 0.35rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run-actions button,
-:where(.zhin-sandbox) .agent-playground-inline-run footer button {
+:where(.zhin-sandbox) .agent-playground-inline-run-actions button:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-inline-run footer button:where(:not(.console-control, [data-state])) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1050,19 +950,18 @@ export const workspaceStyles = `
   transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run-actions button:hover:not(:disabled),
-:where(.zhin-sandbox) .agent-playground-inline-run footer button:hover {
+:where(.zhin-sandbox) .agent-playground-inline-run-actions button:hover:not(:disabled):where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-inline-run footer button:hover:where(:not(.console-control, [data-state])) {
   border-color: hsl(var(--playground-accent) / 0.36);
   color: hsl(var(--playground-accent));
   transform: translateY(-1px);
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run-actions button.is-stop {
+:where(.zhin-sandbox) .agent-playground-inline-run-actions button.is-stop:where(:not(.console-control, [data-state])) {
   border-color: hsl(8 62% 52% / 0.23);
   color: hsl(8 58% 47%);
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run-actions button:disabled { cursor: wait; opacity: 0.55; }
+:where(.zhin-sandbox) .agent-playground-inline-run-actions button:disabled:where(:not(.console-control, [data-state])) { cursor: wait; opacity: 0.55; }
 
 :where(.zhin-sandbox) .agent-playground-inline-run-metrics {
   display: grid;
@@ -1158,7 +1057,7 @@ export const workspaceStyles = `
   padding: 0.55rem 0.95rem 0.6rem 1rem;
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run footer button {
+:where(.zhin-sandbox) .agent-playground-inline-run footer button:where(:not(.console-control, [data-state])) {
   min-height: auto;
   padding: 0.15rem 0;
   border: 0;
@@ -1166,8 +1065,8 @@ export const workspaceStyles = `
   color: hsl(var(--muted-foreground));
 }
 
-:where(.zhin-sandbox) .agent-playground-inline-run footer button:first-child svg { transition: transform 150ms ease; }
-:where(.zhin-sandbox) .agent-playground-inline-run footer button:first-child[aria-expanded="true"] svg { transform: rotate(180deg); }
+:where(.zhin-sandbox) .agent-playground-inline-run footer button:first-child:where(:not(.console-control, [data-state])) svg { transition: transform 150ms ease; }
+:where(.zhin-sandbox) .agent-playground-inline-run footer button:first-child[aria-expanded="true"]:where(:not(.console-control, [data-state])) svg { transform: rotate(180deg); }
 
 :where(.zhin-sandbox) .agent-playground-composer {
   position: relative;
@@ -1196,38 +1095,6 @@ export const workspaceStyles = `
 :where(.zhin-sandbox) .agent-playground-composer .rich-text-editor:focus {
   border-color: hsl(var(--playground-accent) / 0.52) !important;
   box-shadow: 0 0 0 3px hsl(var(--playground-accent) / 0.08);
-}
-
-:where(.zhin-sandbox) .agent-playground-composer .sandbox-composer-tabs {
-  display: inline-flex;
-  flex-shrink: 0;
-  gap: 0.12rem;
-  padding: 0.16rem;
-  border: 1px solid transparent;
-  border-radius: 0.48rem;
-  background: hsl(var(--muted));
-}
-
-:where(.zhin-sandbox) .agent-playground-composer .sandbox-composer-tabs button {
-  min-height: 1.65rem;
-  padding: 0 0.5rem;
-  border: 0;
-  border-radius: 0.34rem;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-size: var(--console-text-label);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-:where(.zhin-sandbox) .agent-playground-composer .sandbox-composer-tabs button.active {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-}
-
-:where(.zhin-sandbox) .agent-playground-composer .sandbox-composer-tabs button:focus-visible {
-  outline: var(--console-focus-width) solid hsl(var(--ring));
-  outline-offset: 1px;
 }
 
 :where(.zhin-sandbox) .agent-playground-composer > div:last-child {
@@ -1280,56 +1147,8 @@ export const workspaceStyles = `
   font-weight: 710;
 }
 
-:where(.zhin-sandbox) .agent-playground-inspector-head button {
+:where(.zhin-sandbox) .agent-playground-inspector-head button:where(:not(.console-control, [data-state])) {
   padding: 0;
-}
-
-:where(.zhin-sandbox) .agent-playground-inspector-close {
-  display: inline-flex;
-}
-
-:where(.zhin-sandbox) .agent-playground-inspector-tabs {
-  display: grid;
-  flex-shrink: 0;
-  grid-template-columns: 1fr 1.35fr;
-  gap: 0.22rem;
-  margin: 0.58rem 0.72rem 0;
-  padding: 0.2rem;
-  border: 1px solid hsl(var(--border) / 0.7);
-  border-radius: 0.62rem;
-  background: hsl(var(--background) / 0.5);
-}
-
-:where(.zhin-sandbox) .agent-playground-inspector-tabs button {
-  display: inline-flex;
-  min-width: 0;
-  height: 1.9rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.32rem;
-  border: 0;
-  border-radius: 0.44rem;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-size: var(--console-text-label);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-:where(.zhin-sandbox) .agent-playground-inspector-tabs button.active {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  box-shadow: 0 1px 6px hsl(var(--im-shadow) / 0.08);
-}
-
-:where(.zhin-sandbox) .agent-playground-inspector-tabs button span {
-  min-width: 1rem;
-  padding: 0.04rem 0.27rem;
-  border-radius: 999px;
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  font-size: var(--console-text-label);
-  font-variant-numeric: tabular-nums;
 }
 
 :where(.zhin-sandbox) .agent-playground-inspector-view {
@@ -1570,7 +1389,7 @@ export const workspaceStyles = `
   box-shadow: 0 8px 24px hsl(var(--im-shadow) / 0.055);
 }
 
-:where(.zhin-sandbox) .agent-playground-artifact-list article > button {
+:where(.zhin-sandbox) .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) {
   display: grid;
   width: 100%;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -1596,7 +1415,7 @@ export const workspaceStyles = `
   color: hsl(var(--playground-accent));
 }
 
-:where(.zhin-sandbox) .agent-playground-artifact-list article > button > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; }
+:where(.zhin-sandbox) .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; }
 :where(.zhin-sandbox) .agent-playground-artifact-list strong,
 :where(.zhin-sandbox) .agent-playground-artifact-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :where(.zhin-sandbox) .agent-playground-artifact-list strong { font-size: var(--console-text-label); font-weight: 660; }
@@ -1605,8 +1424,8 @@ export const workspaceStyles = `
 :where(.zhin-sandbox) .agent-playground-artifact-list article.is-completed em { color: hsl(var(--playground-accent)); }
 :where(.zhin-sandbox) .agent-playground-artifact-list article.is-failed em,
 :where(.zhin-sandbox) .agent-playground-artifact-list article.is-denied em { color: hsl(8 58% 47%); }
-:where(.zhin-sandbox) .agent-playground-artifact-list article > button > svg { color: hsl(var(--muted-foreground)); transition: transform 160ms ease; }
-:where(.zhin-sandbox) .agent-playground-artifact-list article.is-expanded > button > svg { transform: rotate(180deg); }
+:where(.zhin-sandbox) .agent-playground-artifact-list article > button:where(:not(.console-control, [data-state])) > svg { color: hsl(var(--muted-foreground)); transition: transform 160ms ease; }
+:where(.zhin-sandbox) .agent-playground-artifact-list article.is-expanded > button:where(:not(.console-control, [data-state])) > svg { transform: rotate(180deg); }
 
 :where(.zhin-sandbox) .agent-playground-artifact-detail {
   display: grid;
@@ -1678,9 +1497,7 @@ export const workspaceStyles = `
 
 :where(.zhin-sandbox) .agent-playground-inspector-overlay { display: none; }
 
-.agent-playground-shell:where(.zhin-sandbox) button:focus-visible,
-.agent-playground-shell:where(.zhin-sandbox) a:focus-visible,
-.agent-playground-shell:where(.zhin-sandbox) input:focus-visible {
+.agent-playground-shell:where(.zhin-sandbox) button:focus-visible:where(:not(.console-control, [data-state])), .agent-playground-shell:where(.zhin-sandbox) a:focus-visible:where(:not(.console-control, [data-state])), .agent-playground-shell:where(.zhin-sandbox) input:focus-visible:where(:not(.console-control, [data-state])) {
   outline: 2px solid hsl(var(--playground-accent));
   outline-offset: 2px;
 }
@@ -1747,7 +1564,7 @@ export const workspaceStyles = `
   }
 
   :where(.zhin-sandbox) .agent-playground-mobilebar strong { font-size: var(--console-text-label); }
-  :where(.zhin-sandbox) .agent-playground-mobilebar button {
+  :where(.zhin-sandbox) .agent-playground-mobilebar button:where(:not(.console-control, [data-state])) {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -1759,7 +1576,7 @@ export const workspaceStyles = `
     font-size: var(--console-text-label);
     cursor: pointer;
   }
-  :where(.zhin-sandbox) .agent-playground-mobilebar button:last-child { justify-self: end; }
+  :where(.zhin-sandbox) .agent-playground-mobilebar button:last-child:where(:not(.console-control, [data-state])) { justify-self: end; }
 
   :where(.zhin-sandbox) .agent-playground-sessions.channel-sidebar {
     position: fixed;
@@ -1802,8 +1619,7 @@ export const workspaceStyles = `
     border-radius: 0.85rem;
   }
 
-  :where(.zhin-sandbox) .agent-playground-run-actions a,
-  :where(.zhin-sandbox) .agent-playground-run-state { display: none; }
+  :where(.zhin-sandbox) .agent-playground-run-actions a:where(:not(.console-control, [data-state])), :where(.zhin-sandbox) .agent-playground-run-state { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -1824,7 +1640,7 @@ export const workspaceStyles = `
   :where(.zhin-sandbox) .agent-playground-run-icon { width: 2.05rem; height: 2.05rem; }
   :where(.zhin-sandbox) .agent-playground-run-title span { display: none; }
   :where(.zhin-sandbox) .agent-playground-run-actions { flex-wrap: nowrap; gap: 0.25rem; }
-  :where(.zhin-sandbox) .agent-playground-run-actions button {
+  :where(.zhin-sandbox) .agent-playground-run-actions button:where(:not(.console-control, [data-state])) {
     flex-shrink: 0;
     width: 2rem;
     min-width: 2rem;
@@ -1833,9 +1649,6 @@ export const workspaceStyles = `
     padding: 0;
     font-size: 0;
   }
-
-  :where(.zhin-sandbox) .agent-playground-confirm { align-items: flex-end; flex-wrap: wrap; }
-  :where(.zhin-sandbox) .agent-playground-confirm > div { flex-basis: 100%; }
 
   :where(.zhin-sandbox) .agent-playground-run-settings {
     max-height: 16rem;
@@ -1851,7 +1664,7 @@ export const workspaceStyles = `
   }
 
   :where(.zhin-sandbox) .agent-playground-prompts { grid-template-columns: 1fr; }
-  :where(.zhin-sandbox) .agent-playground-prompts button { min-height: 2.8rem; }
+  :where(.zhin-sandbox) .agent-playground-prompts button:where(:not(.console-control, [data-state])) { min-height: 2.8rem; }
   :where(.zhin-sandbox) .agent-playground-message-list { width: calc(100% - 1rem); padding-top: 1rem; }
   :where(.zhin-sandbox) .agent-playground-message-avatar { width: 1.75rem; height: 1.75rem; }
   :where(.zhin-sandbox) .agent-playground-message-main { max-width: calc(100% - 2.35rem); }

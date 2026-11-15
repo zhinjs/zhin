@@ -80,6 +80,11 @@
       "package": "@zhin.js/console-contract",
       "type": "minor",
       "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/adapter-sandbox",
+      "type": "minor",
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：Sandbox 会话页按 D13 两步迁移——Console 中只服务 Sandbox 的样式搬进插件由页面注入，页面改用 @zhin.js/console-ui 组件（新增 peerDependency @zhin.js/console-ui）、definePage({ fullWidth: true }) 与外壳页头（usePageChrome）。"
     }
   ]
 }
