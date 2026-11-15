@@ -106,6 +106,7 @@ const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
 | `requiredPermissions` | `[]` | 访问所需权限：内置权限（如 `status.view`）或插件自定义的权限名 |
 | `requiredRoles` | `[]` | 访问所需角色名（如 `operator`） |
 | `section` | — | Console 导航分区：`overview` / `conversations` / `features` / `plugins` / `ops` / `access`；省略时由 Console 决定（ADR 0052） |
+| `keywords` | — | 命令面板的搜索别名：一组字符串，或按语言分开（`{ 'zh-CN': ['抽奖'], en: ['lottery'] }`，只支持 `zh-CN` / `en`）；和标题、插件名一起用于在命令面板里找到这个页面（ADR 0063） |
 
 导航和页面清单按调用者过滤：全局所有者能看到全部页面；其他用户只能看到角色权限满足要求的页面（插件自定义的权限名按级别授予，见[插件权限的级别](#插件权限的级别)）；未登录只能看到没有要求的页面。用户与角色见 [Console 的用户与权限](../console/index.md#用户与权限)。
 
@@ -525,7 +526,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 - 和 Console 自带页面放在一起时看起来是同一个产品；
 - 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
 
-统一的组件库 `@zhin.js/console-ui` 和它的语义令牌是**规划中（ADR 0063 P1）**，目前还没有发布；在它发布之前，手写页面使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
+统一的组件库 `@zhin.js/console-ui` 已经建立（ADR 0063 P1a：从 Console 迁入组件与令牌，外观不变，带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。插件页面接入它和页面外壳是 P2 的工作；在那之前，插件页面沿用现状：声明式页面照常写蓝图，手写页面继续使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
 
 **允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
 
