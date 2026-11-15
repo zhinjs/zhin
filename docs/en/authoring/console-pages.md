@@ -518,7 +518,7 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 
 ## Page UI guidelines
 
-The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for plugin pages they are **recommended**, plus a small set of hard-floor rules.
+The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for third-party plugin pages they are **recommended**, plus a small set of hard-floor rules; the official plugins in this repository (zhinjs/zhin `plugins/**`) **follow them in full** from ADR 0063 P2 (planned) and serve as reference implementations from then on (see the end of this section).
 
 **Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: once the renderers move to the unified component library (planned, ADR 0063 P2) they follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the 8 standard keys `1`, `2`, `3`, `4`, `6`, `8`, `12` and `16` (the 8-step scale from 0.25 to 4rem); other keys such as `p-5` or `gap-2.5` are off the scale. Why:
 
@@ -538,6 +538,8 @@ The unified component library `@zhin.js/console-ui` and its semantic tokens are 
 5. use the Console's theme tokens for background and text, so it stays readable in both the light and the dark theme.
 
 `zhin plugin check` is planned (ADR 0063 P2) to report deviations from the recommendations as **hints** (warnings, never errors; they do not block a build or publish), each with how to switch to a component or token.
+
+**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: from ADR 0063 P2, the `zhin plugin check` checks and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors for official plugins in zhinjs/zhin CI, just as for the Console's own pages (report-only before that). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Once P2 is complete, look at the official plugins' pages when writing your own; until then some official pages still use the old `zk-` components and should not be copied.
 
 ## Page UI kit
 
