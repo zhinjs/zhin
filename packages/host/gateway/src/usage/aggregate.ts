@@ -139,6 +139,13 @@ export interface UsageStats {
     readonly cacheShareByCall: { readonly p50: number; readonly p90: number };
     /** `inputTokens` is the provider-reported prompt tokens of every model call (all iterations, sub-agents included). */
     readonly inputBasis: 'reported-all-calls';
+    /**
+     * Replies (root turns and sub-agent turns) that claimed a lookup ("查了下", "I checked") while
+     * that turn made no tool call: the trace's `claim_without_tool_call` (#1250 / #1270).
+     */
+    readonly claimsWithoutToolCall: number;
+    /** Turns that ended with a denied or failed side-effect tool and got the 「未执行」 notice (`unexecuted_tool_notice`). */
+    readonly unexecutedToolNotices: number;
   };
   readonly byModel: ReadonlyArray<UsageStatsTokens & {
     /** Merge key: the resolved service id, or the recorded provider when it cannot be resolved. */
@@ -149,6 +156,8 @@ export interface UsageStats {
     readonly providerLabel?: string;
     /** Recorded provider ids merged into this row (e.g. `services:…` and `accounts:…`). */
     readonly providerIds: readonly string[];
+    /** Claims without a tool call answered by this model (the turn's last model call, #1270). */
+    readonly claimsWithoutToolCall: number;
   }>;
   readonly bySession: ReadonlyArray<UsageStatsTokens & {
     readonly sessionKey: string;
@@ -318,6 +327,35 @@ export function parseSessionKey(key: string): { platform?: string; scope?: strin
 interface Tally { calls: number; input: number; output: number; cache: number; cacheWrite: number }
 const tally = (): Tally => ({ calls: 0, input: 0, output: 0, cache: 0, cacheWrite: 0 });
 
+/** One reply that claimed a lookup without any tool call, with the model call that wrote it. */
+export interface TraceLookupClaim {
+  /** Recorded provider / model of the node's last model call; absent when it recorded none. */
+  readonly provider?: string;
+  readonly model?: string;
+}
+
+/**
+ * Every `claim_without_tool_call` of a trace: the root turn's and each nested sub-agent's
+ * (#1270). Shared by the Console usage stats and `zhin usage report`.
+ */
+export function lookupClaimsOf(trace: unknown): readonly TraceLookupClaim[] {
+  const claims: TraceLookupClaim[] = [];
+  const visit = (node: any, depth: number) => {
+    if (!node || typeof node !== 'object' || depth > MAX_SUBAGENT_DEPTH) return;
+    if (node.claim_without_tool_call && typeof node.claim_without_tool_call === 'object') {
+      const calls = Array.isArray(node.model_calls) ? node.model_calls : [];
+      const last = calls[calls.length - 1];
+      claims.push({
+        ...(typeof last?.provider === 'string' && last.provider ? { provider: last.provider } : {}),
+        ...(typeof last?.model === 'string' && last.model ? { model: last.model } : {}),
+      });
+    }
+    if (Array.isArray(node.subagents)) for (const child of node.subagents) visit(child, depth + 1);
+  };
+  visit(trace, 0);
+  return claims;
+}
+
 function tokens(t: Tally): UsageStatsTokens {
   return {
     calls: t.calls,
@@ -352,6 +390,13 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
   for (let t = bucketStartOf(since, bucket, timeZone); t < until; t = nextBucket(t, bucket, timeZone)) {
     buckets.set(t, { ...tally(), byModel: {} });
   }
+  let claimsWithoutToolCall = 0;
+  let unexecutedToolNotices = 0;
+  const claimsByGroup = new Map<string, number>();
+  const groupKeyOf = (recorded: string, model: string) => {
+    const service = resolve(recorded);
+    return service ? `${service.key}\n${model}` : isOpaqueProviderId(recorded) ? `\n${model}` : `${recorded}\n${model}`;
+  };
   const resolve = (provider: string) => {
     if (!options.resolveProvider) return undefined;
     if (!resolved.has(provider)) {
@@ -413,6 +458,13 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
       }
     }
 
+    for (const claim of lookupClaimsOf(trace)) {
+      claimsWithoutToolCall++;
+      const key = groupKeyOf(claim.provider ?? 'unknown', claim.model ?? 'unknown');
+      claimsByGroup.set(key, (claimsByGroup.get(key) ?? 0) + 1);
+    }
+    if (trace.unexecuted_tool_notice && typeof trace.unexecuted_tool_notice === 'object') unexecutedToolNotices++;
+
     const budget = trace.context_budget?.segments;
     if (budget && typeof budget === 'object') {
       breakdown.turns++;
@@ -428,13 +480,14 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
   });
 
   callShares.sort((a, b) => a - b);
-  const byModel = [...models.values()]
-    .map(m => ({
+  const byModel = [...models.entries()]
+    .map(([group, m]) => ({
       provider: m.provider,
       model: m.model,
       displayName: usageModelDisplayName(m.provider, m.model, m.label),
       ...(m.label ? { providerLabel: m.label } : {}),
       providerIds: [...m.providerIds].sort(),
+      claimsWithoutToolCall: claimsByGroup.get(group) ?? 0,
       ...tokens(m),
     }))
     .sort((a, b) => b.inputTokens - a.inputTokens);
@@ -445,6 +498,8 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
       ...tokens(total),
       cacheShareByCall: { p50: nearestRank(callShares, 50), p90: nearestRank(callShares, 90) },
       inputBasis: 'reported-all-calls',
+      claimsWithoutToolCall,
+      unexecutedToolNotices,
     },
     byModel,
     bySession: [...sessions.entries()]

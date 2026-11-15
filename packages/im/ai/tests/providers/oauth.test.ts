@@ -240,6 +240,27 @@ describe('Antigravity Code Assist preparation', () => {
       .rejects.toMatchObject({ code: 'project-unavailable', status: 503, reason: 'UNAVAILABLE', step: 'onboard-user' });
   });
 
+  it('keeps an UNSUPPORTED_CLIENT onboarding refusal as its own reason instead of project-required (#1270)', async () => {
+    const oauth = createAntigravityOAuth({ pollIntervalMs: 0, maxPollAttempts: 2 });
+    const refused = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/refused-1', done: false }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/refused-1', done: true,
+        error: { code: 3, message: 'PRIVATE', details: [{ reason: 'UNSUPPORTED_CLIENT' }] } }));
+    let failure: unknown;
+    try { await oauth.prepare!({ service: antigravityService, signal, fetch: refused, client, credential }); } catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'project-unavailable', status: 200, reason: 'UNSUPPORTED_CLIENT', step: 'onboard-operation' });
+    expect(JSON.stringify(failure)).not.toContain('PRIVATE');
+    // A configured project is still the way through: the refusal is not fatal then.
+    const withConfigured = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 'google-subject' }))
+      .mockResolvedValueOnce(Response.json({ currentTier: { id: 'standard-tier' } }))
+      .mockResolvedValueOnce(Response.json({ name: 'operations/refused-2', done: true, error: { code: 3, details: [{ reason: 'UNSUPPORTED_CLIENT' }] } }));
+    const ready = await oauth.prepare!({ service: withProject('my-project-123'), signal, fetch: withConfigured, client, credential });
+    expect(ready).toMatchObject({ preparation: { status: 'ready' }, metadata: { projectId: 'my-project-123' } });
+  });
+
   it('sends a configured Google Cloud project like gemini-cli and falls back to it when the current tier yields none', async () => {
     const oauth = createAntigravityOAuth({ pollIntervalMs: 0 });
     const fetch = vi.fn<typeof globalThis.fetch>()

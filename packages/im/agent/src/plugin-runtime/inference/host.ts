@@ -27,15 +27,17 @@ import type { AIService } from '../../index.js';
 import { runWithAgentTurnConfiguration } from '../../turn/index.js';
 import { hostModelOwnerId } from './host-identity.js';
 import { DatabaseInferenceRepository } from './repository.js';
-import { InferenceCredentialStore, type EnvironmentExpressionSource } from './credentials.js';
+import { InferenceCredentialStore, type EnvironmentExpressionSource, type OAuthExchangeFailure } from './credentials.js';
 import { HostAccountRuntime } from './account-runtime.js';
 import { createProviderNetwork, matchesProviderTarget } from './network.js';
-import { InferenceManagementService, InferenceManagementError } from './management.js';
+import { InferenceManagementService, InferenceManagementError, inferencePurposeEffects, type InferencePurposeEffect } from './management.js';
+import type { AccountStatusView } from './account-runtime-helpers.js';
+import { pruneInferenceFailures, type InferenceFailureJournal } from './failure-journal.js';
 import { projectProviderSupport } from './support-metadata.js';
 import { InferenceSessionRepository } from './session-state.js';
 import { resolveInferenceTurnContext } from './turn-context.js';
 import { InferenceSessionManagement } from './session-management.js';
-import { createInferenceTargetsReader, type InferenceTargetsReader } from './targets.js';
+import { createInferenceTargetsReader, readAgentPurposeTargets, type InferenceTargetsReader } from './targets.js';
 import { createPersonalSessionDirectory } from './session-directory.js';
 import { createCredentialRequestAccess, type CredentialTransportFact } from './request-access.js';
 import { probeLanguageProfile, type InferenceProbeResult } from './probe.js';
@@ -64,6 +66,25 @@ export interface HostInferenceOptions {
   readonly personalOwners: readonly PersonalSessionOwner[] | (() => readonly PersonalSessionOwner[]);
   /** Trusted process-private in-flight evidence only; not a Console or persistent audit sink. */
   readonly observeCredentialTransport?: (fact: CredentialTransportFact) => void | Promise<void>;
+  /** Instance runtime failure journal (#1270); preparation and model call failures survive a restart. */
+  readonly failureJournal?: InferenceFailureJournal;
+}
+
+/**
+ * A Host model account that needs an operator (#1270), for the Console attention inbox:
+ * - `reauthorize` / `disconnected` / `uncertain`: the stored credential's state;
+ * - `preparation-failed`: signed in, but the read-only preparation failed (with its reason).
+ */
+export interface InferenceAccountAttention {
+  readonly accountId: string;
+  readonly label: string;
+  readonly serviceLabel: string;
+  readonly state: 'reauthorize' | 'disconnected' | 'uncertain' | 'preparation-failed';
+  readonly revision: number;
+  readonly preparationFailure?: AccountStatusView['preparationFailure'];
+  /** Uncertain sign-in exchanges: the classified failure kind and the upstream HTTP status. */
+  readonly failure?: OAuthExchangeFailure['kind'];
+  readonly failureStatus?: number;
 }
 
 /** One process owns encrypted authentication; each invocation borrows exactly its operation generation. */
@@ -124,7 +145,65 @@ export class HostInference {
       allowTarget: ({ service, definition, target, purpose }) =>
         matchesProviderTarget(target, definition.targets(service)[purpose] ?? []),
       resolveSource: options.resolveSource,
+      ...(options.failureJournal ? { failureJournal: options.failureJournal } : {}),
     });
+  }
+
+  /**
+   * Drops journaled account / model failures that are no longer current (#1270): accounts removed
+   * from the graph, and account entries of another credential revision than the stored one.
+   */
+  async pruneFailureJournal(): Promise<void> {
+    const journal = this.options.failureJournal;
+    if (!journal) return;
+    const graph = await this.repository.readGraph({ rootId: this.rootId });
+    if (!graph) return;
+    pruneInferenceFailures(journal, await this.accounts.statuses({ graph, accounts: Object.values(graph.accounts) }));
+  }
+
+  #pruneFailureJournal(graph: Readonly<{ accounts: Readonly<Record<string, unknown>> }>): void {
+    const journal = this.options.failureJournal;
+    if (!journal?.retain) return;
+    const exists = (subject: string) => Object.hasOwn(graph.accounts, subject);
+    try {
+      journal.retain('account', exists, { graceMs: 0 });
+      journal.retain('model', exists, { graceMs: 0 });
+    } catch { /* never breaks a read */ }
+  }
+
+  /** Host-owned accounts that need an operator (#1270); empty while inference storage is unavailable. */
+  async accountAttention(): Promise<readonly InferenceAccountAttention[]> {
+    const graph = await this.repository.readGraph({ rootId: this.rootId });
+    if (!graph) return [];
+    this.#pruneFailureJournal(graph);
+    const accounts = Object.values(graph.accounts).filter(account => account.ownerId === this.hostOwnerId);
+    const statuses = await this.accounts.statuses({ graph, accounts });
+    const rows: InferenceAccountAttention[] = [];
+    for (const account of accounts) {
+      const status = statuses[account.id];
+      if (!status) continue;
+      const service = graph.services[account.serviceId];
+      const common = {
+        accountId: account.id,
+        label: account.label ?? account.id,
+        serviceLabel: service?.label ?? service?.driver.id ?? account.serviceId,
+        revision: status.revision,
+      };
+      if (status.status === 'reauthorize' || status.status === 'disconnected' || status.status === 'uncertain') {
+        rows.push(Object.freeze({ ...common, state: status.status,
+          ...(status.failure ? { failure: status.failure.kind, ...(status.failure.status === undefined ? {} : { failureStatus: status.failure.status }) } : {}) }));
+      } else if (status.status === 'authenticated' && status.preparation === 'required' && status.preparationFailure) {
+        rows.push(Object.freeze({ ...common, state: 'preparation-failed', preparationFailure: status.preparationFailure }));
+      }
+    }
+    return Object.freeze(rows);
+  }
+
+  /** Effect of each `purposes.agents` key in `lease`'s generation (#1270); empty without agent purposes. */
+  async purposeEffects(lease: SnapshotLease): Promise<Readonly<Record<string, InferencePurposeEffect>>> {
+    const graph = await this.repository.readGraph({ rootId: this.rootId });
+    if (!graph?.purposes.agents) return Object.freeze({});
+    return inferencePurposeEffects(graph.purposes.agents, readAgentPurposeTargets(lease.value));
   }
 
   modelRuntimeOptions(): ModelRuntimeServiceOptions {
@@ -341,6 +420,7 @@ export class HostInference {
       return entry.definition;
     };
     const management = new InferenceManagementService({
+      agentTargets: () => readAgentPurposeTargets(lease.value),
       rootId: this.rootId,
       hostOwnerId: this.hostOwnerId,
       directory: join(this.options.projectRoot, '.zhin', 'inference'),

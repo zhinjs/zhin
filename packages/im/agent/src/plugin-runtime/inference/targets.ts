@@ -1,10 +1,12 @@
 import { agentHostToken, type AgentHostPort } from '../agent-host-port.js';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { agentFeatureId, isAgentIndex } from '@zhin.js/agent-feature';
 import {
   decodeTaskTarget,
   encodeTaskTarget,
   encodeStorageIdentity,
   type DatabaseHost,
+  type RuntimeSnapshot,
   type SnapshotLease,
 } from '@zhin.js/plugin-runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
@@ -31,6 +33,13 @@ export interface InferenceTargetPage {
 export interface InferenceTargets {
   readonly agentsAvailable: boolean;
   readonly agents: readonly Readonly<{ name: string; nickname?: string }>[];
+  /**
+   * Sub-agents (`agents/<name>/` of plugins) a `purposes.agents.<key>` model choice can name (#1270).
+   * `qualifiedName` (`<plugin>__<agent>`) always works; `kind` says whether the bare `name` does too:
+   * `bare` (unique and no binding uses it), `shared` (several sub-agents have it) or `binding`
+   * (an Agent binding has that name, so the key belongs to the binding).
+   */
+  readonly subAgents: readonly SubAgentTarget[];
   readonly adaptersAvailable: boolean;
   readonly adapters: readonly Readonly<{
     capabilityId: string;
@@ -50,6 +59,37 @@ export interface InferenceTargets {
   }>[];
   readonly sceneHasMore: boolean;
 }
+export interface SubAgentTarget {
+  readonly qualifiedName: string;
+  readonly name: string;
+  readonly kind: 'bare' | 'shared' | 'binding';
+}
+
+/** Agent binding names and sub-agents of one generation, for purpose effects (#1270). */
+export interface AgentPurposeTargets {
+  readonly bindingNames: readonly string[];
+  readonly subAgents: readonly SubAgentTarget[];
+}
+
+/** Reads the binding names and the sub-agent list of `snapshot`; empty lists when the Agent is absent. */
+export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurposeTargets {
+  const agentHost = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as AgentHostPort | undefined;
+  const bindingNames = ['zhin', ...(agentHost?.protocol.listBindings().map(binding => binding.name) ?? [])];
+  const index = snapshot.projections.get(agentFeatureId);
+  const descriptors = isAgentIndex(index) ? index.list() : [];
+  const counts = new Map<string, number>();
+  for (const agent of descriptors) counts.set(agent.name, (counts.get(agent.name) ?? 0) + 1);
+  const bindings = new Set(bindingNames);
+  const subAgents = descriptors
+    .map((agent): SubAgentTarget => Object.freeze({
+      qualifiedName: agent.qualifiedName,
+      name: agent.name,
+      kind: bindings.has(agent.name) ? 'binding' : (counts.get(agent.name) ?? 0) > 1 ? 'shared' : 'bare',
+    }))
+    .sort((a, b) => (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0));
+  return Object.freeze({ bindingNames: Object.freeze([...new Set(bindingNames)]), subAgents: Object.freeze(subAgents) });
+}
+
 export type InferenceTargetsReader = (page?: InferenceTargetPage) => Promise<InferenceTargets>;
 const COLUMNS = [
   'endpoint_adapter',
@@ -114,6 +154,7 @@ export function createInferenceTargetsReader(
     const common = {
       agentsAvailable: agentHost !== undefined,
       agents: Object.freeze(agents),
+      subAgents: readAgentPurposeTargets(options.lease.value).subAgents,
       adaptersAvailable: isAdapterIndex(index),
       adapters: Object.freeze(adapters),
       endpoints: Object.freeze(endpoints),

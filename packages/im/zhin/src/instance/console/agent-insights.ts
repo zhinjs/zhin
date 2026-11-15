@@ -11,6 +11,31 @@ export interface AgentInsightsSource {
   providerDisplay(): Promise<ProviderDisplayIndex | undefined>;
   /** Newest-last raw turn traces (the archive's own order); never includes request bodies in the projection. */
   recentTraces(limit: number): Promise<readonly unknown[]>;
+  /** Host model accounts that need an operator (#1270); absent without an Agent Host. */
+  accountAttention?(): Promise<readonly InferenceAccountAttentionRow[]>;
+  /** Effect of each `purposes.agents` key, keyed `agents.<key>` (#1270). */
+  purposeEffects?(lease: import('@zhin.js/plugin-runtime').SnapshotLease): Promise<Readonly<Record<string, PurposeEffectRow>>>;
+}
+
+/** `HostInference.accountAttention()` row (structural copy: the Agent package is optional). */
+export interface InferenceAccountAttentionRow {
+  readonly accountId: string;
+  readonly label: string;
+  readonly serviceLabel: string;
+  readonly state: 'reauthorize' | 'disconnected' | 'uncertain' | 'preparation-failed';
+  readonly revision: number;
+  readonly preparationFailure?: Readonly<{ code: string; reason?: string; upstreamStatus?: number; step?: string; restored?: boolean; at?: number }>;
+  readonly failure?: string;
+  readonly failureStatus?: number;
+}
+
+/** `InferencePurposeEffect` (structural copy). */
+export interface PurposeEffectRow {
+  readonly status: 'effective' | 'ignored';
+  readonly reason?: 'binding-name' | 'ambiguous' | 'no-target';
+  readonly target?: 'binding' | 'sub-agent';
+  readonly agents?: readonly string[];
+  readonly ignoredAgents?: readonly string[];
 }
 
 export interface AgentBindingInput {
