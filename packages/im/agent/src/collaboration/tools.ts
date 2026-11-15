@@ -168,6 +168,11 @@ function refusal(action: string, outcome: Extract<SendOutcome, { ok: false }>): 
 export const createCollaborationTools: CreateCollaborationTools = (binding, options) => {
   const { harness, directory, actor, mail } = binding;
   let workerSeq = 0;
+  /** The model of this actor learns that collaboration stopped (#1250 batch 26: the host then need not say so). */
+  const refuse = (action: string, outcome: Extract<SendOutcome, { ok: false }>): string => {
+    if (outcome.escalated) options.onStopped?.();
+    return refusal(action, outcome);
+  };
 
   /** Model-chosen budget with the floor applied; logged when raised. */
   const floor = (amounts: Partial<BudgetAmounts> | undefined, action: string, to: string) => {
@@ -244,7 +249,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
           ...(effectiveBudget ? { budget: effectiveBudget } : {}),
           ...(timeoutMs !== undefined ? { timeoutMs } : {}),
         });
-        if (!outcome.ok) return refusal('ask', outcome);
+        if (!outcome.ok) return refuse('ask', outcome);
         const reply = outcome.reply ?? { status: 'failed' as const, content: '' };
         const content = reply.content.trim() || '(empty reply)';
         return withAttachments(
@@ -293,7 +298,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
           ...(effectiveBudget ? { budget: effectiveBudget } : {}),
           ...(isSelf ? { narrowing: { contacts: only([]) } } : {}),
         });
-        if (!outcome.ok) return refusal('delegate', outcome);
+        if (!outcome.ok) return refuse('delegate', outcome);
         return `delegated to ${toActor} (mail ${outcome.mail.id}); its result will arrive as a new message${budgetNote(floored?.raised ?? [])}`;
       },
     },
@@ -320,7 +325,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         const content = text(args, 'content');
         if (!content) return 'tell refused: provide non-empty content.';
         const outcome = await harness.send(actor, mail, { kind: 'tell', to: resolved.name, text: content });
-        if (!outcome.ok) return refusal('tell', outcome);
+        if (!outcome.ok) return refuse('tell', outcome);
         return `told ${resolved.name} (mail ${outcome.mail.id})`;
       },
     },
@@ -354,6 +359,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
           const code = ack.code ?? ack.reason?.code ?? 'denied';
           const detail = ack.reason?.detail ?? 'follow_up denied';
           const base = `follow_up refused (${code}): ${detail}`;
+          if (ack.escalated) options.onStopped?.();
           return stoppedNote(base, ack.escalated);
         }
         const reply = ack.reply ?? ack.result ?? { status: 'completed' as const, content: '' };

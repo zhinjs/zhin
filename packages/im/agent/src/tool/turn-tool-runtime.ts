@@ -55,7 +55,11 @@ export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
   | Readonly<{ status: 'denied'; policy: string; reason: string; sideEffect?: boolean }>
   | Readonly<{ status: 'cancelled'; reason: string }>
-  | Readonly<{ status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean }>;
+  | Readonly<{
+    status: 'failed'; error: string; retryable: boolean; sideEffect?: boolean;
+    /** #1250 batch 26: the tool ran and returned this failure (`{ error }`, MCP `isError`); `output` is what it returned. */
+    reported?: boolean; output?: unknown;
+  }>;
 
 export interface TurnToolRuntimeOptions {
   /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
@@ -308,7 +312,8 @@ export class TurnToolRuntime {
         const redacted = logToolErrorResult(name, errorResult);
         await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: redacted, durationMs }, causedBy);
         if (this.turn.signal.aborted) return this.#cancelledOutcome();
-        return Object.freeze({ status: 'failed', error: errorResult, retryable: false, sideEffect: tool.readOnly !== true });
+        return Object.freeze({ status: 'failed', error: errorResult, retryable: false, sideEffect: tool.readOnly !== true,
+          reported: true, output });
       }
       // A tool that ignores cancellation may already have committed side effects.
       // Record its real settlement so the audit trail never invites an unsafe retry.

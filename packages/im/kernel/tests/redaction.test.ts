@@ -11,6 +11,22 @@ describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
     expect(isSecretLikeKey('openaiApiKey')).toBe(true);
     expect(isSecretLikeKey('name')).toBe(false);
   });
+
+  it('masks JSON, YAML-style, query-string and Telegram bot-path secrets (#1250 batch 26)', () => {
+    expect(redactSecretText('{"token":"abc123secret","name":"x"}')).toBe('{"token":"[redacted]","name":"x"}');
+    expect(redactSecretText('{"api_key": "k-9 9", "ok": true}')).toBe('{"api_key": "[redacted]", "ok": true}');
+    expect(redactSecretText('api_key: abcdef123456, next')).toBe('api_key: [redacted], next');
+    expect(redactSecretText("password: 'hunter2'")).toBe("password: '[redacted]'");
+    expect(redactSecretText('GET https://maps.example.com/v1?q=a&key=AbCdEf123&lang=zh')).toBe('GET https://maps.example.com/v1?q=a&key=[redacted]&lang=zh');
+    expect(redactSecretText('POST https://api.telegram.org/bot123456:AAH-abcdefghijklmnopqrstuvwxyz012/sendMessage failed'))
+      .toBe('POST https://api.telegram.org/bot123456:[redacted]/sendMessage failed');
+  });
+
+  it('leaves numbers and ordinary prose alone', () => {
+    expect(redactSecretText('max_tokens: 100, tokens: 32000')).toBe('max_tokens: 100, tokens: 32000');
+    expect(redactSecretText('{"tokens": 4096}')).toBe('{"tokens": 4096}');
+    expect(redactSecretText('the keyboard is fine; monkey=1')).toBe('the keyboard is fine; monkey=1');
+  });
 });
 
 describe('chat-owner claim text (ADR 0060 §3.3, zhinjs/zhin#1250)', () => {

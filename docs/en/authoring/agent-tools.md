@@ -44,7 +44,7 @@ Save, then ask the bot in a DM "What's the weather in Berlin?" — the AI calls 
 
 - `description` and `inputSchema` are **written for the model**: say clearly what the tool does and what the parameters are, so it gets called at the right moment.
 - Whatever `execute` returns goes back to the model, which turns it into a reply.
-- To fail, throw, or return an object with a non-empty `error` field (`{ error: '…' }`; an MCP tool's `isError: true` counts too): both are recorded as failed (trace and usage stats count a failure, and one redacted warn line goes to the instance log), and the model reads a failed result. `error: null` / `''` and the like are not failures, nor is a result that also says `ok: true` / `success: true`.
+- To fail, throw, or return an object with a non-empty `error` field (`{ error: '…' }`; an MCP tool's `isError: true` counts too): both are recorded as failed (trace and usage stats count a failure, and one redacted warn line goes to the instance log). A throw means the operation did not finish; a returned failure may have partly taken effect, so the model reads the whole returned value, redacted and through `toModelOutput` (hints and candidates included), with a note that it is unclear whether part of it took effect, and the line added to the reply says the action reported a failure and may be partly done. `error: null` / `''` and the like are not failures, nor is a result that also says `ok: true` / `success: true`.
 
 ### Parameter Schema styles
 

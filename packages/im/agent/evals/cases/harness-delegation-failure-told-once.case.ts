@@ -1,11 +1,11 @@
 import { defineEvalCase } from '../framework/index.js';
 
 // #1250 delegate-failure-message-flood: two delegations to the same agent both run out of budget and nothing
-// supersedes them. The human hears about it once (the entry agent's one-sentence account); the second
-// budget stop stays in the trace instead of becoming another chat message.
+// supersedes them. The entry agent explains the first failure; the second does not wake it again (no second
+// model-written account), the human gets one deterministic line counting it instead.
 export default defineEvalCase({
   id: 'harness-delegation-failure-told-once',
-  description: 'Two failed delegations of one request produce one failure account, not one message each.',
+  description: 'Two failed delegations of one request: one model-written account, then one fixed line for the other.',
   source: '#1250 delegate-failure-message-flood',
   tags: ['collaboration', 'long-task'],
   inbound: { text: '画两张城市人口的图', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
@@ -26,8 +26,10 @@ export default defineEvalCase({
   ],
   allowUnusedSteps: true,
   expect: {
-    outboundContains: ['已经交给 draw', '没能完成'],
+    outboundContains: ['已经交给 draw', '这次绘图没能完成', '另有 1 项后台任务没有完成。'],
     outboundNotContains: ['预算不足'],
-    outboundMessages: 2,
+    outboundMessages: 3,
+    // entry: delegate, ack, first account; draw: one call per sub-turn. The trap is never requested.
+    modelSteps: 5,
   },
 });

@@ -51,6 +51,8 @@ export interface TurnCollaborationInput {
   readonly host: ZhinAgentPrivate;
   readonly core: AgentCore;
   readonly turn: TurnIngress;
+  /** The conversation session the root turn runs in (what the next turn's prompt is built from). */
+  readonly sessionId?: string;
   /** The root turn's projected, already-authorized capabilities. */
   readonly capabilities: AgentCapabilities;
   /** Agent name of the root actor (the turn's binding). */
@@ -130,6 +132,12 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   // way to decide is to answer in the chat.
   const onEscalate = async (reason: string): Promise<string> => {
     await tell(`需要你来决定：${reason}\n（直接回复这条消息告诉我你的决定即可。）`);
+    // The answer arrives as the next message of this session: its turn must see what was asked.
+    try {
+      input.host.toldLedger?.record(input.sessionId ?? turn.session.key, `已请用户决定：${reason}`, 'progress', turn.identity.turnId);
+    } catch (error) {
+      logger.debug(`escalation not recorded in the told ledger: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return 'The human has been asked to decide; stop this line of work and wait for their answer in a later message.';
   };
   const onVenueTell = async (venueId: string, content: string): Promise<void> => {
@@ -155,9 +163,14 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     }),
   }) : undefined;
   // The root turn is the engagement's first entry turn; it is running now.
-  const outcomes = createEngagementOutcomes(directory.entry.name);
+  const outcomes = createEngagementOutcomes();
   outcomes.entryStarted();
   let rootFinished = false;
+  const announceStop = async (): Promise<void> => {
+    outcomes.stopAnnounced();
+    await background.tell(collaborationStoppedLine(turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
+  };
+  const entryName = directory.entry.name;
   const runner = createActorTurnRunner({
     host: input.host,
     core: input.core,
@@ -165,7 +178,11 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     capabilities,
     directory,
     harness: () => harness,
-    createTools: createCollaborationTools,
+    // The entry actor's own refusals tell its model that collaboration stopped.
+    createTools: (binding, options) => createCollaborationTools(
+      binding,
+      binding.actor === entryName ? { ...options, onStopped: () => outcomes.entryInformed() } : options,
+    ),
     resolveModel: input.resolveModel,
     ...(models ? { models } : {}),
     loopHooks: input.loopHooks,
@@ -185,15 +202,18 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     directory,
     ...(input.venueProjector ? { venueProjector: input.venueProjector } : {}),
     runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
-      const entry = actor === directory.entry.name;
+      const entry = actor === entryName;
       const resultsOnly = entry && batch.length > 0 && batch.every((mail) => mail.body.kind === 'result');
       if (resultsOnly) {
-        const withheld = outcomes.withhold(batch);
-        if (withheld) {
+        const plan = outcomes.plan(batch);
+        if (plan.kind !== 'run') {
           // #1250: an internal outcome (budget stop, failure, cancellation) the human must not hear
           // separately; it stays in the engagement journal and the sub-turn's trace.
-          logger.info(`collaboration result withheld (${withheld}): ${describeResults(batch)}`);
-          return Object.freeze({ status: 'completed' as const, content: `result withheld: ${withheld}` });
+          logger.info(`collaboration result withheld (${plan.reason}): ${describeResults(batch)}`);
+          if (plan.kind === 'line') {
+            await background.tell(moreFailuresLine(plan.count, turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
+          }
+          return Object.freeze({ status: 'completed' as const, content: `result withheld: ${plan.reason}` });
         }
       }
       if (entry) outcomes.entryStarted();
@@ -201,34 +221,33 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
       try {
         result = await runner(actor, batch, signal);
       } finally {
-        if (entry) outcomes.entryFinished();
+        if (entry && outcomes.entryFinished()) await announceStop();
       }
-      if (!entry) outcomes.recordSubTurn(actor, batch, result.status);
+      if (!entry) outcomes.recordSubTurn(batch, result.status);
       // The entry actor continuing with delegated results speaks to the human directly.
       if (resultsOnly) {
-        if (outcomes.failureOnly(batch) && result.status !== 'cancelled') outcomes.failureTold();
-        await background.deliverResult(result, signal);
+        const failures = outcomes.failureOnly(batch);
+        await background.deliverResult(result, signal, () => {
+          if (failures) outcomes.failuresTold(batch);
+        });
       }
       return result;
     }),
     onEscalate: AsyncResource.bind(async (notice: EscalationNotice) => {
       // #1250: the guard's reason is developer text (`Actors … above the limit of 3`): it goes to the
       // log and the engagement journal, never to the chat. No one can resume a frozen engagement, so the
-      // human is not asked to decide. While an entry turn runs, its model tells the human in its reply
-      // (the refusal says so); otherwise one short localized line closes the request.
+      // human is not asked to decide. An entry model that met the stop (its refusal says so) tells the
+      // human in its reply; otherwise one short localized line closes the request, now or when the
+      // running entry turn ends.
       logger.warn(`collaboration stopped by the guard (${notice.code}): ${notice.reason}`);
-      const speak = outcomes.stopped();
-      if (speak) {
-        outcomes.failureTold();
-        await background.tell(collaborationStoppedLine(turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
-      }
+      if (outcomes.stopped()) await announceStop();
     }),
     // The delegation reservation lives as long as the engagement (the host bounds both).
     ...(delegation ? { onClosed: () => { void delegation.release().catch(() => undefined); } } : {}),
   });
   const tools = createCollaborationTools(
-    { harness, directory, actor: directory.entry.name, mail: root },
-    { owner: capabilities.owner, onEscalate, onVenueTell },
+    { harness, directory, actor: entryName, mail: root },
+    { owner: capabilities.owner, onEscalate, onVenueTell, onStopped: () => outcomes.entryInformed() },
   );
   const collaboration: TurnCollaboration = {
     harness,
@@ -239,7 +258,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     async finish() {
       if (rootFinished) return;
       rootFinished = true;
-      outcomes.entryFinished();
+      if (outcomes.entryFinished()) await announceStop();
     },
   };
   return Object.freeze(collaboration);
@@ -270,72 +289,133 @@ function describeResults(batch: readonly Mail[]): string {
   return batch.map((mail) => `${mail.from.kind === 'actor' ? mail.from.actor : mail.from.kind} ${resultStatus(mail) ?? mail.kind}`).join(', ');
 }
 
-/** Why a batch of delegated results is not shown to the human. */
-type WithheldReason = 'superseded' | 'already_told' | 'collaboration_stopped';
+/** Why a batch of delegated results is not shown to the human as a woken entry turn. */
+export type WithheldReason = 'superseded' | 'collaboration_stopped' | 'another_failure';
+
+/** What to do with a batch of delegated results for the entry actor. */
+export type ResultBatchPlan =
+  | Readonly<{ kind: 'run' }>
+  | Readonly<{ kind: 'withhold'; reason: 'superseded' | 'collaboration_stopped' }>
+  | Readonly<{ kind: 'line'; reason: 'another_failure'; count: number }>;
 
 /**
  * One user request (engagement) gets one conclusion (#1250 `delegate-failure-message-flood`,
  * `delegate-late-failure-message-contradicts`). A batch of results that are all internal outcomes
- * (failed, budget stop, cancelled, denied) does not wake the entry actor to tell the human when:
+ * (failed, budget stop, cancelled, denied) is planned per failed delegation:
  *
- * - `superseded`: each failed agent completed another sub-turn for the entry actor in this
- *   engagement (a `follow_up` on the same delegation, or a later ask / delegate), so the human
- *   already got, or is about to get, that agent's work; the failure is stale;
- * - `already_told`: the human was already told about a failure in this request;
- * - `collaboration_stopped`: the guard stopped this request's collaboration (the stop was told once).
+ * - superseded: a `follow_up` on that same delegation (the harness sends it with
+ *   `causationId` = the delegation's mail id) completed, so its work reached the entry actor; the
+ *   failure is stale. A later, separate ask / delegate to the same agent supersedes nothing.
+ * - already told: the human already heard about that delegation's failure.
  *
- * Batches with any completed result always run: they carry a real answer.
+ * When every result is one of those, the batch stays in the trace (`superseded`). Otherwise, when
+ * the guard stopped the request's collaboration, the batch stays in the trace too
+ * (`collaboration_stopped`: the stop itself is told once, by the entry model or one line). When
+ * the human was already told about another failure of this request, the entry model is not woken
+ * again: one deterministic line counts the remaining failures (`another_failure`). Only the first
+ * failure account of a request wakes the entry model. Batches with any completed result always run.
+ *
+ * A failure counts as told only once the entry turn's message was actually delivered.
  */
-function createEngagementOutcomes(entry: string) {
-  /** Agents that completed a sub-turn on mail the entry actor sent, by agent → mail ids. */
-  const completed = new Map<string, Set<string>>();
+export function createEngagementOutcomes() {
+  /** Ask / delegate mails that ran as sub-turns: sender, target, causation. */
+  const requests = new Map<string, Readonly<{ from: string; to: string; causationId: string | undefined }>>();
+  /** The request `id` follows up on, when it is a follow-up (same sender, same target). */
+  const followedUp = (id: string): string | undefined => {
+    const request = requests.get(id);
+    const original = request?.causationId ? requests.get(request.causationId) : undefined;
+    return request && original && original.from === request.from && original.to === request.to
+      ? request.causationId
+      : undefined;
+  };
+  /** Delegations a completed follow-up superseded (the whole follow-up chain). */
+  const superseded = new Set<string>();
+  /** Delegations whose failure the human was told about. */
+  const told = new Set<string>();
+  let anyFailureTold = false;
   let entryTurns = 0;
-  let told = false;
   let frozen = false;
+  let informed = false;
+  let stopTold = false;
   const failureOnly = (batch: readonly Mail[]): boolean =>
     batch.length > 0 && batch.every((mail) => FAILED_RESULT_STATUSES.has(resultStatus(mail) ?? ''));
-  const superseded = (mail: Mail): boolean => {
-    if (mail.body.kind !== 'result' || mail.from.kind !== 'actor') return false;
-    const done = completed.get(mail.from.actor);
-    if (!done) return false;
-    const failedMail = mail.body.inReplyTo;
-    return [...done].some((id) => id !== failedMail);
-  };
+  const delegationOf = (mail: Mail): string | undefined => (mail.body.kind === 'result' ? mail.body.inReplyTo : undefined);
+  const stopPending = (): boolean => frozen && !informed && !stopTold && entryTurns === 0;
   return Object.freeze({
     failureOnly,
-    withhold(batch: readonly Mail[]): WithheldReason | undefined {
-      if (!failureOnly(batch)) return undefined;
-      if (frozen) return 'collaboration_stopped';
-      if (batch.every(superseded)) return 'superseded';
-      if (told) return 'already_told';
-      return undefined;
+    plan(batch: readonly Mail[]): ResultBatchPlan {
+      if (!failureOnly(batch)) return { kind: 'run' };
+      const open = batch.filter((mail) => {
+        const id = delegationOf(mail);
+        return id === undefined || (!superseded.has(id) && !told.has(id));
+      });
+      if (open.length === 0) return { kind: 'withhold', reason: 'superseded' };
+      if (frozen) return { kind: 'withhold', reason: 'collaboration_stopped' };
+      if (anyFailureTold) {
+        for (const mail of open) {
+          const id = delegationOf(mail);
+          if (id) told.add(id);
+        }
+        return { kind: 'line', reason: 'another_failure', count: open.length };
+      }
+      return { kind: 'run' };
     },
-    recordSubTurn(actor: string, batch: readonly Mail[], status: string): void {
-      if (status !== 'completed') return;
+    /**
+     * A sub-turn finished. A completed follow-up supersedes the delegation it follows up on. A follow-up
+     * is an ask whose `causationId` names an ask / delegate the same sender sent to the same agent; an
+     * ordinary ask's `causationId` is the mail its sender was processing, which never matches that.
+     */
+    recordSubTurn(batch: readonly Mail[], status: string): void {
       for (const mail of batch) {
         if (mail.kind !== 'ask' && mail.kind !== 'delegate') continue;
-        if (mail.from.kind !== 'actor' || mail.from.actor !== entry) continue;
-        const done = completed.get(actor) ?? new Set<string>();
-        done.add(mail.id);
-        completed.set(actor, done);
+        const from = mail.from.kind === 'actor' ? mail.from.actor : undefined;
+        if (from) requests.set(mail.id, { from, to: mail.to, causationId: mail.causationId });
+        if (status !== 'completed' || mail.kind !== 'ask' || !from) continue;
+        // Walk the follow-up chain back to the delegation (a follow-up may follow up on a follow-up).
+        const seen = new Set<string>();
+        for (let id = followedUp(mail.id); id && !seen.has(id); id = followedUp(id)) {
+          seen.add(id);
+          superseded.add(id);
+        }
       }
     },
-    failureTold(): void {
-      told = true;
+    /** The human was told about the failures of `batch` (the entry turn's message was delivered). */
+    failuresTold(batch: readonly Mail[]): void {
+      anyFailureTold = true;
+      for (const mail of batch) {
+        const id = delegationOf(mail);
+        if (id) told.add(id);
+      }
     },
     entryStarted(): void {
       entryTurns += 1;
     },
-    entryFinished(): void {
+    /** An entry turn ended; true when the stop must now be told with one line. */
+    entryFinished(): boolean {
       entryTurns = Math.max(0, entryTurns - 1);
+      return stopPending();
     },
-    /** Marks the engagement stopped; true when no entry turn runs that could tell the human itself. */
+    /** The entry actor's model met a stop refusal; it tells the human itself. */
+    entryInformed(): void {
+      informed = true;
+    },
+    /** The guard stopped the engagement; true when the stop must be told now (no entry turn runs). */
     stopped(): boolean {
-      const first = !frozen;
       frozen = true;
-      return first && entryTurns === 0 && !told;
+      return stopPending();
+    },
+    stopAnnounced(): void {
+      stopTold = true;
+      anyFailureTold = true;
     },
   });
+}
+
+/** One line for further failures of a request whose first failure was already told. */
+function moreFailuresLine(count: number, locale: string | undefined): string {
+  return locale?.toLowerCase().startsWith('en')
+    ? `${count} more background task${count === 1 ? '' : 's'} did not finish.`
+    : `另有 ${count} 项后台任务没有完成。`;
 }
 
 /** One line closing a request whose background collaboration the guard stopped. */
@@ -438,8 +518,14 @@ export function createBackgroundTeller(turn: TurnIngress) {
      * failure, or no reply at all, tells the human why — unless the actor was
      * stopped (user stop, hot reload): then nothing more is said.
      */
-    async deliverResult(result: ActorTurnOutcome, actorSignal: AbortSignal): Promise<void> {
+    async deliverResult(result: ActorTurnOutcome, actorSignal: AbortSignal, onTold?: () => void): Promise<void> {
       if (turn.policy.unattended) return;
+      /** Sends, and reports when something actually reached the human. */
+      const deliver = async (text: string, deliverSignal: AbortSignal): Promise<BackgroundSend> => {
+        const sent = await send(text, deliverSignal);
+        if (sent === 'sent' || sent === 'partial') onTold?.();
+        return sent;
+      };
       // Delivery outlives a cancelled actor turn only briefly; the host bounds it.
       const signal = AbortSignal.any([AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS), ...(actorSignal.aborted ? [] : [actorSignal])]);
       const reply = result.reply?.trim();
@@ -448,7 +534,7 @@ export function createBackgroundTeller(turn: TurnIngress) {
           logger.debug(`background collaboration stopped; not notifying (${reason})`);
           return;
         }
-        await send(backgroundFailureNotice(reason, turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
+        await deliver(backgroundFailureNotice(reason, turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
       };
       if (result.status === 'cancelled') {
         logger.debug(`background collaboration result cancelled: ${result.content ?? ''}`);
@@ -474,7 +560,7 @@ export function createBackgroundTeller(turn: TurnIngress) {
         logger.warn('background collaboration ran out of budget; delivering its partial result');
         text = `${reply}\n\n${budgetStoppedLine(turn.input.locale)}`;
       }
-      const sent = await send(text, signal);
+      const sent = await deliver(text, signal);
       if (sent === 'failed') {
         await notify('delivery_failed');
       } else if (sent === 'partial') {
