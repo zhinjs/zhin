@@ -74,7 +74,8 @@ describe('attention sources wired to the instance', () => {
     expect(inspected.sort()).toEqual(['news', 'weather']);
     expect(dependencyChecks).toBe(1);
     // One plugin could not be inspected: it gets its own item with the reason, the other plugin's item stays.
-    expect(list.items.map(item => item.id)).toEqual(['plugin.error:plugin=news', 'plugin.error:plugin=weather', 'mcp.disconnected:mcpServer=search', 'logs.errors']);
+    // #1250: the configured MCP server is not loaded (no Agent here) and has not failed: no attention item.
+    expect(list.items.map(item => item.id)).toEqual(['plugin.error:plugin=news', 'plugin.error:plugin=weather', 'logs.errors']);
     expect(list.items[0]).toMatchObject({ title: '无法读取插件 news 的状态', detail: '原因：inspect failed', action: { path: '/plugins/news' } });
     expect(list.items[1]).toMatchObject({ title: '插件 weather 运行异常', detail: 'Declared plugin package is not installed' });
     expect(list.items.find(item => item.kind === 'logs.errors')).toMatchObject({ since: '2026-11-13T07:00:00.000Z', title: '最近 24 小时日志里有 3 条错误' });

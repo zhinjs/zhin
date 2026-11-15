@@ -46,7 +46,7 @@ function everySource(): AttentionSources {
       literalSecrets: async () => [{ path: ['http', 'token'] }, { path: ['qq', 'endpoints', '0', 'secret'] }],
     },
     toolApprovals: () => [{ id: 'appr-1', toolName: 'group_kick', sessionKey: 'icqq:1:group:2', createdAt: NOW - 5_000 }],
-    mcpServers: () => [{ name: 'search', connected: false }, { name: 'files', connected: true }],
+    mcpServers: () => [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 1 } }, { name: 'files', connected: true }],
     errorLogs: async () => ({ count: 7, latest: '2026-11-13T07:00:00.000Z' }),
   };
 }
@@ -217,7 +217,7 @@ describe('attention.list sources', () => {
 
     // A new problem first seen in a failed read is not recorded either.
     const fresh = new AttentionObservations();
-    await collectAttention({ mcpServers: () => [{ name: 'a', connected: false }, { get name(): string { throw new Error('bad row'); }, connected: false }] },
+    await collectAttention({ mcpServers: () => [{ name: 'a', connected: false, lastError: { category: 'network', message: 'x', at: 1 } }, { get name(): string { throw new Error('bad row'); }, connected: false, lastError: { category: 'network', message: 'x', at: 1 } }] },
       { allows: owner, observations: fresh });
     expect(fresh.size).toBe(0);
   });
@@ -435,11 +435,11 @@ describe('dispatchAttentionConsoleRpc', () => {
     expect(await dispatchAttentionConsoleRpc({ type: 'endpoint.list' }, { sources: {}, allows: owner })).toBeNull();
     const reply = await dispatchAttentionConsoleRpc(
       { type: 'attention.list', requestId: 7, data: { locale: 'en' } },
-      { sources: { mcpServers: () => [{ name: 'search', connected: false }] }, allows: owner, now: () => NOW },
+      { sources: { mcpServers: () => [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 1 } }] }, allows: owner, now: () => NOW },
     );
     expect(reply?.status).toBe(200);
     expect(reply?.body).toMatchObject({ success: true, type: 'attention.list', requestId: 7,
-      data: { generatedAt: new Date(NOW).toISOString(), items: [{ kind: 'mcp.disconnected', title: 'MCP server search is not connected' }] } });
+      data: { generatedAt: new Date(NOW).toISOString(), items: [{ kind: 'mcp.disconnected', title: 'MCP server search failed to connect' }] } });
   });
 });
 
@@ -505,7 +505,7 @@ describe('attention.list shared reads', () => {
         source: async () => { calls.config += 1; return { applicationError: 'failed' }; },
         literalSecrets: async () => { calls.secrets += 1; return [{ path: ['http', 'token'] }]; },
       },
-      mcpServers: () => { calls.mcp += 1; return [{ name: 'search', connected: false }]; },
+      mcpServers: () => { calls.mcp += 1; return [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 1 } }]; },
       errorLogs: async () => { calls.logs += 1; return { count: 1, latest: null }; },
     };
     return { calls, sources };

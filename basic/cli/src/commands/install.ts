@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
-import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
+import { PluginManagementWorkflow, isRegistryPackageRequest, projectPinsExactZhinVersions } from '@zhin.js/gateway/plugin-management';
 import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { configurationHints, probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
 import {
@@ -204,6 +204,15 @@ function isWorkspaceRoot(): boolean {
   }
 }
 
+function readProjectManifest(): Record<string, Record<string, string>> | undefined {
+  try {
+    const manifest = fs.readJsonSync(path.join(process.cwd(), 'package.json')) as unknown;
+    return manifest && typeof manifest === 'object' ? manifest as Record<string, Record<string, string>> : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 构建安装命令参数数组（不包含 pnpm 本身）
  */
@@ -253,7 +262,10 @@ export function buildInstallArgs(plugin: string, type: string, options: InstallO
 
     case 'npm':
     default:
-      // npm 包名直接使用
+      // npm 包名直接使用；项目里的 zhin 依赖都锁了精确版本时跟随这种写法（#1250，规则见 projectPinsExactZhinVersions）
+      if (!options.global && isRegistryPackageRequest(plugin.replace(/^npm:/u, '')) && projectPinsExactZhinVersions(readProjectManifest())) {
+        parts.push('--save-exact');
+      }
       break;
   }
 

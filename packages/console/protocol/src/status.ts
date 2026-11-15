@@ -42,11 +42,25 @@ export interface ConsoleMcpFailure {
 
 /**
  * - `connected`: live connection;
- * - `failed`: last connect failed, see `lastError`;
- * - `idle`: loaded by the Agent, not connected yet (MCP connects lazily on first use);
- * - `not_loaded`: configured but not loaded by the running Agent.
+ * - `failed`: last connect failed, see `lastError`; the only state reported in the attention inbox;
+ * - `idle`: loaded by the Agent, not connected yet — shown as "connects on first use" (待首次使用时连接),
+ *   not a problem to act on;
+ * - `not_loaded`: configured but not loaded by the running Agent (Agent off, or not reloaded yet).
  */
 export type ConsoleMcpServerStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';
+
+/**
+ * `POST {base}/introspection/mcp/test` with body `{ name }` (`agent.configure`, #1250): connects
+ * once to the configured server `name` with a throw-away client, lists its tools and disconnects.
+ * It does not change the Agent's own connection or the row's `status`. 404 for a name not in
+ * `ai.mcpServers`, 409 while a test of the same server runs, 503 without a running Agent.
+ */
+export const CONSOLE_MCP_TEST_PATH = '/introspection/mcp/test';
+
+/** `data` of a {@link CONSOLE_MCP_TEST_PATH} response. */
+export type ConsoleMcpConnectTestResult =
+  | Readonly<{ ok: true; name: string; toolCount: number; durationMs: number }>
+  | Readonly<{ ok: false; name: string; failure: ConsoleMcpFailure; durationMs: number }>;
 
 /** Row of `GET {base}/introspection/mcp`. `status` / `lastError` are absent on older instances. */
 export interface ConsoleMcpServerRow {

@@ -5,6 +5,7 @@ import { tokenId, type RuntimeSnapshot, type SnapshotReader, type TokenId } from
 import type { ScheduleExecutionHistoryPort } from '@zhin.js/agent/runtime';
 import type { BoardEntry, EngagementEvent, EngagementSummary } from '@zhin.js/harness';
 import type { VenueDefinition } from '@zhin.js/core';
+import type { ConsoleMcpConnectTestResult } from '@zhin.js/console-protocol';
 
 /**
  * 新 Runtime 的 agent 门面。Session tree 仍由独立服务端口提供；Agent 本体只从
@@ -59,6 +60,8 @@ export type AgentIntrospection = {
     /** Classified, redacted reason of the last failed connect (Agent ≥ #1250). */
     lastError?: Readonly<{ category: string; message: string; exitCode?: number; at: number }>;
   }[];
+  /** Throw-away connect to a configured server (Agent ≥ #1250 batch 28); `undefined` for an unknown name. */
+  testMcpServer?(name: string): Promise<ConsoleMcpConnectTestResult | undefined>;
 };
 
 export function resolveGenerationAgentIntrospection(

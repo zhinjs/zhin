@@ -14,12 +14,12 @@
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `personalPrincipalKeyHints()` / `personalPrincipalKeysOf()`（/iam）与 `shortSessionKey()` / `sessionLabelOf()`（/usage）；实例启动后把 `ai.personalPrincipals` 的建议键写进网关自己的日志（不写进实例日志）。npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `personalPrincipalKeyHints()` / `personalPrincipalKeysOf()`（/iam）与 `shortSessionKey()` / `sessionLabelOf()`（/usage）；实例启动后把 `ai.personalPrincipals` 的建议键写进网关自己的日志（不写进实例日志）。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `projectPinsExactZhinVersions()` / `isRegistryPackageRequest()`（/plugin-management），项目的 zhin 依赖都锁精确版本时安装插件加 `--save-exact`；包管理器参数翻译支持 `add --save-exact`。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 21 批——子 Agent 与被路由到的专家 Agent 显式绑定的模型优先于适配器 / 场景的聊天覆盖（ModelTurnAcquireInput 新增可选 agent，新增导出 specialistModelKey() / traceModelSelection()，TurnTraceModelSelection 新增 source_key / agent；项目自己的子 Agent 使用同名绑定的 purposes.agents 键，purposeKeyEffects / purposeEffects 相应在 binding 目标上列出 agents；AgentHostProtocolPort 新增可选 listConfiguredBindingNames()，管理视图按运行时口径取绑定名）；委派工具对模型自设的预算加下限（不超过剩余额度的一半），ask 对未完成的委派对象返回 delegation_in_progress。npm 上 1.7.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 21 批——子 Agent 与被路由到的专家 Agent 显式绑定的模型优先于适配器 / 场景的聊天覆盖（ModelTurnAcquireInput 新增可选 agent，新增导出 specialistModelKey() / traceModelSelection()，TurnTraceModelSelection 新增 source_key / agent；项目自己的子 Agent 使用同名绑定的 purposes.agents 键，purposeKeyEffects / purposeEffects 相应在 binding 目标上列出 agents；AgentHostProtocolPort 新增可选 listConfiguredBindingNames()，管理视图按运行时口径取绑定名）；委派工具对模型自设的预算加下限（不超过剩余额度的一半），ask 对未完成的委派对象返回 delegation_in_progress。npm 上 1.7.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `HostMcpStatusBoard`（`@zhin.js/agent/runtime`，记录 `ai.mcpServers` 各客户端的连接结果并提供一次性连接测试 `probe()`）与类型 `HostMcpStatusEvent` / `HostMcpStatusBoardOptions` / `HostMcpProbeResult`、常量 `DEFAULT_MCP_PROBE_TIMEOUT_MS`；`projectHostMcp()` 新增可选参数 `status`，`PublishAgentToolFeaturesOptions` 新增可选 `mcpStatus`，`AgentHostPublicationCoordinatorOptions` 新增可选 `mcp`，`AgentHostIntrospectionPort` 新增可选 `testMcpServer()`。npm 上 1.7.0 未被占用。"
     },
     {
       "package": "@zhin.js/plugin-runtime",
@@ -40,6 +40,16 @@
       "package": "@zhin.js/core",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：第 23 批新增公开导出类型 InboundSecretGuard（match / inspectNative）/ InboundSecretMatch（handle / discard）与 ImRuntimeOptions.inboundSecret（入站最早处接手携带当前认领码的消息：不记录、不进 AI、日志只显示脱敏文本；被丢弃的消息作废码；含码的 platform.receive 不派发给原生 Handler），conversation_events 写入时对开启中的认领码脱敏。npm 上 1.11.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——`ConsoleAgentIntrospection` 新增可选方法 `testMcp(name)`，新增路由 `POST {base}/introspection/mcp/test`（MCP 服务立即连接测试）。npm 上 1.6.0 未被占用。"
     }
   ]
 }

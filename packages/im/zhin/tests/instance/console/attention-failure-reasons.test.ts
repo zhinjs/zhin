@@ -56,7 +56,9 @@ describe('attention.list failure reasons (#1270)', () => {
     expect(byServer.github!.reason).toEqual({ category: 'auth', code: 'connect-failed', message: 'HTTP 401 Bearer ***', at: new Date(NOW - 1000).toISOString() });
     expect(byServer.files!.detail).toContain('（重启前记录）');
     expect(byServer.files!.reason?.restored).toBe(true);
-    expect(byServer.plain!.reason).toBeUndefined();
+    // #1250: a server that has not connected yet (no failure) is not something to act on.
+    expect(byServer.plain).toBeUndefined();
+    expect(list.items.map(item => item.title)).toEqual(expect.arrayContaining(['MCP 服务 github 连接失败']));
   });
 
   it('marks an Endpoint reason restored from the journal', async () => {
@@ -167,7 +169,7 @@ describe('attention.list failure reasons (#1270)', () => {
         source: async () => { throw Object.assign(new Error('bad'), { code: 'EACCES' }); },
       },
       toolApprovals: () => [{ id: 'appr-1', toolName: 'group_kick', sessionKey: 's', createdAt: NOW - 1 }],
-      mcpServers: () => [{ name: 'search', connected: false }],
+      mcpServers: () => [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 1 } }],
       unschedulableJobs: () => [{ jobId: 'job-1', reason: 'no_next_run', since: NOW - 1 }],
       errorLogs: async () => ({ count: 1, latest: new Date(NOW).toISOString() }),
       chatRoles: async () => ({ hasGlobalOwner: false, claimOpen: false,

@@ -194,6 +194,41 @@ export function registerIntrospectionRoutes(
     }, { summary: `Introspection: ${kind}`, tags: ['console', 'introspection'] });
   }
 
+  // #1250: "test connection" of one configured MCP server; one test per server at a time.
+  const activeMcpTests = new Set<string>();
+  route('POST', `${base}/introspection/mcp/test`, async (request) => {
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
+    let body: Record<string, unknown>;
+    try {
+      body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    } catch (error) {
+      if (error instanceof HttpBodyError) return jsonResponse(error.statusCode, { success: false, error: error.message });
+      throw error;
+    }
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 160) return jsonResponse(400, { success: false, error: '请提供 MCP 服务名 name' });
+    if (activeMcpTests.has(name)) return jsonResponse(409, { success: false, error: `MCP 服务 ${name} 的连接测试正在进行` });
+    const lease = ctx.acquireAgentRuntime?.();
+    const test = lease?.value.introspection?.testMcp;
+    if (!lease || !test) {
+      lease?.release();
+      return jsonResponse(503, { success: false, error: 'Agent 未运行，无法测试 MCP 连接' });
+    }
+    activeMcpTests.add(name);
+    try {
+      const result = await test(name);
+      if (!result) return jsonResponse(404, { success: false, error: `未在 ai.mcpServers 中找到 MCP 服务 ${name}` });
+      return jsonResponse(200, { success: true, data: result });
+    } catch (error) {
+      logInternalError('mcp_connect_test_failed', error);
+      return jsonResponse(500, { success: false, error: 'MCP connection test failed' });
+    } finally {
+      activeMcpTests.delete(name);
+      lease.release();
+    }
+  }, { summary: 'Test the connection to a configured MCP server', tags: ['console', 'introspection', 'mcp'] });
+
   let activeComponentPreviews = 0;
   route('POST', `${base}/introspection/components/render`, async (request) => {
     const denied = requireWriteScope(ctx);

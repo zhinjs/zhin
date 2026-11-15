@@ -719,6 +719,44 @@ describe('console-rest-pages introspection', () => {
     expect(denied.status).toBe(403);
   });
 
+  it('tests one configured MCP server on request (#1250)', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const testMcp = vi.fn(async (name: string) => {
+      if (name === 'slow') await gate;
+      return name === 'unknown' ? undefined : { ok: false as const, name, durationMs: 5,
+        failure: { category: 'auth' as const, message: 'HTTP 401 Unauthorized', at: 1 } };
+    });
+    const runtime = fakeAgentRuntime();
+    runtime.introspection!.testMcp = testMcp;
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(runtime) }));
+    const post = (body: unknown) => fetch(`${base}/api/introspection/mcp/test`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    expect(await json(await post({ name: 'github' }))).toEqual({ success: true, data: {
+      ok: false, name: 'github', durationMs: 5, failure: { category: 'auth', message: 'HTTP 401 Unauthorized', at: 1 },
+    } });
+    expect((await post({ name: 'unknown' })).status).toBe(404);
+    expect((await post({})).status).toBe(400);
+
+    const first = post({ name: 'slow' });
+    await vi.waitFor(() => expect(testMcp).toHaveBeenCalledWith('slow'));
+    expect((await post({ name: 'slow' })).status).toBe(409);
+    release();
+    expect((await first).status).toBe(200);
+
+    const withoutAgent = await startHost(baseCtx({ acquireAgentRuntime: () => lease({}) }));
+    expect((await fetch(`${withoutAgent}/api/introspection/mcp/test`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'github' }),
+    })).status).toBe(503);
+
+    const demo = await startHost(baseCtx({ fullScope: false, acquireAgentRuntime: () => lease(runtime) }), { apiBase: '/demo-api' });
+    expect((await fetch(`${demo}/demo-api/introspection/mcp/test`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'github' }),
+    })).status).toBe(403);
+  });
+
   it('returns target projection diagnostics through the same full-scope preview route', async () => {
     const runtime = fakeAgentRuntime();
     const target = { endpoint: { adapter: 'test', id: 'endpoint' }, kind: 'group', id: 'room' };

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PluginDeclarationError, PluginManagementWorkflow } from '../../src/plugin-management/workflow.js';
+import { isRegistryPackageRequest, projectPinsExactZhinVersions } from '../../src/plugin-management/exact-pins.js';
 
 const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, features: [], plugins: [] };
 const ADAPTER_SCHEMA = {
@@ -119,5 +120,45 @@ describe('declare: an installed plugin with its first configuration', () => {
   it('checks the expected configuration revision', async () => {
     await expect(workflow().declare('@zhin.js/adapter-sandbox', { endpoints: [] }, { expectedRevision: '0'.repeat(64) })).rejects.toThrow('已被其他会话修改');
     expect((await readConfig()).plugins).toEqual({});
+  });
+});
+
+describe('exact version pins follow the project (#1250)', () => {
+  it('passes --save-exact to the package manager when every zhin dependency is exact', async () => {
+    const project = await readProject();
+    project.dependencies = { 'zhin.js': '1.5.0', '@zhin.js/adapter-sandbox': '1.2.3', lodash: '^4.17.0' };
+    await writeFile(join(root, 'package.json'), JSON.stringify(project));
+    const calls: (readonly string[])[] = [];
+    await new PluginManagementWorkflow(root, { installDependencies: async (args, projectRoot) => { calls.push(args); await packageManager(args, projectRoot); } })
+      .install('reminder', undefined, undefined, { enable: false });
+    expect(calls).toEqual([['add', '--save-exact', 'reminder']]);
+  });
+
+  it('keeps the default when a zhin dependency is a range, or the source is not the registry', async () => {
+    const project = await readProject();
+    project.dependencies = { 'zhin.js': '^1.5.0' };
+    await writeFile(join(root, 'package.json'), JSON.stringify(project));
+    const calls: (readonly string[])[] = [];
+    await new PluginManagementWorkflow(root, { installDependencies: async (args, projectRoot) => { calls.push(args); await packageManager(args, projectRoot); } })
+      .install('reminder', undefined, undefined, { enable: false });
+    expect(calls).toEqual([['add', 'reminder']]);
+  });
+
+  it('decides from zhin.js / @zhin.js/* registry specs only', () => {
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '1.5.0' }, devDependencies: { '@zhin.js/cli': '1.6.0-beta.1' } })).toBe(true);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '1.5.0' }, devDependencies: { '@zhin.js/cli': '~1.6.0' } })).toBe(false);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '1.5.0', '@zhin.js/x': '>=1.0.0' } })).toBe(false);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '1.x' } })).toBe(false);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '*' } })).toBe(false);
+    // Protocols and tags say nothing about the style; nothing left means no pin.
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/x': '1.0.0' } })).toBe(true);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/x': 'latest', lodash: '4.17.21' } })).toBe(false);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin-like': '1.0.0' } })).toBe(false);
+    expect(projectPinsExactZhinVersions(undefined)).toBe(false);
+    expect(isRegistryPackageRequest('@zhin.js/plugin-nettools@1.2.3')).toBe(true);
+    expect(isRegistryPackageRequest('reminder')).toBe(true);
+    expect(isRegistryPackageRequest('github:user/repo')).toBe(false);
+    expect(isRegistryPackageRequest('./plugins/local')).toBe(false);
+    expect(isRegistryPackageRequest('git+https://example.test/x.git')).toBe(false);
   });
 });

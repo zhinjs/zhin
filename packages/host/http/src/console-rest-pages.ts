@@ -16,7 +16,7 @@ import {
   MarketplaceRegistry,
   isValidNpmPackageName,
 } from './marketplace-registry.js';
-import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
+import type { ConsoleMcpConnectTestResult, ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   informativeKeywords,
   isLocale,
@@ -81,6 +81,11 @@ export interface ConsoleAgentIntrospection {
   tools?(): readonly unknown[];
   promptSections?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
+  /**
+   * One throw-away connection to the configured MCP server `name` (`POST …/introspection/mcp/test`,
+   * #1250); `undefined` when `name` is not configured.
+   */
+  testMcp?(name: string): Promise<ConsoleMcpConnectTestResult | undefined>;
   renderComponent?(input: Readonly<{
     requester: string;
     name: string;

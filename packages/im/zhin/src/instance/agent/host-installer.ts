@@ -78,8 +78,10 @@ import {
   type AgentHostAIConfig as AIConfig,
 } from '@zhin.js/agent/runtime';
 import {
+  HostMcpStatusBoard,
   publishAgentToolFeatures,
   type HostAgentTool,
+  type HostMcpStatusEvent,
 } from '@zhin.js/agent/runtime';
 import { AgentRuntimeFoundation } from '@zhin.js/agent/runtime';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
@@ -154,6 +156,8 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
+  // #1250: one board across generations — a retained generation keeps its MCP clients.
+  const mcpStatus = new HostMcpStatusBoard({ onEvent: logMcpStatusEvent });
   return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
@@ -359,6 +363,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       projectRoot: options.projectRoot,
       service,
       mcpServers: mcpEntries,
+      mcpStatus,
       localAssets,
       hostTools: options.extraTools,
       runtimeTools: [...scheduleTools, ...homeTools],
@@ -387,6 +392,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       bootstrapText,
       contextFiles,
       bootstrap: () => ({ bootstrapContext: bootstrap.bootstrapText, contextFiles: bootstrap.contextFiles }),
+      mcp: { entries: mcpEntries, status: mcpStatus },
     });
 
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);
@@ -449,9 +455,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       reportedApprovalConflicts.add(conflict);
       logger.warn(formatCompact({ op: 'approval_channel_conflict', detail: conflict }));
     }
+    // Same wording as the Console / `zhin status` rows: the clients connect when this generation is
+    // activated, after this line, which is logged as `mcp_connected` / `mcp_connect_failed`.
     logger.info(
       `ready | ${binding.name}`
-      + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
+      + ` | mcp: ${describeMcpServers(mcpStatus, mcpEntries.map((entry) => entry.name))}`
       + ` | ${features}`,
     );
     logger.debug(
@@ -462,6 +470,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
   };
 }
 
+
+const MCP_LOG_STATES = { connected: '已连接', failed: '连接失败', pending: '待连接' } as const;
+
+/** `github(已连接),docs(待连接)` — the configured servers with the state the Console shows. */
+export function describeMcpServers(status: HostMcpStatusBoard, names: readonly string[]): string {
+  if (names.length === 0) return '-';
+  return names.map((name) => {
+    const summary = status.summary(name);
+    const state = summary.connected ? 'connected' : summary.lastError ? 'failed' : 'pending';
+    return `${name}(${MCP_LOG_STATES[state]})`;
+  }).join(',');
+}
+
+function logMcpStatusEvent(event: HostMcpStatusEvent): void {
+  if (event.type === 'connected') {
+    logger.info(formatCompact({ op: 'mcp_connected', server: event.name, tools: event.toolCount }));
+  } else if (event.type === 'failed') {
+    logger.warn(formatCompact({
+      op: 'mcp_connect_failed', server: event.name, category: event.failure.category, reason: event.failure.message,
+      ...(event.failure.exitCode === undefined ? {} : { exitCode: event.failure.exitCode }),
+    }));
+  }
+}
 
 /**
  * The bot's workspace bootstrap. Bot-facing files are SOUL.md, AGENTS.md and TOOLS.md, or —
