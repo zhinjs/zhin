@@ -1,6 +1,7 @@
 /**
  * CLI 侧调度任务形状（与 @zhin.js/agent ScheduleJob 对齐）
  */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 export type JobNotifyCli =
   | { channel: 'im'; platform?: string; endpointKey?: string; senderId?: string; sceneId?: string; scope?: string; target?: string | Record<string, unknown> }
   | { channel: 'silent' }
@@ -82,6 +83,6 @@ export function targetSummary(job: Pick<ScheduleJobRecordCli, 'target'>): string
 export function nextRunSummary(job: Pick<ScheduleJobRecordCli, 'enabled' | 'state' | 'schedule'>): string | undefined {
   if (!job.enabled) return undefined;
   const next = job.state?.nextRunAtMs;
-  if (typeof next === 'number') return new Date(next).toLocaleString();
+  if (typeof next === 'number') return formatDateTime(next);
   return (job.schedule as { kind?: string }).kind === 'event' ? undefined : '⚠ 无（不会触发）';
 }
