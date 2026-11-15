@@ -106,6 +106,7 @@ const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
 | `requiredPermissions` | `[]` | 访问所需权限：内置权限（如 `status.view`）或插件自定义的权限名 |
 | `requiredRoles` | `[]` | 访问所需角色名（如 `operator`） |
 | `section` | — | Console 导航分区：`overview` / `conversations` / `features` / `plugins` / `ops` / `access`；省略时由 Console 决定（ADR 0052） |
+| `keywords` | — | 命令面板的搜索别名：一组字符串，或按语言分开（`{ 'zh-CN': ['抽奖'], en: ['lottery'] }`，只支持 `zh-CN` / `en`）；和标题、插件名一起用于在命令面板里找到这个页面（ADR 0063） |
 
 导航和页面清单按调用者过滤：全局所有者能看到全部页面；其他用户只能看到角色权限满足要求的页面（插件自定义的权限名按级别授予，见[插件权限的级别](#插件权限的级别)）；未登录只能看到没有要求的页面。用户与角色见 [Console 的用户与权限](../console/index.md#用户与权限)。
 
@@ -515,6 +516,31 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 | `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | **仅** `ops:approve`（逐文件 unified diff，全部文件合计 ≤ 64 KB，按行截断；配置补丁值按审计口径脱敏；完整试跑检查与 `skippedChecks`；已瘦身时 `bodiesAvailable: false`） |
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
+
+## 页面 UI 规范
+
+Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) 的「增补：设计规则」）。对 Console 自带页面它是强制的；对第三方插件页面是**推荐**，外加一组很小的硬性底线；本仓库（zhinjs/zhin `plugins/**`）的官方插件从 ADR 0063 P2 起（规划中）**完整遵守**这些规则，届时可以当作参考实现来看（见本节末尾）。
+
+**推荐：组合 Console 的组件，不自己写样式。** 用纯蓝图（`definePageBlueprint`）写的页面由 Console 渲染，插件不需要做什么：渲染器迁移到统一组件库后（规划中，ADR 0063 P2）就自动符合这些规则。手写 `.tsx` 页面推荐组合 Console 的组件、使用它的语义令牌，而不是自己写字号、圆角、阴影、内边距的数值或 Tailwind 任意值（`p-[…]` 这类），也不要用原生 `<button>`、`<select>`、`<table>` 代替组件。用 Tailwind 时，间距只用 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16` 这 8 个标准键（即 0.25–4rem 的 8 档间距），其余的键（例如 `p-5`、`gap-2.5`）不在尺度内。这样做的好处：
+
+- 和 Console 自带页面放在一起时看起来是同一个产品；
+- 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
+
+统一的组件库 `@zhin.js/console-ui` 已经建立（ADR 0063 P1a：从 Console 迁入组件与令牌，外观不变，带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。插件页面接入它和页面外壳是 P2 的工作；在那之前，插件页面沿用现状：声明式页面照常写蓝图，手写页面继续使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
+
+**允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
+
+**硬性底线（必须遵守）。** 不管是否使用组件库，插件页面都必须做到：
+
+1. 任何宽度下都不出现整页横向滚动；
+2. 内容不溢出页面容器，不覆盖 Console 的顶栏、导航、页头和全局浮层；
+3. 可交互元素获得焦点时有看得见的焦点样式；
+4. 手机宽度下可交互控件的触控尺寸不小于 44×44px；
+5. 背景与文字使用 Console 主题令牌，在深浅两种主题下都可读。
+
+`zhin plugin check` 计划（ADR 0063 P2）对偏离推荐的写法给出**提示**（不是错误，不会阻止构建或发布），并说明怎样改成组件或令牌。
+
+**官方插件与第三方插件。** 第三方插件推荐遵守上面全部规则，必须遵守的只有硬性底线，`zhin plugin check` 对其余各项只提示。官方插件完整遵守全部规则，作为参考实现：从 ADR 0063 P2 起，`zhin plugin check` 的各项检查和覆盖全部规则的布局审计（类型尺度、间距、圆角 / 边框 / 阴影、响应式和硬性底线）在 zhinjs/zhin 的 CI 中对官方插件是错误，和 Console 自带页面一样（在此之前只出报告）；默认没有例外，确有需要时只能在源码中用写明检查项和理由的忽略注释豁免某一条检查，并经评审。P2 完成后，写自己的页面时可以参考官方插件的页面；在此之前部分官方页面仍在使用旧的 `zk-` 组件，不宜照搬。
 
 ## 页面 UI 套件
 

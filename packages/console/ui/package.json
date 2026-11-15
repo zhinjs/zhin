@@ -1,0 +1,92 @@
+{
+  "name": "@zhin.js/console-ui",
+  "version": "1.0.0-0",
+  "description": "Zhin Console component library: shared React components, page shell and design tokens for the Console and plugin pages, with precompiled CSS (ADR 0063)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./client/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./cn": {
+      "types": "./dist/cn.d.ts",
+      "development": "./client/cn.ts",
+      "import": "./dist/cn.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./tokens.css": "./dist/tokens.css",
+    "./exports.json": "./dist/exports.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "rimraf dist",
+    "test": "vitest run --root ../../.. packages/console/ui/tests",
+    "test:visual": "playwright test --config visual/playwright.config.ts"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "radix-ui": "^1.4.3",
+    "tailwind-merge": "^3.6.0"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "esbuild": "^0.28.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "rimraf": "^6.1.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "^6.0.3"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console/ui"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./cn": {
+        "types": "./dist/cn.d.ts",
+        "import": "./dist/cn.js"
+      },
+      "./styles.css": "./dist/styles.css",
+      "./tokens.css": "./dist/tokens.css",
+      "./exports.json": "./dist/exports.json",
+      "./package.json": "./package.json"
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

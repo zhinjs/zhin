@@ -6,6 +6,7 @@ import {
   ALLOWED_ESM_CANONICAL,
   decodeSpecifierSegment,
   getOrBuildCanonicalEsmBundle,
+  sharedModuleRequestFromSearchParams,
 } from '@zhin.js/pagemanager/node';
 import { logInternalError } from './internal-error.js';
 
@@ -16,11 +17,14 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 
 /**
  * Serve Host-proxied React/router ESM modules (legacy `consoleApiRouter` `/esm/:enc.mjs` parity).
- * Path: `/esm/<encodeURIComponent(canonical).replace(/%2F/g,'~')>.mjs`
+ * Path: `/esm/<encodeURIComponent(canonical).replace(/%2F/g,'~')>.mjs`; for versioned shared modules
+ * (`@zhin.js/console-ui`) the query carries the page's peer range, package and named imports
+ * (ADR 0063 D3), which the generated proxy checks against the Console's registered version.
  */
 export async function serveCanonicalEsm(
   resolveDir: string,
   pathname: string,
+  searchParams?: URLSearchParams,
 ): Promise<Response> {
   const match = pathname.match(/^\/esm\/(.+)\.mjs$/u);
   if (!match) return new Response(null, { status: 404 });
@@ -34,7 +38,7 @@ export async function serveCanonicalEsm(
     return json(403, { message: 'ESM canonical not allowed' });
   }
   try {
-    const code = await getOrBuildCanonicalEsmBundle(canonical, resolveDir, '/');
+    const code = await getOrBuildCanonicalEsmBundle(canonical, resolveDir, '/', sharedModuleRequestFromSearchParams(searchParams));
     return new Response(code, {
       status: 200,
       headers: {

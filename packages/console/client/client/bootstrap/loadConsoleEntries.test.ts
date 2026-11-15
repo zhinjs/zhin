@@ -66,6 +66,22 @@ describe("console entries bootstrap", () => {
     expect(routeMeta({ default: Page }, {})).not.toHaveProperty("section");
   });
 
+  it("forwards page keywords (one list or per locale) into route meta; invalid values are dropped", () => {
+    const Page = () => null;
+    const routeMeta = (mod: Record<string, unknown>, entry: Record<string, unknown>) => {
+      const addRoute = vi.fn();
+      resolveEntryRegister(mod, { id: "p", resolvedModule: "/p.js", route: "/p", ...entry } as any)!({
+        React: { createElement: vi.fn() } as any, addRoute, addTool: vi.fn(),
+      });
+      return addRoute.mock.calls[0]![0].meta as Record<string, unknown>;
+    };
+    expect(routeMeta({ default: Page }, { keywords: ["rss", " feed ", ""] })).toMatchObject({ keywords: ["rss", "feed"] });
+    expect(routeMeta({ default: Page }, { meta: { keywords: { "zh-CN": ["抽奖"], en: [], fr: ["x"] } } })).toMatchObject({ keywords: { "zh-CN": ["抽奖"] } });
+    expect(routeMeta({ default: Page, meta: { keywords: ["module"] } }, { keywords: ["entry"] })).toMatchObject({ keywords: ["module"] });
+    expect(routeMeta({ default: Page }, { keywords: "rss" })).not.toHaveProperty("keywords");
+    expect(routeMeta({ default: Page }, {})).not.toHaveProperty("keywords");
+  });
+
   it("mounts DeclarativePageView for raw zhin.console.page-blueprint objects", () => {
     const blueprint = {
       kind: "zhin.console.page-blueprint",

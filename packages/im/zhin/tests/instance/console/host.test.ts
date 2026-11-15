@@ -151,6 +151,9 @@ describe('Console topology Host endpoint', () => {
       parent: 'overview',
       fullWidth: true,
       section: 'conversations',
+      keywords: { 'zh-CN': ['群聊雷达'], en: ['radar'] },
+      packageName: '@zhin.js/plugin-ambient',
+      pluginDescription: 'Ambient group insights',
       hideInNav: false,
       module: '/assets/client/ambient.js',
       owner: 'root/ambient' as never,
@@ -172,6 +175,10 @@ describe('Console topology Host endpoint', () => {
       parent: 'overview',
       fullWidth: true,
       section: 'conversations',
+      keywords: { 'zh-CN': ['群聊雷达'], en: ['radar'] },
+      packageName: '@zhin.js/plugin-ambient',
+      pluginDescription: 'Ambient group insights',
+      meta: expect.objectContaining({ keywords: { 'zh-CN': ['群聊雷达'], en: ['radar'] } }),
       hideInNav: false,
       owner: 'root/ambient',
       requiredPermissions: ['ambient:read'],
@@ -210,7 +217,10 @@ describe('Console topology Host endpoint', () => {
       group: 'Agent',
       icon: 'Radar',
       section: 'conversations',
-      meta: expect.objectContaining({ section: 'conversations' }),
+      keywords: { 'zh-CN': ['群聊雷达'], en: ['radar'] },
+      packageName: '@zhin.js/plugin-ambient',
+      pluginDescription: 'Ambient group insights',
+      meta: expect.objectContaining({ section: 'conversations', keywords: { 'zh-CN': ['群聊雷达'], en: ['radar'] } }),
     });
 
     const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as HttpHandler;

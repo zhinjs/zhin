@@ -22,6 +22,63 @@ export function optionalPageSection(value: unknown): ConsolePageSection | undefi
   return value;
 }
 
+/** Locales `keywords` can be given per language for (same as `titleI18n`). */
+export type PageKeywordLocale = 'zh-CN' | 'en';
+
+/**
+ * Search aliases of a page for the Console command palette (ADR 0063 决策 3 第 3 条): one list for
+ * every language, or lists per language (e.g. `{ 'zh-CN': ['抽奖'], en: ['lottery'] }`).
+ */
+export type PageKeywords =
+  | readonly string[]
+  | Readonly<Partial<Record<PageKeywordLocale, readonly string[]>>>;
+
+const PAGE_KEYWORD_LOCALES: readonly PageKeywordLocale[] = ['zh-CN', 'en'];
+const MAX_PAGE_KEYWORDS = 32;
+const MAX_PAGE_KEYWORD_LENGTH = 64;
+
+function keywordList(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array of strings`);
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string' || !item.trim()) throw new TypeError(`${label} must contain non-empty strings`);
+    const keyword = item.trim();
+    if (keyword.length > MAX_PAGE_KEYWORD_LENGTH) {
+      throw new TypeError(`${label} entries must be at most ${MAX_PAGE_KEYWORD_LENGTH} characters`);
+    }
+    if (!out.includes(keyword)) out.push(keyword);
+  }
+  if (out.length > MAX_PAGE_KEYWORDS) throw new TypeError(`${label} may list at most ${MAX_PAGE_KEYWORDS} keywords`);
+  return Object.freeze(out);
+}
+
+/**
+ * Validates an optional `keywords` value and returns it trimmed, de-duplicated and frozen;
+ * throws for anything else. Per-language objects accept only `zh-CN` and `en`.
+ */
+export function optionalPageKeywords(value: unknown): PageKeywords | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return keywordList(value, 'Page keywords');
+  if (!value || typeof value !== 'object') {
+    throw new TypeError('Page keywords must be an array of strings or an object keyed by zh-CN / en');
+  }
+  const input = value as Record<string, unknown>;
+  const unknownLocales = Object.keys(input).filter((key) => !(PAGE_KEYWORD_LOCALES as readonly string[]).includes(key));
+  if (unknownLocales.length > 0) throw new TypeError(`Unknown Page keywords locale: ${unknownLocales.sort().join(', ')}`);
+  const out: Partial<Record<PageKeywordLocale, readonly string[]>> = {};
+  for (const locale of PAGE_KEYWORD_LOCALES) {
+    if (input[locale] !== undefined) out[locale] = keywordList(input[locale], `Page keywords.${locale}`);
+  }
+  return Object.freeze(out);
+}
+
+/** Keywords for one locale: a plain list applies to every locale; missing locales give `[]`. */
+export function pageKeywordsFor(keywords: PageKeywords | undefined, locale: PageKeywordLocale): readonly string[] {
+  if (!keywords) return [];
+  if (Array.isArray(keywords)) return keywords as readonly string[];
+  return (keywords as Readonly<Partial<Record<PageKeywordLocale, readonly string[]>>>)[locale] ?? [];
+}
+
 export interface PageMetadata {
   readonly title?: string;
   /** Explicit display titles; missing locales retain title. */
@@ -38,6 +95,8 @@ export interface PageMetadata {
   readonly fullWidth?: boolean;
   /** Console navigation section (ADR 0052); omitted → the Console's default for plugin pages. */
   readonly section?: ConsolePageSection;
+  /** Search aliases for the Console command palette, optionally per language (ADR 0063). */
+  readonly keywords?: PageKeywords;
 }
 
 export interface NormalizedPageMetadata {
@@ -91,12 +150,19 @@ export interface PageManifest extends NormalizedPageMetadata {
   readonly hash: string;
   readonly route: string;
   readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
+  /** Command-palette aliases from `definePage({ keywords })` (ADR 0063). */
+  readonly keywords?: PageKeywords;
+  /** npm package of the owning plugin (for the command palette's plugin entries). */
+  readonly packageName?: string;
+  /** `description` from the owning plugin's package.json. */
+  readonly pluginDescription?: string;
 }
 
 export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> {
   // Same optional keys as `@zhin.js/page`; anything else is still rejected below.
-  const { description, group, parent, fullWidth, section: rawSection, ...base } = requireRecord(metadata, 'Page metadata');
+  const { description, group, parent, fullWidth, section: rawSection, keywords: rawKeywords, ...base } = requireRecord(metadata, 'Page metadata');
   const section = optionalPageSection(rawSection);
+  const keywords = optionalPageKeywords(rawKeywords);
   for (const [key, value] of [['description', description], ['group', group], ['parent', parent]] as const) {
     if (value !== undefined && (typeof value !== 'string' || !value.trim())) {
       throw new TypeError(`Page ${key} must be a non-empty string`);
@@ -112,6 +178,7 @@ export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> 
     ...(parent !== undefined ? { parent: parent as string } : {}),
     ...(fullWidth !== undefined ? { fullWidth } : {}),
     ...(section !== undefined ? { section } : {}),
+    ...(keywords !== undefined ? { keywords } : {}),
   });
 }
 

@@ -13,6 +13,8 @@ Zhin **Remote Console 栈**（与 `packages/im`、`packages/host` 并列）。Ho
 @zhin.js/pagemanager        Node：ConsoleRuntime、页面外壳、客户端构建
         ↓
 @zhin.js/client             浏览器 SDK：拉 entries、注册路由/工具、REST + SSE transport
+        ↑ cn()
+@zhin.js/console-ui         浏览器组件库与令牌（不依赖 @zhin.js/client）
         ↓
 zhin-console（独立仓库）    壳层 UI、登录、内置页；依赖 @zhin.js/client 连接 Host
 ```
@@ -28,6 +30,7 @@ zhin-console（独立仓库）    壳层 UI、登录、内置页；依赖 @zhin.
 | [layout](./layout/) | `@zhin.js/layout` | `pages/nav/index.tsx` / `pages/footer/index.tsx` Layout Feature provider |
 | [pagemanager](./pagemanager/) | `@zhin.js/pagemanager` | 服务端 `ConsoleRuntime`、页面外壳（`renderPageShell` / `renderConsoleIndex`）与客户端构建 |
 | [client](./client/) | `@zhin.js/client` | Remote Console 客户端 SDK（无 UI） |
+| [ui](./ui/) | `@zhin.js/console-ui` | Console 与插件页面共用的组件库、页面外壳与设计令牌，带编译好的 `styles.css`（ADR 0063，只给浏览器用） |
 
 Console Host（PageManager 与管理面 REST）由 `@zhin.js/cli` 作为 composition root 基于 `@zhin.js/host-http` + `@zhin.js/pagemanager` 自动装配，无需安装任何 Host 插件。
 

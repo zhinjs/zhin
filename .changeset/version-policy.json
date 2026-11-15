@@ -65,6 +65,21 @@
       "package": "@zhin.js/im-contract",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P5）：UserInteractionControl 新增可选 answeredBy: 'target' | 'anyone'（谁的回答算数）。npm 上 1.3.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/pagemanager",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：@zhin.js/console-ui 成为 Console 共享单例（ALLOWED_ESM_CANONICAL / HOST_PROXIED_MODULES），新增共享模块版本核对（代理模块按插件 peerDependencies 比对 Console 登记的版本，缺失具名导出按名字报出）及公开导出 compilePeerRange、classifySharedModuleVersion、sharedModuleQuery、sharedModuleRequestFromSearchParams、peerRangeForPage、importedNames、buildHostProxyModule 等；register 包装把 definePage 的 keywords 写进路由 meta。"
+    },
+    {
+      "package": "@zhin.js/page",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageDefinition 与 PageIndex 透传 definePage 的 keywords，PageIndex 条目新增 packageName / pluginDescription；新增再导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/console-contract",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
     }
   ]
 }

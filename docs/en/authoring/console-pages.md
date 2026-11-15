@@ -106,6 +106,7 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `requiredPermissions` | `[]` | Permissions required to access: built-in ones (such as `status.view`) or plugin-defined names |
 | `requiredRoles` | `[]` | Role names required to access (such as `operator`) |
 | `section` | — | Console navigation section: `overview` / `conversations` / `features` / `plugins` / `ops` / `access`; omitted → the Console decides (ADR 0052) |
+| `keywords` | — | Search aliases for the command palette: one list of strings, or lists per language (`{ 'zh-CN': ['抽奖'], en: ['lottery'] }`; only `zh-CN` / `en`). Used with the title and plugin name to find the page in the command palette (ADR 0063) |
 
 Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are granted by level, see [Plugin permission levels](#plugin-permission-levels)). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
 
@@ -515,6 +516,31 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 | `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | `ops:approve` **only** (unified diff per file, ≤ 64 KB combined across all files, cut by line; config patch values redacted like audit payloads; full trial checks and `skippedChecks`; `bodiesAvailable: false` once slimmed) |
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
+
+## Page UI guidelines
+
+The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for third-party plugin pages they are **recommended**, plus a small set of hard-floor rules; the official plugins in this repository (zhinjs/zhin `plugins/**`) **follow them in full** from ADR 0063 P2 (planned) and serve as reference implementations from then on (see the end of this section).
+
+**Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: once the renderers move to the unified component library (planned, ADR 0063 P2) they follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the 8 standard keys `1`, `2`, `3`, `4`, `6`, `8`, `12` and `16` (the 8-step scale from 0.25 to 4rem); other keys such as `p-5` or `gap-2.5` are off the scale. Why:
+
+- your page looks like part of the same product when it sits next to the Console's own pages;
+- the type scale, spacing, narrow-screen layout changes (tables turning into cards, for example), touch target sizes, focus styles and light/dark mode all come with the components, and your page follows when the Console adjusts its styles later.
+
+The unified component library `@zhin.js/console-ui` now exists (ADR 0063 P1a: the Console's components and tokens moved into it unchanged, with a precompiled `styles.css`; see [its README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)). Moving plugin pages onto it and onto the page shell is P2; until then plugin pages stay as they are: declarative pages keep their blueprints, and hand-written pages keep using `@zhin.js/client/ui` from "Page UI kit" below.
+
+**Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
+
+**Hard floor (required).** With or without the component library, a plugin page must:
+
+1. never scroll the whole page horizontally, at any width;
+2. keep its content inside the page container and never cover the Console's top bar, navigation, page header or global overlays;
+3. show a visible focus style on interactive elements;
+4. give interactive controls a touch target of at least 44×44px at phone widths;
+5. use the Console's theme tokens for background and text, so it stays readable in both the light and the dark theme.
+
+`zhin plugin check` is planned (ADR 0063 P2) to report deviations from the recommendations as **hints** (warnings, never errors; they do not block a build or publish), each with how to switch to a component or token.
+
+**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: from ADR 0063 P2, the `zhin plugin check` checks and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors for official plugins in zhinjs/zhin CI, just as for the Console's own pages (report-only before that). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Once P2 is complete, look at the official plugins' pages when writing your own; until then some official pages still use the old `zk-` components and should not be copied.
 
 ## Page UI kit
 
