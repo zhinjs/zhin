@@ -8,6 +8,7 @@
  * | `endpoint.offline` | Endpoint registry (offline, not stopped, no login task; or start `failed` / `retrying`, with `lastError`) | `endpoint.view` on that account |
  * | `endpoint.config-drift` | `zhin.config.yml` `endpoints` vs persisted accounts (#1250) | `endpoint.view` on that adapter instance |
  * | `plugin.error` / `plugin.config` | plugin management `inspect` of declared plugins | `feature.view` |
+ * | `command.conflict` | Command index routes skipped because another registration holds them (#1250) | `feature.view` |
  * | `plugin.dependencies` | one project-wide dependency graph check per read (one item, not one per plugin) | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
@@ -196,6 +197,32 @@ export interface AttentionIneffectiveConfig {
   readonly agents?: readonly string[];
 }
 
+/** One side of a command route conflict (#1250); mirrors `CommandRouteClaimant` of `@zhin.js/command`. */
+export interface AttentionCommandClaimant {
+  /** Plugin instance key. */
+  readonly plugin: string;
+  /** Full plugin id (owner): instance keys can repeat under different parent plugins. */
+  readonly owner: string;
+  /** Command display name. */
+  readonly command: string;
+  /** Plugin-local path, as `disabledCommands` takes it. */
+  readonly localPath: string;
+  readonly kind: 'command' | 'alias' | 'shortcut';
+  /** Alias or shortcut text. */
+  readonly entry?: string;
+  /** The project's Root plugin: shown as such, linked to the plugin list (it has no plugin page). */
+  readonly root?: true;
+}
+
+/** A command route two registrations claim: `skipped` lost it, `kept` holds it (#1250). */
+export interface AttentionCommandConflict {
+  readonly route: string;
+  readonly skipped: AttentionCommandClaimant;
+  readonly kept: AttentionCommandClaimant;
+  /** A later plugin's command took an earlier plugin's alias / shortcut: `danger`. */
+  readonly takenByLater?: true;
+}
+
 /** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
 export const DEFAULT_ERROR_LOG_WINDOW_HOURS = 24;
 
@@ -246,6 +273,8 @@ export interface AttentionSources {
   readonly endpoints?: () => readonly AttentionEndpoint[] | Promise<readonly AttentionEndpoint[]>;
   readonly endpointConfigDrift?: () => Promise<readonly AttentionEndpointDrift[]>;
   readonly plugins?: () => Promise<AttentionPluginsRead>;
+  /** Command routes skipped because another registration holds them (#1250); read live. */
+  readonly commandConflicts?: () => readonly AttentionCommandConflict[];
   readonly configuration?: AttentionConfiguration;
   /** `undefined` when the Agent (and its queue) is not running. */
   readonly toolApprovals?: () => readonly AttentionToolApproval[] | undefined;
@@ -276,7 +305,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'commands' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -511,6 +540,19 @@ const messages = createMessages({
   'plugin.config.title': { 'zh-CN': '插件 {plugin} 的配置需要修正', en: 'Configuration of plugin {plugin} needs fixing' },
   'plugin.missingEnv': { 'zh-CN': '未设置的环境变量：{names}', en: 'Unset environment variables: {names}' },
   'plugin.action': { 'zh-CN': '查看插件', en: 'Open plugin' },
+  'command.title.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」与插件 {other} 重名，没有注册', en: 'Command "{command}" of plugin {plugin} clashes with plugin {other} and was not registered' },
+  'command.title.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」已被占用，已跳过该别名', en: 'Alias "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.title.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」已被占用，已跳过', en: 'Shortcut "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.holder.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」', en: 'command "{command}" of plugin {plugin}' },
+  'command.holder.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」', en: 'alias "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.holder.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」', en: 'shortcut "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.detail.command': { 'zh-CN': '「{route}」已由{holder}使用，先注册的保留，{plugin} 的这条命令（连同它的别名）没有注册。', en: '"{route}" is already used by {holder}; the earlier registration keeps it, so this command of {plugin} (and its aliases) is not registered.' },
+  'command.detail.entry': { 'zh-CN': '「{route}」已由{holder}使用，只跳过了这个{what}，命令本身照常可用。', en: '"{route}" is already used by {holder}; only this {what} was skipped, the command itself still works.' },
+  'command.what.alias': { 'zh-CN': '别名', en: 'alias' },
+  'command.what.shortcut': { 'zh-CN': '快捷方式', en: 'shortcut' },
+  'command.advice': { 'zh-CN': '建议让其中一个插件改名（或给 {plugin} 配置 commandNamespace），或在配置里禁用其中一条：{plugin} 的 disabledCommands: [{path}]，或 {other} 的 disabledCommands: [{otherPath}]；也可以停用其中一个插件。', en: 'Rename one of them (or give {plugin} a commandNamespace), or disable one in the configuration: disabledCommands: [{path}] on {plugin}, or disabledCommands: [{otherPath}] on {other}; or disable one of the plugins.' },
+  'command.takenByLater': { 'zh-CN': '注意：「{entry}」原来由 {plugin} 处理，现在改由后加载的 {other} 的命令处理，用户熟悉的指令已经换了处理方。', en: 'Note: "{entry}" used to run {plugin}; it now runs a command of {other}, which loads later, so users get a different command for text they know.' },
+  'command.rootPlugin': { 'zh-CN': '项目根插件', en: 'the project root plugin' },
   'config.invalid.title': { 'zh-CN': '配置文件无法读取', en: 'The configuration file cannot be read' },
   'config.invalid.detail': { 'zh-CN': '{where}：{kind}。修正文件后重新读取。', en: '{where}: {kind}. Fix the file and reload.' },
   'config.invalid.file': { 'zh-CN': '配置文件', en: 'Configuration file' },
@@ -903,6 +945,38 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         detail: t('drift.detail', { parts: parts.join(locale === 'en' ? '; ' : '；') }),
         action: { label: t('drift.action'), path: ATTENTION_PATHS.adapterAccounts(drift.instanceKey) },
         visible: allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'adapter', adapter: drift.instanceKey })),
+      };
+    }));
+  }
+
+  // #1250: command routes another registration already holds (the instance keeps running).
+  if (sources.commandConflicts && allows(P.FEATURE_VIEW)) {
+    await read('commands', () => sources.commandConflicts!().map((conflict): AttentionDraft => {
+      const { skipped, kept, route } = conflict;
+      // The Root plugin (the project's own `commands/`) has no plugin page and no instance key to show.
+      const pluginName = (side: AttentionCommandClaimant) => side.root ? t('command.rootPlugin') : side.plugin;
+      const display = (side: AttentionCommandClaimant) => ({ plugin: pluginName(side), command: side.command, entry: side.entry ?? '' });
+      // What users type: the command's display name, or the alias / shortcut text (never a route shape).
+      const typed = (side: AttentionCommandClaimant) => side.kind === 'command' ? side.command : side.entry ?? side.command;
+      const holder = t(`command.holder.${kept.kind}`, display(kept));
+      const detail = skipped.kind === 'command'
+        ? t('command.detail.command', { route: typed(skipped), holder, plugin: pluginName(skipped) })
+        : t('command.detail.entry', { route: typed(skipped), holder, what: t(`command.what.${skipped.kind}`) });
+      const gap = locale === 'en' ? ' ' : '';
+      const advice = t('command.advice', { plugin: pluginName(skipped), other: pluginName(kept),
+        path: skipped.localPath || typed(skipped), otherPath: kept.localPath || typed(kept) });
+      // #1250: a later plugin's command took an alias / shortcut of an earlier plugin: what users
+      // were used to typing now silently runs another plugin's command.
+      const taken = conflict.takenByLater
+        ? t('command.takenByLater', { entry: typed(skipped), plugin: pluginName(skipped), other: pluginName(kept) }) : '';
+      return {
+        kind: 'command.conflict', severity: conflict.takenByLater ? 'danger' : 'warning',
+        subject: { plugin: skipped.plugin, pluginId: skipped.owner, commandRoute: route, command: skipped.command, commandKind: skipped.kind },
+        state: { skipped, kept, takenByLater: conflict.takenByLater === true },
+        title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: pluginName(kept) }),
+        detail: [taken, detail, advice].filter(Boolean).join(gap),
+        action: { label: t('plugin.action'), path: skipped.root ? ATTENTION_PATHS.plugins : ATTENTION_PATHS.plugin(skipped.plugin) },
+        reason: { category: 'config', code: `command-${skipped.kind}-conflict` },
       };
     }));
   }
