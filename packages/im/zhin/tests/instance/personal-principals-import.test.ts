@@ -168,6 +168,8 @@ describe('ai.personalPrincipals: a key corrected after the first import (#1250 p
     const first = await book.run({ seeds: [seed('workroom-admin', '10001'), seed('workroom-admin', '10002')], people, logger });
     expect(first.entries.map(entry => [entry.status, entry.reason])).toEqual([['skipped', 'not-a-user'], ['skipped', 'not-a-user']]);
     expect(logs.find(line => line.includes('workroom-admin'))).toContain('改正后下次启动按首次导入处理');
+    // The instance log (readable with status.view) names no Console user; it points to the local CLI.
+    expect(logs.find(line => line.includes('workroom-admin'))).toContain('运行 zhin console user list 查看可用的 user id');
     expect(JSON.parse(await readFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), 'utf8'))).toMatchObject({ migratedAt: 100 });
     // The key is corrected: the same identities are imported like the first import.
     const fixed = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u1', '10002')], people, logger, audit: entry => { audit.push(entry); } });

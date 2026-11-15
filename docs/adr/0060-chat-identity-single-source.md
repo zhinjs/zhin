@@ -375,7 +375,7 @@ export type ChatScopeRef =
   - 1.4.0 写的记录：改正后已进入等待确认的条目，下次启动按上面的规则自动导入一次。
 - **安全论证**：b9 规定「首次导入之后新增的条目需要确认」，是因为之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动链接会把 Console 账号接到别人的聊天身份上。被改正的条目里，平台身份是首次启动时配置就写明的（与首次导入同等可信），改动的只是「链接到哪个 Console 用户」。持有 `ops.config.write` 的人借此最多能把某个**没有任何授予**的人一次性链接到自己选的 Console 用户——首次导入本来就会做同样的事；持有授予的人仍需全局 `iam.manage` 确认，且每次改正都有审计、并重新出现在「需要你处理」里。
 - **一并收紧 `unknown-adapter`**：此前首次导入之后新增、但适配器尚未加载的条目被记为 `unknown-adapter`，适配器加载后会被当作首次导入的条目自动链接，绕过了确认。现在只有带 `firstImport` 的 `unknown-adapter` 条目重试时不需确认（旧记录中的 `unknown-adapter` 条目沿用旧行为）。
-- **警告给出可用的键**：实例不读 gateway.db（ADR 0059 §1），所以由网关在实例进入 `running` 时比对配置里的键与 Console 用户，把建议写进实例日志（`[gateway]` 行）：键正好是某个用户名时给出该用户的 `user:<id>`，否则只有一个全局所有者时给出「当前唯一的所有者是 …，可改为 `user:<id>`」，再否则提示用 `zhin console user list` 查看。`zhin console user list` 显示用户 id，并新增 `--json`。
+- **警告给出可用的键**：实例不读 gateway.db（ADR 0059 §1），所以由网关在实例进入 `running` 时比对配置里的键与 Console 用户，把建议写进**网关自己的日志**（前台运行时的 stderr、后台运行时的 `.zhin/logs/gateway.log`；这两处都不经 Console 的日志接口提供，Console 的项目文件路由也拒绝点目录）。建议里含 Console 用户名与 id，所以不写进实例日志——实例日志经 `GET /logs` 对持有 `status.view` 的 Console 用户可读；实例日志只提示「键无效，运行 `zhin console user list` 查看可用的 user id」。建议规则：键正好是某个用户名时给出该用户的 `user:<id>`，否则只有一个全局所有者时给出「当前唯一的所有者是 …，可改为 `user:<id>`」，再否则提示用 `zhin console user list` 查看。`zhin console user list` 显示用户 id，并新增 `--json`。
 - **不支持用用户名作键**：用户名不能改，但用户删除后同名可被别人重新注册，用户名键会悄悄指向另一个人；实例也读不到用户名。用户 id 随机生成、不复用，因此只接受 `user:<id>`，用户名只用于给出建议。
 - **日志带账号**（`chat-roles-import-log-ambiguous`）：同一 openid 挂在同一适配器的两个账号上时，日志写成 `qq:<openid>（账号 <endpoint id>）`，能分清是哪个账号的条目。
 

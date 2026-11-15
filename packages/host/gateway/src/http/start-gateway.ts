@@ -231,7 +231,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       supervisor.on('state', (status: { readonly state: string }) => {
         if (status.state === 'running') {
           const started = gatewayConsole;
-          if (started) void reportPersonalPrincipalKeys(options.projectRoot, started, supervisor);
+          if (started) void reportPersonalPrincipalKeys(options.projectRoot, started);
         }
         if (markerChecked || status.state !== 'running') return;
         markerChecked = true;
@@ -288,20 +288,14 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
   });
 }
 
-/** `[YYYY-MM-DD HH:mm:ss.SSS][WARN] [gateway] …`, the instance log's own line format (`zhin logs --level`). */
-function gatewayInstanceLogLine(message: string, now = new Date()): string {
-  const pad = (value: number, width = 2) => String(value).padStart(width, '0');
-  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} `
-    + `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
-  return `[${stamp}][WARN] [gateway] ${message}`;
-}
-
 /**
  * `ai.personalPrincipals` keys that name no Console user: the instance cannot tell which id was
- * meant (it never reads gateway.db), so the gateway writes the usable key into the instance log,
- * next to the instance's own warning (#1250). Best effort; never fails the start.
+ * meant (it never reads gateway.db), so the gateway suggests the key (#1250). The suggestion names
+ * Console users, so it goes to the **gateway's own** log (its stderr in the foreground,
+ * `.zhin/logs/gateway.log` in the background), never into the instance log, which Console users
+ * holding `status.view` can read. Best effort; never fails the start.
  */
-async function reportPersonalPrincipalKeys(projectRoot: string, gatewayConsole: GatewayConsole, supervisor: InstanceSupervisor): Promise<void> {
+async function reportPersonalPrincipalKeys(projectRoot: string, gatewayConsole: GatewayConsole): Promise<void> {
   try {
     const file = findConfigFile(projectRoot);
     if (!file) return;
@@ -309,7 +303,7 @@ async function reportPersonalPrincipalKeys(projectRoot: string, gatewayConsole: 
     if (!keys.length) return;
     const iam = gatewayConsole.iam();
     if (!iam) return;
-    for (const hint of personalPrincipalKeyHints(keys, await iam.listUsers())) supervisor.logs.write('stdout', `${gatewayInstanceLogLine(hint)}\n`);
+    for (const hint of personalPrincipalKeyHints(keys, await iam.listUsers())) logger.warn(hint);
   } catch {
     // The Console store may not be open yet; the next start reports it.
   }

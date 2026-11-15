@@ -3,7 +3,8 @@
  *
  * The configuration keys must be `user:<Console user id>` (ADR 0060 §4.1). The instance never
  * reads `.zhin/gateway.db` (ADR 0059 §1), so it cannot say which id a wrong key should have been;
- * the gateway can. These hints only **suggest** a key: nothing is imported from them, and a
+ * the gateway can. The hints name Console users, so the gateway writes them to its own log only
+ * (never to the instance log, which `status.view` holders read). They only **suggest** a key: nothing is imported from them, and a
  * username is never accepted as a key — usernames are free again once a user is deleted, so a
  * username key could later point at somebody else; user ids are random and never reused.
  */

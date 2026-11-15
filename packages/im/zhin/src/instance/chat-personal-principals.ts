@@ -249,7 +249,7 @@ export class PersonalPrincipalImportBook {
             changed = true;
           }
           input.logger.warn(`ai.personalPrincipals.${seed.key}（${source}）：键不是 Console 用户（应为 user:<Console 用户 id>），未导入；`
-            + `用 zhin console user list 查看用户 id（网关运行时会在实例日志里给出可用的键）。${firstImport
+            + `运行 zhin console user list 查看可用的 user id（网关自己的日志——前台运行时的终端或 .zhin/logs/gateway.log——会给出建议的键）。${firstImport
               ? '改正后下次启动按首次导入处理，不需要 Console 确认（ADR 0060）'
               : '改正后的条目等待 Console 确认（需要你处理）'}`);
           continue;
