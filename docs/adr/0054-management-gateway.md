@@ -213,4 +213,4 @@ interface HttpHost {
   前三项在写入之前判定，不做热应用尝试。
 - **事务顺序与回滚不变**：先写配置、再生效；热应用失败时在已写入的配置上重启，重启后启动失败则恢复配置文件并启动原实例。热路径里写入本身失败时只恢复文件，不碰运行中的实例。实例未运行时只写配置（`apply: 'none'`），下次启动生效。
 - **结果**：`plugin` 增加 `apply: 'hot' | 'restart' | 'none'`、`restartReason?`、`restartDetail?`；新阶段 `apply-hot`。Console 两个 RPC 的 `restartRequired` 只在实例真的为此重启时为 `true`，并带同样的 `apply` 字段与说明文字；CLI `zhin enable` / `zhin disable` 输出「已热生效，实例未重启」或重启原因。
-- 聊天命令 `功能 开启|关闭 <插件> 全局` 仍由实例写 `disable_plugins` 并请求重启，留待后续批次。
+- 不经网关事务的入口仍需重启：手改 `disable_plugins` 后执行 `zhin restart`；聊天命令 `功能 开启|关闭 <插件> 全局` 仍由实例写 `disable_plugins` 并请求重启，留待后续批次（依赖变化改为按内容哈希判断同样在后续批次）。

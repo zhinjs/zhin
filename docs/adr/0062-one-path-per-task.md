@@ -245,7 +245,7 @@ sidebar: false
   - 手改 `disable_plugins`：高级。
 - **迁移**：`console-protocol` 里给 `plugin:set-enabled` 标弃用（minor），网关继续接受，并在审计里记录 `deprecated_rpc`；下一个 major 删除。
 - **文档**：「停用插件」只写 Console 功能页。
-- **生效方式（2026-11-15 增补，zhinjs/zhin#1250）**：所有者决定普通插件与适配器一样热生效——上面所有入口最终都是网关的启停事务，实例在运行时按 ADR 0054「修订 2026-11-15」在当前进程里换代，不再重启实例；插件声明 `zhin.toggle: "restart"`、含原生模块、依赖在实例启动后变化或热应用失败时，自动回退为重启并在结果里说明原因。证据条目 `toggle-plugin-restarts-instance` 由此关闭。
+- **生效方式（2026-11-15 增补，zhinjs/zhin#1250）**：所有者决定普通插件与适配器一样热生效——经网关启停事务的入口（Console 插件页开关、Console 功能矩阵的全局开关、`zhin enable` / `zhin disable`）在实例运行时按 ADR 0054「修订 2026-11-15」在当前进程里换代，不再重启实例；插件声明 `zhin.toggle: "restart"`、含原生模块、依赖在实例启动后变化或热应用失败时，自动回退为重启并在结果里说明原因。手改 `disable_plugins` 与聊天「功能 开启 / 关闭 … 全局」仍需重启实例。证据条目 `toggle-plugin-restarts-instance` 由此**部分关闭**：剩余的聊天全局开关热生效、依赖变化改为按内容哈希判断，进入后续批次。
 
 #### 11. 安装、卸载、更新、搜索插件
 

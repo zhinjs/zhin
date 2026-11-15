@@ -103,6 +103,17 @@ describe('InstanceSupervisor', () => {
     await expect(silent.applyPlugin({ instanceKey: 'game', enabled: true, revision: 'r' }, 100)).resolves.toMatchObject({ outcome: 'failed', message: expect.stringContaining('100 ms') });
   });
 
+  it('fails a pending plugins.apply when the instance exits before answering (#1250)', async () => {
+    const supervisor = supervise({ FAKE_PLUGIN_APPLY: 'exit' });
+    await supervisor.start();
+    const started = Date.now();
+    await expect(supervisor.applyPlugin({ instanceKey: 'game', enabled: false, revision: 'r1' }))
+      .resolves.toEqual({ outcome: 'failed', message: 'Instance exited before answering plugins.apply' });
+    // Settled by the exit, not by the 60 s answer timeout.
+    expect(Date.now() - started).toBeLessThan(10_000);
+    await waitFor(() => supervisor.status().lastExitCode === 3 || undefined);
+  });
+
   it('reports the generation of the latest route table after hot reloads, not the one in ready (#1250)', async () => {
     // Out-of-order 4 after 6 must not roll the reported generation back.
     const supervisor = supervise({ FAKE_ROUTE_GENERATIONS: '2,6,4' });

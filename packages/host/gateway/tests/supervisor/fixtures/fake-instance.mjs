@@ -21,7 +21,8 @@ if (env.FAKE_ECHO_STDIN) {
 
 if (env.FAKE_IGNORE_SIGTERM) process.on('SIGTERM', () => { console.log('sigterm-ignored'); });
 process.on('message', (message) => {
-  // FAKE_PLUGIN_APPLY: answer plugins.apply with this outcome (`silent` never answers).
+  // FAKE_PLUGIN_APPLY: answer plugins.apply with this outcome (`silent` never answers, `exit` exits first).
+  if (message?.type === 'plugins.apply' && env.FAKE_PLUGIN_APPLY === 'exit') process.exit(3);
   if (message?.type === 'plugins.apply' && env.FAKE_PLUGIN_APPLY && env.FAKE_PLUGIN_APPLY !== 'silent') {
     console.log(`plugins.apply ${message.payload.instanceKey} ${message.payload.enabled} ${message.payload.revision}`);
     process.send?.({ type: 'plugins.apply.result', id: message.id, payload: { outcome: env.FAKE_PLUGIN_APPLY, generation: 2 } });

@@ -637,6 +637,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     agentBindings: agentHost?.bindings,
   }, httpConfig.apiBase);
   let stopping: Promise<void> | undefined;
+  /** Unsubscribes the gateway's `plugins.apply` handler (#1250); set once the instance is ready. */
+  let disposePluginApply: () => void = () => undefined;
   /** Components whose stop has begun but not settled; reported on a forced exit. */
   const stoppingComponents = new Set<string>();
   const stage = async (name: string, run: () => unknown): Promise<void> => {
@@ -654,6 +656,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   const stopAll = async (): Promise<void> => {
     try {
+      // No hot plugin apply may start a generation transaction while the Runtime stops.
+      disposePluginApply();
       disposeReadiness();
       disposeConsoleControlPlane();
       consoleTerminal?.close();
@@ -772,7 +776,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   bridgedHttpHost?.publishRoutes(snapshot.generation);
   // #1250: plugin enable / disable from the gateway applies in this generation, no restart.
   if (controlChannel) {
-    installPluginApplyChannel({
+    disposePluginApply = installPluginApplyChannel({
       channel: controlChannel,
       runtime: host.runtime,
       onError: (error, request) => getLogger('runtime').warn(formatCompact({

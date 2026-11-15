@@ -483,6 +483,8 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `metadata` | 否 | 展示信息：`displayName`、`displayNameI18n`、`icon`（Console），`descriptionI18n`、`category`（插件市场，只能写在这里）。`displayName` / `displayNameI18n` / `icon` 与 `definePlugin({ metadata })` 只能写一处。语言键只接受 `zh-CN` / `en`，值为非空字符串；`category` 取值见[插件市场元数据](./plugin-delivery.md#marketplace-metadata) |
 | `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级。省略时[按约定目录推断](#infer-features) |
 
+**热启停与资源回收**：热停用会退役该实例的 Scope，按逆序执行 `setup` 返回的清理函数和 `context.lifecycle.add(...)` 登记的清理；约定目录里的命令、中间件、工具、页面等能力随世代一并退役。所以插件自己打开的资源（定时器、监听器、连接、子进程）必须在 `setup` 里创建，并挂到返回的清理函数或 `context.lifecycle` 上，才能被热停用回收。模块顶层的副作用（例如顶层 `setInterval`、在 `process` / 全局对象上注册的监听器、模块加载时建立的连接）不属于任何 Scope，热停用回收不了；这类插件请改成在 `setup` 里创建，做不到时在清单里声明 `"toggle": "restart"`，网关会改为重启实例。
+
 `type: "feature"` 的包只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，`featureApi` 声明它实现的 API 版本，供使用方的 `features[].api` 校验。
 
 插件真正必填的只有两项，最小清单是 `"zhin": { "protocol": 1, "type": "plugin" }`：入口可省略（[无入口插件](#entryless-plugin)），`features` 可省略（见下文推断）。
