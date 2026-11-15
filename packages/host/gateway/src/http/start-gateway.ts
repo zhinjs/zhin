@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
+import { personalPrincipalKeyHints, personalPrincipalKeysOf } from '../iam/personal-principal-keys.js';
 import { projectIdentity } from '../project/identity.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
@@ -228,6 +229,10 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       // store marker is there (normally written at connect time already).
       let markerChecked = false;
       supervisor.on('state', (status: { readonly state: string }) => {
+        if (status.state === 'running') {
+          const started = gatewayConsole;
+          if (started) void reportPersonalPrincipalKeys(options.projectRoot, started, supervisor);
+        }
         if (markerChecked || status.state !== 'running') return;
         markerChecked = true;
         void gatewayConsole?.ensureStoreMarker();
@@ -281,6 +286,33 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       return closeResult;
     },
   });
+}
+
+/** `[YYYY-MM-DD HH:mm:ss.SSS][WARN] [gateway] …`, the instance log's own line format (`zhin logs --level`). */
+function gatewayInstanceLogLine(message: string, now = new Date()): string {
+  const pad = (value: number, width = 2) => String(value).padStart(width, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} `
+    + `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+  return `[${stamp}][WARN] [gateway] ${message}`;
+}
+
+/**
+ * `ai.personalPrincipals` keys that name no Console user: the instance cannot tell which id was
+ * meant (it never reads gateway.db), so the gateway writes the usable key into the instance log,
+ * next to the instance's own warning (#1250). Best effort; never fails the start.
+ */
+async function reportPersonalPrincipalKeys(projectRoot: string, gatewayConsole: GatewayConsole, supervisor: InstanceSupervisor): Promise<void> {
+  try {
+    const file = findConfigFile(projectRoot);
+    if (!file) return;
+    const keys = personalPrincipalKeysOf((await createConfigDocument(join(projectRoot, file)).read()).document);
+    if (!keys.length) return;
+    const iam = gatewayConsole.iam();
+    if (!iam) return;
+    for (const hint of personalPrincipalKeyHints(keys, await iam.listUsers())) supervisor.logs.write('stdout', `${gatewayInstanceLogLine(hint)}\n`);
+  } catch {
+    // The Console store may not be open yet; the next start reports it.
+  }
 }
 
 /** Thrown when the gateway would serve an open Host on a network address. */

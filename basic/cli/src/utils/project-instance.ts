@@ -106,13 +106,15 @@ export interface AgentTraceModuleView {
   defaultTurnTraceDir(root: string): string;
   defaultTurnTraceFile(root: string): string;
   createTurnTraceArchive(dir: string, options: { readonly legacyFile?: string; readonly secrets: readonly string[] }): AgentTraceStoreView;
-  formatTurnTraceList(traces: readonly unknown[]): string;
+  /** `sessionLabel` is ignored by @zhin.js/agent before 1.6 (the session key is shown). */
+  formatTurnTraceList(traces: readonly unknown[], options?: { readonly sessionLabel?: (trace: never) => string | undefined }): string;
   formatTurnTrace(trace: unknown, options: { readonly timeline: boolean; readonly providerLabel?: (provider: string) => string | undefined }): string;
 }
 
 export interface AgentModuleView {
   buildAgentSurfaceInfoReport(root: string): Promise<unknown>;
-  formatAgentSurfaceInfoReport(report: never): string;
+  /** `locale` is ignored by @zhin.js/agent before 1.6 (English output). */
+  formatAgentSurfaceInfoReport(report: never, locale?: 'zh-CN' | 'en'): string;
 }
 
 export interface InstanceCliModule {

@@ -96,7 +96,7 @@ interface PlatformStanding {
 | 名单 | 现状 | 方向 |
 | --- | --- | --- |
 | 聊天角色 `chat_roles` | 唯一事实来源；授予属于「人」，一个人可有多个平台身份（ADR 0060 P2） | — |
-| `ai.personalPrincipals` | 首次启动导入为「人 ↔ Console 账号」链接（不授予角色，P3；需要关系型项目数据库 sqlite / mysql / pg）；之后个人推理主体只读链接。之后新增或修改的条目，以及会链接到持有角色的人的条目，进入「需要你处理」等待全局 `iam.manage` 确认 | P4 从 schema 移除（出现时告警并忽略） |
+| `ai.personalPrincipals` | 首次启动导入为「人 ↔ Console 账号」链接（不授予角色，P3；需要关系型项目数据库 sqlite / mysql / pg）；之后个人推理主体只读链接。之后新增或修改的条目，以及会链接到持有角色的人的条目，进入「需要你处理」等待全局 `iam.manage` 确认。键必须是 `user:<Console 用户 id>`（`zhin console user list` 显示 id；网关会在实例日志里给出可用的键）；首次导入时因键无效而跳过的条目不算已迁移，改正键后下次启动照首次导入处理 | P4 从 schema 移除（出现时告警并忽略） |
 | 适配器 `master` / `trusted`、`ai.trigger.masters` / `trusted` | 只作**种子**：首次启动导入；之后再出现不自动授予，进入 Console「需要你处理」等待确认导入（见[升级指南](../migrations/chat-roles.md)） | 长期作为种子格式支持 |
 | 插件自建名单（`masters` 等） | 不推荐 | 改用 `isOwner` / `hasChatRole` / `chatRolesToken`（见下节） |
 | Console 账号 | 另一个主体体系：Console 权限不等于聊天角色；可与聊天中的「人」一对一链接（不传递权限）。Console「聊天成员」页、Sandbox「以我的聊天身份发言」与个人推理主体都读这条链接（P3） | — |

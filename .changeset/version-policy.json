@@ -4,7 +4,7 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 22 批——`zhin console user list` 显示用户 id 并新增 `--json`；`zhin agent info` 按来源（项目根目录 / 本地插件 / 已安装插件）统计、帮助双语并新增 `--locale`；CLI 日期时间统一为 `YYYY-MM-DD HH:mm:ss`（24 小时制）；`zhin trace -l` 显示可读会话名，`--json` 新增 `session_display_name`。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/console-protocol",
@@ -19,7 +19,7 @@
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批普通插件启停热生效——启停事务在实例运行时改为写配置后经 plugins.apply 热应用，新增事务阶段 apply-hot 与结果字段 plugin.apply / restartReason / restartDetail；新增公开 API InstanceSupervisor.supportsPluginApply / applyPlugin()、InstancePluginApplyResult、DEFAULT_PLUGIN_APPLY_TIMEOUT_MS、PluginManagementWorkflow.hotToggleBlocker()，PackageTransactionInstance / PackageWorkflowPort 新增可选成员。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增公开导出 consoleSetupLink()（/server）与 SetupDatabaseApplyResult 类型（/iam）；ConsoleSetupService.applyDatabase() 返回值新增 changed，选择与当前一致的数据库时不写配置、不提示、不重启（restartRequired: false），gateway.console.setup.database 与 POST /auth/setup/database 的回复相应新增 changed；前台网关在 Console 未初始化时向终端打印带 #token= 的初始化链接。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 lookupClaimsOf() / TraceLookupClaim，UsageStats 新增 totals.claimsWithoutToolCall / unexecutedToolNotices 与 byModel[].claimsWithoutToolCall。npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批普通插件启停热生效——启停事务在实例运行时改为写配置后经 plugins.apply 热应用，新增事务阶段 apply-hot 与结果字段 plugin.apply / restartReason / restartDetail；新增公开 API InstanceSupervisor.supportsPluginApply / applyPlugin()、InstancePluginApplyResult、DEFAULT_PLUGIN_APPLY_TIMEOUT_MS、PluginManagementWorkflow.hotToggleBlocker()，PackageTransactionInstance / PackageWorkflowPort 新增可选成员。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增公开导出 consoleSetupLink()（/server）与 SetupDatabaseApplyResult 类型（/iam）；ConsoleSetupService.applyDatabase() 返回值新增 changed，选择与当前一致的数据库时不写配置、不提示、不重启（restartRequired: false），gateway.console.setup.database 与 POST /auth/setup/database 的回复相应新增 changed；前台网关在 Console 未初始化时向终端打印带 #token= 的初始化链接。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 lookupClaimsOf() / TraceLookupClaim，UsageStats 新增 totals.claimsWithoutToolCall / unexecutedToolNotices 与 byModel[].claimsWithoutToolCall。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `personalPrincipalKeyHints()` / `personalPrincipalKeysOf()`（/iam）与 `shortSessionKey()` / `sessionLabelOf()`（/usage）；实例启动后把 `ai.personalPrincipals` 的可用键写进实例日志。npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/host-http",
@@ -44,7 +44,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效；所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/logger",
@@ -80,6 +80,11 @@
       "package": "@zhin.js/console-contract",
       "type": "minor",
       "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `formatDateTime()` 与 `FormatDateTimeOptions`（CLI 与日志共用的 `YYYY-MM-DD HH:mm:ss` 日期时间格式）。npm 上 1.4.0 未被占用。"
     }
   ]
 }

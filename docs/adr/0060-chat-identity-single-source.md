@@ -362,6 +362,23 @@ export type ChatScopeRef =
 - **非全局管理者看不到链接信息**：`consoleLink`、暗示链接的 `linkMethod`（`code` / `console`）、指向 Console 用户的 `createdBy`，以及从链接得出的授予者名（`grantedByName`），都只对全局 `iam.manage` 持有者显示。
 - **`chat-principals.import`**：导入的授予一律记为 `grantedBy: import:<导入者>`，忽略文件里的 `grantedBy` 标签。
 
+### 部署反馈后的修正（zhinjs/zhin#1250 第 22 批）
+
+问题（`personal-principals-invalid-key-consumes-migration`）：键写成旧写法（如 `workroom-admin`）时，首次导入把条目全部记为 `skipped` / `not-a-user`，却照样写下 `migratedAt`；把键改成 `user:<id>` 后，键是幂等 id 的一部分，改过的条目被当作「之后新增」，一律等待 Console 确认。升级前没把键改对，就失去了自动导入。
+
+- **键无效的条目不算已迁移**：首次导入写入的条目带 `firstImport`。首次导入中因 `not-a-user` 跳过的条目，改正键后，`adapterId` 与 `subjectId` **完全相同**的条目按首次导入处理（不需要确认）。范围限定为：
+  - 只对首次导入时就在配置里的平台身份生效；改键时一起加进来的新身份仍等待确认。
+  - 每个被跳过的条目只能被改正一次（记录 `correctedBy`）；之后把同一身份改到别的键，仍等待确认。
+  - 「永不自动链接到持有授予的人」不变：改正的条目若会链接到持有授予的人，照样 `needs-confirmation`。
+  - 首次导入之后才出现的无效键不开这个例外（警告里写明「改正后的条目等待 Console 确认」）。
+  - 改正导入写审计（`chat-roles.import`，`decision: corrected-key`，含原来的键），并清除「已读」，使 `chat-roles.imported` 重新出现在「需要你处理」里。
+  - 1.4.0 写的记录：改正后已进入等待确认的条目，下次启动按上面的规则自动导入一次。
+- **安全论证**：b9 规定「首次导入之后新增的条目需要确认」，是因为之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动链接会把 Console 账号接到别人的聊天身份上。被改正的条目里，平台身份是首次启动时配置就写明的（与首次导入同等可信），改动的只是「链接到哪个 Console 用户」。持有 `ops.config.write` 的人借此最多能把某个**没有任何授予**的人一次性链接到自己选的 Console 用户——首次导入本来就会做同样的事；持有授予的人仍需全局 `iam.manage` 确认，且每次改正都有审计、并重新出现在「需要你处理」里。
+- **一并收紧 `unknown-adapter`**：此前首次导入之后新增、但适配器尚未加载的条目被记为 `unknown-adapter`，适配器加载后会被当作首次导入的条目自动链接，绕过了确认。现在只有带 `firstImport` 的 `unknown-adapter` 条目重试时不需确认（旧记录中的 `unknown-adapter` 条目沿用旧行为）。
+- **警告给出可用的键**：实例不读 gateway.db（ADR 0059 §1），所以由网关在实例进入 `running` 时比对配置里的键与 Console 用户，把建议写进实例日志（`[gateway]` 行）：键正好是某个用户名时给出该用户的 `user:<id>`，否则只有一个全局所有者时给出「当前唯一的所有者是 …，可改为 `user:<id>`」，再否则提示用 `zhin console user list` 查看。`zhin console user list` 显示用户 id，并新增 `--json`。
+- **不支持用用户名作键**：用户名不能改，但用户删除后同名可被别人重新注册，用户名键会悄悄指向另一个人；实例也读不到用户名。用户 id 随机生成、不复用，因此只接受 `user:<id>`，用户名只用于给出建议。
+- **日志带账号**（`chat-roles-import-log-ambiguous`）：同一 openid 挂在同一适配器的两个账号上时，日志写成 `qq:<openid>（账号 <endpoint id>）`，能分清是哪个账号的条目。
+
 ## 落盘位置（计划）
 
 - 模型与解析：`packages/im/core/src/built/roles.ts`（`ChatRoleService` 按人解析、`ChatRoleReader`、`isOwner` / `hasChatRole`）

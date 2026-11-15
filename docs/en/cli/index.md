@@ -45,6 +45,8 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 
 All commands, grouped by purpose, follow.
 
+Dates and times in command output are always local time as `2026-11-15 00:15:56` (24-hour; `2026-11-15` for a date alone), in both display languages: ISO order cannot be misread on either side of the Atlantic (unlike `11/15/2026` or `15/11/2026`), sorts as text and matches the days of `zhin usage report`.
+
 ## Running
 
 ### start / stop / restart / status / logs: Gateway and Instance
@@ -155,7 +157,7 @@ zhin console user create <username> [--role viewer] [--display-name <name>] [--p
 zhin console user passwd <username> [--password-stdin]
 zhin console user disable <username>
 zhin console user enable <username>
-zhin console user list
+zhin console user list [--json]
 zhin console migrate [--revert]
 ```
 
@@ -167,7 +169,7 @@ Console users, roles, sessions, API tokens and the audit log live in the gateway
   - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
   - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
-- **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
+- **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints username, display name, state, role bindings and the **user id** (`ai.personalPrincipals` keys are `user:<user id>`); `--json` prints `{ users: [{ id, username, displayName, disabled, roles }] }`. Adapter- or account-scoped bindings are set in the Console's Access pages.
 - **`init --reset-store`**: when `.zhin/gateway.db` was lost or replaced (the project database's marker `zhin_gateway_store` names another store) the Console stays closed; once you accept that the old accounts are gone, this resets it (gateway stopped first, asks for confirmation, `--yes` skips it), records the reset in the new audit log and continues with setup.
 - **`migrate`** moves the Console account tables an earlier version kept in the project database into `.zhin/gateway.db` (the gateway also does it when it starts; while a gateway runs the command only reports the state). `--revert` writes them back into the project database and empties gateway.db — required before downgrading, with the gateway stopped (`zhin stop`). See the [upgrade notes](../migrations/gateway-storage.md).
 - `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
@@ -595,12 +597,14 @@ zhin schedule resume <id>
 Requires the AI stack (`@zhin.js/agent` + `zod` + `ai`).
 
 ```bash
-zhin agent info [--json]
+zhin agent info [--json] [--locale zh-CN|en]
 ```
 
 | Command | Purpose |
 | --- | --- |
-| `info` | List discovered Agent capabilities and named Agents (Tools, Skills, Hooks…) |
+| `info` | Lists Agent capabilities and named Agents (tools, skills, hooks…) by source: the **project root**'s convention directories (`tools/`, `skills/`, `agents/*/tools` …, i.e. the application plugin itself), **local plugins** (`plugins/`) and **installed plugins** (`node_modules` packages with a `package.json#zhin` manifest). Below the totals line it gives the packages, tools and skills of each source; `--json` has the same grouping as `bySource`. Framework built-in tools and MCP tools are not project files and are not counted — `zhin trace` shows the tools available at run time |
+
+The output language is the project's `locale` (top level of `zhin.config.yml`, Chinese by default); `--locale` overrides it once. Help texts are bilingual.
 
 ### trace: Inspect Agent Turns
 
@@ -621,7 +625,7 @@ zhin trace <engagementId>         # a specific collaboration; an id prefix is en
 
 | Option | Purpose |
 | --- | --- |
-| `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens |
+| `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens. The session is shown by the same readable name as `zhin usage report` plus a short key (e.g. `sandbox · 私聊 Developer（personal-session:ab12cd34）`), or the short key when no origin was recorded; `--json` keeps the full `session_key` and adds `session_display_name` |
 | `--sessions` | One line per session: turn count, last time and status, total tokens |
 | `--engagements` | Read multi-Agent collaboration records instead (the `engagement_events` database table; requires SQLite, MySQL, or PostgreSQL): with `--list`, list recent collaborations; otherwise show the participants, mail hops, Blackboard, and budget of the latest or the given collaboration. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | Only this session (sessionKey); output switches to the list format |

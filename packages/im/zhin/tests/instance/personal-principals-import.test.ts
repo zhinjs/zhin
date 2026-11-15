@@ -6,7 +6,7 @@ import { grantsAllow, type ConsoleGrant, type ConsoleScopeTarget } from '@zhin.j
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import { ChatPeople } from '../../src/instance/chat-people.js';
 import {
-  PERSONAL_PRINCIPALS_IMPORT_FILE, PersonalPrincipalImportBook, type PersonalPrincipalSeed,
+  PERSONAL_PRINCIPALS_IMPORT_FILE, PersonalPrincipalImportBook, personalPrincipalImportId, personalPrincipalSourceLabel, type PersonalPrincipalSeed,
 } from '../../src/instance/chat-personal-principals.js';
 import { ATTENTION_PATHS, collectAttention, type AttentionChatRoles } from '../../src/instance/console/attention.js';
 import { dispatchChatRoleImportsConsoleRpc } from '../../src/instance/console/chat-role-imports-rpc.js';
@@ -154,6 +154,100 @@ describe('ai.personalPrincipals import (ADR 0060 §4.1, P3)', () => {
     // A further start does not import them either.
     await book.run({ seeds: [seed('user:u2', '30003')], people, logger });
     expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+  });
+});
+
+describe('ai.personalPrincipals: a key corrected after the first import (#1250 personal-principals-invalid-key-consumes-migration)', () => {
+  const at = (adapterId: string, key: string, userId: string, extra: Partial<PersonalPrincipalSeed> = {}): PersonalPrincipalSeed =>
+    ({ key, adapterId, subjectId: userId, identity: { adapter: 'qq', userId }, ...extra });
+
+  it('imports the corrected entries without confirmation, once, audited and shown as unread', async () => {
+    const { store, people, logs, logger, book, root } = await setup();
+    const audit: Record<string, any>[] = [];
+    // First start: the legacy key `workroom-admin` is skipped; the one-time import still runs.
+    const first = await book.run({ seeds: [seed('workroom-admin', '10001'), seed('workroom-admin', '10002')], people, logger });
+    expect(first.entries.map(entry => [entry.status, entry.reason])).toEqual([['skipped', 'not-a-user'], ['skipped', 'not-a-user']]);
+    expect(logs.find(line => line.includes('workroom-admin'))).toContain('改正后下次启动按首次导入处理');
+    expect(JSON.parse(await readFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), 'utf8'))).toMatchObject({ migratedAt: 100 });
+    // The key is corrected: the same identities are imported like the first import.
+    const fixed = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u1', '10002')], people, logger, audit: entry => { audit.push(entry); } });
+    const link = store.principals.linkOfConsoleUser('u1');
+    expect(link).toBeDefined();
+    expect(store.principals.identitiesOf(link!.principalId).map(identity => identity.userId)).toEqual(['10001', '10002']);
+    expect(fixed.entries.filter(entry => entry.consoleUserId === 'u1').map(entry => entry.status)).toEqual(['imported', 'imported']);
+    expect(fixed.entries.filter(entry => entry.reason === 'not-a-user').every(entry => entry.correctedBy)).toBe(true);
+    expect(fixed.acknowledgedAt).toBeUndefined();
+    expect(audit.map(entry => entry.detail?.decision)).toEqual(['corrected-key', 'corrected-key']);
+    expect(audit[0]!.detail).toMatchObject({ previousKey: 'workroom-admin', consoleUserId: 'u1' });
+    expect(logs.some(line => line.includes('因键无效而跳过、现已改正'))).toBe(true);
+    // A skipped entry is corrected once: moving the same identity to another key later waits.
+    await people.unlinkConsole({ consoleUserId: 'u1', actor: 'user:root' });
+    const again = await book.run({ seeds: [seed('user:u2', '10001')], people, logger });
+    expect(again.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+  });
+
+  it('only covers the identities the first import named, and never links onto a person who holds grants', async () => {
+    const { store, people, logger, book } = await setup();
+    await book.run({ seeds: [seed('workroom-admin', '10001'), seed('workroom-admin', 'owner')], people, logger });
+    await store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'owner', role: 'owner' });
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u1', '20002'), seed('user:u-op', 'owner')], people, logger });
+    const by = (userId: string) => state.entries.find(entry => entry.subjectId === userId && entry.reason !== 'not-a-user')!;
+    // A new identity added together with the correction is a configuration edit: it waits.
+    expect(by('20002')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(by('10001')).toMatchObject({ status: 'imported' });
+    // The owner's identity is never linked to u-op without a global iam.manage holder.
+    expect(by('owner')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u-op')).toBeUndefined();
+  });
+
+  it('a later entry with an invalid key does not open the exception, and a still-invalid key keeps warning', async () => {
+    const { store, people, logs, logger, book } = await setup();
+    await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    await book.run({ seeds: [seed('user:u1', '10001'), seed('bad-key', '30003')], people, logger });
+    expect(logs.filter(line => line.includes('bad-key')).at(-1)).toContain('改正后的条目等待 Console 确认');
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u2', '30003')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+    logs.length = 0;
+    await book.run({ seeds: [seed('workroom', '10001')], people, logger });
+    expect(logs.some(line => line.includes('workroom') && line.includes('不是 Console 用户'))).toBe(true);
+    expect(logs.some(line => line.includes('已导入为'))).toBe(false);
+  });
+
+  it('a post-migration entry whose adapter was not loaded waits once it is (no unknown-adapter bypass)', async () => {
+    const { store, people, logger, book } = await setup();
+    await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    await book.run({ seeds: [seed('user:u2', '40004', { identity: undefined })], people, logger });
+    const state = await book.run({ seeds: [seed('user:u2', '40004')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+  });
+
+  it('records written by 1.4.0: corrected entries that waited for confirmation are imported on the next start', async () => {
+    const { store, people, logger, book, root } = await setup();
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(root, '.zhin'), { recursive: true });
+    const legacy = (key: string, extra: Record<string, unknown>) => ({ id: personalPrincipalImportId({ key, adapterId: 'qq-cap\0bot', subjectId: '10001' }),
+      consoleUserId: key.replace(/^user:/u, ''), adapterId: 'qq-cap\0bot', subjectId: '10001', ...extra });
+    await writeFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), JSON.stringify({ version: 1, migratedAt: 50, entries: [
+      legacy('workroom-admin', { status: 'skipped', reason: 'not-a-user', at: 50 }),
+      legacy('user:u1', { status: 'pending', reason: 'needs-confirmation', adapter: 'qq', at: 60 }),
+    ] }));
+    const state = await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'imported' });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeDefined();
+  });
+
+  it('names the account in the log, so one openid on two accounts is two lines (#1250 chat-roles-import-log-ambiguous)', async () => {
+    const { people, logs, logger, book } = await setup();
+    await book.run({ seeds: [], people, logger });
+    await book.run({ seeds: [at('qq-cap\0qq~102069707', 'user:u1', 'EA15'), at('qq-cap\0qq~1905256660', 'user:u1', 'EA15')], people, logger });
+    const lines = logs.filter(line => line.includes('等待 Console 确认'));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('qq:EA15（账号 102069707）');
+    expect(lines[1]).toContain('qq:EA15（账号 1905256660）');
+    expect(personalPrincipalSourceLabel({ adapterId: 'qq-cap', subjectId: 'x', adapter: 'qq' })).toBe('qq:x');
   });
 });
 

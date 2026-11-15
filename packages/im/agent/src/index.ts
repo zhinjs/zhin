@@ -954,8 +954,10 @@ export {
   formatAgentSurfaceInfoReport,
 } from './discovery/agent-surface-info.js';
 export type {
+  AgentSurfaceCounts,
   AgentSurfaceInfoReport,
   AgentSurfacePluginInfo,
+  AgentSurfaceSource,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
 

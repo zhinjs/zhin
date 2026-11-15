@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import {
+  formatDateTime,
   PLUGIN_CATEGORIES,
   PLUGIN_CATEGORY_LABELS,
   informativeKeywords,
@@ -81,7 +82,7 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
         const description = pickLocalizedText(market.descriptionI18n, 'zh-CN', pkg.description) || '无描述';
         // 作者取 package.json 的 author / maintainers；publisher 是发布账号（CI 发布时为机器人），不显示。
         const author = packageAuthorName(pkg) || '未知';
-        const date = pkg.date ? new Date(pkg.date).toLocaleDateString('zh-CN') : '未知';
+        const date = pkg.date ? formatDateTime(new Date(pkg.date), undefined, { part: 'date' }) : '未知';
 
         const badge = formatPackageBadge(classifyPackage(pkg));
 
@@ -141,7 +142,7 @@ export async function runPluginInfo(packageName: string) {
       output.line(`👤 作者: ${authors.length > 0 ? authors.join(', ') : '未知'}`);
       const publishedAt = info.time?.modified ?? info.time?.created;
       output.line(`📅 发布时间: ${publishedAt
-        ? new Date(publishedAt).toLocaleDateString('zh-CN')
+        ? formatDateTime(new Date(publishedAt), undefined, { part: 'date' })
         : '未知'}`);
       if (weeklyDownloads !== null) {
         output.line(`📈 周下载量: ${weeklyDownloads}`);
