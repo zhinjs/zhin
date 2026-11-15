@@ -237,6 +237,8 @@ export class InboundRuntime {
       const origin = classified?.origin;
       this.context.diagnostics?.step('origin', origin ?? 'unclassified');
       if (origin === 'self') {
+        // One of our own accounts posted the secret where others saw it: revoke it like any drop.
+        await this.#discardSecret(secret);
         ledger.report({ outcome: 'ignored_self', reason: 'self_echo', stage: 'ingress' });
         this.context.diagnostics?.route('self_echo');
         logger.debug(formatCompact({
@@ -572,13 +574,36 @@ export class InboundRuntime {
     }
   }
 
-  #nativeCarriesSecret(payload: unknown): boolean {
+  /**
+   * ADR 0060 §3.3 (#1289 review): an Endpoint event other than a message (native platform events,
+   * notices, requests and their comments, system events) that carries the secret is neither recorded
+   * nor dispatched to Handlers.
+   */
+  #withholdSecretEvent(event: EndpointEvent): boolean {
+    if (!this.#nativeCarriesSecret(event)) return false;
+    logger.debug(formatCompact({ op: 'native_secret_withheld', event: event.name, endpoint: String(event.endpoint.id) }));
+    return true;
+  }
+
+  #nativeCarriesSecret(event: EndpointEvent): boolean {
     const inspect = this.context.inboundSecret?.inspectNative;
     if (!inspect) return false;
-    try { return inspect.call(this.context.inboundSecret, payload) === true; } catch (error) {
+    try { return inspect.call(this.context.inboundSecret, event.payload, { name: event.name }) === true; } catch (error) {
       // Fail closed: an event that cannot be inspected is not dispatched while a secret is open.
       logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
       return true;
+    }
+  }
+
+  /**
+   * A withheld notice, request or system event was still seen on the platform (an admin reads a join
+   * request's comment): the guard revokes the secret it carries (#1291 review). `platform.receive` is
+   * not revoked here: the same message's `message.receive` still reaches the claim.
+   */
+  async #discardNativeSecret(event: EndpointEvent): Promise<void> {
+    const guard = this.context.inboundSecret;
+    try { await guard?.discardNative?.(event.payload, { name: event.name }); } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_discard_failed', error: logSafeError(error) }));
     }
   }
 
@@ -635,6 +660,10 @@ export class InboundRuntime {
   async #receiveCanonicalEndpointEvent(
     source: EndpointEvent<IncomingNotice | IncomingRequest | IncomingSystemEvent>,
   ): Promise<void> {
+    if (this.#withholdSecretEvent(source)) {
+      await this.#discardNativeSecret(source);
+      return;
+    }
     const lease = this.context.acquire();
     let active = true;
     let endpointLease: EndpointChildLease | undefined;
@@ -687,11 +716,7 @@ export class InboundRuntime {
   }
 
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
-    if (event.name === 'platform.receive' && this.#nativeCarriesSecret(event.payload)) {
-      // ADR 0060 §3.3: a native event carrying the claim code never reaches native Handlers.
-      logger.debug(formatCompact({ op: 'native_secret_withheld', endpoint: String(event.endpoint.id) }));
-      return;
-    }
+    if (this.#withholdSecretEvent(event)) return;
     let active = true;
     const lease = this.context.acquire();
     let endpointLease: EndpointChildLease | undefined;

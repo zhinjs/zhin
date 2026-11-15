@@ -243,16 +243,52 @@ it.each(['platform.receive', 'notice.receive', 'request.receive', 'system.receiv
 it('withholds a native event that carries an inbound secret from native Handlers (ADR 0060 §3.3)', async () => {
   const called = vi.fn();
   const inspectNative = vi.fn((payload: unknown) => JSON.stringify(payload).includes('SECRET'));
+  const discardNative = vi.fn();
   const f = await fixture(async () => undefined, defineLifecycleHandler({ event: 'platform.receive', handle: called }),
-    { match: () => undefined, inspectNative });
+    { match: () => undefined, inspectNative, discardNative });
   try {
     await f.endpoint[endpointSpec].events.platform('native.message', { text: 'claim SECRET' });
     expect(called).not.toHaveBeenCalled();
     await f.endpoint[endpointSpec].events.platform('native.message', { text: 'hello' });
     expect(called).toHaveBeenCalledTimes(1);
     expect(inspectNative).toHaveBeenCalledTimes(2);
+    // The same message's message.receive still reaches the claim: a native event revokes nothing.
+    expect(discardNative).not.toHaveBeenCalled();
   } finally { await f.close(); }
 });
+
+it.each(['notice.receive', 'request.receive', 'system.receive', 'native.custom'] as const)(
+  'withholds a %s event that carries an inbound secret from Handlers (#1289 review)', async name => {
+    const called = vi.fn();
+    const inspectNative = vi.fn((payload: unknown) => JSON.stringify(payload).includes('SECRET'));
+    const discardNative = vi.fn();
+    const f = await fixture(async () => undefined, defineLifecycleHandler({ event: name, handle: called }),
+      { match: () => undefined, inspectNative, discardNative });
+    const common = { id: 'event', timestamp: 100, metadata: {} };
+    const payload = (comment: string) => name === 'notice.receive'
+      ? { ...common, type: 'notice', name: 'notice.group.member_increase', conversation: { kind: 'group', id: 'room' }, metadata: { comment } }
+      : name === 'request.receive'
+        ? { ...common, type: 'request', name: 'request.group.join', actor: { id: 'alice' }, comment,
+          conversation: { kind: 'group', id: 'room' }, $approve() {}, $reject() {} }
+        : name === 'system.receive' ? { ...common, type: 'system', name: 'system.online', metadata: { comment } } : { comment };
+    try {
+      await f.endpoint[endpointSpec].events.emit(name, payload('认领 SECRET'));
+      expect(called).not.toHaveBeenCalled();
+      expect(inspectNative.mock.calls[0]![1]).toEqual({ name });
+      // A withheld notice / request / system event was seen on the platform: the secret is revoked (#1291 review).
+      if (name === 'native.custom') expect(discardNative).not.toHaveBeenCalled();
+      else {
+        expect(discardNative).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(discardNative.mock.calls[0]![0])).toContain('SECRET');
+        expect(discardNative.mock.calls[0]![1]).toEqual({ name });
+      }
+      await f.endpoint[endpointSpec].events.emit(name, payload('hello'));
+      expect(called).toHaveBeenCalledTimes(1);
+      expect(inspectNative).toHaveBeenCalledTimes(2);
+      expect(discardNative).toHaveBeenCalledTimes(name === 'native.custom' ? 0 : 1);
+    } finally { await f.close(); }
+  },
+);
 
 it('validates native event source incarnation before any Handler dispatch', async () => {
   const called = vi.fn();
