@@ -3,6 +3,9 @@ import { createText, type CreateLocale } from './messages.js';
 
 export const TEMPLATE_VALUES = ['default', 'life-assistant'] as const;
 export const CONFIG_FORMAT_VALUES = ['yaml', 'json'] as const;
+/** Optional extras for `--with` (ADR 0062 §2: process managers other than `zhin service install`). */
+export const WITH_VALUES = ['pm2'] as const;
+export type CreateWith = (typeof WITH_VALUES)[number];
 
 /**
  * Parsed create-zhin command line. Optional steps (database / adapters / AI)
@@ -21,6 +24,8 @@ export interface CreateArgs {
   readonly adapters?: readonly string[] | 'interactive';
   /** Bare `--ai`: run the shared AI wizard step. */
   readonly ai: boolean;
+  /** `--with pm2` (comma-separated, repeatable). */
+  readonly with: readonly CreateWith[];
 }
 
 const DATABASE_DIALECTS = DATABASE_DIALECT_DEFINITIONS.map((definition) => definition.dialect);
@@ -49,6 +54,7 @@ export function parseCreateArgs(args: readonly string[], locale?: CreateLocale):
   let database: CreateArgs['database'];
   let adapters: string[] | 'interactive' | undefined;
   let ai = false;
+  const extras: CreateWith[] = [];
   const seen = new Set<string>();
   const once = (flag: string) => {
     if (seen.has(flag)) throw new TypeError(createText(locale, 'create.error.optionRepeated', [flag]));
@@ -112,6 +118,15 @@ export function parseCreateArgs(args: readonly string[], locale?: CreateLocale):
         once(flag);
         ai = true;
         break;
+      case '--with': {
+        const value = takeValue();
+        if (value === undefined) throw new TypeError(createText(locale, 'create.error.optionValue', [flag, WITH_VALUES.join(' | ')]));
+        for (const name of value.split(',').map((part) => part.trim()).filter(Boolean)) {
+          const extra = readChoice(locale, flag, name, WITH_VALUES);
+          if (!extras.includes(extra)) extras.push(extra);
+        }
+        break;
+      }
       default:
         if (argument.startsWith('-')) throw new TypeError(createText(locale, 'create.error.unknownOption', [argument]));
         if (projectName !== undefined) throw new TypeError(createText(locale, 'create.error.extraName', [projectName, argument]));
@@ -119,5 +134,5 @@ export function parseCreateArgs(args: readonly string[], locale?: CreateLocale):
     }
   }
 
-  return { projectName, yes, skipInstall, template, configFormat, devSkills, database, adapters, ai };
+  return { projectName, yes, skipInstall, template, configFormat, devSkills, database, adapters, ai, with: extras };
 }

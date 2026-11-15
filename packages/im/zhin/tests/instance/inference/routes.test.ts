@@ -219,6 +219,41 @@ it('tells the operator how to set the Google Cloud project id when preparation r
   } finally { await http.close(); }
 });
 
+it('gives every failure a details object and a next step; an UNSUPPORTED_CLIENT refusal says so (#1270)', async () => {
+  const { InferenceAuthenticationError } = await import('@zhin.js/agent/runtime');
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
+  const accounts = {
+    prepareLogin: vi.fn(async () => { throw new InferenceAuthenticationError('preparation-failed',
+      { code: 'project-unavailable', status: 200, reason: 'UNSUPPORTED_CLIENT', step: 'onboard-operation' }); }),
+    beginLogin: vi.fn(async () => { throw new InferenceAuthenticationError('reauthorize'); }),
+    cancelLogin: vi.fn(async () => { throw new Error('PRIVATE internal failure'); }),
+  };
+  registerInferenceRoutes({ http, base: '/api',
+    acquire: () => ({ management: { account: async () => ({ id: 'account' }) }, accounts, sessions: {}, authenticationContract: async () => '1', release: () => {} }) as never,
+    owners: () => [{ id: 'host', label: '部署模型', kind: 'host' }],
+    principal: input => resolveInferenceManagementPrincipal({ ...input, hostOwnerId: 'host', bindings: {} }) });
+  const { origin } = await http.listen();
+  try {
+    const post = async (path: string, body: unknown) => {
+      const response = await fetch(`${origin}/api/agent/inference${path}`, { method: 'POST',
+        headers: { authorization: 'Bearer operator-fixture', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      return { status: response.status, payload: await response.json() };
+    };
+    const prepared = await post('/login/prepare', { accountId: 'account', expectedRevision: 2 });
+    expect(prepared.status).toBe(424);
+    expect(prepared.payload).toMatchObject({ code: 'preparation-failed',
+      details: { preparationCode: 'project-unavailable', step: 'onboard-operation', reason: 'UNSUPPORTED_CLIENT', upstreamStatus: 200 },
+      nextStep: { kind: 'action', action: 'set-project-id' } });
+    expect(prepared.payload.error).toContain('UNSUPPORTED_CLIENT');
+    expect(prepared.payload.error).toContain('Antigravity 直连目前可能卡在这一步');
+    const begun = await post('/login/begin', { accountId: 'account' });
+    expect(begun.payload).toMatchObject({ code: 'reauthorize', details: {}, nextStep: { kind: 'action', action: 'login' } });
+    const unknown = await post('/login/cancel', { accountId: 'account', loginId: 'x' });
+    expect(unknown.payload).toMatchObject({ code: 'unavailable', details: {}, nextStep: { kind: 'action', action: 'retry' } });
+    expect(JSON.stringify(unknown.payload)).not.toContain('PRIVATE');
+  } finally { await http.close(); }
+});
+
 it('adds a discovery-empty hint when the catalogue answers with zero models, and none otherwise', async () => {
   const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
   const discover = vi.fn()

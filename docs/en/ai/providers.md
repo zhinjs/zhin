@@ -200,6 +200,8 @@ These commands run only through the local gateway, are written to the Console au
 
 Claude subscription and Antigravity: experimental · no vendor support · may violate the vendor's terms · used at your own risk. Codex: OpenAI has not explicitly authorized third-party clients.
 
+**Direct Antigravity onboarding may currently stop at "finish preparation".** After a successful login, zhin still needs a Google Cloud project for the account: it reads the project the account already has and, when there is none, asks the upstream to onboard one. For some Antigravity accounts the upstream refuses this step with the reason code `UNSUPPORTED_CLIENT` (step `onboard-operation`). The Console account status and the attention inbox then show "Model account … is signed in but its preparation failed" with the step, reason code and upstream HTTP status; the `/login/prepare` error body carries `details` (`step`, `reason`, `upstreamStatus`) and a `nextStep` (`set-project-id`). What works is setting your own Google Cloud project ID (`projectId`, a string such as `my-project-123`) on the model service, saving, and finishing the preparation again, or using another way in. zhin does not make up a random project name for you. The reason of a failed preparation is written to `.zhin/runtime-failures.json`, so it is still shown after an instance restart, marked as recorded before the restart, until the next successful preparation.
+
 ## Calling from a plugin
 
 When a plugin needs to call a model directly, get a client bound to the current execution scope through `aiInferenceClientToken`:

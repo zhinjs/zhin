@@ -237,6 +237,8 @@ const CODE_ASSIST_METADATA = Object.freeze({ ideType: 'IDE_UNSPECIFIED', platfor
 const CODE_ASSIST_LEGACY_TIER = 'legacy-tier';
 /** `UserTierId.FREE`: uses a Google-managed project; naming a project in its onboardUser request is rejected upstream. */
 const CODE_ASSIST_FREE_TIER = 'free-tier';
+/** Google refuses this OAuth client for Code Assist onboarding (reported for Antigravity, #1250 / #1270). */
+const UNSUPPORTED_CLIENT_REASON = 'UNSUPPORTED_CLIENT';
 const TRANSIENT_PREPARATION_REASONS: ReadonlySet<string> = new Set(['preparation-timeout', 'onboarding-timeout', 'request-timeout', 'transport']);
 /** Long-running operation names are a single `operations/<id>` segment: no `/`, no dot-only (`.` / `..`) id. */
 const OPERATION_NAME = /^operations\/(?=[A-Za-z0-9_.-]*[A-Za-z0-9])[A-Za-z0-9_-][A-Za-z0-9_.-]{0,255}$/u;
@@ -381,7 +383,10 @@ export function createAntigravityOAuth(options: AntigravityPreparationOptions = 
             // Transient onboarding failures (deadlines, transport, upstream 5xx) are reported as such so a retry is suggested;
             // an upstream refusal ends as project-required (keeping its HTTP status and step), since a configured project is the remedy.
             if (onboardFailure && (TRANSIENT_PREPARATION_REASONS.has(onboardFailure.reason ?? '') || (onboardFailure.status ?? 0) >= 500)) throw onboardFailure;
-            throw new ProviderPreparationError('project-unavailable', { status: onboardFailure?.status ?? 200, reason: ineligibleReason ?? 'project-required',
+            // #1270: an upstream refusal of the client itself (`UNSUPPORTED_CLIENT`, seen for Antigravity onboarding)
+            // keeps its own reason, so the Console can say so instead of only asking for a project.
+            const refused = onboardFailure?.reason === UNSUPPORTED_CLIENT_REASON ? UNSUPPORTED_CLIENT_REASON : undefined;
+            throw new ProviderPreparationError('project-unavailable', { status: onboardFailure?.status ?? 200, reason: ineligibleReason ?? refused ?? 'project-required',
               step: onboardFailure?.step ?? (currentTierId ? 'onboard-operation' : 'load-code-assist') });
           }
         } else {

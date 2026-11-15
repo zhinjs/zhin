@@ -64,6 +64,10 @@ import {
   defineWorkspaceConversationTable,
   installConsoleIam,
   installHostConsoleTerminal,
+  listMcpServerStatus,
+  RuntimeFailureJournal,
+  startRuntimeFailureSync,
+  syncRuntimeFailures,
 } from './console/module.js';
 import { DEFAULT_HTTP_PORT, installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
@@ -248,7 +252,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // ADR 0060 P3: the Agent Host reads personal inference owners from the person ↔ Console links,
   // which the feature host (created below, before anything runs) loads.
   const chatPeopleRef: { current?: import('./chat-people.js').ChatPeople } = {};
+  // #1270: latest failure per account / Endpoint / MCP server, kept across restarts (instance-owned file).
+  const runtimeFailures = RuntimeFailureJournal.open(options.root, { warn: message => getLogger('runtime').warn(message) });
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
+    failureJournal: runtimeFailures,
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
     chatLinks: () => {
       const people = chatPeopleRef.current;
@@ -591,7 +598,23 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     consoleIam: consoleIamService,
     featureStores: featureHost.stores,
     ...(agentHost ? { agentInsights: agentHost } : {}),
+    runtimeFailures,
   });
+  const runtimeFailureSources = {
+    journal: runtimeFailures,
+    ...(agentHost ? { prune: () => agentHost.pruneFailureJournal() } : {}),
+    endpoints: () => im.endpoints.list(),
+    mcpServers: () => {
+      const lease = host.runtime.snapshots.acquire();
+      try {
+        return listMcpServerStatus(options.root, lease.value).flatMap(row => typeof row.name === 'string'
+          ? [{ name: row.name, connected: row.connected === true,
+            ...(row.lastError ? { lastError: row.lastError as { category: string; message: string; at: number } } : {}) }]
+          : []);
+      } finally { lease.release(); }
+    },
+  };
+  const stopRuntimeFailureSync = startRuntimeFailureSync(runtimeFailureSources);
   if (agentHost) assistantStatus.bindProviderDisplay(() => agentHost.providerDisplay());
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
@@ -659,6 +682,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // No hot plugin apply may start a generation transaction while the Runtime stops.
       disposePluginApply();
       disposeReadiness();
+      stopRuntimeFailureSync();
+      syncRuntimeFailures({ journal: runtimeFailures, endpoints: runtimeFailureSources.endpoints, mcpServers: runtimeFailureSources.mcpServers });
       disposeConsoleControlPlane();
       consoleTerminal?.close();
       await consoleIam?.dispose();
@@ -681,6 +706,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
               await stage('database', () => databaseHost.stop());
             } finally {
               pluginLifecycleStore.dispose();
+              await runtimeFailures.close().catch(() => undefined);
               complete();
             }
           }
@@ -863,6 +889,12 @@ interface ConfiguredAgentHost {
   personalPrincipalSeeds(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot | undefined): readonly import('./chat-personal-principals.js').PersonalPrincipalSeed[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
+  /** Drops journaled account / model failures that are no longer current (#1270). */
+  pruneFailureJournal(): Promise<void>;
+  /** Host model accounts that need an operator (#1270). */
+  accountAttention(): Promise<readonly import('./console/module.js').InferenceAccountAttentionRow[]>;
+  /** Effect of each `purposes.agents` key in the generation of `lease` (#1270). */
+  purposeEffects(lease: import('@zhin.js/plugin-runtime').SnapshotLease): Promise<Readonly<Record<string, import('./console/module.js').PurposeEffectRow>>>;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
   attach(
     snapshots: import('@zhin.js/plugin-runtime').SnapshotReader,
@@ -889,6 +921,8 @@ async function loadConfiguredAgentHost(options: Readonly<{
   resolveSource: (reference: string | import('@zhin.js/plugin-runtime').EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
   /** ADR 0060 P3: personal inference owners come from these links (late-bound: the chat stores load later). */
   chatLinks?: () => ChatConsoleLinks | undefined;
+  /** #1270: preparation and model call failures are written through it. */
+  failureJournal?: import('@zhin.js/agent/runtime').InferenceFailureJournal;
 }>): Promise<ConfiguredAgentHost | undefined> {
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
@@ -942,6 +976,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
   };
   const consoleUserOf = (principalId: string | undefined) => principalId ? /^user:(.+)$/u.exec(principalId)?.[1] : undefined;
   const inference = new agentHost.HostInference({ projectRoot, database: options.database, resolveSource: options.resolveSource,
+    ...(options.failureJournal ? { failureJournal: options.failureJournal } : {}),
     personalOwners: () => (options.chatLinks?.()?.linkedUsers() ?? []).flatMap(user => linkedOwners(user)),
     snapshots: () => {
       if (!snapshotReader) throw new Error('Inference Snapshot reader is not attached');
@@ -977,6 +1012,9 @@ async function loadConfiguredAgentHost(options: Readonly<{
         ...(identity ? { identity } : {}), ...(owner.rootId !== inference.rootId ? { foreignRoot: true } : {}) });
     })),
     ambientModels: input => inference.ambientModels(input),
+    accountAttention: () => inference.accountAttention(),
+    pruneFailureJournal: () => inference.pruneFailureJournal(),
+    purposeEffects: lease => inference.purposeEffects(lease),
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),

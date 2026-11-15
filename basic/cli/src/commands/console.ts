@@ -68,8 +68,12 @@ export interface ConsoleAdmin {
   status(): Promise<SetupStatus>;
   drivers(): Promise<readonly SetupDriver[]>;
   testDatabase(input: SetupDatabaseInput): Promise<DatabaseProbe>;
-  /** `switched`: the gateway already uses the new database (and restarts the instance). */
-  applyDatabase(input: SetupDatabaseInput): Promise<{ notice: string; switched: boolean; restarting?: boolean }>;
+  /**
+   * `switched`: the gateway already uses the new database (and restarts the instance).
+   * `changed: false`: the choice matches the database in use; nothing was written (an older
+   * gateway leaves it out).
+   */
+  applyDatabase(input: SetupDatabaseInput): Promise<{ notice: string; switched: boolean; restarting?: boolean; changed?: boolean }>;
   createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }>;
   readonly users: ConsoleUserAdmin;
   close(): Promise<void>;
@@ -129,7 +133,10 @@ export async function openProjectConsole(projectRoot: string): Promise<ConsoleAd
     status: () => setup.status(),
     drivers: () => setup.drivers(),
     testDatabase: input => setup.testDatabase(input),
-    applyDatabase: async input => ({ notice: (await setup.applyDatabase(input)).notice, switched: false }),
+    applyDatabase: async input => {
+      const applied = await setup.applyDatabase(input);
+      return { notice: applied.notice, switched: false, changed: applied.changed };
+    },
     createOwner: input => setup.createOwner(input),
     users,
     close: async () => { iam.stop(); await store.close(); },
@@ -199,6 +206,8 @@ export const defaultConsoleCliIo: ConsoleCliIo = {
 
 export interface ConsoleInitOptions {
   readonly status?: boolean;
+  /** With `status`: print the status as JSON (scripts) instead of the readable summary. */
+  readonly json?: boolean;
   readonly database?: string;
   /** `--database-<field>` values keyed by field name. */
   readonly connection?: Readonly<Record<string, string>>;
@@ -227,6 +236,15 @@ function firstLine(text: string): string {
   return text.replace(/\r?\n$/u, '').split(/\r?\n/u)[0] ?? '';
 }
 
+/** The readable `zhin console init --status` (JSON with `--json`). */
+export function renderSetupStatus(status: SetupStatus): string[] {
+  const facts = Object.entries(status.database.summary ?? {}).map(([key, value]) => `${key} ${value}`).join('，');
+  const database = `数据库：${status.database.dialect}（${status.database.source === 'config' ? '配置文件' : '默认'}${facts ? `，${facts}` : ''}）`;
+  return status.setupRequired
+    ? ['Console 尚未初始化：还没有所有者账号。', database, '运行 zhin console init 创建所有者，或打开 zhin start 打印的 Console 链接完成初始化。']
+    : ['Console 已初始化：已有所有者账号。', database, '管理用户：zhin console user list / create / passwd'];
+}
+
 /** `zhin console init`; returns the process exit code. */
 export async function runConsoleInit(
   projectRoot: string,
@@ -234,6 +252,10 @@ export async function runConsoleInit(
   io: ConsoleCliIo = defaultConsoleCliIo,
   open: Opener = openConsoleAdmin,
 ): Promise<number> {
+  if (options.json && !options.status) {
+    io.error('--json 只能与 --status 一起使用');
+    return 1;
+  }
   if (options.resetStore) {
     const reset = await resetStoreStep(projectRoot, options, io);
     if (reset !== 0) return reset;
@@ -250,7 +272,8 @@ export async function runConsoleInit(
   try {
     const status = await project.status();
     if (options.status) {
-      io.log(JSON.stringify(status, null, 2));
+      if (options.json) io.log(JSON.stringify(status, null, 2));
+      else for (const line of renderSetupStatus(status)) io.log(line);
       return 0;
     }
     if (!status.setupRequired) {
@@ -343,6 +366,7 @@ export async function runConsoleInit(
       return 1;
     }
     let switched = false;
+    let databaseChanged = false;
     if (databaseInput) {
       const tested = await project.testDatabase(databaseInput);
       if (!tested.ok) {
@@ -351,18 +375,24 @@ export async function runConsoleInit(
       }
       const applied = await project.applyDatabase(databaseInput);
       switched = applied.switched;
-      io.log(`已写入数据库配置。${applied.notice}`);
-      if (switched) {
-        // Accounts stay in .zhin/gateway.db (ADR 0059); only the instance moves to the new database.
-        io.log(applied.restarting ? '网关正在重启实例以使用新数据库（Console 账号仍在 .zhin/gateway.db）。' : '已写入；实例下次启动时使用新数据库（Console 账号仍在 .zhin/gateway.db）。');
+      databaseChanged = applied.changed !== false;
+      if (!databaseChanged) {
+        // #1250: the database in use was chosen again — nothing written, nothing to restart.
+        io.log(`数据库保持当前设置（${status.database.dialect}），未改动配置，无需重启。`);
       } else {
-        // Continue directly (the accounts are in .zhin/gateway.db either way).
-        await project.close();
-        project = await open(projectRoot);
-      }
-      if (!(await project.status()).setupRequired) {
-        io.error('已有所有者：请改用 `zhin console user …`。');
-        return 1;
+        io.log(`已写入数据库配置。${applied.notice}`);
+        if (switched) {
+          // Accounts stay in .zhin/gateway.db (ADR 0059); only the instance moves to the new database.
+          io.log(applied.restarting ? '网关正在重启实例以使用新数据库（Console 账号仍在 .zhin/gateway.db）。' : '已写入；实例下次启动时使用新数据库（Console 账号仍在 .zhin/gateway.db）。');
+        } else {
+          // Continue directly (the accounts are in .zhin/gateway.db either way).
+          await project.close();
+          project = await open(projectRoot);
+        }
+        if (!(await project.status()).setupRequired) {
+          io.error('已有所有者：请改用 `zhin console user …`。');
+          return 1;
+        }
       }
     }
     await recordOnboardingSteps(onboarding, {
@@ -371,7 +401,7 @@ export async function runConsoleInit(
     const { user } = await project.createOwner({ username, password, displayName });
     io.log(`已创建所有者 ${user.username}。现在可以用它登录 Console。`);
     await recordOnboardingSteps(onboarding, {}, setupOnboardingDeps.io);
-    if (databaseInput && !switched && await io.hostRunning(projectRoot)) {
+    if (databaseChanged && !switched && await io.hostRunning(projectRoot)) {
       io.log('检测到 Host 正在运行：请重启它以使用新的数据库。');
     }
     return 0;
@@ -582,6 +612,7 @@ function finish(code: number): void {
 const initCommand = new Command('init')
   .description('初始化 Console：选择数据库并创建第一个所有者（与 Console 初始化向导相同）')
   .option('--status', '只显示初始化状态')
+  .option('--json', '与 --status 同用：以 JSON 输出（供脚本使用）')
   .option('--database <dialect>', '数据库：sqlite / mysql / pg / mongodb')
   .option('--database-password-env <VAR>', '数据库密码引用已有环境变量（配置里写入 ${VAR}；推荐）')
   .option('--database-password-stdin', '从标准输入第一行读取数据库密码（写入 .env，配置里写 ${VAR}；推荐）')
@@ -605,6 +636,7 @@ initCommand.action(async (raw: Record<string, unknown>) => {
   }
   finish(await runConsoleInit(process.cwd(), {
     status: raw.status === true,
+    json: raw.json === true,
     ...(typeof raw.database === 'string' ? { database: raw.database } : {}),
     connection,
     ...(typeof raw.databasePasswordEnv === 'string' ? { passwordEnv: raw.databasePasswordEnv } : {}),

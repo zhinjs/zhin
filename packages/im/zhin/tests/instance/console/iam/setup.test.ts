@@ -239,6 +239,16 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
     expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).toMatch(/database:\s*\n\s+dialect: sqlite\s*\n\s+filename: data\/other\.sqlite/u);
   });
 
+  it('web: choosing the database in use again writes nothing and does not restart (#1250)', async () => {
+    const root = await project();
+    const host = await startHost(root, { token: 'bootstrap-secret' });
+    const saved = await host.call('POST', '/auth/setup/database', { dialect: 'sqlite', connection: {} }, 'bootstrap-secret');
+    expect(saved.body.data).toMatchObject({ restarting: false, changed: false, restartRequired: false, notice: '' });
+    expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).not.toContain('database:');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    expect(host.requestRestart).not.toHaveBeenCalled();
+  });
+
   it('writes secret fields as ${ZHIN_DATABASE_*} references and keeps other .env lines', async () => {
     const root = await project();
     await writeFile(join(root, '.env'), 'KEEP=1\nZHIN_DATABASE_PASSWORD=old\n');
@@ -269,8 +279,13 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
     // ADR 0053 §5: init records onboarding steps 1–2 on the same state file as the Console.
     expect(JSON.parse(await readFile(join(root, '.zhin/onboarding.json'), 'utf8')).steps).toEqual({ database: 'done', owner: 'done', ai: 'pending', adapters: 'pending' });
     const status = cliIo();
-    expect(await runConsoleInit(root, { status: true }, status)).toBe(0);
+    expect(await runConsoleInit(root, { status: true, json: true }, status)).toBe(0);
     expect(JSON.parse(status.logs[0]!)).toMatchObject({ setupRequired: false, database: { dialect: 'sqlite', source: 'config' } });
+    // #1250 console-init-status-json: without --json the status reads as sentences.
+    const readable = cliIo();
+    expect(await runConsoleInit(root, { status: true }, readable)).toBe(0);
+    expect(readable.logs[0]).toBe('Console 已初始化：已有所有者账号。');
+    expect(readable.logs[1]).toContain('数据库：sqlite（配置文件，filename .zhin/accounts.sqlite');
     const again = cliIo(`${PASSWORD}\n`);
     expect(await runConsoleInit(root, { owner: 'bob', passwordStdin: true, yes: true }, again)).toBe(1);
     expect(again.errors[0]).toContain('zhin console user');

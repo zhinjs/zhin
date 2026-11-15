@@ -67,7 +67,7 @@ https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<初始
 | 1、2 | `zhin console init`；非交互：`printf '%s\n' "$PASSWORD" \| zhin console init --yes --owner admin --password-stdin`（可加 `--database <dialect> --database-<字段> <值>`） |
 | 3 | `zhin setup --ai` |
 | 4 | `zhin setup --adapters` |
-| 查看状态 | `zhin console init --status` |
+| 查看状态 | `zhin console init --status`（脚本用 `--status --json`） |
 
 ## 相关
 

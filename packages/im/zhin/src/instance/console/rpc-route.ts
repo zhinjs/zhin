@@ -81,7 +81,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   // Raw reads of plugins / config / MCP / logs are shared between requests (15 s or until the
   // project files or the runtime generation change); filtering below stays per principal.
   const attentionCache = new AttentionSourceCache({ ...(attentionSources.revision ? { revision: attentionSources.revision } : {}) });
-  const attentionWarnings = new AttentionWarnings(message => attentionLogger.warn(message));
+  const attentionWarnings = new AttentionWarnings(message => attentionLogger.warn(message), { debug: message => attentionLogger.debug(message) });
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;

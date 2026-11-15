@@ -203,6 +203,8 @@ zhin ai account test <账号 id>
 
 Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担。Codex：未经 OpenAI 对第三方客户端的明确授权。
 
+**Antigravity 直连目前可能卡在「完成准备」。** 登录成功后，zhin 还要为账号取得一个 Google Cloud 项目：先读取账号已有的项目，没有时再请求上游自动开通（onboarding）。对部分 Antigravity 账号，上游会直接拒绝这一步，原因码是 `UNSUPPORTED_CLIENT`（步骤 `onboard-operation`）。这时 Console 的账号状态和「需要你处理」会显示「模型账号 … 已登录，但准备未完成」，并给出步骤、原因码和上游 HTTP 状态；`/login/prepare` 的错误体带 `details`（`step`、`reason`、`upstreamStatus`）和 `nextStep`（`set-project-id`）。可行的做法是在该模型服务的配置里填写自己的 Google Cloud 项目 ID（`projectId`，字符串形式如 `my-project-123`），保存后再点「完成准备」；或改用其他接入方式。zhin 不会替你生成随机项目名。准备失败的原因会写入 `.zhin/runtime-failures.json`，实例重启后仍可看到，标为「重启前记录」，直到下一次准备成功。
+
 ## 插件调用
 
 插件需要直接调用模型时，通过 `aiInferenceClientToken` 获取绑定到当前执行作用域的客户端：
