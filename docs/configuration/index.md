@@ -464,7 +464,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 模型管理中的 perception 用途让另一个 Profile 先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
+`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 模型管理中的 perception 用途让另一个 Profile 先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。配置后，系统提示会附一段知识库索引（文件名与一、二级标题，约 1500 字符以内，标注为数据），并提示模型关于本机器人、本项目的问题先查知识库；索引与检索共用缓存，目录文件变化时失效。
 
 `ai.remoteAgents`、`ai.workroom` / `ai.workrooms` 已随 ADR 0048 删除，启动时遇到会直接报错。远程 Agent 改在 `a2a.mailbox.peers` 声明；多 Bot 共享的群或频道改在 `ai.venues` 声明；Agent 之间能联系谁、单次协作预算上限写在 `agents/<name>/agent.json` 的 `collaboration`。用法见[多 Agent 协作与场所](../ai/multi-agent-harness.md)。
 

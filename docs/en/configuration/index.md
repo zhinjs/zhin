@@ -471,7 +471,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` governs multimodal input and output. When the main model cannot see images, the perception purpose in model management selects a Profile to describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
+`ai.multimodal` governs multimodal input and output. When the main model cannot see images, the perception purpose in model management selects a Profile to describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root. With it configured, the system prompt carries a knowledge base index (file names with level-1 and level-2 headings, within about 1,500 characters, marked as data) and tells the model to search the knowledge base first for questions about this bot or project; the index shares the search cache, which is dropped when files in the directory change.
 
 `ai.remoteAgents` and `ai.workroom` / `ai.workrooms` were removed with ADR 0048; startup fails if any of them is present. Declare remote Agents under `a2a.mailbox.peers`, groups or channels shared by several Bots under `ai.venues`, and each Agent's contacts and per-collaboration budget ceiling under `collaboration` in `agents/<name>/agent.json`. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md).
 

@@ -9,6 +9,8 @@ keywords:
   - console page
   - 插件开发
   - 加命令
+  - 写插件功能
+  - 加工具
   - defineCommand
 tags:
   - zhin

@@ -54,6 +54,7 @@ import {
   guardedReply,
   labelSkillInstructions,
   recallTurnMemory,
+  knowledgeIndexSection,
   hardGateOptions,
   type BufferedExecution,
   type FullAgentTurnEngineOptions,
@@ -301,6 +302,7 @@ async function* runInteractiveTurn(
     context.capabilities.skills,
     context.selection.agent,
     context.capabilities.tools,
+    { text: prep.turnUser.rawContent, loadedSkills: sessionSnapshot.loadedSkills },
   );
   if (capabilityContext.stable) {
     // Only sender-neutral (scene-tier) capabilities stay in the cached system prefix, so master and
@@ -313,6 +315,18 @@ async function* runInteractiveTurn(
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
       inject: () => fillPromptSlots(capabilityContext.stable, agentNickname),
+    });
+  }
+  const knowledgeIndex = await knowledgeIndexSection(options.knowledgeIndex, plan.capabilities, context.turn.signal);
+  if (knowledgeIndex) {
+    // Project files, not session facts: it stays in the cached prefix and changes only when they do.
+    turnSegments.push({
+      id: '§11b_knowledge_index',
+      kind: 'platform',
+      weight: BOOTSTRAP_PROMPT_ORDER.task - 2,
+      budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat - 1 : BOOTSTRAP_PROMPT_ORDER.task - 1,
+      retention: 'preferred',
+      inject: () => knowledgeIndex,
     });
   }
   const promptRuntime = Object.freeze({

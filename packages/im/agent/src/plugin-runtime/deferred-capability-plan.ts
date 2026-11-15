@@ -130,6 +130,59 @@ export function primeAgentSkillForIntent(options: Readonly<{
   return Object.freeze({ snapshot: withTools, projected: snapshot, skill });
 }
 
+/** Most public Skills one turn's hint names (#1250 b27). */
+export const PUBLIC_SKILL_HINT_MAX = 2;
+
+/**
+ * Public Skills whose frontmatter keywords occur in the current intent: the best-scoring ones (at
+ * most {@link PUBLIC_SKILL_HINT_MAX}), already loaded ones excluded. Only a hint for the prompt
+ * (#1250 b27): public Skills are third-party guidance and are never activated by keyword, because
+ * activation injects their instructions and unlocks their tools for the session (see
+ * {@link primeAgentSkillForIntent}); the model still decides whether to `load_skill`.
+ * ASCII keywords match whole ASCII words only, so `pr` does not match `prompt` but does match `写PR`.
+ */
+export function suggestPublicSkillsForIntent(
+  skills: readonly SkillDescriptor[],
+  intent: string,
+  loadedSkills: readonly string[] = [],
+): readonly SkillDescriptor[] {
+  const haystack = intent.normalize('NFKC').toLocaleLowerCase().trim();
+  if (!haystack) return Object.freeze([]);
+  const loaded = new Set(loadedSkills);
+  const scored = skills
+    .filter((skill) => !skill.agentName && skill.keywords?.length
+      && !loaded.has(skill.qualifiedName) && !loaded.has(skill.name))
+    .map((skill) => ({ skill, score: wordAffinity(skill.keywords ?? [], haystack) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score
+      || left.skill.qualifiedName.localeCompare(right.skill.qualifiedName));
+  const best = scored[0]?.score;
+  return Object.freeze(scored
+    .filter((entry) => entry.score === best)
+    .slice(0, PUBLIC_SKILL_HINT_MAX)
+    .map((entry) => entry.skill));
+}
+
+const ASCII_KEYWORD = /^[\x20-\x7e]+$/u;
+
+function wordAffinity(keywords: readonly string[], normalizedIntent: string): number {
+  let score = 0;
+  for (const value of new Set(keywords)) {
+    const keyword = value.normalize('NFKC').toLocaleLowerCase().trim();
+    if (!keyword) continue;
+    const hit = ASCII_KEYWORD.test(keyword)
+      // CJK text has no spaces: only a neighbouring ASCII letter or digit breaks a word match.
+      ? new RegExp(`(?<![a-z0-9])${escapeRegExp(keyword)}(?![a-z0-9])`, 'u').test(normalizedIntent)
+      : normalizedIntent.includes(keyword);
+    if (hit) score += [...keyword].length;
+  }
+  return score;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 /** Model recommendation never enlarges the immutable, already-authorized projection. */
 export async function primeSkillsForIntent(options: Readonly<{
   capabilities: Pick<AgentCapabilities, 'tools' | 'skills'>;

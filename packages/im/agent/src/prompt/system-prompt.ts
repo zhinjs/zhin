@@ -24,7 +24,7 @@ import {
   CHAT_STYLE_RULES,
   CHAT_WORKSPACE_TASK_RULES,
 } from './rules/index.js';
-import { triggerSentence } from '../skill/capability-catalog.js';
+import { formatSkillCatalogEntry } from '../skill/capability-catalog.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { scopeBootstrapText, scopeBootstrapDocument, bootstrapSceneFromTurn, type BootstrapScene } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
@@ -179,17 +179,19 @@ function readAttr(attrs: string, name: string): string | undefined {
   return end >= 0 ? attrs.slice(valueStart, end) : undefined;
 }
 
-/** toolSearch 编排层：技能目录仅 name + 短触发说明，不含全文 desc XML */
+/** toolSearch 编排层：技能目录仅 name + 摘要、Use when 与触发词，不含全文 desc XML */
 function buildResourceHubSkillsCatalog(
   skillsSummaryXML: string,
   skillRegistry: SkillRegistry | null,
 ): string | null {
-  let entries = skillsSummaryXML ? parseSkillsSummaryXML(skillsSummaryXML) : [];
+  let entries: Array<{ name: string; available: boolean; requires?: string; desc: string; keywords?: readonly string[] }> =
+    skillsSummaryXML ? parseSkillsSummaryXML(skillsSummaryXML) : [];
   if (entries.length === 0 && skillRegistry?.size) {
     entries = skillRegistry.getAll().map(s => ({
       name: s.name,
       available: true,
       desc: s.description,
+      ...(s.keywords?.length ? { keywords: s.keywords } : {}),
     }));
   }
   if (entries.length === 0) return null;
@@ -203,7 +205,7 @@ function buildResourceHubSkillsCatalog(
       lines.push(` - ${e.name} (unavailable${req})`);
       continue;
     }
-    lines.push(` - ${e.name}: ${triggerSentence(e.desc)}`);
+    lines.push(` ${formatSkillCatalogEntry({ name: e.name, description: e.desc, ...(e.keywords?.length ? { keywords: e.keywords } : {}) })}`);
   }
   return lines.join('\n');
 }

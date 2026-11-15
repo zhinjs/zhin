@@ -122,6 +122,7 @@ export class AgentHostPublicationCoordinator {
       bootstrapContext: options.bootstrapText,
       contextFiles: options.contextFiles,
       ...(options.bootstrap ? { bootstrap: options.bootstrap } : {}),
+      ...(agent.knowledgeIndex ? { knowledgeIndex: agent.knowledgeIndex } : {}),
     }));
   }
 }
