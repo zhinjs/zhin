@@ -68,6 +68,10 @@ describe('package-manager command resolution', () => {
     expect(translatePackageManagerArgs('npm', ['install', '--frozen-lockfile'])).toEqual(['ci']);
     expect(translatePackageManagerArgs('yarn', ['install'])).toEqual(['install']);
     expect(translatePackageManagerArgs('pnpm', ['update', 'pg'])).toEqual(['update', 'pg']);
+    expect(translatePackageManagerArgs('pnpm', ['update', '-r'])).toEqual(['update', '-r']);
+    expect(translatePackageManagerArgs('pnpm', ['update', '-r', 'pg'])).toEqual(['update', '-r', 'pg']);
+    expect(translatePackageManagerArgs('npm', ['update', '-r', 'pg'])).toEqual(['update', 'pg']);
+    expect(() => translatePackageManagerArgs('pnpm', ['add', '-r', 'pg'])).toThrow();
     expect(translatePackageManagerArgs('yarn', ['update', 'pg'])).toEqual(['upgrade', 'pg']);
     expect(translatePackageManagerArgs('npm', ['update'])).toEqual(['update']);
     expect(() => translatePackageManagerArgs('pnpm', ['install', '--ignore-scripts=false'])).toThrow();

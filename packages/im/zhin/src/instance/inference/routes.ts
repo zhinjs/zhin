@@ -66,18 +66,21 @@ export class ConnectionTestRateLimitedError extends Error {
 }
 
 /** Default connection-test budget per account: 6 per minute. */
-export const CONNECTION_TEST_RATE_LIMIT = Object.freeze({ limit: 6, windowMs: 60_000 });
+export const CONNECTION_TEST_RATE_LIMIT = Object.freeze({ limit: 6, windowMs: 60_000, maxKeys: 1_024 });
 
 /**
  * Sliding-window limiter keyed by account: every connection test is a real (billed) model request,
- * so one account cannot be probed in a loop through the Console or CLI.
+ * so one account cannot be probed in a loop through the Console or CLI. At most `maxKeys` keys are
+ * tracked; beyond that the key whose last test is oldest is dropped, so memory stays bounded.
  */
 export function createConnectionTestLimiter(
-  options: Readonly<{ limit?: number; windowMs?: number; now?: () => number }> = {},
+  options: Readonly<{ limit?: number; windowMs?: number; now?: () => number; maxKeys?: number }> = {},
 ): (key: string) => void {
   const limit = options.limit ?? CONNECTION_TEST_RATE_LIMIT.limit;
   const windowMs = options.windowMs ?? CONNECTION_TEST_RATE_LIMIT.windowMs;
+  const maxKeys = Math.max(1, options.maxKeys ?? CONNECTION_TEST_RATE_LIMIT.maxKeys);
   const now = options.now ?? Date.now;
+  // Insertion order = order of each key's latest test (a key is re-inserted on every test).
   const calls = new Map<string, number[]>();
   return (key: string) => {
     const at = now();
@@ -87,13 +90,18 @@ export function createConnectionTestLimiter(
     }
     const recent = calls.get(key) ?? [];
     if (recent.length >= limit) throw new ConnectionTestRateLimitedError(Math.max(1, recent[0]! + windowMs - at));
+    calls.delete(key);
+    // Dropping the oldest key frees its budget early. Accepted: only existing accounts and
+    // profiles are keys, so filling the map to push one out needs more than `maxKeys` of them —
+    // and creating accounts or profiles already takes management (host administrator) rights.
+    while (calls.size >= maxKeys) calls.delete(calls.keys().next().value!);
     calls.set(key, [...recent, at]);
   };
 }
 
 export interface InferenceRouteOptions {
   /** Connection-test budget per account (`/probe`, `/account/test`); default {@link CONNECTION_TEST_RATE_LIMIT}. */
-  readonly connectionTestRateLimit?: Readonly<{ limit?: number; windowMs?: number; now?: () => number }>;
+  readonly connectionTestRateLimit?: Readonly<{ limit?: number; windowMs?: number; now?: () => number; maxKeys?: number }>;
   readonly http: HttpHost;
   readonly base: string;
   readonly acquire: () => InferenceManagementLease;
@@ -533,9 +541,11 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
     if (!lease.probe) throw new InferenceManagementError('unavailable');
     const body = object(await readJsonBody(request));
     const profileId = text(body.profileId);
-    // Counted per account (a profile without one is its own key), shared with /account/test.
-    const accountId = (await lease.management.graph()).profiles[profileId]?.accountId;
-    limitConnectionTest(accountId ? `account:${accountId}` : `profile:${profileId}`);
+    // Counted per account (a profile without one is its own key), shared with /account/test. Only
+    // an existing profile is counted: an unknown id sends no model request and must not grow the map.
+    const { profiles } = await lease.management.graph();
+    const profile = Object.prototype.hasOwnProperty.call(profiles, profileId) ? profiles[profileId] : undefined;
+    if (profile) limitConnectionTest(profile.accountId ? `account:${profile.accountId}` : `profile:${profileId}`);
     return lease.probe({ profileId, signal });
   });
   register('POST', '/account/test', async ({ lease, principal, request, signal, consolePrincipal }) => {

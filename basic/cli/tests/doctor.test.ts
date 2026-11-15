@@ -17,6 +17,13 @@ vi.mock('../src/utils/gateway.js', async importOriginal => ({
   probeGateway: async () => runningGateway.current,
 }));
 
+// Runtime state read over the gateway socket (#1250); unavailable unless a test sets it.
+const runtime = vi.hoisted(() => ({ current: undefined as undefined | Record<string, unknown> }));
+vi.mock('../src/utils/runtime-state.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/utils/runtime-state.js')>();
+  return { ...actual, readRuntimeState: async () => runtime.current ?? actual.runtimeStateUnavailable('测试中未连接') };
+});
+
 async function runDoctor(setup: (directory: string) => void, flags: string[] = []): Promise<{ output: string; directory: string }> {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-run-'));
   const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
@@ -471,5 +478,125 @@ describe('doctor: the effective HTTP port (#1250)', () => {
     try {
       expect(output).toContain('端口 8068');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => {
+  afterEach(() => { runningGateway.current = undefined; runtime.current = undefined; });
+
+  it('lists each attention item and unreadable source as a warning, never 「所有检查通过」', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [] },
+      attention: {
+        available: true,
+        items: [
+          { kind: 'endpoint.offline', severity: 'danger', title: 'icqq 账号 1659488338 离线', detail: '从未上线', source: 'endpoints' },
+          { kind: 'mcp.disconnected', severity: 'warning', title: 'MCP 服务 github 未连接', detail: '401', source: 'mcp' },
+        ],
+        unavailable: [{ source: 'logs', reason: 'store busy' }],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：icqq 账号 1659488338 离线: 从未上线');
+      expect(output).toContain('需要你处理：MCP 服务 github 未连接: 401');
+      expect(output).toContain('来源「logs」暂时无法读取（store busy）');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('warns when the attention list cannot be read', async () => {
+    runningGateway.current = gatewayInfo(true);
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('无法读取 Console「需要你处理」：测试中未连接');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('without a gateway, shows .zhin/runtime-failures.json as 「上次运行」', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.mkdirSync(path.join(dir, '.zhin'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.zhin', 'runtime-failures.json'), JSON.stringify({ version: 1, entries: [
+        { source: 'mcp', subject: 'github', code: 'connect-failed', category: 'auth', message: '401 Unauthorized', firstAt: 1, lastAt: Date.UTC(2026, 10, 14), count: 3 },
+        { source: 'endpoint', subject: 'icqq/1659488338', code: 'start-failed', category: 'config', message: '缺少 password', firstAt: 1, lastAt: 1, count: 1 },
+      ] }));
+    });
+    try {
+      expect(output).toContain('上次运行: MCP 服务 github：401 Unauthorized（connect-failed，共 3 次，最近 2026-11-14T00:00:00.000Z）');
+      expect(output).toContain('上次运行: 适配器账号 icqq/1659488338：缺少 password');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('reports the gateway version skew with the exact restart command', async () => {
+    runningGateway.current = { ...gatewayInfo(true), gateway: { ...gatewayInfo(true).gateway, version: '0.0.1' } };
+    const { output, directory } = await runDoctor(dir => {
+      fs.mkdirSync(path.join(dir, 'node_modules', '@zhin.js', 'gateway'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'node_modules', '@zhin.js', 'gateway', 'package.json'), JSON.stringify({ name: '@zhin.js/gateway', version: '1.4.0' }));
+    });
+    try {
+      expect(output).toContain('网关版本: 网关版本不一致：运行中 v0.0.1，已安装 v1.4.0');
+      expect(output).toContain('zhin restart --gateway');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+describe('doctor: summary and --fix (#1250 doctor-fix-noop-silent)', () => {
+  it('passes only without warnings and errors', async () => {
+    const { summarizeDoctorResults } = await import('../src/commands/doctor.js');
+    expect(summarizeDoctorResults([{ status: 'ok' }, { status: 'info' }], false)).toEqual({ level: 'ok', lines: ['✅ 所有检查通过！'] });
+    expect(summarizeDoctorResults([{ status: 'warn', fix: 'x' }], false).lines.join('\n')).not.toContain('所有检查通过');
+    expect(summarizeDoctorResults([{ status: 'error' }, { status: 'warn' }], false).level).toBe('error');
+  });
+
+  it('with --fix says when nothing could be fixed automatically, and counts what was', async () => {
+    const { summarizeDoctorResults } = await import('../src/commands/doctor.js');
+    expect(summarizeDoctorResults([{ status: 'warn', fix: 'pnpm install' }, { status: 'warn' }], true).lines)
+      .toEqual(['⚠️  发现 2 项警告，建议修复以获得最佳体验', '以上 2 项都不能自动修复：请按各项「需手动修复」的说明处理']);
+    expect(summarizeDoctorResults([{ status: 'warn', fix: '将写入 package.json' }, { status: 'warn', fix: 'pnpm install' }], true).lines[1])
+      .toBe('--fix 已处理 1 项；其余 1 项需要手动修复（见各项说明）');
+  });
+
+  it('prints the manual fix of each remaining warning under --fix', async () => {
+    const { output, directory } = await runDoctor(dir => fs.writeFileSync(path.join(dir, 'tsconfig.json'), '{}'), ['--fix']);
+    try {
+      expect(output).toMatch(/需手动修复:/u);
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+
+describe('doctor: TypeScript version (#1250 doctor-typescript-global)', () => {
+  const dirs: string[] = [];
+  afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+  const project = (installed?: string) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-ts-'));
+    dirs.push(dir);
+    if (installed) {
+      fs.mkdirSync(path.join(dir, 'node_modules', 'typescript'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'node_modules', 'typescript', 'package.json'), JSON.stringify({ name: 'typescript', version: installed }));
+    }
+    return dir;
+  };
+
+  it('reports the project\'s own typescript and the declared range, not the global tsc', async () => {
+    const { diagnoseTypeScript } = await import('../src/commands/doctor.js');
+    const global = vi.fn(async () => 'Version 5.9.3');
+    expect(await diagnoseTypeScript(project('6.0.3'), { devDependencies: { typescript: '^6.0.0' } }, global))
+      .toEqual({ name: 'TypeScript', status: 'ok', message: '6.0.3（项目 node_modules，package.json 声明 ^6.0.0）' });
+    expect(global).not.toHaveBeenCalled();
+    expect(await diagnoseTypeScript(project('5.9.3'), { devDependencies: { typescript: '^6.0.0' } }, global))
+      .toMatchObject({ status: 'warn', message: expect.stringContaining('不在声明范围内') });
+  });
+
+  it('only mentions a global tsc when the project has none', async () => {
+    const { diagnoseTypeScript } = await import('../src/commands/doctor.js');
+    expect(await diagnoseTypeScript(project(), {}, async () => 'Version 5.9.3'))
+      .toMatchObject({ status: 'info', message: expect.stringContaining('不代表项目使用的版本') });
+    expect(await diagnoseTypeScript(project(), { devDependencies: { typescript: '^6.0.0' } }, async () => 'Version 5.9.3'))
+      .toMatchObject({ status: 'warn', fix: 'pnpm install' });
+    expect(await diagnoseTypeScript(project(), {}, async () => undefined)).toMatchObject({ status: 'warn', message: '未安装' });
   });
 });

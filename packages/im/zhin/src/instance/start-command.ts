@@ -100,6 +100,7 @@ import {
 import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
 import { createBridgedHttpHost, openInstanceControlChannel, type BridgedHttpHost } from '@zhin.js/host-http/bridge';
+import { installPluginApplyChannel, PLUGIN_APPLY_FEATURE } from './plugin-apply-channel.js';
 import { createProviderDisplayIndex } from './inference/provider-display.js';
 import {
   ProjectEnvironmentFileSource,
@@ -659,6 +660,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     agentBindings: agentHost?.bindings,
   }, httpConfig.apiBase);
   let stopping: Promise<void> | undefined;
+  /** Unsubscribes the gateway's `plugins.apply` handler (#1250); set once the instance is ready. */
+  let disposePluginApply: () => void = () => undefined;
   /** Components whose stop has begun but not settled; reported on a forced exit. */
   const stoppingComponents = new Set<string>();
   const stage = async (name: string, run: () => unknown): Promise<void> => {
@@ -676,6 +679,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   const stopAll = async (): Promise<void> => {
     try {
+      // No hot plugin apply may start a generation transaction while the Runtime stops.
+      disposePluginApply();
       disposeReadiness();
       stopRuntimeFailureSync();
       syncRuntimeFailures({ journal: runtimeFailures, endpoints: runtimeFailureSources.endpoints, mcpServers: runtimeFailureSources.mcpServers });
@@ -795,9 +800,21 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
   bridgedHttpHost?.publishRoutes(snapshot.generation);
+  // #1250: plugin enable / disable from the gateway applies in this generation, no restart.
+  if (controlChannel) {
+    disposePluginApply = installPluginApplyChannel({
+      channel: controlChannel,
+      runtime: host.runtime,
+      onError: (error, request) => getLogger('runtime').warn(formatCompact({
+        op: 'plugin_hot_apply_failed', instanceKey: request.instanceKey, enabled: request.enabled,
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+  }
   controlChannel?.ready({
     generation: snapshot.generation,
     ...(bridgedHttpHost ? { routes: bridgedHttpHost.routeTable() } : {}),
+    ...(controlChannel && !parsed.once ? { features: [PLUGIN_APPLY_FEATURE] } : {}),
   });
   if (parsed.once) {
     // `--once` is a start-up check: it waits (bounded) for every account's first start attempt to

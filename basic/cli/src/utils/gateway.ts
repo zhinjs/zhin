@@ -107,6 +107,7 @@ const PHASE_LABELS: Readonly<Record<string, string>> = {
   'stop-instance': '停止实例',
   'package-manager': '执行包管理器',
   configure: '写入插件声明与配置',
+  'apply-hot': '在运行中的实例里应用（不重启）',
   'start-instance': '启动实例',
   rollback: '回滚',
   'restore-files': '恢复项目文件',
@@ -159,11 +160,17 @@ function rollbackFailureLines(result: GatewayPackageTransactionResult): string[]
 export function renderTransactionResult(result: GatewayPackageTransactionResult): string[] {
   const names = result.packages.map((item) => item.spec).join(' ') || '(全部依赖)';
   if (result.ok && result.plugin) {
-    const { instanceKey, packageName, enabled, changed } = result.plugin;
+    const { instanceKey, packageName, enabled, changed, apply, restartDetail } = result.plugin;
     const state = enabled ? '启用' : '停用';
-    return [changed
-      ? `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins（实例 ${result.instance.before} → ${result.instance.after}）`
-      : `✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
+    if (!changed) return [`✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
+    const head = `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins`;
+    // #1250: say whether the change applied in place or needed a restart, and why.
+    if (apply === 'hot') return [`${head}，已热生效，实例未重启`];
+    if (apply === 'none') return [`${head}（实例未运行，下次启动时生效）`];
+    // An older gateway does not say how it applied the change.
+    if (apply === undefined) return [`${head}（实例 ${result.instance.before} → ${result.instance.after}）`];
+    return [`${head}（实例已重启：${result.instance.before} → ${result.instance.after}）`,
+      ...(restartDetail ? [`  重启原因：${restartDetail}`] : [])];
   }
   const ignored = result.ignoredBuilds ? [`! ${ignoredBuildsHint(result.ignoredBuilds)}`] : [];
   if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`,

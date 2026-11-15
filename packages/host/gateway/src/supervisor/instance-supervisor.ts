@@ -7,6 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import {
+  INSTANCE_BRIDGE_FEATURES,
   INSTANCE_BRIDGE_PROTOCOL_VERSION,
   INSTANCE_CHILD_ENV,
   IpcInstanceTransport,
@@ -15,7 +16,10 @@ import {
   type GatewayShutdownMessage,
   type InstanceReadyPayload,
   type InstanceRestartRequestPayload,
+  type PluginApplyPayload,
+  type PluginApplyResultPayload,
 } from '@zhin.js/host-http/bridge';
+import { randomUUID } from 'node:crypto';
 import { DEFAULT_SHUTDOWN_BUDGET_MS } from '@zhin.js/runtime';
 import { InstanceLogCollector, type InstanceLogLine, type InstanceLogOptions } from './instance-logs.js';
 
@@ -132,6 +136,14 @@ export const MAX_RESTARTS_PER_WINDOW = 10;
 export const RESTART_WINDOW_MS = 60_000;
 export const RESTART_DELAY_MS = 3_000;
 const FAILURE_LOG_TAIL_LINES = 50;
+/** Time a running instance gets to answer `plugins.apply` (one generation transaction). */
+export const DEFAULT_PLUGIN_APPLY_TIMEOUT_MS = 60_000;
+
+/**
+ * {@link InstanceSupervisor.applyPlugin}: the instance's answer, or `unsupported` when no running
+ * instance announced `plugins.apply` (older instance, `--once`, stopped).
+ */
+export type InstancePluginApplyResult = PluginApplyResultPayload | Readonly<{ outcome: 'unsupported' }>;
 const STDIO_DRAIN_MS = 250;
 
 export class InstanceProtocolMismatchError extends Error {
@@ -191,6 +203,8 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   #lastFailure: InstanceFailure | undefined;
   /** Bumped by every stop(); a pending automatic restart only proceeds when it is unchanged. */
   #stopIntent = 0;
+  /** `plugins.apply` requests waiting for their result, by id. */
+  readonly #applies = new Map<string, { readonly child: ChildRecord; settle(result: InstancePluginApplyResult): void }>();
 
   constructor(options: InstanceSupervisorOptions) {
     super();
@@ -263,6 +277,40 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   /** Ready timeout the next spawn uses. */
   get readyTimeoutMs(): number {
     return this.#readyTimeoutMs ?? DEFAULT_INSTANCE_READY_TIMEOUT_MS;
+  }
+
+  /** Whether the running instance answers `plugins.apply` (it announced it in `ready.features`). */
+  get supportsPluginApply(): boolean {
+    return this.#state === 'running' && this.#child?.ready === true
+      && (this.#ready?.features ?? []).includes(INSTANCE_BRIDGE_FEATURES.PLUGINS_APPLY);
+  }
+
+  /**
+   * Asks the running instance to apply a plugin enable / disable already written to the root
+   * configuration (zhinjs/zhin#1250). Resolves with the instance's outcome; `failed` when the
+   * instance exits or does not answer within `timeoutMs`; `unsupported` without a capable instance.
+   */
+  applyPlugin(request: PluginApplyPayload, timeoutMs = DEFAULT_PLUGIN_APPLY_TIMEOUT_MS): Promise<InstancePluginApplyResult> {
+    const child = this.#child;
+    if (!child || !this.supportsPluginApply) return Promise.resolve(Object.freeze({ outcome: 'unsupported' as const }));
+    const id = randomUUID();
+    return new Promise<InstancePluginApplyResult>((resolve) => {
+      const timer = setTimeout(() => settle(Object.freeze({ outcome: 'failed' as const, message: `Instance did not answer plugins.apply within ${timeoutMs} ms` })), timeoutMs);
+      timer.unref?.();
+      const settle = (result: InstancePluginApplyResult): void => {
+        if (!this.#applies.delete(id)) return;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      this.#applies.set(id, { child, settle });
+      try {
+        child.process.send({ type: 'plugins.apply', id, payload: { ...request } }, (error) => {
+          if (error) settle(Object.freeze({ outcome: 'failed' as const, message: `plugins.apply could not be sent: ${error.message}` }));
+        });
+      } catch (error) {
+        settle(Object.freeze({ outcome: 'failed' as const, message: `plugins.apply could not be sent: ${errorMessage(error)}` }));
+      }
+    });
   }
 
   /** Manual restart: stop gracefully, then start (not counted by the storm guard). */
@@ -383,6 +431,11 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
       child.settleStart?.();
       return;
     }
+    if (message.type === 'plugins.apply.result') {
+      const pending = message.id === undefined ? undefined : this.#applies.get(message.id);
+      if (pending?.child === child) pending.settle(Object.freeze({ ...message.payload }));
+      return;
+    }
     if (message.type === 'routes') {
       // The instance republishes its route table on every generation commit (hot reload,
       // configuration apply); the table carries that generation (#1250).
@@ -411,6 +464,9 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   }
 
   #onExit(child: ChildRecord, code: number | null, signal: NodeJS.Signals | null): void {
+    for (const pending of [...this.#applies.values()]) {
+      if (pending.child === child) pending.settle(Object.freeze({ outcome: 'failed' as const, message: 'Instance exited before answering plugins.apply' }));
+    }
     if (this.#child !== child) return;
     clearTimeout(child.readyTimer);
     clearTimeout(child.termTimer);
