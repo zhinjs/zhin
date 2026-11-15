@@ -55,6 +55,8 @@ export type PluginAddRouteInput = {
     fullWidth?: boolean;
     /** Console navigation section the Page declared (ADR 0052). */
     section?: ConsolePageSection;
+    /** Command-palette aliases from `definePage({ keywords })`: one list, or lists per locale (ADR 0063). */
+    keywords?: readonly string[] | Readonly<Partial<Record<'zh-CN' | 'en', readonly string[]>>>;
   };
   requiredPermissions?: string[];
   requiredRoles?: string[];

@@ -10,6 +10,9 @@ import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 
 export type ConsolePageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en' | string, string>>>;
 
+/** `definePage({ keywords })`: one alias list, or lists per locale (ADR 0063). */
+export type ConsolePageKeywords = readonly string[] | Readonly<Partial<Record<'zh-CN' | 'en', readonly string[]>>>;
+
 export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
   readonly owner?: string;
   readonly source?: string;
@@ -20,6 +23,12 @@ export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
   readonly fullWidth?: boolean;
   /** Console navigation section (ADR 0052). */
   readonly section?: string;
+  /** Command-palette aliases (ADR 0063). */
+  readonly keywords?: ConsolePageKeywords;
+  /** npm package of the owning plugin. */
+  readonly packageName?: string;
+  /** `description` of the owning plugin's package.json. */
+  readonly pluginDescription?: string;
   readonly hideInNav?: boolean;
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
@@ -99,6 +108,9 @@ export async function listPages(
       ...(page.parent !== undefined ? { parent: page.parent } : {}),
       ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
       ...(page.section !== undefined ? { section: page.section } : {}),
+      ...(page.keywords !== undefined ? { keywords: page.keywords } : {}),
+      ...(page.packageName !== undefined ? { packageName: page.packageName } : {}),
+      ...(page.pluginDescription !== undefined ? { pluginDescription: page.pluginDescription } : {}),
       ...(page.hideInNav !== undefined ? { hideInNav: page.hideInNav } : {}),
       ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
       ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),
@@ -131,6 +143,7 @@ export type ConsoleEntryBody = {
     readonly parent?: string | null;
     readonly fullWidth?: boolean;
     readonly section?: string;
+    readonly keywords?: ConsolePageKeywords;
     readonly hideInMenu?: boolean;
     readonly hideInNav?: boolean;
     readonly titleI18n?: ConsolePageTitleI18n;
@@ -145,6 +158,9 @@ export type ConsoleEntryBody = {
   readonly parent?: string | null;
   readonly fullWidth?: boolean;
   readonly section?: string;
+  readonly keywords?: ConsolePageKeywords;
+  readonly packageName?: string;
+  readonly pluginDescription?: string;
   readonly hideInNav?: boolean;
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
@@ -192,6 +208,7 @@ export function projectConsoleEntries(
           ...(page.parent !== undefined ? { parent: page.parent } : {}),
           ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
           ...(page.section !== undefined ? { section: page.section } : {}),
+          ...(page.keywords !== undefined ? { keywords: page.keywords } : {}),
           ...(page.hideInNav !== undefined ? { hideInMenu: page.hideInNav, hideInNav: page.hideInNav } : {}),
           ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
         }),
@@ -205,6 +222,9 @@ export function projectConsoleEntries(
         ...(page.parent !== undefined ? { parent: page.parent } : {}),
         ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
         ...(page.section !== undefined ? { section: page.section } : {}),
+        ...(page.keywords !== undefined ? { keywords: page.keywords } : {}),
+        ...(page.packageName !== undefined ? { packageName: page.packageName } : {}),
+        ...(page.pluginDescription !== undefined ? { pluginDescription: page.pluginDescription } : {}),
         ...(page.hideInNav !== undefined ? { hideInNav: page.hideInNav } : {}),
         ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
         ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),

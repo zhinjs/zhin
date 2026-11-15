@@ -22,6 +22,7 @@ export type ConsoleRouteRecord = {
     group?: string;
     fullWidth?: boolean;
     section?: import('@zhin.js/contract').ConsolePageSection;
+    keywords?: NonNullable<import('@zhin.js/contract').PluginAddRouteInput['meta']>['keywords'];
   };
 };
 

@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   rootPluginId,
@@ -15,6 +18,7 @@ import pageFeature, {
   definePageBlueprint,
   isPageIndex,
   pageIndexProjection,
+  pageKeywordsFor,
   parsePageArtifact,
 } from '../src/index.js';
 
@@ -53,6 +57,52 @@ describe('Page Feature', () => {
       { module: '/assets/dash.js', hash: 'h1', metadata: { section: 'elsewhere' } },
       { owner: rootPluginId(), feature: pageFeature.id, localName: 'dashboard', source: '/app/pages/dashboard/index.tsx' },
     )).toThrow('Page section must be one of');
+  });
+
+  it('passes definePage keywords through unchanged, per language or as one list (ADR 0063)', () => {
+    const context = { owner: rootPluginId(), feature: pageFeature.id, localName: 'lottery', source: '/app/pages/lottery/index.ts' };
+    const meta = definePage({ title: '彩票推荐', keywords: { 'zh-CN': [' 抽奖 ', '抽奖', '双色球'], en: ['lottery'] } });
+    expect(meta.keywords).toEqual({ 'zh-CN': ['抽奖', '双色球'], en: ['lottery'] });
+    expect(parsePageArtifact({ module: '/assets/l.js', hash: 'h', metadata: meta }, context).keywords)
+      .toEqual({ 'zh-CN': ['抽奖', '双色球'], en: ['lottery'] });
+    expect(definePage({ keywords: ['rss', 'feed'] }).keywords).toEqual(['rss', 'feed']);
+    expect(pageKeywordsFor(['rss'], 'en')).toEqual(['rss']);
+    expect(pageKeywordsFor(meta.keywords, 'en')).toEqual(['lottery']);
+    expect(pageKeywordsFor(undefined, 'zh-CN')).toEqual([]);
+    expect(() => definePage({ keywords: 'lottery' as never })).toThrow('Page keywords must be');
+    expect(() => definePage({ keywords: { fr: ['loterie'] } as never })).toThrow('Unknown Page keywords locale: fr');
+    expect(() => definePage({ keywords: [''] })).toThrow('non-empty strings');
+    expect(() => parsePageArtifact({ module: '/assets/l.js', hash: 'h', metadata: { keywords: [1] } }, context)).toThrow('non-empty strings');
+  });
+
+  it('carries keywords, the plugin package name and its package.json description into the index', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-page-index-'));
+    try {
+      const root = rootPluginId();
+      const child = `${root}/admin` as PluginId;
+      const base = snapshotWithChild(child);
+      await mkdir(join(dir, 'admin'), { recursive: true });
+      await writeFile(join(dir, 'admin/package.json'), JSON.stringify({ name: '@zhin.js/plugin-admin', description: 'Group admin tools' }));
+      const tree = new Map(base.tree);
+      tree.set(child, node({ ...base.tree.get(child)!, packageName: '@zhin.js/plugin-admin', packageRoot: join(dir, 'admin') }));
+      tree.set(root, node({ ...base.tree.get(root)!, packageRoot: join(dir, 'missing') }));
+      const withKeywords = slot(child, 'status', '/assets/status.js');
+      const index = new PageIndex([
+        slot(root, 'home', '/assets/home.js'),
+        { ...withKeywords, definition: { ...withKeywords.definition, keywords: { 'zh-CN': ['群管'] } } },
+      ], { generation: 1, ...base, tree });
+      expect(index.route('/admin/p-status')).toMatchObject({
+        keywords: { 'zh-CN': ['群管'] },
+        packageName: '@zhin.js/plugin-admin',
+        pluginDescription: 'Group admin tools',
+      });
+      const home = index.route('/p-home');
+      expect(home?.packageName).toBe('root');
+      expect(home && 'pluginDescription' in home).toBe(false);
+      expect(home && 'keywords' in home).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('recognizes PageIndex by its projection brand rather than prototype identity', () => {

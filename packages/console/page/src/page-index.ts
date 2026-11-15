@@ -4,6 +4,8 @@ import {
 } from '@zhin.js/console-contract';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { OwnerCapabilityIndex } from '@zhin.js/feature-kit';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PageDefinition } from './definition.js';
 
 export const pageIndexProjection = 'zhin.page-index/1' as const;
@@ -23,9 +25,13 @@ export class PageIndex {
   ) {
     const index = new OwnerCapabilityIndex(slots, snapshot);
     const byRoute = new Map<string, Readonly<PageManifest>>();
+    const descriptions = new Map<string, string | undefined>();
     this.#pages = Object.freeze(index.entries().map((entry) => {
       const route = pageRoute(entry.owner, snapshot.root, entry.name);
       const definition = entry.slot.definition;
+      const node = snapshot.tree.get(entry.owner);
+      const packageName = node?.packageName;
+      const pluginDescription = node ? packageDescription(node.packageRoot, descriptions) : undefined;
       const page = Object.freeze({
         id: entry.slot.id,
         owner: entry.owner,
@@ -41,6 +47,9 @@ export class PageIndex {
         ...(definition.parent === undefined ? {} : { parent: definition.parent }),
         ...(definition.fullWidth === undefined ? {} : { fullWidth: definition.fullWidth }),
         ...(definition.section === undefined ? {} : { section: definition.section }),
+        ...(definition.keywords === undefined ? {} : { keywords: definition.keywords }),
+        ...(packageName ? { packageName } : {}),
+        ...(pluginDescription ? { pluginDescription } : {}),
         icon: definition.icon,
         order: definition.order,
         hideInNav: definition.hideInNav,
@@ -66,6 +75,21 @@ export class PageIndex {
   route(path: string): Readonly<PageManifest> | undefined {
     return this.#byRoute.get(path);
   }
+}
+
+/** `description` of the plugin's package.json, read once per package root for this index. */
+function packageDescription(packageRoot: string, cache: Map<string, string | undefined>): string | undefined {
+  if (!packageRoot) return undefined;
+  if (cache.has(packageRoot)) return cache.get(packageRoot);
+  let description: string | undefined;
+  try {
+    const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { description?: unknown };
+    if (typeof manifest.description === 'string' && manifest.description.trim()) description = manifest.description.trim();
+  } catch {
+    description = undefined;
+  }
+  cache.set(packageRoot, description);
+  return description;
 }
 
 function comparePage(left: PageManifest, right: PageManifest): number {

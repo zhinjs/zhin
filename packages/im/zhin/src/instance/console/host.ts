@@ -68,7 +68,7 @@ export function registerConsoleHttp(options: {
 }): void {
   const http = options.http;
   // Browser ESM 裸导入（react/jsx-runtime 等）由 TypeScriptClientBuilder 改写为 /esm/<enc>.mjs
-  http.route('GET', '/esm/*', (_request, { url }) => serveCanonicalEsm(options.projectRoot, url.pathname));
+  http.route('GET', '/esm/*', (_request, { url }) => serveCanonicalEsm(options.projectRoot, url.pathname, url.searchParams));
   http.route('GET', `${clientPublicBase}/*`, (_request, { url }) => (
     serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname)
   ));
