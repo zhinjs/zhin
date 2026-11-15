@@ -40,3 +40,11 @@ export {
 export {
   defineFeatureOverrideTable, FeatureOverrideStore, FeatureOverrideStorageUnavailableError, FEATURE_OVERRIDE_TABLE,
 } from './feature-override-store.js';
+export {
+  MAX_RUNTIME_FAILURES, RuntimeFailureJournal, endpointFailureSubject, readRuntimeFailureFile, startRuntimeFailureSync,
+  syncEndpointFailures, syncMcpFailures, syncRuntimeFailures,
+  type RuntimeFailureEndpointRow, type RuntimeFailureEntry, type RuntimeFailureJournalOptions, type RuntimeFailureMcpRow,
+  type RuntimeFailureReport, type RuntimeFailureSyncOptions,
+} from './runtime-failures.js';
+export { listMcpServerStatus } from './agent-runtime-resolver.js';
+export type { InferenceAccountAttentionRow, PurposeEffectRow } from './agent-insights.js';

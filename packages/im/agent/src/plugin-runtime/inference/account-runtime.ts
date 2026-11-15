@@ -254,7 +254,18 @@ export class HostAccountRuntime {
     const key = accountKey(account);
     const record = (result: Readonly<{ response?: Response; error?: unknown }>) => {
       const call = classifyAccountCall(result);
-      if (call) this.#lastCalls.set(key, Object.freeze({ ...call, at: this.options.now?.() ?? Date.now() }));
+      if (!call) return;
+      const at = this.options.now?.() ?? Date.now();
+      this.#lastCalls.set(key, Object.freeze({ ...call, at }));
+      // #1270: the latest failed model call survives a restart in the runtime failure journal.
+      try {
+        if (call.outcome === 'ok') this.options.failureJournal?.clear('model', account.id);
+        else this.options.failureJournal?.record({
+          source: 'model', subject: account.id, code: call.outcome, category: call.outcome,
+          message: `Model call failed: outcome=${call.outcome}${call.status === undefined ? '' : ` upstreamStatus=${call.status}`}`,
+          ...(call.status === undefined ? {} : { upstreamStatus: call.status }), at,
+        });
+      } catch { /* the journal never breaks a model call */ }
     };
     return async (input, init) => {
       try {

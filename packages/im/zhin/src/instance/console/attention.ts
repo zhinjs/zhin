@@ -11,10 +11,17 @@
  * | `plugin.dependencies` | one project-wide dependency graph check per read (one item, not one per plugin) | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
- * | `mcp.disconnected` | Agent MCP servers (configured + connected) | `status.view` |
+ * | `mcp.disconnected` | Agent MCP servers (configured + connected, with the last connect failure) | `status.view` |
+ * | `inference.account` | Host model accounts: reauthorize / disconnected / uncertain / preparation failed (#1270) | `agent.view` |
+ * | `config.ineffective` | `purposes.agents.<key>` choices the runtime ignores (#1270) | `agent.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
  * | `schedule.unschedulable` | enabled persistent schedule jobs without a next run | `ops.schedule.read` |
  * | `chat-roles.no-owner` / `chat-roles.imported` / `chat-roles.import-pending` | chat role store + migration record (ADR 0060) | global `iam.manage` |
+ *
+ * While the instance is still starting (its Root does not accept generation operations), the list
+ * answers `status: 'starting'` without reading any source or logging per source (#1270). Reasons
+ * restored from the runtime failure journal (`.zhin/runtime-failures.json`) are marked
+ * 「重启前记录」.
  *
  * Text is localized for the request's `locale` (task catalog pattern); dynamic Host text (issues,
  * error messages, ids) is inserted verbatim, except configuration parse errors, which are reduced to
@@ -34,6 +41,7 @@ import {
   type ConsoleAttentionItem,
   type ConsoleAttentionKind,
   type ConsoleAttentionList,
+  type ConsoleAttentionReason,
   type ConsoleAttentionSeverity,
   type ConsoleAttentionSubject,
   type ConsoleConfigSource,
@@ -77,7 +85,9 @@ export interface AttentionEndpoint {
   /** An unfinished login flow of this account waits for a person (ADR 0058). */
   readonly pendingLogin?: boolean;
   /** Classified, redacted reason of the last failed start (#1250). */
-  readonly lastError?: Readonly<{ category: string; message: string }>;
+  readonly lastError?: Readonly<{ category: string; message: string; at?: number;
+    /** From the runtime failure journal: observed before the last restart (#1270). */
+    restored?: boolean }>;
 }
 
 /** One adapter instance whose configuration file accounts differ from the persisted ones (#1250). */
@@ -159,6 +169,31 @@ export interface AttentionToolApproval {
 export interface AttentionMcpServer {
   readonly name: string;
   readonly connected: boolean;
+  /** Classified, redacted reason of the last failed connect (#1270). */
+  readonly lastError?: Readonly<{ category: string; message: string; at?: number; exitCode?: number }>;
+  /** The reason comes from the runtime failure journal (before the last restart). */
+  readonly restored?: boolean;
+}
+
+/** A Host model account that needs an operator (#1270). */
+export interface AttentionInferenceAccount {
+  readonly accountId: string;
+  readonly label: string;
+  readonly serviceLabel: string;
+  readonly state: 'reauthorize' | 'disconnected' | 'uncertain' | 'preparation-failed';
+  readonly revision: number;
+  readonly preparationFailure?: Readonly<{ code: string; reason?: string; upstreamStatus?: number; step?: string; restored?: boolean; at?: number }>;
+  readonly failure?: string;
+  readonly failureStatus?: number;
+}
+
+/** A saved setting the runtime ignores (#1270). */
+export interface AttentionIneffectiveConfig {
+  /** Configuration path, e.g. `purposes.agents.planner`. */
+  readonly path: string;
+  readonly reason: 'binding-name' | 'ambiguous' | 'no-target';
+  /** Sub-agents (qualified names) the setting was meant for. */
+  readonly agents?: readonly string[];
 }
 
 /** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
@@ -221,6 +256,15 @@ export interface AttentionSources {
   readonly errorLogs?: () => Promise<AttentionErrorLogs | null>;
   /** ADR 0060: chat role bootstrap and configuration import. */
   readonly chatRoles?: () => Promise<AttentionChatRoles>;
+  /** Host model accounts that need an operator (#1270). */
+  readonly inferenceAccounts?: () => Promise<readonly AttentionInferenceAccount[]>;
+  /** Saved settings the runtime ignores (#1270). */
+  readonly ineffectiveConfig?: () => Promise<readonly AttentionIneffectiveConfig[]>;
+  /**
+   * Whether the instance accepts reads (its Root is running). `false`: `attention.list` answers
+   * `status: 'starting'` without reading any source (#1270).
+   */
+  readonly ready?: () => boolean;
   /**
    * Cheap signal that changes with the project files and the runtime generation; a cached read
    * (see {@link AttentionSourceCache}) older than the current revision is read again.
@@ -232,7 +276,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -295,12 +339,14 @@ function suggestedCommand(reason: string): string | undefined {
  */
 export class AttentionWarnings {
   readonly #log: (message: string) => void;
+  readonly #debug: (message: string) => void;
   readonly #interval: number;
   readonly #now: () => number;
   readonly #last = new Map<string, { readonly reason: string; readonly at: number }>();
 
-  constructor(log: (message: string) => void, options: { readonly intervalMs?: number; readonly now?: () => number } = {}) {
+  constructor(log: (message: string) => void, options: { readonly intervalMs?: number; readonly now?: () => number; readonly debug?: (message: string) => void } = {}) {
     this.#log = log;
+    this.#debug = options.debug ?? (() => undefined);
     this.#interval = options.intervalMs ?? 10 * 60_000;
     this.#now = options.now ?? Date.now;
   }
@@ -314,6 +360,17 @@ export class AttentionWarnings {
     this.#log(`attention.list: ${key}: ${reason}`);
     return true;
   }
+
+  /** Expected, transient unavailability (the instance is starting or stopping): debug only, never a warning. */
+  debug(key: string, reason: string): void {
+    this.#debug(`attention.list: ${key}: ${reason}`);
+  }
+}
+
+/** The Root refused a read because it is not running (starting, stopping): expected, not a fault. */
+export function isAttentionNotReady(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? error as { name?: unknown; message?: unknown } : undefined;
+  return typeof record?.message === 'string' && /is not accepting generation operations/u.test(record.message);
 }
 
 // ---------------------------------------------------------------- shared reads
@@ -457,6 +514,27 @@ const messages = createMessages({
   'approval.action': { 'zh-CN': '去审批', en: 'Review' },
   'mcp.title': { 'zh-CN': 'MCP 服务 {server} 未连接', en: 'MCP server {server} is not connected' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
+  'mcp.reason': { 'zh-CN': '最近一次连接失败（{category}）：{message}', en: 'Last connect failed ({category}): {message}' },
+  'restored': { 'zh-CN': '（重启前记录）', en: ' (recorded before the restart)' },
+  'inference.title.reauthorize': { 'zh-CN': '模型账号 {account} 需要重新登录', en: 'Model account {account} must sign in again' },
+  'inference.title.disconnected': { 'zh-CN': '模型账号 {account} 已断开', en: 'Model account {account} is disconnected' },
+  'inference.title.uncertain': { 'zh-CN': '模型账号 {account} 的登录结果未知', en: 'The sign-in result of model account {account} is unknown' },
+  'inference.title.preparation-failed': { 'zh-CN': '模型账号 {account} 已登录，但准备未完成', en: 'Model account {account} is signed in but its preparation failed' },
+  'inference.detail.reauthorize': { 'zh-CN': '服务「{service}」的凭据已失效，使用它的用途暂时无法调用模型。请在模型服务里重新登录。', en: 'The credential for "{service}" is no longer valid; purposes using it cannot call the model. Sign in again under model services.' },
+  'inference.detail.disconnected': { 'zh-CN': '服务「{service}」的账号已断开连接。请在模型服务里重新登录。', en: 'The account for "{service}" was disconnected. Sign in again under model services.' },
+  'inference.detail.uncertain': { 'zh-CN': '服务「{service}」最近一次登录没有得到明确结果{failure}。请在模型服务里重新读取状态或重新登录。', en: 'The last sign-in for "{service}" ended without a clear result{failure}. Reload its state or sign in again under model services.' },
+  'inference.detail.preparation': { 'zh-CN': '服务「{service}」准备失败：{facts}。{hint}', en: 'Preparation for "{service}" failed: {facts}. {hint}' },
+  'inference.hint.project': { 'zh-CN': '在该模型服务的配置中填写 Google Cloud 项目 ID（projectId），保存后点「完成准备」。', en: 'Set the Google Cloud project ID (projectId) of this model service, save, then finish the preparation.' },
+  'inference.hint.unsupportedClient': { 'zh-CN': '上游拒绝了这个客户端的自动开通（UNSUPPORTED_CLIENT）：Antigravity 直连目前可能卡在这一步。可在该模型服务的配置中填写自己的 Google Cloud 项目 ID（projectId）后重试，或改用其他接入方式。', en: 'The upstream refused automatic onboarding for this client (UNSUPPORTED_CLIENT): direct Antigravity onboarding may currently stop here. Set your own Google Cloud project ID (projectId) on the model service and retry, or use another way in.' },
+  'inference.hint.validation': { 'zh-CN': '该账号需要先在浏览器里完成 Google 的账号验证，之后再点「完成准备」。', en: 'Verify the account with Google in a browser first, then finish the preparation.' },
+  'inference.hint.retry': { 'zh-CN': '这通常是暂时的，稍后在模型服务里点「完成准备」重试。', en: 'This is usually temporary; retry the preparation later.' },
+  'inference.hint.other': { 'zh-CN': '在模型服务里查看账号后点「完成准备」重试。', en: 'Review the account under model services and retry the preparation.' },
+  'inference.action': { 'zh-CN': '查看模型服务', en: 'Open model services' },
+  'ineffective.title': { 'zh-CN': '配置 {path} 没有生效', en: 'Setting {path} has no effect' },
+  'ineffective.detail.binding-name': { 'zh-CN': '这个键属于同名的 Agent 绑定，子 Agent {agents} 不会用它，仍用聊天模型。请改用子 Agent 的完整名称（插件名__Agent 名）作为键。', en: 'This key belongs to the Agent binding of that name; sub-agent {agents} does not use it and runs on the chat model. Key it by the qualified name (plugin__agent) instead.' },
+  'ineffective.detail.ambiguous': { 'zh-CN': '有多个子 Agent 叫这个名字（{agents}），无法确定指哪一个，它们都仍用聊天模型。请改用完整名称（插件名__Agent 名）作为键。', en: 'Several sub-agents share this name ({agents}), so none uses it and they run on the chat model. Key it by the qualified name (plugin__agent) instead.' },
+  'ineffective.detail.no-target': { 'zh-CN': '没有 Agent 绑定或子 Agent 叫这个名字，这个模型选择不会被使用。请改为子 Agent 的完整名称（插件名__Agent 名），或删除它。', en: 'No Agent binding or sub-agent has this name, so this model choice is never used. Use a sub-agent qualified name (plugin__agent) or remove it.' },
+  'ineffective.action': { 'zh-CN': '打开模型用途', en: 'Open model purposes' },
   'mcp.action': { 'zh-CN': '查看 MCP', en: 'Open MCP' },
   'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },
   'logs.detail': { 'zh-CN': '只统计最近 {hours} 小时的错误；更早的错误不再提醒，仍可在错误日志里查看。', en: 'Counts errors from the last {hours} hours only; older errors no longer raise this item and stay in the error log.' },
@@ -532,6 +610,10 @@ export const ATTENTION_PATHS = Object.freeze({
   config: '/ops/config',
   toolApprovals: '/ops/schedules?tab=admin',
   mcp: '/introspection?tab=mcp',
+  /** Model services page, focused on one account (#1270). */
+  inferenceAccount: (accountId: string) => `/features/ai?account=${segment(accountId)}`,
+  /** Model purposes page (#1270). */
+  inferencePurposes: '/features/ai?tab=purposes',
   schedules: '/ops/schedules',
   errorLogs: '/logs?level=error',
   /** Global scope page, chat roles tab (ADR 0056 §3 / ADR 0060 §7). */
@@ -604,6 +686,18 @@ export interface CollectAttentionOptions {
   readonly viewerUserId?: string;
 }
 
+/** Inference preparation reasons that a retry may fix. */
+const TRANSIENT_PREPARATION = new Set(['preparation-timeout', 'onboarding-timeout', 'request-timeout', 'transport']);
+
+/** Which hint explains a preparation failure (route messages use the same split). */
+export function preparationHint(failure: Readonly<{ reason?: string; upstreamStatus?: number }>): 'project' | 'unsupportedClient' | 'validation' | 'retry' | 'other' {
+  if (failure.reason === 'UNSUPPORTED_CLIENT') return 'unsupportedClient';
+  if (failure.reason === 'project-required') return 'project';
+  if (failure.reason === 'validation-required') return 'validation';
+  if (TRANSIENT_PREPARATION.has(failure.reason ?? '') || (failure.upstreamStatus ?? 0) >= 500) return 'retry';
+  return 'other';
+}
+
 const P = CONSOLE_PERMISSIONS;
 const TOOL_APPROVAL_READ = ['tool_approvals:read', 'ops:approve'] as const;
 
@@ -625,6 +719,8 @@ interface AttentionDraft {
   readonly since?: number;
   /** Observed regardless of the caller; listed only when this is true. */
   readonly visible?: boolean;
+  /** Structured reason (#1270). */
+  readonly reason?: ConsoleAttentionReason;
 }
 
 interface ConfigRead {
@@ -669,7 +765,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
     try { drafts = await run(); } catch (error) {
       const reason = attentionFailureReason(error);
       unavailable.push(Object.freeze({ source: name, reason }));
-      options.warnings?.warn(`source ${name} unavailable`, reason);
+      // #1270: a Root that is starting or stopping is expected, not a fault worth a WARN.
+      if (isAttentionNotReady(error)) options.warnings?.debug(`source ${name} unavailable`, reason);
+      else options.warnings?.warn(`source ${name} unavailable`, reason);
       return;
     }
     const present = new Set<string>();
@@ -689,10 +787,19 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         since: new Date(since).toISOString(),
         action: Object.freeze({ ...draft.action }),
         source: name,
+        ...(draft.reason ? { reason: Object.freeze({ ...draft.reason }) } : {}),
       }));
     }
     observations.settle(name, present);
   };
+
+  // #1270: while the instance is starting no source can be read; answer that instead of N warnings.
+  let ready: boolean;
+  try { ready = sources.ready ? sources.ready() : true; } catch { ready = false; }
+  if (!ready) {
+    options.warnings?.debug('instance', 'starting');
+    return Object.freeze({ status: 'starting' as const, items: Object.freeze([]), generatedAt: new Date(at).toISOString() });
+  }
 
   const anyEndpointView = allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'any' }));
   // Endpoint rows (live): offline accounts, and the account each login task belongs to.
@@ -741,8 +848,13 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           title: t('endpoint.title', { account: `${row.adapter} / ${row.name}` }),
           // #1250: the classified, redacted reason of the last failed start, when there is one.
           detail: row.lastError
-            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}`
+            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}${row.lastError.restored ? t('restored') : ''}`
             : detail,
+          ...(row.lastError ? { reason: {
+            category: row.lastError.category, code: 'start-failed', message: attentionFailureReason(row.lastError.message),
+            ...(row.lastError.restored ? { restored: true } : {}),
+            ...(row.lastError.at !== undefined ? { at: new Date(row.lastError.at).toISOString() } : {}),
+          } } : {}),
           action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(row.adapter, row.name) },
           visible: allowsEndpointAccount(allows, P.ENDPOINT_VIEW, row),
         };
@@ -887,11 +999,25 @@ export async function collectAttention(sources: AttentionSources, options: Colle
 
   if (sources.mcpServers && allows(P.STATUS_VIEW)) {
     await read('mcp', async () => (await shared('mcp', async () => sources.mcpServers!()))
-      .filter(server => !server.connected).map((server): AttentionDraft => ({
-        kind: 'mcp.disconnected', severity: 'warning', subject: { mcpServer: server.name }, state: { connected: false },
-        title: t('mcp.title', { server: server.name }), detail: t('mcp.detail'),
-        action: { label: t('mcp.action'), path: ATTENTION_PATHS.mcp },
-      })));
+      .filter(server => !server.connected).map((server): AttentionDraft => {
+        const failure = server.lastError;
+        const message = failure ? attentionFailureReason(failure.message) : undefined;
+        return {
+          kind: 'mcp.disconnected', severity: 'warning', subject: { mcpServer: server.name },
+          state: { connected: false, ...(failure ? { category: failure.category, message } : {}) },
+          title: t('mcp.title', { server: server.name }),
+          // #1270: say why, from the last failed connect (or the journal, before a restart).
+          detail: failure
+            ? `${t('mcp.detail')} ${t('mcp.reason', { category: failure.category, message: message! })}${server.restored ? t('restored') : ''}`
+            : t('mcp.detail'),
+          action: { label: t('mcp.action'), path: ATTENTION_PATHS.mcp },
+          ...(failure ? { reason: {
+            category: failure.category, code: 'connect-failed', message: message!,
+            ...(server.restored ? { restored: true } : {}),
+            ...(failure.at !== undefined ? { at: new Date(failure.at).toISOString() } : {}),
+          } } : {}),
+        };
+      }));
   }
 
   if (sources.unschedulableJobs && allows(P.OPS_SCHEDULE_READ)) {
@@ -918,6 +1044,65 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         action: { label: t('logs.action'), path: ATTENTION_PATHS.errorLogs },
         ...(Number.isNaN(latest) ? {} : { since: latest }) }];
     });
+  }
+
+  // #1270: Host model accounts that need an operator.
+  if (sources.inferenceAccounts && allows(P.AGENT_VIEW)) {
+    await read('inference', async () => (await sources.inferenceAccounts!()).map((account): AttentionDraft => {
+      const name = account.label || account.accountId;
+      const action = { label: t('inference.action'), path: ATTENTION_PATHS.inferenceAccount(account.accountId) };
+      const subject = { inferenceAccount: account.accountId };
+      if (account.state === 'preparation-failed') {
+        const failure = account.preparationFailure ?? { code: 'preparation-failed' };
+        const facts = [
+          `code=${failure.code}`,
+          ...(failure.step ? [`step=${failure.step}`] : []),
+          ...(failure.upstreamStatus === undefined ? [] : [`upstreamStatus=${failure.upstreamStatus}`]),
+          ...(failure.reason ? [`reason=${failure.reason}`] : []),
+        ].join(' ');
+        return {
+          kind: 'inference.account', severity: 'danger', subject,
+          state: { state: account.state, revision: account.revision, code: failure.code, step: failure.step ?? null, reason: failure.reason ?? null },
+          title: t('inference.title.preparation-failed', { account: name }),
+          detail: `${t('inference.detail.preparation', { service: account.serviceLabel, facts, hint: t(`inference.hint.${preparationHint(failure)}`) })}${failure.restored ? t('restored') : ''}`,
+          action,
+          ...(failure.at !== undefined ? { since: failure.at } : {}),
+          reason: {
+            category: 'preparation', code: failure.code,
+            ...(failure.step ? { step: failure.step } : {}),
+            ...(failure.reason ? { reason: failure.reason } : {}),
+            ...(failure.upstreamStatus === undefined ? {} : { upstreamStatus: failure.upstreamStatus }),
+            ...(failure.restored ? { restored: true } : {}),
+            ...(failure.at !== undefined ? { at: new Date(failure.at).toISOString() } : {}),
+          },
+        };
+      }
+      const failure = account.failure ? ` (${account.failure}${account.failureStatus === undefined ? '' : ` HTTP ${account.failureStatus}`})` : '';
+      return {
+        kind: 'inference.account', severity: account.state === 'uncertain' ? 'warning' : 'danger', subject,
+        state: { state: account.state, revision: account.revision, failure: account.failure ?? null },
+        title: t(`inference.title.${account.state}`, { account: name }),
+        detail: account.state === 'uncertain'
+          ? t('inference.detail.uncertain', { service: account.serviceLabel, failure })
+          : t(`inference.detail.${account.state}`, { service: account.serviceLabel }),
+        action,
+        reason: { category: 'auth', code: account.state,
+          ...(account.failure ? { reason: account.failure } : {}),
+          ...(account.failureStatus === undefined ? {} : { upstreamStatus: account.failureStatus }) },
+      };
+    }));
+  }
+
+  // #1270: saved settings the runtime ignores (e.g. a sub-agent model choice that falls back to chat).
+  if (sources.ineffectiveConfig && allows(P.AGENT_VIEW)) {
+    await read('agent-config', async () => (await sources.ineffectiveConfig!()).map((entry): AttentionDraft => ({
+      kind: 'config.ineffective', severity: 'warning', subject: { configPath: entry.path },
+      state: { reason: entry.reason, agents: entry.agents ?? [] },
+      title: t('ineffective.title', { path: entry.path }),
+      detail: t(`ineffective.detail.${entry.reason}`, { agents: entry.agents?.length ? listed(entry.agents, locale) : '—' }),
+      action: { label: t('ineffective.action'), path: ATTENTION_PATHS.inferencePurposes },
+      reason: { category: 'config', code: entry.reason },
+    })));
   }
 
   // ADR 0060: chat role bootstrap and configuration import (global iam.manage only: who holds a

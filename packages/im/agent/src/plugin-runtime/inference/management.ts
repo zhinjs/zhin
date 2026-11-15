@@ -29,6 +29,8 @@ import { InferenceAuthenticationError, InferenceCredentialStore, credentialMater
 import { createPersonalModelFetch } from './personal-network.js';
 import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js';
 import { DatabaseInferenceRepository } from './repository.js';
+import { purposeKeyEffects, type PurposeIgnoredReason } from '../../model-runtime/purpose-effect.js';
+import type { AgentPurposeTargets } from './targets.js';
 
 /**
  * Who may make a Host API-key account read a Host environment variable (`env://NAME` account
@@ -112,6 +114,37 @@ export interface InferenceManagementOptions {
   readonly drivers: () => readonly InferenceDriverView[];
   /** Skip state of purpose models (#1250); defaults to the process-wide registry. */
   readonly modelAvailability?: ModelAvailabilityRegistry;
+  /** Binding names and sub-agents of the held generation, for `purposeEffects` (#1270). */
+  readonly agentTargets?: () => AgentPurposeTargets;
+}
+
+/**
+ * Whether one `purposes.agents.<key>` choice takes effect at run time (#1270), keyed
+ * `agents.<key>` in {@link InferenceManagementView.purposeEffects}. `ignored`: `binding-name`
+ * (the key is an Agent binding's), `ambiguous` (several sub-agents share the bare name) or
+ * `no-target` (no binding or sub-agent has that name): those sub-agents run on the chat model.
+ */
+export type InferencePurposeEffect = Readonly<{
+  status: 'effective' | 'ignored';
+  reason?: PurposeIgnoredReason;
+  /** What uses the key when effective. */
+  target?: 'binding' | 'sub-agent';
+  /** Sub-agents (qualified names) the key applies to, or was meant for when ignored. */
+  agents?: readonly string[];
+  /** Effective binding keys: same-named sub-agents that do not use it (`reason: 'binding-name'`). */
+  ignoredAgents?: readonly string[];
+}>;
+
+/** `purposeEffects` of a graph's `purposes.agents`, from the generation's binding and sub-agent names. */
+export function inferencePurposeEffects(
+  agents: Readonly<Record<string, unknown>> | undefined,
+  targets: AgentPurposeTargets,
+): Readonly<Record<string, InferencePurposeEffect>> {
+  const keys = Object.keys(agents ?? {}).filter(key => Boolean(agents?.[key]));
+  const effects = purposeKeyEffects(keys,
+    targets.subAgents.map(agent => ({ name: agent.name, qualifiedName: agent.qualifiedName })),
+    new Set(targets.bindingNames));
+  return Object.freeze(Object.fromEntries(Object.entries(effects).map(([key, effect]) => [`agents.${key}`, effect as InferencePurposeEffect])));
 }
 /**
  * Read-only fallback state for the Console purposes page (#1250 chat-purpose-no-fallback):
@@ -168,6 +201,8 @@ export interface InferenceManagementView {
   readonly environmentReferences?: InferenceEnvironmentAuthority;
   /** Host administrators only (#1250). */
   readonly modelAvailability?: InferenceModelAvailabilityView;
+  /** Host administrators only (#1270): effect of each `purposes.agents` key, keyed `agents.<key>`. */
+  readonly purposeEffects?: Readonly<Record<string, InferencePurposeEffect>>;
 }
 interface PreparedMutation {
   readonly kind: 'graph' | 'credential';
@@ -291,6 +326,8 @@ export class InferenceManagementService {
       deployment,
       drivers,
       ...(principal.hostAdministrator ? { purposes: graph.purposes, modelAvailability: this.#availability() } : {}),
+      ...(principal.hostAdministrator && graph.purposes.agents && this.options.agentTargets
+        ? { purposeEffects: inferencePurposeEffects(graph.purposes.agents, this.options.agentTargets()) } : {}),
       ...(principal.environmentReferences ? { environmentReferences: principal.environmentReferences } : {}),
     };
   }

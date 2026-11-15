@@ -12,6 +12,8 @@ import {
   type HttpHost,
 } from '@zhin.js/host-http';
 import { withNoStore } from '../console/no-store.js';
+import { preparationHint } from '../console/attention.js';
+import type { ConsoleErrorDetails, ConsoleErrorNextStep } from '@zhin.js/console-protocol';
 
 /** The authenticated Console user behind a request, as the management principal id. */
 function principalId(principal: ConsolePrincipal | undefined): { principalId?: string } {
@@ -148,9 +150,42 @@ interface RouteFailure {
     path?: string }>;
   /** Operator-facing text replacing the generic one when the failure is actionable. */
   readonly message?: string;
+  /** What the operator can do next (#1270); `ConsoleErrorNextStep` of `@zhin.js/console-protocol`. */
+  readonly nextStep?: ConsoleErrorNextStep;
   /** Why an environment reference was refused (#1250); its text is {@link INFERENCE_ENVIRONMENT_REFUSALS}. */
   readonly reason?: keyof typeof INFERENCE_ENVIRONMENT_REFUSALS;
 }
+/** Console action ids of {@link ConsoleErrorNextStep} used by the inference routes (#1270). */
+const NEXT_STEPS = Object.freeze({
+  login: { kind: 'action', action: 'login', label: '重新登录该模型账号' },
+  retry: { kind: 'action', action: 'retry', label: '稍后重试' },
+  setProjectId: { kind: 'action', action: 'set-project-id', label: '在模型服务配置中填写 Google Cloud 项目 ID（projectId）' },
+  setClientSecret: { kind: 'action', action: 'set-client-secret', label: '为账号设置 OAuth 客户端凭据（client secret）' },
+  verifyAccount: { kind: 'action', action: 'verify-account', label: '先在浏览器中完成 Google 账号验证，再完成准备' },
+  editConfig: { kind: 'action', action: 'edit-config', label: '修正对应的模型配置' },
+  reload: { kind: 'action', action: 'reload', label: '重新读取后再提交' },
+} as const satisfies Record<string, ConsoleErrorNextStep>);
+
+/** Next step of a preparation failure, by its sanitized reason (same split as the attention hint). */
+function preparationNextStep(preparation: Readonly<{ reason?: string; status?: number }> | undefined): ConsoleErrorNextStep {
+  const hint = preparationHint({ ...(preparation?.reason ? { reason: preparation.reason } : {}),
+    ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }) });
+  return hint === 'project' || hint === 'unsupportedClient' ? NEXT_STEPS.setProjectId
+    : hint === 'validation' ? NEXT_STEPS.verifyAccount : NEXT_STEPS.retry;
+}
+
+/** Operator text of a preparation failure. */
+function preparationMessage(reason: string | undefined): string {
+  if (reason === 'project-required')
+    return '账号准备未完成：该账号已开通但上游没有为它分配 Google Cloud 项目。请在该模型服务的配置中填写 Google Cloud 项目 ID（projectId，字符串形式如 my-project-123，不是数字项目编号；即 gemini-cli 的 GOOGLE_CLOUD_PROJECT），保存后重新完成准备';
+  if (reason === 'UNSUPPORTED_CLIENT')
+    return '账号准备未完成：上游拒绝为这个客户端自动开通（UNSUPPORTED_CLIENT），Antigravity 直连目前可能卡在这一步。'
+      + '可以在该模型服务的配置中填写自己的 Google Cloud 项目 ID（projectId）后重新完成准备，或改用其他接入方式';
+  if (reason === 'validation-required')
+    return '账号准备未完成：该账号需要先在浏览器中完成 Google 的账号验证，之后再完成准备';
+  return '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试';
+}
+
 /** Shown when model discovery succeeds with zero models. */
 const DISCOVERY_EMPTY_HINT = '上游模型目录没有返回可用模型：可以直接手动填写模型 ID 继续配置；Codex 订阅还可以在模型服务配置中调整 codexClientVersion（上游按 Codex CLI 版本过滤模型）后重新读取';
 function failure(error: unknown): RouteFailure {
@@ -158,12 +193,13 @@ function failure(error: unknown): RouteFailure {
     return { status: 409, code: 'migration-required' };
   if (error instanceof PersonalSessionAccessError) return { status: 403, code: 'forbidden' };
   if (error instanceof PersonalSessionRevisionConflictError)
-    return { status: 409, code: 'revision-conflict' };
+    return { status: 409, code: 'revision-conflict', nextStep: NEXT_STEPS.reload };
   if (error instanceof InferenceStoreError) return { status: 503, code: `storage-${error.code}` };
   if (error instanceof TypeError) return { status: 400, code: 'invalid-input' };
   if (error instanceof ProviderError)
     return {
       code: error.code,
+      ...(error.code === 'plan-conflict' ? { nextStep: NEXT_STEPS.reload } : error.path ? { nextStep: NEXT_STEPS.editConfig } : {}),
       ...(error.path ? { details: { path: error.path },
         message: error.code === 'invalid-graph'
           ? `配置 ${error.path} 引用的模型配置不存在或类型不对（删除模型配置前请先从这里移除）`
@@ -196,6 +232,7 @@ function failure(error: unknown): RouteFailure {
       code: error.code,
       details: { reason: 'client-secret-required' },
       message: '该服务使用机密 OAuth 客户端，登录前需要先为账号设置客户端凭据（client secret）',
+      nextStep: NEXT_STEPS.setClientSecret,
     };
   if (error instanceof InferenceAuthenticationError && error.code === 'preparation-failed') {
     const preparation = error.preparation;
@@ -210,9 +247,8 @@ function failure(error: unknown): RouteFailure {
         ...(preparation?.status === undefined ? {} : { upstreamStatus: preparation.status }),
         ...(preparation?.step ? { step: preparation.step } : {}),
       },
-      message: preparation?.reason === 'project-required'
-        ? '账号准备未完成：该账号已开通但上游没有为它分配 Google Cloud 项目。请在该模型服务的配置中填写 Google Cloud 项目 ID（projectId，字符串形式如 my-project-123，不是数字项目编号；即 gemini-cli 的 GOOGLE_CLOUD_PROJECT），保存后重新完成准备'
-        : '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
+      message: preparationMessage(preparation?.reason),
+      nextStep: preparationNextStep(preparation),
     };
   }
   if (error instanceof ConnectionTestRateLimitedError)
@@ -221,6 +257,7 @@ function failure(error: unknown): RouteFailure {
       code: 'rate-limited',
       details: { retryAfterMs: error.retryAfterMs },
       message: '连接测试过于频繁，请稍后重试',
+      nextStep: NEXT_STEPS.retry,
     };
   if (error instanceof ProviderDiscoveryError && error.code === 'rate-limited')
     return {
@@ -231,6 +268,7 @@ function failure(error: unknown): RouteFailure {
         ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
       },
       message: '模型目录请求过于频繁，请稍后重试',
+      nextStep: NEXT_STEPS.retry,
     };
   if (error instanceof InferenceAuthenticationError)
     return {
@@ -240,8 +278,33 @@ function failure(error: unknown): RouteFailure {
         ? 403
         : 503,
       code: error.code,
+      ...(authenticationNextStep(error.code) ? { nextStep: authenticationNextStep(error.code)! } : {}),
     };
-  return { status: 503, code: 'unavailable' };
+  return { status: 503, code: 'unavailable', nextStep: NEXT_STEPS.retry };
+}
+
+/** Next step of an authentication failure the operator can act on (#1270). */
+function authenticationNextStep(code: string): ConsoleErrorNextStep | undefined {
+  if (code === 'reauthorize' || code === 'disconnected' || code === 'not-authorized' || code === 'identity-change') return NEXT_STEPS.login;
+  if (code === 'conflict') return NEXT_STEPS.reload;
+  if (code === 'outcome-unknown' || code === 'not-submitted' || code === 'rejected') return NEXT_STEPS.retry;
+  return undefined;
+}
+
+/**
+ * The `details` object of a failure body (#1270, `ConsoleErrorDetails`): always present, holding
+ * only the safe enum-like fields. They are also kept at the top level for older Consoles.
+ */
+function failureDetails(result: RouteFailure): ConsoleErrorDetails {
+  const details = result.details ?? {};
+  return Object.freeze({
+    ...(details.step ? { step: details.step } : {}),
+    ...(details.reason ? { reason: details.reason } : result.reason ? { reason: result.reason } : {}),
+    ...(details.upstreamStatus === undefined ? {} : { upstreamStatus: details.upstreamStatus }),
+    ...(details.retryAfterMs === undefined ? {} : { retryAfterMs: details.retryAfterMs }),
+    ...(details.path ? { path: details.path } : {}),
+    ...(details.preparationCode ? { preparationCode: details.preparationCode } : {}),
+  });
 }
 
 /** One authenticated management surface for Host and pre-bound personal owners. No raw error or provider response leaves this boundary. */
@@ -259,6 +322,8 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
         return withNoStore(jsonResponse(result.status, {
           success: false,
           code: result.code,
+          details: failureDetails(result),
+          ...(result.nextStep ? { nextStep: result.nextStep } : {}),
           error: '未关联可管理的模型身份',
         }));
       }
@@ -348,6 +413,8 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
             code: result.code,
             ...(result.details ?? {}),
             ...(result.reason ? { reason: result.reason } : {}),
+            details: failureDetails(result),
+            ...(result.nextStep ? { nextStep: result.nextStep } : {}),
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
             error: result.reason ? INFERENCE_ENVIRONMENT_REFUSALS[result.reason] : result.message ?? failureMessage(result.code),
           }));

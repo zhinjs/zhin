@@ -17,8 +17,10 @@ import {
   type PendingLogin,
   accountKey,
   authenticationFailure,
+  clearJournaledFailure,
   describePreparationFailure,
   exchangeFailure,
+  journalPreparationFailure,
   identity,
   preparationFailure,
   publicFailure,
@@ -310,6 +312,7 @@ export async function prepareAccountOAuth(
     const failure = preparationFailure(error);
     if (!failure || signal.aborted) throw error;
     ctx.preparationFailures.set(accountKey(account), { revision: current.record.revision, failure });
+    journalPreparationFailure(ctx, account, current.record.revision, failure);
     ctx.reportCleanup(describePreparationFailure(failure));
     throw new InferenceAuthenticationError('preparation-failed', failure);
   }
@@ -324,6 +327,7 @@ export async function prepareAccountOAuth(
   if (subject && credential.subject && subject !== credential.subject)
     throw new InferenceAuthenticationError('identity-change');
   ctx.preparationFailures.delete(accountKey(account));
+  clearJournaledFailure(ctx, 'account', account);
   await ctx.publish({
     account,
     previous: current,

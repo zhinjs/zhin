@@ -48,6 +48,8 @@ export interface ConsoleControlPlaneOptions {
   readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
   /** Effective provider bindings and recent turns for the Agent workbench (#1250). */
   readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
+  /** Instance runtime failure journal (#1270) for the attention inbox. */
+  readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -105,6 +107,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
       ...(options.featureStores ? { featureStores: options.featureStores } : {}),
       ...(options.agentInsights ? { agentInsights: options.agentInsights } : {}),
+      ...(options.runtimeFailures ? { runtimeFailures: options.runtimeFailures } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();
