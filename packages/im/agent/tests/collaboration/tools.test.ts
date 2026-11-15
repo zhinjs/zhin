@@ -20,7 +20,7 @@ import {
 } from '@zhin.js/harness';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { CollaborationAgent, CollaborationDirectory } from '../../src/collaboration/contracts.js';
-import { MAX_AGENT_REPLY_CHARS, createCollaborationTools } from '../../src/collaboration/tools.js';
+import { MAX_AGENT_REPLY_CHARS, MIN_DELEGATION_BUDGET, applyDelegationBudgetFloor, createCollaborationTools } from '../../src/collaboration/tools.js';
 import { recordActorAttachments, resolveAttachmentRefs } from '../../src/media/agent-attachments.js';
 import { mergeToolOutboundElements } from '../../src/media/media-tool-bridge.js';
 
@@ -209,8 +209,77 @@ describe('collaboration tools: ask', () => {
         return { status: 'completed', content: 'ok' };
       },
     });
-    await call(tools, 'ask', { agent: 'researcher', question: 'q', budget: { modelCalls: 3 } });
-    expect(remaining).toBe(3);
+    await call(tools, 'ask', { agent: 'researcher', question: 'q', budget: { modelCalls: 5 } });
+    expect(remaining).toBe(5);
+  });
+
+  it('raises a budget below one complete answer to the floor and says so (#1250 delegate-budget-self-sabotage)', async () => {
+    const seen: Array<BudgetAmounts | undefined> = [];
+    const { tools } = await setup([ceiling('zhin'), ceiling('researcher')], {
+      researcher: async (mail, _signal, harness) => {
+        seen.push(harness.remaining(mail));
+        return { status: 'completed', content: 'ok' };
+      },
+    });
+    const out = await call(tools, 'ask', { agent: 'researcher', question: 'q', budget: { modelCalls: 1, tokens: 250, sideEffects: 1 } });
+    expect(seen[0]).toMatchObject({ modelCalls: MIN_DELEGATION_BUDGET.modelCalls, tokens: MIN_DELEGATION_BUDGET.tokens, sideEffects: 1 });
+    expect(out).toContain(`budget raised to the minimum for one complete answer: modelCalls 1→${MIN_DELEGATION_BUDGET.modelCalls}, tokens 250→${MIN_DELEGATION_BUDGET.tokens}`);
+  });
+
+  it('never raises a budget floor above half of what the asker has left', () => {
+    const remaining = { modelCalls: 6, tokens: 100_000, wallMs: 10_000, sideEffects: 5 };
+    expect(applyDelegationBudgetFloor({ modelCalls: 1, tokens: 500, wallMs: 1_000 }, remaining)).toEqual({
+      amounts: { modelCalls: 3, tokens: MIN_DELEGATION_BUDGET.tokens, wallMs: 5_000 },
+      raised: ['modelCalls 1→3', `tokens 500→${MIN_DELEGATION_BUDGET.tokens}`, 'wallMs 1000→5000'],
+    });
+    expect(applyDelegationBudgetFloor({ modelCalls: 1 }, { ...remaining, modelCalls: 2 })).toEqual({ amounts: { modelCalls: 1 }, raised: [] });
+    expect(applyDelegationBudgetFloor({ modelCalls: 10 }, remaining)).toEqual({ amounts: { modelCalls: 10 }, raised: [] });
+  });
+
+  it('accepts three parallel one-call delegations out of six remaining calls (the floor does not eat the budget)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => { release = resolve; });
+    const { harness, toolsFor, attached } = await setup([ceiling('zhin'), ceiling('a'), ceiling('b'), ceiling('c')], {
+      a: async () => { await hold; return { status: 'completed', content: 'a' }; },
+      b: async () => { await hold; return { status: 'completed', content: 'b' }; },
+      c: async () => { await hold; return { status: 'completed', content: 'c' }; },
+      'zhin#worker-1': async () => { await hold; return { status: 'completed', content: 'coordinated' }; },
+    });
+    // A grant of six model calls for the delegating mail: its remaining budget is 6.
+    const sent = await harness.send('zhin', attached.root, { kind: 'delegate', to: 'zhin#worker-1', text: 'coordinate', budget: { modelCalls: 6 } });
+    if (!sent.ok) throw new Error(`grant failed: ${sent.code}`);
+    expect(harness.remaining(sent.mail)?.modelCalls).toBe(6);
+    const tools = toolsFor('zhin#worker-1', sent.mail);
+    const outs = await Promise.all(['a', 'b', 'c'].map(agent => call(tools, 'delegate', { agent, brief: 'part', budget: { modelCalls: 1 } })));
+    for (const [index, out] of outs.entries()) expect(out).toMatch(new RegExp(`^delegated to ${['a', 'b', 'c'][index]} \\(mail id\\d+\\)`));
+    expect(harness.remaining(sent.mail)!.modelCalls).toBeGreaterThanOrEqual(0);
+    release();
+    await attached.detach({ status: 'completed' });
+  });
+
+  it('refuses a fresh ask to an agent still working on a delegation (one line of work)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => { release = resolve; });
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('planner')], {
+      planner: async () => { await hold; return { status: 'completed', content: 'plan' }; },
+    });
+    const delegated = await call(tools, 'delegate', { agent: 'planner', brief: 'Plan the weekend.' });
+    const mailId = /mail (id\d+)/.exec(delegated)![1]!;
+    const refused = await call(tools, 'ask', { agent: 'planner', question: 'Done yet?' });
+    expect(refused).toMatch(/^ask refused \(delegation_in_progress\)/);
+    expect(refused).toContain(`mail ${mailId}`);
+    expect(refused).toContain('follow_up');
+    release();
+    await attached.detach({ status: 'completed' });
+  });
+
+  it('asks again once the delegated result has arrived', async () => {
+    const { tools, harness, attached } = await setup([ceiling('zhin'), ceiling('planner')]);
+    const delegated = await call(tools, 'delegate', { agent: 'planner', brief: 'Plan the weekend.' });
+    const mailId = /mail (id\d+)/.exec(delegated)![1]!;
+    await vi.waitFor(() => expect(harness.graph(attached.root.engagementId)!.outstanding!(mailId)).toBe(false));
+    expect(await call(tools, 'ask', { agent: 'planner', question: 'One more?' })).toMatch(/^agent planner replied \(completed\)/);
+    await attached.detach({ status: 'completed' });
   });
 
   it('refuses unknown agents without contacting the harness', async () => {

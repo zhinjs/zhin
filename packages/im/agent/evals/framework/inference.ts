@@ -6,6 +6,9 @@ import { ModelRuntimeService } from '../../src/model-runtime/service.js';
 import type { EvalCase } from './fixture.js';
 import { PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel } from './scripted-model.js';
 
+/** Platform of eval IM turns (driver `PLATFORM`). */
+const EVAL_PLATFORM = 'eval';
+
 export function createEvalInference(model: ScriptedModel, definition: EvalCase) {
   const root = rootPluginId(), ownerId = 'eval-host';
   const state: SnapshotState = { root,
@@ -32,7 +35,10 @@ export function createEvalInference(model: ScriptedModel, definition: EvalCase) 
       .map(native => [id(alias, native), { ...resources, id: id(alias, native), accountId: alias, model: native, parameters: {} }]))),
     purposes: { defaults: { chat: id(model.providerAlias, model.modelId),
       ...(definition.perception ? { perception: { profile: id(PERCEPTION_PROVIDER_ALIAS, PERCEPTION_MODEL_ID),
-        fallbacks: (definition.perception.fallbacks ?? []).map(native => id(model.providerAlias, native)) } } : {}) } },
+        fallbacks: (definition.perception.fallbacks ?? []).map(native => id(model.providerAlias, native)) } } : {}) },
+      ...(definition.purposes?.agents ? { agents: Object.fromEntries(Object.entries(definition.purposes.agents)
+        .map(([key, native]) => [key, id(model.providerAlias, native)])) } : {}),
+      ...(definition.purposes?.adapterChat ? { adapters: { [EVAL_PLATFORM]: { chat: id(model.providerAlias, definition.purposes.adapterChat) } } } : {}) },
   });
   const driver = defineProvider({ id: 'eval-scripted', contractVersion: '1', serviceSchema: { parse: (value: unknown) => value },
     authentication: { methods: ['none'] }, targets: () => ({ authentication: [], inference: [] }), models: service => service.models,
@@ -49,7 +55,9 @@ export function createEvalInference(model: ScriptedModel, definition: EvalCase) 
     },
   });
   const runtime = new ModelRuntimeService({ rootId: 'root', hostOwnerId: ownerId,
-    context: ({ request }) => ({ rootId: 'root', ownerId, hostOwnerId: ownerId, operationId: request.identity.turnId, sessionKey: request.session.key }),
+    context: ({ request }) => ({ rootId: 'root', ownerId, hostOwnerId: ownerId, operationId: request.identity.turnId, sessionKey: request.session.key,
+      // Host ingress keys an IM conversation's turn by its adapter (inferencePolicyKeys).
+      ...(request.origin.kind === 'im' ? { adapterKey: request.origin.platform } : {}) }),
     inferenceFactory: ({ lease }) => createInferenceRuntime({ repository: { readGraph: async () => graph }, generationIdentity: lease.value,
       drivers: { acquire: async ({ service }) => {
         if (!lease.active || !snapshots.owns(lease)) throw new Error('Eval generation lease expired');

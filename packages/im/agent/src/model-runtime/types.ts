@@ -78,6 +78,12 @@ export interface ModelTurnResolveInput {
   readonly binding: ResolvedAgentBinding;
 }
 export interface ModelTurnAcquireInput extends ModelTurnResolveInput {
+  /**
+   * The specialist the turn was routed to (`@name`, an endpoint's preferred agent, a platform agent):
+   * the turn runs on its `agent:<key>` purpose when one is effective, else on the binding's
+   * (#1250 agent-purpose-binding-ignored). Actor turns of its engagement that name no sub-agent keep it.
+   */
+  readonly agent?: SubAgentModelKey;
   readonly lease: SnapshotLease;
   readonly snapshots: SnapshotReader;
   readonly inferenceSnapshot?: InferenceGraphSnapshot;

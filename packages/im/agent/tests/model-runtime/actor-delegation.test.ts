@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import { getLogger } from '@zhin.js/logger';
 import { modelRuntimeFixture } from '../helpers/model-runtime.js';
+import { context } from '../../../ai/tests/provider/fixtures.js';
 import { MAX_DELEGATION_RETENTION_MS } from '../../src/model-runtime/service.js';
 
 function withAgentProfile(f: ReturnType<typeof modelRuntimeFixture>, agents: Record<string, string>) {
@@ -66,6 +67,70 @@ describe('#1250 actor turns run on their own delegated model operations', () => 
     await delegation.release();
   });
 
+  it('an explicit sub-agent model wins over adapter, endpoint and scene chat overrides (#1250 batch 21)', async () => {
+    const f = modelRuntimeFixture({ bindingNames: ['planner'] });
+    const graph = f.graph;
+    f.update({ ...graph,
+      profiles: { ...graph.profiles, A: { ...graph.profiles.text, id: 'A' }, B: { ...graph.profiles.text, id: 'B' } },
+      purposes: { ...graph.purposes, agents: { planner: 'A', researcher: 'A' },
+        adapters: { sandbox: { chat: 'B' } }, scenes: { room: { chat: 'B' } } } });
+    const root = await f.acquire({ adapterKey: 'sandbox', sceneKey: 'room' });
+    // The root turn runs on chat, where the scene / adapter overrides apply.
+    expect([root.chat.binding.profile.id, root.purpose]).toEqual(['B', 'chat']);
+    const delegation = root.retainDelegation();
+    // A project sub-agent that is also a (legacy) `ai.agents.planner` binding: the reported case.
+    const planner = await delegation.acquire({ operationId: 'p', sessionKey: 's#actor:planner', agent: { name: 'planner', qualifiedName: 'planner' } });
+    expect([planner.chat.binding.profile.id, planner.purpose, planner.chat.binding.source])
+      .toEqual(['A', 'agent:planner', { level: 'agent', name: 'planner' }]);
+    const researcher = await delegation.acquire({ operationId: 'r', sessionKey: 's#actor:researcher', agent: { name: 'researcher', qualifiedName: 'tools__researcher' } });
+    expect([researcher.chat.binding.profile.id, researcher.purpose]).toEqual(['A', 'agent:researcher']);
+    // Without its own key a sub-agent runs on chat, overrides included.
+    const executor = await delegation.acquire({ operationId: 'e', sessionKey: 's#actor:executor', agent: { name: 'executor', qualifiedName: 'executor' } });
+    expect([executor.chat.binding.profile.id, executor.purpose]).toEqual(['B', 'chat']);
+    await delegation.release();
+    await root.release();
+  });
+
+  it('runs a turn routed to a specialist, and its aggregation turns, on the specialist binding (#1250 batch 21)', async () => {
+    const f = modelRuntimeFixture({ bindingNames: ['support'] });
+    const graph = f.graph;
+    f.update({ ...graph,
+      profiles: { ...graph.profiles, A: { ...graph.profiles.text, id: 'A' }, B: { ...graph.profiles.text, id: 'B' }, S: { ...graph.profiles.text, id: 'S' } },
+      purposes: { ...graph.purposes, agents: { planner: 'A', support: 'S' }, adapters: { sandbox: { chat: 'B' } } } });
+    const open = async (agent: { name: string; qualifiedName?: string }, bindingName = 'zhin') => {
+      const lease = f.snapshots.acquire();
+      const scope = await f.runtime.acquireForContext({ lease, snapshots: f.snapshots, context: { ...context, adapterKey: 'sandbox' }, bindingName, agent });
+      return { scope, release: async () => { await scope.release(); lease.release(); } };
+    };
+    const routed = await open({ name: 'planner', qualifiedName: 'planner' });
+    expect([routed.scope.chat.binding.profile.id, routed.scope.purpose]).toEqual(['A', 'agent:planner']);
+    const delegation = routed.scope.retainDelegation();
+    // The entry actor (planner) continuing with results names no sub-agent: it keeps the root's purpose.
+    const aggregation = await delegation.acquire({ operationId: 'agg', sessionKey: 's#actor:planner' });
+    expect([aggregation.chat.binding.profile.id, aggregation.purpose]).toEqual(['A', 'agent:planner']);
+    // A sub-agent without a key of its own still runs on chat (adapter override included).
+    const researcher = await delegation.acquire({ operationId: 'r', sessionKey: 's#actor:researcher', agent: { name: 'researcher', qualifiedName: 'researcher' } });
+    expect([researcher.chat.binding.profile.id, researcher.purpose]).toEqual(['B', 'chat']);
+    await delegation.release();
+    await routed.release();
+    // A specialist without a key keeps the binding's purpose (not chat).
+    const unkeyed = await open({ name: 'executor', qualifiedName: 'executor' }, 'support');
+    expect([unkeyed.scope.chat.binding.profile.id, unkeyed.scope.purpose]).toEqual(['S', 'agent:support']);
+    await unkeyed.release();
+  });
+
+  it('a configured binding run by name selects agent:<binding> without a sub-agent warning (#1250 batch 21)', async () => {
+    const warn = vi.spyOn(getLogger('ai.model-runtime'), 'warn');
+    const f = modelRuntimeFixture({ bindingNames: ['support'] });
+    f.update(withAgentProfile(f, { support: 'other' }));
+    // AgentRuntime passes no specialist key for a binding that is not a listed agent (specialistModelKey → undefined).
+    const scope = await f.acquire({ adapterKey: 'sandbox' }, 'support');
+    expect([scope.chat.binding.profile.id, scope.purpose]).toEqual(['other', 'agent:support']);
+    expect(warn).not.toHaveBeenCalled();
+    await scope.release();
+    warn.mockRestore();
+  });
+
   it('looks a sub-agent up by its qualified name first', async () => {
     const f = modelRuntimeFixture();
     f.update(withAgentProfile(f, { 'tools-plugin__researcher': 'other', researcher: 'text' }));
@@ -86,9 +151,10 @@ describe('#1250 actor turns run on their own delegated model operations', () => 
     const delegation = root.retainDelegation();
     const bare = await delegation.acquire({ operationId: 'a', sessionKey: 's', agent: { name: 'support', qualifiedName: 'helpdesk__support' } });
     expect([bare.chat.binding.profile.id, bare.purpose]).toEqual(['text', 'chat']);
-    // A root-plugin sub-agent's qualified name is its bare name: still the binding's key.
+    // A root-plugin sub-agent's qualified name is its bare name: `agents/support/` and
+    // `ai.agents.support` are one agent, so the key is its own explicit choice (#1250 batch 21).
     const rootPlugin = await delegation.acquire({ operationId: 'b', sessionKey: 's', agent: { name: 'support', qualifiedName: 'support' } });
-    expect([rootPlugin.chat.binding.profile.id, rootPlugin.purpose]).toEqual(['text', 'chat']);
+    expect([rootPlugin.chat.binding.profile.id, rootPlugin.purpose]).toEqual(['other', 'agent:support']);
     expect(warn.mock.calls.some(([message]) => String(message).includes('belongs to the Agent binding'))).toBe(true);
     // The binding itself still selects it.
     const binding = await f.acquire({}, 'support');

@@ -19,12 +19,17 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 21 批——子 Agent 与被路由到的专家 Agent 显式绑定的模型优先于适配器 / 场景的聊天覆盖（ModelTurnAcquireInput 新增可选 agent，新增导出 specialistModelKey() / traceModelSelection()，TurnTraceModelSelection 新增 source_key / agent；项目自己的子 Agent 使用同名绑定的 purposes.agents 键，purposeKeyEffects / purposeEffects 相应在 binding 目标上列出 agents；AgentHostProtocolPort 新增可选 listConfiguredBindingNames()，管理视图按运行时口径取绑定名）；委派工具对模型自设的预算加下限（不超过剩余额度的一半），ask 对未完成的委派对象返回 delegation_in_progress。npm 上 1.7.0 未被占用。"
     },
     {
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `formatDateTime()` 与 `FormatDateTimeOptions`（CLI 与日志共用的 `YYYY-MM-DD HH:mm:ss` 日期时间格式）。npm 上 1.4.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/harness",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 21 批 EngagementGraphView 新增可选方法 outstanding(mailId)（ask / delegate 是否仍在等结果）。npm 上 1.1.0 未被占用。"
     }
   ]
 }
