@@ -61,3 +61,4 @@ export {
   refreshIntervalOptions,
 } from './components/refresh-control-model.js';
 export * from './components/page-chrome.js';
+export * from './components/content-blocks.js';

@@ -12,6 +12,7 @@
 @import "./base.css";
 @import "./components.css";
 @import "./searchable-select.css";
+@import "./content-blocks.css";
 
 /* Tailwind's `text-xs` is the Console caption size (13px): secondary text never drops to 12px. */
 @theme {

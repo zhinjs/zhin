@@ -73,6 +73,15 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '群号 / 用户 ID / 频道 ID': 'Group / user / channel ID',
   '使用该会话': 'Use this conversation',
   '未启用': 'Disabled',
+  // Declarative renderer on @zhin.js/console-ui (ADR 0063 P2)
+  '查看 JSON': 'View JSON',
+  '执行结果预览': 'Result preview',
+  '复制图片数据': 'Copy data URL',
+  '请输入{0}…': 'Enter {0}…',
+  '共 {0} / {1} 条': '{0} / {1} items',
+  '第 {0} / {1} 页（共 {2} 条）': 'Page {0} of {1} ({2} items)',
+  '无匹配记录': 'No matching rows',
+  '清除过滤': 'Clear filter',
 };
 
 /**

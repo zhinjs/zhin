@@ -36,8 +36,8 @@ function mountCard(props: { draft?: Draft; endpoint?: Record<string, unknown>; s
     if (!node) throw new Error(`missing button ${label}: ${textOf(env.tree())}`);
     return node.props as { onClick: () => Promise<void> | void; disabled?: boolean; busy?: boolean };
   };
-  const confirm = () => nodes().find(n => isComponent(n, 'ConfirmButton'))!.props as { confirmLabel: string; message: string; onConfirm: () => Promise<void>; children: string; disabled?: boolean };
-  const textarea = () => nodes().find(n => n.type === 'textarea')!.props as { value: string; onChange(e: { target: { value: string } }): void };
+  const confirm = () => nodes().find(n => isComponent(n, 'ActionButton'))!.props as { label: string; variant: string; confirmLabel: string; confirm: string; onRun: () => Promise<void>; disabled?: boolean };
+  const textarea = () => nodes().find(n => isComponent(n, 'Textarea'))!.props as { value: string; onChange(e: { target: { value: string } }): void };
   return { env, s, nodes, button, confirm, textarea, text: () => textOf(env.tree()) };
 }
 
@@ -74,14 +74,15 @@ describe('DraftCard', () => {
     expect(view.s.notify).toHaveBeenCalledWith({ tone: 'success', message: '已发出', link: 'https://x.test/posted' });
   });
 
-  it('discards through an inline ConfirmButton labelled 丢弃草稿, never window.confirm', async () => {
+  it('discards through a danger ActionButton with a confirmation dialog labelled 丢弃草稿, never window.confirm', async () => {
     const windowConfirm = vi.fn(() => true);
     vi.stubGlobal('window', { confirm: windowConfirm });
     const view = mountCard();
     const confirm = view.confirm();
-    expect(confirm.children).toBe('丢弃草稿'); expect(confirm.confirmLabel).toBe('丢弃草稿');
+    expect(confirm.label).toBe('丢弃草稿'); expect(confirm.confirmLabel).toBe('丢弃草稿');
+    expect(confirm.variant).toBe('danger'); expect(confirm.confirm).toBe('确定丢弃这条回复？不会发送。');
     expect(view.s.call).not.toHaveBeenCalled();
-    await confirm.onConfirm(); await view.env.settle();
+    await confirm.onRun(); await view.env.settle();
     expect(view.s.call).toHaveBeenCalledWith('drop', { id: 'd1', locale: 'zh-CN' });
     expect(view.s.notify).toHaveBeenCalledWith({ tone: 'success', message: '已丢弃' });
     expect(windowConfirm).not.toHaveBeenCalled();
@@ -100,16 +101,16 @@ describe('DraftCard', () => {
     view.env.rerender();
     view.textarea().onChange({ target: { value: 'a'.repeat(1003) } });
     view.env.rerender();
-    const field = view.nodes().find(n => isComponent(n, 'Field'))!.props as { error?: string; hint?: string };
+    const field = view.nodes().find(n => isComponent(n, 'FormField') && n.props?.error !== undefined)!.props as { error?: string; hint?: string };
     expect(field.error).toBe('超出 3 字'); expect(field.hint).toBe('1003 / 1000 字');
     expect(view.button('发送').disabled).toBe(true); expect(view.button('保存').disabled).toBe(true);
-    expect(view.nodes().some(n => n.type === 'textarea' && 'autoFocus' in (n.props ?? {}))).toBe(false);
+    expect(view.nodes().some(n => isComponent(n, 'Textarea') && 'autoFocus' in (n.props ?? {}))).toBe(false);
   });
 
   it('keeps the unconfirmed-result warning for interrupted sends', () => {
     const view = mountCard({ draft: draft({ interrupted: true }) });
-    const notice = view.nodes().find(n => isComponent(n, 'Notice'))!.props as { tone: string; title: string; children: string };
-    expect(notice.tone).toBe('warning'); expect(notice.title).toBe('结果未确认');
+    const notice = view.nodes().find(n => isComponent(n, 'NoticeBlock'))!.props as { tone: string; children: unknown };
+    expect(notice.tone).toBe('warning'); expect(textOf(notice.children)).toContain('结果未确认');
     expect(textOf(notice.children)).toContain('示例站');
   });
 
@@ -172,13 +173,14 @@ describe('CommentReviewSession', () => {
     const mod = env.load(file('./CommentReviewPage.tsx'));
     env.mount(() => (mod.CommentReviewSession as (p: unknown) => unknown)({ spec }));
     const nodes = () => allNodes(env.tree());
-    return { env, store, nodes, text: () => textOf(env.tree()), refreshButton: () => nodes().find(n => isComponent(n, 'Button'))!.props as { onClick: () => Promise<void>; busy?: boolean } };
+    const page = () => nodes().find(n => isComponent(n, 'RendererPage'))!.props as { refresh: { onRefresh: () => Promise<unknown>; intervalMs: number } };
+    return { env, store, nodes, page, text: () => textOf(env.tree()), refreshButton: () => ({ onClick: () => page().refresh.onRefresh() }) };
   }
   const status = (endpoints: unknown[]) => ({ endpoints, updatedAt: Date.now() });
 
   it('shows loading, then one section per endpoint for the resolved plugin', async () => {
     const view = host(status([endpoint()]));
-    expect(view.nodes().some(n => isComponent(n, 'LoadingState'))).toBe(true);
+    expect(view.nodes().some(n => isComponent(n, 'LoadingBlock'))).toBe(true);
     await view.env.settle();
     expect(view.store.calls).toContain('plugin.plugin-a.status');
     expect(view.nodes().filter(n => isComponent(n, 'EndpointSection'))).toHaveLength(1);
@@ -189,7 +191,7 @@ describe('CommentReviewSession', () => {
   it('shows an empty state when the adapter has no endpoints', async () => {
     const view = host(status([]));
     await view.env.settle();
-    expect(view.nodes().some(n => isComponent(n, 'EmptyState'))).toBe(true);
+    expect(view.nodes().some(n => isComponent(n, 'EmptyBlock'))).toBe(true);
     expect(view.nodes().some(n => isComponent(n, 'EndpointSection'))).toBe(false);
     view.env.unmount();
   });
@@ -198,8 +200,8 @@ describe('CommentReviewSession', () => {
     const view = host(status([endpoint()]));
     view.store.fail = true;
     await view.env.settle();
-    const state = view.nodes().find(n => isComponent(n, 'ErrorState'))!.props as { message: string; onRetry: () => unknown };
-    expect(state.message).toBe('主机无响应'); expect(typeof state.onRetry).toBe('function');
+    const state = view.nodes().find(n => isComponent(n, 'ErrorBlock'))!.props as { message: string; onRetry: () => unknown };
+    expect(state.message).toBe('无法读取评论审批状态：主机无响应'); expect(typeof state.onRetry).toBe('function');
     view.env.unmount();
   });
 
@@ -208,20 +210,20 @@ describe('CommentReviewSession', () => {
     await view.env.settle();
     view.store.fail = true;
     await view.refreshButton().onClick(); await view.env.settle();
-    const stale = view.nodes().find(n => isComponent(n, 'StaleNotice'))!.props as { error: string; lastSuccessAt: number };
-    expect(stale.error).toBe('主机无响应'); expect(stale.lastSuccessAt).toBeTypeOf('number');
+    const stale = view.nodes().find(n => isComponent(n, 'NoticeBlock') && n.props?.tone === 'warning')!.props as { children: unknown };
+    expect(textOf(stale.children)).toContain('主机无响应');
     expect(view.nodes().some(n => isComponent(n, 'EndpointSection'))).toBe(true);
     view.env.unmount();
   });
 
-  it('polls every 10s normally and every 2s while a login is pending', async () => {
+  it('auto-refreshes every 10s through the RefreshControl normally and polls every 2s while a login is pending', async () => {
     const view = host(status([endpoint()]));
     await view.env.settle();
+    // The 10s interval belongs to the RefreshControl (shell or inline header); the RPC hook does not poll on its own.
+    expect(view.page().refresh.intervalMs).toBe(10_000);
     const idle = view.store.statusCalls;
-    await vi.advanceTimersByTimeAsync(2000); await view.env.settle();
+    await vi.advanceTimersByTimeAsync(10_000); await view.env.settle();
     expect(view.store.statusCalls).toBe(idle);
-    await vi.advanceTimersByTimeAsync(8000); await view.env.settle();
-    expect(view.store.statusCalls).toBe(idle + 1);
     view.env.unmount();
 
     const waiting = host(status([endpoint({ qr: { state: 'waiting', image: 'data:x' } })]));
