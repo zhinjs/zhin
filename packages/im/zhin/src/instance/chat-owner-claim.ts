@@ -19,8 +19,8 @@
  *   of the code's SHA-256, never the code.
  * - Kept out of chat (#1250): {@link createChatOwnerClaimGuard} takes every claim-shaped message
  *   (`matchChatOwnerClaimText`: keyword first, then exactly one token) at the start of inbound, with or
- *   without a prefix and whether or not a command matches — while a code is open in any conversation,
- *   afterwards in private chats. Such a message is never recorded, logged, traced or handed to the
+ *   without a prefix and whether or not a command matches — only while a code is open (in any
+ *   conversation). Such a message is never recorded, logged, traced or handed to the
  *   Agent; it gets the claim reply (usage, refusal or result) only.
  */
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
@@ -305,14 +305,16 @@ export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim;
 /**
  * #1250: takes claim-shaped messages (`认领 <码>` / `claim <code>`, prefixed or not) before anything records,
  * logs or routes them, so a code never reaches the Agent, the conversation history or a trace. While a code
- * is open this applies in every conversation (a correct code sent in a group is still burnt); afterwards
- * only in private chats, where the reply says claims are closed — in groups such text stays ordinary chat.
+ * is open this applies in every conversation (a correct code sent in a group is still burnt); once a
+ * global owner exists (or claims are not open) nothing is taken: such text goes to commands or the Agent
+ * as usual, and only the writer-side backstop masks the token.
  */
 export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerClaim }>): InboundSecretGuard {
   const guard: InboundSecretGuard = {
-    match: ({ text, prefix, conversation, snapshot }) => {
+    match: ({ text, prefix, snapshot }) => {
       const found = matchChatOwnerClaimText(text, prefix);
-      if (!found || (!options.claim.active && conversation.kind !== 'private')) return undefined;
+      // Only while a code is open: afterwards there is nothing to leak, and such text is ordinary chat.
+      if (!found || !options.claim.active) return undefined;
       return Object.freeze({
         name: 'claim',
         redacted: `${found.keyword} ***`,

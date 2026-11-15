@@ -161,13 +161,15 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     expect(await kept()).toContain('我想认领这个任务');
   });
 
-  it('after a global owner exists, groups chat normally and a private claim is told claims are closed', async () => {
-    const { send, agent, roles } = await setup();
+  it('after a global owner exists nothing is taken: claim-shaped text reaches the Agent as usual', async () => {
+    const { send, agent, roles, claim } = await setup();
     await roles.store.grant({ level: 'global', key: '', adapter: 'tg', userId: 'boss', role: 'owner' });
     await new Promise(resolve => setTimeout(resolve, 0));
+    expect(claim.active).toBe(false);
+    await send('qq', 'private', 'claim reward');
+    expect(agent).toHaveBeenCalledTimes(1);
+    expect(String(agent.mock.calls[0]![0].content)).toBe('claim reward');
     await send('qq', 'group', '认领 任务');
-    expect(agent).toHaveBeenCalledTimes(1);
-    expect(await send('qq', 'private', `认领 ${CODE}`)).toContain('当前不接受认领');
-    expect(agent).toHaveBeenCalledTimes(1);
+    expect(agent).toHaveBeenCalledTimes(2);
   });
 });
