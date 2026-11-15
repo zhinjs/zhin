@@ -15,6 +15,7 @@ import {
   getAIDependencies,
   getCreateBotBaseDependencies,
   CREATE_BOT_PACKAGE_MANAGER,
+  DEFAULT_CREATE_BOT_HTTP_PORT,
   getCreateBotPnpmWorkspaceConfig,
   withScaffoldVersionRanges,
   type AdapterSetupResult,
@@ -63,7 +64,25 @@ function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilena
 
 const NO_ADAPTERS: AdapterSetupResult = { packages: [], plugins: [], instances: [], envVars: {} };
 
-export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
+/** create-zhin-only choices that the shared wizard options do not carry. */
+export interface WorkspaceExtras {
+  /**
+   * `--with pm2`: add PM2 (devDependency, `ecosystem.config.cjs`, `pm2:*` scripts). Off by default:
+   * `zhin service install` is the one documented way to run the bot as a service (ADR 0062 §2).
+   */
+  readonly pm2?: boolean;
+}
+
+const PM2_SCRIPTS: Readonly<Record<string, string>> = {
+  'pm2:start': 'pm2 start ecosystem.config.cjs',
+  'pm2:stop': 'pm2 stop ecosystem.config.cjs',
+  'pm2:restart': 'pm2 restart ecosystem.config.cjs',
+  'pm2:delete': 'pm2 delete ecosystem.config.cjs',
+  'pm2:logs': 'pm2 logs',
+  'pm2:monit': 'pm2 monit',
+};
+
+export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions, extras: WorkspaceExtras = {}): Promise<void> {
   const locale = options.locale;
   const configFilename = getConfigFilename(options.config);
   // ADR 0053: adapters are installed only when requested; the Console onboarding adds them later.
@@ -124,12 +143,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       stop: 'zhin stop',
       preview: 'zhin preview',
       build: 'tsc --noEmit',
-      'pm2:start': 'pm2 start ecosystem.config.cjs',
-      'pm2:stop': 'pm2 stop ecosystem.config.cjs',
-      'pm2:restart': 'pm2 restart ecosystem.config.cjs',
-      'pm2:delete': 'pm2 delete ecosystem.config.cjs',
-      'pm2:logs': 'pm2 logs',
-      'pm2:monit': 'pm2 monit'
+      ...(extras.pm2 ? PM2_SCRIPTS : {}),
     },
     // Zhin packages get the caret range of the release this scaffold ships with, not `latest`.
     dependencies: withScaffoldVersionRanges({
@@ -143,7 +157,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     devDependencies: withScaffoldVersionRanges({
       '@types/node': '^25.0.0',
       'typescript': '^6.0.0',
-      'pm2': '^6.0.0'
+      ...(extras.pm2 ? { 'pm2': '^6.0.0' } : {}),
     }),
     engines: {
       node: CREATE_NODE_REQUIREMENT
@@ -191,124 +205,18 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     }
   }
 
-  // 创建 systemd service 配置（Linux）：当前目录用 npx 启动，不写死 nvm/node 路径
-  await fs.writeFile(path.join(projectPath, `${projectName}.service`),
-wizardText(locale, "templates.systemd", [projectName, path.resolve(projectPath), projectName, path.resolve(projectPath, '.env')]));
+  // No service files: `zhin service install` writes them for the current system, with this
+  // machine's node and CLI paths (ADR 0062 §2).
 
-  // 创建 launchd plist 配置（macOS）：当前目录用 npx 启动，不写死 nvm/node 路径
-  await fs.writeFile(path.join(projectPath, `com.zhinjs.${projectName}.plist`),
-`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.zhinjs.${projectName}</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/bin/env</string>
-        <string>npx</string>
-        <string>zhin</string>
-        <string>start</string>
-        <string>--foreground</string>
-        <string>--mode</string>
-        <string>production</string>
-        <string>--no-watch</string>
-    </array>
-
-    <key>WorkingDirectory</key>
-    <string>${path.resolve(projectPath)}</string>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>NODE_ENV</key>
-        <string>production</string>
-        <key>PATH</key>
-        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    </dict>
-
-    <key>RunAtLoad</key>
-    <true/>
-
-    <key>KeepAlive</key>
-    <true/>
-
-    <key>StandardOutPath</key>
-    <string>${path.resolve(projectPath, 'logs/launchd-stdout.log')}</string>
-
-    <key>StandardErrorPath</key>
-    <string>${path.resolve(projectPath, 'logs/launchd-stderr.log')}</string>
-
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-</dict>
-</plist>
-`);
-
-  // 创建 Windows NSSM 安装脚本（PowerShell）
-  await fs.writeFile(path.join(projectPath, 'install-service.ps1'),
-wizardText(locale, "templates.windowsService", [projectName, path.resolve(projectPath)]));
-
-  // 创建 Windows Task Scheduler XML（备选方案）
-  await fs.writeFile(path.join(projectPath, `${projectName}-task.xml`),
-`<?xml version="1.0" encoding="UTF-8"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>Zhin.js Endpoint - ${projectName}</Description>
-    <URI>\\${projectName}</URI>
-  </RegistrationInfo>
-  <Triggers>
-    <BootTrigger>
-      <Enabled>true</Enabled>
-    </BootTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>7</Priority>
-    <RestartOnFailure>
-      <Interval>PT1M</Interval>
-      <Count>3</Count>
-    </RestartOnFailure>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>npx</Command>
-      <Arguments>zhin start --foreground --mode production --no-watch</Arguments>
-      <WorkingDirectory>${path.resolve(projectPath).replace(/\\/g, '\\\\')}</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>
-`);
-
-  // 创建 PM2 配置文件
-  await fs.writeFile(path.join(projectPath, 'ecosystem.config.cjs'),
+  if (extras.pm2) {
+    // 创建 PM2 配置文件（--with pm2）
+    await fs.writeFile(path.join(projectPath, 'ecosystem.config.cjs'),
 `module.exports = {
   apps: [
     {
       name: '${projectName}',
       script: 'node_modules/.bin/zhin',
-      args: 'start --foreground --mode production --no-watch',
+      args: 'start --foreground --mode production',
       cwd: './',
       instances: 1,
       autorestart: true,
@@ -331,6 +239,7 @@ wizardText(locale, "templates.windowsService", [projectName, path.resolve(projec
   ],
 };
 `);
+  }
 
   // 创建 .gitignore
   await fs.writeFile(path.join(projectPath, '.gitignore'),
@@ -352,7 +261,7 @@ data/
 
   // 创建 README.md
   await fs.writeFile(path.join(projectPath, 'README.md'),
-wizardText(locale, "templates.projectReadme", [projectName, projectName, configFilename, configFilename, renderDatabaseReadme(options.database, configFilename, locale), configFilename]));
+wizardText(locale, "templates.projectReadme", [projectName, projectName, configFilename, configFilename, renderDatabaseReadme(options.database, configFilename, locale), configFilename, options.httpPort ?? DEFAULT_CREATE_BOT_HTTP_PORT]));
 }
 
 async function createRuntimeProjectFiles(projectPath: string, projectName: string, options: InitOptions): Promise<void> {

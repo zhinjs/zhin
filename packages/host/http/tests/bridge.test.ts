@@ -43,6 +43,26 @@ describe('bridge protocol', () => {
       { type: 'ready', payload: { version: 1, pid: 1 } },
     ]) expect(parseGatewayMessage(bad), JSON.stringify(bad)).toBeUndefined();
   });
+
+  it('validates the additive plugins.apply messages and ready.features (zhinjs/zhin#1250)', () => {
+    expect(parseInstanceMessage({ type: 'ready', payload: { version: 3, pid: 1, features: ['plugins.apply'] } })).toBeDefined();
+    expect(parseGatewayMessage({ type: 'plugins.apply', id: 'a', payload: { instanceKey: 'game', enabled: false, revision: 'r1' } })).toBeDefined();
+    expect(parseInstanceMessage({ type: 'plugins.apply.result', id: 'a', payload: { outcome: 'applied', generation: 4 } })).toBeDefined();
+    expect(parseInstanceMessage({ type: 'plugins.apply.result', id: 'a', payload: { outcome: 'restart-required', reasons: ['host-update-unavailable'] } })).toBeDefined();
+    for (const bad of [
+      { type: 'ready', payload: { version: 3, pid: 1, features: 'plugins.apply' } },
+      { type: 'ready', payload: { version: 3, pid: 1, features: [1] } },
+      { type: 'plugins.apply.result', payload: { outcome: 'applied' } },
+      { type: 'plugins.apply.result', id: 'a', payload: { outcome: 'maybe' } },
+      { type: 'plugins.apply.result', id: 'a', payload: { outcome: 'failed', message: 3 } },
+    ]) expect(parseInstanceMessage(bad), JSON.stringify(bad)).toBeUndefined();
+    for (const bad of [
+      { type: 'plugins.apply', payload: { instanceKey: 'game', enabled: false, revision: 'r' } },
+      { type: 'plugins.apply', id: 'a', payload: { instanceKey: 'Root/Game', enabled: false, revision: 'r' } },
+      { type: 'plugins.apply', id: 'a', payload: { instanceKey: 'game', enabled: 'no', revision: 'r' } },
+      { type: 'plugins.apply', id: 'a', payload: { instanceKey: 'game', enabled: true } },
+    ]) expect(parseGatewayMessage(bad), JSON.stringify(bad)).toBeUndefined();
+  });
 });
 
 /** Environment the gateway gives its instance child. */

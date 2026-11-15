@@ -11,12 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { projectIdentity } from '@zhin.js/gateway/project';
-import { launchdLabel } from './process-manager.js';
+import { legacyServiceFileNames, serviceProjectNameOf } from './service-definition.js';
 
 const execFileAsync = promisify(execFile);
 
 const PM2_FILE = /^ecosystem\.config\.(?:c?js|mjs|json|ya?ml)$/u;
-const PROJECT_NAME = /^[a-zA-Z0-9._-]+$/u;
 
 export interface LegacyServiceFiles {
   /** systemd / launchd / Windows service files. */
@@ -27,7 +26,7 @@ export interface LegacyServiceFiles {
 
 /**
  * The service files older scaffolds wrote into the project root, by their exact names (the same
- * list `zhin service install` mentions): `<name>.service`, `com.zhinjs.<name>.plist`,
+ * list `zhin service install` mentions, `legacyServiceFileNames`): `<name>.service`, `com.zhinjs.<name>.plist`,
  * `install-service.ps1`, `<name>-task.xml`, with `<name>` from package.json. `ecosystem.config.*`
  * is left out while the project uses PM2 (a `pm2` dependency or a `pm2:*` script), since
  * `create-zhin-app --with pm2` writes it.
@@ -36,13 +35,11 @@ export function findLegacyServiceFiles(root: string): LegacyServiceFiles {
   let manifest: Record<string, unknown>;
   try { manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as Record<string, unknown>; }
   catch { return { service: [], pm2: [] }; }
-  const declaredName = typeof manifest.name === 'string' && manifest.name ? manifest.name : 'zhin-bot';
   const exists = (name: string): boolean => {
     try { return fs.statSync(path.join(root, name)).isFile(); } catch { return false; }
   };
-  const candidates = PROJECT_NAME.test(declaredName)
-    ? [`${declaredName}.service`, `${launchdLabel(declaredName)}.plist`, 'install-service.ps1', `${declaredName}-task.xml`]
-    : ['install-service.ps1'];
+  // One list with `zhin service install` (which mentions the same files).
+  const candidates = legacyServiceFileNames(serviceProjectNameOf(manifest.name));
   const has = (field: string, test: (key: string) => boolean): boolean => {
     const entries = manifest[field];
     return !!entries && typeof entries === 'object' && Object.keys(entries).some(test);

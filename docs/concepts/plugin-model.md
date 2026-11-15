@@ -53,6 +53,7 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
 | `engine` | 字符串，可选 | 引擎版本约束，如 `"^1.0.0"` |
 | `runtime` | `"trusted"` 或 `"isolated"`，可选 | 是否以隔离运行时加载该插件 |
 | `platformFeatures` | 布尔，可选 | 默认 `true`；Root 是否继承平台 Stable Features（见下文「platformFeatures 继承」） |
+| `toggle` | `"hot"` / `"restart"`，可选 | 默认 `"hot"`：实例运行时启停该插件只换代、不重启实例；`"restart"` 让网关改为重启实例 |
 | `features` | 数组 | 本包依赖的 Feature 能力包：`{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `metadata` | 对象，可选 | 静态 displayName/icon；同字段不得再在代码 metadata 重复声明 |
 

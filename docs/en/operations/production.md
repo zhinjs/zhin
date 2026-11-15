@@ -189,12 +189,15 @@ zhin status          # gateway and instance state; exit code 3 when not running
 zhin logs -f         # instance logs
 zhin stop
 
-# Linux: install a user-level systemd service
+# Start on boot: generate and install a service for this system (--user: user-level systemd on Linux)
 zhin service install --user
 zhin service status --user
+zhin service stop --user    # stays stopped; zhin service start starts it again
 ```
 
-On macOS, use the launchd service commands without `--user`. Keep one restart owner: with systemd, launchd, Kubernetes, or PM2, let the external supervisor own a foreground gateway (`--foreground`). Use the background `zhin start` only for a directly managed bare-metal process.
+On macOS, use the same commands without `--user` (launchd). `zhin service install` is the one recommended way to run the bot as a service: the file is generated on the spot with the current absolute `node` and project CLI paths and restarts the gateway only after a failure; see the [CLI reference](../cli/index.md#service). Keep one restart owner: with systemd, launchd, or Kubernetes, let the external supervisor own a foreground gateway (`--foreground`). Use the background `zhin start` only for a directly managed bare-metal process.
+
+Advanced: in an existing PM2 setup, create the project with `create-zhin-app --with pm2` (adds `ecosystem.config.cjs` and `pm2:*` scripts); Docker is covered by the templates above.
 
 The gateway (ADR 0054) is long-lived and supervises the instance: Console restarts, dependency changes and instance crashes are handled by restarting the instance inside the gateway; after a crash storm the instance stays `crashed` while the gateway stays online (the Console shows the logs and can start it again). The gateway exits with code 0 on SIGTERM / `zhin stop` and non-zero when it fails to start; an external supervisor only needs to restart it after an abnormal exit. Exit codes and a systemd example: [zhin start](../cli/runtime.md#exit-codes).
 

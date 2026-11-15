@@ -13,6 +13,7 @@ import {
   probeOrigin,
   probePortHealth,
 } from '../../src/utils/doctor-project-checks.js';
+import { legacyServiceFileNames, serviceProjectNameOf } from '../../src/utils/service-definition.js';
 
 let root: string;
 beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-doctor-checks-')); });
@@ -35,6 +36,16 @@ describe('legacy service files', () => {
     expect(check.message).toContain('PM2 配置');
     expect(fs.existsSync(path.join(root, 'bot.service'))).toBe(true);
     expect(legacyServiceFilesCheck(findLegacyServiceFiles(path.join(root, 'none')))).toBeUndefined();
+  });
+
+  it('uses the same names as zhin service install (scope removed)', () => {
+    write('package.json', JSON.stringify({ name: '@acme/bot' }));
+    const names = legacyServiceFileNames(serviceProjectNameOf('@acme/bot'));
+    expect(names).toEqual(['bot.service', 'com.zhinjs.bot.plist', 'install-service.ps1', 'bot-task.xml']);
+    for (const name of names) write(name);
+    expect(findLegacyServiceFiles(root).service).toEqual([...names].sort());
+    expect(serviceProjectNameOf('bad name')).toBeUndefined();
+    expect(legacyServiceFileNames(undefined)).toEqual(['install-service.ps1']);
   });
 
   it('leaves ecosystem.config.* alone while the project uses PM2', () => {

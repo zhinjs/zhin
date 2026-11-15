@@ -186,12 +186,12 @@ A missing `ready` (60 seconds by default) counts as a failed start. `--once` ign
 [Service]
 Type=simple
 WorkingDirectory=/srv/my-bot
-ExecStart=/usr/bin/env npx zhin start --foreground --mode production --no-watch
-Restart=always
+ExecStart="/home/bot/.nvm/versions/node/v24.11.0/bin/node" "/srv/my-bot/node_modules/@zhin.js/cli/bin/zhin.js" "start" "--foreground" "--mode" "production"
+Restart=on-failure
 RestartSec=10s
 ```
 
-The service manager owns the gateway; the gateway restarts the instance, and after a crash storm the instance stays `crashed` while the gateway stays online, so `Restart=always` only applies when the gateway itself exits. `zhin service install` and the scaffolded service files use the same command.
+The service manager owns the gateway; the gateway restarts the instance, and after a crash storm the instance stays `crashed` while the gateway stays online. The gateway exits with 0 only on `zhin stop` / SIGTERM, so `Restart=on-failure` restarts it after a failure and leaves it stopped after `zhin stop`. Do not write this file by hand: `zhin service install` generates it with this machine's `node` and CLI paths.
 
 ### Orphan protection
 

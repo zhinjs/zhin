@@ -186,12 +186,12 @@ flowchart TD
 [Service]
 Type=simple
 WorkingDirectory=/srv/my-bot
-ExecStart=/usr/bin/env npx zhin start --foreground --mode production --no-watch
-Restart=always
+ExecStart="/home/bot/.nvm/versions/node/v24.11.0/bin/node" "/srv/my-bot/node_modules/@zhin.js/cli/bin/zhin.js" "start" "--foreground" "--mode" "production"
+Restart=on-failure
 RestartSec=10s
 ```
 
-服务管理器托管的是网关；实例由网关监管重启，崩溃风暴后停在 `crashed` 而网关保持在线，所以 `Restart=always` 只在网关本身退出时生效。`zhin service install` 与脚手架生成的服务文件使用同一条命令。
+服务管理器托管的是网关；实例由网关监管重启，崩溃风暴后停在 `crashed` 而网关保持在线。网关只在 `zhin stop` / SIGTERM 时以 0 退出，`Restart=on-failure` 让它在异常退出后重启、在 `zhin stop` 后保持停止。不要手写这个文件：`zhin service install` 按当前机器的 `node` 与 CLI 路径生成它。
 
 ### 孤儿保护
 

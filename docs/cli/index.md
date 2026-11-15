@@ -113,15 +113,28 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 }
 ```
 
-### service：系统服务
+### service：系统服务 {#service}
 
 ```bash
 zhin service install [--user]
-zhin service uninstall [--user]
+zhin service start|stop|restart [--user]
 zhin service status [--user]
+zhin service uninstall [--user]
 ```
 
-安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。服务文件以前台方式运行网关（`zhin start --foreground --mode production --no-watch`），实例由网关监管重启。
+托管与开机自启的唯一推荐方式（[ADR 0062 §2](../adr/0062-one-path-per-task.md)）。`install` 按当前系统现场生成服务文件：Linux 写 systemd 单元（`--user` 为用户级，直接安装并设为开机自启；不带 `--user` 时生成到 `.zhin/service/` 并打印 `sudo` 安装命令），macOS 写 `~/Library/LaunchAgents/com.zhinjs.<项目名>.plist` 并用 `launchctl bootstrap` 加载，Windows 生成计划任务 XML 并打印 `schtasks` / NSSM 命令。
+
+服务文件写入**当前**的 `node` 绝对路径和项目内 `node_modules/@zhin.js/cli/bin/zhin.js`，不经过 `npx`，所以 nvm / fnm / volta 安装的 Node 也能开机启动；更换 Node 版本或移动项目目录后重新运行 `zhin service install`。服务以前台方式运行网关（`zhin start --foreground --mode production`），**只在异常退出时重启**（systemd `Restart=on-failure`，launchd `KeepAlive.SuccessfulExit=false`），所以 `zhin stop` 或 `zhin service stop` 之后机器人保持停止，直到下次开机 / 登录或 `zhin service start`。
+
+`zhin stop` 遇到由服务托管的前台网关时：服务文件是旧版（`Restart=always` / `KeepAlive: true`，网关会被立即拉起）就拒绝执行并提示改用 `zhin service stop` 或重新 `zhin service install`；新版服务文件则正常停止并说明何时会再启动。脚手架不再生成任何服务文件；老项目根目录里的 `.service`、`.plist`、`install-service.ps1`、`*-task.xml` 不再使用，可以删除。
+
+服务文件里不能出现控制字符：项目路径含换行等字符时 `zhin service install` 直接报错。打印出来供复制的命令已按 shell（Linux / macOS 用 POSIX 单引号，Windows 用 PowerShell 单引号）转义；目标服务文件是符号链接时拒绝写入。
+
+Windows 的限制（本版不改）：
+- 计划任务用 `InteractiveToken` 登录类型，**没有用户登录时不会在开机后启动**；需要无人登录也运行时改用 NSSM。
+- 计划任务的 `RestartOnFailure` 只在任务**启动失败**时重试，网关运行中崩溃不会被重新拉起。
+- `zhin service stop` 用 `schtasks /End`，会**强制结束**进程，网关来不及正常停止实例。
+- 用 NSSM 安装的是 Windows 服务，`zhin service start|stop|restart` 只操作计划任务；请用 `nssm start|stop|restart <名称>` 管理。
 
 ### db：Console SQL 的受限账号 {#db}
 
@@ -134,7 +147,7 @@ PostgreSQL / MySQL 上，Console 的 SQL 控制台只用单独登录的受限账
 ### console：初始化与用户管理 {#console}
 
 ```bash
-zhin console init [--status] [--reset-store]
+zhin console init [--status [--json]] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
@@ -149,7 +162,7 @@ zhin console migrate [--revert]
 Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `.zhin/gateway.db` 里（[ADR 0049](../adr/0049-console-rbac.md)、[ADR 0059](../adr/0059-gateway-storage-isolation.md)），不在项目数据库里。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
 
 - **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开 `.zhin/gateway.db`（离线初始化与救援），先把旧版留在项目数据库里的账号表迁过来。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
-- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
+- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只用几行文字说明初始化状态与当前数据库，加 `--json` 输出 JSON（供脚本使用）。选择的数据库与当前一致（例如默认 SQLite 下 `--database sqlite`）时不写配置、不提示迁移、不重启实例。已经有所有者时报错退出，请改用 `zhin console user`。
   - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
@@ -380,7 +393,9 @@ zhin enable <instanceKey 或包名>
 
 | 情况 | 结果 |
 | --- | --- |
-| 网关在运行（`zhin start`） | 经网关事务执行：备份配置 → 停止实例 → 写入 `disable_plugins` → 启动实例并等待就绪；启动失败时恢复配置文件并启动原实例（不运行包管理器）。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 网关在运行（`zhin start`），实例运行中 | 经网关事务热生效：备份配置 → 写入 `disable_plugins` → 在运行中的实例里应用（一次换代：停用即退役该实例的命令、中间件、工具、页面等全部能力，启用即装配并提交）。实例不重启，适配器不重新登录；输出「已热生效，实例未重启」。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 需要重启的情况 | 插件在 `package.json#zhin.toggle` 声明 `"restart"`、含原生模块、实例启动后项目依赖或锁文件有变化、实例版本较旧，或热应用失败时，自动改为：停止实例 → 启动实例并等待就绪，输出里写明重启原因；启动失败时恢复配置文件并启动原实例（不运行包管理器） |
+| 网关在运行，实例未运行 | 只写入配置，下次启动实例时生效 |
 | 网关未运行 | 直接写入配置文件，下次 `zhin start` 时生效 |
 | 已是目标状态 | 成功退出，不改配置，也不重启实例 |
 | 未声明、保留键（`http`、`plugins` 等）、项目根插件 | 报错，退出码 1 |
