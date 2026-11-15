@@ -51,3 +51,41 @@ export function createMessages<const T extends MessageCatalog>(catalog: T) {
     });
   };
 }
+
+export interface FormatDateTimeOptions {
+  /** IANA zone; defaults to the process zone (`TZ`, else the system zone). */
+  readonly timeZone?: string;
+  /** `datetime` (default) `2026-11-15 00:15:56`, `date` `2026-11-15`, `time` `00:15:56`. */
+  readonly part?: 'datetime' | 'date' | 'time';
+}
+
+const DATE_TIME_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Date and time for CLI and log output (#1250 `cli-datetime-us-locale`): always
+ * `YYYY-MM-DD HH:mm:ss`, 24-hour, in both display languages. `en` deliberately uses the same
+ * ISO-8601 style rather than `en-US` / `en-GB`: day-month order is read differently on either side
+ * of the Atlantic, ISO order is not, it sorts as text and it matches the `YYYY-MM-DD` days of
+ * `zhin usage report`. The locale parameter keeps call sites ready should a language need another
+ * form. An invalid date yields `-`.
+ */
+export function formatDateTime(value: number | Date, locale?: Locale, options: FormatDateTimeOptions = {}): string {
+  void resolveLocale(locale);
+  const time = value instanceof Date ? value.getTime() : value;
+  if (typeof time !== 'number' || !Number.isFinite(time)) return '-';
+  // The process zone by name, so a changed `TZ` never reuses a formatter built for the old zone.
+  const zone = options.timeZone ?? new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let format = DATE_TIME_FORMATS.get(zone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    DATE_TIME_FORMATS.set(zone, format);
+  }
+  const parts: Record<string, string> = {};
+  for (const part of format.formatToParts(time)) parts[part.type] = part.value;
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  const clock = `${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}:${parts.second}`;
+  return options.part === 'date' ? date : options.part === 'time' ? clock : `${date} ${clock}`;
+}

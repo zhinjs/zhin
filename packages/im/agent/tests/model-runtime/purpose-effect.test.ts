@@ -17,6 +17,17 @@ describe('subAgentPurposeEffect (#1250 agent-purpose-binding-ignored, #1270)', (
       .toEqual({ status: 'ignored', key: 'evaluator', reason: 'ambiguous' });
     expect(subAgentPurposeEffect(keys, { name: 'executor' }, bindings)).toEqual({ status: 'unconfigured' });
   });
+
+  it('gives the project\'s own sub-agent the key of the binding of its name (#1250 batch 21)', () => {
+    const keys = new Set(['planner', 'zhin']);
+    expect(subAgentPurposeEffect(keys, { name: 'planner', qualifiedName: 'planner' }, bindings))
+      .toEqual({ status: 'effective', key: 'planner' });
+    // A plugin's sub-agent of that name still does not take the binding's key.
+    expect(subAgentPurposeEffect(keys, { name: 'planner', qualifiedName: 'tools__planner' }, bindings))
+      .toEqual({ status: 'ignored', key: 'planner', reason: 'binding-name' });
+    expect(subAgentPurposeEffect(keys, { name: 'zhin', qualifiedName: 'zhin' }, bindings))
+      .toEqual({ status: 'ignored', key: 'zhin', reason: 'binding-name' });
+  });
 });
 
 describe('purposeKeyEffects', () => {
@@ -33,6 +44,18 @@ describe('purposeKeyEffects', () => {
       tools__researcher: { status: 'effective', target: 'sub-agent', agents: ['tools__researcher'] },
       typo: { status: 'ignored', reason: 'no-target' },
     });
+  });
+
+  it('reports a binding key that the project\'s sub-agent of that name also runs on (#1250 batch 21)', () => {
+    expect(purposeKeyEffects(['planner'], [
+      { name: 'planner', qualifiedName: 'planner' },
+      { name: 'planner', qualifiedName: 'tools__planner' },
+    ], bindings)).toEqual({
+      planner: { status: 'effective', target: 'binding', agents: ['planner'], ignoredAgents: ['tools__planner'], reason: 'binding-name' },
+    });
+    expect(inferencePurposeEffects({ planner: 'profiles:a' }, {
+      bindingNames: ['zhin', 'planner'], subAgents: [{ name: 'planner', qualifiedName: 'planner', kind: 'bare' }],
+    })).toEqual({ 'agents.planner': { status: 'effective', target: 'binding', agents: ['planner'] } });
   });
 
   it('keys the management view as agents.<key>', () => {

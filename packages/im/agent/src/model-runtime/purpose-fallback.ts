@@ -8,7 +8,7 @@ import {
 } from '@zhin.js/ai/provider';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createInvocationCompletion, invocationModel } from './completion.js';
-import type { ModelExecutionBundle } from './types.js';
+import type { ModelExecutionBundle, ModelExecutionScope, SubAgentModelKey } from './types.js';
 
 const logger = getLogger('ai.model-runtime');
 
@@ -149,6 +149,29 @@ export function selectedPurposeProfileId(input: Readonly<{
   };
   if (!ids.length || ids.length === 1 || available(ids[0]!)) return ids[0];
   return ids.slice(1).find(available) ?? ids[0];
+}
+
+/**
+ * Trace shape of the model a (sub-)turn runs on (`TurnTraceModelSelection`): purpose, layer and its
+ * key, and the agent whose `purposes.agents` key was looked up, so a trace shows which path chose
+ * the model (#1250 agent-purpose-binding-ignored).
+ */
+export function traceModelSelection(models: Pick<ModelExecutionScope, 'chat' | 'purpose'>, agent?: SubAgentModelKey): Readonly<{
+  purpose: string; profile_id: string; account_id: string; model: string; source?: string; source_key?: string; agent?: string;
+}> {
+  const binding = models.chat.binding;
+  const source = binding.source as (Readonly<{ level: string; key?: string; name?: string; profileId?: string }> | undefined);
+  const key = source?.key ?? source?.name ?? source?.profileId;
+  const label = agent ? agent.qualifiedName?.trim() || agent.name : undefined;
+  return Object.freeze({
+    purpose: models.purpose ?? (source?.level === 'agent' && source.name ? `agent:${source.name}` : 'chat'),
+    profile_id: binding.profile.id,
+    account_id: binding.account.id,
+    model: models.chat.model.id,
+    ...(source ? { source: source.level } : {}),
+    ...(key ? { source_key: key } : {}),
+    ...(label ? { agent: label } : {}),
+  });
 }
 
 /** Trace shape of one fallback switch (`TurnTraceModelFallback`). */

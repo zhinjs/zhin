@@ -49,9 +49,12 @@ const TOOL_FAMILIES: Readonly<Record<string, string>> = {
   grep: 'search', glob: 'search', list_dir: 'search',
   read_file: 'read',
   web_fetch: 'web', web_search: 'web',
+  // Searching the deferred catalog for a tool that is not there is one streak (#1250
+  // delegate-budget-self-sabotage: a sub-agent spent its turn discovering tools that do not exist).
+  discover: 'catalog', load_tool: 'catalog', load_skill: 'catalog',
 };
 
-const EMPTY_RESULT = /^\s*$|^no (matches|results)\b|^未找到|^没有(找到|匹配)|^无(匹配|结果)/i;
+const EMPTY_RESULT = /^\s*$|^no (matches|results)\b|^(tool|skill) ["'][^"']*["'] not found\b|^未找到|^没有(找到|匹配)|^无(匹配|结果)/i;
 
 export interface SpinHint {
   readonly family: string;

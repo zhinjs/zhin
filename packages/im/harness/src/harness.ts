@@ -312,6 +312,7 @@ export function createHarness(options: HarnessOptions): Harness {
       engagement: state.engagement,
       get mails() { return state.mails; },
       get: (id) => state.byId.get(id),
+      outstanding: (id) => state.outstanding.has(id),
     };
   }
 

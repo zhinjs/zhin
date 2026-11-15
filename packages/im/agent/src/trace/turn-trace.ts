@@ -79,8 +79,15 @@ export interface TurnTraceModelSelection {
   readonly profile_id: string;
   readonly account_id: string;
   readonly model: string;
-  /** Selection layer (`default`, `agent`, `session`, …) when known. */
+  /** Selection layer (`default`, `agent`, `session`, `adapter`, `endpoint`, `scene`, …) when known. */
   readonly source?: string;
+  /** Key of that layer: the agent key, or the adapter / endpoint / scene key of a chat override. */
+  readonly source_key?: string;
+  /**
+   * Sub-agent or routed specialist whose `purposes.agents` key was looked up (qualified name). With
+   * `purpose: chat` it has no effective key of its own (#1250 agent-purpose-binding-ignored).
+   */
+  readonly agent?: string;
 }
 
 /**

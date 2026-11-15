@@ -361,7 +361,10 @@ async function runInWorkspace(
       };
       let status: 'completed' | 'failed' | 'cancelled' = 'failed';
       const lease = inference.snapshots.acquire();
-      const models = await inference.runtime.acquireForTurn({ request: turn, binding: context.selection.binding, lease, snapshots: inference.snapshots });
+      // As AgentRuntime does: a turn routed to a specialist runs on its `agent:<key>` purpose (#1250).
+      const specialist = entryActor !== 'zhin' ? { name: entryActor, qualifiedName: entryActor } : undefined;
+      const models = await inference.runtime.acquireForTurn({ request: turn, binding: context.selection.binding,
+        ...(specialist ? { agent: specialist } : {}), lease, snapshots: inference.snapshots });
       const mediaPerception = perception({ scope: models, sessionKey: turn.session.key, settings: perceptionConfig,
         resilience: definition.agentConfig?.providerResilience, timers: clock });
       try {

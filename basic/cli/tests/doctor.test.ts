@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -546,7 +547,10 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
       ] }));
     });
     try {
-      expect(output).toContain('上次运行: MCP 服务 github：401 Unauthorized（connect-failed，共 3 次，最近 2026-11-14T00:00:00.000Z）');
+      // Local time, `YYYY-MM-DD HH:mm:ss` (#1250 cli-datetime-us-locale).
+      expect(output).toContain(`上次运行: MCP 服务 github：401 Unauthorized（connect-failed，共 3 次，最近 ${formatDateTime(Date.UTC(2026, 10, 14))}）`);
+      expect(output).toMatch(/最近 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}）/u);
+      expect(output).not.toMatch(/\b(?:AM|PM)\b/u);
       expect(output).toContain('上次运行: 适配器账号 icqq/1659488338：缺少 password');
       expect(output).not.toContain('所有检查通过');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }

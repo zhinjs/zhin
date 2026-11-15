@@ -88,6 +88,15 @@ describe.runIf(process.platform !== 'win32')('zhin console without a gateway (AD
     const again = io();
     expect(await consoleUserActions.list(root, again)).toBe(0);
     expect(again.logs.join('\n')).toContain('carol');
+    // #1250: the user id is shown (ai.personalPrincipals keys are user:<id>), also as JSON.
+    const json = io();
+    expect(await consoleUserActions.list(root, json, undefined, { json: true })).toBe(0);
+    const listed = JSON.parse(json.logs.join('\n')) as { users: { id: string; username: string; roles: string[] }[] };
+    const carol = listed.users.find(entry => entry.username === 'carol')!;
+    expect(carol).toMatchObject({ roles: ['viewer'], disabled: false });
+    expect(carol.id).toMatch(/\S{8,}/u);
+    expect(again.logs[0]).toBe('用户名\t显示名\t状态\t角色\t用户 id');
+    expect(again.logs.find(line => line.startsWith('carol\t'))).toBe(`carol\tcarol\t启用\tviewer\t${carol.id}`);
     expect(await projectTables(root)).toEqual([]);
   });
 
@@ -189,6 +198,7 @@ describe.runIf(process.platform !== 'win32')('a lost gateway.db (ADR 0059 §3 �
     const after = io();
     expect(await consoleUserActions.list(root, after)).toBe(0);
     expect(after.logs.join('\n')).toContain('neo');
-    expect(after.logs.join('\n')).not.toContain('owner\t');
+    // No row for the user named `owner` from before the reset (rows start with the username; neo's role column also reads owner).
+    expect(after.logs.some(line => line.startsWith('owner\t'))).toBe(false);
   });
 });

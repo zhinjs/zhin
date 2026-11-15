@@ -10,20 +10,29 @@
  *   it; every start rotates it. Five wrong attempts rotate it as well, but one sender counts for
  *   at most {@link CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES} of them per window: after that its
  *   attempts are refused (`locked`) without being counted, so no single sender can keep rotating it.
- * - Accepted only in a private chat (ADR 0060 Q8) on a real platform adapter: a correct code sent
+ * - Accepted only in a private chat (ADR 0060 Q8) on a real platform adapter, where the bare form
+ *   `认领 <码>` / `claim <code>` works without the adapter's command prefix (#1250; the prefixed command
+ *   still works): a correct code sent
  *   in a group is burnt and rotated (bystanders saw it); adapters whose capability profile marks a
  *   local simulation (`runtime.sandbox`, clients pick their own sender id) never accept it.
  * - Audited as `chat-roles.claim`; the audit and logs of attempts carry only the first 8 hex digits
  *   of the code's SHA-256, never the code.
+ * - Kept out of chat (#1250): {@link createChatOwnerClaimGuard} takes every claim-shaped message
+ *   (`matchChatOwnerClaimText`: keyword first, then exactly one token) at the start of inbound, with or
+ *   without a prefix and whether or not a command matches — only while a code is open (in any
+ *   conversation). Such a message is never recorded, logged, traced or handed to the
+ *   Agent; it gets the claim reply (usage, refusal or result) only.
  */
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
+import { containsChatOwnerClaimCode, matchChatOwnerClaimText, registerChatOwnerClaimCode } from '@zhin.js/kernel';
 import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
+import type { InboundSecretGuard, Message } from '@zhin.js/core/runtime';
 import type { InstanceChatRoleService } from './chat-roles.js';
 import {
   chatRoleMigrationAdapterKinds, type ChatRoleAudit, type ChatRoleMigrationAdapterKind, type ChatRoleMigrationLogger,
@@ -53,7 +62,14 @@ export function chatOwnerClaimCodeHash(code: string): string {
   return createHash('sha256').update(code).digest('hex').slice(0, 8);
 }
 
-const normalizeCode = (text: string) => text.toUpperCase().replace(/[\s-]/gu, '');
+/**
+ * The one code a claim text stands for (#1250: `认领:码`, `認領 码`, `ｃｌａｉｍ 码`, `认领码`, `AAAA 2222`,
+ * trailing punctuation, zero-width characters): NFKC, letter case ignored, everything but letters and
+ * digits dropped, then one leading keyword (`认领`, `认领码`, `claim`). The whole remainder is compared, so a text compares exactly
+ * one candidate however long it is (`认领 码 谢谢` or a long word carrying the code is not one code).
+ */
+const normalizeCode = (text: string) => text.normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu, '')
+  .replace(/^(?:认领|認領|CLAIM)(?:码|碼|CODE)?/u, '');
 
 function sameCode(left: string, right: string): boolean {
   const a = Buffer.from(left);
@@ -74,6 +90,8 @@ export type ChatOwnerClaimOutcome =
   /** A local simulation adapter, or an adapter whose kind is unknown. */
   | 'simulated'
   | 'invalid'
+  /** The text carried the current code but stood for more than one code (`认领 码 谢谢`, a long word): the code was revoked. */
+  | 'revoked'
   /** This sender made too many wrong attempts in the window. */
   | 'locked'
   | 'unpersisted'
@@ -105,6 +123,8 @@ export class ChatOwnerClaim {
   /** Wrong attempts per sender identity in the current window. */
   readonly #senderFailures = new Map<string, { count: number; since: number }>();
   #unsubscribe: (() => void) | undefined;
+  /** Registration of the current code for the writer-side backstop (`redactChatOwnerClaimText`). */
+  #unregisterCode: (() => void) | undefined;
   #exitHook: (() => void) | undefined;
 
   constructor(options: ChatOwnerClaimOptions) { this.#options = options; }
@@ -134,10 +154,12 @@ export class ChatOwnerClaim {
     const code = (this.#options.code ?? generateChatOwnerClaimCode)();
     this.#code = code;
     this.#failures = 0;
+    this.#unregisterCode?.();
+    this.#unregisterCode = registerChatOwnerClaimCode(code);
     const file = this.#file;
     // Never the code itself: the log reaches SystemLog and `GET /logs`.
     this.#options.logger.warn(`聊天角色：还没有全局 owner（聊天主人）。认领码见 zhin status（或本机 ${CHAT_OWNER_CLAIM_FILE}），`
-      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；私聊机器人发送「认领 <码>」即成为全局 owner。认领码一次性，实例重启后轮换。`
+      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀）即成为全局 owner。认领码一次性，实例重启后轮换。`
       + '也可以在 Console「聊天角色」页授予全局 owner。'
       + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
     if (!file) return;
@@ -160,6 +182,8 @@ export class ChatOwnerClaim {
   /** Ends the claim and removes the local file. */
   async close(): Promise<void> {
     this.#code = undefined;
+    this.#unregisterCode?.();
+    this.#unregisterCode = undefined;
     this.#failures = 0;
     this.#senderFailures.clear();
     const file = this.#file;
@@ -181,16 +205,40 @@ export class ChatOwnerClaim {
     } catch { /* audit never breaks a claim */ }
   }
 
+  /** Whether `text` carries the current code (however it is written: case, gaps, full-width, zero-width). */
+  carries(text: string): boolean {
+    const current = this.#code;
+    return current !== undefined && containsChatOwnerClaimCode(text, current);
+  }
+
+  /** Revokes the current code when `text` carries it (a message others saw but no claim handled). */
+  async revokeIfCarried(text: string): Promise<boolean> {
+    if (!this.carries(text)) return false;
+    this.#options.logger.warn('聊天角色：认领码出现在一条未处理的消息中（其他机器人发送、会话未就绪等），已作废；新码见 zhin status。');
+    await this.rotate();
+    return true;
+  }
+
   async attempt(attempt: ChatOwnerClaimAttempt): Promise<ChatOwnerClaimOutcome> {
     const current = this.#code;
     if (!current || hasGlobalOwner(this.#options.roles)) return 'inactive';
-    const code = normalizeCode(attempt.code);
-    const correct = sameCode(code, current);
+    // Only exactly one code grants: one attempt compares one candidate, so the failure limits bound guessing.
+    // Text that merely carries the current code (`认领 码 谢谢`, a long word with the code inside) revokes it
+    // instead — granting on "contains" would let one message try thousands of candidates (#1289 review).
+    const correct = sameCode(normalizeCode(attempt.code), current);
+    const carried = !correct && containsChatOwnerClaimCode(attempt.code, current);
+    // The audit and logs carry the hash of what was compared: the current code when it matched.
+    const code = correct || carried ? current : normalizeCode(attempt.code);
     if (attempt.kind !== 'private') {
       this.#audit(attempt, 'denied', 'not-private', code);
       // Bystanders saw a correct code: burn it.
-      if (correct) await this.rotate();
+      if (correct || carried) await this.rotate();
       return 'not-private';
+    }
+    if (carried) {
+      this.#audit(attempt, 'denied', 'revoked', code);
+      await this.rotate();
+      return 'revoked';
     }
     if (attempt.adapterKind !== 'platform') {
       this.#audit(attempt, 'denied', 'simulated', code);
@@ -233,17 +281,27 @@ export class ChatOwnerClaim {
 
 const messages = createMessages({
   description: { 'zh-CN': '尚无聊天主人时，私聊发送认领码成为全局 owner', en: 'Become the global chat owner with the claim code (private chat, only while there is none)' },
-  usage: { 'zh-CN': '用法：认领 <认领码>（码见 zhin status，只接受私聊）', en: 'Usage: claim <code> (zhin status shows the code; private chat only)' },
+  usage: { 'zh-CN': '用法：在私聊中直接发送「认领 <认领码>」（不需要命令前缀；码见 zhin status）。码不对时回复「认领码不正确」并计入错误次数（同一发送者 10 分钟内最多 2 次，之后暂时锁定）。', en: 'Usage: send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code). A wrong code is answered as wrong and counts as a failed attempt (2 per sender in 10 minutes, then locked for a while).' },
   inactive: { 'zh-CN': '当前不接受认领：本机器人已有主人，或认领未开启。请联系主人在 Console「聊天角色」页授予角色。', en: 'Claims are closed: this bot already has an owner, or claims are not open. Ask the owner to grant you a role in the Console (Chat roles).' },
-  notPrivate: { 'zh-CN': '认领只接受私聊。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only. If that was a valid code it has been revoked; zhin status shows the new one.' },
+  notPrivate: { 'zh-CN': '认领只接受私聊：请在私聊中直接向机器人发送「认领 <码>」。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only: send 「claim <code>」 to the bot privately. If that was a valid code it has been revoked; zhin status shows the new one.' },
   simulated: { 'zh-CN': '这个适配器上不接受认领（模拟适配器的发言者 id 可由客户端自选）。请在真实平台私聊机器人。', en: 'Claims are not accepted on this adapter (a simulation lets clients choose the sender id). Message the bot privately on a real platform.' },
   invalid: { 'zh-CN': '认领码不正确或已失效。', en: 'The claim code is wrong or no longer valid.' },
+  revoked: { 'zh-CN': '这条消息含有认领码，但不只是一个认领码（多了别的文字），码已作废。新码见 zhin status，请在私聊中只发送「认领 <码>」。', en: 'That message carried the claim code along with other text, so the code was revoked. zhin status shows the new one; send only 「claim <code>」 privately.' },
   locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },
   unpersisted: { 'zh-CN': '未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg）。', en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg).' },
   claimed: { 'zh-CN': '认领成功：你（{identity}）现在是本机器人的全局 owner，认领码已失效。', en: 'Claimed: you ({identity}) are now the global owner of this bot; the code no longer works.' },
   unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   failed: { 'zh-CN': '认领失败：{error}', en: 'Claim failed: {error}' },
 });
+
+/**
+ * How to claim, for replies and hints: in a private chat, without the command prefix. A message of the
+ * claim shape (`认领 <一个词>`) sent privately with a wrong code is answered as wrong and counted
+ * ({@link CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES} per sender per window), exactly like the command.
+ */
+export function formatOwnerClaimUsage(locale: Locale): string {
+  return messages(locale, 'usage');
+}
 
 /** Runs one `认领` / `claim` invocation and returns the reply text (normal send chain). */
 export async function executeOwnerClaim(
@@ -253,7 +311,7 @@ export async function executeOwnerClaim(
   const { locale, actor } = input;
   if (!claim.active) return messages(locale, 'inactive');
   if (!actor) return messages(locale, 'unknownConversation');
-  if (!input.code) return messages(locale, 'usage');
+  if (!input.code) return formatOwnerClaimUsage(locale);
   let outcome: ChatOwnerClaimOutcome;
   try {
     outcome = await claim.attempt({ code: input.code, identity: actor.identity, kind: actor.kind, adapterKind: input.adapterKind });
@@ -265,6 +323,7 @@ export async function executeOwnerClaim(
     case 'not-private': return messages(locale, 'notPrivate');
     case 'simulated': return messages(locale, 'simulated');
     case 'invalid': return messages(locale, 'invalid');
+    case 'revoked': return messages(locale, 'revoked');
     case 'locked': return messages(locale, 'locked');
     case 'unpersisted': return messages(locale, 'unpersisted');
     default: return messages(locale, 'inactive');
@@ -291,4 +350,56 @@ export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim;
       },
     }));
   };
+}
+
+/**
+ * #1250: recognizes, before anything records, logs or routes a message, the ones that carry the current
+ * claim code — however written (`认领:码`, `認領 码`, `ｃｌａｉｍ 码`, `认领码`, `认领 码 谢谢`, `ABCD 2345`,
+ * trailing punctuation; see `containsChatOwnerClaimCode`) — in any conversation, plus in private chats the
+ * claim-shaped ones (`认领 <一个词>`) with a wrong code, which are answered and counted. Everything else
+ * passes: `claim it` in a group goes to the Agent. Only text that stands for exactly the current
+ * code (`normalizeCode`: `认领 <码>`, `认领:码`, the bare code, …) grants; any other text carrying it only revokes it, so one message
+ * compares one candidate (#1289 review). Only while a code is open: once a global owner exists
+ * (or claims are not open) nothing is taken and such text goes to commands or the Agent as usual.
+ */
+export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerClaim }>): InboundSecretGuard {
+  const { claim } = options;
+  const guard: InboundSecretGuard = {
+    match: ({ text, prefix, conversation, snapshot }) => {
+      if (!claim.active) return undefined;
+      const carried = claim.carries(text);
+      const shaped = matchChatOwnerClaimText(text, prefix);
+      if (!carried && !(shaped && conversation.kind === 'private')) return undefined;
+      return Object.freeze({
+        name: 'claim',
+        redacted: `${shaped?.keyword ?? '认领'} ***`,
+        handle: (message: Message) => {
+          const actor = featureChatActor(snapshot, message);
+          const adapterKind = actor ? chatRoleMigrationAdapterKinds(snapshot)(actor.identity.adapter) : undefined;
+          return executeOwnerClaim({ code: shaped ? shaped.code : text, actor, adapterKind, locale: message.locale }, claim);
+        },
+        discard: async () => { await claim.revokeIfCarried(text); },
+      });
+    },
+    inspectNative: payload => claim.active && claim.carries(nativeText(payload)),
+  };
+  return Object.freeze(guard);
+}
+
+/** The strings of a native payload, joined (bounded: depth 8, 2000 values); unserializable parts are skipped. */
+function nativeText(payload: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<object>();
+  const visit = (value: unknown, depth: number): void => {
+    if (parts.length >= 2000) return;
+    if (typeof value === 'string') { parts.push(value); return; }
+    if (typeof value === 'number' || typeof value === 'bigint') { parts.push(String(value)); return; }
+    if (!value || typeof value !== 'object' || depth > 8 || seen.has(value)) return;
+    seen.add(value);
+    try {
+      for (const item of Array.isArray(value) ? value : Object.values(value)) visit(item, depth + 1);
+    } catch { /* getters that throw: skipped */ }
+  };
+  visit(payload, 0);
+  return parts.join('\n');
 }

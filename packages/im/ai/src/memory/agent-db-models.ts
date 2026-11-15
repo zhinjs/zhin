@@ -2,6 +2,7 @@
  * Agent session persistence models.
  */
 
+import { redactChatOwnerClaimText } from '@zhin.js/kernel';
 import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
 import {
   normalizeUserMessageForStorage,
@@ -160,7 +161,8 @@ export function serializeAgentMessage(
 ): AgentMessageRow {
   // `aliasSeq` is derived from stored order on every load (ADR 0043 §5); it is never persisted.
   const { aliasSeq: _derived, aliasParts: _derivedParts, ...persistable } = message as AgentMessage & { aliasSeq?: number; aliasParts?: readonly (string | null)[] };
-  const stored = normalizeUserMessageForStorage(persistable as AgentMessage, extra);
+  const normalized = normalizeUserMessageForStorage(persistable as AgentMessage, extra);
+  const stored = { ...normalized, message: redactClaimText(normalized.message) };
   return {
     session_id: '',
     role: stored.message.role,
@@ -169,6 +171,21 @@ export function serializeAgentMessage(
     extra: stored.extra ? JSON.stringify(stored.extra) : '',
     timestamp: stored.message.timestamp ?? Date.now(),
   };
+}
+
+/** Backstop (ADR 0060 §3.3): an open chat-owner claim code in a user text is stored as `***`. */
+function redactClaimText(message: AgentMessage): AgentMessage {
+  if (message.role !== 'user') return message;
+  const user = message as UserMessage;
+  let changed = false;
+  const content = user.content.map(block => {
+    if (block.type !== 'text' || typeof block.text !== 'string') return block;
+    const text = redactChatOwnerClaimText(block.text);
+    if (text === block.text) return block;
+    changed = true;
+    return { ...block, text };
+  });
+  return changed ? { ...user, content } : message;
 }
 
 function resolveAgentMessagePayload(payload: string | AgentMessage): AgentMessage | null {

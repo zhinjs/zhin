@@ -13,7 +13,7 @@ import {
   type EngagementSummary,
 } from '@zhin.js/harness';
 import { createConfigDocument } from '@zhin.js/runtime';
-import { DEFAULT_ROOT_CONFIG_FILE_NAME } from '@zhin.js/plugin-runtime';
+import { DEFAULT_ROOT_CONFIG_FILE_NAME, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 
@@ -118,6 +118,20 @@ export function describeEngagement(
   return { summary: summarizeEngagementEvents(engagementId, events), board: reconstructBoardFromEvents(events) };
 }
 
+/** The journal's table operations over a started DatabaseHost's models (as the Agent Host wires them). */
+function hostEngagementJournalDatabase(database: Pick<DatabaseHost, 'models'>): EngagementJournalDatabase {
+  const model = (table: string) => {
+    const found = database.models.get(table);
+    if (!found) throw new Error(`Database table '${table}' is not ready`);
+    return found;
+  };
+  return {
+    select: (table, fields) => model(table).select(...fields),
+    insert: (table, row) => model(table).insert(row),
+    delete: (table, condition) => model(table).delete().where(condition),
+  };
+}
+
 export async function openProjectEngagementJournal(root: string): Promise<{
   readonly journal: DatabaseEngagementJournal;
   close(): Promise<void>;
@@ -139,7 +153,9 @@ export async function openProjectEngagementJournal(root: string): Promise<{
     }
     defineEngagementEventModel(dbHost);
     await dbHost.start();
-    const journal = new DatabaseEngagementJournal(dbHost as unknown as EngagementJournalDatabase);
+    // The journal speaks to tables, the Host exposes models (#1250 trace-engagements-crash:
+    // passing the Host itself failed with `this[#db].select is not a function`).
+    const journal = new DatabaseEngagementJournal(hostEngagementJournalDatabase(dbHost));
     return {
       journal,
       close: () => dbHost.stop(),

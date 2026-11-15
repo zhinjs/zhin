@@ -110,7 +110,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
-3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
+3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
 
 ### 4. 迁移与兼容
 
@@ -361,6 +361,38 @@ export type ChatScopeRef =
 - **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
 - **非全局管理者看不到链接信息**：`consoleLink`、暗示链接的 `linkMethod`（`code` / `console`）、指向 Console 用户的 `createdBy`，以及从链接得出的授予者名（`grantedByName`），都只对全局 `iam.manage` 持有者显示。
 - **`chat-principals.import`**：导入的授予一律记为 `grantedBy: import:<导入者>`，忽略文件里的 `grantedBy` 标签。
+
+### 部署反馈后的修正（zhinjs/zhin#1250 第 22 批）
+
+问题（`personal-principals-invalid-key-consumes-migration`）：键写成旧写法（如 `workroom-admin`）时，首次导入把条目全部记为 `skipped` / `not-a-user`，却照样写下 `migratedAt`；把键改成 `user:<id>` 后，键是幂等 id 的一部分，改过的条目被当作「之后新增」，一律等待 Console 确认。升级前没把键改对，就失去了自动导入。
+
+- **键无效的条目不算已迁移**：首次导入写入的条目带 `firstImport`。首次导入中因 `not-a-user` 跳过的条目，改正键后，`adapterId` 与 `subjectId` **完全相同**的条目按首次导入处理（不需要确认）。范围限定为：
+  - **期限**：只在首次导入（`migratedAt`）后 **30 天**内有效；过期后改正的条目一律等待确认，警告文案也随之改变。
+  - 只对首次导入时就在配置里的平台身份生效；改键时一起加进来的新身份仍等待确认。
+  - **按身份消费**：每个 `adapterId` + `subjectId` 一生只能改正一次，同一身份写在多个无效键下也只算一次（全部记 `correctedBy`）。只要这个身份在首次导入之后出现过其他任何条目——等待确认、被忽略或已导入（含 1.4.0 写下的记录）——就视为已消费，不能再改正；在 Console 里「导入」或「忽略」也会给原条目写上 `correctedBy`。因此所有者在 1.4.0 里「忽略」过的身份不会被改键绕过。适配器尚未加载时改正不消费身份，条目以 `unknown-adapter`（不带 `firstImport`）等待，加载后按同样的规则（含期限）再判断。
+  - 「永不自动链接到持有授予的人」不变：改正的条目若会链接到持有授予的人，照样 `needs-confirmation`。
+  - 首次导入之后才出现的无效键不开这个例外（警告里写明「改正后的条目等待 Console 确认」）。
+  - 改正导入写审计（`chat-roles.import`，`decision: corrected-key`，含原来的键），并清除「已读」，使 `chat-roles.imported` 重新出现在「需要你处理」里。
+  - 1.4.0 写的记录：改正后已进入等待确认（或已被忽略）的条目保持原状，由全局 `iam.manage` 持有者在 Console 处理。
+- **安全论证**：b9 规定「首次导入之后新增的条目需要确认」，是因为之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动链接会把 Console 账号接到别人的聊天身份上。被改正的条目里，平台身份是首次启动时配置就写明的（与首次导入同等可信），改动的只是「链接到哪个 Console 用户」。持有 `ops.config.write` 的人借此最多能把某个**没有任何授予**的人一次性链接到自己选的 Console 用户——首次导入本来就会做同样的事；持有授予的人仍需全局 `iam.manage` 确认，且每次改正都有审计、并重新出现在「需要你处理」里。**剩余风险**：在 30 天窗口内，持有 `ops.config.write` 的人能把首次配置里出现过、且没有任何授予的身份，链接到任意一个 Console 用户（每个身份一次）；窗口过后这条路径关闭。
+- **一并收紧 `unknown-adapter`**：此前首次导入之后新增、但适配器尚未加载的条目被记为 `unknown-adapter`，适配器加载后会被当作首次导入的条目自动链接，绕过了确认。现在只有带 `firstImport` 的 `unknown-adapter` 条目重试时不需确认。1.4.0 的旧记录里，`at` 晚于 `migratedAt` 的 `unknown-adapter` 条目无法证明属于首次导入（旧版每次重试都会更新 `at`），一律改为等待确认。
+- **警告给出可用的键**：实例不读 gateway.db（ADR 0059 §1），所以由网关在实例进入 `running` 时比对配置里的键与 Console 用户，把建议写进**网关自己的日志**（前台运行时的 stderr、后台运行时的 `.zhin/logs/gateway.log`；这两处都不经 Console 的日志接口提供，Console 的项目文件路由也拒绝点目录）。建议里含 Console 用户名与 id，所以不写进实例日志——实例日志经 `GET /logs` 对持有 `status.view` 的 Console 用户可读；实例日志只提示「键无效，运行 `zhin console user list` 查看可用的 user id」。建议规则：键正好是某个用户名时给出该用户的 `user:<id>`，否则只有一个全局所有者时给出「当前唯一的所有者是 …，可改为 `user:<id>`」，再否则提示用 `zhin console user list` 查看。`zhin console user list` 显示用户 id，并新增 `--json`。
+- **不支持用用户名作键**：用户名不能改，但用户删除后同名可被别人重新注册，用户名键会悄悄指向另一个人；实例也读不到用户名。用户 id 随机生成、不复用，因此只接受 `user:<id>`，用户名只用于给出建议。
+- **日志带账号**（`chat-roles-import-log-ambiguous`）：同一 openid 挂在同一适配器的两个账号上时，日志写成 `qq:<openid>（账号 <endpoint id>）`，能分清是哪个账号的条目。
+
+### 认领码的入站处理（zhinjs/zhin#1250 第 23 批）
+
+根因：`认领` / `claim` 原是普通根命令，要带适配器的命令前缀才触发，而所有提示都写「私聊发送『认领 <码>』」。配了 `commandPrefix` 的账号上，按提示发送的消息没有匹配到命令，整条消息（含认领码）作为普通聊天交给了外部模型，并进入会话历史与 trace；用户也得不到任何反馈。
+
+- **按当前码识别，不按格式猜**：只在认领开启期间（尚无全局 owner、有关系型数据库）生效。消息（命令匹配用的文本：群聊开头的 @ 提及已去掉）只要**含有当前有效的认领码**就被接手，不论写法——比较规则与 `sameCode` 一致（不分大小写、忽略空白与 `-`），另外忽略零宽字符与软连字符、也按 NFKC 形式比较（`containsChatOwnerClaimCode`，`@zhin.js/kernel`）。因此 `认领:码`、`認領 码`、`ｃｌａｉｍ 码`、`认领码`、`认领 码 谢谢`、`ABCD 2345`、`认领 码!!!!` 都会被接手。
+- **只有恰好一个码才授予**：接手后，整条文本先规范化成一个候选（NFKC、不分大小写、去掉字母数字以外的字符、去掉开头的 `认领` / `认领码` / `claim`），与当前码等长比较；相等才认领。只是含有当前码的其它文本（`认领 码 谢谢`、码藏在长单词里、一条消息列出许多候选）只作废并轮换码、回复「码已作废」，不授予——否则一条消息能一次比较成千上万个候选，绕开错误次数限制（#1289 复审）。
+- **形态只用于私聊里的错码**：私聊中形如「认领 / claim + 一个词」（`matchChatOwnerClaimText`：关键词是第一个词，后面恰好一个词；容忍命令前缀、关键词前至多 3 个标点、码前后至多 3 个标点）但码不对的消息，同样由认领处理器回复「不正确」并计入错误次数（用法说明见 `formatOwnerClaimUsage`）。不含当前码的群聊消息一律放行：`claim it`、`认领 任务` 照常进 Agent。
+- **最早处理**：Core 的 `ImRuntimeOptions.inboundSecret`（`InboundSecretGuard`）在入站构造消息后、写调试日志之前识别；实例装配 `createChatOwnerClaimGuard`。命中的消息只交给认领处理器：不写会话历史，不经中间件、事件处理器、命令、交互提示与 Agent，日志与消息事件流只出现 `认领 ***`，结局记为 `command_replied`（`reason: secret`，命令 `claim`）。私聊进入认领；群聊中的当前码作废轮换并回复「只接受私聊」；Sandbox 拒绝。
+- **被丢弃的消息也作废码**：在交给处理器之前就被丢弃的消息——会话未就绪（`dropped_unready`）、其他机器人或本项目另一账号发送（`peer_bot` / `member`）、去重失败——若含当前码，同样不记录，并立即作废轮换（`InboundSecretMatch.discard`）：这些消息别人已经看到，而没有认领流程会消费它。重复投递（另一账号处理同一条消息）不作废。
+- **原生事件 `platform.receive` 的边界**：派发原生事件前也调用守卫（`InboundSecretGuard.inspectNative`，检查载荷里的全部字符串）；含当前码的原生事件**不派发给原生 Handler**（只记一条不含正文的调试日志）。选择不派发而不是脱敏后派发：原生载荷是平台自定义结构，文本可能在任意字段、以任意编码出现，无法可靠脱敏；同一条消息的规范化 `message.receive` 仍会被认领处理器正常处理，原生 Handler 少看到的只是这一条带码事件。
+- **写入端兜底只脱敏真实码**：会话记录（`conversation_events`、Agent 会话消息）与 trace（`scrubSecrets`）写入前用 `redactChatOwnerClaimText` 把**当前开启的认领码**（实例轮换时 `registerChatOwnerClaimCode` 登记）替换为 `***`。认领未开启（含已有全局 owner）时不做任何替换：此时不存在有效的码，按形态脱敏只会把普通聊天（`claim it`）存成 `claim ***`。已作废的旧码不再是秘密，不追溯已落盘的记录。
+- **有 owner 之后**：入站不再拦截任何消息，带前缀的 `#认领 xxx` 照常匹配到命令并回复「当前不接受认领」，不带前缀的照常进 Agent。
+- **保留不变**：只接受真实平台私聊、sandbox 不接受、同一码连错 5 次轮换且同一发送者窗口内至多计 2 次、码只用一次。
 
 ## 落盘位置（计划）
 

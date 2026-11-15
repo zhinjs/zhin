@@ -1,4 +1,5 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
 import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
@@ -57,13 +58,21 @@ function timelineDetail(entry: TurnTrace['timeline'][number], label?: (provider:
 }
 
 /** One line per trace, newest last. */
-export function formatTurnTraceList(traces: readonly TurnTrace[]): string {
+export interface FormatTurnTraceListOptions {
+  /**
+   * Readable conversation of a trace (`zhin trace -l` passes the one `zhin usage report` shows,
+   * #1250); without it, or when it returns nothing, the session key is shown.
+   */
+  readonly sessionLabel?: (trace: TurnTrace) => string | undefined;
+}
+
+export function formatTurnTraceList(traces: readonly TurnTrace[], options: FormatTurnTraceListOptions = {}): string {
   if (traces.length === 0) return '还没有记录到任何回合。';
   return traces.map(trace => [
-    new Date(trace.started_at).toLocaleString(),
+    formatDateTime(trace.started_at),
     STATUS_LABEL[trace.termination.status],
     trace.turn_id,
-    trace.session_key,
+    options.sessionLabel?.(trace) ?? trace.session_key,
     `${trace.tool_calls.length} tools`,
     trace.subagent_usage?.model_calls
       ? `${turnTraceTotalUsage(trace).total_tokens} tokens (子 agent ${trace.subagent_usage.total_tokens})`
@@ -88,7 +97,7 @@ function renderTrace(
       + (trace.principal.trust_level ? `  信任级别: ${trace.principal.trust_level}` : ''));
   }
   if (trace.trigger) lines.push(...renderTrigger(trace.trigger, indent));
-  lines.push(`${indent}  开始: ${new Date(trace.started_at).toLocaleString()}  耗时: ${formatDuration(trace.duration_ms)}`);
+  lines.push(`${indent}  开始: ${formatDateTime(trace.started_at)}  耗时: ${formatDuration(trace.duration_ms)}`);
   if (termination.code || termination.reason) {
     lines.push(`${indent}  结束原因: ${[termination.code, termination.reason].filter(Boolean).join(' — ')}`);
   }

@@ -75,6 +75,7 @@ import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
 import { createFeatureHost } from './feature-host-installer.js';
+import { createChatOwnerClaimGuard } from './chat-owner-claim.js';
 import { PersonalPrincipalImportBook } from './chat-personal-principals.js';
 import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
@@ -299,7 +300,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   chatPeopleRef.current = featureHost.people;
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
-  const im = new ImRuntime({ enrichSender: senderEnricher });
+  // #1250: claim-shaped messages are taken before anything records, logs or routes them.
+  const im = new ImRuntime({ enrichSender: senderEnricher, inboundSecret: createChatOwnerClaimGuard({ claim: featureHost.claim }) });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });

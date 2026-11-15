@@ -150,6 +150,17 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     expect(await reopened.attempt({ code: 'ZZZZ7999', identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
   });
 
+  it('one attempt compares one candidate: text carrying the code among other symbols revokes it (#1289 review)', async () => {
+    const { make, roles } = setup();
+    const claim = make();
+    await claim.refresh();
+    const identity = { adapter: 'qq', userId: 'mallory' };
+    expect(await claim.attempt({ code: `${'Z'.repeat(400)}AAAA2222ZZZZ`, identity, kind: 'private', adapterKind: 'platform' })).toBe('revoked');
+    expect(hasGlobalOwner(roles)).toBe(false);
+    expect(await claim.attempt({ code: 'AAAA2222', identity, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+    expect(await claim.attempt({ code: '认领:ｂｂｂｂ ３３３３!', identity: { adapter: 'qq', userId: 'alice' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
+  });
+
   it('the claim file is not reachable through the Console project-file routes (security review)', () => {
     expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE)).toBe(false);
     expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE.replace(/\\/gu, '/'))).toBe(false);
