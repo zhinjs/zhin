@@ -538,9 +538,39 @@ The unified component library `@zhin.js/console-ui` now exists (ADR 0063 P1a: th
 4. give interactive controls a touch target of at least 44×44px at phone widths;
 5. use the Console's theme tokens for background and text, so it stays readable in both the light and the dark theme.
 
-`zhin plugin check` is planned (ADR 0063 P2) to report deviations from the recommendations as **hints** (warnings, never errors; they do not block a build or publish), each with how to switch to a component or token.
+`zhin plugin check` reports deviations from the recommendations as **hints** (never errors; they do not block a build or publish), each with how to switch to a component or token; see "Page checks in `zhin plugin check`" below.
 
-**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: from ADR 0063 P2, the `zhin plugin check` checks and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors for official plugins in zhinjs/zhin CI, just as for the Console's own pages (report-only before that). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Once P2 is complete, look at the official plugins' pages when writing your own; until then some official pages still use the old `zk-` components and should not be copied.
+**Official and third-party plugins.** Third-party plugins are recommended to follow all of the rules above; only the hard floor is required, and `zhin plugin check` reports everything else as hints. Official plugins follow every rule and serve as reference implementations: `zhin plugin check` rules 1–6 and the layout audit covering every rule (type scale, spacing, radius / border / shadow, responsive behaviour and the hard floor) are errors in zhinjs/zhin CI for the official plugins on the gate list, just as for the Console's own pages (plugins not yet on it are only reported). There are no exceptions by default; where one is truly needed, a single check can be waived only with an ignore comment in the source that names the check and the reason, and it goes through review. Once P2 is complete, look at the official plugins' pages when writing your own; until then some official pages still use the old `zk-` components and should not be copied.
+
+### Page checks in `zhin plugin check` {#plugin-check-pages}
+
+`zhin plugin check` checks a plugin's `pages/**` (scripts and `.css` / `.scss` / `.less`, without tests and declaration files). Each hint says what it means and how to fix it:
+
+| Rule | What it checks | Use instead |
+| --- | --- | --- |
+| 1 | Native `<select>` (JSX or `createElement('select')`) | `Select` from `@zhin.js/console-ui` (`SearchableSelect` when it needs search) |
+| 2 | Custom page header: `<h1>`, or `PageHeader` / `PluginPage` imported from `@zhin.js/client/ui` | Put the title in `definePage({ title })` and header actions in `usePageChrome()`; start sections at `<h2>` |
+| 3 | Fixed content width: `width` / `max-width` of at least 640px or 40rem (styles, CSS, `max-w-[…]` / `w-[…]`, `max-w-2xl` and up, `max-w-prose`, `max-w-screen-*`), or setting `--console-content-max` yourself | Remove it and leave it to the shell; use `definePage({ fullWidth: true })` for full width |
+| 4 | Raw style values: literal font size, font weight, radius, shadow, padding, margin or gap in a `style` attribute, a style object whose name ends in `style` / `styles`, a CSS string or a stylesheet (`0`, keywords such as `auto` / `none`, and `var(--console-…)` are fine) | Components, or `var(--console-…)` semantic tokens |
+| 5 | Off-scale Tailwind classes: arbitrary values (`p-[…]`, `rounded-[…]`, `text-[…]`; references to Console tokens such as `p-(--console-…)` are fine), off-scale spacing keys (`p-5`, `gap-2.5`), default `shadow` / `shadow-sm` … `shadow-2xl` | Spacing keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16`, radius `0`–`4` / `full`, shadows `e1`–`e3`, or components |
+| 6 | Native `<button>`, `<input>`, `<textarea>`, `<table>`, `<dialog>` | `Button`, `Input`, `Textarea`, `Table`, `Dialog` |
+
+Rule 3 is an approximation: a static check cannot tell which element is the page's root container, so a fixed width of at least 640px / 40rem is taken to set the content width.
+
+**Waivers.** To keep a pattern on purpose, add a comment at the end of the line or on the line above, naming the rule and the reason (several rules separated by commas):
+
+```tsx
+{/* zhin-ui-ignore 6: native <button> inside the canvas; focus and touch size meet the floor */}
+<button className="canvas-tool" />
+```
+
+Use `// zhin-ui-ignore 4: …` in scripts and `/* zhin-ui-ignore 4: … */` in stylesheets. A comment on a line of its own waives the next line with code; a comment after code waives its own line; only the named rules are waived. Comments without a rule or a reason, or that waive nothing, are reported too. Waivers for the Playwright layout audit go on the element itself: `data-zhin-ui-ignore="<audit check>: <reason>"` (applies to the element and its descendants; the audit tool defines the check names).
+
+**The gate for official plugins.** The official plugins in this repository treat these checks as errors in CI:
+
+- The gate list is [`scripts/plugin-ui-gate.json`](https://github.com/zhinjs/zhin/blob/main/scripts/plugin-ui-gate.json): violations of plugins in `gated` fail, plugins in `pending` are only reported and state the condition for joining; every official plugin with `pages/` must be in one of them. A plugin moves to `gated` once its pages use `@zhin.js/console-ui`; declarative blueprints, adapter pages and comment review pages are rendered by the Console and comply with the renderer migration, so they join as soon as the check passes.
+- `pnpm check:plugin` runs rules 1–6 (in the PR contracts stage) and `pnpm check:plugin-ui-audit` runs the full Playwright audit (the audit tool comes from `@zhin.js/console-ui` and is skipped until it is available). Both use the same list and list violations and every waiver by plugin and check in the run summary.
+- The list cannot switch a check off for a plugin or a file; waivers are only the inline comments above, reviewed with the PR.
 
 ## Page UI kit
 

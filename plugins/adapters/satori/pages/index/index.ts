@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Sparkles',
   order: 72,
   requiredPermissions: ['satori:read'],
+  keywords: { 'zh-CN': ['Satori 协议', '适配器', '连接'], en: ['satori protocol', 'adapter', 'connection'] },
 });
 
 /**

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Mail',
   order: 79,
   requiredPermissions: ['email:read'],
+  keywords: { 'zh-CN': ['邮件', '邮箱', 'SMTP', 'IMAP'], en: ['mail', 'smtp', 'imap'] },
 });
 
 /**

@@ -538,9 +538,39 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 4. 手机宽度下可交互控件的触控尺寸不小于 44×44px；
 5. 背景与文字使用 Console 主题令牌，在深浅两种主题下都可读。
 
-`zhin plugin check` 计划（ADR 0063 P2）对偏离推荐的写法给出**提示**（不是错误，不会阻止构建或发布），并说明怎样改成组件或令牌。
+`zhin plugin check` 对偏离推荐的写法给出**提示**（不是错误，不会阻止构建或发布），并说明怎样改成组件或令牌，见下文「`zhin plugin check` 的页面检查」。
 
-**官方插件与第三方插件。** 第三方插件推荐遵守上面全部规则，必须遵守的只有硬性底线，`zhin plugin check` 对其余各项只提示。官方插件完整遵守全部规则，作为参考实现：从 ADR 0063 P2 起，`zhin plugin check` 的各项检查和覆盖全部规则的布局审计（类型尺度、间距、圆角 / 边框 / 阴影、响应式和硬性底线）在 zhinjs/zhin 的 CI 中对官方插件是错误，和 Console 自带页面一样（在此之前只出报告）；默认没有例外，确有需要时只能在源码中用写明检查项和理由的忽略注释豁免某一条检查，并经评审。P2 完成后，写自己的页面时可以参考官方插件的页面；在此之前部分官方页面仍在使用旧的 `zk-` 组件，不宜照搬。
+**官方插件与第三方插件。** 第三方插件推荐遵守上面全部规则，必须遵守的只有硬性底线，`zhin plugin check` 对其余各项只提示。官方插件完整遵守全部规则，作为参考实现：`zhin plugin check` 的第 1–6 条和覆盖全部规则的布局审计（类型尺度、间距、圆角 / 边框 / 阴影、响应式和硬性底线）在 zhinjs/zhin 的 CI 中对门禁名单里的官方插件是错误，和 Console 自带页面一样（尚未进入名单的只出报告）；默认没有例外，确有需要时只能在源码中用写明检查项和理由的忽略注释豁免某一条检查，并经评审。P2 完成后，写自己的页面时可以参考官方插件的页面；在此之前部分官方页面仍在使用旧的 `zk-` 组件，不宜照搬。
+
+### `zhin plugin check` 的页面检查 {#plugin-check-pages}
+
+`zhin plugin check` 检查插件的 `pages/**`（脚本和 `.css` / `.scss` / `.less`，不含测试和声明文件），每条提示说明含义和改法：
+
+| 条 | 检查什么 | 改成 |
+| --- | --- | --- |
+| 1 | 原生 `<select>`（JSX 或 `createElement('select')`） | `@zhin.js/console-ui` 的 `Select`（需要搜索时用 `SearchableSelect`） |
+| 2 | 自定义页头：`<h1>`，或从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage` | 标题写在 `definePage({ title })`，页头操作用 `usePageChrome()`；页内小节从 `<h2>` 起 |
+| 3 | 固定内容宽度：`width` / `max-width` 不小于 640px 或 40rem（样式、CSS、`max-w-[…]` / `w-[…]`、`max-w-2xl` 及以上、`max-w-prose`、`max-w-screen-*`），或自己设置 `--console-content-max` | 删掉，交给外壳；需要占满宽度时用 `definePage({ fullWidth: true })` |
+| 4 | 原始样式数值：`style` 属性、名字以 `style` / `styles` 结尾的样式对象、CSS 字符串和样式文件里，字号、字重、圆角、阴影、内外边距、间隔写了字面值（`0`、`auto` / `none` 等关键字和 `var(--console-…)` 除外） | 组件，或 `var(--console-…)` 语义令牌 |
+| 5 | 尺度外的 Tailwind 类名：任意值（`p-[…]`、`rounded-[…]`、`text-[…]`；`p-(--console-…)` 这种引用 Console 令牌的除外）、尺度外的间距键（`p-5`、`gap-2.5`）、默认 `shadow` / `shadow-sm` … `shadow-2xl` | 间距键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`，圆角 `0`–`4` / `full`，阴影 `e1`–`e3`，或组件 |
+| 6 | 原生 `<button>`、`<input>`、`<textarea>`、`<table>`、`<dialog>` | `Button`、`Input`、`Textarea`、`Table`、`Dialog` |
+
+第 3 条是近似判断：静态检查认不出哪个元素是页面根容器，所以把「不小于 640px / 40rem 的固定宽度」当作在设置内容宽度。
+
+**豁免写法。** 确实要保留某个写法时，在该行末尾或上一行写一条注释，写明检查项和理由（多条用逗号分开）：
+
+```tsx
+{/* zhin-ui-ignore 6: 画布内的原生 <button>，焦点和触控尺寸已自行满足底线 */}
+<button className="canvas-tool" />
+```
+
+脚本中写 `// zhin-ui-ignore 4: …`，样式文件中写 `/* zhin-ui-ignore 4: … */`。注释单独占一行时豁免下一行有代码的行，写在代码后面时豁免它所在的行；只豁免写明的检查项。缺检查项、缺理由或没有豁免到任何违规的注释也会被报出。Playwright 布局审计的豁免写在被豁免的元素上：`data-zhin-ui-ignore="<审计检查项>: <理由>"`（对该元素及其子元素生效，检查项名由审计工具定义）。
+
+**官方插件的门禁。** 本仓库的官方插件在 CI 中把这些检查当作错误：
+
+- 门禁名单是 [`scripts/plugin-ui-gate.json`](https://github.com/zhinjs/zhin/blob/main/scripts/plugin-ui-gate.json)：`gated` 中的插件违规即失败，`pending` 中的只出报告，并写明加入门禁的条件；有 `pages/` 的官方插件必须在其中之一。页面迁移到 `@zhin.js/console-ui` 后移入 `gated`；只由 Console 渲染器渲染的声明式蓝图、适配器页和评论审批页随渲染器迁移自动合规，检查通过即可进入。
+- `pnpm check:plugin` 跑第 1–6 条（PR 的 contracts 阶段），`pnpm check:plugin-ui-audit` 跑 Playwright 全项审计（审计工具由 `@zhin.js/console-ui` 提供，未就绪时跳过）；两者共用这份名单，在运行摘要中按插件和检查项列出违规与全部豁免。
+- 名单不能按插件或文件关闭检查，豁免只能是上面的行内注释，随 PR 评审。
 
 ## 页面 UI 套件
 

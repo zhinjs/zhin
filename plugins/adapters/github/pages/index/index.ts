@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Github',
   order: 63,
   requiredPermissions: ['github:read'],
+  keywords: { 'zh-CN': ['Webhook', 'GitHub App', 'Issue', 'PR'], en: ['webhook', 'github app', 'issues', 'pull requests'] },
 });
 
 /**

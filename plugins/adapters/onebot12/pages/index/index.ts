@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Bot',
   order: 71,
   requiredPermissions: ['onebot12:read'],
+  keywords: { 'zh-CN': ['OneBot v12', '适配器', '连接'], en: ['onebot v12', 'adapter', 'connection'] },
 });
 
 /**

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageCircle',
   order: 62,
   requiredPermissions: ['discord:read'],
+  keywords: { 'zh-CN': ['适配器', '连接'], en: ['adapter', 'connection'] },
 });
 
 /**

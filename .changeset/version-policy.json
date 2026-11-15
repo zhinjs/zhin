@@ -29,7 +29,7 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。；所有者已批准（zhinjs/zhin#1250）：新增命令 `zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`，`zhin status`（含 `--json` 的 `chatOwnerClaim`）在没有全局 owner 时显示认领码。npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。；所有者已批准（zhinjs/zhin#1250）：新增命令 `zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`，`zhin status`（含 `--json` 的 `chatOwnerClaim`）在没有全局 owner 时显示认领码。npm 上 1.5.0 未被占用。；ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：zhin plugin check 新增页面 UI 第 1–6 条检查（原生 <select>、自定义页头、固定内容宽度、原始样式数值、尺度外的 Tailwind 类名、原生基础控件，只提示并给出替换建议，不计入错误与警告），行内豁免注释 zhin-ui-ignore，检查报告新增 ui 与 hintCount 字段。"
     },
     {
       "package": "@zhin.js/scaffold-wizard",

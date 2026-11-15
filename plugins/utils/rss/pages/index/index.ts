@@ -29,6 +29,7 @@ export const meta = definePage({
   icon: 'Rss',
   order: 52,
   requiredPermissions: ['rss:read'],
+  keywords: { 'zh-CN': ['订阅', '资讯', '推送', 'Feed'], en: ['feed', 'atom', 'subscriptions'] },
 });
 
 export default definePageBlueprint<RssConsoleStatus>({

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Building2',
   order: 61,
   requiredPermissions: ['dingtalk:read'],
+  keywords: { 'zh-CN': ['钉钉', '适配器', '连接'], en: ['adapter', 'connection'] },
 });
 
 /**

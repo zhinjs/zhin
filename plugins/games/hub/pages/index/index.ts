@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Gamepad2',
   order: 57,
   requiredPermissions: ['game-hub:read'],
+  keywords: { 'zh-CN': ['小游戏', '游戏', '排行榜', '战绩'], en: ['games', 'mini games', 'leaderboard', 'stats'] },
 });
 
 export default createDeclarativePage<GameHubConsoleStatus>({

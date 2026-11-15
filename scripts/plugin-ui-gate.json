@@ -1,0 +1,49 @@
+{
+  "$comment": [
+    "ADR 0063 D19「本仓库的官方插件」：官方插件页面的 UI 门禁名单，由 pnpm check:plugin（zhin plugin check 第 1–6 条）与 pnpm check:plugin-ui-audit（Playwright 全项审计）共用。",
+    "gated：页面已迁移到 @zhin.js/console-ui（或是只由 Console 渲染器渲染的声明式蓝图 / 适配器页 / 评论审批页），第 1–6 条与审计的违规在 CI 中是错误。",
+    "pending：尚未迁移，只出报告；每项写明加入门禁的条件。P2 验收时 pending 必须为空。",
+    "有 pages/ 的官方插件必须出现在 gated 或 pending 之一。豁免只能是源码中的行内注释（// zhin-ui-ignore <检查项>: <理由>；审计用 data-zhin-ui-ignore=\"<检查项>: <理由>\"），不能在这里按插件或文件关闭检查。"
+  ],
+  "gated": [
+    "plugins/adapters/bilibili",
+    "plugins/adapters/bilibili-live",
+    "plugins/adapters/dingtalk",
+    "plugins/adapters/discord",
+    "plugins/adapters/email",
+    "plugins/adapters/github",
+    "plugins/adapters/icqq",
+    "plugins/adapters/juejin",
+    "plugins/adapters/kook",
+    "plugins/adapters/lark",
+    "plugins/adapters/line",
+    "plugins/adapters/milky",
+    "plugins/adapters/napcat",
+    "plugins/adapters/onebot11",
+    "plugins/adapters/onebot12",
+    "plugins/adapters/qq",
+    "plugins/adapters/satori",
+    "plugins/adapters/slack",
+    "plugins/adapters/telegram",
+    "plugins/adapters/wechat-mp",
+    "plugins/adapters/wecom",
+    "plugins/adapters/weixin-ilink",
+    "plugins/features/process-monitor",
+    "plugins/games/hub",
+    "plugins/utils/calendar",
+    "plugins/utils/content-moderation",
+    "plugins/utils/group-suite",
+    "plugins/utils/ledger",
+    "plugins/utils/lottery",
+    "plugins/utils/qrcode",
+    "plugins/utils/reminder",
+    "plugins/utils/rss",
+    "plugins/utils/short-url"
+  ],
+  "pending": [
+    {
+      "plugin": "plugins/adapters/sandbox",
+      "reason": "ADR 0063 D13 两步完成后加入：先把 agent-playground.css / im-workspace.css 移进插件由页面自行注入，再把 Sandbox 的 .tsx 改写到 @zhin.js/console-ui 组件上；工作区确需的个别写法只能逐条行内豁免。由 Sandbox 迁移负责移入 gated。"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Cat',
   order: 69,
   requiredPermissions: ['napcat:read'],
+  keywords: { 'zh-CN': ['QQ', 'NapCatQQ', 'OneBot'], en: ['qq', 'napcatqq', 'onebot'] },
 });
 
 /**

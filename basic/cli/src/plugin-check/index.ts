@@ -5,6 +5,7 @@
 import path from 'node:path';
 import { checkPeerDependencies, checkZhinManifest } from './manifest-checks.js';
 import { checkPluginPack } from './pack-checks.js';
+import { checkPluginPageUi, formatPageUiReport, type PageUiReport } from './page-checks.js';
 import { checkPluginSource, readPluginManifest, type PluginCheckProblems } from './source-checks.js';
 
 export interface PluginCheckOptions {
@@ -18,8 +19,15 @@ export interface PluginCheckReport {
   source: PluginCheckProblems;
   /** Absent when the pack step was skipped or could not start (see source errors). */
   pack?: PluginCheckProblems & { packedFiles: number };
+  /**
+   * Page UI rules 1–6 (ADR 0063) over `pages/**`. Hints only: they never count in
+   * `errorCount` / `warningCount`, so they do not fail `--strict` or block `zhin pub`.
+   */
+  ui?: PageUiReport;
   errorCount: number;
   warningCount: number;
+  /** Page UI hints (findings plus malformed or unused ignore comments). */
+  hintCount: number;
 }
 
 function hasZhinManifestObject(manifest: Record<string, unknown>): boolean {
@@ -32,7 +40,9 @@ export async function checkPlugin(directory: string, options: PluginCheckOptions
   const source: PluginCheckProblems = { errors: [], warnings: [] };
   const manifest = readPluginManifest(pluginDirectory, source);
   let pack: PluginCheckReport['pack'];
+  let ui: PageUiReport | undefined;
   if (manifest) {
+    ui = checkPluginPageUi(pluginDirectory);
     const sourceProblems = checkPluginSource(pluginDirectory, manifest);
     source.errors.push(...sourceProblems.errors);
     source.warnings.push(...sourceProblems.warnings);
@@ -55,8 +65,10 @@ export async function checkPlugin(directory: string, options: PluginCheckOptions
     name: typeof manifest?.name === 'string' ? manifest.name : undefined,
     source,
     pack,
+    ...(ui && ui.files > 0 ? { ui } : {}),
     errorCount,
     warningCount,
+    hintCount: ui ? ui.findings.length + ui.directiveProblems.length : 0,
   };
 }
 
@@ -76,6 +88,8 @@ export function formatPluginCheckReport(report: PluginCheckReport, options: Plug
   } else if (options.pack === false) {
     lines.push('  发布包：已跳过（--no-pack）');
   }
-  lines.push(`结果：${report.errorCount} 个错误，${report.warningCount} 个警告`);
+  if (report.ui) lines.push(...formatPageUiReport(report.ui));
+  const hints = report.hintCount > 0 ? `，${report.hintCount} 个页面 UI 提示` : '';
+  lines.push(`结果：${report.errorCount} 个错误，${report.warningCount} 个警告${hints}`);
   return lines.join('\n');
 }

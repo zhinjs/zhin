@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Link',
   order: 59,
   requiredPermissions: ['short-url:read'],
+  keywords: { 'zh-CN': ['短链接', '短网址', '缩短链接', '链接还原'], en: ['url shortener', 'short link', 'expand link'] },
 });
 
 export default definePageBlueprint<ShortUrlConsoleStatus>({

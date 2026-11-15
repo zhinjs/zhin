@@ -438,7 +438,8 @@ Checks whether the plugin in a directory (the current one by default) will publi
   - the packed `zhin.entry` can be imported: it is loaded in a child process using the plugin's own `node_modules` (skipped with a warning when dependencies are not installed).
 
   These are the same rules as the repository's `pnpm check:pack-imports`. `--no-pack` skips this step.
-- Exits with code 1 on errors; `--strict` also fails on warnings; `--json` prints a structured result for CI.
+- **Page UI**: checks `pages/**` for deviations from the Console page rules (ADR 0063 rules 1–6: native `<select>`, custom page header, fixed content width, raw style values, off-scale Tailwind classes, native basic controls), each with a suggested replacement. These are **hints** only and count as neither errors nor warnings. Rules and the waiver syntax: [Page UI guidelines](../authoring/console-pages.md#plugin-check-pages).
+- Exits with code 1 on errors; `--strict` also fails on warnings (page UI hints excepted); `--json` prints a structured result for CI (page UI under `ui` and `hintCount`).
 
 ### pub: Publish a Plugin
 
