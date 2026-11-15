@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  connectableHost, hostGet, HostTargetError, isLocalMachineUrl, isLoopbackUrl, listHostEndpoints, loadHostHttpConfig, normalizeHostUrl,
+  connectableHost, hostGet, HostTargetError, isLocalMachineUrl, isLoopbackUrl, resolvesToLocalMachine, listHostEndpoints, loadHostHttpConfig, normalizeHostUrl,
   verifyHostProject,
 } from '../../src/utils/host-http.js';
 import { requestPluginConsole } from '../../src/plugin-management/console-client.js';
@@ -323,14 +323,46 @@ describe('security review (#1250): the --host check fails closed', () => {
     }
   });
 
-  it('counts 0.0.0.0, IPv4-mapped loopback and *.localhost as loopback; other addresses are not', () => {
+  it('counts 0.0.0.0 and IPv4-mapped loopback as loopback; *.localhost and other addresses are not', () => {
     for (const url of ['http://0.0.0.0:8068', 'http://[::]:8068', 'http://[::ffff:127.0.0.1]:8068', 'http://[::ffff:7f00:1]:8068',
-      'http://app.localhost:8068', 'http://LOCALHOST:8068', 'http://127.1.2.3:8068', 'http://[::1]:8068']) {
+      'http://LOCALHOST:8068', 'http://127.1.2.3:8068', 'http://[::1]:8068']) {
       expect(isLoopbackUrl(url), url).toBe(true);
     }
-    for (const url of ['http://10.0.0.5:8068', 'http://[::ffff:a00:5]:8068', 'http://localhost.example.com:8068', 'http://example.com']) {
+    // *.localhost goes through the system resolver in Node: never a plain-HTTP token target.
+    for (const url of ['http://10.0.0.5:8068', 'http://[::ffff:a00:5]:8068', 'http://localhost.example.com:8068', 'http://example.com',
+      'http://app.localhost:8068']) {
       expect(isLoopbackUrl(url), url).toBe(false);
     }
+  });
+
+  it('refuses a plain-HTTP token to *.localhost but still verifies its project', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ success: true, data: 1 })));
+    vi.stubGlobal('fetch', fetch);
+    expect(await hostGet({ baseUrl: 'http://app.localhost:8068/api', token: 'secret-token' }, '/stats'))
+      .toMatchObject({ ok: false, code: 'insecure-transport' });
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    expect(isLocalMachineUrl('http://app.localhost:8068', () => new Set())).toBe(true);
+    const probe = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' })));
+    await expect(verifyHostProject('http://app.localhost:8068/api', root, { fetch: probe as never }))
+      .rejects.toMatchObject({ code: 'project-unverified' });
+  });
+
+  it('resolves a host name before deciding it is remote (project check only)', async () => {
+    const addresses = () => new Set(['192.168.1.20']);
+    expect(await resolvesToLocalMachine('http://mybox.lan:8068', { addresses, resolve: async () => ['192.168.1.20'] })).toBe(true);
+    expect(await resolvesToLocalMachine('http://loop.example:8068', { addresses, resolve: async () => ['127.0.0.1'] })).toBe(true);
+    expect(await resolvesToLocalMachine('http://v6.example:8068', { addresses, resolve: async () => ['::1'] })).toBe(true);
+    expect(await resolvesToLocalMachine('http://remote.example:8068', { addresses, resolve: async () => ['203.0.113.9'] })).toBe(false);
+    expect(await resolvesToLocalMachine('http://broken.example:8068', { addresses, resolve: async () => { throw new Error('ENOTFOUND'); } })).toBe(false);
+    // A resolver that never answers does not hold the command: the timeout counts as "not local".
+    expect(await resolvesToLocalMachine('http://slow.example:8068', { addresses, resolve: () => new Promise(() => undefined), timeoutMs: 20 })).toBe(false);
+    // IP literals are never looked up.
+    const resolve = vi.fn(async () => ['127.0.0.1']);
+    expect(await resolvesToLocalMachine('http://203.0.113.9:8068', { addresses, resolve })).toBe(false);
+    expect(resolve).not.toHaveBeenCalled();
+    // The resolved answer never allows a plain-HTTP token: the request resolves the name again.
+    expect(isLoopbackUrl('http://loop.example:8068')).toBe(false);
   });
 
   it('verifies an address of a local network interface too (not loopback, still this machine)', async () => {
