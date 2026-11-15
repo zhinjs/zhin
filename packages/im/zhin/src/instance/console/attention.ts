@@ -308,9 +308,14 @@ export function allowsEndpointAccount(allows: AttentionAllows, permission: strin
 // ---------------------------------------------------------------- failure reasons
 
 const MAX_REASON = 200;
+/** Only this much of the first line reaches the masking expressions: bounds their backtracking (#1278). */
+const MAX_REDACTED_INPUT = 2048;
 
-/** Key names whose value is a credential (also matched inside longer names such as `x-api-key`). */
-const CREDENTIAL_KEY = String.raw`[\w-]*(?:authorization|cookie|token|secret|password|passwd|credential|api[-_]?key|access[-_]?key|private[-_]?key|key)[\w-]*`;
+/**
+ * Key names whose value is a credential (also matched inside longer names such as `x-api-key`);
+ * `sig` / `signature` only as whole names, so `signal: …` stays readable.
+ */
+const CREDENTIAL_KEY = String.raw`(?:[\w-]*(?:authorization|cookie|token|secret|pass|pwd|credential|api[-_]?key|access[-_]?key|private[-_]?key|session[-_]?id|key)[\w-]*|sig|signature)`;
 const CREDENTIAL_PAIR = new RegExp(
   String.raw`(["']?)\b(${CREDENTIAL_KEY})\1(\s*[=:]\s*)(?:(Bearer|Basic|Token)\s+)?("[^"]*"|'[^']*'|[^\s,;&"']+)`, 'giu');
 
@@ -327,7 +332,7 @@ const CREDENTIAL_PAIR = new RegExp(
 export function attentionFailureReason(error: unknown): string {
   const record = error && typeof error === 'object' ? error as { message?: unknown } : undefined;
   const raw = typeof error === 'string' ? error : typeof record?.message === 'string' ? record.message : '';
-  let text = (raw.split(/\r?\n/u).find(line => line.trim()) ?? '').trim();
+  let text = (raw.split(/\r?\n/u).find(line => line.trim()) ?? '').trim().slice(0, MAX_REDACTED_INPUT);
   text = text
     // URL user info and query / fragment.
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, '$1***@')

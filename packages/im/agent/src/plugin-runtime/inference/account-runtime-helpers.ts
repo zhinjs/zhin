@@ -147,6 +147,8 @@ export interface AccountRuntimeContext {
       previous: OpenCredential | undefined;
       authContractVersion: string;
       payload: CredentialPayload;
+      /** A periodic token refresh of the same identity: journaled failures stay (#1278). */
+      refresh?: boolean;
     }>
   ): Promise<OpenCredential>;
   release(fn: () => void | Promise<void>): Promise<void>;

@@ -242,6 +242,19 @@ it('clears journaled failures of the old credential when a new one is published 
   } finally { await fixture.close(); }
 });
 
+it('keeps the journaled model failure across a periodic token refresh of the same identity (#1278)', async () => {
+  const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
+  const fixture = await setup('oauth', undefined, { failureJournal: () => journal });
+  try {
+    await fixture.seed({ accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1 });
+    journal.record({ source: 'model', subject: 'account', code: 'rate-limit', category: 'rate-limit', message: 'x', upstreamStatus: 429 });
+    expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'new-access' });
+    expect(fixture.refresh).toHaveBeenCalledOnce();
+    expect((await fixture.host.status(fixture.account)).revision).toBeGreaterThan(1);
+    expect(journal.get('model', 'account')).toMatchObject({ code: 'rate-limit', upstreamStatus: 429 });
+  } finally { await fixture.close(); }
+});
+
 it('ignores a journaled preparation failure of another credential revision', async () => {
   const journal = new RuntimeFailureJournal(join(await mkdtemp(join(tmpdir(), 'inference-journal-')), 'f.json'));
   journal.record({ source: 'account', subject: 'account', code: 'project-unavailable', category: 'preparation', message: 'x', credentialRevision: 1 });

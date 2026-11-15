@@ -364,6 +364,7 @@ export async function runAccountRefresh(
       account,
       previous: current,
       authContractVersion: oauth.contractVersion,
+      refresh: true,
       payload: {
         status: 'exchange-pending',
         method: 'oauth',
@@ -398,6 +399,7 @@ export async function runAccountRefresh(
         account,
         previous: pending,
         authContractVersion: oauth.contractVersion,
+        refresh: true,
         payload: {
           status: 'ready',
           method: 'oauth',

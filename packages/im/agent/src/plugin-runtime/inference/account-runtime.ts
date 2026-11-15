@@ -681,12 +681,15 @@ export class HostAccountRuntime {
       previous: OpenCredential | undefined;
       authContractVersion: string;
       payload: CredentialPayload;
+      refresh?: boolean;
     }>
   ): Promise<OpenCredential> {
-    const published = await publishAccountCredential(this.#context(), input);
-    // #1270: a new credential revision (re-login, disconnect, refresh) voids the journaled failures
-    // of the old one, so nothing reads them as current.
-    if (published.record.revision !== input.previous?.record.revision) {
+    const { refresh, ...write } = input;
+    const published = await publishAccountCredential(this.#context(), write);
+    // #1270: a new credential (login, disconnect, another key or re-authorization) voids the
+    // journaled failures of the old one, so nothing reads them as current. A periodic token
+    // refresh of the same identity is not a new credential: its failures stay (#1278).
+    if (!refresh && published.record.revision !== input.previous?.record.revision && !sameCredentialIdentity(input.previous, input.payload)) {
       try {
         const journal = this.options.failureJournal;
         const entry = journal?.get('account', input.account.id);
@@ -732,4 +735,12 @@ export class HostAccountRuntime {
       this.#reportCleanup('Provider lease cleanup failed');
     }
   }
+}
+
+/** Ready → ready with the same method, subject and key fingerprint: a token refresh or preparation, not a new credential. */
+function sameCredentialIdentity(previous: OpenCredential | undefined, next: CredentialPayload): boolean {
+  const before = previous?.payload;
+  if (!before || before.status !== 'ready' || next.status !== 'ready' || before.method !== next.method) return false;
+  const prior = identity(previous), after = identity({ ...previous!, payload: next });
+  return prior.subject === after.subject && prior.materialFingerprint === after.materialFingerprint;
 }

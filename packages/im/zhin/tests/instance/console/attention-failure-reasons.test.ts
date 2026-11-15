@@ -138,6 +138,8 @@ describe('attention.list failure reasons (#1270)', () => {
     ['secret: s3cr3t, password=hunter2', 'secret: ***, password=***'],
     ['leaked AIzaSyDUMMYDUMMYDUMMYDUMMYXX here', 'leaked *** here'],
     ['opaque abcdefghijklmnopqrstuvwxyz0123 value', 'opaque *** value'],
+    ['login pass=hunter2 pwd: x1', 'login pass=*** pwd: ***'],
+    ['callback sig=abc&session_id=s1', 'callback sig=***&session_id=***'],
   ])('masks %s', (input, expected) => {
     expect(attentionFailureReason(new Error(input))).toBe(expected);
   });
@@ -210,5 +212,18 @@ describe('attention.list failure reasons (#1270)', () => {
     clock += 15_000;
     await collectAttention(sources, { allows: owner, cache });
     expect(reads).toBe(2);
+  });
+
+  it('stays fast on huge single-line input (no quadratic backtracking, #1278)', () => {
+    for (const input of ['key'.repeat(34_000), 'a'.repeat(100_000), `${'key'.repeat(34_000)}=1`, `x ${'a1'.repeat(50_000)}`]) {
+      const started = performance.now();
+      const reason = attentionFailureReason(new Error(input));
+      expect(performance.now() - started).toBeLessThan(50);
+      expect(reason.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('keeps `signal:` readable while masking a `sig` value', () => {
+    expect(attentionFailureReason('aborted, signal: SIGTERM')).toBe('aborted, signal: SIGTERM');
   });
 });
