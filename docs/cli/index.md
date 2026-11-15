@@ -95,15 +95,20 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 }
 ```
 
-### service：系统服务
+### service：系统服务 {#service}
 
 ```bash
 zhin service install [--user]
-zhin service uninstall [--user]
+zhin service start|stop|restart [--user]
 zhin service status [--user]
+zhin service uninstall [--user]
 ```
 
-安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。服务文件以前台方式运行网关（`zhin start --foreground --mode production --no-watch`），实例由网关监管重启。
+托管与开机自启的唯一推荐方式（[ADR 0062 §2](../adr/0062-one-path-per-task.md)）。`install` 按当前系统现场生成服务文件：Linux 写 systemd 单元（`--user` 为用户级，直接安装并设为开机自启；不带 `--user` 时生成到 `.zhin/service/` 并打印 `sudo` 安装命令），macOS 写 `~/Library/LaunchAgents/com.zhinjs.<项目名>.plist` 并用 `launchctl bootstrap` 加载，Windows 生成计划任务 XML 并打印 `schtasks` / NSSM 命令。
+
+服务文件写入**当前**的 `node` 绝对路径和项目内 `node_modules/@zhin.js/cli/bin/zhin.js`，不经过 `npx`，所以 nvm / fnm / volta 安装的 Node 也能开机启动；更换 Node 版本或移动项目目录后重新运行 `zhin service install`。服务以前台方式运行网关（`zhin start --foreground --mode production`），**只在异常退出时重启**（systemd `Restart=on-failure`，launchd `KeepAlive.SuccessfulExit=false`），所以 `zhin stop` 或 `zhin service stop` 之后机器人保持停止，直到下次开机 / 登录或 `zhin service start`。
+
+`zhin stop` 遇到由服务托管的前台网关时：服务文件是旧版（`Restart=always` / `KeepAlive: true`，网关会被立即拉起）就拒绝执行并提示改用 `zhin service stop` 或重新 `zhin service install`；新版服务文件则正常停止并说明何时会再启动。脚手架不再生成任何服务文件；老项目根目录里的 `.service`、`.plist`、`install-service.ps1`、`*-task.xml` 不再使用，可以删除。
 
 ### db：Console SQL 的受限账号 {#db}
 
@@ -116,7 +121,7 @@ PostgreSQL / MySQL 上，Console 的 SQL 控制台只用单独登录的受限账
 ### console：初始化与用户管理 {#console}
 
 ```bash
-zhin console init [--status] [--reset-store]
+zhin console init [--status [--json]] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
@@ -131,7 +136,7 @@ zhin console migrate [--revert]
 Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `.zhin/gateway.db` 里（[ADR 0049](../adr/0049-console-rbac.md)、[ADR 0059](../adr/0059-gateway-storage-isolation.md)），不在项目数据库里。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
 
 - **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开 `.zhin/gateway.db`（离线初始化与救援），先把旧版留在项目数据库里的账号表迁过来。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
-- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
+- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只用几行文字说明初始化状态与当前数据库，加 `--json` 输出 JSON（供脚本使用）。选择的数据库与当前一致（例如默认 SQLite 下 `--database sqlite`）时不写配置、不提示迁移、不重启实例。已经有所有者时报错退出，请改用 `zhin console user`。
   - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。

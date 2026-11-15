@@ -273,20 +273,42 @@ describe('createWorkspace', () => {
     expect(readme).toContain('PostgreSQL 的方言名固定为 `pg`')
   })
 
-  it('generates Windows scripts with matching encoding and interpolation-safe quoting', async () => {
+  it('writes no service files and no PM2 by default (ADR 0062 §2: zhin service install generates them)', async () => {
     const projectPath = await makeProject()
+    for (const file of ['bot.service', 'com.zhinjs.bot.plist', 'install-service.ps1', 'bot-task.xml', 'ecosystem.config.cjs']) {
+      expect(await fs.pathExists(path.join(projectPath, file)), file).toBe(false)
+    }
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+    expect(Object.keys(pkg.scripts).filter((name) => name.startsWith('pm2:'))).toEqual([])
+    expect(pkg.devDependencies).not.toHaveProperty('pm2')
+    const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
+    expect(readme).toContain('npx zhin service install')
+    expect(readme).not.toContain('pm2:start')
+  })
 
-    // Task Scheduler XML 以 UTF-8 写入，声明必须一致（否则 Windows 拒绝导入）
-    const taskXml = await fs.readFile(path.join(projectPath, 'bot-task.xml'), 'utf8')
-    expect(taskXml).toContain('<?xml version="1.0" encoding="UTF-8"?>')
-    expect(taskXml).not.toContain('UTF-16')
+  it('adds PM2 only with --with pm2', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-test-'))
+    tmpRoots.push(root)
+    const projectPath = path.join(root, 'bot')
+    await createWorkspace(projectPath, 'bot', { config: 'yaml', httpToken: 'test-token', yes: true }, { pm2: true })
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+    expect(pkg.scripts['pm2:start']).toBe('pm2 start ecosystem.config.cjs')
+    expect(pkg.devDependencies.pm2).toBe('^6.0.0')
+    const ecosystem = await fs.readFile(path.join(projectPath, 'ecosystem.config.cjs'), 'utf8')
+    expect(ecosystem).toContain("args: 'start --foreground --mode production'")
+    for (const file of ['bot.service', 'com.zhinjs.bot.plist', 'install-service.ps1', 'bot-task.xml']) {
+      expect(await fs.pathExists(path.join(projectPath, file)), file).toBe(false)
+    }
+  })
 
-    // NSSM PowerShell 脚本：单引号防止项目名/路径中的 $ 被 PowerShell 插值
-    const ps1 = await fs.readFile(path.join(projectPath, 'install-service.ps1'), 'utf8')
-    expect(ps1).toContain("$ServiceName = 'bot'")
-    expect(ps1).toContain(`$ProjectPath = '${path.resolve(projectPath)}'`)
-    expect(ps1).not.toContain('$ServiceName = "')
-    expect(ps1).not.toContain('$ProjectPath = "')
+  it('writes the chosen http.port into the config and README (#1250 scaffold-port-collision)', async () => {
+    const projectPath = await makeProject({ httpPort: 8071 })
+    const config = parse(await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8'))
+    expect(config.http.port).toBe(8071)
+    const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
+    expect(readme).toContain('http://127.0.0.1:8071')
+    expect(readme).toContain('127.0.0.1%3A8071')
+    expect(readme).not.toContain('8068')
   })
 
   it('writes AI stack dependencies and tool feature when AI is enabled', async () => {

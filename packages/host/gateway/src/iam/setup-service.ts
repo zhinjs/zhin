@@ -80,6 +80,36 @@ const DEFAULT_SQLITE_FILE = '.zhin/data.sqlite';
 const SECRET_FIELDS: ReadonlySet<string> = new Set(['password']);
 const ENV_REFERENCE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/u;
 
+/** Result of {@link ConsoleSetupService.applyDatabase}. */
+export interface SetupDatabaseApplyResult {
+  /** False: the choice matches the database in use; nothing was written. */
+  readonly changed: boolean;
+  readonly restartRequired: boolean;
+  /** Empty when nothing changed. */
+  readonly notice: string;
+}
+
+const UNCHANGED_DATABASE: SetupDatabaseApplyResult = Object.freeze({ changed: false, restartRequired: false, notice: '' });
+
+/** Same keys and values; a sqlite filename is compared as a normalized relative path. */
+function sameDatabaseBlock(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const normalize = (block: Record<string, unknown>) => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(block)) {
+      if (value === undefined || value === null || value === '') continue;
+      out[key] = key === 'filename' && typeof value === 'string' ? value.replace(/^\.\//u, '').replace(/\\/gu, '/') : value;
+    }
+    return out;
+  };
+  const a = normalize(left);
+  const b = normalize(right);
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (a[key] !== b[key] && String(a[key]) !== String(b[key])) return false;
+  }
+  return true;
+}
+
 export const SETUP_NO_MIGRATION_NOTICE = '切换数据库不会迁移旧库数据：插件数据仍留在原数据库。';
 
 function envNameFor(field: string): string {
@@ -160,9 +190,14 @@ export class ConsoleSetupService {
     return this.#probe(prepared);
   }
 
-  /** Tests, then writes `database` (secrets as `${…}` into `.env`). */
-  async applyDatabase(input: SetupDatabaseInput): Promise<{ restartRequired: true; notice: string }> {
+  /**
+   * Tests, then writes `database` (secrets as `${…}` into `.env`). A choice that matches the
+   * database already in use (#1250 console-init-default-db-restart) writes nothing and needs no
+   * restart: `{ changed: false, restartRequired: false, notice: '' }`.
+   */
+  async applyDatabase(input: SetupDatabaseInput): Promise<SetupDatabaseApplyResult> {
     this.#assertSetupOpen();
+    if (await this.#keepsCurrentDatabase(input)) return UNCHANGED_DATABASE;
     const prepared = await this.#prepare(input);
     const probe = await this.#probe(prepared);
     if (!probe.ok) throw new IamError('invalid_input', `数据库连接失败：${probe.error ?? 'unknown error'}`);
@@ -178,13 +213,45 @@ export class ConsoleSetupService {
         block[field.name] = value;
       }
     }
+    if (await this.#matchesCurrent(block, envUpdates)) return UNCHANGED_DATABASE;
     if (Object.keys(envUpdates).length) {
       await this.#options.envFile.write(upsertDotenv(await this.#options.envFile.read(), envUpdates));
     }
     // The setup flow writes `.env` itself (bootstrap / owner): secret literals may go there too.
     await this.#options.config.setKey('database', block, { environmentWrite: true });
     const notice = prepared.dialect === 'pg' || prepared.dialect === 'mysql' ? `${SETUP_NO_MIGRATION_NOTICE}${SETUP_CONSOLE_ROLE_NOTICE}` : SETUP_NO_MIGRATION_NOTICE;
-    return Object.freeze({ restartRequired: true, notice });
+    return Object.freeze({ changed: true, restartRequired: true, notice });
+  }
+
+  /** The dialect in use was picked again with no connection fields: keep its configuration as it is. */
+  async #keepsCurrentDatabase(input: SetupDatabaseInput): Promise<boolean> {
+    const connection = input.connection;
+    const empty = connection === undefined || connection === null
+      || (typeof connection === 'object' && !Array.isArray(connection) && Object.values(connection).every(value => value === undefined || value === null || value === ''));
+    if (!empty) return false;
+    const current = await this.#currentDatabase();
+    return current.dialect === input.dialect;
+  }
+
+  /**
+   * The block equals the configured one (or, with no `database` block, the default SQLite file the
+   * runtime already uses), and every secret it would write to `.env` already holds that value.
+   */
+  async #matchesCurrent(block: Record<string, unknown>, envUpdates: Readonly<Record<string, string>>): Promise<boolean> {
+    const configured = (await this.#options.config.readDocument()).database;
+    const current = configured && typeof configured === 'object' && !Array.isArray(configured)
+      ? configured as Record<string, unknown>
+      : { dialect: 'sqlite', filename: DEFAULT_SQLITE_FILE };
+    // A field left out stands for its default (e.g. sqlite `mode: wal`).
+    const definition = SETUP_DEFINITIONS.find(candidate => candidate.dialect === block.dialect);
+    const defaults: Record<string, unknown> = {};
+    for (const field of definition ? fieldsOf(definition) : []) {
+      if (field.default !== undefined) defaults[field.name] = field.default;
+    }
+    if (!sameDatabaseBlock({ ...defaults, ...current }, { ...defaults, ...block })) return false;
+    if (!Object.keys(envUpdates).length) return true;
+    const environment = await this.#environment();
+    return Object.entries(envUpdates).every(([name, value]) => environment[name] === value);
   }
 
   async createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }> {

@@ -120,6 +120,7 @@ npm create zhin-app my-bot --yes
 | `--adapter <name>[,<name>]` | 安装并挂载适配器（可重复）。`sandbox` 与字段式适配器使用默认值，凭据写成 `.env` 引用；带专用配置流程的平台（如 `telegram`、`qq`、`discord`）会询问该平台的凭据 | 不安装 |
 | `--adapters` | 进入适配器选择向导（与 `zhin setup --adapters` 相同） | — |
 | `--ai` | 进入 AI 向导并安装 AI 依赖（与 `zhin setup --ai` 相同） | 不启用 |
+| `--with pm2` | 额外加入 PM2：`pm2` devDependency、`ecosystem.config.cjs` 与 `pm2:*` 脚本（高级用法；推荐 `zhin service install`） | 不加入 |
 
 **默认配置（交互与 `-y` 相同，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts`、`tests/onboarding-flow.test.ts` 断言）：**
 - 配置格式: YAML (`zhin.config.yml`)
@@ -129,7 +130,8 @@ npm create zhin-app my-bot --yes
 - 初始化令牌: 随机生成，写入 `.env` 的 `HTTP_TOKEN`
 - 适配器: 无（`plugins: {}`），在 Console 引导或 `zhin setup --adapters` 中添加
 - AI: 不启用，在 Console 引导或 `zhin setup --ai` 中启用
-- Remote Console: `https://console.zhin.dev`；脚手架写入 `http.port: 8068`、`http.base: /api`，Console 里的 API Base 为 `http://127.0.0.1:8068`（见 [docs/console/index.md](../../../docs/console/index.md)）
+- Remote Console: `https://console.zhin.dev`；脚手架写入 `http.port: 8068`、`http.base: /api`，Console 里的 API Base 为 `http://127.0.0.1:8068`（见 [docs/console/index.md](../../../docs/console/index.md)）。8068 已被占用时（例如同一台机器上另一个 Zhin 项目正在运行），脚手架改用其后第一个空闲端口并在终端说明占用者是不是 Zhin 网关
+- 守护进程: 不生成任何服务文件，也不加 PM2；需要开机自启时在项目目录运行 `npx zhin service install`，按当前系统现场生成
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
 需要本地 Sandbox 调试时加 `--adapter sandbox`；它与 [examples/minimal-bot](../../../examples/minimal-bot/) 的 Sandbox 实例一致（实例键 `sandbox`、`commandPrefix: /`、Endpoint `sandbox-bot`）。
@@ -203,13 +205,13 @@ my-awesome-bot/
 ├── package.json              # 依赖、脚本与 zhin 清单
 ├── tsconfig.json             # TypeScript 配置
 ├── pnpm-workspace.yaml       # workspace 配置
-├── ecosystem.config.cjs      # PM2 配置
+├── ecosystem.config.cjs      # PM2 配置（仅 --with pm2）
 ├── .env / .env.development / .env.production / .env.example
 ├── .gitignore
 └── README.md
 ```
 
-另外会生成系统服务模板（systemd `.service`、launchd `.plist`、Windows `install-service.ps1` 与计划任务 XML）；启用 AI 时还有 `SOUL.md`、`TOOLS.md`、`AGENTS.md` 与 `assistant.profile.yml.example`。
+不再生成 systemd / launchd / Windows 服务文件：`zhin service install` 按当前系统现场生成。启用 AI 时还有 `SOUL.md`、`TOOLS.md`、`AGENTS.md` 与 `assistant.profile.yml.example`。
 
 **⚠️ 重要**: `.env` 文件包含敏感信息（HTTP Token），已自动添加到 `.gitignore`，不会被提交到版本控制。
 
@@ -228,16 +230,12 @@ packages:
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
     "preview": "zhin preview",
-    "build": "tsc --noEmit",
-    "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop ecosystem.config.cjs",
-    "pm2:restart": "pm2 restart ecosystem.config.cjs",
-    "pm2:delete": "pm2 delete ecosystem.config.cjs",
-    "pm2:logs": "pm2 logs",
-    "pm2:monit": "pm2 monit"
+    "build": "tsc --noEmit"
   }
 }
 ```
+
+`--with pm2` 时另有 `pm2:start` / `pm2:stop` / `pm2:restart` / `pm2:delete` / `pm2:logs` / `pm2:monit`。
 
 `package.json#zhin` 是 Plugin Runtime 拓扑清单（`entry: ./plugin.ts`、`features`、`plugins`）。
 
@@ -330,14 +328,16 @@ plugins:
 # 类型检查
 pnpm build
 
-# 前台启动
-pnpm start
+# 安装为系统服务（开机自启；systemd / launchd / Windows 任务计划）
+npx zhin service install
+npx zhin service status
 
-# 或交给 PM2 守护
-pnpm pm2:start
-pnpm pm2:logs
-pnpm pm2:stop
+# 停止 / 重启服务
+npx zhin service stop
+npx zhin service restart
 ```
+
+Docker 等自带进程管理的环境用 `pnpm start`（前台运行）。
 
 ## 错误处理
 

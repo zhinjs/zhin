@@ -24,7 +24,7 @@ import {
 import { GatewayPackageService } from '@zhin.js/gateway/packages';
 import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { supervisedNodeArguments } from '@zhin.js/gateway/supervisor';
-import { consoleLink } from '@zhin.js/gateway/server';
+import { consoleLink, loadGatewayHttpConfig } from '@zhin.js/gateway/server';
 import { isProcessRunning } from './process.js';
 
 export interface GatewayTarget {
@@ -86,20 +86,65 @@ export function describeInstance(status: GatewayInstanceStatus): string {
   return `${status.state}${parts.length ? `（${parts.join('，')}）` : ''}`;
 }
 
-export function renderStatus(result: LocalGatewayInfoResult, now = Date.now()): string[] {
+export interface RenderStatusOptions {
+  /**
+   * The bootstrap token, from {@link consoleSetupToken}: while the Console is not initialized the
+   * Console link carries it after `#` (ADR 0053 §1, #1250 start-bg-no-setup-link).
+   */
+  readonly setupToken?: string;
+}
+
+export function renderStatus(result: LocalGatewayInfoResult, now = Date.now(), options: RenderStatusOptions = {}): string[] {
   const { gateway, instance } = result;
   const lines = [
     `网关：运行中（pid ${gateway.pid}，${gateway.mode}，v${gateway.version}，已运行 ${formatDuration(now - gateway.startedAt)}）`,
   ];
   for (const origin of gateway.origins) lines.push(`  HTTP：${origin}`);
-  if (gateway.origins[0]) lines.push(`  Console：${consoleLink(gateway.origins[0])}`);
-  if (!result.consoleInitialized) lines.push('  Console 尚未初始化：用 .env 的 HTTP_TOKEN（初始化令牌）登录，或运行 zhin console init');
+  const origin = gateway.origins[0];
+  if (origin && !result.consoleInitialized && options.setupToken) {
+    lines.push(`  Console 尚未初始化，打开此链接完成初始化：${consoleLink(origin, options.setupToken)}`);
+    lines.push('    （令牌在 # 之后，不会发给 console.zhin.dev；也可以运行 zhin console init）');
+  } else {
+    if (origin) lines.push(`  Console：${consoleLink(origin)}`);
+    if (!result.consoleInitialized) {
+      lines.push('  Console 尚未初始化：在登录页填写 .env 的 HTTP_TOKEN（初始化令牌），或运行 zhin console init'
+        + '（输出不是终端时，链接里不带令牌）');
+    }
+  }
   lines.push(`实例：${describeInstance(instance)}`);
   if (instance.lastFailure && instance.state !== 'running') {
     lines.push(`  最近失败：${instance.lastFailure.message}`);
     for (const line of instance.lastFailure.logTail.slice(-10)) lines.push(`    ${line}`);
   }
   return lines;
+}
+
+export interface ConsoleSetupTokenOptions {
+  /** Whether stdout is an interactive terminal (the token is never written to logs or pipes). */
+  readonly interactive?: boolean;
+  /** Reads the resolved `http.token` (tests). */
+  readonly readToken?: (root: string, environment: string) => Promise<string | undefined>;
+}
+
+/**
+ * The bootstrap token to print in the Console link: only while the Console has no owner, only to
+ * an interactive terminal, and only when `http.token` resolves (ADR 0053 §1).
+ */
+export async function consoleSetupToken(
+  root: string,
+  status: LocalGatewayInfoResult,
+  environment: string,
+  options: ConsoleSetupTokenOptions = {},
+): Promise<string | undefined> {
+  if (status.consoleInitialized || !status.gateway.origins[0]) return undefined;
+  if (!(options.interactive ?? process.stdout.isTTY === true)) return undefined;
+  const read = options.readToken ?? (async (projectRoot: string, name: string) => (await loadGatewayHttpConfig(projectRoot, name)).token);
+  try {
+    const token = await read(root, environment);
+    return token?.trim() ? token : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const PHASE_LABELS: Readonly<Record<string, string>> = {

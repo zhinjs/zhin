@@ -87,7 +87,7 @@ describe('deploy/huggingface template', () => {
           '#!/bin/sh',
           'echo "$*" >> calls.log',
           'case "$*" in',
-          '  "console init --status") echo \'{ "setupRequired": true }\' ;;',
+          '  "console init --status --json") echo \'{ "setupRequired": true }\' ;;',
           '  "console user list") : ;;',
           '  start*) env > start-env.log ;;',
           '  *) cat > /dev/null ;;',
