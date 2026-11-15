@@ -24,7 +24,7 @@ function node(id: PluginId, instanceKey: string, children: PluginId[] = []): Plu
 /** ADR 0057 §2: stored adapter / endpoint switches, keyed `<plugin>|<resolution key>`. */
 type Stored = Readonly<Record<string, { enabled?: false; patch?: Record<string, unknown> }>>;
 
-function fixture(document: Record<string, unknown>, stored: Stored = {}) {
+function fixture(document: Record<string, unknown>, stored: Stored = {}, extra: readonly CapabilitySlot[] = []) {
   const events: string[] = [];
   const slots: CapabilitySlot[] = [
     createCapabilitySlot({ owner: rss, feature: commandFeatureId, localName: 'rss', source: '/rss/commands/rss/index.ts',
@@ -39,6 +39,7 @@ function fixture(document: Record<string, unknown>, stored: Stored = {}) {
       definition: defineHandler({ handle() { events.push('handler:rss'); } }) }),
     createCapabilitySlot({ owner: weather, feature: handlerFeatureId, localName: 'message/receive', source: '/weather/handlers/message/receive/index.ts',
       definition: defineHandler({ handle() { events.push('handler:weather'); } }) }),
+    ...extra,
   ] as CapabilitySlot[];
   const primary: PrimaryConfig = { document, expanded: document, get: () => undefined };
   const projections = new Map<ReturnType<typeof featureId>, unknown>();
@@ -108,6 +109,21 @@ describe('ADR 0050 dispatch gate', () => {
     expect(events).toEqual(['command:rss']);
     const menu = gatedCommandIndex(message('ep:main', ''), snapshot)!.list().map(command => command.name);
     expect(menu).toEqual(['rss']);
+  });
+
+  // #1250: a cross-plugin route conflict is resolved per projection. Where the plugin that keeps
+  // the route is switched off, the derived index has no conflict and the skipped command answers.
+  it('lets a command skipped for a route conflict answer where the keeping plugin is switched off', async () => {
+    const clash = createCapabilitySlot({ owner: weather, feature: commandFeatureId, localName: 'rss', source: '/weather/commands/rss/index.ts',
+      definition: defineCommand({ async execute() { return 'weather rss'; } }) }) as CapabilitySlot;
+    const { snapshot } = fixture(document, { 'rss|qq/news': { enabled: false } }, [clash]);
+    const projected = snapshot.projections.get(commandFeatureId) as CommandIndex;
+    expect(projected.conflicts()).toEqual([expect.objectContaining({
+      route: 'rss', skipped: expect.objectContaining({ plugin: 'weather' }), kept: expect.objectContaining({ plugin: 'rss' }) })]);
+    const dispatcher = new MessageDispatcher(() => '');
+    expect(await dispatcher.dispatch(message('ep:main', 'rss'), snapshot)).toMatchObject({ matched: true, owner: rss });
+    expect(await dispatcher.dispatch(message('ep:news', 'rss'), snapshot)).toMatchObject({ matched: true, owner: weather });
+    expect(gatedCommandIndex(message('ep:news', ''), snapshot)!.conflicts()).toEqual([]);
   });
 
   it('skips middleware of disabled owners', async () => {

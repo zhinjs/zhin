@@ -63,7 +63,9 @@ export type ConsoleAttentionKind =
   /**
    * Two registrations claim the same command route (#1250): the later command (primary route) or
    * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` is the
-   * plugin that lost it, `subject.commandRoute` the route. Visible with `feature.view`.
+   * plugin that lost it, `subject.commandRoute` the route, `subject.command` / `commandKind` the
+   * skipped command and which of its routes. `danger` when a later plugin's command took an earlier
+   * plugin's alias or shortcut. Visible with `feature.view`.
    */
   | 'command.conflict'
   /** The project configuration file cannot be read or parsed. */
@@ -163,6 +165,10 @@ export interface ConsoleAttentionSubject {
   readonly configPath?: string;
   /** Command route a `command.conflict` is about (words separated by spaces, #1250). */
   readonly commandRoute?: string;
+  /** Display name of the command whose route a `command.conflict` skipped (#1250). */
+  readonly command?: string;
+  /** Which of its routes was skipped: `command` (the whole command), `alias` or `shortcut` (#1250). */
+  readonly commandKind?: string;
 }
 
 /**

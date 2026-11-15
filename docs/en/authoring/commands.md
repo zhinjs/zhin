@@ -410,12 +410,15 @@ plugins:
 
 A parent path such as `netease` also removes `netease login`, `netease status` and its other subcommands. Disabled commands are left out of routing and do not occupy their routes, so another plugin may use the same name. Entries that match no command are ignored.
 
-An unresolved clash no longer stops the instance from starting:
+An unresolved clash between two plugins no longer stops the instance from starting:
 
-- When two command names clash, the one registered first keeps the route, in the order the plugins are declared in the configuration and then by command path within a plugin. The later command is not registered, and neither are its aliases and shortcuts.
-- When only an alias or a shortcut clashes, only that alias or shortcut is skipped and the command itself is registered. A command name takes precedence over another command's alias.
+- When two command names clash, the plugin declared first in the configuration keeps the route. The later command is not registered, and neither are its aliases and shortcuts; its subcommands (such as `foo bar`) are not affected and still work.
+- When only an alias or a shortcut clashes, only that alias or shortcut is skipped and the command itself is registered. A command name takes precedence over another plugin's alias: when a plugin declared later adds a command named like an earlier plugin's alias (for example A's `admin` has the alias `ban` and B adds a command `ban`), `ban` now runs B's command. The "Needs attention" inbox marks this case as danger.
+- A plugin switched off for an adapter, account or conversation does not occupy its routes there. So on an endpoint where the plugin that keeps a route is switched off, the command that was skipped answers instead.
 
 Each clash is logged once as a warning (`op=command_route_conflict`) and is listed in the Console "Needs attention" inbox and in `zhin doctor`, with both plugin names and the command or alias. Fix it as described above: rename one of them, add a `commandNamespace`, or remove one with `disabledCommands`. A plugin hot reload that replaces its own commands is not a clash.
+
+Two commands, aliases or shortcuts of the same plugin that collide are that plugin's own bug (for example `commands/foo` declares a parameter and `commands/foo/[id]` also exists). This still fails with `Duplicate Command route` when the plugin loads, so the plugin's own tests catch it.
 
 ### Params as folders
 

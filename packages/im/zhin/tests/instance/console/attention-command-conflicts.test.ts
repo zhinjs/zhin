@@ -73,15 +73,17 @@ describe('command.conflict attention items (#1250)', () => {
   it('lists the skipped alias and the skipped command with both plugins and advice', async () => {
     const list = await collectAttention(sourcesFor(conflictingSlots()), { allows: () => true });
     const items = list.items.filter(item => item.kind === 'command.conflict');
-    expect(items.map(item => [item.id, item.severity, item.source, item.action.path])).toEqual(expect.arrayContaining([
-      ['command.conflict:commandRoute=%E6%8E%92%E8%A1%8C&plugin=group-suite', 'warning', 'commands', '/plugins/group-suite'],
-      ['command.conflict:commandRoute=%E7%AD%BE%E5%88%B0&plugin=game-hub', 'warning', 'commands', '/plugins/game-hub'],
+    expect(items.map(item => [item.subject, item.severity, item.source, item.action.path])).toEqual(expect.arrayContaining([
+      // game-hub (declared later) took group-suite's alias: danger.
+      [{ plugin: 'group-suite', commandRoute: '排行', command: 'rank', commandKind: 'alias' }, 'danger', 'commands', '/plugins/group-suite'],
+      [{ plugin: 'game-hub', commandRoute: '签到', command: '签到', commandKind: 'command' }, 'warning', 'commands', '/plugins/game-hub'],
     ]));
     expect(items).toHaveLength(2);
 
     const alias = items.find(item => item.subject?.plugin === 'group-suite')!;
     expect(alias.title).toBe('插件 group-suite 的命令「rank」的别名「排行」已被占用，已跳过该别名');
     expect(alias.detail).toContain('「排行」已由插件 game-hub 的命令「排行」使用，只跳过了这个别名，命令本身照常可用。');
+    expect(alias.detail).toContain('注意：「排行」原来由 group-suite 处理，现在改由后加载的 game-hub 的命令处理');
     expect(alias.detail).toContain('group-suite 的 disabledCommands: [rank]');
     expect(alias.detail).toContain('game-hub 的 disabledCommands: [排行]');
     expect(alias.reason).toEqual({ category: 'config', code: 'command-alias-conflict' });
@@ -91,6 +93,41 @@ describe('command.conflict attention items (#1250)', () => {
     expect(primary.detail).toContain('「签到」已由插件 group-suite 的命令「签到」使用，先注册的保留');
     expect(primary.detail).toContain('建议让其中一个插件改名');
     expect(primary.reason).toEqual({ category: 'config', code: 'command-command-conflict' });
+    expect(primary.detail).not.toContain('注意');
+  });
+
+  it('gives each skipped command its own item when several aliases of one plugin hit the same route', async () => {
+    const slots = [
+      command(groupSuite, 'x', { alias: ['top'], execute: () => 'x' }),
+      command(gameHub, 'y', { alias: ['top'], execute: () => 'y' }),
+      command(gameHub, 'z', { alias: ['top'], execute: () => 'z' }),
+    ];
+    const list = await collectAttention(sourcesFor(slots), { allows: () => true });
+    const items = list.items.filter(item => item.kind === 'command.conflict');
+    expect(items.map(item => item.subject?.command).sort()).toEqual(['y', 'z']);
+    expect(new Set(items.map(item => item.id)).size).toBe(2);
+  });
+
+  it('shows command display names, not route shapes, and links the Root plugin to the plugin list', async () => {
+    const dynamic = (owner: PluginId, key: string) => createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'foo/$id', source: `/plugins/${key}/commands/foo/[id]/index.ts`,
+      definition: { ...defineCommand({ params: { id: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const },
+    }) as Readonly<CapabilitySlot<CommandDefinition>>;
+    const list = await collectAttention(sourcesFor([dynamic(root, 'root'), dynamic(gameHub, 'game-hub')]), { allows: () => true });
+    const [item] = list.items.filter(entry => entry.kind === 'command.conflict');
+    expect(item).toMatchObject({
+      subject: { plugin: 'game-hub', commandRoute: 'foo $', command: 'foo <id>', commandKind: 'command' },
+      title: '插件 game-hub 的命令「foo <id>」与插件 项目根插件 重名，没有注册',
+    });
+    expect(item!.detail).toContain('「foo <id>」已由插件 项目根插件 的命令「foo <id>」使用');
+    expect(`${item!.title}${item!.detail}`).not.toContain('foo $');
+
+    const rootLoses = await collectAttention(sourcesFor([
+      command(groupSuite, 'ping', { execute: () => 'a' }),
+      command(root, 'admin', { alias: ['ping'], execute: () => 'b' }),
+    ]), { allows: () => true });
+    const [rootItem] = rootLoses.items.filter(entry => entry.kind === 'command.conflict');
+    expect(rootItem).toMatchObject({ title: '插件 项目根插件 的命令「admin」的别名「ping」已被占用，已跳过该别名', action: { path: '/plugins' } });
   });
 
   it('reads nothing without feature.view and reports nothing without conflicts', async () => {
@@ -112,7 +149,7 @@ describe('command.conflict attention items (#1250)', () => {
     const conflicted = state(conflictingSlots());
     log.report({ ...conflicted, generation: 1 });
     expect(warned).toEqual(expect.arrayContaining([
-      expect.objectContaining({ op: 'command_route_conflict', route: '排行', skipped: 'group-suite:rank alias=排行', kept: 'game-hub:排行', result: 'alias_skipped' }),
+      expect.objectContaining({ op: 'command_route_conflict', route: '排行', skipped: 'group-suite:rank alias=排行', kept: 'game-hub:排行', result: 'alias_skipped', taken_by_later: true }),
       expect.objectContaining({ op: 'command_route_conflict', route: '签到', skipped: 'game-hub:签到', kept: 'group-suite:签到', result: 'command_not_registered' }),
     ]));
     expect(warned).toHaveLength(2);

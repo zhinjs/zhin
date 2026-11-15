@@ -167,17 +167,10 @@ it('selects explicit localized aliases in help, menu and references without chan
   expect(target).toHaveBeenCalledTimes(2);
 });
 
-it('rejects display aliases that do not exist and skips a preferred alias another command holds', () => {
+it('rejects display aliases that do not exist and preserves route collision checks', () => {
   expect(() => defineCommand({ preferredAliasI18n: { en: 'missing' }, execute() {} })).toThrow('must reference a declared alias');
   expect(() => defineCommand({ alias: ['real'], preferredAliasI18n: { en: 'other' }, execute() {} })).toThrow('must reference a declared alias');
   const first = command('原名', defineCommand({ alias: ['existing'], preferredAliasI18n: { en: ' existing ' }, execute() {} }));
   const second = command('existing', defineCommand({ execute() {} }));
-  // #1250: the collision is reported instead of thrown; the skipped alias is neither routed nor displayed.
-  const index = new CommandIndex([first, second], snapshot([first, second]));
-  expect(index.conflicts()).toEqual([expect.objectContaining({
-    route: 'daily existing',
-    skipped: expect.objectContaining({ command: 'daily 原名', kind: 'alias', entry: 'existing' }),
-    kept: expect.objectContaining({ command: 'daily existing', kind: 'command' }),
-  })]);
-  expect(index.list('en').map(command => [command.name, command.alias])).toEqual(expect.arrayContaining([['daily 原名', undefined], ['daily existing', undefined]]));
+  expect(() => new CommandIndex([first, second], snapshot([first, second]))).toThrow('Duplicate Command route');
 });

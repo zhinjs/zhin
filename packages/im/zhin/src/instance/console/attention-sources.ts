@@ -139,7 +139,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       commandConflicts: (): readonly AttentionCommandConflict[] => withLease(lease => {
         const index = lease.value.projections.get(commandFeatureId);
         return isCommandIndex(index)
-          ? index.conflicts().map(conflict => ({ route: conflict.route, skipped: claimant(conflict.skipped), kept: claimant(conflict.kept) }))
+          ? index.conflicts().map(conflict => ({ route: conflict.route, skipped: claimant(conflict.skipped), kept: claimant(conflict.kept),
+            ...(conflict.takenByLater ? { takenByLater: true as const } : {}) }))
           : [];
       }),
     } : {}),
@@ -254,7 +255,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
 
 function claimant(side: CommandRouteClaimant): AttentionCommandClaimant {
   return { plugin: side.plugin, command: side.command, localPath: side.localPath, kind: side.kind,
-    ...(side.entry !== undefined ? { entry: side.entry } : {}) };
+    ...(side.entry !== undefined ? { entry: side.entry } : {}), ...(side.root ? { root: true as const } : {}) };
 }
 
 function isFailure(value: unknown): value is { category: string; message: string; at?: number; exitCode?: number } {

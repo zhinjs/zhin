@@ -17,7 +17,6 @@ function side(claimant: CommandRouteClaimant): string {
 /** Structured `command_route_conflict` warning for one conflict. */
 export function describeCommandConflictLog(conflict: CommandRouteConflict, generation: number): LogFields {
   const { skipped, kept } = conflict;
-  const same = skipped.plugin === kept.plugin;
   return {
     op: 'command_route_conflict',
     generation,
@@ -25,9 +24,9 @@ export function describeCommandConflictLog(conflict: CommandRouteConflict, gener
     skipped: side(skipped),
     kept: side(kept),
     result: skipped.kind === 'command' ? 'command_not_registered' : `${skipped.kind}_skipped`,
-    hint: same
-      ? `rename one command, alias or shortcut of plugin ${skipped.plugin}, or disable one with disabledCommands`
-      : `rename one of them (or set commandNamespace on ${skipped.plugin}), or disable one: ${skipped.plugin}.disabledCommands: [${skipped.localPath}] / ${kept.plugin}.disabledCommands: [${kept.localPath}]`,
+    // A later plugin's command took an earlier plugin's alias / shortcut: users get another command.
+    taken_by_later: conflict.takenByLater === true ? true : undefined,
+    hint: `rename one of them (or set commandNamespace on ${skipped.plugin}), or disable one: ${skipped.plugin}.disabledCommands: [${skipped.localPath}] / ${kept.plugin}.disabledCommands: [${kept.localPath}]`,
   };
 }
 

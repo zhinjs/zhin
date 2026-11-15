@@ -70,6 +70,8 @@ export interface CommandRouteClaimant {
   /** Plugin instance key (its configuration block name); the owner id when the tree has no node. */
   readonly plugin: string;
   readonly packageName?: string;
+  /** The project's Root plugin (its own `commands/`); it has no plugin page of its own. */
+  readonly root?: true;
   readonly capability: CapabilityId;
   /** Display name of the command (with `commandNamespace` and parameter placeholders). */
   readonly command: string;
@@ -83,15 +85,21 @@ export interface CommandRouteClaimant {
 }
 
 /**
- * A route two registrations claim (#1250 duplicate-command-route-crashes-instance). The earlier
- * registration (plugin tree order, then the plugin-local path) keeps it; the later one is skipped:
- * the whole command when its primary route collides, only the alias / shortcut otherwise.
+ * A route two plugins claim (#1250 duplicate-command-route-crashes-instance). Command names claim
+ * first, then aliases, then shortcuts; within each the earlier plugin (tree order) keeps the
+ * route. The loser is skipped: the whole command when its name collides, only the alias /
+ * shortcut otherwise. Collisions inside one plugin are not reported here: they throw.
  */
 export interface CommandRouteConflict {
   /** Route shape both claim: words separated by spaces, `$` / `$*` / `$+` for parameters. */
   readonly route: string;
   readonly skipped: CommandRouteClaimant;
   readonly kept: CommandRouteClaimant;
+  /**
+   * The keeper's plugin comes after the skipped one's: a later plugin's command took an alias or
+   * shortcut an earlier plugin had, so text users knew now runs another plugin's command.
+   */
+  readonly takenByLater?: true;
 }
 
 /** One dispatch reads the caller's exact operation generation and presentation. */
@@ -237,20 +245,30 @@ export class CommandIndex {
     const shortcuts = new Map<string, ShortcutEntry>();
     const conflicts: CommandRouteConflict[] = [];
 
-    // #1250 duplicate-command-route-crashes-instance: a route two registrations claim is kept by
-    // the earlier one and reported; it never fails the whole projection (and so the instance).
-    const occupied = (keys: readonly string[]): { readonly key: string; readonly kept: CommandRouteClaimant } | undefined => {
+    const ranks = pluginRanks(this.snapshot);
+    const rank = (owner: PluginId) => ranks.get(owner) ?? Number.MAX_SAFE_INTEGER;
+
+    // #1250 duplicate-command-route-crashes-instance: a route claimed by two *plugins* is kept by
+    // the earlier claim and reported; it never fails the whole projection (and so the instance).
+    // Two routes of the same plugin colliding is that plugin's own authoring error and still
+    // throws, so the plugin's tests catch it (no winner picked by path order).
+    const claim = (keys: readonly string[], claimant: CommandRouteClaimant): boolean => {
+      let conflict: { readonly key: string; readonly kept: CommandRouteClaimant } | undefined;
       for (const key of keys) {
         for (const [existing, kept] of occupancy) {
-          if (routeShapesOverlap(key, existing)) return { key, kept };
+          if (!routeShapesOverlap(key, existing)) continue;
+          if (kept.owner === claimant.owner) {
+            throw new Error(`Duplicate Command route "${key}" (${claimantLabel(claimant)} vs ${claimantLabel(kept)})`);
+          }
+          conflict ??= { key, kept };
         }
       }
-      return undefined;
-    };
-    const claim = (keys: readonly string[], claimant: CommandRouteClaimant): boolean => {
-      const conflict = occupied(keys);
       if (conflict) {
-        conflicts.push(Object.freeze({ route: conflict.key, skipped: claimant, kept: conflict.kept }));
+        const { key, kept } = conflict;
+        conflicts.push(Object.freeze({
+          route: key, skipped: claimant, kept,
+          ...(rank(kept.owner) > rank(claimant.owner) ? { takenByLater: true as const } : {}),
+        }));
         return false;
       }
       for (const key of keys) occupancy.set(key, claimant);
@@ -271,7 +289,7 @@ export class CommandIndex {
     const disabledByOwner = new Map<PluginId, readonly string[]>();
     // Pass 1: primary routes. A primary route taken by an earlier command skips the later command
     // as a whole (its aliases and shortcuts included).
-    for (const slot of registrationOrder(slots, this.snapshot)) {
+    for (const slot of registrationOrder(slots, ranks)) {
       let disabled = disabledByOwner.get(slot.owner);
       if (!disabled) {
         disabled = disabledCommands(this.snapshot, slot.owner);
@@ -861,8 +879,18 @@ export function isCommandIndex(value: unknown): value is CommandIndex {
  */
 function registrationOrder<T extends Readonly<CapabilitySlot<CommandDefinition>>>(
   slots: readonly T[],
-  snapshot: RuntimeSnapshot,
+  rank: ReadonlyMap<PluginId, number>,
 ): readonly T[] {
+  const order = (owner: PluginId) => rank.get(owner) ?? Number.MAX_SAFE_INTEGER;
+  const text = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+  return [...slots].sort((left, right) => order(left.owner) - order(right.owner)
+    || text(String(left.owner), String(right.owner))
+    || text(left.localName, right.localName)
+    || text(String(left.id), String(right.id)));
+}
+
+/** Plugin tree order: depth first from the Root, children as declared. */
+function pluginRanks(snapshot: RuntimeSnapshot): ReadonlyMap<PluginId, number> {
   const rank = new Map<PluginId, number>();
   const visit = (id: PluginId): void => {
     if (rank.has(id)) return;
@@ -871,12 +899,12 @@ function registrationOrder<T extends Readonly<CapabilitySlot<CommandDefinition>>
   };
   visit(snapshot.root);
   for (const id of snapshot.tree.keys()) visit(id);
-  const order = (owner: PluginId) => rank.get(owner) ?? Number.MAX_SAFE_INTEGER;
-  const text = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
-  return [...slots].sort((left, right) => order(left.owner) - order(right.owner)
-    || text(String(left.owner), String(right.owner))
-    || text(left.localName, right.localName)
-    || text(String(left.id), String(right.id)));
+  return rank;
+}
+
+/** How the build-time error names a route's registration (unchanged wording). */
+function claimantLabel(claimant: CommandRouteClaimant): string {
+  return claimant.kind === 'command' ? claimant.source : `${claimant.source} ${claimant.kind} ${JSON.stringify(claimant.entry)}`;
 }
 
 function commandClaimant(
@@ -891,6 +919,7 @@ function commandClaimant(
     owner: slot.owner,
     plugin: node?.instanceKey || String(slot.owner),
     ...(node?.packageName ? { packageName: node.packageName } : {}),
+    ...(slot.owner === snapshot.root ? { root: true as const } : {}),
     capability: slot.id,
     command,
     localPath: runtimeSegments(slot.localName).filter((segment) => !segment.startsWith('$')).join(' '),

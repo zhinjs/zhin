@@ -208,6 +208,8 @@ export interface AttentionCommandClaimant {
   readonly kind: 'command' | 'alias' | 'shortcut';
   /** Alias or shortcut text. */
   readonly entry?: string;
+  /** The project's Root plugin: shown as such, linked to the plugin list (it has no plugin page). */
+  readonly root?: true;
 }
 
 /** A command route two registrations claim: `skipped` lost it, `kept` holds it (#1250). */
@@ -215,6 +217,8 @@ export interface AttentionCommandConflict {
   readonly route: string;
   readonly skipped: AttentionCommandClaimant;
   readonly kept: AttentionCommandClaimant;
+  /** A later plugin's command took an earlier plugin's alias / shortcut: `danger`. */
+  readonly takenByLater?: true;
 }
 
 /** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
@@ -545,7 +549,8 @@ const messages = createMessages({
   'command.what.alias': { 'zh-CN': '别名', en: 'alias' },
   'command.what.shortcut': { 'zh-CN': '快捷方式', en: 'shortcut' },
   'command.advice': { 'zh-CN': '建议让其中一个插件改名（或给 {plugin} 配置 commandNamespace），或在配置里禁用其中一条：{plugin} 的 disabledCommands: [{path}]，或 {other} 的 disabledCommands: [{otherPath}]；也可以停用其中一个插件。', en: 'Rename one of them (or give {plugin} a commandNamespace), or disable one in the configuration: disabledCommands: [{path}] on {plugin}, or disabledCommands: [{otherPath}] on {other}; or disable one of the plugins.' },
-  'command.advice.same': { 'zh-CN': '两条都属于插件 {plugin}：请修改其中一条命令的名称、别名或快捷方式，或用 disabledCommands 禁用其一。', en: 'Both belong to plugin {plugin}: rename one command, alias or shortcut, or disable one with disabledCommands.' },
+  'command.takenByLater': { 'zh-CN': '注意：「{entry}」原来由 {plugin} 处理，现在改由后加载的 {other} 的命令处理，用户熟悉的指令已经换了处理方。', en: 'Note: "{entry}" used to run {plugin}; it now runs a command of {other}, which loads later, so users get a different command for text they know.' },
+  'command.rootPlugin': { 'zh-CN': '项目根插件', en: 'the project root plugin' },
   'config.invalid.title': { 'zh-CN': '配置文件无法读取', en: 'The configuration file cannot be read' },
   'config.invalid.detail': { 'zh-CN': '{where}：{kind}。修正文件后重新读取。', en: '{where}: {kind}. Fix the file and reload.' },
   'config.invalid.file': { 'zh-CN': '配置文件', en: 'Configuration file' },
@@ -946,21 +951,29 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   if (sources.commandConflicts && allows(P.FEATURE_VIEW)) {
     await read('commands', () => sources.commandConflicts!().map((conflict): AttentionDraft => {
       const { skipped, kept, route } = conflict;
-      const display = (side: AttentionCommandClaimant) => ({ plugin: side.plugin, command: side.command, entry: side.entry ?? '' });
+      // The Root plugin (the project's own `commands/`) has no plugin page and no instance key to show.
+      const pluginName = (side: AttentionCommandClaimant) => side.root ? t('command.rootPlugin') : side.plugin;
+      const display = (side: AttentionCommandClaimant) => ({ plugin: pluginName(side), command: side.command, entry: side.entry ?? '' });
+      // What users type: the command's display name, or the alias / shortcut text (never a route shape).
+      const typed = (side: AttentionCommandClaimant) => side.kind === 'command' ? side.command : side.entry ?? side.command;
       const holder = t(`command.holder.${kept.kind}`, display(kept));
       const detail = skipped.kind === 'command'
-        ? t('command.detail.command', { route, holder, plugin: skipped.plugin })
-        : t('command.detail.entry', { route, holder, what: t(`command.what.${skipped.kind}`) });
-      const advice = skipped.plugin === kept.plugin
-        ? t('command.advice.same', { plugin: skipped.plugin })
-        : t('command.advice', { plugin: skipped.plugin, other: kept.plugin, path: skipped.localPath || route, otherPath: kept.localPath || route });
+        ? t('command.detail.command', { route: typed(skipped), holder, plugin: pluginName(skipped) })
+        : t('command.detail.entry', { route: typed(skipped), holder, what: t(`command.what.${skipped.kind}`) });
+      const gap = locale === 'en' ? ' ' : '';
+      const advice = t('command.advice', { plugin: pluginName(skipped), other: pluginName(kept),
+        path: skipped.localPath || typed(skipped), otherPath: kept.localPath || typed(kept) });
+      // #1250: a later plugin's command took an alias / shortcut of an earlier plugin: what users
+      // were used to typing now silently runs another plugin's command.
+      const taken = conflict.takenByLater
+        ? t('command.takenByLater', { entry: typed(skipped), plugin: pluginName(skipped), other: pluginName(kept) }) : '';
       return {
-        kind: 'command.conflict', severity: 'warning',
-        subject: { plugin: skipped.plugin, commandRoute: route },
-        state: { skipped, kept },
-        title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: kept.plugin }),
-        detail: `${detail}${locale === 'en' ? ' ' : ''}${advice}`,
-        action: { label: t('plugin.action'), path: ATTENTION_PATHS.plugin(skipped.plugin) },
+        kind: 'command.conflict', severity: conflict.takenByLater ? 'danger' : 'warning',
+        subject: { plugin: skipped.plugin, commandRoute: route, command: skipped.command, commandKind: skipped.kind },
+        state: { skipped, kept, takenByLater: conflict.takenByLater === true },
+        title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: pluginName(kept) }),
+        detail: [taken, detail, advice].filter(Boolean).join(gap),
+        action: { label: t('plugin.action'), path: skipped.root ? ATTENTION_PATHS.plugins : ATTENTION_PATHS.plugin(skipped.plugin) },
         reason: { category: 'config', code: `command-${skipped.kind}-conflict` },
       };
     }));

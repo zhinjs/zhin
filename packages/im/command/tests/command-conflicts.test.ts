@@ -66,7 +66,54 @@ describe('Command route conflicts (#1250)', () => {
       route: '排行',
       skipped: expect.objectContaining({ plugin: 'group-suite', packageName: '@test/group-suite', command: 'rank', localPath: 'rank', kind: 'alias', entry: '排行' }),
       kept: expect.objectContaining({ plugin: 'game-hub', command: '排行', localPath: '排行', kind: 'command' }),
+      // game-hub is declared after group-suite: a later plugin took an earlier plugin's alias.
+      takenByLater: true,
     }]);
+  });
+
+  it('flags a later plugin command that takes an earlier plugin alias (admin alias ban vs new ban)', async () => {
+    const admin = command(groupSuite, 'admin', { alias: ['ban'], execute: () => 'admin' });
+    const ban = command(gameHub, 'ban', { execute: () => 'game-hub ban' });
+    const index = new CommandIndex([admin, ban], snapshot([admin, ban]));
+    // Users who typed `ban` now reach game-hub; the conflict says so.
+    await expect(index.dispatch({ input: 'ban' })).resolves.toMatchObject({ value: 'game-hub ban' });
+    await expect(index.dispatch({ input: 'admin' })).resolves.toMatchObject({ value: 'admin' });
+    expect(index.conflicts()).toEqual([expect.objectContaining({
+      route: 'ban', takenByLater: true,
+      skipped: expect.objectContaining({ plugin: 'group-suite', command: 'admin', kind: 'alias', entry: 'ban' }),
+      kept: expect.objectContaining({ plugin: 'game-hub', command: 'ban', kind: 'command' }),
+    })]);
+    // The other way round (the earlier plugin's command keeps its name) is not flagged.
+    const early = command(groupSuite, 'ban', { execute: () => 'group-suite ban' });
+    const late = command(gameHub, 'admin', { alias: ['ban'], execute: () => 'admin' });
+    const other = new CommandIndex([late, early], snapshot([late, early]));
+    expect(other.conflicts()).toHaveLength(1);
+    expect(other.conflicts()[0]!.takenByLater).toBeUndefined();
+  });
+
+  it('still throws for a collision inside one plugin, whatever the slot order', () => {
+    const declared = command(gameHub, 'foo', { params: { id: { type: 'string' } }, execute() {} });
+    const dynamic = createCapabilitySlot({ owner: gameHub, feature: commandFeatureId, localName: 'foo/$id', source: '/plugins/game-hub/commands/foo/[id]/index.ts',
+      definition: { ...defineCommand({ params: { id: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } }) as Readonly<CapabilitySlot<CommandDefinition>>;
+    expect(() => new CommandIndex([declared, dynamic], snapshot([declared, dynamic]))).toThrow(/Duplicate Command route "foo \$"/);
+    expect(() => new CommandIndex([dynamic, declared], snapshot([dynamic, declared]))).toThrow(/Duplicate Command route "foo \$"/);
+    const aliasClash = command(gameHub, 'other', { alias: ['foo'], execute() {} });
+    expect(() => new CommandIndex([aliasClash, declared], snapshot([aliasClash, declared]))).toThrow(/Duplicate Command route/);
+  });
+
+  it('keeps the subcommands of a skipped command and drops a preferred alias that was skipped', async () => {
+    const first = command(groupSuite, 'foo', { execute: () => 'group-suite foo' });
+    const second = command(gameHub, 'foo', { alias: ['foo2'], execute: () => 'game-hub foo' });
+    const sub = command(gameHub, 'foo/bar', { execute: () => 'game-hub foo bar' });
+    const index = new CommandIndex([first, second, sub], snapshot([first, second, sub]));
+    await expect(index.dispatch({ input: 'foo' })).resolves.toMatchObject({ value: 'group-suite foo' });
+    await expect(index.dispatch({ input: 'foo bar' })).resolves.toMatchObject({ value: 'game-hub foo bar' });
+    expect(index.list().map(entry => entry.name).sort()).toEqual(['foo', 'foo bar']);
+
+    const localized = command(gameHub, 'rank', { alias: ['排行'], preferredAliasI18n: { 'zh-CN': '排行' }, execute: () => 'rank' });
+    const holder = command(groupSuite, '排行', { execute: () => 'holder' });
+    const named = new CommandIndex([localized, holder], snapshot([localized, holder]));
+    expect(named.list('zh-CN').find(entry => entry.owner === gameHub)?.name).toBe('rank');
   });
 
   it('keeps the earlier plugin for a colliding alias of two commands', async () => {
