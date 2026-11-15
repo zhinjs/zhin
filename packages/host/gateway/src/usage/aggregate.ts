@@ -14,7 +14,7 @@ import { PromptCacheProbe, type PromptCacheHint } from './prompt-cache.js';
 
 export const DAY_MS = 86_400_000;
 export const HOUR_MS = 3_600_000;
-export const FIXED_SEGMENTS: ReadonlySet<string> = new Set(['system', 'tool_schemas', 'output_schema', 'tool_index', 'skill_catalog', 'agent_catalog', 'memory', 'bootstrap']);
+export const FIXED_SEGMENTS: ReadonlySet<string> = new Set(['system', 'tool_schemas', 'output_schema', 'tool_index', 'skill_catalog', 'agent_catalog', 'knowledge_index', 'memory', 'bootstrap']);
 
 export interface TraceScanOptions {
   readonly since?: number;

@@ -14,6 +14,7 @@ import {
   type ToolInputSchema,
 } from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { SKILL_KEYWORD_MAX_CHARS } from '../skill/capability-catalog.js';
 import { getLogger } from '@zhin.js/logger';
 import { rankDecisionCandidates } from '../decision/rank.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
@@ -133,26 +134,59 @@ export function primeAgentSkillForIntent(options: Readonly<{
 /** Most public Skills one turn's hint names (#1250 b27). */
 export const PUBLIC_SKILL_HINT_MAX = 2;
 
+/** Only the first this many declared keywords of a Skill count towards its hint score. */
+export const PUBLIC_SKILL_HINT_KEYWORDS = 12;
+/** Shortest usable hint keyword: CJK (any Han / kana / Hangul character) and ASCII-only. */
+const HINT_MIN_CJK_CHARS = 2;
+const HINT_MIN_ASCII_CHARS = 3;
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+/**
+ * Greetings, fillers and function words that say nothing about a task. A Skill cannot earn a hint
+ * by listing them (keyword stuffing), and small talk never triggers one.
+ */
+const HINT_STOPWORDS: ReadonlySet<string> = new Set([
+  '你好', '您好', '谢谢', '感谢', '好的', '哈哈', '嗯嗯', '在吗', '请问', '帮我', '帮忙', '麻烦', '一下', '这个', '那个',
+  '什么', '怎么', '怎样', '如何', '为什么', '可以', '能不能', '是不是', '有没有', '我们', '你们', '他们', '一个', '没有',
+  '就是', '不是', '知道', '现在', '今天', '我想', '我要', '想要', '需要', '还是', '然后', '东西', '问题', '事情', '一些',
+  'the', 'and', 'for', 'you', 'your', 'with', 'this', 'that', 'what', 'how', 'can', 'are', 'was', 'not', 'have',
+  'has', 'from', 'about', 'please', 'hello', 'hey', 'thanks', 'thank', 'help', 'want', 'need', 'just', 'get',
+  'let', 'make', 'some', 'any', 'all', 'yes', 'okay', 'open', 'show', 'tell', 'give', 'use', 'new', 'now',
+]);
+
+/** The normalized keyword when it may score a hint, else undefined. */
+function hintKeyword(value: string): string | undefined {
+  const keyword = value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+  const length = [...keyword].length;
+  if (!keyword || length > SKILL_KEYWORD_MAX_CHARS || HINT_STOPWORDS.has(keyword)) return undefined;
+  if (CJK_CHAR.test(keyword)) return length >= HINT_MIN_CJK_CHARS ? keyword : undefined;
+  return length >= HINT_MIN_ASCII_CHARS ? keyword : undefined;
+}
+
 /**
  * Public Skills whose frontmatter keywords occur in the current intent: the best-scoring ones (at
  * most {@link PUBLIC_SKILL_HINT_MAX}), already loaded ones excluded. Only a hint for the prompt
  * (#1250 b27): public Skills are third-party guidance and are never activated by keyword, because
  * activation injects their instructions and unlocks their tools for the session (see
  * {@link primeAgentSkillForIntent}); the model still decides whether to `load_skill`.
- * ASCII keywords match whole ASCII words only, so `pr` does not match `prompt` but does match `写PR`.
+ *
+ * Third-party keywords must not buy a hint by stuffing: a Skill scores the length of its single
+ * longest matching keyword (no sum), only its first {@link PUBLIC_SKILL_HINT_KEYWORDS} keywords
+ * count, and single characters, ASCII words under 3 characters, stopwords and keywords over
+ * {@link SKILL_KEYWORD_MAX_CHARS} characters are ignored. ASCII keywords match whole ASCII words
+ * (`api` does not match `rapid` but matches `写api`); CJK keywords ignore spaces.
  */
 export function suggestPublicSkillsForIntent(
   skills: readonly SkillDescriptor[],
   intent: string,
   loadedSkills: readonly string[] = [],
 ): readonly SkillDescriptor[] {
-  const haystack = intent.normalize('NFKC').toLocaleLowerCase().trim();
+  const haystack = intent.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
   if (!haystack) return Object.freeze([]);
   const loaded = new Set(loadedSkills);
   const scored = skills
     .filter((skill) => !skill.agentName && skill.keywords?.length
       && !loaded.has(skill.qualifiedName) && !loaded.has(skill.name))
-    .map((skill) => ({ skill, score: wordAffinity(skill.keywords ?? [], haystack) }))
+    .map((skill) => ({ skill, score: longestKeywordHit(skill.keywords ?? [], haystack) }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score
       || left.skill.qualifiedName.localeCompare(right.skill.qualifiedName));
@@ -163,20 +197,19 @@ export function suggestPublicSkillsForIntent(
     .map((entry) => entry.skill));
 }
 
-const ASCII_KEYWORD = /^[\x20-\x7e]+$/u;
-
-function wordAffinity(keywords: readonly string[], normalizedIntent: string): number {
-  let score = 0;
-  for (const value of new Set(keywords)) {
-    const keyword = value.normalize('NFKC').toLocaleLowerCase().trim();
+function longestKeywordHit(keywords: readonly string[], normalizedIntent: string): number {
+  const unspaced = normalizedIntent.replace(/\s+/gu, '');
+  let best = 0;
+  for (const value of keywords.slice(0, PUBLIC_SKILL_HINT_KEYWORDS)) {
+    const keyword = hintKeyword(value);
     if (!keyword) continue;
-    const hit = ASCII_KEYWORD.test(keyword)
+    const hit = CJK_CHAR.test(keyword)
+      ? unspaced.includes(keyword.replace(/\s+/gu, ''))
       // CJK text has no spaces: only a neighbouring ASCII letter or digit breaks a word match.
-      ? new RegExp(`(?<![a-z0-9])${escapeRegExp(keyword)}(?![a-z0-9])`, 'u').test(normalizedIntent)
-      : normalizedIntent.includes(keyword);
-    if (hit) score += [...keyword].length;
+      : new RegExp(`(?<![a-z0-9])${escapeRegExp(keyword)}(?![a-z0-9])`, 'u').test(normalizedIntent);
+    if (hit) best = Math.max(best, [...keyword].length);
   }
-  return score;
+  return best;
 }
 
 function escapeRegExp(text: string): string {

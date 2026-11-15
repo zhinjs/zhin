@@ -246,13 +246,17 @@ export function markdownHeadings(text: string): readonly Readonly<{ level: 1 | 2
   let fence: string | undefined;
   for (; index < lines.length; index += 1) {
     const line = lines[index]!;
-    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/u)?.[1];
-    if (marker) {
-      if (!fence) fence = marker;
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+    if (fence) {
+      // CommonMark: a closing fence is the same character, at least as long, then only whitespace.
+      const closing = line.match(/^\s{0,3}(`{3,}|~{3,})[ \t]*$/u)?.[1];
+      if (closing && closing[0] === fence[0] && closing.length >= fence.length) fence = undefined;
       continue;
     }
-    if (fence) continue;
+    const opening = line.match(/^\s{0,3}(`{3,}|~{3,})/u)?.[1];
+    if (opening) {
+      fence = opening;
+      continue;
+    }
     const heading = line.match(/^\s{0,3}(#{1,2})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
     if (heading) headings.push(Object.freeze({ level: heading[1]!.length as 1 | 2, text: heading[2]! }));
   }
@@ -273,9 +277,20 @@ function chunkText(text: string, maxChunkSize = 1_000): string[] {
   return chunks;
 }
 
-/** Share of a CJK term's character bigrams a chunk must contain to count as a partial match. */
+/** Share of a CJK term's content bigrams a chunk must contain to count as a partial match. */
 const CJK_PARTIAL_MATCH_MIN = 0.3;
 const CJK_RUN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{2,}/gu;
+/**
+ * Function words and fillers of Chinese questions. They carry no topic, so they are cut out of a
+ * term before its bigrams are taken: "量子力学怎么可以知道" must not match a document through
+ * "怎么" / "可以", and "我想知道怎么可以把这个机器人部署一下" is scored on "机器人部署" only.
+ */
+const CJK_STOP_WORDS: readonly string[] = Object.freeze([
+  '为什么', '是不是', '有没有', '能不能', '可不可以', '怎么样',
+  '怎么', '怎样', '如何', '什么', '哪些', '哪个', '可以', '能否', '这个', '那个', '这些', '那些', '一下', '一个',
+  '一些', '知道', '我想', '我要', '想要', '需要', '请问', '帮我', '麻烦', '你好', '我们', '你们', '他们', '就是',
+  '还是', '然后', '没有', '不是', '应该', '是否', '的话', '告诉', '给我',
+]);
 
 function scoreChunk(text: string, terms: readonly string[]): number {
   const normalized = text.toLowerCase();
@@ -283,17 +298,25 @@ function scoreChunk(text: string, terms: readonly string[]): number {
   return Math.round(score * 100) / 100;
 }
 
-/**
- * CJK questions arrive without spaces ("怎么给这个机器人添加新知识"), so a whole-term match rarely
- * hits. Such a term scores the share of its character bigrams found in the chunk (#1250 b27).
- */
-function partialCjkMatch(normalized: string, term: string): number {
+/** Character bigrams of a term's CJK text with the stop words cut out (#1250 b27). */
+export function contentBigrams(term: string): ReadonlySet<string> {
+  let text = term;
+  for (const word of CJK_STOP_WORDS) text = text.split(word).join(' ');
   const bigrams = new Set<string>();
-  for (const run of term.match(CJK_RUN) ?? []) {
+  for (const run of text.match(CJK_RUN) ?? []) {
     const chars = [...run];
     for (let index = 0; index + 1 < chars.length; index += 1) bigrams.add(chars[index]! + chars[index + 1]!);
   }
-  if (bigrams.size < 2) return 0;
+  return bigrams;
+}
+
+/**
+ * CJK questions arrive without spaces ("怎么给这个机器人添加新知识"), so a whole-term match rarely
+ * hits. Such a term scores the share of its content bigrams (stop words removed) found in the chunk.
+ */
+function partialCjkMatch(normalized: string, term: string): number {
+  const bigrams = contentBigrams(term);
+  if (bigrams.size === 0) return 0;
   let hits = 0;
   for (const bigram of bigrams) if (normalized.includes(bigram)) hits += 1;
   const share = hits / bigrams.size;

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { ToolExecutionContext } from '@zhin.js/tool'
 
 import {
+  contentBigrams,
   createNativeKnowledgeToolFeature,
   MarkdownKnowledgeIndex,
 } from '../../src/plugin-runtime/native-knowledge-tool.js'
@@ -178,6 +179,19 @@ describe('knowledge base outline and discovery (#1250 b27)', () => {
     ])
   })
 
+  it('closes a fence only on a fence line followed by whitespace (CommonMark)', async () => {
+    await writeFile(join(tempDir, 'knowledge', 'code.md'), [
+      '# 代码示例', '', '```md', '```js', '# still inside the fence', '```   ', '', '## 之后的标题',
+      '', '~~~~', '~~~', '## 仍在围栏里', '~~~~', '## 最后',
+    ].join('\n'))
+    const outline = await new MarkdownKnowledgeIndex(join(tempDir, 'knowledge')).outline(context.signal)
+    expect(outline.files.find((file) => file.source === 'code.md')?.headings).toEqual([
+      { level: 1, text: '代码示例' },
+      { level: 2, text: '之后的标题' },
+      { level: 2, text: '最后' },
+    ])
+  })
+
   it('shares the search cache and re-reads the directory after invalidate()', async () => {
     const index = new MarkdownKnowledgeIndex(join(tempDir, 'knowledge'), { cacheTtlMs: 60_000 })
     const before = await index.outline(context.signal)
@@ -200,6 +214,17 @@ describe('knowledge base outline and discovery (#1250 b27)', () => {
     expect(result).toContain('添加新知识')
     // Unrelated CJK queries still find nothing.
     expect(await createTool().execute({ query: '量子力学 薛定谔方程' }, context)).toContain('未找到')
+  })
+
+  it('ignores function-word bigrams: no false hits, and long questions are scored on their topic', async () => {
+    await writeFile(join(tempDir, 'knowledge', 'deploy.md'), '# 部署指南\n\n用 Docker 部署机器人到服务器。\n')
+    await writeFile(join(tempDir, 'knowledge', 'filler.md'), '# 杂谈\n\n怎么可以知道这个一下我想一个什么如何\n')
+    const offTopic = await createTool().execute({ query: '量子力学怎么可以知道' }, context)
+    expect(offTopic).toContain('未找到')
+    const deploy = await createTool().execute({ query: '我想知道怎么可以把这个机器人部署一下' }, context)
+    expect(deploy).toContain('deploy.md')
+    expect(deploy).not.toContain('filler.md')
+    expect([...contentBigrams('我想知道怎么可以把这个机器人部署一下')]).toEqual(['机器', '器人', '人部', '部署'])
   })
 
   it('tells the model to search it first for questions about the bot or project', () => {

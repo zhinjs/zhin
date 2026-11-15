@@ -67,4 +67,12 @@ describe('knowledge base index section (#1250 b27)', () => {
     const broken: KnowledgeIndex = { search: vi.fn(), outline: async () => { throw new Error('EACCES'); } } as never;
     expect(await knowledgeIndexSection(broken, [{ name: 'knowledge_search' }], signal)).toBeUndefined();
   });
+
+  it('is left out while knowledge_search is gated by permission or bot role (stable prefix is sender-neutral)', async () => {
+    const outline = vi.fn(async () => ready([file('faq.md', ['FAQ'])]));
+    const index: KnowledgeIndex = { search: vi.fn(), outline } as never;
+    expect(await knowledgeIndexSection(index, [{ name: 'knowledge_search', permissions: ['owner'] }], signal)).toBeUndefined();
+    expect(await knowledgeIndexSection(index, [{ name: 'knowledge_search', currentConversationBotRoles: ['admin'] }], signal)).toBeUndefined();
+    expect(outline).not.toHaveBeenCalled();
+  });
 });

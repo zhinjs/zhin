@@ -24,7 +24,7 @@ import {
   CHAT_STYLE_RULES,
   CHAT_WORKSPACE_TASK_RULES,
 } from './rules/index.js';
-import { formatSkillCatalogEntry } from '../skill/capability-catalog.js';
+import { renderSkillCatalogLines } from '../skill/capability-catalog.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { scopeBootstrapText, scopeBootstrapDocument, bootstrapSceneFromTurn, type BootstrapScene } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
@@ -134,8 +134,16 @@ function decodeXmlEntities(text: string): string {
   });
 }
 
-function parseSkillsSummaryXML(xml: string): Array<{ name: string; available: boolean; requires?: string; desc: string }> {
-  const entries: Array<{ name: string; available: boolean; requires?: string; desc: string }> = [];
+interface ResourceHubSkillEntry {
+  name: string;
+  available: boolean;
+  requires?: string;
+  desc: string;
+  keywords?: readonly string[];
+}
+
+function parseSkillsSummaryXML(xml: string): ResourceHubSkillEntry[] {
+  const entries: ResourceHubSkillEntry[] = [];
   let cursor = 0;
   while (cursor < xml.length) {
     const start = xml.indexOf('<skill ', cursor);
@@ -147,12 +155,16 @@ function parseSkillsSummaryXML(xml: string): Array<{ name: string; available: bo
     const body = xml.slice(openEnd + 1, end);
     const name = readTag(body, 'name');
     const desc = readTag(body, 'description');
+    // Optional `<keywords>a, b</keywords>`: the same keywords the main catalog lists (#1250 b27).
+    const keywords = readTag(body, 'keywords');
     if (name != null && desc != null) {
+      const list = keywords == null ? [] : decodeXmlEntities(keywords).split(/\s*[,，、]\s*/u).filter(Boolean);
       entries.push({
         name: decodeXmlEntities(name),
         available: !attrs.includes('available="false"'),
         requires: readAttr(attrs, 'requires'),
         desc: decodeXmlEntities(desc),
+        ...(list.length ? { keywords: list } : {}),
       });
     }
     cursor = end + '</skill>'.length;
@@ -179,13 +191,15 @@ function readAttr(attrs: string, name: string): string | undefined {
   return end >= 0 ? attrs.slice(valueStart, end) : undefined;
 }
 
-/** toolSearch 编排层：技能目录仅 name + 摘要、Use when 与触发词，不含全文 desc XML */
+/**
+ * toolSearch 编排层：技能目录仅 name + 摘要、Use when 与触发词，不含全文 desc XML。与主目录同一格式、
+ * 同一总预算（`SKILL_CATALOG_BUDGET_CHARS`）；不可用的技能另列在后面。
+ */
 function buildResourceHubSkillsCatalog(
   skillsSummaryXML: string,
   skillRegistry: SkillRegistry | null,
 ): string | null {
-  let entries: Array<{ name: string; available: boolean; requires?: string; desc: string; keywords?: readonly string[] }> =
-    skillsSummaryXML ? parseSkillsSummaryXML(skillsSummaryXML) : [];
+  let entries: ResourceHubSkillEntry[] = skillsSummaryXML ? parseSkillsSummaryXML(skillsSummaryXML) : [];
   if (entries.length === 0 && skillRegistry?.size) {
     entries = skillRegistry.getAll().map(s => ({
       name: s.name,
@@ -196,18 +210,16 @@ function buildResourceHubSkillsCatalog(
   }
   if (entries.length === 0) return null;
 
-  const lines: string[] = [];
-  // Sorted: the catalog is part of the cached prefix and must not depend on registration order.
-  entries = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  for (const e of entries) {
-    if (!e.available) {
-      const req = e.requires ? `; needs ${e.requires}` : '';
-      lines.push(` - ${e.name} (unavailable${req})`);
-      continue;
-    }
-    lines.push(` ${formatSkillCatalogEntry({ name: e.name, description: e.desc, ...(e.keywords?.length ? { keywords: e.keywords } : {}) })}`);
-  }
-  return lines.join('\n');
+  // Sorted inside renderSkillCatalogLines: the catalog is part of the cached prefix.
+  const available = renderSkillCatalogLines(entries.filter(entry => entry.available).map(entry => ({
+    name: entry.name,
+    description: entry.desc,
+    ...(entry.keywords?.length ? { keywords: entry.keywords } : {}),
+  })));
+  const unavailable = entries.filter(entry => !entry.available)
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map(entry => `- ${entry.name} (unavailable${entry.requires ? `; needs ${entry.requires}` : ''})`);
+  return [...available, ...unavailable].map(line => ` ${line}`).join('\n');
 }
 
 /** Name used for `{{nickname}}` when the agent binding configures no nickname. */

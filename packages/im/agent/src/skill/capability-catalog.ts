@@ -29,6 +29,11 @@ export const SKILL_TRIGGER_MAX_CHARS = 40;
 export const SKILL_CATALOG_BUDGET_CHARS = 4_000;
 /** Longest single skill catalog entry, so one verbose skill cannot take the whole budget. */
 export const SKILL_CATALOG_ENTRY_MAX_CHARS = 320;
+/**
+ * Longest trigger word or keyword kept. Longer ones are dropped, which bounds the instruction-like
+ * text one third-party Skill can place in the cached prefix as "keywords" (#1250 b27).
+ */
+export const SKILL_KEYWORD_MAX_CHARS = 32;
 /** A clipped catalog part shorter than this is dropped instead of kept as a stub. */
 const CATALOG_PART_MIN_CHARS = 8;
 /** Trigger words are short; one kept word still helps the model match a request. */
@@ -107,7 +112,10 @@ export interface SkillCatalogParts {
   readonly summary: string;
   /** First `Use when …` / `Use for …` / `适用于…` sentence, if any. */
   readonly useWhen: string;
-  /** `Triggers:` words from the description, then frontmatter keywords; de-duplicated. */
+  /**
+   * `Triggers:` words from the description, then frontmatter keywords; de-duplicated, words over
+   * {@link SKILL_KEYWORD_MAX_CHARS} characters dropped.
+   */
   readonly triggers: readonly string[];
 }
 
@@ -148,7 +156,7 @@ export function skillCatalogParts(description: string, keywords: readonly string
   for (const raw of [...triggerList.split(TRIGGER_SEPARATOR), ...keywords]) {
     const word = raw.replace(/\s+/gu, ' ').trim();
     const key = word.normalize('NFKC').toLocaleLowerCase();
-    if (!word || seen.has(key)) continue;
+    if (!word || [...word].length > SKILL_KEYWORD_MAX_CHARS || seen.has(key)) continue;
     seen.add(key);
     triggers.push(word);
   }
@@ -244,6 +252,17 @@ export function renderSkillCatalog(
   budget = SKILL_CATALOG_BUDGET_CHARS,
 ): string | undefined {
   if (skills.length === 0) return undefined;
+  return [SKILL_CATALOG_HEADING, ...renderSkillCatalogLines(skills, budget)].join('\n');
+}
+
+/**
+ * The entry lines of {@link renderSkillCatalog} (sorted, at most {@link CATALOG_MAX_ENTRIES} plus an
+ * overflow line), fitted to `budget`. Shared with the legacy resource-hub catalog.
+ */
+export function renderSkillCatalogLines(
+  skills: readonly CatalogEntry[],
+  budget = SKILL_CATALOG_BUDGET_CHARS,
+): string[] {
   const sorted = [...skills].sort(byName);
   const listed = sorted.slice(0, CATALOG_MAX_ENTRIES);
   const perEntry = listed.map(entryTiers);
@@ -252,7 +271,7 @@ export function renderSkillCatalog(
   const lines = listed.map((skill, index) => renderSkillLine(skill.name, fitted[index]!));
   const hidden = sorted.length - listed.length;
   if (hidden > 0) lines.push(`- …and ${hidden} more; use discover(kind=skill) to search them.`);
-  return [SKILL_CATALOG_HEADING, ...lines].join('\n');
+  return lines;
 }
 
 /** Specialist agent catalog block: names and one-line descriptions. */

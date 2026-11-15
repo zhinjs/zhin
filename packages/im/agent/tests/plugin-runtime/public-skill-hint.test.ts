@@ -26,8 +26,43 @@ describe('public Skill hint (#1250 b27)', () => {
   });
 
   it('matches ASCII keywords as whole words only', () => {
-    expect(suggestPublicSkillsForIntent([github], 'improve this prompt')).toEqual([]);
-    expect(suggestPublicSkillsForIntent([github], 'open a PR, please').map(entry => entry.name)).toEqual(['github']);
+    const api = skill('api-docs', ['api', 'openapi']);
+    expect(suggestPublicSkillsForIntent([api], 'a rapid fix')).toEqual([]);
+    expect(suggestPublicSkillsForIntent([api], '写api文档').map(entry => entry.name)).toEqual(['api-docs']);
+    expect(suggestPublicSkillsForIntent([github], 'please open a pull request').map(entry => entry.name)).toEqual(['github']);
+  });
+
+  describe('keyword stuffing', () => {
+    const stuffer = skill('stuffer', [
+      '你', '好', '我', '帮', '的', '一', '你好', '请问', '帮我', '一下', '这个', '怎么', '可以',
+      'a', 'pr', 'is', 'please', 'open', 'hello', 'help', 'the', 'and', 'you', 'what',
+    ]);
+
+    it('single characters and stopwords never earn a hint, even in small talk', () => {
+      for (const text of ['你好', '你好呀，请问一下', 'hello, can you help me', 'please open a PR']) {
+        expect(suggestPublicSkillsForIntent([stuffer], text), text).toEqual([]);
+      }
+    });
+
+    it('a stuffed Skill does not outrank a legitimate one', () => {
+      for (const text of ['你好，帮我写一个 PR 描述', '帮我写PR描述可以吗', 'please open a pull request']) {
+        expect(suggestPublicSkillsForIntent([stuffer, github], text).map(entry => entry.name), text).toEqual(['github']);
+      }
+    });
+
+    it('scores only the longest matching keyword, without summing many matches', () => {
+      const many = skill('many', ['deploy', 'docker', 'server', 'build', 'release']);
+      const precise = skill('precise', ['docker deploy']);
+      expect(suggestPublicSkillsForIntent([many, precise], 'docker deploy to the server, then build a release').map(entry => entry.name))
+        .toEqual(['precise']);
+    });
+
+    it('only the first keywords count, and over-long keywords are ignored', () => {
+      const late = skill('late', [...Array.from({ length: 12 }, (_, index) => `filler-${index}`), 'deploy']);
+      expect(suggestPublicSkillsForIntent([late], 'deploy now')).toEqual([]);
+      const long = skill('long', ['x'.repeat(40)]);
+      expect(suggestPublicSkillsForIntent([long], `${'x'.repeat(40)} please`)).toEqual([]);
+    });
   });
 
   it('skips Agent-private, keyword-less and already loaded Skills', () => {
@@ -66,7 +101,7 @@ describe('public Skill hint (#1250 b27)', () => {
   });
 
   it('adds no hint once the Skill is loaded or nothing matches', () => {
-    expect(buildCapabilityContext([], [github], undefined, [], { text: 'PR', loadedSkills: ['github'] }).tail).toBe('');
+    expect(buildCapabilityContext([], [github], undefined, [], { text: 'PR 描述', loadedSkills: ['github'] }).tail).toBe('');
     expect(buildCapabilityContext([], [github], undefined, [], { text: '今天天气怎么样' }).tail).toBe('');
   });
 });

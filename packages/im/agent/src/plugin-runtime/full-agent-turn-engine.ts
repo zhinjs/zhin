@@ -55,6 +55,9 @@ import {
   labelSkillInstructions,
   recallTurnMemory,
   knowledgeIndexSection,
+  KNOWLEDGE_INDEX_SEGMENT_ID,
+  KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS,
+  KNOWLEDGE_INDEX_WEIGHT,
   hardGateOptions,
   type BufferedExecution,
   type FullAgentTurnEngineOptions,
@@ -319,13 +322,15 @@ async function* runInteractiveTurn(
   }
   const knowledgeIndex = await knowledgeIndexSection(options.knowledgeIndex, plan.capabilities, context.turn.signal);
   if (knowledgeIndex) {
-    // Project files, not session facts: it stays in the cached prefix and changes only when they do.
+    // Project files, not session facts: cached prefix, last of the stable kinds (just before
+    // `scene`), so editing a knowledge file leaves the cache of everything before it intact.
     turnSegments.push({
-      id: '§11b_knowledge_index',
+      id: KNOWLEDGE_INDEX_SEGMENT_ID,
       kind: 'platform',
-      weight: BOOTSTRAP_PROMPT_ORDER.task - 2,
+      weight: KNOWLEDGE_INDEX_WEIGHT,
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat - 1 : BOOTSTRAP_PROMPT_ORDER.task - 1,
       retention: 'preferred',
+      maxChars: KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS,
       inject: () => knowledgeIndex,
     });
   }

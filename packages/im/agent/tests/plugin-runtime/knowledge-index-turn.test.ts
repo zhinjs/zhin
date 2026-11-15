@@ -11,6 +11,7 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { AgentEventBus } from '../../src/event/ai-event-bus.js';
 import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import type { PromptSegment } from '../../src/prompt/segments/types.js';
+import { KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS, KNOWLEDGE_INDEX_WEIGHT } from '../../src/plugin-runtime/turn-engine-helpers.js';
 
 /** #1250 b27: the knowledge base index reaches the turn's system prompt segments. */
 async function promptSegmentsFor(tools: readonly ToolCapability[], index: KnowledgeIndex, text = '怎么给这个机器人添加新知识？') {
@@ -74,6 +75,11 @@ it('adds the knowledge base index to the cached prompt prefix while knowledge_se
   const text = segment?.inject({ history: [], runtime: {}, session: { sessionKey: 'session' } }) as string;
   expect(text).toContain('- faq.md: 常见问题 — 如何添加新知识');
   expect(text).toContain('call knowledge_search first');
+  // Last of the stable kinds: after every other platform segment, before scene; capped.
+  const otherPlatform = segments.filter(entry => entry.kind === 'platform' && entry.id !== segment?.id);
+  for (const entry of otherPlatform) expect(entry.weight).toBeGreaterThan(segment!.weight);
+  expect(segment?.weight).toBe(KNOWLEDGE_INDEX_WEIGHT);
+  expect(segment?.maxChars).toBe(KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS);
 });
 
 it('leaves the index out when the turn cannot call knowledge_search', async () => {

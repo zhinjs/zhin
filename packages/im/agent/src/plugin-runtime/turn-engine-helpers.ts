@@ -589,17 +589,29 @@ export function hardGateOptions(
 
 /** Tool name whose presence in the turn enables the knowledge base index (#1250 b27). */
 export const KNOWLEDGE_SEARCH_TOOL = 'knowledge_search';
+/** Prompt segment id of the knowledge base index. */
+export const KNOWLEDGE_INDEX_SEGMENT_ID = '§11b_knowledge_index';
+/**
+ * Lowest weight of the stable kinds: the index renders after every other `platform` segment and
+ * right before `scene`, so a knowledge base change only invalidates the cache from there on.
+ */
+export const KNOWLEDGE_INDEX_WEIGHT = -1_000_000;
+/** Hard cap of the segment (index budget plus heading and guidance lines). */
+export const KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS = 2_000;
 
 /**
  * Knowledge base index section for this turn, when a knowledge base is configured and the turn
- * may call `knowledge_search`. Advisory: a read failure is logged and the turn goes on without it.
+ * may call `knowledge_search` with no permission or bot-role gate. Advisory: a read failure is
+ * logged and the turn goes on without it.
  */
 export async function knowledgeIndexSection(
   index: KnowledgeIndex | undefined,
-  tools: readonly { readonly name: string }[],
+  tools: readonly ({ readonly name: string } & AccessGated)[],
   signal: AbortSignal,
 ): Promise<string | undefined> {
-  if (!index?.outline || !tools.some(tool => tool.name === KNOWLEDGE_SEARCH_TOOL)) return undefined;
+  // Only while knowledge_search is open to every sender of the scene: the index sits in the cached
+  // prefix, which must be byte-identical for every sender (a gated tool would make it differ).
+  if (!index?.outline || !tools.some(tool => tool.name === KNOWLEDGE_SEARCH_TOOL && isSenderNeutral(tool))) return undefined;
   try {
     return renderKnowledgeIndexSection(await index.outline(signal));
   } catch (error) {
