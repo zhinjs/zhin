@@ -5,8 +5,16 @@
  *
  * `purposes.agents` is one key space shared by Agent bindings (`ai.agents.<binding>`) and
  * sub-agents. A sub-agent is looked up by its plugin-qualified name (`<plugin>__<agent>`) first;
- * its bare name only when no other sub-agent shares it and no binding uses it. A sub-agent never
- * resolves to a binding's purpose: without a usable key of its own it runs on `chat`.
+ * its bare name only when no other sub-agent shares it and no binding uses it. A plugin's
+ * sub-agent never resolves to a binding's purpose: without a usable key of its own it runs on
+ * `chat`. A project's own sub-agent (`agents/<name>/` of the root plugin, whose qualified name is
+ * its bare name) and an `ai.agents.<name>` binding of the same name are one agent, so that key is
+ * its explicit choice (#1250 batch 21).
+ *
+ * Precedence for a sub-agent turn: its effective `purposes.agents.<key>` model wins over every
+ * chat override (session, `purposes.adapters.<adapter>.chat`, `purposes.endpoints.<endpoint>.chat`,
+ * `purposes.scenes.<scene>.chat`); only without one does it run on `chat`, where those overrides
+ * apply before the global `purposes.chat`.
  */
 
 /** A sub-agent as the purpose lookup sees it. */
@@ -36,7 +44,9 @@ export function subAgentPurposeEffect(
 ): SubAgentPurposeEffect {
   const qualified = agent.qualifiedName?.trim();
   if (qualified && configuredKeys.has(qualified)) {
-    return bindingNames.has(qualified)
+    // A root-plugin sub-agent (qualified name = bare name) is the binding of that name (#1250 batch 21).
+    const sameAgent = qualified === agent.name && qualified !== 'zhin';
+    return bindingNames.has(qualified) && !sameAgent
       ? Object.freeze({ status: 'ignored', key: qualified, reason: 'binding-name' })
       : Object.freeze({ status: 'effective', key: qualified });
   }
@@ -52,7 +62,10 @@ export function subAgentPurposeEffect(
 export type PurposeKeyEffect =
   | Readonly<{
     status: 'effective'; target: 'binding' | 'sub-agent';
-    /** Sub-agents (`target: 'sub-agent'`) that run on this key. */
+    /**
+     * Sub-agents that run on this key: every one for `target: 'sub-agent'`; for `target: 'binding'`,
+     * the project's own sub-agent of the binding's name (the same agent, #1250 batch 21).
+     */
     agents?: readonly string[];
     /**
      * `target: 'binding'` only: sub-agents of the same name that do NOT use this key (it belongs
@@ -92,13 +105,15 @@ export function purposeKeyEffects(
   const result: Record<string, PurposeKeyEffect> = {};
   for (const key of [...keys].sort()) {
     const agents = effective.get(key);
-    if (agents?.length) result[key] = Object.freeze({ status: 'effective', target: 'sub-agent', agents: Object.freeze(agents.sort()) });
-    else if (bindingNames.has(key)) {
-      // The binding uses its own key; a sub-agent that was meant by it is reported alongside.
+    if (bindingNames.has(key)) {
+      // The binding uses its own key (and so does the project's sub-agent of that name);
+      // a plugin sub-agent that was meant by it is reported alongside.
       const meant = ignored.get(key);
       result[key] = Object.freeze({ status: 'effective', target: 'binding',
+        ...(agents?.length ? { agents: Object.freeze(agents.sort()) } : {}),
         ...(meant ? { ignoredAgents: Object.freeze(meant.agents.sort()), reason: 'binding-name' as const } : {}) });
-    } else {
+    } else if (agents?.length) result[key] = Object.freeze({ status: 'effective', target: 'sub-agent', agents: Object.freeze(agents.sort()) });
+    else {
       const meant = ignored.get(key);
       result[key] = meant
         ? Object.freeze({ status: 'ignored', reason: meant.reason, agents: Object.freeze(meant.agents.sort()) })

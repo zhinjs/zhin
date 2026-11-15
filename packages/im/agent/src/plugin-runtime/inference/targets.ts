@@ -36,8 +36,9 @@ export interface InferenceTargets {
   /**
    * Sub-agents (`agents/<name>/` of plugins) a `purposes.agents.<key>` model choice can name (#1270).
    * `qualifiedName` (`<plugin>__<agent>`) always works; `kind` says whether the bare `name` does too:
-   * `bare` (unique and no binding uses it), `shared` (several sub-agents have it) or `binding`
-   * (an Agent binding has that name, so the key belongs to the binding).
+   * `bare` (unique and no binding uses it, or the project's own sub-agent, whose qualified name is
+   * the bare name), `shared` (several sub-agents have it) or `binding` (an Agent binding has that
+   * name, so the key belongs to the binding).
    */
   readonly subAgents: readonly SubAgentTarget[];
   readonly adaptersAvailable: boolean;
@@ -84,7 +85,10 @@ export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurpose
     .map((agent): SubAgentTarget => Object.freeze({
       qualifiedName: agent.qualifiedName,
       name: agent.name,
-      kind: bindings.has(agent.name) ? 'binding' : (counts.get(agent.name) ?? 0) > 1 ? 'shared' : 'bare',
+      // The project's own sub-agent: its qualified name is the bare name, which always reaches it
+      // (an `ai.agents.<name>` binding of that name is the same agent, #1250 batch 21).
+      kind: agent.qualifiedName === agent.name && agent.name !== 'zhin' ? 'bare'
+        : bindings.has(agent.name) ? 'binding' : (counts.get(agent.name) ?? 0) > 1 ? 'shared' : 'bare',
     }))
     .sort((a, b) => (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0));
   return Object.freeze({ bindingNames: Object.freeze([...new Set(bindingNames)]), subAgents: Object.freeze(subAgents) });

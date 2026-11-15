@@ -501,6 +501,8 @@ function actorPersona(name: string, instructions: string, entry: boolean): strin
     '',
     `You are ${name}, collaborating with other agents on behalf of a human.`,
     'Your final message is returned to whoever asked you; make it a complete answer or report.',
+    // #1250 delegate-budget-self-sabotage: a simple question needs no tool search.
+    'When you can answer from what you were given, answer directly; do not search for tools the task does not need.',
     entry
       ? 'You are the entry agent: you may address the end user directly.'
       : 'Do not address or greet the end user; you are not the entry agent.',

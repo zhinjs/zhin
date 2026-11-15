@@ -42,8 +42,13 @@ export const MAX_DELEGATION_RETENTION_MS = 30 * 60_000;
  * `agent:<binding>`) and sub-agents. A sub-agent is looked up by its
  * plugin-qualified name (`<plugin>__<agent>`, the canonical key) first; its bare
  * name is accepted only when no other sub-agent of the turn shares it and no
- * binding uses it. A sub-agent never resolves to a binding's purpose: without a
- * usable key of its own it runs on `chat`.
+ * binding uses it. A plugin's sub-agent never resolves to a binding's purpose; the
+ * project's own sub-agent of a binding's name is that binding's agent and uses its
+ * key. Without a usable key of its own a sub-agent runs on `chat`.
+ *
+ * An effective sub-agent key wins over every chat override (session, adapter,
+ * endpoint, scene): `agent:<key>` is resolved from `purposes.agents` alone
+ * (#1250 batch 21, see {@link subAgentPurposeEffect}).
  */
 export function selectLanguagePurpose(
   graph: InferenceOperationScope['graph'],

@@ -214,6 +214,9 @@ Guardrails are enforced deterministically by `@zhin.js/harness`'s Guard Kernel:
 
 - **Monotonic authority attenuation**: a callee's effective authority is the intersection of the caller's authority, any narrowing on the mail, and the callee's own ceiling.
 - **Conserved budget ledger**: every `ask` / `delegate` carves a child grant out of the caller's remaining budget (`modelCalls`, `tokens`, `wallMs`, `sideEffects`); a subtree can never spend more than its parent granted.
+- **Budget floor**: a budget the model writes into `ask` / `delegate` / `follow_up` cannot go below one complete answer: at least 4 `modelCalls`, 32000 `tokens` and 60000 `wallMs` (never above the caller's remaining budget). Lower values are raised to the floor; the tool result says "budget raised to the minimum…" and an `ai.collaboration` info line is logged. `sideEffects` has no floor (lowering it only restricts writes); an author's `collaboration.budget` in `agent.json` is not changed.
+- **One line of work per delegation**: while a `delegate` to an agent has no result yet, a new `ask` to that agent is refused (`delegation_in_progress`) and points to waiting for the result or to `follow_up` with that delegation's `mail_id`; `follow_up` adds or changes an instruction and is not for hurrying.
+- **No detours**: sub-agents are told to answer directly when they can and not to search for tools the task does not need; three catalog searches in a row that find nothing (`discover` / `load_tool` / `load_skill`) get a one-time "change approach or answer" hint.
 - **Approvals go to the human**: hard-gate, dangerous-tool, and self-change approvals always route to the initiating human Principal, never to another Agent.
 - **Cycle and convergence guards**: delegation depth (`maxDepth`), fanout (`maxFanout`), pair round trips (`maxPairRoundTrips`), duplicate messages (`maxDuplicates`), and synchronous wait cycles (`wait_cycle`) are blocked deterministically and escalated to the human.
 

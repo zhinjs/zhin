@@ -44,7 +44,7 @@
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效；所有者已批准（zhinjs/zhin#1250）：第 21 批——子 Agent 显式绑定的模型优先于适配器 / 场景的聊天覆盖（项目自己的子 Agent 使用同名绑定的 purposes.agents 键，purposeKeyEffects / purposeEffects 相应在 binding 目标上列出 agents），委派工具对模型自设的预算加下限，ask 对未完成的委派对象返回 delegation_in_progress。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/logger",
@@ -80,6 +80,11 @@
       "package": "@zhin.js/console-contract",
       "type": "minor",
       "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/harness",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 21 批 EngagementGraphView 新增可选方法 outstanding(mailId)（ask / delegate 是否仍在等结果）。npm 上 1.1.0 未被占用。"
     }
   ]
 }

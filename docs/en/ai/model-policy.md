@@ -94,6 +94,16 @@ One authenticated person has a distinct AI Session in each private chat, group o
 
 Chat resolves in this order: **personal Session selection > scene > Endpoint > Adapter > deployment default**. Explicit Agent roles use their Host Profile purpose. Selecting a Host role model does not grant Host administration rights to the caller.
 
+### Sub-agent model precedence
+
+A sub-agent turn started by `ask` / `delegate` / `follow_up` picks its model in this order (#1250):
+
+1. **Sub-agent binding**: an effective `purposes.agents.<key>` (Console "Purposes → Agent"). The plugin-qualified name `<plugin>__<agent>` is looked up first, then the bare name (only when no other sub-agent shares it and no Agent binding has it). A project's own `agents/<name>/` and an `ai.agents.<name>` binding of the same name are one agent, so `purposes.agents.<name>` applies to it; a plugin's sub-agent of that name does not take the binding's key — configure it by its qualified name.
+2. **Adapter / Endpoint / scene chat overrides** (and a personal Session selection): used only when the sub-agent has no effective binding, in the chat order above.
+3. **Deployment chat** (`purposes.chat`).
+
+So a model bound to a sub-agent wins over channel-level overrides such as `purposes.adapters.<adapter>.chat`; the aggregation turn (the entry agent continuing with results) keeps the root turn's purpose. The sub-turn trace's `model_selection` records the purpose and Profile actually used; the Console's purpose effects and attention items apply the same rules.
+
 | Scope | Selectable purposes |
 | --- | --- |
 | Deployment | chat, summary, ambient language, perception (each with optional fallbacks), image, six decisions, Agent roles (optional fallbacks) |

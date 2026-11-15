@@ -24,6 +24,21 @@ const traceSavers = new WeakMap<TurnTraceCollector, TurnTraceSave>();
 /** Sub-turns traced by their own collector (#1250 trace-subagent-model-calls-missing). */
 const subTurnCollectors = new Map<string, TurnTraceCollector>();
 const eventScopes = new WeakMap<object, TraceScope>();
+/**
+ * Events a sub-turn collector already recorded (#1250 trace-subagent-calls-doubled). An actor
+ * turn records its engine's model calls on its own trace and also appends them to the root
+ * journal (for the usage rows); the tracing journal routes that append back to the same
+ * collector, which must count the call once.
+ */
+const recordedBy = new WeakMap<TurnTraceCollector, WeakSet<object>>();
+
+function recordOnce(collector: TurnTraceCollector, event: TurnEvent): void {
+  let seen = recordedBy.get(collector);
+  if (!seen) recordedBy.set(collector, seen = new WeakSet());
+  if (seen.has(event)) return;
+  seen.add(event);
+  collector.record(event);
+}
 
 /** Journal port that feeds the collector before delegating to the real journal. */
 export function createTracingJournal(journal: TurnJournalPort, collector: TurnTraceCollector): TurnJournalPort {
@@ -34,7 +49,7 @@ export function createTracingJournal(journal: TurnJournalPort, collector: TurnTr
         ? subTurnCollectors.get(scope.turnId) ?? collector.child(scope.turnId, scope.sessionKey)
         : collector;
       try {
-        target.record(event);
+        recordOnce(target, event);
       } catch {
         // Tracing is a projection; it must never fail the turn.
       }
@@ -127,7 +142,7 @@ export function captureSubTurnTracing(rootTurnId: string): SubTurnTracing | unde
       return Object.freeze({
         turnId: input.turnId,
         record(event: TurnEvent) {
-          try { collector.record(event); } catch { /* Projection only. */ }
+          try { recordOnce(collector, event); } catch { /* Projection only. */ }
         },
         note(note: TurnTraceNote) {
           try { collector.note(note); } catch { /* Projection only. */ }

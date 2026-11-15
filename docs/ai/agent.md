@@ -209,6 +209,9 @@ ai:
 
 - **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时收窄的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会放大调用方权限。
 - **守恒预算账本**：每个 Engagement 有根预算池（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。每次 `ask` / `delegate` 从父级剩余额度中划拨子配额，子树总消耗绝不超过父级授信。
+- **预算下限**：模型在 `ask` / `delegate` / `follow_up` 里自己写的预算不能低于一次完整回答所需：`modelCalls` 至少 4、`tokens` 至少 32000、`wallMs` 至少 60000（不超过调用方剩余额度）。更低的值会被抬到下限，工具结果里写明「budget raised to the minimum…」，并记一条 `ai.collaboration` info 日志。`sideEffects` 没有下限（压低它只会限制写操作）；`agent.json` 里作者配置的 `collaboration.budget` 不受影响。
+- **一项委派一条线**：对某个 Agent 的 `delegate` 还没出结果时，再 `ask` 同一个 Agent 会被拒绝（`delegation_in_progress`），提示等结果自动回来，或用 `follow_up`（带那封委派的 `mail_id`）补充指令；`follow_up` 只用来补充或修改指令，不用来催。
+- **少走冤枉路**：子 Agent 的提示要求能直接回答就直接回答，不为用不到的工具搜索；在按需工具目录里连续 3 次搜不到（`discover` / `load_tool` / `load_skill`）会收到一次「换个办法或直接回答」的提示。
 - **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
 - **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后自动冻结 Engagement 并 `escalate`。
 - **身份来自传输**：消息发送方由框架填写，正文里自称"主人"或"审核员"无效。

@@ -564,6 +564,32 @@ describe('#1250 actor turns own their model operation and trace', () => {
     expect(rootTrace.snapshot().subagents).toHaveLength(1);
   });
 
+  it('records each sub-turn model call once in the trace and the usage rows (#1250 trace-subagent-calls-doubled)', async () => {
+    const { TurnTraceCollector } = await import('../../src/trace/turn-trace.js');
+    const { registerTurnTrace, captureSubTurnTracing, createTracingJournal } = await import('../../src/trace/turn-trace-registry.js');
+    const { AgentUsageCollector } = await import('../../src/security/usage-store.js');
+    const rootTrace = new TurnTraceCollector({ turnId: 'turn-1', sessionKey: 'im:icqq:bot:private:owner' });
+    const release = registerTurnTrace(rootTrace);
+    try {
+      const usage = new AgentUsageCollector('owner', { identity: { traceId: 'trace', turnId: 'turn-1' }, session: { key: 's' },
+        principal: { subjectId: 'owner', roles: [] }, origin: { kind: 'internal', source: 'test' } } as never, { provider: 'p', model: 'm' });
+      // The production root journal: usage rows, then the tracing journal (agent-runtime createIngressTurn).
+      const traced = createTracingJournal({ append: async () => undefined }, rootTrace);
+      const journal = { append: (event: never) => { usage.record(event); return traced.append(event); } };
+      const researcher = fakeScope('gemini', 'gemini-profile', 'agent:researcher');
+      const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], journal,
+        tracing: captureSubTurnTracing('turn-1')!, models: { acquire: async () => researcher.scope }, script: reply('done', 2, 10) });
+      const { root } = await ctx.attach();
+      await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
+      const trace = rootTrace.snapshot();
+      expect(trace.model_calls).toHaveLength(0);
+      expect(trace.subagents).toHaveLength(1);
+      expect(trace.subagents[0]!.model_calls.map(call => call.index)).toEqual([1, 2]);
+      expect(trace.subagent_usage?.model_calls).toBe(2);
+      expect(usage.finish('completed').calls).toHaveLength(2);
+    } finally { release(); }
+  });
+
   it('flags a sub-turn reply that claims a lookup without any tool call', async () => {
     const { TurnTraceCollector } = await import('../../src/trace/turn-trace.js');
     const { registerTurnTrace, captureSubTurnTracing } = await import('../../src/trace/turn-trace-registry.js');
