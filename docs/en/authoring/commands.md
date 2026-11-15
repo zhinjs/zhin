@@ -410,6 +410,13 @@ plugins:
 
 A parent path such as `netease` also removes `netease login`, `netease status` and its other subcommands. Disabled commands are left out of routing and do not occupy their routes, so another plugin may use the same name. Entries that match no command are ignored.
 
+An unresolved clash no longer stops the instance from starting:
+
+- When two command names clash, the one registered first keeps the route, in the order the plugins are declared in the configuration and then by command path within a plugin. The later command is not registered, and neither are its aliases and shortcuts.
+- When only an alias or a shortcut clashes, only that alias or shortcut is skipped and the command itself is registered. A command name takes precedence over another command's alias.
+
+Each clash is logged once as a warning (`op=command_route_conflict`) and is listed in the Console "Needs attention" inbox and in `zhin doctor`, with both plugin names and the command or alias. Fix it as described above: rename one of them, add a `commandNamespace`, or remove one with `disabledCommands`. A plugin hot reload that replaces its own commands is not a clash.
+
 ### Params as folders
 
 A param can also be the last path segment, Next.js style. Types and defaults are still declared in `params`:
