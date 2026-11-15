@@ -368,3 +368,17 @@ describe('createAmbientDecisionJudge', () => {
     expect(observe).toHaveBeenCalledWith(expect.objectContaining({ task: 'ambient', mode: 'shadow', outcome: 'shadow' }));
   });
 });
+
+describe('AmbientEngagement spoke tracking is bounded (review of #1281)', () => {
+  it('drops groups outside the conversation window and caps the map', () => {
+    let now = 0;
+    const engagement = new AmbientEngagement({ config: { conversations: [], conversationWindowMs: 1_000 }, now: () => now });
+    for (let index = 0; index < 10; index += 1) engagement.noteSpoke(`qq:${index}`);
+    expect(engagement.trackedSpokeGroups).toBe(10);
+    now = 5_000;
+    engagement.noteSpoke('qq:fresh');
+    expect(engagement.trackedSpokeGroups).toBe(1);
+    for (let index = 0; index < 5_000; index += 1) engagement.noteSpoke(`qq:burst-${index}`);
+    expect(engagement.trackedSpokeGroups).toBeLessThanOrEqual(4096);
+  });
+});

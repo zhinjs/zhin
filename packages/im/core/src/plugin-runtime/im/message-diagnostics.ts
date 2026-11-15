@@ -3,6 +3,17 @@ import { randomUUID } from 'node:crypto';
 import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
 import type { RuntimeMessageRendering } from './message-events.js';
 import type { CommandExecutionLimit } from '@zhin.js/command';
+import type { MessageOutcome, MessageOutcomeRecord } from './message-outcome.js';
+
+/** The settled outcome as the 15-minute diagnostics timeline shows it (ADR 0061 §2). */
+export interface RuntimeMessageDiagnosticOutcome {
+  readonly id: string;
+  readonly outcome: MessageOutcome;
+  readonly reason?: string;
+  readonly stage: MessageOutcomeRecord['stage'];
+  readonly addressed: boolean;
+  readonly facets: readonly string[];
+}
 
 export interface RuntimeMessageDiagnosticStep {
   readonly stage: 'received' | 'origin' | 'prefix' | 'middleware' | 'handlers' | 'dispatch' | 'delivery';
@@ -36,6 +47,8 @@ export interface RuntimeMessageDiagnostic {
   readonly command?: string;
   readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
   readonly limit?: CommandExecutionLimit;
+  /** ADR 0061: the message's settled outcome (absent while processing). */
+  readonly outcome?: RuntimeMessageDiagnosticOutcome;
   /** Some evidence exceeded the per-operation bound; the record is not a complete timeline. */
   readonly truncated: boolean;
   readonly steps: readonly RuntimeMessageDiagnosticStep[];
@@ -114,6 +127,19 @@ export class RuntimeMessageDiagnostics implements RuntimeMessageDiagnosticsReade
     if (result.status === 'limited' && result.limit) record.limit = Object.freeze({ reason: result.limit.reason,
       ...(result.limit.retryAfterMs !== undefined ? { retryAfterMs: result.limit.retryAfterMs } : {}) });
     this.step('dispatch', result.status ?? record.route);
+  }
+
+  /** Id of the current operation's record, linked from the outcome record. */
+  currentId(): string | undefined {
+    return this.#current()?.id;
+  }
+
+  /** Attaches the settled outcome (ADR 0061 §2) to the current operation's record. */
+  outcome(record: MessageOutcomeRecord): void {
+    const current = this.#current();
+    if (!current) return;
+    current.outcome = Object.freeze({ id: record.id, outcome: record.outcome, ...(record.reason ? { reason: record.reason } : {}),
+      stage: record.stage, addressed: record.addressed, facets: Object.freeze([...record.facets]) });
   }
 
   route(route: NonNullable<RuntimeMessageDiagnostic['route']>): void {

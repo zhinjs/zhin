@@ -47,3 +47,13 @@ export {
 export { renderTemplatePaths } from './template-paths.js';
 export { Time, sleep } from './utils.js';
 export type { Dict } from './utils.js';
+
+// ── Redaction (ADR 0061 P1: shared by the decision audit and the message outcome ledger) ──
+export {
+  isPromptPayloadKey,
+  isSecretLikeKey,
+  redactApprovalDisplay,
+  redactDecisionPayload,
+  redactSecretText,
+} from './redaction.js';
+export type { RedactablePayload } from './redaction.js';

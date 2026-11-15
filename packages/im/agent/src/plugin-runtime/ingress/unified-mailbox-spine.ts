@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { InferenceOperationScope } from '@zhin.js/ai/provider';
 import { readOperationSession, type AITriggerConfig, type VenueProjector, type VenueRegistry } from '@zhin.js/core';
+import { reportInboundOutcome } from '@zhin.js/core/runtime';
 import type {
   GroupRuleDefaultOutcome,
   GroupRuleViolationOutcome,
@@ -34,6 +35,7 @@ import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './grou
 import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
+import { turnFailureOutcome, turnSuccessOutcome } from './ingress-outcomes.js';
 import {
   createAnnouncementDispatcher,
   createGroupRuleChannel,
@@ -561,8 +563,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #ambientEngagement(): AmbientEngagement | null {
     if (this.#ambient !== undefined) return this.#ambient;
+    // ADR 0062 §23: with an `ai.trigger.ambient` section (even an empty allowlist) stored overrides
+    // may switch interjection on per group; without the section there is no interjection at all
+    // and no engagement state is kept.
     const config = this.options.agent.service.getTriggerConfig()?.ambient;
-    if (!config?.conversations?.length) return this.#ambient = null;
+    if (!config) return this.#ambient = null;
     return this.#ambient = new AmbientEngagement({ config });
   }
 
@@ -593,6 +598,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   ): Promise<boolean> {
     const messageOrigin = (message as { readonly origin?: unknown }).origin ?? message.metadata?.origin;
     if (typeof messageOrigin === 'string' && messageOrigin !== 'human') {
+      reportInboundOutcome(message, { outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'agent_gate' });
       return false;
     }
     const operationSession = readOperationSession(message);
@@ -643,6 +649,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
       withModelScope: options.withModelScope, reply,
     })) {
+      reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;
     }
 
@@ -693,6 +700,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
     if (isClearCommand(matched.content)) {
       await zhinAgent.archiveSession(sessionKey);
+      reportInboundOutcome(message, { outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate', turnId });
       await reply(t(message.locale, 'cleared'));
       return true;
     }
@@ -707,6 +715,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       mergeWindowEnabled: this.#mergeWindowEnabled, liveRoom, ambient, turnAccess,
       projectRoot: options.projectRoot, message, reply,
     })) {
+      reportInboundOutcome(message, { outcome: 'superseded', reason: 'stopped', stage: 'admission', turnId });
       return true;
     }
 
@@ -738,6 +747,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
         senderRoles, plainText, liveRoom, mergeable, turnAccess, audit, reply,
       });
       if (admittedResult.kind === 'completed') {
+        reportInboundOutcome(message, admittedResult.outcome === 'merged'
+          ? { outcome: 'merged', reason: admittedResult.reason, stage: 'admission', turnId }
+          : { outcome: 'rate_limited', reason: admittedResult.reason, stage: 'admission', turnId });
         return true;
       }
       admission = admittedResult.admission;
@@ -766,8 +778,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
         audit, outcome, capabilities, routedAgentName: routed.agent?.name,
         modelPayload, sttApplied: inbound.sttApplied, toolCalls,
       });
+      reportInboundOutcome(message, turnSuccessOutcome(outcome, turnId, admission.facts.mergeWindow !== undefined));
       return true;
     } catch (error) {
+      reportInboundOutcome(message, turnFailureOutcome(error, admission?.signal.aborted === true, turnId));
       return handleIngressTurnFailure({
         error, admission, modelStartedAt, modelPayload, audit, sessionKey, trigger,
         isMaster: senderRoles.isMaster, locale: message.locale, outboundBlocked, reply,

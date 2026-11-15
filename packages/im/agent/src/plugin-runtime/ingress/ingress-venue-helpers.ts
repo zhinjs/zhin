@@ -11,6 +11,7 @@ import {
 import { agentFeatureId, isAgentIndex } from '@zhin.js/agent-feature';
 import {
   adapterDeclaresLiveDanmaku,
+  reportInboundOutcome,
   type ImRuntime,
   type Message,
   type SendContent,
@@ -19,6 +20,7 @@ import type { InferenceOperationScope } from '@zhin.js/ai/provider';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId, RuntimeSnapshot, SnapshotLease } from '@zhin.js/plugin-runtime';
 import type { TurnAccessContext } from '../../turn/turn-ingress.js';
+import { speakBlockReasonCode } from '../../decision-events.js';
 import { isCancelIntent } from '../../turn/index.js';
 import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import type { AmbientEngagement } from './ambient-engagement.js';
@@ -235,6 +237,10 @@ export async function evaluateIngressGatesAndTrigger(input: {
     if (verdict.blocked) {
       logControlBlocked('agent_turn_skipped_control', `${platform}:${message.conversation.id}`, verdict);
       auditControlGate(audit, verdict, { source: 'message', addressed: matched != null });
+      // ADR 0061 §1.4: a control-plane stop is a policy outcome (fail-closed judgment errors included).
+      reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: verdict.level === 'unavailable' ? 'control_gate_failed' : verdict.reasonCode, stage: 'agent_gate',
+        ...(verdict.level === 'unavailable' ? { visibility: 'admin' as const } : {}),
+        detail: verdict.level === 'unavailable' ? 'control_state_unavailable' : `${verdict.level}:${verdict.switch}` });
       return { kind: 'halt', handled: matched != null };
     }
   }
@@ -263,6 +269,8 @@ export async function evaluateIngressGatesAndTrigger(input: {
     if (blocked) {
       logger.info(formatCompact({ op: 'agent_turn_skipped_cannot_speak', conv: `${platform}:${message.conversation.id}`, reason: blocked }));
       auditCannotSpeak(audit, blocked, { source: 'message', addressed: matched != null });
+      const { code } = speakBlockReasonCode(blocked);
+      reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: code, stage: 'agent_gate' });
       return { kind: 'halt', handled: matched != null };
     }
   }

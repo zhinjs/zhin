@@ -291,6 +291,8 @@ const JUDGE_TIMEOUT_MS = 15_000;
 const MAX_LINE_CHARS = 200;
 /** Safety ceiling for replies inside an ongoing conversation, which skip the interjection limits. */
 const MAX_CONVERSATION_REPLIES_PER_HOUR = 30;
+/** Bound of the per-group "bot spoke at" map; oldest groups go first. */
+const MAX_SPOKE_ENTRIES = 4096;
 
 /**
  * Per-generation state for unprompted group replies: waits for a burst to settle, throttles
@@ -334,9 +336,24 @@ export class AmbientEngagement {
     return list.includes('*') || list.includes(`${platform}:${groupId}`);
   }
 
-  /** Any bot turn in the group, addressed or not, opens (or extends) a conversation. */
+  /**
+   * Any bot turn in the group, addressed or not, opens (or extends) a conversation. Only the
+   * conversation window matters, so entries older than it are dropped and the map is bounded.
+   */
   noteSpoke(key: string): void {
-    this.#lastSpoke.set(key, this.#now());
+    const now = this.#now();
+    this.#lastSpoke.delete(key);
+    this.#lastSpoke.set(key, now);
+    const horizon = now - this.#config.conversationWindowMs;
+    for (const [entry, at] of this.#lastSpoke) {
+      if (at >= horizon && this.#lastSpoke.size <= MAX_SPOKE_ENTRIES) break;
+      this.#lastSpoke.delete(entry);
+    }
+  }
+
+  /** Number of groups whose last bot turn is still tracked (tests / diagnostics). */
+  get trackedSpokeGroups(): number {
+    return this.#lastSpoke.size;
   }
 
   async consider(input: {
