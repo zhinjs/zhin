@@ -210,6 +210,15 @@ describe('renderProjectConfigPatch preview (#1250 install-dry-run-dumps-whole-co
     expect(patch).not.toContain('key29');
   });
 
+  it('keeps a CRLF file CRLF: the preview shows the added line only, no line-ending change', async () => {
+    const root = await makeProject();
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), source.replaceAll('\n', '\r\n'));
+    const plan = createProjectConfigPlan({ loaded: loadProjectConfig(root), enablePlugins: ['@zhin.js/plugin-nettools'] });
+    const patch = renderProjectConfigPatch(plan);
+    expect(patch).not.toContain('line endings');
+    expect(patch.split('\n').filter(line => /^[-+](?![-+]{2})/u.test(line))).toHaveLength(1);
+  });
+
   it('says nothing changes when the plugin is already declared', async () => {
     const root = await makeProject();
     await fs.writeFile(path.join(root, 'zhin.config.yml'), source);

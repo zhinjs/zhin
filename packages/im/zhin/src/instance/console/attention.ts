@@ -1098,7 +1098,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
 
   if (sources.mcpServers && allows(P.STATUS_VIEW)) {
     // #1250: only a failed connect is something to act on. A server that has not connected yet
-    // (connects on first use) or is not loaded by the running Agent is shown on the MCP page only.
+    // (waiting to connect) or is not loaded by the running Agent is shown on the MCP page only.
     await read('mcp', async () => (await shared('mcp', async () => sources.mcpServers!()))
       .filter(server => !server.connected && server.lastError !== undefined).map((server): AttentionDraft => {
         const failure = server.lastError;

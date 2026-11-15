@@ -23,7 +23,7 @@ describe('configured MCP status (#1250 mcp-status-not-loaded-contradicts-agent)'
     connectSucceeds();
     const events: HostMcpStatusEvent[] = [];
     const status = new HostMcpStatusBoard({ onEvent: event => events.push(event) });
-    // Before the generation is activated: configured, not connected yet, no failure (pending first connect).
+    // Before the generation is activated: configured, not connected yet, no failure (waiting to connect).
     expect(status.summary('github')).toEqual({ name: 'github', connected: false, toolCount: 0 });
 
     const client = await projectHostMcp(entry, status).definition.create({} as never);
@@ -96,5 +96,32 @@ describe('configured MCP status (#1250 mcp-status-not-loaded-contradicts-agent)'
 
     vi.spyOn(McpClientConnection.prototype, 'connect').mockReturnValue(new Promise(() => undefined));
     await expect(status.probe(entry, 20)).resolves.toMatchObject({ ok: false, failure: { category: 'timeout' } });
+  });
+
+  it('closes the throw-away client when the probe times out', async () => {
+    const close = vi.fn(async () => undefined);
+    const clientClose = vi.fn(async () => undefined);
+    // A transport that opened but whose handshake never completes.
+    vi.spyOn(McpClientConnection.prototype, 'connect').mockImplementation(function (this: McpClientConnection) {
+      Reflect.set(this, 'transport', { close });
+      Reflect.set(this, 'client', { close: clientClose });
+      return new Promise(() => undefined);
+    });
+    const result = await new HostMcpStatusBoard().probe(entry, 20);
+    expect(result).toMatchObject({ ok: false, failure: { category: 'timeout' } });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(clientClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the failure of a server removed from the configuration', async () => {
+    const status = new HostMcpStatusBoard();
+    status.failed('github', { category: 'auth', message: 'HTTP 401', at: 1 });
+    status.failed('docs', { category: 'network', message: 'ECONNREFUSED', at: 1 });
+    // Next generation: github removed.
+    status.retain(['docs']);
+    expect(status.summary('docs').lastError).toMatchObject({ category: 'network' });
+    // Added back later: no reason from before it was removed.
+    status.retain(['docs', 'github']);
+    expect(status.summary('github')).toEqual({ name: 'github', connected: false, toolCount: 0 });
   });
 });

@@ -64,8 +64,17 @@ export class HostMcpStatusBoard {
   }
 
   /**
+   * Forgets the recorded failures of servers no longer configured; called when a generation is
+   * published, so a server removed and added back later does not show an old reason.
+   */
+  retain(configured: Iterable<string>): void {
+    const names = new Set(configured);
+    for (const name of [...this.#failures.keys()]) if (!names.has(name)) this.#failures.delete(name);
+  }
+
+  /**
    * Row for one configured server: `connected` while any live client is connected; otherwise the
-   * last failed connect, if any. Neither means it has not connected yet (pending first use).
+   * last failed connect, if any. Neither means it has not connected yet (waiting to connect).
    */
   summary(name: string): AgentHostMcpSummary {
     const connected = [...this.#live.get(name) ?? []].filter(connection => connection.isConnected);
@@ -79,6 +88,11 @@ export class HostMcpStatusBoard {
   /**
    * Connects to `entry` once with a fresh client, lists its tools and disconnects. It does not
    * change the Agent's own clients or the recorded state; the Console "test connection" action.
+   *
+   * The probe is a second client next to the Agent's own: for a `stdio` server it starts a second
+   * copy of the configured command while the Agent's copy keeps running. A server that holds an
+   * exclusive resource (a lock file, a fixed port, a single-session login) can fail the probe, or
+   * disturb the running copy, for that reason alone.
    */
   async probe(entry: McpServerEntry, timeoutMs = DEFAULT_MCP_PROBE_TIMEOUT_MS): Promise<HostMcpProbeResult> {
     const started = Date.now();

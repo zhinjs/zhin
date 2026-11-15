@@ -201,7 +201,7 @@ const PHASE_LABELS: Readonly<Record<string, string>> = {
 };
 
 const MCP_LABELS: Readonly<Record<RuntimeMcpServer['status'], string>> = {
-  connected: '已连接', failed: '连接失败', idle: '待首次使用时连接', not_loaded: '未加载', disconnected: '未连接',
+  connected: '已连接', failed: '连接失败', idle: '待连接', not_loaded: '未加载', disconnected: '未连接',
 };
 
 /** `zhin status` lines for the runtime state (Chinese). */

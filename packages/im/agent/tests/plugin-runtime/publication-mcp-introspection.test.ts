@@ -45,7 +45,7 @@ describe('Agent Host MCP introspection (#1250 batch 28)', () => {
     });
     const status = new HostMcpStatusBoard();
     const host = publish(status);
-    // Before activation: both configured, neither connected nor failed (pending first connect).
+    // Before activation: both configured, neither connected nor failed (waiting to connect).
     expect(host.introspection.listMcpServers()).toEqual([
       { name: 'github', connected: false, toolCount: 0 },
       { name: 'docs', connected: false, toolCount: 0 },

@@ -123,7 +123,7 @@ describe('zhin status runtime state', () => {
     expect(parsed.endpoints).toEqual({ available: false, error: '实例未运行' });
   });
 
-  it('shows a server that has not connected yet as pending first use, not as a problem (#1250)', () => {
+  it('shows a server that has not connected yet as waiting to connect, not as a problem (#1250)', () => {
     const lines = renderRuntimeState({
       endpoints: { available: true, items: [] },
       mcp: { available: true, items: [
@@ -132,7 +132,7 @@ describe('zhin status runtime state', () => {
       ] },
       attention: { available: true, items: [], unavailable: [] },
     });
-    expect(lines).toContain('  ✓ github：待首次使用时连接');
+    expect(lines).toContain('  ✓ github：待连接');
     expect(lines).toContain('  ✗ docs：连接失败（HTTP 401）');
   });
 

@@ -164,6 +164,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (!aiConfig || typeof aiConfig !== 'object') return;
     provideAiProviders(resources, builtinAiProviders);
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    // A server removed from (and later added back to) the configuration starts without an old reason.
+    mcpStatus.retain(mcpEntries.map((entry) => entry.name));
     const externalPeers = resolveAgentHostExternalPeers(aiConfig);
     for (const peer of externalPeers) {
       const releasePeer = getProcessPeerRegistry().declareExternal(peer.platform, peer.userId, peer.label);

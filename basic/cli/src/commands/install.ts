@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
-import { PluginManagementWorkflow, isRegistryPackageRequest, projectPinsExactZhinVersions } from '@zhin.js/gateway/plugin-management';
+import { PluginManagementWorkflow, installSavesExact } from '@zhin.js/gateway/plugin-management';
 import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { configurationHints, probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
 import {
@@ -262,8 +262,8 @@ export function buildInstallArgs(plugin: string, type: string, options: InstallO
 
     case 'npm':
     default:
-      // npm 包名直接使用；项目里的 zhin 依赖都锁了精确版本时跟随这种写法（#1250，规则见 projectPinsExactZhinVersions）
-      if (!options.global && isRegistryPackageRequest(plugin.replace(/^npm:/u, '')) && projectPinsExactZhinVersions(readProjectManifest())) {
+      // npm 包名直接使用；项目里的 zhin 依赖都锁了精确版本、请求本身没写范围时跟随这种写法（#1250，规则见 installSavesExact）
+      if (!options.global && installSavesExact(plugin, readProjectManifest())) {
         parts.push('--save-exact');
       }
       break;

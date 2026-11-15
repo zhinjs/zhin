@@ -59,8 +59,9 @@ function createAgentRuntime(
       promptSections: () => listGenerationPromptSections(getSnapshot(), projectRoot),
       mcp: () => mergeMcpServers(configuration, getSnapshot()),
       testMcp: async (name: string) => {
+        // No Agent in this generation (AI off, or an Agent without the test): 503, not an internal error.
         const test = resolveCurrentAgentIntrospection(getSnapshot())?.testMcpServer;
-        if (!test) throw new Error('The running Agent cannot test MCP connections');
+        if (!test) return 'agent-unavailable' as const;
         return await test(name);
       },
     },
@@ -97,7 +98,7 @@ export function listMcpServerStatus(projectRoot: string, snapshot: RuntimeSnapsh
  * - `connected`: the Agent holds a live connection;
  * - `failed`: the last connect failed — `lastError` carries `{ category, message, exitCode?, at }`;
  *   the only state that goes to the attention inbox;
- * - `idle`: loaded by the Agent but not connected yet — "connects on first use" (待首次使用时连接). The
+ * - `idle`: loaded by the Agent but not connected yet — "waiting to connect" (待连接), as in the `ready` log. The
  *   configured servers connect when the generation is activated, so this is the short window before;
  * - `not_loaded`: in the configuration but not loaded by the running Agent (Agent off, or not reloaded yet).
  *

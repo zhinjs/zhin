@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PluginDeclarationError, PluginManagementWorkflow } from '../../src/plugin-management/workflow.js';
-import { isRegistryPackageRequest, projectPinsExactZhinVersions } from '../../src/plugin-management/exact-pins.js';
+import { installSavesExact, isRegistryPackageRequest, projectPinsExactZhinVersions } from '../../src/plugin-management/exact-pins.js';
 
 const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, features: [], plugins: [] };
 const ADAPTER_SCHEMA = {
@@ -155,10 +155,39 @@ describe('exact version pins follow the project (#1250)', () => {
     expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/x': 'latest', lodash: '4.17.21' } })).toBe(false);
     expect(projectPinsExactZhinVersions({ dependencies: { 'zhin-like': '1.0.0' } })).toBe(false);
     expect(projectPinsExactZhinVersions(undefined)).toBe(false);
+    // `=1.5.0` is the same exact pin written with the equals operator.
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '=1.5.0', '@zhin.js/cli': '1.6.0' } })).toBe(true);
+    expect(projectPinsExactZhinVersions({ dependencies: { 'zhin.js': '=1.x' } })).toBe(false);
     expect(isRegistryPackageRequest('@zhin.js/plugin-nettools@1.2.3')).toBe(true);
     expect(isRegistryPackageRequest('reminder')).toBe(true);
     expect(isRegistryPackageRequest('github:user/repo')).toBe(false);
     expect(isRegistryPackageRequest('./plugins/local')).toBe(false);
     expect(isRegistryPackageRequest('git+https://example.test/x.git')).toBe(false);
+  });
+});
+
+describe('a range named in the request is kept (#1250)', () => {
+  const pinned = { dependencies: { 'zhin.js': '1.5.0' } };
+  it('adds --save-exact for a bare name, an exact version or a tag, but not for a range', () => {
+    expect(installSavesExact('@zhin.js/plugin-nettools', pinned)).toBe(true);
+    expect(installSavesExact('@zhin.js/plugin-nettools@1.2.3', pinned)).toBe(true);
+    expect(installSavesExact('@zhin.js/plugin-nettools@latest', pinned)).toBe(true);
+    expect(installSavesExact('npm:foo', pinned)).toBe(true);
+    expect(installSavesExact('foo@^1.2.0', pinned)).toBe(false);
+    expect(installSavesExact('@scope/foo@~1.2', pinned)).toBe(false);
+    expect(installSavesExact('foo@>=1.0.0', pinned)).toBe(false);
+    expect(installSavesExact('foo@1.x', pinned)).toBe(false);
+    expect(installSavesExact('foo', { dependencies: { 'zhin.js': '^1.5.0' } })).toBe(false);
+    expect(installSavesExact('github:user/repo', pinned)).toBe(false);
+  });
+
+  it('passes the requested range through without --save-exact', async () => {
+    const project = await readProject();
+    project.dependencies = { 'zhin.js': '1.5.0' };
+    await writeFile(join(root, 'package.json'), JSON.stringify(project));
+    const calls: (readonly string[])[] = [];
+    await new PluginManagementWorkflow(root, { installDependencies: async (args, projectRoot) => { calls.push(args); await packageManager(args, projectRoot); } })
+      .install('reminder@^1.0.0', undefined, undefined, { enable: false });
+    expect(calls).toEqual([['add', 'reminder@^1.0.0']]);
   });
 });

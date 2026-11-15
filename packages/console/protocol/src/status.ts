@@ -43,8 +43,9 @@ export interface ConsoleMcpFailure {
 /**
  * - `connected`: live connection;
  * - `failed`: last connect failed, see `lastError`; the only state reported in the attention inbox;
- * - `idle`: loaded by the Agent, not connected yet — shown as "connects on first use" (待首次使用时连接),
- *   not a problem to act on;
+ * - `idle`: loaded by the Agent, not connected yet — shown as "waiting to connect" (待连接). The
+ *   configured servers connect when the generation is activated, so this is the moment before; not a
+ *   problem to act on;
  * - `not_loaded`: configured but not loaded by the running Agent (Agent off, or not reloaded yet).
  */
 export type ConsoleMcpServerStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';

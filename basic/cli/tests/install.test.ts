@@ -128,6 +128,13 @@ describe('install dry-run preview and exact pins (#1250)', () => {
     await projectWith({ 'zhin.js': '1.5.0', '@zhin.js/adapter-sandbox': '1.2.3', lodash: '^4.17.0' }, { '@zhin.js/cli': '1.6.0' });
     expect(buildInstallArgs('@zhin.js/plugin-nettools', 'npm', {})).toEqual(['add', '--save-exact', '@zhin.js/plugin-nettools']);
     expect(buildInstallArgs('@zhin.js/plugin-nettools@latest', 'npm', {})).toEqual(['add', '--save-exact', '@zhin.js/plugin-nettools@latest']);
+    // A range in the request is what the user asked for.
+    expect(buildInstallArgs('@zhin.js/plugin-nettools@^1.2.0', 'npm', {})).toEqual(['add', '@zhin.js/plugin-nettools@^1.2.0']);
+  });
+
+  it('treats =1.5.0 as an exact pin', async () => {
+    await projectWith({ 'zhin.js': '=1.5.0', '@zhin.js/adapter-sandbox': '1.2.3' });
+    expect(buildInstallArgs('@zhin.js/plugin-nettools', 'npm', {})).toContain('--save-exact');
   });
 
   it('keeps the default range when any zhin dependency uses ^ or ~', async () => {

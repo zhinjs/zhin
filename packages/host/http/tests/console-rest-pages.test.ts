@@ -757,6 +757,64 @@ describe('console-rest-pages introspection', () => {
     })).status).toBe(403);
   });
 
+  it('limits MCP tests per server and overall, and audits each test (#1250)', async () => {
+    const releases: Array<() => void> = [];
+    const testMcp = vi.fn(async (name: string) => {
+      if (name.startsWith('slow')) await new Promise<void>(resolve => releases.push(resolve));
+      return name === 'down'
+        ? { ok: false as const, name, durationMs: 4, failure: { category: 'auth' as const, message: 'HTTP 401 token=secret', at: 1 } }
+        : { ok: true as const, name, toolCount: 2, durationMs: 3 };
+    });
+    const runtime = fakeAgentRuntime();
+    runtime.introspection!.testMcp = testMcp;
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const audited: Record<string, unknown>[] = [];
+    host.tokenRegistry.useAccessProvider({ initialized: () => false, authenticate: async () => null, audit: entry => { audited.push({ ...entry }); } });
+    registerConsoleRestPages(host, baseCtx({ acquireAgentRuntime: () => lease(runtime) }), { mcpTestCooldownMs: 60_000 });
+    const { port } = await host.listen();
+    const post = (name: string) => fetch(`http://127.0.0.1:${port}/api/introspection/mcp/test`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+
+    expect((await post('github')).status).toBe(200);
+    const again = await post('github');
+    expect(again.status).toBe(429);
+    expect(Number(again.headers.get('retry-after'))).toBeGreaterThanOrEqual(59);
+    expect((await post('down')).status).toBe(200);
+
+    // At most two tests at once, whichever servers they are for.
+    const first = post('slow-a');
+    const second = post('slow-b');
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    const third = await post('other');
+    expect(third.status).toBe(429);
+    expect(third.headers.get('retry-after')).toBe('1');
+    releases.forEach(release => release());
+    expect((await first).status).toBe(200);
+    expect((await second).status).toBe(200);
+
+    // Who, which server and the outcome; never the failure message.
+    expect(audited.filter(entry => entry.action === 'mcp.test')).toEqual([
+      expect.objectContaining({ action: 'mcp.test', target: 'github', outcome: 'ok', detail: { result: 'connected', toolCount: 2, durationMs: 3 } }),
+      expect.objectContaining({ action: 'mcp.test', target: 'down', outcome: 'ok', detail: { result: 'failed', category: 'auth', durationMs: 4 } }),
+      expect.objectContaining({ target: 'slow-a', outcome: 'ok' }),
+      expect.objectContaining({ target: 'slow-b', outcome: 'ok' }),
+    ]);
+    expect(JSON.stringify(audited)).not.toContain('secret');
+    expect(audited.every(entry => typeof entry.actor === 'string')).toBe(true);
+  });
+
+  it('answers 503 when the request generation has no Agent (#1250)', async () => {
+    const runtime = fakeAgentRuntime();
+    runtime.introspection!.testMcp = async () => 'agent-unavailable' as const;
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(runtime) }));
+    const response = await fetch(`${base}/api/introspection/mcp/test`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'github' }),
+    });
+    expect(response.status).toBe(503);
+  });
+
   it('returns target projection diagnostics through the same full-scope preview route', async () => {
     const runtime = fakeAgentRuntime();
     const target = { endpoint: { adapter: 'test', id: 'endpoint' }, kind: 'group', id: 'room' };

@@ -21,7 +21,7 @@ import { resolveCommand } from '../onboarding/package-manager.js';
 import { dependenciesInPlace, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
 import { officialPluginCandidates, undeclaredPluginMessage } from './plugin-candidates.js';
 import { hotToggleBlocker, type HotToggleBlocker } from './hot-toggle.js';
-import { isRegistryPackageRequest, projectPinsExactZhinVersions } from './exact-pins.js';
+import { installSavesExact } from './exact-pins.js';
 import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
@@ -486,7 +486,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
         || existing.error || existing.version !== spec.version) {
         const source = options.source ?? spec.spec;
         // #1250: follow the project's own style when its Zhin packages are pinned to exact versions.
-        const exact = isRegistryPackageRequest(source) && projectPinsExactZhinVersions(installedProject);
+        const exact = installSavesExact(source, installedProject);
         await this.#pnpm(['add', ...(options.saveDev ? ['-D'] : []), ...(exact ? ['--save-exact'] : []), source]);
       }
       completed.push('dependency-install');
