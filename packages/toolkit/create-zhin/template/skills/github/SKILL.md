@@ -8,6 +8,9 @@ keywords:
   - pr
   - release notes
   - 写 issue
+  - PR 描述
+  - 提 PR
+  - 发布说明
 tags:
   - github
   - collaboration

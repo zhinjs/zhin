@@ -20,6 +20,7 @@ export const CONTEXT_BUDGET_SEGMENTS = [
   'tool_index',
   'skill_catalog',
   'agent_catalog',
+  'knowledge_index',
   'active_skills',
   'memory',
   'bootstrap',
@@ -37,6 +38,7 @@ export const FIXED_CONTEXT_SEGMENTS: ReadonlySet<ContextBudgetSegment> = new Set
   'tool_index',
   'skill_catalog',
   'agent_catalog',
+  'knowledge_index',
   'memory',
   'bootstrap',
 ]);
@@ -99,6 +101,8 @@ const SECTION_SEGMENT: Readonly<Record<string, ContextBudgetSegment>> = {
   '§11_bootstrap': 'bootstrap',
   // Keep specialist instructions in their previous category; catalog sizes are split out below.
   '§11_capabilities': 'bootstrap',
+  // #1250 b27: project knowledge base index (file names and headings).
+  '§11b_knowledge_index': 'knowledge_index',
 };
 
 function toolSchemaTokens(tools: readonly AgentTool[]): number {
@@ -163,7 +167,8 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
   // Legacy callers may still carry the tool index in system; current turns mark it in user context.
   segments.tool_index = estimatePromptTokens(headedBlock(input.systemPrompt, DEFERRED_TOOL_INDEX_HEADING));
 
-  const attributedSystem = segments.tool_index + segments.skill_catalog + segments.agent_catalog + segments.memory + segments.bootstrap;
+  const attributedSystem = segments.tool_index + segments.skill_catalog + segments.agent_catalog
+    + segments.knowledge_index + segments.memory + segments.bootstrap;
   segments.system = Math.max(0, systemTokens - attributedSystem);
   segments.tool_schemas = toolSchemaTokens(input.loadedTools);
   segments.output_schema = input.outputSchema ? estimatePromptTokens(JSON.stringify(input.outputSchema)) : 0;

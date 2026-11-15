@@ -24,6 +24,14 @@ describe('resolveHostProtectedPaths (#1030 P0)', () => {
     expect(classifyHostPath(join(root, 'zhin.config.yml'), paths)).toBe('self');
   });
 
+  it('protects the configured knowledge base directory: its headings enter the system prompt (#1250 b27)', async () => {
+    const paths = await resolveHostProtectedPaths(root, {}, { knowledgeDir: 'knowledge' });
+    expect(classifyHostPath(join(root, 'knowledge/faq.md'), paths)).toBe('self');
+    expect(classifyHostPath(join(root, 'knowledge-notes.md'), paths)).toBeUndefined();
+    const without = await resolveHostProtectedPaths(root, {});
+    expect(classifyHostPath(join(root, 'knowledge/faq.md'), without)).toBeUndefined();
+  });
+
   it('protects the bot instruction file BOT.md like AGENTS.md (#1250)', async () => {
     const paths = await resolveHostProtectedPaths(root, {});
     expect(classifyHostPath(join(root, 'BOT.md'), paths)).toBe('self');

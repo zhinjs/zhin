@@ -185,6 +185,7 @@ const SEGMENT_LABEL: Record<ContextBudgetSegment, string> = {
   tool_index: '按需工具索引',
   skill_catalog: '技能目录',
   agent_catalog: '专家 agent 目录',
+  knowledge_index: '知识库索引',
   active_skills: '已加载技能',
   memory: '记忆',
   bootstrap: 'bootstrap',
