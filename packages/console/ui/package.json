@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-ui",
-  "version": "0.0.0",
+  "version": "1.0.0-0",
   "description": "Zhin Console component library: shared React components, page shell and design tokens for the Console and plugin pages, with precompiled CSS (ADR 0063)",
   "type": "module",
   "main": "./dist/index.js",

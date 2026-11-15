@@ -17,7 +17,7 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 - `@zhin.js/console-ui/tokens.css`：只有令牌（颜色、圆角、控件高度、间距、阴影、`--console-content-max`）。深色由祖先上的 `.dark` 切换，配色由 `<html data-palette>` 切换。
 - `@zhin.js/console-ui/cn`：只有 `cn()`（`@zhin.js/client` 由此再导出 `cn`）。
 
-插件的手写 `.tsx` 页面把本包声明为 `peerDependencies`（例如 `"@zhin.js/console-ui": "^0.1.0"`）：`@zhin.js/pagemanager` 不会把它打进插件，页面拿到的是 Console 已加载的那份组件和 CSS；版本不兼容时会明确报错，见下文「共享模块版本」。
+插件的手写 `.tsx` 页面把本包声明为 `peerDependencies`（例如 `"@zhin.js/console-ui": "^1.0.0"`）：`@zhin.js/pagemanager` 不会把它打进插件，页面拿到的是 Console 已加载的那份组件和 CSS；版本不兼容时会明确报错，见下文「共享模块版本」。
 
 ## 导出
 
