@@ -80,6 +80,40 @@ export function redactSecretText(value: string): string {
 }
 
 /**
+ * ADR 0060 §3.3 (zhinjs/zhin#1250): a chat-owner claim message is the keyword `认领` or `claim` (any
+ * letter case) as the first word, whitespace, then exactly one token, and nothing else. Ignored around
+ * it: surrounding whitespace, up to three punctuation marks before the keyword (a command prefix such as
+ * `#` or `/`, or a quote `「`) and around the token (`<码>`, `」`), copied from a hint.
+ */
+const CHAT_OWNER_CLAIM_TEXT = /^[^\p{L}\p{N}\s]{0,3}\s*(认领|claim)\s+[^\p{L}\p{N}\s]{0,3}(\S+?)[^\p{L}\p{N}\s]{0,3}$/iu;
+/**
+ * Every line of that shape inside a longer text, also after leading mentions (`@bot `) — the
+ * writer-side backstop, which does not know the conversation's prefix.
+ */
+const CHAT_OWNER_CLAIM_LINE = /^(\s*(?:@\S+\s+)*[^\p{L}\p{N}\s]{0,3}\s*(?:认领|claim)\s+)\S+(\s*)$/gimu;
+
+/**
+ * Whether `text` is a chat-owner claim message, and its keyword (as typed) and code. `prefix` (the
+ * adapter's command prefix, which may be a word) may precede the keyword; the bare form matches too.
+ * A message where the keyword is not the first word (`我想认领这个任务`, `请认领 X`), is followed by no
+ * whitespace (`认领了`) or by more than one token (`claim this task`) is ordinary chat.
+ */
+export function matchChatOwnerClaimText(text: string, prefix = ''): Readonly<{ keyword: string; code: string }> | undefined {
+  const body = text.trim();
+  const candidates = prefix && body.startsWith(prefix) ? [body.slice(prefix.length).trim(), body] : [body];
+  for (const candidate of candidates) {
+    const match = CHAT_OWNER_CLAIM_TEXT.exec(candidate);
+    if (match) return Object.freeze({ keyword: match[1]!, code: match[2]! });
+  }
+  return undefined;
+}
+
+/** Replaces the code of every claim-shaped line with `***` (conversation records, traces, logs). */
+export function redactChatOwnerClaimText(text: string): string {
+  return text.includes('认领') || /claim/iu.test(text) ? text.replace(CHAT_OWNER_CLAIM_LINE, '$1***$2') : text;
+}
+
+/**
  * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
  * token-shaped text are hidden. Execution, fingerprints and approval scope keys still use the exact arguments.
  */

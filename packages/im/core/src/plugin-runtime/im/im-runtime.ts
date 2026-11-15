@@ -36,6 +36,7 @@ import {
   imOperationResourcesToken,
   type IncomingMessage,
   type OutboundMessageService,
+  type InboundSecretGuard,
   type MessageSenderRef,
   type SendRequest,
 } from './contracts.js';
@@ -91,6 +92,11 @@ export interface ImRuntimeOptions {
   readonly conversationEvents?: ConversationEventStore;
   /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /**
+   * Recognizes messages that carry a one-time secret (ADR 0060 §3.3: the chat-owner claim code) before
+   * anything records, logs or routes them; see {@link InboundSecretGuard}.
+   */
+  readonly inboundSecret?: InboundSecretGuard;
   /**
    * 探测 `inboundClaim` 这类进程级 prompt 在该 Endpoint 上、对该发送者是否有待回答项。
    * Room Router 用它把消息送到持有待回答状态的成员 Endpoint。必须同步、无副作用。
@@ -183,6 +189,7 @@ export class ImRuntime implements OutboundMessageService {
         return readLeasedRootResource(snapshots, input.lease, imOperationResourcesToken)?.open({ ...input, snapshots });
       },
       inboundClaim: options.inboundClaim,
+      ...(options.inboundSecret ? { inboundSecret: options.inboundSecret } : {}),
       originClassifier,
       deduper,
       registry,

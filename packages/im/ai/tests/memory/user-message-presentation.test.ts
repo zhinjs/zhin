@@ -22,6 +22,12 @@ describe('user-message-presentation', () => {
     scope: 'group' as const,
   };
 
+  it('stores a claim-shaped user message with its code masked (ADR 0060 §3.3 backstop, #1250)', () => {
+    expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).not.toContain('ABCD2345');
+    expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).toContain('认领 ***');
+    expect(serializeAgentMessage(createUserMessage('我想认领这个任务', undefined, 1, actor)).payload).toContain('我想认领这个任务');
+  });
+
   it('strips an origin-bearing prefix back to the canonical body and round-trips origin', () => {
     const message = createUserMessage('你好', undefined, 1, { ...actor, origin: 'human' });
     const rendered = renderUserMessageForLlm(message);

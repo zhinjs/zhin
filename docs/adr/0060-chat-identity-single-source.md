@@ -110,7 +110,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
-3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；私聊机器人发送 `认领 <码>`（`claim <code>`）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
+3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
 
 ### 4. 迁移与兼容
 
@@ -361,6 +361,16 @@ export type ChatScopeRef =
 - **归并**：任一方带 Console 链接时需要全局 `iam.manage`。
 - **非全局管理者看不到链接信息**：`consoleLink`、暗示链接的 `linkMethod`（`code` / `console`）、指向 Console 用户的 `createdBy`，以及从链接得出的授予者名（`grantedByName`），都只对全局 `iam.manage` 持有者显示。
 - **`chat-principals.import`**：导入的授予一律记为 `grantedBy: import:<导入者>`，忽略文件里的 `grantedBy` 标签。
+
+### 认领码的入站处理（zhinjs/zhin#1250 第 23 批）
+
+根因：`认领` / `claim` 原是普通根命令，要带适配器的命令前缀才触发，而所有提示都写「私聊发送『认领 <码>』」。配了 `commandPrefix` 的账号上，按提示发送的消息没有匹配到命令，整条消息（含认领码）作为普通聊天交给了外部模型，并进入会话历史与 trace；用户也得不到任何反馈。
+
+- **精确形态**：`matchChatOwnerClaimText`（`@zhin.js/kernel`）——整条消息去掉首尾空白后，关键词 `认领` / `claim`（不分大小写）是第一个词，后接空白与**恰好一个词**（`^(认领|claim)\s+\S+$`）。容忍：命令前缀（含词形前缀）、关键词前至多 3 个标点（`#`、`/`、`「`）、码前后至多 3 个标点（`<码>`、`」`，照抄提示时常见）。群聊开头的 @ 提及先去掉（与命令匹配一致）。关键词不在开头（`我想认领这个任务`、`请认领 X`）、紧跟其他字（`认领了`）、后面不止一个词（`claim this task`）都是普通聊天。
+- **最早处理**：Core 的 `ImRuntimeOptions.inboundSecret`（`InboundSecretGuard`）在入站构造消息后、写调试日志之前识别；实例装配 `createChatOwnerClaimGuard`。命中的消息只交给认领处理器：不写会话历史，不经中间件、事件处理器、命令、交互提示与 Agent，日志与消息事件流只出现 `认领 ***`，结局记为 `command_replied`（`reason: secret`，命令 `claim`）。去重、机器人来源等判定照旧（重复投递不回复）。
+- **适用范围**：认领开启时任何会话都接手（群聊里的正确码照旧作废轮换；Sandbox 拒绝）；已有全局 owner 或认领未开启时只接手私聊（回复「当前不接受认领」），群聊中这类文字照常聊天——此时不存在有效的码。带前缀的 `#认领 <码>` 命令保留。
+- **保留不变**：只接受真实平台私聊、sandbox 不接受、同一码连错 5 次轮换且同一发送者窗口内至多计 2 次、码只用一次。
+- **写入端兜底**：会话记录（`conversation_events`、Agent 会话消息）与 trace（`scrubSecrets`）写入前用 `redactChatOwnerClaimText` 把认领形态行里的码替换为 `***`；不追溯已落盘的记录。
 
 ## 落盘位置（计划）
 

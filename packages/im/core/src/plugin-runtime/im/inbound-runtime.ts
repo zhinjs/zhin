@@ -22,6 +22,8 @@ import {
   type CaptureEndpointOperationInput,
   type CapturedEndpointOperation,
   type IncomingMessage,
+  type InboundSecretGuard,
+  type InboundSecretMatch,
   type Message,
   type MessageDispatchResult,
   type MessageSenderRef,
@@ -50,7 +52,7 @@ import {
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-ledger.js';
 import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
-import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
+import { defaultCommandPrefixResolver, MessageDispatcher, normalizeCommandInputText } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
 import {
   formatConversationLog,
@@ -70,6 +72,8 @@ interface InboundRuntimeContext {
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
   createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
+  readonly inboundSecret?: InboundSecretGuard;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
   readonly originClassifier?: InboundOriginClassifier;
   /** Cross-Endpoint dedup of human group messages. Absent: no dedup. */
@@ -209,11 +213,14 @@ export class InboundRuntime {
         ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
       });
       this.context.diagnostics?.identify(conversation);
+      // ADR 0060 §3.3: a one-time secret is recognized before it is logged, recorded or routed.
+      const secret = this.#matchSecret(input, lease.value);
+      const visibleContent = secret ? secret.redacted : input.content;
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
         sender: `${input.sender?.name || 'undefined'}(${input.sender?.id || 'undefined'})`,
-        preview: truncatePreview(input.content),
+        preview: truncatePreview(visibleContent),
       }));
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
@@ -298,8 +305,8 @@ export class InboundRuntime {
             content,
             incoming: {
               sender: enrichedSender,
-              content: input.content,
-              segments: input.segments,
+              content: visibleContent,
+              ...(secret ? {} : { segments: input.segments }),
               messageId: input.message?.id,
               timestamp: receivedAt,
               endpointId: input.endpointId,
@@ -391,7 +398,8 @@ export class InboundRuntime {
             },
           },
         );
-        const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
+        // A secret-bearing message never enters the conversation history.
+        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender);
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));
@@ -412,7 +420,7 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(input.content),
+            contentPreview: previewMessageContent(visibleContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -431,7 +439,27 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(input.content),
+            contentPreview: previewMessageContent(visibleContent),
+            ...(input.message?.id ? { messageId: input.message.id } : {}),
+            timestamp: receivedAt,
+          });
+          return result;
+        }
+        if (secret) {
+          // Handled here alone: no middleware, handler, command, interaction prompt or Agent sees it.
+          ledger.enter('command');
+          this.context.diagnostics?.route('command');
+          const content = await secret.handle(message);
+          ledger.report({ outcome: 'command_replied', reason: 'secret', stage: 'command', command: secret.name, owner: lease.value.root });
+          result = Object.freeze({ matched: true, status: 'executed', command: secret.name, owner: lease.value.root });
+          this.context.diagnostics?.dispatch(result);
+          await commandOperation?.stopProgress();
+          if (content !== undefined) await message.$replyFrom(lease.value.root, content);
+          this.context.publish({
+            direction: 'inbound',
+            conversation,
+            ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
+            contentPreview: previewMessageContent(visibleContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -511,7 +539,7 @@ export class InboundRuntime {
           direction: 'inbound',
           conversation,
           ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-          contentPreview: previewMessageContent(input.content),
+          contentPreview: previewMessageContent(visibleContent),
           ...(input.message?.id ? { messageId: input.message.id } : {}),
           timestamp: receivedAt,
         });
@@ -525,6 +553,19 @@ export class InboundRuntime {
       throw error;
     } finally {
       await close();
+    }
+  }
+
+  /** The guard's match for this message; a throwing guard matches nothing (logged). */
+  #matchSecret(input: IncomingMessage, snapshot: RuntimeSnapshot): InboundSecretMatch | undefined {
+    const guard = this.context.inboundSecret;
+    if (!guard) return undefined;
+    try {
+      return guard.match({ text: normalizeCommandInputText(input), prefix: this.#dispatcher.prefixOf(input, snapshot),
+        conversation: input.conversation, snapshot });
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
+      return undefined;
     }
   }
 

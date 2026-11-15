@@ -33,7 +33,7 @@ export async function readChatOwnerClaim(root: string, instance: Readonly<{ pid?
 
 export function renderChatOwnerClaim(claim: ChatOwnerClaimInfo): string[] {
   return [
-    `聊天主人：尚无全局 owner。私聊机器人发送「认领 ${claim.code}」（claim ${claim.code}）即可认领；`,
-    '  认领码一次性，实例重启后轮换；也可在 Console「聊天角色」页授予。',
+    `聊天主人：尚无全局 owner。在私聊中直接向机器人发送「认领 ${claim.code}」（claim ${claim.code}，不需要命令前缀）即可认领；`,
+    '  认领码一次性，实例重启后轮换；只接受私聊，发到群里会作废。也可在 Console「聊天角色」页授予。',
   ];
 }

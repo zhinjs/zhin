@@ -52,7 +52,9 @@ export type { Dict } from './utils.js';
 export {
   isPromptPayloadKey,
   isSecretLikeKey,
+  matchChatOwnerClaimText,
   redactApprovalDisplay,
+  redactChatOwnerClaimText,
   redactDecisionPayload,
   redactSecretText,
 } from './redaction.js';

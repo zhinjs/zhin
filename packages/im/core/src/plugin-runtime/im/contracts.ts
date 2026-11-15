@@ -273,6 +273,32 @@ export interface OutboundMessageService {
 }
 
 
+/**
+ * Inbound secret guard (ADR 0060 §3.3, zhinjs/zhin#1250): recognizes a message that carries a one-time
+ * secret (the chat-owner claim code) before anything else sees it. A recognized message is never
+ * recorded in the conversation history, never handed to middlewares, handlers, commands, interaction
+ * prompts or the Agent, and is logged and published only as {@link InboundSecretMatch.redacted}.
+ */
+export interface InboundSecretGuard {
+  match(input: Readonly<{
+    /** The text a command would be matched against (leading quotes and mentions dropped, trimmed). */
+    text: string;
+    /** The command prefix of this conversation (`''`: none). */
+    prefix: string;
+    conversation: ConversationRef;
+    snapshot: RuntimeSnapshot;
+  }>): InboundSecretMatch | undefined;
+}
+
+export interface InboundSecretMatch {
+  /** Reported as the outcome's command (for example `claim`). */
+  readonly name: string;
+  /** What logs and the message event stream show instead of the text (for example `认领 ***`). */
+  readonly redacted: string;
+  /** Handles the message; the returned content is replied through the normal send chain by the root Plugin. */
+  handle(message: Message): Promise<SendContent | undefined> | SendContent | undefined;
+}
+
 export interface MessageDispatchResult {
   readonly matched: boolean;
   readonly status?: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';

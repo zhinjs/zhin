@@ -207,6 +207,12 @@ describe('redaction', () => {
     expect(scrubSecrets('{"refresh_token":"1//abc"}')).toBe('{"refresh_token":"[redacted]"}');
     expect(scrubSecrets('plain text stays')).toBe('plain text stays');
   });
+
+  it('masks the code of a chat-owner claim message (ADR 0060 §3.3 backstop, #1250)', () => {
+    expect(scrubSecrets('认领 ABCD2345')).toBe('认领 ***');
+    expect(scrubSecrets('#claim abcd2345')).toBe('#claim ***');
+    expect(scrubSecrets('我想认领这个任务')).toBe('我想认领这个任务');
+  });
 });
 
 describe('file store', () => {

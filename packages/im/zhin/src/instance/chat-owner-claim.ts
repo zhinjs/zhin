@@ -10,20 +10,29 @@
  *   it; every start rotates it. Five wrong attempts rotate it as well, but one sender counts for
  *   at most {@link CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES} of them per window: after that its
  *   attempts are refused (`locked`) without being counted, so no single sender can keep rotating it.
- * - Accepted only in a private chat (ADR 0060 Q8) on a real platform adapter: a correct code sent
+ * - Accepted only in a private chat (ADR 0060 Q8) on a real platform adapter, where the bare form
+ *   `认领 <码>` / `claim <code>` works without the adapter's command prefix (#1250; the prefixed command
+ *   still works): a correct code sent
  *   in a group is burnt and rotated (bystanders saw it); adapters whose capability profile marks a
  *   local simulation (`runtime.sandbox`, clients pick their own sender id) never accept it.
  * - Audited as `chat-roles.claim`; the audit and logs of attempts carry only the first 8 hex digits
  *   of the code's SHA-256, never the code.
+ * - Kept out of chat (#1250): {@link createChatOwnerClaimGuard} takes every claim-shaped message
+ *   (`matchChatOwnerClaimText`: keyword first, then exactly one token) at the start of inbound, with or
+ *   without a prefix and whether or not a command matches — while a code is open in any conversation,
+ *   afterwards in private chats. Such a message is never recorded, logged, traced or handed to the
+ *   Agent; it gets the claim reply (usage, refusal or result) only.
  */
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
+import { matchChatOwnerClaimText } from '@zhin.js/kernel';
 import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
+import type { InboundSecretGuard, Message } from '@zhin.js/core/runtime';
 import type { InstanceChatRoleService } from './chat-roles.js';
 import {
   chatRoleMigrationAdapterKinds, type ChatRoleAudit, type ChatRoleMigrationAdapterKind, type ChatRoleMigrationLogger,
@@ -137,7 +146,7 @@ export class ChatOwnerClaim {
     const file = this.#file;
     // Never the code itself: the log reaches SystemLog and `GET /logs`.
     this.#options.logger.warn(`聊天角色：还没有全局 owner（聊天主人）。认领码见 zhin status（或本机 ${CHAT_OWNER_CLAIM_FILE}），`
-      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；私聊机器人发送「认领 <码>」即成为全局 owner。认领码一次性，实例重启后轮换。`
+      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀）即成为全局 owner。认领码一次性，实例重启后轮换。`
       + '也可以在 Console「聊天角色」页授予全局 owner。'
       + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
     if (!file) return;
@@ -233,9 +242,9 @@ export class ChatOwnerClaim {
 
 const messages = createMessages({
   description: { 'zh-CN': '尚无聊天主人时，私聊发送认领码成为全局 owner', en: 'Become the global chat owner with the claim code (private chat, only while there is none)' },
-  usage: { 'zh-CN': '用法：认领 <认领码>（码见 zhin status，只接受私聊）', en: 'Usage: claim <code> (zhin status shows the code; private chat only)' },
+  usage: { 'zh-CN': '用法：在私聊中直接发送「认领 <认领码>」（不需要命令前缀；码见 zhin status）', en: 'Usage: send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code)' },
   inactive: { 'zh-CN': '当前不接受认领：本机器人已有主人，或认领未开启。请联系主人在 Console「聊天角色」页授予角色。', en: 'Claims are closed: this bot already has an owner, or claims are not open. Ask the owner to grant you a role in the Console (Chat roles).' },
-  notPrivate: { 'zh-CN': '认领只接受私聊。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only. If that was a valid code it has been revoked; zhin status shows the new one.' },
+  notPrivate: { 'zh-CN': '认领只接受私聊：请在私聊中直接向机器人发送「认领 <码>」。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only: send 「claim <code>」 to the bot privately. If that was a valid code it has been revoked; zhin status shows the new one.' },
   simulated: { 'zh-CN': '这个适配器上不接受认领（模拟适配器的发言者 id 可由客户端自选）。请在真实平台私聊机器人。', en: 'Claims are not accepted on this adapter (a simulation lets clients choose the sender id). Message the bot privately on a real platform.' },
   invalid: { 'zh-CN': '认领码不正确或已失效。', en: 'The claim code is wrong or no longer valid.' },
   locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },
@@ -291,4 +300,29 @@ export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim;
       },
     }));
   };
+}
+
+/**
+ * #1250: takes claim-shaped messages (`认领 <码>` / `claim <code>`, prefixed or not) before anything records,
+ * logs or routes them, so a code never reaches the Agent, the conversation history or a trace. While a code
+ * is open this applies in every conversation (a correct code sent in a group is still burnt); afterwards
+ * only in private chats, where the reply says claims are closed — in groups such text stays ordinary chat.
+ */
+export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerClaim }>): InboundSecretGuard {
+  const guard: InboundSecretGuard = {
+    match: ({ text, prefix, conversation, snapshot }) => {
+      const found = matchChatOwnerClaimText(text, prefix);
+      if (!found || (!options.claim.active && conversation.kind !== 'private')) return undefined;
+      return Object.freeze({
+        name: 'claim',
+        redacted: `${found.keyword} ***`,
+        handle: (message: Message) => {
+          const actor = featureChatActor(snapshot, message);
+          const adapterKind = actor ? chatRoleMigrationAdapterKinds(snapshot)(actor.identity.adapter) : undefined;
+          return executeOwnerClaim({ code: found.code, actor, adapterKind, locale: message.locale }, options.claim);
+        },
+      });
+    },
+  };
+  return Object.freeze(guard);
 }

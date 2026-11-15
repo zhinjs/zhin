@@ -95,7 +95,7 @@ const messages = createMessages({
   denied: { 'zh-CN': '你在该范围没有 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You do not hold the admin role at that scope. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
   // ADR 0060 §5.3: platform standing is not a zhin role; say where roles come from.
   deniedStanding: { 'zh-CN': '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You are a group owner / admin on the platform, but that is not a zhin role; this scope needs the zhin admin role. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
-  noOwnerHint: { 'zh-CN': '本机器人还没有主人：部署者可私聊机器人发送「认领 <码>」（码见 zhin status）。', en: 'This bot has no owner yet: the deployer can send 「claim <code>」 to it in a private chat (zhin status shows the code).' },
+  noOwnerHint: { 'zh-CN': '本机器人还没有主人：部署者可在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀；码见 zhin status）。', en: 'This bot has no owner yet: the deployer can send 「claim <code>」 to it in a private chat (no command prefix needed; zhin status shows the code).' },
   roleDenied: { 'zh-CN': '你在该范围的角色不足以授予或撤销 {role}。', en: 'Your role at that scope cannot grant or revoke {role}.' },
   ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。', en: 'Only an owner at a higher level can grant or revoke owner; global owners are granted on the Console "Chat roles" page.' },
   peerDenied: {

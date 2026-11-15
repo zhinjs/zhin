@@ -63,6 +63,7 @@
     "test": "vitest run --root ../../.. packages/im/ai/tests"
   },
   "dependencies": {
+    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "undici": "^8.12.2"

@@ -120,6 +120,7 @@
     "@zhin.js/harness": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/permission": "workspace:*",
