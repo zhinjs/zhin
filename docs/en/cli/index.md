@@ -110,6 +110,14 @@ The file records the **current** absolute `node` path and the project's `node_mo
 
 When `zhin stop` meets a foreground gateway run by a service: with a legacy service file (`Restart=always` / `KeepAlive: true`, which would start the gateway again at once) it refuses and points to `zhin service stop` or a fresh `zhin service install`; with a current file it stops and says when the bot starts again. The scaffold no longer writes service files; the `.service`, `.plist`, `install-service.ps1` and `*-task.xml` files in older project roots are unused and can be deleted.
 
+Service files cannot contain control characters: `zhin service install` fails when the project path contains a newline or similar. The commands printed for you to copy are quoted for their shell (POSIX single quotes on Linux / macOS, PowerShell single quotes on Windows), and a target service file that is a symbolic link is not written.
+
+Windows limitations (unchanged in this release):
+- The scheduled task uses the `InteractiveToken` logon type, so **it does not start after boot until a user logs on**; use NSSM when the bot must run without a logged-on user.
+- The task's `RestartOnFailure` only retries when the task **fails to start**; a gateway that crashes while running is not started again.
+- `zhin service stop` uses `schtasks /End`, which **terminates** the process: the gateway cannot stop the instance gracefully.
+- NSSM installs a Windows service; `zhin service start|stop|restart` only control the scheduled task, so manage the NSSM service with `nssm start|stop|restart <name>`.
+
 ### db: restricted account of the Console SQL editor {#db}
 
 ```bash

@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import {
   isDatabaseDriverAvailable,
   probeDatabaseConnection,
@@ -91,7 +92,7 @@ export interface SetupDatabaseApplyResult {
 
 const UNCHANGED_DATABASE: SetupDatabaseApplyResult = Object.freeze({ changed: false, restartRequired: false, notice: '' });
 
-/** Same keys and values; a sqlite filename is compared as a normalized relative path. */
+/** Same keys and raw values; a sqlite filename is compared as a normalized relative path. */
 function sameDatabaseBlock(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
   const normalize = (block: Record<string, unknown>) => {
     const out: Record<string, unknown> = {};
@@ -104,8 +105,10 @@ function sameDatabaseBlock(left: Record<string, unknown>, right: Record<string, 
   const a = normalize(left);
   const b = normalize(right);
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  // Field by field on the raw values: a `${VAR}` reference, an object (e.g. `console`) or a number
+  // only equals the same value.
   for (const key of keys) {
-    if (a[key] !== b[key] && String(a[key]) !== String(b[key])) return false;
+    if (!isDeepStrictEqual(a[key], b[key])) return false;
   }
   return true;
 }

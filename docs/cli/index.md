@@ -110,6 +110,14 @@ zhin service uninstall [--user]
 
 `zhin stop` 遇到由服务托管的前台网关时：服务文件是旧版（`Restart=always` / `KeepAlive: true`，网关会被立即拉起）就拒绝执行并提示改用 `zhin service stop` 或重新 `zhin service install`；新版服务文件则正常停止并说明何时会再启动。脚手架不再生成任何服务文件；老项目根目录里的 `.service`、`.plist`、`install-service.ps1`、`*-task.xml` 不再使用，可以删除。
 
+服务文件里不能出现控制字符：项目路径含换行等字符时 `zhin service install` 直接报错。打印出来供复制的命令已按 shell（Linux / macOS 用 POSIX 单引号，Windows 用 PowerShell 单引号）转义；目标服务文件是符号链接时拒绝写入。
+
+Windows 的限制（本版不改）：
+- 计划任务用 `InteractiveToken` 登录类型，**没有用户登录时不会在开机后启动**；需要无人登录也运行时改用 NSSM。
+- 计划任务的 `RestartOnFailure` 只在任务**启动失败**时重试，网关运行中崩溃不会被重新拉起。
+- `zhin service stop` 用 `schtasks /End`，会**强制结束**进程，网关来不及正常停止实例。
+- 用 NSSM 安装的是 Windows 服务，`zhin service start|stop|restart` 只操作计划任务；请用 `nssm start|stop|restart <名称>` 管理。
+
 ### db：Console SQL 的受限账号 {#db}
 
 ```bash

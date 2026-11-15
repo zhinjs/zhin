@@ -11,9 +11,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
+import { launchdLabel } from '../utils/process-manager.js';
 import {
-  launchdLabel,
+  posixQuote,
   readServiceProjectName,
+  ServiceDefinitionError,
+  systemdSystemInstallCommands,
+  windowsInstallCommands,
+  writeServiceFile,
   renderLaunchdPlist,
   renderSystemdUnit,
   renderWindowsTask,
@@ -42,7 +47,7 @@ function run(command: string, args: readonly string[], options: { quiet?: boolea
 }
 
 function describeCommand(command: ServiceCommand): void {
-  output.line(`  启动命令：${[command.node, command.cli, ...command.args].join(' ')}`);
+  output.line(`  启动命令：${[command.node, command.cli, ...command.args].map(posixQuote).join(' ')}`);
   if (!command.projectCli) {
     logger.warn('项目里没有安装 @zhin.js/cli，服务使用当前 CLI 的路径；建议先 pnpm add -D @zhin.js/cli 再重新安装服务');
   }
@@ -67,7 +72,7 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
     const userDir = path.join(os.homedir(), '.config', 'systemd', 'user');
     await fs.ensureDir(userDir);
     const targetPath = path.join(userDir, `${projectName}.service`);
-    await fs.writeFile(targetPath, unit);
+    await writeServiceFile(targetPath, unit);
     logger.success(`已安装用户服务：${targetPath}`);
     describeCommand(command);
     if (run('systemctl', ['--user', 'daemon-reload'])) {
@@ -80,15 +85,12 @@ async function installSystemd(cwd: string, projectName: string, userMode: boolea
   } else {
     const generated = path.join(cwd, '.zhin', 'service', `${projectName}.service`);
     await fs.ensureDir(path.dirname(generated));
-    await fs.writeFile(generated, unit);
-    const targetPath = `/etc/systemd/system/${projectName}.service`;
+    await writeServiceFile(generated, unit);
     logger.success(`已生成系统服务文件：${generated}`);
     describeCommand(command);
     output.line();
     output.line('  系统级安装需要 root，请执行：');
-    output.line(`  sudo cp ${generated} ${targetPath}`);
-    output.line('  sudo systemctl daemon-reload');
-    output.line(`  sudo systemctl enable --now ${projectName}.service`);
+    for (const line of systemdSystemInstallCommands(generated, projectName)) output.line(`  ${line}`);
     output.line();
     output.line('  不需要 root 时可改用用户服务：zhin service install --user');
   }
@@ -137,9 +139,10 @@ async function installLaunchd(cwd: string, projectName: string): Promise<void> {
   const targetPath = launchdPlistPath(projectName);
   await fs.ensureDir(path.dirname(targetPath));
   await fs.ensureDir(path.join(cwd, '.zhin', 'logs'));
+  const plist = renderLaunchdPlist(projectName, command);
   // Re-installing replaces the loaded definition.
   if (launchdLoaded(projectName)) run('launchctl', ['bootout', `${launchdDomain()}/${launchdLabel(projectName)}`], { quiet: true });
-  await fs.writeFile(targetPath, renderLaunchdPlist(projectName, command));
+  await writeServiceFile(targetPath, plist);
   logger.success(`已安装服务：${targetPath}`);
   describeCommand(command);
   if (run('launchctl', ['bootstrap', launchdDomain(), targetPath])) logger.success('服务已加载并启动（登录后自动启动）');
@@ -165,19 +168,17 @@ async function installWindows(cwd: string, projectName: string): Promise<void> {
   const command = resolveServiceCommand(cwd);
   const taskXml = path.join(cwd, '.zhin', 'service', `${projectName}-task.xml`);
   await fs.ensureDir(path.dirname(taskXml));
-  await fs.writeFile(taskXml, renderWindowsTask(projectName, command));
+  await writeServiceFile(taskXml, renderWindowsTask(projectName, command));
   logger.success(`已生成计划任务定义：${taskXml}`);
   describeCommand(command);
+  const commands = windowsInstallCommands(projectName, taskXml, command);
   output.line();
-  output.line('  方式一：计划任务（开机启动，失败后重试）');
-  output.line(`    schtasks /Create /TN "${projectName}" /XML "${taskXml}"`);
+  output.line('  以下命令在 PowerShell 中执行。');
+  output.line('  方式一：计划任务（登录后启动；只在任务启动失败时重试；zhin service stop 会强制结束进程）');
+  output.line(`    ${commands.schtasks}`);
   output.line();
-  output.line('  方式二：NSSM（Windows 服务，需先 choco install nssm 或 scoop install nssm，以管理员运行）');
-  output.line(`    nssm install ${projectName} "${command.node}" "${command.cli}" ${command.args.join(' ')}`);
-  output.line(`    nssm set ${projectName} AppDirectory "${cwd}"`);
-  output.line(`    nssm set ${projectName} AppEnvironmentExtra NODE_ENV=production`);
-  output.line(`    nssm set ${projectName} AppExit 0 Exit`);
-  output.line(`    nssm start ${projectName}`);
+  output.line('  方式二：NSSM（Windows 服务，需先 choco install nssm 或 scoop install nssm，以管理员运行；之后用 nssm 命令管理）');
+  for (const line of commands.nssm) output.line(`    ${line}`);
   await mentionLegacyFiles(cwd, projectName);
 }
 
@@ -266,13 +267,17 @@ const installCmd = new Command('install')
     const projectName = await getProjectName();
     const platform = os.platform();
 
-    if (platform === 'linux') {
-      await installSystemd(cwd, projectName, opts.user ?? false);
-    } else if (platform === 'darwin') {
-      await installLaunchd(cwd, projectName);
-    } else if (platform === 'win32') {
-      await installWindows(cwd, projectName);
-    } else {
+    try {
+      if (platform === 'linux') await installSystemd(cwd, projectName, opts.user ?? false);
+      else if (platform === 'darwin') await installLaunchd(cwd, projectName);
+      else if (platform === 'win32') await installWindows(cwd, projectName);
+    } catch (error) {
+      if (!(error instanceof ServiceDefinitionError)) throw error;
+      logger.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+    if (!['linux', 'darwin', 'win32'].includes(platform)) {
       logger.error('当前系统暂不支持: ' + platform);
       process.exit(1);
     }
