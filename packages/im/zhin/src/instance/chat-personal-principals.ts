@@ -16,9 +16,10 @@
  *   under 「需要你处理」 `chat-roles.import-pending`).
  * - One exception (#1250 `personal-principals-invalid-key-consumes-migration`): an entry the first
  *   import skipped as `not-a-user` (its key was not `user:<id>`) is not part of what was migrated.
- *   Once its key is corrected, an entry with the **same** `adapterId` + `subjectId` is imported like
- *   the first import would have: once per skipped entry, still never onto a person who holds grants,
- *   audited, and shown as unread under 「需要你处理」. Only the key (which Console user) is new; the
+ *   Once its key is corrected, within 30 days of the first import, an entry with the **same**
+ *   `adapterId` + `subjectId` is imported like the first import would have: once per identity (any
+ *   later entry for it — waiting, ignored, imported — consumes it), still never onto a person who
+ *   holds grants, audited, and shown as unread under 「需要你处理」. Only the key (which Console user) is new; the
  *   chat identity is the one the configuration named when the first import ran.
  * - Afterwards the links are the source: the configuration entry is only reported as
  *   「已导入，数据库为准」; the record (`.zhin/personal-principals-import.json`) keeps what happened
@@ -138,10 +139,10 @@ async function readImportRecord(file: string): Promise<ImportRecord> {
   // Records written before `migratedAt` existed: entries mean the first import already ran.
   const migratedAt = value.migratedAt ? Number(value.migratedAt) : entries.length ? entries[0]!.at || 1 : undefined;
   // Records written before `firstImport` existed: the first import stamped its entries with
-  // `migratedAt` (skipped ones are never rewritten); `unknown-adapter` retries keep what that version
-  // did with them (retried without confirmation; their `at` moved on every retry).
-  const flagged = value.flags === 1 ? entries : entries.map(entry => (migratedAt !== undefined && entry.at <= migratedAt)
-    || (entry.status === 'pending' && entry.reason === 'unknown-adapter') ? Object.freeze({ ...entry, firstImport: true as const }) : entry);
+  // `migratedAt`. Anything later (an `unknown-adapter` entry retried by that version moved its `at`
+  // on every retry, so it cannot be told from one added after the first import) needs confirmation.
+  const flagged = value.flags === 1 ? entries : entries.map(entry => migratedAt !== undefined && entry.at <= migratedAt
+    ? Object.freeze({ ...entry, firstImport: true as const }) : entry);
   return { version: 1, entries: flagged, flags: 1, ...(value.acknowledgedAt ? { acknowledgedAt: Number(value.acknowledgedAt) } : {}),
     ...(migratedAt !== undefined ? { migratedAt } : {}) };
 }
@@ -154,6 +155,31 @@ export function personalPrincipalSourceLabel(entry: Readonly<{ adapterId: string
 }
 
 const pairOf = (entry: Readonly<{ adapterId: string; subjectId: string }>) => JSON.stringify([entry.adapterId, entry.subjectId]);
+
+/** A corrected key is imported without confirmation only this long after the first import. */
+export const PERSONAL_PRINCIPAL_CORRECTION_WINDOW_MS = 30 * 86_400_000;
+
+const isSkippedFirstImport = (entry: PersonalPrincipalImportEntry) => entry.status === 'skipped' && entry.reason === 'not-a-user' && entry.firstImport === true;
+
+/**
+ * Identities (`adapterId` + `subjectId`) a corrected key may still import without confirmation:
+ * the first import skipped them as `not-a-user`, none of those skipped entries was corrected, and no
+ * other entry for the identity exists (one that waited, was ignored or imported — in this version or
+ * an earlier one — consumes it). An `unknown-adapter` retry does not: it is still that correction.
+ */
+function correctableIdentities(entries: readonly PersonalPrincipalImportEntry[]): Map<string, PersonalPrincipalImportEntry[]> {
+  const byPair = new Map<string, PersonalPrincipalImportEntry[]>();
+  for (const entry of entries) byPair.set(pairOf(entry), [...(byPair.get(pairOf(entry)) ?? []), entry]);
+  const correctable = new Map<string, PersonalPrincipalImportEntry[]>();
+  for (const [pair, list] of byPair) {
+    const skipped = list.filter(isSkippedFirstImport);
+    if (!skipped.length || skipped.some(entry => entry.correctedBy)) continue;
+    const consumed = list.some(entry => !isSkippedFirstImport(entry) && !(entry.status === 'pending' && entry.reason === 'unknown-adapter')
+      && !(entry.status === 'skipped' && entry.reason === 'not-a-user'));
+    if (!consumed) correctable.set(pair, skipped);
+  }
+  return correctable;
+}
 
 async function writeImportRecord(file: string, value: ImportRecord): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
@@ -212,30 +238,26 @@ export class PersonalPrincipalImportBook {
       const migrated = record.migratedAt !== undefined;
       // First-import entries skipped only because their key was not `user:<id>`, by identity: not
       // part of what was migrated, so a corrected key is imported like that first import (#1250).
-      const correctable = new Map<string, PersonalPrincipalImportEntry>();
-      for (const entry of record.entries) {
-        if (entry.status === 'skipped' && entry.reason === 'not-a-user' && entry.firstImport && !entry.correctedBy && !correctable.has(pairOf(entry))) {
-          correctable.set(pairOf(entry), entry);
-        }
-      }
-      const corrects = (seed: PersonalPrincipalSeed) => migrated && !!consoleUserOfPersonalPrincipalKey(seed.key) && correctable.has(pairOf(seed));
+      // Each identity is corrected at most once, and only within the window after the first import.
+      const now = this.#now();
+      const inWindow = migrated && now - record.migratedAt! <= PERSONAL_PRINCIPAL_CORRECTION_WINDOW_MS;
+      const correctable = inWindow ? correctableIdentities(record.entries) : new Map<string, PersonalPrincipalImportEntry[]>();
+      const corrects = (seed: PersonalPrincipalSeed) => !!consoleUserOfPersonalPrincipalKey(seed.key) && correctable.has(pairOf(seed));
       const fresh = input.seeds.filter(seed => {
         const previous = known.get(personalPrincipalImportId(seed));
         if (!previous) return true;
         if (previous.status === 'pending' && previous.reason !== 'needs-confirmation') return true;
         // A key still not `user:<id>` is reported again (it never was imported).
-        if (previous.status === 'skipped' && previous.reason === 'not-a-user') return true;
-        // Corrected while this version did not exist yet: it waited for confirmation instead.
-        return previous.status === 'pending' && previous.reason === 'needs-confirmation' && !previous.firstImport && corrects(seed);
+        return previous.status === 'skipped' && previous.reason === 'not-a-user';
       });
       const already = input.seeds.length - fresh.length;
       if (already > 0) input.logger.warn(`ai.personalPrincipals 已导入为「人 ↔ Console 账号」链接，数据库为准；配置中的 ${already} 条不再生效，可从 zhin.config 删除（ADR 0060）`);
       if (!fresh.length) return Object.freeze({ entries: record.entries, ...(record.acknowledgedAt ? { acknowledgedAt: record.acknowledgedAt } : {}) });
-      const at = this.#now();
+      const at = now;
       const results = new Map(known);
       const byUser = new Map<string, PersonalPrincipalSeed[]>();
       /** Seeds imported because they correct a first-import `not-a-user` entry (id → that entry). */
-      const corrected = new Map<string, PersonalPrincipalImportEntry>();
+      const corrected = new Map<string, PersonalPrincipalImportEntry[]>();
       let changed = false;
       for (const seed of fresh) {
         const id = personalPrincipalImportId(seed);
@@ -248,17 +270,21 @@ export class PersonalPrincipalImportBook {
             results.set(id, Object.freeze({ ...base, status: 'skipped' as const, reason: 'not-a-user' as const, ...(firstImport ? { firstImport: true as const } : {}) }));
             changed = true;
           }
+          // The exemption only while this identity can still be corrected (not used, within the window).
+          const exempt = !migrated || (firstImport && correctable.has(pairOf(seed)));
           input.logger.warn(`ai.personalPrincipals.${seed.key}（${source}）：键不是 Console 用户（应为 user:<Console 用户 id>），未导入；`
-            + `运行 zhin console user list 查看可用的 user id（网关自己的日志——前台运行时的终端或 .zhin/logs/gateway.log——会给出建议的键）。${firstImport
-              ? '改正后下次启动按首次导入处理，不需要 Console 确认（ADR 0060）'
+            + `运行 zhin console user list 查看可用的 user id（网关自己的日志——前台运行时的终端或 .zhin/logs/gateway.log——会给出建议的键）。${exempt
+              ? '首次导入后 30 天内改正，下次启动按首次导入处理，不需要 Console 确认（ADR 0060）'
               : '改正后的条目等待 Console 确认（需要你处理）'}`);
           continue;
         }
-        const correcting = !previous?.firstImport && corrects(seed) ? correctable.get(pairOf(seed)) : undefined;
+        // While the adapter is not loaded the identity is not consumed: the correction waits as
+        // `unknown-adapter` (no `firstImport`) and is judged again, window included, once it loads.
+        const correcting = !previous?.firstImport && seed.identity && corrects(seed) ? correctable.get(pairOf(seed)) : undefined;
         if (correcting) {
-          // One corrected entry per skipped one.
+          // One correction per identity, however many invalid keys named it.
           correctable.delete(pairOf(seed));
-          results.set(correcting.id, Object.freeze({ ...correcting, correctedBy: id }));
+          for (const skipped of correcting) results.set(skipped.id, Object.freeze({ ...skipped, correctedBy: id }));
           corrected.set(id, correcting);
         }
         const firstImport = !migrated || previous?.firstImport === true || !!correcting;
@@ -301,7 +327,7 @@ export class PersonalPrincipalImportBook {
           results.set(id, Object.freeze({ id, consoleUserId, adapterId: seed.adapterId, subjectId: seed.subjectId, adapter: seed.identity!.adapter,
             ...(outcome.principalId ? { principalId: outcome.principalId } : {}), at, firstImport: true as const,
             ...(elsewhere ? { status: 'skipped' as const, reason: 'owned-elsewhere' as const } : { status: 'imported' as const }) }));
-          const skipped = corrected.get(id);
+          const skipped = corrected.get(id)?.[0];
           if (skipped && !elsewhere) {
             unread = true;
             try { input.audit?.({ actor: 'import:ai.personalPrincipals', action: 'chat-roles.import', target: 'personal-principals', outcome: 'ok',
@@ -353,7 +379,9 @@ export class PersonalPrincipalImportBook {
         resolution = Object.freeze({ status: elsewhere ? 'skipped' as const : 'imported' as const,
           ...(outcome.principalId ? { principalId: outcome.principalId } : {}), ...(elsewhere ? { reason: 'owned-elsewhere' as const } : {}) });
       }
-      const entries = Object.freeze(record.entries.map(candidate => candidate.id === entry.id ? next : candidate));
+      // A decided identity (imported or ignored) can no longer be corrected by a later key edit.
+      const entries = Object.freeze(record.entries.map(candidate => candidate.id === entry.id ? next
+        : isSkippedFirstImport(candidate) && !candidate.correctedBy && pairOf(candidate) === pairOf(entry) ? Object.freeze({ ...candidate, correctedBy: entry.id }) : candidate));
       // A fresh import shows up as unread again.
       const acknowledgedAt = next.status === 'imported' ? undefined : record.acknowledgedAt;
       await writeImportRecord(this.#file, { version: 1, entries, ...(acknowledgedAt ? { acknowledgedAt } : {}),

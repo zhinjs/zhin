@@ -73,11 +73,12 @@ export function formatDateTime(value: number | Date, locale?: Locale, options: F
   void resolveLocale(locale);
   const time = value instanceof Date ? value.getTime() : value;
   if (typeof time !== 'number' || !Number.isFinite(time)) return '-';
-  const zone = options.timeZone ?? '';
+  // The process zone by name, so a changed `TZ` never reuses a formatter built for the old zone.
+  const zone = options.timeZone ?? new Intl.DateTimeFormat().resolvedOptions().timeZone;
   let format = DATE_TIME_FORMATS.get(zone);
   if (!format) {
     format = new Intl.DateTimeFormat('en-US', {
-      ...(zone ? { timeZone: zone } : {}), hourCycle: 'h23',
+      timeZone: zone, hourCycle: 'h23',
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
     DATE_TIME_FORMATS.set(zone, format);

@@ -14,7 +14,7 @@
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批实例在 ready.features 声明 plugins.apply，并按网关请求在当前进程内换代应用插件启停（不重启实例）。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0062 §23）：「功能 开启 / 关闭 / 重置 插话」与 feature.get / set-enabled / remove-override 支持保留功能 @ambient（适配器 / 账号 / 会话层插话开关）"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批实例在 ready.features 声明 plugins.apply，并按网关请求在当前进程内换代应用插件启停（不重启实例）。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0062 §23）：「功能 开启 / 关闭 / 重置 插话」与 feature.get / set-enabled / remove-override 支持保留功能 @ambient（适配器 / 账号 / 会话层插话开关）；所有者已批准（zhinjs/zhin#1250）：第 22 批——收紧 `ai.personalPrincipals` 导入语义（行为变化）：首次导入之后新增、适配器当时未加载的条目加载后改为等待确认，1.4.0 记录中晚于首次导入的 `unknown-adapter` 条目同样；首次导入时键无效而跳过的条目在 30 天内改正可按首次导入处理（每个身份一次，确认 / 忽略 / 导入过的身份除外）。与第 20 批合并为 1.5.0，npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/gateway",

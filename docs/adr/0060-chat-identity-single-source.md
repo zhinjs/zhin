@@ -367,14 +367,15 @@ export type ChatScopeRef =
 问题（`personal-principals-invalid-key-consumes-migration`）：键写成旧写法（如 `workroom-admin`）时，首次导入把条目全部记为 `skipped` / `not-a-user`，却照样写下 `migratedAt`；把键改成 `user:<id>` 后，键是幂等 id 的一部分，改过的条目被当作「之后新增」，一律等待 Console 确认。升级前没把键改对，就失去了自动导入。
 
 - **键无效的条目不算已迁移**：首次导入写入的条目带 `firstImport`。首次导入中因 `not-a-user` 跳过的条目，改正键后，`adapterId` 与 `subjectId` **完全相同**的条目按首次导入处理（不需要确认）。范围限定为：
+  - **期限**：只在首次导入（`migratedAt`）后 **30 天**内有效；过期后改正的条目一律等待确认，警告文案也随之改变。
   - 只对首次导入时就在配置里的平台身份生效；改键时一起加进来的新身份仍等待确认。
-  - 每个被跳过的条目只能被改正一次（记录 `correctedBy`）；之后把同一身份改到别的键，仍等待确认。
+  - **按身份消费**：每个 `adapterId` + `subjectId` 一生只能改正一次，同一身份写在多个无效键下也只算一次（全部记 `correctedBy`）。只要这个身份在首次导入之后出现过其他任何条目——等待确认、被忽略或已导入（含 1.4.0 写下的记录）——就视为已消费，不能再改正；在 Console 里「导入」或「忽略」也会给原条目写上 `correctedBy`。因此所有者在 1.4.0 里「忽略」过的身份不会被改键绕过。适配器尚未加载时改正不消费身份，条目以 `unknown-adapter`（不带 `firstImport`）等待，加载后按同样的规则（含期限）再判断。
   - 「永不自动链接到持有授予的人」不变：改正的条目若会链接到持有授予的人，照样 `needs-confirmation`。
   - 首次导入之后才出现的无效键不开这个例外（警告里写明「改正后的条目等待 Console 确认」）。
   - 改正导入写审计（`chat-roles.import`，`decision: corrected-key`，含原来的键），并清除「已读」，使 `chat-roles.imported` 重新出现在「需要你处理」里。
-  - 1.4.0 写的记录：改正后已进入等待确认的条目，下次启动按上面的规则自动导入一次。
-- **安全论证**：b9 规定「首次导入之后新增的条目需要确认」，是因为之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动链接会把 Console 账号接到别人的聊天身份上。被改正的条目里，平台身份是首次启动时配置就写明的（与首次导入同等可信），改动的只是「链接到哪个 Console 用户」。持有 `ops.config.write` 的人借此最多能把某个**没有任何授予**的人一次性链接到自己选的 Console 用户——首次导入本来就会做同样的事；持有授予的人仍需全局 `iam.manage` 确认，且每次改正都有审计、并重新出现在「需要你处理」里。
-- **一并收紧 `unknown-adapter`**：此前首次导入之后新增、但适配器尚未加载的条目被记为 `unknown-adapter`，适配器加载后会被当作首次导入的条目自动链接，绕过了确认。现在只有带 `firstImport` 的 `unknown-adapter` 条目重试时不需确认（旧记录中的 `unknown-adapter` 条目沿用旧行为）。
+  - 1.4.0 写的记录：改正后已进入等待确认（或已被忽略）的条目保持原状，由全局 `iam.manage` 持有者在 Console 处理。
+- **安全论证**：b9 规定「首次导入之后新增的条目需要确认」，是因为之后改配置的人不一定是 owner（`ops.config.write` 可单独授予），自动链接会把 Console 账号接到别人的聊天身份上。被改正的条目里，平台身份是首次启动时配置就写明的（与首次导入同等可信），改动的只是「链接到哪个 Console 用户」。持有 `ops.config.write` 的人借此最多能把某个**没有任何授予**的人一次性链接到自己选的 Console 用户——首次导入本来就会做同样的事；持有授予的人仍需全局 `iam.manage` 确认，且每次改正都有审计、并重新出现在「需要你处理」里。**剩余风险**：在 30 天窗口内，持有 `ops.config.write` 的人能把首次配置里出现过、且没有任何授予的身份，链接到任意一个 Console 用户（每个身份一次）；窗口过后这条路径关闭。
+- **一并收紧 `unknown-adapter`**：此前首次导入之后新增、但适配器尚未加载的条目被记为 `unknown-adapter`，适配器加载后会被当作首次导入的条目自动链接，绕过了确认。现在只有带 `firstImport` 的 `unknown-adapter` 条目重试时不需确认。1.4.0 的旧记录里，`at` 晚于 `migratedAt` 的 `unknown-adapter` 条目无法证明属于首次导入（旧版每次重试都会更新 `at`），一律改为等待确认。
 - **警告给出可用的键**：实例不读 gateway.db（ADR 0059 §1），所以由网关在实例进入 `running` 时比对配置里的键与 Console 用户，把建议写进**网关自己的日志**（前台运行时的 stderr、后台运行时的 `.zhin/logs/gateway.log`；这两处都不经 Console 的日志接口提供，Console 的项目文件路由也拒绝点目录）。建议里含 Console 用户名与 id，所以不写进实例日志——实例日志经 `GET /logs` 对持有 `status.view` 的 Console 用户可读；实例日志只提示「键无效，运行 `zhin console user list` 查看可用的 user id」。建议规则：键正好是某个用户名时给出该用户的 `user:<id>`，否则只有一个全局所有者时给出「当前唯一的所有者是 …，可改为 `user:<id>`」，再否则提示用 `zhin console user list` 查看。`zhin console user list` 显示用户 id，并新增 `--json`。
 - **不支持用用户名作键**：用户名不能改，但用户删除后同名可被别人重新注册，用户名键会悄悄指向另一个人；实例也读不到用户名。用户 id 随机生成、不复用，因此只接受 `user:<id>`，用户名只用于给出建议。
 - **日志带账号**（`chat-roles-import-log-ambiguous`）：同一 openid 挂在同一适配器的两个账号上时，日志写成 `qq:<openid>（账号 <endpoint id>）`，能分清是哪个账号的条目。

@@ -25,3 +25,18 @@ describe('formatDateTime (#1250 cli-datetime-us-locale)', () => {
     expect(formatDateTime(at)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/u);
   });
 });
+
+describe('formatDateTime default zone (review of #1288)', () => {
+  it('follows a changed process TZ instead of a cached default', () => {
+    const previous = process.env.TZ;
+    const at = Date.UTC(2026, 10, 14, 16, 15, 56);
+    try {
+      process.env.TZ = 'UTC';
+      expect(formatDateTime(at)).toBe('2026-11-14 16:15:56');
+      process.env.TZ = 'Asia/Shanghai';
+      expect(formatDateTime(at)).toBe('2026-11-15 00:15:56');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+});

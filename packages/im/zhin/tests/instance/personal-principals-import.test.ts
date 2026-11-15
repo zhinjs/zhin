@@ -6,7 +6,7 @@ import { grantsAllow, type ConsoleGrant, type ConsoleScopeTarget } from '@zhin.j
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import { ChatPeople } from '../../src/instance/chat-people.js';
 import {
-  PERSONAL_PRINCIPALS_IMPORT_FILE, PersonalPrincipalImportBook, personalPrincipalImportId, personalPrincipalSourceLabel, type PersonalPrincipalSeed,
+  PERSONAL_PRINCIPAL_CORRECTION_WINDOW_MS, PERSONAL_PRINCIPALS_IMPORT_FILE, PersonalPrincipalImportBook, personalPrincipalImportId, personalPrincipalSourceLabel, type PersonalPrincipalSeed,
 } from '../../src/instance/chat-personal-principals.js';
 import { ATTENTION_PATHS, collectAttention, type AttentionChatRoles } from '../../src/instance/console/attention.js';
 import { dispatchChatRoleImportsConsoleRpc } from '../../src/instance/console/chat-role-imports-rpc.js';
@@ -167,7 +167,7 @@ describe('ai.personalPrincipals: a key corrected after the first import (#1250 p
     // First start: the legacy key `workroom-admin` is skipped; the one-time import still runs.
     const first = await book.run({ seeds: [seed('workroom-admin', '10001'), seed('workroom-admin', '10002')], people, logger });
     expect(first.entries.map(entry => [entry.status, entry.reason])).toEqual([['skipped', 'not-a-user'], ['skipped', 'not-a-user']]);
-    expect(logs.find(line => line.includes('workroom-admin'))).toContain('改正后下次启动按首次导入处理');
+    expect(logs.find(line => line.includes('workroom-admin'))).toContain('首次导入后 30 天内改正，下次启动按首次导入处理');
     // The instance log (readable with status.view) names no Console user; it points to the local CLI.
     expect(logs.find(line => line.includes('workroom-admin'))).toContain('运行 zhin console user list 查看可用的 user id');
     expect(JSON.parse(await readFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), 'utf8'))).toMatchObject({ migratedAt: 100 });
@@ -226,19 +226,105 @@ describe('ai.personalPrincipals: a key corrected after the first import (#1250 p
     expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
   });
 
-  it('records written by 1.4.0: corrected entries that waited for confirmation are imported on the next start', async () => {
-    const { store, people, logger, book, root } = await setup();
+  const writeLegacy = async (root: string, migratedAt: number, entries: readonly Record<string, unknown>[]) => {
     const { mkdir, writeFile } = await import('node:fs/promises');
     await mkdir(join(root, '.zhin'), { recursive: true });
-    const legacy = (key: string, extra: Record<string, unknown>) => ({ id: personalPrincipalImportId({ key, adapterId: 'qq-cap\0bot', subjectId: '10001' }),
-      consoleUserId: key.replace(/^user:/u, ''), adapterId: 'qq-cap\0bot', subjectId: '10001', ...extra });
-    await writeFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), JSON.stringify({ version: 1, migratedAt: 50, entries: [
+    await writeFile(join(root, PERSONAL_PRINCIPALS_IMPORT_FILE), JSON.stringify({ version: 1, migratedAt, entries }));
+  };
+  const legacy = (key: string, extra: Record<string, unknown>, subjectId = '10001') => ({ id: personalPrincipalImportId({ key, adapterId: 'qq-cap\0bot', subjectId }),
+    consoleUserId: key.replace(/^user:/u, ''), adapterId: 'qq-cap\0bot', subjectId, ...extra });
+
+  it('review of #1288: an identity the owner ignored in 1.4.0 is never corrected into a link', async () => {
+    const { store, people, logs, logger, book, root } = await setup();
+    await writeLegacy(root, 50, [
+      legacy('workroom-admin', { status: 'skipped', reason: 'not-a-user', at: 50 }),
+      legacy('user:u1', { status: 'skipped', reason: 'ignored', adapter: 'qq', at: 70 }),
+    ]);
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u2', '10001'), seed('workroom-admin', '10001')], people, logger });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'skipped', reason: 'ignored' });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    // The warning no longer promises the exemption.
+    expect(logs.find(line => line.includes('workroom-admin'))).toContain('改正后的条目等待 Console 确认');
+  });
+
+  it('review of #1288: an identity that already waited for confirmation in 1.4.0 keeps waiting', async () => {
+    const { store, people, logger, book, root } = await setup();
+    await writeLegacy(root, 50, [
       legacy('workroom-admin', { status: 'skipped', reason: 'not-a-user', at: 50 }),
       legacy('user:u1', { status: 'pending', reason: 'needs-confirmation', adapter: 'qq', at: 60 }),
-    ] }));
+    ]);
+    const state = await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
+  });
+
+  it('review of #1288: a 1.4.0 unknown-adapter entry added after the first import waits once its adapter loads', async () => {
+    const { store, people, logger, book, root } = await setup();
+    await writeLegacy(root, 50, [
+      legacy('user:u0', { status: 'imported', adapter: 'qq', at: 50 }, '1'),
+      legacy('user:u1', { status: 'pending', reason: 'unknown-adapter', at: 80 }),
+      legacy('user:u3', { status: 'pending', reason: 'unknown-adapter', at: 50 }, '3'),
+    ]);
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u3', '3')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
+    // Stamped by the first import itself: still part of it.
+    expect(state.entries.find(entry => entry.consoleUserId === 'u3')).toMatchObject({ status: 'imported' });
+  });
+
+  it('review of #1288: one correction per identity, even when several invalid keys named it', async () => {
+    const { store, people, logger, book } = await setup();
+    await book.run({ seeds: [seed('admin-a', '10001'), seed('admin-b', '10001')], people, logger });
+    const state = await book.run({ seeds: [seed('user:u1', '10001'), seed('user:u2', '10001')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'imported' });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(state.entries.filter(entry => entry.reason === 'not-a-user').map(entry => entry.correctedBy)).toEqual([expect.any(String), expect.any(String)]);
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+  });
+
+  it('review of #1288: the exemption ends 30 days after the first import', async () => {
+    const { store, people, logs, logger, root } = await setup();
+    let now = 1_000;
+    const book = new PersonalPrincipalImportBook({ projectRoot: root, now: () => now });
+    await book.run({ seeds: [seed('workroom-admin', '10001'), seed('workroom-admin', '10002')], people, logger });
+    now += PERSONAL_PRINCIPAL_CORRECTION_WINDOW_MS + 1;
+    logs.length = 0;
+    await book.run({ seeds: [seed('workroom-admin', '10002')], people, logger });
+    expect(logs.find(line => line.includes('workroom-admin'))).toContain('改正后的条目等待 Console 确认');
+    const state = await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
+  });
+
+  it('review of #1288: inside the window a correction whose adapter is not loaded yet waits without consuming the identity', async () => {
+    const { store, people, logger, root } = await setup();
+    let now = 1_000;
+    const book = new PersonalPrincipalImportBook({ projectRoot: root, now: () => now });
+    await book.run({ seeds: [seed('workroom-admin', '10001')], people, logger });
+    await book.run({ seeds: [seed('user:u1', '10001', { identity: undefined })], people, logger });
+    now += 1_000;
     const state = await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
     expect(state.entries.find(entry => entry.consoleUserId === 'u1')).toMatchObject({ status: 'imported' });
     expect(store.principals.linkOfConsoleUser('u1')).toBeDefined();
+  });
+
+  it('review of #1288: resolving an identity in the Console (ignore) consumes its correction', async () => {
+    const { store, people, logger, book } = await setup();
+    await book.run({ seeds: [seed('user:u0', '1'), seed('workroom-admin', '10001')], people, logger });
+    // Linking onto a person who holds grants waits even inside the correction exemption.
+    await store.grant({ level: 'global', key: '', adapter: 'qq', userId: '10001', role: 'owner' });
+    const waiting = await book.run({ seeds: [seed('user:u1', '10001')], people, logger });
+    const pending = waiting.entries.find(entry => entry.consoleUserId === 'u1')!;
+    expect(pending).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
+    expect(await book.resolve({ id: pending.id, decision: 'ignore', people, actor: 'user:root' })).toEqual({ status: 'ignored' });
+    const after = await book.read();
+    expect(after.entries.find(entry => entry.reason === 'not-a-user')!.correctedBy).toBe(pending.id);
+    // Without the grant a fresh correction would otherwise import by itself.
+    expect(await store.revoke({ level: 'global', key: '', adapter: 'qq', userId: '10001' })).toBe('saved');
+    const again = await book.run({ seeds: [seed('user:u2', '10001')], people, logger });
+    expect(again.entries.find(entry => entry.consoleUserId === 'u2')).toMatchObject({ status: 'pending', reason: 'needs-confirmation' });
   });
 
   it('names the account in the log, so one openid on two accounts is two lines (#1250 chat-roles-import-log-ambiguous)', async () => {
