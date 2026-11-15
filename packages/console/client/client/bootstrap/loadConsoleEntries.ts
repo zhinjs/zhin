@@ -3,7 +3,7 @@ import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntries
 import type * as React from 'react';
 import { AdapterConsolePage } from '../adapter-console/AdapterConsolePage.js';
 import { getToken } from '../console-utils/remoteApi.js';
-import { DeclarativePageView, type DeclarativePageComponentProps, type DeclarativePageSpec } from '../ui/declarative-page.js';
+import { DeclarativePageView, type DeclarativePageComponentProps, type DeclarativePageSpec } from '../declarative/index.js';
 
 export type FetchConsoleEntriesOptions = {
   entriesUrl?: string;

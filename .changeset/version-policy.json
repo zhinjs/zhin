@@ -64,7 +64,7 @@
     {
       "package": "@zhin.js/console-ui",
       "type": "minor",
-      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。"
+      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。另含 ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：新增内容区块 ContentSection / ContentStack / ContentGrid / MetricCard / FormField / KeyValueList / ProgressMeter / Sparkline / Timeline / Disclosure / CodeText / JsonBlock / MediaPreview / ResponsiveTable / RecordCard（容器查询，styles.css 含其样式），PageChrome 新增可选 title / description，RefreshControl 新增可选 onAutoRefresh。"
     },
     {
       "package": "@zhin.js/pagemanager",
@@ -80,6 +80,11 @@
       "package": "@zhin.js/console-contract",
       "type": "minor",
       "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/client",
+      "type": "minor",
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：DeclarativePageView、AdapterConsolePage、CommentReviewPage 改用 @zhin.js/console-ui，只渲染内容区块并经 usePageChrome 把页头交给外壳（无外壳时自绘），删除首字母方块（蓝图 mark 忽略并告警一次），danger 动作改为 destructive-outline 加确认对话框，去掉原生 select 与注入的 zk- 样式（删除 adapter-console/styles.ts、review-console/styles.ts）；非 UI 导出（usePluginRpc、usePluginData、useRpcResource、useLocale、detectLocale、translate、formatClock、resolvePluginId 等、DeclarativePageView、createDeclarativePage、DataTable）迁到根入口，新增 DECLARATIVE_PAGE_CAPABILITIES，ADAPTER_CONSOLE_PAGE_CAPABILITIES 新增 pageChrome；@zhin.js/client/ui 改为弃用的再导出层（首次使用告警一次），adapterConsoleStyles / conversationPickerStyles 弃用期内为空字符串。"
     }
   ]
 }

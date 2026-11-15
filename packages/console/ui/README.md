@@ -2,7 +2,7 @@
 
 Zhin Console 与插件页面共用的组件库（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md)）：基于 Radix 的 React 组件、页面外壳、刷新控件，以及一份设计令牌。样式随包发布、已经编译好，使用方不需要 Tailwind。
 
-> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）。插件页面在 P2 之前仍沿用现有写法（声明式蓝图或 `@zhin.js/client/ui`），见 [Console 页面与布局](../../../docs/authoring/console-pages.md)。
+> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）。`@zhin.js/client/ui` 已弃用，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
 
 只给浏览器用：本包与 `radix-ui`、`class-variance-authority`、`clsx`、`tailwind-merge`、`lucide-react` 不在 `zhin.js` 的依赖树里。React 是 peerDependency。
 
@@ -28,8 +28,9 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | --- | --- |
 | 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
 | 页面与通用组件 | `PageShell`（`width`：`reading` / `data` / `full`）、`PageHeader`（`menuActions` / `moreActions`）、`Section`、`Grid`、`ListDetail`、`StatusBadge`/`isAttentionStatus`、`MoreMenu`、`RowActions`、`PageActions`、`ConfirmDialog`/`useConfirm`、`StatCard`/`StatGrid`/`MiniRingGauge`、`EmptyState`、`ErrorAlert`、`InfoHint`、`RefreshControl` |
+| 内容区块（P2） | `ContentSection`、`ContentStack`、`ContentGrid`（`auto-fit` 弹性网格，`min="stat"` 在窄容器里两列）、`MetricCard`、`FormField`、`KeyValueList`、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`、`CodeText`、`JsonBlock`、`MediaPreview`、`ResponsiveTable`（容器窄于 40rem 时显示卡片）、`RecordCard` |
 | 容器宽度 | `useContainerAtLeast`、`CONSOLE_BREAKPOINTS_REM`、`syncTableCellLabels` |
-| 页面外壳接口 | `usePageChrome({ actions, refresh })`、`PageChromeProvider`、`createPageChromeStore`、`usePageChromeState`、`PageChromeActions` |
+| 页面外壳接口 | `usePageChrome({ title, description, actions, refresh, menuActions, moreActions })`、`PageChromeProvider`、`createPageChromeStore`、`usePageChromeState`、`PageChromeActions` |
 | 语言 | `ConsoleUiI18nProvider`、`useConsoleUiI18n`、`createConsoleUiI18n`、`ConsoleUiText`、`CONSOLE_UI_MESSAGES`、`CONSOLE_UI_LOCALES` |
 | 纯函数 | `cn`、`groupSelectOptions`、`navigableValues`、`optionMatches`、`optionSearchText`、`canSubmitConfirm`、`confirmTextMatches`、`confirmErrorMessage`、`formatRefreshTime`、`refreshIntervalOptions`、`DEFAULT_REFRESH_INTERVALS` |
 | 共享模块 | `CONSOLE_UI_VERSION`、`CONSOLE_UI_MODULE_ID`、`registerConsoleUiSharedModule`、`CONSOLE_SHARED_MODULE_VERSIONS_KEY`、`CONSOLE_SHARED_MODULE_ISSUES_KEY`、`CONSOLE_SHARED_MODULE_ISSUE_EVENT` |
@@ -113,7 +114,11 @@ export default function Feeds() {
 }
 ```
 
-外壳为每个页面槽创建一个 `createPageChromeStore()`，用 `<PageChromeProvider store>` 包住页面，并在 `PageHeader` 的 `actions` 里放 `<PageChromeActions store />`。`usePageChrome` 还接受 `menuActions`（有文字的操作：页头够宽时是按钮，窄于 40rem 时收进「更多」）和 `moreActions`（始终在「更多」里）。Console 外壳与插件页面的接入在 P2。
+外壳为每个页面槽创建一个 `createPageChromeStore()`，用 `<PageChromeProvider store>` 包住页面，并在 `PageHeader` 的 `actions` 里放 `<PageChromeActions store />`。`usePageChrome` 还接受 `menuActions`（有文字的操作：页头够宽时是按钮，窄于 40rem 时收进「更多」）和 `moreActions`（始终在「更多」里）。`usePageChromeState(store)` 还能读到页面上报的 `title` / `description`（声明式页面的标题与说明），外壳已有自己的标题区时可以只用作页签名。`RefreshControl` 的 `onAutoRefresh` 用于自动刷新与手动「刷新」做的事不同的页面（例如手动刷新才解除「请先刷新」的锁定）。
+
+## 内容区块
+
+外壳负责页头，页面只放内容区块。区块按**自己所在容器**的宽度切换布局（`@container`，不看视口）：`ContentGrid` 用 `repeat(auto-fit, minmax(…, 1fr))`，统计卡片在窄容器里两列；`KeyValueList` 在窄容器里一列；`ResponsiveTable` 同时放表格和每行一张 `RecordCard`，容器窄于 40rem 时只显示卡片；`Disclosure` 默认收起，用于原始 ID、JSON 这类默认不显示的内容（D15、D18）。
 
 ## 共享模块版本
 

@@ -30,7 +30,9 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `ConsoleTransport.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
 | `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
 | `createAdapterConsolePage` / `AdapterConsolePage` | 平台适配器 Console 页的共享页面（连接、endpoint 增删、登录待办、适配器动作） |
-| `@zhin.js/client/ui` | 插件页 UI 套件（见下文“插件页 UI 套件”） |
+| `DeclarativePageView` / `createDeclarativePage` / `DataTable` | 声明式页面渲染器（基于 `@zhin.js/console-ui`，只渲染内容区块，页头交给页面外壳） |
+| `usePluginRpc` / `usePluginData` / `useRpcResource` / `useLocale` / `resolvePluginId` | 插件页的数据、语言与插件 ID 工具（原 `@zhin.js/client/ui`，见下文“插件页：组件与页面外壳”） |
+| `@zhin.js/client/ui` | **已弃用**（ADR 0063 P2）：弃用期内原样再导出，首次使用告警一次，后续 minor 删除 |
 | `resolveAdapterConsolePluginId` | 从 `/console/api/pages` 解析当前适配器页所属的 PluginId |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
@@ -74,7 +76,7 @@ import { AdapterConsolePage } from '@zhin.js/client';
 />
 ```
 
-`embedded` 不传 `toolbar` 时显示 SDK 自带的「文档」「添加」（没有「刷新」）。需要兼容旧版 SDK 的宿主可读 `AdapterConsolePage.capabilities`（或导出的 `ADAPTER_CONSOLE_PAGE_CAPABILITIES`）判断是否支持；旧版会忽略这些属性。
+`embedded` 不传 `toolbar` 时显示 SDK 自带的「文档」「添加」（没有「刷新」）。嵌入模式不向页面外壳上报页头（`usePageChrome`），免得覆盖宿主页的页头；独立页面则把标题、说明、「文档」「添加」和刷新控件交给外壳。需要兼容旧版 SDK 的宿主可读 `AdapterConsolePage.capabilities`（或导出的 `ADAPTER_CONSOLE_PAGE_CAPABILITIES`）判断是否支持；旧版会忽略这些属性。
 
 ### 宿主自己画账号行（headless）
 
@@ -95,59 +97,90 @@ import { AdapterAccountEditor, AdapterAccountsProvider, AdapterConsolePage, useA
 ```tsx
 const { migration } = useAdapterAccounts();
 {migration && (
-  <Notice tone="warning">
-    需要先把 {migration.ids.join('、')} 迁移到数据库。
-    <Button size="sm" busy={migration.busy} onClick={migration.confirm}>确认迁移</Button>
-    <Button size="sm" variant="ghost" onClick={migration.cancel}>取消</Button>
-  </Notice>
+  <ConfirmDialog
+    open
+    onOpenChange={open => { if (!open) migration.cancel(); }}
+    title="确认迁移"
+    description={`需要先把 ${migration.ids.join('、')} 迁移到数据库。`}
+    confirmLabel="确认迁移"
+    onConfirm={migration.confirm}
+  />
 )}
 ```
 
 只想换掉 SDK 卡片内容时，传 `renderRow={row => …}`（拿到同样的账号行）。`capabilities` 里的 `renderRow` / `hostAccounts` 标明支持。
 
-## 插件页 UI 套件
+## 插件页：组件与页面外壳
 
-`@zhin.js/client/ui` 是给插件 Console 页面用的小套件：与 Console 共用同一套主题变量（亮暗色、字号、圆角、焦点环自动跟随），**不依赖 Tailwind**（远程页面不会被 Console 的 Tailwind 扫描），所有样式是 `zk-` 前缀的自带类。
+插件页面的组件来自 [`@zhin.js/console-ui`](../ui/README.md)（Console 自己用的同一套组件、令牌与编译好的 `styles.css`），页头由 Console 的**页面外壳**负责（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md) 决策 2）：标题、说明、页头操作和刷新控件由外壳摆放，页面只渲染内容区块。本包提供数据、语言和插件 ID 工具：
 
 ```tsx
-import { Badge, Button, ConfirmButton, ErrorState, LoadingState, Notice, PluginPage, Section, StaleNotice, pluginUiStyles, usePluginRpc, resolvePluginId, useLocale } from '@zhin.js/client/ui';
+import { usePluginRpc, useLocale } from '@zhin.js/client';
+import { Button, ContentSection, ErrorAlert, Skeleton, usePageChrome } from '@zhin.js/console-ui';
 
 export default function Page() {
   const { t } = useLocale();
-  const status = usePluginRpc<{ items: string[] }>('root/my-plugin', 'status', undefined, { pollMs: 6000 });
-  return (
-    <PluginPage>
-      <style>{pluginUiStyles}</style>
-      {status.state === 'loading' && <LoadingState />}
-      {status.state === 'error' && <ErrorState message="读取状态失败，请稍后重试。" details={status.error?.message} onRetry={status.refresh} />}
-      {status.state === 'stale' && <StaleNotice lastSuccessAt={status.lastSuccessAt} />}
-      {status.data && <Section title={t('账号')}>…</Section>}
-    </PluginPage>
-  );
+  const status = usePluginRpc<{ items: string[] }>('root/my-plugin', 'status');
+  // 页头操作与刷新交给外壳；返回 false 表示外层没有外壳（旧版 Console），可以自己画。
+  usePageChrome({
+    actions: <Button size="sm" onClick={() => void status.refresh()}>{t('重新同步')}</Button>,
+    refresh: { onRefresh: status.refresh, updatedAt: status.lastSuccessAt ?? null, refreshing: status.refreshing },
+  });
+  if (status.state === 'loading') return <Skeleton className="h-4 w-full" />;
+  if (status.state === 'error') return <ErrorAlert error={t('读取状态失败，请稍后重试。')} technicalDetail={status.error?.message} onRetry={() => void status.refresh()} />;
+  return <ContentSection title={t('账号')}>…</ContentSection>;
 }
 ```
 
-| 导出 | 说明 |
+| 导出（`@zhin.js/client` 根入口） | 说明 |
 |------|------|
-| `pluginUiStyles` | 唯一的样式字符串，用 `<style>` 注入 |
-| `PluginPage` / `PageHeader` / `Section` | 页面容器、页头、分节 |
-| `Button` | `primary` / `secondary` / `ghost` / `danger`；`size` 为 `default` / `sm` / `icon`；`busy` 在按钮内显示转圈；手机上点击目标 ≥ 44px |
-| `Badge` | `neutral` / `success` / `warning` / `danger` / `info`；状态必须用文字表达，不能只靠颜色 |
-| `Notice` | `info` / `success` / `warning` / `danger`，可选关闭按钮；错误不应自动消失 |
-| `EmptyState` / `LoadingState` / `ErrorState` | 空、加载、失败（说明 + 重试 + 默认折叠的技术详情） |
-| `StaleNotice` | 刷新失败但仍展示旧数据时的“数据可能已过期，上次成功 hh:mm” |
-| `ConfirmButton` | 行内确认，替代 `window.confirm`；用具体动作做确认文案（“删除账号”而不是“确定”）；取消或 Esc 后焦点回到触发按钮 |
-| `Field` | 标签 + 说明 + 错误，自动接好 `aria-describedby` |
-| `usePluginRpc(pluginId, method, params?, { pollMs?, pauseWhenHidden? })` | 返回 `state`（`loading` / `empty` / `ready` / `error` / `stale`）、`data`、`error`、`lastSuccessAt`、`refresh()`、`mutate()`；失败时保留上次成功数据，并丢弃过期响应 |
-| `useRpcResource(key, load, options)` | `usePluginRpc` 的通用形态，可用于 `consoleRpc` 等其他读取 |
-| `useLocale(dictionary?)` | `{ locale, t }`，取代各页面重复的 `detectLocale` + `text` |
-| `resolvePluginId({ adapter } \| { source }, fallback?)` | 从 `/console/api/pages` 解析页面所属 PluginId |
+| `usePluginRpc(pluginId, method, params?, { pollMs?, pauseWhenHidden? })` | 返回 `state`（`loading` / `empty` / `ready` / `error` / `stale`）、`data`、`error`、`lastSuccessAt`、`refreshing`、`refresh()`、`mutate()`；失败时保留上次成功数据，并丢弃过期响应 |
+| `usePluginData` / `useRpcResource(key, load, options)` | 同一套四态读取的其他形态，可用于 `consoleRpc` 等读取 |
+| `useLocale(dictionary?)` / `detectLocale` / `translate` / `formatClock` | 以中文原文为键的页面文案与语言 |
+| `resolvePluginId` / `resolveSyncPluginId` / `resolveAdapterConsolePluginId` | 解析页面所属 PluginId |
+| `DeclarativePageView` / `createDeclarativePage` | 声明式页面渲染器 |
+| `DataTable` | 基于 `@zhin.js/console-ui` 表格的数据表：搜索、排序、分页、多选与批量操作、行操作、可展开行；容器窄于 40rem 时每行变成一张卡片 |
 
-`adapterConsoleStyles` 仍然导出（sandbox 页在用），内容是套件样式加一小段通用兼容样式；旧版 `ac-*` 评论审批样式已删除。
+### 渲染器的行为（ADR 0063 P2）
+
+`DeclarativePageView`、`AdapterConsolePage`、`CommentReviewPage` 三个渲染器都改用 `@zhin.js/console-ui`，不再注入任何 `zk-` 样式：
+
+- **只渲染内容区块**：标题、说明、无表单的动作、状态徽标和 `RefreshControl`（更新于 hh:mm:ss、手动 / 5s / 15s / 30s 自动、刷新）通过 `usePageChrome` 交给外壳；外层没有 `PageChromeProvider`（旧版 Console）时，渲染器在内容区顶部自己画 `PageHeader`。`AdapterConsolePage embedded` 仍由宿主负责页头，不上报。
+- **首字母方块删除**：蓝图的 `mark` 字段被忽略，使用时控制台告警一次（后续 minor 删除）。
+- **危险操作**：`variant: 'danger'` 一律渲染为 `destructive-outline` 描边按钮，点击后弹出确认对话框；蓝图没写 `confirm` 时自动用「确认<动作名>？」；实心红色只出现在对话框的确认按钮上；`confirmText`（输入对象名后才能确认）照常可用。
+- **没有原生 `<select>`**：选择字段、自动刷新间隔、适配器页的布尔字段和平台动作选项都用 Radix 下拉。
+- **展示规则（D15）**：统计卡片用 `auto-fit` 弹性网格（手机上两列），表格在窄容器里变成卡片，正常状态的徽标弱化、只有异常着色，JSON 与自动卡片里的原始 ID 默认收在「查看 JSON」/「技术详情」里。
+- 宿主可读 `DeclarativePageView.capabilities` / `ADAPTER_CONSOLE_PAGE_CAPABILITIES` 的 `pageChrome: true` 判断渲染器是否会上报页头。
+
+### 从 `@zhin.js/client/ui` 升级
+
+`@zhin.js/client/ui` 弃用：弃用期（至少一个 minor）内它原样再导出下面的名字和旧的 `zk-` 组件，首次导入时在浏览器控制台告警一次；`zk-` 类名同样弃用。之后的 minor（ADR 0063 P4）删除该子路径、`zk-` 组件与样式。
+
+| 原导出（`@zhin.js/client/ui`） | 去向 |
+| --- | --- |
+| `usePluginRpc`、`usePluginData`、`useRpcResource` 及其类型 | `@zhin.js/client` 根入口 |
+| `useLocale`、`detectLocale`、`translate`、`formatClock` 及其类型 | `@zhin.js/client` 根入口 |
+| `resolvePluginId`、`resolveSyncPluginId`、`resolveAdapterConsolePluginId` | `@zhin.js/client` 根入口 |
+| `DeclarativePageView`、`createDeclarativePage`、`DataTable` 及声明式类型 | `@zhin.js/client` 根入口（`DataTable` 改为基于 `@zhin.js/console-ui` 的表格；列的 `fixed` 与 `responsiveStack` 不再起作用：窄容器里自动变卡片） |
+| `Button` | `@zhin.js/console-ui` 的 `Button`：`primary` → `variant="default"`，`secondary` → `outline`，`danger` → `destructive-outline`（外加确认对话框）；没有 `busy` / `icon` 属性，把图标放进 children，忙碌时设 `disabled` 与 `aria-busy` |
+| `Badge` | `Badge`：`tone` → `variant`（`danger` → `destructive`，`neutral` → `outline`，正常状态用 `secondary`） |
+| `Select` | `SelectField`（`options` / `value` / `onValueChange`，Radix 下拉）；长列表用 `SearchableSelectField` |
+| `Modal` / `Drawer` | `Dialog` / `Sheet` |
+| `ConfirmButton` | `Button variant="destructive-outline"` + `ConfirmDialog`（或 `useConfirm()`） |
+| `Card` / `Section` / `Stack` / `Grid` | `Card`、`ContentSection`、`ContentStack`、`ContentGrid` |
+| `Tabs` / `Input` / `Textarea` / `Switch` / `Checkbox` / `RadioGroup` | 同名组件（Radix 版本：`onValueChange` / `onCheckedChange`） |
+| `Notice` / `ErrorState` / `EmptyState` / `LoadingState` | `Alert`、`ErrorAlert`、`EmptyState`、`Skeleton` |
+| `StatCard` / `StatGrid` / `ProgressBar` / `Sparkline` / `Timeline` / `DescriptionList` / `JsonView` | `MetricCard` / `ContentGrid min="stat"`、`ProgressMeter`、`Sparkline`、`Timeline`、`KeyValueList`、`JsonBlock`（放进 `Disclosure`） |
+| `PluginPage`、`PageHeader` | 无对应组件：页头由页面外壳负责，手写页面用 `usePageChrome({ actions, refresh })` |
+| `pluginUiStyles`、`adapterConsoleStyles`、`conversationPickerStyles` | 无：样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供（`adapterConsoleStyles` / `conversationPickerStyles` 弃用期内是空字符串） |
+
+### 布局审计的挂载模块
+
+`audit/mount-plugin-page.tsx`（仓库内，不随包发布）导出 `mountPluginPage({ element, pageModule, pageName, theme, renderInShell })`，供 `@zhin.js/console-ui/audit` 的 `auditPluginPages` 渲染声明式蓝图页、适配器页和评论审批页：设 `ZHIN_UI_AUDIT_MOUNT_MODULE=packages/console/client/audit/mount-plugin-page.tsx`。它不连 Host：`audit/fixtures.ts` 替换 `window.fetch`，`plugin.<id>.status` 返回夹具数据（蓝图页按蓝图读取的 `dataKey` / 表达式路径 / 表格列类型生成样例，表格三行；适配器页一个在线账号；评论审批页一个账号一条待审草稿），`endpoint.list` / `login.list` / 其他 RPC 返回固定样例或 `{}`。
 
 ## 评论审批页
 
-「AI 起草 → 人工审批 → 发送」类的评论回复适配器（Bilibili、掘金…）用 `createCommentReviewPage(spec)` 生成整页：账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿，丢弃走行内确认）、可关闭的错误提示、刷新失败时的“数据可能已过期”。页面只依赖 `@zhin.js/client/ui` 套件，会先解析 PluginId，再读 `plugin.<pluginId>.status` 并调用 `edit` / `send` / `drop` 与你声明的登录动作。
+「AI 起草 → 人工审批 → 发送」类的评论回复适配器（Bilibili、掘金…）用 `createCommentReviewPage(spec)` 生成整页：账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿，丢弃走确认对话框）、可关闭的错误提示、刷新失败时的“数据可能已过期”，组件来自 `@zhin.js/console-ui`，页头交给页面外壳。页面会先解析 PluginId，再读 `plugin.<pluginId>.status` 并调用 `edit` / `send` / `drop` 与你声明的登录动作。
 
 ```tsx
 import { createCommentReviewPage, ReviewResourceList } from '@zhin.js/client';
@@ -155,7 +188,6 @@ import { createCommentReviewPage, ReviewResourceList } from '@zhin.js/client';
 export default createCommentReviewPage({
   adapter: 'juejin',                              // 解析 PluginId
   platform: { zh: '掘金', en: 'Juejin' },
-  mark: '掘',
   resource: { zh: '文章', en: 'articles' },
   account: endpoint => ({ id: endpoint.login.userId, name: endpoint.login.userName }),
   draftResource: (draft, t) => t('文章 {0}', draft.articleId),
