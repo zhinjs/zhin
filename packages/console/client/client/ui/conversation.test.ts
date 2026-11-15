@@ -340,8 +340,8 @@ describe('declarative page additions (#1250)', () => {
     // The cells live in the DataTable: render it with the page's props.
     const table = allNodes(env.tree()).find(node => isComponent(node, 'DataTable'))!;
     const rendered = renderChild(file('../declarative/DataTable.tsx'), 'DataTable', table.props);
-    const responsive = allNodes(rendered.tree()).find(node => isComponent(node, 'ResponsiveTable'))!;
-    const labels = allNodes(responsive.props!.table).filter(node => isComponent(node, 'ConversationLabel')).map(node => node.props?.value);
+    const tableNode = allNodes(rendered.tree()).find(node => isComponent(node, 'Table'))!;
+    const labels = allNodes(tableNode).filter(node => isComponent(node, 'ConversationLabel')).map(node => node.props?.value);
     expect(labels).toEqual([GROUP_KEY, PRIVATE_KEY]);
     env.unmount();
   });

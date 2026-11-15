@@ -3,7 +3,15 @@
  * Normal states render as muted badges (D15); raw JSON stays collapsed (D18 第 6 条).
  */
 import React from 'react';
-import { Badge, Button, CodeText, ContentStack, Disclosure, JsonBlock, ProgressMeter } from '@zhin.js/console-ui';
+import {
+  Badge,
+  Button,
+  CodeText,
+  ContentStack,
+  Disclosure,
+  JsonBlock,
+  ProgressMeter,
+} from '@zhin.js/console-ui';
 import { ConversationLabel } from '../ui/conversation-picker.js';
 import type { PluginUiText } from '../ui/locale.js';
 import { ToneBadge } from '../renderer/kit.js';

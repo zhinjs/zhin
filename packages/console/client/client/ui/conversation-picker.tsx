@@ -7,7 +7,12 @@
  * its display name. Both read the page's shared directory ({@link useSharedConversationDirectory}).
  */
 import React, { useMemo, useState } from 'react';
-import { Button, ContentGrid, ContentStack, Input } from '@zhin.js/console-ui';
+import {
+  Button,
+  Grid,
+  ContentStack,
+  Input,
+} from '@zhin.js/console-ui';
 import { ChoiceSelect, NoticeBlock, ToneBadge } from '../renderer/kit.js';
 import { useLocale, type PluginUiLocale } from './locale.js';
 import {
@@ -180,7 +185,7 @@ export function ConversationPicker({
         </ContentStack>
       )}
       {allowManual && manual && (
-        <ContentGrid min="field" data-conversation-manual="">
+        <Grid min="14rem" data-conversation-manual="">
           {accountsListed ? (
             <ChoiceSelect
               aria-label={t('机器人账号')}
@@ -234,7 +239,7 @@ export function ConversationPicker({
               {t('使用该会话')}
             </Button>
           </ContentStack>
-        </ContentGrid>
+        </Grid>
       )}
     </ContentStack>
   );

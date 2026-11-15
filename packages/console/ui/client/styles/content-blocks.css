@@ -1,35 +1,16 @@
 /*
  * @zhin.js/console-ui — content blocks (ADR 0063 P2): the blocks plugin pages and the declarative
- * renderers of @zhin.js/client place inside the page shell. Values are tokens only; layout follows
- * the block's own container (`@container`), never the viewport (D18).
- * `--console-space-*` / `--console-text-*` scale names come with the P1b token tiers; the fallbacks
- * keep the current values until then.
+ * renderers of @zhin.js/client place inside the page shell, next to the P1b layout components
+ * (Section, Grid, StatGrid, Table, Card). Semantic tokens only; layout follows the block's own
+ * `.console-cq` container, never the viewport (D18).
  */
 @layer components {
-  .console-content-section {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: var(--console-space-stack);
-  }
-  .console-content-section-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--console-space-2, 0.5rem) var(--console-space-4, 1rem);
-  }
-  .console-content-section-heading { display: flex; min-width: 0; flex: 1 1 16rem; flex-direction: column; gap: var(--console-space-1, 0.25rem); }
-  .console-content-section-heading > .console-section-title { margin: 0; }
-  .console-content-section-description { margin: 0; max-width: 70ch; font-size: var(--console-text-body-sm); line-height: var(--console-leading-body); color: hsl(var(--muted-foreground)); }
-  .console-content-section-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--console-space-2, 0.5rem); }
-
   .console-content-stack { display: flex; min-width: 0; flex-direction: column; }
   .console-content-stack.is-row { flex-direction: row; align-items: center; }
   .console-content-stack.is-wrap { flex-wrap: wrap; }
-  .console-content-stack.is-gap-tight { gap: var(--console-space-2, 0.5rem); }
-  .console-content-stack.is-gap-stack { gap: var(--console-space-stack); }
-  .console-content-stack.is-gap-section { gap: var(--console-space-section); }
+  .console-content-stack.is-gap-tight { gap: var(--console-inline-gap); }
+  .console-content-stack.is-gap-stack { gap: var(--console-stack-gap); }
+  .console-content-stack.is-gap-section { gap: var(--console-section-gap); }
   .console-content-stack.is-align-start { align-items: flex-start; }
   .console-content-stack.is-align-center { align-items: center; }
   .console-content-stack.is-align-end { align-items: flex-end; }
@@ -40,44 +21,29 @@
   .console-content-stack.is-justify-end { justify-content: flex-end; }
   .console-content-stack.is-justify-between { justify-content: space-between; }
 
-  /* Flexible grid: auto-fit columns; statistic cards keep two per row in a phone-width container. */
-  .console-content-grid-host { container-type: inline-size; min-width: 0; }
-  .console-content-grid { display: grid; gap: var(--console-space-stack); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--console-content-grid-min)), 1fr)); }
-  .console-content-grid.is-min-stat { --console-content-grid-min: 12rem; }
-  .console-content-grid.is-min-field { --console-content-grid-min: 14rem; }
-  .console-content-grid.is-min-card { --console-content-grid-min: 18rem; }
-  .console-content-grid.is-min-wide { --console-content-grid-min: 24rem; }
-  @container (max-width: 40rem) {
-    .console-content-grid.is-min-stat { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-
-  .console-metric-card { position: relative; }
-  .console-metric-card-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--console-space-2, 0.5rem); }
-  .console-metric-card-icon { width: 1rem; height: 1rem; object-fit: contain; }
-
-  .console-form-field { display: flex; min-width: 0; flex-direction: column; gap: var(--console-space-1, 0.25rem); }
+  .console-form-field { display: flex; min-width: 0; flex-direction: column; gap: var(--console-heading-gap); }
   .console-form-field.is-full { grid-column: 1 / -1; }
-  .console-form-field-label { font-size: var(--console-text-label); line-height: var(--console-leading-label); font-weight: 500; color: hsl(var(--foreground)); }
-  .console-form-field-required { margin-inline-start: var(--console-space-1, 0.25rem); color: hsl(var(--destructive)); }
+  .console-form-field-label { font-size: var(--console-text-label); line-height: var(--console-leading-label); font-weight: var(--console-weight-medium); color: hsl(var(--foreground)); }
+  .console-form-field-required { margin-inline-start: var(--console-heading-gap); color: hsl(var(--destructive)); }
   .console-form-field-hint { font-size: var(--console-text-label); line-height: var(--console-leading-label); color: hsl(var(--muted-foreground)); }
   .console-form-field-error { font-size: var(--console-text-label); line-height: var(--console-leading-label); color: hsl(var(--destructive)); }
 
-  .console-kv-host { container-type: inline-size; min-width: 0; }
-  .console-kv { display: grid; margin: 0; gap: var(--console-space-2, 0.5rem) var(--console-space-4, 1rem); grid-template-columns: repeat(var(--console-kv-cols, 2), minmax(0, 1fr)); }
+  /* Key / value list: the columns asked for in a wide container, one column below 40rem. */
+  .console-kv { display: grid; margin: 0; gap: 0 var(--console-stack-gap); grid-template-columns: repeat(var(--console-kv-cols, 2), minmax(0, 1fr)); }
   .console-kv.is-cols-1 { --console-kv-cols: 1; }
   .console-kv.is-cols-2 { --console-kv-cols: 2; }
   .console-kv.is-cols-3 { --console-kv-cols: 3; }
-  @container (max-width: 40rem) {
+  @container console (width < 40rem) {
     .console-kv { grid-template-columns: minmax(0, 1fr); }
   }
-  .console-kv-item { display: flex; min-width: 0; flex-direction: column; gap: var(--console-space-1, 0.25rem); padding-block: var(--console-space-2, 0.5rem); border-bottom: var(--console-border-width) solid var(--console-border-subtle); }
+  .console-kv-item { display: flex; min-width: 0; flex-direction: column; gap: var(--console-heading-gap); padding-block: var(--console-list-row-padding); border-bottom: var(--console-card-border) solid var(--console-border-subtle); }
   .console-kv-label { display: flex; flex-direction: column; font-size: var(--console-text-label); line-height: var(--console-leading-label); color: hsl(var(--muted-foreground)); }
   .console-kv-hint { font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
-  .console-kv-value { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--console-space-2, 0.5rem); margin: 0; overflow-wrap: anywhere; font-size: var(--console-text-body); }
+  .console-kv-value { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); margin: 0; overflow-wrap: anywhere; font-size: var(--console-text-body); }
   .console-kv-value.is-muted { color: hsl(var(--muted-foreground)); }
 
-  .console-progress { display: inline-flex; width: 100%; min-width: 4rem; align-items: center; gap: var(--console-space-2, 0.5rem); }
-  .console-progress-track { position: relative; display: block; height: 0.375rem; flex: 1 1 auto; overflow: hidden; border-radius: var(--console-radius-full, 999rem); background: hsl(var(--foreground) / 0.08); }
+  .console-progress { display: inline-flex; width: 100%; min-width: 4rem; align-items: center; gap: var(--console-inline-gap); }
+  .console-progress-track { position: relative; display: block; height: 0.375rem; flex: 1 1 auto; overflow: hidden; border-radius: var(--console-badge-radius); background: hsl(var(--foreground) / 0.08); }
   .console-progress-bar { display: block; height: 100%; border-radius: inherit; background: hsl(var(--primary)); }
   .console-progress[data-tone="success"] .console-progress-bar { background: hsl(var(--success)); }
   .console-progress[data-tone="warning"] .console-progress-bar { background: hsl(var(--warning)); }
@@ -92,46 +58,44 @@
   .console-sparkline[data-tone="danger"] { color: hsl(var(--destructive)); }
   .console-sparkline[data-tone="neutral"] { color: hsl(var(--muted-foreground)); }
 
-  .console-timeline { display: flex; margin: 0; padding: 0; list-style: none; flex-direction: column; gap: var(--console-space-stack); }
-  .console-timeline-item { display: flex; min-width: 0; gap: var(--console-space-3, 0.75rem); }
-  .console-timeline-dot { width: 0.5rem; height: 0.5rem; flex-shrink: 0; margin-top: 0.4rem; border-radius: var(--console-radius-full, 999rem); background: hsl(var(--muted-foreground) / 0.5); }
+  .console-timeline { display: flex; margin: 0; padding: 0; list-style: none; flex-direction: column; gap: var(--console-stack-gap); }
+  .console-timeline-item { display: flex; min-width: 0; gap: var(--console-stack-gap); }
+  /* The dot sits on the first text line: (body line height − dot) / 2. */
+  .console-timeline-dot { width: 0.5rem; height: 0.5rem; flex-shrink: 0; margin-top: calc(var(--console-heading-gap) * 2); border-radius: var(--console-badge-radius); background: hsl(var(--muted-foreground) / 0.5); }
   .console-timeline-item[data-tone="primary"] .console-timeline-dot { background: hsl(var(--primary)); }
   .console-timeline-item[data-tone="warning"] .console-timeline-dot { background: hsl(var(--warning)); }
   .console-timeline-item[data-tone="danger"] .console-timeline-dot { background: hsl(var(--destructive)); }
-  .console-timeline-body { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: var(--console-space-1, 0.25rem); }
-  .console-timeline-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--console-space-2, 0.5rem); }
-  .console-timeline-title { font-weight: 500; }
+  .console-timeline-body { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: var(--console-heading-gap); }
+  .console-timeline-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); }
+  .console-timeline-title { font-weight: var(--console-weight-medium); }
   .console-timeline-time { margin-inline-start: auto; font-size: var(--console-text-label); font-variant-numeric: tabular-nums; color: hsl(var(--muted-foreground)); }
-  .console-timeline-description { margin: 0; font-size: var(--console-text-body-sm); color: hsl(var(--muted-foreground)); }
+  .console-timeline-description { margin: 0; font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
 
-  .console-disclosure { min-width: 0; border: var(--console-border-width) solid var(--console-border-subtle); border-radius: var(--console-radius-lg); background: var(--console-surface-raised); }
-  .console-disclosure-summary { display: flex; min-height: var(--console-touch-target, 2.75rem); flex-wrap: wrap; align-items: center; gap: var(--console-space-2, 0.5rem); padding: var(--console-space-2, 0.5rem) var(--console-space-card); cursor: pointer; list-style: none; }
+  .console-disclosure { min-width: 0; border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-card-radius); background: var(--console-surface-raised); }
+  .console-disclosure-summary { display: flex; min-height: var(--console-touch-target); flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); padding: var(--console-inline-gap) var(--console-card-padding); cursor: pointer; list-style: none; }
   .console-disclosure-summary::-webkit-details-marker { display: none; }
-  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-border-width) solid currentColor; border-bottom: var(--console-border-width) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-duration-fast) ease; }
+  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-card-border) solid currentColor; border-bottom: var(--console-card-border) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-duration-fast) ease; }
   .console-disclosure[open] > .console-disclosure-summary::before { transform: rotate(45deg); }
-  .console-disclosure-title { font-weight: 500; }
+  .console-disclosure-summary:focus-visible { outline: var(--console-focus-ring); outline-offset: var(--console-focus-ring-offset); border-radius: var(--console-card-radius); }
+  .console-disclosure-title { font-weight: var(--console-weight-medium); }
   .console-disclosure-description { flex-basis: 100%; font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
-  .console-disclosure-body { display: flex; min-width: 0; flex-direction: column; gap: var(--console-space-stack); padding: 0 var(--console-space-card) var(--console-space-card); }
+  .console-disclosure-body { display: flex; min-width: 0; flex-direction: column; gap: var(--console-stack-gap); padding: 0 var(--console-card-padding) var(--console-card-padding); }
 
-  .console-code-text { padding: 0 var(--console-space-1, 0.25rem); border-radius: var(--console-radius-sm); background: hsl(var(--foreground) / 0.06); font-family: var(--console-font-mono); font-size: var(--console-text-code, var(--console-text-label)); overflow-wrap: anywhere; }
-  .console-json-block { max-height: 24rem; margin: 0; overflow: auto; padding: var(--console-space-3, 0.75rem); border-radius: var(--console-radius-md); background: var(--console-surface-inset); font-family: var(--console-font-mono); font-size: var(--console-text-code, var(--console-text-label)); line-height: var(--console-leading-code, 1.5); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .console-media-preview { max-width: min(100%, 12.5rem); max-height: 12.5rem; padding: var(--console-space-2, 0.5rem); border: var(--console-border-width) solid var(--console-border-subtle); border-radius: var(--console-radius-md); background: hsl(0 0% 100%); object-fit: contain; }
+  .console-code-text { padding: 0 var(--console-heading-gap); border-radius: var(--console-check-radius); background: hsl(var(--foreground) / 0.06); font-family: var(--console-font-mono); font-size: var(--console-text-label); overflow-wrap: anywhere; }
+  .console-json-block { max-height: 24rem; margin: 0; overflow: auto; padding: var(--console-stack-gap); border-radius: var(--console-control-radius); background: var(--console-surface-inset); font-family: var(--console-font-mono); font-size: var(--console-text-label); line-height: var(--console-leading-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .console-media-preview { max-width: min(100%, 12.5rem); max-height: 12.5rem; padding: var(--console-inline-gap); border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-control-radius); background: hsl(0 0% 100%); object-fit: contain; }
 
-  /* Table in a wide container, one card per row below `sm` (40rem). */
-  .console-responsive-table { container-type: inline-size; min-width: 0; }
-  .console-responsive-table-narrow { display: none; flex-direction: column; gap: var(--console-space-2, 0.5rem); }
-  @container (max-width: 40rem) {
-    .console-responsive-table-wide { display: none; }
-    .console-responsive-table-narrow { display: flex; }
-  }
+  /* RecordCard is a Card; only its header row is laid out here. */
+  .console-record-card-head { display: flex; min-width: 0; align-items: center; gap: var(--console-inline-gap); }
+  .console-record-card-title { min-width: 0; flex: 1 1 auto; font-weight: var(--console-weight-medium); overflow-wrap: anywhere; }
+  .console-card[data-selected="true"] { border-color: hsl(var(--primary) / 0.5); }
 
-  .console-record-card { display: flex; min-width: 0; flex-direction: column; gap: var(--console-space-2, 0.5rem); padding: var(--console-space-card-sm, var(--console-space-card)); border: var(--console-border-width) solid var(--console-border-subtle); border-radius: var(--console-radius-lg); background: var(--console-surface-raised); }
-  .console-record-card.is-selected { border-color: hsl(var(--primary) / 0.5); }
-  .console-record-card-head { display: flex; min-width: 0; align-items: center; gap: var(--console-space-2, 0.5rem); }
-  .console-record-card-title { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
-  .console-record-card-fields { display: flex; margin: 0; flex-direction: column; gap: var(--console-space-1, 0.25rem); }
-  .console-record-card-field { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--console-space-2, 0.5rem); }
-  .console-record-card-field > dt { font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
-  .console-record-card-field > dd { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--console-space-1, 0.25rem); margin: 0; overflow-wrap: anywhere; }
-  .console-record-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--console-space-2, 0.5rem); }
+  /* LoadingBlock: skeleton lines one body line high. */
+  .console-loading-block { display: flex; min-width: 0; flex-direction: column; gap: var(--console-inline-gap); }
+  .console-skeleton-line { width: 100%; height: calc(var(--console-text-body) * var(--console-leading-body)); }
+
+  /* StatCard extras (P2): an image icon and a unit after the value. */
+  .console-stat-icon { width: 1rem; height: 1rem; flex-shrink: 0; object-fit: contain; }
+  .console-stat-unit { margin-inline-start: var(--console-heading-gap); font-size: var(--console-text-label); font-weight: var(--console-weight-regular); color: hsl(var(--muted-foreground)); }
+  .console-stat-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--console-inline-gap); }
 }

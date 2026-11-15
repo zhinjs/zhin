@@ -19,6 +19,7 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '确认：{0}': 'Confirm: {0}',
   '刷新': 'Refresh',
   '操作': 'Actions',
+  '统计': 'Statistics',
   '复制': 'Copy',
   '不能为空': 'is required',
   '已完成': 'Completed',

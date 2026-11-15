@@ -1,46 +1,18 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '../cn.js'
+import { Card, CardContent, CardFooter, CardHeader } from './ui/card.js'
+import { Skeleton } from './ui/skeleton.js'
 
 /**
  * Content blocks for plugin pages and the declarative renderers of `@zhin.js/client` (ADR 0063 P2).
- * The page shell owns the header (title, description, actions, refresh); a page renders these blocks
- * inside it. Layout follows the container the block is placed in (`@container`), never the viewport
- * (D18): stat grids flow with `auto-fit`, key / value lists and tables fold to one column / cards in
- * a narrow container.
+ * They complement the P1b layout components and do not repeat them: sections are `Section`, grids
+ * `Grid` / `StatGrid`, statistic cards `StatCard`, tables `Table` (which turns rows into cards in a
+ * narrow container by itself). The page shell owns the header (title, description, actions,
+ * refresh). Layout follows the container the block is placed in (`.console-cq`), never the
+ * viewport (D18): key / value lists fold to one column in a narrow container.
  */
 
 export type ContentTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger'
-
-export interface ContentSectionProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
-  /** Section heading (an `h2`; the page title belongs to the shell). */
-  readonly title?: ReactNode
-  /** One line under the heading; say it once per page (D15). */
-  readonly description?: ReactNode
-  /** Controls on the heading row (search, count, buttons). */
-  readonly actions?: ReactNode
-  readonly children?: ReactNode
-}
-
-/** A titled block of page content. */
-export function ContentSection({ title, description, actions, children, className, ...rest }: ContentSectionProps) {
-  const hasHead = title != null || description != null || actions != null
-  return (
-    <section className={cn('console-content-section', className)} {...rest}>
-      {hasHead ? (
-        <div className="console-content-section-head">
-          {title != null || description != null ? (
-            <div className="console-content-section-heading">
-              {title != null ? <h2 className="console-section-title">{title}</h2> : null}
-              {description != null ? <p className="console-content-section-description">{description}</p> : null}
-            </div>
-          ) : null}
-          {actions != null ? <div className="console-content-section-actions">{actions}</div> : null}
-        </div>
-      ) : null}
-      {children}
-    </section>
-  )
-}
 
 export interface ContentStackProps extends HTMLAttributes<HTMLDivElement> {
   /** `tight` inside a control group, `stack` (default) within a block, `section` between blocks. */
@@ -67,64 +39,6 @@ export function ContentStack({ gap = 'stack', direction = 'column', wrap, align,
       )}
       {...rest}
     />
-  )
-}
-
-export interface ContentGridProps extends HTMLAttributes<HTMLDivElement> {
-  /**
-   * Minimum item width: `stat` (statistic cards; two per row in a phone-width container), `field`
-   * (form fields), `card` (default) and `wide` (forms, panels).
-   */
-  readonly min?: 'stat' | 'field' | 'card' | 'wide'
-}
-
-/** Flexible grid, `repeat(auto-fit, minmax(min, 1fr))` (D18 第 3 条). */
-export function ContentGrid({ min = 'card', className, ...rest }: ContentGridProps) {
-  return (
-    <div className="console-content-grid-host">
-      <div className={cn('console-content-grid', `is-min-${min}`, className)} {...rest} />
-    </div>
-  )
-}
-
-export interface MetricCardProps {
-  readonly label: ReactNode
-  /** Small icon before the label (an element, or an image URL). */
-  readonly icon?: ReactNode
-  readonly value: ReactNode
-  readonly unit?: ReactNode
-  /** Badge on the label row. */
-  readonly badge?: ReactNode
-  /** Next to the value (trend badge, sparkline). */
-  readonly aside?: ReactNode
-  /** Under the value (progress meter). */
-  readonly footer?: ReactNode
-  readonly hint?: ReactNode
-  /** Only `warning` / `danger` change the card; normal values stay neutral (D15). */
-  readonly tone?: ContentTone
-}
-
-/** Statistic card with the Console's stat-card look; place several in `ContentGrid min="stat"`. */
-export function MetricCard({ label, icon, value, unit, badge, aside, footer, hint, tone }: MetricCardProps) {
-  return (
-    <div className={cn('console-stat-card console-metric-card', (tone === 'danger' || tone === 'warning') && `is-${tone}`)} data-tone={tone ?? 'neutral'}>
-      <span className="console-metric-card-head">
-        <span className="console-stat-label">
-          {typeof icon === 'string' ? <img src={icon} alt="" className="console-metric-card-icon" /> : icon}
-          {label}
-        </span>
-        {badge}
-      </span>
-      <span className="console-stat-value-row">
-        <strong className="console-stat-value">
-          {value}
-          {unit != null ? <small>{unit}</small> : null}
-        </strong>
-        {aside}
-      </span>
-      {footer}
-      {hint != null ? <span className="console-stat-sub">{hint}</span> : null}
-    </div>
   )
 }
 
@@ -175,7 +89,7 @@ export interface KeyValueListProps {
 /** Description list (`dl`) of label / value pairs. */
 export function KeyValueList({ items, columns = 2, className }: KeyValueListProps) {
   return (
-    <div className="console-kv-host">
+    <div className="console-cq">
       <dl className={cn('console-kv', `is-cols-${columns}`, className)}>
         {items.map((item, index) => (
           <div key={item.key ?? index} className="console-kv-item">
@@ -323,28 +237,6 @@ export function MediaPreview({ src, alt, className }: { readonly src: string; re
   return <img src={src} alt={alt} className={cn('console-media-preview', className)} />
 }
 
-export interface ResponsiveTableProps {
-  /** The table for a wide container. */
-  readonly table: ReactNode
-  /** One card per row for a container narrower than `sm` (40rem). */
-  readonly cards: ReactNode
-  readonly className?: string
-}
-
-/**
- * Table in a wide container, cards in a narrow one (D18 第 6 条: no sideways scrolling of a table on
- * a phone). The switch is a container query on this block, so it follows the space the page gives
- * it, not the viewport.
- */
-export function ResponsiveTable({ table, cards, className }: ResponsiveTableProps) {
-  return (
-    <div className={cn('console-responsive-table', className)}>
-      <div className="console-responsive-table-wide">{table}</div>
-      <div className="console-responsive-table-narrow">{cards}</div>
-    </div>
-  )
-}
-
 export interface RecordCardField {
   readonly key: string
   readonly label: ReactNode
@@ -352,38 +244,58 @@ export interface RecordCardField {
 }
 
 export interface RecordCardProps {
-  /** First line of the card (usually the first column). */
+  /** First line of the card. */
   readonly title?: ReactNode
-  /** Before the title (row checkbox, expand toggle). */
+  /** Before the title (checkbox, toggle). */
   readonly leading?: ReactNode
-  readonly fields: readonly RecordCardField[]
+  /** Label / value pairs, shown as a one-column {@link KeyValueList}. */
+  readonly fields?: readonly RecordCardField[]
   readonly actions?: ReactNode
   readonly selected?: boolean
   readonly children?: ReactNode
 }
 
-/** One table row shown as a card (`ResponsiveTable` narrow view, card lists). */
-export function RecordCard({ title, leading, fields, actions, selected, children }: RecordCardProps) {
+/**
+ * One record (an account, a connection) as a card: the P1b `Card` with a header, a one-column
+ * {@link KeyValueList} and a footer for actions. For table rows use `Table`, which turns its rows
+ * into cards by itself in a narrow container.
+ */
+export function RecordCard({ title, leading, fields = [], actions, selected, children }: RecordCardProps) {
   return (
-    <div className={cn('console-record-card', selected && 'is-selected')} data-selected={selected ? 'true' : undefined}>
+    <Card data-selected={selected ? 'true' : undefined} data-slot="record-card">
       {title != null || leading != null ? (
-        <div className="console-record-card-head">
-          {leading}
-          {title != null ? <span className="console-record-card-title">{title}</span> : null}
-        </div>
+        <CardHeader>
+          <div className="console-record-card-head">
+            {leading}
+            {title != null ? <div className="console-record-card-title">{title}</div> : null}
+          </div>
+        </CardHeader>
       ) : null}
-      {fields.length > 0 ? (
-        <dl className="console-record-card-fields">
-          {fields.map(field => (
-            <div key={field.key} className="console-record-card-field">
-              <dt>{field.label}</dt>
-              <dd>{field.value}</dd>
-            </div>
-          ))}
-        </dl>
+      {fields.length > 0 || children != null ? (
+        <CardContent>
+          <ContentStack>
+            {fields.length > 0 ? <KeyValueList columns={1} items={fields} /> : null}
+            {children}
+          </ContentStack>
+        </CardContent>
       ) : null}
-      {children}
-      {actions != null ? <div className="console-record-card-actions">{actions}</div> : null}
+      {actions != null ? <CardFooter><div className="console-page-actions">{actions}</div></CardFooter> : null}
+    </Card>
+  )
+}
+
+export interface LoadingBlockProps {
+  /** Accessible name of the busy region (e.g. 「加载中…」). */
+  readonly label: string
+  /** Placeholder lines; default 2. */
+  readonly lines?: number
+}
+
+/** Placeholder while a block loads: a `role="status"` region with skeleton text lines. */
+export function LoadingBlock({ label, lines = 2 }: LoadingBlockProps) {
+  return (
+    <div role="status" aria-live="polite" aria-label={label} data-loading="" className="console-loading-block">
+      {Array.from({ length: Math.max(1, lines) }, (_, index) => <Skeleton key={index} className="console-skeleton-line" />)}
     </div>
   )
 }

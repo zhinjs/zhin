@@ -2,16 +2,15 @@ import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  ContentGrid,
-  ContentSection,
   Disclosure,
   KeyValueList,
-  MetricCard,
+  LoadingBlock,
   PageChromeProvider,
   ProgressMeter,
   RecordCard,
-  ResponsiveTable,
+  Section,
   Sparkline,
+  StatCard,
   createPageChromeStore,
   usePageChrome,
 } from '../client/index.js';
@@ -19,25 +18,39 @@ import {
 const css = readFileSync(new URL('../client/styles/content-blocks.css', import.meta.url), 'utf8');
 
 describe('content blocks (ADR 0063 P2)', () => {
-  it('renders a section with an h2, never an h1 (the page title belongs to the shell)', () => {
-    const html = renderToStaticMarkup(h(ContentSection, { title: '订阅', description: '说明', actions: h('span', null, '共 3 条') }, '内容'));
+  it('does not repeat the P1b layout components (sections, grids, stat cards, table cards)', async () => {
+    const exports = await import('../client/index.js');
+    for (const name of ['ContentSection', 'ContentGrid', 'MetricCard', 'ResponsiveTable']) expect(exports).not.toHaveProperty(name);
+    const html = renderToStaticMarkup(h(Section, { title: '订阅', description: '说明', actions: h('span', null, '共 3 条'), id: 's', 'aria-label': '订阅' }, '内容'));
     expect(html).toContain('<h2');
-    expect(html).not.toContain('<h1');
-    expect(html).toContain('共 3 条');
+    expect(html).toContain('id="s"');
+    expect(css).not.toMatch(/console-(?:content-section|content-grid|metric-card|responsive-table)/u);
   });
 
-  it('grids flow with auto-fit and keep two stat cards per row in a narrow container', () => {
-    expect(renderToStaticMarkup(h(ContentGrid, { min: 'stat' }, h(MetricCard, { label: '任务', value: 3 })))).toContain('is-min-stat');
-    expect(css).toMatch(/repeat\(auto-fit, minmax\(/u);
-    expect(css).toMatch(/@container \(max-width: 40rem\)\s*\{\s*\.console-content-grid\.is-min-stat \{ grid-template-columns: repeat\(2/u);
+  it('StatCard takes the declarative extras (image icon, unit, badge, footer)', () => {
+    const html = renderToStaticMarkup(h(StatCard, { icon: '/a.png', label: '任务', value: 3, unit: '个', badge: h('span', null, 'B'), footer: h('span', null, 'F') }));
+    expect(html).toContain('console-stat-icon');
+    expect(html).toContain('console-stat-unit');
+    expect(html).toContain('console-stat-head');
+    expect(html).toContain('F');
   });
 
-  it('switches a table to cards in a container narrower than sm, not by the viewport', () => {
-    const html = renderToStaticMarkup(h(ResponsiveTable, { table: h('table', null), cards: h(RecordCard, { title: 'A', fields: [{ key: 'k', label: '状态', value: '运行中' }] }) }));
-    expect(html).toContain('console-responsive-table-wide');
-    expect(html).toContain('console-responsive-table-narrow');
+  it('RecordCard is a Card with a one-column key / value list', () => {
+    const html = renderToStaticMarkup(h(RecordCard, { title: 'A', fields: [{ key: 'k', label: '状态', value: '运行中' }] }));
+    expect(html).toContain('console-card ');
+    expect(html).toContain('console-kv is-cols-1');
+  });
+
+  it('LoadingBlock sizes its lines with component classes, not utility classes', () => {
+    const html = renderToStaticMarkup(h(LoadingBlock, { label: '加载中…' }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain('console-skeleton-line');
+    expect(html).not.toMatch(/\bh-4\b|\bw-full\b/u);
+  });
+
+  it('follows the container (`.console-cq`), never the viewport', () => {
     expect(css).not.toMatch(/@media/u);
-    expect(css).toMatch(/@container \(max-width: 40rem\)\s*\{\s*\.console-responsive-table-wide \{ display: none; \}/u);
+    expect(css).toMatch(/@container console \(width < 40rem\)/u);
   });
 
   it('keeps raw content collapsed unless asked and marks muted values', () => {

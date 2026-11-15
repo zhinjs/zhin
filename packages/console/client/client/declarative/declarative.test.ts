@@ -64,7 +64,7 @@ describe('DeclarativePageView content mode (ADR 0063 P2)', () => {
     // No header, letter tile or refresh select in the content itself.
     expect(view.find('PageHeader')).toBeUndefined();
     expect(view.nodes().some(node => node.type === 'select' || node.type === 'h1')).toBe(false);
-    expect(view.find('ContentGrid', node => node.props?.min === 'stat')).toBeDefined();
+    expect(view.find('StatGrid')).toBeDefined();
     view.env.unmount();
   });
 
@@ -208,15 +208,17 @@ describe('D15 presentation in the renderer', () => {
       stats: [{ key: 'a', label: 'A', value: 'a', tone: 'success' }, { key: 'b', label: 'B', value: 'b', tone: 'danger' }],
       sections: [{ id: 't', items: 'rows', columns: [{ key: 'name', label: '名称' }, { key: 'status', label: '状态' }] }],
     }, { a: 1, b: 2, rows: [{ id: '1', name: 'Alpha', status: 'running' }, { id: '2', name: 'Beta', status: 'failed' }] });
-    const grid = view.find('ContentGrid', node => node.props?.min === 'stat')!;
-    const cards = allNodes(grid.props!.children).filter(node => isComponent(node, 'MetricCard'));
-    expect(cards.map(node => node.props?.tone)).toEqual(['success', 'danger']);
+    const grid = view.find('StatGrid')!;
+    const cards = allNodes(grid.props!.children).filter(node => isComponent(node, 'StatCard'));
+    // Only states that need attention change the card (D15): success stays neutral.
+    expect(cards.map(node => node.props?.tone)).toEqual([undefined, 'danger']);
     const table = renderChild(TABLE, 'DataTable', view.find('DataTable')!.props);
-    const responsive = allNodes(table.tree()).find(node => isComponent(node, 'ResponsiveTable'))!;
-    expect(allNodes(responsive.props!.table).some(node => isComponent(node, 'Table'))).toBe(true);
-    expect(allNodes(responsive.props!.cards).filter(node => isComponent(node, 'RecordCard'))).toHaveLength(2);
+    // One console-ui Table, which turns its rows into cards by itself in a narrow container.
+    const tables = allNodes(table.tree()).filter(node => isComponent(node, 'Table'));
+    expect(tables).toHaveLength(1);
+    expect(allNodes(table.tree()).some(node => isComponent(node, 'RecordCard') || isComponent(node, 'ResponsiveTable'))).toBe(false);
     // Normal states are muted badges, abnormal ones colored.
-    const badges = allNodes(responsive.props!.table).filter(node => isComponent(node, 'ToneBadge')).map(node => node.props?.tone);
+    const badges = allNodes(tables[0]).filter(node => isComponent(node, 'ToneBadge')).map(node => node.props?.tone);
     expect(badges).toEqual(expect.arrayContaining(['success', 'danger']));
     const kit = createHookEnv().load(KIT);
     expect(kit.badgeVariantFor('success')).toBe('secondary');

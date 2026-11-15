@@ -15,8 +15,8 @@ import {
   CardTitle,
   CodeText,
   ConfirmDialog,
-  ContentGrid,
-  ContentSection,
+  Grid,
+  Section,
   ContentStack,
   Disclosure,
   FormField,
@@ -1055,12 +1055,12 @@ function renderFieldBlock(fields: readonly AdapterConsoleFieldView[], locale: Ad
     byGroup.get(group)!.push(field);
   }
   return (
-    <ContentGrid min="field">
+    <Grid min="14rem">
       {order.flatMap(group => [
         ...(group ? [<FormField key={`group:${group}`} full label={<span className="console-section-title">{group}</span>} />] : []),
         ...byGroup.get(group)!.map(render),
       ])}
-    </ContentGrid>
+    </Grid>
   );
 }
 
@@ -1121,7 +1121,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     : null;
 
   const loginTasks = !addOpen && !editor && visibleLogins.length > 0 ? (
-    <ContentSection id="adapter-logins" title={t(locale, '登录待办')} description={t(locale, '完成验证后，账号即可继续连接。')}>
+    <Section id="adapter-logins" title={t(locale, '登录待办')} description={t(locale, '完成验证后，账号即可继续连接。')}>
       <ContentStack direction="row" gap="tight" aria-label={t(locale, '登录待办')}>
         <ToneBadge tone="neutral">{t(locale, '1. 发起连接')}</ToneBadge>
         <ToneBadge tone="primary">{t(locale, '2. 完成平台安全验证')}</ToneBadge>
@@ -1200,7 +1200,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
           );
         })}
       </ContentStack>
-    </ContentSection>
+    </Section>
   ) : null;
 
   const qqWorkbench = status && effectiveAdapterKey === 'qq' && status.actions.some(a => a.name === 'qq-bind-start') ? (() => {
@@ -1220,7 +1220,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     const bindActive = Boolean(bindImage || bindUrl || status.extra?.bindFlowActive || status.extra?.bindState === 'waiting' || status.extra?.bindState === 'scanned');
     const chooseKind = (value: string) => setActionValues(curr => ({ ...curr, 'qq-bind-kind': { ...curr['qq-bind-kind'], value } }));
     return (
-      <ContentSection title={t(locale, 'QQ 官方机器人双轨接入工作台')} actions={<ToneBadge tone="neutral">QR + AppID</ToneBadge>} role="region" aria-label={t(locale, 'QQ 官方机器人双轨接入工作台')}>
+      <Section title={t(locale, 'QQ 官方机器人双轨接入工作台')} actions={<ToneBadge tone="neutral">QR + AppID</ToneBadge>} role="region" aria-label={t(locale, 'QQ 官方机器人双轨接入工作台')}>
         <ContentStack direction="row" gap="tight">
           {startAction && (
             <Button type="button" variant="default" size="sm" disabled={addDisabled} onClick={() => void runAction(startAction)}>
@@ -1258,12 +1258,12 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             )}
           </ContentStack>
         )}
-      </ContentSection>
+      </Section>
     );
   })() : null;
 
   const accountCards = runtime && showAccounts && !addOpen && !editor ? (
-    <ContentGrid min="card" data-adapter-accounts="">
+    <Grid data-adapter-accounts="">
       {rows.map(row => {
         if (renderRow) return <div key={row.key} data-adapter-account={row.endpointId}>{renderRow(row)}</div>;
         const protocolPills = inferAccountProtocolPills(effectiveAdapterKey, row.values, runningModes.get(row.endpointId));
@@ -1337,11 +1337,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
           </CardContent>
         </Card>
       )}
-    </ContentGrid>
+    </Grid>
   ) : null;
 
   const accountsSection = runtime ? (
-    <ContentSection id="adapter-accounts" aria-label={t(locale, '账号')}>
+    <Section id="adapter-accounts" aria-label={t(locale, '账号')}>
       {showAccounts && runtime.needsMigration && (
         <NoticeBlock
           tone="warning"
@@ -1377,7 +1377,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {accountCards}
       {showAccounts && runtime.lastMutation && <p role="status" className="console-form-field-hint">{t(locale, '最近操作：{0}', operationLabel(runtime.lastMutation.action, locale))} · {executionLabel(runtime.lastMutation, locale)}</p>}
       {showEditor && renderAccountEditor(m)}
-    </ContentSection>
+    </Section>
   ) : null;
 
   const addForm = runtime && status?.canAdd && addOpen ? (() => {
@@ -1418,7 +1418,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       );
     })() : null;
     return (
-      <ContentSection
+      <Section
         id="adapter-add-account"
         aria-label={t(locale, '添加账号')}
         title={t(locale, '添加账号')}
@@ -1428,7 +1428,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
           <Button type="button" variant="ghost" size="sm" onClick={toggleAdd}>← {t(locale, '账号列表')}</Button>
         </>}
       >
-        <ContentGrid min="wide">
+        <Grid min="24rem">
           <Card>
             <CardContent>
               <ContentStack>
@@ -1453,7 +1453,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                 {callback}
                 {platformProfile?.presets && platformProfile.presets.length > 0 && (
                   <FormField label={t(locale, '快速预设模板')}>
-                    <ContentGrid min="field">
+                    <Grid min="14rem">
                       {platformProfile.presets.map((preset) => (
                         <ContentStack key={preset.key} gap="tight" align="start">
                           <Button type="button" variant="outline" size="sm" onClick={() => setAddValues((prev) => ({ ...prev, ...preset.values }))}>
@@ -1463,7 +1463,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                           {preset.description && <span className="console-form-field-hint">{preset.description}</span>}
                         </ContentStack>
                       ))}
-                    </ContentGrid>
+                    </Grid>
                   </FormField>
                 )}
                 {(effectiveAdapterKey === 'email' || platformProfile?.supportsEmailSync) && (
@@ -1505,14 +1505,14 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             </CardContent>
           </Card>
           {renderOnboardingGuide(m)}
-        </ContentGrid>
-      </ContentSection>
+        </Grid>
+      </Section>
     );
   })() : null;
 
   const platformActions = status && sidebarActions.length > 0 ? (
-    <ContentSection id="adapter-tools" title={t(locale, '平台操作')}>
-      <ContentGrid min="card">
+    <Section id="adapter-tools" title={t(locale, '平台操作')}>
+      <Grid>
         {sidebarActions.map(action => {
           const values = actionValues[action.name] ?? {};
           const result = actionResults[action.name];
@@ -1576,8 +1576,8 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             </Card>
           );
         })}
-      </ContentGrid>
-    </ContentSection>
+      </Grid>
+    </Section>
   ) : null;
 
   return (
@@ -1642,11 +1642,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       )}
 
       {!runtime && status && (
-        <ContentSection title={t(locale, '运行中的连接')}>
+        <Section title={t(locale, '运行中的连接')}>
           {runningIds.length === 0
             ? <p className="console-form-field-hint">{t(locale, '还没有运行中的连接。')}</p>
             : (
-              <ContentGrid min="card">
+              <Grid>
                 {runningIds.map((id) => {
                   const endpoint = endpointById.get(id);
                   const mode = runningModes.get(id);
@@ -1663,9 +1663,9 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                     />
                   );
                 })}
-              </ContentGrid>
+              </Grid>
             )}
-        </ContentSection>
+        </Section>
       )}
 
       {loginTasks}
@@ -1673,11 +1673,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {accountsSection}
 
       {!runtime && status && (
-        <ContentSection id="adapter-accounts" title={t(locale, '已配置的账号')} description={t(locale, '当前环境只能查看账号配置。')}>
+        <Section id="adapter-accounts" title={t(locale, '已配置的账号')} description={t(locale, '当前环境只能查看账号配置。')}>
           {!status.configured.length
             ? <p className="console-form-field-hint">{runningIds.length > 0 ? t(locale, '此适配器没有提供账号清单；运行中的连接见上方。') : t(locale, '配置里还没有账号。')}</p>
             : (
-              <ContentGrid min="card">
+              <Grid>
                 {status.configured.map((entry) => {
                   const running = runningIds.includes(entry.id);
                   return (
@@ -1688,15 +1688,15 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                     />
                   );
                 })}
-              </ContentGrid>
+              </Grid>
             )}
-        </ContentSection>
+        </Section>
       )}
 
       {addForm}
       {platformActions}
       {sidebarExtraEntries.length > 0 && (
-        <ContentSection title={t(locale, '平台状态')}>
+        <Section title={t(locale, '平台状态')}>
           <KeyValueList
             items={sidebarExtraEntries.map(([key, value]) => ({
               key,
@@ -1704,7 +1704,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
               value: typeof value === 'string' && isLink(value) ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === 'boolean' ? t(locale, value ? '已开启' : '已关闭') : String(value),
             }))}
           />
-        </ContentSection>
+        </Section>
       )}
       <p className="console-form-field-hint">{t(locale, '此页面由适配器提供；敏感凭据不会展示。')}</p>
     </RendererPage>
@@ -1722,7 +1722,7 @@ function renderAccountEditor(m: AdapterConsoleModel) {
   const fields = status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)) ?? [];
   const saveBusy = isBusy('mutate:update:' + editor.instanceId);
   return (
-    <ContentSection
+    <Section
       role="region"
       aria-label={t(locale, '编辑账号')}
       title={`${t(locale, '编辑账号')} · ${editor.originalId}`}
@@ -1731,7 +1731,7 @@ function renderAccountEditor(m: AdapterConsoleModel) {
         <Button type="button" variant="ghost" size="sm" onClick={closeEdit}>← {t(locale, '账号列表')}</Button>
       </>}
     >
-      <ContentGrid min="wide">
+      <Grid min="24rem">
         <Card>
           <CardContent>
             <ContentStack>
@@ -1739,12 +1739,12 @@ function renderAccountEditor(m: AdapterConsoleModel) {
               <FormField label={t(locale, '账号 ID')} hint={platformProfile?.idLabel} htmlFor="adapter-edit-id">
                 <Input id="adapter-edit-id" disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} />
               </FormField>
-              <ContentGrid min="field">
+              <Grid min="14rem">
                 {fields.map(field => renderAccountField({
                   field, locale, adapterKey: effectiveAdapterKey, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration,
                   value: editor.values[field.key] ?? '', onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }),
                 }))}
-              </ContentGrid>
+              </Grid>
               {formError && <NoticeBlock tone="danger">{formError}</NoticeBlock>}
               <ContentStack direction="row" gap="tight">
                 {editorReplacing
@@ -1767,8 +1767,8 @@ function renderAccountEditor(m: AdapterConsoleModel) {
           </CardContent>
         </Card>
         {renderOnboardingGuide(m)}
-      </ContentGrid>
-    </ContentSection>
+      </Grid>
+    </Section>
   );
 }
 

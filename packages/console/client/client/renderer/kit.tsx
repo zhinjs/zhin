@@ -25,7 +25,6 @@ import {
   RadioGroupItem,
   RefreshControl,
   SelectField,
-  Skeleton,
   Switch,
   usePageChrome,
   type BadgeProps,
@@ -288,16 +287,8 @@ export function NoticeBlock({ tone = 'info', children, onDismiss, dismissLabel, 
   );
 }
 
-export function LoadingBlock({ label }: { readonly label: string }) {
-  return (
-    <div role="status" aria-live="polite" aria-label={label} data-loading="">
-      <ContentStack gap="tight">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-      </ContentStack>
-    </div>
-  );
-}
+/** Loading placeholder; the console-ui block (skeleton lines sized by tokens, no utility classes). */
+export { LoadingBlock } from '@zhin.js/console-ui';
 
 export function ErrorBlock({ message, details, onRetry }: { readonly message: string; readonly details?: string; readonly onRetry?: () => void }) {
   return <ErrorAlert error={message} onRetry={onRetry} {...(details && details !== message ? { technicalDetail: details } : {})} />;

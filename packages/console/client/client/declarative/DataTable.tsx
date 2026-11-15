@@ -1,7 +1,7 @@
 /**
  * `DataTable` on the `@zhin.js/console-ui` table (ADR 0063 P2): search, sorting, paging, selection
- * with batch actions, row actions and expandable rows. In a container narrower than `sm` the rows
- * turn into cards (`ResponsiveTable`, D18 第 6 条) instead of scrolling sideways.
+ * with batch actions, row actions and expandable rows. In a container narrower than `sm` the
+ * console-ui `Table` turns its rows into cards by itself (D18 第 6 条) instead of scrolling sideways.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -9,8 +9,6 @@ import {
   Checkbox,
   ContentStack,
   Input,
-  RecordCard,
-  ResponsiveTable,
   Table,
   TableBody,
   TableCell,
@@ -346,24 +344,6 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
     </Table>
   );
 
-  const cards = view.paged.map((row, index) => {
-    const absolute = view.offset + index;
-    const key = keyOf(row, absolute);
-    const [titleColumn, ...rest] = columns;
-    return (
-      <RecordCard
-        key={key}
-        selected={selectedSet.has(key)}
-        leading={isSelectable || renderExpandedRow ? <>{isSelectable ? rowCheckbox(key) : null}{renderExpandedRow ? expandToggle(key) : null}</> : undefined}
-        title={titleColumn ? cell(titleColumn, row, absolute) : undefined}
-        fields={rest.map(column => ({ key: column.key, label: label(column), value: cell(column, row, absolute) }))}
-        actions={hasRowActions ? rowActionButtons(row, absolute) : undefined}
-      >
-        {renderExpandedRow && expandedSet.has(key) ? renderExpandedRow(row, absolute) : null}
-      </RecordCard>
-    );
-  });
-
   return (
     <ContentStack gap="tight" data-data-table="">
       {showSearch || actions ? (
@@ -425,7 +405,7 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
           action={<Button type="button" variant="ghost" size="sm" onClick={() => setQuery('')}>{t('清除过滤')}</Button>}
         />
       ) : (
-        <ResponsiveTable table={table} cards={cards} />
+        table
       )}
 
       {view.totalPages > 1 ? (

@@ -1,6 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { pluginRpc, PluginRpcError } from '../console-utils/remoteApi.js';
-import { Button, Card, CardContent, ContentSection, ContentStack, FormField, MediaPreview, Textarea } from '@zhin.js/console-ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  Section,
+  ContentStack,
+  FormField,
+  MediaPreview,
+  Textarea,
+} from '@zhin.js/console-ui';
 import { useLocale, type PluginUiText } from '../ui/locale.js';
 import { resolvePluginId } from '../ui/plugin-id.js';
 import { usePluginRpc } from '../ui/rpc.js';
@@ -49,7 +58,7 @@ export function ReviewResourceList({ title, items, empty, footnote }: {
   readonly footnote?: string;
 }) {
   return (
-    <ContentSection title={title} description={footnote}>
+    <Section title={title} description={footnote}>
       {items.length === 0
         ? (empty ? <p className="console-form-field-hint">{empty}</p> : null)
         : (
@@ -64,7 +73,7 @@ export function ReviewResourceList({ title, items, empty, footnote }: {
             ))}
           </ContentStack>
         )}
-    </ContentSection>
+    </Section>
   );
 }
 
@@ -321,17 +330,17 @@ export function EndpointSection({ endpoint, showTitle, session }: { endpoint: Re
   const hint = spec.loginHint?.(endpoint, t);
 
   const drafts = (
-    <ContentSection
+    <Section
       title={<ContentStack direction="row" gap="tight" align="center">{t('待审回复')}{endpoint.pendingCount > 0 && <ToneBadge tone="warning">{endpoint.pendingCount}</ToneBadge>}</ContentStack>}
       description={!endpoint.persistent ? t('草稿只存在内存里，重启会丢失。') : undefined}
     >
       {endpoint.drafts.length === 0
         ? <EmptyBlock title={t('没有待审的回复。新的 AI 回复会自动出现在这里。')} />
         : <ContentStack gap="tight">{endpoint.drafts.map(draft => <DraftCard key={draft.id} draft={draft} endpoint={endpoint} session={session} />)}</ContentStack>}
-    </ContentSection>
+    </Section>
   );
   return (
-    <ContentSection title={showTitle ? t('账号 {0}', endpoint.id) : undefined} data-review-endpoint={endpoint.id}>
+    <Section title={showTitle ? t('账号 {0}', endpoint.id) : undefined} data-review-endpoint={endpoint.id}>
       <ContentStack gap="tight">
         <ContentStack direction="row" gap="tight" align="center">
           <ToneBadge tone={state === 'ok' ? 'success' : state === 'expired' ? 'warning' : 'neutral'}>
@@ -350,7 +359,7 @@ export function EndpointSection({ endpoint, showTitle, session }: { endpoint: Re
       {spec.renderResources
         ? spec.renderResources(endpoint, context)
         : <DeclarativeResources endpoint={endpoint as ReviewEndpointBase & Record<string, any>} context={context} resourcesKey={spec.resourcesKey} />}
-    </ContentSection>
+    </Section>
   );
 }
 

@@ -14,15 +14,16 @@ import {
   CardHeader,
   CardTitle,
   CodeText,
-  ContentGrid,
-  ContentSection,
+  Grid,
+  Section,
   ContentStack,
   Disclosure,
   FormField,
   Input,
   KeyValueList,
   MediaPreview,
-  MetricCard,
+  StatCard,
+  StatGrid,
   ProgressMeter,
   RecordCard,
   Sparkline,
@@ -358,7 +359,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
     const copyKey = `action-res-${actionName}`;
     return (
       <div data-action-preview={actionName}>
-        <ContentSection
+        <Section
           title={t('执行结果预览')}
           actions={<ActionButton label={t('关闭')} variant="ghost" locale={locale} onRun={() => dismissPreview(actionName)} />}
         >
@@ -375,7 +376,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
             </ContentStack>
           ) : null}
           {structuredData !== undefined ? <JsonValue value={structuredData} t={t} /> : null}
-        </ContentSection>
+        </Section>
       </div>
     );
   };
@@ -638,7 +639,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       }
       // Automatic cards: IDs and nested objects stay behind 「技术详情」 (D18 第 6 条).
       return (
-        <ContentGrid min="card">
+        <Grid>
           {list.map((row, rowIdx) => {
             const { shown, technical } = splitTechnicalFields(row);
             return (
@@ -654,7 +655,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
               </RecordCard>
             );
           })}
-        </ContentGrid>
+        </Grid>
       );
     };
 
@@ -682,14 +683,14 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       );
     }
     return (
-      <ContentSection key={secKey} id={section.id} title={title} description={sectionDescription}>
+      <Section key={secKey} id={section.id} title={title} description={sectionDescription}>
         {body}
-      </ContentSection>
+      </Section>
     );
   };
 
   const renderStats = (statData: TData) => (
-    <ContentGrid min="stat" data-stats="">
+    <StatGrid label={t('统计')} data-stats="">
       {stats.map((stat, idx) => {
         const val = typeof stat.value === 'function' ? stat.value(statData, ctx) : evaluateDeclarativeExpr(stat.value, statData, locale, t);
         const hint = typeof stat.hint === 'function'
@@ -713,13 +714,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         const trendArrow = stat.trend?.direction === 'up' ? '↑ ' : stat.trend?.direction === 'down' ? '↓ ' : '';
         const tone = contentTone(stat.tone);
         return (
-          <MetricCard
+          <StatCard
             key={stat.key ?? idx}
             label={pickText(stat.label, locale, t)}
             icon={stat.image ?? stat.icon}
             value={val}
             unit={stat.unit ? pickText(stat.unit, locale, t) : undefined}
-            tone={tone}
+            tone={tone === 'danger' || tone === 'warning' ? tone : undefined}
             badge={stat.badge ? <ToneBadge tone={resolveBadgeTone(stat.badge.tone, statData, locale, t)}>{badgeLabel}</ToneBadge> : undefined}
             aside={trendText || (Array.isArray(sparkline) && sparkline.length >= 2) ? (
               <>
@@ -728,11 +729,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
               </>
             ) : undefined}
             footer={rawProgress !== undefined && Number.isFinite(rawProgress) ? <ProgressMeter value={rawProgress} tone={tone} /> : undefined}
-            hint={hint}
+            sub={hint}
           />
         );
       })}
-    </ContentGrid>
+    </StatGrid>
   );
 
   const renderSections = (sectionData: TData) => {
@@ -793,8 +794,8 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       {ready && stats.length > 0 ? renderStats(data) : null}
 
       {ready && formActions.length > 0 ? (
-        <ContentSection id="zhin-actions-section" title={t('操作')}>
-          <ContentGrid min="wide">
+        <Section id="zhin-actions-section" title={t('操作')}>
+          <Grid min="24rem">
             {formActions.map((action) => {
               const isBusy = busyAction === action.name;
               const isDisabled = typeof action.disabled === 'function' ? action.disabled(data) : Boolean(action.disabled);
@@ -807,9 +808,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   </CardHeader>
                   <CardContent>
                     <ContentStack>
-                      <ContentGrid min="field">
+                      <Grid min="14rem">
                         {fields.map((field) => renderField(action, field, fields.length >= 2, isDisabled || isBusy))}
-                      </ContentGrid>
+                      </Grid>
                       <ContentStack direction="row" gap="tight">{renderActionButton(action, 'default')}</ContentStack>
                       {renderActionResultPreview(action.name, actionResults[action.name])}
                       {action.result && action.name in inlineResults ? (
@@ -833,8 +834,8 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 </Card>
               );
             })}
-          </ContentGrid>
-        </ContentSection>
+          </Grid>
+        </Section>
       ) : null}
 
       {ready ? renderSections(data) : null}
