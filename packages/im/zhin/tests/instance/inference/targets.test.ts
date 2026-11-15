@@ -159,6 +159,53 @@ it('keeps the leased Adapter generation and reports missing source metadata expl
   }
 });
 
+it('derives the purpose key of a routed specialist from the agent list (#1250 batch 21)', async () => {
+  const agentFeatureId = 'zhin.agent' as never;
+  const { specialistModelKey } = await import('@zhin.js/agent/runtime');
+  const base = snapshot();
+  const agents = [{ name: 'planner', qualifiedName: 'planner' }, { name: 'evaluator', qualifiedName: 'a__evaluator' }, { name: 'evaluator', qualifiedName: 'b__evaluator' }];
+  const state: SnapshotState = { ...base,
+    projections: new Map([...base.projections, [agentFeatureId, { $projection: 'zhin.agent-index/1', list: () => agents }]]) };
+  const store = new SnapshotStore(state);
+  const lease = store.acquire();
+  try {
+    expect(specialistModelKey(lease.value, 'planner')).toEqual({ name: 'planner', qualifiedName: 'planner' });
+    expect(specialistModelKey(lease.value, 'a__evaluator')).toEqual({ name: 'evaluator', qualifiedName: 'a__evaluator', bareNameShared: true });
+    expect(specialistModelKey(lease.value, 'tools__ghost')).toEqual({ name: 'ghost', qualifiedName: 'tools__ghost' });
+    expect(specialistModelKey(lease.value, 'zhin')).toBeUndefined();
+    expect(specialistModelKey(lease.value, undefined)).toBeUndefined();
+  } finally {
+    lease.release();
+    await store.close();
+  }
+});
+
+it('takes binding names from configured ai.agents only, as the runtime does (#1250 batch 21)', async () => {
+  const agentFeatureId = 'zhin.agent' as never;
+  const { agentHostToken, readAgentPurposeTargets, inferencePurposeEffects } = await import('@zhin.js/agent/runtime');
+  const base = snapshot();
+  const agents = [{ name: 'planner', qualifiedName: 'tools__planner' }];
+  // `planner` is only discovered from agents/planner/ (listBindings), not configured under ai.agents.
+  const protocol = { listBindings: () => [{ name: 'zhin' }, { name: 'planner' }], listConfiguredBindingNames: () => ['zhin'] };
+  const state: SnapshotState = {
+    ...base,
+    projections: new Map([...base.projections, [agentFeatureId, { $projection: 'zhin.agent-index/1', list: () => agents }]]),
+    resources: new Map([[base.root, new Map([[agentHostToken.id, { protocol }]])]]),
+  };
+  const store = new SnapshotStore(state);
+  const lease = store.acquire();
+  try {
+    const targets = readAgentPurposeTargets(lease.value);
+    expect(targets).toEqual({ bindingNames: ['zhin'], subAgents: [{ qualifiedName: 'tools__planner', name: 'planner', kind: 'bare' }] });
+    // Not misreported as the binding's key: the sub-agent runs on it.
+    expect(inferencePurposeEffects({ planner: 'profiles:a' }, targets))
+      .toEqual({ 'agents.planner': { status: 'effective', target: 'sub-agent', agents: ['tools__planner'] } });
+  } finally {
+    lease.release();
+    await store.close();
+  }
+});
+
 it('lists sub-agents with their qualified names and whether the bare name is usable (#1270)', async () => {
   // `zhin.agent-index/1` projection, keyed by the Agent feature id (`@zhin.js/agent-feature`).
   const agentFeatureId = 'zhin.agent' as never;

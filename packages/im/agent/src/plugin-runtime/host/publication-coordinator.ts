@@ -45,6 +45,7 @@ export class AgentHostPublicationCoordinator {
     resources.provide(agentHostToken, Object.freeze({
       protocol: Object.freeze({
         listBindings: () => agent.listBindings(),
+        listConfiguredBindingNames: () => Object.freeze(service.getBindingRegistry().listConfiguredBindingNames()),
         execute: (bindingName: string, request: TurnRequest) => {
           const selected = service.getBindingRegistry().getBinding(bindingName);
           if (!selected) throw new Error(`Agent binding not found: ${bindingName}`);

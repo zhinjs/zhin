@@ -102,7 +102,11 @@ A sub-agent turn started by `ask` / `delegate` / `follow_up` picks its model in 
 2. **Adapter / Endpoint / scene chat overrides** (and a personal Session selection): used only when the sub-agent has no effective binding, in the chat order above.
 3. **Deployment chat** (`purposes.chat`).
 
-So a model bound to a sub-agent wins over channel-level overrides such as `purposes.adapters.<adapter>.chat`; the aggregation turn (the entry agent continuing with results) keeps the root turn's purpose. The sub-turn trace's `model_selection` records the purpose and Profile actually used; the Console's purpose effects and attention items apply the same rules.
+So a model bound to a sub-agent wins over channel-level overrides such as `purposes.adapters.<adapter>.chat`; the aggregation turn (the entry agent continuing with results) keeps the root turn's purpose.
+
+**The same holds for a routed specialist**: when a message is routed to a specialist agent (`@planner …`, an Endpoint's preferred agent, an agent that declares the platform), that agent is the turn's entry agent. The root turn and the aggregation turns of its engagement pick their model by its `purposes.agents.<key>`; without an effective key they keep the binding's purpose (chat for `zhin`).
+
+The `model_selection` of a turn's and sub-turn's trace records the purpose used (`purpose`), the Profile, the layer that chose it (`source`: `agent` / `adapter` / `endpoint` / `scene` / `session` / `default`) and its key (`source_key`), and whose key was looked up (`agent`). An `agent` with `purpose: chat` means that agent has no effective binding. The Console's purpose effects and attention items apply the same rules.
 
 | Scope | Selectable purposes |
 | --- | --- |

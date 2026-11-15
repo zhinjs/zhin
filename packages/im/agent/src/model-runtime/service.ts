@@ -70,7 +70,8 @@ export function selectLanguagePurpose(
         : `sub-agent ${agent.name}: purposes.agents.${effect.key} is ambiguous (several sub-agents share the name); `
           + `key it by the qualified name${qualified ? ` (${qualified})` : ''}; using chat`);
     }
-    return 'chat';
+    // Without a usable key of its own: a sub-agent (no binding name) runs on chat; a turn routed to a
+    // specialist keeps its binding's purpose.
   }
   return !input.bindingName || input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}`;
 }
@@ -98,7 +99,8 @@ export class ModelRuntimeService {
       throw new ModelRuntimeError('invalid-context');
     }
     return this.acquireForContext({ lease: input.lease, snapshots: input.snapshots, context,
-      bindingName: input.binding.name, signal: input.request.signal, inferenceSnapshot: input.inferenceSnapshot });
+      bindingName: input.binding.name, ...(input.agent ? { agent: input.agent } : {}),
+      signal: input.request.signal, inferenceSnapshot: input.inferenceSnapshot });
   }
 
   acquireForContext(input: ModelContextAcquireInput): Promise<ModelExecutionScope> { return this.#acquire(input, false); }
@@ -198,9 +200,12 @@ export class ModelRuntimeService {
               const child: Promise<ModelExecutionScope> = this.#acquire({ lease: retained, snapshots: input.snapshots,
                 context: { ...context, operationId: childInput.operationId, sessionKey: childInput.sessionKey,
                   ...(childInput.epoch !== undefined ? { epoch: childInput.epoch } : {}) },
-                // A child without a sub-agent continues the root turn's binding (the entry actor's
-                // aggregation turn), so it keeps the root's `agent:<binding>` purpose, not `chat`.
-                bindingName: childInput.bindingName ?? (childInput.agent ? undefined : input.bindingName), agent: childInput.agent, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
+                // A child without a sub-agent continues the root turn (the entry actor's aggregation turn):
+                // it keeps the root's binding and routed specialist, so the root's purpose, not `chat`.
+                bindingName: childInput.bindingName ?? (childInput.agent ? undefined : input.bindingName),
+                ...((childInput.agent ?? (childInput.bindingName ? undefined : input.agent))
+                  ? { agent: childInput.agent ?? input.agent } : {}),
+                signal: childInput.signal, inferenceSnapshot: scope.snapshot,
               }, true).then(acquired => {
                 let childRelease: Promise<void> | undefined;
                 return Object.freeze({ ...acquired, release: () => childRelease ??= (async () => {

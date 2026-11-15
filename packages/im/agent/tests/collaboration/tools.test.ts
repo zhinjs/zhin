@@ -226,13 +226,35 @@ describe('collaboration tools: ask', () => {
     expect(out).toContain(`budget raised to the minimum for one complete answer: modelCalls 1→${MIN_DELEGATION_BUDGET.modelCalls}, tokens 250→${MIN_DELEGATION_BUDGET.tokens}`);
   });
 
-  it('never raises a budget floor above what the asker has left', () => {
-    const remaining = { modelCalls: 2, tokens: 100_000, wallMs: 10_000, sideEffects: 5 };
+  it('never raises a budget floor above half of what the asker has left', () => {
+    const remaining = { modelCalls: 6, tokens: 100_000, wallMs: 10_000, sideEffects: 5 };
     expect(applyDelegationBudgetFloor({ modelCalls: 1, tokens: 500, wallMs: 1_000 }, remaining)).toEqual({
-      amounts: { modelCalls: 2, tokens: MIN_DELEGATION_BUDGET.tokens, wallMs: 10_000 },
-      raised: ['modelCalls 1→2', `tokens 500→${MIN_DELEGATION_BUDGET.tokens}`, 'wallMs 1000→10000'],
+      amounts: { modelCalls: 3, tokens: MIN_DELEGATION_BUDGET.tokens, wallMs: 5_000 },
+      raised: ['modelCalls 1→3', `tokens 500→${MIN_DELEGATION_BUDGET.tokens}`, 'wallMs 1000→5000'],
     });
+    expect(applyDelegationBudgetFloor({ modelCalls: 1 }, { ...remaining, modelCalls: 2 })).toEqual({ amounts: { modelCalls: 1 }, raised: [] });
     expect(applyDelegationBudgetFloor({ modelCalls: 10 }, remaining)).toEqual({ amounts: { modelCalls: 10 }, raised: [] });
+  });
+
+  it('accepts three parallel one-call delegations out of six remaining calls (the floor does not eat the budget)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => { release = resolve; });
+    const { harness, toolsFor, attached } = await setup([ceiling('zhin'), ceiling('a'), ceiling('b'), ceiling('c')], {
+      a: async () => { await hold; return { status: 'completed', content: 'a' }; },
+      b: async () => { await hold; return { status: 'completed', content: 'b' }; },
+      c: async () => { await hold; return { status: 'completed', content: 'c' }; },
+      'zhin#worker-1': async () => { await hold; return { status: 'completed', content: 'coordinated' }; },
+    });
+    // A grant of six model calls for the delegating mail: its remaining budget is 6.
+    const sent = await harness.send('zhin', attached.root, { kind: 'delegate', to: 'zhin#worker-1', text: 'coordinate', budget: { modelCalls: 6 } });
+    if (!sent.ok) throw new Error(`grant failed: ${sent.code}`);
+    expect(harness.remaining(sent.mail)?.modelCalls).toBe(6);
+    const tools = toolsFor('zhin#worker-1', sent.mail);
+    const outs = await Promise.all(['a', 'b', 'c'].map(agent => call(tools, 'delegate', { agent, brief: 'part', budget: { modelCalls: 1 } })));
+    for (const [index, out] of outs.entries()) expect(out).toMatch(new RegExp(`^delegated to ${['a', 'b', 'c'][index]} \\(mail id\\d+\\)`));
+    expect(harness.remaining(sent.mail)!.modelCalls).toBeGreaterThanOrEqual(0);
+    release();
+    await attached.detach({ status: 'completed' });
   });
 
   it('refuses a fresh ask to an agent still working on a delegation (one line of work)', async () => {

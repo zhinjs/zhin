@@ -226,6 +226,9 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `harness-delegate-result-wakes-delegator` | collaboration, long-task | ADR 0048 §3.3: async delegate, result mail wakes the delegator  |
 | `harness-delegatee-ceiling-not-widened` | collaboration, approval | ADR 0048 invariant 1: the delegatee's ceiling caps a master's delegation  |
 | `harness-delegation-budget-enforced` | collaboration, long-task, quota | ADR 0048 invariant 2: a delegatee cannot exceed its budget grant  |
+| `harness-delegation-budget-floor` | collaboration, quota | #1250: a model-chosen delegation budget below one complete answer is raised to the floor and reported |
+| `harness-routed-specialist-purpose` | collaboration | #1250: a turn routed to a specialist (and its aggregation turns) runs on the specialist binding, not the adapter chat override |
+| `harness-subagent-purpose-over-adapter-chat` | collaboration | #1250: sub-agent turns through delegate / follow_up / ask run on the sub-agent binding, not the adapter chat override |
 | `harness-ping-pong-escalates` | collaboration, long-task | ADR 0048 invariant 5: agents bouncing a question are stopped and the human decides  |
 | `harness-specialist-routing` | collaboration, tool-use | ADR 0048 §2 / H4: addressing `@<specialist>` routes the entry turn to that specialist with its own ceiling and contacts |
 | `harness-venue-bot-origin-not-human` | collaboration, injection | ADR 0048 §3.4 invariant 7: bot-origin messages in a Venue (`member` / `peer_bot` / `self`) never open a human Mail turn |

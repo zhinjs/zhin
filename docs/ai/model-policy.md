@@ -102,7 +102,11 @@ purposes:
 2. **适配器 / Endpoint / 场景的聊天覆盖**（以及个人 Session 的明确选择）：只在子 Agent 没有生效的绑定时才用，顺序同上面的聊天解析顺序。
 3. **部署聊天**（`purposes.chat`）。
 
-也就是说，给子 Agent 显式绑定的模型优先于 `purposes.adapters.<adapter>.chat` 等渠道级覆盖；汇总回合（入口 Agent 继续处理结果）沿用主回合的用途。子回合 trace 的 `model_selection` 写出实际用的用途和 Profile；Console 的「用途效果」与提醒按同一规则判断某个键是否生效。
+也就是说，给子 Agent 显式绑定的模型优先于 `purposes.adapters.<adapter>.chat` 等渠道级覆盖；汇总回合（入口 Agent 继续处理结果）沿用主回合的用途。
+
+**被路由到的专家 Agent 同样适用**：消息被路由给某个专家 Agent 时（`@planner …`、Endpoint 的首选 Agent、声明了该平台的 Agent），这一轮的入口 Agent 就是它。主回合和它这次协作里的汇总回合按它的 `purposes.agents.<key>` 选模型；它没有生效的键时沿用绑定的用途（`zhin` 即聊天）。
+
+回合与子回合 trace 的 `model_selection` 写出实际用的用途（`purpose`）、Profile、选中这一层（`source`：`agent` / `adapter` / `endpoint` / `scene` / `session` / `default`）及其键（`source_key`），以及查了哪个 Agent 的键（`agent`）。`agent` 有值而 `purpose` 是 `chat`，表示这个 Agent 没有生效的绑定。Console 的「用途效果」与提醒按同一规则判断某个键是否生效。
 
 可覆盖范围固定：
 

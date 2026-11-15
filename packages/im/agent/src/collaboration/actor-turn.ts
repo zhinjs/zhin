@@ -47,11 +47,11 @@ import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
-import { traceModelFallback } from '../model-runtime/purpose-fallback.js';
+import { traceModelFallback, traceModelSelection } from '../model-runtime/purpose-fallback.js';
 import { captureSubTurnTracing, createScopedTraceJournal, type SubTurnTrace, type SubTurnTracing } from '../trace/turn-trace-registry.js';
 import type { TurnTraceTermination } from '../trace/turn-trace.js';
 import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
-import type { ModelExecutionScope } from '../model-runtime/types.js';
+import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
 import type { OutboundMediaAuthority } from '../media/media-normalize.js';
 import type { FileRole } from '../security/file-role-policy.js';
@@ -144,15 +144,17 @@ async function runActorTurn(
     roles: rootTurn.principal.roles,
   } });
   const entryActor = agent.name === options.directory.entry.name;
+  // The entry actor continues the root turn (its binding and routed specialist): no key of its own.
+  const modelKey: SubAgentModelKey | undefined = entryActor ? undefined : Object.freeze({
+    name: agent.name,
+    ...(agent.qualifiedName ? { qualifiedName: agent.qualifiedName } : {}),
+    ...(agent.bareNameShared ? { bareNameShared: true } : {}),
+  });
   let models: ModelExecutionScope | undefined;
   if (options.models) {
     try {
       models = await options.models.acquire({
-        ...(entryActor ? {} : { agent: Object.freeze({
-          name: agent.name,
-          ...(agent.qualifiedName ? { qualifiedName: agent.qualifiedName } : {}),
-          ...(agent.bareNameShared ? { bareNameShared: true } : {}),
-        }) }),
+        ...(modelKey ? { agent: modelKey } : {}),
         operationId: turnId,
         sessionKey,
         signal: AbortSignal.any([signal, rootTurn.signal]),
@@ -162,7 +164,7 @@ async function runActorTurn(
       trace?.close({ status: 'failed', code: 'model_unavailable', reason: content });
       return { status: 'failed', content };
     }
-    recordModelSelection(trace, models);
+    recordModelSelection(trace, models, modelKey);
   }
   try {
     return await runActorTurnWithModel(options, { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models });
@@ -206,16 +208,8 @@ export function actorModelSelection(
   return { modelId, modelCandidates: [...new Set([modelId, ...inherited])] };
 }
 
-function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExecutionScope): void {
-  const binding = models.chat.binding;
-  const source = binding.source;
-  trace?.note({ kind: 'model_selection', selection: {
-    purpose: models.purpose ?? (source?.level === 'agent' ? `agent:${source.name}` : 'chat'),
-    profile_id: binding.profile.id,
-    account_id: binding.account.id,
-    model: models.chat.model.id,
-    ...(source ? { source: source.level } : {}),
-  } });
+function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExecutionScope, agent?: SubAgentModelKey): void {
+  trace?.note({ kind: 'model_selection', selection: traceModelSelection(models, agent) });
   // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the sub-turn's trace.
   if (trace) models.observeModelFallback?.(event => trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) }));
 }

@@ -549,7 +549,7 @@ describe('#1250 actor turns own their model operation and trace', () => {
     const nested = rootTrace.snapshot().subagents[0]!;
     expect(nested.turn_id).toMatch(/^turn-1:actor:researcher:/);
     expect(nested.model_calls).toHaveLength(2);
-    expect(nested.model_selection).toEqual({ purpose: 'agent:researcher', profile_id: 'gemini-profile', account_id: 'acct', model: 'gemini', source: 'agent' });
+    expect(nested.model_selection).toEqual({ purpose: 'agent:researcher', profile_id: 'gemini-profile', account_id: 'acct', model: 'gemini', source: 'agent', source_key: 'researcher', agent: 'researcher' });
     expect(nested.termination.status).toBe('completed');
     expect(saved).toHaveLength(0);
 

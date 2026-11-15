@@ -12,6 +12,7 @@ import {
 import type { StructuredDatabase } from '@zhin.js/database';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { inferencePolicyKeys } from './turn-context.js';
+import type { SubAgentModelKey } from '../../model-runtime/types.js';
 
 export interface InferenceEndpointAddress {
   readonly rootId: string;
@@ -75,7 +76,11 @@ export interface AgentPurposeTargets {
 /** Reads the binding names and the sub-agent list of `snapshot`; empty lists when the Agent is absent. */
 export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurposeTargets {
   const agentHost = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as AgentHostPort | undefined;
-  const bindingNames = ['zhin', ...(agentHost?.protocol.listBindings().map(binding => binding.name) ?? [])];
+  // The runtime's binding names (configured `ai.agents` only, #1250 batch 21): a name merely
+  // discovered from `agents/<name>/` is a sub-agent, and its key must not read as a binding's.
+  const configured = agentHost?.protocol.listConfiguredBindingNames?.()
+    ?? agentHost?.protocol.listBindings().map(binding => binding.name) ?? [];
+  const bindingNames = ['zhin', ...configured];
   const index = snapshot.projections.get(agentFeatureId);
   const descriptors = isAgentIndex(index) ? index.list() : [];
   const counts = new Map<string, number>();
@@ -92,6 +97,21 @@ export function readAgentPurposeTargets(snapshot: RuntimeSnapshot): AgentPurpose
     }))
     .sort((a, b) => (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0));
   return Object.freeze({ bindingNames: Object.freeze([...new Set(bindingNames)]), subAgents: Object.freeze(subAgents) });
+}
+
+/**
+ * `purposes.agents` lookup key of the specialist a turn was routed to (`selection.agent`: its
+ * qualified name, or a bare name), from the generation's agent list (#1250 agent-purpose-binding-ignored).
+ */
+export function specialistModelKey(snapshot: RuntimeSnapshot, agent: string | undefined): SubAgentModelKey | undefined {
+  const selected = agent?.trim();
+  if (!selected || selected === 'zhin') return undefined;
+  const index = snapshot.projections.get(agentFeatureId);
+  const descriptors = isAgentIndex(index) ? index.list() : [];
+  const found = descriptors.find(item => item.qualifiedName === selected) ?? descriptors.find(item => item.name === selected);
+  const name = found?.name ?? selected.slice(selected.lastIndexOf('__') + (selected.includes('__') ? 2 : 0));
+  const shared = descriptors.filter(item => item.name === name).length > 1;
+  return Object.freeze({ name, qualifiedName: found?.qualifiedName ?? selected, ...(shared ? { bareNameShared: true } : {}) });
 }
 
 export type InferenceTargetsReader = (page?: InferenceTargetPage) => Promise<InferenceTargets>;
