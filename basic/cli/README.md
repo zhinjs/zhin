@@ -19,10 +19,10 @@ pnpm add -g @zhin.js/cli   # 或 npm i -g @zhin.js/cli
 zhin start               # 后台启动网关与实例（--watch source config；--mode production）
 zhin start --foreground --mode production --no-watch   # systemd / Docker / PM2 用前台
 zhin status [--json]      # 网关与实例状态（未运行时退出码 3）
-zhin logs [-f] [-n N]     # 实例日志
+zhin logs [-f] [-n N]     # 实例日志（--level / --since / --until / --grep / --name 过滤）
 zhin restart [--gateway]  # 重启实例（--gateway 连网关一起）
 zhin stop                 # 停止实例与网关
-zhin update [pkg...]      # 更新依赖（网关运行时：停实例 → 安装 → 启实例，失败回滚）
+zhin update [pkg...]      # 更新依赖（网关运行时：停实例 → 安装 → 启实例，失败回滚；--dry-run 只列出会升级的版本）
 zhin console init         # 初始化：数据库 + 第一个所有者（之后 http.token 失效）
 zhin console user …       # 用户管理与救援（create / passwd / disable / enable / list）；网关运行时经网关，否则直接打开数据库
 zhin service install      # 安装开机自启的系统服务（前台网关）

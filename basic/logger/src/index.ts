@@ -4,6 +4,7 @@ export {
   Logger,
   DefaultFormatter,
   displayLogCategory,
+  parseLogLine,
   ConsoleTransport,
   FileTransport,
   StreamTransport,
@@ -25,6 +26,8 @@ export {
 export type {
   LogEntry,
   LogFormatter,
+  DefaultFormatterOptions,
+  ParsedLogLine,
   LogTransport,
   LoggerOptions,
   TransportSecurityOptions,

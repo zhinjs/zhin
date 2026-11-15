@@ -19,6 +19,7 @@ import {
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
+import { listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
 import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
@@ -26,21 +27,34 @@ import { findConfigFile } from '@zhin.js/gateway/project';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 
 const packagesCommand = new Command('packages')
-  .description('插件生态入口：搜索/查看/安装插件与 zhin-package 技能包（ADR 0010）');
+  .description('已安装的包与插件状态，以及 zhin-package 技能包（ADR 0010）；安装 / 卸载 / 搜索插件用 zhin install / uninstall / search / info');
+
+/**
+ * ADR 0062 Q11: npm plugins are installed, searched and inspected with `zhin install` / `search` /
+ * `info`; the `packages` copies forward to the same code and say so once (on stderr).
+ */
+function warnDuplicate(command: string, replacement: string): void {
+  logger.warn(`zhin packages ${command} 已弃用，将在后续版本删除：请改用 ${replacement}（ADR 0062）`);
+}
 
 packagesCommand
   .command('search [keyword]')
-  .description('搜索 Zhin.js 插件（npm registry）')
+  .description('（已弃用，改用 zhin search）搜索 Zhin.js 插件（npm registry）')
   .option('-c, --category <category>', `按分类搜索 (${PLUGIN_CATEGORIES.join('|')})`)
   .option('-l, --limit <number>', '限制结果数量', '20')
   .option('--official', '仅显示官方插件', false)
-  .action((keyword: string | undefined, options: { category?: string; limit?: number; official?: boolean }) =>
-    runPluginSearch(keyword, options));
+  .action((keyword: string | undefined, options: { category?: string; limit?: number; official?: boolean }) => {
+    warnDuplicate('search', 'zhin search');
+    return runPluginSearch(keyword, options);
+  });
 
 packagesCommand
   .command('info <name>')
-  .description('查看插件详情（版本/描述/周下载量/依赖/homepage；官方适配器附配置入口）')
-  .action((name: string) => runPluginInfo(name));
+  .description('（已弃用，改用 zhin info）查看插件详情（版本/描述/周下载量/依赖/homepage；官方适配器附配置入口）')
+  .action((name: string) => {
+    warnDuplicate('info', 'zhin info');
+    return runPluginInfo(name);
+  });
 
 interface InstallOptions {
   local?: boolean;
@@ -50,7 +64,7 @@ interface InstallOptions {
 
 packagesCommand
   .command('install <source>')
-  .description('安装包：npm 插件/适配器，或 npm:/git: 前缀的 zhin-package 技能包')
+  .description('安装 npm:/git: 前缀的 zhin-package 技能包（npm 插件 / 适配器已弃用，改用 zhin install）')
   .option('-l, --local', '技能包安装到项目 .zhin/packages/')
   .option('--no-enable', '只安装依赖，不自动写入应用插件声明')
   .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')
@@ -70,6 +84,7 @@ packagesCommand
       return;
     }
 
+    warnDuplicate('install <npm 包>', `zhin install ${source}`);
     await installNpmPlugin(resolved, opts, source);
   });
 
@@ -170,22 +185,29 @@ packagesCommand
 
 packagesCommand
   .command('list')
-  .description('列出已安装包')
-  .option('-l, --local', '仅项目本地')
-  .action((opts: { local?: boolean }) => {
+  .description('分组列出项目依赖（适配器 / 插件 / Zhin 框架与功能包 / 其他依赖）与 zhin-package 技能包')
+  .option('-l, --local', '技能包只列项目本地（.zhin/packages/）')
+  .option('--json', '以 JSON 输出（{ packages, skillPacks }）')
+  .action((opts: { local?: boolean; json?: boolean }) => {
     const roots = opts.local
       ? [resolvePackagesRoot(true)]
       : [resolvePackagesRoot(false), resolvePackagesRoot(true)];
     const seen = new Set<string>();
+    const skillPacks: SkillPackEntry[] = [];
     for (const root of roots) {
-      const lock = readLock(root);
-      for (const pkg of lock.packages) {
+      for (const pkg of readLock(root).packages) {
         if (seen.has(pkg.name)) continue;
         seen.add(pkg.name);
-        console.log(`${pkg.name}  ←  ${pkg.source}  (${pkg.local ? 'local' : 'global'})`);
+        skillPacks.push({ name: pkg.name, source: pkg.source, local: pkg.local === true });
       }
     }
-    if (seen.size === 0) console.log('（无已安装 zhin-package）');
+    // #1250: this used to print only the skill packs ("（无已安装 zhin-package）" next to 40 plugins).
+    const packages = listProjectPackages(process.cwd());
+    if (opts.json) {
+      output.line(JSON.stringify({ packages, skillPacks }, null, 2));
+      return;
+    }
+    output.line(...renderProjectPackages(packages, skillPacks));
   });
 
 packagesCommand

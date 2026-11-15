@@ -205,7 +205,7 @@ describe('DefaultFormatter', () => {
 
   it('formats as [HH:mm:ss.SSS][LEVEL][category] message without Zhin prefix', async () => {
     const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
-    const formatter = new DefaultFormatter(plainColors)
+    const formatter = new DefaultFormatter(plainColors, { date: false })
 
     const timestamp = new Date(2026, 7, 7, 12, 34, 56, 789)
     const result = formatter.format({
@@ -221,7 +221,7 @@ describe('DefaultFormatter', () => {
 
   it('omits CATEGORY segment when logger name is empty', async () => {
     const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
-    const formatter = new DefaultFormatter(plainColors)
+    const formatter = new DefaultFormatter(plainColors, { date: false })
 
     const result = formatter.format({
       level: LogLevel.WARN,
@@ -235,7 +235,7 @@ describe('DefaultFormatter', () => {
 
   it('omits CATEGORY for legacy bare Zhin root name', async () => {
     const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
-    const formatter = new DefaultFormatter(plainColors)
+    const formatter = new DefaultFormatter(plainColors, { date: false })
     const result = formatter.format({
       level: LogLevel.INFO,
       name: 'Zhin',
@@ -244,6 +244,41 @@ describe('DefaultFormatter', () => {
       args: [],
     })
     expect(result).toBe('[01:02:03.004][INFO] legacy')
+  })
+
+  // #1250: file logs and piped output carry the date; a terminal keeps the short time.
+  it('adds the local date when asked, and by default when stdout is not a terminal', async () => {
+    const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
+    const entry = { level: LogLevel.WARN, name: 'agent', message: 'm', timestamp: new Date(2026, 10, 5, 9, 8, 7, 6), args: [] }
+    expect(new DefaultFormatter(plainColors, { date: true }).format(entry)).toBe('[2026-11-05 09:08:07.006][WARN] [agent] m')
+    const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+    try {
+      Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+      expect(new DefaultFormatter(plainColors).format(entry)).toBe('[09:08:07.006][WARN] [agent] m')
+      Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true })
+      expect(new DefaultFormatter(plainColors).format(entry)).toBe('[2026-11-05 09:08:07.006][WARN] [agent] m')
+    } finally {
+      if (descriptor) Object.defineProperty(process.stdout, 'isTTY', descriptor)
+      else delete (process.stdout as { isTTY?: boolean }).isTTY
+    }
+  })
+})
+
+describe('parseLogLine', () => {
+  it('reads both timestamp forms, strips colours and round-trips the formatter', async () => {
+    const { DefaultFormatter, LogLevel, parseLogLine } = await import('../src/logger.js')
+    const timestamp = new Date(2026, 10, 15, 16, 22, 15, 448)
+    const line = new DefaultFormatter(undefined, { date: true }).format({ level: LogLevel.ERROR, name: 'icqq:123', message: 'a | b: c', timestamp, args: [] })
+    expect(parseLogLine(line)).toEqual({ date: '2026-11-15', time: '16:22:15.448', timestamp, level: 'error', category: 'icqq:123', message: 'a | b: c' })
+    expect(parseLogLine('\u001b[90m[13:33:58.147]\u001b[39m\u001b[34m[INFO]\u001b[39m \u001b[36m[Speech]\u001b[39m ready')).toEqual({ time: '13:33:58.147', level: 'info', category: 'Speech', message: 'ready' })
+    expect(parseLogLine('[00:00:00.001][WARN] root')).toEqual({ time: '00:00:00.001', level: 'warn', message: 'root' })
+  })
+
+  it('returns undefined for lines that are not log entries', async () => {
+    const { parseLogLine } = await import('../src/logger.js')
+    expect(parseLogLine('    at foo (bar.js:1:2)')).toBeUndefined()
+    expect(parseLogLine('[2026-11-14T16:14:37.324] [INFO] [icqq] - x')).toBeUndefined()
+    expect(parseLogLine('[12:00:00.000][LOUD] x')).toBeUndefined()
   })
 })
 
