@@ -1,5 +1,14 @@
 # @zhin.js/plugin-ledger
 
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [941d534]
+  - @zhin.js/console-contract@1.3.0
+  - @zhin.js/page@1.2.0
+  - @zhin.js/tool@1.1.22
+
 ## 1.0.8
 
 ### Patch Changes

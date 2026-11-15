@@ -1,5 +1,29 @@
 # @zhin.js/gateway
 
+## 1.5.0
+
+### Minor Changes
+
+- efa87bf: 用量统计计入「声称查过但本轮没有调用工具」（#1270）：`totals.claimsWithoutToolCall`、`byModel[].claimsWithoutToolCall`，以及 `totals.unexecutedToolNotices`；新增 `lookupClaimsOf()`，供 `zhin usage report` 复用。
+- fd3800c: #1250 第 19a 批：`zhin console init` / Console 初始化向导选择与当前一致的数据库（例如默认 SQLite 下 `--database sqlite`）时不再写 `database:` 块、不再提示「切换数据库不会迁移旧库数据」、不再重启实例：`ConsoleSetupService.applyDatabase()` 返回 `changed: false`（新增 `SetupDatabaseApplyResult` 类型）。前台网关（`pnpm dev`）在 Console 未初始化时向交互终端打印带 `#token=` 的初始化链接（新增导出 `consoleSetupLink()`），令牌不写入日志文件。
+- 0e6a82f: 普通插件启停热生效，不再重启实例（zhinjs/zhin#1250 `toggle-plugin-restarts-instance`，ADR 0054 修订 2026-11-15）：实例运行时 `zhin enable` / `zhin disable` 与 Console 全局开关先写 `disable_plugins`，再经控制通道 `plugins.apply` 让实例按该修订换代（退役或装配该插件实例的全部能力），实例不重启、适配器不重新登录。插件声明 `package.json#zhin.toggle: "restart"`、含原生模块、实例启动后依赖有变化、实例不支持或热应用失败时，自动回退为停止 → 启动实例（启动失败照旧恢复配置并启动原实例），结果的 `plugin.apply` / `restartReason` / `restartDetail` 与新阶段 `apply-hot` 说明生效方式和原因；Console RPC 的 `restartRequired` 只在实例确实重启时为 true；CLI 输出「已热生效，实例未重启」或重启原因。
+
+### Patch Changes
+
+- e7cf228: `zhin update`（网关依赖事务）在 pnpm 工作区（`pnpm-workspace.yaml` 列出了 `packages`）里以 `pnpm update -r` 运行，工作区里的本地插件随根目录一起升级（zhinjs/zhin#1250）。
+- Updated dependencies [efa87bf]
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+- Updated dependencies [92e6c1e]
+- Updated dependencies [0e6a82f]
+- Updated dependencies [fd3800c]
+  - @zhin.js/console-protocol@1.5.0
+  - @zhin.js/logger@1.3.0
+  - @zhin.js/host-http@1.5.0
+  - @zhin.js/runtime@1.5.0
+  - @zhin.js/scaffold-wizard@1.4.0
+  - @zhin.js/database@1.2.2
+
 ## 1.4.0
 
 ### Minor Changes

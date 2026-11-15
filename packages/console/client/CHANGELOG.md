@@ -1,5 +1,23 @@
 # @zhin.js/client
 
+## 1.2.2
+
+### Patch Changes
+
+- a257dae: 新增 `@zhin.js/console-ui`（ADR 0063 P1a，首发 1.0.0：package.json 记 1.0.0-0，由本 patch 升到 1.0.0）：Console 与插件页面共用的组件库。从 Console 迁入 `components/ui/*`（含 `SearchableSelectField`）、`PageShell`、`PageHeader`、`ConfirmDialog` / `useConfirm`、`StatCard`、`EmptyState`、`ErrorAlert`、`InfoHint`，属性与 Console 原组件一致、外观不变；新增 `RefreshControl`（「更新于 hh:mm:ss」+ 手动 / 5s / 15s / 30s 自动刷新 + 刷新按钮）、`usePageChrome({ actions, refresh })` 及外壳侧的 `PageChromeProvider` / `PageChromeActions`、`Button` 的 `variant="destructive-outline"`、语言 Provider `ConsoleUiI18nProvider`（内置 zh-CN / en，宿主可注入语言与覆盖文案）。发布产物带编译好的 `@zhin.js/console-ui/styles.css`（令牌 + 组件样式，使用方不需要 Tailwind）和只含令牌的 `tokens.css`。
+
+  `@zhin.js/client`：`cn()` 移入 `@zhin.js/console-ui`，`@zhin.js/client` 改为再导出，原有导入不变；`--zk-*` 变量标注为指向 `@zhin.js/console-ui` 令牌的弃用别名（取值不变）。
+
+- 941d534: `definePage()` 新增 `keywords`（ADR 0063 决策 3）：命令面板搜索别名，可以是一组，也可以按 `zh-CN` / `en` 分语言（例如 `{ 'zh-CN': ['抽奖'], en: ['lottery'] }`）；`definePage` 校验并去重，`@zhin.js/page` 原样透传。`keywords` 和 `section` 走同一路径：register 包装与 `@zhin.js/client` 的 `resolveEntryRegister` 写进路由 `meta.keywords`，Host 的 `/entries` 在每条 entry 顶层与 `meta` 中都带上 `keywords`；每条 entry 另带所属插件的 `packageName` 和 `pluginDescription`（插件 package.json 的 `description`），供 Console 命令面板按插件名与说明搜索插件页面。
+- Updated dependencies [a257dae]
+- Updated dependencies [941d534]
+- Updated dependencies [efa87bf]
+- Updated dependencies [92e6c1e]
+- Updated dependencies [0e6a82f]
+  - @zhin.js/console-ui@1.0.0
+  - @zhin.js/contract@1.1.28
+  - @zhin.js/console-protocol@1.5.0
+
 ## 1.2.1
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 1.1.31
+
+### Patch Changes
+
+- Updated dependencies [816c3f3]
+  - @zhin.js/core@1.10.0
+  - @zhin.js/im-contract@1.3.0
+  - @zhin.js/tool@1.1.22
+
 ## 1.1.30
 
 ### Patch Changes

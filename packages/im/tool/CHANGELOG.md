@@ -1,5 +1,12 @@
 # @zhin.js/tool
 
+## 1.1.22
+
+### Patch Changes
+
+- Updated dependencies [816c3f3]
+  - @zhin.js/im-contract@1.3.0
+
 ## 1.1.21
 
 ### Patch Changes
