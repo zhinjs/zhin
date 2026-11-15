@@ -289,8 +289,11 @@ export interface InboundSecretGuard {
     snapshot: RuntimeSnapshot;
   }>): InboundSecretMatch | undefined;
   /**
-   * Whether a native platform event (`platform.receive`) carries the secret. Such an event is not
-   * dispatched to native Handlers: its payload is platform-shaped, so it cannot be redacted reliably.
+   * Whether an Endpoint event other than `message.receive` carries the secret: native platform events
+   * (`platform.receive` and any other side event) and canonical notices, requests (a friend or join
+   * request's comment) and system events. Such an event is neither recorded nor dispatched to Handlers:
+   * its payload is platform-shaped, so it cannot be redacted reliably. A payload too large to inspect
+   * completely should count as carrying it (fail closed).
    */
   inspectNative?(payload: unknown): boolean;
 }

@@ -4608,6 +4608,27 @@ describe('IM Runtime inbound origin routing', () => {
     } finally { await close(f); }
   });
 
+  it('revokes a secret in a self echo it drops, without recording or routing it (#1289 review)', async () => {
+    const discard = vi.fn();
+    const handle = vi.fn();
+    const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+      ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); },
+      { inboundSecret });
+    try {
+      await expect(receive(f.im, groupInput(f, 'bot-self', 'claim SECRET'))).resolves.toEqual({ matched: false });
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(handle).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+      expect(f.im.messageDiagnostics.list()[0]).toMatchObject({ route: 'self_echo' });
+      discard.mockClear();
+      await receive(f.im, groupInput(f, 'bot-self', 'hello'));
+      expect(discard).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
   it.each(['peer_bot', 'member'] as const)('records %s group messages as history only', async (kind) => {
     const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
     if (kind === 'member') commitMembership(f, { isMember: () => true });
@@ -4769,6 +4790,32 @@ describe('IM Runtime inbound origin routing', () => {
         await receive(f.im, dedupInput(f, a!, undefined));
         await receive(f.im, dedupInput(f, b!, undefined));
         expect(f.route).toHaveBeenCalledTimes(2);
+      } finally { await close(f); }
+    });
+
+    it('revokes a secret in a message it drops on a dedup failure, without recording or routing it (#1289 review)', async () => {
+      const discard = vi.fn();
+      const handle = vi.fn();
+      const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+        ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+      const f = await twoEndpoints({ inboundDeduper: { claim: () => { throw new Error('boom'); } }, inboundSecret });
+      const published: unknown[] = [];
+      f.im.messageEvents.subscribe((event) => published.push(event));
+      try {
+        const [a] = endpointIds(f);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-secret', 'group', 'alice', 'claim SECRET'))).resolves.toEqual({ matched: false });
+        expect(discard).toHaveBeenCalledTimes(1);
+        expect(handle).not.toHaveBeenCalled();
+        expect(f.route).not.toHaveBeenCalled();
+        expect(await countRecords(f, a!)).toBe(0);
+        // Published only as the redacted text.
+        expect(JSON.stringify(published)).not.toContain('SECRET');
+        expect(JSON.stringify(published)).toContain('claim ***');
+        expect(f.im.messageOutcomes.list({ limit: 1 })[0]).toMatchObject({ outcome: 'dropped_dedup_error' });
+        discard.mockClear();
+        await receive(f.im, dedupInput(f, a!, 'dup-plain', 'group', 'alice', 'hello'));
+        expect(discard).not.toHaveBeenCalled();
+        expect(await countRecords(f, a!)).toBe(1);
       } finally { await close(f); }
     });
 

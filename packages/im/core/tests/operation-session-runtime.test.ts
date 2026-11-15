@@ -254,6 +254,29 @@ it('withholds a native event that carries an inbound secret from native Handlers
   } finally { await f.close(); }
 });
 
+it.each(['notice.receive', 'request.receive', 'system.receive', 'native.custom'] as const)(
+  'withholds a %s event that carries an inbound secret from Handlers (#1289 review)', async name => {
+    const called = vi.fn();
+    const inspectNative = vi.fn((payload: unknown) => JSON.stringify(payload).includes('SECRET'));
+    const f = await fixture(async () => undefined, defineLifecycleHandler({ event: name, handle: called }),
+      { match: () => undefined, inspectNative });
+    const common = { id: 'event', timestamp: 100, metadata: {} };
+    const payload = (comment: string) => name === 'notice.receive'
+      ? { ...common, type: 'notice', name: 'notice.group.member_increase', conversation: { kind: 'group', id: 'room' }, metadata: { comment } }
+      : name === 'request.receive'
+        ? { ...common, type: 'request', name: 'request.group.join', actor: { id: 'alice' }, comment,
+          conversation: { kind: 'group', id: 'room' }, $approve() {}, $reject() {} }
+        : name === 'system.receive' ? { ...common, type: 'system', name: 'system.online', metadata: { comment } } : { comment };
+    try {
+      await f.endpoint[endpointSpec].events.emit(name, payload('认领 SECRET'));
+      expect(called).not.toHaveBeenCalled();
+      await f.endpoint[endpointSpec].events.emit(name, payload('hello'));
+      expect(called).toHaveBeenCalledTimes(1);
+      expect(inspectNative).toHaveBeenCalledTimes(2);
+    } finally { await f.close(); }
+  },
+);
+
 it('validates native event source incarnation before any Handler dispatch', async () => {
   const called = vi.fn();
   const f = await fixture(async () => undefined, defineLifecycleHandler({ event: 'platform.receive', handle: called }));

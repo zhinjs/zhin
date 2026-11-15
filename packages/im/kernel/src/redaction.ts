@@ -102,28 +102,123 @@ export function matchChatOwnerClaimText(text: string, prefix = ''): Readonly<{ k
   return undefined;
 }
 
-/** What may sit between the symbols of a code someone typed: whitespace, `-`, soft hyphens, zero-width characters. */
-const CLAIM_CODE_GAP = '[\\s\\-\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]*';
+/**
+ * What may sit between the symbols of a code someone typed, and is ignored when codes are compared:
+ * whitespace, `-`, format characters (`\p{Cf}`: soft hyphen, zero-width characters, U+2061–2064,
+ * U+200E/200F, U+180E, U+FEFF, …) and combining marks (`\p{M}`: U+034F, U+FE0F, …), all invisible
+ * or nearly so. `normalizeCode` in `zhin.js/instance` (chat-owner-claim) ignores exactly these too.
+ */
+const CLAIM_CODE_GAP = /[\s\-\p{Cf}\p{M}]/u;
+const CLAIM_CODE_GAPS = /[\s\-\p{Cf}\p{M}]+/gu;
+const NON_ASCII = /[\u0080-\u{10FFFF}]/u;
+
+/** Text folded for code comparison (`nfkc`: after NFKC): upper case first (it may add a mark: `ǰ` → `J` + U+030C), then gaps dropped. */
+function foldClaimText(text: string, nfkc: boolean): string {
+  return (nfkc ? text.normalize('NFKC') : text).toUpperCase().replace(CLAIM_CODE_GAPS, '');
+}
 
 /**
- * Matches `code` the way the claim compares codes (letter case, whitespace and `-` ignored), also when
- * zero-width characters split it; applied to the text as written and to its NFKC form (full-width letters).
+ * `text` the way claim codes are compared (ADR 0060 §3.3): NFKC, upper case, gap characters dropped.
+ * The claim's exact comparison (`normalizeCode`) starts from this, so text that grants always carries
+ * the code for {@link containsChatOwnerClaimCode}.
  */
-function claimCodePattern(code: string, flags: string): RegExp | undefined {
-  const symbols = [...code.toUpperCase().replace(/[\s-]/gu, '')];
-  if (symbols.length === 0) return undefined;
-  return new RegExp(symbols.map(symbol => symbol.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join(CLAIM_CODE_GAP), flags);
+export function foldChatOwnerClaimText(text: string): string {
+  return foldClaimText(text, true);
+}
+
+/** `code` as compared: NFKC, upper case, gaps dropped (`undefined`: nothing to compare). */
+function foldClaimCode(code: string): string | undefined {
+  return foldClaimText(code, true) || undefined;
+}
+
+/**
+ * Whether folded `text` contains `target`: as written (a combining mark after a code symbol is a gap)
+ * and in its NFKC form (full-width letters). ASCII text is its own NFKC form: it is folded once.
+ */
+function containsFolded(text: string, target: string): boolean {
+  if (foldClaimText(text, false).includes(target)) return true;
+  return NON_ASCII.test(text) && foldClaimText(text, true).includes(target);
 }
 
 /** Whether `text` carries `code` anywhere (ADR 0060 §3.3: how inbound recognizes the current claim code). */
 export function containsChatOwnerClaimCode(text: string, code: string): boolean {
-  const pattern = claimCodePattern(code, 'iu');
-  if (!pattern || !text) return false;
-  return pattern.test(text) || pattern.test(text.normalize('NFKC'));
+  const target = foldClaimCode(code);
+  if (!target || !text) return false;
+  return containsFolded(text, target);
 }
 
-/** Codes of the claims open in this process (normally at most one). */
-const openClaimCodes = new Set<{ readonly code: string }>();
+/**
+ * A streaming {@link containsChatOwnerClaimCode} over many strings (the strings of a native event), read
+ * as if joined by line breaks, so a code split across two strings is found too. Each string is folded
+ * once as written and, only when it is not ASCII, once more after NFKC; nothing but the last
+ * `code.length - 1` folded symbols is kept between strings.
+ */
+export interface ChatOwnerClaimCodeScanner {
+  /** Feeds the next string; `true` once the code has been seen (in it, or across it and the previous ones). */
+  feed(text: string): boolean;
+}
+
+export function createChatOwnerClaimCodeScanner(code: string): ChatOwnerClaimCodeScanner {
+  const target = foldClaimCode(code);
+  const keep = target ? target.length - 1 : 0;
+  let written = '';
+  let normalized = '';
+  let found = false;
+  return Object.freeze({
+    feed(text: string): boolean {
+      if (found || !target || !text) return found;
+      const raw = foldClaimText(text, false);
+      const nfkc = NON_ASCII.test(text) ? foldClaimText(text, true) : raw;
+      written += raw;
+      normalized += nfkc;
+      if (written.includes(target) || normalized.includes(target)) return (found = true);
+      written = keep ? written.slice(-keep) : '';
+      normalized = keep ? normalized.slice(-keep) : '';
+      return false;
+    },
+  });
+}
+
+/**
+ * Source ranges `[start, end)` of every occurrence of `target` in `text`, folding each code point on
+ * its own (gaps dropped, NFKC, upper case) so that a hit maps back to the characters as written.
+ */
+function claimCodeRanges(text: string, target: string): [number, number][] {
+  let folded = '';
+  /** Per code unit of `folded`: the source range of the character it came from. */
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let index = 0;
+  for (const char of text) {
+    const end = index + char.length;
+    if (!CLAIM_CODE_GAP.test(char)) {
+      const mapped = NON_ASCII.test(char) ? foldClaimText(char, true) : char.toUpperCase();
+      folded += mapped;
+      for (let unit = 0; unit < mapped.length; unit += 1) { starts.push(index); ends.push(end); }
+    }
+    index = end;
+  }
+  const ranges: [number, number][] = [];
+  for (let at = folded.indexOf(target); at !== -1; at = folded.indexOf(target, at + target.length)) {
+    const start = starts[at]!;
+    const end = ends[at + target.length - 1]!;
+    const previous = ranges.at(-1);
+    if (previous && start < previous[1]) previous[1] = Math.max(previous[1], end);
+    else ranges.push([start, end]);
+  }
+  return ranges;
+}
+
+/**
+ * Codes of the claims open in this process (normally at most one). One set per process, even when this
+ * module is loaded more than once (two copies of `@zhin.js/kernel` in a project, or source and build in
+ * one run): the claim may register through one copy while a writer redacts through another.
+ */
+const OPEN_CLAIM_CODES = Symbol.for('zhin.kernel.chat-owner-claim-codes');
+const openClaimCodes: Set<{ readonly code: string }> = (() => {
+  const host = globalThis as { [OPEN_CLAIM_CODES]?: Set<{ readonly code: string }> };
+  return host[OPEN_CLAIM_CODES] ??= new Set<{ readonly code: string }>();
+})();
 
 /**
  * Registers an open claim code for {@link redactChatOwnerClaimText}; the returned function unregisters it.
@@ -137,16 +232,23 @@ export function registerChatOwnerClaimCode(code: string): () => void {
 
 /**
  * Writer-side backstop (conversation records, Agent session messages, traces): every occurrence of a
- * currently open claim code becomes `***`. Without an open claim nothing is changed — no valid code exists.
+ * currently open claim code becomes `***`. Only the characters of a hit are replaced, everything else is
+ * kept as written — also when only the NFKC form shows the code (`ＱＷＥＲＴＹ２３`). Without an open
+ * claim nothing is changed — no valid code exists.
  */
 export function redactChatOwnerClaimText(text: string): string {
   if (openClaimCodes.size === 0 || !text) return text;
   let result = text;
   for (const { code } of openClaimCodes) {
-    const probe = claimCodePattern(code, 'iu');
-    if (!probe) continue;
-    if (probe.test(result)) result = result.replace(claimCodePattern(code, 'giu')!, '***');
-    else if (probe.test(result.normalize('NFKC'))) result = result.normalize('NFKC').replace(claimCodePattern(code, 'giu')!, '***');
+    const target = foldClaimCode(code);
+    if (!target || !containsFolded(result, target)) continue;
+    const ranges = claimCodeRanges(result, target);
+    // Fail closed: the code is there but cannot be located character by character.
+    if (ranges.length === 0) return '***';
+    let next = '';
+    let cursor = 0;
+    for (const [start, end] of ranges) { next += `${result.slice(cursor, start)}***`; cursor = end; }
+    result = next + result.slice(cursor);
   }
   return result;
 }

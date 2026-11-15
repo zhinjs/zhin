@@ -28,7 +28,10 @@ import { rmSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
-import { containsChatOwnerClaimCode, matchChatOwnerClaimText, registerChatOwnerClaimCode } from '@zhin.js/kernel';
+import {
+  containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, foldChatOwnerClaimText, matchChatOwnerClaimText, registerChatOwnerClaimCode,
+} from '@zhin.js/kernel';
+import { getLogger } from '@zhin.js/logger';
 import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
@@ -64,12 +67,18 @@ export function chatOwnerClaimCodeHash(code: string): string {
 
 /**
  * The one code a claim text stands for (#1250: `认领:码`, `認領 码`, `ｃｌａｉｍ 码`, `认领码`, `AAAA 2222`,
- * trailing punctuation, zero-width characters): NFKC, letter case ignored, everything but letters and
- * digits dropped, then one leading keyword (`认领`, `认领码`, `claim`). The whole remainder is compared, so a text compares exactly
- * one candidate however long it is (`认领 码 谢谢` or a long word carrying the code is not one code).
+ * trailing punctuation, zero-width characters): folded like `containsChatOwnerClaimCode` compares
+ * (`foldChatOwnerClaimText`: NFKC, letter case, and the same gap characters — whitespace, `-`, `\p{Cf}`,
+ * `\p{M}` — ignored), then punctuation around it and one leading keyword (`认领`, `认领码`, `claim`)
+ * dropped. The whole remainder is compared, so a text compares exactly one candidate however long it is
+ * (`认领 码 谢谢` or a long word carrying the code is not one code). Punctuation inside the remainder
+ * (`ABCD.2345`) is kept: it separates symbols for the containment check as well, so text that grants
+ * always carries the code (#1289 review).
  */
-const normalizeCode = (text: string) => text.normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]/gu, '')
-  .replace(/^(?:认领|認領|CLAIM)(?:码|碼|CODE)?/u, '');
+const normalizeCode = (text: string) => foldChatOwnerClaimText(text)
+  .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
+  .replace(/^(?:认领|認領|CLAIM)(?:码|碼|CODE)?/u, '')
+  .replace(/^[^\p{L}\p{N}]+/u, '');
 
 function sameCode(left: string, right: string): boolean {
   const a = Buffer.from(left);
@@ -209,6 +218,12 @@ export class ChatOwnerClaim {
   carries(text: string): boolean {
     const current = this.#code;
     return current !== undefined && containsChatOwnerClaimCode(text, current);
+  }
+
+  /** Whether a native event payload carries the current code; see {@link inspectNativeClaimPayload}. */
+  inspectNative(payload: unknown): NativeClaimInspection {
+    const current = this.#code;
+    return current === undefined ? 'clear' : inspectNativeClaimPayload(payload, current);
   }
 
   /** Revokes the current code when `text` carries it (a message others saw but no claim handled). */
@@ -381,25 +396,81 @@ export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerCl
         discard: async () => { await claim.revokeIfCarried(text); },
       });
     },
-    inspectNative: payload => claim.active && claim.carries(nativeText(payload)),
+    inspectNative: payload => {
+      const inspection = claim.inspectNative(payload);
+      if (inspection === 'exceeded') {
+        nativeLogger.debug('聊天角色：认领开放期间，一个原生事件过大或无法完整检查，按含认领码处理（不派发）。'
+          + ' (native event too large to inspect while a claim is open: withheld)');
+      }
+      return inspection !== 'clear';
+    },
   };
   return Object.freeze(guard);
 }
 
-/** The strings of a native payload, joined (bounded: depth 8, 2000 values); unserializable parts are skipped. */
-function nativeText(payload: unknown): string {
-  const parts: string[] = [];
+const nativeLogger = getLogger('instance.chat-owner-claim');
+
+/**
+ * What one native-event check reads at most (#1289 review). Beyond it the event counts as carrying
+ * the code (`exceeded`, fail closed) instead of the rest going unchecked: a claim is open only until
+ * the first owner exists, and withholding an oversized native event for that while is safer than
+ * handing a code to native Handlers. Every string up to the budget is checked; nothing is skipped.
+ */
+export const CHAT_OWNER_CLAIM_NATIVE_LIMITS = Object.freeze({ depth: 32, values: 50_000, chars: 4_000_000 });
+
+export type NativeClaimInspection = 'carried' | 'clear' | 'exceeded';
+
+const utf8 = new TextDecoder('utf-8');
+
+/**
+ * Whether a native payload carries `code` (ADR 0060 §3.3): every string, number and byte buffer
+ * (decoded as UTF-8) of every array, plain or class object (own enumerable values), Map and Set is
+ * read, in order, through one `createChatOwnerClaimCodeScanner` (so a code split across neighbouring
+ * strings is found too; each string is folded once, NFKC only when it is not ASCII). A getter that
+ * throws, a structure deeper than {@link CHAT_OWNER_CLAIM_NATIVE_LIMITS} or more values or characters
+ * than it allows: `exceeded`.
+ */
+export function inspectNativeClaimPayload(
+  payload: unknown, code: string, limits: Readonly<{ depth: number; values: number; chars: number }> = CHAT_OWNER_CLAIM_NATIVE_LIMITS,
+): NativeClaimInspection {
+  const scanner = createChatOwnerClaimCodeScanner(code);
   const seen = new Set<object>();
-  const visit = (value: unknown, depth: number): void => {
-    if (parts.length >= 2000) return;
-    if (typeof value === 'string') { parts.push(value); return; }
-    if (typeof value === 'number' || typeof value === 'bigint') { parts.push(String(value)); return; }
-    if (!value || typeof value !== 'object' || depth > 8 || seen.has(value)) return;
+  let values = 0;
+  let chars = 0;
+  const stack: [unknown, number][] = [[payload, 0]];
+  while (stack.length > 0) {
+    const [value, depth] = stack.pop()!;
+    let text: string | undefined;
+    if (typeof value === 'string') text = value;
+    else if (typeof value === 'number' || typeof value === 'bigint') text = String(value);
+    else if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+      if (chars + value.byteLength > limits.chars) return 'exceeded';
+      text = utf8.decode(value);
+    }
+    if (text !== undefined) {
+      values += 1;
+      chars += text.length;
+      if (values > limits.values || chars > limits.chars) return 'exceeded';
+      if (scanner.feed(text)) return 'carried';
+      continue;
+    }
+    // Booleans, symbols, functions, null and undefined carry no text.
+    if (!value || typeof value !== 'object' || seen.has(value)) continue;
+    if (depth >= limits.depth) return 'exceeded';
     seen.add(value);
+    values += 1;
+    if (values > limits.values) return 'exceeded';
+    let children: unknown[];
     try {
-      for (const item of Array.isArray(value) ? value : Object.values(value)) visit(item, depth + 1);
-    } catch { /* getters that throw: skipped */ }
-  };
-  visit(payload, 0);
-  return parts.join('\n');
+      children = value instanceof Map ? [...value].flat()
+        : value instanceof Set ? [...value]
+          : Array.isArray(value) ? [...value as unknown[]] : Object.values(value);
+    } catch {
+      // A getter (or proxy) that throws hides what it would return.
+      return 'exceeded';
+    }
+    if (values + children.length > limits.values) return 'exceeded';
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push([children[index], depth + 1]);
+  }
+  return 'clear';
 }
