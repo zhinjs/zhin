@@ -34,6 +34,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import { describeHmrReloadLog, describeManifestIgnoredLog, describeRestartLog } from './hmr-log.js';
+import { CommandConflictLog } from './command-conflict-log.js';
 import {
   ConfigValidationError,
   createConfigDocument,
@@ -408,12 +409,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     configFile,
     restartSupported,
   });
+  // #1250: command route conflicts are skipped by the Command index; say so once per conflict.
+  const commandConflictLog = new CommandConflictLog(fields => getLogger('command').warn(formatCompact(fields)));
   const host = new RootHost({
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
     watch: parsed.once ? [] : parsed.watch,
     onGenerationCommit: (generation) => {
+      try { commandConflictLog.report(host.runtime.snapshot); } catch { /* diagnostics only */ }
       // Route table follows hot reloads (ADR 0054 §3 `routes`).
       bridgedHttpHost?.publishRoutes(generation);
       consoleEventHub.publish('hmr:reload', { generation });
