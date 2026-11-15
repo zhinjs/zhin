@@ -21,7 +21,11 @@ import {
   upgradePackageJson,
   isPinnedSpecifier,
   isNewerThanRelease,
+  syncWorkspaceYamlOverrides,
+  upgradeWorkspacePackages,
 } from '../src/commands/migrate.js';
+import { cachedRegistryLookup, npmRegistryLookup } from '../src/utils/registry-version.js';
+import { listWorkspacePackageDirs, workspaceGlobToRegExp } from '../src/utils/workspace-packages.js';
 import { scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
@@ -445,6 +449,76 @@ describe('migrate', () => {
     const output = log.mock.calls.flat().join('\n');
     expect(output).toContain(`zhin.js: ${existing} 不低于 registry 最新版本 9.4.2，保留`);
     expect(output).toContain(`@zhin.js/agent: ${existing} 不低于 registry 最新版本 9.4.2，保留`);
+  });
+
+  it('upgrades every pnpm workspace package, exact pins too, and skips workspace:/link:/file: (#1250 migrate-skips-workspace-packages)', () => {
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n  - 'packages/**'\n  - '!packages/**/fixtures/**'\n");
+    const write = (dir: string, manifest: object) => {
+      fs.mkdirSync(path.join(tmp, dir), { recursive: true });
+      fs.writeFileSync(path.join(tmp, dir, 'package.json'), JSON.stringify(manifest, null, 2));
+    };
+    write('plugins/foo', { name: 'foo', dependencies: { 'zhin.js': '1.2.0', '@zhin.js/command': '~1.2.2' }, devDependencies: { '@zhin.js/core': 'workspace:*' } });
+    write('plugins/bar', { name: 'bar', dependencies: { 'zhin.js': 'link:../../zhin', '@zhin.js/ai': 'file:../ai', 'left-pad': '1.0.0' } });
+    write('plugins/none', { name: 'none', dependencies: { 'left-pad': '1.0.0' } });
+    write('packages/a/b', { name: 'deep', dependencies: { 'zhin.js': '^1.0.0' } });
+    write('packages/a/fixtures/c', { name: 'fixture', dependencies: { 'zhin.js': '^1.0.0' } });
+    fs.mkdirSync(path.join(tmp, 'plugins', 'empty'), { recursive: true });
+    expect(listWorkspacePackageDirs(tmp).map(dir => path.relative(tmp, dir).split(path.sep).join('/')))
+      .toEqual(['packages/a/b', 'plugins/bar', 'plugins/foo', 'plugins/none']);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const releases = new Map<string, string>();
+    const changed = upgradeWorkspacePackages(tmp, { dryRun: false, lookup: cachedRegistryLookup(npmRegistryLookup), releases });
+    expect(changed).toEqual(['packages/a/b', 'plugins/foo']);
+    const foo = JSON.parse(fs.readFileSync(path.join(tmp, 'plugins/foo/package.json'), 'utf8'));
+    expect(foo.dependencies).toEqual({ 'zhin.js': '9.4.2', '@zhin.js/command': '^9.4.2' });
+    expect(foo.devDependencies).toEqual({ '@zhin.js/core': 'workspace:*' });
+    expect(JSON.parse(fs.readFileSync(path.join(tmp, 'plugins/bar/package.json'), 'utf8')).dependencies)
+      .toEqual({ 'zhin.js': 'link:../../zhin', '@zhin.js/ai': 'file:../ai', 'left-pad': '1.0.0' });
+    // A member never gets the root's scripts / engines.
+    expect(foo.scripts).toBeUndefined();
+    expect(foo.engines).toBeUndefined();
+    expect(JSON.parse(fs.readFileSync(path.join(tmp, 'packages/a/fixtures/c/package.json'), 'utf8')).dependencies['zhin.js']).toBe('^1.0.0');
+    expect(releases.get('@zhin.js/command')).toBe('9.4.2');
+    // One registry query per package for the whole workspace.
+    expect(registry.calls.filter(call => call === 'zhin.js@latest')).toHaveLength(1);
+  });
+
+  it('matches pnpm workspace globs', () => {
+    expect(workspaceGlobToRegExp('plugins/*').test('plugins/foo')).toBe(true);
+    expect(workspaceGlobToRegExp('plugins/*').test('plugins/foo/bar')).toBe(false);
+    expect(workspaceGlobToRegExp('packages/**').test('packages/a/b')).toBe(true);
+    expect(workspaceGlobToRegExp('./apps/web/').test('apps/web')).toBe(true);
+    expect(workspaceGlobToRegExp('**/fixtures/**').test('packages/a/fixtures/c')).toBe(true);
+  });
+
+  it('aligns @zhin.js/* in pnpm-workspace.yaml overrides and keeps comments (#1250 migrate-ignores-overrides)', () => {
+    const file = path.join(tmp, 'pnpm-workspace.yaml');
+    fs.writeFileSync(file, [
+      'packages:', "  - 'plugins/*'", '# keep me', 'overrides:', "  '@zhin.js/core': 1.1.0", "  '@zhin.js/local': link:../local",
+      "  'left-pad': 1.0.0", 'allowBuilds:', '  esbuild: true', '',
+    ].join('\n'));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = cachedRegistryLookup(npmRegistryLookup);
+    const resolved = new Map([['zhin.js', '^9.4.2']]);
+    expect(syncWorkspaceYamlOverrides(tmp, '^1.0.0', resolved, lookup, true)).toBe(true);
+    expect(fs.readFileSync(file, 'utf8')).toContain("'@zhin.js/core': 1.1.0");
+    expect(syncWorkspaceYamlOverrides(tmp, '^1.0.0', resolved, lookup, false)).toBe(true);
+    const text = fs.readFileSync(file, 'utf8');
+    expect(text).toContain('# keep me');
+    expect(yaml.parse(text)).toMatchObject({
+      overrides: { '@zhin.js/core': '^9.4.1', '@zhin.js/local': 'link:../local', 'left-pad': '1.0.0' },
+      allowBuilds: { esbuild: true },
+    });
+    expect(syncWorkspaceYamlOverrides(tmp, '^1.0.0', resolved, lookup, false)).toBe(false);
+  });
+
+  it('the root upgrade syncs pnpm-workspace.yaml overrides too', () => {
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "overrides:\n  '@zhin.js/ai': 1.0.0\n");
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', engines: { node: '>=22.19.0' }, dependencies: { 'zhin.js': '^1.1.0' } }, null, 2));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(yaml.parse(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8')).overrides).toEqual({ '@zhin.js/ai': '^9.4.0' });
   });
 
   it('isNewerThanRelease compares the lowest admitted version with the registry latest', () => {

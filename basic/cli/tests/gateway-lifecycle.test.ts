@@ -113,9 +113,16 @@ describe.runIf(process.platform !== 'win32')('zhin gateway lifecycle commands', 
     const parsed = JSON.parse(status.stdout) as { gateway: { running: boolean; mode: string; pid: number; args: string[]; ports: number[] }; instance: { state: string; pid: number } };
     expect(parsed.gateway).toMatchObject({ running: true, mode: 'daemon', ports: [port], args: ['--mode', 'production', '--no-watch'] });
     expect(parsed.instance.state).toBe('running');
+    // #1250: the fake instance has no Console RPC: the runtime reads degrade, status still succeeds.
+    const runtime = JSON.parse(status.stdout) as { endpoints: { available: boolean }; mcp: { available: boolean }; attention: { available: boolean } };
+    expect(runtime.endpoints).toMatchObject({ available: false, error: expect.any(String) });
+    expect(runtime.mcp).toMatchObject({ available: false });
+    expect(runtime.attention).toMatchObject({ available: false });
     const human = await zhin(root, ['status']);
     expect(human.stdout).toContain('网关：运行中');
     expect(human.stdout).toContain('实例：running');
+    expect(human.stdout).toContain('适配器账号：无法读取');
+    expect(human.code).toBe(0);
 
     const logs = await zhin(root, ['logs', '-n', '20']);
     expect(logs.code).toBe(0);

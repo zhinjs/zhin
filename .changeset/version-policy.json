@@ -29,7 +29,7 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。；所有者已批准（zhinjs/zhin#1250）：新增命令 `zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`，`zhin status`（含 `--json` 的 `chatOwnerClaim`）在没有全局 owner 时显示认领码。npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 10 批新增 zhin ai account add / test / rename-env 命令；send / schedule / watch / config / packages --live 新增 --allow-unverified-host（本机目标未报告项目标识时默认拒绝）；zhin config set 新增 --plain。；所有者已批准（zhinjs/zhin#1250）：新增命令 `zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`，`zhin status`（含 `--json` 的 `chatOwnerClaim`）在没有全局 owner 时显示认领码。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/scaffold-wizard",

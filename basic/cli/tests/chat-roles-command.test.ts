@@ -115,4 +115,40 @@ describe('zhin chat-roles export|import (ADR 0060 §4.5)', () => {
     expect(exit).toHaveBeenCalledWith(1);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('export / import accept --host and refuse an unverified local target unless --allow-unverified-host', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-cli-chat-roles-'));
+    dirs.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'http:\n  port: 1\n');
+    const file = join(root, 'good.json');
+    await writeFile(file, JSON.stringify(sample));
+    for (const sub of ['export', 'import']) {
+      const command = chatRolesCommand.commands.find(c => c.name() === sub)!;
+      expect(command.options.map(option => option.long)).toEqual(expect.arrayContaining(['--host', '--allow-unverified-host']));
+    }
+    const urls: string[] = [];
+    const imported = { principals: 0, identities: 0, roles: 0, consoleLinks: 0, skipped: [] };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url);
+      // A /pub/health that reports no project id: unverified.
+      return new Response(JSON.stringify(url.endsWith('/pub/health') ? { status: 'ok' } : { success: true, data: imported }), { status: 200 });
+    }));
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`exit ${code}`); }) as never);
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+    try {
+      await expect(chatRolesCommand.parseAsync(['import', file, '--host', 'http://127.0.0.1:9'], { from: 'user' })).rejects.toThrow('exit 1');
+      expect(urls).toEqual(['http://127.0.0.1:9/pub/health']);
+      urls.length = 0;
+      exit.mockClear();
+      await chatRolesCommand.parseAsync(['import', file, '--host', 'http://127.0.0.1:9', '--allow-unverified-host'], { from: 'user' });
+      expect(exit).not.toHaveBeenCalled();
+      expect(urls).toEqual(['http://127.0.0.1:9/pub/health', 'http://127.0.0.1:9/api/console/request']);
+    } finally {
+      cwd.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
 });

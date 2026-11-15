@@ -42,18 +42,21 @@ export function translatePackageManagerArgs(manager: PackageManagerName, args: r
   if (command !== 'add' && command !== 'remove' && command !== 'update') throw new Error(`Unsupported package-manager command: ${String(command)}`);
   const workspace = rest.includes('-w');
   const dev = rest.includes('-D');
-  const specs = rest.filter(arg => arg !== '-w' && arg !== '-D');
+  // `-r` (update only): every package of a pnpm workspace; other managers have no pnpm workspace.
+  const recursive = rest.includes('-r');
+  const specs = rest.filter(arg => arg !== '-w' && arg !== '-D' && arg !== '-r');
   if (specs.some(spec => spec.startsWith('-'))) throw new Error('Unsupported package-manager flag');
   if (command === 'update') {
     if (dev) throw new Error('Unsupported package-manager flag');
     switch (manager) {
-      case 'pnpm': return ['update', ...(workspace ? ['-w'] : []), ...specs];
+      case 'pnpm': return ['update', ...(recursive ? ['-r'] : []), ...(workspace ? ['-w'] : []), ...specs];
       case 'npm': return ['update', ...specs];
       case 'yarn': return ['upgrade', ...specs];
       case 'bun': return ['update', ...specs];
     }
   }
   if (command !== 'add' && command !== 'remove') throw new Error('unreachable');
+  if (recursive) throw new Error('Unsupported package-manager flag');
   switch (manager) {
     case 'pnpm': return [command, ...(workspace ? ['-w'] : []), ...(dev ? ['-D'] : []), ...specs];
     case 'npm': return [command === 'add' ? 'install' : 'uninstall', ...(dev ? ['--save-dev'] : []), ...specs];
