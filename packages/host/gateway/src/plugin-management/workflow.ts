@@ -20,9 +20,11 @@ import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
 import { dependenciesInPlace, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
 import { officialPluginCandidates, undeclaredPluginMessage } from './plugin-candidates.js';
+import { hotToggleBlocker, type HotToggleBlocker } from './hot-toggle.js';
 import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
+type HotTogglePackageJson = Readonly<Record<string, unknown>> & { readonly zhin?: unknown };
 
 // Narrow local view of the `@zhin.js/adapter` index projection: the gateway must not import IM layers (ADR 0054 §0).
 const adapterFeatureId = featureId('zhin.adapter');
@@ -644,17 +646,33 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return this.#mutate(async completed => {
       await this.#assertRevision(expectedRevision, expectedProjectRevision);
       const plan = await this.planSetEnabled(request, enabled);
+      let revision = plan.configurationRevision;
       if (plan.changed) {
         const configuration = this.#configuration();
         if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
         const current = await configuration.document.read();
         if (current.revision !== plan.configurationRevision) throw new Error('配置在校验期间变化，请刷新后重试');
-        await (await configuration.document.prepare(current, [{ op: 'set', path: ['disable_plugins'], value: [...plan.disabled] }])).commit();
+        revision = (await (await configuration.document.prepare(current, [{ op: 'set', path: ['disable_plugins'], value: [...plan.disabled] }])).commit()).revision;
         completed.push(enabled ? 'plugin-enable' : 'plugin-disable');
       }
       const state = await this.inspect(plan.instanceKey);
-      return Object.freeze({ plan, changed: plan.changed, restartRequired: plan.changed || state.restartRequired, state });
+      // `revision`: the configuration revision after the write (what a running instance applies).
+      return Object.freeze({ plan, changed: plan.changed, restartRequired: plan.changed || state.restartRequired, state, revision });
     }, request);
+  }
+
+  /**
+   * Why enabling / disabling this declared instance in a running instance must restart it
+   * (manifest `zhin.toggle: "restart"`, native addon, dependencies changed after `startedAt`);
+   * `undefined` when it can be applied in place (zhinjs/zhin#1250). Writes nothing.
+   */
+  async hotToggleBlocker(instanceKey: string, startedAt?: number): Promise<HotToggleBlocker | undefined> {
+    const entries = await this.#declaredEntries();
+    const entry = entries.find(item => item.instanceKey === instanceKey);
+    const pkg = entry ? (await this.#installed(entry.package).catch(() => undefined))?.pkg : undefined;
+    return hotToggleBlocker(this.#root, pkg ? {
+      name: pkg.name, root: pkg.root, packageJson: pkg.packageJson as unknown as HotTogglePackageJson,
+    } : undefined, startedAt);
   }
 
   async planUninstall(request: string): Promise<PluginUninstallPlan> {
