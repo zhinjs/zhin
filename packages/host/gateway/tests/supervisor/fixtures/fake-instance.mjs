@@ -21,6 +21,12 @@ if (env.FAKE_ECHO_STDIN) {
 
 if (env.FAKE_IGNORE_SIGTERM) process.on('SIGTERM', () => { console.log('sigterm-ignored'); });
 process.on('message', (message) => {
+  // FAKE_PLUGIN_APPLY: answer plugins.apply with this outcome (`silent` never answers).
+  if (message?.type === 'plugins.apply' && env.FAKE_PLUGIN_APPLY && env.FAKE_PLUGIN_APPLY !== 'silent') {
+    console.log(`plugins.apply ${message.payload.instanceKey} ${message.payload.enabled} ${message.payload.revision}`);
+    process.send?.({ type: 'plugins.apply.result', id: message.id, payload: { outcome: env.FAKE_PLUGIN_APPLY, generation: 2 } });
+    return;
+  }
   if (message?.type !== 'shutdown') return;
   console.log(`shutdown ${message.payload.reason} ${message.payload.budgetMs}`);
   if (env.FAKE_IGNORE_SHUTDOWN) return;
@@ -34,7 +40,8 @@ if (crashAfter !== undefined) setTimeout(() => { console.error('crashing'); proc
 
 if (!env.FAKE_NO_READY) {
   setTimeout(() => {
-    send('ready', { version: number('FAKE_VERSION') ?? Number(env.ZHIN_RUNTIME_CHILD), pid: process.pid, generation: 1 });
+    send('ready', { version: number('FAKE_VERSION') ?? Number(env.ZHIN_RUNTIME_CHILD), pid: process.pid, generation: 1,
+      ...(env.FAKE_PLUGIN_APPLY ? { features: ['plugins.apply'] } : {}) });
     // Route tables published after hot reloads carry the newly committed generation.
     for (const generation of (env.FAKE_ROUTE_GENERATIONS ?? '').split(',').filter(Boolean)) {
       send('routes', { table: { revision: Number(generation), generation: Number(generation), apiBase: '/api', http: [], ws: [] } });

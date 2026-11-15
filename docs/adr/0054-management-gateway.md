@@ -101,7 +101,7 @@ interface HttpHost {
 | 网关 → 实例 | `http.request` / `http.body` / `http.abort` | 请求头与流式请求体 |
 | 实例 → 网关 | `http.response` / `http.body` / `http.end` | 响应头与流式响应体 |
 | 双向 | `ws.open` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧 |
-| 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
+| 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、聊天命令改写的 `disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
 | 网关 → 实例 | `shutdown` | `{ reason, budgetMs }` |
 | 网关 → 实例 | `principal-revoked` | `{ principalId, reason? }`：用户被禁用 / 删除、改密或绑定变化（ADR 0049 §6）后，实例关闭该用户（`userId`）经桥接打开的 SSE 与 WS（WS 关闭码 4401）。终端会话在网关本地，由网关直接结束 |
 | 实例 → 网关 | `catalog` | `{ pluginPermissions }`：当前世代的插件权限目录（ADR 0049 增补），监听时与每次变化（世代提交）时上报；网关缓存（实例重启期间沿用上一份），用于 `/auth/me` 的等级展开、`iam.roles.list` 与网关自己的授权 |
@@ -125,7 +125,7 @@ interface HttpHost {
 
 - `install` 声明新插件前用 Schema 默认值补全空配置并校验；有无默认值的必填字段（或引用缺失的环境变量）时只安装依赖、不声明，事务成功，结果带 `needsConfiguration`（缺少的配置路径与环境变量），实例不会因缺配置而回滚整笔安装。
 - `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`；Schema 校验失败时回复除 `error` 文本外另带结构化 `errors: [{ path, message }]`（`path` 相对实例块，`$` 加 `.键/索引`，如 `$.endpoints.0.id`）与 `missingEnv: string[]`，仅非空时出现，类型见 `GatewayRpcErrorDetails`，本地 socket 的错误行同形），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。已安装但未声明的插件（`needsConfiguration`）可用 `schema:get { pluginName: <包名> }` 读取其 `schema.json` 表单（只读，须是生产依赖且为 Plugin 包），形状与已声明实例相同并带 `declared: false`。
-- `gateway.plugins.enable { plugin, startInstance? }` / `gateway.plugins.disable { plugin, startInstance? }`（`plugin.manage`；非所有者只能启停白名单内的包，`./` 本地插件只限所有者）把一个已声明实例移出或加入 `disable_plugins`（`plugin` 为实例键，或只声明一次的包名）。先在停实例前校验（未声明、保留键、项目根插件一律 `invalid_input`；`enable` 另要求包已安装、依赖可解析、实例配置通过插件 Schema，失败时与 `declare` 同样带 `errors` / `missingEnv`），再作为只写配置的事务执行（`snapshot → stop-instance → configure → start-instance`），启动失败时恢复配置文件并启动旧实例。已是目标状态时直接成功、不停实例、不写文件。结果带 `plugin: { instanceKey, packageName, enabled, changed }`。CLI 的 `zhin enable` / `zhin disable` 在网关运行时经本地 socket 调用它们，否则直接写配置。
+- `gateway.plugins.enable { plugin, startInstance? }` / `gateway.plugins.disable { plugin, startInstance? }`（`plugin.manage`；非所有者只能启停白名单内的包，`./` 本地插件只限所有者）把一个已声明实例移出或加入 `disable_plugins`（`plugin` 为实例键，或只声明一次的包名）。先在停实例前校验（未声明、保留键、项目根插件一律 `invalid_input`；`enable` 另要求包已安装、依赖可解析、实例配置通过插件 Schema，失败时与 `declare` 同样带 `errors` / `missingEnv`），再作为只写配置的事务执行（`snapshot → stop-instance → configure → start-instance`；2026-11-15 起实例运行时默认热生效、不重启，见文末「修订 2026-11-15」），启动失败时恢复配置文件并启动旧实例。已是目标状态时直接成功、不停实例、不写文件。结果带 `plugin: { instanceKey, packageName, enabled, changed }`。CLI 的 `zhin enable` / `zhin disable` 在网关运行时经本地 socket 调用它们，否则直接写配置。
 - Console 的全局插件开关（`plugin:set-enabled { instanceKey, enabled }`，以及 `feature.set-enabled` 的 `level: 'global'`）是同一笔启停事务（2026-11-13 修订）：网关在 `POST {base}/console/request` 转发前拦截这两种请求，按 `plugin.manage` 授权（权限表把 `plugin:set-enabled` 映射到 `plugin.manage`，`feature.set-enabled` 按 `level` 细化：`global` → `plugin.manage`，其余层仍是 `feature.toggle`），调用 `PackageService.setEnabled`，用各自原有的回复形状作答（`plugin:set-enabled`：`{ success, instanceKey, enabled, disabled, restartRequired, message }`；`feature.set-enabled`：`{ status: 'saved' | 'unchanged', revision, restartRequired?, warnings, message? }`，`revision` 与 `warnings` 取事务后的配置文件），并多带 `transaction`（事务结果）。`restartRequired` 为 `true` 表示实例已为这次变更由网关重启。事务失败或回滚时回复错误信封 `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`（HTTP 500）；事务前的拒绝（校验、并发事务、权限）保留网关错误码与状态。事务成功且有变化时，网关在 `{base}/events` 上补发 `plugin:lifecycle-updated { instanceKey, enabled }`。`feature.set-enabled` 的适配器 / 账号 / 会话层是功能开关（ADR 0050 / 0055），原样转发给实例。实例不再写全局开关：Console 路径上的 `plugin:set-enabled` 与全局 `feature.set-enabled` 一律拒绝（后者为 409 `gateway-required`），`zhin start --standalone`（无网关）下也一样，提示改用 `zhin enable` / `zhin disable` 或在网关下运行。聊天命令 `功能 开启|关闭 <插件> 全局` + `功能 确认 <码>` 暂仍由实例写 `disable_plugins` 并请求重启（无回滚），待实例 → 网关的事务请求通道。
 - 回滚报告的 `logTail` 只含本次事务期间实例输出的行。
 
@@ -196,3 +196,21 @@ interface HttpHost {
 - 「数据库切换」改为：网关写配置后只重启实例，不再重连。
 - 本地控制套接字新增 `gateway.console.migration.status`（`zhin console migrate` / `zhin doctor` 在网关运行时读迁移状态）。
 
+
+## 修订 2026-11-15：插件启停热生效，不再重启实例（zhinjs/zhin#1250）
+
+所有者决定：「适配器也算插件，既然适配器都做了，插件也做吧，本身这算是优化了」。§4 的启停事务（`gateway.plugins.enable` / `disable`、Console 全局开关）改为：
+
+- **默认热生效**：实例在运行时，事务是 `snapshot → configure → apply-hot`。网关先一次原子写入 `disable_plugins`，再经控制通道发 `plugins.apply { instanceKey, enabled, revision }`；实例按该修订执行一次配置应用（与 Console「应用已保存配置」同一条世代事务：停用＝退役该实例的 Scope 与全部能力，启用＝装配并提交），以提交后的世代为准回复 `plugins.apply.result { outcome: applied | restart-required | failed }`。实例不停、适配器不重新登录。
+- **控制通道增量**：`plugins.apply` / `plugins.apply.result` 是可选消息，协议版本仍是 3；实例在 `ready.features` 里声明 `plugins.apply`，网关只向声明了的实例发送（较旧实例按下面的回退处理）。
+- **回退为重启**（`snapshot → stop-instance → configure → start-instance`，或热应用后 `… → apply-hot → stop-instance → start-instance`），结果写明原因 `restartReason`：
+  - `manifest`：插件在 `package.json#zhin.toggle` 声明 `"restart"`（默认 `"hot"`）；
+  - `native-module`：插件含原生扩展（`binding.gyp`、`.node` 预编译文件，或依赖 `bindings` / `node-gyp-build` / `prebuild-install` 等加载器）；
+  - `dependencies-changed`：项目 `package.json`、锁文件或插件自身的 `package.json` 在实例就绪之后被修改；
+  - `instance-unsupported`：运行中的实例没有声明 `plugins.apply`；
+  - `runtime-requires-restart`：实例的 Runtime 把这次变更留给进程重启（`restart-pending` 分组）；
+  - `hot-apply-failed`：世代事务被拒绝、超时或结果无法确认。
+  前三项在写入之前判定，不做热应用尝试。
+- **事务顺序与回滚不变**：先写配置、再生效；热应用失败时在已写入的配置上重启，重启后启动失败则恢复配置文件并启动原实例。热路径里写入本身失败时只恢复文件，不碰运行中的实例。实例未运行时只写配置（`apply: 'none'`），下次启动生效。
+- **结果**：`plugin` 增加 `apply: 'hot' | 'restart' | 'none'`、`restartReason?`、`restartDetail?`；新阶段 `apply-hot`。Console 两个 RPC 的 `restartRequired` 只在实例真的为此重启时为 `true`，并带同样的 `apply` 字段与说明文字；CLI `zhin enable` / `zhin disable` 输出「已热生效，实例未重启」或重启原因。
+- 聊天命令 `功能 开启|关闭 <插件> 全局` 仍由实例写 `disable_plugins` 并请求重启，留待后续批次。

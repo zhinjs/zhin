@@ -479,6 +479,7 @@ Plugins and Feature packages declare their packaging contract in the top-level `
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
+| `toggle` | No | Plugin only: `"hot"` (default) or `"restart"`. While the instance runs, `zhin enable` / `zhin disable` and the Console's global switch apply in place by default (a new generation, no instance restart). Declare `"restart"` when the plugin's `setup` holds state that cannot be retired in-process (process-wide singletons, native handles); the gateway then restarts the instance instead |
 | `metadata` | No | Display information: `displayName`, `displayNameI18n`, `icon` (Console), `descriptionI18n`, `category` (plugin market, manifest only). `displayName` / `displayNameI18n` / `icon` go here or in `definePlugin({ metadata })`, not both. Locale keys are `zh-CN` / `en` only, with non-empty strings; see [Marketplace metadata](./plugin-delivery.md#marketplace-metadata) for `category` values |
 | `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing. [Inferred from convention directories](#infer-features) when omitted |
 

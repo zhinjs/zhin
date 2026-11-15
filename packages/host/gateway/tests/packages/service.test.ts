@@ -14,7 +14,7 @@ import {
   type PackageWorkflowPort,
 } from '../../src/packages/index.js';
 import { PluginManagementWorkflow } from '../../src/plugin-management/workflow.js';
-import { InstanceStartError, InstanceSupervisor, type InstanceFailure, type InstanceState, type InstanceStatus } from '../../src/supervisor/instance-supervisor.js';
+import { InstanceStartError, InstanceSupervisor, type InstanceFailure, type InstancePluginApplyResult, type InstanceState, type InstanceStatus } from '../../src/supervisor/instance-supervisor.js';
 import { testUser } from '../utils/console-users.js';
 
 const LOCK = 'lockfileVersion: 9.0\n';
@@ -130,6 +130,23 @@ class FakeInstance extends EventEmitter implements PackageTransactionInstance {
     if (behaviour === 'crash-after-ready') {
       setTimeout(() => { this.state = 'crashed'; this.emit('failure', failure('restart storm')); }, 5);
     }
+  }
+}
+
+/** A {@link FakeInstance} that applies plugin enable / disable in place (zhinjs/zhin#1250). */
+class HotInstance extends FakeInstance {
+  readonly supportsPluginApply = true;
+  readonly applies: { instanceKey: string; enabled: boolean; revision: string }[] = [];
+  startedAt: number | undefined;
+  constructor(initial: InstanceState, readonly answer: (request: { instanceKey: string; enabled: boolean; revision: string }) => InstancePluginApplyResult | Promise<InstancePluginApplyResult> = () => ({ outcome: 'applied', generation: 2 }),
+    behaviour?: (attempt: number) => StartBehaviour) {
+    super(initial, behaviour);
+  }
+  override status(): InstanceStatus { return { ...super.status(), ...(this.startedAt !== undefined ? { startedAt: this.startedAt } : {}) }; }
+  async applyPlugin(request: { instanceKey: string; enabled: boolean; revision: string }): Promise<InstancePluginApplyResult> {
+    this.calls.push('apply');
+    this.applies.push(request);
+    return this.answer(request);
   }
 }
 
@@ -645,6 +662,127 @@ describe('GatewayPackageService enable / disable', () => {
     expect(result.plugin).toBeUndefined();
     expect(phases(events)).toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'rollback', 'restore-files', 'restart-instance', 'done']);
     expect(await readFile(join(root, 'zhin.config.json'), 'utf8')).toBe(before);
+  });
+
+  describe('hot enable / disable (zhinjs/zhin#1250)', () => {
+    it('applies a disable and an enable in the running instance without stopping it', async () => {
+      const instance = new HotInstance('running');
+      const calls: string[][] = [];
+      const subject = await declaredService(instance, calls);
+      const events: GatewayPackageEvent[] = [];
+      const disabled = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner, onEvent: event => events.push(event) });
+      expect(disabled).toMatchObject({ ok: true, status: 'succeeded', operation: 'disable',
+        plugin: { instanceKey: 'sandbox', enabled: false, changed: true, apply: 'hot' }, instance: { before: 'running', after: 'running' } });
+      expect(disabled.plugin?.restartReason).toBeUndefined();
+      expect(phases(events)).toEqual(['snapshot', 'configure', 'apply-hot', 'done']);
+      expect((await readConfig()).disable_plugins).toEqual(['sandbox']);
+      const enabled = await subject.setEnabled({ plugin: 'sandbox' }, true, { principal: owner });
+      expect(enabled).toMatchObject({ ok: true, plugin: { enabled: true, changed: true, apply: 'hot' } });
+      expect((await readConfig()).disable_plugins).toEqual([]);
+      // The instance was asked to apply the exact revision written; never stopped or started.
+      expect(instance.calls).toEqual(['apply', 'apply']);
+      expect(instance.applies.map(item => [item.instanceKey, item.enabled])).toEqual([['sandbox', false], ['sandbox', true]]);
+      for (const item of instance.applies) expect(item.revision).toMatch(/\S/u);
+      expect(calls).toEqual([]);
+    });
+
+    it('restarts instead when the plugin declares zhin.toggle "restart", and says why', async () => {
+      const instance = new HotInstance('running');
+      const subject = await declaredService(instance);
+      const manifestPath = join(root, 'node_modules', SANDBOX, 'package.json');
+      const manifest = await readJson(manifestPath);
+      await writeFile(manifestPath, JSON.stringify({ ...manifest, zhin: { ...manifest.zhin, toggle: 'restart' } }));
+      const events: GatewayPackageEvent[] = [];
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner, onEvent: event => events.push(event) });
+      expect(result).toMatchObject({ ok: true, plugin: { apply: 'restart', restartReason: 'manifest', restartDetail: expect.stringContaining('zhin.toggle') } });
+      expect(phases(events)).toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'done']);
+      expect(instance.calls).toEqual(['stop', 'start']);
+    });
+
+    it('restarts instead for a plugin with a native addon', async () => {
+      const instance = new HotInstance('running');
+      const subject = await declaredService(instance);
+      await writeFile(join(root, 'node_modules', SANDBOX, 'binding.gyp'), '{}');
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+      expect(result).toMatchObject({ ok: true, plugin: { apply: 'restart', restartReason: 'native-module' } });
+      expect(instance.calls).toEqual(['stop', 'start']);
+    });
+
+    it('restarts instead when dependencies changed after the instance started', async () => {
+      const instance = new HotInstance('running');
+      const subject = await declaredService(instance);
+      instance.startedAt = Date.now() - 60_000;
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+      expect(result).toMatchObject({ ok: true, plugin: { apply: 'restart', restartReason: 'dependencies-changed' } });
+      expect(instance.calls).toEqual(['stop', 'start']);
+    });
+
+    it('restarts an instance that cannot apply plugin changes in place', async () => {
+      const instance = new FakeInstance('running');
+      const subject = await declaredService(instance);
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+      expect(result).toMatchObject({ ok: true, plugin: { apply: 'restart', restartReason: 'instance-unsupported' } });
+      expect(instance.calls).toEqual(['stop', 'start']);
+    });
+
+    it.each([
+      [{ outcome: 'failed', message: 'reminder setup failed' } as const, 'hot-apply-failed', 'reminder setup failed'],
+      [{ outcome: 'restart-required', reasons: ['host-update-unavailable'] } as const, 'runtime-requires-restart', 'host-update-unavailable'],
+      [{ outcome: 'unsupported' } as const, 'instance-unsupported', '不支持'],
+    ])('falls back to a restart on the written configuration when the instance answers %o', async (answer, reason, detail) => {
+      const instance = new HotInstance('running', () => answer);
+      const subject = await declaredService(instance);
+      const events: GatewayPackageEvent[] = [];
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner, onEvent: event => events.push(event) });
+      expect(result).toMatchObject({ ok: true, status: 'succeeded', plugin: { apply: 'restart', restartReason: reason, restartDetail: expect.stringContaining(detail) } });
+      expect(phases(events)).toEqual(['snapshot', 'configure', 'apply-hot', 'stop-instance', 'start-instance', 'done']);
+      expect(instance.calls).toEqual(['apply', 'stop', 'start']);
+      expect((await readConfig()).disable_plugins).toEqual(['sandbox']);
+    });
+
+    it('rolls the configuration back when the fallback restart does not come up', async () => {
+      // Starts: install, declare, then the fallback start that fails, then the rollback start.
+      const instance = new HotInstance('running', () => ({ outcome: 'failed', message: 'boom' }), attempt => (attempt === 2 ? 'fail' : 'ready'));
+      const subject = await declaredService(instance);
+      const before = await readFile(join(root, 'zhin.config.json'), 'utf8');
+      const events: GatewayPackageEvent[] = [];
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner, onEvent: event => events.push(event) });
+      expect(result).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'start-instance', instance: { after: 'running' } });
+      expect(result.plugin).toBeUndefined();
+      expect(phases(events)).toEqual(['snapshot', 'configure', 'apply-hot', 'stop-instance', 'start-instance', 'rollback', 'restore-files', 'restart-instance', 'done']);
+      expect(await readFile(join(root, 'zhin.config.json'), 'utf8')).toBe(before);
+    });
+
+    it('restores the file without touching the running instance when writing fails', async () => {
+      const instance = new HotInstance('running');
+      const workflow = new PluginManagementWorkflow(root);
+      const failing: PackageWorkflowPort = {
+        inspect: request => workflow.inspect(request),
+        install: (...args) => workflow.install(...args),
+        uninstall: (...args) => workflow.uninstall(...args),
+        update: (...args) => workflow.update(...args),
+        planSetEnabled: (request, enabled) => workflow.planSetEnabled(request, enabled),
+        hotToggleBlocker: (key, startedAt) => workflow.hotToggleBlocker(key, startedAt),
+        setEnabled: async () => { throw new Error('disk full'); },
+      };
+      await declaredService(instance);
+      instance.calls.length = 0;
+      const subject = service({ instance, workflow: failing });
+      const events: GatewayPackageEvent[] = [];
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner, onEvent: event => events.push(event) });
+      expect(result).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'configure', error: expect.stringContaining('disk full'), instance: { before: 'running', after: 'running' } });
+      expect(phases(events)).toEqual(['snapshot', 'configure', 'rollback', 'restore-files', 'done']);
+      expect(instance.calls).toEqual([]);
+    });
+
+    it('only writes the configuration when no instance is running', async () => {
+      const instance = new HotInstance('running');
+      const subject = await declaredService(instance);
+      instance.state = 'stopped';
+      const result = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+      expect(result).toMatchObject({ ok: true, plugin: { apply: 'none' }, instance: { before: 'stopped', after: 'stopped' } });
+      expect(instance.calls).toEqual([]);
+    });
   });
 
   it('lets only owners toggle a project-local plugin', async () => {

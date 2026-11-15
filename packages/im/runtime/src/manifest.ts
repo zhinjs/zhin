@@ -38,6 +38,13 @@ export interface ZhinPluginManifest {
    * are omitted from `features` / project dependencies. Set false to opt out.
    */
   readonly platformFeatures?: boolean;
+  /**
+   * How `zhin enable` / `zhin disable` (and the Console's global switch) apply to this plugin
+   * while the instance runs (zhinjs/zhin#1250). `hot` (default): one generation transaction in the
+   * running process. `restart`: the gateway stops and starts the instance instead — for plugins
+   * whose setup cannot be retired in place (process-wide state, native handles).
+   */
+  readonly toggle?: 'hot' | 'restart';
   readonly features: readonly PackageReference[];
   /**
    * Present (true) when the manifest omits `features`: Feature packages are then inferred from
@@ -282,6 +289,10 @@ function parseZhinManifest(
     `${source}.platformFeatures`,
     issues,
   );
+  const toggle = record.toggle;
+  if (toggle !== undefined && toggle !== 'hot' && toggle !== 'restart') {
+    issues.push(`${source}.toggle must be "hot" or "restart"`);
+  }
   return Object.freeze({
     protocol: 1,
     type,
@@ -290,6 +301,7 @@ function parseZhinManifest(
     runtime: runtime as 'trusted' | 'isolated' | undefined,
     metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues, leniency),
     platformFeatures,
+    ...(toggle === 'hot' || toggle === 'restart' ? { toggle } : {}),
     features: parseReferences(record.features, `${source}.features`, issues, false),
     ...(record.features === undefined ? { featuresOmitted: true as const } : {}),
     plugins: parseReferences(record.plugins, `${source}.plugins`, issues, true),

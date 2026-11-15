@@ -20,6 +20,7 @@ import type {
   GatewayPackageTransactionStatus,
   GatewayPluginConfigurationNeed,
   GatewayPluginEnablement,
+  GatewayPluginRestartReason,
   GatewayTransactionOperation,
 } from '@zhin.js/console-protocol';
 import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
@@ -28,7 +29,7 @@ import { InstallOutputRelay, streamEvents } from '../onboarding/install.js';
 import { createStreamingPackageManager, detectPackageManager, type PackageManagerOutput } from '../onboarding/package-manager.js';
 import { dependenciesInPlace, IGNORED_BUILDS_OUTPUT_LIMIT, parseIgnoredBuilds } from '../onboarding/ignored-builds.js';
 import { PluginDeclarationError, PluginEnablementError, PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
-import { InstanceStartError, type InstanceFailure, type InstanceState, type InstanceStatus, type InstanceStopOptions } from '../supervisor/instance-supervisor.js';
+import { InstanceStartError, type InstanceFailure, type InstancePluginApplyResult, type InstanceState, type InstanceStatus, type InstanceStopOptions } from '../supervisor/instance-supervisor.js';
 import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { authorizePackages, gatewayPrincipalAllows, type GatewayPackageAction, type GatewayPrincipal } from './authorization.js';
 import { GatewayError } from './errors.js';
@@ -43,6 +44,10 @@ export interface PackageTransactionInstance {
   on(event: 'failure', listener: (failure: InstanceFailure) => void): unknown;
   off(event: 'failure', listener: (failure: InstanceFailure) => void): unknown;
   readonly logs?: { tail(limit?: number): readonly InstanceLogLine[] };
+  /** The running instance applies plugin enable / disable in place (zhinjs/zhin#1250). */
+  readonly supportsPluginApply?: boolean;
+  /** Applies an enable / disable already written to the configuration, without a restart. */
+  applyPlugin?(request: { readonly instanceKey: string; readonly enabled: boolean; readonly revision: string }): Promise<InstancePluginApplyResult>;
 }
 
 /** The part of `PluginManagementWorkflow` (`PluginManagementPort`) a transaction uses. */
@@ -56,7 +61,10 @@ export interface PackageWorkflowPort {
   declare?(request: string, config?: unknown, options?: { readonly instanceKey?: string }): Promise<unknown>;
   /** Validates an enable / disable without writing (throws `PluginEnablementError`). */
   planSetEnabled?(request: string, enabled: boolean): Promise<{ readonly packageName: string; readonly instanceKey: string; readonly changed: boolean }>;
+  /** Resolves with `{ revision }` (the configuration revision after the write) when it wrote. */
   setEnabled?(request: string, enabled: boolean): Promise<unknown>;
+  /** Why toggling this instance in a running instance must restart it; `undefined` → in place. */
+  hotToggleBlocker?(instanceKey: string, startedAt?: number): Promise<{ readonly reason: GatewayPluginRestartReason; readonly detail: string } | undefined>;
 }
 
 /**
@@ -138,6 +146,22 @@ interface TransactionExtras {
 const CONFIG_ONLY_OPERATIONS: ReadonlySet<GatewayTransactionOperation> = new Set(['declare', 'enable', 'disable']);
 
 type TransactionBody = (ctx: TransactionContext, authorized: readonly GatewayAuthorizedPackage[]) => Promise<TransactionExtras | void>;
+
+/**
+ * A plugin enable / disable that a running instance may apply in place (zhinjs/zhin#1250): the
+ * transaction writes the configuration without stopping the instance, then asks it to apply.
+ * Any reason to restart — decided before the write ({@link check}) or reported by the instance —
+ * falls back to stop → start, with the usual rollback when the instance does not come up.
+ */
+interface HotPluginApply {
+  readonly instanceKey: string;
+  readonly enabled: boolean;
+  check(): Promise<{ readonly reason: GatewayPluginRestartReason; readonly detail: string } | undefined>;
+  /** The configuration revision the body wrote. */
+  revision(): string | undefined;
+}
+
+const MAX_RESTART_DETAIL = 512;
 
 interface TransactionContext {
   readonly workflow: PackageWorkflowPort;
@@ -318,12 +342,27 @@ export class GatewayPackageService {
     try { plan = await workflow.planSetEnabled(request.plugin, enabled); }
     catch (error) { throw enablementError(error); }
     const plugin: GatewayPluginEnablement = Object.freeze({ instanceKey: plan.instanceKey, packageName: plan.packageName, enabled, changed: plan.changed });
-    if (!plan.changed) return this.#unchanged(operation, await this.authorize(options.principal, operation, [plan.packageName]), plugin, options);
+    if (!plan.changed) return this.#unchanged(operation, await this.authorize(options.principal, operation, [plan.packageName]), Object.freeze({ ...plugin, apply: 'none' as const }), options);
+    let revision: string | undefined;
+    const hot: HotPluginApply = {
+      instanceKey: plan.instanceKey,
+      enabled,
+      check: async () => {
+        const instance = this.#options.instance;
+        if (!instance?.applyPlugin || !instance.supportsPluginApply) {
+          return { reason: 'instance-unsupported', detail: '运行中的实例不支持热启停插件（zhin.js 版本较旧），改为重启实例' };
+        }
+        return workflow.hotToggleBlocker?.(plan.instanceKey, instance.status().startedAt);
+      },
+      revision: () => revision,
+    };
     return this.#transaction(operation, [plan.packageName], options, async (ctx) => {
       // The exact instance key: the declaration may not be re-resolved to another instance.
-      await ctx.workflow.setEnabled!(plan.instanceKey, enabled);
+      const written = await ctx.workflow.setEnabled!(plan.instanceKey, enabled);
+      const value = written && typeof written === 'object' ? (written as { readonly revision?: unknown }).revision : undefined;
+      revision = typeof value === 'string' ? value : undefined;
       return { plugin };
-    });
+    }, hot);
   }
 
   /** The result of an enable / disable that found nothing to change (instance untouched). */
@@ -382,6 +421,7 @@ export class GatewayPackageService {
     packages: readonly unknown[] | 'all',
     options: GatewayTransactionOptions,
     execute: TransactionBody,
+    hot?: HotPluginApply,
   ): Promise<GatewayPackageTransactionResult> {
     if (this.#active) throw new GatewayError('conflict', '另一个依赖事务正在进行，请等待它结束');
     const id = randomUUID();
@@ -391,7 +431,7 @@ export class GatewayPackageService {
       const release = await this.#lock();
       try {
         await this.#options.beforeTransaction?.().catch(() => undefined);
-        return await this.#run(id, operation, authorized, options, execute);
+        return await this.#run(id, operation, authorized, options, execute, hot);
       } finally {
         await release();
       }
@@ -406,6 +446,7 @@ export class GatewayPackageService {
     authorized: readonly GatewayAuthorizedPackage[],
     options: GatewayTransactionOptions,
     execute: TransactionBody,
+    hot?: HotPluginApply,
   ): Promise<GatewayPackageTransactionResult> {
     const now = this.#options.now ?? Date.now;
     const startedAt = now();
@@ -435,20 +476,45 @@ export class GatewayPackageService {
     let rollbackFailure: unknown;
     let restartFailure: unknown;
     let logTail: readonly string[] | undefined;
+    // Hot plugin enable / disable (#1250): how the change took effect, and why it restarted.
+    let applyMode: GatewayPluginEnablement['apply'] = wasRunning || startAfter ? 'restart' : 'none';
+    let restart: { reason: GatewayPluginRestartReason; detail: string } | undefined;
+    // True while an in-place apply has left the running instance alone: a failure then only
+    // restores the files; the instance keeps (or never left) its previous generation.
+    let untouched = false;
     this.#ignoredBuilds = undefined;
     emit({ type: 'start', id, operation, packages: authorized });
     try {
       try {
         enter('snapshot');
         snapshot = await ProjectFileSnapshot.capture(this.#root);
-        if (instance && instance.state !== 'stopped') {
+        // Decided before the write: a plugin that must restart never runs the in-place attempt.
+        let inPlace = false;
+        if (hot && instance && wasRunning && instance.state === 'running') {
+          restart = await hot.check().catch((error: unknown) => ({ reason: 'hot-apply-failed' as const, detail: failureMessage(error) }));
+          inPlace = restart === undefined;
+          untouched = inPlace;
+        }
+        if (!inPlace && instance && instance.state !== 'stopped') {
           enter('stop-instance');
           await instance.stop({ reason: `packages:${operation}` });
         }
         enter(configOnly ? 'configure' : 'package-manager');
         mutated = true;
         extras = await execute({ workflow: this.#workflow, run }, authorized);
-        if (startAfter) {
+        if (inPlace) {
+          enter('apply-hot');
+          const outcome = await this.#applyHot(instance!, hot!);
+          if (outcome) {
+            // Fall back to stop → start on the written configuration; a failed start rolls back.
+            restart = outcome;
+            untouched = false;
+            enter('stop-instance');
+            await instance!.stop({ reason: `packages:${operation}:hot-fallback` });
+            enter('start-instance');
+            await this.#startInstance(instance!, logMark);
+          } else applyMode = 'hot';
+        } else if (startAfter) {
           enter('start-instance');
           await this.#startInstance(instance!, logMark);
         }
@@ -460,7 +526,7 @@ export class GatewayPackageService {
         enter('rollback');
         try {
           // Stopping also cancels a pending automatic restart of the broken instance.
-          if (instance && instance.state !== 'stopped') await instance.stop({ reason: 'packages:rollback' });
+          if (!untouched && instance && instance.state !== 'stopped') await instance.stop({ reason: 'packages:rollback' });
           if (mutated && snapshot) {
             enter('restore-files');
             await snapshot.restore();
@@ -476,7 +542,7 @@ export class GatewayPackageService {
         // A running instance is brought back even when restoring the files or dependencies failed
         // (#1250): leaving the bot stopped is worse than starting it on what is on disk. A failed
         // start is reported on its own.
-        if (wasRunning) {
+        if (wasRunning && !untouched) {
           enter('restart-instance');
           try {
             await this.#startInstance(instance!, logMark);
@@ -502,7 +568,10 @@ export class GatewayPackageService {
         ...(ignoredBuilds ? { ignoredBuilds } : {}),
         ...(logTail?.length ? { logTail } : {}),
         ...(status === 'succeeded' && extras?.needsConfiguration?.length ? { needsConfiguration: extras.needsConfiguration } : {}),
-        ...(status === 'succeeded' && extras?.plugin ? { plugin: extras.plugin } : {}),
+        ...(status === 'succeeded' && extras?.plugin ? { plugin: Object.freeze({
+          ...extras.plugin, apply: applyMode,
+          ...(applyMode === 'restart' && restart ? { restartReason: restart.reason, restartDetail: restart.detail.slice(0, MAX_RESTART_DETAIL) } : {}),
+        }) } : {}),
         instance: Object.freeze({ before, after: this.#instanceState() }),
         startedAt,
         finishedAt: now(),
@@ -512,6 +581,27 @@ export class GatewayPackageService {
     } finally {
       detach();
     }
+  }
+
+  /**
+   * Asks the running instance to apply the written enable / disable. `undefined` when the committed
+   * generation has it; otherwise why the transaction falls back to a restart.
+   */
+  async #applyHot(instance: PackageTransactionInstance, hot: HotPluginApply): Promise<{ reason: GatewayPluginRestartReason; detail: string } | undefined> {
+    const revision = hot.revision();
+    if (revision === undefined) return { reason: 'hot-apply-failed', detail: '未取得写入后的配置修订，无法确认热应用' };
+    let outcome: InstancePluginApplyResult;
+    try {
+      outcome = await instance.applyPlugin!({ instanceKey: hot.instanceKey, enabled: hot.enabled, revision });
+    } catch (error) {
+      return { reason: 'hot-apply-failed', detail: `热应用失败，改为重启实例：${failureMessage(error)}` };
+    }
+    if (outcome.outcome === 'applied') return undefined;
+    if (outcome.outcome === 'unsupported') return { reason: 'instance-unsupported', detail: '运行中的实例不支持热启停插件，改为重启实例' };
+    if (outcome.outcome === 'restart-required') {
+      return { reason: 'runtime-requires-restart', detail: `实例要求重启才能生效（${(outcome.reasons ?? []).join('、') || '未说明原因'}）` };
+    }
+    return { reason: 'hot-apply-failed', detail: `热应用失败，改为重启实例：${outcome.message ?? '未知错误'}` };
   }
 
   /** Starts the instance, waits for `ready` within the timeout, then for the stability window. */

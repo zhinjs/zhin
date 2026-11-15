@@ -479,6 +479,7 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `engine` | 否 | semver 范围，与运行时版本不匹配时拒绝加载 |
 | `runtime` | 否 | `isolated` 表示在隔离环境中运行：仅限子插件、不能挂载 Host Feature，且需要隔离适配器支持 |
 | `platformFeatures` | 否 | 默认 `true`：Root 插件即使不声明，也会获得官方 Stable Features |
+| `toggle` | 否 | 仅 plugin：`"hot"`（默认）或 `"restart"`。`zhin enable` / `zhin disable` 与 Console 全局开关在实例运行时默认热生效（换代，不重启实例）；插件的 `setup` 持有无法在进程内退役的状态（进程级单例、原生句柄）时声明 `"restart"`，网关改为重启实例 |
 | `metadata` | 否 | 展示信息：`displayName`、`displayNameI18n`、`icon`（Console），`descriptionI18n`、`category`（插件市场，只能写在这里）。`displayName` / `displayNameI18n` / `icon` 与 `definePlugin({ metadata })` 只能写一处。语言键只接受 `zh-CN` / `en`，值为非空字符串；`category` 取值见[插件市场元数据](./plugin-delivery.md#marketplace-metadata) |
 | `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级。省略时[按约定目录推断](#infer-features) |
 
