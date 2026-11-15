@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import consoleUi from './packages/console/ui/lint/eslint-plugin.mjs';
 
 export default tseslint.config(
   // Global ignores
@@ -300,5 +301,20 @@ export default tseslint.config(
       'no-duplicate-imports': 'off',
       'no-useless-escape': 'off',
     },
+  },
+  // ADR 0063 D20: @zhin.js/console-ui stays on the Console scale (no arbitrary or off-scale
+  // Tailwind classes, no native controls outside the primitives that wrap them).
+  {
+    files: ['packages/console/ui/**/*.{ts,tsx}'],
+    ...consoleUi.configs.recommended,
+  },
+  {
+    files: ['packages/console/ui/client/components/ui/**/*.tsx'],
+    rules: { 'console-ui/no-native-controls': 'off' },
+  },
+  {
+    // Tests feed the classifiers deliberate off-scale class names.
+    files: ['packages/console/ui/tests/**/*.ts'],
+    rules: { 'console-ui/no-arbitrary-values': 'off', 'console-ui/no-off-scale-classes': 'off' },
   },
 );

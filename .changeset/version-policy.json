@@ -64,7 +64,7 @@
     {
       "package": "@zhin.js/console-ui",
       "type": "minor",
-      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：新包 @zhin.js/console-ui 首发 0.1.0（package.json 记 0.0.0，由本 minor 升到 0.1.0），从 Console 迁入组件、令牌与编译好的 styles.css / tokens.css，新增 RefreshControl、usePageChrome、Button 的 destructive-outline 变体与语言 Provider。"
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：新包 @zhin.js/console-ui 首发 0.1.0（package.json 记 0.0.0，由本 minor 升到 0.1.0），从 Console 迁入组件、令牌与编译好的 styles.css / tokens.css，新增 RefreshControl、usePageChrome、Button 的 destructive-outline 变体与语言 Provider。；ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。"
     },
     {
       "package": "@zhin.js/pagemanager",

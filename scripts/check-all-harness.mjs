@@ -74,6 +74,11 @@ const checks = [
     description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
   },
   {
+    name: 'Console UI Styles',
+    command: 'pnpm check:console-ui-styles',
+    description: '@zhin.js/console-ui stylelint：只用令牌与尺度内取值；生成物与 tokens/tokens.mjs 一致（ADR 0063 D17、D20）',
+  },
+  {
     name: 'IM Send Path',
     command: 'pnpm check:harness-paths',
     description: '检查是否绕过 Adapter.sendMessage 链路',
