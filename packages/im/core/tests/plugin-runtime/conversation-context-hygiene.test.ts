@@ -8,6 +8,7 @@ import {
   CONVERSATION_CONTEXT_MAX_AGE_MS,
   ConversationRuntime,
 } from '../../src/plugin-runtime/im/conversation-runtime.js';
+import { registerChatOwnerClaimCode } from '@zhin.js/kernel';
 
 const conversation = {
   endpoint: { id: 'bot-1', adapter: 'memory' },
@@ -157,6 +158,22 @@ describe('ConversationRuntime context hygiene', () => {
     const current = await store.append(message('current', '好的', now, 'user-1'));
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
     expect(JSON.stringify(context.blocks)).not.toContain('已经完成一部分');
+  });
+
+  it('records an open claim code masked (ADR 0060 §3.3 backstop, #1250)', async () => {
+    const unregister = registerChatOwnerClaimCode('ABCD2345');
+    try {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    await runtime.recordIncoming({ conversation, content: '认领 ABCD2345', message: { conversation, id: 'c1' } } as never, { id: 'user-1' });
+    await runtime.recordIncoming({ conversation, content: '#认领 ABCD2345',
+      segments: [{ type: 'text', data: { text: '#认领 ABCD2345' } }], message: { conversation, id: 'c2' } } as never, { id: 'user-1' });
+    await runtime.recordIncoming({ conversation, content: '我想认领这个任务', message: { conversation, id: 'c3' } } as never, { id: 'user-1' });
+    const stored = JSON.stringify(await Promise.all(['c1', 'c2', 'c3'].map(id => store.getMessage({ conversation, id }))));
+    expect(stored).not.toContain('ABCD2345');
+    expect(stored).toContain('认领 ***');
+    expect(stored).toContain('我想认领这个任务');
+    } finally { unregister(); }
   });
 });
 

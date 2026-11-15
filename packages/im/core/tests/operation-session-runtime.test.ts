@@ -42,9 +42,10 @@ declare module '@zhin.js/feature-kit' { interface AdapterRegistry { native: Nati
 
 class NativeEvent { readonly buffer = Buffer.from('private'); method() { return 'event'; } }
 
-async function fixture(execute: (session: OperationSession<string>, message: Message, signal: AbortSignal) => Promise<unknown>, sideHandler?: HandlerDefinition) {
+async function fixture(execute: (session: OperationSession<string>, message: Message, signal: AbortSignal) => Promise<unknown>, sideHandler?: HandlerDefinition,
+  inboundSecret?: NonNullable<ConstructorParameters<typeof ImRuntime>[0]>['inboundSecret']) {
   const root = rootPluginId(), author = childPluginId(root, 'command-author');
-  const im = new ImRuntime({ enrichSender: sender => sender ? { ...sender, platform: { standing: 'admin' as const }, chatRole: 'trusted' as const } : sender });
+  const im = new ImRuntime({ ...(inboundSecret ? { inboundSecret } : {}), enrichSender: sender => sender ? { ...sender, platform: { standing: 'admin' as const }, chatRole: 'trusted' as const } : sender });
   const adapter = new NativeAdapter();
   let saved: EndpointDesiredSnapshot | undefined;
   const repository: EndpointDesiredRepository = {
@@ -238,6 +239,20 @@ it.each(['platform.receive', 'notice.receive', 'request.receive', 'system.receiv
   },
 );
 
+
+it('withholds a native event that carries an inbound secret from native Handlers (ADR 0060 §3.3)', async () => {
+  const called = vi.fn();
+  const inspectNative = vi.fn((payload: unknown) => JSON.stringify(payload).includes('SECRET'));
+  const f = await fixture(async () => undefined, defineLifecycleHandler({ event: 'platform.receive', handle: called }),
+    { match: () => undefined, inspectNative });
+  try {
+    await f.endpoint[endpointSpec].events.platform('native.message', { text: 'claim SECRET' });
+    expect(called).not.toHaveBeenCalled();
+    await f.endpoint[endpointSpec].events.platform('native.message', { text: 'hello' });
+    expect(called).toHaveBeenCalledTimes(1);
+    expect(inspectNative).toHaveBeenCalledTimes(2);
+  } finally { await f.close(); }
+});
 
 it('validates native event source incarnation before any Handler dispatch', async () => {
   const called = vi.fn();

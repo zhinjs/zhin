@@ -80,6 +80,78 @@ export function redactSecretText(value: string): string {
 }
 
 /**
+ * ADR 0060 §3.3 (zhinjs/zhin#1250): a chat-owner claim message is the keyword `认领` or `claim` (any
+ * letter case) as the first word, whitespace, then exactly one token, and nothing else. Ignored around
+ * it: surrounding whitespace, up to three punctuation marks before the keyword (a command prefix such as
+ * `#` or `/`, or a quote `「`) and around the token (`<码>`, `」`), copied from a hint.
+ */
+const CHAT_OWNER_CLAIM_TEXT = /^[^\p{L}\p{N}\s]{0,3}\s*(认领|claim)\s+[^\p{L}\p{N}\s]{0,3}(\S+?)[^\p{L}\p{N}\s]{0,3}$/iu;
+/**
+ * Whether `text` is a chat-owner claim message, and its keyword (as typed) and code. `prefix` (the
+ * adapter's command prefix, which may be a word) may precede the keyword; the bare form matches too.
+ * A message where the keyword is not the first word (`我想认领这个任务`, `请认领 X`), is followed by no
+ * whitespace (`认领了`) or by more than one token (`claim this task`) is ordinary chat.
+ */
+export function matchChatOwnerClaimText(text: string, prefix = ''): Readonly<{ keyword: string; code: string }> | undefined {
+  const body = text.trim();
+  const candidates = prefix && body.startsWith(prefix) ? [body.slice(prefix.length).trim(), body] : [body];
+  for (const candidate of candidates) {
+    const match = CHAT_OWNER_CLAIM_TEXT.exec(candidate);
+    if (match) return Object.freeze({ keyword: match[1]!, code: match[2]! });
+  }
+  return undefined;
+}
+
+/** What may sit between the symbols of a code someone typed: whitespace, `-`, soft hyphens, zero-width characters. */
+const CLAIM_CODE_GAP = '[\\s\\-\\u00AD\\u200B-\\u200D\\u2060\\uFEFF]*';
+
+/**
+ * Matches `code` the way the claim compares codes (letter case, whitespace and `-` ignored), also when
+ * zero-width characters split it; applied to the text as written and to its NFKC form (full-width letters).
+ */
+function claimCodePattern(code: string, flags: string): RegExp | undefined {
+  const symbols = [...code.toUpperCase().replace(/[\s-]/gu, '')];
+  if (symbols.length === 0) return undefined;
+  return new RegExp(symbols.map(symbol => symbol.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join(CLAIM_CODE_GAP), flags);
+}
+
+/** Whether `text` carries `code` anywhere (ADR 0060 §3.3: how inbound recognizes the current claim code). */
+export function containsChatOwnerClaimCode(text: string, code: string): boolean {
+  const pattern = claimCodePattern(code, 'iu');
+  if (!pattern || !text) return false;
+  return pattern.test(text) || pattern.test(text.normalize('NFKC'));
+}
+
+/** Codes of the claims open in this process (normally at most one). */
+const openClaimCodes = new Set<{ readonly code: string }>();
+
+/**
+ * Registers an open claim code for {@link redactChatOwnerClaimText}; the returned function unregisters it.
+ * The claim registers its current code on every rotation and unregisters it when it closes.
+ */
+export function registerChatOwnerClaimCode(code: string): () => void {
+  const entry = Object.freeze({ code });
+  openClaimCodes.add(entry);
+  return () => { openClaimCodes.delete(entry); };
+}
+
+/**
+ * Writer-side backstop (conversation records, Agent session messages, traces): every occurrence of a
+ * currently open claim code becomes `***`. Without an open claim nothing is changed — no valid code exists.
+ */
+export function redactChatOwnerClaimText(text: string): string {
+  if (openClaimCodes.size === 0 || !text) return text;
+  let result = text;
+  for (const { code } of openClaimCodes) {
+    const probe = claimCodePattern(code, 'iu');
+    if (!probe) continue;
+    if (probe.test(result)) result = result.replace(claimCodePattern(code, 'giu')!, '***');
+    else if (probe.test(result.normalize('NFKC'))) result = result.normalize('NFKC').replace(claimCodePattern(code, 'giu')!, '***');
+  }
+  return result;
+}
+
+/**
  * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
  * token-shaped text are hidden. Execution, fingerprints and approval scope keys still use the exact arguments.
  */

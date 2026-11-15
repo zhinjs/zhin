@@ -3396,6 +3396,7 @@ async function createFixture(
     inboundDeduper?: Pick<InboundDeduper, 'claim'>;
     inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
     messageHandler?: (event: unknown) => unknown;
+    inboundSecret?: ConstructorParameters<typeof ImRuntime>[0] extends infer O ? O extends { inboundSecret?: infer G } ? G : never : never;
   },
 ) {
   const root = rootPluginId();
@@ -3508,6 +3509,7 @@ async function createFixture(
   const im = new ImRuntime({
     inboundClaim: options?.inboundClaim,
     ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
+    ...(options?.inboundSecret ? { inboundSecret: options.inboundSecret } : {}),
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
     // Test transports declare the sender's chat role directly (production resolves it from chat_roles).
@@ -4584,6 +4586,27 @@ describe('IM Runtime inbound origin routing', () => {
     resources.set(current.root, new Map([...resources.get(current.root)!, [roomMembershipToken.id, port]]));
     f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
   };
+
+  it.each(['peer_bot', 'member', 'unready'] as const)('revokes a secret in a %s group message it drops, without recording it (ADR 0060 §3.3)', async (kind) => {
+    const discard = vi.fn();
+    const handle = vi.fn();
+    const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+      ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); }, { inboundSecret });
+    if (kind === 'member') commitMembership(f, { isMember: () => true });
+    if (kind === 'unready') commitMembership(f, { isMember: () => false, isRoomReady: () => ({ ready: false, unreadyEndpoints: [] }) });
+    try {
+      await receive(f.im, groupInput(f, kind === 'unready' ? 'human' : 'other-bot', 'claim SECRET'));
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(handle).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+      // Text without the secret is untouched.
+      discard.mockClear();
+      await receive(f.im, groupInput(f, kind === 'unready' ? 'human' : 'other-bot', 'hello'));
+      expect(discard).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
 
   it.each(['peer_bot', 'member'] as const)('records %s group messages as history only', async (kind) => {
     const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });

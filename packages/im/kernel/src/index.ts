@@ -51,8 +51,12 @@ export type { Dict } from './utils.js';
 // ── Redaction (ADR 0061 P1: shared by the decision audit and the message outcome ledger) ──
 export {
   isPromptPayloadKey,
+  containsChatOwnerClaimCode,
   isSecretLikeKey,
+  matchChatOwnerClaimText,
   redactApprovalDisplay,
+  redactChatOwnerClaimText,
+  registerChatOwnerClaimCode,
   redactDecisionPayload,
   redactSecretText,
 } from './redaction.js';

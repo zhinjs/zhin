@@ -15,6 +15,7 @@ import {
   type SequencedConversationEvent,
   type Segment,
 } from '@zhin.js/im-contract';
+import { redactChatOwnerClaimText } from '@zhin.js/kernel';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import type { Notice } from '../../notice.js';
@@ -30,6 +31,14 @@ import { flattenContent } from './message-events.js';
 export const CONVERSATION_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const MAX_TRACKED_INTERACTION_ANSWERS = 1_000;
+
+/** A text segment with any claim code replaced by `***`; other segments unchanged. */
+function redactClaimSegment<T extends { readonly type: unknown; readonly data?: unknown }>(segment: T): T {
+  const data = segment.data as { text?: unknown } | undefined;
+  if (segment.type !== 'text' || typeof data?.text !== 'string') return segment;
+  const text = redactChatOwnerClaimText(data.text);
+  return text === data.text ? segment : { ...segment, data: { ...data, text } };
+}
 
 /** Owns one ImRuntime's conversation fact store, projections, and consumer cursors. */
 export class ConversationRuntime {
@@ -143,9 +152,10 @@ export class ConversationRuntime {
         actor: sender
           ? Object.freeze({ id: sender.id, ...(sender.name ? { displayName: sender.name } : {}) })
           : UNKNOWN_SENDER,
+        // Backstop (ADR 0060 §3.3): an open chat-owner claim code is stored as `***`.
         segments: Object.freeze(input.segments?.length
-          ? [...input.segments]
-          : [{ type: 'text', data: { text: input.content } }]),
+          ? input.segments.map(redactClaimSegment)
+          : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]),
         timestamp,
         ...(input.replyTo
           ? { replyTo: Object.freeze({ conversation: input.conversation, id: input.replyTo.id }) }

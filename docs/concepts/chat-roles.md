@@ -113,7 +113,7 @@ interface PlatformStanding {
 - 聊天中 `角色 授予` 的目标除 `@提及` 与用户 id 外，还可以写 `#<人 id 前缀>`（如 `#cp_ab12cd`，前缀唯一时）引用一个人，便于给多平台的同一人授予全局角色。
 - 导出 / 导入：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例，需要全局 `iam.manage`；导入只新增或提升，不降级、不删除、不改挂已属于他人的身份）。
 
-第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用 `zhin status` 显示的一次性认领码（日志只记哈希前缀），在真实平台私聊机器人发送 `认领 <码>`（详见[升级指南](../migrations/chat-roles.md#first-owner)）。
+第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用 `zhin status` 显示的一次性认领码（日志只记哈希前缀），在真实平台的私聊中直接向机器人发送 `认领 <码>`（不需要命令前缀；这类消息不会交给 AI，也不进会话历史，详见[升级指南](../migrations/chat-roles.md#first-owner)）。
 
 ## 在代码里使用
 

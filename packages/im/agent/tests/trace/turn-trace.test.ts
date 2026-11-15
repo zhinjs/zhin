@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { registerChatOwnerClaimCode } from '@zhin.js/kernel';
 import {
   TurnTraceCollector,
   createFileTurnTraceStore,
@@ -206,6 +207,16 @@ describe('redaction', () => {
     expect(scrubSecrets('token ghp_abcdefghijklmnop123 used')).toBe('token [redacted] used');
     expect(scrubSecrets('{"refresh_token":"1//abc"}')).toBe('{"refresh_token":"[redacted]"}');
     expect(scrubSecrets('plain text stays')).toBe('plain text stays');
+  });
+
+  it('masks an open chat-owner claim code (ADR 0060 §3.3 backstop, #1250)', () => {
+    expect(scrubSecrets('认领 ABCD2345')).toBe('认领 ABCD2345');
+    const unregister = registerChatOwnerClaimCode('ABCD2345');
+    try {
+      expect(scrubSecrets('认领 ABCD2345')).toBe('认领 ***');
+      expect(scrubSecrets('#claim abcd-2345')).toBe('#claim ***');
+      expect(scrubSecrets('claim it')).toBe('claim it');
+    } finally { unregister(); }
   });
 });
 

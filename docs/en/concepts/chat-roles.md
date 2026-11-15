@@ -113,7 +113,7 @@ Chat roles (`chat_roles`) are the only source of truth. "Who is an admin" used t
 - The `role grant` target in chat accepts `#<person id prefix>` (e.g. `#cp_ab12cd`, when the prefix is unique) besides an @mention or user id, to grant a global role to the same person across platforms.
 - Export / import: `zhin chat-roles export [file]` / `zhin chat-roles import <file>` (through the running instance, global `iam.manage`; imports only add or raise, never lower, remove or move an identity owned by someone else).
 
-The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code `zhin status` shows (logs carry only a hash prefix) and send `claim <code>` to the bot in a private chat on a real platform (see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
+The first global owner: grant it under Chat roles in the Console; without a Console, use the one-time claim code `zhin status` shows (logs carry only a hash prefix) and send `claim <code>` straight to the bot in a private chat on a real platform (no command prefix needed; such messages never reach the AI or the conversation history; see the [upgrade guide](../migrations/chat-roles.md#first-owner)).
 
 ## In code
 

@@ -575,8 +575,8 @@ const messages = createMessages({
     en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
   },
   'roles.noOwner.claim': {
-    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
-    en: 'Or send 「claim <code>」 to the bot in a private chat; zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
+    'zh-CN': '也可以在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀），认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
+    en: 'Or send 「claim <code>」 to the bot in a private chat (no command prefix needed); zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
   },
   'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
   'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
