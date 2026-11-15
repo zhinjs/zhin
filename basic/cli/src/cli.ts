@@ -33,6 +33,7 @@ import { previewCommand } from './commands/preview.js';
 import { consoleCommand } from './commands/console.js';
 import { dbCommand } from './commands/db.js';
 import { setCliFlags } from './utils/cli-flags.js';
+import { findUnknownCommand, formatUnknownCommand } from './utils/unknown-command.js';
 
 // src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -95,6 +96,14 @@ program.addCommand(useCasesCommand);
 program.addCommand(previewCommand);
 program.addCommand(consoleCommand);
 program.addCommand(dbCommand);
+
+// #1250: an unknown subcommand is an error (exit 1) even with --help, where commander would
+// print the parent's help and exit 0; the message names the closest command.
+const unknownCommand = findUnknownCommand(program, process.argv.slice(2));
+if (unknownCommand) {
+  process.stderr.write(`${formatUnknownCommand(unknownCommand).join('\n')}\n`);
+  process.exit(1);
+}
 
 try {
   await program.parseAsync();

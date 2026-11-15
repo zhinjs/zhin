@@ -50,7 +50,7 @@ description: Console 对象页的「功能」与「角色」页签：在全局�
 - **禁用**；
 - **被上级禁用并锁定**——鼠标悬停显示「已在全局禁用」「已在适配器禁用」或「已在账号禁用」，附跳转链接。
 
-有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点适配器名进它的「功能」页签。全局开关是插件启停：由管理网关作为事务执行（停止实例 → 写入 `disable_plugins` → 启动实例，启动失败则恢复配置并启动原实例），需要 `plugin.manage`，确认框会提示实例将重启。数据来自 `feature.matrix`。
+有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点适配器名进它的「功能」页签。全局开关是插件启停：由管理网关作为事务执行，默认在运行中的实例里热生效（写入 `disable_plugins` → 换代，实例不重启、适配器不重新登录）；插件声明需要重启、含原生模块、依赖在实例启动后变化或热应用失败时，改为停止实例 → 启动实例，启动失败则恢复配置并启动原实例。需要 `plugin.manage`。数据来自 `feature.matrix`。
 
 ## 继承规则 {#resolution}
 
@@ -101,7 +101,7 @@ description: Console 对象页的「功能」与「角色」页签：在全局�
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`：有覆盖的会话（分页），以及实例近期见过的会话（`hasOverrides: false`） |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | 聊天角色（见下） |
 
-**全局开关**（全局层 `feature.set-enabled` 与 `plugin:set-enabled`）是插件生命周期，不是功能开关：管理网关在转发给实例前拦截它们，按 `plugin.manage` 授权（只有 `feature.toggle` 的运营会被拒绝；非所有者只能启停可管理目录内的包，项目本地插件只限所有者），执行 `gateway.plugins.enable` / `disable` 同一笔事务，并用原有的回复形状作答（多带 `transaction`；`restartRequired: true` 表示实例已为此重启）。已是目标状态时回复 `unchanged`，实例不动。事务失败或已回滚时回复 `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`。成功变更后事件流会收到 `plugin:lifecycle-updated`。实例自身不再写全局开关：没有网关时（`zhin start --standalone`）全局开关被拒绝（`feature.set-enabled` 为 409 `gateway-required`），请改用 `zhin enable` / `zhin disable <插件>` 或在 `zhin start` 下操作。
+**全局开关**（全局层 `feature.set-enabled` 与 `plugin:set-enabled`）是插件生命周期，不是功能开关：管理网关在转发给实例前拦截它们，按 `plugin.manage` 授权（只有 `feature.toggle` 的运营会被拒绝；非所有者只能启停可管理目录内的包，项目本地插件只限所有者），执行 `gateway.plugins.enable` / `disable` 同一笔事务，并用原有的回复形状作答（多带 `transaction` 与 `apply`：`hot` 热生效、`restart` 已重启（附 `restartReason` / `restartDetail`）、`none` 实例未运行；`restartRequired: true` 只在实例确实为此重启时出现）。已是目标状态时回复 `unchanged`，实例不动。事务失败或已回滚时回复 `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`。成功变更后事件流会收到 `plugin:lifecycle-updated`。实例自身不再写全局开关：没有网关时（`zhin start --standalone`）全局开关被拒绝（`feature.set-enabled` 为 409 `gateway-required`），请改用 `zhin enable` / `zhin disable <插件>` 或在 `zhin start` 下操作。
 
 `feature.configure`、`feature.toggle` 与 `iam.manage`（仅 `chat-roles.*`）按作用域检查：绑定到适配器 `qq` 的运营只能改 `qq` 及其账号、会话上的覆盖与角色，不能改全局或别的适配器；会话键按它所属的账号计。适配器 / 账号 / 会话层的写入带该条覆盖的修订号（`expectedRevision`），并发修改会被拒绝（`conflict`）而不是互相覆盖；为兼容旧版 Console，适配器 / 账号层仍接受 `feature.list` / `feature.matrix` 返回的配置文件修订号（与当前修订号相同时不做行级检查，不同时视为冲突）。
 

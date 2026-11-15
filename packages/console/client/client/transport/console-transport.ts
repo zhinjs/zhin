@@ -533,9 +533,12 @@ export class ConsoleTransport {
   }
   /**
    * Global plugin on / off (`disable_plugins`, `plugin.manage`): the gateway answers it as an
-   * enable / disable transaction (stop the instance, write, start it, roll back on failure;
-   * ADR 0054 §4), so it gets the package-transaction deadline. `restartRequired` is true when the
-   * instance was restarted for the change; `transaction` is the gateway transaction result.
+   * enable / disable transaction (ADR 0054 §4, addendum 2026-11-15): written, then applied in the
+   * running instance without a restart, or — when the plugin needs it or the in-place apply fails —
+   * the instance is stopped and started, rolled back on failure. It gets the package-transaction
+   * deadline. `restartRequired` is true only when the instance was restarted for the change; how it took
+   * effect is `transaction.plugin.apply` (`hot` / `restart` / `none`, with `restartReason` /
+   * `restartDetail`) on newer gateways; `transaction` is the gateway transaction result.
    */
   async setPluginEnabled(instanceKey: string, enabled: boolean, options?: ConsoleRequestOptions) {
     return this.sendRequest<{

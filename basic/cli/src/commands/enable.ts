@@ -19,9 +19,11 @@ export interface PluginEnablementOptions {
 
 /**
  * `zhin enable` / `zhin disable`: edits `disable_plugins` for one declared instance. With a running
- * gateway the change is a configuration-only transaction (instance stopped, file written, instance
- * started again, rolled back if it does not come up, ADR 0054 §6); without one the file is written
- * directly and the change applies at the next `zhin start`. Returns the process exit code.
+ * gateway the change is a configuration-only transaction: written, then applied in the running
+ * instance without a restart (zhinjs/zhin#1250); a plugin that needs a restart (manifest
+ * `zhin.toggle: "restart"`, native addon, changed dependencies) or a failed in-place apply falls
+ * back to stop → start, rolled back if it does not come up (ADR 0054 §4). Without a gateway the
+ * file is written directly and the change applies at the next `zhin start`. Returns the exit code.
  */
 export async function runPluginEnablement(plugin: string, enabled: boolean, options: PluginEnablementOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
@@ -62,7 +64,9 @@ function toggleCommand(name: 'enable' | 'disable'): Command {
     .argument('<plugin>', '插件实例键（instanceKey），或只声明了一个实例的包名')
     .addHelpText('after', [
       '',
-      '网关运行中：经网关事务写入配置并重启实例，启动失败时自动回滚；网关未运行：只写入配置，下次 zhin start 生效。',
+      '网关运行中：经网关事务写入配置，并在运行中的实例里热生效，不重启实例、适配器不重新登录。',
+      '插件声明需要重启（package.json#zhin.toggle: "restart"）、含原生模块、实例启动后依赖有变化，或热应用失败时，',
+      '自动改为重启实例并说明原因；重启后启动失败时恢复配置并启动原实例。网关未运行：只写入配置，下次 zhin start 生效。',
       `已是${verb}状态时不修改配置也不重启实例。`,
       enabled ? '启用前会校验插件已安装、依赖可解析且实例配置通过插件 Schema。' : '停用不删除依赖和实例配置；彻底移除请用 zhin uninstall plugin。',
       '',

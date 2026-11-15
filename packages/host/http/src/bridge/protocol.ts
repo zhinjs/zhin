@@ -33,8 +33,21 @@ import type { RouteMeta } from '../openapi.js';
  * - 3: Console accounts live in the gateway (B1.4): `auth.*` removed; `catalog` (plugin permission
  *   catalog) and `audit` (instance-side audit entries) from the instance; `principal-revoked`
  *   from the gateway.
+ *
+ * Additive messages do not bump the version; the instance announces them in `ready.features`
+ * ({@link INSTANCE_BRIDGE_FEATURES}) and the gateway only sends them to an instance that did:
+ * - `plugins.apply` / `plugins.apply.result` (zhinjs/zhin#1250): apply a plugin enable / disable
+ *   written to the root configuration in the running generation, without a process restart.
  */
 export const INSTANCE_BRIDGE_PROTOCOL_VERSION = 3;
+
+/** Optional control channel messages, announced by the instance in `ready.features`. */
+export const INSTANCE_BRIDGE_FEATURES = Object.freeze({
+  /** Answers `plugins.apply` with `plugins.apply.result`. */
+  PLUGINS_APPLY: 'plugins.apply',
+} as const);
+
+export type InstanceBridgeFeature = (typeof INSTANCE_BRIDGE_FEATURES)[keyof typeof INSTANCE_BRIDGE_FEATURES];
 
 /** Protocol versions this build can talk to. */
 export const SUPPORTED_BRIDGE_PROTOCOL_VERSIONS: readonly number[] = Object.freeze([INSTANCE_BRIDGE_PROTOCOL_VERSION]);
@@ -163,6 +176,28 @@ export interface InstanceReadyPayload {
   readonly pid: number;
   /** Route table at ready time (also sent earlier with `routes`). */
   readonly routes?: BridgeRouteTable;
+  /** Optional messages this instance answers ({@link INSTANCE_BRIDGE_FEATURES}); absent on older instances. */
+  readonly features?: readonly string[];
+}
+
+/**
+ * Outcome of a `plugins.apply` request:
+ * - `applied`: the committed generation has the instance in the requested state;
+ * - `restart-required`: the change was not applied in place (the Runtime asked for a process
+ *   restart, `reasons` says why); the running generation is unchanged;
+ * - `failed`: the generation transaction was rejected or its outcome could not be confirmed
+ *   (`message`); the gateway falls back to a restart.
+ */
+export type PluginApplyOutcome = 'applied' | 'restart-required' | 'failed';
+
+export interface PluginApplyResultPayload {
+  readonly outcome: PluginApplyOutcome;
+  /** Committed generation after the request. */
+  readonly generation?: number;
+  /** Short machine-readable reasons of a `restart-required` outcome. */
+  readonly reasons?: readonly string[];
+  /** Redacted failure text of a `failed` outcome. */
+  readonly message?: string;
 }
 
 export interface InstanceRestartRequestPayload {
@@ -215,11 +250,14 @@ export interface InstanceAuditPayload {
 
 export type InstanceCatalogMessage = BridgeMessage<'catalog', InstanceCatalogPayload>;
 export type InstanceAuditMessage = BridgeMessage<'audit', InstanceAuditPayload>;
+/** Answer to the gateway's `plugins.apply` with the same `id`. */
+export type InstancePluginApplyResultMessage = BridgeStreamMessage<'plugins.apply.result', PluginApplyResultPayload>;
 
 export type InstanceToGatewayMessage =
   | InstanceReadyMessage
   | InstanceCatalogMessage
   | InstanceAuditMessage
+  | InstancePluginApplyResultMessage
   | InstanceRestartRequestMessage
   | InstanceRoutesMessage
   | HttpResponseHeadMessage
@@ -271,7 +309,23 @@ export interface PrincipalRevokedPayload {
   readonly reason?: string;
 }
 
+/**
+ * Apply a plugin enable / disable the gateway already wrote to the root configuration
+ * (zhinjs/zhin#1250): the instance applies the configuration at `revision` as one generation
+ * transaction and answers `plugins.apply.result`. Sent only to instances that announced
+ * {@link INSTANCE_BRIDGE_FEATURES.PLUGINS_APPLY}.
+ */
+export interface PluginApplyPayload {
+  /** Top-level instance alias whose `disable_plugins` membership changed. */
+  readonly instanceKey: string;
+  /** The requested state. */
+  readonly enabled: boolean;
+  /** Configuration revision the gateway wrote; a newer one fails the request (superseded). */
+  readonly revision: string;
+}
+
 export type GatewayShutdownMessage = BridgeMessage<'shutdown', GatewayShutdownPayload>;
+export type GatewayPluginApplyMessage = BridgeStreamMessage<'plugins.apply', PluginApplyPayload>;
 export type GatewayPrincipalRevokedMessage = BridgeMessage<'principal-revoked', PrincipalRevokedPayload>;
 export type GatewayAddressesMessage = BridgeMessage<'host.addresses', { readonly addresses: readonly HttpHostAddress[] }>;
 export type HttpRequestMessage = BridgeStreamMessage<'http.request', HttpRequestPayload>;
@@ -283,6 +337,7 @@ export type WsOpenMessage = BridgeStreamMessage<'ws.open', WsOpenPayload>;
 
 export type GatewayToInstanceMessage =
   | GatewayShutdownMessage
+  | GatewayPluginApplyMessage
   | GatewayPrincipalRevokedMessage
   | GatewayAddressesMessage
   | HttpRequestMessage
@@ -440,6 +495,21 @@ function isAuditEntry(value: unknown): value is ConsoleAuditEntry {
   return true;
 }
 
+const MAX_FEATURES = 64;
+const PLUGIN_APPLY_OUTCOMES: ReadonlySet<unknown> = new Set(['applied', 'restart-required', 'failed']);
+
+function isFeatureList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length <= MAX_FEATURES && value.every((item) => isText(item, 64));
+}
+
+function isPluginApplyResult(payload: Record<string, unknown>): boolean {
+  if (!PLUGIN_APPLY_OUTCOMES.has(payload.outcome)) return false;
+  if (payload.generation !== undefined && !isFiniteNonNegative(payload.generation)) return false;
+  if (payload.reasons !== undefined && !(Array.isArray(payload.reasons) && payload.reasons.length <= 32
+    && payload.reasons.every((reason) => isText(reason, 256)))) return false;
+  return payload.message === undefined || isText(payload.message);
+}
+
 function isOptionalPrincipal(value: unknown): boolean {
   return value === undefined || parseBridgePrincipal(value) !== undefined;
 }
@@ -461,6 +531,7 @@ export function parseInstanceMessage(
       if (!Number.isSafeInteger(payload.pid)) return undefined;
       if (payload.generation !== undefined && !isFiniteNonNegative(payload.generation)) return undefined;
       if (payload.routes !== undefined && !isRouteTable(payload.routes, limits)) return undefined;
+      if (payload.features !== undefined && !isFeatureList(payload.features)) return undefined;
       return value as unknown as InstanceReadyMessage;
     case 'restart-request':
       if (typeof payload.reason !== 'string') return undefined;
@@ -479,6 +550,8 @@ export function parseInstanceMessage(
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
+    case 'plugins.apply.result':
+      return isPluginApplyResult(payload) ? value as unknown as InstancePluginApplyResultMessage : undefined;
     case 'http.response.head':
       if (!Number.isSafeInteger(payload.status) || (payload.status as number) < 200 || (payload.status as number) > 599) return undefined;
       if (payload.statusText !== undefined && !isText(payload.statusText)) return undefined;
@@ -528,6 +601,10 @@ export function parseGatewayMessage(
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
+    case 'plugins.apply':
+      if (!isText(payload.instanceKey, 256) || !/^[a-z0-9][a-z0-9-]*$/u.test(payload.instanceKey)) return undefined;
+      if (typeof payload.enabled !== 'boolean' || !isText(payload.revision, 256)) return undefined;
+      return value as unknown as GatewayPluginApplyMessage;
     case 'http.request':
       if (!isText(payload.method, 16) || !/^[A-Za-z]+$/u.test(payload.method)) return undefined;
       if (!isText(payload.url, limits.maxHeadBytes) || typeof payload.body !== 'boolean') return undefined;
