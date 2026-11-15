@@ -89,6 +89,9 @@ export function createConnectionTestLimiter(
     const recent = calls.get(key) ?? [];
     if (recent.length >= limit) throw new ConnectionTestRateLimitedError(Math.max(1, recent[0]! + windowMs - at));
     calls.delete(key);
+    // Dropping the oldest key frees its budget early. Accepted: only existing accounts and
+    // profiles are keys, so filling the map to push one out needs more than `maxKeys` of them —
+    // and creating accounts or profiles already takes management (host administrator) rights.
     while (calls.size >= maxKeys) calls.delete(calls.keys().next().value!);
     calls.set(key, [...recent, at]);
   };

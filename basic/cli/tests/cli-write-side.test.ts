@@ -22,10 +22,11 @@ import {
   isPinnedSpecifier,
   isNewerThanRelease,
   syncWorkspaceYamlOverrides,
+  upgradeProjectDependencies,
   upgradeWorkspacePackages,
 } from '../src/commands/migrate.js';
 import { cachedRegistryLookup, npmRegistryLookup } from '../src/utils/registry-version.js';
-import { listWorkspacePackageDirs, workspaceGlobToRegExp } from '../src/utils/workspace-packages.js';
+import { expandWorkspaceBraces, listWorkspacePackageDirs, workspaceGlobToRegExp } from '../src/utils/workspace-packages.js';
 import { scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
@@ -483,12 +484,76 @@ describe('migrate', () => {
     expect(registry.calls.filter(call => call === 'zhin.js@latest')).toHaveLength(1);
   });
 
+  it('keeps a member on the root\'s lock: a root pin without --include-pinned moves neither the member nor the overrides (#1250 review)', () => {
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\noverrides:\n  '@zhin.js/core': 1.1.0\n");
+    fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({
+      name: 'demo', engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '1.1.6', '@zhin.js/agent': '^1.1.0' },
+      pnpm: { overrides: { '@zhin.js/core': '1.1.0' } },
+    }, null, 2));
+    fs.mkdirSync(path.join(tmp, 'plugins', 'foo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'plugins', 'foo', 'package.json'), JSON.stringify({
+      name: 'foo', dependencies: { 'zhin.js': '~1.1.0', '@zhin.js/agent': '1.1.0', '@zhin.js/command': '1.0.0' },
+    }, null, 2));
+    registry.zhinDependencies = { '@zhin.js/core': '1.1.6' };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const result = upgradeProjectDependencies(tmp, { dryRun: false });
+      const root = JSON.parse(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8'));
+      const member = JSON.parse(fs.readFileSync(path.join(tmp, 'plugins', 'foo', 'package.json'), 'utf8'));
+      // The root keeps its lock; the member's zhin.js stays as well (no move past the root).
+      expect(root.dependencies['zhin.js']).toBe('1.1.6');
+      expect(member.dependencies['zhin.js']).toBe('~1.1.0');
+      // Packages the root upgraded move in the member too; member-only ones follow the registry.
+      expect(root.dependencies['@zhin.js/agent']).toBe('^9.4.2');
+      expect(member.dependencies['@zhin.js/agent']).toBe('9.4.2');
+      expect(member.dependencies['@zhin.js/command']).toBe('9.4.2');
+      // Overrides follow the root's own target (its pinned zhin.js 1.1.6), never a member's.
+      expect(root.pnpm.overrides['@zhin.js/core']).toBe('1.1.6');
+      expect(yaml.parse(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8')).overrides['@zhin.js/core']).toBe('1.1.6');
+      expect(registry.calls).not.toContain('zhin.js@9.4.2');
+      expect(result.updatedFiles).toEqual(['package.json', 'plugins/foo/package.json', 'pnpm-workspace.yaml']);
+      expect(log.mock.calls.flat().join('\n')).toContain('根目录保留了 zhin.js 的当前版本');
+    } finally {
+      registry.zhinDependencies = { '@zhin.js/core': '^9.4.1', '@zhin.js/ai': '^9.4.0' };
+    }
+  });
+
   it('matches pnpm workspace globs', () => {
     expect(workspaceGlobToRegExp('plugins/*').test('plugins/foo')).toBe(true);
     expect(workspaceGlobToRegExp('plugins/*').test('plugins/foo/bar')).toBe(false);
     expect(workspaceGlobToRegExp('packages/**').test('packages/a/b')).toBe(true);
     expect(workspaceGlobToRegExp('./apps/web/').test('apps/web')).toBe(true);
     expect(workspaceGlobToRegExp('**/fixtures/**').test('packages/a/fixtures/c')).toBe(true);
+  });
+
+  it('expands {a,b} in workspace globs like check-release-plan', () => {
+    expect(expandWorkspaceBraces('plugins/{foo,bar}')).toEqual(['plugins/foo', 'plugins/bar']);
+    expect(expandWorkspaceBraces('{apps,libs}/{x, y}')).toEqual(['apps/x', 'apps/y', 'libs/x', 'libs/y']);
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/{foo,bar}'\n  - '!plugins/{bar}'\n");
+    for (const name of ['foo', 'bar', 'baz']) {
+      fs.mkdirSync(path.join(tmp, 'plugins', name), { recursive: true });
+      fs.writeFileSync(path.join(tmp, 'plugins', name, 'package.json'), '{}');
+    }
+    expect(listWorkspacePackageDirs(tmp).map(dir => path.basename(dir))).toEqual(['foo']);
+  });
+
+  it('never writes a member package.json that is a symbolic link', () => {
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-outside-'));
+    try {
+      const target = path.join(outside, 'package.json');
+      const original = JSON.stringify({ name: 'outside', dependencies: { 'zhin.js': '1.0.0' } });
+      fs.writeFileSync(target, original);
+      fs.mkdirSync(path.join(tmp, 'plugins', 'linked'), { recursive: true });
+      fs.symlinkSync(target, path.join(tmp, 'plugins', 'linked', 'package.json'));
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(upgradeWorkspacePackages(tmp, { dryRun: false, lookup: cachedRegistryLookup(npmRegistryLookup) })).toEqual([]);
+      expect(fs.readFileSync(target, 'utf8')).toBe(original);
+      expect(log.mock.calls.flat().join('\n')).toContain('是符号链接，已跳过');
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it('aligns @zhin.js/* in pnpm-workspace.yaml overrides and keeps comments (#1250 migrate-ignores-overrides)', () => {

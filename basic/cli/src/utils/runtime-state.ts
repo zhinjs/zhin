@@ -5,8 +5,10 @@
  * local owner). Every read has a deadline; a read that fails or times out is reported as
  * 「无法读取」 and never fails `zhin status` / `zhin doctor` on its own.
  *
- * Without a running gateway, `.zhin/runtime-failures.json` (the instance's failure journal) tells
- * what failed during the last run.
+ * Without a running gateway, `.zhin/runtime-failures.json` tells what failed during the last run.
+ * Its only writer is the Zhin instance's `RuntimeFailureJournal` (zhin.js,
+ * `packages/im/zhin/src/instance/console/runtime-failures.ts`, added by #1270 batch 14); until a
+ * release with that writer runs, the file does not exist and nothing is shown.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -236,23 +238,54 @@ export function renderRuntimeState(state: RuntimeState): string[] {
 
 // ---------------------------------------------------------------- last-run failure journal
 
-/** The instance's failure journal, relative to the project root (written by the instance). */
+/**
+ * Failure journal path relative to the project root. Written only by the instance's
+ * `RuntimeFailureJournal` (zhin.js `src/instance/console/runtime-failures.ts`, #1270 batch 14),
+ * atomically (temp file + rename) and removed when no failure is left. Same value as
+ * `RUNTIME_FAILURES_FILE` of `@zhin.js/console-protocol` from that batch on.
+ */
 export const RUNTIME_FAILURES_FILE = '.zhin/runtime-failures.json';
+
+/** `source` values the writer uses (`ConsoleRuntimeFailureSource`). */
+const FAILURE_SOURCES: ReadonlySet<string> = new Set(['account', 'endpoint', 'mcp', 'model']);
 
 export interface RecordedRuntimeFailure {
   readonly source: string;
   readonly subject: string;
-  readonly code?: string;
-  readonly category?: string;
+  readonly code: string;
+  readonly category: string;
   readonly message: string;
-  /** Epoch ms of the latest observation. */
-  readonly lastAt?: number;
-  readonly count?: number;
+  /** Epoch ms of the first and the latest observation since the subject last succeeded. */
+  readonly firstAt: number;
+  readonly lastAt: number;
+  readonly count: number;
+}
+
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * One entry, validated like the writer's own reader (`parseEntry` in runtime-failures.ts): `source`
+ * one of the known sources, non-empty `subject` (≤ 512), `code`, `category`, `firstAt`, `lastAt`
+ * and a positive `count`; `message` falls back to `code`. Malformed entries are dropped.
+ */
+function parseRecordedFailure(value: unknown): RecordedRuntimeFailure | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.source !== 'string' || !FAILURE_SOURCES.has(raw.source)) return undefined;
+  if (typeof raw.subject !== 'string' || !raw.subject || raw.subject.length > 512) return undefined;
+  if (typeof raw.code !== 'string' || !raw.code || typeof raw.category !== 'string' || !raw.category) return undefined;
+  if (!isCount(raw.firstAt) || !isCount(raw.lastAt) || !isCount(raw.count) || raw.count === 0) return undefined;
+  return {
+    source: raw.source, subject: raw.subject, code: raw.code, category: raw.category,
+    message: (typeof raw.message === 'string' && raw.message ? raw.message : raw.code).slice(0, 300),
+    firstAt: raw.firstAt, lastAt: raw.lastAt, count: raw.count,
+  };
 }
 
 /**
  * Entries of `.zhin/runtime-failures.json` (`{ version: 1, entries: [...] }`), newest first.
- * Undefined when the file does not exist; an unreadable file yields `{ error }`.
+ * Undefined when the file does not exist (no failure left, or no instance with the writer has run
+ * yet); a file that cannot be read or parsed yields `{ error }`.
  */
 export function readRuntimeFailureJournal(root: string): { readonly entries: readonly RecordedRuntimeFailure[] } | { readonly error: string } | undefined {
   const file = path.join(root, RUNTIME_FAILURES_FILE);
@@ -263,25 +296,17 @@ export function readRuntimeFailureJournal(root: string): { readonly entries: rea
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     return { error: message(error) };
   }
+  let parsed: { version?: unknown; entries?: unknown };
   try {
-    const parsed = JSON.parse(text) as { entries?: unknown };
-    if (!Array.isArray(parsed.entries)) return { error: `${RUNTIME_FAILURES_FILE} 的格式无法识别` };
-    const entries = parsed.entries.flatMap((entry: Record<string, unknown>): RecordedRuntimeFailure[] => {
-      if (!entry || typeof entry !== 'object' || typeof entry.subject !== 'string' || typeof entry.message !== 'string') return [];
-      return [{
-        source: typeof entry.source === 'string' ? entry.source : 'unknown',
-        subject: entry.subject,
-        message: entry.message.slice(0, 300),
-        ...(typeof entry.code === 'string' ? { code: entry.code } : {}),
-        ...(typeof entry.category === 'string' ? { category: entry.category } : {}),
-        ...(typeof entry.lastAt === 'number' ? { lastAt: entry.lastAt } : {}),
-        ...(typeof entry.count === 'number' ? { count: entry.count } : {}),
-      }];
-    });
-    return { entries: entries.sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0)) };
+    parsed = JSON.parse(text) as { version?: unknown; entries?: unknown };
   } catch {
     return { error: `${RUNTIME_FAILURES_FILE} 不是有效的 JSON` };
   }
+  if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.entries)) {
+    return { error: `${RUNTIME_FAILURES_FILE} 的格式无法识别（应为 version 1）` };
+  }
+  const entries = parsed.entries.flatMap(entry => parseRecordedFailure(entry) ?? []);
+  return { entries: entries.sort((a, b) => b.lastAt - a.lastAt) };
 }
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = { account: '模型账号', model: '模型调用', endpoint: '适配器账号', mcp: 'MCP 服务' };
@@ -290,7 +315,7 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = { account: '模型账号
 export function formatRecordedFailure(entry: RecordedRuntimeFailure): string {
   const notes = [
     entry.code,
-    entry.count && entry.count > 1 ? `共 ${entry.count} 次` : undefined,
+    entry.count > 1 ? `共 ${entry.count} 次` : undefined,
     entry.lastAt ? `最近 ${new Date(entry.lastAt).toISOString()}` : undefined,
   ].filter((note): note is string => note !== undefined);
   return `${SOURCE_LABELS[entry.source] ?? entry.source} ${entry.subject}：${entry.message}${notes.length ? `（${notes.join('，')}）` : ''}`;

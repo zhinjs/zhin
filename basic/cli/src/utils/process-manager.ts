@@ -87,13 +87,15 @@ export function readProcessContext(
 export function detectProcessManager(
   context: ProcessContext | undefined,
   uid: number | undefined = process.getuid?.(),
+  platform: NodeJS.Platform = process.platform,
 ): ProcessManager | undefined {
   if (!context) return undefined;
   const { env } = context;
   if (env.pm_id !== undefined && env.pm_id !== '') {
     return { kind: 'pm2', ...(env.name ? { name: env.name } : {}), id: env.pm_id };
   }
-  const xpc = env.XPC_SERVICE_NAME;
+  // XPC_SERVICE_NAME means launchd only on macOS; elsewhere it is just an inherited variable.
+  const xpc = platform === 'darwin' ? env.XPC_SERVICE_NAME : undefined;
   if (xpc && xpc !== '0' && !xpc.startsWith('application.')) {
     return { kind: 'launchd', label: xpc, ...(uid !== undefined ? { uid } : {}) };
   }

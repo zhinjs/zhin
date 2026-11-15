@@ -994,7 +994,11 @@ export function runtimeHealthResults(state: RuntimeState): CheckResult[] {
   return results;
 }
 
-/** Without a running gateway: the failures the instance recorded during its last run. */
+/**
+ * Without a running gateway: the failures recorded during the last run in
+ * `.zhin/runtime-failures.json` (written by zhin.js's `RuntimeFailureJournal`,
+ * `src/instance/console/runtime-failures.ts`, #1270 batch 14). No file, no results.
+ */
 export function lastRunResults(cwd: string): CheckResult[] {
   const journal = readRuntimeFailureJournal(cwd);
   if (!journal) return [];

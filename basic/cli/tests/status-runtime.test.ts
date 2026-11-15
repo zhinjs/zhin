@@ -162,3 +162,31 @@ describe('zhin update: gateway restart notice (#1250 gateway-version-skew-after-
     expect(updateGatewayNotice(undefined, '1.3.0', '1.4.0')).toEqual(['@zhin.js/gateway：1.3.0 → 1.4.0；下次 zhin start 会使用新版本']);
   });
 });
+
+describe('.zhin/runtime-failures.json reader (format of zhin.js RuntimeFailureJournal, #1270 batch 14)', () => {
+  it('is empty without the file, validates entries like the writer and rejects other versions', async () => {
+    const { readRuntimeFailureJournal } = await import('../src/utils/runtime-state.js');
+    const root = await project();
+    expect(readRuntimeFailureJournal(root)).toBeUndefined();
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(path.join(root, '.zhin'), { recursive: true });
+    const file = path.join(root, '.zhin', 'runtime-failures.json');
+    const good = { source: 'account', subject: 'acc-1', code: 'preparation-failed', category: 'preparation', message: 'project unavailable', firstAt: 1, lastAt: 5, count: 2 };
+    await writeFile(file, JSON.stringify({ version: 1, entries: [
+      good,
+      { ...good, subject: 'newer', lastAt: 9, message: '' },
+      { ...good, source: 'unknown' },
+      { ...good, count: 0 },
+      { ...good, category: undefined },
+      'junk',
+    ] }));
+    expect(readRuntimeFailureJournal(root)).toEqual({ entries: [
+      { ...good, subject: 'newer', lastAt: 9, message: 'preparation-failed' },
+      good,
+    ] });
+    await writeFile(file, JSON.stringify({ version: 2, entries: [good] }));
+    expect(readRuntimeFailureJournal(root)).toEqual({ error: expect.stringContaining('格式无法识别') });
+    await writeFile(file, '{');
+    expect(readRuntimeFailureJournal(root)).toEqual({ error: expect.stringContaining('不是有效的 JSON') });
+  });
+});

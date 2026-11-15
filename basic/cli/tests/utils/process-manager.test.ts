@@ -91,7 +91,9 @@ describe('launchd (macOS, #1250 gateway-version-skew-after-update)', () => {
     expect(launchdLabel('my-bot')).toBe('com.zhinjs.my-bot');
     const context = readLaunchdContext(4242, list);
     expect(context).toEqual({ env: { XPC_SERVICE_NAME: 'com.zhinjs.my-bot' } });
-    const manager = detectProcessManager(context, 501);
+    const manager = detectProcessManager(context, 501, 'darwin');
+    // Only macOS: on Linux the variable is merely inherited.
+    expect(detectProcessManager(context, 501, 'linux')).toBeUndefined();
     expect(manager).toEqual({ kind: 'launchd', label: 'com.zhinjs.my-bot', uid: 501 });
     expect(managerRestartCommand(manager!)).toBe('launchctl kickstart -k gui/501/com.zhinjs.my-bot');
     expect(readLaunchdContext(7, list)).toBeUndefined();
@@ -103,8 +105,8 @@ describe('launchd (macOS, #1250 gateway-version-skew-after-update)', () => {
   });
 
   it('does not treat a terminal (XPC_SERVICE_NAME 0 / application.*) as a launchd job', () => {
-    expect(detectProcessManager({ env: { XPC_SERVICE_NAME: '0' } })).toBeUndefined();
-    expect(detectProcessManager({ env: { XPC_SERVICE_NAME: 'application.com.apple.Terminal.1234' } })).toBeUndefined();
+    expect(detectProcessManager({ env: { XPC_SERVICE_NAME: '0' } }, 501, 'darwin')).toBeUndefined();
+    expect(detectProcessManager({ env: { XPC_SERVICE_NAME: 'application.com.apple.Terminal.1234' } }, 501, 'darwin')).toBeUndefined();
   });
 
   it('names launchd in the foreground restart explanation', () => {
