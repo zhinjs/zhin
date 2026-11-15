@@ -19,6 +19,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceInstaller } from '@zhin.js/runtime';
 import { containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
+import { AMBIENT_FEATURE_ID, AMBIENT_FEATURE_WORDS } from '@zhin.js/core/runtime';
 import {
   chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry,
@@ -164,7 +165,17 @@ const messages = createMessages({
   levelEndpoint: { 'zh-CN': '账号', en: 'endpoint' },
   levelAdapter: { 'zh-CN': '适配器', en: 'adapter' },
   levelGlobal: { 'zh-CN': '全局', en: 'global' },
+  ambientName: { 'zh-CN': '插话', en: 'ambient' },
+  ambientGlobal: {
+    'zh-CN': '插话的全局默认值在配置 ai.trigger.ambient 中设置（Console「AI → 插话」）；聊天里可以按会话 / 账号 / 适配器开关。',
+    en: 'The global interjection default is ai.trigger.ambient in the configuration (Console "AI → Ambient"); in chat switch it per conversation / endpoint / adapter.',
+  },
 });
+
+/** ADR 0062 §23: `插话` / `ambient` names group interjection, a feature without a Plugin. */
+function featureTarget(word: string | undefined): string | undefined {
+  return word !== undefined && AMBIENT_FEATURE_WORDS.has(word.toLowerCase()) ? AMBIENT_FEATURE_ID : word;
+}
 
 const LEVEL_MESSAGE = { conversation: 'levelConversation', endpoint: 'levelEndpoint', adapter: 'levelAdapter', global: 'levelGlobal' } as const;
 const levelName = (locale: Locale, level: FeatureConfigLevel) => messages(locale, LEVEL_MESSAGE[level]);
@@ -417,6 +428,16 @@ export async function executeFeatureChat(
               : Object.keys(data.values ?? {}).length ? messages(locale, 'overridden') : '';
         lines.push(messages(locale, 'listLine', { plugin: feature.plugin, state: messages(locale, enabled ? 'enabledWord' : 'disabledWord'), source }));
       }
+      // ADR 0062 §23: group interjection is listed like a feature (switch only).
+      if (actor.kind !== 'private') {
+        const ambient = await call('feature.get', { plugin: AMBIENT_FEATURE_ID, level: 'conversation', key: actor.conversationKey });
+        const data = (ambient?.body as Record<string, any>)?.data as { enabled?: boolean; lockedBy?: FeatureConfigLevel } | undefined;
+        if (data) {
+          lines.push(messages(locale, 'listLine', { plugin: messages(locale, 'ambientName'),
+            state: messages(locale, data.enabled ? 'enabledWord' : 'disabledWord'),
+            source: data.lockedBy ? messages(locale, 'lockedBy', { level: levelName(locale, data.lockedBy) }) : '' }));
+        }
+      }
       const pages = Math.max(1, Math.ceil(lines.length / FEATURE_LIST_PAGE_SIZE));
       if (page > pages) return messages(locale, 'listPageOutOfRange', { pages });
       const out = [messages(locale, 'listHeader')];
@@ -428,10 +449,11 @@ export async function executeFeatureChat(
     }
     case 'enable':
     case 'disable': {
-      const plugin = words[1];
+      const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
       if (!plugin || level === null || words.length > 3) return messages(locale, 'usage');
       const enabled = sub === 'enable';
+      if (plugin === AMBIENT_FEATURE_ID && level === 'global') return messages(locale, 'ambientGlobal');
       const scope = target(level);
       if ('error' in scope) { audit(sub, level, scopeAt(actor, level), 'denied', { plugin }); return scope.error; }
       if (level === 'global') {
@@ -442,7 +464,7 @@ export async function executeFeatureChat(
       }
       const reply = await call('feature.set-enabled', { plugin, level, key: scope.key, enabled });
       audit(sub, level, scope.key, reply?.body.success ? 'ok' : reply?.status === 403 ? 'denied' : 'error', { plugin });
-      return describe(reply, plugin, level);
+      return describe(reply, plugin === AMBIENT_FEATURE_ID ? messages(locale, 'ambientName') : plugin, level);
     }
     case 'confirm': {
       const pending = deps.pending?.get(actorName(actor));
@@ -492,14 +514,14 @@ export async function executeFeatureChat(
       return describe(reply, plugin, level);
     }
     case 'reset': {
-      const plugin = words[1];
+      const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
       if (!plugin || level === null || level === 'global' || words.length > 3) return messages(locale, 'usage');
       const scope = target(level);
       if ('error' in scope) { audit('reset', level, scopeAt(actor, level), 'denied', { plugin }); return scope.error; }
       const reply = await call('feature.remove-override', { plugin, level, key: scope.key });
       audit('reset', level, scope.key, reply?.body.success ? 'ok' : 'error', { plugin });
-      return describe(reply, plugin, level);
+      return describe(reply, plugin === AMBIENT_FEATURE_ID ? messages(locale, 'ambientName') : plugin, level);
     }
   }
   return messages(locale, 'usage');

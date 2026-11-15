@@ -84,6 +84,7 @@ group-suite:
 |---|---|
 | `checkin` / `mypoints` / `rank` | 签到、积分与排行 |
 | `checkin do` / `签到` · `checkin streak` · `checkin rank` | 兼容别名：分别等同 `checkin`、`mypoints`、`rank`，方便从 `checkin <子命令>` 风格的本地签到插件迁移 |
+| `积分` / `我的积分` · `排行` / `积分排行` | 中文别名：分别等同 `mypoints`、`rank`（回复里出现的词都能直接当命令用） |
 | `stats` / `stats-week` / `stats-rank` / `mystats` | 消息统计 |
 | `stats-card` | 当日统计 HTML 图卡；没有渲染服务时走统一文本降级 |
 | `teach` / `teach-regex` / `teach-list` / `forget` | 群问答（整句匹配）与管理，见下方「两套自动回复」 |

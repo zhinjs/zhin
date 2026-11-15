@@ -359,7 +359,7 @@ export async function admitIngressMailTurn(input: {
   readonly audit: DecisionAudit;
   readonly reply: (content: SendContent) => Promise<Awaited<ReturnType<Message['$reply']>>>;
 }): Promise<
-  | { readonly kind: 'completed' }
+  | { readonly kind: 'completed'; readonly outcome: 'merged' | 'rejected'; readonly reason: string }
   | {
       readonly kind: 'admitted';
       readonly admission: Extract<TurnAdmission, { kind: 'run' }>;
@@ -411,13 +411,13 @@ export async function admitIngressMailTurn(input: {
   });
   if (admitted.kind === 'merged') {
     logger.debug(formatCompact({ op: 'agent_host_turn_merged', sessionKey }));
-    return { kind: 'completed' };
+    return { kind: 'completed', outcome: 'merged', reason: 'merge_window_joined' };
   }
   if (admitted.kind === 'rejected') {
     logger.info(formatCompact({ op: 'agent_host_turn_rejected', sessionKey, reason: admitted.reason }));
     const notice = admissionRejectionNotice(admitted.reason, message.locale);
     if (notice) await reply(notice);
-    return { kind: 'completed' };
+    return { kind: 'completed', outcome: 'rejected', reason: String(admitted.reason) };
   }
   if (gate) inbound = { ...preprocessed, text: admitted.text };
   const window = admitted.facts.mergeWindow;

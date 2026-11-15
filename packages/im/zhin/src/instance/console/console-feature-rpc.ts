@@ -39,6 +39,7 @@ import {
 } from '@zhin.js/runtime';
 import { maskConfigValue } from '@zhin.js/gateway/config';
 import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '@zhin.js/host-http';
+import { AMBIENT_ENGAGE_FIELD, AMBIENT_FEATURE_ID, resolveAmbientSwitchAt } from '@zhin.js/core/runtime';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import type { FeatureOverrideStore } from './feature-override-store.js';
 import { FeatureOverrideConflictError, FeatureOverrideStorageUnavailableError } from './feature-override-store.js';
@@ -818,7 +819,76 @@ async function withConversationName(result: ConsoleFeatureGetResult, context: Fe
   return name ? Object.freeze({ ...result, conversation: Object.freeze({ ...result.conversation, name }) }) : result;
 }
 
+/**
+ * ADR 0062 §23: group interjection as a feature. The global default is the configuration file's
+ * `ai.trigger.ambient.conversations`; adapter / endpoint / conversation switches are stored rows
+ * of the reserved feature {@link AMBIENT_FEATURE_ID}: `enabled: false` (off, locks lower levels)
+ * or `patch.engage: true` (on). Only switch reads and writes are served (no fields).
+ */
+function ambientGlobalEnabled(document: RuntimeConfigDocument, key: string | undefined): boolean {
+  const ai = record(document.ai) ? document.ai : undefined;
+  const trigger = ai && record(ai.trigger) ? ai.trigger : undefined;
+  const ambient = trigger && record(trigger.ambient) ? trigger.ambient : undefined;
+  const list = Array.isArray(ambient?.conversations) ? ambient.conversations.filter((item): item is string => typeof item === 'string') : [];
+  if (list.includes('*')) return true;
+  const ref = key ? parseFeatureConversationKey(key) : undefined;
+  // The file allowlist names `<platform>:<conversation id>`; the adapter alias usually is the platform.
+  return !!ref && list.includes(`${ref.adapter}:${ref.conversation.id}`);
+}
+
+async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, context: FeatureRpcContext): Promise<unknown> {
+  const { level, key } = readScope(input);
+  await authorize(context, { type, plugin: AMBIENT_FEATURE_ID, level, ...(key !== undefined ? { key } : {}) });
+  const store = stores(context).overrides;
+  await store.refresh();
+  if (type === 'feature.get') {
+    return readState(context, state => {
+      const resolved = resolveAmbientSwitchAt(store, key, ambientGlobalEnabled(state.document, key), level === 'global' ? undefined : level);
+      const row = key ? store.get(AMBIENT_FEATURE_ID, key) : undefined;
+      const ref = level === 'conversation' && key ? parseFeatureConversationKey(key) : undefined;
+      return Object.freeze({
+        revision: key ? String(store.revisionOf(AMBIENT_FEATURE_ID, key)) : state.revision,
+        plugin: AMBIENT_FEATURE_ID, level, ...(key ? { key } : {}),
+        levels: Object.freeze(['global', 'adapter', 'endpoint', 'conversation'] as const),
+        conversationFields: Object.freeze([]), selfServiceFields: Object.freeze([]), schema: null,
+        values: Object.freeze({}), effective: Object.freeze({}), sources: Object.freeze({ '/enabled': resolved.source }),
+        enabled: resolved.enabled,
+        ...(resolved.lockedBy ? { lockedBy: resolved.lockedBy } : {}),
+        ...(ref ? { conversation: Object.freeze({ adapter: ref.adapter, endpointId: ref.endpointId, kind: ref.conversation.kind, id: ref.conversation.id }) } : {}),
+        ...(row ? { updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}), ...(row.operator ? { operator: row.operator } : {}) } : {}),
+        persistent: store.persistent,
+      }) satisfies ConsoleFeatureGetResult;
+    });
+  }
+  if (level === 'global' || key === undefined) {
+    throw new FeatureRpcError(409, '插话的全局默认值在配置文件 ai.trigger.ambient（Console「AI → 插话」）中修改', { code: 'ambient-global-in-config' });
+  }
+  if (type !== 'feature.set-enabled' && type !== 'feature.remove-override') invalid('插话只支持开关，没有可设置的字段');
+  if (type === 'feature.set-enabled' && typeof input.enabled !== 'boolean') invalid('enabled 必须是布尔值');
+  const lockedBy = resolveAmbientSwitchAt(store, key, false, level).lockedBy;
+  if (lockedBy) locked(lockedBy);
+  const enabled = input.enabled === true;
+  const result = await store.write({
+    plugin: AMBIENT_FEATURE_ID, key,
+    ...(typeof input.expectedRevision === 'string' && /^\d{1,15}$/u.test(input.expectedRevision) ? { expectedRevision: Number(input.expectedRevision) } : {}),
+    ...(context.actor ? { updatedBy: context.actor } : {}),
+    ...(context.operator ? { operator: context.operator } : {}),
+    next: () => type === 'feature.remove-override' ? null
+      : enabled ? { patch: { [AMBIENT_ENGAGE_FIELD]: true } } : { enabled: false, patch: {} },
+  });
+  const label = LEVEL_LABEL[level as Exclude<ConsoleFeatureLevel, 'global'>];
+  if (result.status === 'conflict') return Object.freeze({ status: 'conflict', revision: String(result.revision), message: `${label}覆盖已被其他地方修改，未保存。请刷新后重试。` });
+  if (result.status === 'unchanged') return Object.freeze({ status: 'unchanged', revision: String(result.revision), warnings: Object.freeze([]) });
+  context.publishEvent?.('feature:updated', { plugin: AMBIENT_FEATURE_ID, level, key });
+  return Object.freeze({ status: 'saved', revision: String(result.revision), restartRequired: false, warnings: Object.freeze([]),
+    persistent: store.persistent, message: `${label}插话开关已保存，立即生效` });
+}
+
 async function handle(type: ConsoleFeatureRpcType, input: Record_, context: FeatureRpcContext): Promise<unknown> {
+  if (input.plugin === AMBIENT_FEATURE_ID && (type === 'feature.get' || type === 'feature.set-enabled'
+    || type === 'feature.remove-override' || type === 'feature.set-override')) {
+    return handleAmbient(type, input, context);
+  }
   switch (type) {
     case 'feature.list':
       await authorize(context, { type });

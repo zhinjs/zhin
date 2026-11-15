@@ -6,6 +6,7 @@ import { operationInputBinding, operationInputSignal, operationInputResources, o
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
+import { inboundOutcomeSink, type InboundOutcomeSink } from './inbound-outcome-ledger.js';
 import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 import type { OutboundMediaTrust } from '../../built/outbound-media-trust.js';
@@ -341,6 +342,8 @@ export interface RuntimeMessageOperation {
   readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
   readonly presentation?: RuntimeMessagePresentation;
+  /** ADR 0061: this message's outcome ledger; shared by every author view. */
+  readonly outcomes?: InboundOutcomeSink;
 }
 
 /** Canonical runtime message with optional plugin-owned extensions. */
@@ -479,6 +482,11 @@ export class RuntimeMessage implements MessageBase {
   [operationInputSignal](): AbortSignal | undefined {
     this.#operation.assertActive?.();
     return this.#operation.signal;
+  }
+
+  /** @internal The inbound outcome ledger (ADR 0061); reports after settlement are ignored by it. */
+  [inboundOutcomeSink](): InboundOutcomeSink | undefined {
+    return this.#operation.outcomes;
   }
 
   /** @internal The command/handler author's actual leased operation. */

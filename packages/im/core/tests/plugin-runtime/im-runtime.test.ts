@@ -5294,3 +5294,84 @@ describe('IM Runtime inbound origin routing', () => {
     } finally { await close(f); }
   });
 });
+
+describe('inbound message outcomes (ADR 0061 P1)', () => {
+  const latest = (fixture: Awaited<ReturnType<typeof createFixture>>) => fixture.im.messageOutcomes.list({ limit: 1 })[0];
+
+  it('records command_replied for an executed command and mirrors it on the diagnostics record', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      const record = latest(fixture)!;
+      expect(record).toMatchObject({ outcome: 'command_replied', reason: 'executed', stage: 'command', addressed: true,
+        command: expect.any(String), reply: 'yes', visibility: 'sender' });
+      expect(record.diagnosticId).toBe(fixture.im.messageDiagnostics.list()[0]!.id);
+      expect(fixture.im.messageDiagnostics.list()[0]!.outcome).toMatchObject({ id: record.id, outcome: 'command_replied' });
+      expect(JSON.stringify(record)).not.toContain('open');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('settles a throwing command as internal_error with an errorId and still rethrows', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new Error('PRIVATE-ERROR token=sk-abcdefghijklmnop'); },
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toThrow('PRIVATE-ERROR');
+      const record = latest(fixture)!;
+      expect(record).toMatchObject({ outcome: 'internal_error', reason: 'command_threw', stage: 'command', reply: 'throttled' });
+      expect(record.errorId).toMatch(/^err_[0-9a-f]{12}$/u);
+      expect(record.detail).toContain('PRIVATE-ERROR');
+      expect(record.detail).not.toContain('sk-abcdefghijklmnop');
+      expect(JSON.stringify(fixture.im.messageDiagnostics.list()[0])).not.toContain('PRIVATE-ERROR');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('records refused for a UserFacingError and invalid_input / permission_denied for command feedback', async () => {
+    const refusing = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new UserFacingError('本群没有开启抽奖'); },
+    });
+    try {
+      await receive(refusing.im, fixtureInput(refusing, '/gh issue list open'));
+      expect(latest(refusing)).toMatchObject({ outcome: 'refused', reason: 'user_facing_error', stage: 'command' });
+    } finally { await refusing.adapters.stop(); await refusing.store.close(); }
+    const validating = await createFixture([], [], undefined, undefined, undefined, { middleware: false, validateCommand: true });
+    try {
+      await receive(validating.im, fixtureInput(validating, '/gh issue list zero'));
+      expect(latest(validating)).toMatchObject({ outcome: 'invalid_input', reason: 'invalid' });
+    } finally { await validating.adapters.stop(); await validating.store.close(); }
+    const restricted = await createFixture([], [], undefined, undefined, undefined, { middleware: false, restrictCommand: true });
+    try {
+      await receive(restricted.im, fixtureInput(restricted, '/gh issue list open'));
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', stage: 'command' });
+      expect(latest(restricted)!.reason).toMatch(/^denied/u);
+    } finally { await restricted.adapters.stop(); await restricted.store.close(); }
+  });
+
+  it('records not_addressed for an unmatched group message and keeps addressed private messages apart', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      const privateInput = fixtureInput(fixture, 'just chatting');
+      await receive(fixture.im, privateInput);
+      expect(latest(fixture)).toMatchObject({ outcome: 'not_addressed', addressed: true });
+      const group = { ...privateInput.conversation, kind: 'group' as const, id: 'quiet-group' };
+      await receive(fixture.im, { ...privateInput, conversation: group, content: 'my points' });
+      expect(latest(fixture)).toMatchObject({ outcome: 'not_addressed', reason: 'prefix_mismatch', addressed: false,
+        visibility: 'sender', reply: 'no', sceneId: 'group:quiet-group' });
+      expect(fixture.im.messageOutcomes.list({ conversation: group })).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('takes the outcome an ingress route returns and keeps the higher-priority candidate', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      const current = fixture.store.current;
+      const resources = new Map(current.resources);
+      resources.set(current.root, new Map([...resources.get(current.root)!, [ingressRouteToken.id, {
+        route: async () => ({ handled: true, outcome: { outcome: 'ambient_silent', reason: 'cooldown', stage: 'ambient' } }),
+      }]]));
+      fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+      await expect(receive(fixture.im, fixtureInput(fixture, 'hello there'))).resolves.toMatchObject({ matched: true, command: 'ai' });
+      expect(latest(fixture)).toMatchObject({ outcome: 'ambient_silent', reason: 'cooldown', stage: 'ambient' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+});

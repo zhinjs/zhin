@@ -1,3 +1,4 @@
+import { AMBIENT_FEATURE_ID } from '@zhin.js/core/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyConfigPatches, childPluginId, featureId, rootPluginId,
@@ -306,6 +307,26 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await say(admin, '设置 repeater greeting')).toContain('用法');
   });
 
+  it('switches group interjection per conversation as a feature, locked from above (ADR 0062 §23)', async () => {
+    const { run, conversations, roles, audits } = await harness();
+    await promote(roles);
+    const admin = actor();
+    expect(await run(admin, '列表')).toContain('插话：停用');
+    expect(await run(admin, '开启 插话')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toMatchObject({ patch: { engage: true } });
+    expect(audits.at(-1)).toMatchObject({ action: 'feature.chat:enable', outcome: 'ok', detail: { plugin: AMBIENT_FEATURE_ID } });
+    expect(await run(admin, '列表')).toContain('插话：启用');
+    expect(await run(admin, '关闭 插话')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toMatchObject({ enabled: false });
+    expect(await run(admin, '重置 插话')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toBeUndefined();
+    // The global default is the configuration file, never written from chat.
+    expect(await run(actor({ user: 'boss' }), '关闭 插话 全局')).toContain('ai.trigger.ambient');
+    // An endpoint owner switches it off for the whole account; the conversation below is locked.
+    expect(await run(actor({ user: 'boss' }), 'disable ambient endpoint', 'en')).toBe('Saved (endpoint level), effective now.');
+    expect(await run(admin, '开启 插话')).toBe('插话 已在账号层停用，下级不能开启或修改开关。');
+  });
+
   it('lists only chat-facing plugins for this conversation, with configuration and global switches, paginated (#1250)', async () => {
     const { run } = await harness();
     const owner = actor({ user: 'boss' });
@@ -329,11 +350,13 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     const { run } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureOverrideStore(), 20);
     const owner = actor({ user: 'boss' });
     const first = await run(owner, '列表');
-    expect(first).toContain('第 1/2 页 · 共 27 项');
+    expect(first).toContain('第 1/2 页 · 共 28 项');
     expect(first).toContain('下一页：功能 列表 2');
     expect(first.split('\n').filter(line => /：(启用|停用)/u.test(line)).length).toBe(15);
     const second = await run(owner, '列表 2');
-    expect(second).toContain('第 2/2 页 · 共 27 项');
+    expect(second).toContain('第 2/2 页 · 共 28 项');
+    // ADR 0062 §23: group interjection is listed after the plugins.
+    expect(second).toContain('插话：停用');
     expect(second).not.toContain('下一页');
     expect(second).toContain('你的角色：');
   });

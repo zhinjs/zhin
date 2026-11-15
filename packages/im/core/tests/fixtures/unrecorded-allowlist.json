@@ -1,0 +1,4 @@
+{
+  "$comment": "ADR 0061 §4.1: stages whose branches may still settle as `unrecorded` in tests (warn only). Each phase removes the stages it covers; from P6 the list must be empty and any `unrecorded` fails.",
+  "stages": ["agent_gate"]
+}
