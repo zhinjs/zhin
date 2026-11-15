@@ -250,18 +250,13 @@ export class CommandIndex {
 
     // #1250 duplicate-command-route-crashes-instance: a route claimed by two *plugins* is kept by
     // the earlier claim and reported; it never fails the whole projection (and so the instance).
-    // Two routes of the same plugin colliding is that plugin's own authoring error and still
-    // throws, so the plugin's tests catch it (no winner picked by path order).
     const claim = (keys: readonly string[], claimant: CommandRouteClaimant): boolean => {
       let conflict: { readonly key: string; readonly kept: CommandRouteClaimant } | undefined;
       for (const key of keys) {
         for (const [existing, kept] of occupancy) {
-          if (!routeShapesOverlap(key, existing)) continue;
-          if (kept.owner === claimant.owner) {
-            throw new Error(`Duplicate Command route "${key}" (${claimantLabel(claimant)} vs ${claimantLabel(kept)})`);
-          }
-          conflict ??= { key, kept };
+          if (routeShapesOverlap(key, existing)) { conflict = { key, kept }; break; }
         }
+        if (conflict) break;
       }
       if (conflict) {
         const { key, kept } = conflict;
@@ -275,20 +270,23 @@ export class CommandIndex {
       return true;
     };
 
-    interface Admitted {
+    interface RouteClaim {
+      readonly keys: readonly string[];
+      readonly claimant: CommandRouteClaimant;
+    }
+    interface Declared {
       readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
       readonly namespace: readonly string[];
       readonly primarySegments: string[];
       readonly parameter: CommandParameterDefinition | undefined;
       readonly name: string;
-      readonly claimant: (kind: CommandRouteClaimant['kind'], entry?: string) => CommandRouteClaimant;
-      readonly aliasRoutes: { readonly entry: string; readonly segments: readonly string[] }[];
-      readonly shortcutEntries: { readonly trigger: string; readonly key: string; readonly prefill: Readonly<Record<string, CommandDynamicValue>> }[];
+      readonly primary: RouteClaim;
+      readonly aliases: readonly (RouteClaim & { readonly entry: string; readonly segments: readonly string[] })[];
+      readonly shortcuts: readonly (RouteClaim & { readonly trigger: string; readonly key: string; readonly prefill: Readonly<Record<string, CommandDynamicValue>> })[];
     }
-    const admitted: Admitted[] = [];
+    // Pass 0: every route each command declares (primary, aliases, shortcuts).
+    const declared: Declared[] = [];
     const disabledByOwner = new Map<PluginId, readonly string[]>();
-    // Pass 1: primary routes. A primary route taken by an earlier command skips the later command
-    // as a whole (its aliases and shortcuts included).
     for (const slot of registrationOrder(slots, ranks)) {
       let disabled = disabledByOwner.get(slot.owner);
       if (!disabled) {
@@ -303,29 +301,60 @@ export class CommandIndex {
       const name = displayName(primarySegments, parameter);
       const claimant = (kind: CommandRouteClaimant['kind'], entry?: string): CommandRouteClaimant =>
         commandClaimant(this.snapshot, slot, name, kind, entry);
-      if (!claim([...new Set([occupancyKey(primarySegments, parameter), ...declaredRouteShapes(primarySegments, slot.definition)])], claimant('command'))) continue;
-      admitted.push({ slot, namespace, primarySegments, parameter, name, claimant, aliasRoutes: [], shortcutEntries: [] });
-    }
-    // Pass 2: aliases, after every primary route, so an alias never costs another command its
-    // name; a taken alias skips only that alias.
-    for (const entry of admitted) {
-      const { slot, namespace, primarySegments, parameter } = entry;
-      for (const aliasText of normalizeAliasList(slot.definition.alias) ?? []) {
+      const aliases = (normalizeAliasList(slot.definition.alias) ?? []).map((aliasText) => {
         const aliasSegments = [...namespace, ...aliasRuntimeSegments(
           aliasText,
           primarySegments.slice(namespace.length),
         )];
         assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(aliasText)}`);
-        if (!claim([...new Set([occupancyKey(aliasSegments, parameter), ...declaredRouteShapes(aliasSegments, slot.definition)])], entry.claimant('alias', aliasText))) continue;
-        entry.aliasRoutes.push({ entry: aliasText, segments: Object.freeze(aliasSegments) });
+        return {
+          entry: aliasText,
+          segments: Object.freeze(aliasSegments),
+          keys: [...new Set([occupancyKey(aliasSegments, parameter), ...declaredRouteShapes(aliasSegments, slot.definition)])],
+          claimant: claimant('alias', aliasText),
+        };
+      });
+      const shortcuts = Object.entries(slot.definition.shortcut ?? {}).map(([rawTrigger, prefill]) => {
+        const trigger = [...namespace, ...splitCommand(rawTrigger)].join(' ');
+        return { trigger, key: rawTrigger.trim(), prefill, keys: [trigger], claimant: claimant('shortcut', trigger) };
+      });
+      declared.push({
+        slot, namespace, primarySegments, parameter, name,
+        primary: { keys: [...new Set([occupancyKey(primarySegments, parameter), ...declaredRouteShapes(primarySegments, slot.definition)])], claimant: claimant('command') },
+        aliases,
+        shortcuts,
+      });
+    }
+
+    // Two routes of the same plugin colliding is that plugin's own authoring error: it throws, so
+    // the plugin's tests catch it. Checked per plugin against its own routes only, so the result
+    // never depends on which other plugins are loaded, enabled or gated for an endpoint.
+    assertNoSamePluginOverlap(declared.flatMap((entry) => [entry.primary, ...entry.aliases, ...entry.shortcuts]));
+
+    interface Admitted extends Declared {
+      readonly aliasRoutes: { readonly entry: string; readonly segments: readonly string[] }[];
+      readonly shortcutEntries: { readonly trigger: string; readonly key: string; readonly prefill: Readonly<Record<string, CommandDynamicValue>> }[];
+    }
+    const admitted: Admitted[] = [];
+    // Pass 1: primary routes. A primary route taken by an earlier plugin skips the later command
+    // as a whole (its aliases and shortcuts included).
+    for (const entry of declared) {
+      if (!claim(entry.primary.keys, entry.primary.claimant)) continue;
+      admitted.push({ ...entry, aliasRoutes: [], shortcutEntries: [] });
+    }
+    // Pass 2: aliases, after every primary route, so an alias never costs another command its
+    // name; a taken alias skips only that alias.
+    for (const entry of admitted) {
+      for (const alias of entry.aliases) {
+        if (!claim(alias.keys, alias.claimant)) continue;
+        entry.aliasRoutes.push({ entry: alias.entry, segments: alias.segments });
       }
     }
     // Pass 3: shortcuts; a taken trigger skips only that shortcut.
     for (const entry of admitted) {
-      for (const [rawTrigger, prefill] of Object.entries(entry.slot.definition.shortcut ?? {})) {
-        const trigger = [...entry.namespace, ...splitCommand(rawTrigger)].join(' ');
-        if (!claim([trigger], entry.claimant('shortcut', trigger))) continue;
-        entry.shortcutEntries.push({ trigger, key: rawTrigger.trim(), prefill });
+      for (const shortcut of entry.shortcuts) {
+        if (!claim(shortcut.keys, shortcut.claimant)) continue;
+        entry.shortcutEntries.push({ trigger: shortcut.trigger, key: shortcut.key, prefill: shortcut.prefill });
       }
     }
 
@@ -900,6 +929,29 @@ function pluginRanks(snapshot: RuntimeSnapshot): ReadonlyMap<PluginId, number> {
   visit(snapshot.root);
   for (const id of snapshot.tree.keys()) visit(id);
   return rank;
+}
+
+/** Throws when two routes of one plugin overlap (`claims` in registration order). */
+function assertNoSamePluginOverlap(
+  claims: readonly { readonly keys: readonly string[]; readonly claimant: CommandRouteClaimant }[],
+): void {
+  const byOwner = new Map<PluginId, { readonly key: string; readonly claimant: CommandRouteClaimant }[]>();
+  for (const { keys, claimant } of claims) {
+    let taken = byOwner.get(claimant.owner);
+    if (!taken) {
+      taken = [];
+      byOwner.set(claimant.owner, taken);
+    }
+    for (const key of keys) {
+      for (const existing of taken) {
+        if (routeShapesOverlap(key, existing.key)) {
+          throw new Error(`Duplicate Command route "${key}" (${claimantLabel(claimant)} vs ${claimantLabel(existing.claimant)})`);
+        }
+      }
+    }
+    // A command's own route shapes (one per accepted arity) overlap each other by design.
+    taken.push(...keys.map((key) => ({ key, claimant })));
+  }
 }
 
 /** How the build-time error names a route's registration (unchanged wording). */

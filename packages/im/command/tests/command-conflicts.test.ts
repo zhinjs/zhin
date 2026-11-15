@@ -101,6 +101,32 @@ describe('Command route conflicts (#1250)', () => {
     expect(() => new CommandIndex([aliasClash, declared], snapshot([aliasClash, declared]))).toThrow(/Duplicate Command route/);
   });
 
+  it('throws for a same-plugin collision whether or not another plugin holds the route', () => {
+    // game-hub: `foo`, and `bar` whose alias is also `foo`; group-suite also has `foo`.
+    const other = command(groupSuite, 'foo', { execute: () => 'group-suite foo' });
+    const foo = command(gameHub, 'foo', { execute: () => 'foo' });
+    const bar = command(gameHub, 'bar', { alias: ['foo'], execute: () => 'bar' });
+    const message = /Duplicate Command route "foo" \(\/plugins\/game-hub\/commands\/(bar|foo)\/index\.ts( alias "foo")? vs \/plugins\/game-hub\/commands\/(bar|foo)\/index\.ts( alias "foo")?\)/;
+    expect(() => new CommandIndex([foo, bar], snapshot([foo, bar]))).toThrow(message);
+    expect(() => new CommandIndex([other, foo, bar], snapshot([other, foo, bar]))).toThrow(message);
+    expect(() => new CommandIndex([bar, foo, other], snapshot([bar, foo, other]))).toThrow(message);
+  });
+
+  it('never throws only after gating: an index without one plugin is valid when the full one is', () => {
+    const slots = [
+      command(groupSuite, 'foo', { alias: ['f'], execute: () => 'a' }),
+      command(gameHub, 'foo', { alias: ['g'], shortcut: { 'foo now': {} }, execute: () => 'b' }),
+      command(gameHub, 'bar', { alias: ['f'], execute: () => 'c' }),
+    ];
+    const full = new CommandIndex(slots, snapshot(slots));
+    expect(full.conflicts().length).toBeGreaterThan(0);
+    // What gatedCommandIndex builds when one plugin is switched off for an endpoint.
+    for (const off of [groupSuite, gameHub]) {
+      const remaining = slots.filter(slot => slot.owner !== off);
+      expect(() => new CommandIndex(remaining, snapshot(slots))).not.toThrow();
+    }
+  });
+
   it('keeps the subcommands of a skipped command and drops a preferred alias that was skipped', async () => {
     const first = command(groupSuite, 'foo', { execute: () => 'group-suite foo' });
     const second = command(gameHub, 'foo', { alias: ['foo2'], execute: () => 'game-hub foo' });

@@ -254,7 +254,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
 }
 
 function claimant(side: CommandRouteClaimant): AttentionCommandClaimant {
-  return { plugin: side.plugin, command: side.command, localPath: side.localPath, kind: side.kind,
+  return { plugin: side.plugin, owner: String(side.owner), command: side.command, localPath: side.localPath, kind: side.kind,
     ...(side.entry !== undefined ? { entry: side.entry } : {}), ...(side.root ? { root: true as const } : {}) };
 }
 

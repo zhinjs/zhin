@@ -176,8 +176,8 @@ describe('attention.list failure reasons (#1270)', () => {
       inferenceAccounts: async () => [{ accountId: 'accounts:a', label: 'A', serviceLabel: 'S', state: 'reauthorize', revision: 1 }],
       ineffectiveConfig: async () => [{ path: 'purposes.agents.typo', reason: 'no-target' }],
       commandConflicts: () => [{ route: '排行',
-        skipped: { plugin: 'game-hub', command: '排行', localPath: '排行', kind: 'command' },
-        kept: { plugin: 'group-suite', command: '排行', localPath: '排行', kind: 'command' } }],
+        skipped: { plugin: 'game-hub', owner: 'root/game-hub', command: '排行', localPath: '排行', kind: 'command' },
+        kept: { plugin: 'group-suite', owner: 'root/group-suite', command: '排行', localPath: '排行', kind: 'command' } }],
     };
   }
 

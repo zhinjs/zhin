@@ -201,6 +201,8 @@ export interface AttentionIneffectiveConfig {
 export interface AttentionCommandClaimant {
   /** Plugin instance key. */
   readonly plugin: string;
+  /** Full plugin id (owner): instance keys can repeat under different parent plugins. */
+  readonly owner: string;
   /** Command display name. */
   readonly command: string;
   /** Plugin-local path, as `disabledCommands` takes it. */
@@ -969,7 +971,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         ? t('command.takenByLater', { entry: typed(skipped), plugin: pluginName(skipped), other: pluginName(kept) }) : '';
       return {
         kind: 'command.conflict', severity: conflict.takenByLater ? 'danger' : 'warning',
-        subject: { plugin: skipped.plugin, commandRoute: route, command: skipped.command, commandKind: skipped.kind },
+        subject: { plugin: skipped.plugin, pluginId: skipped.owner, commandRoute: route, command: skipped.command, commandKind: skipped.kind },
         state: { skipped, kept, takenByLater: conflict.takenByLater === true },
         title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: pluginName(kept) }),
         detail: [taken, detail, advice].filter(Boolean).join(gap),

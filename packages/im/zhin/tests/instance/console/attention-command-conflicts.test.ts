@@ -75,8 +75,8 @@ describe('command.conflict attention items (#1250)', () => {
     const items = list.items.filter(item => item.kind === 'command.conflict');
     expect(items.map(item => [item.subject, item.severity, item.source, item.action.path])).toEqual(expect.arrayContaining([
       // game-hub (declared later) took group-suite's alias: danger.
-      [{ plugin: 'group-suite', commandRoute: '排行', command: 'rank', commandKind: 'alias' }, 'danger', 'commands', '/plugins/group-suite'],
-      [{ plugin: 'game-hub', commandRoute: '签到', command: '签到', commandKind: 'command' }, 'warning', 'commands', '/plugins/game-hub'],
+      [{ plugin: 'group-suite', pluginId: String(groupSuite), commandRoute: '排行', command: 'rank', commandKind: 'alias' }, 'danger', 'commands', '/plugins/group-suite'],
+      [{ plugin: 'game-hub', pluginId: String(gameHub), commandRoute: '签到', command: '签到', commandKind: 'command' }, 'warning', 'commands', '/plugins/game-hub'],
     ]));
     expect(items).toHaveLength(2);
 
@@ -96,15 +96,46 @@ describe('command.conflict attention items (#1250)', () => {
     expect(primary.detail).not.toContain('注意');
   });
 
-  it('gives each skipped command its own item when several aliases of one plugin hit the same route', async () => {
-    const slots = [
+  it('gives each skipped command its own item, and refuses several aliases of one plugin on one route', async () => {
+    // Two aliases of one plugin on one route are that plugin's own error: the index throws
+    // whether or not another plugin also holds the route, so no duplicate items can arise.
+    expect(() => state([
       command(groupSuite, 'x', { alias: ['top'], execute: () => 'x' }),
       command(gameHub, 'y', { alias: ['top'], execute: () => 'y' }),
       command(gameHub, 'z', { alias: ['top'], execute: () => 'z' }),
+    ])).toThrow(/Duplicate Command route "top"/);
+    // Different skipped routes of one plugin on one route name are still told apart by command and kind.
+    const slots = [
+      command(groupSuite, 'x', { alias: ['top'], shortcut: { hot: {} }, execute: () => 'x' }),
+      command(gameHub, 'y', { alias: ['top'], execute: () => 'y' }),
+      command(gameHub, 'z', { shortcut: { hot: {} }, execute: () => 'z' }),
     ];
-    const list = await collectAttention(sourcesFor(slots), { allows: () => true });
-    const items = list.items.filter(item => item.kind === 'command.conflict');
-    expect(items.map(item => item.subject?.command).sort()).toEqual(['y', 'z']);
+    const items = (await collectAttention(sourcesFor(slots), { allows: () => true })).items.filter(item => item.kind === 'command.conflict');
+    expect(items.map(item => [item.subject?.command, item.subject?.commandKind]).sort()).toEqual([['y', 'alias'], ['z', 'shortcut']]);
+    expect(new Set(items.map(item => item.id)).size).toBe(2);
+  });
+
+  it('keeps items of same-named child plugins under different parents apart', async () => {
+    const left = childPluginId(groupSuite, 'shared');
+    const right = childPluginId(gameHub, 'shared');
+    const slots = [command(root, 'foo', { execute: () => 'root' }), command(left, 'foo', { execute: () => 'left' }), command(right, 'foo', { execute: () => 'right' })];
+    const nested = (id: PluginId, parent: PluginId) => [id, { id, instanceKey: 'shared', packageName: '@test/shared', packageRoot: `/plugins/${String(id)}`, parent, children: [] }] as const;
+    const base = state(slots);
+    const tree = new Map(base.tree);
+    tree.set(groupSuite, { ...tree.get(groupSuite)!, children: [left] });
+    tree.set(gameHub, { ...tree.get(gameHub)!, children: [right] });
+    for (const [id, node] of [nested(left, groupSuite), nested(right, gameHub)]) tree.set(id, node);
+    const config = new Map([...base.config, [left, {}], [right, {}]]);
+    const resources = new Map([...base.resources, [left, new Map()], [right, new Map()]]);
+    const withTree = { ...base, tree, config, resources };
+    const index = new CommandIndex(slots, { ...withTree, generation: 1, projections: new Map() });
+    const store = new SnapshotStore({ ...withTree, projections: new Map([[commandFeatureId, index]]) });
+    stores.push(store);
+    const sources = createAttentionSources({ projectRoot: '/app', pluginLifecycleFile: '/app/plugin-lifecycle.json', snapshots: store,
+      configuration: { readSource: async () => ({}) } } as unknown as ConsoleRpcComposition);
+    const items = (await collectAttention(sources, { allows: () => true })).items.filter(item => item.kind === 'command.conflict');
+    expect(items.map(item => item.subject?.plugin)).toEqual(['shared', 'shared']);
+    expect(items.map(item => item.subject?.pluginId).sort()).toEqual([String(left), String(right)].sort());
     expect(new Set(items.map(item => item.id)).size).toBe(2);
   });
 
@@ -116,7 +147,7 @@ describe('command.conflict attention items (#1250)', () => {
     const list = await collectAttention(sourcesFor([dynamic(root, 'root'), dynamic(gameHub, 'game-hub')]), { allows: () => true });
     const [item] = list.items.filter(entry => entry.kind === 'command.conflict');
     expect(item).toMatchObject({
-      subject: { plugin: 'game-hub', commandRoute: 'foo $', command: 'foo <id>', commandKind: 'command' },
+      subject: { plugin: 'game-hub', pluginId: String(gameHub), commandRoute: 'foo $', command: 'foo <id>', commandKind: 'command' },
       title: '插件 game-hub 的命令「foo <id>」与插件 项目根插件 重名，没有注册',
     });
     expect(item!.detail).toContain('「foo <id>」已由插件 项目根插件 的命令「foo <id>」使用');

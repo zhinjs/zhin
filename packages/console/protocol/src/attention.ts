@@ -62,8 +62,8 @@ export type ConsoleAttentionKind =
   | 'plugin.config'
   /**
    * Two registrations claim the same command route (#1250): the later command (primary route) or
-   * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` is the
-   * plugin that lost it, `subject.commandRoute` the route, `subject.command` / `commandKind` the
+   * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` (instance key) and
+   * `subject.pluginId` (full id) name the plugin that lost it, `subject.commandRoute` the route, `subject.command` / `commandKind` the
    * skipped command and which of its routes. `danger` when a later plugin's command took an earlier
    * plugin's alias or shortcut. Visible with `feature.view`.
    */
@@ -169,6 +169,11 @@ export interface ConsoleAttentionSubject {
   readonly command?: string;
   /** Which of its routes was skipped: `command` (the whole command), `alias` or `shortcut` (#1250). */
   readonly commandKind?: string;
+  /**
+   * Full plugin id of `plugin` (`command.conflict`, #1250): instance keys can repeat under different
+   * parent plugins, so the id keeps such items apart.
+   */
+  readonly pluginId?: string;
 }
 
 /**

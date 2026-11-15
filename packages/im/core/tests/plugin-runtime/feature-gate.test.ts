@@ -126,6 +126,16 @@ describe('ADR 0050 dispatch gate', () => {
     expect(gatedCommandIndex(message('ep:news', ''), snapshot)!.conflicts()).toEqual([]);
   });
 
+  it('fails a same-plugin collision when projecting, not only once a gate removes the other plugin', () => {
+    // weather: `rss` and `wx` (alias `rss`); rss also has `rss`. Gating rss off on qq/news must
+    // not be the first place weather's own collision shows up (it would fail every message there).
+    const own = createCapabilitySlot({ owner: weather, feature: commandFeatureId, localName: 'rss', source: '/weather/commands/rss/index.ts',
+      definition: defineCommand({ async execute() { return 'weather rss'; } }) }) as CapabilitySlot;
+    const alias = createCapabilitySlot({ owner: weather, feature: commandFeatureId, localName: 'wx', source: '/weather/commands/wx/index.ts',
+      definition: defineCommand({ alias: ['rss'], async execute() { return 'wx'; } }) }) as CapabilitySlot;
+    expect(() => fixture(document, { 'rss|qq/news': { enabled: false } }, [own, alias])).toThrow(/Duplicate Command route "rss" \(\/weather\/commands\//);
+  });
+
   it('skips middleware of disabled owners', async () => {
     const { snapshot, events } = fixture(document, stored);
     await runRuntimeMiddleware(snapshot, message('ep:main', 'hi'), async () => { events.push('terminal'); }, 'inbound');
