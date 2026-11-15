@@ -55,10 +55,28 @@ zhin start [--foreground] [--mode development|test|production] [--environment <n
 zhin stop [--timeout <ms>]
 zhin restart [--gateway]
 zhin status [--json]
-zhin logs [-f] [-n <1-1000>] [--interval <ms>]
+zhin logs [-f] [-n <N>] [--level debug|info|warn|error] [--since <time>] [--until <time>]
+          [--grep <text>] [--name <logger>] [--interval <ms>]
 ```
 
 `zhin start` starts the management gateway (long-lived; serves HTTP and the Console), which launches the Zhin instance. It runs in the background by default; `--foreground` (`-f`) keeps it attached (development, systemd, containers, PM2). Only `--foreground`, `--once` and `--standalone` run attached: `--mode production` on its own still runs in the background, so process managers must pass `--foreground`. While the gateway runs, the other commands talk to it over the local control socket `.zhin/gateway.sock`: `stop` stops instance and gateway, `restart` restarts only the instance (`--gateway` restarts a background gateway), `status` shows both (exit code 3 when not running), `logs` reads the instance logs. Without a gateway, `stop` / `restart` have nothing to do and `logs` reads `.zhin/logs/instance.log`. Run the management commands as the same system user that started the gateway. Options, exit codes and a systemd example: [zhin start](./runtime.md).
+
+A log line reads `[2026-11-15 09:00:01.234][WARN] [logger] message`: files and pipes carry the date, a terminal shows only the time. Fields are written as `action | key: value | flag` (e.g. `usage_persist | status: failed | detail: …`).
+
+Without filters `zhin logs` shows the last `-n` lines (default 200, at most 1000). With a filter it searches `.zhin/logs/instance.log` and its rotated files `instance.log.1`…, not limited by the gateway's 1000-line buffer, and `-n` is the number of matching lines (at most 100000):
+
+- `--level warn`: WARN and above (ERROR);
+- `--since` / `--until`: `10m`, `1h`, `2d` (before now), `09:00` (today), `2026-11-15 09:00` or an ISO time with a zone. Log lines carry no time-zone offset: their times, and values written without a zone, are read in the local time zone of the machine running `zhin logs` (matching only when it shares the instance's machine and zone); lines written before the upgrade have a time but no date and are skipped, with a count at the end;
+- `--grep`: lines containing the text, case-insensitive;
+- `--name`: the leading `[logger]` segment; `icqq` also matches `icqq:12345`. Log lines carry no plugin name, so to see one plugin's logs use its logger name.
+
+Continuation lines such as stack traces follow the entry above them; when `--grep` hits a continuation line, the entry line it belongs to is printed first. `-f` works with filters and prints only matching new lines. The log is text, so there is no `--json`.
+
+```bash
+# Did the 9 o'clock job run, and did anything fail around it?
+zhin logs --since 08:55 --until 09:10 --level warn
+zhin logs --name icqq --grep reconnect -f
+```
 
 For `zhin update`, see [Update dependencies](#update-update-dependencies) below.
 
@@ -232,6 +250,8 @@ zhin doctor --live <host-url> [--json]
 
 Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can, still lists the manual fix of every item it cannot repair, and says so when it could repair nothing; 「所有检查通过」 is never printed while a warning exists. While the gateway runs, every Console attention item and every source that could not be read is a warning, and a running gateway older or newer than the installed `@zhin.js/gateway` gets the restart command; without a running gateway, the failures recorded in `.zhin/runtime-failures.json` are shown as 「上次运行」 (last run): the instance (zhin.js) writes the latest failure of each model account, adapter account and MCP server there while it runs and removes it once that subject recovers; when nothing is recorded, or the instance version does not write the file yet, nothing is shown and nothing is reported. The TypeScript check reads the project's own `node_modules/typescript` and the range `package.json` declares, not a global `tsc` on PATH. The single-instance check names who requires each copy, e.g. `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`, with the concrete fix (which `package.json` to edit, or `zhin migrate`). `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. `--live` reads a running Host's readiness report (needs an API token with `status.view` in `ZHIN_CONSOLE_TOKEN`; put a custom `http.base` in the URL path) and `--json` prints it as JSON; exit code `0` when ready, `1` otherwise. See [Production](../operations/production.md). When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards. When the project has `@zhin.js/gateway`, `doctor` also loads the gateway's `node-pty` from the project directory: when that fails (usually because pnpm skipped its build script) it warns with the repair command, and the Console's local terminal is unavailable. See [Build scripts of the native dependencies](../console/operations.md#native-build).
 
+When the HTTP port is taken by something other than this project's gateway (as reached over its control socket), `doctor` sends one request without any credentials to `/pub/health` on the configured `http.host` and TLS setting (`0.0.0.0` / `::` become loopback) and tells apart another project's Zhin gateway, another gateway of this project (control socket unusable), a Zhin instance run without a gateway, and other programs (a refused connection, a failed TLS handshake — e.g. a self-signed certificate — or a timeout is reported as「无法确认占用者」, occupant unknown); for another project's gateway it compares the project id it reports with the working directory of the listening processes and names that project directory (and pid), suggesting `zhin stop` there or a different `http.port`. When the project root still holds service files an older scaffold generated (by the `name` in `package.json`: `<name>.service`, `com.zhinjs.<name>.plist`, `install-service.ps1`, `<name>-task.xml`), the 「旧服务文件」 item says they can be deleted in favour of `zhin service install`; `ecosystem.config.*` is only mentioned when `package.json` has neither a `pm2` dependency nor a `pm2:*` script. The item is informational (not a warning); neither `doctor` nor `--fix` deletes anything.
+
 ### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 
 ```bash
@@ -384,10 +404,12 @@ Adds an installed, declared plugin instance to `disable_plugins` in the config f
 ### update: Update Dependencies
 
 ```bash
-zhin update [package | package@exact-version ...]
+zhin update [package | package@exact-version ...] [--dry-run]
 ```
 
-Without package names every dependency is updated (`pnpm update`). While the gateway runs the same transaction goes through it (stop instance → update → start instance, rolled back on failure); otherwise it runs directly.
+Without package names every dependency is updated (`pnpm update`; in a pnpm workspace `pnpm update -r`, so the workspace members move too). While the gateway runs the same transaction goes through it (stop instance → update → start instance, rolled back on failure); otherwise it runs directly.
+
+`--dry-run` only lists what would be upgraded: per root project and workspace member, the current → target version with the range from `package.json`, and the newest release when it is outside the range (not installed). Plain package-name keys in `package.json#pnpm.overrides` and `pnpm-workspace.yaml#overrides` are shown at the override's version; overrides the preview cannot evaluate (`link:` and the like) and conditional ones (`a>b`, `name@<2`) are listed separately. Targets come from the registry within each range; nothing is written and the instance is neither stopped nor restarted. pnpm's `minimumReleaseAge` can still hold back a release less than a day old.
 
 ### search / info: Discover Plugins
 
@@ -473,13 +495,17 @@ zhin pub [plugin-name|plugin-dir] [--tag latest] [--access public] [--registry <
 **Manage skill / extension packages** (ADR 0010):
 
 ```bash
-zhin packages install <pkg|npm:skill-pack|git:url> [--local]
+zhin packages install <npm:skill-pack|git:url> [--local]
 zhin packages remove <name> [--local]
-zhin packages list [--local]
+zhin packages list [--local] [--json]
 zhin packages update [source] [--local]
 ```
 
-`--local` (`-l`) installs into the project's `.zhin/packages/` instead of globally. Without an `npm:` / `git:` prefix, it uses the same install flow as `zhin install <package>` and Console.
+`--local` (`-l`) installs into the project's `.zhin/packages/` instead of globally.
+
+`zhin packages list` groups the dependencies in the project's `package.json` (run from a subdirectory, it finds the project root above): adapters, plugins, the Zhin framework and feature packages (`zhin.js` and packages whose `package.json#zhin.type` is `feature`), other dependencies, declared but not installed, and finally the skill packs; `--json` prints `{ packages, skillPacks }`. The group comes from the installed package's `package.json#zhin`, as on the Console plugins page.
+
+For npm plugins use `zhin install` / `zhin search` / `zhin info` ([ADR 0062](../../adr/0062-one-path-per-task.md) item 11). `zhin packages install <npm package>`, `zhin packages search` and `zhin packages info` still work unchanged but warn that they are deprecated and will be removed in a later release.
 
 **Check whether a plugin is really live**: installing doesn't mean it's loaded, its platform is online, or its features are verified. Use these to inspect status and run verification:
 

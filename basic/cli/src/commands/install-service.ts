@@ -16,6 +16,7 @@ import {
   posixQuote,
   readServiceProjectName,
   ServiceDefinitionError,
+  legacyServiceFileNames,
   systemdSystemInstallCommands,
   windowsInstallCommands,
   writeServiceFile,
@@ -56,9 +57,8 @@ function describeCommand(command: ServiceCommand): void {
 
 /** Scaffold files written before ADR 0062 §2: no longer read. */
 async function mentionLegacyFiles(cwd: string, projectName: string): Promise<void> {
-  const legacy = [
-    `${projectName}.service`, `${launchdLabel(projectName)}.plist`, 'install-service.ps1', `${projectName}-task.xml`,
-  ].filter((name) => fs.existsSync(path.join(cwd, name)));
+  // The same list `zhin doctor` reports (legacyServiceFileNames).
+  const legacy = legacyServiceFileNames(projectName).filter((name) => fs.existsSync(path.join(cwd, name)));
   if (legacy.length) {
     output.line(`  项目根目录的旧服务模板不再使用，可以删除：${legacy.join('、')}`);
   }

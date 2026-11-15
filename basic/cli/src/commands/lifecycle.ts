@@ -35,6 +35,16 @@ import { describeForegroundGatewayRestart, detectProcessManager, readProcessCont
 import { serviceStopAdviceFor } from '../utils/service-definition.js';
 import { formatGatewayVersionSkew, gatewayVersionSkew, installedGatewayVersion } from '../utils/gateway-version.js';
 import { readRuntimeState, renderRuntimeState, runtimeStateUnavailable } from '../utils/runtime-state.js';
+import {
+  hasLogFilter,
+  instanceLogFiles,
+  LogLineFilter,
+  parseLogFilterLevel,
+  parseLogTime,
+  readFilteredHistory,
+  type LogFilterOptions,
+} from '../utils/log-filter.js';
+import { previewUpdate, renderUpdatePreview } from '../utils/update-preview.js';
 import { runtimeCommand } from './runtime.js';
 
 /**
@@ -211,17 +221,24 @@ export const statusCommand = new Command('status')
     } catch (error) { fail(error); }
   });
 
-function parseLineCount(value: string): number {
+/** `-n` without filters reads the gateway's 1000-line buffer; with filters it searches the log files. */
+const MAX_LINES = 1000;
+const MAX_FILTERED_LINES = 100_000;
+const DEFAULT_LINES = 200;
+
+function parseLineCount(value: string | undefined, max: number): number {
+  if (value === undefined) return DEFAULT_LINES;
   const lines = Number(value);
-  if (!Number.isInteger(lines) || lines < 1 || lines > 1000) throw new Error('-n 必须是 1–1000 的整数');
+  if (!Number.isInteger(lines) || lines < 1 || lines > max) throw new Error(`-n 必须是 1–${max} 的整数`);
   return lines;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 
 /** Follows a log file by polling its size (no gateway). */
-async function followFile(file: string, output: Output, pollMs: number): Promise<never> {
+async function followFile(file: string, output: Output, pollMs: number, filter?: LogLineFilter): Promise<never> {
   let offset = existsSync(file) ? statSync(file).size : 0;
+  let pending = '';
   for (;;) {
     await sleep(pollMs);
     let size = 0;
@@ -232,34 +249,90 @@ async function followFile(file: string, output: Output, pollMs: number): Promise
     try {
       const buffer = Buffer.alloc(size - offset);
       await handle.read(buffer, 0, buffer.length, offset);
-      output.out(buffer.toString('utf8'));
       offset = size;
+      if (!filter) { output.out(buffer.toString('utf8')); continue; }
+      const lines = (pending + buffer.toString('utf8')).split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) for (const shown of filter.take(line)) output.out(`${shown}\n`);
     } finally { await handle.close(); }
   }
 }
 
+interface LogsOptions {
+  follow?: boolean;
+  lines?: string;
+  interval: string;
+  level?: string;
+  since?: string;
+  until?: string;
+  grep?: string;
+  name?: string;
+}
+
+/** `zhin logs` filter options (#1250); undefined when none is given. */
+export function logFilterOptions(options: LogsOptions, now = new Date()): LogFilterOptions | undefined {
+  const filter: LogFilterOptions = {
+    ...(options.level !== undefined ? { level: parseLogFilterLevel(options.level) } : {}),
+    ...(options.since !== undefined ? { since: parseLogTime(options.since, '--since', now) } : {}),
+    ...(options.until !== undefined ? { until: parseLogTime(options.until, '--until', now) } : {}),
+    ...(options.grep !== undefined && options.grep !== '' ? { grep: options.grep } : {}),
+    ...(options.name !== undefined && options.name.trim() !== '' ? { name: options.name.trim() } : {}),
+  };
+  if (filter.since && filter.until && filter.since.getTime() > filter.until.getTime()) throw new Error('--since 晚于 --until');
+  return hasLogFilter(filter) ? filter : undefined;
+}
+
 export const logsCommand = new Command('logs')
-  .description('查看实例日志（网关运行时经 gateway.instance.logs；否则读取 .zhin/logs/instance.log）')
-  .option('-f, --follow', '持续输出新日志')
-  .option('-n, --lines <n>', '显示最近 N 行（1–1000）', '200')
+  .description('查看实例日志（网关运行时经 gateway.instance.logs；否则读取 .zhin/logs/instance.log）；带过滤条件时搜索全部日志文件')
+  .option('-f, --follow', '持续输出新日志（与过滤条件同用时只输出匹配的行）')
+  .option('-n, --lines <n>', `显示最近 N 行（默认 ${DEFAULT_LINES}；1–${MAX_LINES}，带过滤条件时为匹配的行，最多 ${MAX_FILTERED_LINES}）`)
+  .option('--level <level>', '只看该级别及以上：debug / info / warn / error')
+  .option('--since <time>', '只看此时间之后：10m / 1h / 2d、09:00、2026-11-15 09:00 或带时区的 ISO 时间')
+  .option('--until <time>', '只看此时间之前（写法同 --since）')
+  .option('--grep <text>', '只看包含该文字的行（不区分大小写）')
+  .option('--name <logger>', '只看该日志来源，即行首的 [名称] 段（icqq 也匹配 icqq:12345）')
   .option('--interval <ms>', '-f 的轮询间隔', '1000')
-  .action(async (options: { follow?: boolean; lines: string; interval: string }) => {
+  .addHelpText('after', [
+    '',
+    '过滤说明：',
+    '  日志行的格式是 [日期 时间][级别] [名称] 内容；堆栈等续行跟随它上面的那一条。',
+    '  日志不记录插件名，按来源过滤用 --name（行首的 [名称]）。',
+    '  日志行不带时区偏移：行里的时间与不带时区的 --since / --until 都按本机时区解释。',
+    '  升级前写入的行只有时间、没有日期，--since / --until 会跳过它们；--grep 命中续行时先输出它所属的日志行。',
+    '  带过滤条件时依次读取实例日志文件（默认 .zhin/logs/instance.log）及轮转文件 .1、.2…（不受 1000 行缓冲限制）。',
+  ].join('\n'))
+  .action(async (options: LogsOptions) => {
     const { root } = target();
     const output = processOutput;
     try {
-      const lines = parseLineCount(options.lines);
+      const filterOptions = logFilterOptions(options);
+      const lines = parseLineCount(options.lines, filterOptions ? MAX_FILTERED_LINES : MAX_LINES);
       const pollMs = Math.max(100, Number(options.interval) || 1000);
       const running = await probeGateway({ root });
+      // The running gateway names its log file (`--log-file`); otherwise the default location.
+      const file = running?.gateway.logFile ?? defaultInstanceLogFile(root);
+      const filter = filterOptions ? new LogLineFilter(filterOptions) : undefined;
+      const files = instanceLogFiles(file);
+      const reportFiltered = (matched: number, shown: number): void => {
+        if (matched > shown) process.stderr.write(`（共 ${matched} 行匹配，只显示最后 ${shown} 行；用 -n 调整）\n`);
+        if (matched === 0) process.stderr.write('（没有匹配的日志）\n');
+        if (filter!.undatedSkipped > 0) process.stderr.write(`（${filter!.undatedSkipped} 条日志没有日期（升级前写入），--since / --until 跳过了它们）\n`);
+      };
       if (!running) {
-        const file = defaultInstanceLogFile(root);
         if (!existsSync(file)) {
           process.stderr.write(`网关未运行，也没有日志文件 ${file}\n`);
           process.exitCode = 1;
           return;
         }
         process.stderr.write(`（网关未运行，读取 ${file}）\n`);
-        for (const line of readFileTail(file, lines)) output.out(`${line}\n`);
-        if (options.follow) await followFile(file, output, pollMs);
+        if (filter) {
+          const history = await readFilteredHistory(files, filter, lines);
+          for (const line of history.lines) output.out(`${line}\n`);
+          reportFiltered(history.matched, history.lines.length);
+        } else {
+          for (const line of readFileTail(file, lines)) output.out(`${line}\n`);
+        }
+        if (options.follow) await followFile(file, output, pollMs, filter);
         return;
       }
       await withGateway({ root }, async (client) => {
@@ -269,14 +342,36 @@ export const logsCommand = new Command('logs')
           for (const line of logs.lines) {
             if (line.seq <= last) continue;
             last = line.seq;
-            (line.stream === 'stderr' ? output.err : output.out)(`${line.line}\n`);
+            const write = line.stream === 'stderr' ? output.err : output.out;
+            for (const shown of filter ? filter.take(line.line, line.time) : [line.line]) write(`${shown}\n`);
           }
         };
-        print(await read(lines));
+        if (filter && files.length > 0) {
+          // History from the files; following continues after the newest buffered line.
+          last = (await read(1)).lines.at(-1)?.seq ?? 0;
+          const history = await readFilteredHistory(files, filter, lines);
+          for (const line of history.lines) output.out(`${line}\n`);
+          reportFiltered(history.matched, history.lines.length);
+        } else if (filter) {
+          // No log file (custom location): filter the gateway's buffer, using its capture times.
+          const kept: { stream: 'stdout' | 'stderr'; text: string }[] = [];
+          let matched = 0;
+          for (const line of (await read(MAX_LINES)).lines) {
+            last = line.seq;
+            for (const text of filter.take(line.line, line.time)) {
+              matched += 1;
+              kept.push({ stream: line.stream, text });
+            }
+          }
+          for (const line of kept.slice(-lines)) (line.stream === 'stderr' ? output.err : output.out)(`${line.text}\n`);
+          reportFiltered(matched, Math.min(matched, lines));
+        } else {
+          print(await read(lines));
+        }
         if (!options.follow) return;
         for (;;) {
           await sleep(pollMs);
-          print(await read(1000));
+          print(await read(MAX_LINES));
         }
       });
     } catch (error) { fail(error); }
@@ -285,8 +380,16 @@ export const logsCommand = new Command('logs')
 export const updateCommand = new Command('update')
   .description('更新依赖（网关运行时经网关：停实例 → 包管理器 → 启实例，失败回滚）')
   .argument('[packages...]', '包名，或 name@精确版本；省略时更新全部依赖')
-  .action(async (packages: string[]) => {
+  .option('--dry-run', '只列出会升级的包与版本（含 pnpm 工作区成员），不写任何文件，也不停止或重启实例')
+  .action(async (packages: string[], options: { dryRun?: boolean }) => {
     const { root } = target();
+    if (options.dryRun) {
+      try {
+        const running = await probeGateway({ root }).catch(() => undefined);
+        for (const line of renderUpdatePreview(await previewUpdate(root, packages), running?.instance.state === 'running')) process.stdout.write(`${line}\n`);
+      } catch (error) { fail(error); }
+      return;
+    }
     const request = { operation: 'update' as const, packages: packages.length ? packages : 'all' as const };
     try {
       const running = await probeGateway({ root });

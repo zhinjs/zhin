@@ -62,7 +62,7 @@ zhin start --once --mode test
 | `zhin restart` | `gateway.instance.restart`：只重启实例 | 无事可做 |
 | `zhin restart --gateway` | 停止后台网关，再用原启动参数重新启动；前台网关（`--foreground`）不能原地重启，见下文 | 无事可做 |
 | `zhin status [--json]` | 网关 pid、模式、版本、HTTP 地址、Console 链接，实例状态（`stopped / starting / running / stopping / backoff / crashed`、pid、generation、最近失败与日志尾部）；实例运行时还有每个适配器账号是否在线、MCP 服务状态和「需要你处理」的数量（见下文） | 显示未运行，**退出码 3** |
-| `zhin logs [-f] [-n N]` | `gateway.instance.logs`：最近 N 行（1–1000，默认 200）；`-f` 轮询输出新行 | 读取 `.zhin/logs/instance.log`；`-f` 跟随文件 |
+| `zhin logs [-f] [-n N]` | `gateway.instance.logs`：最近 N 行（1–1000，默认 200）；`-f` 轮询输出新行；带 `--level` / `--since` / `--until` / `--grep` / `--name` 时搜索日志文件（见 [CLI 参考](./index.md)） | 读取 `.zhin/logs/instance.log`；`-f` 跟随文件 |
 | `zhin install / uninstall / update` | 经网关执行依赖事务：停实例 → 包管理器 → 启实例，失败回滚；进度实时输出 | 直接在项目里执行同一事务 |
 
 前台网关（`zhin start --foreground`，systemd、PM2、launchd、容器里的推荐方式）挂在终端或服务管理器上，`zhin restart --gateway` 不会停止它，而是说明原因并以退出码 `1` 结束，同时给出替代命令：在 Linux 上读取网关进程的环境变量识别服务管理器，systemd（`INVOCATION_ID`，单元名取自进程的 cgroup）提示 `sudo systemctl restart <单元>`（用户服务为 `systemctl --user restart <单元>`），PM2（`pm_id`）提示 `pm2 restart <应用名>`；在 macOS 上从 `launchctl list` 找到运行网关进程的 launchd 任务（`zhin service install` 安装的标签是 `com.zhinjs.<项目名>`，即进程的 `XPC_SERVICE_NAME`），提示 `launchctl kickstart -k gui/<uid>/<标签>`；识别不到时提示通过服务管理器重启，或在其终端按 Ctrl+C 后用原启动参数重新执行 `zhin start --foreground …`。只重启实例用 `zhin restart`，前台网关同样支持。

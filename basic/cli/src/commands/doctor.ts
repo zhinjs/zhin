@@ -46,6 +46,7 @@ import {
   formatRecordedFailure, readRuntimeFailureJournal, readRuntimeState, RUNTIME_FAILURES_FILE, type RuntimeState,
 } from '../utils/runtime-state.js';
 import { nativeModuleFixCommand, probeGatewayNativeModule } from '../utils/native-build-deps.js';
+import { describePortOwner, findLegacyServiceFiles, legacyServiceFilesCheck } from '../utils/doctor-project-checks.js';
 import { compareInstalledVersions, declaredZhinDependencies, detectPnpmMajor, explainVersionMismatch, installedSatisfies } from '../utils/installed-versions.js';
 import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
@@ -682,9 +683,11 @@ export const doctorCommand = new Command('doctor')
 
     // 8. 检查端口占用：按启动时的方式解析 http.port（展开 .env 中的 ${VAR}；未配置时为默认端口）
     let httpPort: number | undefined = DEFAULT_HTTP_PORT;
+    let httpTls = false;
+    let httpHost: string | undefined;
     if (existingConfig && !configParseFailed) {
       const resolved = await resolveEffectiveHttpPort(cwd, existingConfig);
-      if (resolved.status === 'ok') httpPort = resolved.port ?? DEFAULT_HTTP_PORT;
+      if (resolved.status === 'ok') { httpPort = resolved.port ?? DEFAULT_HTTP_PORT; httpTls = resolved.tls === true; httpHost = resolved.host; }
       else {
         httpPort = undefined;
         results.push({
@@ -711,12 +714,8 @@ export const doctorCommand = new Command('doctor')
             message: `由本项目的管理网关监听（pid ${gateway.gateway.pid}）`,
           });
         } else if (stdout.trim()) {
-          results.push({
-            name: `端口 ${port}`,
-            status: 'warn',
-            message: '已被占用',
-            fix: `若是 zhin 进程，先正常停止（运行 zhin stop，或在其终端按 Ctrl+C）；否则用 lsof -i:${port} 找到进程后 kill <pid>（SIGTERM），或在 zhin.config.yml 修改 http.port 换用其他端口`
-          });
+          // #1250: ask the occupant's /pub/health (no credentials) whether it is a Zhin gateway, and whose.
+          results.push({ name: `端口 ${port}`, ...await describePortOwner(port, cwd, { tls: httpTls, ...(httpHost ? { host: httpHost } : {}) }) });
         } else {
           results.push({
             name: `端口 ${port}`,
@@ -732,6 +731,10 @@ export const doctorCommand = new Command('doctor')
         });
       }
     }
+
+    // 8b. 旧版脚手架留在项目根目录的服务文件（ADR 0062 §2）：只提示，不删除
+    const legacyServiceFiles = legacyServiceFilesCheck(findLegacyServiceFiles(cwd));
+    if (legacyServiceFiles) results.push({ name: '旧服务文件', ...legacyServiceFiles });
 
     // 9. 检查 TypeScript：项目自己装的版本（node_modules），不是 PATH 上的全局 tsc（#1250）
     if (fs.existsSync(path.join(cwd, 'tsconfig.json'))) {
@@ -1025,11 +1028,11 @@ export async function resolveEffectiveHttpPort(
   cwd: string,
   configFile: string,
   environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
-): Promise<{ status: 'ok'; port: number | undefined } | { status: 'invalid'; message: string }> {
+): Promise<{ status: 'ok'; port: number | undefined; tls?: boolean; host?: string } | { status: 'invalid'; message: string }> {
   try {
     const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
     const http = await resolveHttpConfig(createConfigDocument(path.join(cwd, configFile)), layers.environments?.[environment], cwd);
-    return { status: 'ok', port: http.port };
+    return { status: 'ok', port: http.port, ...(http.tls ? { tls: true } : {}), ...(typeof http.host === 'string' ? { host: http.host } : {}) };
   } catch (error) {
     if (error instanceof InvalidHttpPortError) return { status: 'invalid', message: `${error.message}；网关会拒绝启动` };
     // Other http.* problems (TLS files, listeners) are not this check's business.

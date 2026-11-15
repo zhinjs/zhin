@@ -126,6 +126,25 @@ export async function readServiceProjectName(cwd: string): Promise<string | unde
   return validateProjectName(name.replace(/^@[^/]+\//u, ''));
 }
 
+/**
+ * Service name for a package.json `name` (scope removed, `zhin-bot` when empty); undefined when it
+ * is not a safe service name. The same rule {@link readServiceProjectName} applies.
+ */
+export function serviceProjectNameOf(manifestName: unknown): string | undefined {
+  const name = typeof manifestName === 'string' && manifestName ? manifestName : 'zhin-bot';
+  try { return validateProjectName(name.replace(/^@[^/]+\//u, '')); } catch { return undefined; }
+}
+
+/**
+ * Files older scaffolds wrote into the project root before ADR 0062 §2 (no longer read):
+ * `zhin service install` mentions them, `zhin doctor` reports them (#1250).
+ */
+export function legacyServiceFileNames(projectName: string | undefined): string[] {
+  return projectName
+    ? [`${projectName}.service`, `${launchdLabel(projectName)}.plist`, 'install-service.ps1', `${projectName}-task.xml`]
+    : ['install-service.ps1'];
+}
+
 /** systemd expands `%` specifiers in every setting below. */
 function systemdSpecifiers(value: string): string {
   return value.replace(/%/gu, '%%');

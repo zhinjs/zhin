@@ -26,7 +26,8 @@ vi.mock('../src/utils/plugin-registry.js', async (importOriginal) => ({
   fetchWeeklyDownloads: async () => null,
 }));
 
-const PREFIX = /\[\d{2}:\d{2}:\d{2}\.\d{3}\]\[(INFO|WARN|ERROR)\]/;
+// The date is present when stdout is not a terminal (#1250), as under the test runner.
+const PREFIX = /\[(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d{3}\]\[(INFO|WARN|ERROR)\]/;
 let stdout: string[];
 let stderr: string[];
 let tmp: string;
