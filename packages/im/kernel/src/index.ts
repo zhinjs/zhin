@@ -52,6 +52,8 @@ export type { Dict } from './utils.js';
 export {
   isPromptPayloadKey,
   containsChatOwnerClaimCode,
+  createChatOwnerClaimCodeScanner,
+  foldChatOwnerClaimText,
   isSecretLikeKey,
   matchChatOwnerClaimText,
   redactApprovalDisplay,
@@ -60,4 +62,4 @@ export {
   redactDecisionPayload,
   redactSecretText,
 } from './redaction.js';
-export type { RedactablePayload } from './redaction.js';
+export type { ChatOwnerClaimCodeScanner, RedactablePayload } from './redaction.js';
