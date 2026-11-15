@@ -26,6 +26,7 @@ import {
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor.js';
 import HtmlMessage from './HtmlMessage.js';
 import { sandboxStyles } from './styles.js';
+import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
 import {
@@ -1081,7 +1082,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const recoveryConnectionId = connectionRef.current.connectionId
     return (
         <section className={cn("zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
-            <style>{`${sandboxStyles}
+            <style>{`${workspaceStyles}
+${sandboxStyles}
 .sandbox-sender-trigger { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 6px; }
 .sandbox-role-badge { font-style: normal; font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: rgba(148,163,184,0.18); color: inherit; }
 .sandbox-role-badge.is-master { background: rgba(245,158,11,0.18); color: #d97706; }

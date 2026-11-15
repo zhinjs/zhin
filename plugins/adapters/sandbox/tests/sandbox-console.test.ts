@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -155,12 +155,7 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'packages/page/index.ts'));
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
-  const pageFiles = [
-    'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx', 'index/HtmlMessage.tsx',
-    'index/messages.ts', 'index/styles.ts', 'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
-    'index/workspaceDirectory.ts', 'index/workspaceDirectoryState.ts', 'index/composerCommands.ts', 'index/chatIdentity.ts', 'index/segmentFallback.ts',
-    'index/ConversationRecoveryPanel.tsx', 'index/conversationRecovery.ts', 'index/useSandboxHistory.ts',
-  ];
+  const pageFiles = (await readdir(join(pagesDir, 'index'))).map((name) => `index/${name}`);
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);
     await mkdir(dirname(dest), { recursive: true });
