@@ -60,6 +60,26 @@
       "package": "@zhin.js/core",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：ADR 0060 聊天身份与角色新增公开 API——`isOwner`、`hasChatRole`、只读 `chatRolesToken` / `ChatRoleReader`（`roleOf` / `principalOf` / `holders` / `factsOf` / `subscribe`，可选 `consoleSpeaker`）、`createChatRoleReader`、`implicitChatPrincipalId` 及相关类型；入站消息新增 Runtime 写入的只读 `sender.chatPrincipal`。npm 上 1.9.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/console-ui",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：新包 @zhin.js/console-ui 首发 0.1.0（package.json 记 0.0.0，由本 minor 升到 0.1.0），从 Console 迁入组件、令牌与编译好的 styles.css / tokens.css，新增 RefreshControl、usePageChrome、Button 的 destructive-outline 变体与语言 Provider。"
+    },
+    {
+      "package": "@zhin.js/pagemanager",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：@zhin.js/console-ui 成为 Console 共享单例（ALLOWED_ESM_CANONICAL / HOST_PROXIED_MODULES），新增共享模块版本核对（代理模块按插件 peerDependencies 比对 Console 登记的版本，缺失具名导出按名字报出）及公开导出 compilePeerRange、classifySharedModuleVersion、sharedModuleQuery、sharedModuleRequestFromSearchParams、peerRangeForPage、importedNames、buildHostProxyModule 等；register 包装把 definePage 的 keywords 写进路由 meta。"
+    },
+    {
+      "package": "@zhin.js/page",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageDefinition 与 PageIndex 透传 definePage 的 keywords，PageIndex 条目新增 packageName / pluginDescription；新增再导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/console-contract",
+      "type": "minor",
+      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
     }
   ]
 }

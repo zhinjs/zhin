@@ -38,7 +38,15 @@ import {
 import {
   ALLOWED_ESM_CANONICAL,
   rewriteBareImportsForBrowser,
+  type RewriteBareImportsOptions,
 } from '../node/esmForBrowser.js';
+import {
+  CONSOLE_UI_MODULE,
+  VERSIONED_SHARED_MODULES,
+  importedNames,
+  peerRangeForPage,
+  type SharedModuleRequest,
+} from '../node/shared-modules.js';
 import type {
   ClientArtifactManifest,
   ClientArtifactRecord,
@@ -289,7 +297,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     if (String(request.feature) === pageFeature) {
       const prebuilt = await tryLoadPrebuiltBundle(absSource);
       if (prebuilt !== undefined) {
-        const code = rewriteBareImportsForBrowser(prebuilt, this.#consoleBasePath, '');
+        const code = rewriteBareImportsForBrowser(prebuilt, this.#consoleBasePath, '', sharedModuleRequests(prebuilt, absSource, this.#projectRoot));
         await atomicWrite(output, code);
         return Object.freeze({
           module: `${this.#publicBase}/${fileName}`,
@@ -310,7 +318,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     const bundled = extracted
       ? synthesizePureBlueprintModule(absSource, extracted.modules, request, metadata)
       : await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
-    const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
+    const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '', sharedModuleRequests(bundled, absSource, this.#projectRoot));
     await atomicWrite(output, code);
     return Object.freeze({
       module: `${this.#publicBase}/${fileName}`,
@@ -348,6 +356,7 @@ type PageMeta = {
   readonly parent?: string;
   readonly fullWidth?: boolean;
   readonly section?: string;
+  readonly keywords?: unknown;
   readonly hideInNav?: boolean;
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
@@ -486,6 +495,7 @@ function synthesizePureBlueprintModule(
     parent: meta.parent,
     fullWidth: meta.fullWidth,
     section: meta.section,
+    keywords: meta.keywords,
     hideInNav,
     localName: request.localName,
     requiredPermissions: meta.requiredPermissions,
@@ -588,6 +598,7 @@ async function bundlePageEntry(
     parent: meta.parent,
     fullWidth: meta.fullWidth,
     section: meta.section,
+    keywords: meta.keywords,
     hideInNav,
     localName: request.localName,
     requiredPermissions: meta.requiredPermissions,
@@ -614,7 +625,7 @@ async function bundlePageEntry(
       join(projectRoot, 'node_modules'),
     ],
     external: BROWSER_EXTERNALS,
-    plugins: [consoleContractStubPlugin()],
+    plugins: [consoleContractStubPlugin(), consoleUiSubpathPlugin()],
   });
   const file = result.outputFiles?.[0];
   if (!file) throw new Error(`esbuild produced no output for ${absSource}`);
@@ -638,7 +649,7 @@ async function bundleSource(absSource: string, projectRoot: string): Promise<str
       join(projectRoot, 'node_modules'),
     ],
     external: BROWSER_EXTERNALS,
-    plugins: [consoleContractStubPlugin()],
+    plugins: [consoleContractStubPlugin(), consoleUiSubpathPlugin()],
   });
   const file = result.outputFiles?.[0];
   if (!file) throw new Error(`esbuild produced no output for ${absSource}`);
@@ -662,6 +673,7 @@ export function buildPageRegisterWrapper(
     readonly parent?: string;
     readonly fullWidth?: boolean;
     readonly section?: string;
+    readonly keywords?: unknown;
     readonly hideInNav: boolean;
     readonly localName: string;
     readonly requiredPermissions?: readonly string[];
@@ -689,6 +701,7 @@ function buildRegisterFunctionBody(options: {
   readonly parent?: string;
   readonly fullWidth?: boolean;
   readonly section?: string;
+  readonly keywords?: unknown;
   readonly hideInNav: boolean;
   readonly localName: string;
   readonly requiredPermissions?: readonly string[];
@@ -704,6 +717,7 @@ function buildRegisterFunctionBody(options: {
   const parent = options.parent === undefined ? 'undefined' : JSON.stringify(options.parent);
   const fullWidth = options.fullWidth === undefined ? 'undefined' : JSON.stringify(options.fullWidth);
   const section = options.section === undefined ? 'undefined' : JSON.stringify(options.section);
+  const keywords = options.keywords === undefined ? 'undefined' : JSON.stringify(options.keywords);
   const hideInNav = options.hideInNav ? 'true' : 'false';
   const toolId = JSON.stringify(options.localName);
   const requiredPermissions = options.requiredPermissions === undefined ? 'undefined' : JSON.stringify(options.requiredPermissions);
@@ -837,6 +851,7 @@ export function register(api) {
   const parent = m.parent ?? ${parent};
   const fullWidth = typeof m.fullWidth === 'boolean' ? m.fullWidth : ${fullWidth};
   const section = typeof m.section === 'string' ? m.section : ${section};
+  const keywords = m.keywords !== undefined && m.keywords !== null && typeof m.keywords === 'object' ? m.keywords : ${keywords};
   const titleI18n = m.titleI18n ?? Component?.titleI18n ?? ${titleI18n};
   const requiredPermissions = Array.isArray(m.requiredPermissions) ? m.requiredPermissions : ${requiredPermissions};
   const requiredRoles = Array.isArray(m.requiredRoles) ? m.requiredRoles : ${requiredRoles};
@@ -889,6 +904,7 @@ export function register(api) {
       ...(order !== undefined ? { order } : {}),
       ...(fullWidth !== undefined ? { fullWidth } : {}),
       ...(section !== undefined ? { section } : {}),
+      ...(keywords !== undefined ? { keywords } : {}),
     },
   });
   if (typeof api.addTool === 'function') {
@@ -928,6 +944,41 @@ function consoleContractStubPlugin(): EsbuildPlugin {
       }));
     },
   };
+}
+
+/**
+ * `@zhin.js/console-ui` is a Console singleton: its subpath `cn` is folded into the root import
+ * (rewritten to the Host proxy), and its stylesheets become empty modules because the Console
+ * already loads them.
+ */
+function consoleUiSubpathPlugin(): EsbuildPlugin {
+  return {
+    name: 'zhin-console-ui-subpaths',
+    setup(build) {
+      build.onResolve({ filter: /^@zhin\.js\/console-ui\/.+/ }, (args) => {
+        if (/\.css$/u.test(args.path)) return { path: args.path, namespace: 'zhin-console-ui-css' };
+        if (args.path === `${CONSOLE_UI_MODULE}/cn`) return { path: CONSOLE_UI_MODULE, external: true };
+        return undefined;
+      });
+      build.onLoad({ filter: /.*/, namespace: 'zhin-console-ui-css' }, () => ({ contents: '', loader: 'js' }));
+    },
+  };
+}
+
+/** Peer range, consumer and named imports of every versioned shared module the bundle imports. */
+function sharedModuleRequests(code: string, absSource: string, projectRoot: string): RewriteBareImportsOptions {
+  const sharedModules: Record<string, SharedModuleRequest> = {};
+  for (const moduleId of VERSIONED_SHARED_MODULES) {
+    if (!code.includes(`"${moduleId}"`) && !code.includes(`'${moduleId}'`)) continue;
+    const { range, consumer } = peerRangeForPage(absSource, moduleId, projectRoot);
+    const imports = importedNames(code, moduleId);
+    sharedModules[moduleId] = {
+      ...(range ? { range } : {}),
+      ...(consumer ? { consumer } : {}),
+      ...(imports.length > 0 ? { imports } : {}),
+    };
+  }
+  return { sharedModules };
 }
 
 function manifestSource(root: string, source: string): string {

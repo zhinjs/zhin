@@ -146,7 +146,7 @@ done < names.txt
 
 ## 包清单
 
-以下 106 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
+以下 107 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
 
 ### `basic/`（5）
 
@@ -156,7 +156,7 @@ done < names.txt
 - [ ] `@zhin.js/schedule` — `basic/schedule`
 - [ ] `@zhin.js/schema` — `basic/schema`
 
-### `packages/console/`（7）
+### `packages/console/`（8）
 
 - [ ] `@zhin.js/client` — `packages/console/client`
 - [ ] `@zhin.js/contract` — `packages/console/contract`
@@ -165,6 +165,7 @@ done < names.txt
 - [ ] `@zhin.js/pagemanager` — `packages/console/pagemanager`
 - [ ] `@zhin.js/console-contract` — `packages/console/plugin-contract`
 - [ ] `@zhin.js/console-protocol` — `packages/console/protocol`
+- [ ] `@zhin.js/console-ui` — `packages/console/ui`
 
 ### `packages/game-kit`（1）
 

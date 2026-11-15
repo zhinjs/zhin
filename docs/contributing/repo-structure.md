@@ -12,7 +12,7 @@ title: 仓库结构
 | --- | --- |
 | `basic/` | 基础层：`cli`、`database`、`logger`、`schedule`、`schema`（日志、数据库、配置校验、命令行） |
 | `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-file`、`core`、`feature-kit`、`harness`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`（含 `im-contract`）、`runtime`（含 `host/` 通用安装器）、`skill`、`tool`、`zhin` 等 |
-| `packages/console/` | Remote Console 支撑包（`client`、`layout`、`page`、`pagemanager`、`protocol` 含 `contract`/`review-kit`）。Host 提供 Server-Driven Blueprints 与 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
+| `packages/console/` | Remote Console 支撑包（`client`、`layout`、`page`、`pagemanager`、`protocol` 含 `contract`/`review-kit`，以及 Console 与插件页面共用的组件库 `ui`（`@zhin.js/console-ui`，ADR 0063））。Host 提供 Server-Driven Blueprints 与 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
 | `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server）、`gateway`（`@zhin.js/gateway`，管理网关，ADR 0054） |
 | `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`components`（纯 JSX 样式）、`tailwind`（静态工具类）、`html-renderer`（Shotium）、`speech` |
 | `packages/game-kit/` | 游戏开发套件（供 `plugins/games/` 使用） |

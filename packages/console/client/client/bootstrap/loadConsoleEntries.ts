@@ -33,6 +33,8 @@ export interface ConsoleEntryMetadataFields {
   readonly parent?: string | null;
   readonly fullWidth?: boolean;
   readonly section?: string;
+  /** Command-palette aliases (`definePage({ keywords })`, ADR 0063). */
+  readonly keywords?: unknown;
   readonly hideInNav?: boolean;
   readonly requiredPermissions?: string[];
   readonly requiredRoles?: string[];
@@ -154,6 +156,7 @@ export function resolveEntryRegister(
   const sectionCandidate = meta?.section ?? entry.section ?? entryMeta?.["section"];
   // Unknown values are dropped: the Console falls back to its default section.
   const section = isConsolePageSection(sectionCandidate) ? sectionCandidate : undefined;
+  const keywords = routeKeywords(meta?.keywords ?? entry.keywords ?? entryMeta?.["keywords"]);
   const hideInNav = meta?.hideInNav ?? entry.hideInNav ?? (entryMeta?.["hideInNav"] === true || entryMeta?.["hideInMenu"] === true);
   const requiredPermissions = meta?.requiredPermissions ?? entry.requiredPermissions;
   const requiredRoles = meta?.requiredRoles ?? entry.requiredRoles;
@@ -197,9 +200,29 @@ export function resolveEntryRegister(
         ...(order === undefined ? {} : { order }),
         ...(fullWidth === undefined ? {} : { fullWidth }),
         ...(section === undefined ? {} : { section }),
+        ...(keywords === undefined ? {} : { keywords }),
       },
     });
   };
+}
+
+type RouteKeywords = NonNullable<NonNullable<Parameters<PluginRegisterHostApi["addRoute"]>[0]["meta"]>["keywords"]>;
+
+/** Keeps a keyword list, or per-locale lists for zh-CN / en; anything else is dropped. */
+export function routeKeywords(value: unknown): RouteKeywords | undefined {
+  const list = (input: unknown): string[] | undefined => Array.isArray(input)
+    ? input.filter((item): item is string => typeof item === "string" && item.trim() !== "").map(item => item.trim())
+    : undefined;
+  const plain = list(value);
+  if (plain) return plain.length > 0 ? plain : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const out: Partial<Record<"zh-CN" | "en", string[]>> = {};
+  for (const locale of ["zh-CN", "en"] as const) {
+    const items = list(record[locale]);
+    if (items && items.length > 0) out[locale] = items;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 interface EntryRegistration {

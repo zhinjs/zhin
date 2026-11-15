@@ -1,0 +1,341 @@
+/*
+ * @zhin.js/console-ui — design tokens (ADR 0063 决策 1 第 2 条).
+ *
+ * One copy of the Console tokens: color tokens (light / dark / palettes) and the base tier
+ * (type, radii, control heights, spacing, shadows, motion, --console-content-max).
+ * Values are moved verbatim from the Console's theme-tokens.css and the token part of
+ * design-system.css (P1a: no value changes, D21). Dark mode follows the `.dark` class on an
+ * ancestor (the Console puts it on <html>); palettes follow `data-palette` on <html>.
+ * The deprecated `--zk-*` variables of @zhin.js/client are aliases of these tokens.
+ */
+@layer base {
+  :root {
+    /* ── Palette inputs (overridden per palette below) ── */
+    --palette-hue: 214;
+    /* Neutral surfaces: just enough hue to feel related, not colored. */
+    --palette-surface-chroma: 14%;
+    --palette-dark-surface-chroma: 12%;
+    --palette-ink-chroma: 34%;
+    --palette-brand-saturation: 88%;
+    --palette-brand-lightness: 44%;
+    --palette-dark-brand-saturation: 96%;
+    --palette-dark-brand-lightness: 66%;
+    /* Soft tints used for primary actions, selection and the outgoing chat bubble. */
+    --palette-tint-saturation: 100%;
+    --palette-tint-lightness: 95.5%;
+    --palette-dark-tint-saturation: 42%;
+    --palette-dark-tint-lightness: 17%;
+    --surface-chroma: var(--palette-surface-chroma);
+
+    --background: var(--palette-hue) var(--surface-chroma) 95.4%;
+    --foreground: var(--palette-hue) var(--palette-ink-chroma) 12%;
+    --card: 0 0% 100%;
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --primary: var(--palette-hue) var(--palette-brand-saturation) var(--palette-brand-lightness);
+    --primary-foreground: 0 0% 100%;
+    --primary-action: var(--palette-hue) var(--palette-tint-saturation) var(--palette-tint-lightness);
+    --primary-action-foreground: var(--primary);
+    --primary-action-border: var(--palette-hue) var(--palette-brand-saturation) 78%;
+    --secondary: var(--palette-hue) var(--surface-chroma) 97.2%;
+    --secondary-foreground: var(--foreground);
+    --muted: var(--secondary);
+    --muted-foreground: var(--palette-hue) var(--surface-chroma) 39%;
+    --accent: var(--palette-hue) var(--surface-chroma) 93.2%;
+    --accent-foreground: var(--foreground);
+    --selected: var(--primary-action);
+    --selected-foreground: var(--primary);
+    --border: var(--palette-hue) var(--surface-chroma) 90.5%;
+    --border-strong: var(--palette-hue) var(--surface-chroma) 84%;
+    --input: var(--palette-hue) var(--surface-chroma) 51%;
+    --ring: var(--primary);
+    --sidebar: var(--card);
+    --sidebar-foreground: var(--palette-hue) var(--surface-chroma) 30%;
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+    --im-shell-bg: var(--card);
+    --im-list-bg: var(--card);
+    --im-list-surface: var(--card);
+    --im-chat-bg: var(--secondary);
+    --im-chat-wash: var(--accent);
+    --im-line: var(--border);
+    --im-shadow: 222 30% 12%;
+    --im-bubble-in: var(--card);
+    --im-bubble-out: var(--primary-action);
+    --im-bubble-out-fg: var(--foreground);
+    --im-date-bg: var(--card);
+    --im-date-fg: var(--muted-foreground);
+    --im-at: var(--primary);
+    --im-row-hover: var(--palette-hue) var(--surface-chroma) 96%;
+    --im-row-active: var(--primary-action);
+    --im-row-active-fg: var(--foreground);
+    --im-row-active-muted: var(--muted-foreground);
+    --im-unread: var(--primary);
+    --destructive: 0 68% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 145 52% 28%;
+    --success-foreground: 0 0% 100%;
+    --info: 222 62% 50%;
+    --info-foreground: 0 0% 100%;
+    --warning: 32 80% 30%;
+    --warning-foreground: 0 0% 100%;
+    --radius: var(--console-radius-md);
+    --status-info: var(--info);
+    --status-success: var(--success);
+    --status-warning: var(--warning);
+    --status-danger: var(--destructive);
+    --chart-1: 222 62% 50%;
+    --chart-2: 35 85% 38%;
+    --chart-3: 160 70% 30%;
+    --chart-4: 330 60% 46%;
+    --chart-5: 262 50% 52%;
+    --chart-6: 12 60% 46%;
+    --chart-7: 188 75% 34%;
+    --chart-8: 220 8% 46%;
+    --chart-other: 220 6% 58%;
+    color-scheme: light;
+  }
+  /* Fresh palettes: brighter hues; their tints are slightly warmer so selection still reads. */
+  :root[data-palette="sky"] {
+    --palette-hue: 200;
+    --palette-brand-saturation: 92%;
+    --palette-brand-lightness: 34%;
+    --palette-dark-brand-saturation: 70%;
+    --palette-dark-brand-lightness: 68%;
+  }
+  :root[data-palette="peach"] {
+    --palette-hue: 12;
+    --palette-brand-saturation: 78%;
+    --palette-brand-lightness: 40%;
+    --palette-tint-saturation: 90%;
+    --palette-dark-brand-saturation: 76%;
+    --palette-dark-brand-lightness: 72%;
+  }
+  :root[data-palette="sunny"] {
+    --palette-hue: 38;
+    --palette-brand-saturation: 92%;
+    --palette-brand-lightness: 30%;
+    --palette-tint-saturation: 92%;
+    --palette-tint-lightness: 93.5%;
+    --palette-dark-brand-saturation: 82%;
+    --palette-dark-brand-lightness: 64%;
+  }
+  :root[data-palette="mint"] {
+    --palette-hue: 162;
+    --palette-brand-saturation: 76%;
+    --palette-brand-lightness: 27%;
+    --palette-tint-saturation: 64%;
+    --palette-tint-lightness: 94%;
+    --palette-dark-brand-saturation: 56%;
+    --palette-dark-brand-lightness: 62%;
+  }
+  /* Calm palettes. */
+  :root[data-palette="forest"] {
+    --palette-hue: 158;
+    --palette-brand-saturation: 44%;
+    --palette-brand-lightness: 32%;
+    --palette-tint-saturation: 38%;
+    --palette-tint-lightness: 94.5%;
+    --palette-dark-brand-saturation: 40%;
+    --palette-dark-brand-lightness: 66%;
+    --palette-dark-tint-saturation: 24%;
+  }
+  :root[data-palette="ocean"] {
+    --palette-hue: 214;
+  }
+  :root[data-palette="plum"] {
+    --palette-hue: 274;
+    --palette-brand-saturation: 36%;
+    --palette-brand-lightness: 44%;
+    --palette-tint-saturation: 48%;
+    --palette-dark-brand-saturation: 44%;
+    --palette-dark-brand-lightness: 76%;
+    --palette-dark-tint-saturation: 24%;
+  }
+  :root[data-palette="graphite"] {
+    --palette-hue: 0;
+    --palette-surface-chroma: 0%;
+    --palette-dark-surface-chroma: 0%;
+    --palette-ink-chroma: 0%;
+    --palette-brand-saturation: 0%;
+    --palette-brand-lightness: 24%;
+    --palette-tint-saturation: 0%;
+    --palette-tint-lightness: 93%;
+    --palette-dark-brand-saturation: 0%;
+    --palette-dark-brand-lightness: 86%;
+    --palette-dark-tint-saturation: 0%;
+    --palette-dark-tint-lightness: 20%;
+  }
+  .dark {
+    --surface-chroma: var(--palette-dark-surface-chroma);
+    --background: var(--palette-hue) var(--surface-chroma) 5%;
+    --foreground: var(--palette-hue) var(--surface-chroma) 94.5%;
+    --card: var(--palette-hue) var(--surface-chroma) 8.6%;
+    --popover: var(--palette-hue) var(--surface-chroma) 10.5%;
+    --primary: var(--palette-hue) var(--palette-dark-brand-saturation) var(--palette-dark-brand-lightness);
+    --primary-foreground: var(--palette-hue) 40% 9%;
+    --primary-action: var(--palette-hue) var(--palette-dark-tint-saturation) var(--palette-dark-tint-lightness);
+    --primary-action-foreground: var(--primary);
+    --primary-action-border: var(--palette-hue) var(--palette-dark-tint-saturation) 34%;
+    --secondary: var(--palette-hue) var(--surface-chroma) 12.2%;
+    --secondary-foreground: var(--foreground);
+    --muted-foreground: var(--palette-hue) var(--surface-chroma) 64%;
+    --accent: var(--palette-hue) var(--surface-chroma) 15.5%;
+    --accent-foreground: var(--foreground);
+    --border: var(--palette-hue) var(--surface-chroma) 16%;
+    --border-strong: var(--palette-hue) var(--surface-chroma) 22%;
+    --input: var(--palette-hue) var(--surface-chroma) 44%;
+    --sidebar: var(--card);
+    --sidebar-foreground: var(--palette-hue) var(--surface-chroma) 76%;
+    --im-chat-bg: var(--palette-hue) var(--surface-chroma) 6.6%;
+    --im-line: var(--border);
+    --im-shadow: 0 0% 0%;
+    --im-bubble-in: var(--secondary);
+    --im-bubble-out: var(--primary-action);
+    --im-row-hover: var(--palette-hue) var(--surface-chroma) 12%;
+    --destructive: 0 62% 65%;
+    --destructive-foreground: 0 0% 10%;
+    --success: 145 52% 64%;
+    --success-foreground: 0 0% 10%;
+    --info: 217 90% 70%;
+    --info-foreground: 0 0% 10%;
+    --warning: 38 80% 65%;
+    --warning-foreground: 0 0% 10%;
+    --chart-1: 217 80% 68%;
+    --chart-2: 38 80% 62%;
+    --chart-3: 160 55% 56%;
+    --chart-4: 330 65% 68%;
+    --chart-5: 262 70% 76%;
+    --chart-6: 12 70% 68%;
+    --chart-7: 188 65% 58%;
+    --chart-8: 220 10% 68%;
+    --chart-other: 220 6% 50%;
+    color-scheme: dark;
+  }
+}
+
+/* Base tier: type, radii, control sizes, spacing, shadows, motion. */
+@layer base {
+  /*
+   * Base tier (light and dark alike): type, radii, control sizes, spacing.
+   * Radii 6 / 10 / 14 / 18 / 22 px; every button, input and select uses one of three heights
+   * (32 / 36 / 40 px) on pointer screens, and at least 44 px on touch-sized layouts.
+   */
+  :root {
+    --console-font-sans: 'Inter', 'MiSans', 'SF Pro Text', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    --console-font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, Consolas, 'Noto Sans Mono CJK SC', monospace;
+    --console-text-label: 0.8125rem;
+    --console-text-caption: var(--console-text-label);
+    --console-text-code: 0.8125rem;
+    --console-text-body-sm: 0.8125rem;
+    --console-text-title-compact: 1.25rem;
+    --console-text-section-sm: 0.9375rem;
+    --console-line-code: 1.25rem;
+    --console-leading-title: 1.25;
+    --console-leading-section: 1.4;
+    --console-leading-body: 1.6;
+    --console-leading-label: 1.45;
+    --console-leading-code: 1.6;
+    --console-border-width: 1px;
+    --console-focus-width: 2px;
+    --console-text-body: 0.875rem;
+    --console-text-section: 1rem;
+    --console-text-title: 1.375rem;
+    --console-control-height-sm: 2rem;
+    --console-control-height: 2.25rem;
+    --console-control-height-lg: 2.5rem;
+    --console-touch-target: 2.75rem;
+    --console-radius-sm: 0.375rem;
+    --console-radius-md: 0.625rem;
+    --console-radius-lg: 0.875rem;
+    --console-radius-xl: 1.125rem;
+    --console-radius-2xl: 1.375rem;
+    --console-control-radius: var(--console-radius-md);
+    --console-space-page-x: 1.5rem;
+    --console-space-page-y: 2rem;
+    --console-space-section: 1.25rem;
+    --console-space-stack: 0.75rem;
+    --console-space-card: 1.25rem;
+    --console-space-card-sm: 1rem;
+    /* Content column: 1440px wide at most, centered on the canvas. */
+    --console-content-max: 90rem;
+
+    /* Semantic surfaces derived from the color tokens (theme-tokens.css). */
+    --console-surface-raised: hsl(var(--card));
+    --console-surface-muted: hsl(var(--secondary));
+    --console-surface-inset: hsl(var(--secondary));
+    --console-surface-hover: hsl(var(--foreground) / 0.045);
+    --console-surface-active: hsl(var(--foreground) / 0.08);
+    --console-border-subtle: hsl(var(--border) / 0.7);
+    --console-border-default: hsl(var(--border));
+    --console-border-strong: hsl(var(--border-strong));
+
+    /* Shadows: a hairline ring plus a short, soft drop. Cards carry no border of their own. */
+    --console-shadow-color: 222 30% 12%;
+    --console-shadow-ring: 0 0 0 1px hsl(var(--console-shadow-color) / 0.045);
+    --console-shadow-xs: 0 1px 2px hsl(var(--console-shadow-color) / 0.05);
+    --console-shadow-sm: 0 1px 2px hsl(var(--console-shadow-color) / 0.06), var(--console-shadow-ring);
+    --console-shadow-md: 0 6px 16px -4px hsl(var(--console-shadow-color) / 0.1), 0 0 0 1px hsl(var(--console-shadow-color) / 0.05);
+    --console-shadow-lg: 0 24px 48px -12px hsl(var(--console-shadow-color) / 0.18), 0 0 0 1px hsl(var(--console-shadow-color) / 0.06);
+    --console-shadow-xl: var(--console-shadow-lg);
+    --console-shadow-hover: var(--console-shadow-md);
+    --console-shadow-button: none;
+    --console-shadow-panel: 0 1px 2px hsl(var(--console-shadow-color) / 0.04), 0 8px 24px -12px hsl(var(--console-shadow-color) / 0.08);
+
+    /* Motion: page enter 200ms; the curve settles quickly without overshoot. */
+    --console-ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+    --console-duration-page: 200ms;
+    --console-duration-fast: 150ms;
+  }
+
+  .dark {
+    --console-surface-hover: hsl(0 0% 100% / 0.05);
+    --console-surface-active: hsl(0 0% 100% / 0.09);
+    --console-shadow-color: 0 0% 0%;
+    --console-shadow-ring: 0 0 0 1px hsl(0 0% 100% / 0.05);
+    --console-shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.4);
+    --console-shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4), var(--console-shadow-ring);
+    --console-shadow-md: 0 6px 16px -4px hsl(0 0% 0% / 0.5), 0 0 0 1px hsl(0 0% 100% / 0.06);
+    --console-shadow-lg: 0 24px 48px -12px hsl(0 0% 0% / 0.7), 0 0 0 1px hsl(0 0% 100% / 0.08);
+    --console-shadow-panel: 0 0 0 1px hsl(0 0% 100% / 0.06);
+  }
+
+  @media (max-width: 767px) {
+    :root {
+      --console-space-page-x: 1rem;
+      --console-space-page-y: 1.25rem;
+      --console-space-section: 0.875rem;
+      --console-space-card: 1rem;
+      /* Touch-sized controls on phones. */
+      --console-control-height-sm: 2.75rem;
+      --console-control-height: 2.75rem;
+      --console-control-height-lg: 2.75rem;
+    }
+  }
+
+  @media (min-width: 768px) {
+    :root {
+      --console-text-label: 0.8125rem; --console-text-code: 0.8125rem;
+      --console-text-title: 1.375rem; --console-text-title-compact: 1.25rem;
+    }
+  }
+  @media (min-width: 768px) and (max-width: 1199px) {
+    :root {
+      --console-space-page-x: 1.25rem;
+      --console-space-page-y: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1600px) {
+    :root {
+      --console-space-page-x: 1.5rem;
+      --console-space-page-y: 2rem;
+      --console-space-section: 1.5rem;
+    }
+  }
+}

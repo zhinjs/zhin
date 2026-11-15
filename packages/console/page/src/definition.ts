@@ -16,9 +16,13 @@ import {
   projectBlueprintToImCard,
   projectBlueprintToCliPanel,
   optionalPageSection,
+  optionalPageKeywords,
+  pageKeywordsFor,
   CONSOLE_PAGE_SECTIONS,
   isConsolePageSection,
   type ConsolePageSection,
+  type PageKeywordLocale,
+  type PageKeywords,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -59,6 +63,8 @@ import type { ValidationContext } from '@zhin.js/feature-kit';
 export {
   CONSOLE_PAGE_SECTIONS,
   isConsolePageSection,
+  optionalPageKeywords,
+  pageKeywordsFor,
   normalizePageMetadata,
   normalizeClientModuleArtifact,
   isConsoleBlueprint,
@@ -75,6 +81,8 @@ export {
   projectBlueprintToImCard,
   projectBlueprintToCliPanel,
   type ConsolePageSection,
+  type PageKeywordLocale,
+  type PageKeywords,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -162,6 +170,8 @@ export interface PageDefinition extends NormalizedPageMetadata {
   readonly parent?: string;
   readonly fullWidth?: boolean;
   readonly section?: ConsolePageSection;
+  /** Command-palette aliases from `definePage({ keywords })`, passed through unchanged (ADR 0063). */
+  readonly keywords?: PageKeywords;
   readonly module: string;
   readonly hash: string;
   readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
@@ -172,8 +182,9 @@ export function parsePageArtifact(value: unknown, context: ValidationContext): P
   const rawMeta = artifact.metadata && typeof artifact.metadata === 'object' && !Array.isArray(artifact.metadata)
     ? artifact.metadata as Record<string, unknown>
     : undefined;
-  const { description, group, parent, fullWidth, section: rawSection, ...baseMeta } = rawMeta ?? {};
+  const { description, group, parent, fullWidth, section: rawSection, keywords: rawKeywords, ...baseMeta } = rawMeta ?? {};
   const section = optionalPageSection(rawSection);
+  const keywords = optionalPageKeywords(rawKeywords);
   if (description !== undefined && (typeof description !== 'string' || !description.trim())) {
     throw new TypeError('Page description must be a non-empty string');
   }
@@ -193,6 +204,7 @@ export function parsePageArtifact(value: unknown, context: ValidationContext): P
     ...(typeof parent === 'string' ? { parent } : {}),
     ...(typeof fullWidth === 'boolean' ? { fullWidth } : {}),
     ...(section !== undefined ? { section } : {}),
+    ...(keywords !== undefined ? { keywords } : {}),
     module: artifact.module,
     hash: artifact.hash,
     ...(artifact.blueprint !== undefined ? { blueprint: artifact.blueprint } : {}),

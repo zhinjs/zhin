@@ -106,6 +106,7 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `requiredPermissions` | `[]` | Permissions required to access: built-in ones (such as `status.view`) or plugin-defined names |
 | `requiredRoles` | `[]` | Role names required to access (such as `operator`) |
 | `section` | — | Console navigation section: `overview` / `conversations` / `features` / `plugins` / `ops` / `access`; omitted → the Console decides (ADR 0052) |
+| `keywords` | — | Search aliases for the command palette: one list of strings, or lists per language (`{ 'zh-CN': ['抽奖'], en: ['lottery'] }`; only `zh-CN` / `en`). Used with the title and plugin name to find the page in the command palette (ADR 0063) |
 
 Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are granted by level, see [Plugin permission levels](#plugin-permission-levels)). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
 
@@ -525,7 +526,7 @@ The Console follows one set of rules for information density, typography, spacin
 - your page looks like part of the same product when it sits next to the Console's own pages;
 - the type scale, spacing, narrow-screen layout changes (tables turning into cards, for example), touch target sizes, focus styles and light/dark mode all come with the components, and your page follows when the Console adjusts its styles later.
 
-The unified component library `@zhin.js/console-ui` and its semantic tokens are **planned (ADR 0063 P1)** and not published yet; until then, hand-written pages use `@zhin.js/client/ui` from "Page UI kit" below.
+The unified component library `@zhin.js/console-ui` now exists (ADR 0063 P1a: the Console's components and tokens moved into it unchanged, with a precompiled `styles.css`; see [its README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)). Moving plugin pages onto it and onto the page shell is P2; until then plugin pages stay as they are: declarative pages keep their blueprints, and hand-written pages keep using `@zhin.js/client/ui` from "Page UI kit" below.
 
 **Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
 

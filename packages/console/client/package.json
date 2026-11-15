@@ -23,9 +23,8 @@
   },
   "dependencies": {
     "@zhin.js/console-protocol": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
+    "@zhin.js/console-ui": "workspace:*",
+    "@zhin.js/contract": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18"

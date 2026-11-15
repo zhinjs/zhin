@@ -69,7 +69,7 @@ packages/im/zhin            # Main entry — IM core; agent via optional peer + 
 packages/host/gateway       # Management gateway (ADR 0054): IAM, terminal, project files; no zhin.js / IM layers
 basic/cli                   # `zhin` CLI: depends on the gateway, never on IM layers
 
-packages/console/{contract,protocol,plugin-contract,page,layout,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
+packages/console/{contract,protocol,plugin-contract,page,layout,pagemanager,client,ui}  # 控制台栈（平行，不经 IM 发送链）；ui = @zhin.js/console-ui（浏览器组件库，ADR 0063）
 packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚手架与渲染库
 ```
 
