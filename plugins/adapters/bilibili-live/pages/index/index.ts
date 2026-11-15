@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Radio',
   order: 78,
   requiredPermissions: ['bilibili-live:read'],
+  keywords: { 'zh-CN': ['B站直播', '哔哩哔哩', '弹幕', '直播间'], en: ['bilibili', 'live stream', 'danmaku'] },
 });
 
 /**

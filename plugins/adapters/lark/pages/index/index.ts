@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Bird',
   order: 66,
   requiredPermissions: ['lark:read'],
+  keywords: { 'zh-CN': ['飞书', '适配器', '连接'], en: ['feishu', 'adapter', 'connection'] },
 });
 
 /**

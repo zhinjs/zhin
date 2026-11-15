@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Gamepad2',
   order: 65,
   requiredPermissions: ['kook:read'],
+  keywords: { 'zh-CN': ['开黑啦', '适配器', '连接'], en: ['kaiheila', 'adapter', 'connection'] },
 });
 
 /**

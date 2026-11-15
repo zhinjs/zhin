@@ -17,6 +17,7 @@ export const meta = definePage({
   icon: 'Calendar',
   order: 53,
   requiredPermissions: ['calendar:read'],
+  keywords: { 'zh-CN': ['日程', '日历', 'CalDAV', 'Google 日历', 'Outlook'], en: ['schedule', 'events', 'caldav', 'google calendar', 'outlook'] },
 });
 
 export default definePageBlueprint<CalendarConsoleStatus>({

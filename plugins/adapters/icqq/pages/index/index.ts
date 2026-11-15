@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageCircle',
   order: 64,
   requiredPermissions: ['icqq:read'],
+  keywords: { 'zh-CN': ['QQ', '扫码登录', '适配器'], en: ['qq', 'qr login', 'adapter'] },
 });
 
 /**

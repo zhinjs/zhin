@@ -102,7 +102,7 @@ describe('bounded PR scope transport', () => {
     expect(commands.filter(command => command.args.length === 1).map(command => command.args[0]).sort()).toEqual([
       'check:architecture', 'check:dependency-policy', 'check:release-plan', 'check:harness-paths',
       'check:no-removed-plugin-api', 'check:api-surface', 'check:plugin-runtime-api', 'check:feature-peers', 'check:doc-links',
-      'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest',
+      'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest', 'check:plugin',
     ].sort());
   });
 

@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'QrCode',
   order: 58,
   requiredPermissions: ['qrcode:read'],
+  keywords: { 'zh-CN': ['二维码', '扫码', '生成二维码', '识别二维码'], en: ['qr', 'qrcode', 'scan', 'barcode'] },
 });
 
 export default definePageBlueprint<QrCodeConsoleStatus>({

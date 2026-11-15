@@ -97,7 +97,8 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | --- | --- |
 | API Surface（`pnpm check:api-surface`） | public API surface 快照 |
 | Plugin Runtime API（`pnpm check:plugin-runtime-api`） | 约定式插件运行时 API surface 快照 |
-| Plugin Spec（`pnpm check:plugin`） | 插件符合标准规范 |
+| Plugin Spec（`pnpm check:plugin`） | 插件符合标准规范；官方插件页面 UI 门禁（ADR 0063 第 1–6 条，名单 `scripts/plugin-ui-gate.json`） |
+| Plugin UI Audit（`pnpm check:plugin-ui-audit`） | 官方插件页面的 Playwright 全项审计门禁（ADR 0063；审计工具未就绪时跳过） |
 | Plugin Capability Publish（`pnpm check:plugin-capability-publish`） | 插件能力目录发布清单（files、prepublishOnly、peer 依赖） |
 | Publish Repository（`pnpm check:publish-repository`） | 可发布包 `repository.url` 匹配 github.com/zhinjs/zhin（npm provenance） |
 | Agent Tool Schema（`pnpm check:agent-tool-schema`） | `tools` inputSchema 与 defineAgentTool/execute 类型一致 |
