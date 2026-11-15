@@ -7,6 +7,7 @@ import {
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { FeatureOverrideStore } from '../../src/instance/console/feature-override-store.js';
+import { dispatchFeatureConsoleRpc } from '../../src/instance/console/console-feature-rpc.js';
 import { ChatPeople } from '../../src/instance/chat-people.js';
 import {
   ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
@@ -325,6 +326,42 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     // An endpoint owner switches it off for the whole account; the conversation below is locked.
     expect(await run(actor({ user: 'boss' }), 'disable ambient endpoint', 'en')).toBe('Saved (endpoint level), effective now.');
     expect(await run(admin, '开启 插话')).toBe('插话 已在账号层停用，下级不能开启或修改开关。');
+  });
+
+  it('reads the file default with the runtime platform name, not the adapter alias (review of #1281)', async () => {
+    const icqq = snapshot();
+    const capabilities = new Map(icqq.capabilities);
+    for (const [id, slot] of capabilities) if (slot.owner === qq && String(slot.feature) === 'zhin.adapter') capabilities.set(id, { ...slot, localName: 'icqq~bot-1' });
+    const document = { ...structuredClone(base), ai: { trigger: { ambient: { conversations: ['icqq:100'] } } } };
+    const overrides = new FeatureOverrideStore();
+    const context = {
+      authScope: 'test', authorize: () => true,
+      configuration: { async readProject() { return { revision: 'r1', exists: true, value: structuredClone(document) }; } },
+      snapshots: { acquire: () => ({ value: { ...icqq, capabilities }, release() {} }) },
+      stores: { overrides },
+    } as never;
+    const get = async (key: string) => ((await dispatchFeatureConsoleRpc({ type: 'feature.get', data: { plugin: AMBIENT_FEATURE_ID, level: 'conversation', key } }, context))!
+      .body.data as { enabled: boolean; sources: Record<string, string> });
+    // The allowlist says `icqq:100`; the adapter instance alias is `qq`.
+    expect(await get('qq/bot-1/group:100')).toMatchObject({ enabled: true, sources: { '/enabled': 'global' } });
+    expect(await get('qq/bot-1/group:200')).toMatchObject({ enabled: false });
+    document.ai.trigger.ambient.conversations = ['qq:100'];
+    expect(await get('qq/bot-1/group:100')).toMatchObject({ enabled: false });
+  });
+
+  it('keeps a locked level\'s switch on reset and reports success, like a Plugin (review of #1281)', async () => {
+    const { run, conversations, roles } = await harness();
+    await promote(roles);
+    const admin = actor();
+    expect(await run(admin, '关闭 插话')).toBe('已保存（会话层），立即生效。');
+    expect(await run(actor({ user: 'boss' }), '关闭 插话 账号')).toBe('已保存（账号层），立即生效。');
+    expect(await run(admin, '重置 插话')).toBe('没有变化。');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toMatchObject({ enabled: false });
+    expect(await run(admin, '开启 插话')).toBe('插话 已在账号层停用，下级不能开启或修改开关。');
+    // Unlocked again: the reset removes the conversation switch.
+    expect(await run(actor({ user: 'boss' }), '重置 插话 账号')).toBe('已保存（账号层），立即生效。');
+    expect(await run(admin, '重置 插话')).toBe('已保存（会话层），立即生效。');
+    expect(conversations.get(AMBIENT_FEATURE_ID, 'qq/bot-1/group:100')).toBeUndefined();
   });
 
   it('lists only chat-facing plugins for this conversation, with configuration and global switches, paginated (#1250)', async () => {

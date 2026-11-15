@@ -563,9 +563,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #ambientEngagement(): AmbientEngagement | null {
     if (this.#ambient !== undefined) return this.#ambient;
-    // ADR 0062 §23: stored overrides can switch interjection on below an empty file allowlist,
-    // so the engagement state exists whenever the ambient trigger is not removed outright.
-    const config = this.options.agent.service.getTriggerConfig()?.ambient ?? {};
+    // ADR 0062 §23: with an `ai.trigger.ambient` section (even an empty allowlist) stored overrides
+    // may switch interjection on per group; without the section there is no interjection at all
+    // and no engagement state is kept.
+    const config = this.options.agent.service.getTriggerConfig()?.ambient;
+    if (!config) return this.#ambient = null;
     return this.#ambient = new AmbientEngagement({ config });
   }
 

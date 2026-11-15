@@ -8,7 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { redactSecretText } from '@zhin.js/kernel';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  MESSAGE_OUTCOMES,
   defaultOutcomeReply,
   defaultOutcomeVisibility,
   messageOutcomePriority,
@@ -18,6 +20,11 @@ import {
   type MessageOutcomeRecord,
   type MessageOutcomeStage,
 } from './message-outcome.js';
+
+const logger = getLogger('im.inbound');
+const KNOWN_OUTCOMES: ReadonlySet<string> = new Set(MESSAGE_OUTCOMES);
+/** Set only by the framework when it settles (ADR 0061 §4.1); never accepted from a report. */
+const SYSTEM_OUTCOMES: ReadonlySet<string> = new Set<MessageOutcome>(['internal_error', 'unrecorded']);
 
 /** Symbol of the `RuntimeMessage` method returning its ledger port. @internal */
 export const inboundOutcomeSink = Symbol('zhin.im.inbound-outcome-sink');
@@ -58,7 +65,15 @@ export interface InboundOutcomeLedgerInit {
 
 /** Listener for `unrecorded` outcomes (tests fail on stages outside the allowlist, ADR 0061 §4.3). */
 export type UnrecordedOutcomeListener = (record: MessageOutcomeRecord) => void;
-const unrecordedListeners = new Set<UnrecordedOutcomeListener>();
+/**
+ * One listener set per process, even when this module is loaded more than once (two copies of
+ * the package, or source and build in one test run), so the test guard cannot silently miss one.
+ */
+const UNRECORDED_LISTENERS = Symbol.for('zhin.im.inbound-outcome.unrecorded-listeners');
+const unrecordedListeners: Set<UnrecordedOutcomeListener> = (() => {
+  const host = globalThis as { [UNRECORDED_LISTENERS]?: Set<UnrecordedOutcomeListener> };
+  return host[UNRECORDED_LISTENERS] ??= new Set<UnrecordedOutcomeListener>();
+})();
 
 /** Observes every `unrecorded` outcome in this process; returns the unsubscribe function. @public */
 export function onUnrecordedInboundOutcome(listener: UnrecordedOutcomeListener): () => void {
@@ -95,9 +110,19 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
     if (!this.#settled) this.#lastStage = stage;
   }
 
-  /** Adds one candidate; the highest priority wins, ties keep the earlier one. False after settle. */
+  /**
+   * Adds one candidate; the highest priority wins, ties keep the earlier one. False after settle,
+   * and for a code outside {@link MESSAGE_OUTCOMES} or a framework-only code (`internal_error`,
+   * `unrecorded`), which are dropped with one debug line.
+   */
   report(candidate: MessageOutcomeCandidate): boolean {
     if (this.#settled) return false;
+    const code = (candidate as { outcome?: unknown } | undefined)?.outcome;
+    if (typeof code !== 'string' || !KNOWN_OUTCOMES.has(code) || SYSTEM_OUTCOMES.has(code)) {
+      logger.debug(formatCompact({ op: 'inbound_outcome_report_rejected', outcome: boundedCode(code) ?? typeof code,
+        reason: typeof code === 'string' && SYSTEM_OUTCOMES.has(code) ? 'framework_only' : 'unknown_outcome' }));
+      return false;
+    }
     this.#lastStage = candidate.stage;
     for (const facet of candidate.facets ?? []) this.#addFacet(facet);
     const best = this.#best;
@@ -247,6 +272,8 @@ interface QuietWindow { minute: number; count: number; aggregate?: { id: string;
 export class MessageOutcomeLog implements MessageOutcomeReader {
   readonly persistent = false;
   readonly #records = new Map<string, MessageOutcomeRecord>();
+  /** Ids of silent-tier rows, oldest first: evicted before any other row when the log is full. */
+  readonly #silent = new Set<string>();
   readonly #quiet = new Map<string, QuietWindow>();
   constructor(private readonly options: MessageOutcomeLogOptions = {}) {}
 
@@ -272,13 +299,23 @@ export class MessageOutcomeLog implements MessageOutcomeReader {
         const { messageId: _messageId, senderId: _senderId, ...rest } = record;
         stored = Object.freeze({ ...rest, id, facets: Object.freeze([...record.facets.filter(f => !f.startsWith('aggregated:')), `aggregated:${n}`]) });
         window.aggregate = { id, outcome: record.outcome, ...(record.reason ? { reason: record.reason } : {}), n };
-        this.#records.delete(id);
+        this.#delete(id);
       }
     }
     this.#records.set(stored.id, stored);
+    if (isSilentOutcome(stored.outcome)) this.#silent.add(stored.id);
     const capacity = this.options.capacity ?? 2000;
-    while (this.#records.size > capacity) this.#records.delete(this.#records.keys().next().value!);
+    // A flood of silent rows (not addressed, bot echoes) never pushes out failures or replies.
+    while (this.#records.size > capacity) {
+      const oldest = this.#silent.size > 0 ? this.#silent.values().next().value! : this.#records.keys().next().value!;
+      this.#delete(oldest);
+    }
     return stored;
+  }
+
+  #delete(id: string): void {
+    this.#records.delete(id);
+    this.#silent.delete(id);
   }
 
   list(query: MessageOutcomeQuery = {}): readonly MessageOutcomeRecord[] {
@@ -307,9 +344,14 @@ export class MessageOutcomeLog implements MessageOutcomeReader {
     const threshold = this.#now() - (this.options.ttlMs ?? 24 * 60 * 60_000);
     for (const [id, record] of this.#records) {
       if (record.settledAt >= threshold) break;
-      this.#records.delete(id);
+      this.#delete(id);
     }
   }
+}
+
+/** Silent tier (ADR 0061 §1.3–§1.5): no reply by design, the bulk of the traffic. */
+function isSilentOutcome(outcome: MessageOutcome): boolean {
+  return messageOutcomePriority(outcome) === messageOutcomePriority('not_addressed');
 }
 
 function conversationKey(conversation: Pick<ConversationRef, 'endpoint' | 'kind' | 'id'>): string {

@@ -199,7 +199,7 @@ Each judgment logs an `ambient_engagement` line (decision, confidence, reason). 
 
 ##### Switching interjection per group
 
-`conversations` is the global default. To switch one group off, or only one group on, use the feature switch instead of editing the configuration file:
+`conversations` is the global default. To switch one group off, or only one group on, use the feature switch instead of editing the configuration file (the configuration needs an `ai.trigger.ambient` section, `conversations` may be empty; without the section there is no interjection at all):
 
 - A group admin (zhin `admin` role, with `features.selfService.enabled`) sends `feature disable ambient`, `feature enable ambient` or `feature reset ambient` in the group (Chinese: 「功能 关闭 插话」); add a level (`endpoint`, `adapter`) at the end, the default is this conversation.
 - Once an upper level switches it off, lower levels cannot switch it back on (as for plugins).

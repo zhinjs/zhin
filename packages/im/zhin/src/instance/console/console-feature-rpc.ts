@@ -825,15 +825,30 @@ async function withConversationName(result: ConsoleFeatureGetResult, context: Fe
  * of the reserved feature {@link AMBIENT_FEATURE_ID}: `enabled: false` (off, locks lower levels)
  * or `patch.engage: true` (on). Only switch reads and writes are served (no fields).
  */
-function ambientGlobalEnabled(document: RuntimeConfigDocument, key: string | undefined): boolean {
+function ambientGlobalEnabled(document: RuntimeConfigDocument, snapshot: RuntimeSnapshot | undefined, key: string | undefined): boolean {
   const ai = record(document.ai) ? document.ai : undefined;
   const trigger = ai && record(ai.trigger) ? ai.trigger : undefined;
   const ambient = trigger && record(trigger.ambient) ? trigger.ambient : undefined;
   const list = Array.isArray(ambient?.conversations) ? ambient.conversations.filter((item): item is string => typeof item === 'string') : [];
   if (list.includes('*')) return true;
   const ref = key ? parseFeatureConversationKey(key) : undefined;
-  // The file allowlist names `<platform>:<conversation id>`; the adapter alias usually is the platform.
-  return !!ref && list.includes(`${ref.adapter}:${ref.conversation.id}`);
+  if (!ref) return false;
+  // The file allowlist names `<platform>:<conversation id>` exactly as the Agent matches it: the
+  // platform is the adapter capability's local name (`icqq`), not the instance alias (`qq`).
+  return ambientPlatforms(snapshot, ref.adapter).some(platform => list.includes(`${platform}:${ref.conversation.id}`));
+}
+
+/** Platform names (adapter capability local names) served by the adapter instance `alias`. */
+export function ambientPlatforms(snapshot: RuntimeSnapshot | undefined, alias: string): readonly string[] {
+  if (!snapshot) return [];
+  const platforms = new Set<string>();
+  for (const slot of snapshot.capabilities.values()) {
+    if (String(slot.feature) !== 'zhin.adapter') continue;
+    const node = snapshot.tree.get(slot.owner);
+    if (node?.instanceKey !== alias || node.parent !== snapshot.root) continue;
+    platforms.add(slot.localName.split('~')[0]!);
+  }
+  return [...platforms];
 }
 
 async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, context: FeatureRpcContext): Promise<unknown> {
@@ -843,7 +858,7 @@ async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, contex
   await store.refresh();
   if (type === 'feature.get') {
     return readState(context, state => {
-      const resolved = resolveAmbientSwitchAt(store, key, ambientGlobalEnabled(state.document, key), level === 'global' ? undefined : level);
+      const resolved = resolveAmbientSwitchAt(store, key, ambientGlobalEnabled(state.document, state.snapshot, key), level === 'global' ? undefined : level);
       const row = key ? store.get(AMBIENT_FEATURE_ID, key) : undefined;
       const ref = level === 'conversation' && key ? parseFeatureConversationKey(key) : undefined;
       return Object.freeze({
@@ -866,14 +881,17 @@ async function handleAmbient(type: ConsoleFeatureRpcType, input: Record_, contex
   if (type !== 'feature.set-enabled' && type !== 'feature.remove-override') invalid('插话只支持开关，没有可设置的字段');
   if (type === 'feature.set-enabled' && typeof input.enabled !== 'boolean') invalid('enabled 必须是布尔值');
   const lockedBy = resolveAmbientSwitchAt(store, key, false, level).lockedBy;
-  if (lockedBy) locked(lockedBy);
+  // As for Plugins: below a disabled level the switch cannot change, but a reset still succeeds and
+  // keeps this level's stored switch (only the explicit "on" is cleared).
+  if (lockedBy && type === 'feature.set-enabled') locked(lockedBy);
   const enabled = input.enabled === true;
   const result = await store.write({
     plugin: AMBIENT_FEATURE_ID, key,
     ...(typeof input.expectedRevision === 'string' && /^\d{1,15}$/u.test(input.expectedRevision) ? { expectedRevision: Number(input.expectedRevision) } : {}),
     ...(context.actor ? { updatedBy: context.actor } : {}),
     ...(context.operator ? { operator: context.operator } : {}),
-    next: () => type === 'feature.remove-override' ? null
+    next: current => type === 'feature.remove-override'
+      ? (lockedBy && current?.enabled === false ? { enabled: false, patch: {} } : null)
       : enabled ? { patch: { [AMBIENT_ENGAGE_FIELD]: true } } : { enabled: false, patch: {} },
   });
   const label = LEVEL_LABEL[level as Exclude<ConsoleFeatureLevel, 'global'>];

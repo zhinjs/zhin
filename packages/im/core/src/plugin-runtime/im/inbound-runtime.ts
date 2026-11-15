@@ -3,6 +3,7 @@ import type { CommandExecutionBudget, CommandOperationController } from '@zhin.j
 import type { OperationResourceView } from '@zhin.js/feature-kit';
 import { normalizePlatformStanding, type DeliveryReceipt, type UserInteraction } from '@zhin.js/im-contract';
 import { createErrorId, formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import { redactSecretText } from '@zhin.js/kernel';
 import type {
   CapabilityId,
   GenerationAdmissionGate,
@@ -148,8 +149,9 @@ export class InboundRuntime {
     // ADR 0061 §4.1: one ledger per message, settled exactly once in `finally`.
     const ledger = new InboundOutcomeLedger({
       conversation: { ...source.payload?.conversation, endpoint: { id: source.endpoint.id, adapter: source.endpoint.adapter } },
-      ...(typeof source.payload.sender?.id === 'string' ? { senderId: source.payload.sender.id } : {}),
-      ...(source.payload.message?.id ? { messageId: source.payload.message.id } : {}),
+      // A malformed event without a payload still settles an outcome (the code below then throws).
+      ...(typeof source.payload?.sender?.id === 'string' ? { senderId: source.payload.sender.id } : {}),
+      ...(typeof source.payload?.message?.id === 'string' ? { messageId: source.payload.message.id } : {}),
       receivedAt,
     });
     let failure: unknown;
@@ -158,6 +160,20 @@ export class InboundRuntime {
     let active = true;
     let commandOperation: CommandOperationController | undefined;
     let endpointLease: EndpointChildLease | undefined;
+    /** Drains the operation, releases leases and settles the outcome; a drain failure is a failure. */
+    const close = async (): Promise<void> => {
+      try { await commandOperation?.finish(); }
+      catch (error) {
+        if (!failed) { failed = true; failure = error; }
+        throw error;
+      } finally {
+        active = false;
+        try { endpointLease?.release(); } finally {
+          this.context.release(lease);
+          this.#settleOutcome(ledger, failed, failure);
+        }
+      }
+    };
     try {
       const adapter = source.endpoint.id as CapabilityId;
       this.context.diagnostics?.begin(lease.value.generation, {
@@ -500,14 +516,7 @@ export class InboundRuntime {
       failure = error;
       throw error;
     } finally {
-      try { await commandOperation?.finish(); }
-      finally {
-        active = false;
-        try { endpointLease?.release(); } finally {
-          this.context.release(lease);
-          this.#settleOutcome(ledger, failed, failure);
-        }
-      }
+      await close();
     }
   }
 
@@ -525,9 +534,11 @@ export class InboundRuntime {
       if (failed) {
         const errorId = createErrorId();
         record = ledger.settle({ error: { errorId, ...(failure instanceof Error ? { name: failure.name, message: failure.message } : { message: String(failure) }) } });
-        logger.error(formatCompact({ op: 'inbound_internal_error', errorId, conv: formatConversationLog(record.conversation),
+        let conv: string;
+        try { conv = formatConversationLog(record.conversation); } catch { conv = 'unknown'; }
+        logger.error(formatCompact({ op: 'inbound_internal_error', errorId, conv,
           messageId: record.messageId, stage: record.stage,
-          error: failure instanceof Error ? failure.message : String(failure) }));
+          error: logSafeError(failure) }));
       } else {
         record = ledger.settle();
       }
@@ -539,7 +550,9 @@ export class InboundRuntime {
       this.context.diagnostics?.outcome(record);
       this.context.outcomes?.record(record);
     } catch { /* silent-ok: observer — the outcome projection never changes the message's result */ }
-    const fields = { op: 'inbound_outcome', conv: formatConversationLog(record.conversation), messageId: record.messageId,
+    let conv: string;
+    try { conv = formatConversationLog(record.conversation); } catch { conv = 'unknown'; }
+    const fields = { op: 'inbound_outcome', conv, messageId: record.messageId,
       outcome: record.outcome, reason: record.reason, stage: record.stage, addressed: record.addressed, errorId: record.errorId };
     if (record.outcome === 'unrecorded') {
       logger.warn(formatCompact({ ...fields, op: 'inbound_outcome_unrecorded', lastStage: record.lastStage }));
@@ -652,4 +665,13 @@ function adapterSender(sender: MessageSenderRef | undefined): MessageSenderRef |
     ...(sender.name !== undefined ? { name: sender.name } : {}),
     ...(platform ? { platform } : {}),
   });
+}
+
+const MAX_LOGGED_ERROR_CHARS = 500;
+
+/** Error text for the instance log: secrets masked (decision audit patterns), one line, bounded. */
+function logSafeError(failure: unknown): string {
+  const text = redactSecretText(failure instanceof Error ? failure.message : String(failure)).replace(/\p{Cc}+/gu, ' ').trim();
+  const chars = [...text];
+  return chars.length > MAX_LOGGED_ERROR_CHARS ? `${chars.slice(0, MAX_LOGGED_ERROR_CHARS - 1).join('')}…` : text;
 }

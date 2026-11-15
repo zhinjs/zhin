@@ -5361,6 +5361,31 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('records internal_error when the command operation fails to finish (review of #1281)', async () => {
+    const { CommandExecutionBudget } = await import('@zhin.js/command/internal/execution');
+    const open = CommandExecutionBudget.prototype.openOperation;
+    const spy = vi.spyOn(CommandExecutionBudget.prototype, 'openOperation').mockImplementation(function (this: InstanceType<typeof CommandExecutionBudget>, input) {
+      const controller = open.call(this, input);
+      return Object.freeze({ ...controller, finish: async () => { await controller.finish(); throw new Error('drain failed'); } });
+    });
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toThrow('drain failed');
+      expect(latest(fixture)).toMatchObject({ outcome: 'internal_error' });
+      expect(latest(fixture)!.facets).toContain('command_replied:executed');
+    } finally { spy.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('settles an outcome even for an event without a payload (review of #1281)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      const endpoint = Object.freeze({ id: String(fixture.adapter.id) as never, adapter: 'memory', name: 'test' });
+      await expect(fixture.im.endpointEvents.receive(Object.freeze({ name: 'message.receive', payload: undefined, endpoint,
+        client: ignoredEndpointEvents }) as never)).rejects.toThrow();
+      expect(latest(fixture)).toMatchObject({ outcome: 'internal_error', conversation: { endpoint: { id: String(fixture.adapter.id) } } });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('takes the outcome an ingress route returns and keeps the higher-priority candidate', async () => {
     const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
     try {

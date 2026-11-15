@@ -258,3 +258,63 @@ describe('group interjection switch (ADR 0062 §23)', () => {
     expect(resolveAmbientSwitchAt(reader, 'qq/bot-1/group:200', true)).toEqual({ enabled: true, source: 'global' });
   });
 });
+
+describe('outcome reports cannot be forged (review of #1281)', () => {
+  it('drops unknown codes and framework-only codes reported through the public sink', () => {
+    const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+    const message = new Message({ conversation, content: 'hi' }, { generation: 1, reply: async () => ({ status: 'sent' }), outcomes: ledger });
+    expect(reportInboundOutcome(message, { outcome: 'made_up' as never, stage: 'handlers' })).toBe(false);
+    expect(reportInboundOutcome(message, { outcome: 'internal_error', reason: 'command_threw', stage: 'command', errorId: 'err_000000000000' })).toBe(false);
+    expect(reportInboundOutcome(message, { outcome: 'unrecorded', stage: 'command' })).toBe(false);
+    expect(ledger.report({ outcome: 'internal_error', stage: 'command' })).toBe(false);
+    expect(reportInboundOutcome(message, { outcome: 'handler_replied', reason: 'handler', stage: 'handlers' })).toBe(true);
+    const record = ledger.settle();
+    expect(record.outcome).toBe('handler_replied');
+    expect(record.facets).toEqual([]);
+    // Only the framework settles a failure.
+    const failing = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+    expect(failing.settle({ error: { errorId: 'err_aaaaaaaaaaaa', message: 'boom' } }).outcome).toBe('internal_error');
+  });
+});
+
+describe('MessageOutcomeLog keeps loud outcomes under a silent flood (review of #1281)', () => {
+  const row = (index: number, outcome: MessageOutcome, sender = `u${index}`): MessageOutcomeRecord => ({
+    id: `f${index}`, receivedAt: 60_000 + index, settledAt: 60_000 + index,
+    conversation: { ...conversation, id: `room-${index % 50}` }, platform: 'test', sceneId: 'group:room', senderId: sender,
+    addressed: false, outcome, facets: [], stage: 'ambient', visibility: 'sender', reply: 'no',
+  });
+
+  it('evicts silent rows first, so an internal_error survives thousands of not_addressed rows', () => {
+    const log = new MessageOutcomeLog({ capacity: 100, now: () => 61_000 });
+    log.record(row(0, 'internal_error'));
+    log.record(row(1, 'command_replied'));
+    for (let index = 2; index < 5_000; index += 1) log.record(row(index, 'not_addressed'));
+    const rows = log.list({ limit: 500 });
+    expect(rows.length).toBeLessThanOrEqual(100);
+    expect(log.get('f0')?.outcome).toBe('internal_error');
+    expect(log.get('f1')?.outcome).toBe('command_replied');
+    expect(log.list({ outcome: 'internal_error' })).toHaveLength(1);
+  });
+
+  it('falls back to the oldest row once only loud rows remain', () => {
+    const log = new MessageOutcomeLog({ capacity: 3, now: () => 61_000 });
+    for (let index = 0; index < 5; index += 1) log.record(row(index, 'delivery_failed'));
+    expect(log.list({ limit: 10 }).map(record => record.id)).toEqual(['f4', 'f3', 'f2']);
+  });
+});
+
+describe('unrecorded listeners (review of #1281)', () => {
+  it('share one process-wide set even when the module is loaded twice', async () => {
+    vi.resetModules();
+    const copy = await import('../../src/plugin-runtime/im/inbound-outcome-ledger.js');
+    expect(copy.InboundOutcomeLedger).not.toBe(InboundOutcomeLedger);
+    const seen: string[] = [];
+    const stop = copy.onUnrecordedInboundOutcome(record => { seen.push(String(record.lastStage)); });
+    try {
+      const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+      ledger.enter('agent_gate');
+      ledger.settle();
+      expect(seen).toEqual(['agent_gate']);
+    } finally { stop(); }
+  });
+});
