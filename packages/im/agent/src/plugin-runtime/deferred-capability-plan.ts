@@ -146,6 +146,10 @@ const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script
 const CJK_CHARS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu;
 const WORD_CHARS = /[\p{L}\p{N}]/gu;
 const LETTER = /\p{L}/u;
+/** Invisible format characters (zero-width space / joiners, BOM, bidi marks): never content, never a word break. */
+const FORMAT_CHARS = /\p{Cf}/gu;
+/** Content that is one 1-2 character unit repeated: laughter and fillers such as 呵呵, 嘻嘻, hhh, hahaha. */
+const REPEATED_UNIT = /^(.{1,2}?)\1+$/u;
 /**
  * Greetings, fillers and function words that say nothing about a task. A Skill cannot earn a hint
  * by listing them (keyword stuffing), and small talk never triggers one.
@@ -155,6 +159,8 @@ const HINT_STOPWORDS: ReadonlySet<string> = new Set([
   'has', 'from', 'about', 'please', 'hello', 'hey', 'thanks', 'thank', 'help', 'want', 'need', 'just', 'get',
   'let', 'make', 'some', 'any', 'all', 'yes', 'okay', 'open', 'show', 'tell', 'give', 'use', 'new', 'now',
   'hi', 'ok', 'is', 'it', 'its', 'me', 'my', 'we', 'our', 'do', 'does', 'did', 'be', 'to', 'of', 'in', 'on', 'a', 'an',
+  'bye', 'goodbye', 'thx', 'pls', 'plz', 'sorry', 'lol', 'lmao', 'yeah', 'yep', 'yup', 'nope', 'sure', 'cool', 'nice',
+  'great', 'good', 'morning', 'afternoon', 'evening', 'night', 'welcome',
 ]);
 /**
  * CJK greetings, fillers and function words, cut out of a CJK keyword (as substrings, longest
@@ -167,13 +173,16 @@ const HINT_CJK_STOPWORDS: readonly string[] = Object.freeze([
   '我们', '你们', '他们', '一个', '一些', '没有', '就是', '不是', '知道', '现在', '今天', '我想', '我要', '想要',
   '需要', '还是', '然后', '东西', '问题', '事情', '应该', '的话', '告诉', '给我', '看看', '试试', '行吗', '好吗',
   '对吗', '是吗', '了吗',
-  // Particles, pronouns and fillers on their own: no topic word is built from them.
-  '的', '了', '吗', '呢', '吧', '啊', '呀', '哦', '噢', '嗯', '哈', '啦', '嘛', '哇', '哎', '喂', '我', '你', '您', '帮',
+  '早上好', '中午好', '下午好', '晚上好', '早安', '午安', '晚安', '再见', '拜拜', '收到', '好滴', '好哒', '辛苦',
+  '在不在', '有人在吗', '有人吗', '你是谁',
+  // Particles, pronouns and fillers on their own: no topic word is built from them. (哈 is not one:
+  // 哈哈 above covers laughter, and 哈希 is a topic word.)
+  '的', '了', '吗', '呢', '吧', '啊', '呀', '哦', '噢', '嗯', '啦', '嘛', '哇', '哎', '喂', '我', '你', '您', '帮',
 ].sort((left, right) => [...right].length - [...left].length));
 
 /** The normalized keyword and its content score when it may score a hint, else undefined. */
 function hintKeyword(value: string): { readonly keyword: string; readonly score: number } | undefined {
-  const keyword = value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+  const keyword = normalizeHintText(value);
   if (!keyword || [...keyword].length > SKILL_KEYWORD_MAX_CHARS || HINT_STOPWORDS.has(keyword)) return undefined;
   if (CJK_CHAR.test(keyword)) {
     // CJK keywords match with spaces removed, so they also score without them.
@@ -181,12 +190,12 @@ function hintKeyword(value: string): { readonly keyword: string; readonly score:
     let content = compact;
     for (const word of HINT_CJK_STOPWORDS) content = content.split(word).join(' ');
     content = content.split(/[^\p{L}\p{N}]+/u).filter(word => word && !HINT_STOPWORDS.has(word)).join('');
-    if ((content.match(CJK_CHARS)?.length ?? 0) < HINT_MIN_CJK_CHARS) return undefined;
+    if ((content.match(CJK_CHARS)?.length ?? 0) < HINT_MIN_CJK_CHARS || REPEATED_UNIT.test(content)) return undefined;
     return { keyword: compact, score: content.match(WORD_CHARS)?.length ?? 0 };
   }
   const words = keyword.split(/[^\p{L}\p{N}]+/u).filter(word => word && !HINT_STOPWORDS.has(word));
   const content = words.join('');
-  if (!LETTER.test(content)) return undefined;
+  if (!LETTER.test(content) || REPEATED_UNIT.test(content)) return undefined;
   const score = content.match(WORD_CHARS)?.length ?? 0;
   return score >= HINT_MIN_WORD_CHARS ? { keyword, score } : undefined;
 }
@@ -202,8 +211,10 @@ function hintKeyword(value: string): { readonly keyword: string; readonly score:
  * longest matching keyword (no sum), only its first {@link PUBLIC_SKILL_HINT_KEYWORDS} keywords
  * count, and a keyword scores only its content: spaces, stopwords and CJK function characters do not
  * count. Keywords left with under 2 content CJK characters, non-CJK keywords under 3 letters /
- * digits or without a letter (numbers, symbols, emoji), stopwords and keywords over
- * {@link SKILL_KEYWORD_MAX_CHARS} characters are ignored. ASCII keywords match whole ASCII words
+ * digits or without a letter (numbers, symbols, emoji), content that only repeats a 1-2 character
+ * unit (呵呵, hhh, hahaha), stopwords and keywords over {@link SKILL_KEYWORD_MAX_CHARS} characters
+ * are ignored; invisible format characters (zero-width space, BOM) are dropped from keywords and
+ * intent alike. ASCII keywords match whole ASCII words
  * (`api` does not match `rapid` but matches `写api`); CJK keywords ignore spaces. The hint names the
  * top {@link PUBLIC_SKILL_HINT_MAX} scores, so one higher-scoring Skill never hides every other.
  */
@@ -212,7 +223,7 @@ export function suggestPublicSkillsForIntent(
   intent: string,
   loadedSkills: readonly string[] = [],
 ): readonly SkillDescriptor[] {
-  const haystack = intent.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+  const haystack = normalizeHintText(intent);
   if (!haystack) return Object.freeze([]);
   const loaded = new Set(loadedSkills);
   const scored = skills
@@ -243,6 +254,11 @@ function longestKeywordHit(keywords: readonly string[], normalizedIntent: string
     if (hit) best = Math.max(best, scored.score);
   }
   return best;
+}
+
+/** NFKC, lower case, format characters removed and whitespace collapsed: keywords and intent alike. */
+function normalizeHintText(text: string): string {
+  return text.normalize('NFKC').replace(FORMAT_CHARS, '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
 }
 
 function escapeRegExp(text: string): string {

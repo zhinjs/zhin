@@ -83,6 +83,9 @@ describe('public Skill hint (#1250 b27)', () => {
     const hijacks = [
       '能不能帮我', '帮我看看', '你好啊', '可以吗', '谢谢你', '我的', '的话', '了吗',
       '???', '。。。', '123', '😀😀😀', 'hi!', "what's",
+      // Zero-width characters, repeated laughter and common greetings (#1292 second review).
+      '请\u200b问', '帮\u3000我', '呵呵', '嘻嘻嘻', 'hhh', 'hahaha', 'lol', 'thx', 'good morning', 'bye',
+      '早上好', '晚安', '拜拜', '收到', '在不在', '有人吗',
     ];
     for (const keyword of hijacks) {
       it(`"${keyword}" cannot push the legitimate Skill out of the hint`, () => {
@@ -99,6 +102,17 @@ describe('public Skill hint (#1250 b27)', () => {
         }
       });
     }
+
+    it('topic keywords that contain a filler character or repeat a letter still score', () => {
+      for (const [keyword, text] of [['哈希', '帮我算一下哈希'], ['摘要', '给这篇文章写个摘要'], ['部署', '帮我部署服务'], ['css', 'fix my css'], ['ssh', 'ssh 连不上']]) {
+        expect(names(suggestPublicSkillsForIntent([skill('topic', [keyword])], text)), text).toEqual(['topic']);
+      }
+    });
+
+    it('zero-width characters in the message do not hide a keyword', () => {
+      expect(names(suggestPublicSkillsForIntent([legit], '帮我翻\u200b译'))).toEqual(['legit']);
+      expect(names(suggestPublicSkillsForIntent([legit], 'trans\u200blate this'))).toEqual(['legit']);
+    });
 
     it('a higher-scoring Skill does not push a matching one out of the hint', () => {
       const broad = skill('broad', ['翻译这篇文章']);
