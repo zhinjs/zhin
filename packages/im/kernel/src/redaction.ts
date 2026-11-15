@@ -148,8 +148,9 @@ export function containsChatOwnerClaimCode(text: string, code: string): boolean 
 }
 
 /**
- * A streaming {@link containsChatOwnerClaimCode} over many strings (the strings of a native event), read
- * as if joined by line breaks, so a code split across two strings is found too. Each string is folded
+ * A streaming {@link containsChatOwnerClaimCode} over many strings (the strings of a native event): the
+ * folded strings are concatenated directly, with no separator between them, so a code split across two
+ * neighbouring strings is found too. Each string is folded
  * once as written and, only when it is not ASCII, once more after NFKC; nothing but the last
  * `code.length - 1` folded symbols is kept between strings.
  */

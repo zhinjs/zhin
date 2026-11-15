@@ -16,10 +16,17 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import {
-  CHAT_OWNER_CLAIM_NATIVE_LIMITS, ChatOwnerClaim, createChatOwnerClaimGuard, hasGlobalOwner, inspectNativeClaimPayload,
+  CHAT_OWNER_CLAIM_NATIVE_LIMITS, CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS, ChatOwnerClaim, createChatOwnerClaimGuard, hasGlobalOwner, inspectNativeClaimPayload,
 } from '../../src/instance/chat-owner-claim.js';
 
 const CODE = 'AAAA2222';
+/** UTF-8 bytes of `text` in a SharedArrayBuffer. */
+const sharedBytes = (text: string) => {
+  const bytes = new TextEncoder().encode(text);
+  const shared = new SharedArrayBuffer(bytes.length);
+  new Uint8Array(shared).set(bytes);
+  return shared;
+};
 const NEXT = 'BBBB3333';
 
 class TestEndpoint implements Endpoint {
@@ -302,6 +309,9 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     for (const payload of [
       { raw: new TextEncoder().encode(`{"text":"认领 ${CODE}"}`) },
       { raw: Buffer.from(`claim ${CODE}`).buffer },
+      { raw: sharedBytes(`认领 ${CODE}`) },
+      { raw: new Uint8Array(sharedBytes(`认领 ${CODE}`)) },
+      { raw: new DataView(sharedBytes(`claim ${CODE}`)) },
       { cache: new Map([['m1', { text: `认领 ${CODE}` }]]) },
       { keys: new Map([[`认领 ${CODE}`, 1]]) },
       { tags: new Set(['a', `claim ${CODE}`]) },
@@ -319,6 +329,44 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     }
   });
 
+  it('a join request carrying the code is withheld and burns it; a native event only withholds (#1291 review)', async () => {
+    const { claim, endpointOf, agent } = await setup();
+    const endpoint = endpointOf('qq');
+    const common = { id: 'event', timestamp: 100, metadata: {} };
+    await endpoint[endpointSpec].events.emit('request.receive', { ...common, type: 'request', name: 'request.group.join', actor: { id: 'alice' },
+      comment: `认领 ${CODE}`, conversation: { kind: 'group', id: 'room' }, $approve() {}, $reject() {} });
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+    await endpoint[endpointSpec].events.platform('native.message', { text: `认领 ${NEXT}` });
+    expect(claim.carries(NEXT)).toBe(true);
+    // A request without the code burns nothing.
+    await endpoint[endpointSpec].events.emit('request.receive', { ...common, id: 'event-2', type: 'request', name: 'request.friend', actor: { id: 'bob' },
+      comment: 'hello', $approve() {}, $reject() {} });
+    expect(claim.carries(NEXT)).toBe(true);
+    expect(agent).not.toHaveBeenCalled();
+  });
+
+  it('warns about a payload too large to inspect at most once per event name and window, without its content (#1291 review)', async () => {
+    const { claim } = await setup();
+    const warnings: string[] = [];
+    let now = 1_000;
+    const guard = createChatOwnerClaimGuard({ claim, logger: { warn: line => { warnings.push(line); } }, now: () => now });
+    const huge = { text: `认领 ${CODE.slice(0, 4)}`, items: Array.from({ length: CHAT_OWNER_CLAIM_NATIVE_LIMITS.values + 1 }, (_, index) => index) };
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(warnings).toHaveLength(1);
+    expect(guard.inspectNative?.(huge, { name: 'request.receive' })).toBe(true);
+    expect(warnings).toHaveLength(2);
+    now += CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS;
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(warnings).toHaveLength(3);
+    expect(warnings[0]).toContain('platform.receive');
+    expect(warnings.join('\n')).not.toContain(CODE.slice(0, 4));
+    // Too large is not "carried": nothing is revoked.
+    await guard.discardNative?.(huge, { name: 'request.receive' });
+    expect(claim.carries(CODE)).toBe(true);
+  });
+
   it('counts a native payload it cannot read completely as carrying the code (fail closed, #1289 review)', async () => {
     const limits = CHAT_OWNER_CLAIM_NATIVE_LIMITS;
     let deep: Record<string, unknown> = { text: 'hello' };
@@ -330,6 +378,7 @@ describe('claim-shaped messages at inbound (#1250)', () => {
       { items: Array.from({ length: limits.values + 1 }, (_, index) => index) },
       { text: 'x'.repeat(limits.chars + 1) },
       { raw: new Uint8Array(limits.chars + 1) },
+      { raw: new SharedArrayBuffer(limits.chars + 1) },
       throwing,
     ]) expect(inspectNativeClaimPayload(payload, CODE)).toBe('exceeded');
     // The guard withholds such an event while a claim is open, and only then.

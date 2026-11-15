@@ -580,18 +580,30 @@ export class InboundRuntime {
    * nor dispatched to Handlers.
    */
   #withholdSecretEvent(event: EndpointEvent): boolean {
-    if (!this.#nativeCarriesSecret(event.payload)) return false;
+    if (!this.#nativeCarriesSecret(event)) return false;
     logger.debug(formatCompact({ op: 'native_secret_withheld', event: event.name, endpoint: String(event.endpoint.id) }));
     return true;
   }
 
-  #nativeCarriesSecret(payload: unknown): boolean {
+  #nativeCarriesSecret(event: EndpointEvent): boolean {
     const inspect = this.context.inboundSecret?.inspectNative;
     if (!inspect) return false;
-    try { return inspect.call(this.context.inboundSecret, payload) === true; } catch (error) {
+    try { return inspect.call(this.context.inboundSecret, event.payload, { name: event.name }) === true; } catch (error) {
       // Fail closed: an event that cannot be inspected is not dispatched while a secret is open.
       logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
       return true;
+    }
+  }
+
+  /**
+   * A withheld notice, request or system event was still seen on the platform (an admin reads a join
+   * request's comment): the guard revokes the secret it carries (#1291 review). `platform.receive` is
+   * not revoked here: the same message's `message.receive` still reaches the claim.
+   */
+  async #discardNativeSecret(event: EndpointEvent): Promise<void> {
+    const guard = this.context.inboundSecret;
+    try { await guard?.discardNative?.(event.payload, { name: event.name }); } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_discard_failed', error: logSafeError(error) }));
     }
   }
 
@@ -648,7 +660,10 @@ export class InboundRuntime {
   async #receiveCanonicalEndpointEvent(
     source: EndpointEvent<IncomingNotice | IncomingRequest | IncomingSystemEvent>,
   ): Promise<void> {
-    if (this.#withholdSecretEvent(source)) return;
+    if (this.#withholdSecretEvent(source)) {
+      await this.#discardNativeSecret(source);
+      return;
+    }
     const lease = this.context.acquire();
     let active = true;
     let endpointLease: EndpointChildLease | undefined;

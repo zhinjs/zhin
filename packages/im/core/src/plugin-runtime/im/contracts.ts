@@ -295,7 +295,14 @@ export interface InboundSecretGuard {
    * its payload is platform-shaped, so it cannot be redacted reliably. A payload too large to inspect
    * completely should count as carrying it (fail closed).
    */
-  inspectNative?(payload: unknown): boolean;
+  inspectNative?(payload: unknown, event?: Readonly<{ name: string }>): boolean;
+  /**
+   * A notice, request or system event withheld by {@link inspectNative} was still seen on the platform
+   * (a join request's comment is shown to the group's admins): revoke the secret when the payload
+   * really carries it (not merely too large to inspect). Not called for `platform.receive`: the same
+   * message's `message.receive` still reaches {@link match}.
+   */
+  discardNative?(payload: unknown, event?: Readonly<{ name: string }>): Promise<void> | void;
 }
 
 export interface InboundSecretMatch {

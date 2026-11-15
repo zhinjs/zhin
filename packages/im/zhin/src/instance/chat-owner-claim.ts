@@ -226,6 +226,17 @@ export class ChatOwnerClaim {
     return current === undefined ? 'clear' : inspectNativeClaimPayload(payload, current);
   }
 
+  /**
+   * Revokes the current code when a withheld notice / request / system payload really carries it
+   * (others on the platform saw it); a payload only too large to inspect revokes nothing.
+   */
+  async revokeIfNativeCarried(payload: unknown): Promise<boolean> {
+    if (this.inspectNative(payload) !== 'carried') return false;
+    this.#options.logger.warn('聊天角色：认领码出现在一条通知、请求或系统事件中（如入群附言），已作废；新码见 zhin status。');
+    await this.rotate();
+    return true;
+  }
+
   /** Revokes the current code when `text` carries it (a message others saw but no claim handled). */
   async revokeIfCarried(text: string): Promise<boolean> {
     if (!this.carries(text)) return false;
@@ -377,8 +388,17 @@ export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim;
  * compares one candidate (#1289 review). Only while a code is open: once a global owner exists
  * (or claims are not open) nothing is taken and such text goes to commands or the Agent as usual.
  */
-export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerClaim }>): InboundSecretGuard {
+export function createChatOwnerClaimGuard(options: Readonly<{
+  claim: ChatOwnerClaim;
+  /** Where the rate-limited "withheld: too large to inspect" warning goes (default: the instance log). */
+  logger?: Readonly<{ warn(line: string): void }>;
+  now?: () => number;
+}>): InboundSecretGuard {
   const { claim } = options;
+  const log = options.logger ?? nativeLogger;
+  const now = options.now ?? Date.now;
+  /** Last "too large to inspect" warning per event name. */
+  const warned = new Map<string, number>();
   const guard: InboundSecretGuard = {
     match: ({ text, prefix, conversation, snapshot }) => {
       if (!claim.active) return undefined;
@@ -396,19 +416,30 @@ export function createChatOwnerClaimGuard(options: Readonly<{ claim: ChatOwnerCl
         discard: async () => { await claim.revokeIfCarried(text); },
       });
     },
-    inspectNative: payload => {
+    inspectNative: (payload, event) => {
       const inspection = claim.inspectNative(payload);
       if (inspection === 'exceeded') {
-        nativeLogger.debug('聊天角色：认领开放期间，一个原生事件过大或无法完整检查，按含认领码处理（不派发）。'
-          + ' (native event too large to inspect while a claim is open: withheld)');
+        // Rate limited per event name; never the payload (it may carry the code).
+        const name = String(event?.name ?? 'unknown').slice(0, 64);
+        const at = now();
+        const last = warned.get(name);
+        if (last === undefined || at - last >= CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS) {
+          warned.set(name, at);
+          if (warned.size > 1000) warned.delete(warned.keys().next().value!);
+          log.warn(`聊天角色：认领开放期间，原生事件 ${name} 过大或无法完整检查，按含认领码处理（不派发）；`
+            + `同一事件名 10 分钟内只提示一次。(event ${name} too large to inspect while a claim is open: withheld)`);
+        }
       }
       return inspection !== 'clear';
     },
+    discardNative: async payload => { await claim.revokeIfNativeCarried(payload); },
   };
   return Object.freeze(guard);
 }
 
 const nativeLogger = getLogger('instance.chat-owner-claim');
+/** At most one "too large to inspect" warning per event name in this window. */
+export const CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS = 10 * 60_000;
 
 /**
  * What one native-event check reads at most (#1289 review). Beyond it the event counts as carrying
@@ -422,9 +453,16 @@ export type NativeClaimInspection = 'carried' | 'clear' | 'exceeded';
 
 const utf8 = new TextDecoder('utf-8');
 
+/** `ArrayBuffer`, `SharedArrayBuffer` or any view of one (typed arrays, `Buffer`, `DataView`). */
+function isByteBuffer(value: unknown): value is ArrayBuffer | SharedArrayBuffer | ArrayBufferView {
+  return value instanceof ArrayBuffer || ArrayBuffer.isView(value)
+    || (typeof SharedArrayBuffer === 'function' && value instanceof SharedArrayBuffer);
+}
+
 /**
  * Whether a native payload carries `code` (ADR 0060 §3.3): every string, number and byte buffer
- * (decoded as UTF-8) of every array, plain or class object (own enumerable values), Map and Set is
+ * (`ArrayBuffer`, `SharedArrayBuffer` and their views, decoded as UTF-8; one that cannot be decoded:
+ * `exceeded`) of every array, plain or class object (own enumerable values), Map and Set is
  * read, in order, through one `createChatOwnerClaimCodeScanner` (so a code split across neighbouring
  * strings is found too; each string is folded once, NFKC only when it is not ASCII). A getter that
  * throws, a structure deeper than {@link CHAT_OWNER_CLAIM_NATIVE_LIMITS} or more values or characters
@@ -443,9 +481,12 @@ export function inspectNativeClaimPayload(
     let text: string | undefined;
     if (typeof value === 'string') text = value;
     else if (typeof value === 'number' || typeof value === 'bigint') text = String(value);
-    else if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    else if (isByteBuffer(value)) {
       if (chars + value.byteLength > limits.chars) return 'exceeded';
-      text = utf8.decode(value);
+      try { text = utf8.decode(value); } catch {
+        // A buffer that cannot be decoded (detached, or a view the decoder refuses) hides its text.
+        return 'exceeded';
+      }
     }
     if (text !== undefined) {
       values += 1;
