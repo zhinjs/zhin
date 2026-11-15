@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, createPeerRegistry, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint } from '@zhin.js/adapter';
-import { ImRuntime, ingressRouteToken, type IngressRoute } from '@zhin.js/core/runtime';
+import { ImRuntime, ingressRouteToken, roomMembershipToken, type IngressRoute } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import { containsChatOwnerClaimCode } from '@zhin.js/kernel';
 import { addTransport, removeTransport, setLevel, getLogger } from '@zhin.js/logger';
@@ -15,9 +15,18 @@ import {
   type CapabilityId, type CapabilitySlot, type FeatureId, type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
-import { ChatOwnerClaim, createChatOwnerClaimGuard, hasGlobalOwner } from '../../src/instance/chat-owner-claim.js';
+import {
+  CHAT_OWNER_CLAIM_NATIVE_LIMITS, CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS, ChatOwnerClaim, createChatOwnerClaimGuard, hasGlobalOwner, inspectNativeClaimPayload,
+} from '../../src/instance/chat-owner-claim.js';
 
 const CODE = 'AAAA2222';
+/** UTF-8 bytes of `text` in a SharedArrayBuffer. */
+const sharedBytes = (text: string) => {
+  const bytes = new TextEncoder().encode(text);
+  const shared = new SharedArrayBuffer(bytes.length);
+  new Uint8Array(shared).set(bytes);
+  return shared;
+};
 const NEXT = 'BBBB3333';
 
 class TestEndpoint implements Endpoint {
@@ -32,7 +41,7 @@ class TestAdapter extends Adapter<TestEndpoint> { protected createEndpoint() { r
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
-async function setup() {
+async function setup(options: Readonly<{ deduper?: { claim(): never }; membership?: object }> = {}) {
   const root = rootPluginId();
   const qq = childPluginId(root, 'qq');
   const sandbox = childPluginId(root, 'sandbox');
@@ -46,7 +55,8 @@ async function setup() {
   events.append = async event => { appended.push(event); return append(event); };
   const peers = createPeerRegistry();
   peers.declareExternal('qq', 'other-bot');
-  const im = new ImRuntime({ conversationEvents: events, peerRegistry: peers, inboundSecret: createChatOwnerClaimGuard({ claim }) });
+  const im = new ImRuntime({ conversationEvents: events, peerRegistry: peers, inboundSecret: createChatOwnerClaimGuard({ claim }),
+    ...(options.deduper ? { inboundDeduper: options.deduper as never } : {}) });
   const agent = vi.fn<IngressRoute['route']>(async () => true);
   const route: IngressRoute = { route: agent };
   const adapters = { qq: new TestAdapter(), sandbox: new TestAdapter() };
@@ -60,7 +70,8 @@ async function setup() {
     tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@test/root', packageRoot: '/project', children: [qq, sandbox] }],
       [qq, node(qq, 'qq')], [sandbox, node(sandbox, 'sandbox')]]) as never,
     config: new Map([[root, {}], [qq, { commandPrefix: '#', endpoints: [{ id: 'bot' }] }], [sandbox, { endpoints: [{ id: 'sim' }] }]]),
-    resources: new Map([[root, new Map<string, unknown>([[endpointEventGatewayToken.id, im.endpointEvents], [ingressRouteToken.id, route]])], [qq, new Map([[endpointEventGatewayToken.id, im.endpointEvents]])], [sandbox, new Map([[endpointEventGatewayToken.id, im.endpointEvents]])]]),
+    resources: new Map([[root, new Map<string, unknown>([[endpointEventGatewayToken.id, im.endpointEvents], [ingressRouteToken.id, route],
+      ...(options.membership ? [[roomMembershipToken.id, options.membership] as const] : [])])], [qq, new Map([[endpointEventGatewayToken.id, im.endpointEvents]])], [sandbox, new Map([[endpointEventGatewayToken.id, im.endpointEvents]])]]),
     capabilities: new Map<CapabilityId, CapabilitySlot>([[qqSlot.id, qqSlot], [sandboxSlot.id, sandboxSlot]]), projections: new Map(),
   };
   const index = await AdapterIndex.create([qqSlot, sandboxSlot], createSnapshotView(0, state), new AbortController().signal);
@@ -92,7 +103,7 @@ async function setup() {
   });
   /** Whether anything kept carries `code`, however written. */
   const leaked = async (code = CODE) => containsChatOwnerClaimCode(await kept(), code);
-  return { im, appended, claim, roles, agent, send, kept, leaked, published, logs };
+  return { im, appended, claim, roles, agent, send, kept, leaked, published, logs, peers, endpointOf };
 }
 
 describe('claim-shaped messages at inbound (#1250)', () => {
@@ -193,6 +204,38 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     expect(claim.active).toBe(true);
   });
 
+  it('one of our own accounts posting the code (a self echo) burns it without a reply or a record (#1289 review)', async () => {
+    const { send, agent, leaked, claim, appended, peers, im } = await setup();
+    const row = im.endpoints.list().find(item => item.endpoint.adapter === 'qq')!;
+    peers.registerEndpoint({}, { endpointId: row.endpoint.id as never, adapter: 'qq', selfUserId: 'bot-self' });
+    expect(await send('qq', 'group', `认领 ${CODE}`, 'bot-self')).toBe('');
+    expect(agent).not.toHaveBeenCalled();
+    expect(appended).toHaveLength(0);
+    expect(await leaked()).toBe(false);
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+  });
+
+  it.each([
+    ['the venue is not ready', 'dropped_unready', { membership: { isMember: () => false, isRoomReady: () => ({ ready: false, unreadyEndpoints: ['qq'] }) } }],
+    ['deduplication fails', 'dropped_dedup_error', {
+      deduper: { claim: (): never => { throw new Error('boom'); } },
+      membership: { isMember: () => false, hasRoom: () => true },
+    }],
+  ] as const)('a group message carrying the code is burnt when %s, without a reply, a record or the Agent (#1289 review)', async (_label, outcome, options) => {
+    const { send, agent, leaked, claim, appended, im } = await setup(options);
+    expect(await send('qq', 'group', `认领 ${CODE}`)).toBe('');
+    expect(agent).not.toHaveBeenCalled();
+    expect(appended).toHaveLength(0);
+    expect(await leaked()).toBe(false);
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+    expect(im.messageOutcomes.list({ limit: 1 })[0]?.outcome).toBe(outcome);
+    // Text without the code is dropped the same way but burns nothing.
+    await send('qq', 'group', 'hello');
+    expect(claim.carries(NEXT)).toBe(true);
+  });
+
   it.each([
     ['without the prefix', `认领 ${CODE}`],
     ['with the prefix', `#认领 ${CODE}`],
@@ -255,7 +298,94 @@ describe('claim-shaped messages at inbound (#1250)', () => {
     const guard = createChatOwnerClaimGuard({ claim });
     expect(guard.inspectNative?.({ message: { elements: [{ type: 'text', text: `认领 ${CODE}` }] } })).toBe(true);
     expect(guard.inspectNative?.({ message: { elements: [{ type: 'text', text: 'claim it' }] } })).toBe(false);
+    // A join request's comment, full-width and split by a format character.
+    expect(guard.inspectNative?.({ type: 'request', comment: '认领 ＡＡＡＡ\u20622222', $approve() {} })).toBe(true);
     await claim.close();
     expect(guard.inspectNative?.({ text: `认领 ${CODE}` })).toBe(false);
+  });
+
+  it('reads every string of a native payload: buffers, maps, sets, class objects and neighbouring strings (#1289 review)', () => {
+    class NativeMessage { constructor(readonly content: string) {} }
+    for (const payload of [
+      { raw: new TextEncoder().encode(`{"text":"认领 ${CODE}"}`) },
+      { raw: Buffer.from(`claim ${CODE}`).buffer },
+      { raw: sharedBytes(`认领 ${CODE}`) },
+      { raw: new Uint8Array(sharedBytes(`认领 ${CODE}`)) },
+      { raw: new DataView(sharedBytes(`claim ${CODE}`)) },
+      { cache: new Map([['m1', { text: `认领 ${CODE}` }]]) },
+      { keys: new Map([[`认领 ${CODE}`, 1]]) },
+      { tags: new Set(['a', `claim ${CODE}`]) },
+      { message: new NativeMessage(`认领 ${CODE}`) },
+      { parts: ['认领 AAAA', '2222'] },
+      // Past the old 2000-value bound, and deeper than the old depth 8.
+      { items: [...Array.from({ length: 3000 }, (_, index) => `item ${index}`), `认领 ${CODE}`] },
+      { a: { b: { c: { d: { e: { f: { g: { h: { i: { j: `认领 ${CODE}` } } } } } } } } } },
+      { text: `${'说'.repeat(200_000)} 认领 ${CODE}` },
+    ]) expect(inspectNativeClaimPayload(payload, CODE), JSON.stringify(payload, (_k, v) => typeof v === 'string' && v.length > 40 ? `${v.slice(0, 40)}…` : v)).toBe('carried');
+    const cyclic: Record<string, unknown> = { text: 'hello' };
+    cyclic.self = cyclic;
+    for (const payload of [{ text: 'claim it' }, cyclic, { at: 1700000000, ok: true, fn: () => CODE }, null, undefined, 'plain']) {
+      expect(inspectNativeClaimPayload(payload, CODE)).toBe('clear');
+    }
+  });
+
+  it('a join request carrying the code is withheld and burns it; a native event only withholds (#1291 review)', async () => {
+    const { claim, endpointOf, agent } = await setup();
+    const endpoint = endpointOf('qq');
+    const common = { id: 'event', timestamp: 100, metadata: {} };
+    await endpoint[endpointSpec].events.emit('request.receive', { ...common, type: 'request', name: 'request.group.join', actor: { id: 'alice' },
+      comment: `认领 ${CODE}`, conversation: { kind: 'group', id: 'room' }, $approve() {}, $reject() {} });
+    expect(claim.carries(CODE)).toBe(false);
+    expect(claim.carries(NEXT)).toBe(true);
+    await endpoint[endpointSpec].events.platform('native.message', { text: `认领 ${NEXT}` });
+    expect(claim.carries(NEXT)).toBe(true);
+    // A request without the code burns nothing.
+    await endpoint[endpointSpec].events.emit('request.receive', { ...common, id: 'event-2', type: 'request', name: 'request.friend', actor: { id: 'bob' },
+      comment: 'hello', $approve() {}, $reject() {} });
+    expect(claim.carries(NEXT)).toBe(true);
+    expect(agent).not.toHaveBeenCalled();
+  });
+
+  it('warns about a payload too large to inspect at most once per event name and window, without its content (#1291 review)', async () => {
+    const { claim } = await setup();
+    const warnings: string[] = [];
+    let now = 1_000;
+    const guard = createChatOwnerClaimGuard({ claim, logger: { warn: line => { warnings.push(line); } }, now: () => now });
+    const huge = { text: `认领 ${CODE.slice(0, 4)}`, items: Array.from({ length: CHAT_OWNER_CLAIM_NATIVE_LIMITS.values + 1 }, (_, index) => index) };
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(warnings).toHaveLength(1);
+    expect(guard.inspectNative?.(huge, { name: 'request.receive' })).toBe(true);
+    expect(warnings).toHaveLength(2);
+    now += CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS;
+    expect(guard.inspectNative?.(huge, { name: 'platform.receive' })).toBe(true);
+    expect(warnings).toHaveLength(3);
+    expect(warnings[0]).toContain('platform.receive');
+    expect(warnings.join('\n')).not.toContain(CODE.slice(0, 4));
+    // Too large is not "carried": nothing is revoked.
+    await guard.discardNative?.(huge, { name: 'request.receive' });
+    expect(claim.carries(CODE)).toBe(true);
+  });
+
+  it('counts a native payload it cannot read completely as carrying the code (fail closed, #1289 review)', async () => {
+    const limits = CHAT_OWNER_CLAIM_NATIVE_LIMITS;
+    let deep: Record<string, unknown> = { text: 'hello' };
+    for (let level = 0; level < limits.depth + 1; level += 1) deep = { next: deep };
+    const throwing = { get text(): string { throw new Error('lazy field'); } };
+    Object.defineProperty(throwing, 'text', { enumerable: true });
+    for (const payload of [
+      deep,
+      { items: Array.from({ length: limits.values + 1 }, (_, index) => index) },
+      { text: 'x'.repeat(limits.chars + 1) },
+      { raw: new Uint8Array(limits.chars + 1) },
+      { raw: new SharedArrayBuffer(limits.chars + 1) },
+      throwing,
+    ]) expect(inspectNativeClaimPayload(payload, CODE)).toBe('exceeded');
+    // The guard withholds such an event while a claim is open, and only then.
+    const { claim } = await setup();
+    const guard = createChatOwnerClaimGuard({ claim });
+    expect(guard.inspectNative?.(deep)).toBe(true);
+    await claim.close();
+    expect(guard.inspectNative?.(deep)).toBe(false);
   });
 });
