@@ -50,7 +50,11 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const choices = choicesForState(stateFromSession(session));
+    const state = stateFromSession(session);
+    // 群里远征队是整频道共享的：不在队伍里的人只能用文字「加入」，其余文字（攻击、防御、序号…）
+    // 按普通聊天放行，不被别人的对局截走（#1250）。
+    const member = state.players.some(player => player.id === message.sender.id);
+    const choices = choicesForState(state).filter(choice => member || choice.id === 'join');
     const map = buildChoiceFallbackMap(
       DUNGEON_PREFIX,
       dungeonSessionToken(session),
