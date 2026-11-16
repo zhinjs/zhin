@@ -504,6 +504,10 @@ jobs:
       - name: agent evals (scripted model)
         run: pnpm eval:agent
 
+      # check:plugin-ui-audit (in check:all) audits official plugin pages with Playwright's Chromium (ADR 0063).
+      - name: install plugin UI audit browser
+        run: pnpm exec playwright install --with-deps chromium
+
       # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
       - name: harness checks (incl. type-check, lint)
         run: pnpm check:all
