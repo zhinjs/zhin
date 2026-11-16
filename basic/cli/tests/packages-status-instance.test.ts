@@ -102,4 +102,43 @@ describe('zhin packages verification-plan / verify / apply', () => {
   it('apply refuses without an instance instead of pretending', async () => {
     await expect(run(['apply', 'api60s', '--project-revision', 'rev'], 'stopped')).rejects.toThrow('没有连上运行中的实例');
   });
+
+  it('apply / verify say nothing ran only when the gateway did not dispatch to the instance', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      success: false, code: 'instance_unavailable', requestOutcome: 'not-dispatched', state: 'crashed', error: 'The Zhin instance is not running',
+    }), { status: 503, headers: { 'content-type': 'application/json' } }));
+    await expect(run(['apply', 'api60s', '--project-revision', 'rev'], 'running', fetch as never))
+      .rejects.toThrow('没有连上运行中的实例：网关在运行，但实例没有接收请求（The Zhin instance is not running）；未执行任何操作');
+  });
+
+  // Each case imports the command afresh (modules reset after each test), so each gets its own fetch.
+  it('apply forwarded to an instance that went away is unconfirmed, never "nothing ran"', async () => {
+    // Forwarded, then the instance went away: the gateway says the outcome is unknown.
+    const unknown = vi.fn(async () => new Response(JSON.stringify({
+      success: false, code: 'instance_disconnected', requestOutcome: 'unknown', state: 'restarting', error: 'lost',
+    }), { status: 502, headers: { 'content-type': 'application/json' } }));
+    const apply = run(['apply', 'api60s', '--project-revision', 'rev'], 'running', unknown as never);
+    await expect(apply).rejects.toMatchObject({ name: 'ConsoleRequestUnconfirmedError' });
+    await expect(apply).rejects.not.toThrow('未执行任何操作');
+  });
+
+  it('verify that timed out after it was sent is unconfirmed', async () => {
+    const timedOut = vi.fn(async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); });
+    const verify = run(['verify', 'api60s', 'ping', '--generation', '1', '--project-revision', 'rev', '--check-revision', 'chk'], 'running', timedOut as never);
+    await expect(verify).rejects.toMatchObject({ name: 'ConsoleRequestUnconfirmedError' });
+  });
+
+  it('apply with a rejected credential reports the rejection', async () => {
+    // A rejected credential is the gateway's answer, not a missing instance.
+    const denied = vi.fn(async () => new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } }));
+    await expect(run(['apply', 'api60s', '--project-revision', 'rev'], 'running', denied as never))
+      .rejects.toMatchObject({ name: 'ConsoleAuthenticationError' });
+  });
+
+  it('status still falls back to the files when the outcome of a read is unknown', async () => {
+    const timedOut = vi.fn(async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); });
+    const { text, workflow } = await run(['status', 'api60s'], 'running', timedOut as never);
+    expect(workflow.inspect).toHaveBeenCalledWith('api60s');
+    expect((JSON.parse(text) as typeof offlineState).statusReason).toContain('网关在运行，但实例没有给出结果');
+  });
 });

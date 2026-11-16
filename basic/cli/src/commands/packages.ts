@@ -22,7 +22,7 @@ import { output } from '../utils/output.js';
 import { formatVerificationPlan, type VerificationPlanView } from '../utils/verification-plan-format.js';
 import { findProjectRoot, listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
-import { ConsoleRpcError, requestPluginConsole } from '../plugin-management/console-client.js';
+import { ConsoleConnectionError, ConsoleRpcError, requestPluginConsole } from '../plugin-management/console-client.js';
 import {
   ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, HostConfigInvalidError, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject,
 } from '../utils/host-http.js';
@@ -134,8 +134,14 @@ type InstanceAnswer<T> =
  * #1250 第 39 批：a request about the running instance. `--live` goes to that Host; without it, to
  * this project's gateway over its local socket, which forwards to the supervised instance (the
  * instance holds the current snapshot and generation). `unavailable` says why no instance answered.
+ *
+ * `mutation`: the request changes or runs something (apply / verify). Then only failures that prove
+ * nothing reached the instance — no gateway, the socket refused, or the gateway answering
+ * `requestOutcome: 'not-dispatched'` — count as `unavailable`; any other failure (a timeout or reset
+ * after the request was sent, a rejected credential) is thrown as is, so the caller never reports
+ * "nothing was executed" for a request whose outcome is unknown.
  */
-async function askInstance<T>(request: Readonly<Record<string, unknown>>, options: LiveOptions): Promise<InstanceAnswer<T>> {
+async function askInstance<T>(request: Readonly<Record<string, unknown>>, options: LiveOptions, mutation = false): Promise<InstanceAnswer<T>> {
   if (options.live) return { data: await liveRequest<T>(options.live, request, options), live: options.live };
   let http: Awaited<ReturnType<typeof loadHostHttpConfig>>;
   try { http = await loadHostHttpConfig(process.cwd()); }
@@ -145,22 +151,36 @@ async function askInstance<T>(request: Readonly<Record<string, unknown>>, option
     throw error;
   }
   if (!http?.fetch) return { unavailable: '当前目录不是 zhin 项目，找不到本项目的网关' };
+  const gatewayFetch = http.fetch;
+  // The gateway's own forward failures say whether the request reached the instance (ADR 0054 §3).
+  let notDispatched: string | undefined;
+  const fetch: typeof gatewayFetch = async (input, init) => {
+    const response = await gatewayFetch(input, init);
+    if (response.status >= 500) {
+      const reply = await response.clone().json().catch(() => undefined) as { requestOutcome?: unknown; error?: unknown } | undefined;
+      if (reply?.requestOutcome === 'not-dispatched') notDispatched = typeof reply.error === 'string' ? reply.error : `HTTP ${response.status}`;
+    }
+    return response;
+  };
   try {
     return { data: await requestPluginConsole<T>(http.baseUrl, request, options.tokenEnv, {
       // Over the local socket a token is optional (the request runs as the local owner without one).
       token: (options.tokenEnv && options.tokenEnv !== 'ZHIN_CONSOLE_TOKEN' ? process.env[options.tokenEnv]?.trim() : undefined) || http.token,
-      fetch: http.fetch,
+      fetch,
     }), viaGateway: true };
   } catch (error) {
     // The instance's own refusal (unknown instance key, invalid request) is the answer.
     if (error instanceof ConsoleRpcError) throw error;
+    if (notDispatched !== undefined) return { unavailable: `网关在运行，但实例没有接收请求（${notDispatched}）` };
+    if (error instanceof ConsoleConnectionError) return { unavailable: '本项目的网关未运行（zhin start 启动）' };
+    if (mutation) throw error;
     return { unavailable: `网关在运行，但实例没有给出结果（${error instanceof Error ? error.message : String(error)}）` };
   }
 }
 
 /** Requests that change or run something need an instance; there is no offline fallback. */
 async function requireInstance<T>(request: Readonly<Record<string, unknown>>, options: LiveOptions): Promise<T> {
-  const answer = await askInstance<T>(request, options);
+  const answer = await askInstance<T>(request, options, true);
   if ('unavailable' in answer) throw new Error(`没有连上运行中的实例：${answer.unavailable}；未执行任何操作。也可以加 --live <host-url> 指定 Host`);
   return answer.data;
 }
