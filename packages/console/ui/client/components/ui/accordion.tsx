@@ -5,6 +5,7 @@ import * as Radix from "radix-ui"
 const AccordionPrimitive = Radix.Accordion
 import { cn } from '../../cn.js'
 import { ChevronDown } from "lucide-react"
+import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 
 const Accordion = AccordionPrimitive.Root
 
@@ -35,7 +36,7 @@ const AccordionTrigger = forwardRef<
       {...props}
     >
       {children}
-      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
+      <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
     </AccordionPrimitive.Trigger>
   </AccordionPrimitive.Header>
 ))

@@ -115,6 +115,7 @@ export {
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 
+// Data, locale and plugin ID helpers for plugin pages (moved here from `@zhin.js/client/ui`, ADR 0063 D14).
 export { resolveAdapterConsolePluginId, resolvePluginId, resolveSyncPluginId, type ResolvePluginIdOptions } from './ui/plugin-id.js';
 export {
   usePluginRpc,
@@ -126,21 +127,36 @@ export {
   type UsePluginRpcOptions,
   type UsePluginDataOptions,
 } from './ui/rpc.js';
+export { useLocale, detectLocale, translate, formatClock, type PluginUiLocale, type PluginUiText } from './ui/locale.js';
+
+// Declarative page renderer on @zhin.js/console-ui (ADR 0063 P2).
 export {
+  DECLARATIVE_PAGE_CAPABILITIES,
   createDeclarativePage,
   DeclarativePageView,
+  DataTable,
+  type DataTableProps,
+  type DataTableColumn,
+  type DataTableBatchAction,
+  type DataTableRowAction,
   type DeclarativePageSpec,
   type DeclarativePageContext,
   type DeclarativePageComponentProps,
   type DeclarativeBadgeSpec,
+  type DeclarativeBadgeTone,
+  type DeclarativeButtonVariant,
   type DeclarativeStatSpec,
   type DeclarativeActionSpec,
   type DeclarativeActionFieldSpec,
   type DeclarativeActionResultSpec,
   type DeclarativeColumnSpec,
+  type DeclarativeColumnType,
+  type DeclarativeBatchActionSpec,
+  type DeclarativeRowActionSpec,
   type DeclarativeSectionSpec,
+  type DeclarativeValueExpr,
   type DeclarativeI18nText,
-} from './ui/declarative-page.js';
+} from './declarative/index.js';
 export {
   ConversationPicker,
   ConversationLabel,
@@ -169,7 +185,11 @@ export {
   type ConversationDescription,
   type ConversationDirectoryState,
 } from './ui/conversation-directory.js';
-export { adapterConsoleStyles } from './adapter-console/styles.js';
+/**
+ * @deprecated ADR 0063 P2: the adapter page is built from `@zhin.js/console-ui` and injects no styles;
+ * this is an empty string, kept for one minor and removed with the `zk-` kit (P4).
+ */
+export const adapterConsoleStyles = '';
 
 export {
   ADAPTER_CONSOLE_PAGE_CAPABILITIES,

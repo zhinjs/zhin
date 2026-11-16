@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
 
 const nodeRequire = createRequire(import.meta.url);
+const consoleUiEntry = resolve(dirname(nodeRequire.resolve('@zhin.js/console-ui/package.json')), 'client/index.ts');
 
 export type ElementNode = { type?: string | { name?: string }; props?: Record<string, unknown> };
 
@@ -16,25 +17,36 @@ export function textOf(node: unknown): string {
     if (element.type === 'style') return '';
     const props = element.props ?? {};
     const own = ['title', 'label', 'message', 'description', 'hint', 'error'].map(key => typeof props[key] === 'string' ? props[key] : '').join('');
-    const slots = Object.entries(props).filter(([key, value]) => key !== 'children' && isElementish(value)).map(([, value]) => textOf(value)).join('');
+    const slots = Object.entries(props).filter(([key, value]) => key !== 'children' && isElementish(value))
+      .map(([, value]) => textOf(isRecordList(value) ? recordParts(value) : value)).join('');
     return own + textOf(props.children) + slots;
   }
   return String(node);
 }
 
 const isElement = (value: unknown): boolean => !!value && typeof value === 'object' && 'props' in (value as object) && 'type' in (value as object);
-const isElementish = (value: unknown): boolean => isElement(value) || (Array.isArray(value) && value.some(isElementish));
+/** Record lists such as `KeyValueList.items` / `RecordCard.fields`: plain objects with a `label` or `value`. */
+const isRecordList = (value: unknown): boolean => Array.isArray(value) && value.length > 0 && value.every(item =>
+  !!item && typeof item === 'object' && !isElement(item) && ('label' in (item as object) || 'value' in (item as object)));
+const recordParts = (value: unknown): unknown[] => (value as Record<string, unknown>[]).flatMap(item => [item.label, item.value]);
+const isElementish = (value: unknown): boolean => isElement(value) || isRecordList(value) || (Array.isArray(value) && value.some(isElementish));
 
 /** 元素本身，加上 children 与其他承载元素的 props（如 `actions`）里的所有子元素。 */
 export function allNodes(node: unknown): ElementNode[] {
   if (!node || typeof node !== 'object') return [];
   if (Array.isArray(node)) return node.flatMap(allNodes);
   const props = (node as ElementNode).props ?? {};
-  const slots = Object.entries(props).filter(([key, value]) => key === 'children' || isElementish(value)).map(([, value]) => value);
+  const slots = Object.entries(props).filter(([key, value]) => key === 'children' || isElementish(value))
+    .map(([, value]) => (isRecordList(value) ? recordParts(value) : value));
   return [node as ElementNode, ...slots.flatMap(allNodes)];
 }
 
-export const isComponent = (node: ElementNode, name: string): boolean => typeof node.type === 'function' && node.type.name === name;
+/** A function component named `name`, or a forwardRef / memo component whose `displayName` is `name` (console-ui). */
+export const isComponent = (node: ElementNode, name: string): boolean => {
+  const type = node.type as unknown as { name?: string; displayName?: string } | string | undefined;
+  if (typeof type === 'function') return (type as { name?: string }).name === name || (type as { displayName?: string }).displayName === name;
+  return !!type && typeof type === 'object' && (type as { displayName?: string }).displayName === name;
+};
 
 /**
  * 最小 React hooks 运行时：把 TS/TSX 源文件（及其相对导入）转译后用假 hooks 执行，
@@ -100,7 +112,9 @@ export function createHookEnv() {
         for (const ext of ['.ts', '.tsx']) if (existsSync(base + ext)) return load(base + ext);
         throw new Error(`cannot resolve ${name} from ${file}`);
       }
-      return nodeRequire(name);
+      // @zhin.js/console-ui runs from source with the fake hooks too (usePageChrome, RefreshControl, …).
+      if (name === '@zhin.js/console-ui') return load(consoleUiEntry);
+      return createRequire(file)(name);
     };
     new Function('require', 'module', 'exports', compiled)(req, module, module.exports);
     cache.set(key, module.exports);
@@ -124,4 +138,16 @@ export function createHookEnv() {
     tree: () => value,
     unmount() { for (const slot of slots) (slot as { cleanup?: () => void })?.cleanup?.(); },
   };
+}
+
+/**
+ * Renders one child element (a component the harness left unrendered) in a fresh hook env:
+ * `exportName` is loaded from `sourceFile` so its hooks bind to that env.
+ */
+export function renderChild(sourceFile: string, exportName: string, props: unknown, setup?: (env: ReturnType<typeof createHookEnv>) => void) {
+  const env = createHookEnv();
+  setup?.(env);
+  const mod = env.load(sourceFile);
+  env.mount(() => (mod[exportName] as (p: unknown) => unknown)(props));
+  return env;
 }

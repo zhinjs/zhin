@@ -762,6 +762,10 @@ export interface DeclarativePageSpec<TData = Record<string, unknown>> {
   readonly pluginId?: string;
   readonly title: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  /**
+   * @deprecated ADR 0063 P2: the renderer no longer draws a letter tile in the page header; this
+   * field is ignored (the Console warns once when it is set) and will be removed in a later minor.
+   */
   readonly mark?: DeclarativeRenderable;
   /** Status RPC method name; defaults to `'status'`. */
   readonly statusMethod?: string;
@@ -903,7 +907,11 @@ export interface CommentReviewBlueprintSpec<
 > {
   readonly adapter: string;
   readonly platform: { readonly zh: string; readonly en: string };
-  readonly mark: string;
+  /**
+   * @deprecated ADR 0063 P2: ignored (no letter tile in the page header any more); not copied into
+   * the blueprint. Will be removed in a later minor.
+   */
+  readonly mark?: string;
   readonly resource: { readonly zh: string; readonly en: string };
   readonly dictionary?: Readonly<Record<string, string>>;
   readonly openLabel?: string;
@@ -1160,7 +1168,6 @@ export function defineCommentReviewPage<
   const blueprint = buildBlueprintFromSpec<{ readonly endpoints?: readonly E[]; readonly updatedAt?: number }>({
     pluginId: reviewSpec.adapter,
     title: { zh: zhTitle, 'zh-CN': zhTitle, en: enTitle },
-    mark: reviewSpec.mark,
     statusMethod: 'status',
     pollMs: reviewSpec.pollMs ?? 10_000,
     ...(reviewSpec.dictionary ? { dictionary: reviewSpec.dictionary } : {}),

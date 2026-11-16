@@ -5,27 +5,36 @@ import * as Radix from "radix-ui"
 const SelectPrimitive = Radix.Select
 import { cn } from '../../cn.js'
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
+import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
+import { controlVariantClass, type ControlVariant } from './control-variant.js'
 
 const Select = SelectPrimitive.Root
 const SelectGroup = SelectPrimitive.Group
 const SelectValue = SelectPrimitive.Value
 
+export interface SelectTriggerProps extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  /** `ghost`: no border until hovered, focused or open, for secondary fields (ADR 0063 D29). */
+  variant?: ControlVariant
+}
+
 const SelectTrigger = forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  SelectTriggerProps
+>(({ className, children, variant, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     data-slot="input"
+    data-variant={variant === 'ghost' ? 'ghost' : undefined}
     className={cn(
-      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border border-input bg-card hover:border-foreground/45 focus-visible:border-primary px-3 text-body placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 [&>span]:line-clamp-1",
+      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border px-3 text-body transition-colors placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1",
+      controlVariantClass(variant),
       className
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="size-4 shrink-0 opacity-50" />
+      <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4 shrink-0 opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -40,7 +49,7 @@ const SelectScrollUpButton = forwardRef<
     className={cn("flex cursor-default items-center justify-center py-1", className)}
     {...props}
   >
-    <ChevronUp className="size-4" />
+    <ChevronUp strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
   </SelectPrimitive.ScrollUpButton>
 ))
 SelectScrollUpButton.displayName = "SelectScrollUpButton"
@@ -54,7 +63,7 @@ const SelectScrollDownButton = forwardRef<
     className={cn("flex cursor-default items-center justify-center py-1", className)}
     {...props}
   >
-    <ChevronDown className="size-4" />
+    <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
   </SelectPrimitive.ScrollDownButton>
 ))
 SelectScrollDownButton.displayName = "SelectScrollDownButton"
@@ -103,14 +112,14 @@ const SelectItem = forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-primary/5 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-brand-tint data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
       className
     )}
     {...props}
   >
-    <span className="absolute right-2 flex size-4 items-center justify-center text-primary">
+    <span className="absolute right-2 flex size-4 items-center justify-center text-brand-text">
       <SelectPrimitive.ItemIndicator>
-        <Check className="size-4" />
+        <Check strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

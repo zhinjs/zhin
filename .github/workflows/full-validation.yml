@@ -504,6 +504,10 @@ jobs:
       - name: agent evals (scripted model)
         run: pnpm eval:agent
 
+      # check:plugin-ui-audit (in check:all) audits official plugin pages with Playwright's Chromium (ADR 0063).
+      - name: install plugin UI audit browser
+        run: pnpm exec playwright install --with-deps chromium
+
       # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
       - name: harness checks (incl. type-check, lint)
         run: pnpm check:all
@@ -612,6 +616,13 @@ jobs:
       # ADR 0063 D20: the @zhin.js/console-ui gallery must pass the layout audit (gate).
       - name: audit the console-ui gallery layout
         run: pnpm check:console-ui-audit
+
+      # ADR 0063 D20 第 3 条 / P2: every official plugin page (all gated) passes the same audit;
+      # blueprints, adapter and comment review pages are mounted by the @zhin.js/client renderers.
+      - name: audit official plugin pages
+        run: pnpm --filter @zhin.js/console-ui build && pnpm check:plugin-ui-audit --require-audit
+        env:
+          ZHIN_UI_AUDIT_MOUNT_MODULE: packages/console/client/audit/mount-plugin-page.tsx
 
       # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
       # cancels the whole run instead of letting the other jobs finish for nothing.

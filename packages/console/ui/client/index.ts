@@ -21,6 +21,19 @@ export * from './components/ui/badge.js';
 export * from './components/ui/button.js';
 export * from './components/ui/card.js';
 export * from './components/ui/checkbox.js';
+export type { ControlVariant } from './components/ui/control-variant.js';
+export * from './components/ui/date-field.js';
+export {
+  addDays,
+  addMonths,
+  calendarMonth,
+  formatDateTimeValue,
+  formatDateValue,
+  parseDateTimeValue,
+  parseDateValue,
+  type CalendarDate,
+  type CalendarDateTime,
+} from './components/ui/date-field-model.js';
 export * from './components/ui/dialog.js';
 export * from './components/ui/dropdown-menu.js';
 export * from './components/ui/input.js';
@@ -51,7 +64,11 @@ export * from './components/PageHeader.js';
 export * from './components/confirm-dialog.js';
 export { canSubmitConfirm, confirmErrorMessage, confirmTextMatches } from './components/confirm-dialog-model.js';
 export * from './components/StatCard.js';
+export * from './components/BrandMark.js';
 export * from './components/empty-state.js';
+export * from './components/empty-illustrations.js';
+export * from './components/code.js';
+export { CONSOLE_ICON_SIZE, CONSOLE_ICON_STROKE_WIDTH } from './components/icon.js';
 export * from './components/error-alert.js';
 export * from './components/InfoHint.js';
 export * from './components/RefreshControl.js';
@@ -65,3 +82,4 @@ export * from './components/actions.js';
 export * from './components/layout.js';
 export * from './components/StatusBadge.js';
 export { useContainerAtLeast, CONSOLE_BREAKPOINTS_REM } from './components/use-container-width.js';
+export * from './components/content-blocks.js';

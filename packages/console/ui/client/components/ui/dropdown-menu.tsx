@@ -5,6 +5,7 @@ import * as Radix from "radix-ui"
 const DropdownMenuPrimitive = Radix.DropdownMenu
 import { cn } from '../../cn.js'
 import { Check, Circle } from "lucide-react"
+import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 
 const DropdownMenu = DropdownMenuPrimitive.Root
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
@@ -63,7 +64,7 @@ const DropdownMenuCheckboxItem = forwardRef<
   >
     <span className="absolute left-2 flex size-4 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="size-4" />
+        <Check strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -85,7 +86,7 @@ const DropdownMenuRadioItem = forwardRef<
   >
     <span className="absolute left-2 flex size-4 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <Circle className="size-2 fill-current" />
+        <Circle strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-2 fill-current" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}

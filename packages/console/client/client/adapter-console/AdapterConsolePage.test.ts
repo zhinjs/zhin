@@ -17,22 +17,46 @@ function harness() {
   const owner = env.load(file('../ui/plugin-id.ts'));
   const nodes = () => all(env.tree());
   const buttonNodes = () => nodes().filter(node => isComponent(node, 'Button'));
+  const actionNodes = () => nodes().filter(node => isComponent(node, 'ActionButton'));
+  const label = (node: { props?: Record<string, unknown> }) => text(node.props?.children).replace(/^← /u, '');
   return {
     exports: { ...page, resolveAdapterConsolePluginId: owner.resolveAdapterConsolePluginId },
     mount: env.mount, rerender: env.rerender, settle: env.settle, unmount: env.unmount, nodes,
-    button(label: string) { const node = buttonNodes().find(node => text(node.props?.children) === label); if (!node) throw new Error(`missing button ${label}: ${text(env.tree())}`); return node.props as Handlers; },
-    confirm(label: string) { const node = nodes().find(node => isComponent(node, 'ConfirmButton') && text(node.props?.children) === label); if (!node) throw new Error(`missing confirm button ${label}`); return node.props as unknown as Confirm; },
-    hasControl(labels: string[]) { return nodes().some(node => ((isComponent(node, 'Button') || isComponent(node, 'ConfirmButton')) && labels.includes(text(node.props?.children)))
-      || (isComponent(node, 'Switch') && labels.includes(node.props?.checked ? '停止' : '启动'))); },
+    /** A console-ui Button, an ActionButton without confirmation, a ConfirmDialog's confirm, or the page's 刷新 (RefreshControl). */
+    button(name: string): Handlers {
+      const button = buttonNodes().find(node => label(node) === name);
+      if (button) return button.props as Handlers;
+      const action = actionNodes().find(node => node.props?.label === name);
+      if (action) return { ...action.props, onClick: action.props!.onRun as () => Promise<void> } as Handlers;
+      const dialog = nodes().find(node => isComponent(node, 'ConfirmDialog') && node.props?.confirmLabel === name);
+      if (dialog) return { ...dialog.props, onClick: dialog.props!.onConfirm as () => Promise<void> } as Handlers;
+      const page = nodes().find(node => isComponent(node, 'RendererPage'));
+      const refresh = page?.props?.refresh as { onRefresh: () => Promise<void> } | undefined;
+      if (name === '刷新' && refresh) return { onClick: refresh.onRefresh, refresh } as unknown as Handlers;
+      throw new Error(`missing button ${name}: ${text(env.tree())}`);
+    },
+    /** An ActionButton that asks for confirmation (its dialog's confirm is `onConfirm`). */
+    confirm(name: string) {
+      const node = actionNodes().find(node => node.props?.label === name && node.props?.confirm);
+      if (!node) throw new Error(`missing confirm button ${name}`);
+      const props = node.props as { onRun: () => Promise<void>; beforeConfirm?: () => boolean; disabled?: boolean; confirmLabel: string; confirm: string };
+      return { onConfirm: props.onRun, beforeOpen: props.beforeConfirm, disabled: props.disabled, confirmLabel: props.confirmLabel, message: props.confirm } as Confirm;
+    },
+    hasControl(labels: string[]) { return nodes().some(node => (isComponent(node, 'Button') && labels.includes(label(node)))
+      || (isComponent(node, 'ActionButton') && labels.includes(String(node.props?.label)))
+      || (isComponent(node, 'SwitchRow') && labels.includes(node.props?.checked ? '停止' : '启动'))); },
     /** The account's start / stop switch (the only start / stop control): `启动` flips an off switch on, `停止` an on switch off. */
     toggle(action: '启动' | '停止') {
-      const node = nodes().find(node => isComponent(node, 'Switch') && node.props?.checked === (action === '停止'));
+      const node = nodes().find(node => isComponent(node, 'SwitchRow') && node.props?.checked === (action === '停止'));
       if (!node) throw new Error(`missing switch to ${action}: ${text(env.tree())}`);
-      const props = node.props as { onChange: (value: boolean) => void; disabled?: boolean; checked: boolean; label: string; ariaLabel?: string };
-      return { ...props, onClick: async () => { props.onChange(action === '启动'); } };
+      const props = node.props as { onCheckedChange: (value: boolean) => void; disabled?: boolean; checked: boolean; label: string };
+      return { ...props, onChange: props.onCheckedChange, onClick: async () => { props.onCheckedChange(action === '启动'); } };
     },
-    input(at: number) { return nodes().filter(node => node.type === 'input')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
-    select(at: number) { return nodes().filter(node => node.type === 'select')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
+    input(at: number) { return nodes().filter(node => isComponent(node, 'Input'))[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
+    select(at: number) {
+      const props = nodes().filter(node => isComponent(node, 'ChoiceSelect'))[at]!.props as { value: string; options: { value: string; disabled?: boolean }[]; onValueChange: (value: string) => void };
+      return { ...props, onChange: (e: { target: { value: string } }) => props.onValueChange(e.target.value) };
+    },
     text: () => text(env.tree()),
   };
 }
@@ -108,7 +132,7 @@ describe('shared runtime Adapter page production handlers', () => {
     const save = f.h.nodes().filter(node => isComponent(node, 'Button') && text(node.props?.children) === '添加').at(-1)!.props!;
     await (save.onClick as () => Promise<void>)(); await f.h.settle();
     expect(f.writes()).toHaveLength(1); expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-add', data: { id: '10002', values: { password: 'synthetic-add-only', server: 'new-server' }, expectedGeneration: 4, expectedRevision: 2 } });
-    expect(f.h.text()).toContain('已保存，请手动启动'); expect(f.h.nodes().filter(node => node.type === 'input')).toHaveLength(0); f.h.unmount();
+    expect(f.h.text()).toContain('已保存，请手动启动'); expect(f.h.nodes().filter(node => isComponent(node, 'Input'))).toHaveLength(0); f.h.unmount();
   });
 
   it('lists legacy accounts and sends migration consent only after the user confirms this operation', async () => {
@@ -285,8 +309,8 @@ describe('shared runtime Adapter page production handlers', () => {
     runtime: { ...base.runtime!, mutableFields: [...base.runtime!.mutableFields, 'url', 'proxy.port', 'enabled'] } });
     await f.h.settle(); await f.h.button('编辑').onClick(); await f.h.settle();
     expect(f.h.input(3).value).toBe('••••••'); expect(f.h.input(4).value).toBe('1080'); expect(f.h.select(0).value).toBe('false');
-    expect(f.h.nodes().find(node => node.type === 'option' && node.props?.value === '')?.props?.disabled).toBe(true);
-    expect(f.h.nodes().filter(node => node.type === 'input')[4]!.props!.type).toBe('number');
+    expect(f.h.select(0).options.find(option => option.value === '')?.disabled).toBe(true);
+    expect(f.h.nodes().filter(node => isComponent(node, 'Input'))[4]!.props!.type).toBe('number');
     f.h.input(4).onChange({ target: { value: '1081' } }); await f.h.settle(); f.h.select(0).onChange({ target: { value: 'true' } }); await f.h.settle();
     await f.h.button('保存').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body.data).toEqual({ instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2, values: { 'proxy.port': '1081', enabled: 'true' } });
@@ -295,11 +319,11 @@ describe('shared runtime Adapter page production handlers', () => {
 
   it('keeps credentials behind a native disclosure and exposes an accessible account editor', async () => {
     const f = fixture(); await f.h.settle();
-    const disclosure = f.h.nodes().find(node => node.type === 'details');
-    expect(disclosure).toBeDefined(); expect(disclosure!.props?.open).toBeUndefined();
+    const disclosure = f.h.nodes().find(node => isComponent(node, 'Disclosure'));
+    expect(disclosure).toBeDefined(); expect(disclosure!.props?.defaultOpen).toBeUndefined();
     expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
     await f.h.button('编辑').onClick(); await f.h.settle();
-    expect(f.h.nodes().find(node => isComponent(node, 'Field'))?.props).toMatchObject({ label: '账号 ID' });
+    expect(f.h.nodes().find(node => isComponent(node, 'FormField'))?.props).toMatchObject({ label: '账号 ID' });
     expect(f.h.nodes().some(node => node.props?.autoFocus !== undefined)).toBe(false);
     f.h.unmount();
   });
@@ -330,7 +354,7 @@ describe('loading and failure states (ICQQ page regressions)', () => {
     const f = fixture(s, [], 'slow-status'); f.setHostEndpoints([icqqEndpoint]);
     await f.h.settle(); await f.h.settle();
     const loading = f.h.text();
-    expect(f.h.nodes().some(node => isComponent(node, 'LoadingState'))).toBe(true);
+    expect(f.h.nodes().some(node => isComponent(node, 'LoadingBlock'))).toBe(true);
     expect(loading).not.toContain('配置里还没有');
     expect(loading).not.toContain('当前环境只能查看');
     expect(loading).not.toContain('运行中的连接');
@@ -347,24 +371,27 @@ describe('loading and failure states (ICQQ page regressions)', () => {
     const text = f.h.text();
     expect(text).toContain('无法读取账号状态'); expect(text).toContain('Host 暂时无法响应');
     expect(text).not.toContain('配置里还没有'); expect(text).not.toContain('加载中…');
-    const retry = f.h.nodes().find(node => node.type !== undefined && typeof node.type === 'function' && node.type.name === 'ErrorState')!.props as { onRetry: () => Promise<boolean>; details: string };
+    const retry = f.h.nodes().find(node => isComponent(node, 'ErrorBlock') && String(node.props?.message).includes('无法读取账号状态'))!.props as { onRetry: () => void; details: string };
     expect(retry.details).toContain('unavailable');
-    f.failStatus(false); await retry.onRetry(); await f.h.settle();
+    f.failStatus(false); retry.onRetry(); await f.h.settle();
     expect(f.h.text()).toContain('10001'); expect(f.h.text()).not.toContain('无法读取账号状态'); f.h.unmount();
   });
 
   it('keeps showing the last good account list as stale when a poll fails, with a separate error for the connection list', async () => {
     const f = fixture(); await f.h.settle(); expect(f.h.text()).toContain('10001');
+    // Auto-refresh ticks come from the RefreshControl (the shell's or the inline header's).
+    const tick = async () => { await (f.h.nodes().find(node => isComponent(node, 'RendererPage'))!.props!.refresh as { onAutoRefresh: () => Promise<unknown> }).onAutoRefresh(); await f.h.settle(); };
+    const stale = () => f.h.nodes().filter(node => isComponent(node, 'NoticeBlock') && node.props?.tone === 'warning' && /读取(账号|连接)状态：/u.test(textOf(node.props?.children)));
     f.failStatus(true); f.failEndpoints(true);
-    await vi.advanceTimersByTimeAsync(6000); await f.h.settle();
+    await tick();
     const text = f.h.text();
     expect(text).toContain('10001');
-    expect(f.h.nodes().filter(node => typeof node.type === 'function' && node.type.name === 'StaleNotice').length).toBeGreaterThanOrEqual(1);
+    expect(stale().length).toBeGreaterThanOrEqual(1);
     expect(text).toContain('读取账号状态：Host 暂时无法响应');
     expect(text).toContain('读取连接状态：safe synthetic error');
     f.failStatus(false); f.failEndpoints(false);
-    await vi.advanceTimersByTimeAsync(6000); await f.h.settle();
-    expect(f.h.nodes().some(node => typeof node.type === 'function' && node.type.name === 'StaleNotice')).toBe(false); f.h.unmount();
+    await tick();
+    expect(stale()).toHaveLength(0); f.h.unmount();
   });
 
   it('shows unknown, not offline, while the connection list is unavailable', async () => {
@@ -407,7 +434,7 @@ describe('loading and failure states (ICQQ page regressions)', () => {
     await f.h.settle();
     const nodes = f.h.nodes();
     expect(nodes.find(node => node.type === 'time')?.props?.dateTime).toMatch(/^PT\d+S$/u);
-    expect(nodes.find(node => node.type === 'img')?.props?.alt).toContain('二维码');
+    expect(nodes.find(node => isComponent(node, 'MediaPreview'))?.props?.alt).toContain('二维码');
     expect(f.h.text()).not.toContain('即将过期');
     await vi.advanceTimersByTimeAsync(55_000); await f.h.settle();
     expect(f.h.text()).toContain('验证即将过期'); f.h.unmount();
@@ -460,16 +487,15 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     await fNap.h.settle();
     await fNap.h.button('添加').onClick();
     await fNap.h.settle();
-    const reverseWsTab = fNap.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('反向 WebSocket'),
-    );
-    expect(reverseWsTab).toBeDefined();
-    await reverseWsTab!.props.onClick();
+    const modes = fNap.h.nodes().find(node => isComponent(node, 'RadioChoices') && node.props?.['aria-label'] === '连接模式')!;
+    const reverseWs = (modes.props!.options as { value: string; label: string }[]).find(option => option.label.includes('反向 WebSocket'));
+    expect(reverseWs).toBeDefined();
+    (modes.props!.onValueChange as (value: string) => void)(reverseWs!.value);
     await fNap.h.settle();
     expect(fNap.h.text()).toContain('ws://');
     expect(fNap.h.text()).toContain('/napcat');
     const genSecretBtn = fNap.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('生成随机密钥'),
+      node => isComponent(node, 'Button') && text(node.props?.children).includes('生成随机密钥'),
     );
     expect(genSecretBtn).toBeDefined();
     await genSecretBtn!.props.onClick();
@@ -477,7 +503,7 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     const generatedSecret = String(
       fNap.h
         .nodes()
-        .filter(node => node.type === 'input')
+        .filter(node => isComponent(node, 'Input'))
         .map(node => String(node.props?.value ?? ''))
         .find(val => val.length === 32) ?? '',
     );
@@ -512,18 +538,18 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     await fEmail.h.button('添加').onClick();
     await fEmail.h.settle();
     const qqMailPreset = fEmail.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('QQ 邮箱'),
+      node => isComponent(node, 'Button') && text(node.props?.children).includes('QQ 邮箱'),
     );
     expect(qqMailPreset).toBeDefined();
     await qqMailPreset!.props.onClick();
     await fEmail.h.settle();
-    const emailInputs = () => fEmail.h.nodes().filter(node => node.type === 'input');
+    const emailInputs = () => fEmail.h.nodes().filter(node => isComponent(node, 'Input'));
     expect(emailInputs().some(n => n.props?.value === 'smtp.qq.com')).toBe(true);
 
     fEmail.h.input(1).onChange({ target: { value: 'bot@qq.com' } });
     await fEmail.h.settle();
     const syncBtn = fEmail.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('将发件账号同步至收件账号'),
+      node => isComponent(node, 'Button') && text(node.props?.children).includes('将发件账号同步至收件账号'),
     );
     expect(syncBtn).toBeDefined();
     await syncBtn!.props.onClick();
@@ -608,22 +634,21 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     expect(f.h.text()).toContain('https://q.qq.com/qqbot/open-scan-test');
 
     const startQrBtn = f.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('用手机 QQ 扫码一键创建/绑定官方机器人'),
+      node => isComponent(node, 'Button') && text(node.props?.children).includes('用手机 QQ 扫码一键创建/绑定官方机器人'),
     );
     expect(startQrBtn).toBeDefined();
     await startQrBtn!.props.onClick();
     await f.h.settle();
     expect(f.calls.some(c => c.body.type === 'plugin.plugin-a.qq-bind-start')).toBe(true);
 
-    const publicKindBtn = f.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('公域机器人 (Public)'),
-    );
-    expect(publicKindBtn).toBeDefined();
-    await publicKindBtn!.props.onClick();
+    const kinds = f.h.nodes().find(node => isComponent(node, 'RadioChoices') && node.props?.['aria-label'] === '机器人类型')!;
+    const publicKind = (kinds.props!.options as { value: string; label: string }[]).find(option => option.label === '公域机器人 (Public)');
+    expect(publicKind).toBeDefined();
+    (kinds.props!.onValueChange as (value: string) => void)(publicKind!.value);
     await f.h.settle();
 
     const confirmKindBtn = f.h.nodes().find(
-      node => node.type === 'button' && text(node.props?.children).includes('确认创建并写入配置'),
+      node => isComponent(node, 'Button') && text(node.props?.children).includes('确认创建并写入配置'),
     );
     expect(confirmKindBtn).toBeDefined();
     await confirmKindBtn!.props.onClick();
@@ -638,13 +663,18 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
 });
 
 describe('embedded in a host page', () => {
-  const header = (f: ReturnType<typeof fixture>) => f.h.nodes().find(node => isComponent(node, 'PageHeader'));
+  /** The page header is the shell's, or the inline fallback RendererPage draws for a stand-alone page. */
+  const page = (f: ReturnType<typeof fixture>) => f.h.nodes().find(node => isComponent(node, 'RendererPage'))!.props as Record<string, any>;
+  const header = (f: ReturnType<typeof fixture>) => (page(f).embedded ? undefined : page(f));
+  const toolbarRow = (f: ReturnType<typeof fixture>) => f.h.nodes().find(node => node.props?.['data-adapter-toolbar'] !== undefined);
   const statusReads = (f: ReturnType<typeof fixture>) => f.calls.filter(call => call.body.type === 'plugin.plugin-a.status').length;
 
   it('keeps the stand-alone page header with its own refresh by default', async () => {
     const f = fixture(); await f.h.settle();
-    expect(header(f)).toBeDefined();
-    expect(f.h.nodes().some(node => node.type === 'div' && node.props?.className === 'zk-embedded-toolbar zk-row')).toBe(false);
+    expect(header(f)).toMatchObject({ title: 'ICQQ', description: '管理 ICQQ 的账号与登录。' });
+    expect(typeof header(f)!.refresh.onRefresh).toBe('function');
+    expect(text(header(f)!.actions)).toContain('添加');
+    expect(toolbarRow(f)).toBeUndefined();
     f.h.unmount();
   });
 
@@ -653,11 +683,11 @@ describe('embedded in a host page', () => {
     const f = fixture(s, [], '', { embedded: true }); await f.h.settle();
     expect(header(f)).toBeUndefined();
     expect(f.h.hasControl(['刷新', '刷新中…'])).toBe(false);
-    const row = f.h.nodes().find(node => node.type === 'div' && node.props?.className === 'zk-embedded-toolbar zk-row');
+    const row = toolbarRow(f);
     expect(text(row?.props?.children)).toContain('文档');
     expect(text(row?.props?.children)).toContain('添加');
-    const page = f.h.nodes().find(node => isComponent(node, 'PluginPage'));
-    expect(page?.props?.className).toBe('zk-page--embedded');
+    expect(page(f)).toMatchObject({ embedded: true, 'data-embedded': 'true' });
+    expect(page(f).actions).toBeUndefined();
     await f.h.button('添加').onClick(); await f.h.settle();
     expect(f.h.text()).toContain('取消');
     f.h.unmount();
@@ -688,13 +718,13 @@ describe('embedded in a host page', () => {
 
   it('a toolbar that returns null renders no toolbar row', async () => {
     const f = fixture(status(), [], '', { embedded: true, toolbar: () => null }); await f.h.settle();
-    expect(f.h.nodes().some(node => node.type === 'div' && String(node.props?.className ?? '').startsWith('zk-embedded-toolbar'))).toBe(false);
+    expect(toolbarRow(f)).toBeUndefined();
     f.h.unmount();
   });
 
   it('advertises the embedded API for hosts that also run against older SDKs', async () => {
     const page = await import('./AdapterConsolePage.js');
-    expect(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES).toEqual({ embedded: true, toolbar: true, refreshKey: true, renderRow: true, hostAccounts: true });
+    expect(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES).toEqual({ embedded: true, toolbar: true, refreshKey: true, renderRow: true, hostAccounts: true, pageChrome: true });
     expect((page.AdapterConsolePage as unknown as { capabilities: unknown }).capabilities).toBe(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES);
   });
 });
@@ -702,18 +732,19 @@ describe('embedded in a host page', () => {
 describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
   it('labels the start / stop switch with the state and keeps no duplicate start / stop button', async () => {
     const f = fixture(); await f.h.settle();
-    const off = f.h.toggle('启动'); expect(off.label).toBe('已停止'); expect(off.ariaLabel).toBe('10001：已停止');
+    const off = f.h.toggle('启动'); expect(off.label).toBe('已停止'); expect((off as Record<string, unknown>)['aria-label']).toBe('10001：已停止');
     expect(f.h.nodes().some(node => isComponent(node, 'Button') && ['启动', '停止'].includes(text(node.props?.children)))).toBe(false);
     await off.onClick(); await f.h.settle();
     expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedRevision: 2 } });
     f.h.unmount();
   });
 
-  it('draws the account avatar from the adapter display name, not a platform table', async () => {
+  it('draws no letter tile for accounts (ADR 0063 removed the mark) and no platform-table names', async () => {
     const s = status(); s.displayName = 'QQ 官方机器人'; s.adapterKey = 'qq';
     const f = fixture(s); await f.h.settle();
-    const icon = f.h.nodes().find(node => node.type === 'div' && node.props?.className === 'zk-bot-tile__icon');
-    expect(text(icon?.props?.children)).toBe('Q'); expect(f.h.text()).not.toContain('企Q'); f.h.unmount();
+    const card = f.h.nodes().find(node => isComponent(node, 'RecordCard'))!;
+    expect(card.props?.leading).toBeUndefined();
+    expect(f.h.text()).not.toContain('企Q'); f.h.unmount();
   });
 
   it('renders each account through renderRow with its row data', async () => {
@@ -721,7 +752,7 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     const renderRow = (row: { endpointId: string; enabledLabel: string; can: unknown }) => { seen.push(row); return { type: 'span', props: { className: 'host-row', children: `${row.endpointId}/${row.enabledLabel}` } }; };
     const f = fixture(status(), [], '', { renderRow }); await f.h.settle();
     expect(f.h.text()).toContain('10001/已停止');
-    expect(f.h.nodes().some(node => isComponent(node, 'Switch'))).toBe(false);
+    expect(f.h.nodes().some(node => isComponent(node, 'SwitchRow'))).toBe(false);
     expect(seen.at(-1)).toMatchObject({ endpointId: '10001', instanceId: 'instance-old', enabled: false, can: { toggle: true, edit: true, remove: true, test: false } });
     f.h.unmount();
   });
@@ -730,7 +761,7 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     const f = fixture(status(), [], '', { hosted: true }); await f.h.settle();
     const accounts = f.hosted.accounts!;
     expect(accounts.state).toBe('ready'); expect(accounts.rows).toHaveLength(1);
-    expect(f.h.nodes().some(node => isComponent(node, 'Switch'))).toBe(false);
+    expect(f.h.nodes().some(node => isComponent(node, 'SwitchRow'))).toBe(false);
     expect(f.h.text()).not.toContain('10001');
     await (accounts.rows[0]!.start as () => Promise<void>)(); await f.h.settle();
     expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2 } });

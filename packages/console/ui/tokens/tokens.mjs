@@ -108,17 +108,19 @@ export const touchTarget = '2.75rem';
 
 /**
  * Other base-tier tokens that are not part of the size scale (fonts, line heights for code,
- * motion, derived surfaces). Unchanged from P1a.
+ * the easing curve, derived surfaces). Unchanged from P1a except the durations, which moved to
+ * {@link motion}.
  */
 export const misc = {
+  // Font stacks (ADR 0063 D33): Inter / JetBrains Mono first, then system faces. The package ships
+  // no font files — the host (the Console) loads Inter and JetBrains Mono with @font-face.
   'font-sans': "'Inter', 'MiSans', 'SF Pro Text', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
   'font-mono': "'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, Consolas, 'Noto Sans Mono CJK SC', monospace",
   'line-code': '1.25rem',
   'leading-code': '1.6',
   'shadow-color': '222 30% 12%',
+  // The one easing curve of every transition and animation (ADR 0063 「色板角色与信号色」, zhinjs/console#125).
   'ease-out': 'cubic-bezier(0.25, 1, 0.5, 1)',
-  'duration-page': '200ms',
-  'duration-fast': '150ms',
   'surface-raised': 'hsl(var(--card))',
   'surface-muted': 'hsl(var(--secondary))',
   'surface-inset': 'hsl(var(--secondary))',
@@ -127,6 +129,88 @@ export const misc = {
   'border-subtle': 'hsl(var(--border) / 0.7)',
   'border-default': 'hsl(var(--border))',
   'border-strong': 'hsl(var(--border-strong))',
+};
+
+/**
+ * Motion (zhinjs/console#125): three durations, all with `--console-ease-out`. Components never
+ * write milliseconds (stylelint `console/motion-tokens`).
+ *   fast  hover, press, color changes
+ *   base  expand / collapse, popovers, toasts
+ *   slow  drawers, sheets, page transitions
+ */
+export const motion = {
+  'motion-fast': '120ms',
+  'motion-base': '200ms',
+  'motion-slow': '280ms',
+};
+
+/**
+ * Color roles that do not follow the palette (ADR 0063 「色板角色与信号色」, zhinjs/console#125).
+ * HSL triplets like the palette colors (`hsl(var(--console-brand) / 0.1)`); one value per theme.
+ *
+ *   brand                 #76EEC6 (light) / #7FFFD4 (dark), owner's decision 2026-11-16 — the fill of
+ *                         the brand mark and of the one solid primary button of a view. The same
+ *                         under every palette. Too light for text or thin lines on light surfaces.
+ *   brand-foreground      text and the Z on brand (dark teal, ≥ 4.5:1)
+ *   brand-text            brand as text or a thin line — links, focus ring, selection marks: the
+ *                         same hue darkened to ≥ 4.5:1 on light surfaces; #7FFFD4 in the dark theme
+ *   brand-tint            quiet brand surfaces (selected rows)
+ *   signal-*-fill         bright: dots, bars, gauges, icons, badge tints — never text
+ *   signal-*-text         the same hue darkened (light) / lightened (dark) to ≥ 4.5:1 for text
+ *                         Hue and saturation are the same in both themes; only lightness changes.
+ *   chart-1 … chart-8     categorical data colors, independent of the palette; neighbours differ
+ *                         by ΔE2000 ≥ 20 in both themes. `chart-other` is the 「其他」 series.
+ *
+ * Steady states (running, succeeded, 0 failures) use no signal color; failures and rejections
+ * must be more prominent than successes.
+ */
+export const color = {
+  light: {
+    brand: '160 78% 69.8%',
+    'brand-foreground': '160 80% 10%',
+    'brand-text': '160 84% 25%',
+    'brand-tint': '160 60% 94%',
+    'signal-danger-fill': '0 76% 54%',
+    'signal-danger-text': '0 76% 40%',
+    'signal-warning-fill': '38 92% 50%',
+    'signal-warning-text': '38 92% 26%',
+    'signal-success-fill': '145 60% 40%',
+    'signal-success-text': '145 60% 25%',
+    'signal-info-fill': '217 84% 56%',
+    'signal-info-text': '217 84% 42%',
+    'chart-1': '217 74% 50%',
+    'chart-2': '32 94% 42%',
+    'chart-3': '164 72% 32%',
+    'chart-4': '330 66% 48%',
+    'chart-5': '262 56% 56%',
+    'chart-6': '48 92% 32%',
+    'chart-7': '192 80% 38%',
+    'chart-8': '8 66% 46%',
+    'chart-other': '220 6% 58%',
+  },
+  dark: {
+    brand: '159.8 100% 74.9%',
+    'brand-foreground': '160 80% 10%',
+    'brand-text': '159.8 100% 74.9%',
+    'brand-tint': '160 40% 14%',
+    'signal-danger-fill': '0 76% 58%',
+    'signal-danger-text': '0 76% 70%',
+    'signal-warning-fill': '38 92% 52%',
+    'signal-warning-text': '38 92% 62%',
+    'signal-success-fill': '145 60% 44%',
+    'signal-success-text': '145 60% 58%',
+    'signal-info-fill': '217 84% 62%',
+    'signal-info-text': '217 84% 72%',
+    'chart-1': '217 80% 66%',
+    'chart-2': '32 92% 58%',
+    'chart-3': '164 60% 48%',
+    'chart-4': '330 72% 62%',
+    'chart-5': '262 70% 74%',
+    'chart-6': '48 86% 56%',
+    'chart-7': '192 70% 52%',
+    'chart-8': '8 72% 64%',
+    'chart-other': '220 6% 50%',
+  },
 };
 
 /** Dark overrides of {@link misc}. */
@@ -198,7 +282,8 @@ export const semantic = {
  * the component reads them).
  */
 export const composite = {
-  'focus-ring': 'var(--console-focus-ring-width) solid hsl(var(--ring))',
+  // The focus ring is brand-text (zhinjs/console#125), the same under every palette.
+  'focus-ring': 'var(--console-focus-ring-width) solid hsl(var(--console-brand-text))',
   /* Content width the shell resolved for the current page (D16, D22): `data` unless the page is a reading page. */
   'content-max': 'var(--console-content-data)',
 };
@@ -236,6 +321,9 @@ export const aliases = {
   'control-height-lg': 'control-height',
   'border-width': 'border-hairline',
   'focus-width': 'border-focus',
+  // Motion (zhinjs/console#125): 150ms became motion-fast 120ms, 200ms motion-base.
+  'duration-fast': 'motion-fast',
+  'duration-page': 'motion-base',
   // Type.
   'text-caption': 'text-label',
   'text-code': 'text-label',

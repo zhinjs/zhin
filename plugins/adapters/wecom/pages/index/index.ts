@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Building',
   order: 76,
   requiredPermissions: ['wecom:read'],
+  keywords: { 'zh-CN': ['企微', '企业微信机器人', '适配器'], en: ['wechat work', 'enterprise wechat', 'adapter'] },
 });
 
 /**

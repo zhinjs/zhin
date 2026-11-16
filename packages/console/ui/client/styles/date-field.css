@@ -1,0 +1,58 @@
+/*
+ * DateField / DateTimeField (unlayered, like SearchableSelectField; ADR 0063 D29): semantic tokens
+ * only. The trigger matches SelectTrigger; the calendar is a 7-column grid that also fills the
+ * bottom drawer at phone width.
+ */
+.console-date-field { position: relative; display: flex; width: 100%; min-width: 0; }
+.console-date-field-trigger {
+  display: flex; width: 100%; height: var(--console-control-height); min-width: 0; align-items: center; gap: var(--console-control-gap);
+  border: var(--console-control-border) solid hsl(var(--input)); border-radius: var(--console-control-radius); background: hsl(var(--card));
+  padding: 0 var(--console-control-padding-inline); color: hsl(var(--foreground)); font-size: var(--console-text-body); text-align: left; white-space: nowrap;
+  transition: border-color var(--console-motion-fast) var(--console-ease-out);
+}
+.console-date-field-spacer { width: var(--console-control-height-compact); flex-shrink: 0; }
+.console-date-field-trigger:hover { border-color: hsl(var(--foreground) / 0.45); }
+.console-date-field-trigger:focus-visible { border-color: hsl(var(--console-brand-text)); }
+.console-date-field-trigger:disabled { cursor: not-allowed; background: hsl(var(--muted)); opacity: 0.6; }
+.console-date-field[data-variant="ghost"] .console-date-field-trigger { border-color: transparent; background: transparent; }
+.console-date-field[data-variant="ghost"] .console-date-field-trigger:hover,
+.console-date-field[data-variant="ghost"] .console-date-field-trigger[aria-expanded="true"] { border-color: hsl(var(--input)); }
+.console-date-field[data-variant="ghost"] .console-date-field-trigger:focus-visible { border-color: hsl(var(--console-brand-text)); }
+.console-date-field-icon { width: 1rem; height: 1rem; flex-shrink: 0; color: hsl(var(--muted-foreground)); }
+.console-date-field-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.console-date-field-value.is-placeholder { color: hsl(var(--muted-foreground)); }
+.console-date-field-clear {
+  position: absolute; top: 50%; right: var(--console-heading-gap); display: inline-grid; place-items: center;
+  width: var(--console-control-height-compact); height: var(--console-control-height-compact); translate: 0 -50%;
+  border: 0; border-radius: var(--console-control-radius); background: transparent; color: hsl(var(--muted-foreground)); cursor: pointer;
+  transition: background-color var(--console-motion-fast) var(--console-ease-out), color var(--console-motion-fast) var(--console-ease-out);
+}
+.console-date-field-clear:hover { background: var(--console-surface-hover); color: hsl(var(--foreground)); }
+.console-date-field-clear:focus-visible { outline: var(--console-focus-ring); outline-offset: var(--console-focus-ring-offset); }
+.console-date-field-clear svg { width: 1rem; height: 1rem; }
+
+.console-date-popover { display: flex; width: 18rem; max-width: calc(100vw - 1.5rem); flex-direction: column; gap: var(--console-heading-gap); padding: var(--console-stack-gap); }
+.console-date-header { display: flex; align-items: center; justify-content: space-between; gap: var(--console-inline-gap); }
+.console-date-header [data-slot="button"] { width: var(--console-control-height-compact); height: var(--console-control-height-compact); }
+.console-date-title { margin: 0; font-size: var(--console-text-body); font-weight: var(--console-weight-strong); font-variant-numeric: tabular-nums; }
+.console-date-grid { display: flex; flex-direction: column; gap: 0; }
+.console-date-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.console-date-row > span { display: grid; place-items: center; }
+.console-date-weekday { height: var(--console-control-height-compact); color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); line-height: var(--console-control-height-compact); }
+.console-date-day {
+  width: 100%; max-width: var(--console-control-height); aspect-ratio: 1; border: var(--console-control-border) solid transparent;
+  border-radius: var(--console-popover-item-radius); background: transparent; color: hsl(var(--foreground)); font-size: var(--console-text-body);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background-color var(--console-motion-fast) var(--console-ease-out);
+}
+.console-date-day:hover { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+.console-date-day:focus-visible { outline: var(--console-focus-ring); outline-offset: 0; }
+.console-date-day.is-outside { color: hsl(var(--muted-foreground)); }
+.console-date-day.is-today { border-color: hsl(var(--console-brand-text) / 0.6); }
+.console-date-day.is-selected { border-color: transparent; background: hsl(var(--console-brand)); color: hsl(var(--console-brand-foreground)); font-weight: var(--console-weight-strong); }
+.console-date-day:disabled { opacity: 0.35; cursor: not-allowed; background: transparent; }
+.console-date-time { display: flex; align-items: center; gap: var(--console-heading-gap); border-top: var(--console-control-border) solid hsl(var(--border)); padding-top: var(--console-heading-gap); }
+.console-date-time-label { flex: 1; color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); }
+.console-date-time .console-date-time-input { width: 3.25rem; text-align: center; }
+.console-date-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--console-inline-gap); border-top: var(--console-control-border) solid hsl(var(--border)); padding-top: var(--console-heading-gap); }
+.console-date-footer-end { display: inline-flex; align-items: center; gap: var(--console-heading-gap); }

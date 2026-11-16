@@ -77,7 +77,8 @@ test('the audit reports what it checks (self-test)', async ({ page }) => {
       <p data-zhin-ui-ignore="spacing: self-test exemption" style="padding: 5px">exempted</p>`;
     content.append(bad);
   });
-  const run = await auditPage(page);
+  // The injected button sits after the whole gallery: tab far enough to reach it.
+  const run = await auditPage(page, { maxFocusSteps: 120 });
   const checks = new Set(run.violations.map((violation) => violation.check));
   for (const check of ['type-scale', 'spacing', 'radius', 'border', 'shadow', 'static-card', 'touch-target', 'overflow', 'shell-overlap', 'duplicate-text', 'contrast', 'focus-visible']) {
     expect(checks, `${check} is reported`).toContain(check);

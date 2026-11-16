@@ -7,8 +7,9 @@ import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Activity, Inbox, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
 import {
-  Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
-  Checkbox, ConfirmDialog, ConsoleUiI18nProvider, EmptyState, ErrorAlert, Grid, Input, ListDetail, MiniRingGauge,
+  Alert, AlertDescription, AlertTitle, Badge, BrandMark, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Checkbox, ConfirmDialog, ConsoleUiI18nProvider, DateField, DateTimeField, EMPTY_ILLUSTRATIONS, EmptyState, ErrorAlert, Grid,
+  InlineCode, Input, ListDetail, MiniRingGauge,
   PageChromeActions, PageChromeProvider, PageHeader, PageShell, RowActions, SearchableSelectField, Section,
   SelectField, StatCard, StatGrid, StatusBadge, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
   Tabs, TabsContent, TabsList, TabsTrigger, Textarea, createPageChromeStore, usePageChrome, type PageAction,
@@ -98,6 +99,9 @@ function FeedTable({ onOpen }: { onOpen: (id: string) => void }) {
 function Gallery() {
   const [chrome] = useState(createPageChromeStore)
   const [mode, setMode] = useState('all')
+  const [fallback, setFallback] = useState('')
+  const [day, setDay] = useState('2026-11-16')
+  const [since, setSince] = useState('2026-11-16T09:30')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const selectedFeed = FEEDS.find(feed => feed.id === selected)
@@ -121,21 +125,33 @@ function Gallery() {
           <StatCard icon={Users} label="会话" value="36" aside={<MiniRingGauge percent={72} />} />
           <StatCard icon={Inbox} label="待处理" value="3" tone="warning" sub="需要处理" />
           <StatCard icon={Activity} label="错误" value="1" tone="danger" onOpen={noop} />
+          <StatCard icon={Activity} label="失败" value="0" tone="danger" sub="稳态不着色" />
         </StatGrid>
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-6">
+            <BrandMark size="sm" />
+            <BrandMark />
+            <BrandMark size="lg" />
+            <BrandMark withText />
+            <BrandMark size="lg" withText />
+          </CardContent>
+        </Card>
         <Grid min="20rem">
           <Card>
             <CardHeader>
               <CardTitle>按钮</CardTitle>
-              <CardDescription>页面上的危险操作用描边样式，实心红色只在确认对话框里出现。</CardDescription>
+              <CardDescription>每个视图最多一个实心主按钮；页面上的危险操作用幽灵或描边样式，实心红色只在确认对话框里出现。</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-3">
-              <Button>主要操作</Button>
+              <Button variant="primary">主要操作</Button>
+              <Button variant="soft">柔和</Button>
               <Button variant="secondary">次要</Button>
               <Button variant="outline">描边</Button>
               <Button variant="ghost">幽灵</Button>
               <Button variant="link">链接</Button>
               <Button variant="destructive-outline" onClick={() => setConfirmOpen(true)}>删除数据</Button>
-              <Button variant="destructive">确认删除</Button>
+              <Button variant="destructive">移除</Button>
+              <Button variant="destructive-solid">确认删除</Button>
               <Button size="sm">小号</Button>
               <Button disabled>禁用</Button>
             </CardContent>
@@ -154,6 +170,22 @@ function Gallery() {
                 options={[{ value: 'all', label: '全部' }, { value: 'active', label: '启用中' }, { value: 'paused', label: '已暂停' }]}
               />
               <Textarea aria-label="备注" placeholder="备注" rows={2} />
+              <Input variant="ghost" aria-label="备用地址" placeholder="备用地址（ghost，悬停或聚焦时才有边框）" />
+              <SelectField
+                variant="ghost"
+                aria-label="备用模型"
+                value={fallback}
+                onValueChange={setFallback}
+                options={[{ value: '', label: '未设置备用模型' }, { value: 'mini', label: 'gpt-5-mini' }]}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DateField aria-label="日期" value={day} onValueChange={setDay} />
+                <DateTimeField aria-label="开始时间" value={since} onValueChange={setSince} />
+              </div>
+              <p className="console-text-body">
+                插件 <InlineCode>@zhin.js/plugin-rss</InlineCode> 的 RPC <InlineCode>rss.status</InlineCode>，
+                订阅 ID <InlineCode tone="plain">feed_01J9</InlineCode>
+              </p>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex items-center gap-2"><Checkbox defaultChecked /> 启用</label>
                 <label className="inline-flex items-center gap-2"><Switch defaultChecked /> 自动推送</label>
@@ -196,6 +228,18 @@ function Gallery() {
           </div>
           <Card><EmptyState icon={Inbox} title="没有记录" /></Card>
         </Grid>
+        <Section title="空状态" description="64px 线稿插画 + 一句说明 + 可选的一个操作；插画是 brand-text 单色、1.5px 描边。">
+          <Grid min="14rem">
+            {EMPTY_ILLUSTRATIONS.map(name => (
+              <Card key={name} data-illustration-card={name}>
+                <EmptyState
+                  illustration={name}
+                  action={name === 'tasks' ? { label: '新建定时任务', variant: 'primary', onSelect: noop } : name === 'not-found' ? { label: '返回首页', href: '#' } : undefined}
+                />
+              </Card>
+            ))}
+          </Grid>
+        </Section>
         <PageChromeProvider store={chrome}>
           <PluginContent />
         </PageChromeProvider>

@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Activity',
   order: 56,
   requiredPermissions: ['process-monitor:read'],
+  keywords: { 'zh-CN': ['系统监控', '内存', '运行时间', '崩溃', '重启'], en: ['system monitor', 'memory', 'uptime', 'crash', 'restart'] },
 });
 
 /** "自 2026-01-01 起累计" — the cumulative counters come from `data/process-state.json`. */

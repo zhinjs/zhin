@@ -65,6 +65,16 @@ describe('stylelint config', () => {
     expect(await lint('.a { border-radius: var(--console-radius-md); }')).toEqual(['console/no-deprecated-tokens']);
   });
 
+  it('motion: no millisecond / second literals and no easing literals (zhinjs/console#125)', async () => {
+    expect(await lint('.a { transition: color var(--console-motion-fast) var(--console-ease-out), opacity var(--console-motion-base) var(--console-ease-out); animation: spin calc(var(--console-motion-slow) * 5) linear infinite; transition-delay: 0s; }')).toEqual([]);
+    expect(await lint('.a { transition: color 150ms ease; }')).toEqual(['console/motion-tokens', 'console/motion-tokens']);
+    expect(await lint('.a { animation: x 0.2s cubic-bezier(0.2, 1, 0.3, 1); }')).toEqual(['console/motion-tokens', 'console/motion-tokens']);
+    expect(await lint('.a { transition-duration: 200ms; animation-delay: 1s; }')).toEqual(['console/motion-tokens', 'console/motion-tokens']);
+    expect(await lint('@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }', '/x/shell.css')).toEqual([]);
+    expect(await lint('.a { transition: color 150ms; }', '/x/components.css', { motionTokens: 'warning' })).toEqual(['console/motion-tokens']);
+    expect(await lint('.a { transition: color 150ms; }', '/x/components.css', { motionTokens: false })).toEqual([]);
+  });
+
   it('keeps @media in shell files and on the breakpoints', async () => {
     expect(await lint('@media (min-width: 40rem) { .a { color: red; } }')).toEqual(['console/media-queries']);
     expect(await lint('@media (min-width: 40rem) { .a { color: red; } }', '/x/shell.css')).toEqual([]);

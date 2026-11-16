@@ -2,7 +2,7 @@
 
 Zhin Console 与插件页面共用的组件库（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md)）：基于 Radix 的 React 组件、页面外壳、刷新控件，以及一份设计令牌。样式随包发布、已经编译好，使用方不需要 Tailwind。
 
-> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）。插件页面在 P2 之前仍沿用现有写法（声明式蓝图或 `@zhin.js/client/ui`），见 [Console 页面与布局](../../../docs/authoring/console-pages.md)。
+> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）；空状态插画、ghost 控件、日期选择、图标、代码标识、焦点环与字体见 D28–D33（#125 第三阶段）。`@zhin.js/client/ui` 已弃用，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
 
 只给浏览器用：本包与 `radix-ui`、`class-variance-authority`、`clsx`、`tailwind-merge`、`lucide-react` 不在 `zhin.js` 的依赖树里。React 是 peerDependency。
 
@@ -26,15 +26,50 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 
 | 类别 | 导出 |
 | --- | --- |
-| 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
-| 页面与通用组件 | `PageShell`（`width`：`reading` / `data` / `full`）、`PageHeader`（`menuActions` / `moreActions`）、`Section`、`Grid`、`ListDetail`、`StatusBadge`/`isAttentionStatus`、`MoreMenu`、`RowActions`、`PageActions`、`ConfirmDialog`/`useConfirm`、`StatCard`/`StatGrid`/`MiniRingGauge`、`EmptyState`、`ErrorAlert`、`InfoHint`、`RefreshControl` |
+| 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`DateField`/`DateTimeField`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
+| 表单控件（D29） | `variant="ghost"`（`Input`、`Textarea`、`SelectTrigger` / `SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField`，类型 `ControlVariant`）；日期纯函数 `parseDateValue`、`parseDateTimeValue`、`formatDateValue`、`formatDateTimeValue`、`calendarMonth`、`addDays`、`addMonths` |
+| 空状态与标识（D28、D31） | `EmptyState`（`illustration`、`action`）、`EmptyIllustration`、`EMPTY_ILLUSTRATIONS`、`InlineCode`（`tone`：`subtle` / `plain`） |
+| 图标（D30） | `CONSOLE_ICON_STROKE_WIDTH`（1.75）、`CONSOLE_ICON_SIZE`（控件 16、导航 18） |
+| 品牌 | `BrandMark`（`size`：`sm` / `md` / `lg` / 像素值，`withText` 显示「Zhin Console」）、`CONSOLE_PRODUCT_NAME` |
+| 页面与通用组件 | `PageShell`（`width`：`reading` / `data` / `full`）、`PageHeader`（`menuActions` / `moreActions`）、`Section`、`Grid`、`ListDetail`、`StatusBadge`/`isAttentionStatus`、`MoreMenu`、`RowActions`、`PageActions`、`ConfirmDialog`/`useConfirm`、`StatCard`/`StatGrid`/`MiniRingGauge`/`isZeroValue`、`EmptyState`、`ErrorAlert`、`InfoHint`、`RefreshControl` |
+| 内容区块（P2） | `ContentStack`、`FormField`、`KeyValueList`、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`、`CodeText`、`JsonBlock`、`MediaPreview`、`RecordCard`（`Card` + `KeyValueList`）、`LoadingBlock`；分区、网格、统计卡片与表格卡片直接用上面的 `Section`、`Grid`、`StatGrid` / `StatCard`、`Table` |
 | 容器宽度 | `useContainerAtLeast`、`CONSOLE_BREAKPOINTS_REM`、`syncTableCellLabels` |
-| 页面外壳接口 | `usePageChrome({ actions, refresh })`、`PageChromeProvider`、`createPageChromeStore`、`usePageChromeState`、`PageChromeActions` |
+| 页面外壳接口 | `usePageChrome({ title, description, actions, refresh, menuActions, moreActions })`、`PageChromeProvider`、`createPageChromeStore`、`usePageChromeState`、`PageChromeActions` |
 | 语言 | `ConsoleUiI18nProvider`、`useConsoleUiI18n`、`createConsoleUiI18n`、`ConsoleUiText`、`CONSOLE_UI_MESSAGES`、`CONSOLE_UI_LOCALES` |
 | 纯函数 | `cn`、`groupSelectOptions`、`navigableValues`、`optionMatches`、`optionSearchText`、`canSubmitConfirm`、`confirmTextMatches`、`confirmErrorMessage`、`formatRefreshTime`、`refreshIntervalOptions`、`DEFAULT_REFRESH_INTERVALS` |
 | 共享模块 | `CONSOLE_UI_VERSION`、`CONSOLE_UI_MODULE_ID`、`registerConsoleUiSharedModule`、`CONSOLE_SHARED_MODULE_VERSIONS_KEY`、`CONSOLE_SHARED_MODULE_ISSUES_KEY`、`CONSOLE_SHARED_MODULE_ISSUE_EVENT` |
 
-组件的属性与 Console 原来的同名组件一致。新增：`Button` 的 `variant="destructive-outline"`（页面上的危险操作入口，等价于 `variant="outline"` 加 `text-destructive`；实心 `destructive` 只用于确认对话框里的确认按钮）。
+组件的属性与 Console 原来的同名组件一致。`Button` 的变体（ADR 0063 D25）：
+
+| 变体 | 外观与用途 |
+| --- | --- |
+| `primary` | 品牌色实心底 + 深色字（`brand` / `brand-foreground`），浅色主题下另有一圈 `brand-text` 描边。**每个视图最多一个**：登录、保存、发送、筛选这类「下一步」；`PageAction` 的 `tone: 'primary'` 和非危险的 `ConfirmDialog` 确认按钮也用它 |
+| `soft` | 配色的浅色调（原来的 `default`）。`default` 是它的弃用别名，外观相同、仍是默认变体，保留到 P4 |
+| `outline`、`secondary`、`ghost`、`link` | 不变；`link` 改用 `brand-text` |
+| `destructive` | **幽灵样式**：红字、无底。页面上的危险操作入口 |
+| `destructive-outline` | 描边 + 红字（ADR 0063 决策 5） |
+| `destructive-solid` | 实心红。**只用于确认对话框的确认按钮**（`ConfirmDialog variant="destructive"` 已使用） |
+
+## 空状态、ghost 控件、日期选择与代码标识（ADR 0063 D28–D31）
+
+```tsx
+import { DateTimeField, EmptyState, InlineCode, SelectField } from '@zhin.js/console-ui';
+
+<EmptyState illustration="tasks" action={{ label: '新建定时任务', variant: 'primary', onSelect: create }} />
+<EmptyState illustration="table" compact />            // 「在左侧选择一个数据表」
+<SelectField variant="ghost" aria-label="备用模型" value={fallback} onValueChange={setFallback} options={models} />
+<DateTimeField aria-label="开始时间" value={since} onValueChange={setSince} />  // '2026-11-16T09:30'，清空为 ''
+<p>插件 <InlineCode>@zhin.js/plugin-rss</InlineCode> 的 RPC <InlineCode>rss.status</InlineCode></p>
+```
+
+- **`EmptyState`**：64px 线稿插画 + 一句说明 + 至多一个操作。`illustration` 取 `messages`（无消息）、`tasks`（无任务）、`logs`（无日志）、`table`（未选中数据表）、`record`（未选中记录）、`not-found`（找不到页面）、`generic`（通用空）；插画是 `brand-text` 单色、1.5px 描边。不给说明时用插画的默认说明，不再单独显示「暂无数据」。`action` 是 `{ label, onSelect?, href?, variant?: 'soft' | 'primary', icon? }`（默认 `soft`）或一个元素。原有的 `icon` / `title` / `description` / `compact` 不变；没传 `illustration` 时图标改为 `brand-text`，不再是半透明灰色。
+- **ghost 控件**：`variant="ghost"` 平时无边框，悬停、聚焦或展开时才出现边框，用于次要字段。
+- **`DateField` / `DateTimeField`**：替代原生 `date` / `datetime-local` 输入框，值为本地时间的 ISO 字符串（`YYYY-MM-DD` / `YYYY-MM-DDTHH:mm`），空值 `''`；`min`、`max`、`clearable`（默认开）、`weekStartsOn`、`placeholder`、`variant`。键盘：触发器上 Enter / ↓ 打开、Delete / Backspace 清空；月历里方向键按天 / 周、Home / End、PageUp / PageDown 按月（Shift 按年）、Enter 选中、Esc 关闭。
+- **`InlineCode`**（或 `console-code` 类）：包名、RPC 名、ID 这类短标识；等宽字体，极浅底色（`tone="plain"` 无底色），不加边框。`CodeText` 外观相同。
+- **图标**：组件里的 lucide 图标统一 `strokeWidth 1.75`，控件里 16px、导航 18px；列表、⌘K、工具栏的图标不放在浅色方块里。宿主可用 `<LucideProvider strokeWidth={CONSOLE_ICON_STROKE_WIDTH}>` 让自己的图标一致。
+- **焦点环**：只在 `:focus-visible` 时出现，鼠标点开再关闭对话框、菜单、下拉和日期选择后不留焦点环。所有动画只在 `prefers-reduced-motion: no-preference` 下运行。
+
+`StatCard` 的 `tone`（`danger` / `warning`）只给异常值着色：数值用信号文字色、图标用信号填充色，`danger` 卡片另有红色描边；数值为 0 时不着色（稳态，`isZeroValue`）。
 
 ## 令牌（ADR 0063 D16、D17）
 
@@ -46,7 +81,25 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | 第二层：语义令牌（组件只用这一层） | `--console-page-padding-inline`、`--console-page-padding-block`、`--console-section-gap`、`--console-stack-gap`、`--console-inline-gap`、`--console-heading-gap`、`--console-card-padding(-wide)`、`--console-card-radius`、`--console-card-edge-radius`、`--console-card-border`、`--console-card-elevation`、`--console-card-hover-elevation`、`--console-grid-gap`、`--console-list-row-padding(-inline)`、`--console-control-height(-compact)`、`--console-control-radius`、`--console-control-padding-inline`、`--console-control-gap`、`--console-control-border`、`--console-check-radius`、`--console-segment-radius`、`--console-touch-min`、`--console-badge-height/radius/padding-inline`、`--console-popover-radius/item-radius/padding/elevation`、`--console-dialog-radius/padding/elevation/close-clearance`、`--console-sheet-radius`、`--console-focus-ring(-width/-offset)`、`--console-content-max` |
 | 第三层：按尺寸取值 | 小于 40rem / 40–64rem / 64rem 及以上三档，取值见 `tokens.mjs` 的 `semantic`（即 D16 的「按尺寸取值」表）。页面级令牌和浮层令牌按视口取值；其余令牌按所在 `.console-cq` 容器（`PageShell`、`PageHeader`、`Table`、`StatGrid` 等）的宽度取值 |
 
-旧名（`--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-*`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card(-sm)`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`）在 P4 之前作为别名保留。
+颜色角色（ADR 0063 D23，zhinjs/console#125）在 `tokens.mjs` 的 `color` 中定义，深浅两套，**与配色无关**，生成为 HSL 三元组（`hsl(var(--console-brand))`、`hsl(var(--console-brand) / 0.1)`），Tailwind 主题提供同名颜色类（`bg-brand`、`text-brand-foreground`、`text-signal-danger-text`、`fill-chart-1` 等）：
+
+| 令牌 | 浅色 | 深色 | 用途 |
+| --- | --- | --- | --- |
+| `--console-brand` | `#76EEC6` | `#7FFFD4` | 品牌标、`primary` 按钮底色（所有者 2026-11-16 决定） |
+| `--console-brand-foreground` | `160 80% 10%` | `160 80% 10%` | 品牌底上的文字 |
+| `--console-brand-text` | `160 84% 25%` | `#7FFFD4` | 链接、焦点环、选中态（品牌色当文字或细线用） |
+| `--console-brand-tint` | `160 60% 94%` | `160 40% 14%` | 选中行等安静的品牌底 |
+| `--console-signal-{danger,warning,success,info}-fill` | 明亮 | 明亮 | 圆点、进度条、图标、徽标底色；不当文字 |
+| `--console-signal-{danger,warning,success,info}-text` | ≥ 4.5:1 | ≥ 4.5:1 | 状态文字；与 fill 同色相、同饱和度，深浅主题只调亮度 |
+| `--console-chart-1`…`-8`、`--console-chart-other` | 分类色 | 分类色 | 一切数据可视化；相邻两色 ΔE2000 ≥ 20 |
+
+稳态（运行中、成功、失败数为 0）不用信号色；「失败」「已拒绝」比「成功」醒目。旧颜色名 `--destructive`、`--success`、`--warning`、`--info` 指向对应的 `signal-*-text`，`--chart-*` 指向 `--console-chart-*`，`--ring` 指向 `brand-text`。具体取值与实测对比度见 ADR 0063 D23。
+
+字体（D33）：`--console-font-sans`（Inter 优先）与 `--console-font-mono`（JetBrains Mono 优先）只定义字体栈，之后回退到系统字体。**本包不打包字体，宿主负责加载字体**（例如 Console 用 `@font-face` 自托管 Inter 与 JetBrains Mono 的拉丁 + 数字子集，`font-display: swap`）；没有加载时按字体栈回退。
+
+动效（D26）：`--console-motion-fast` 120ms、`--console-motion-base` 200ms、`--console-motion-slow` 280ms，缓动统一 `--console-ease-out`；Tailwind 的 `transition-*` 默认也用它们。`styles.css` 在根上设置 `font-variant-numeric: tabular-nums`，数字等宽。
+
+旧名（`--console-duration-fast`、`--console-duration-page`、`--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-*`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card(-sm)`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`）在 P4 之前作为别名保留。
 
 Tailwind 主题（`theme.css`）：`p-*` / `m-*` / `gap-*` / `space-*` 只有 `0`、`px`、`1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 对应 `p-6`）；尺寸类（`w` / `h` / `size` / `inset` / `min-*` / `max-*` / `translate` / `basis`）保留 Tailwind 的数字键，另有 `control`、`control-compact`、`touch`、`touch-min`、`badge`；`text-*` 只有五个字号，`font-*` 只有三个字重，`rounded-*` 为 `0`–`4`、`full` 和语义键（`control`、`card`、`badge`、`popover`、`dialog` 等），`shadow-*` 为 `e1`–`e3` 和语义键，断点 `sm` / `md` / `lg` / `xl`，颜色只有主题色。
 
@@ -62,7 +115,7 @@ import consoleUi from '@zhin.js/console-ui/eslint';
 export default [{ files: ['**/*.tsx'], ...consoleUi.configs.recommended }];
 ```
 
-- `console/scale-values`、`console/no-unknown-tokens`、`console/no-deprecated-tokens`、`console/media-queries`（stylelint 插件 `@zhin.js/console-ui/stylelint-plugin`）；
+- `console/scale-values`、`console/no-unknown-tokens`、`console/no-deprecated-tokens`、`console/media-queries`、`console/motion-tokens`（stylelint 插件 `@zhin.js/console-ui/stylelint-plugin`；`motion-tokens` 禁止 `transition` / `animation` 写死时长或缓动，迁移期间可用 `createConsoleStylelintConfig({ motionTokens: 'warning' })` 降级）；
 - `console-ui/no-arbitrary-values`、`console-ui/no-off-scale-classes`、`console-ui/no-native-controls`（ESLint）；判定逻辑在 `@zhin.js/console-ui/tailwind-classes` 的 `classifyClass()`，`zhin plugin check` 可直接复用。
 
 本包自己：`pnpm --filter @zhin.js/console-ui lint:css`（stylelint + 生成物核对，根命令 `pnpm check:console-ui-styles`）；ESLint 规则在根 `eslint.config.mjs` 中对 `packages/console/ui/**` 生效（`components/ui/**` 的基础组件本身包装原生元素，不查 `no-native-controls`）。
@@ -113,7 +166,11 @@ export default function Feeds() {
 }
 ```
 
-外壳为每个页面槽创建一个 `createPageChromeStore()`，用 `<PageChromeProvider store>` 包住页面，并在 `PageHeader` 的 `actions` 里放 `<PageChromeActions store />`。`usePageChrome` 还接受 `menuActions`（有文字的操作：页头够宽时是按钮，窄于 40rem 时收进「更多」）和 `moreActions`（始终在「更多」里）。Console 外壳与插件页面的接入在 P2。
+外壳为每个页面槽创建一个 `createPageChromeStore()`，用 `<PageChromeProvider store>` 包住页面，并在 `PageHeader` 的 `actions` 里放 `<PageChromeActions store />`。`usePageChrome` 还接受 `menuActions`（有文字的操作：页头够宽时是按钮，窄于 40rem 时收进「更多」）和 `moreActions`（始终在「更多」里）。`usePageChromeState(store)` 还能读到页面上报的 `title` / `description`（声明式页面的标题与说明），外壳已有自己的标题区时可以只用作页签名。`RefreshControl` 的 `onAutoRefresh` 用于自动刷新与手动「刷新」做的事不同的页面（例如手动刷新才解除「请先刷新」的锁定）。
+
+## 内容区块
+
+外壳负责页头，页面只放内容。内容区块补充 P1b 的布局组件而不重复它们：分区用 `Section`，网格用 `Grid`（统计卡片用 `StatGrid` + `StatCard`，`StatCard` 可带 `unit`、`badge`、`footer`），表格用 `Table`（自身宽度小于 40rem 时每行变卡片）。区块按**所在 `.console-cq` 容器**的宽度切换布局（`@container console`，不看视口），只用语义令牌：`KeyValueList` 在窄容器里一列；`RecordCard` 是 `Card` + 一列 `KeyValueList`，用于账号、连接这类记录卡片；`Disclosure` 默认收起，用于原始 ID、JSON 这类默认不显示的内容（D15、D18）；`LoadingBlock` 是带 `role="status"` 的骨架行。
 
 ## 共享模块版本
 
@@ -130,7 +187,7 @@ ConsoleUi.registerConsoleUiSharedModule(ConsoleUi, sharedModules); // sharedModu
 
 ```bash
 pnpm --filter @zhin.js/console-ui build          # 生成令牌 + tsc + Tailwind 编译 dist/styles.css、tokens.css、theme.css、scale.json、exports.json
-pnpm vitest run packages/console/ui              # 单元测试（含令牌、lint 规则）
+pnpm vitest run packages/console/ui              # 单元测试（含令牌、lint 规则、颜色对比度与图表色 ΔE）
 pnpm --filter @zhin.js/console-ui lint:css       # stylelint + 生成物核对
 pnpm --filter @zhin.js/console-ui test:visual    # Playwright 视觉回归（亮 / 暗，1280 与 375，先 build）
 pnpm --filter @zhin.js/console-ui test:audit     # 布局审计门禁（先 build）

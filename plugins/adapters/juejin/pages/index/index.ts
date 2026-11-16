@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'MessageSquare',
   order: 41,
   requiredPermissions: ['juejin:read'],
+  keywords: { 'zh-CN': ['掘金', '稀土掘金', '评论回复'], en: ['juejin', 'comments', 'reply approval'] },
 });
 
 /**

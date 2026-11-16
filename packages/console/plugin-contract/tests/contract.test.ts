@@ -248,7 +248,6 @@ describe('Console contract', () => {
     const ReviewPage = defineCommentReviewPage({
       adapter: 'bilibili',
       platform: { zh: 'B 站', en: 'Bilibili' },
-      mark: 'B',
       resource: { zh: '视频', en: 'videos' },
       loginMode: 'qr',
     });
