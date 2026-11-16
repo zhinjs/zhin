@@ -118,6 +118,22 @@ describe('github protocol helpers', () => {
     expect(formatOutboundBody([{ type: 'markdown', data: { content: '' } }, { type: 'text', data: { text: 'x' } }])).toBe('x');
   });
 
+  it('separates a Markdown block ending in one newline so the next text does not continue it', () => {
+    // GFM lazy continuation: `- item\n谢谢` puts 谢谢 inside the list item, `> 引用\n谢谢` inside the quote.
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '- 条目\n' } },
+      { type: 'text', data: { text: '谢谢' } },
+    ])).toBe('- 条目\n\n谢谢');
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: '说明\n' } },
+      { type: 'markdown', data: { content: '> 引用' } },
+    ])).toBe('说明\n\n> 引用');
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '> 引用\n\n' } },
+      { type: 'text', data: { text: '\n谢谢' } },
+    ])).toBe('> 引用\n\n\n谢谢');
+  });
+
   it('declares native Markdown so the core projection keeps the formatting (ADR 0064 F2)', async () => {
     expect(defineGithubAdapter.segments?.markdown).toBe('native');
     const snapshot = {

@@ -174,7 +174,13 @@ export function formatOutboundBody(payload: unknown): string {
   let afterBlock = false;
   const append = (part: string, block: boolean) => {
     if (!part) return;
-    if (body && (block || afterBlock) && !body.endsWith('\n') && !part.startsWith('\n')) body += '\n\n';
+    // A single newline is no block boundary: text after `- item\n` or `> quote\n` would continue that block.
+    if (body && (block || afterBlock)) {
+      let newlines = 0;
+      for (let i = body.length - 1; i >= 0 && body[i] === '\n' && newlines < 2; i -= 1) newlines += 1;
+      for (let i = 0; i < part.length && part[i] === '\n' && newlines < 2; i += 1) newlines += 1;
+      if (newlines < 2) body += '\n'.repeat(2 - newlines);
+    }
     body += part;
     afterBlock = block;
   };
