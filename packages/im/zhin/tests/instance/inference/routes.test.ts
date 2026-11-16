@@ -38,10 +38,11 @@ it('runs manual OAuth through authenticated HTTP, keeps private verifier/token o
     const login = begun.payload.data;
     expect(login.redirectUri).toBe('http://localhost:1455/auth/callback');
     expect(JSON.stringify(begun.payload)).not.toContain('private-verifier');
-    for (const body of [
-      { accountId: 'account', loginId: login.loginId, callbackUrl: 'https://unregistered-console.test/callback?code=c&state=fixture-state' },
-      { accountId: 'another', loginId: login.loginId, callbackUrl: `${login.redirectUri}?code=c&state=fixture-state` },
-    ]) expect((await fixture.call('/login/complete', body)).status).toBe(403);
+    // A wrong callback is refused; an id naming no account is reported as unknown to the Host administrator (#1250).
+    for (const [body, status] of [
+      [{ accountId: 'account', loginId: login.loginId, callbackUrl: 'https://unregistered-console.test/callback?code=c&state=fixture-state' }, 403],
+      [{ accountId: 'another', loginId: login.loginId, callbackUrl: `${login.redirectUri}?code=c&state=fixture-state` }, 404],
+    ] as const) expect((await fixture.call('/login/complete', body)).status).toBe(status);
     expect(fixture.exchange).not.toHaveBeenCalled();
     const completed = await fixture.call('/login/complete', { accountId: 'account', loginId: login.loginId,
       callbackUrl: `${login.redirectUri}?code=private-fixture-code&state=fixture-state` });

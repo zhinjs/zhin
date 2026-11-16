@@ -83,7 +83,7 @@ const expectedSurface = new Map([
     'commandFeedbackToken', 'commandMenuPresentationToken',
     'UserFacingError', 'isUserFacingError',
   ]],
-  ['zhin.js/component', ['ComponentContext', 'ComponentDefiner', 'ComponentDefinition', 'defineComponent']],
+  ['zhin.js/component', ['ComponentContext', 'ComponentDefiner', 'ComponentDefinition', 'ComponentPreviewService', 'defineComponent']],
   ['zhin.js/core/runtime', [
     'Message', 'MessageBase', 'ComponentCall', 'IncomingContext', 'IncomingMessage',
     'MessageDispatchResult', 'OutboundMessageService', 'MessageSenderRef', 'OutboundEnvelope',

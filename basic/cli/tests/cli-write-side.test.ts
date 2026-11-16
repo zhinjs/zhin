@@ -956,6 +956,23 @@ describe('schedule (running Host)', () => {
     expect(output).not.toMatch(/\b[AP]M\b/u);
   });
 
+  it('list 缩进多行内容、超过 2 行截断并提示 --json；--json 输出完整内容 (#1250)', async () => {
+    const prompt = '第一行\n第二行\n第三行';
+    stubHost(() => ({ status: 200, body: { success: true, data: { jobs: [
+      { id: 'multi', enabled: false, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+        action: { kind: 'agent', prompt }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} },
+    ] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const text = lines.join('\n');
+    expect(text).toContain('    内容:   第一行\n            第二行\n            …（共 3 行，完整内容用 zhin schedule list --json 查看）');
+    expect(text).not.toContain('第三行');
+    lines.length = 0;
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list', '--json']);
+    expect(JSON.parse(lines.join('\n'))[0].action.prompt).toBe(prompt);
+  });
+
   it('--target 格式无效时不发请求 (#1250)', async () => {
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit:${code}`);

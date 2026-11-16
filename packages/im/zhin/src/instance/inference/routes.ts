@@ -140,14 +140,86 @@ function revision(value: unknown): number {
     throw new InferenceManagementError('invalid-input');
   return Number(value);
 }
-/** Actionable text for refusals the Console user can resolve; other failures stay generic. */
-const FAILURE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+/**
+ * Operator text for every code the inference routes return (#1250 `ai-account-cli-no-list`): the
+ * Console and `zhin ai account …` show it instead of a bare code. An unknown code keeps the generic
+ * fallback of {@link failureMessage}; codes with their own message (`preparation-failed`,
+ * `client-secret-required`, rate limits, environment refusals) set it where they are classified.
+ */
+const INFERENCE_FAILURE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  // Management (InferenceManagementError)
+  'invalid-input': '请求内容无效：请检查账号 / 服务 id、变量名等参数后重试',
+  forbidden: '没有权限操作这个模型账号或服务：它不属于当前身份，或该操作只允许 Host 管理员',
+  conflict: '有同名的账号或服务，或配置刚被修改：请改用 id，或重新读取后再提交',
+  unavailable: '模型服务管理暂时不可用（实例可能仍在启动，或 AI 未启用），请稍后重试',
+  unsupported: '这个账号不支持该操作（例如还没有语言模型配置，无法测试连接）',
+  // Account lookup by id (routes)
+  'account-not-found': '没有找到这个模型账号：请用 zhin ai account list 查看账号 id',
+  'account-id-is-service': '这是模型服务的 id，不是账号 id：一个服务下可以有多个账号，请用 zhin ai account list 查看账号 id',
+  // Personal sessions and storage
+  'migration-required': '个人会话数据需要先迁移，请按 Console 提示完成迁移后重试',
+  'revision-conflict': '数据已被其他操作修改，请重新读取后再提交',
+  'storage-unavailable': '模型配置存储暂时不可用，请稍后重试',
+  'storage-integrity': '模型配置存储校验失败，请查看实例日志',
+  // Provider graph (ProviderError)
+  'invalid-graph': '模型配置之间的引用无效（引用的服务、账号或模型配置不存在）',
+  'not-configured': '还没有可用的模型配置，请先在 Console「模型」中添加并绑定用途',
+  'profile-not-found': '没有找到这个模型配置',
+  'stale-reference': '引用的模型配置已被修改或删除，请重新读取后再提交',
+  'unsupported-capability': '所选模型不支持该用途需要的能力',
+  'driver-unavailable': '模型服务的驱动不可用：服务类型不存在或对应插件未加载（zhin ai account add --service 需要已有服务的 id / 名称或内置服务类型）',
+  'driver-contract-mismatch': '模型服务驱动的版本与保存的配置不一致，请更新对应插件后重试',
+  'operation-closed': '操作已结束（实例正在重载或请求已取消），请重试',
+  'multiple-stream-consumers': '同一个模型响应不能被读取两次',
+  'invalid-plan': '导入的模型配置计划无效，请检查后重试',
+  'plan-conflict': '模型配置在审阅之后被修改，请重新生成计划后再应用',
   'service-origin-change':
     '已有账号在用这个服务，服务地址只能改路径（例如补上 /v1），不能换主机、协议或端口：账号的密钥只会发往原来的主机。'
     + '要换主机，请用「复制为新服务」新建一个服务，再把账号和用途迁移过去。',
+  // Account authentication (InferenceAuthenticationError)
+  integrity: '账号凭据校验失败，请重新登录或重新设置密钥',
+  'not-authorized': '账号还没有可用的凭据：请先登录或设置密钥（引用环境变量时确认该变量已设置）',
+  disconnected: '账号已断开连接，请重新登录',
+  reauthorize: '账号的授权已失效，请重新登录',
+  'outcome-unknown': '上游没有确认结果，请稍后查看账号状态后重试',
+  'identity-change': '登录的账号与原来的不是同一个身份；确认要更换时请先断开再重新登录',
+  'target-denied': '账号不允许访问这个服务地址',
+  'not-submitted': '请求没有发送到上游，请重试',
+  rejected: '上游拒绝了这次请求，请检查账号后重试',
+  'not-prepared': '账号还没有完成准备，请先完成准备',
+  'client-secret-required': '该服务使用机密 OAuth 客户端，登录前需要先为账号设置客户端凭据（client secret）',
+  'preparation-failed': '账号准备未完成：上游服务拒绝或未能完成准备，请查看原因后重试',
+  'rate-limited': '连接测试过于频繁，请稍后重试',
+  'discovery-rate-limited': '模型目录请求过于频繁，请稍后重试',
 });
 function failureMessage(code: string): string {
-  return FAILURE_MESSAGES[code] ?? '模型服务操作未完成';
+  return INFERENCE_FAILURE_MESSAGES[code] ?? '模型服务操作未完成';
+}
+
+/** An account id that names no account of this caller (Host administrators only, #1250). */
+class InferenceAccountNotFoundError extends Error {
+  constructor(readonly code: 'account-not-found' | 'account-id-is-service') {
+    super(`Inference account: ${code}`);
+    this.name = 'InferenceAccountNotFoundError';
+  }
+}
+
+/**
+ * The caller's account by id. For a Host administrator an unknown id is reported as such, and a
+ * service id passed where an account id belongs is named; others keep the plain `forbidden`, so
+ * a personal owner cannot probe which ids exist.
+ */
+async function accountById(lease: InferenceManagementLease, principal: InferenceManagementPrincipal, id: string) {
+  try {
+    return await lease.management.account(principal, id);
+  } catch (error) {
+    if (error instanceof InferenceManagementError && error.code === 'forbidden' && principal.hostAdministrator) {
+      const graph = await lease.management.graph();
+      if (!Object.hasOwn(graph.accounts, id))
+        throw new InferenceAccountNotFoundError(Object.hasOwn(graph.services, id) ? 'account-id-is-service' : 'account-not-found');
+    }
+    throw error;
+  }
 }
 interface RouteFailure {
   readonly status: number;
@@ -222,6 +294,7 @@ function failure(error: unknown): RouteFailure {
           : 400,
     };
   if (error instanceof HttpBodyError) return { status: error.statusCode, code: 'invalid-input' };
+  if (error instanceof InferenceAccountNotFoundError) return { status: 404, code: error.code };
   if (error instanceof InferenceManagementError)
     return {
       ...(error.reason ? { reason: error.reason } : {}),
@@ -505,12 +578,12 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   });
   register('POST', '/login/begin', async ({ lease, principal, request, signal }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     return lease.accounts.beginLogin({ account, signal });
   });
   register('POST', '/login/complete', async ({ lease, principal, request, signal }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     await lease.accounts.completeCallback({
       account,
       loginId: text(body.loginId),
@@ -521,13 +594,13 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   });
   register('POST', '/login/cancel', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     await lease.accounts.cancelLogin({ account, loginId: text(body.loginId) });
     return lease.accounts.status(account);
   });
   register('POST', '/login/prepare', async ({ lease, principal, request, signal }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     await lease.accounts.prepareLogin({
       account,
       expectedRevision: revision(body.expectedRevision),
@@ -550,7 +623,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   });
   register('POST', '/account/test', async ({ lease, principal, request, signal, consolePrincipal }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     if (!lease.probe) throw new InferenceManagementError('unavailable');
     const graph = await lease.management.graph();
     const profiles = Object.values(graph.profiles).filter((profile) => profile.accountId === account.id
@@ -579,7 +652,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),
-      account = await lease.management.account(principal, text(body.accountId));
+      account = await accountById(lease, principal, text(body.accountId));
     await lease.accounts.disconnect({
       account,
       expectedRevision: revision(body.expectedRevision),

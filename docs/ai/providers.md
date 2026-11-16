@@ -168,6 +168,8 @@ Console 引用 Host 环境变量只有两条规则：
 服务地址本身不受限制：全局 owner 可以把 `*_API_KEY` 账号指向自定义地址（例如自建的模型中转）。新建引用、修改引用名，或修改引用 env 的账号所用服务时都会重新检查这两条规则；被拒绝时返回明确原因。密钥值不会出现在任何响应、日志、审计或数据库明文中。
 
 ```bash
+# 列出 Host 模型账号：id、名称、服务、引用的环境变量名（不含值）与状态；--json 输出同样的字段
+zhin ai account list [--json]
 # 新增一个读取 OPENAI_API_KEY 的 Host 账号（服务可写已有服务的 id／名称，或内置服务类型）
 zhin ai account add --service openai --env OPENAI_API_KEY --name 主账号 --test
 # 修改引用的变量名（账号身份不变）；新值与原凭据不同时需确认重新授权

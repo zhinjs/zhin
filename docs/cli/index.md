@@ -312,7 +312,7 @@ zhin migrate inference --sessions-only --mapping <file> --output <file>   # 只�
 zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm 包名>] [--is-official] [--skip-install]
 ```
 
-**这是创建插件的唯一官方入口。** 插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。
+**这是创建插件的唯一官方入口。** 插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。非交互环境（CI、脚本、无 TTY）不会提问，必须同时给出插件名称和 `--type`，否则立即报错退出。普通插件模板的示例命令是 `commands/<name>/index.ts`（`<name>`）和它的子命令 `commands/<name>/echo/[text]/index.ts`（`<name> echo <文本>`）。
 
 - **独立插件（要发布到 npm 的外部插件）**：`npx @zhin.js/cli new my-plugin --standalone`，在当前目录下生成 `./my-plugin/`，不需要事先有 Bot 项目，也不会修改任何 `package.json`。生成物包含 `package.json#zhin` 清单、默认导出 `definePlugin()` 的 `plugin.ts`、约定目录、`tests/`、`README.md`，开箱可 `pnpm test` / `pnpm typecheck` / `pnpm publish`。
 - **项目内本地插件**：在 Bot 项目根执行 `zhin new my-plugin`（不加 `--standalone`），生成到 `plugins/<name>/` 并把它加进根 `package.json` 的 `dependencies`。
@@ -446,6 +446,8 @@ zhin preview --json                    # 输出扫描与渲染结果后退出
 
 启动本地预览工作台：自动扫描项目或插件目录（默认当前目录）的 `components/*` 与 `pages/*`，支持热重载，并可在线修改 Props、调整样式。默认监听 `127.0.0.1:4176`，`--open` 启动后自动打开浏览器。
 
+组件的示例 Props 来自 `previewProps`；组件里 `use(token)` 读取的插件服务来自 `previewServices` 里的替身（见[组件](../authoring/middleware-components.md#预览时给插件服务一个替身previewservices)），没有替身时预览会指出缺的是哪个 token。
+
 ### build：构建插件
 
 ```bash
@@ -559,7 +561,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin start` 启动并启用 `assistant.enabled`。
 
 ```bash
-zhin schedule list [--host <url>]
+zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "早上好，汇报今日日程" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "检查一下 RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
@@ -577,7 +579,7 @@ zhin schedule resume <id>
 | `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
-`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。
+`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。多行内容逐行缩进，超过 2 行时截断；`--json` 输出完整的任务数据。
 
 ### agent：Agent 诊断
 
@@ -596,12 +598,15 @@ zhin agent info [--json] [--locale zh-CN|en]
 ### ai account：引用 Host 环境变量的模型账号 {#ai-account}
 
 ```bash
+zhin ai account list [--json]
 zhin ai account add --service <服务 id／名称／内置类型> --env <变量名> [--name <名称>] [--test]
 zhin ai account rename-env <账号> <原变量名> <新变量名> [--reauthorize]
 zhin ai account test <账号 id>
 ```
 
 只经本机网关控制套接字执行（需先 `zhin start`），不接受 Console 会话或 `ZHIN_CONSOLE_TOKEN`；只发送变量名，不回显值，写入审计。规则与限制见[账号来源与 Host 环境变量](../ai/providers.md#account-sources)。
+
+`list` 列出 Host 模型账号的 id、名称、所属服务、引用的环境变量名（不含值）和状态，`--json` 输出同样的字段；`test`、`rename-env` 需要的是账号 id，不是服务 id（传错时会提示）。
 
 ### trace：查看 Agent 回合
 
