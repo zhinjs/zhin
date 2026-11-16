@@ -1,5 +1,58 @@
 # @zhin.js/cli
 
+## 1.6.0
+
+### Minor Changes
+
+- e7cf228: 命令行看得到运行状态，升级不留半截（zhinjs/zhin#1250 第 15 批）：
+
+  - `zhin status` 经本项目网关的本地套接字读取 `endpoint.list`、MCP 状态与 `attention.list`，逐个显示适配器账号是否在线、MCP 服务状态和「需要你处理」的数量；每次读取都有超时，读不到时显示「无法读取」，不影响退出码。`--json` 新增 `endpoints`、`mcp`、`attention`。
+  - 运行中的网关版本与已安装的 `@zhin.js/gateway` 不一致时，`zhin status` / `zhin doctor` 给出确切的重启命令：后台网关 `zhin restart --gateway`，systemd `systemctl [--user] restart <unit>`，launchd `launchctl kickstart -k gui/<uid>/<label>`，PM2 `pm2 restart <name>`；`zhin update` 结束时如果网关包有变化也会提示。`zhin restart --gateway` 能识别由 launchd 托管的前台网关。
+  - `zhin doctor` 在网关运行时把「需要你处理」的每一项和读不到的来源列为警告；网关未运行时读取 `.zhin/runtime-failures.json`（由实例 zhin.js 记录各模型账号、适配器账号与 MCP 服务的最近一次失败），显示为「上次运行」；文件不存在时不显示、不报错。有警告时不再显示「所有检查通过」；`--fix` 没有可自动修复的项时会明确说明，并列出每项的手动修复方法。TypeScript 检查改为读取项目自己安装的版本和 package.json 声明的范围，不再看 PATH 上的全局 `tsc`。
+  - 「Zhin 包单实例」检查列出每个副本由谁依赖（例如 `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`），并给出具体修复（改哪个 package.json，或运行 `zhin migrate`）。
+  - `zhin migrate` 按 `pnpm-workspace.yaml` 的 `packages` 一并升级工作区里每个包的 zhin 依赖（精确版本同样升级、保持精确；`workspace:` / `link:` / `file:` 跳过），并同步 `pnpm-workspace.yaml` 的 `overrides:`。
+  - 未知子命令加 `--help` 时也报错并以非 0 退出，附最接近的命令；`zhin plugin list` 提示 `zhin plugin` 是插件作者工具，查看已安装插件用 `zhin packages list`。
+  - `zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`，与 send / schedule 一致。
+  - `*.localhost` 不再视为可以明文发送 Console 令牌的回环地址（Node 经系统解析器解析它）；核对项目标识时仍算本机。显式 `--host` 的主机名会先做一次带超时的 DNS 解析，解析到本机时同样核对项目标识（解析结果从不用来放行明文令牌）。
+
+- d21754f: 日志、升级预览与包列表（zhinjs/zhin#1250 第 19b 批）：
+
+  - `zhin logs` 新增 `--level`（该级别及以上）、`--since` / `--until`（`10m`、`1h`、`09:00`、`2026-11-15 09:00` 或带时区的 ISO 时间）、`--grep`（不区分大小写）和 `--name`（行首 `[来源]` 段，前缀匹配）。带过滤条件时依次搜索实例日志文件及其轮转文件，不受 1000 行缓冲限制，`-n` 表示匹配的行数（最多 100000）；`-f` 只输出匹配的新行；堆栈等续行跟随所属日志，`--grep` 命中续行时先输出所属日志行；日志行不带时区偏移，时间按运行 `zhin logs` 的机器的本地时区解释。日志行没有插件字段，也不是结构化格式，因此没有 `--plugin` 和 `--json`。
+  - `zhin update --dry-run`：按根项目和每个 pnpm 工作区成员列出「当前 → 目标」版本与范围，最新版本超出范围时说明，pnpm overrides 按 override 的版本显示（无法预览的单独说明）；不写文件，也不停止或重启实例。
+  - `zhin packages list` 在项目任意子目录里分组列出项目依赖（适配器 / 插件 / Zhin 框架与功能包 / 其他依赖 / 未安装）与技能包，新增 `--json`；不再在装了几十个插件时显示「无已安装 zhin-package」。`zhin packages install <npm 包>`、`packages search`、`packages info` 行为不变，但提示已弃用，改用 `zhin install` / `search` / `info`（ADR 0062 第 11 项）。
+  - `zhin doctor`：HTTP 端口被占用时按配置的 `http.host` 与 TLS 经 `/pub/health`（不带凭据）判断占用者是不是 Zhin 网关，是另一个项目时写出项目目录与 pid；项目根目录里有旧版脚手架按项目名生成的服务文件（`<name>.service`、`com.zhinjs.<name>.plist`、`install-service.ps1`、`<name>-task.xml`；`ecosystem.config.*` 只在项目不用 PM2 时）时提示可以删除，改用 `zhin service install`（只提示，不删除）。
+
+- fd3800c: #1250 第 19a 批（ADR 0062 §1 / §2）：
+
+  - `zhin service install` 按当前系统现场生成服务文件，不再依赖脚手架生成的模板：写入当前 `node` 与项目内 `@zhin.js/cli` 的绝对路径（nvm / fnm / volta 安装的 Node 也能开机启动，不再经过 `npx`），只在异常退出时重启（systemd `Restart=on-failure`，launchd `KeepAlive.SuccessfulExit=false`），macOS 改用 `launchctl bootstrap` / `bootout`；Windows 生成计划任务 XML 并给出 NSSM 命令。新增 `zhin service start` / `stop` / `restart`。
+  - `zhin stop` 遇到由服务托管的前台网关时（按网关进程确认它确实由该 systemd unit / launchd 任务启动）：旧版服务文件（退出后总是重启）拒绝执行并提示 `zhin service stop`（用户级 unit 带 `--user`）；新版服务文件正常停止并说明何时会再启动。
+  - 服务文件拒绝含控制字符的路径，systemd 的 `%` / `$` 已转义；打印给用户复制的 `sudo cp`、`schtasks`、NSSM 命令按 POSIX / PowerShell 单引号转义；目标是符号链接时拒绝写入。
+  - 后台 `zhin start`、`zhin status` 与 `zhin restart --gateway` 在 Console 未初始化时（仅交互终端）直接打印带 `#token=` 的初始化链接。
+  - `zhin console init --status` 默认输出中文说明，JSON 改为 `--status --json`；选择与当前一致的数据库时提示「未改动配置，无需重启」。
+
+### Patch Changes
+
+- 92e6c1e: 更正上一版发布说明：认领码只由 `zhin status` 显示（或读 `.zhin/chat-owner-claim.json`），实例日志里只记它的哈希前 8 位，不会出现认领码本身。1.4.0 / 1.5.0 发布说明中「实例日志与 `zhin status` 给出一次性认领码」的写法有误（ADR 0060「安全复核」）。
+- 0e6a82f: 普通插件启停热生效，不再重启实例（zhinjs/zhin#1250 `toggle-plugin-restarts-instance`，ADR 0054 修订 2026-11-15）：实例运行时 `zhin enable` / `zhin disable` 与 Console 全局开关先写 `disable_plugins`，再经控制通道 `plugins.apply` 让实例按该修订换代（退役或装配该插件实例的全部能力），实例不重启、适配器不重新登录。插件声明 `package.json#zhin.toggle: "restart"`、含原生模块、实例启动后依赖有变化、实例不支持或热应用失败时，自动回退为停止 → 启动实例（启动失败照旧恢复配置并启动原实例），结果的 `plugin.apply` / `restartReason` / `restartDetail` 与新阶段 `apply-hot` 说明生效方式和原因；Console RPC 的 `restartRequired` 只在实例确实重启时为 true；CLI 输出「已热生效，实例未重启」或重启原因。
+- Updated dependencies [941d534]
+- Updated dependencies [941d534]
+- Updated dependencies [efa87bf]
+- Updated dependencies [efa87bf]
+- Updated dependencies [e7cf228]
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+- Updated dependencies [92e6c1e]
+- Updated dependencies [fd3800c]
+- Updated dependencies [0e6a82f]
+- Updated dependencies [fd3800c]
+  - @zhin.js/pagemanager@1.2.0
+  - @zhin.js/gateway@1.5.0
+  - @zhin.js/console-protocol@1.5.0
+  - @zhin.js/logger@1.3.0
+  - @zhin.js/host-http@1.5.0
+  - @zhin.js/runtime@1.5.0
+  - @zhin.js/scaffold-wizard@1.4.0
+
 ## 1.5.0
 
 ### Minor Changes

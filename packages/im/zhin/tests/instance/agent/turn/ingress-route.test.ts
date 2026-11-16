@@ -9,6 +9,7 @@ import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/run
 import { AiControlPlane, DecisionEventLog, requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
 import { HostMailbox } from '@zhin.js/agent/turn';
 import type { CoreReplyStream, Message, OpenReplyStreamOptions } from '@zhin.js/core/runtime';
+import { InboundOutcomeLedger, inboundOutcomeSink } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../core/src/plugin-runtime/im/conversation-runtime.js';
 import { rootPluginId, SnapshotStore, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
@@ -868,4 +869,88 @@ it('CLI progressive cancellation interrupts a pending finish instead of waiting 
   } });
   await f.run();
   expect(f.release).toHaveBeenCalledOnce();
+});
+
+describe('inbound message outcomes from the Agent ingress (ADR 0061 P2)', () => {
+  const endpoint = { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' };
+  const conversation: ConversationRef = { endpoint, kind: 'group', id: 'quiet-room' };
+
+  function outcomeFixture(trigger: Record<string, unknown>) {
+    const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
+    const snapshots = new SnapshotStore(snapshot);
+    const executeLeased = vi.fn(async () => ({ status: 'completed', output: [] }));
+    const route = new AgentTurnIngressRoute({
+      withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.1,"reason":"secret chat quote"}') }).withInferenceScope,
+      projectRoot: '/host-a', runtime: { executeLeased } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext: async () => ({ blocks: [{ text: 'hi', eventType: 'message.created' }], cursor: 5 }),
+        commitConversationContext: async () => undefined } as never,
+      ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
+      agent: {
+        service: {
+          getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
+          getTriggerConfig: () => ({ enabled: true, ...trigger }),
+          getAgentConfig: () => ({ mailbox: { merge: { enabled: false, quietMs: 0, maxWaitMs: 0 } } }),
+        },
+        agent: { archiveSession: vi.fn(async () => true), appendSessionEvents: vi.fn(async () => true) },
+      } as never,
+    });
+    const run = async (text: string, extra: Record<string, unknown> = {}) => {
+      const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+      const message = {
+        conversation, content: text, endpointId: 'account-a', sender: { id: 'alice' },
+        message: { conversation, id: 'message-1' }, $reply: vi.fn(async () => ({ status: 'sent' })),
+        [inboundOutcomeSink]: () => ledger, ...extra,
+      } as unknown as Message;
+      const lease = snapshots.acquire();
+      try { return { handled: await route.route(message, lease, rootPluginId(), 5), record: ledger.settle() }; }
+      finally { lease.release(); }
+    };
+    return { run, executeLeased, async close() { route.dispose(); await snapshots.close(); } };
+  }
+
+  it('records not_addressed when the group is not an interjection group (unaddressed-message-no-record)', async () => {
+    const f = outcomeFixture({});
+    try {
+      const { handled, record } = await f.run('我的积分');
+      expect(handled).toBe(false);
+      expect(record).toMatchObject({ outcome: 'not_addressed', reason: 'no_command_not_ambient', stage: 'ambient', reply: 'no' });
+      expect(f.executeLeased).not.toHaveBeenCalled();
+      expect(record.detail).toContain('no ai.trigger.ambient');
+    } finally { await f.close(); }
+  });
+
+  it('says why a configured but unlisted group got no interjection (review of #1281)', async () => {
+    const f = outcomeFixture({ ambient: { conversations: ['icqq:other-room'] } });
+    try {
+      const { record } = await f.run('我的积分');
+      expect(record).toMatchObject({ outcome: 'not_addressed', reason: 'no_command_not_ambient' });
+      expect(record.detail).toContain('not in ai.trigger.ambient.conversations');
+    } finally { await f.close(); }
+  });
+
+  it('records empty_input for an empty group message', async () => {
+    const f = outcomeFixture({ ignorePrefixes: ['!'], ambient: { conversations: ['*'] } });
+    try {
+      expect((await f.run('   ')).record).toMatchObject({ outcome: 'not_addressed', reason: 'empty_input' });
+    } finally { await f.close(); }
+  });
+
+  it('records ambient_silent with the judge outcome but never the judge’s reason text', async () => {
+    const f = outcomeFixture({ ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } });
+    try {
+      const { record } = await f.run('anyone around?');
+      expect(record).toMatchObject({ outcome: 'ambient_silent', reason: 'ambient_not_engaged', stage: 'ambient' });
+      expect(JSON.stringify(record)).not.toContain('secret chat quote');
+    } finally { await f.close(); }
+  });
+
+  it('records model_silent for an addressed turn that produced no output, with the turn id', async () => {
+    const f = outcomeFixture({});
+    try {
+      const { handled, record } = await f.run('@zhin hello', { mentioned: true });
+      expect(handled).toBe(true);
+      expect(record).toMatchObject({ outcome: 'model_silent', reason: 'empty_output', stage: 'model' });
+      expect(record.turnId).toEqual(expect.any(String));
+    } finally { await f.close(); }
+  });
 });

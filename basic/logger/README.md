@@ -5,7 +5,7 @@
 ## ✨ 特性
 
 - 🎯 **轻量级**: 仅依赖 chalk 与 string-width
-- 🎨 **默认格式**: `[HH:mm:ss.SSS][LEVEL] [name] message`，可换成自定义格式化器
+- 🎨 **默认格式**: `[YYYY-MM-DD HH:mm:ss.SSS][LEVEL] [name] message`（终端里省略日期），可换成自定义格式化器
 - 🌈 **智能着色**: 自动为不同级别和名称分配颜色
 - 🎨 **颜色自定义**: 完全自定义级别、名称、日期颜色（新功能）
 - 📊 **多输出支持**: 控制台、文件、流等多种输出方式
@@ -41,12 +41,15 @@ logger.info('这是来自 MyApp 的日志')
 ### 输出格式
 
 ```
-[04:07:55.852][INFO] [MyApp] 应用启动
-[04:07:55.854][WARN] [Database] 连接超时
-[04:07:55.855][ERROR] [Auth] 用户验证失败
+[2026-11-15 04:07:55.852][INFO] [MyApp] 应用启动
+[2026-11-15 04:07:55.854][WARN] [Database] 连接超时
+[2026-11-15 04:07:55.855][ERROR] [Auth] 用户验证失败
 ```
 
-- **时间格式**: `HH:mm:ss.SSS`（本地时间；名称为空时省略 `[name]` 段）
+- **时间格式**: `YYYY-MM-DD HH:mm:ss.SSS`（本地时间）。stdout 是终端时省略日期，只写 `HH:mm:ss.SSS`；文件、管道和网关托管的实例日志（`.zhin/logs/instance.log`）都带日期。`new DefaultFormatter(colors, { date: true | false })` 可以固定其中一种
+- **名称**: 名称为空时省略 `[name]` 段
+- **解析**: `parseLogLine(line)` 按同一格式解析一行（先去掉颜色，日期可有可无），返回 `{ date?, time, timestamp?, level, category?, message }`；不是日志开头的行（堆栈、第三方输出）返回 `undefined`。`zhin logs` 的过滤和 Console 系统日志都用它
+- **字段写法**: 消息里的结构化字段统一用 `formatCompact()`：`动作 | 键: 值 | 标记`（如 `usage_persist | status: failed | detail: 本轮用量未写入数据库`）。不要再写 `key=value`
 - **级别着色**: DEBUG(灰), INFO(蓝), WARN(黄), ERROR(红)
 - **名称着色**: 自动为不同名称分配颜色，便于区分
 

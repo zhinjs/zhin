@@ -1,5 +1,42 @@
 # zhin.js
 
+## 1.5.0
+
+### Minor Changes
+
+- 816c3f3: #1250 第 18 批：入站消息结局与群聊插话（ADR 0061 P1/P2/P5、ADR 0062 §23）。
+
+  - 每条入站消息在处理结束时恰好得到一个结局（`InboundOutcomeLedger`，`finally` 提交）：命令、中间件、处理器、交互态、准入、去重、近似指令、发送失败与 Agent 入口都上报候选，按优先级取主结局，其余记为 facets；抛错记为 `internal_error` 并带错误号（`err_` + 12 位十六进制，`createErrorId` 移入 `@zhin.js/logger`），原样重新抛出。结局不存消息正文，管理员补充 ≤ 200 字并按决策审计同一套规则脱敏（`redactDecisionPayload` 下移到 `@zhin.js/kernel`，Agent 原名再导出）。
+  - 结局保存在进程内（2000 条 / 24 小时，静默结局每会话每分钟超过 30 条时聚合），附在消息诊断记录上（`RuntimeMessageDiagnostic.outcome`），并写一行实例日志 `op=inbound_outcome`。
+  - 没被 @、不是指令、本群又没开插话的群消息记 `not_addressed`（`unaddressed-message-no-record`）；旁听判定不插话记 `ambient_silent`；控制面 / 禁言记 `filtered_by_policy`。
+  - 群插话纳入功能开关：`ai.trigger.ambient.conversations` 是全局默认值，适配器 / 账号 / 会话层开关存进 `feature_overrides`；群管理员可在群里发「功能 关闭 / 开启 / 重置 插话」（`ambient-allowlist-only`）。
+  - 交互态：提问可声明 `answeredBy: 'target' | 'anyone'`（默认 `target`）；回答无效时提示最多重发一次。提醒插件的确认步骤只接受「确认」/「取消」，期间的闲聊不再让整段确认提示反复出现（`reminder-confirm-captures-chat`）。
+  - group-suite：`mypoints` 增加中文别名「积分」「我的积分」，`rank` 增加「排行」「积分排行」（`group-suite-zh-alias-partial`）。
+
+- 0e6a82f: 普通插件启停热生效，不再重启实例（zhinjs/zhin#1250 `toggle-plugin-restarts-instance`，ADR 0054 修订 2026-11-15）：实例运行时 `zhin enable` / `zhin disable` 与 Console 全局开关先写 `disable_plugins`，再经控制通道 `plugins.apply` 让实例按该修订换代（退役或装配该插件实例的全部能力），实例不重启、适配器不重新登录。插件声明 `package.json#zhin.toggle: "restart"`、含原生模块、实例启动后依赖有变化、实例不支持或热应用失败时，自动回退为停止 → 启动实例（启动失败照旧恢复配置并启动原实例），结果的 `plugin.apply` / `restartReason` / `restartDetail` 与新阶段 `apply-hot` 说明生效方式和原因；Console RPC 的 `restartRequired` 只在实例确实重启时为 true；CLI 输出「已热生效，实例未重启」或重启原因。
+
+### Patch Changes
+
+- 941d534: `definePage()` 新增 `keywords`（ADR 0063 决策 3）：命令面板搜索别名，可以是一组，也可以按 `zh-CN` / `en` 分语言（例如 `{ 'zh-CN': ['抽奖'], en: ['lottery'] }`）；`definePage` 校验并去重，`@zhin.js/page` 原样透传。`keywords` 和 `section` 走同一路径：register 包装与 `@zhin.js/client` 的 `resolveEntryRegister` 写进路由 `meta.keywords`，Host 的 `/entries` 在每条 entry 顶层与 `meta` 中都带上 `keywords`；每条 entry 另带所属插件的 `packageName` 和 `pluginDescription`（插件 package.json 的 `description`），供 Console 命令面板按插件名与说明搜索插件页面。
+- 941d534: Console 共享模块版本核对（ADR 0063 D3）：`@zhin.js/console-ui` 与 React 一样由 Console 提供单例，插件页面打包时不再打进去（`@zhin.js/console-ui/cn` 并入根导入，`styles.css` / `tokens.css` 的导入变为空模块）。页面的 `/esm/@zhin.js~console-ui.mjs` 地址带上插件 `peerDependencies` 中的范围、插件包名和用到的具名导出；代理模块拿 Console 在 `globalThis.__ZHIN_CONSOLE_SHARED_MODULE_VERSIONS__` 登记的版本比对：主版本不兼容时明确报错，版本偏低时在控制台告警并记录到 `__ZHIN_CONSOLE_SHARED_MODULE_ISSUES__`（同时派发 `zhin:console-shared-module-issue` 事件），缺少的具名导出按名字报出、调用时抛错，不再静默给出 `undefined`。`zhin.js` 的 `/esm/*` 把查询参数交给 pagemanager。
+- efa87bf: 失败原因看得见（#1270 第 14 批）：实例把账号准备、模型调用、账号启动与 MCP 连接的最近一次失败原子写入 `.zhin/runtime-failures.json`（随机临时文件名、`wx` 独占创建、权限 0600，拒绝符号链接），成功后清除，重启后标为「重启前记录」；暂时从列表消失的账号或 MCP 服务保留 10 分钟宽限期；失败原因脱敏加强（URL query、JSON 键、`Cookie:`、裸 `sk-…` / `AIza…` 与长串）；「需要你处理」新增模型账号（需重新登录 / 已断开 / 结果未知 / 准备失败）与无效配置（子 Agent 的模型选择被忽略）条目，MCP 未连接条目给出原因；实例启动中 `attention.list` 返回「启动中」，不再逐个来源记 WARN。模型服务接口的失败都带 `details` 与 `nextStep`；Antigravity 开通被上游拒绝（`UNSUPPORTED_CLIENT`）时保留这一原因并提示填写 `projectId`。
+- e7cf228: 模型服务连接测试的限流（`/api/agent/inference/probe`、`/account/test`）只统计已存在的 Profile，未知的 Profile ID 不再占用计数；限流表最多记录 1024 个键，超出时丢弃最久未测试的键，内存不再随请求增长（zhinjs/zhin#1250）。
+- d21754f: 日志写法统一（zhinjs/zhin#1250 第 19b 批）：Agent 的存储与清理失败日志由 `op=usage_persist status=failed; 说明` 改为与其余日志相同的 `usage_persist | status: failed | detail: 说明`，备用模型切换日志改为 `model_fallback | purpose: … | from: … | to: … | reason: … | phase: …`。实例的 Console 系统日志改用 `@zhin.js/logger` 的 `parseLogLine`，带日期的新格式与旧格式的行都能落库。
+- Updated dependencies [efa87bf]
+- Updated dependencies [816c3f3]
+- Updated dependencies [d21754f]
+- Updated dependencies [92e6c1e]
+- Updated dependencies [0e6a82f]
+  - @zhin.js/console-protocol@1.5.0
+  - @zhin.js/core@1.10.0
+  - @zhin.js/logger@1.3.0
+  - @zhin.js/im-contract@1.3.0
+  - @zhin.js/host-http@1.5.0
+  - @zhin.js/database@1.2.2
+  - @zhin.js/adapter@1.3.2
+  - @zhin.js/command@1.3.1
+  - @zhin.js/harness@1.0.1
+
 ## 1.4.0
 
 ### Minor Changes

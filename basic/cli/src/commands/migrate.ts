@@ -2,7 +2,9 @@
  * migrate — 将老版本 Zhin 项目快速升级到最新
  *
  * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖到 registry 上的最新版本（写 ^x.y.z；精确版本保持精确，
- *   用户锁定的依赖默认保留），并按目标 zhin.js 的依赖对齐 pnpm.overrides 中的 @zhin.js/*
+ *   用户锁定的依赖默认保留），并按目标 zhin.js 的依赖对齐 pnpm.overrides 与 pnpm-workspace.yaml overrides 中的 @zhin.js/*
+ * - pnpm 工作区（pnpm-workspace.yaml 的 packages）里的每个包也升级 zhin 依赖：精确版本同样升级（保持精确），
+ *   只跳过 workspace: / link: / file: 等本地来源
  * - 在 pnpm-workspace.yaml 的 allowBuilds 中补齐网关原生依赖（node-pty、ssh2、cpu-features），已有条目保留
  * - 补全缺失的推荐 scripts、engines
  * - 确保 data、plugins 等目录存在
@@ -37,6 +39,8 @@ import {
   syncReleaseAgeExclusions,
 } from '../utils/installed-versions.js';
 import { semver } from '../plugin-check/semver.js';
+import { isMap, isScalar, parseDocument } from 'yaml';
+import { isSymbolicLink, listWorkspacePackageDirs, workspaceRelative } from '../utils/workspace-packages.js';
 
 const cwd = process.cwd();
 
@@ -104,12 +108,38 @@ function isLocalOverride(value: string): boolean {
   return /^(?:workspace:|link:|file:|portal:|\$|\.{0,2}\/)/.test(value.trim());
 }
 
+/** Local sources a workspace member's dependency keeps (`workspace:`, `link:`, `file:`, …): never rewritten. */
+export function isLocalDependencySpecifier(specifier: string): boolean {
+  return /^(?:workspace:|link:|file:|portal:|catalog:|npm:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(specifier.trim());
+}
+
 export interface UpgradePackageJsonOptions {
   toLatest: boolean;
   dryRun: boolean;
   includePinned?: boolean;
   /** Registry lookup; defaults to `npm view` against the project's configured registry. */
   lookup?: RegistryLookup;
+  /**
+   * A member package of the project's pnpm workspace (`plugins/foo`, #1250): only its Zhin
+   * dependencies move — exact versions too (kept exact), local sources never. Scripts, engines,
+   * the start stack, overrides and pnpm-workspace.yaml are the root's business.
+   */
+  workspaceMember?: boolean;
+  /** Receives the registry releases the upgrade targets (`name → version`). */
+  releases?: Map<string, string>;
+  /** Receives the registry specifiers of every looked-up dependency (`name → specifier`). */
+  resolved?: Map<string, string>;
+  /** Output prefix (`plugins/foo: `) for a workspace member's lines. */
+  label?: string;
+  /** Receives the Zhin dependencies this upgrade kept as they are (locked, newer than the registry, offline). */
+  kept?: Set<string>;
+  /**
+   * Workspace members only: the Zhin dependencies the root declares but kept (`kept` of the root's
+   * upgrade). A member keeps its own specifier for them instead of moving past the root.
+   */
+  rootKept?: ReadonlySet<string>;
+  /** Receives `pnpm-workspace.yaml` when this (root) upgrade rewrote its overrides. */
+  yamlChanged?: Set<string>;
 }
 
 export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonOptions): boolean {
@@ -117,14 +147,16 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
 
   const zhinDeps = collectZhinDeps(pkg);
   if (zhinDeps.length === 0) {
-    logger.warn(formatCompact( { cmd: 'migrate', op: 'no_zhin_deps' }));
+    if (!options.workspaceMember) logger.warn(formatCompact( { cmd: 'migrate', op: 'no_zhin_deps' }));
     return false;
   }
 
   let changed = false;
+  const label = options.label ?? '';
+  const member = options.workspaceMember === true;
   const lookup = cachedRegistryLookup(options.lookup ?? npmRegistryLookup);
   /** Registry releases the upgrade targets (`name → version`), for pnpm's release-age exclusions. */
-  const releases = new Map<string, string>();
+  const releases = options.releases ?? new Map<string, string>();
   /**
    * The specifier an upgrade writes: the registry's latest release, exact when the old one was
    * exact. Never a downgrade: a range whose lowest version is already newer than the registry's
@@ -145,8 +177,8 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
   const added = new Set<string>();
   const upgraded = new Map<string, string>();
   /** Registry targets of every looked-up dependency, including ones already at that release. */
-  const resolved = new Map<string, string>();
-  if (isBotProjectDirectory(path.dirname(pkgPath))) {
+  const resolved = options.resolved ?? new Map<string, string>();
+  if (!member && isBotProjectDirectory(path.dirname(pkgPath))) {
     const stack = withStartStackDependencies(pkg.dependencies, pkg.devDependencies);
     for (const change of stack.changes) {
       if (change.kind === 'add') {
@@ -177,26 +209,42 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     if (String(existing).startsWith('workspace:')) {
       continue;
     }
-    if (!options.includePinned && isPinnedSpecifier(String(existing))) {
+    if (member && isLocalDependencySpecifier(String(existing))) {
+      console.log(chalk.gray(`  · ${label}${dep}: ${existing} 是本地来源，保留`));
+      continue;
+    }
+    // The root kept this package (a lock without --include-pinned, a newer range, offline): a member
+    // must not move past it, or the root, the member and the overrides end up on different versions.
+    if (member && options.rootKept?.has(dep)) {
+      console.log(chalk.gray(`  · ${label}${dep}: 根目录保留了 ${dep} 的当前版本，${existing} 也保留`));
+      continue;
+    }
+    // A workspace member's exact pin is what leaves a second copy next to the root's (#1250): it
+    // moves with the root (staying exact); only the root keeps exact versions unless --include-pinned.
+    if (!member && !options.includePinned && isPinnedSpecifier(String(existing))) {
       console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（加 --include-pinned 一并升级）`));
+      options.kept?.add(dep);
       continue;
     }
     const target = upgradeSpecifier(dep, String(existing));
     if (target.kind === 'unavailable') {
-      console.log(chalk.yellow(`  ! ${dep}: 无法从 registry 查询最新版本，保留 ${existing}`));
+      console.log(chalk.yellow(`  ! ${label}${dep}: 无法从 registry 查询最新版本，保留 ${existing}`));
+      options.kept?.add(dep);
       continue;
     }
     if (target.kind === 'newer') {
-      console.log(chalk.gray(`  · ${dep}: ${existing} 不低于 registry 最新版本 ${target.latest}，保留（不降级）`));
+      console.log(chalk.gray(`  · ${label}${dep}: ${existing} 不低于 registry 最新版本 ${target.latest}，保留（不降级）`));
+      options.kept?.add(dep);
       continue;
     }
     const next = target.specifier;
     resolved.set(dep, next);
     if (existing === next) continue;
     if (options.dryRun) {
-      console.log(chalk.cyan(`  [dry-run] ${dep}: ${existing} → ${next}`));
+      console.log(chalk.cyan(`  [dry-run] ${label}${dep}: ${existing} → ${next}`));
     } else {
       pkg[key][dep] = next;
+      if (member) console.log(chalk.cyan(`  · ${label}${dep}: ${existing} → ${next}`));
     }
     upgraded.set(dep, next);
     changed = true;
@@ -222,8 +270,17 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} ${name}: + dependencies (${version})`));
   }
 
+  if (member) {
+    if (changed && !options.dryRun) fs.writeJsonSync(pkgPath, pkg, { spaces: 2 });
+    return changed;
+  }
+
   // Overrides follow the registry target even when the dependency itself was already on it.
-  if (syncZhinOverrides(pkg, resolved, lookup, options.dryRun)) changed = true;
+  const declaredCore = String(pkg.dependencies?.[CORE_PACKAGE] ?? pkg.devDependencies?.[CORE_PACKAGE] ?? '');
+  if (pkg.pnpm?.overrides && typeof pkg.pnpm.overrides === 'object'
+    && syncZhinOverrides(pkg.pnpm.overrides, 'pnpm.overrides', declaredCore, resolved, lookup, options.dryRun)) changed = true;
+  // pnpm 10+ also reads overrides from pnpm-workspace.yaml (#1250 migrate-ignores-overrides).
+  if (syncWorkspaceYamlOverrides(path.dirname(pkgPath), declaredCore, resolved, lookup, options.dryRun)) options.yamlChanged?.add('pnpm-workspace.yaml');
 
   // pnpm 10+ skips dependency build scripts: allow the gateway's native ones (node-pty for the
   // Console terminal) in pnpm-workspace.yaml; the install below then builds them.
@@ -299,17 +356,21 @@ export function isNewerThanRelease(existing: string, latest: string): boolean {
  * specifier. Local wiring (`workspace:`, `link:`, `file:`, `$ref`) and selector keys
  * (`a>b`, `name@range`) are left alone.
  */
-function syncZhinOverrides(pkg: any, resolved: ReadonlyMap<string, string>, lookup: RegistryLookup, dryRun: boolean): boolean {
-  const overrides = pkg.pnpm?.overrides;
-  if (!overrides || typeof overrides !== 'object') return false;
+function syncZhinOverrides(
+  overrides: Record<string, unknown>,
+  where: string,
+  declaredCore: string,
+  resolved: ReadonlyMap<string, string>,
+  lookup: RegistryLookup,
+  dryRun: boolean,
+): boolean {
   const names = Object.keys(overrides).filter(key => key.startsWith(ZHIN_PACKAGE_PREFIX) && !key.includes('>') && !key.slice(1).includes('@'));
   if (names.length === 0) return false;
 
-  const declared = String(pkg.dependencies?.[CORE_PACKAGE] ?? pkg.devDependencies?.[CORE_PACKAGE] ?? '');
-  const target = resolved.get(CORE_PACKAGE) ?? (isExactVersionSpecifier(declared) ? declared.replace(/^=?v?/, '') : undefined);
+  const target = resolved.get(CORE_PACKAGE) ?? (isExactVersionSpecifier(declaredCore) ? declaredCore.replace(/^=?v?/, '') : undefined);
   const coreDependencies = target ? lookup(CORE_PACKAGE, target.replace(/^\^/, ''))?.dependencies : undefined;
   if (target && !coreDependencies) {
-    console.log(chalk.yellow(`  ! pnpm.overrides: 无法查询 zhin.js@${target} 的依赖，保留原值`));
+    console.log(chalk.yellow(`  ! ${where}: 无法查询 zhin.js@${target} 的依赖，保留原值`));
   }
 
   let changed = false;
@@ -318,12 +379,73 @@ function syncZhinOverrides(pkg: any, resolved: ReadonlyMap<string, string>, look
     if (typeof current !== 'string' || isLocalOverride(current)) continue;
     const next = coreDependencies?.[name] ?? resolved.get(name);
     if (next === undefined || next === current) continue;
-    if (dryRun) console.log(chalk.cyan(`  [dry-run] pnpm.overrides.${name}: ${current} → ${next}`));
+    if (dryRun) console.log(chalk.cyan(`  [dry-run] ${where}.${name}: ${current} → ${next}`));
     else {
       overrides[name] = next;
-      console.log(chalk.cyan(`  · pnpm.overrides.${name}: ${current} → ${next}`));
+      console.log(chalk.cyan(`  · ${where}.${name}: ${current} → ${next}`));
     }
     changed = true;
+  }
+  return changed;
+}
+
+/**
+ * {@link syncZhinOverrides} for `pnpm-workspace.yaml#overrides` (pnpm 10+), editing the YAML
+ * document in place so comments and the other settings stay as they are. Returns whether it changed.
+ */
+export function syncWorkspaceYamlOverrides(
+  dir: string,
+  declaredCore: string,
+  resolved: ReadonlyMap<string, string>,
+  lookup: RegistryLookup,
+  dryRun: boolean,
+): boolean {
+  const file = path.join(dir, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(file)) return false;
+  const doc = parseDocument(fs.readFileSync(file, 'utf8'));
+  const node = doc.errors.length === 0 ? doc.get('overrides', true) : undefined;
+  if (!isMap(node)) return false;
+  const values: Record<string, unknown> = {};
+  for (const item of node.items) {
+    const key = isScalar(item.key) ? String(item.key.value) : String(item.key);
+    values[key] = isScalar(item.value) ? item.value.value : undefined;
+  }
+  const before = { ...values };
+  if (!syncZhinOverrides(values, 'pnpm-workspace.yaml overrides', declaredCore, resolved, lookup, dryRun)) return false;
+  if (dryRun) return true;
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== before[key]) node.set(key, value);
+  }
+  fs.writeFileSync(file, doc.toString({ lineWidth: 0 }));
+  return true;
+}
+
+/**
+ * Upgrades the Zhin dependencies of every member package of the project's pnpm workspace with the
+ * same registry lookup as the root (#1250). Returns the members that changed (`plugins/foo`).
+ */
+export function upgradeWorkspacePackages(
+  root: string,
+  options: Pick<UpgradePackageJsonOptions, 'dryRun' | 'lookup' | 'releases' | 'rootKept'>,
+): string[] {
+  const changed: string[] = [];
+  for (const dir of listWorkspacePackageDirs(root)) {
+    const relative = workspaceRelative(root, dir);
+    // Never write through a link: its target may lie outside the project (another checkout, a store).
+    if (isSymbolicLink(path.join(dir, 'package.json'))) {
+      console.log(chalk.yellow(`  ! ${relative}/package.json 是符号链接，已跳过（不经链接改写其他位置的文件）`));
+      continue;
+    }
+    try {
+      if (upgradePackageJson(path.join(dir, 'package.json'), {
+        toLatest: true, dryRun: options.dryRun, workspaceMember: true, label: `${relative}: `,
+        ...(options.lookup ? { lookup: options.lookup } : {}),
+        ...(options.releases ? { releases: options.releases } : {}),
+        ...(options.rootKept ? { rootKept: options.rootKept } : {}),
+      })) changed.push(relative);
+    } catch (error) {
+      console.log(chalk.yellow(`  ! ${relative}/package.json 无法读取或写入，已跳过：${error instanceof Error ? error.message : String(error)}`));
+    }
   }
   return changed;
 }
@@ -622,6 +744,34 @@ export function reportInstalledVersions(
   return behind;
 }
 
+/**
+ * Step 1 of `zhin migrate`: the root first — overrides and `minimumReleaseAgeExclude` follow only
+ * the root's own targets — then every pnpm workspace member with the same registry lookup; a
+ * package the root kept (locked, newer, offline) stays as it is in the members too (#1250).
+ * Returns the files it changed (or would change).
+ */
+export function upgradeProjectDependencies(
+  root: string,
+  options: { readonly dryRun: boolean; readonly includePinned?: boolean; readonly lookup?: RegistryLookup },
+): { readonly pkgChanged: boolean; readonly members: readonly string[]; readonly updatedFiles: readonly string[] } {
+  const pkgPath = path.join(root, 'package.json');
+  const dryRun = options.dryRun;
+  const lookup = cachedRegistryLookup(options.lookup ?? npmRegistryLookup);
+  const rootKept = new Set<string>();
+  const yamlChanged = new Set<string>();
+  const pkgChanged = upgradePackageJson(pkgPath, { toLatest: true, dryRun, includePinned: !!options.includePinned, lookup, kept: rootKept, yamlChanged });
+  const memberReleases = new Map<string, string>();
+  const members = upgradeWorkspacePackages(root, { dryRun, lookup, releases: memberReleases, rootKept });
+  // A package only members declare has no root target to conflict with: its release still needs
+  // the release-age exclusion, or pnpm 11 keeps the member on the old version during the cooldown.
+  const rootDeclared = new Set(collectZhinDeps(fs.readJsonSync(pkgPath)).map(entry => entry.dep));
+  const memberOnly = new Map([...memberReleases].filter(([name]) => !rootDeclared.has(name)));
+  if (memberOnly.size > 0 && usesPnpm(root, fs.readJsonSync(pkgPath)) && syncReleaseAgeExclusions(root, memberOnly, dryRun).length > 0) {
+    yamlChanged.add('pnpm-workspace.yaml');
+  }
+  return { pkgChanged, members, updatedFiles: [...(pkgChanged ? ['package.json'] : []), ...members.map(member => `${member}/package.json`), ...yamlChanged] };
+}
+
 export const migrateCommand = new Command('migrate')
   .description('升级项目依赖、scripts 与目录结构；v1 配置（缺少 configVersion: 2）请用 zhin migrate instances')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
@@ -660,11 +810,12 @@ Note: "zhin runtime migrate" migrates legacy plugin capability code, not the con
       console.log('');
     }
 
-    // 1. 升级 package.json
+    // 1. 升级 package.json：先升级根目录（overrides 与 minimumReleaseAgeExclude 只按根目录自己的
+    //    目标版本），再升级工作区里的包（共用同一次 registry 查询；根目录保留的包，成员也保留）。
     console.log(chalk.bold.blue('1. 升级依赖与 scripts'));
-    const pkgChanged = upgradePackageJson(pkgPath, { toLatest: true, dryRun, includePinned: !!options.includePinned });
-    if (pkgChanged && !dryRun) {
-      console.log(chalk.green('  ✓ package.json 已更新'));
+    const { updatedFiles } = upgradeProjectDependencies(cwd, { dryRun, includePinned: !!options.includePinned });
+    if (updatedFiles.length > 0 && !dryRun) {
+      console.log(chalk.green(`  ✓ ${updatedFiles.join('、')} 已更新`));
     } else if (dryRun && collectZhinDeps(fs.readJsonSync(pkgPath)).length > 0) {
       console.log(chalk.gray('  (见上方 [dry-run] 变更)'));
     }

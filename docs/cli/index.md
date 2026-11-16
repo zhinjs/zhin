@@ -55,10 +55,28 @@ zhin start [--foreground] [--mode development|test|production] [--environment <n
 zhin stop [--timeout <ms>]
 zhin restart [--gateway]
 zhin status [--json]
-zhin logs [-f] [-n <1-1000>] [--interval <ms>]
+zhin logs [-f] [-n <N>] [--level debug|info|warn|error] [--since <时间>] [--until <时间>]
+          [--grep <文字>] [--name <日志来源>] [--interval <ms>]
 ```
 
 `zhin start` 启动管理网关（常驻，承载 HTTP 与 Console）并由它拉起 Zhin 实例；默认后台运行，`--foreground`（`-f`）前台运行（开发、systemd、容器、PM2）。只有 `--foreground`、`--once`、`--standalone` 会前台运行：单写 `--mode production` 仍在后台，进程管理器里必须带 `--foreground`。网关在运行时，其余命令经本地控制套接字 `.zhin/gateway.sock` 请求网关：`stop` 停止实例与网关，`restart` 只重启实例（`--gateway` 重启后台网关），`status` 显示两者状态（未运行时退出码 3），`logs` 读取实例日志。网关未运行时 `stop` / `restart` 无事可做，`logs` 读取 `.zhin/logs/instance.log`。管理命令必须以启动网关的同一个系统用户运行。选项、退出码与 systemd 示例见 [zhin start](./runtime.md)。
+
+日志行的格式是 `[2026-11-15 09:00:01.234][WARN] [来源] 内容`：文件和管道里带日期，终端里只显示时间。键值统一写成 `动作 | 键: 值 | 标记`（如 `usage_persist | status: failed | detail: …`）。
+
+`zhin logs` 不带过滤条件时显示最近 `-n` 行（默认 200，最多 1000）。带上过滤条件时，依次搜索 `.zhin/logs/instance.log` 和轮转文件 `instance.log.1`…，不受网关 1000 行缓冲的限制，`-n` 表示最近多少行匹配的日志（最多 100000）：
+
+- `--level warn`：WARN 及以上（ERROR）；
+- `--since` / `--until`：`10m`、`1h`、`2d`（距现在），`09:00`（今天），`2026-11-15 09:00`，或带时区的 ISO 时间。日志行本身不带时区偏移，行里的时间和不带时区的写法都按运行 `zhin logs` 那台机器的本地时区解释（与写日志的实例在同一台机器、同一时区时才一致）；升级前写入的行只有时间、没有日期，会被跳过并在末尾说明条数；
+- `--grep`：包含该文字的行，不区分大小写；
+- `--name`：行首 `[来源]` 段，`icqq` 也匹配 `icqq:12345`。日志不记录插件名，按插件看日志就用它的日志来源。
+
+堆栈等续行跟随它上面那条日志；`--grep` 命中续行时，会先输出它所属的那条日志行。`-f` 可以和过滤条件同用，只输出匹配的新行。日志是文本格式，没有 `--json`。
+
+```bash
+# 早上 9 点前后有没有执行定时任务、有没有报错
+zhin logs --since 08:55 --until 09:10 --level warn
+zhin logs --name icqq --grep reconnect -f
+```
 
 `zhin update` 见下文[更新依赖](#update-更新依赖)。
 
@@ -95,15 +113,28 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 }
 ```
 
-### service：系统服务
+### service：系统服务 {#service}
 
 ```bash
 zhin service install [--user]
-zhin service uninstall [--user]
+zhin service start|stop|restart [--user]
 zhin service status [--user]
+zhin service uninstall [--user]
 ```
 
-安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。服务文件以前台方式运行网关（`zhin start --foreground --mode production --no-watch`），实例由网关监管重启。
+托管与开机自启的唯一推荐方式（[ADR 0062 §2](../adr/0062-one-path-per-task.md)）。`install` 按当前系统现场生成服务文件：Linux 写 systemd 单元（`--user` 为用户级，直接安装并设为开机自启；不带 `--user` 时生成到 `.zhin/service/` 并打印 `sudo` 安装命令），macOS 写 `~/Library/LaunchAgents/com.zhinjs.<项目名>.plist` 并用 `launchctl bootstrap` 加载，Windows 生成计划任务 XML 并打印 `schtasks` / NSSM 命令。
+
+服务文件写入**当前**的 `node` 绝对路径和项目内 `node_modules/@zhin.js/cli/bin/zhin.js`，不经过 `npx`，所以 nvm / fnm / volta 安装的 Node 也能开机启动；更换 Node 版本或移动项目目录后重新运行 `zhin service install`。服务以前台方式运行网关（`zhin start --foreground --mode production`），**只在异常退出时重启**（systemd `Restart=on-failure`，launchd `KeepAlive.SuccessfulExit=false`），所以 `zhin stop` 或 `zhin service stop` 之后机器人保持停止，直到下次开机 / 登录或 `zhin service start`。
+
+`zhin stop` 遇到由服务托管的前台网关时：服务文件是旧版（`Restart=always` / `KeepAlive: true`，网关会被立即拉起）就拒绝执行并提示改用 `zhin service stop` 或重新 `zhin service install`；新版服务文件则正常停止并说明何时会再启动。脚手架不再生成任何服务文件；老项目根目录里的 `.service`、`.plist`、`install-service.ps1`、`*-task.xml` 不再使用，可以删除。
+
+服务文件里不能出现控制字符：项目路径含换行等字符时 `zhin service install` 直接报错。打印出来供复制的命令已按 shell（Linux / macOS 用 POSIX 单引号，Windows 用 PowerShell 单引号）转义；目标服务文件是符号链接时拒绝写入。
+
+Windows 的限制（本版不改）：
+- 计划任务用 `InteractiveToken` 登录类型，**没有用户登录时不会在开机后启动**；需要无人登录也运行时改用 NSSM。
+- 计划任务的 `RestartOnFailure` 只在任务**启动失败**时重试，网关运行中崩溃不会被重新拉起。
+- `zhin service stop` 用 `schtasks /End`，会**强制结束**进程，网关来不及正常停止实例。
+- 用 NSSM 安装的是 Windows 服务，`zhin service start|stop|restart` 只操作计划任务；请用 `nssm start|stop|restart <名称>` 管理。
 
 ### db：Console SQL 的受限账号 {#db}
 
@@ -116,7 +147,7 @@ PostgreSQL / MySQL 上，Console 的 SQL 控制台只用单独登录的受限账
 ### console：初始化与用户管理 {#console}
 
 ```bash
-zhin console init [--status] [--reset-store]
+zhin console init [--status [--json]] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
@@ -131,7 +162,7 @@ zhin console migrate [--revert]
 Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `.zhin/gateway.db` 里（[ADR 0049](../adr/0049-console-rbac.md)、[ADR 0059](../adr/0059-gateway-storage-isolation.md)），不在项目数据库里。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
 
 - **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开 `.zhin/gateway.db`（离线初始化与救援），先把旧版留在项目数据库里的账号表迁过来。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
-- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
+- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只用几行文字说明初始化状态与当前数据库，加 `--json` 输出 JSON（供脚本使用）。选择的数据库与当前一致（例如默认 SQLite 下 `--database sqlite`）时不写配置、不提示迁移、不重启实例。已经有所有者时报错退出，请改用 `zhin console user`。
   - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
@@ -217,7 +248,9 @@ zhin doctor [--fix] [--upgrade-l4]
 zhin doctor --live <host-url> [--json]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项，不能自动修复的项仍列出「需手动修复」的方法，一项也修不了时会明确说明；有任何警告时不显示「所有检查通过」。网关运行时，Console「需要你处理」的每一项和暂时读不到的来源都列为警告，运行中网关与已安装的 `@zhin.js/gateway` 版本不一致时给出重启命令；网关未运行时读取 `.zhin/runtime-failures.json`，把其中记录的失败显示为「上次运行」：这个文件由实例（zhin.js）在运行中记下模型账号、适配器账号和 MCP 服务的最近一次失败，恢复后删除；还没有记录、或实例版本尚不写这个文件时，这一项不显示，也不报错。TypeScript 一项读取项目自己安装的版本（`node_modules/typescript`）和 `package.json` 声明的范围，不看 PATH 上的全局 `tsc`。「Zhin 包单实例」列出每个副本由谁依赖，例如 `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`，并给出具体修复（改哪个 `package.json`，或运行 `zhin migrate`）。`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
+
+HTTP 端口被占用、又不是本项目经控制套接字能连上的网关时，`doctor` 按配置的 `http.host` 与 TLS（`0.0.0.0` / `::` 换成回环地址）向 `<http|https>://<host>:<端口>/pub/health` 发一次不带任何凭据的请求，区分「另一个项目的 Zhin 网关」「本项目的另一个网关（控制套接字不可用）」「不经网关运行的 Zhin 实例」和其他程序（连接被拒、TLS 握手失败——例如自签证书——或超时时报「无法确认占用者」）；是别的项目的网关时，用它报告的项目标识与监听进程的工作目录比对，写出是哪个项目目录（pid），修复建议是到那里运行 `zhin stop` 或修改 `http.port`。项目根目录里还留着旧版脚手架生成的服务文件（按 `package.json` 的 `name`：`<name>.service`、`com.zhinjs.<name>.plist`、`install-service.ps1`、`<name>-task.xml`）时，「旧服务文件」一项提示可以删除，改用 `zhin service install`；`ecosystem.config.*` 只在 `package.json` 里没有 `pm2` 依赖、也没有 `pm2:*` 脚本时才提示。这一项只是提示（不计为警告），`doctor` 和 `--fix` 都不会删除文件。
 
 ### dev：联调本地 zhin 源码与独立插件
 
@@ -246,7 +279,7 @@ zhin onboard [--quick] [--flow quickstart|full]
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并升级。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides:` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。pnpm 工作区（`pnpm-workspace.yaml` 的 `packages`）里的每个包也一并升级 zhin 依赖：精确版本同样升级（保持精确），`workspace:`、`link:`、`file:` 等本地来源不动；scripts、engines 只改根目录。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并升级。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
@@ -360,7 +393,9 @@ zhin enable <instanceKey 或包名>
 
 | 情况 | 结果 |
 | --- | --- |
-| 网关在运行（`zhin start`） | 经网关事务执行：备份配置 → 停止实例 → 写入 `disable_plugins` → 启动实例并等待就绪；启动失败时恢复配置文件并启动原实例（不运行包管理器）。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 网关在运行（`zhin start`），实例运行中 | 经网关事务热生效：备份配置 → 写入 `disable_plugins` → 在运行中的实例里应用（一次换代：停用即退役该实例的命令、中间件、工具、页面等全部能力，启用即装配并提交）。实例不重启，适配器不重新登录；输出「已热生效，实例未重启」。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 需要重启的情况 | 插件在 `package.json#zhin.toggle` 声明 `"restart"`、含原生模块、实例启动后项目依赖或锁文件有变化、实例版本较旧，或热应用失败时，自动改为：停止实例 → 启动实例并等待就绪，输出里写明重启原因；启动失败时恢复配置文件并启动原实例（不运行包管理器） |
+| 网关在运行，实例未运行 | 只写入配置，下次启动实例时生效 |
 | 网关未运行 | 直接写入配置文件，下次 `zhin start` 时生效 |
 | 已是目标状态 | 成功退出，不改配置，也不重启实例 |
 | 未声明、保留键（`http`、`plugins` 等）、项目根插件 | 报错，退出码 1 |
@@ -369,10 +404,12 @@ zhin enable <instanceKey 或包名>
 ### update：更新依赖
 
 ```bash
-zhin update [包名 | 包名@精确版本 ...]
+zhin update [包名 | 包名@精确版本 ...] [--dry-run]
 ```
 
-不带包名时更新全部依赖（`pnpm update`）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
+不带包名时更新全部依赖（`pnpm update`；pnpm 工作区里是 `pnpm update -r`，工作区成员一起更新）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
+
+`--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides` 里按包名写的项按 override 的版本显示；`link:` 等无法预览的 override 和带条件的 override（`a>b`、`name@<2`）在输出里单独说明。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
 
 ### search / info：发现插件
 
@@ -445,13 +482,17 @@ zhin pub [plugin-name|插件目录] [--tag latest] [--access public] [--registry
 **管理技能 / 扩展包**（ADR 0010）：
 
 ```bash
-zhin packages install <pkg|npm:skill-pack|git:url> [--local]
+zhin packages install <npm:skill-pack|git:url> [--local]
 zhin packages remove <name> [--local]
-zhin packages list [--local]
+zhin packages list [--local] [--json]
 zhin packages update [source] [--local]
 ```
 
-`--local`（`-l`）安装到项目的 `.zhin/packages/`，而不是全局。不带 `npm:` / `git:` 前缀时，与 `zhin install <包名>` 和 Console 使用同一套安装流程。
+`--local`（`-l`）安装到项目的 `.zhin/packages/`，而不是全局。
+
+`zhin packages list` 分组列出项目 `package.json` 里的依赖（在子目录里运行时向上找到项目根目录）：适配器、插件、Zhin 框架与功能包（`zhin.js`、`package.json#zhin.type` 为 `feature` 的包）、其他依赖、已声明但未安装，最后是技能包；`--json` 输出 `{ packages, skillPacks }`。类别按已安装包的 `package.json#zhin` 判断，与 Console 插件页相同。
+
+npm 插件请用 `zhin install` / `zhin search` / `zhin info`（[ADR 0062](../adr/0062-one-path-per-task.md) 第 11 项）。`zhin packages install <npm 包>`、`zhin packages search`、`zhin packages info` 仍然可用、行为不变，但会提示已弃用，将在后续版本删除。
 
 **查看插件是否真正生效**：安装完成不等于已经加载、平台已上线或功能已验证。用下面的命令查看状态并执行验证：
 
@@ -490,6 +531,8 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 ## 操作运行中的 Bot
 
 以下命令操作正在运行的 Bot，需要先在项目目录里用 `zhin start` 启动。默认只经**本项目网关**的本地控制套接字（`.zhin/gateway.sock`）连接，以本地所有者身份执行，不需要令牌；本项目网关没有运行时命令直接报「本项目的网关未运行」，不会按 `http.port` 去连本机端口（那里可能是另一个项目的网关）。要连其他地址时加 `--host <url>`：请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人；Console 初始化之后 `http.token` 一律被拒绝），本机地址会先核对对方 `/pub/health` 报告的项目标识，不是本项目就拒绝；没有报告项目标识（旧版网关或 `--standalone` 实例）时也拒绝，确认目标无误时可加 `--allow-unverified-host` 继续。
+
+「本机地址」包括 loopback（`127.0.0.1`、`localhost`、`[::1]`、`0.0.0.0`）、`*.localhost`、本机网卡地址，以及解析到这些地址的主机名（只为核对项目标识做一次最多 1.5 秒的 DNS 解析，失败或超时按非本机处理）。明文 HTTP 只允许把令牌发给 loopback：`*.localhost` 不算（Node 经系统解析器解析它，可能被 DNS 指到别处），解析结果也从不用来放行明文令牌（真正发请求时会重新解析，DNS 可能已经变了）。`zhin chat-roles export|import` 同样接受 `--host` 与 `--allow-unverified-host`。
 
 ### send：向运行中的 bot 发消息
 

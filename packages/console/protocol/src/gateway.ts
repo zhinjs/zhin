@@ -128,7 +128,37 @@ export interface GatewayPluginEnablement {
   readonly enabled: boolean;
   /** False when the instance already was in the requested state (nothing written, instance untouched). */
   readonly changed: boolean;
+  /**
+   * How a change took effect (zhinjs/zhin#1250; absent from older gateways):
+   * - `hot`: applied in the running instance as one generation transaction, no restart;
+   * - `restart`: the gateway stopped and started the instance ({@link restartReason} says why);
+   * - `none`: nothing was running (written only; applies at the next start) or nothing changed.
+   */
+  readonly apply?: GatewayPluginApplyMode;
+  /** Why the change needed a restart (`apply: 'restart'` only). */
+  readonly restartReason?: GatewayPluginRestartReason;
+  /** Detail of {@link restartReason} (the plugin's own reason, the failed hot apply, the changed file). */
+  readonly restartDetail?: string;
 }
+
+export type GatewayPluginApplyMode = 'hot' | 'restart' | 'none';
+
+/**
+ * Why an enable / disable fell back to stop → write → start:
+ * - `manifest`: the plugin declares `package.json#zhin.toggle: "restart"`;
+ * - `native-module`: the plugin ships or depends on a native addon (cannot be unloaded / reloaded in-process);
+ * - `dependencies-changed`: dependencies changed on disk since the instance started;
+ * - `instance-unsupported`: the running instance cannot apply plugin changes in place (older zhin.js);
+ * - `runtime-requires-restart`: the instance's Runtime kept the previous state for a process restart;
+ * - `hot-apply-failed`: the in-place generation transaction failed or could not be confirmed.
+ */
+export type GatewayPluginRestartReason =
+  | 'manifest'
+  | 'native-module'
+  | 'dependencies-changed'
+  | 'instance-unsupported'
+  | 'runtime-requires-restart'
+  | 'hot-apply-failed';
 
 /**
  * An installed plugin left undeclared because its schema requires fields without defaults (or
@@ -210,6 +240,8 @@ export type GatewayPackagePhase =
   | 'stop-instance'
   | 'package-manager'
   | 'configure'
+  /** Applying a plugin enable / disable in the running instance (no restart, zhinjs/zhin#1250). */
+  | 'apply-hot'
   | 'start-instance'
   | 'rollback'
   | 'restore-files'

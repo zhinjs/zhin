@@ -11,6 +11,12 @@ export interface UserInteractionControl {
   readonly timeoutText?: string;
   readonly invalidText?: string;
   readonly signal?: AbortSignal;
+  /**
+   * Whose replies count as the answer (ADR 0061 P5): `target` (default) only the person the
+   * prompt was asked of, `anyone` any participant of the conversation. Other messages are never
+   * taken as the answer.
+   */
+  readonly answeredBy?: 'target' | 'anyone';
 }
 
 /**

@@ -31,7 +31,24 @@ export type {
   RuntimeMessageDiagnosticStep,
   RuntimeMessageDiagnosticDelivery,
   RuntimeMessageDiagnosticsReader,
+  RuntimeMessageDiagnosticOutcome,
 } from './message-diagnostics.js';
+export * from './message-outcome.js';
+export {
+  enterInboundOutcomeStage,
+  InboundOutcomeLedger,
+  inboundOutcomeSink,
+  MessageOutcomeLog,
+  onUnrecordedInboundOutcome,
+  reportInboundOutcome,
+  type InboundOutcomeLedgerInit,
+  type InboundOutcomeSink,
+  type MessageOutcomeLogOptions,
+  type MessageOutcomeQuery,
+  type MessageOutcomeReader,
+  type UnrecordedOutcomeListener,
+} from './inbound-outcome-ledger.js';
+export type { InteractionClaimResolution } from './interaction-runtime.js';
 export {
   MessageBus,
   messageBusToken,
@@ -54,3 +71,4 @@ export * from '../../notice.js';
 export * from '../../request.js';
 export * from '../../system-event.js';
 export * from '../../venue/index.js';
+export * from './ambient-switch.js';

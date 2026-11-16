@@ -45,7 +45,9 @@ fi
 export HTTP_TOKEN
 
 if [ -n "${OWNER_PASSWORD:-}" ]; then
-  if "$ZHIN" console init --status | grep -q '"setupRequired": true'; then
+  # `--json` exists from @zhin.js/cli 1.6; older versions print JSON without it.
+  setup_status=$("$ZHIN" console init --status --json 2>/dev/null || "$ZHIN" console init --status || true)
+  if printf '%s\n' "$setup_status" | grep -q '"setupRequired": true'; then
     printf '%s\n' "$OWNER_PASSWORD" | "$ZHIN" console init --yes --owner "${OWNER_USERNAME:-maintainer}" --password-stdin \
       || fail "creating the owner account failed (see above)."
   fi

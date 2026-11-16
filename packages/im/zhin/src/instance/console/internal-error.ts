@@ -1,21 +1,18 @@
-import { randomBytes } from 'node:crypto';
 import { jsonResponse } from '@zhin.js/host-http';
 import {
   CONSOLE_INTERNAL_ERROR_MESSAGE,
   type ConsoleApiErrorBody,
   type ConsoleApiErrorCode,
 } from '@zhin.js/console-protocol';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { createErrorId, formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('console');
 
 /** Message of an unexpected failure: logged here, never sent to the client. */
 export const INTERNAL_ERROR_MESSAGE = CONSOLE_INTERNAL_ERROR_MESSAGE;
 
-/** A fresh log correlation id (`err_` + 12 hex), matching `CONSOLE_ERROR_ID_PATTERN`. */
-export function createErrorId(): string {
-  return `err_${randomBytes(6).toString('hex')}`;
-}
+/** A fresh log correlation id (`err_` + 12 hex), matching `CONSOLE_ERROR_ID_PATTERN`; now in `@zhin.js/logger` (ADR 0061 §5). */
+export { createErrorId };
 
 /**
  * A JSON error response for an unexpected failure. The error detail (message) is logged

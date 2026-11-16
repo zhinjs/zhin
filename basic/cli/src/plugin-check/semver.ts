@@ -10,6 +10,7 @@ interface SemverModule {
   satisfies(version: string, range: string, options?: { readonly includePrerelease?: boolean }): boolean;
   minVersion(range: string): { readonly version: string } | null;
   gt(left: string, right: string): boolean;
+  maxSatisfying(versions: readonly string[], range: string, options?: { readonly includePrerelease?: boolean }): string | null;
 }
 
 const requireFromCli = createRequire(import.meta.url);

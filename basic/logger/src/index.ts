@@ -4,6 +4,7 @@ export {
   Logger,
   DefaultFormatter,
   displayLogCategory,
+  parseLogLine,
   ConsoleTransport,
   FileTransport,
   StreamTransport,
@@ -25,6 +26,8 @@ export {
 export type {
   LogEntry,
   LogFormatter,
+  DefaultFormatterOptions,
+  ParsedLogLine,
   LogTransport,
   LoggerOptions,
   TransportSecurityOptions,
@@ -86,6 +89,8 @@ export {
   LOG_LEVEL_NAMES,
 } from './log-level.js'
 export type { LogLevelInput, Log4jsLevel, LogLevelName } from './log-level.js'
+
+export { createErrorId, ERROR_ID_PATTERN } from './error-id.js'
 
 // 导入默认logger和便捷方法
 import defaultLogger from './logger.js'

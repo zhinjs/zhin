@@ -2,7 +2,7 @@ import { agentOperationResourcesToken, createAgentOperationFactory } from './ope
 import type { TurnEvent } from '../event/turn-event.js';
 import { hostProtectedPathsToken, type HostProtectedPaths } from '../security/host-config-paths.js';
 import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../security/usage-store.js';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
 import { readLeasedRootResource, createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { applyTurnTrust } from '../security/trust-level.js';
@@ -443,7 +443,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       try { await models?.release(); }
       catch {
         // Resource cleanup cannot turn an already delivered reply into a retryable failure.
-        try { this.#usageLogger.error('op=model_resource_release status=failed'); } catch { /* Diagnostic only. */ }
+        try { this.#usageLogger.error(formatCompact({ op: 'model_resource_release', status: 'failed' })); } catch { /* Diagnostic only. */ }
       }
       releaseTrace?.();
       if (activeTrace) this.#saveTrace(activeTrace, { ...logContext, status: outcome?.status });
@@ -451,7 +451,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         try { await usageStore.save(usage.finish(usageStatus)); }
         catch {
           // No model response, prompt or database error text enters this diagnostic.
-          try { this.#usageLogger.error('op=usage_persist status=failed; 本轮用量未写入数据库'); } catch { /* Transport failure cannot change delivery. */ }
+          try { this.#usageLogger.error(formatCompact({ op: 'usage_persist', status: 'failed', detail: '本轮用量未写入数据库' })); } catch { /* Transport failure cannot change delivery. */ }
         }
       }
     }

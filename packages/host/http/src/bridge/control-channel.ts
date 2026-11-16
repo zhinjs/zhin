@@ -31,6 +31,8 @@ export interface InstanceReadyDetails {
   readonly generation?: number;
   /** Route table at ready time (ADR 0054 §3 `ready { routes }`). */
   readonly routes?: BridgeRouteTable;
+  /** Optional messages this instance answers (`INSTANCE_BRIDGE_FEATURES`). */
+  readonly features?: readonly string[];
 }
 
 export interface InstanceControlChannel {
@@ -124,6 +126,7 @@ export function openInstanceControlChannel(
           pid,
           ...(details.generation !== undefined ? { generation: details.generation } : {}),
           ...(details.routes ? { routes: details.routes } : {}),
+          ...(details.features?.length ? { features: [...details.features] } : {}),
         },
       });
     },

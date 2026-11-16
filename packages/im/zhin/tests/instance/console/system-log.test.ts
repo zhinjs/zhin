@@ -77,13 +77,15 @@ describe('SystemLogDatabaseTransport', () => {
   it('stores actual current DefaultFormatter output across levels and sources', async () => {
     const { host, rows } = fakeDatabaseHost();
     const transport = new SystemLogDatabaseTransport(host);
-    const formatter = new DefaultFormatter();
-    for (const [level, name] of [[LogLevel.DEBUG, 'fixture:one'], [LogLevel.INFO, 'fixture:two'], [LogLevel.WARN, 'fixture:three'], [LogLevel.ERROR, 'fixture:four']] as const) {
-      transport.write(formatter.format({ level, name, message: 'actual formatter\nsecond line', timestamp: new Date(), args: [] }));
+    // #1250: with the date (files, pipes) and without it (a terminal).
+    for (const formatter of [new DefaultFormatter(undefined, { date: true }), new DefaultFormatter(undefined, { date: false })]) {
+      for (const [level, name] of [[LogLevel.DEBUG, 'fixture:one'], [LogLevel.INFO, 'fixture:two'], [LogLevel.WARN, 'fixture:three'], [LogLevel.ERROR, 'fixture:four']] as const) {
+        transport.write(formatter.format({ level, name, message: 'actual formatter\nsecond line', timestamp: new Date(), args: [] }));
+      }
     }
     await flush();
-    expect(rows).toHaveLength(4);
-    expect(rows.map(row => row.level)).toEqual(['debug', 'info', 'warn', 'error']);
+    expect(rows).toHaveLength(8);
+    expect(rows.map(row => row.level)).toEqual(['debug', 'info', 'warn', 'error', 'debug', 'info', 'warn', 'error']);
     expect(rows.every(row => row.source === 'fixture' && row.message === 'actual formatter\nsecond line')).toBe(true);
   });
 
