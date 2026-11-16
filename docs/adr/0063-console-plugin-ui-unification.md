@@ -370,6 +370,44 @@ sidebar: false
 
 `packages/console/ui/tests/contrast.test.ts` 在 8 种配色 × 深浅主题下检查：主按钮文字对比度 ≥ 4.5:1 与底色亮度差（见 D25）、浅色主按钮描边 ≥ 3:1、`brand-text` 在所有表面 ≥ 4.5:1、信号文字在表面与徽标底色上 ≥ 4.5:1、`destructive-solid` ≥ 4.5:1、信号色深浅同色相同饱和度、图表色相邻 ΔE ≥ 20（实测浅色最小 23.6、深色最小 21.8，任意两色最小 16.7 / 18.7）且在卡片上 ≥ 3:1。
 
+## 增补：空状态、表单控件、图标与焦点（console#125 第三阶段）
+
+增补日期：2026-11-16。来源：zhinjs/console#125 第三阶段（第 7–12 条）。本节只写组件库一侧：组件库提供空状态、ghost 控件、日期选择、代码标识和图标规则；字体文件的加载、表面层级、找不到页面的整页、⌘K 和 toast 由 zhinjs/console 实施。Console 要等 `@zhin.js/console-ui` 下次发版后才能用上本节的组件。
+
+### 21. 空状态（D28）
+
+1. `EmptyState` 的结构固定为：**一张 64px 线稿插画（或图标）+ 一句说明 + 至多一个操作**。插画统一 1.5px 描边（任意尺寸下都保持 1.5px）、不填充、单色 `brand-text`（`currentColor`），是 SVG 组件 `EmptyIllustration`。
+2. 插画用 `illustration` 选择，首批 7 张：`messages`（无消息）、`tasks`（无任务）、`logs`（无日志）、`table`（未选中数据表）、`record`（未选中记录）、`not-found`（找不到页面）、`generic`（通用空）；清单是 `EMPTY_ILLUSTRATIONS`。紧凑模式（`compact`）下为 48px。
+3. 只给插画、不给 `title` / `description` 时，用该插画的默认说明（如「还没有任务」「在左侧选择一个数据表」「找不到这个页面」）；**不再单独显示「暂无数据」**：只给了 `title` 时只显示标题，什么都不给时显示「这里还没有内容」（`empty.noData` 的新文案）。
+4. `action` 渲染为一个 `Button`，默认 `soft`，可选 `primary`（仍受「每个视图最多一个 `primary`」约束，D25）；给 `href` 时渲染为链接；也可以直接传一个元素。
+5. 向后兼容：原有属性（`icon`、`title`、`description`、`compact`、`className`）不变。没传 `illustration` 时仍用原来的图标，但不再是 `opacity 0.3` 的灰图标，而是与插画相同的 `brand-text`、1.5px 描边。
+6. Console 的 `StatusState kind="empty"` 与找不到页面的整页（标题「找不到这个页面」、访问的地址、「返回首页」与「打开 ⌘K 搜索」）由 zhinjs/console 改用本组件实现。
+
+### 22. ghost 控件与日期选择（D29）
+
+1. `Input`、`Textarea`、`SelectTrigger` / `SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField` 接受 `variant="ghost"`：平时无边框、无底色，悬停、聚焦或展开时才出现边框（聚焦为 `brand-text`）。用于次要字段（备用模型、未设置的决策槽），让长表单不再是一面「框墙」；主字段仍用默认样式。类型 `ControlVariant`。
+2. 新增 `DateField`（值 `YYYY-MM-DD`）与 `DateTimeField`（值 `YYYY-MM-DDTHH:mm`），替代浏览器原生的 `date` / `datetime-local` 输入框。值是本地时间的 ISO 8601 字符串（与原生输入框的值格式相同，迁移时不用改数据），空值为 `''`；带时区的值（`Z`、`+08:00`）按本地时间显示，改动后输出不带时区的本地值。
+3. 实现基于 `Popover` + 一个简单的月历（grid 模式），不引入日期库。键盘：触发器上 Enter / Space / ↓ 打开，Delete / Backspace 清空；月历里 ← → ↑ ↓ 按天 / 周移动，Home / End 到本周首尾，PageUp / PageDown 按月（加 Shift 按年），Enter / Space 选中，Esc 关闭；`DateTimeField` 的时、分输入框支持 ↑ ↓ 调整。`clearable`（默认开）显示清除按钮；`min` / `max` 之外的日期不可选；`weekStartsOn` 默认 zh-CN 周一、en 周日。纯函数（`parseDateValue`、`parseDateTimeValue`、`formatDateValue`、`formatDateTimeValue`、`calendarMonth`、`addDays`、`addMonths`）一并导出。
+
+### 23. 图标（D30）
+
+1. 组件库内只用 lucide 图标，统一 `strokeWidth 1.75`（`CONSOLE_ICON_STROKE_WIDTH`）；尺寸：控件里 16px，导航 18px（`CONSOLE_ICON_SIZE`）。组件库渲染使用方传入的图标（`StatCard`、`PageAction`、`EmptyState` 的 `icon`）时也按此描边；空状态的插画与图标例外，为 1.5px（D28）。宿主可以用 lucide 的 `LucideProvider strokeWidth={1.75}` 让自己的图标一致。
+2. **列表、⌘K、工具栏不把图标放在浅色方块里**，图标直接放在表面上；只有导航可以带底。确认对话框的信号图标保留浅色底（它不是列表、⌘K 或工具栏）。
+
+### 24. 代码标识（D31）
+
+包名、RPC 名、ID、cron 表达式这类行内短标识用 `InlineCode`（或 `console-code` 类）：`--console-font-mono` 等宽字体，默认极浅底色（前景色 5%），`tone="plain"` 无底色，**不加边框**。`CodeText` 与它外观相同。
+
+### 25. 焦点环与动效（D32）
+
+1. 组件库里所有组件的焦点环只在 `:focus-visible` 时出现（`brand-text`，D25）。鼠标点开再关闭 `Dialog`、`DropdownMenu`、`Select`、`DateField` 后，焦点回到触发器但不出现焦点环；键盘操作仍然有焦点环。文本输入框聚焦时总有焦点环（浏览器规则，这是预期）。视觉回归用例 `mouse interaction leaves no focus ring` 检查这一点。
+2. 组件库的所有动画（抽屉滑入、手机宽度下的底部抽屉、骨架屏闪光）只在 `prefers-reduced-motion: no-preference` 下运行；`reduce` 下的重置同时停止过渡。
+3. 组件库没有 toast 和 Command（⌘K）组件：toast 的进出场动画（从右下滑入 8px + 淡入 `motion-base`，退出淡出 `motion-fast`，包在 `no-preference` 里）与 ⌘K 输入框去掉内层边框由 zhinjs/console 实施，规则同本条。
+
+### 26. 字体（D33）
+
+组件库**不打包字体**。令牌定义字体栈：`--console-font-sans` 以 Inter 优先、`--console-font-mono` 以 JetBrains Mono 优先，之后回退到系统字体（中文用系统字体）。宿主负责用 `@font-face` 加载 Inter 与 JetBrains Mono（Console 自托管拉丁 + 数字子集，`font-display: swap`）；没有加载时，组件按字体栈回退，布局不依赖具体字体。
+
 ## 备选方案
 
 - **A. 反过来，Console 也改用 `zk-` 套件，作为唯一的组件库**（issue 中的方向 b）。不采用：Console 的组件更完整（基于 Radix 的下拉、对话框、弹出层、焦点管理和无障碍支持），也是用户看得最多的部分；`zk-` 的 `Select` 是原生控件，要补齐就等于重写一遍 Radix。
