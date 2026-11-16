@@ -140,7 +140,7 @@ export async function projectOutboundPayload(
   }
   if (!options.deferInteractive) {
     payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
-    if (interactive === 'native') payload = applyOutboundButtonLimit(payload, resolveOutboundMaxButtons(adapter, snapshot), options.rememberFallback);
+    if (interactive === 'native') payload = applyOutboundButtonLimit(payload, resolveOutboundMaxButtons(adapter, snapshot, conversation), options.rememberFallback);
   }
   if (Array.isArray(payload)) {
     payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));

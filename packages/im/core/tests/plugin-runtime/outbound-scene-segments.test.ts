@@ -7,6 +7,7 @@ import {
   resolveOutboundHtmlPolicy,
   resolveOutboundInteractivePolicy,
   resolveOutboundMarkdownPolicy,
+  resolveOutboundMaxButtons,
   resolveOutboundMediaPolicy,
   resolveOutboundSupportedSegments,
 } from '../../src/plugin-runtime/im/outbound-segments.js';
@@ -133,5 +134,33 @@ describe('outbound segment policy per conversation kind (ADR 0064 F1)', () => {
       createAdapter: () => { throw new Error('not used'); },
     }));
     expect(resolveOutboundSupportedSegments(id, plain, conversation('channel', 'topic-1'))).toEqual(['text', 'share']);
+  });
+
+  it('reads the native button limit per conversation kind (#1250 interactiveLimits)', async () => {
+    const limited = snapshotOf(defineAdapter({
+      capabilities: ['outbound'],
+      profile: {
+        default: { messaging: { segments: { outboundMedia: ['url'], interactive: 'native', interactiveLimits: { maxButtons: 25 } } } },
+        // A kind section that declares segments keeps its own limit…
+        channel: { messaging: { segments: { outboundMedia: ['url'], interactive: 'native', interactiveLimits: { maxButtons: 25 } } } },
+        // …or overrides it.
+        group: { messaging: { segments: { outboundMedia: ['url'], interactive: 'native', interactiveLimits: { maxButtons: 3 } } } },
+        // A section that drops the limit has none (segments replace the default as a whole).
+        thread: { messaging: { segments: { outboundMedia: ['url'], interactive: 'native' } } },
+      },
+      createAdapter: () => { throw new Error('not used'); },
+    }));
+    expect(resolveOutboundMaxButtons(id, limited)).toBe(25);
+    expect(resolveOutboundMaxButtons(id, limited, conversation('private'))).toBe(25);
+    expect(resolveOutboundMaxButtons(id, limited, conversation('channel'))).toBe(25);
+    expect(resolveOutboundMaxButtons(id, limited, conversation('group'))).toBe(3);
+    expect(resolveOutboundMaxButtons(id, limited, conversation('channel', 'topic-1'))).toBeUndefined();
+    const buttons = Array.from({ length: 5 }, (_, index) => ({ id: `b${index}`, label: `选项${index + 1}`, payload: `x:s:${index + 1}` }));
+    const keyboard = [{ type: 'markdown', data: { content: '选' } }, { type: 'keyboard', data: { rows: [buttons] } }];
+    const group = (await projectOutboundPayload(keyboard, conversation('group'), limited)).payload as { type: string; data: any }[];
+    expect(group.find(item => item.type === 'keyboard')!.data.rows.flat()).toHaveLength(3);
+    expect(group.filter(item => item.type === 'text').map(item => item.data.text).join('\n')).toContain('5. 选项5');
+    const privateChat = (await projectOutboundPayload(keyboard, conversation('private'), limited)).payload as { type: string; data: any }[];
+    expect(privateChat.find(item => item.type === 'keyboard')!.data.rows.flat()).toHaveLength(5);
   });
 });

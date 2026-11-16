@@ -298,9 +298,14 @@ function readDeclaredInteractivePolicy(segments: Readonly<Record<string, unknown
  * Native button limit an adapter declares (`segments.interactiveLimits.maxButtons`, ADR 0044
  * profile; #1250 select-over-10-options-no-buttons). `undefined` = no declared limit.
  */
-export function resolveOutboundMaxButtons(adapter: CapabilityId, snapshot: RuntimeSnapshot): number | undefined {
-  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const segments = (slot?.definition as { segments?: OutboundSegmentsPolicy } | undefined)?.segments;
+export function resolveOutboundMaxButtons(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
+): number | undefined {
+  // ADR 0064 F1: read through the same per-conversation declaration as the interactive policy, so
+  // a kind section that declares its own `segments` (QQ channels) supplies its own limit.
+  const segments = resolveDeclaredSegments(adapter, snapshot, conversation) as Partial<OutboundSegmentsPolicy> | undefined;
   const max = segments?.interactiveLimits?.maxButtons;
   return typeof max === 'number' && Number.isInteger(max) && max >= 1 ? max : undefined;
 }
