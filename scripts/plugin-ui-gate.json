@@ -13,6 +13,7 @@
     "plugins/adapters/email",
     "plugins/adapters/github",
     "plugins/adapters/icqq",
+    "plugins/adapters/ipad-wechat",
     "plugins/adapters/juejin",
     "plugins/adapters/kook",
     "plugins/adapters/lark",

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/ipad-wechat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/ipad-wechat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=865b6fb5d8849b57 -->
+<!-- sync-adapter-docs:sha256=bbe94a9e8059b475 -->
 
 # @zhin.js/adapter-ipad-wechat
 
@@ -111,6 +111,10 @@ ipad-wechat:
 - **出站**：每次发送使用新的 `operationId`，拿到终态结果（成功或被拒）后确认回收；**结果未知时报告 `unknown`，不会换新 ID 重发**。
 
 其余 SDK 交付（`sync.command`、`sync.error`、`init.page`、`longlink.*`、`session.blocked`）作为平台事件转发；长链 `error` 事件会结束本次运行（与 SDK 在线示例一致）。需要 SDK 独有功能（朋友圈、群公告、邀请等）时，可通过 Endpoint 的 `sdkClient` 拿到底层客户端。
+
+## Console 页面
+
+插件页 `/ipad-wechat` 显示账号运行状态，可以测试连接、增删 endpoint；读取需要 `ipad-wechat:read`，写入需要 `ipad-wechat:write`。扫码与设备验证在 Console 的登录面板完成。
 
 ## 故障排查
 

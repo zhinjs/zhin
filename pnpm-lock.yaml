@@ -2578,6 +2578,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2590,6 +2593,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -7101,6 +7107,9 @@ packages:
     engines: {node: '>=24.0.0 <25'}
     peerDependencies:
       '@wchats/ipad-sign': 0.0.1
+    peerDependenciesMeta:
+      '@wchats/ipad-sign':
+        optional: true
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
@@ -12662,7 +12671,7 @@ snapshots:
   '@wchats/ipad-sign@0.0.1': {}
 
   '@wchats/ipad@0.0.1(@wchats/ipad-sign@0.0.1)':
-    dependencies:
+    optionalDependencies:
       '@wchats/ipad-sign': 0.0.1
 
   '@workflow/serde@4.1.0': {}

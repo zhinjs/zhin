@@ -31,6 +31,7 @@
   },
   "files": [
     "adapters",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -57,10 +58,12 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*"
   },
   "peerDependencies": {
     "@wchats/ipad": "0.0.1",
@@ -101,6 +104,10 @@
       {
         "package": "@zhin.js/adapter",
         "api": "^2.1.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
       }
     ],
     "plugins": [],

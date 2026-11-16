@@ -100,6 +100,10 @@ ipad-wechat:
 
 其余 SDK 交付（`sync.command`、`sync.error`、`init.page`、`longlink.*`、`session.blocked`）作为平台事件转发；长链 `error` 事件会结束本次运行（与 SDK 在线示例一致）。需要 SDK 独有功能（朋友圈、群公告、邀请等）时，可通过 Endpoint 的 `sdkClient` 拿到底层客户端。
 
+## Console 页面
+
+插件页 `/ipad-wechat` 显示账号运行状态，可以测试连接、增删 endpoint；读取需要 `ipad-wechat:read`，写入需要 `ipad-wechat:write`。扫码与设备验证在 Console 的登录面板完成。
+
 ## 故障排查
 
 | 现象 | 可能原因 |

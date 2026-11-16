@@ -8,7 +8,7 @@ tier: Experimental
 This page translates [`plugins/adapters/ipad-wechat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/ipad-wechat/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
-<!-- sync-adapter-docs:sha256=865b6fb5d8849b57 -->
+<!-- sync-adapter-docs:sha256=bbe94a9e8059b475 -->
 
 # @zhin.js/adapter-ipad-wechat
 
@@ -44,7 +44,7 @@ pnpm add @zhin.js/adapter-ipad-wechat @wchats/ipad@0.0.1 @wchats/ipad-sign@0.0.1
 
 Both SDK packages are optional peers: without them the plugin still loads, and starting an account fails with a hint to install them. Their versions must match each other.
 
-## Minimal configuration
+## Minimal Configuration
 
 ```yaml
 configVersion: 2
@@ -111,6 +111,10 @@ Delivery follows the SDK:
 - **Outbound**: every send uses a fresh `operationId` and is reclaimed after a terminal result (sent or rejected); **an unknown result is reported as `unknown` and never resent under a new ID**.
 
 Other SDK deliveries (`sync.command`, `sync.error`, `init.page`, `longlink.*`, `session.blocked`) are forwarded as platform events; a long-link `error` event ends the current run (as in the SDK's online example). For SDK-only features (Moments, group announcements, invitations …) use the Endpoint's `sdkClient`.
+
+## Console page
+
+The plugin page `/ipad-wechat` shows account status, tests the connection and adds or removes endpoints; reading needs `ipad-wechat:read`, writing needs `ipad-wechat:write`. QR login and device verification happen in the Console login panel.
 
 ## Troubleshooting
 

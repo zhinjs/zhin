@@ -1,4 +1,5 @@
 import { definePlugin } from 'zhin.js';
+import { createIpadWechatConsoleRpc } from './src/console.js';
 import { displayName } from './src/index.js';
 
 /**
@@ -9,4 +10,9 @@ export default definePlugin({
   name: 'ipad-wechat',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: { displayName },
+  setup(context) {
+    return {
+      consoleRpc: createIpadWechatConsoleRpc(context.resources, () => context.config.get()),
+    };
+  },
 });
