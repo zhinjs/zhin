@@ -1,4 +1,4 @@
-import { describeProbe, runAccountAdd, runAccountTest, runRenameEnv, aiCommand } from '../src/commands/ai.js';
+import { accountRows, describeProbe, runAccountAdd, runAccountList, runAccountTest, runRenameEnv, aiCommand } from '../src/commands/ai.js';
 import type { HostHttpConfig } from '../src/utils/host-http.js';
 
 function client(handler: (path: string, body: Record<string, unknown>) => { status: number; body: unknown }) {
@@ -24,9 +24,9 @@ function output() {
 
 afterEach(() => { process.exitCode = undefined; });
 
-it('registers zhin ai account add / rename-env / test', () => {
+it('registers zhin ai account list / add / rename-env / test', () => {
   const account = aiCommand.commands.find(command => command.name() === 'account')!;
-  expect(account.commands.map(command => command.name()).sort()).toEqual(['add', 'rename-env', 'test']);
+  expect(account.commands.map(command => command.name()).sort()).toEqual(['add', 'list', 'rename-env', 'test']);
 });
 
 it('adds a Host env account over the local socket with names only, then tests it on request', async () => {
@@ -74,4 +74,51 @@ it('reports a failed connection test with its outcome class only', async () => {
   expect(await runAccountTest({ client: config, account: 'account:1', output: out.sink })).toBe(false);
   expect(out.errors).toEqual(['连接测试失败：auth HTTP 401（40ms）']);
   expect(describeProbe({ status: 'failed', kind: 'credential', code: 'not-authorized', durationMs: 1 })).toBe('连接测试失败：credential not-authorized（1ms）');
+});
+
+describe('zhin ai account list (#1250 ai-account-cli-no-list)', () => {
+  const view = {
+    services: { 'service:1': { label: 'OpenAI 官方' }, 'service:2': {} },
+    accounts: {
+      'account:2': { id: 'account:2', serviceId: 'service:2', authentication: { method: 'oauth' } },
+      'account:1': { id: 'account:1', label: '主账号', serviceId: 'service:1', authentication: { method: 'api-key', source: 'env://OPENAI_API_KEY' } },
+      'account:3': { id: 'account:3', serviceId: 'service:1', authentication: { method: 'api-key', source: '${PRIMARY_API_KEY:-${BACKUP_API_KEY}}' } },
+    },
+    statuses: {
+      'account:1': { status: 'not-authorized', environment: 'missing' },
+      'account:2': { status: 'ready' },
+      'account:3': { status: 'ready' },
+    },
+  };
+
+  it('reads the management view and shows id, name, service, variable names and status, never a value', async () => {
+    const { config, requests } = client(() => ({ status: 200, body: { success: true, data: view } }));
+    const out = output();
+    expect(await runAccountList({ client: config, output: out.sink })).toBe(true);
+    expect(requests.map(request => request.path)).toEqual(['/api/agent/inference']);
+    const text = out.lines.join('\n');
+    expect(text).toContain('account:1  主账号');
+    expect(text).toContain('服务：OpenAI 官方（service:1）');
+    expect(text).toContain('读取环境变量 OPENAI_API_KEY');
+    expect(text).toContain('⚠ 环境变量未设置');
+    expect(text).toContain('读取环境变量 PRIMARY_API_KEY, BACKUP_API_KEY');
+    expect(text.indexOf('account:1')).toBeLessThan(text.indexOf('account:2'));
+  });
+
+  it('prints JSON rows with --json', async () => {
+    const { config } = client(() => ({ status: 200, body: { success: true, data: view } }));
+    const out = output();
+    expect(await runAccountList({ client: config, json: true, output: out.sink })).toBe(true);
+    expect(JSON.parse(out.lines.join('\n'))).toEqual(accountRows(view));
+    expect(accountRows(view)[0]).toEqual({ id: 'account:1', name: '主账号', serviceId: 'service:1', service: 'OpenAI 官方',
+      method: 'api-key', env: ['OPENAI_API_KEY'], status: 'environment-missing' });
+  });
+
+  it('prints the instance message on failure', async () => {
+    const { config } = client(() => ({ status: 503, body: { success: false, code: 'unavailable', error: '模型服务管理暂时不可用' } }));
+    const out = output();
+    expect(await runAccountList({ client: config, output: out.sink })).toBe(false);
+    expect(out.errors).toEqual(['模型服务管理暂时不可用']);
+    expect(process.exitCode).toBe(1);
+  });
 });

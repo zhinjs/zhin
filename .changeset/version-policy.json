@@ -4,7 +4,7 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`zhin console user list` 显示用户 id 并新增 `--json`；`zhin agent info` 按来源（项目根目录 / 本地插件 / 已安装插件）统计、帮助双语并新增 `--locale`；CLI 日期时间统一为 `YYYY-MM-DD HH:mm:ss`（24 小时制）；`zhin trace -l` 显示可读会话名，`--json` 新增 `session_display_name`。npm 上 1.6.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`zhin console user list` 显示用户 id 并新增 `--json`；`zhin agent info` 按来源（项目根目录 / 本地插件 / 已安装插件）统计、帮助双语并新增 `--locale`；CLI 日期时间统一为 `YYYY-MM-DD HH:mm:ss`（24 小时制）；`zhin trace -l` 显示可读会话名，`--json` 新增 `session_display_name`。npm 上 1.6.0 未被占用。；zhinjs/zhin#1250 第 32 批（待所有者确认）——新增 `zhin ai account list [--json]`（id、名称、服务、引用的环境变量名与状态，不含值）与 `zhin schedule list --json`；`zhin preview` 的组件渲染上下文提供 `use()` / `has()`（来自组件的 `previewServices`）；`zhin watch` 按进程（instance / gateway）分别显示内存。npm 上 1.7.0 未被占用。"
     },
     {
       "package": "zhin.js",
@@ -55,6 +55,16 @@
       "package": "@zhin.js/console-ui",
       "type": "minor",
       "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。"
+    },
+    {
+      "package": "@zhin.js/runtime",
+      "type": "minor",
+      "reason": "zhinjs/zhin#1250 第 32 批（待所有者确认）——新增公开导出 `withFrameworkPluginConfigFields()`：插件自身配置 schema 加上框架字段 `commandNamespace` / `disabledCommands`（Root 之下再加 `overrides`），Runtime 组合配置与网关离线校验（`zhin packages status`、Console 保存）共用同一形状。npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/component",
+      "type": "minor",
+      "reason": "zhinjs/zhin#1250 第 32 批（待所有者确认）——`ComponentDefinition` 新增可选字段 `previewServices`（新增导出类型 `ComponentPreviewService`），`zhin preview` 用它为 `context.use(token)` 提供替身；`parseComponentDefinition()` 拒绝格式错误的 `previewServices`。npm 上 1.2.0 未被占用。"
     }
   ]
 }

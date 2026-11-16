@@ -9,7 +9,7 @@ import {
   rootPluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type ConfigFileDocument, type EnvStore } from '@zhin.js/runtime';
+import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, withFrameworkPluginConfigFields, createEnvStore, type ConfigFileDocument, type EnvStore } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
@@ -685,7 +685,11 @@ export class ConsoleConfigurationStore {
   async validatePluginConfig(pluginName: string, data: unknown, capturedDocument?: RuntimeConfigDocument): Promise<PluginConfigValidation> {
     const document = capturedDocument ?? (await this.#document.read()).document;
     await this.#assertUnambiguousKey(document, pluginName);
-    const schema = await this.#schemas.readJson(pluginName, document);
+    const own = await this.#schemas.readJson(pluginName, document);
+    // A Plugin config also takes the framework fields (`commandNamespace`, `disabledCommands`,
+    // `overrides`) Runtime composition adds to its schema; validate against that same shape.
+    const schema = own && (pluginName === 'plugin' || !HOST_CONFIG_KEYS.includes(pluginName))
+      ? withFrameworkPluginConfigFields(own, { child: pluginName !== 'plugin' }) : own;
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };

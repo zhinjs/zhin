@@ -15,6 +15,7 @@ import {
   withNotifyTarget,
   targetSummary,
   nextRunSummary,
+  contentLines,
   normalizeCronExpression,
 } from '../utils/assistant-jobs.js';
 import {
@@ -86,7 +87,8 @@ function scheduleSummary(s: JobScheduleCli): string {
 
 const listCommand = new Command('list')
   .description('列出运行中实例的持久化调度任务')
-  .action(async () => {
+  .option('--json', '以 JSON 输出（含完整的任务内容）')
+  .action(async (opts: { json?: boolean }) => {
     const data = await requireOk(
       await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
     );
@@ -95,6 +97,10 @@ const listCommand = new Command('list')
       process.exit(1);
     }
     const jobs = data?.jobs ?? [];
+    if (opts.json) {
+      output.line(JSON.stringify(jobs, null, 2));
+      return;
+    }
     if (jobs.length === 0) {
       output.line('暂无调度任务。使用 zhin schedule add 添加。');
       return;
@@ -110,7 +116,7 @@ const listCommand = new Command('list')
       if (target) output.line(`    目标:   ${target}`);
       const next = nextRunSummary(j);
       if (next) output.line(`    下次:   ${next}`);
-      output.line(`    内容:   ${j.action.prompt}`);
+      for (const line of contentLines(j.action.prompt)) output.line(line);
     }
   });
 

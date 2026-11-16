@@ -452,7 +452,8 @@ describe('Shared CLI and Console plugin workflow', () => {
       const workflow = new PluginManagementWorkflow(root, { snapshots: runtime.snapshots, requestRestart: restart });
       expect(await workflow.inspect('reminder')).toMatchObject({ status: 'enabled', validation: { schemaAvailable: true, valid: true } });
       await packageInstalled(root, 'reminder', '2.0.0', { type: 'object', required: ['y'], properties: { y: { type: 'string' } } });
-      expect(await workflow.inspect('reminder')).toMatchObject({ status: 'missing-config', validation: { schemaAvailable: true, valid: false, errors: [{ path: '$.y' }] } });
+      // Validated like Runtime composition (#1250): a schema without additionalProperties is closed, so the old `x` is reported too.
+      expect(await workflow.inspect('reminder')).toMatchObject({ status: 'missing-config', validation: { schemaAvailable: true, valid: false, errors: [{ path: '$.y' }, { path: '$.x' }] } });
       await expect(workflow.apply('reminder')).rejects.toThrow('不能应用');
       expect(restart).not.toHaveBeenCalled();
       await rm(join(root, 'node_modules/reminder/schema.json'));

@@ -15,6 +15,7 @@ import {
   ProjectGraphService,
   validatePluginConfigSchema,
   parsePluginConfigSchema,
+  withFrameworkPluginConfigFields,
 } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -665,3 +666,22 @@ async function json(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
+
+// #1250 plugin-status-ignores-framework-config-keys: the one shape Runtime and the gateway validate against.
+describe('withFrameworkPluginConfigFields', () => {
+  const own = { type: 'object', additionalProperties: false, properties: { city: { type: 'string' } } };
+
+  it('adds commandNamespace / disabledCommands (and overrides below the Root) to a closed schema', () => {
+    const child = withFrameworkPluginConfigFields(own, { child: true });
+    expect(Object.keys(child.properties as object).sort()).toEqual(['city', 'commandNamespace', 'disabledCommands', 'overrides']);
+    expect(Object.keys(withFrameworkPluginConfigFields(own, { child: false }).properties as object).sort()).toEqual(['city', 'commandNamespace', 'disabledCommands']);
+    expect(parsePluginConfigSchema(child, { city: '上海', commandNamespace: 'tq', disabledCommands: ['forecast'] }).errors).toEqual([]);
+    expect(parsePluginConfigSchema(child, { city: '上海', extra: 1 }).errors).not.toEqual([]);
+    expect(parsePluginConfigSchema(own, { commandNamespace: 'tq' }).errors).not.toEqual([]);
+  });
+
+  it('is idempotent on a schema that already carries the fields', () => {
+    const once = withFrameworkPluginConfigFields(own, { child: true });
+    expect(withFrameworkPluginConfigFields(once, { child: true })).toEqual(once);
+  });
+});

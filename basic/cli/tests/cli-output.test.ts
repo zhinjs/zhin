@@ -171,7 +171,8 @@ describe('zhin schedule list', () => {
     const text = stdout.join('\n');
     expect(text).toContain('  j1 (早报)  [启用]');
     expect(text).toContain('    计划:   every 30m');
-    expect(text).toContain('    内容:   汇报\n第二行');
+    // Every content line is indented under the label (#1250 schedule-list-multiline-content).
+    expect(text).toContain('    内容:   汇报\n            第二行');
     expect(text).not.toMatch(PREFIX);
   });
 });
