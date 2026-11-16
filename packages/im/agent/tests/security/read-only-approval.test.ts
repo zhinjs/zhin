@@ -73,6 +73,25 @@ describe('readOnly declaration (#1250 b33)', () => {
     expect(readOnlyDeclarationApplies(tool(name, { readOnly: true }))).toBe(false);
   });
 
+  // b33 review: spelling variants of a side-effect name must not earn the relaxation either.
+  it.each([
+    'Write_File', 'WRITE_FILE', 'write-file', 'writeFile', 'plugin.write_file', 'plugin:bash', 'BASH',
+    'sendMessage', 'Send-Group-Notice', 'plugin_a__sendGroupMsg', 'memoryUpsert', 'setConfig', 'addReminder',
+    '\uff57rite_file', 'wr\u0456te_file',
+  ])('ignores readOnly on the spelling variant %s', (name) => {
+    expect(readOnlyDeclarationApplies(tool(name, { readOnly: true }))).toBe(false);
+  });
+
+  it('still honours readOnly on ordinary read tools in any spelling', () => {
+    for (const name of ['weather', 'getWeather', 'plugin_a__list-members', 'get_config']) {
+      expect(readOnlyDeclarationApplies(tool(name, { readOnly: true }))).toBe(true);
+    }
+  });
+
+  it.each(['member', 'publish', 'funds', 'identity'] as const)('ignores readOnly on a tool with riskCategory %s', (riskCategory) => {
+    expect(readOnlyDeclarationApplies(tool('lookup', { readOnly: true, riskCategory }))).toBe(false);
+  });
+
   it.each([
     ['shell tag', { tags: ['shell'] }],
     ['outbound tag', { tags: ['outbound'] }],

@@ -67,12 +67,33 @@ const HOST_WRITE_TOOLS = new Set(['memory_upsert', 'memory_delete', 'self_change
 /**
  * #1250 b33: built-in tools that write files, run commands or message other conversations. A `readOnly`
  * declaration on a tool with one of these names (bare, or as the last segment of a qualified name) is
- * ignored, so it can never relax their approval.
+ * ignored, so it can never relax their approval. Spelling variants count as the same name (b33 review):
+ * case, camelCase, `-` / `.` / `:` / `/` separators and full-width forms ({@link toolNameSpellings}).
  */
 export function isBuiltinSideEffectToolName(name: string): boolean {
-  const local = name.split('__').at(-1) ?? name;
-  return [name, local].some(candidate => FILE_WRITE_TOOLS.has(candidate) || SHELL_TOOLS.has(candidate)
+  return toolNameSpellings(name).some(candidate => FILE_WRITE_TOOLS.has(candidate) || SHELL_TOOLS.has(candidate)
     || HOST_WRITE_TOOLS.has(candidate) || isOutboundToolName(candidate));
+}
+
+/**
+ * #1250 b33 review: the name of a tool, its last qualified segment, and both in canonical snake_case
+ * (NFKC, camelCase split, lower case, every other separator as `_`), so `sendMessage`, `Send-Message`,
+ * `plugin.write_file` or a full-width `ｗrite_file` are checked like `send_message` / `write_file`.
+ */
+export function toolNameSpellings(name: string): string[] {
+  const local = name.split(/__|[.:/]/u).filter(Boolean).at(-1) ?? name;
+  const canonical = (value: string) => value.normalize('NFKC')
+    .replace(/([a-z0-9])([A-Z])/gu, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '');
+  return [...new Set([name, local, canonical(name), canonical(local)])];
+}
+
+/** #1250 b33 review: a name that is not plain ASCII after NFKC (possible homoglyph) never earns a relaxation. */
+export function hasNonAsciiToolName(name: string): boolean {
+  return /[^\x20-\x7e]/u.test(name.normalize('NFKC'));
 }
 
 const OUTBOUND_TOOL_NAME = /(?:^|_)(?:send|forward|broadcast|notify|email|mail|dm|post_message|private_message)(?:_|$)/;

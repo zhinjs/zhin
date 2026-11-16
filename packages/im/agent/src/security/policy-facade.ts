@@ -26,7 +26,9 @@ import { classifyHighRiskAction } from './provenance.js';
 import {
   TRUST_LEVEL_POLICY,
   TRUST_RESTRICTION_REASON,
+  hasNonAsciiToolName,
   isBuiltinSideEffectToolName,
+  toolNameSpellings,
   isToolAboveTrust,
   resolveTurnTrustLevel,
 } from './trust-level.js';
@@ -363,12 +365,15 @@ function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
  * tools declared `risk: 'dangerous'`.
  */
 export function readOnlyDeclarationApplies(
-  tool: Pick<ToolDescriptor, 'name' | 'readOnly' | 'tags' | 'risk'>,
+  tool: Pick<ToolDescriptor, 'name' | 'readOnly' | 'tags' | 'risk' | 'riskCategory'>,
 ): boolean {
   if (tool.readOnly !== true) return false;
   if (tool.risk === 'dangerous') return false;
-  if (isBuiltinSideEffectToolName(tool.name)) return false;
-  return classifyHighRiskAction(tool) === undefined;
+  // b33 review: a risk category (member / publish / funds / identity) contradicts a read-only declaration.
+  if (tool.riskCategory !== undefined) return false;
+  // b33 review: spelling variants and possible homoglyphs of a side-effect name never earn the relaxation.
+  if (hasNonAsciiToolName(tool.name) || isBuiltinSideEffectToolName(tool.name)) return false;
+  return toolNameSpellings(tool.name).every(name => classifyHighRiskAction({ ...tool, name }) === undefined);
 }
 
 /**
