@@ -216,9 +216,9 @@ export function Disclosure({ summary, description, badge, defaultOpen, className
   )
 }
 
-/** Inline monospace value (IDs, cron expressions, paths). */
+/** Inline monospace value (IDs, cron expressions, paths); the same look as `InlineCode` (ADR 0063 D31). */
 export function CodeText({ children, className }: { readonly children?: ReactNode; readonly className?: string }) {
-  return <code className={cn('console-code-text', className)}>{children}</code>
+  return <code data-slot="code" className={cn('console-code console-code-text', className)}>{children}</code>
 }
 
 /** Pretty-printed JSON in a scrollable block. */

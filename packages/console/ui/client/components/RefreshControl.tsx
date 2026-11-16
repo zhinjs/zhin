@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { Button } from './ui/button.js'
@@ -106,7 +107,7 @@ export function RefreshControl({
         }}
       />
       <Button variant="outline" size="sm" onClick={() => run()} disabled={disabled || busy} aria-busy={busy || undefined}>
-        <RefreshCw aria-hidden="true" className={cn(busy && 'animate-spin')} />
+        <RefreshCw strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" className={cn(busy && 'animate-spin')} />
         {busy ? i18n.t('refresh.refreshing') : i18n.t('refresh.refresh')}
       </Button>
     </div>

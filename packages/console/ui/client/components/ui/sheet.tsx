@@ -4,6 +4,7 @@ import { forwardRef } from "react"
 import * as Radix from "radix-ui"
 import { cn } from '../../cn.js'
 import { X } from "lucide-react"
+import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 
 const SheetPrimitive = Radix.Dialog
 
@@ -46,7 +47,7 @@ const SheetContent = forwardRef<
     >
       {children}
       <SheetPrimitive.Close className="console-dialog-close disabled:pointer-events-none">
-        <X className="size-4" />
+        <X strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
         <span className="sr-only"><ConsoleUiText id="dialog.close" /></span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>

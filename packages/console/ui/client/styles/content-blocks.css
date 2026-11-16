@@ -81,7 +81,6 @@
   .console-disclosure-description { flex-basis: 100%; font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
   .console-disclosure-body { display: flex; min-width: 0; flex-direction: column; gap: var(--console-stack-gap); padding: 0 var(--console-card-padding) var(--console-card-padding); }
 
-  .console-code-text { padding: 0 var(--console-heading-gap); border-radius: var(--console-check-radius); background: hsl(var(--foreground) / 0.06); font-family: var(--console-font-mono); font-size: var(--console-text-label); overflow-wrap: anywhere; }
   .console-json-block { max-height: 24rem; margin: 0; overflow: auto; padding: var(--console-stack-gap); border-radius: var(--console-control-radius); background: var(--console-surface-inset); font-family: var(--console-font-mono); font-size: var(--console-text-label); line-height: var(--console-leading-code); white-space: pre-wrap; overflow-wrap: anywhere; }
   .console-media-preview { max-width: min(100%, 12.5rem); max-height: 12.5rem; padding: var(--console-inline-gap); border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-control-radius); background: hsl(0 0% 100%); object-fit: contain; }
 

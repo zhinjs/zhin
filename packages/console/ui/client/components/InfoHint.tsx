@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Info } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.js'
 
@@ -15,7 +16,7 @@ export function InfoHint({ label, children, className, tone }: { label: ReactNod
         {/* eslint-disable-next-line console-ui/no-native-controls -- InfoHint is the pill control itself; .console-touch gives the 44px hit area */}
         <button type="button" className={cn('console-info-hint console-touch', tone === 'warning' && 'is-warning', className)}>
           <span>{label}</span>
-          <Info aria-hidden="true" />
+          <Info strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="console-info-hint-panel" align="start">{children}</PopoverContent>

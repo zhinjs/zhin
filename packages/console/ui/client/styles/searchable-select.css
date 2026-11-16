@@ -6,6 +6,11 @@
 }
 .console-searchable-select-trigger:hover { border-color: hsl(var(--foreground) / 0.45); }
 .console-searchable-select-trigger:focus-visible { border-color: hsl(var(--console-brand-text)); }
+.console-searchable-select-trigger[data-variant="ghost"] { border-color: transparent; background: transparent; }
+.console-searchable-select-trigger[data-variant="ghost"]:hover,
+.console-searchable-select-trigger[data-variant="ghost"][aria-expanded="true"] { border-color: hsl(var(--input)); }
+.console-searchable-select-trigger[data-variant="ghost"]:focus-visible { border-color: hsl(var(--console-brand-text)); }
+.console-searchable-select-trigger[data-variant="ghost"]:disabled { background: transparent; }
 .console-searchable-select-trigger:disabled { cursor: not-allowed; background: hsl(var(--muted)); opacity: 0.6; }
 .console-searchable-select-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .console-searchable-select-chevron { width: 1rem; height: 1rem; flex-shrink: 0; opacity: 0.5; }

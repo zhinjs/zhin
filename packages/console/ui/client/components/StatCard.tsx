@@ -1,5 +1,6 @@
 import { createElement, isValidElement, type ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 
 export interface StatCardProps {
@@ -67,7 +68,7 @@ function statIcon(icon: StatCardProps['icon']): ReactNode {
   if (icon == null || icon === '') return null
   if (typeof icon === 'string') return <img src={icon} alt="" className="console-stat-icon" />
   if (isValidElement(icon)) return icon
-  if (typeof icon === 'function' || (typeof icon === 'object' && '$$typeof' in icon)) return createElement(icon as LucideIcon, { 'aria-hidden': true })
+  if (typeof icon === 'function' || (typeof icon === 'object' && '$$typeof' in icon)) return createElement(icon as LucideIcon, { 'aria-hidden': true, strokeWidth: CONSOLE_ICON_STROKE_WIDTH })
   return icon as ReactNode
 }
 
