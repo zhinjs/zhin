@@ -4,15 +4,19 @@ import path from 'node:path';
 import yaml from 'yaml';
 import {
   createConfigDocument,
+  JsonConfigDocument,
   readApplicationPluginDeclaration,
   readSourcePluginOrder,
+  YamlConfigDocument,
 } from '@zhin.js/runtime';
+import { unifiedLineDiff } from './unified-diff.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   readPluginConfigurationMap,
   ROOT_CONFIG_FILE_NAMES,
   rootConfigFormat,
   selectRootConfigFile,
+  type ConfigPatch,
   type RootConfigFormat,
 } from '@zhin.js/plugin-runtime';
 
@@ -256,25 +260,34 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions, local
   };
 }
 
+/** Lines of unchanged context around each change in {@link renderProjectConfigPatch}. */
+const PROJECT_CONFIG_PATCH_CONTEXT = 3;
+
+/**
+ * Preview of the config change as a unified diff (#1250): only the changed lines with
+ * {@link PROJECT_CONFIG_PATCH_CONTEXT} lines around them, computed from the text that
+ * {@link applyProjectConfigPlan} would write (comments and key order kept), not from a
+ * re-serialised document.
+ */
 export function renderProjectConfigPatch(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   if (!plan.changed) return wizardText(locale, "配置无需改动。");
   const format = plan.format ?? 'yaml';
-  const name = plan.relativePath ?? 'zhin.config.yml';
-  return [
-    `# ${name}`,
-    serializeConfig(plan.after, format).trimEnd(),
-    '',
-  ].join('\n');
+  const name = (plan.relativePath ?? 'zhin.config.yml').split(path.sep).join('/');
+  const after = previewProjectConfigSource(plan);
+  const diff = after === undefined
+    ? unifiedLineDiff(serializeConfig(plan.before, format), serializeConfig(plan.after, format), {
+      from: `a/${name}`, to: `b/${name}`, context: PROJECT_CONFIG_PATCH_CONTEXT,
+    })
+    : unifiedLineDiff(plan.expectedSource!, after, {
+      from: `a/${name}`, to: `b/${name}`, context: PROJECT_CONFIG_PATCH_CONTEXT,
+    });
+  return diff || wizardText(locale, "配置无需改动。");
 }
 
-export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<boolean> {
-  if (!plan.changed) return false;
-  if (!plan.writable || !plan.configPath || !plan.format) return false;
-  const document = createConfigDocument(plan.configPath);
-  const snapshot = await document.readSource();
-  if ((plan.expectedSource !== undefined && snapshot.source !== plan.expectedSource) || !isDeepStrictEqual(snapshot.document, plan.before)) throw new Error(wizardText(locale, "配置已在预览后发生变更，请重新生成配置计划。"));
+/** Per-key patches {@link applyProjectConfigPlan} hands to the config document. */
+function projectConfigPatches(plan: ProjectConfigPlan): ConfigPatch[] {
   const keys = new Set([...Object.keys(plan.before), ...Object.keys(plan.after)]);
-  const patches = [...keys].filter(key => !isDeepStrictEqual(plan.before[key], plan.after[key])).flatMap(key => {
+  return [...keys].filter(key => !isDeepStrictEqual(plan.before[key], plan.after[key])).flatMap((key): ConfigPatch[] => {
     if (key === 'plugins') {
       const before = plan.before.plugins as Record<string, string> | undefined;
       const after = plan.after.plugins as Record<string, string> | undefined;
@@ -288,6 +301,39 @@ export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: 'z
       ? { op: 'set' as const, path: [key], value: plan.after[key] }
       : { op: 'remove' as const, path: [key] }];
   });
+}
+
+/** Exposes the documents' own (comment-preserving) patcher without touching the file. */
+class YamlPreviewDocument extends YamlConfigDocument {
+  preview(source: string, patches: readonly ConfigPatch[]): string { return this.patchSource(source, patches).source; }
+}
+class JsonPreviewDocument extends JsonConfigDocument {
+  preview(source: string, patches: readonly ConfigPatch[]): string { return this.patchSource(source, patches).source; }
+}
+
+/**
+ * The text {@link applyProjectConfigPlan} would write, from the source read at planning time.
+ * `undefined` when the plan has no source text (an in-memory config) or the patcher refuses it.
+ */
+function previewProjectConfigSource(plan: ProjectConfigPlan): string | undefined {
+  if (plan.expectedSource === undefined || !plan.configPath || !plan.format) return undefined;
+  const document = plan.format === 'json'
+    ? new JsonPreviewDocument(plan.configPath)
+    : new YamlPreviewDocument(plan.configPath);
+  try {
+    return document.preview(plan.expectedSource, projectConfigPatches(plan));
+  } catch {
+    return undefined;
+  }
+}
+
+export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<boolean> {
+  if (!plan.changed) return false;
+  if (!plan.writable || !plan.configPath || !plan.format) return false;
+  const document = createConfigDocument(plan.configPath);
+  const snapshot = await document.readSource();
+  if ((plan.expectedSource !== undefined && snapshot.source !== plan.expectedSource) || !isDeepStrictEqual(snapshot.document, plan.before)) throw new Error(wizardText(locale, "配置已在预览后发生变更，请重新生成配置计划。"));
+  const patches = projectConfigPatches(plan);
   await (await document.prepare(snapshot, patches)).commit();
   return true;
 }

@@ -2,6 +2,8 @@ import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
 import { jsonResponse } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { CONSOLE_MCP_TEST_PATH } from '@zhin.js/console-protocol';
+import { auditActor, type ConsoleAuditEntry, type ConsolePrincipal } from './access-control.js';
 
 const logger = getLogger('console');
 
@@ -45,6 +47,7 @@ export function registerIntrospectionRoutes(
   base: string,
   ctx: ConsoleRestCtx,
   options: ConsoleRestPagesOptions,
+  auditSink?: (entry: ConsoleAuditEntry) => void,
 ): void {
   const collectors: Array<{
     kind: IntrospectionKind;
@@ -194,6 +197,70 @@ export function registerIntrospectionRoutes(
     }, { summary: `Introspection: ${kind}`, tags: ['console', 'introspection'] });
   }
 
+  // #1250: "test connection" of one configured MCP server. One test per server at a time, at most
+  // `mcpTestMaxConcurrent` (2) overall, and a cooldown per server after each test; every test that
+  // reaches the Agent is written to the Console audit log (who, when, which server, the outcome).
+  const activeMcpTests = new Set<string>();
+  const mcpTestCooldownUntil = new Map<string, number>();
+  const mcpTestMaxConcurrent = clampPositiveInt(options.mcpTestMaxConcurrent, 2, 8);
+  const mcpTestCooldownMs = Math.max(0, options.mcpTestCooldownMs ?? 5_000);
+  const tooManyRequests = (retryAfterMs: number, error: string) => {
+    const response = jsonResponse(429, { success: false, error });
+    response.headers.set('retry-after', String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+    return response;
+  };
+  route('POST', `${base}${CONSOLE_MCP_TEST_PATH}`, async (request, { principal, remoteAddress }) => {
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
+    let body: Record<string, unknown>;
+    try {
+      body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    } catch (error) {
+      if (error instanceof HttpBodyError) return jsonResponse(error.statusCode, { success: false, error: error.message });
+      throw error;
+    }
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 160) return jsonResponse(400, { success: false, error: '请提供 MCP 服务名 name' });
+    if (activeMcpTests.has(name)) return jsonResponse(409, { success: false, error: `MCP 服务 ${name} 的连接测试正在进行` });
+    const cooldown = (mcpTestCooldownUntil.get(name) ?? 0) - Date.now();
+    if (cooldown > 0) return tooManyRequests(cooldown, `MCP 服务 ${name} 刚测试过，请稍后再试`);
+    if (activeMcpTests.size >= mcpTestMaxConcurrent) return tooManyRequests(1_000, 'MCP 连接测试正忙，请稍后再试');
+    const lease = ctx.acquireAgentRuntime?.();
+    const test = lease?.value.introspection?.testMcp;
+    if (!lease || !test) {
+      lease?.release();
+      return agentUnavailable();
+    }
+    activeMcpTests.add(name);
+    const audit = (outcome: 'ok' | 'error', detail: Record<string, unknown>) => {
+      try {
+        auditSink?.({
+          actor: auditActor(principal as ConsolePrincipal | undefined), action: 'mcp.test', target: name, outcome,
+          detail, ...(remoteAddress ? { ip: remoteAddress } : {}),
+        });
+      } catch { /* audit never breaks a request */ }
+    };
+    try {
+      const result = await test(name);
+      if (result === 'agent-unavailable') return agentUnavailable();
+      if (!result) return jsonResponse(404, { success: false, error: `未在 ai.mcpServers 中找到 MCP 服务 ${name}` });
+      mcpTestCooldownUntil.set(name, Date.now() + mcpTestCooldownMs);
+      // Category and counts only: the failure message may name hosts or paths.
+      audit('ok', result.ok
+        ? { result: 'connected', toolCount: result.toolCount, durationMs: result.durationMs }
+        : { result: 'failed', category: result.failure.category, durationMs: result.durationMs });
+      return jsonResponse(200, { success: true, data: result });
+    } catch (error) {
+      mcpTestCooldownUntil.set(name, Date.now() + mcpTestCooldownMs);
+      audit('error', { result: 'error' });
+      logInternalError('mcp_connect_test_failed', error);
+      return jsonResponse(500, { success: false, error: 'MCP connection test failed' });
+    } finally {
+      activeMcpTests.delete(name);
+      lease.release();
+    }
+  }, { summary: 'Test the connection to a configured MCP server', tags: ['console', 'introspection', 'mcp'] });
+
   let activeComponentPreviews = 0;
   route('POST', `${base}/introspection/components/render`, async (request) => {
     const denied = requireWriteScope(ctx);
@@ -261,6 +328,10 @@ export function registerIntrospectionRoutes(
       if (!controller.signal.aborted) controller.abort();
     }
   }, { summary: 'Render a Component preview', tags: ['console', 'introspection', 'component'] });
+}
+
+function agentUnavailable(): Response {
+  return jsonResponse(503, { success: false, error: 'Agent 未运行，无法测试 MCP 连接' });
 }
 
 class ComponentPreviewTimeoutError extends Error {

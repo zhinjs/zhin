@@ -12,7 +12,7 @@
  * | `plugin.dependencies` | one project-wide dependency graph check per read (one item, not one per plugin) | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
- * | `mcp.disconnected` | Agent MCP servers (configured + connected, with the last connect failure) | `status.view` |
+ * | `mcp.disconnected` | Agent MCP servers whose last connect failed (not those still waiting for their first connect) | `status.view` |
  * | `inference.account` | Host model accounts: reauthorize / disconnected / uncertain / preparation failed (#1270) | `agent.view` |
  * | `config.ineffective` | `purposes.agents.<key>` choices the runtime ignores (#1270) | `agent.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
@@ -579,7 +579,7 @@ const messages = createMessages({
   'approval.session.private': { 'zh-CN': '{account} 的私聊 {scene}', en: 'a private chat ({scene}) on {account}' },
   'approval.session.other': { 'zh-CN': '一个会话', en: 'a conversation' },
   'approval.action': { 'zh-CN': '去审批', en: 'Review' },
-  'mcp.title': { 'zh-CN': 'MCP 服务 {server} 未连接', en: 'MCP server {server} is not connected' },
+  'mcp.title': { 'zh-CN': 'MCP 服务 {server} 连接失败', en: 'MCP server {server} failed to connect' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
   'mcp.reason': { 'zh-CN': '最近一次连接失败（{category}）：{message}', en: 'Last connect failed ({category}): {message}' },
   'restored': { 'zh-CN': '（重启前记录）', en: ' (recorded before the restart)' },
@@ -1097,8 +1097,10 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   }
 
   if (sources.mcpServers && allows(P.STATUS_VIEW)) {
+    // #1250: only a failed connect is something to act on. A server that has not connected yet
+    // (waiting to connect) or is not loaded by the running Agent is shown on the MCP page only.
     await read('mcp', async () => (await shared('mcp', async () => sources.mcpServers!()))
-      .filter(server => !server.connected).map((server): AttentionDraft => {
+      .filter(server => !server.connected && server.lastError !== undefined).map((server): AttentionDraft => {
         const failure = server.lastError;
         const message = failure ? attentionFailureReason(failure.message) : undefined;
         return {

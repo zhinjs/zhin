@@ -1,3 +1,4 @@
+import type { HostMcpStatusBoard } from '../host-mcp-status.js';
 import { currentAgentInference } from '../inference/current-operation.js';
 import { join } from 'node:path';
 import type { AIService, AiAnnouncements, AiGroupRules, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '../../index.js';
@@ -53,6 +54,8 @@ export interface PublishAgentToolFeaturesOptions {
   readonly service: AIService;
   readonly localAssets?: LocalImageAssetStore;
   readonly mcpServers: readonly McpServerEntry[];
+  /** Records the configured servers' connect outcomes for introspection (#1250). */
+  readonly mcpStatus?: HostMcpStatusBoard;
   readonly hostTools?: readonly HostAgentTool[];
   readonly runtimeTools: readonly RuntimeToolFeature[];
   readonly knowledgeIndex?: KnowledgeIndex;
@@ -70,7 +73,7 @@ export interface PublishAgentToolFeaturesOptions {
 /** Publish every Host-owned Tool through one candidate-generation boundary. */
 export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOptions): void {
   for (const entry of options.mcpServers) {
-    const projected = projectHostMcp(entry);
+    const projected = projectHostMcp(entry, options.mcpStatus);
     options.addFeature(projected.feature, projected.name, projected.definition);
   }
 

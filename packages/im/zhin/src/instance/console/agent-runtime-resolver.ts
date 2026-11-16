@@ -58,6 +58,12 @@ function createAgentRuntime(
       tools: () => listGenerationTools(getSnapshot(), projectRoot),
       promptSections: () => listGenerationPromptSections(getSnapshot(), projectRoot),
       mcp: () => mergeMcpServers(configuration, getSnapshot()),
+      testMcp: async (name: string) => {
+        // No Agent in this generation (AI off, or an Agent without the test): 503, not an internal error.
+        const test = resolveCurrentAgentIntrospection(getSnapshot())?.testMcpServer;
+        if (!test) return 'agent-unavailable' as const;
+        return await test(name);
+      },
     },
   };
 }
@@ -91,8 +97,14 @@ export function listMcpServerStatus(projectRoot: string, snapshot: RuntimeSnapsh
  * Row `status` (#1250), so a "not connected" row always says why:
  * - `connected`: the Agent holds a live connection;
  * - `failed`: the last connect failed — `lastError` carries `{ category, message, exitCode?, at }`;
- * - `idle`: loaded by the Agent but not connected yet (MCP connects lazily, on the first turn that uses it);
+ *   the only state that goes to the attention inbox;
+ * - `idle`: loaded by the Agent but not connected yet — "waiting to connect" (待连接), as in the `ready` log. The
+ *   configured servers connect when the generation is activated, so this is the short window before;
  * - `not_loaded`: in the configuration but not loaded by the running Agent (Agent off, or not reloaded yet).
+ *
+ * Batch 28: the configured servers are generation-owned MCP features. The Agent used to report only
+ * its own `resourceHub.mcps` registry, which they never enter, so every configured server read
+ * `not_loaded` while the Agent had connected it (`[agent] ready | … | mcp: github`).
  */
 export type McpServerRowStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';
 

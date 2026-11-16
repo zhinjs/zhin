@@ -4,3 +4,4 @@ export * from './plugin-management/config-explanation.js';
 export * from './plugin-management/use-cases.js';
 export * from './plugin-management/workflow.js';
 export * from './plugin-management/plugin-candidates.js';
+export * from './plugin-management/exact-pins.js';

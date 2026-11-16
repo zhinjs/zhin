@@ -27,7 +27,7 @@ export async function detectPackageManager(projectRoot: string): Promise<Package
 }
 
 /**
- * Maps the workflow's pnpm invocation (`add|remove [-w] [-D] <spec>`) and the gateway's
+ * Maps the workflow's pnpm invocation (`add|remove [-w] [-D] [--save-exact] <spec>`) and the gateway's
  * `update [-w] [<name>…]` / `install [--frozen-lockfile]` to another manager.
  * Unknown flags are refused rather than forwarded.
  */
@@ -44,10 +44,12 @@ export function translatePackageManagerArgs(manager: PackageManagerName, args: r
   const dev = rest.includes('-D');
   // `-r` (update only): every package of a pnpm workspace; other managers have no pnpm workspace.
   const recursive = rest.includes('-r');
-  const specs = rest.filter(arg => arg !== '-w' && arg !== '-D' && arg !== '-r');
+  // `--save-exact` (add only): write the resolved version without a `^` range (#1250).
+  const exact = rest.includes('--save-exact');
+  const specs = rest.filter(arg => arg !== '-w' && arg !== '-D' && arg !== '-r' && arg !== '--save-exact');
   if (specs.some(spec => spec.startsWith('-'))) throw new Error('Unsupported package-manager flag');
   if (command === 'update') {
-    if (dev) throw new Error('Unsupported package-manager flag');
+    if (dev || exact) throw new Error('Unsupported package-manager flag');
     switch (manager) {
       case 'pnpm': return ['update', ...(recursive ? ['-r'] : []), ...(workspace ? ['-w'] : []), ...specs];
       case 'npm': return ['update', ...specs];
@@ -56,12 +58,12 @@ export function translatePackageManagerArgs(manager: PackageManagerName, args: r
     }
   }
   if (command !== 'add' && command !== 'remove') throw new Error('unreachable');
-  if (recursive) throw new Error('Unsupported package-manager flag');
+  if (recursive || (exact && command !== 'add')) throw new Error('Unsupported package-manager flag');
   switch (manager) {
-    case 'pnpm': return [command, ...(workspace ? ['-w'] : []), ...(dev ? ['-D'] : []), ...specs];
-    case 'npm': return [command === 'add' ? 'install' : 'uninstall', ...(dev ? ['--save-dev'] : []), ...specs];
-    case 'yarn': return [command, ...(workspace ? ['-W'] : []), ...(dev ? ['-D'] : []), ...specs];
-    case 'bun': return [command, ...(dev ? ['-d'] : []), ...specs];
+    case 'pnpm': return [command, ...(workspace ? ['-w'] : []), ...(dev ? ['-D'] : []), ...(exact ? ['--save-exact'] : []), ...specs];
+    case 'npm': return [command === 'add' ? 'install' : 'uninstall', ...(dev ? ['--save-dev'] : []), ...(exact ? ['--save-exact'] : []), ...specs];
+    case 'yarn': return [command, ...(workspace ? ['-W'] : []), ...(dev ? ['-D'] : []), ...(exact ? ['--exact'] : []), ...specs];
+    case 'bun': return [command, ...(dev ? ['-d'] : []), ...(exact ? ['--exact'] : []), ...specs];
   }
 }
 
