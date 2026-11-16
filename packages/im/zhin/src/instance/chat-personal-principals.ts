@@ -90,13 +90,26 @@ export interface PersonalPrincipalPendingEntry {
   readonly id: string;
   readonly consoleUserId: string;
   readonly adapter: string;
+  /** The account the link is for, when the configuration names one (`<adapter>~<endpoint>`). */
+  readonly endpoint?: string;
   readonly userId: string;
   readonly at: number;
 }
 
 export function personalPrincipalPending(entries: readonly PersonalPrincipalImportEntry[]): readonly PersonalPrincipalPendingEntry[] {
   return Object.freeze(entries.filter(entry => entry.status === 'pending' && entry.reason === 'needs-confirmation' && entry.adapter)
-    .map(entry => Object.freeze({ id: entry.id, consoleUserId: entry.consoleUserId, adapter: entry.adapter!, userId: entry.subjectId, at: entry.at })));
+    .map(entry => {
+      const endpoint = personalPrincipalEndpointOf(entry.adapterId);
+      return Object.freeze({ id: entry.id, consoleUserId: entry.consoleUserId, adapter: entry.adapter!, ...(endpoint ? { endpoint } : {}),
+        userId: entry.subjectId, at: entry.at });
+    }));
+}
+
+/** The account (endpoint) part of an `ai.personalPrincipals` adapter id (`<adapter>~<endpoint>`), when it names one (#1250). */
+export function personalPrincipalEndpointOf(adapterId: string): string | undefined {
+  const index = adapterId.lastIndexOf('~');
+  const endpoint = index >= 0 ? adapterId.slice(index + 1) : '';
+  return endpoint || undefined;
 }
 
 export interface PersonalPrincipalImportState {
@@ -149,7 +162,7 @@ async function readImportRecord(file: string): Promise<ImportRecord> {
 
 /** `<adapter alias>:<subjectId>（账号 <endpoint>）`: one openid on two accounts is two entries (#1250). */
 export function personalPrincipalSourceLabel(entry: Readonly<{ adapterId: string; subjectId: string; adapter?: string }>): string {
-  const endpoint = entry.adapterId.includes('~') ? entry.adapterId.slice(entry.adapterId.lastIndexOf('~') + 1) : undefined;
+  const endpoint = personalPrincipalEndpointOf(entry.adapterId);
   const adapter = entry.adapter ?? entry.adapterId.split(/[\0~]/u).filter(Boolean).pop() ?? entry.adapterId;
   return `${adapter}:${entry.subjectId}${endpoint ? `（账号 ${endpoint}）` : ''}`;
 }

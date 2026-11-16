@@ -19,7 +19,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
-import { personalPrincipalPending } from '../chat-personal-principals.js';
+import { personalPrincipalEndpointOf, personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
@@ -83,6 +83,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
             id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
             ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
             transportState: row.transportState, pendingLogin: row.pendingLogin,
+            admitted: row.admitted, startAttempt: row.startAttempt,
+            ...(row.nextRetryAt !== undefined ? { nextRetryAt: row.nextRetryAt } : {}),
             ...(lastError ? { lastError } : {}),
           };
         });
@@ -205,7 +207,10 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const personalState = featureStores.personalPrincipalImports ? await featureStores.personalPrincipalImports.read() : undefined;
         const personal = personalState && !personalState.acknowledgedAt
           ? personalState.entries.filter(entry => entry.status === 'imported' && entry.adapter)
-            .map(entry => ({ consoleUserId: entry.consoleUserId, adapter: entry.adapter!, userId: entry.subjectId, at: entry.at }))
+            .map(entry => {
+              const endpoint = personalPrincipalEndpointOf(entry.adapterId);
+              return { consoleUserId: entry.consoleUserId, adapter: entry.adapter!, ...(endpoint ? { endpoint } : {}), userId: entry.subjectId, at: entry.at };
+            })
           : [];
         return {
           hasGlobalOwner: hasGlobalOwner(roles),
@@ -213,7 +218,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
           ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
           pending: state?.pending ?? [],
           ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),
-            entries: personal.map(({ consoleUserId, adapter, userId }) => ({ consoleUserId, adapter, userId })) } } : {}),
+            entries: personal.map(({ consoleUserId, adapter, endpoint, userId }) => ({ consoleUserId, adapter, ...(endpoint ? { endpoint } : {}), userId })) } } : {}),
           ...(personalState ? { personalPending: personalPrincipalPending(personalState.entries) } : {}),
         };
       },
