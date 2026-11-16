@@ -34,6 +34,9 @@ describe('plugin marketplace metadata', () => {
     expect(packageAuthorName({ author: { name: 'lc-cn', url: 'https://github.com/zhinjs/zhin' } })).toBe('lc-cn');
     expect(packageAuthorName({ author: 'Jane Doe <jane@example.com> (https://example.com)' })).toBe('Jane Doe');
     expect(packageAuthorName({ maintainers: [{ name: 'a' }, { name: 'b' }, { name: 'a' }] })).toBe('a, b');
+    // npm `/-/v1/search` maintainers use `username` (#1250: search showed 「未知」 where info did not).
+    expect(packageAuthorName({ maintainers: [{ username: 'lc-cn', email: 'x@example.com' }] })).toBe('lc-cn');
+    expect(packageAuthorName({ maintainers: [{ name: 'a', username: 'ignored' }, { username: 'b' }, { username: '  ' }] })).toBe('a, b');
     expect(packageAuthorName({ _npmUser: { name: 'GitHub Actions' }, publisher: { username: 'GitHub Actions' } } as never)).toBeUndefined();
   });
 

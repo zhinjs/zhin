@@ -110,8 +110,11 @@ function personName(person: unknown): string | undefined {
     return name || undefined;
   }
   if (person && typeof person === 'object' && !Array.isArray(person)) {
-    const name = (person as { name?: unknown }).name;
-    return typeof name === 'string' && name.trim() ? name.trim() : undefined;
+    // packuments carry `{ name, email }`; npm `/-/v1/search` maintainers carry `{ username, email }`.
+    for (const field of ['name', 'username'] as const) {
+      const value = (person as Record<string, unknown>)[field];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
   }
   return undefined;
 }
