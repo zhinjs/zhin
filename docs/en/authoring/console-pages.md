@@ -530,6 +530,8 @@ The unified component library is `@zhin.js/console-ui` (with a precompiled `styl
 
 Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b): spacing `space-1`…`space-8` is the Tailwind keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16` (`space-5` is `p-6`), font sizes `label` / `body` / `section` / `title` / `display`, weights `regular` / `medium` / `strong`, radii `r-0`…`r-4` / `full`, shadows `e-1`…`e-3`; content width is `reading` (60rem, settings and forms) or `data` (120rem, lists and tables, the default). Hand-written pages that use Tailwind can import the generated `@zhin.js/console-ui/theme.css`, so off-scale keys simply do not exist; `@zhin.js/console-ui/audit` is the same layout audit and can be run against your own pages.
 
+Use colors by role (ADR 0063 D23–D25, zhinjs/console#125): the brand color `brand` (`#76EEC6` light, `#7FFFD4` dark, the same under every palette) is only for the one solid primary button of a view, `Button variant="primary"`; as text or a thin line (links, selection) use `brand-text`. States use only the signal colors `signal-*-fill` (fills and marks) and `signal-*-text` (text), and steady states (running, succeeded, 0 failures) get no color; charts use `chart-1`…`chart-8`. Dangerous actions on a page use `variant="destructive"` (ghost) or `destructive-outline`; the solid red `destructive-solid` appears only in confirmation dialogs. Motion uses only `--console-motion-fast` / `-base` / `-slow` and `--console-ease-out`.
+
 **Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
 
 **Hard floor (required).** With or without the component library, a plugin page must:
