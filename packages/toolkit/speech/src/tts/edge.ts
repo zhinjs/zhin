@@ -26,9 +26,12 @@ export function createEdgeTtsProvider(config: TTSConfig): TtsProvider {
         const data = await readFile(tmpFile);
         return { data, format: 'mp3' };
       } catch (error) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
-          && 'path' in error && error.path === cmd) {
-          throw new Error('未找到 edge-tts。请在 Bot 运行环境安装 edge-tts，并配置 speech.tts.edgeTtsCommand 为可执行文件路径；也可改用 openai / azure / custom TTS。', { cause: error });
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+        const spawnFailed = error && typeof error === 'object' && 'path' in error && error.path === cmd;
+        if (spawnFailed && (code === 'ENOENT' || code === 'EACCES')) {
+          // #1250: launchd / systemd 等托管环境的 PATH 很短（通常不含 ~/.local/bin），只写命令名会找不到。
+          const what = code === 'EACCES' ? `edge-tts 命令「${cmd}」不可执行（没有执行权限）` : `未找到 edge-tts（命令「${cmd}」）`;
+          throw new Error(`${what}。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 speech.tts.edgeTtsCommand 配置为可执行文件的绝对路径（launchd / systemd 等托管环境的 PATH 通常不含 ~/.local/bin，也不展开 ~）；也可改用 openai / azure / custom TTS。`, { cause: error });
         }
         throw error;
       } finally {

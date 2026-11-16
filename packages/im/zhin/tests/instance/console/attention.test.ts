@@ -580,3 +580,37 @@ describe('attention.list schedule.unschedulable (#1250)', () => {
     expect((await collectAttention({ unschedulableJobs: () => undefined }, { allows: owner })).items).toEqual([]);
   });
 });
+
+describe('speech.unavailable (#1250 batch 29 speech-ready-without-tts-binary)', () => {
+  const issue = { feature: 'tts' as const, provider: 'edge', configPath: 'speech.tts.edgeTtsCommand', command: '/Users/me/.local/bin/edge-tts', reason: 'not-found' as const, at: NOW - 1_000 };
+
+  it('lists a speech feature whose command cannot run, pointing at the setting to fix', async () => {
+    const list = await collectAttention({ speech: () => [issue] }, { allows: owner, now: () => NOW });
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]).toMatchObject({
+      id: attentionItemId('speech.unavailable', { configPath: 'speech.tts.edgeTtsCommand' }),
+      kind: 'speech.unavailable', severity: 'warning', source: 'speech',
+      subject: { configPath: 'speech.tts.edgeTtsCommand' },
+      title: '语音合成（edge）不可用',
+      action: { path: ATTENTION_PATHS.config },
+      reason: { category: 'config', code: 'not-found' },
+      since: new Date(NOW - 1_000).toISOString(),
+    });
+    expect(list.items[0]!.detail).toContain('绝对路径');
+    expect(list.items[0]!.detail).toContain('~/.local/bin');
+    // The configured home path is reduced to its last segment.
+    expect(list.items[0]!.detail).toContain('…/edge-tts');
+    expect(list.items[0]!.detail).not.toContain('/Users/me');
+    const en = await collectAttention({ speech: () => [issue] }, { allows: owner, now: () => NOW, locale: 'en' });
+    expect(en.items[0]!.title).toBe('Speech synthesis (edge) is unavailable');
+  });
+
+  it('is a status.view item, an info item when the check only timed out, and nothing when speech is fine', async () => {
+    const viewer: ConsoleGrant[] = [{ scope: { kind: 'global' }, permissions: ['status.view'] }];
+    expect((await collectAttention({ speech: () => [issue] }, { allows: allowsFor(viewer) })).items).toHaveLength(1);
+    expect((await collectAttention({ speech: () => [issue] }, { allows: allowsFor([]) })).items).toEqual([]);
+    const timeout = await collectAttention({ speech: () => [{ ...issue, reason: 'timeout' as const }] }, { allows: owner });
+    expect(timeout.items[0]).toMatchObject({ severity: 'info', reason: { code: 'timeout' } });
+    expect((await collectAttention({ speech: () => [] }, { allows: owner })).items).toEqual([]);
+  });
+});

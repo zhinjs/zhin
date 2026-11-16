@@ -82,6 +82,13 @@ export type ConsoleAttentionKind =
    */
   | 'mcp.disconnected'
   /**
+   * A configured speech feature cannot run because the external command it needs is not executable
+   * (#1250 第 29 批: `speech.tts.provider: edge` without a runnable `edge-tts`). `subject.configPath`
+   * names the setting (`speech.tts.edgeTtsCommand`); `reason.code` is `not-found` / `not-executable` /
+   * `timeout`. Visible with `status.view`.
+   */
+  | 'speech.unavailable'
+  /**
    * A Host model account needs an operator (#1270): it must sign in again (`reauthorize`), was
    * disconnected, its last sign-in has an unknown outcome (`uncertain`), or it is signed in but its
    * read-only preparation failed (`preparation-failed`, with step / reason / upstream status).
@@ -113,7 +120,7 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
-  'inference.account', 'config.ineffective', 'command.conflict',
+  'inference.account', 'config.ineffective', 'command.conflict', 'speech.unavailable',
 ]);
 
 /**
@@ -141,6 +148,7 @@ export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentio
   'inference.account': 'agent.view',
   'config.ineffective': 'agent.view',
   'command.conflict': 'feature.view',
+  'speech.unavailable': 'status.view',
 });
 
 /** The object an item is about. Absent fields do not apply. */

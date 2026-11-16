@@ -30,6 +30,7 @@ import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import { publishReplyImages } from '../media/publish-image-reply.js';
 import { resolveAttachmentRefs } from '../media/agent-attachments.js';
+import { omitInlineBinaryForModel, splitToolResultMedia } from '../media/media-tool-bridge.js';
 import { COLLABORATION_TOOL_SOURCE } from '../collaboration/tools.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
@@ -524,7 +525,8 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           const sideEffect = outcome.sideEffect ?? tool.isReadOnly !== true;
           let shown: string;
           try {
-            shown = redactSecretText(await applyToolToModelOutput(tool, outcome.output, effectiveArgs));
+            // #1250 第 29 批：失败结果同样不把内嵌二进制交给模型。
+            shown = omitInlineBinaryForModel(redactSecretText(await applyToolToModelOutput(tool, outcome.output, effectiveArgs)));
           } catch {
             shown = redactSecretText(outcome.error);
           }
@@ -553,8 +555,11 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: unavailable });
           return toolResultToAgentMessage(toolCall, unavailable, true);
         }
-        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
-        let modelOutput = outcome.output;
+        // #1250 第 29 批：媒体工具的音频 / 图片在进入模型之前拆出，随本轮回复经出站链发送；
+        // 模型只看到元数据。其余工具结果中的 base64 / data URL 统一省略。
+        const split = splitToolResultMedia(resolvedName, outcome.output);
+        const rawText = omitInlineBinaryForModel(await applyToolToModelOutput(tool, split.output, effectiveArgs));
+        let modelOutput = split.output;
 
         // PostToolUse interception
         let resultText = rawText;
@@ -575,14 +580,15 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           }
           if (postDecision.decision === 'modify') {
             modelOutput = postDecision.modifiedOutput;
-            resultText = typeof postDecision.modifiedOutput === 'string'
+            resultText = omitInlineBinaryForModel(typeof postDecision.modifiedOutput === 'string'
               ? postDecision.modifiedOutput
-              : JSON.stringify(postDecision.modifiedOutput);
+              : JSON.stringify(postDecision.modifiedOutput));
           }
         }
         // MCP capture already removed bytes before execution returned. Only enqueue
         // an authorized metadata reference after the output hook has accepted it.
-        resultText = localInspection?.accept(modelOutput) ?? resultText;
+        const accepted = localInspection?.accept(modelOutput);
+        if (accepted !== undefined) resultText = omitInlineBinaryForModel(accepted);
 
         const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
@@ -597,7 +603,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
         const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
         // #1250: media a sub-agent produced comes back with ask / follow_up as attachments.
-        const media = tool.source === COLLABORATION_TOOL_SOURCE ? resolveAttachmentRefs(resultText) : [];
+        const media = [...split.media, ...(tool.source === COLLABORATION_TOOL_SOURCE ? resolveAttachmentRefs(resultText) : [])];
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText, status: 'completed', ...(media.length ? { media } : {}) });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);

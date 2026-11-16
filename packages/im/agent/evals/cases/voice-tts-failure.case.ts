@@ -17,7 +17,8 @@ export default defineEvalCase({
     streamToolEvents: ['tool_call:voice_tts', 'tool_failed:voice_tts'],
     outboundContains: ['先用文字说：你好', '（语音操作报告失败，是否已部分生效不确定）'],
     // #1250 batch 26: the model sees the whole failed result (the hint too) and is not told nothing changed.
-    modelInputContains: ['可以改用文字回复', '是否已部分生效不确定'],
+    // #1250 batch 29: the reason itself (not just "unavailable") reaches the model.
+    modelInputContains: ['未找到 edge-tts', '可以改用文字回复', '是否已部分生效不确定'],
     modelInputNotContains: ['写入/变更没有生效'],
     outboundNotContains: ['[音频:', 'data:audio', '语音已发送', '「voice_tts」'],
     noRawToolOutput: true,

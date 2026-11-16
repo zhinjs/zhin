@@ -605,6 +605,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     featureStores: featureHost.stores,
     ...(agentHost ? { agentInsights: agentHost } : {}),
     runtimeFailures,
+    ...(speechHandle ? { speechIssues: () => speechHandle.dependencyIssues() } : {}),
   });
   const runtimeFailureSources = {
     journal: runtimeFailures,
