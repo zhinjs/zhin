@@ -10,6 +10,7 @@ const TTT_ACTIONS: Record<string, string> = {
   加入: 'join',
   离开: 'leave',
   认输: 'quit',
+  退出: 'quit',
   观战: 'spectate',
   帮助: 'help',
 };
@@ -29,6 +30,8 @@ const ADV_ACTIONS: Record<string, string> = {
   放弃: 'quit',
   退出: 'quit',
   帮助: 'help',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 const RPS_ACTIONS: Record<string, string> = {
@@ -40,6 +43,9 @@ const RPS_ACTIONS: Record<string, string> = {
   继续: 'continue',
   放弃: 'quit',
   帮助: 'help',
+  退出: 'quit',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 const GUESS_ACTIONS: Record<string, string> = {
@@ -49,6 +55,9 @@ const GUESS_ACTIONS: Record<string, string> = {
   开始: 'start',
   放弃: 'quit',
   帮助: 'help',
+  退出: 'quit',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 const DICE_ACTIONS: Record<string, string> = {
@@ -60,6 +69,9 @@ const DICE_ACTIONS: Record<string, string> = {
   继续: 'continue',
   放弃: 'quit',
   帮助: 'help',
+  退出: 'quit',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 function lookup(map: Record<string, string>, raw: string): string {
@@ -128,6 +140,9 @@ const CHAIN_ACTIONS: Record<string, string> = {
   继续: 'continue',
   放弃: 'quit',
   帮助: 'help',
+  退出: 'quit',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 const RIDDLE_ACTIONS: Record<string, string> = {
@@ -143,6 +158,9 @@ const RIDDLE_ACTIONS: Record<string, string> = {
   帮助: 'help',
   字谜: 'char',
   成语: 'idiom',
+  退出: 'quit',
+  认输: 'quit',
+  结束: 'quit',
 };
 
 export function normalizeChainAction(raw: string): string {

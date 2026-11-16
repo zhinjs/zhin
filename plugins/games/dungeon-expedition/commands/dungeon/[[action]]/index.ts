@@ -12,7 +12,9 @@ export default defineCommand({
   descriptionI18n: { en: 'Multiplayer dungeon expedition' },
   alias: ['地牢远征'],
   preferredAliasI18n: { 'zh-CN': '地牢远征' },
-  params: { action: { type: 'string', default: '' } },
+  params: { action: { type: 'string', default: '',
+    // 近似指令提示里列出真实子命令，而不是 `[action]`（#1250）。
+    suggestions: ['start', 'join', 'status', 'quit'], suggestionsI18n: { 'zh-CN': ['开始', '加入', '状态', '放弃'] } } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const rawAction = String(params.action ?? '');
     if (normalizeDungeonAction(rawAction) === 'help') return getDungeonHelp({ locale, formatCommand });

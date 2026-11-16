@@ -30,13 +30,19 @@ const messages = createMessages({
 });
 export const ROULETTE_TITLE = messages('zh-CN', 'title');
 
+/** 子命令与命令名同一种语言（plugins/games/README.md「命令命名约定」）。 */
+function sub(command: string, en: 'join' | 'start' | 'fire'): string {
+  const zh = { join: '加入', start: '开始', fire: '开枪' } as const;
+  return `${command} ${/\p{Script=Han}/u.test(command) ? zh[en] : en}`;
+}
+
 export function describeLobby(state: RouletteState, config: RouletteConfig, presentation: Presentation = {}): string {
   const locale = presentation.locale;
   const host = state.players.find(player => player.id === state.hostId);
   const command = presentation.formatCommand?.('roulette');
   return [messages(locale, 'lobby', { title: messages(locale, 'title'), count: state.players.length, max: config.maxPlayers }),
     messages(locale, 'players', { players: listNames(state.players, presentation) }),
-    ...(command === undefined ? [] : [messages(locale, 'joinStart', { join: `${command} join`, start: `${command} start`, host: host?.name ?? messages(locale, 'host'), min: MIN_ROULETTE_PLAYERS })]),
+    ...(command === undefined ? [] : [messages(locale, 'joinStart', { join: sub(command, 'join'), start: sub(command, 'start'), host: host?.name ?? messages(locale, 'host'), min: MIN_ROULETTE_PLAYERS })]),
     messages(locale, 'lobbyExpiry', { seconds: config.lobbyTimeoutSeconds }),
   ].join('\n');
 }
@@ -54,7 +60,7 @@ export function describeTurn(state: RouletteState, config: RouletteConfig, prese
   const command = presentation.formatCommand?.('roulette');
   return messages(presentation.locale, 'turn', { name: shooter.name, seconds: config.turnTimeoutSeconds,
     chambers: remainingChambers(state), instruction: command === undefined ? ''
-      : messages(presentation.locale, 'fire', { command: `${command} fire` }) });
+      : messages(presentation.locale, 'fire', { command: sub(command, 'fire') }) });
 }
 
 export function describeClick(shooter: RoulettePlayer, state: RouletteState, config: RouletteConfig, presentation: Presentation = {}): string {

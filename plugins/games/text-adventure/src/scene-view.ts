@@ -44,7 +44,7 @@ export function buildSceneInteractive(
     })),
     terminal,
     buttonsPerRow: 2,
-    fallbackHint: locale === 'en' ? 'Reply with the choice number only' : '回复数字选择（仅编号）',
+    locale,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });

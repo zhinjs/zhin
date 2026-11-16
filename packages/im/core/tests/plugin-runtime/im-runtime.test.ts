@@ -5381,6 +5381,40 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('records handler_replied when a middleware replies and stops, filtered_by_policy only for a silent stop (#1250)', async () => {
+    const sent: unknown[] = [];
+    let replies = true;
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundMiddleware: async (input) => { if (replies) await input.$reply('📉 太大了！'); },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '50'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'handler_replied', reason: 'middleware_replied', stage: 'middleware', reply: 'yes' });
+      replies = false;
+      await receive(fixture.im, fixtureInput(fixture, '51'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware', visibility: 'admin' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps filtered_by_policy when the stopping middleware sent nothing and another plugin replied (#1250)', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'policy-gate');
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundOwner: child,
+      inboundMiddleware: async (input) => { await input.$replyFrom(root, 'ack from another plugin'); },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, 'blocked'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'filtered_by_policy', reason: 'middleware_stopped', owner: child });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('settles a throwing command as internal_error with an errorId and still rethrows', async () => {
     const fixture = await createFixture([], [], undefined, undefined, undefined, {
       middleware: false, commandResult: () => { throw new Error('PRIVATE-ERROR token=sk-abcdefghijklmnop'); },

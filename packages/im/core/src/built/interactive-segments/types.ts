@@ -32,6 +32,12 @@ export type ButtonData = {
 export type KeyboardFallback = {
   hint: string;
   map: Record<string, string>;
+  /**
+   * Text rendering on endpoints without buttons (`interactive: 'text'`): `list` (default) puts
+   * one option per line; `inline` puts the options on one line (`1. 要牌  2. 停牌  3. 放弃`) and
+   * prints the hint line only when it is non-empty.
+   */
+  layout?: 'list' | 'inline';
 };
 export type KeyboardSegmentData = {
   rows: ButtonData[][];

@@ -507,7 +507,7 @@ export class CommandIndex {
       if (names.length >= config.limit) break;
       // Without a sender nothing proves a permit, so gated commands are never revealed.
       if (source === undefined ? (record.permit?.length ?? 0) > 0 : !(await this.#listable(record, source, operationSnapshot))) continue;
-      names.push(`${commandPrefix}${commandDisplayName(record, locale)}`);
+      names.push(`${commandPrefix}${commandSuggestionName(record, locale)}`);
     }
     return names;
   }
@@ -893,6 +893,19 @@ function commandDisplaySegments(record: CommandRecord, locale: Locale): readonly
 
 function commandDisplayName(record: CommandRecord, locale: Locale): string {
   return displayName(commandDisplaySegments(record, locale), record.parameter);
+}
+
+/**
+ * The near-miss form of a command: a parameter that declares `suggestions` shows them
+ * (`玩石头剪刀布 开始|继续|退出`) instead of `[action]`, which reads like "what to play". #1250
+ */
+function commandSuggestionName(record: CommandRecord, locale: Locale): string {
+  const parameter = record.parameter;
+  const schema = parameter ? record.slot.definition.params?.[parameter.name] : undefined;
+  const values = schema?.suggestionsI18n?.[locale] ?? schema?.suggestions;
+  if (!parameter || !values?.length) return commandDisplayName(record, locale);
+  return commandDisplaySegments(record, locale)
+    .map(segment => segment === `$${parameter.name}` ? values.join('|') : segment).join(' ');
 }
 
 function commandLocale(source: unknown, snapshot: RuntimeSnapshot): Locale {

@@ -5,7 +5,7 @@ import { startBotGame, startPvpGame } from './game-flow.js';
 import type { SessionServices } from './session-service.js';
 
 export function getTttHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
-  return formatGameHelp({ presentation: message, title: { 'zh-CN': '井字棋', en: 'Tic-Tac-Toe' }, commandPath: 'ttt', actions: ['bot', 'join', 'leave', 'quit', 'spectate'], footer: { 'zh-CN': '群聊排队满 2 人自动开局；私聊可选择人机对战。', en: 'The group queue starts a match when two players join. In private chats, play against the bot.' } });
+  return formatGameHelp({ presentation: message, title: { 'zh-CN': '井字棋', en: 'Tic-Tac-Toe' }, commandPath: 'ttt', actions: ['bot', 'join', 'leave', 'forfeit', 'spectate'], footer: { 'zh-CN': '群聊排队满 2 人自动开局；私聊可选择人机对战。', en: 'The group queue starts a match when two players join. In private chats, play against the bot.' } });
 }
 export const TTT_HELP = getTttHelp();
 

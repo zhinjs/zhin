@@ -83,6 +83,10 @@ function validateSchema(name: string, schema: CommandParamSchema): void {
   if (schema.choices !== undefined && !Array.isArray(schema.choices)) {
     throw new TypeError(`Command argument ${name}.choices must be an array`);
   }
+  const suggestionLists = [schema.suggestions, ...Object.values(schema.suggestionsI18n ?? {})];
+  if (suggestionLists.some(list => list !== undefined && (!Array.isArray(list) || list.some(item => typeof item !== 'string' || !item.trim())))) {
+    throw new TypeError(`Command argument ${name}.suggestions must be arrays of non-empty strings`);
+  }
   if (schema.descriptionI18n !== undefined && (!schema.descriptionI18n || typeof schema.descriptionI18n !== 'object'
     || Array.isArray(schema.descriptionI18n)
     || Object.entries(schema.descriptionI18n).some(([locale, text]) => !['zh-CN', 'en'].includes(locale) || typeof text !== 'string'))) {

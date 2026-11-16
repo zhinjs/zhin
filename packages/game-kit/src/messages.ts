@@ -2,6 +2,8 @@ import { createMessages } from '@zhin.js/plugin-runtime';
 
 export const gameMessages = createMessages({
   chooseNumber: { 'zh-CN': '回复数字选择', en: 'Reply with a number to choose' },
+  replyOrdinalOrLabel: { 'zh-CN': '回复序号或按钮文字也可以', en: 'You can also reply with the number or the button text' },
+  replyLabel: { 'zh-CN': '回复按钮文字也可以', en: 'You can also reply with the button text' },
   lobby: { 'zh-CN': '🎮 游戏大厅', en: '🎮 Game lobby' },
   noGames: { 'zh-CN': '暂无已加载的游戏插件。', en: 'No game plugins are loaded.' },
   installGame: { 'zh-CN': '安装并启用 `@zhin.js/plugin-guess-number` 等游戏包后重试。', en: 'Install and enable a game package such as `@zhin.js/plugin-guess-number`, then try again.' },
