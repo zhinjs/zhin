@@ -473,13 +473,14 @@ zhin plugin check [插件目录] [--no-pack] [--json] [--strict]
 ### pub：发布插件
 
 ```bash
-zhin pub [plugin-name|插件目录] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--skip-check] [--yes]
+zhin pub [plugin-name|插件目录] [--tag latest] [--access public|restricted] [--registry <url>] [--dry-run] [--skip-build] [--skip-check] [--yes]
 ```
 
 - 在 `zhin new --standalone` 生成的插件目录里，不带参数就发布当前目录：`npx @zhin.js/cli pub --dry-run` 预览，`npx @zhin.js/cli pub` 发布（`npx @zhin.js/cli` 在任何版本下都可靠；`npx zhin` 从 `zhin@4` 起才等价，见本页开头的提示）。
 - 参数也可以是任意插件目录（`package.json` 有 `zhin` 字段），如 `zhin pub ../my-plugin`。
 - 在 Bot 项目根，参数是相对 `plugins/` 的路径；不传时只有一个插件就直接选中，多个时交互选择。
 - `--dry-run` 只走流程，不实际发布；非交互环境（CI）需要加 `--yes` 才会跳过发布确认。`private: true` 的包会被拒绝，`zhin.entry` 指向 `.ts` 时会提示改用构建出的 `.js`。
+- `--access` 不填时取 `package.json` 的 `publishConfig.access`，都没有时为 `public`；私有包写 `"publishConfig": { "access": "restricted" }` 后不会被意外公开发布，见 [私有插件包](../authoring/plugin-delivery.md#private-packages)。
 - 发布前会自动运行 [`zhin plugin check`](#plugin-check-发布前检查插件)（含 `npm pack`）：有错误时停止发布，只有警告时继续；确需跳过加 `--skip-check`。完整发布流程见 [插件完整交付](../authoring/plugin-delivery.md)。
 
 ### packages：插件状态与扩展包
