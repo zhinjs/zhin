@@ -4,7 +4,7 @@ import {
   createMemoryGameServices,
   plainTextFromSendContent,
 } from '@zhin.js/game-kit';
-import { handleChoice, processAnswerText, startGame } from '../src/game-flow.js';
+import { HINTS_PER_ROUND, handleChoice, processAnswerText, startGame } from '../src/game-flow.js';
 import { cleanRiddleText, riddlesByType } from '../src/riddle-provider.js';
 import { getRiddleById } from '../src/engine.js';
 import { createServices, currentRiddleId, type SessionService } from '../src/session-service.js';
@@ -76,6 +76,18 @@ describe('word-riddle hint, quit and question bank (#1250)', () => {
     const after = (await services.getById(session.id))!;
     expect(after.streak).toBe(2);
     expect(after.score).toBe(17);
+  });
+
+  it('limits hints per round so they are not free and unlimited at score 0', async () => {
+    const { message, session } = await active('idiom');
+    expect((await services.getById(session.id))!.score).toBe(0);
+    for (let used = 1; used <= HINTS_PER_ROUND; used++) {
+      const text = plainTextFromSendContent((await handleChoice(services, message as never, session.id, 'hint'))!);
+      expect(text).toContain(`本局还可提示 ${HINTS_PER_ROUND - used}/${HINTS_PER_ROUND} 次`);
+    }
+    const refused = String(await handleChoice(services, message as never, session.id, 'hint'));
+    expect(refused).toContain('提示已经用完');
+    expect((await services.getById(session.id))!.hints_used).toBe(HINTS_PER_ROUND);
   });
 
   it('a character-riddle hint lists candidates that include the answer', async () => {

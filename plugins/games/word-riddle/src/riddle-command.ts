@@ -13,7 +13,7 @@ const messages = createMessages({
   counts: { 'zh-CN': '字谜 {chars} 题 · 成语 {idioms} 题', en: '{chars} character riddles · {idioms} idiom riddles' },
   char: { 'zh-CN': '{command} — 字谜模式', en: '{command} — Chinese character riddles' },
   idiom: { 'zh-CN': '{command} — 猜成语模式', en: '{command} — Chinese idiom riddles' },
-  instructions: { 'zh-CN': '进行中直接回复答案；连击加分，失误会清零连击。回复「提示」看首字或候选字（-3 分），「结束」公布答案并结算本局。', en: 'Reply with the answer during play. Streaks earn bonus points; mistakes reset the streak. Reply 提示 (hint) for the first character or candidates (-3 points), 结束 (end) to reveal the answer and see your round score.' },
+  instructions: { 'zh-CN': '进行中直接回复答案；连击加分，失误会清零连击。回复「提示」看首字或候选字（-3 分，每局 3 次），「结束」公布答案并结算本局。', en: 'Reply with the answer during play. Streaks earn bonus points; mistakes reset the streak. Reply 提示 (hint) for the first character or candidates (-3 points, 3 per round), 结束 (end) to reveal the answer and see your round score.' },
   active: { 'zh-CN': '进行中：{mode} · 得分 {score} · 连击 {streak}', en: 'Playing: {mode} · Score {score} · Streak {streak}' },
 });
 
