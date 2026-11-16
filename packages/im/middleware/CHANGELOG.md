@@ -1,5 +1,14 @@
 # @zhin.js/middleware
 
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [d216b84]
+  - @zhin.js/plugin-runtime@1.4.0
+  - @zhin.js/feature-kit@1.1.19
+  - @zhin.js/permission@1.2.3
+
 ## 1.1.19
 
 ### Patch Changes

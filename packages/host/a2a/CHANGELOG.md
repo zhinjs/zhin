@@ -1,5 +1,14 @@
 # @zhin.js/a2a
 
+## 1.1.30
+
+### Patch Changes
+
+- Updated dependencies [a460a46]
+- Updated dependencies [e929d34]
+- Updated dependencies [2ab7fb9]
+  - @zhin.js/harness@1.1.0
+
 ## 1.1.29
 
 ### Patch Changes
