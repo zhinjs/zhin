@@ -530,6 +530,8 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 
 尺度的唯一来源是它的 `tokens/tokens.mjs`（ADR 0063 P1b）：间距 `space-1`…`space-8` 对应 Tailwind 键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 是 `p-6`），字号 `label` / `body` / `section` / `title` / `display`，字重 `regular` / `medium` / `strong`，圆角 `r-0`…`r-4` / `full`，阴影 `e-1`…`e-3`；内容宽度分 `reading`（60rem，设置、表单）和 `data`（120rem，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。
 
+颜色按角色使用（ADR 0063 D23–D25，zhinjs/console#125）：品牌色 `brand`（浅色 `#76EEC6`、深色 `#7FFFD4`，与配色无关）只用于每个视图唯一的实心主按钮 `Button variant="primary"`；当文字或细线用时（链接、选中态）用 `brand-text`。状态只用信号色 `signal-*-fill`（填充、图形）和 `signal-*-text`（文字），稳态（运行中、成功、失败数为 0）不着色；图表用 `chart-1`…`chart-8`。页面上的危险操作用 `variant="destructive"`（幽灵样式）或 `destructive-outline`，实心红 `destructive-solid` 只出现在确认对话框里。动效只用 `--console-motion-fast` / `-base` / `-slow` 与 `--console-ease-out`。
+
 **允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
 
 **硬性底线（必须遵守）。** 不管是否使用组件库，插件页面都必须做到：

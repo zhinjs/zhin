@@ -179,7 +179,7 @@
     background: var(--console-surface-raised);
     box-shadow: var(--console-card-elevation);
     min-width: 0;
-    transition: border-color var(--console-duration-fast) ease, box-shadow var(--console-duration-fast) ease;
+    transition: border-color var(--console-motion-fast) var(--console-ease-out), box-shadow var(--console-motion-fast) var(--console-ease-out);
   }
   .console-card--interactive {
     cursor: pointer;
@@ -239,10 +239,15 @@
     line-height: 1;
     white-space: nowrap;
   }
-  .console-badge-success { border-color: hsl(var(--success) / 0.2); background: hsl(var(--success) / 0.08); color: hsl(var(--success)); }
-  .console-badge-info { border-color: hsl(var(--info) / 0.2); background: hsl(var(--info) / 0.08); color: hsl(var(--info)); }
-  .console-badge-warning { border-color: hsl(var(--warning) / 0.2); background: hsl(var(--warning) / 0.08); color: hsl(var(--warning)); }
-  .console-badge-danger { border-color: hsl(var(--destructive) / 0.24); background: hsl(var(--destructive) / 0.08); color: hsl(var(--destructive)); }
+    /*
+   * Signal badges (zhinjs/console#125): the bright fill tints the badge, the text token carries the
+   * label (≥ 4.5:1 on the tint). Danger is the strongest — failures outrank successes, and
+   * 「正常」 / 「成功」 are no badge at all (.console-status-quiet).
+   */
+  .console-badge-success { border-color: hsl(var(--console-signal-success-fill) / 0.3); background: hsl(var(--console-signal-success-fill) / 0.12); color: hsl(var(--console-signal-success-text)); }
+  .console-badge-info { border-color: hsl(var(--console-signal-info-fill) / 0.3); background: hsl(var(--console-signal-info-fill) / 0.12); color: hsl(var(--console-signal-info-text)); }
+  .console-badge-warning { border-color: hsl(var(--console-signal-warning-fill) / 0.45); background: hsl(var(--console-signal-warning-fill) / 0.12); color: hsl(var(--console-signal-warning-text)); }
+  .console-badge-danger { border-color: hsl(var(--console-signal-danger-fill) / 0.55); background: hsl(var(--console-signal-danger-fill) / 0.12); color: hsl(var(--console-signal-danger-text)); font-weight: var(--console-weight-strong); }
   /* 「正常」 and neutral states: muted text, no colored badge (D15 第 1 条). */
   .console-status-quiet {
     display: inline-flex;
@@ -289,7 +294,7 @@
   }
   .console-table tbody tr {
     border-bottom: var(--console-card-border) solid hsl(var(--border) / 0.7);
-    transition: background-color var(--console-duration-fast) ease;
+    transition: background-color var(--console-motion-fast) var(--console-ease-out);
   }
   .console-table tbody tr:last-child { border-bottom-width: 0; }
   .console-table tbody tr:hover { background: var(--console-surface-hover); }
@@ -412,7 +417,7 @@
     background: transparent;
     color: hsl(var(--muted-foreground));
     cursor: pointer;
-    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    transition: background-color var(--console-motion-fast) var(--console-ease-out), color var(--console-motion-fast) var(--console-ease-out), border-color var(--console-motion-fast) var(--console-ease-out);
   }
   .console-dialog-close:hover {
     background: var(--console-surface-muted);
@@ -441,21 +446,21 @@
     width: min(34rem, 94vw);
     height: 100dvh;
     border-radius: var(--console-sheet-radius) 0 0 var(--console-sheet-radius);
-    animation: console-sheet-in-right 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation: console-sheet-in-right var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-content[data-side="left"] {
     inset: 0 auto 0 0;
     width: min(24rem, 90vw);
     height: 100dvh;
     border-radius: 0 var(--console-sheet-radius) var(--console-sheet-radius) 0;
-    animation: console-sheet-in-left 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation: console-sheet-in-left var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-content[data-side="bottom"] {
     inset: auto 0 0 0;
     width: 100%;
     max-height: 86dvh;
     border-radius: var(--console-sheet-radius) var(--console-sheet-radius) 0 0;
-    animation: console-sheet-in-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-header {
     display: flex;
@@ -489,14 +494,14 @@
     height: 2.5rem;
     flex-shrink: 0;
     border-radius: var(--console-control-radius);
-    background: hsl(var(--primary) / 0.1);
-    border: var(--console-control-border) solid hsl(var(--primary) / 0.22);
-    color: hsl(var(--primary));
+    background: hsl(var(--console-signal-info-fill) / 0.12);
+    border: var(--console-control-border) solid hsl(var(--console-signal-info-fill) / 0.3);
+    color: hsl(var(--console-signal-info-text));
   }
   .console-confirm-icon.is-destructive {
-    background: hsl(var(--destructive) / 0.1);
-    border-color: hsl(var(--destructive) / 0.24);
-    color: hsl(var(--destructive));
+    background: hsl(var(--console-signal-danger-fill) / 0.12);
+    border-color: hsl(var(--console-signal-danger-fill) / 0.55);
+    color: hsl(var(--console-signal-danger-text));
   }
 
   /* ── Stat cards: auto-fit grid, two side by side below 40rem (D18 第 3 条). ── */
@@ -525,10 +530,10 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+    transition: border-color var(--console-motion-fast) var(--console-ease-out), box-shadow var(--console-motion-fast) var(--console-ease-out);
   }
   .console-stat-card.is-link:hover {
-    border-color: hsl(var(--primary) / 0.35);
+    border-color: var(--console-border-strong);
   }
   .console-stat-card.is-link:focus-visible {
     outline: var(--console-focus-ring);
@@ -576,13 +581,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .console-stat-card.is-danger .console-stat-value,
-  .console-stat-card.is-danger .console-stat-label svg { color: hsl(var(--destructive)); }
-  .console-stat-card.is-warning .console-stat-value,
-  .console-stat-card.is-warning .console-stat-label svg { color: hsl(var(--warning)); }
+  /*
+   * Signal tones (zhinjs/console#125): only abnormal values are colored — the value in the text
+   * token, the icon in the fill. A danger card also gets a danger edge so it outranks a warning.
+   * Steady values (0 failures) never get a tone (StatCard drops it).
+   */
+  .console-stat-card.is-danger .console-stat-value { color: hsl(var(--console-signal-danger-text)); }
+  .console-stat-card.is-danger .console-stat-label svg { color: hsl(var(--console-signal-danger-fill)); }
+  .console-stat-card.is-danger { border-color: hsl(var(--console-signal-danger-fill) / 0.55); }
+  .console-stat-card.is-warning .console-stat-value { color: hsl(var(--console-signal-warning-text)); }
+  .console-stat-card.is-warning .console-stat-label svg { color: hsl(var(--console-signal-warning-fill)); }
   .console-stat-card.is-pressed {
-    border-color: hsl(var(--primary) / 0.55);
-    background: hsl(var(--primary) / 0.05);
+    border-color: hsl(var(--console-brand-text) / 0.7);
+    background: hsl(var(--console-brand-tint));
   }
   .console-ring-gauge {
     position: relative;
@@ -626,11 +637,40 @@
   }
   .console-info-hint:hover { background: hsl(var(--accent)); }
   .console-info-hint > svg { width: 0.875rem; height: 0.875rem; color: hsl(var(--muted-foreground)); }
-  .console-info-hint.is-warning { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning)); }
+  .console-info-hint.is-warning { background: hsl(var(--console-signal-warning-fill) / 0.12); color: hsl(var(--console-signal-warning-text)); }
   .console-info-hint.is-warning > svg { color: currentColor; }
   .console-info-hint-panel { width: min(22rem, calc(100vw - 2rem)); font-size: var(--console-text-body); line-height: var(--console-leading-body); }
   .console-info-hint-panel > p + p { margin-top: var(--console-heading-gap); color: hsl(var(--muted-foreground)); }
-  .console-info-hint-panel > p.is-partial { color: hsl(var(--warning)); }
+  .console-info-hint-panel > p.is-partial { color: hsl(var(--console-signal-warning-text)); }
+
+  /* ── Brand mark (zhinjs/console#125): fixed brand colors, sizes sm 20px / md 28px / lg 40px. ── */
+  .console-brand {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--console-inline-gap);
+    color: hsl(var(--foreground));
+    vertical-align: middle;
+  }
+  .console-brand-mark {
+    display: block;
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  .console-brand[data-size="sm"] .console-brand-mark { width: 1.25rem; height: 1.25rem; }
+  .console-brand[data-size="lg"] .console-brand-mark { width: 2.5rem; height: 2.5rem; }
+  .console-brand-name {
+    overflow: hidden;
+    font-size: var(--console-text-section);
+    font-weight: var(--console-weight-strong);
+    line-height: var(--console-leading-section);
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .console-brand[data-size="sm"] .console-brand-name { font-size: var(--console-text-body); line-height: var(--console-leading-body); }
+  .console-brand[data-size="lg"] .console-brand-name { font-size: var(--console-text-title); line-height: var(--console-leading-title); }
 
   /* ── Empty state ── */
   .console-empty {
@@ -653,7 +693,8 @@
     inset: 0;
     transform: translateX(-100%);
     background: linear-gradient(90deg, transparent, hsl(var(--background) / 0.55), transparent);
-    animation: console-skeleton-shimmer 1.4s ease-in-out infinite;
+    /* One shimmer = five slow steps (1.4s); a loop, not a transition. */
+    animation: console-skeleton-shimmer calc(var(--console-motion-slow) * 5) var(--console-ease-out) infinite;
   }
 }
 @keyframes console-sheet-in-right {

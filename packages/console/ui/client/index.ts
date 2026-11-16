@@ -51,6 +51,7 @@ export * from './components/PageHeader.js';
 export * from './components/confirm-dialog.js';
 export { canSubmitConfirm, confirmErrorMessage, confirmTextMatches } from './components/confirm-dialog-model.js';
 export * from './components/StatCard.js';
+export * from './components/BrandMark.js';
 export * from './components/empty-state.js';
 export * from './components/error-alert.js';
 export * from './components/InfoHint.js';

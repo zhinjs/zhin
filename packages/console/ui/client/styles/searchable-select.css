@@ -5,7 +5,7 @@
   padding: 0 var(--console-control-padding-inline); color: hsl(var(--foreground)); font-size: var(--console-text-body); text-align: left; white-space: nowrap;
 }
 .console-searchable-select-trigger:hover { border-color: hsl(var(--foreground) / 0.45); }
-.console-searchable-select-trigger:focus-visible { border-color: hsl(var(--primary)); }
+.console-searchable-select-trigger:focus-visible { border-color: hsl(var(--console-brand-text)); }
 .console-searchable-select-trigger:disabled { cursor: not-allowed; background: hsl(var(--muted)); opacity: 0.6; }
 .console-searchable-select-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .console-searchable-select-chevron { width: 1rem; height: 1rem; flex-shrink: 0; opacity: 0.5; }
@@ -42,5 +42,5 @@
 .console-searchable-select-description {
   display: block; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); font-weight: var(--console-weight-regular); text-overflow: ellipsis; white-space: nowrap;
 }
-.console-searchable-select-check { width: 1rem; height: 1rem; flex-shrink: 0; color: hsl(var(--primary)); }
+.console-searchable-select-check { width: 1rem; height: 1rem; flex-shrink: 0; color: hsl(var(--console-brand-text)); }
 .console-searchable-select-empty { padding: var(--console-card-padding) var(--console-control-padding-inline); color: hsl(var(--muted-foreground)); font-size: var(--console-text-body); text-align: center; }

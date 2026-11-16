@@ -45,17 +45,17 @@
   .console-progress { display: inline-flex; width: 100%; min-width: 4rem; align-items: center; gap: var(--console-inline-gap); }
   .console-progress-track { position: relative; display: block; height: 0.375rem; flex: 1 1 auto; overflow: hidden; border-radius: var(--console-badge-radius); background: hsl(var(--foreground) / 0.08); }
   .console-progress-bar { display: block; height: 100%; border-radius: inherit; background: hsl(var(--primary)); }
-  .console-progress[data-tone="success"] .console-progress-bar { background: hsl(var(--success)); }
-  .console-progress[data-tone="warning"] .console-progress-bar { background: hsl(var(--warning)); }
-  .console-progress[data-tone="danger"] .console-progress-bar { background: hsl(var(--destructive)); }
+  .console-progress[data-tone="success"] .console-progress-bar { background: hsl(var(--console-signal-success-fill)); }
+  .console-progress[data-tone="warning"] .console-progress-bar { background: hsl(var(--console-signal-warning-fill)); }
+  .console-progress[data-tone="danger"] .console-progress-bar { background: hsl(var(--console-signal-danger-fill)); }
   .console-progress[data-tone="neutral"] .console-progress-bar { background: hsl(var(--muted-foreground)); }
   .console-progress-value { font-size: var(--console-text-label); font-variant-numeric: tabular-nums; color: hsl(var(--muted-foreground)); }
 
   .console-sparkline { width: 5.25rem; height: 1.625rem; flex-shrink: 0; color: hsl(var(--primary)); }
   .console-sparkline path { stroke: currentColor; stroke-width: 1.5; }
-  .console-sparkline[data-tone="success"] { color: hsl(var(--success)); }
-  .console-sparkline[data-tone="warning"] { color: hsl(var(--warning)); }
-  .console-sparkline[data-tone="danger"] { color: hsl(var(--destructive)); }
+  .console-sparkline[data-tone="success"] { color: hsl(var(--console-signal-success-fill)); }
+  .console-sparkline[data-tone="warning"] { color: hsl(var(--console-signal-warning-fill)); }
+  .console-sparkline[data-tone="danger"] { color: hsl(var(--console-signal-danger-fill)); }
   .console-sparkline[data-tone="neutral"] { color: hsl(var(--muted-foreground)); }
 
   .console-timeline { display: flex; margin: 0; padding: 0; list-style: none; flex-direction: column; gap: var(--console-stack-gap); }
@@ -63,8 +63,8 @@
   /* The dot sits on the first text line: (body line height − dot) / 2. */
   .console-timeline-dot { width: 0.5rem; height: 0.5rem; flex-shrink: 0; margin-top: calc(var(--console-heading-gap) * 2); border-radius: var(--console-badge-radius); background: hsl(var(--muted-foreground) / 0.5); }
   .console-timeline-item[data-tone="primary"] .console-timeline-dot { background: hsl(var(--primary)); }
-  .console-timeline-item[data-tone="warning"] .console-timeline-dot { background: hsl(var(--warning)); }
-  .console-timeline-item[data-tone="danger"] .console-timeline-dot { background: hsl(var(--destructive)); }
+  .console-timeline-item[data-tone="warning"] .console-timeline-dot { background: hsl(var(--console-signal-warning-fill)); }
+  .console-timeline-item[data-tone="danger"] .console-timeline-dot { background: hsl(var(--console-signal-danger-fill)); }
   .console-timeline-body { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: var(--console-heading-gap); }
   .console-timeline-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); }
   .console-timeline-title { font-weight: var(--console-weight-medium); }
@@ -74,7 +74,7 @@
   .console-disclosure { min-width: 0; border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-card-radius); background: var(--console-surface-raised); }
   .console-disclosure-summary { display: flex; min-height: var(--console-touch-target); flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); padding: var(--console-inline-gap) var(--console-card-padding); cursor: pointer; list-style: none; }
   .console-disclosure-summary::-webkit-details-marker { display: none; }
-  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-card-border) solid currentColor; border-bottom: var(--console-card-border) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-duration-fast) ease; }
+  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-card-border) solid currentColor; border-bottom: var(--console-card-border) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-motion-fast) var(--console-ease-out); }
   .console-disclosure[open] > .console-disclosure-summary::before { transform: rotate(45deg); }
   .console-disclosure-summary:focus-visible { outline: var(--console-focus-ring); outline-offset: var(--console-focus-ring-offset); border-radius: var(--console-card-radius); }
   .console-disclosure-title { font-weight: var(--console-weight-medium); }

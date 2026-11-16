@@ -14,6 +14,10 @@ export interface StatCardProps {
   /** Under the value (progress meter). */
   footer?: ReactNode
   sub?: ReactNode
+  /**
+   * Signal tone for an abnormal value (zhinjs/console#125): the value in the signal text color,
+   * the icon in its fill. Ignored while the value is 0 — a steady state (「失败 0」) is never colored.
+   */
   tone?: 'danger' | 'warning'
   /** 数值右侧的附加内容，如环形进度 */
   aside?: ReactNode
@@ -27,7 +31,8 @@ export interface StatCardProps {
  * 指标卡：图标 + 标签、大号数值、说明文字。总览页与列表页共用。
  */
 export function StatCard({ icon, label, value, unit, badge, footer, sub, tone, aside, onOpen, pressed }: StatCardProps) {
-  const className = cn('console-stat-card', tone && `is-${tone}`, onOpen && 'is-link', pressed && 'is-pressed')
+  const signal = tone && !isZeroValue(value) ? tone : undefined
+  const className = cn('console-stat-card', signal && `is-${signal}`, onOpen && 'is-link', pressed && 'is-pressed')
   const labelRow = <span className="console-stat-label">{statIcon(icon)}{label}</span>
   const content = (
     <>
@@ -50,6 +55,12 @@ export function StatCard({ icon, label, value, unit, badge, footer, sub, tone, a
       {content}
     </button>
   )
+}
+
+/** `0`, `'0'`, `'0.0'`, `'0%'`: a steady value that never takes a signal tone. */
+export function isZeroValue(value: ReactNode): boolean {
+  if (typeof value === 'number') return value === 0
+  return typeof value === 'string' && /^\s*0+(?:[.,]0+)?\s*%?\s*$/u.test(value)
 }
 
 function statIcon(icon: StatCardProps['icon']): ReactNode {
@@ -75,9 +86,9 @@ export function MiniRingGauge({ percent, tone = 'primary' }: { percent: number; 
   const offset = c - (clamped / 100) * c
   const stroke =
     tone === 'success'
-      ? 'hsl(var(--success))'
+      ? 'hsl(var(--console-signal-success-fill))'
       : tone === 'warning'
-        ? 'hsl(var(--warning))'
+        ? 'hsl(var(--console-signal-warning-fill))'
         : 'hsl(var(--primary))'
   return (
     <span className="console-ring-gauge" aria-hidden="true">

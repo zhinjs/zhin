@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { createElement as h, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  BrandMark,
   Button,
+  CONSOLE_PRODUCT_NAME,
   CONSOLE_SHARED_MODULE_VERSIONS_KEY,
   CONSOLE_UI_LOCALES,
   CONSOLE_UI_MESSAGES,
@@ -13,8 +15,10 @@ import {
   ConsoleUiI18nProvider,
   EmptyState,
   ErrorAlert,
+  PageActions,
   PageChromeActions,
   RefreshControl,
+  StatCard,
   buttonVariants,
   canSubmitConfirm,
   cn,
@@ -22,6 +26,7 @@ import {
   createConsoleUiI18n,
   createPageChromeStore,
   formatRefreshTime,
+  isZeroValue,
   groupSelectOptions,
   navigableValues,
   refreshIntervalOptions,
@@ -56,9 +61,69 @@ describe('Button', () => {
     expect(new Set(variant.split(' '))).toEqual(new Set(outlinePlusDestructive.split(' ')));
   });
 
-  it('keeps the solid destructive variant for confirmation steps', () => {
-    expect(buttonVariants({ variant: 'destructive' })).toContain('bg-destructive');
-    expect(renderToStaticMarkup(h(Button, { variant: 'destructive-outline' }, '删除'))).toContain('text-destructive');
+  const classes = (variant?: Parameters<typeof buttonVariants>[0] extends infer P ? P extends { variant?: infer V } ? V : never : never) =>
+    new Set(cn(buttonVariants(variant === undefined ? {} : { variant })).split(' '));
+
+  it('primary is the solid brand button with brand-foreground text (zhinjs/console#125)', () => {
+    const primary = classes('primary');
+    for (const name of ['bg-brand', 'text-brand-foreground']) expect(primary.has(name), name).toBe(true);
+    expect(renderToStaticMarkup(h(Button, { variant: 'primary' }, '保存'))).toContain('bg-brand');
+  });
+
+  it('soft is the former default; default stays as its alias and is still the default variant', () => {
+    expect(classes('default')).toEqual(classes('soft'));
+    expect(classes(undefined)).toEqual(classes('soft'));
+    expect(classes('soft').has('bg-primary-action')).toBe(true);
+  });
+
+  it('destructive is a ghost (red text, no fill); the solid red is destructive-solid', () => {
+    const ghost = classes('destructive');
+    expect(ghost.has('text-destructive')).toBe(true);
+    expect(ghost.has('bg-destructive')).toBe(false);
+    const solid = classes('destructive-solid');
+    for (const name of ['bg-destructive', 'text-destructive-foreground']) expect(solid.has(name), name).toBe(true);
+  });
+
+  it('solid red appears only in ConfirmDialog; PageAction tone primary is the primary button', () => {
+    const users = files(join(clientRoot, 'components'), /\.tsx$/u)
+      .filter((file) => !file.endsWith('button.tsx') && readFileSync(file, 'utf8').includes("'destructive-solid'"))
+      .map((file) => relative(clientRoot, file));
+    expect(users).toEqual(['components/confirm-dialog.tsx']);
+    expect(readFileSync(join(clientRoot, 'components/confirm-dialog.tsx'), 'utf8')).toContain("variant === 'destructive' ? 'destructive-solid' : 'primary'");
+    const header = renderToStaticMarkup(h(PageActions, { actions: [{ label: '新建', tone: 'primary', onSelect: () => undefined }, { label: '导入', onSelect: () => undefined }] }));
+    expect(header.match(/text-brand-foreground/gu)).toHaveLength(1);
+  });
+});
+
+describe('BrandMark', () => {
+  it('renders the favicon shape in brand colors, independent of the palette', () => {
+    const mark = renderToStaticMarkup(h(BrandMark, null));
+    expect(mark).toContain('role="img"');
+    expect(mark).toContain(`aria-label="${CONSOLE_PRODUCT_NAME}"`);
+    expect(mark).toContain('fill="hsl(var(--console-brand, 160 78% 69.8%))"');
+    expect(mark).toContain('fill="hsl(var(--console-brand-foreground, 160 80% 10%))"');
+    expect(mark).not.toMatch(/--primary|--palette/u);
+    expect(mark).toContain('data-size="md"');
+  });
+
+  it('optionally shows 「Zhin Console」 and takes preset or pixel sizes', () => {
+    const named = renderToStaticMarkup(h(BrandMark, { withText: true, size: 'lg' }));
+    expect(named).toContain('>Zhin Console</span>');
+    expect(named).toContain('aria-hidden="true"');
+    expect(named).toContain('data-size="lg"');
+    expect(renderToStaticMarkup(h(BrandMark, { size: 48 }))).toContain('style="width:48px;height:48px"');
+  });
+});
+
+describe('StatCard signal tones', () => {
+  it('colors abnormal values only; 0 is a steady state', () => {
+    expect(renderToStaticMarkup(h(StatCard, { label: '失败', value: 3, tone: 'danger' }))).toContain('is-danger');
+    expect(renderToStaticMarkup(h(StatCard, { label: '失败', value: 0, tone: 'danger' }))).not.toContain('is-danger');
+    expect(renderToStaticMarkup(h(StatCard, { label: '待处理', value: '0', tone: 'warning' }))).not.toContain('is-warning');
+    expect(isZeroValue('0.0')).toBe(true);
+    expect(isZeroValue('0%')).toBe(true);
+    expect(isZeroValue('10')).toBe(false);
+    expect(isZeroValue(null)).toBe(false);
   });
 });
 

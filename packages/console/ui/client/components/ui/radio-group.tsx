@@ -20,7 +20,7 @@ const RadioGroupItem = forwardRef<
   <RadioGroupPrimitive.Item
     ref={ref}
     className={cn(
-      "console-control console-touch aspect-square size-4 shrink-0 rounded-full border border-input bg-card text-primary transition-colors disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary",
+      "console-control console-touch aspect-square size-4 shrink-0 rounded-full border border-input bg-card text-brand-text transition-colors disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-brand-text",
       className
     )}
     {...props}

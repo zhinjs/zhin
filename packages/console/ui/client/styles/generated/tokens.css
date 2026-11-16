@@ -5,8 +5,11 @@
 
 /*
  * @zhin.js/console-ui — color tokens (light / dark / palettes). Hand-written source, defined only
- * here; tokens/generate.mjs copies it into the generated tokens.css. Values unchanged from P1a
- * (D22: colors and component shapes follow the current Console).
+ * here; tokens/generate.mjs copies it into the generated tokens.css. Palette colors unchanged from
+ * P1a (D22: colors and component shapes follow the current Console). The roles that do not follow
+ * the palette — brand, signal fill / text, chart-1…8 — are defined in tokens/tokens.mjs (`color`,
+ * zhinjs/console#125); the older names below (`--destructive`, `--success`, `--warning`, `--info`,
+ * `--chart-*`, `--ring`) now point at them and are redeclared on `.dark` so they resolve there.
  * Dark mode follows the `.dark` class on an ancestor (the Console puts it on <html>); palettes
  * follow `data-palette` on <html>.
  */
@@ -51,7 +54,7 @@
     --border: var(--palette-hue) var(--surface-chroma) 90.5%;
     --border-strong: var(--palette-hue) var(--surface-chroma) 84%;
     --input: var(--palette-hue) var(--surface-chroma) 51%;
-    --ring: var(--primary);
+    --ring: var(--console-brand-text);
     --sidebar: var(--card);
     --sidebar-foreground: var(--palette-hue) var(--surface-chroma) 30%;
     --sidebar-primary: var(--primary);
@@ -78,27 +81,27 @@
     --im-row-active-fg: var(--foreground);
     --im-row-active-muted: var(--muted-foreground);
     --im-unread: var(--primary);
-    --destructive: 0 68% 42%;
+    --destructive: var(--console-signal-danger-text);
+    --success: var(--console-signal-success-text);
+    --info: var(--console-signal-info-text);
+    --warning: var(--console-signal-warning-text);
     --destructive-foreground: 0 0% 100%;
-    --success: 145 52% 28%;
     --success-foreground: 0 0% 100%;
-    --info: 222 62% 50%;
     --info-foreground: 0 0% 100%;
-    --warning: 32 80% 30%;
     --warning-foreground: 0 0% 100%;
     --status-info: var(--info);
     --status-success: var(--success);
     --status-warning: var(--warning);
     --status-danger: var(--destructive);
-    --chart-1: 222 62% 50%;
-    --chart-2: 35 85% 38%;
-    --chart-3: 160 70% 30%;
-    --chart-4: 330 60% 46%;
-    --chart-5: 262 50% 52%;
-    --chart-6: 12 60% 46%;
-    --chart-7: 188 75% 34%;
-    --chart-8: 220 8% 46%;
-    --chart-other: 220 6% 58%;
+    --chart-1: var(--console-chart-1);
+    --chart-2: var(--console-chart-2);
+    --chart-3: var(--console-chart-3);
+    --chart-4: var(--console-chart-4);
+    --chart-5: var(--console-chart-5);
+    --chart-6: var(--console-chart-6);
+    --chart-7: var(--console-chart-7);
+    --chart-8: var(--console-chart-8);
+    --chart-other: var(--console-chart-other);
     color-scheme: light;
   }
   /* Fresh palettes: brighter hues; their tints are slightly warmer so selection still reads. */
@@ -191,6 +194,7 @@
     --border: var(--palette-hue) var(--surface-chroma) 16%;
     --border-strong: var(--palette-hue) var(--surface-chroma) 22%;
     --input: var(--palette-hue) var(--surface-chroma) 44%;
+    --ring: var(--console-brand-text);
     --sidebar: var(--card);
     --sidebar-foreground: var(--palette-hue) var(--surface-chroma) 76%;
     --im-chat-bg: var(--palette-hue) var(--surface-chroma) 6.6%;
@@ -199,23 +203,23 @@
     --im-bubble-in: var(--secondary);
     --im-bubble-out: var(--primary-action);
     --im-row-hover: var(--palette-hue) var(--surface-chroma) 12%;
-    --destructive: 0 62% 65%;
+    --destructive: var(--console-signal-danger-text);
+    --success: var(--console-signal-success-text);
+    --info: var(--console-signal-info-text);
+    --warning: var(--console-signal-warning-text);
     --destructive-foreground: 0 0% 10%;
-    --success: 145 52% 64%;
     --success-foreground: 0 0% 10%;
-    --info: 217 90% 70%;
     --info-foreground: 0 0% 10%;
-    --warning: 38 80% 65%;
     --warning-foreground: 0 0% 10%;
-    --chart-1: 217 80% 68%;
-    --chart-2: 38 80% 62%;
-    --chart-3: 160 55% 56%;
-    --chart-4: 330 65% 68%;
-    --chart-5: 262 70% 76%;
-    --chart-6: 12 70% 68%;
-    --chart-7: 188 65% 58%;
-    --chart-8: 220 10% 68%;
-    --chart-other: 220 6% 50%;
+    --chart-1: var(--console-chart-1);
+    --chart-2: var(--console-chart-2);
+    --chart-3: var(--console-chart-3);
+    --chart-4: var(--console-chart-4);
+    --chart-5: var(--console-chart-5);
+    --chart-6: var(--console-chart-6);
+    --chart-7: var(--console-chart-7);
+    --chart-8: var(--console-chart-8);
+    --chart-other: var(--console-chart-other);
     color-scheme: dark;
   }
 }
@@ -286,8 +290,6 @@
     --console-leading-code: 1.6;
     --console-shadow-color: 222 30% 12%;
     --console-ease-out: cubic-bezier(0.25, 1, 0.5, 1);
-    --console-duration-page: 200ms;
-    --console-duration-fast: 150ms;
     --console-surface-raised: hsl(var(--card));
     --console-surface-muted: hsl(var(--secondary));
     --console-surface-inset: hsl(var(--secondary));
@@ -296,6 +298,32 @@
     --console-border-subtle: hsl(var(--border) / 0.7);
     --console-border-default: hsl(var(--border));
     --console-border-strong: hsl(var(--border-strong));
+    --console-motion-fast: 120ms;
+    --console-duration-fast: var(--console-motion-fast);
+    --console-motion-base: 200ms;
+    --console-duration-page: var(--console-motion-base);
+    --console-motion-slow: 280ms;
+    --console-brand: 160 78% 69.8%;
+    --console-brand-foreground: 160 80% 10%;
+    --console-brand-text: 160 84% 25%;
+    --console-brand-tint: 160 60% 94%;
+    --console-signal-danger-fill: 0 76% 54%;
+    --console-signal-danger-text: 0 76% 40%;
+    --console-signal-warning-fill: 38 92% 50%;
+    --console-signal-warning-text: 38 92% 26%;
+    --console-signal-success-fill: 145 60% 40%;
+    --console-signal-success-text: 145 60% 25%;
+    --console-signal-info-fill: 217 84% 56%;
+    --console-signal-info-text: 217 84% 42%;
+    --console-chart-1: 217 74% 50%;
+    --console-chart-2: 32 94% 42%;
+    --console-chart-3: 164 72% 32%;
+    --console-chart-4: 330 66% 48%;
+    --console-chart-5: 262 56% 56%;
+    --console-chart-6: 48 92% 32%;
+    --console-chart-7: 192 80% 38%;
+    --console-chart-8: 8 66% 46%;
+    --console-chart-other: 220 6% 58%;
     --console-shadow-ring: 0 0 0 1px hsl(var(--console-shadow-color) / 0.045);
   }
   .dark {
@@ -306,6 +334,27 @@
     --console-shadow-color: 0 0% 0%;
     --console-surface-hover: hsl(0 0% 100% / 0.05);
     --console-surface-active: hsl(0 0% 100% / 0.09);
+    --console-brand: 159.8 100% 74.9%;
+    --console-brand-foreground: 160 80% 10%;
+    --console-brand-text: 159.8 100% 74.9%;
+    --console-brand-tint: 160 40% 14%;
+    --console-signal-danger-fill: 0 76% 58%;
+    --console-signal-danger-text: 0 76% 70%;
+    --console-signal-warning-fill: 38 92% 52%;
+    --console-signal-warning-text: 38 92% 62%;
+    --console-signal-success-fill: 145 60% 44%;
+    --console-signal-success-text: 145 60% 58%;
+    --console-signal-info-fill: 217 84% 62%;
+    --console-signal-info-text: 217 84% 72%;
+    --console-chart-1: 217 80% 66%;
+    --console-chart-2: 32 92% 58%;
+    --console-chart-3: 164 60% 48%;
+    --console-chart-4: 330 72% 62%;
+    --console-chart-5: 262 70% 74%;
+    --console-chart-6: 48 86% 56%;
+    --console-chart-7: 192 70% 52%;
+    --console-chart-8: 8 72% 64%;
+    --console-chart-other: 220 6% 50%;
   }
 }
 
@@ -369,7 +418,7 @@
     --console-sheet-radius: var(--console-radius-4);
     --console-focus-ring-width: var(--console-border-focus);
     --console-focus-ring-offset: 2px;
-    --console-focus-ring: var(--console-focus-ring-width) solid hsl(var(--ring));
+    --console-focus-ring: var(--console-focus-ring-width) solid hsl(var(--console-brand-text));
     --console-content-max: var(--console-content-data);
   }
   @media (min-width: 40rem) {
