@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Activity, Inbox, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
 import {
-  Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Alert, AlertDescription, AlertTitle, Badge, BrandMark, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
   Checkbox, ConfirmDialog, ConsoleUiI18nProvider, EmptyState, ErrorAlert, Grid, Input, ListDetail, MiniRingGauge,
   PageChromeActions, PageChromeProvider, PageHeader, PageShell, RowActions, SearchableSelectField, Section,
   SelectField, StatCard, StatGrid, StatusBadge, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -121,21 +121,33 @@ function Gallery() {
           <StatCard icon={Users} label="会话" value="36" aside={<MiniRingGauge percent={72} />} />
           <StatCard icon={Inbox} label="待处理" value="3" tone="warning" sub="需要处理" />
           <StatCard icon={Activity} label="错误" value="1" tone="danger" onOpen={noop} />
+          <StatCard icon={Activity} label="失败" value="0" tone="danger" sub="稳态不着色" />
         </StatGrid>
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-6">
+            <BrandMark size="sm" />
+            <BrandMark />
+            <BrandMark size="lg" />
+            <BrandMark withText />
+            <BrandMark size="lg" withText />
+          </CardContent>
+        </Card>
         <Grid min="20rem">
           <Card>
             <CardHeader>
               <CardTitle>按钮</CardTitle>
-              <CardDescription>页面上的危险操作用描边样式，实心红色只在确认对话框里出现。</CardDescription>
+              <CardDescription>每个视图最多一个实心主按钮；页面上的危险操作用幽灵或描边样式，实心红色只在确认对话框里出现。</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-3">
-              <Button>主要操作</Button>
+              <Button variant="primary">主要操作</Button>
+              <Button variant="soft">柔和</Button>
               <Button variant="secondary">次要</Button>
               <Button variant="outline">描边</Button>
               <Button variant="ghost">幽灵</Button>
               <Button variant="link">链接</Button>
               <Button variant="destructive-outline" onClick={() => setConfirmOpen(true)}>删除数据</Button>
-              <Button variant="destructive">确认删除</Button>
+              <Button variant="destructive">移除</Button>
+              <Button variant="destructive-solid">确认删除</Button>
               <Button size="sm">小号</Button>
               <Button disabled>禁用</Button>
             </CardContent>

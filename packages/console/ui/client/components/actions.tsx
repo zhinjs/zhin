@@ -18,14 +18,17 @@ export interface PageAction {
   readonly label: string
   readonly onSelect: () => void
   readonly icon?: LucideIcon
-  /** `destructive` renders the outline button with destructive text (ADR 0063 决策 5). */
+  /**
+   * `primary` is the solid brand button — at most one per view (zhinjs/console#125); `destructive`
+   * renders the outline button with destructive text (ADR 0063 决策 5).
+   */
   readonly tone?: 'default' | 'primary' | 'destructive'
   readonly disabled?: boolean
 }
 
 function buttonVariant(action: PageAction): ButtonProps['variant'] {
   if (action.tone === 'destructive') return 'destructive-outline'
-  if (action.tone === 'primary') return 'default'
+  if (action.tone === 'primary') return 'primary'
   return 'outline'
 }
 

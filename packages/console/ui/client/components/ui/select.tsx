@@ -18,7 +18,7 @@ const SelectTrigger = forwardRef<
     ref={ref}
     data-slot="input"
     className={cn(
-      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border border-input bg-card hover:border-foreground/45 focus-visible:border-primary px-3 text-body placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 [&>span]:line-clamp-1",
+      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border border-input bg-card hover:border-foreground/45 focus-visible:border-brand-text px-3 text-body placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 [&>span]:line-clamp-1",
       className
     )}
     {...props}
@@ -103,12 +103,12 @@ const SelectItem = forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-primary/5 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-brand-tint data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
       className
     )}
     {...props}
   >
-    <span className="absolute right-2 flex size-4 items-center justify-center text-primary">
+    <span className="absolute right-2 flex size-4 items-center justify-center text-brand-text">
       <SelectPrimitive.ItemIndicator>
         <Check className="size-4" />
       </SelectPrimitive.ItemIndicator>

@@ -107,7 +107,7 @@ export function ConfirmDialog({
             <Button variant="outline" size="sm">{cancelLabel ?? i18n.t("confirm.cancel")}</Button>
           </DialogClose>
           <Button
-            variant={variant === 'destructive' ? 'destructive' : 'default'}
+            variant={variant === 'destructive' ? 'destructive-solid' : 'primary'}
             size="sm"
             onClick={handleConfirm}
             disabled={!canSubmit}
