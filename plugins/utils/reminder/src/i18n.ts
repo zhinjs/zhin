@@ -154,8 +154,8 @@ export const reminderMessages = createMessages({
     "en": "A reminder is being completed. Reply with the reminder text, or cancel before starting another command."
   },
   "preview": {
-    "zh-CN": "时间：{time}\n原会话：{scene}\n账号：{account}\n正文（原样显示）：\n{text}\n\n请等待下一条确认提示，再输入“确认”创建；不会更换目标会话。",
-    "en": "Time: {time}\nOriginal conversation: {scene}\nAccount: {account}\nText (shown verbatim):\n{text}\n\nWait for the next confirmation prompt, then enter \"confirm\" to create. The target conversation will remain unchanged."
+    "zh-CN": "- 时间：{time}\n- 原会话：{scene}\n- 账号：{account}\n- 正文（原样显示）：\n\n{text}\n\n确认后在原会话创建，不会更换目标会话。",
+    "en": "- Time: {time}\n- Original conversation: {scene}\n- Account: {account}\n- Text (shown verbatim):\n\n{text}\n\nConfirming creates it in the original conversation; the target conversation will remain unchanged."
   },
   "parent": {
     "zh-CN": "父容器",
@@ -174,12 +174,12 @@ export const reminderMessages = createMessages({
     "en": "Create this reminder?"
   },
   "confirmHelp": {
-    "zh-CN": "请核对上一条预览的时间、时区、正文和原会话；仅输入“确认”才创建。",
-    "en": "Check the time, timezone, text and original conversation in the preview. Enter \"confirm\" to create."
+    "zh-CN": "请核对上面的时间、时区、正文和原会话；点「确认」或回复“确认”才创建，回复“取消”退出。",
+    "en": "Check the time, timezone, text and original conversation above. Click Confirm or reply \"confirm\" to create; reply \"cancel\" to exit."
   },
   "confirmInvalid": {
-    "zh-CN": "未创建提醒。请明确输入“确认”，或输入“取消”退出。",
-    "en": "No reminder was created. Enter \"confirm\", or enter \"cancel\" to exit."
+    "zh-CN": "未创建提醒。请明确输入“确认”（或点「确认」按钮），或输入“取消”退出。",
+    "en": "No reminder was created. Enter \"confirm\" (or click Confirm), or enter \"cancel\" to exit."
   },
   "expired": {
     "zh-CN": "提醒时间已过，未创建提醒。请选择未来时间；不会自动顺延。",

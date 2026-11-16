@@ -22,6 +22,25 @@ export interface OperationInputBinding {
   [operationInputBinding](owner: PluginId, snapshot: RuntimeSnapshot): unknown;
 }
 
+/**
+ * @internal The exact generation snapshot of the operation an input belongs to. A Feature
+ * projection obtained through `context.project()` was built against a projection-time view of
+ * the generation, not the committed snapshot the operation runs on; services that accept the
+ * operation's input read this hook so they bind to that operation instead of their own view.
+ */
+export const operationInputSnapshot = Symbol.for('zhin.operation-input-snapshot/1');
+
+export interface OperationInputSnapshot {
+  [operationInputSnapshot](): RuntimeSnapshot | undefined;
+}
+
+/** @internal Read the operation's snapshot hook, never similarly named metadata fields. */
+export function readOperationInputSnapshot(input: unknown): RuntimeSnapshot | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const read = (input as Partial<OperationInputSnapshot>)[operationInputSnapshot];
+  return typeof read === 'function' ? read.call(input) : undefined;
+}
+
 /** @internal Features remain neutral about the operation's message or transport. */
 export function bindOperationInput<TInput>(input: TInput, owner: PluginId, snapshot: RuntimeSnapshot): TInput {
   if (!input || typeof input !== 'object') return input;

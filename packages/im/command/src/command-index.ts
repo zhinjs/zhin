@@ -4,7 +4,9 @@ import {
   type MessageSegment,
 } from 'segment-matcher';
 import {
+  disabledFeatureOwners,
   htmlRendererToken,
+  resolveFeatureTargetKey,
   resolveLocale,
   type CapabilityId,
   type CapabilitySlot,
@@ -13,7 +15,7 @@ import {
   type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
-import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   describeDeniedPermit,
   permissionHostToken,
@@ -231,7 +233,9 @@ const DEFAULT_MENU_KEYWORDS = new Set(['菜单', '帮助', 'help', 'menu']);
 
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
+  readonly #slots: readonly Readonly<CapabilitySlot<CommandDefinition>>[];
   readonly #commands: readonly CommandRecord[];
+  readonly #endpointGated = new Map<string, CommandIndex>();
   readonly #routes: readonly CommandRoute[];
   readonly #shortcuts: ReadonlyMap<string, ShortcutEntry>;
   readonly #menu?: CommandMenuConfig;
@@ -243,6 +247,7 @@ export class CommandIndex {
     menu?: CommandMenuConfig,
   ) {
     this.#menu = menu;
+    this.#slots = slots;
     const commands: CommandRecord[] = [];
     const routes: CommandRoute[] = [];
     const occupancy = new Map<string, CommandRouteClaimant>();
@@ -567,8 +572,23 @@ export class CommandIndex {
     }
   }
 
-  async dispatch({ input, source, interactionFactory, commandPrefix, snapshot: operationSnapshot = this.snapshot,
-    locale: localeOverride, operation: operationFactory }: CommandDispatchRequest): Promise<CommandDispatchResult> {
+  async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
+    const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
+    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(source) : undefined;
+    if (sourceSnapshot) {
+      // ADR 0050: a Plugin switched off for this message's endpoint has no commands there, also when a
+      // middleware/handler dispatches through the raw projection (Core's dispatcher passes a gated index).
+      const gated = this.#gatedForEndpoint(source, sourceSnapshot);
+      if (gated !== this) {
+        return gated.dispatch({ ...request, snapshot: sourceSnapshot,
+          operation: request.operation ?? readOperationInputResources(source, sourceSnapshot) });
+      }
+    }
+    const operationSnapshot = request.snapshot ?? sourceSnapshot ?? this.snapshot;
+    // A source that carries its own operation (a framework Message) also brings that operation's
+    // resources; an explicit snapshot or factory from the caller is used exactly as given.
+    const operationFactory = request.operation
+      ?? (sourceSnapshot ? readOperationInputResources(source, sourceSnapshot) : undefined);
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
@@ -684,6 +704,39 @@ export class CommandIndex {
       lines.push(`  ${prefix}${commandDisplayName(record, locale)}${description ? `  - ${description}` : ''}`);
     }
     return lines;
+  }
+
+  /**
+   * Issue #1250: this index was projected against a projection-time view of its generation, not the
+   * committed snapshot a message's operation runs on. Without an explicit `snapshot`, a source that
+   * carries an operation (a Message such as `context.input`) supplies that snapshot, so an index from
+   * `context.project()` in a middleware or handler dispatches as that message's real author. The
+   * operation's snapshot must hold this very index; one kept across a reload is refused.
+   */
+  #sourceSnapshot(source: unknown): RuntimeSnapshot | undefined {
+    const bound = readOperationInputSnapshot(source);
+    if (!bound) return undefined;
+    if (bound !== this.snapshot && ![...bound.projections.values()].includes(this)) {
+      throw new Error(`This CommandIndex (generation ${this.snapshot.generation}) is not the command projection of the message's generation `
+        + `${bound.generation}: resolve it with context.project(commandFeatureId) inside the current middleware/handler `
+        + 'instead of keeping it across a reload. See docs/authoring/commands.md#dispatch-from-middleware.');
+    }
+    return bound;
+  }
+
+  /** This index without the commands of owners disabled for `source`'s endpoint in `snapshot` (ADR 0050 §6). */
+  #gatedForEndpoint(source: unknown, snapshot: RuntimeSnapshot): CommandIndex {
+    let key: string | undefined;
+    try { key = resolveFeatureTargetKey(snapshot, source as Parameters<typeof resolveFeatureTargetKey>[1]); } catch { return this; }
+    const disabled = disabledFeatureOwners(snapshot, snapshot.tree.keys(), key);
+    if (disabled.size === 0 || !this.#slots.some(slot => disabled.has(slot.owner))) return this;
+    const cacheKey = [...disabled].sort().join('\0');
+    let gated = this.#endpointGated.get(cacheKey);
+    if (!gated) {
+      gated = new CommandIndex(this.#slots.filter(slot => !disabled.has(slot.owner)), snapshot, this.#menu);
+      this.#endpointGated.set(cacheKey, gated);
+    }
+    return gated;
   }
 
   #denied(record: CommandRecord, permit: string | null, locale: Locale): CommandDispatchResult {
