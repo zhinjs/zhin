@@ -961,7 +961,7 @@ ${sandboxStyles}`}</style>
                         <div>
                             <div>
                                 <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                                <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
+                                <div><h2>{sandboxText(locale, "会话")}</h2></div>
                             </div>
                             {connectionBadge}
                         </div>

@@ -1,5 +1,18 @@
 # @zhin.js/plugin-game-hub
 
+## 1.1.32
+
+### Patch Changes
+
+- c9187c2: 官方插件页面补充命令面板别名 `keywords`（ADR 0063 P3，中英文各一组，例如彩票推荐补「抽奖」「双色球」，飞书适配器补「飞书」/ `feishu`），Console 的命令面板可以按别名找到这些页面。
+- Updated dependencies [8941172]
+- Updated dependencies [f1affdd]
+  - @zhin.js/console-contract@1.3.1
+  - @zhin.js/game-kit@1.1.32
+  - @zhin.js/page@1.2.1
+  - @zhin.js/skill@1.1.20
+  - @zhin.js/tool@1.1.23
+
 ## 1.1.31
 
 ### Patch Changes

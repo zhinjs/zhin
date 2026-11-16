@@ -1,5 +1,54 @@
 # @zhin.js/adapter-process
 
+## 1.2.0
+
+### Minor Changes
+
+- 58046de: Sandbox 会话页迁到 `@zhin.js/console-ui`（ADR 0063 P2，D13 两步）。
+
+  - 第一步：zhinjs/console 中只服务 Sandbox 的样式（`agent-playground.css` 全部、`im-workspace.css` 中 Sandbox 用到的规则）搬进插件 `pages/index/workspaceStyles.ts`，由页面自己注入、全部限定在 `.zhin-sandbox` 内，不再依赖 Console 的样式表与 Tailwind 扫描。
+  - 第二步：按钮、输入框、下拉框（原生 `<select>` 换成 `SelectField`）、开关、页签、「更多」菜单（`DropdownMenu`）、清空确认（`ConfirmDialog`）、提示条（`Alert`）改用 `@zhin.js/console-ui`；危险操作为描边按钮，实心红色只在确认对话框中出现；页面以 `definePage({ fullWidth: true })` 占满内容区，页头交给 Console 外壳（`usePageChrome`），无外壳时页面自己画「会话列表」「检查器」开关；手机上运行栏只保留运行状态、停止与「更多」，其余操作收进「更多」，可点控件不小于 44px。
+  - 修正 768–1180px 宽度下会话列表变成抽屉却没有开关、主区被挤进第一列的问题；会话抽屉不再用 `position: fixed` 盖住 Console 外壳；打开检查器时宽屏下输入区不再被挤出。
+  - 样式令牌化：页面自带 CSS 中的字号、字重、间距、圆角、阴影改用 `@zhin.js/console-ui` 令牌（`var(--console-…)`），断点改为 Console 的 40 / 48 / 64 / 90rem（`@media (width < 64rem)` 这类范围写法，列表抽屉与手机运行栏的脚本判断同步），界面颜色改用主题色令牌（代码块的语法高亮配色保留）；`zhin plugin check` 第 1–6 条与 Playwright 布局审计均无违规，Sandbox 进入官方插件 UI 门禁。表情列表、Agent Trace、待处理交互的响应格式异常时不再让整页崩溃。
+  - `package.json` 新增 peerDependency `@zhin.js/console-ui`（`workspace:^`，发布时为 `^` 加当时的 console-ui 版本，即 `^1.x`），需要提供该共享模块的 Console。
+
+### Patch Changes
+
+- 19526a6: 没回复、被拒绝、离线都说清原因（zhinjs/zhin#1250 第 31 批）：
+
+  - `self-service-unknown-conversation-opaque`（回退的根因）：第 9 批（ADR 0060 P3，b6ec01464「Sandbox speaks as the linked chat identity; typed ids are simulated and role-less」）起，Sandbox 里手填的发送者以 `~sim:<id>` 进入运行时，而 `chatRoleMessageContext()` 把这种保留 id 当成「无法识别」，`功能` / `角色` / `认领` / `绑定` 都只回「无法识别当前会话。」；之前同一个群里 `功能 关闭 repeater` 能用，是因为当时手填的 id 还会被当成真实身份。现在 `@zhin.js/core` 新增 `resolveChatRoleMessageContext()`，返回 `{ ok: false, reason }`（`no-conversation` / `unknown-endpoint` / `no-adapter` / `no-sender` / `simulated-sender` / `invalid-sender`），实例侧再加 `unkeyed-conversation`（适配器没有提供可用的会话类型或会话 id）；四个指令按原因回复下一步（如「你正以模拟身份发言……请在 Sandbox 打开『以我的身份发言』，或在 Console『功能』/『聊天角色』页设置」）。不带参数的 `功能` / `角色` 直接列出。
+  - 被拒绝或失败的自助指令不再记成 `command_replied | executed`：`UserFacingError` 新增闭合的拒绝码 `reason`，指令派发结果带 `refusalReason`，入站结局记 `refused` 与该码（如 `simulated-sender`、`not-admin`、`usage`、`locked`、`self-service-disabled`），回复文字不变。没有码的 `UserFacingError` 仍记 `user_facing_error`。
+  - `unaddressed-message-no-record`（复测失败的根因）：第 18 批之后，没被 @、不是指令的群消息其实已经记了 `not_addressed`，但未点名的静默结局一律只写 debug 日志，Console 的运行日志看不到；结局只存在进程内，Sandbox 和轨迹页也没有入口，看起来就像「什么都没记」。现在每个会话每分钟第一条 `not_addressed` 写 info（`inbound_outcome | … | sampled: first_per_minute`），其余仍为 debug；新增 `GET {base}/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 连接绑定的会话、且只列该连接 owner 本人或其模拟身份发出的消息；只返回结局码和面向发送者的文案，不含插件名、阶段等运维文案），Sandbox 发消息后读取这条消息的结局，没有回复时显示原因（如「这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。（not_addressed · no_command_not_ambient）」）。`ConsoleMessageDiagnostic` 补上已有的 `outcome` 字段。
+  - `console-offline-no-reason`：适配器不上报连接状态（如 GitHub 这类 Webhook 适配器）且没有失败记录的已启动账号，不再显示「离线 · 连接状态：未知」，改为「未上报连接状态」（提示级），并说明常见原因与检查方法；确实离线时附上最近一次失败的原因、失败时间与自动重试次数 / 下次重试时间。这些只改显示文字：条目的 revision 与之前相同，已忽略的待办不会重新出现（「已从配置导入聊天角色」的 revision 也仍按原始条目数计算）。
+  - `principal-link-attention-ids`：「人员名单或身份链接等待确认」按人分组，每个身份写出适配器与账号（`qq·bot-a`），平台 id 只显示后 4 位（`尾号 1234`），数量按去重后的 (adapter, endpoint, userId) 计算；查看者本人显示为「你（显示名）」，其他 Console 用户显示 id 前 8 位，条目新增 `links`（`ConsoleAttentionItem.links`）供 Console 按 `iam.users.list` 换成用户名。
+
+- f1affdd: 游戏输入与入站结局（zhinjs/zhin#1250 第 34 批）：
+
+  - `game-input-also-reaches-agent`：猜数字的数字中间件在游戏回复之后仍调用 `next()`，同一条「50」又流到 Agent，于是有两条回复。现在游戏处理过的输入就结束分发，只有没有对局时才放行。`replyGameOperation()` 返回游戏是否回复了（`boolean`），并接受可选的 `input`：传入后把消息结局记成 `handler_replied` / `game_input`。所有游戏的对局中间件都会传入它。成语接龙和猜谜的自由文本作答也改为只在游戏真正处理了输入时才结束分发。
+  - `inbound-outcome-middleware-reply-mislabeled`：中间件先回复（回执 `sent`）再停止分发的，结局记 `handler_replied` / `middleware_replied`。只看停止分发的那个中间件所属插件自己送达的回复：别的插件先回复过、而它没回复就停止的，仍记 `filtered_by_policy` / `middleware_stopped`。入站结局端口 `InboundOutcomeSink` 新增可选方法 `replied(owner?)`。ADR 0061 已同步；没有改动已有的 reason 取值。
+  - `game-button-label-text-not-accepted`：游戏会话同时接受序号和按钮文字（忽略 emoji、空白与大小写），例如「要牌」「🏳️ 放弃」。对局结束后的文字「再来一局」（以及二十一点的序号 1）只在结束后 10 分钟内有效，之后按普通聊天放行。地牢远征在群里由整个频道共享：不在队伍里的人只能用文字「加入」，其余文字和序号都放行。`buildChoiceKeyboard()` / `buildGridKeyboard()` 统一在卡片上加一行「回复序号或按钮文字也可以」：猜数字的数字是猜测本身，所以只提示按钮文字；对局结束后没有可点按钮时不加。键盘段新增 `fallback.layout: 'inline'`，在能力画像为 `interactive: 'text'` 的适配器上，按钮渲染成一行 `1. 要牌  2. 停牌  3. 放弃`。井字棋改为按棋盘位置编号：回复 1–9 落在对应格，卡片上写明「回复 1–9 在对应位置落子（左上为 1，右下为 9）」。
+  - `game-command-names-mixed-language`：所有游戏的子命令都有中英两种写法，都能用（开始 / 继续 / 退出 / 认输 / 加入 / 离开 / 观战 / 人机）。帮助和提示里的写法跟命令名同一种语言，`formatGameHelp()` / `gameCommandHint()` 统一处理。井字棋的中文命令改为与标题一致的「井字棋」，旧名「井字游戏」仍可用。约定写在 `plugins/games/README.md`。
+  - `near-miss-suggestion-param-misleading`：指令参数新增只用于显示的 `suggestions` / `suggestionsI18n`。「你是不是想用」改为列出真实子命令（`玩石头剪刀布 开始|继续|退出`），不再显示 `[action]`。「玩石头剪刀布 石头」/「猜拳 石头」现在一步开局并出拳。
+  - `game-quit-means-forfeit`：会判负的退出（井字棋、成语接龙）在帮助里写「认输并结束对局」；其他游戏的退出写「结束当前对局（不计胜负）」。
+  - `command-menu-unreadable-in-sandbox`：指令菜单模板加了媒体查询：宽度 860px 以下为两列，560px 以下为单列，名称按词换行。Sandbox 按 HTML 段请求的 `width` 渲染，再等比缩小到聊天栏宽度，和平台实际收到的图片一致。
+  - `config-write-moves-inline-comment`：YAML 逐键补丁不再把写在键行上的注释（`"user:…": # …` 后接块状列表或映射）挪到下一行。补丁没有触及的顶层条目逐字节保留原文，flow 集合的空格风格也沿用原文件。`zhin disable` 现在只改 `disable_plugins`。
+
+- 9b868ac: Sandbox 会话栏（无 Console 外壳时）去掉写死的英文副标题「Conversations」，标题已按语言显示「会话 / Conversations」（zhinjs/console#125）。
+- Updated dependencies [8941172]
+- Updated dependencies [f370ec5]
+- Updated dependencies [48dc650]
+- Updated dependencies [a7f3a7c]
+- Updated dependencies [19526a6]
+- Updated dependencies [f1affdd]
+- Updated dependencies [2ab7fb9]
+  - @zhin.js/client@1.3.0
+  - @zhin.js/console-contract@1.3.1
+  - @zhin.js/core@1.11.0
+  - @zhin.js/host-http@1.6.0
+  - @zhin.js/page@1.2.1
+  - @zhin.js/adapter@1.3.3
+  - @zhin.js/feature-kit@1.1.19
+
 ## 1.1.36
 
 ### Patch Changes
