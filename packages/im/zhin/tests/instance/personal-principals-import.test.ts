@@ -365,8 +365,33 @@ describe('chat-roles.imported for ai.personalPrincipals (Q2)', () => {
       personalPending: [{ id: 'a'.repeat(24), consoleUserId: 'u-op', adapter: 'qq', userId: 'owner', at: 5 }] }) }, { allows });
     const item = result.items.find(entry => entry.kind === 'chat-roles.import-pending')!;
     expect(item.title).toContain('1');
-    expect(item.detail).toContain('Console 用户 u-op ↔ qq:owner');
+    expect(item.detail).toContain('Console 用户 #u-op 将链接 1 个聊天身份：qq（尾号 wner）');
     expect(item.detail).not.toContain('已从配置文件移除');
+  });
+
+  it('groups waiting links by person with each account, masks platform ids and counts distinct identities (#1250 principal-link-attention-ids)', async () => {
+    const owner = 'f'.repeat(32);
+    const pending = [
+      { id: 'a'.repeat(24), consoleUserId: owner, adapter: 'icqq', endpoint: '1689919782', userId: '1659488338', at: 5 },
+      { id: 'b'.repeat(24), consoleUserId: owner, adapter: 'qq', endpoint: 'bot-a', userId: 'A1B2C3D4E5F6OPENID0001', at: 6 },
+      { id: 'c'.repeat(24), consoleUserId: owner, adapter: 'qq', endpoint: 'bot-b', userId: 'A1B2C3D4E5F6OPENID0002', at: 7 },
+      { id: 'd'.repeat(24), consoleUserId: owner, adapter: 'sandbox', userId: 'sandbox-user', at: 8 },
+      // The same identity listed twice counts once.
+      { id: 'e'.repeat(24), consoleUserId: owner, adapter: 'qq', endpoint: 'bot-b', userId: 'A1B2C3D4E5F6OPENID0002', at: 9 },
+    ];
+    const read = async (viewer: Record<string, string>) => (await collectAttention({ chatRoles: async () => state({ personal: undefined,
+      personalPending: pending }) }, { allows, ...viewer })).items.find(entry => entry.kind === 'chat-roles.import-pending')!;
+    const item = await read({ viewerUserId: owner, viewerName: '管理员小王' });
+    expect(item.title).toBe('配置中有 4 条人员名单或身份链接等待确认');
+    expect(item.detail).toContain('你（管理员小王） 将链接 4 个聊天身份：icqq·1689919782（尾号 8338）、qq·bot-a（尾号 0001）、qq·bot-b（尾号 0002）、sandbox（尾号 user）');
+    // No full platform id or hex user id on the home page.
+    for (const secret of ['1659488338', 'A1B2C3D4E5F6OPENID0001', 'A1B2C3D4E5F6OPENID0002', owner]) expect(item.detail).not.toContain(secret);
+    // The Console names users from `links` (the instance cannot read gateway.db).
+    expect(item.links).toEqual([{ consoleUserId: owner, identities: [
+      { adapter: 'icqq', endpoint: '1689919782', userIdTail: '8338' }, { adapter: 'qq', endpoint: 'bot-a', userIdTail: '0001' },
+      { adapter: 'qq', endpoint: 'bot-b', userIdTail: '0002' }, { adapter: 'sandbox', userIdTail: 'user' }] }]);
+    const other = await read({ viewerUserId: 'someone-else' });
+    expect(other.detail).toContain(`Console 用户 #${owner.slice(0, 8)} 将链接 4 个聊天身份`);
   });
 
   it('acknowledge also marks the personal import as read', async () => {

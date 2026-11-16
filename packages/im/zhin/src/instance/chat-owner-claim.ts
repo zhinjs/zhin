@@ -40,7 +40,10 @@ import type { InstanceChatRoleService } from './chat-roles.js';
 import {
   chatRoleMigrationAdapterKinds, type ChatRoleAudit, type ChatRoleMigrationAdapterKind, type ChatRoleMigrationLogger,
 } from './chat-role-migration.js';
-import { featureChatActor, featureChatTokens } from './feature-self-service.js';
+import {
+  FeatureChatRefusal, featureChatActorFailureText, featureChatTokens, resolveFeatureChatActor,
+  type FeatureChatActor, type FeatureChatActorFailure,
+} from './feature-self-service.js';
 
 /** Read by `zhin status` (`basic/cli`, which cannot import this module: keep the path in sync). */
 export const CHAT_OWNER_CLAIM_FILE = join('.zhin', 'chat-owner-claim.json');
@@ -316,7 +319,6 @@ const messages = createMessages({
   locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },
   unpersisted: { 'zh-CN': '未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg）。', en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg).' },
   claimed: { 'zh-CN': '认领成功：你（{identity}）现在是本机器人的全局 owner，认领码已失效。', en: 'Claimed: you ({identity}) are now the global owner of this bot; the code no longer works.' },
-  unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   failed: { 'zh-CN': '认领失败：{error}', en: 'Claim failed: {error}' },
 });
 
@@ -331,12 +333,12 @@ export function formatOwnerClaimUsage(locale: Locale): string {
 
 /** Runs one `认领` / `claim` invocation and returns the reply text (normal send chain). */
 export async function executeOwnerClaim(
-  input: Readonly<{ code: string | undefined; actor: ReturnType<typeof featureChatActor>; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale }>,
+  input: Readonly<{ code: string | undefined; actor: FeatureChatActor | FeatureChatActorFailure | undefined; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale }>,
   claim: ChatOwnerClaim,
 ): Promise<string> {
   const { locale, actor } = input;
   if (!claim.active) return messages(locale, 'inactive');
-  if (!actor) return messages(locale, 'unknownConversation');
+  if (!actor || typeof actor !== 'object') return ownerClaimActorFailureText(actor ?? 'no-conversation', locale);
   if (!input.code) return formatOwnerClaimUsage(locale);
   let outcome: ChatOwnerClaimOutcome;
   try {
@@ -356,6 +358,11 @@ export async function executeOwnerClaim(
   }
 }
 
+/** Why a claim cannot name its sender: a simulated sender gets the claim's own wording (#1250). */
+function ownerClaimActorFailureText(reason: FeatureChatActorFailure, locale: Locale): string {
+  return reason === 'simulated-sender' ? messages(locale, 'simulated') : featureChatActorFailureText(reason, locale);
+}
+
 /** Root command `claim` (alias `认领`); installed whenever commands are, replies by itself when closed. */
 export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim; snapshots: SnapshotReader }>): RootResourceInstaller {
   return context => {
@@ -365,14 +372,16 @@ export function installChatOwnerClaim(options: Readonly<{ claim: ChatOwnerClaim;
       alias: ['认领'], options: {},
       execute: (command: CommandContext) => {
         const lease = options.snapshots.acquire();
-        let actor: ReturnType<typeof featureChatActor>;
+        let resolved: ReturnType<typeof resolveFeatureChatActor>;
         let adapterKind: ChatRoleMigrationAdapterKind;
         try {
-          actor = featureChatActor(lease.value, command.input);
-          adapterKind = actor ? chatRoleMigrationAdapterKinds(lease.value)(actor.identity.adapter) : undefined;
+          resolved = resolveFeatureChatActor(lease.value, command.input);
+          adapterKind = resolved.ok ? chatRoleMigrationAdapterKinds(lease.value)(resolved.actor.identity.adapter) : undefined;
         } finally { lease.release(); }
+        // #1250: a sender that cannot be named is a refusal with its reason, not `command_replied`.
+        if (!resolved.ok && options.claim.active) throw new FeatureChatRefusal(ownerClaimActorFailureText(resolved.reason, command.locale), resolved.reason);
         const first = featureChatTokens(command).find((token): token is string => typeof token === 'string');
-        return executeOwnerClaim({ code: first, actor, adapterKind, locale: command.locale }, options.claim);
+        return executeOwnerClaim({ code: first, actor: resolved.ok ? resolved.actor : resolved.reason, adapterKind, locale: command.locale }, options.claim);
       },
     }));
   };
@@ -409,9 +418,9 @@ export function createChatOwnerClaimGuard(options: Readonly<{
         name: 'claim',
         redacted: `${shaped?.keyword ?? '认领'} ***`,
         handle: (message: Message) => {
-          const actor = featureChatActor(snapshot, message);
-          const adapterKind = actor ? chatRoleMigrationAdapterKinds(snapshot)(actor.identity.adapter) : undefined;
-          return executeOwnerClaim({ code: shaped ? shaped.code : text, actor, adapterKind, locale: message.locale }, claim);
+          const resolved = resolveFeatureChatActor(snapshot, message);
+          const adapterKind = resolved.ok ? chatRoleMigrationAdapterKinds(snapshot)(resolved.actor.identity.adapter) : undefined;
+          return executeOwnerClaim({ code: shaped ? shaped.code : text, actor: resolved.ok ? resolved.actor : resolved.reason, adapterKind, locale: message.locale }, claim);
         },
         discard: async () => { await claim.revokeIfCarried(text); },
       });
