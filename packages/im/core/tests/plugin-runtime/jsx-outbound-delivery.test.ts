@@ -556,7 +556,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
   it.each(['root', 'nested-mixed'] as const)('evaluates a reused %s replacement JSX root once and retains segment order', async (mode) => {
     const render = vi.fn(async () => jsx(Html, { children: jsx('b', { children: 'Ready' }) }));
     const node = jsx(render, {});
-    const html = { type: 'html', data: { html: '<b>Ready</b>' } };
+    const html = { type: 'html', data: { html: '<b>Ready</b>', width: 540 } };
     const mention = segment.mention('alice');
     const image = segment.image({ kind: 'url', value: 'https://cdn.example/image.png' });
     const replace = mode === 'root' ? node : ['before', [node, [mention, image, node]], 'after'];
@@ -631,7 +631,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
       segment.image({ kind: 'url', value: 'https://cdn.example/image.png' }),
     ])).status).toBe('sent');
     expect(f.sent[0]?.payload).toEqual([
-      { type: 'html', data: { html: '<b>Ready</b>' } },
+      { type: 'html', data: { html: '<b>Ready</b>', width: 540 } },
       { type: 'text', data: { text: 'image unavailable' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/image.png' } } },
     ]);
@@ -660,7 +660,8 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     expect((await f.send(jsx(Html, { children: jsx('b', { children: 'Ready' }) }))).status).toBe('sent');
     expect(renderer.render).toHaveBeenCalledTimes(html === 'image' ? 1 : 0);
     expect(f.sent[0]?.payload).toEqual(html === 'direct'
-      ? [{ type: 'html', data: { html: '<b>Ready</b>' } }]
+      // ADR 0064 D5: direct HTML carries the design width an image endpoint renders at.
+      ? [{ type: 'html', data: { html: '<b>Ready</b>', width: 540 } }]
       : html === 'text'
         ? [{ type: 'text', data: { text: 'Ready' } }]
         : [{ type: 'image', data: { media: {
@@ -744,7 +745,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     const direct = await fixture({ segments: { html: 'direct' } });
     const content = segment.html({ html: '<div style="width:10px;height:10px;background:red"></div>' });
     expect((await direct.send(content)).status).toBe('sent');
-    expect(direct.sent[0]?.payload).toEqual([content]);
+    expect(direct.sent[0]?.payload).toEqual([{ ...content, data: { ...content.data, width: 540 } }]);
     const text = await fixture({ segments: { html: 'text' } });
     expect(await text.send(content)).toEqual({ status: 'suppressed' });
     expect(text.sent).toEqual([]);

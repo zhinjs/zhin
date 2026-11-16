@@ -26,6 +26,8 @@ export default defineAdapter<SlackEndpointConfig>({
         recall: {},
         edit: true,
         reaction: {},
+        // ADR 0064 §5：端点原生流式回复。
+        streaming: { mode: 'native' },
       },
       actions: {
         recall: { scopes: ['private', 'group', 'channel'] },

@@ -843,7 +843,8 @@ describe('IM Runtime', () => {
     try {
       await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
       expect(rendered).toHaveBeenCalledTimes(1);
-      expect(sent).toEqual([expect.objectContaining({ payload: [{ type: 'html', data: { html: '<b>ready</b>' } }] })]);
+      // ADR 0064 D5: a direct HTML endpoint receives the card's design width.
+      expect(sent).toEqual([expect.objectContaining({ payload: [{ type: 'html', data: { html: '<b>ready</b>', width: 540 } }] })]);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 

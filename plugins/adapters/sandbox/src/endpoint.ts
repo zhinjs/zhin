@@ -1,6 +1,7 @@
 import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
 import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest,
-  type EndpointStreaming, type EndpointStreamRequest, type EndpointMessageStream, type EndpointStreamAcknowledgement } from 'zhin.js/adapter';
+  type EndpointStreaming, type EndpointStreamRequest, type EndpointMessageStream, type EndpointStreamAcknowledgement,
+  type EndpointControl } from 'zhin.js/adapter';
 /**
  * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
  */
@@ -9,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { principalAllows, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import { hostChatRole, type CapabilityId, type ChatRoleReader } from 'zhin.js';
-import { EndpointDeliveryError, type PlatformStandingLevel } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type MessageRef, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
   sandboxSocketOf,
@@ -127,6 +128,7 @@ const messages = createMessages({
   protocol: { 'zh-CN': '与 Node Host 控制台沙盒协议一致（{path}）', en: 'Using the Node Host Console sandbox protocol ({path})' },
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
+  receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
 });
 
 export interface SandboxEndpointOptions {
@@ -202,6 +204,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
+      control: this.#control(),
       ...(options.defaults.streaming ? { streaming: Object.freeze<EndpointStreaming>({ mode: 'native',
         minIntervalMs: options.defaults.streamingIntervalMs, supports: request => this.#supportsStream(request),
         open: request => this.#openStream(request) }) } : {}),
@@ -293,6 +296,48 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       );
     }
     return messageId;
+  }
+
+  /**
+   * ADR 0064 P1b (D9): the Sandbox shows every non-segment capability too. Each operation is one
+   * wire frame on the message's scene (`recall` / `edit` / `reaction`); the page applies it to the
+   * message with that id. No live page = not performed, exactly like a send.
+   */
+  #control(): EndpointControl {
+    const deliver = (message: MessageRef, frame: Record<string, unknown>): void => {
+      if (!this.#open) throw new EndpointDeliveryError('endpoint_inactive', 'Sandbox Endpoint is not open', 'not_sent');
+      const scene = { type: message.conversation.kind, id: message.conversation.id };
+      const wire = JSON.stringify({ ...frame, id: scene.id, conversation: scene, endpoint: this.#options.defaults.id,
+        bot: this.#options.defaults.id, messageId: message.id, timestamp: Date.now() });
+      if (this.#broadcast(this.#subscribers(scene), wire) === 0) {
+        throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'Sandbox Endpoint has no live connection', 'not_sent');
+      }
+    };
+    return Object.freeze<EndpointControl>({
+      recall: async ({ message, signal }) => {
+        signal?.throwIfAborted();
+        deliver(message, { type: 'recall' });
+      },
+      edit: async ({ message, content, signal }) => {
+        signal?.throwIfAborted();
+        const wire = JSON.parse(formatSandboxOutbound(content, { messageId: message.id })) as { content?: unknown };
+        deliver(message, { type: 'edit', content: wire.content ?? [] });
+        return message.id;
+      },
+      addReaction: async ({ message, emoji, signal }) => {
+        signal?.throwIfAborted();
+        if (typeof emoji !== 'string' || !emoji) {
+          throw new EndpointDeliveryError('invalid_payload', 'Sandbox reaction needs an emoji', 'not_sent');
+        }
+        const reactionId = randomUUID();
+        deliver(message, { type: 'reaction', op: 'add', emoji, reactionId });
+        return reactionId;
+      },
+      removeReaction: async ({ message, reactionId, signal }) => {
+        signal?.throwIfAborted();
+        deliver(message, { type: 'reaction', op: 'remove', reactionId });
+      },
+    });
   }
 
   #supportsStream(request: Pick<EndpointStreamRequest, 'conversation' | 'source'>): boolean {
@@ -470,11 +515,22 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
               ...(parsed.agentRun ? { sandboxAgentRun: parsed.agentRun } : {}),
             }),
           }).catch((err) => {
+            const error = err instanceof Error ? err.message : String(err);
             this.#logger.warn(formatCompact({
               op: 'sandbox_gateway_receive_failed',
               target,
-              error: err instanceof Error ? err.message : String(err),
+              error,
             }));
+            // #1250 sandbox-submitted-without-feedback: the page shows the failure next to the
+            // input (a clicked button's card) instead of a silent 「已提交」.
+            try {
+              socket.send(JSON.stringify({
+                type: 'error', code: 'sandbox_gateway_receive_failed', endpoint: target, connectionId,
+                id: scene.id, conversation: scene, messageId,
+                content: [{ type: 'text', data: { text: messages(this.#locale, 'receiveFailed', { error: error.slice(0, 200) }) } }],
+                timestamp: Date.now(),
+              }));
+            } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
           });
         }).catch((error: unknown) => {
           this.#logger.debug(formatCompact({ op: 'sandbox_receive_failed', error: error instanceof Error ? error.message : String(error) }));

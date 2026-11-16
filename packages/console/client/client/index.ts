@@ -60,8 +60,10 @@ export {
   parseMarkdownInline,
   highlightCodeLine,
   isSafeMarkdownHref,
+  safeMarkdownImageSrc,
   type MarkdownBlock,
   type MarkdownInline,
+  type MarkdownListItem,
   type CodeToken,
   type CodeTokenKind,
 } from "./message-content/markdown.js";
