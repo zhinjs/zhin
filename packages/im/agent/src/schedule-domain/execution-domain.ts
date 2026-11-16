@@ -2,7 +2,8 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { randomUUID } from 'node:crypto';
 import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
-import type { TurnEvent } from '../event/turn-event.js';
+import type { ReplyFallback, TurnEvent } from '../event/turn-event.js';
+import { formatReplyFallback, inlineToolName } from '../core/tool-calls-user-format.js';
 import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from '../config/zhin-agent-defaults.js';
@@ -10,6 +11,7 @@ import { BudgetGuard, type ScheduleExecutionBudget } from './budget-guard.js';
 import {
   JsonlScheduleAuditLogger,
   createScheduleAuditRecord,
+  type ScheduleRunDegradation,
   type ScheduleAuditLogger,
   type ScheduleAuditRecord,
 } from './audit-logger.js';
@@ -32,7 +34,12 @@ export interface ScheduleExecutionResult {
   error?: string;
   audit: ScheduleAuditRecord;
   replay?: ReplayEvidence;
-  status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial';
+  /**
+   * `degraded` (#1250 b33): the run finished and its reply was delivered, but it did not do what was asked
+   * (no tool, a denied tool, or the framework's fallback instead of a reply); `error` says why.
+   */
+  status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'degraded';
+  degraded?: ScheduleRunDegradation;
 }
 
 export interface ScheduleExecutionOptions {
@@ -123,8 +130,10 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     );
     const securityDenials: ScheduleSecurityDenial[] = [];
     let resolution: ScheduleToolResolution = {
-      tools: [], skills: [], resolvedBy: 'affinity', missingTools: [], missingSkills: [],
+      tools: [], skills: [], resolvedBy: 'affinity', missingTools: [], missingSkills: [], warnings: [],
     };
+    let fallback: ReplyFallback | undefined;
+    let toolResults = 0;
     const guard = new BudgetGuard(resolveBudget(this.deps.config, job));
     let streamed = '';
     let usageSeen = false;
@@ -165,8 +174,12 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
               resolvedBy: event.resolvedBy === 'session' ? 'affinity' : event.resolvedBy,
               missingTools: [...event.missingTools],
               missingSkills: [...event.missingSkills],
+              warnings: [...(event.warnings ?? [])],
+              ...(event.unattendedApproval ? { unattendedApproval: event.unattendedApproval } : {}),
             };
           }
+          if (event.type === 'turn_end' && event.fallback) fallback = event.fallback;
+          if (event.type === 'tool_result') toolResults += 1;
           if (event.type === 'tool_call') budget.onToolCall(event.toolName);
           if (event.type === 'tool_denied') {
             securityDenials.push({ tool: event.toolName, policy: event.policy, reason: event.reason });
@@ -186,7 +199,11 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     const outcome = guarded.value;
     const completedOutput = outcome?.status === 'completed' ? outcome.output : [];
     const raw = completedOutput.length > 0 ? textFromElements([...completedOutput]) : streamed;
-    const validation = validateScheduleOutput(raw);
+    // #1250 b33: the framework's fallback is re-worded with the job's name; the rest of the reply stays.
+    const scheduleContext = { jobId: job.id, ...(job.label ? { label: job.label } : {}), turnId: executionId };
+    const degradedRaw = fallback && outcome?.status === 'completed'
+      ? formatReplyFallback(fallback, { schedule: scheduleContext }) : raw;
+    const validation = validateScheduleOutput(degradedRaw);
     const suffix = guarded.terminatedBy ? `\n\n[任务因${terminationLabel(guarded.terminatedBy)}被终止]` : '';
     const output = validation.valid ? `${validation.cleaned}${suffix}` : '';
     const durationMs = this.now() - startedAt;
@@ -196,10 +213,17 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
         : outcome.status === 'cancelled' ? outcome.reason
           : `budget exceeded: ${outcome.budget}`
       : undefined;
-    const error = acceptedPartial
+    const failureError = acceptedPartial
       ? undefined
       : guarded.error?.message ?? outcomeError
         ?? (validation.valid ? undefined : 'schedule output is empty after validation');
+    const succeeded = Boolean(acceptedPartial || (!guarded.error && outcome?.status === 'completed' && validation.valid));
+    // #1250 b33: a finished run that used the fallback text, ran without any tool result and with an empty
+    // reply, or had a tool denied did not do what was asked: it is recorded as degraded, not ok.
+    const degraded = succeeded
+      ? detectDegradation({ fallback, denials: securityDenials, toolResults, reply: raw })
+      : undefined;
+    const error = failureError ?? (degraded ? describeDegradation(degraded, executionId) : undefined);
     const audit = createScheduleAuditRecord({
       jobId: job.id,
       executionId,
@@ -216,10 +240,13 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       durationMs,
       budgetTerminated: guarded.terminatedBy,
       securityDenials,
-      success: Boolean(acceptedPartial || (!guarded.error && outcome?.status === 'completed' && validation.valid)),
+      success: succeeded,
       outputLength: output.length,
       outputStripped: validation.stripped,
       error,
+      ...(resolution.warnings.length ? { warnings: [...resolution.warnings] } : {}),
+      ...(resolution.unattendedApproval ? { unattendedApproval: resolution.unattendedApproval } : {}),
+      ...(degraded ? { degraded } : {}),
     });
     (options.attempt?.history ?? this.#history).audit({ attempt: options.attempt?.identity ?? {
       runId: executionId, jobId: job.id, attemptId: executionId, number: 1, startedAt,
@@ -233,7 +260,9 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       error: audit.error,
       audit,
       replay: evidence.snapshot(),
-      status: options.signal?.aborted ? 'cancelled' : acceptedPartial ? 'budget_partial' : audit.success ? 'succeeded' : 'failed',
+      status: options.signal?.aborted ? 'cancelled' : acceptedPartial ? 'budget_partial'
+        : audit.success ? degraded ? 'degraded' : 'succeeded' : 'failed',
+      ...(degraded ? { degraded } : {}),
     };
   }
 
@@ -247,4 +276,33 @@ interface ScheduleToolResolution {
   resolvedBy: 'execution-plan' | 'affinity';
   missingTools: string[];
   missingSkills: string[];
+  warnings: string[];
+  unattendedApproval?: ScheduleAuditRecord['unattendedApproval'];
+}
+
+/** #1250 b33: why a finished run did not do what was asked, or undefined when it did. */
+export function detectDegradation(input: Readonly<{
+  fallback?: ReplyFallback;
+  denials: readonly ScheduleSecurityDenial[];
+  toolResults: number;
+  reply: string;
+}>): ScheduleRunDegradation | undefined {
+  const denied = [...new Set(input.denials.map(denial => denial.tool))];
+  if (input.fallback) {
+    const tools = input.fallback.tools?.length ? input.fallback.tools : denied;
+    return Object.freeze({ cause: input.fallback.cause === 'empty_reply' && denied.length ? 'tool_denied' : input.fallback.cause,
+      ...(tools.length ? { tools: Object.freeze([...tools]) } : {}), fallback: true });
+  }
+  if (denied.length) return Object.freeze({ cause: 'tool_denied', tools: Object.freeze(denied), fallback: false });
+  if (input.toolResults === 0 && !input.reply.trim()) return Object.freeze({ cause: 'empty_reply', fallback: false });
+  return undefined;
+}
+
+/** `last_error` text of a degraded run: the cause, the tools involved and where to look. */
+export function describeDegradation(degraded: ScheduleRunDegradation, turnId: string): string {
+  const tools = degraded.tools?.length ? degraded.tools.map(inlineToolName).join('、') : '';
+  const cause = degraded.cause === 'no_tools' ? '没有可用的工具，模型没有给出回复'
+    : degraded.cause === 'tool_denied' ? `工具${tools ? ` ${tools} ` : ''}被拒绝，没有运行`
+      : '模型没有返回可见内容';
+  return `${cause}${degraded.fallback ? '（已发送兜底说明）' : ''}；排查：zhin trace ${turnId}`;
 }

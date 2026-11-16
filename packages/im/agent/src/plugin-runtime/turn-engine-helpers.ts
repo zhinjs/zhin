@@ -32,7 +32,9 @@ import type { TurnContextView } from '../context/turn-envelope.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import { unattendedApprovalNeed } from '../security/policy-facade.js';
+import { isApprovalPortAvailable } from '../session/approval-port.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import type { ContextFile } from '../bootstrap.js';
@@ -62,6 +64,26 @@ export interface FullAgentTurnEngineOptions {
 
 const logger = getLogger('FullAgentTurnEngine');
 
+/**
+ * #1250 b33: which selected tools an unattended turn cannot run without approval. Informative only
+ * (`schedule_preview`, trace); the decision is made per call by the tool runtime.
+ */
+export function describeUnattendedApproval(
+  tools: readonly import('./capability-ingress.js').ToolCapability[],
+  turn: Readonly<{ policy: Readonly<{ unattended: boolean }>; ports: Pick<import('../turn/turn-ingress.js').TurnPorts, 'unattendedReview'> }>,
+): NonNullable<import('../event/turn-event.js').CapabilityResolutionEvent['unattendedApproval']> | undefined {
+  if (!turn.policy.unattended) return undefined;
+  const review = isApprovalPortAvailable(turn.ports.unattendedReview, 'authorization') ? 'auto' as const : 'none' as const;
+  const denied: string[] = [];
+  const reviewed: string[] = [];
+  for (const tool of tools) {
+    const need = unattendedApprovalNeed(tool);
+    if (need === 'human' || (need === 'approval' && review === 'none')) denied.push(tool.name);
+    else if (need === 'approval') reviewed.push(tool.name);
+  }
+  return Object.freeze({ review, denied, reviewed });
+}
+
 export async function* runScheduleTurn(
   options: FullAgentTurnEngineOptions,
   context: AgentTurnExecutionContext,
@@ -79,6 +101,11 @@ export async function* runScheduleTurn(
     tools: context.toolCapabilities,
     skills: context.capabilities.skills,
   });
+  const unattendedApproval = describeUnattendedApproval(plan.capabilities, context.turn);
+  if (plan.warnings.length > 0) {
+    logger.warn(formatCompact({ op: 'schedule_capability_warning', job: origin.jobId,
+      turn: context.turn.identity.turnId, warnings: plan.warnings.join(','), tools: plan.resolvedTools.length }));
+  }
   yield {
     type: 'capability_resolution',
     mode: 'direct',
@@ -87,6 +114,8 @@ export async function* runScheduleTurn(
     skills: plan.skills.map((skill) => skill.qualifiedName),
     missingTools: [...plan.missingTools],
     missingSkills: [...plan.missingSkills],
+    ...(plan.warnings.length ? { warnings: [...plan.warnings] } : {}),
+    ...(unattendedApproval ? { unattendedApproval } : {}),
   };
 
   const activeSkillsContext = plan.skills.map((skill) => skill.instructions).join('\n\n');

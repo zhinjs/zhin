@@ -15,7 +15,7 @@
  * "Side-effect tool" = any tool not declared read-only (`readOnly` / `isReadOnly`), the same rule
  * restricted turns already use; undeclared tools count as writing.
  */
-import type { ToolCallRecord } from './tool-calls-user-format.js';
+import { inlineToolName, type ToolCallRecord } from './tool-calls-user-format.js';
 
 /** Tools whose failure is internal plumbing, never an operation the user asked for. */
 const INTERNAL_TOOLS: ReadonlySet<string> = new Set(['load_skill', 'discover', 'load_tool', 'prepare_reply']);
@@ -33,14 +33,16 @@ export function formatUnexecutedToolResult(
   reason: string,
   sideEffect: boolean,
 ): string {
+  // #1250 b33: the name goes in inline code; a model echoing 「api60s__skill__weather」 lost its `__` to Markdown.
+  const shown = inlineToolName(toolName);
   if (kind === 'reported') {
-    const head = `执行失败（FAILED）：工具「${toolName}」报告了失败，是否已部分生效不确定。工具返回：${reason}`;
+    const head = `执行失败（FAILED）：工具 ${shown} 报告了失败，是否已部分生效不确定。工具返回：${reason}`;
     if (!sideEffect) return head;
     return `${head}\n回复用户时如实说明这一步报告了失败，不要说已经完成；也不要断言没有任何改动，需要时请用户核实。`;
   }
   const head = kind === 'denied'
-    ? `未执行（NOT EXECUTED）：工具「${toolName}」被拒绝，没有运行。原因：${reason}`
-    : `未执行成功（NOT COMPLETED）：工具「${toolName}」运行出错，操作没有完成。原因：${reason}`;
+    ? `未执行（NOT EXECUTED）：工具 ${shown} 被拒绝，没有运行。原因：${reason}`
+    : `未执行成功（NOT COMPLETED）：工具 ${shown} 运行出错，操作没有完成。原因：${reason}`;
   if (!sideEffect) return head;
   return `${head}\n这一步的写入/变更没有生效。回复用户时必须如实说明它没有完成，不要说已经完成、已记住或已保存。`;
 }

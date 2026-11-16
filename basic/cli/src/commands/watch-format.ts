@@ -252,7 +252,8 @@ export function renderWatchText(options: {
         const label = j.label ? ` ${j.label}` : '';
         lines.push(`  [${status}] ${j.id}${label}`);
         lines.push(`       ${j.schedule}  notify:${j.notify}  last:${last}`);
-        if (j.lastError && j.lastStatus === 'error') {
+        // #1250 b33: a degraded run (finished, but did not do what was asked) shows its cause too.
+        if (j.lastError && (j.lastStatus === 'error' || j.lastStatus === 'degraded')) {
           lines.push(`       err: ${truncateText(j.lastError, 64)}`);
         }
       }

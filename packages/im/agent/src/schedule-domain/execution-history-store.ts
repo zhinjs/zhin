@@ -7,7 +7,7 @@ import type { ScheduleAuditLogger, ScheduleAuditRecord } from './audit-logger.js
 import type { ScheduleActivityEvent, ScheduleActivityPort } from './activity.js';
 import type { ScheduleAttemptIdentity, ScheduleHistoryEvent, ScheduleHistoryProgress, ScheduleHistoryResult, ScheduleRunContext, ScheduleReplayDecision, ScheduleObservationOwner } from './execution-history.js';
 
-export type ScheduleHistoryStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'interrupted' | 'unsettled';
+export type ScheduleHistoryStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'degraded' | 'interrupted' | 'unsettled';
 export interface ScheduleHistorySummary {
   readonly runId: string;
   readonly jobId: string;

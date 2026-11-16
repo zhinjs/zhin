@@ -61,6 +61,20 @@ const FILE_WRITE_TOOLS = new Set([
 
 const SHELL_TOOLS = new Set(['bash']);
 
+/** Host-owned tools that change state outside the reply even though their name is not a file / shell / send name. */
+const HOST_WRITE_TOOLS = new Set(['memory_upsert', 'memory_delete', 'self_change', 'change_draft']);
+
+/**
+ * #1250 b33: built-in tools that write files, run commands or message other conversations. A `readOnly`
+ * declaration on a tool with one of these names (bare, or as the last segment of a qualified name) is
+ * ignored, so it can never relax their approval.
+ */
+export function isBuiltinSideEffectToolName(name: string): boolean {
+  const local = name.split('__').at(-1) ?? name;
+  return [name, local].some(candidate => FILE_WRITE_TOOLS.has(candidate) || SHELL_TOOLS.has(candidate)
+    || HOST_WRITE_TOOLS.has(candidate) || isOutboundToolName(candidate));
+}
+
 const OUTBOUND_TOOL_NAME = /(?:^|_)(?:send|forward|broadcast|notify|email|mail|dm|post_message|private_message)(?:_|$)/;
 
 export interface TrustTurnView {

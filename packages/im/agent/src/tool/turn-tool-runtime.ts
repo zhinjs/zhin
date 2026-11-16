@@ -6,12 +6,15 @@ import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
   formatApprovalBlocked,
   formatApprovalDenial,
+  formatUnattendedReviewDenial,
   isApprovalPortAvailable,
   requestApprovalOutcome,
   type ApprovalBlockReason,
   type ApprovalDenialContext,
   type ApprovalOutcome,
+  type ApprovalPort,
 } from '../session/approval-port.js';
+import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
@@ -255,7 +258,7 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, decision.policy,
           formatApprovalBlocked(blocked, denial, blocked === 'no_channel' ? 'ApprovalPort unavailable' : undefined), causedBy);
       }
-      const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
+      const approval = await requestApprovalOutcome(this.#approvalChannel()!, {
         ...(humanOnly ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
@@ -281,11 +284,17 @@ export class TurnToolRuntime {
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
       this.#auditApproval(name, decision.policy, purpose, approval);
+      const unattended = this.turn.policy.unattended;
+      if (unattended) {
+        // #1250 b33: the automatic reviewer's verdict on an unattended call goes into the trace.
+        noteTurnTrace(this.turn.identity.turnId, { kind: 'unattended_review', tool: name, policy: decision.policy,
+          outcome: approval.status === 'approved' ? 'approved' : approval.status === 'denied' ? 'rejected' : 'unavailable' });
+      }
       // Fail closed if a surface ever answers an authorization request with an intent-only confirmation.
       if (approval.status !== 'approved' || (approval.scope === 'intent' && purpose !== 'intent')) {
         return this.#deny(name, toolUseId, decision.policy, approval.status === 'approved'
           ? formatApprovalBlocked('no_channel', denial, 'only the initiator confirmed; approval needs someone with authority')
-          : formatApprovalDenial(approval, denial), causedBy);
+          : unattended ? formatUnattendedReviewDenial(approval, denial) : formatApprovalDenial(approval, denial), causedBy);
       }
     }
 
@@ -336,8 +345,18 @@ export class TurnToolRuntime {
 
   /** Unattended turns and turns without an approval surface cannot ask anyone (#1250: kept apart for the model). */
   #approvalBlocked(purpose: 'authorization' | 'intent'): ApprovalBlockReason | undefined {
-    if (this.turn.policy.unattended) return 'unattended';
+    if (this.turn.policy.unattended) {
+      // #1250 b33: under `execApprovalMode: auto` the automatic reviewer settles authorization requests of
+      // unattended turns. An intent confirmation needs the initiator, who is not here, so it stays blocked.
+      return purpose === 'authorization' && isApprovalPortAvailable(this.turn.ports.unattendedReview, 'authorization')
+        ? undefined : 'unattended';
+    }
     return isApprovalPortAvailable(this.turn.ports.approval, purpose) ? undefined : 'no_channel';
+  }
+
+  /** The port that settles an approval request of this turn (checked by {@link #approvalBlocked} first). */
+  #approvalChannel(): ApprovalPort | undefined {
+    return this.turn.policy.unattended ? this.turn.ports.unattendedReview : this.turn.ports.approval;
   }
 
   /** Ordinary and provenance prompts are audited like hard-gate cards (`tool_approval`, channel `turn_prompt`). */

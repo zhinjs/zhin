@@ -160,3 +160,21 @@ describe('fetchWatchSnapshot', () => {
     expect(snapshot.assistant).toEqual({ enabled: true, eventsActive: false, jobs: [] });
   });
 });
+
+describe('degraded schedule runs (#1250 b33)', () => {
+  it('zhin watch shows the cause of a degraded run like an error', () => {
+    const jobs = jobRowsFromApi([{ id: 'j1', label: '早报', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
+      notify: { channel: 'im' }, state: { lastStatus: 'degraded', lastError: '没有可用的工具；排查：zhin trace t1' } }]);
+    const text = renderWatchText({ baseUrl: 'http://127.0.0.1:8086/api', fetchedAt: new Date('2026-11-16T09:00:00'), jobs });
+    expect(text).toContain('last:degraded');
+    expect(text).toContain('err: 没有可用的工具；排查：zhin trace t1');
+  });
+
+  it('zhin schedule list summarises the last run with its cause', async () => {
+    const { lastRunSummary } = await import('../src/commands/schedule.js');
+    expect(lastRunSummary({ state: { lastStatus: 'degraded', lastError: '工具 `w` 被拒绝' } })).toBe('未完成（降级）：工具 `w` 被拒绝');
+    expect(lastRunSummary({ state: { lastStatus: 'error', lastError: 'boom' } })).toBe('失败：boom');
+    expect(lastRunSummary({ state: { lastStatus: 'ok', lastError: 'stale' } })).toBe('成功');
+    expect(lastRunSummary({ state: {} })).toBeUndefined();
+  });
+});
