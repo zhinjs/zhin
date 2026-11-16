@@ -1,5 +1,55 @@
 # @zhin.js/console-protocol
 
+## 1.6.0
+
+### Minor Changes
+
+- a7f3a7c: MCP 状态口径与安装预览（zhinjs/zhin#1250 第 28 批）：
+
+  - `mcp-status-not-loaded-contradicts-agent`（根因）：Plugin Runtime 下 `ai.mcpServers` 的服务作为本代（generation）的 MCP 特性运行，在代激活时连接；Agent 的内省却只读自己的 `resourceHub.mcps` 注册表，而这些服务从不进入该表，于是 Console「运行时能力 → MCP 服务」、`zhin status` 都把已连接的 github 显示成「未加载」（`not_loaded`），「需要你处理」也报「未连接」。现在由 `HostMcpStatusBoard` 记录每个配置服务客户端的实际连接结果（跨代保留：被沿用的代仍算已连接，候选代连接失败不影响旧代），内省按它报告：已连接（含工具数）/ 连接失败（附分类原因）/ 尚未连接（`idle`，显示为「待连接」：配置的服务在代激活时就连接，这是激活前的短暂状态）。发布新的一代时清掉已从配置删除的服务的失败记录，删掉再加回来不会显示旧原因。
+  - 「需要你处理」只列连接失败的 MCP 服务并附失败原因，标题改为「MCP 服务 … 连接失败」；尚未连接、未加载的服务只在 MCP 页显示。`zhin status` 中 `idle` 显示为「待连接」。
+  - 启动日志 `ready | … | mcp:` 改为与状态一致的写法（如 `github(待连接)`；日志写出时客户端尚未连接），连接结果另记 `mcp_connected`（工具数）/ `mcp_connect_failed`（分类与原因）。
+  - 新增 MCP 连接测试：`POST {base}/introspection/mcp/test`（body `{ name }`，权限 `agent.configure`，已登记到 `CONSOLE_HTTP_PERMISSIONS`）用一次性客户端连接、列工具后断开，不改变 Agent 自己的连接与行状态；未配置的名字返回 404，同一服务测试进行中返回 409，Agent 未运行返回 503；全局最多同时 2 个测试，同一服务每次测试后冷却 5 秒，超出返回 429 并带 `Retry-After`；每次测试写入 Console 审计日志（`mcp.test`：操作者、服务名、结果与失败分类，不含失败消息）。注意：对 `stdio` 服务，测试会在 Agent 已有进程之外再启动一个同名命令，独占资源（锁文件、固定端口）的服务测试时可能冲突。新增导出：`@zhin.js/console-protocol` 的 `CONSOLE_MCP_TEST_PATH` / `ConsoleMcpConnectTestResult`；`@zhin.js/host-http` 的 `ConsoleAgentIntrospection.testMcp()`（Agent 不可用时返回 `'agent-unavailable'`）与 `ConsoleRestPagesOptions.mcpTestMaxConcurrent` / `mcpTestCooldownMs`；`@zhin.js/agent/runtime` 的 `HostMcpStatusBoard`（`probe()`）及相关类型，`AgentHostIntrospectionPort.testMcpServer()`。
+  - `install-dry-run-dumps-whole-config`：`zhin install … --dry-run` 的配置预览改为 unified diff，只含改动的行和上下 3 行，由真正写入时（逐键补丁、保留注释与顺序）会产生的文本计算，不再重新序列化打印整份配置（此前注释几乎全部丢失，看起来像安装会抹掉注释）。
+  - 安装插件时跟随项目的精确版本写法：项目 `dependencies` / `devDependencies` / `optionalDependencies` 里的 `zhin.js` / `@zhin.js/*` 注册表依赖全部是不带 `^` / `~` 等范围的精确版本（`=1.5.0` 也算精确）（`workspace:`、`link:`、`file:`、`catalog:`、`npm:` 别名、git / 路径来源与 `latest` 这类标签不参与判断；至少要有一条注册表依赖）时，`pnpm add` 加 `--save-exact`（npm `--save-exact`，yarn / bun `--exact`）。只对 npm 注册表包生效，请求本身写了范围（如 `foo@^1.2.0`）时按原样安装、不加；`--dry-run` 显示的命令同样带上。`@zhin.js/gateway/plugin-management` 新增 `projectPinsExactZhinVersions()`、`isRegistryPackageRequest()`、`installSavesExact()`。
+  - 预览的 diff 也显示行尾差异：文件末尾无换行输出 `\ No newline at end of file`；只有行尾不同的单行标出 ` (CRLF)` / ` (LF)`；整个文件换了行尾时在文件头后用一行 `# line endings: CRLF -> LF` 说明。
+
+- 19526a6: 没回复、被拒绝、离线都说清原因（zhinjs/zhin#1250 第 31 批）：
+
+  - `self-service-unknown-conversation-opaque`（回退的根因）：第 9 批（ADR 0060 P3，b6ec01464「Sandbox speaks as the linked chat identity; typed ids are simulated and role-less」）起，Sandbox 里手填的发送者以 `~sim:<id>` 进入运行时，而 `chatRoleMessageContext()` 把这种保留 id 当成「无法识别」，`功能` / `角色` / `认领` / `绑定` 都只回「无法识别当前会话。」；之前同一个群里 `功能 关闭 repeater` 能用，是因为当时手填的 id 还会被当成真实身份。现在 `@zhin.js/core` 新增 `resolveChatRoleMessageContext()`，返回 `{ ok: false, reason }`（`no-conversation` / `unknown-endpoint` / `no-adapter` / `no-sender` / `simulated-sender` / `invalid-sender`），实例侧再加 `unkeyed-conversation`（适配器没有提供可用的会话类型或会话 id）；四个指令按原因回复下一步（如「你正以模拟身份发言……请在 Sandbox 打开『以我的身份发言』，或在 Console『功能』/『聊天角色』页设置」）。不带参数的 `功能` / `角色` 直接列出。
+  - 被拒绝或失败的自助指令不再记成 `command_replied | executed`：`UserFacingError` 新增闭合的拒绝码 `reason`，指令派发结果带 `refusalReason`，入站结局记 `refused` 与该码（如 `simulated-sender`、`not-admin`、`usage`、`locked`、`self-service-disabled`），回复文字不变。没有码的 `UserFacingError` 仍记 `user_facing_error`。
+  - `unaddressed-message-no-record`（复测失败的根因）：第 18 批之后，没被 @、不是指令的群消息其实已经记了 `not_addressed`，但未点名的静默结局一律只写 debug 日志，Console 的运行日志看不到；结局只存在进程内，Sandbox 和轨迹页也没有入口，看起来就像「什么都没记」。现在每个会话每分钟第一条 `not_addressed` 写 info（`inbound_outcome | … | sampled: first_per_minute`），其余仍为 debug；新增 `GET {base}/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 连接绑定的会话、且只列该连接 owner 本人或其模拟身份发出的消息；只返回结局码和面向发送者的文案，不含插件名、阶段等运维文案），Sandbox 发消息后读取这条消息的结局，没有回复时显示原因（如「这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。（not_addressed · no_command_not_ambient）」）。`ConsoleMessageDiagnostic` 补上已有的 `outcome` 字段。
+  - `console-offline-no-reason`：适配器不上报连接状态（如 GitHub 这类 Webhook 适配器）且没有失败记录的已启动账号，不再显示「离线 · 连接状态：未知」，改为「未上报连接状态」（提示级），并说明常见原因与检查方法；确实离线时附上最近一次失败的原因、失败时间与自动重试次数 / 下次重试时间。这些只改显示文字：条目的 revision 与之前相同，已忽略的待办不会重新出现（「已从配置导入聊天角色」的 revision 也仍按原始条目数计算）。
+  - `principal-link-attention-ids`：「人员名单或身份链接等待确认」按人分组，每个身份写出适配器与账号（`qq·bot-a`），平台 id 只显示后 4 位（`尾号 1234`），数量按去重后的 (adapter, endpoint, userId) 计算；查看者本人显示为「你（显示名）」，其他 Console 用户显示 id 前 8 位，条目新增 `links`（`ConsoleAttentionItem.links`）供 Console 按 `iam.users.list` 换成用户名。
+
+### Patch Changes
+
+- 2386370: 不同插件的命令或别名重名不再让实例启动失败（#1250 duplicate-command-route-crashes-instance）。以前 Command 索引遇到重名路由直接抛 `Duplicate Command route`，实例退出、被网关反复拉起，所有适配器下线。现在：
+
+  - 命令名称冲突时，先声明的插件保留（按插件在配置里的声明顺序），后来的那条命令连同它的别名、快捷方式不注册，它的子命令仍然可用；
+  - 只有别名或快捷方式冲突时，只跳过这个别名或快捷方式，命令本身照常注册；命令名称优先于别的插件的别名；
+  - 同一插件内部的冲突仍然在加载时报 `Duplicate Command route`，插件自己的测试能发现；
+  - 插件热重载替换自己的命令不算冲突，热重载也不会改变由谁保留路由；
+  - 插件按适配器、账号或会话关闭时，在保留方被关闭的端点上，原来被跳过的命令会生效。
+
+  **升级注意**：后声明的插件如果有与前一个插件的别名同名的命令（例如 A 的 `admin` 带别名 `ban`，B 有命令 `ban`），升级后 `ban` 由 B 处理，而不是像以前那样启动失败。用户熟悉的指令换了处理方，所以这种冲突在「需要你处理」里标为严重（`danger`），升级后请检查并处理。
+
+  每处冲突在启动（及热重载）日志里打一条 warn（`op=command_route_conflict`），并作为 `command.conflict` 列在 Console「需要你处理」和 `zhin doctor` 的运行状态里，写明两个插件名、命令名或别名，以及建议：让其中一个插件改名（或配置 `commandNamespace`），或在配置里用 `disabledCommands` 禁用其一。`CommandIndex` 新增 `conflicts()`；`@zhin.js/console-protocol` 的 attention 新增 `command.conflict`（需要 `feature.view`）与 `subject.pluginId` / `commandRoute` / `command` / `commandKind`。
+
+- f145963: 语音能力的可用性检查与 `voice_tts` 音频不再进入模型上下文（zhinjs/zhin#1250 第 29 批）：
+
+  - `voice-tts-base64-in-model-context`（根因）：`voice_tts` 合成成功后把整段 mp3 的 base64 放进工具结果，Agent 把工具结果原样交给模型，于是模型看到约 2.5 万字符的 base64，并在回复里又抄写一遍（结果出现一段正常、一段残缺的两段语音，整轮将近 6 分钟）。现在 Agent 在工具结果进入模型之前把 `voice_tts` 的音频（以及没有对象存储时 `generate_image` 的内嵌图片）拆出来，作为媒体随本轮回复经正常发送链（`Message.$reply` → OutboundRenderer → Endpoint）只发一次；模型只看到 `{ format, size, sent: true, note }` 和「语音已发送给用户……不要重复输出音频内容」的提示。
+  - 兜底：任何工具结果（成功、报告失败、抛错、PostToolUse 改写后的结果）进入模型前，base64 载荷 2048 字符以上的 data URL 与连续 base64 串替换为一行「[已省略 … 数据（N 字符），未提供给模型]」。读文件 / 搜索 / shell 类工具（`read_file`、`grep`、`glob`、`list_dir`、`web_fetch`、`bash` 等）的结果可能被原样写回文件，只截断 64 KB 以上的串并标明「已截断」，CSS / SVG 里的内嵌图标原样保留；`write_file` / `edit_file` 拒绝写入含这类占位的内容并给出明确报错。实现为一次线性扫描，构造输入不会退化为平方复杂度。
+  - 会话历史：已发送的工具语音带 `fallbackText`（如「[语音 mp3 18.6KB 已发送]」），内嵌图片带 `alt`；写入历史（`encodeConfirmedOutput`，流式平台的已确认输出）与文本投影（`renderAgentOutput`）时，所有 data URL / base64 媒体元素与媒体段统一只写占位，下一轮模型看不到载荷。非流式回复只带 messageId 写历史（没有已确认输出，保存的是模型原文）时，助手文本同样经过上面的内嵌二进制兜底，模型自己写的内嵌音频 / data URL 段在历史里只剩「[已省略 … 数据（N 字符），未提供给模型]」。助手原文重新交给模型时也一样：格式修复（schema repair）提示里的「Rejected reply」、Agent 循环每次迭代的消息投影（本轮与历史中的助手文本）、迭代耗尽 / 进度摘要的补全，以及压缩摘要请求，都先省略内嵌二进制再发送，模型看不到被拒回复或先前回复里抄写 / 编造的 base64。修复提示要求删掉占位；模型照抄进回复的框架占位（「[已省略 / 已截断 … 数据（N 字符）…]」「[语音 mp3 18.6KB 已发送]」「[语音（内嵌数据，已省略）]」等固定形态）在出站前统一剔除（结算去重与流式快照都覆盖，流式中未写完、可能成为占位的尾部先不提交），普通方括号文字不受影响。取舍：超过 2048 字符、连续由 base64 字符集组成的文本（包括长十六进制串）会以占位提供给模型并存入历史；用户要求模型输出或改写超长 base64 时，原文不会保留到下一轮。
+  - 本轮工具已经产出某类媒体（如语音）时，模型回复里同类的内嵌媒体（`kind: base64` 或 `data:` URL，结构化回复的媒体段和文本回复的 `[audio](data:…)` 都算）视为抄写的副本，不再作为第二段媒体发出——结算阶段与流式结构化回复都去重，并在 turn trace 记一条 `copied_inline_media_dropped`（`@zhin.js/agent/trace` 的 `TurnTraceNote` 新增该变体）；模型引用的 URL / 文件不受影响，没有工具媒体时行为不变。
+  - `voice_stt` 只接收 URL / 本地路径并返回文字，入站语音按多模态配置转写或作为媒体块交给模型，不会以 base64 文本进入上下文，未改动。
+  - `speech-ready-without-tts-binary`：`speech.tts.provider: edge` 时，Speech Host 启动会检查 `speech.tts.edgeTtsCommand`（默认 `edge-tts`）能否执行——只在 `PATH`（Windows 含 `PATHEXT`）/ 文件系统里查找，不运行命令，最多 3 秒。不能执行时：记 warn（`speech_dependency_unavailable`），启动行写成 `degraded | … | tts: edge (unavailable: not-found edge-tts)`，不再写 `ready`；Console「需要你处理」新增 `speech.unavailable` 条目（已登记到 `CONSOLE_ATTENTION_KINDS` 与 `CONSOLE_ATTENTION_KIND_PERMISSIONS`，权限 `status.view`，指向 `speech.tts.edgeTtsCommand`，配置中的家目录路径只显示最后一段）；实例运行时 `zhin doctor` 通过同一个「需要你处理」列表列出它。检查超时只作为提示（`info`），不阻止调用。
+  - `edgeTtsCommand` 填了带参数的命令行（如 `uvx edge-tts`）时单独提示「只能填可执行文件路径，不支持带参数」（新增原因 `has-arguments`；路径本身含空格时仍按找不到处理）。Windows 上只接受 `.exe` / `.com`（Node ≥ 22 不经 shell 运行 `.cmd` / `.bat` 会报 `EINVAL`），只有 `.cmd` / `.bat` 时报「不能直接执行」；`@zhin.js/speech` 把 `EINVAL` 翻译为可读提示。
+  - 返回给模型的报错与 warn 日志里，命令路径只保留最后一段（`…/edge-tts`），不暴露家目录。
+  - `voice_tts` 在 TTS 被标为不可用时先重新检查（装好 edge-tts 后无需重启），仍不可用则直接返回原因（「未找到 edge-tts（命令「…」不在运行环境的 PATH 中）……配置为可执行文件的绝对路径……」），模型据此准确告诉用户；单次调用改用其他 provider 不受影响。合成失败的 `{ error }` 按失败记录、模型看到完整原因（第 26 批）已核实，并在 eval 中断言原因到达模型。
+  - `@zhin.js/speech` 的 edge-tts 缺失提示补充命令名、无执行权限（`EACCES`）的情况，以及 launchd / systemd 托管时必须写绝对路径（`PATH` 通常不含 `~/.local/bin`，也不展开 `~`）。其他 provider（openai / azure / custom TTS、openai / ollama STT）都是 HTTP 服务，没有本机命令依赖，不做启动探测。
+  - 文档（中英文 `ai/speech`、`@zhin.js/speech` README）说明托管环境中 `edgeTtsCommand` 要写绝对路径、启动检查的表现，以及语音不进模型上下文。
+
 ## 1.5.0
 
 ### Minor Changes
