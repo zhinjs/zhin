@@ -2,6 +2,7 @@ import {
   assertDeclaredProfileActions,
   deriveLegacyProfile,
   operationsImpliedByProfile,
+  profileStreamingMismatch,
   resolveStaticCapabilities,
   resolveTurnCapabilities,
   selfStandingDeclared,
@@ -23,6 +24,7 @@ import {
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { createConstructionContext } from '@zhin.js/feature-kit';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   endpointCapabilitiesOf,
   resolveAdapterOperations,
@@ -65,6 +67,8 @@ import { type EndpointDesiredRepository, type EndpointSecretResolver, type Endpo
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, mergeEndpointProfileConfiguration,
   type SelfProfile, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
+
+const logger = getLogger('adapter');
 
 /** ADR 0056 §1: how long the Bot's own standing in one conversation is reused. */
 export const SELF_STANDING_TTL_MS = 60_000;
@@ -304,6 +308,12 @@ export class AdapterIndex {
             if (definition.profile) {
               assertDeclaredProfileActions(runtime, definition.profile, String(record.canonicalId),
                 definition.capabilities.includes('outbound'));
+              // ADR 0064 D11: a streaming declaration that disagrees with the Endpoint is a warning for now.
+              const streamingMismatch = profileStreamingMismatch(definition.profile, runtime.streaming?.mode);
+              if (streamingMismatch) {
+                logger.warn(formatCompact({ op: 'profile_streaming_mismatch', endpoint: String(record.canonicalId),
+                  reason: streamingMismatch }));
+              }
             }
             return operations;
           },

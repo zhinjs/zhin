@@ -420,10 +420,21 @@ async function normalizeOneSegment(
     if (item.data?.html === '') {
       return { type: 'text', data: { text: htmlSegmentFallbackText(item.data, '') } };
     }
-    if (options?.htmlPolicy === 'direct') return toCanonicalSegments([item])[0]!;
+    if (options?.htmlPolicy === 'direct') return stampHtmlDesignWidth(toCanonicalSegments([item])[0]!);
     return renderHtmlSegment(item, renderer, mediaPolicy, options);
   }
   return toCanonicalSegments([item])[0]!;
+}
+
+/**
+ * ADR 0064 D5: a `direct` HTML endpoint (Sandbox, Email) lays the card out at the same design width
+ * an `image` endpoint renders it at, so a card without `data.width` is stamped with
+ * `DEFAULT_CARD_WIDTH` instead of taking whatever width the client column happens to have.
+ */
+function stampHtmlDesignWidth(segment: Segment): Segment {
+  const data = segment.data as Record<string, unknown> | undefined;
+  if (!data || (typeof data.width === 'number' && Number.isFinite(data.width) && data.width > 0)) return segment;
+  return { ...segment, data: { ...data, width: DEFAULT_CARD_WIDTH } } as Segment;
 }
 
 async function renderHtmlSegment(

@@ -18,6 +18,7 @@ import {
   parseSandboxWsPayload,
   resolveSandboxEndpoint,
 } from '../src/protocol.js';
+import { sandboxOperations } from './sandbox-operations.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -47,7 +48,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults: resolveSandboxEndpoint({ id: 'self-bot', owner: 'sandbox-user' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBeUndefined();
     await endpoint.start();
     expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBeUndefined();
@@ -71,7 +72,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, `sandbox-${id}`),
       http,
       defaults: resolveSandboxEndpoint({ id, owner: 'sandbox-user' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
 
     const previous = await createEndpoint('demo-bot');
     const replacement = await createEndpoint('demo-bot');
@@ -142,7 +143,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults,
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -207,7 +208,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults,
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -323,7 +324,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults: resolveSandboxEndpoint({ id: 'rbac-bot', owner: 'sandbox-user' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -349,12 +350,12 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults: resolveSandboxEndpoint({ id: 'alpha-bot', owner: 'user-a' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gatewayA, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gatewayA, undefined) });
     const endpointB = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults: resolveSandboxEndpoint({ id: 'beta-bot', owner: 'user-b' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gatewayB, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gatewayB, undefined) });
     await endpointA.start();
     endpointA.open();
     await endpointB.start();
@@ -540,7 +541,7 @@ describe('sandbox plugin runtime adapter', () => {
     };
     const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'), http, defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -583,7 +584,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults,
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -649,7 +650,7 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
       defaults,
-    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();

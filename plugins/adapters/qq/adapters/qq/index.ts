@@ -52,6 +52,8 @@ export default defineAdapter<QqEndpointConfig>({
       delivery: { send: true, requiresMessageSeq: true, spool: true },
     },
     private: {
+      // ADR 0064 §5：仅单聊（C2C）原生流式回复。
+      messaging: { streaming: { mode: 'native' } },
       delivery: { passiveWindow: { seconds: 3600, maxMessages: 4 } },
     },
     group: {

@@ -1,10 +1,13 @@
 import type { MessageSegment } from './types.js';
 
-/** IM 可见段白名单（与 core segment-contract/delivery 对齐） */
+/**
+ * IM 可见段白名单：core `OUTBOUND_SEGMENT_CATALOG`（ADR 0064 §1）的浏览器侧镜像，外加入站的 `action`。
+ * 浏览器包不依赖 core，由 Sandbox 的目录对照测试守住两边一致。
+ */
 const IM_VISIBLE_TYPES = new Set([
   'text', 'mention', 'image', 'video', 'audio', 'voice', 'record', 'file',
   'face', 'reply', 'forward', 'link', 'dice', 'rps', 'markdown', 'html',
-  'qrcode', 'tts', 'keyboard', 'action', 'share',
+  'qrcode', 'tts', 'keyboard', 'action', 'share', 'card',
 ]);
 
 const AI_ONLY_TYPES = new Set(['thinking', 'tool_call']);
