@@ -1,5 +1,5 @@
 /**
- * Static view of a plugin package for `zhin packages info` (#1250): who maintains it, which
+ * Static view of a plugin package for `zhin info` (#1250): who maintains it, which
  * commands / Agent tools it ships and which config fields it declares. Read from `package.json`,
  * `schema.json` and the convention directories only — no plugin code runs and no IM layer is loaded.
  */
@@ -7,8 +7,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scanConventionCapabilityFeatures } from '@zhin.js/runtime';
 
-/** `author` / a `maintainers` entry as npm returns it: `"Name <mail> (url)"` or `{ name, email }`. */
-export type PackagePerson = string | { readonly name?: unknown; readonly email?: unknown } | null | undefined;
+/** `author` / a `maintainers` entry as npm returns it: `"Name <mail> (url)"`, `{ name, email }` or `{ username, email }`. */
+export type PackagePerson = string | { readonly name?: unknown; readonly username?: unknown; readonly email?: unknown } | null | undefined;
 
 /** Display name of a package person; `undefined` when it names nobody. */
 export function packagePersonName(person: PackagePerson): string | undefined {
@@ -20,8 +20,11 @@ export function packagePersonName(person: PackagePerson): string | undefined {
     const name = (cut === -1 ? person : person.slice(0, cut)).trim();
     return name || undefined;
   }
-  if (person && typeof person === 'object' && typeof person.name === 'string' && person.name.trim()) {
-    return person.name.trim();
+  if (person && typeof person === 'object') {
+    // Packuments carry `{ name }`; npm `/-/v1/search` maintainers carry `{ username }` (#1250).
+    for (const value of [person.name, person.username]) {
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
   }
   return undefined;
 }

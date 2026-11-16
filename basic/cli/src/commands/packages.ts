@@ -19,6 +19,7 @@ import {
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
+import { formatVerificationPlan, type VerificationPlanView } from '../utils/verification-plan-format.js';
 import { findProjectRoot, listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
@@ -148,15 +149,20 @@ packagesCommand
 
 packagesCommand
   .command('verification-plan <name>')
-  .description('列出业务检查及副作用，不执行；离线时明确报告未配置验证')
+  .description('列出业务检查及副作用，不执行；离线时说明没有当前 generation 与可执行的检查')
   .option('--live <host-url>', '运行中的 Host URL')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
-  .action(async (name: string, options: LiveOptions) => {
+  .option('--json', '输出原始 JSON 结构（generation、projectRevision、checkRevision、checks）')
+  .action(async (name: string, options: LiveOptions & { json?: boolean }) => {
     const plan = options.live
-      ? await liveRequest(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options)
+      ? await liveRequest<VerificationPlanView>(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options)
       : await new PluginManagementWorkflow(process.cwd()).verificationPlan(name);
-    console.log(JSON.stringify(plan, null, 2));
+    if (options.json) {
+      output.json(plan);
+      return;
+    }
+    output.line(...formatVerificationPlan(plan, { live: options.live }));
   });
 
 packagesCommand

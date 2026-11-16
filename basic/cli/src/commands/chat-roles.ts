@@ -57,7 +57,9 @@ export async function importChatRoles(http: HostHttpConfig, file: string): Promi
 
 /** Result lines of `zhin chat-roles export` (stdout; diagnostics go to stderr through `logger`). */
 export function chatRolesExportLines(data: ConsoleChatRolesExport, file: string): readonly string[] {
-  return [`✓ 已导出 ${data.principals.length} 个人、${data.roles.length} 条角色授予到 ${file}`];
+  // Same four categories as the import summary (#1250): identities and Console links travel too.
+  return [`✓ 已导出 ${data.principals.length} 个人、${data.identities.length} 条聊天身份、${data.roles.length} 条角色授予、`
+    + `${data.consoleLinks.length} 条 Console 链接到 ${file}`];
 }
 
 /** Result lines of `zhin chat-roles import`, including the entries the instance skipped. */
