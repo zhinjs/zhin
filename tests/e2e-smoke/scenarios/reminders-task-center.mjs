@@ -59,11 +59,13 @@ try {
     const creation = say('remind create 10分钟后 喝水');
     const confirmationPrompt = /确认创建这条提醒？/u;
     await waitUntil(() => kit.deliveries.some(delivery => confirmationPrompt.test(deliveryText(delivery.payload))));
-    const [preview, prompt] = kit.deliveries.map(delivery => deliveryText(delivery.payload));
-    assert.match(preview, /^时间：2026-10-20 09:10:00 UTC\+08:00 \(Asia\/Shanghai\)$/mu);
-    assert.match(preview, /^原会话：group smoke-group$/mu);
-    assert.match(preview, /^喝水$/mu);
+    // #1250 batch 38: the preview is the confirm prompt's description, so both arrive as one message.
+    assert.equal(kit.deliveries.length, 1);
+    const prompt = deliveryText(kit.deliveries[0].payload);
     assert.match(prompt, confirmationPrompt);
+    assert.match(prompt, /^(?:• )?时间：2026-10-20 09:10:00 UTC\+08:00 \(Asia\/Shanghai\)$/mu);
+    assert.match(prompt, /^(?:• )?原会话：group smoke-group$/mu);
+    assert.match(prompt, /^喝水$/mu);
     await say('确认');
     const created = await creation;
     assert.equal(created?.status, 'executed');
