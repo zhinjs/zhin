@@ -123,6 +123,8 @@ describe('StatCard signal tones', () => {
     expect(isZeroValue('0.0')).toBe(true);
     expect(isZeroValue('0%')).toBe(true);
     expect(isZeroValue('10')).toBe(false);
+    expect(isZeroValue(' 0 % ')).toBe(true);
+    expect(isZeroValue('0' + '\t'.repeat(50_000) + 'x')).toBe(false);
     expect(isZeroValue(null)).toBe(false);
   });
 });
