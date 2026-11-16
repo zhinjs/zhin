@@ -18,12 +18,20 @@ import {
   packagePersonName,
   readPackageCapabilities,
 } from '../src/utils/package-capabilities.js';
+import { NpmViewError, npmViewFailure } from '../src/utils/plugin-registry.js';
 
-const plugin = vi.hoisted(() => ({ info: undefined as unknown }));
+const plugin = vi.hoisted(() => ({ info: undefined as unknown, search: {} as Record<string, unknown[]>, queries: [] as string[] }));
 vi.mock('../src/utils/plugin-registry.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/utils/plugin-registry.js')>(),
-  npmView: () => plugin.info,
+  npmView: () => {
+    if (plugin.info instanceof Error) throw plugin.info;
+    return plugin.info;
+  },
   fetchWeeklyDownloads: async () => null,
+  npmSearch: (query: string) => {
+    plugin.queries.push(query);
+    return plugin.search[query] ?? [];
+  },
 }));
 
 // The date is present when stdout is not a terminal (#1250), as under the test runner.
@@ -83,6 +91,8 @@ describe('zhin packages info', () => {
   it('reads author and maintainers in every npm shape', () => {
     expect(packagePersonName('Jane Doe <jane@example.com> (https://x.dev)')).toBe('Jane Doe');
     expect(packagePersonName({ name: 'Jane' })).toBe('Jane');
+    // npm search maintainers carry `username` (#1250 cli-search-author-unknown).
+    expect(packagePersonName({ username: 'lc-cn' })).toBe('lc-cn');
     expect(packagePersonName('<only@mail>')).toBeUndefined();
     // Nested / unbalanced brackets never leave partial markup behind.
     expect(packagePersonName('Eve <<script>a> (x)')).toBe('Eve');
@@ -96,13 +106,13 @@ describe('zhin packages info', () => {
     expect(formatCommandRoute('echo/[...text]')).toBe('echo <...text>');
   });
 
-  function installFixture(): string {
-    const root = path.join(tmp, 'node_modules', '@demo', 'plugin-rss');
+  function installFixture(manifest: Record<string, unknown> = {}, base = path.join(tmp, 'node_modules', '@demo', 'plugin-rss')): string {
+    const root = base;
     const file = (relative: string, text = 'export default {}') => {
       fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
       fs.writeFileSync(path.join(root, relative), text);
     };
-    file('package.json', JSON.stringify({ name: '@demo/plugin-rss', version: '1.0.0' }));
+    file('package.json', JSON.stringify({ name: '@demo/plugin-rss', version: '1.0.0', ...manifest }));
     file('commands/rss-add/[url]/index.ts');
     file('commands/rss-list/index.js');
     file('tools/fetch_feed/index.ts');
@@ -125,24 +135,63 @@ describe('zhin packages info', () => {
     ]);
   });
 
-  it('prints the info to stdout, unprefixed, with the author and the capability sections', async () => {
-    installFixture();
-    plugin.info = {
-      name: '@demo/plugin-rss', version: '1.0.0', description: 'RSS',
+  it('prints the info of an installed package from disk, unprefixed, with the author and the capability sections', async () => {
+    // Local first (#1250 cli-info-local-workspace-plugin): the installed package.json, not npm.
+    installFixture({
+      description: 'RSS',
       author: 'Jane Doe <jane@example.com>',
       zhin: { features: [{ package: '@zhin.js/command', api: '^1.0.0' }] },
-    };
+    });
+    plugin.info = undefined;
     const { runPluginInfo } = await import('../src/commands/search.js');
     await runPluginInfo('@demo/plugin-rss');
     const text = stdout.join('\n');
     expect(text).toContain('👤 作者: Jane Doe');
     expect(text).not.toContain('作者: 未知');
     expect(text).toContain('功能: @zhin.js/command');
+    expect(text).toContain('📍 来源: 已安装到当前项目');
+    expect(text).toContain('未查询 npm');
     expect(text).toMatch(/⌨️ {2}命令（2）:\n {3}rss-add <url>\n {3}rss-list/);
     expect(text).toMatch(/Agent 工具（2）:\n {3}fetch_feed\n {3}rss_preview（技能 rss）/);
     expect(text).toContain('pollCron（string，默认 "0 */5 * * * *"） — 轮询频率');
+    expect(text).toContain('zhin install @demo/plugin-rss@latest');
+    expect(text).not.toContain('zhin packages');
     expect(text).not.toMatch(PREFIX);
     expect(stderr.join('')).not.toMatch(PREFIX);
+  });
+
+  it('describes a workspace plugin of this project without asking npm', async () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'demo-bot', private: true }));
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'packages:\n  - plugins/*\n');
+    installFixture({ name: 'zhin.js-media-ai', private: true, description: '本地插件' }, path.join(tmp, 'plugins', 'media-ai'));
+    plugin.info = undefined;
+    const { runPluginInfo } = await import('../src/commands/search.js');
+    await runPluginInfo('zhin.js-media-ai');
+    const text = stdout.join('\n');
+    expect(text).toContain('📦 名称: zhin.js-media-ai');
+    expect(text).toContain('📍 来源: 本项目 workspace（plugins/media-ai）');
+    expect(text).toMatch(/⌨️ {2}命令（2）:/);
+    expect(text).toContain('pollCron');
+    expect(text).toContain('无需安装');
+    expect(text).not.toContain('npm view');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('reports a package that is neither local nor on npm without the raw npm view failure', async () => {
+    plugin.info = new NpmViewError('@demo/missing', true);
+    const { runPluginInfo } = await import('../src/commands/search.js');
+    try {
+      await runPluginInfo('@demo/missing');
+      const err = stderr.join('');
+      expect(err).toContain('未找到插件: @demo/missing');
+      expect(err).toContain('zhin search');
+      expect(err).not.toContain('Command failed');
+      expect(err).not.toContain('zhin packages search');
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = 0;
+    }
   });
 
   it('says how to see the capabilities when the package is not installed', async () => {
@@ -152,6 +201,41 @@ describe('zhin packages info', () => {
     const text = stdout.join('\n');
     expect(text).toContain('👤 作者: bob');
     expect(text).toContain('未安装到当前项目');
+    expect(text).toContain('   zhin install @demo/absent');
+    expect(text).not.toContain('zhin packages install');
+  });
+
+  it('zhin search: official packages come from the scope query; hints name zhin install / zhin info', async () => {
+    plugin.queries = [];
+    plugin.search = {
+      'zhin.js 60s': [{ name: '@maptiler/weather', version: '4.0.1', keywords: ['maptiler', 'plugin', 'weather'] }],
+      '@zhin.js 60s': [{ name: '@zhin.js/plugin-60s', version: '1.0.0', description: '60 秒读懂世界', maintainers: [{ username: 'lc-cn', email: 'x@example.com' }] }],
+    };
+    const { runPluginSearch } = await import('../src/commands/search.js');
+    await runPluginSearch('60s', { limit: 20 });
+    const text = stdout.join('\n');
+    expect(plugin.queries).toEqual(['zhin.js 60s', '@zhin.js 60s']);
+    expect(text).toContain('@zhin.js/plugin-60s@1.0.0');
+    expect(text).not.toContain('@maptiler/weather');
+    expect(text).toContain('作者: lc-cn');
+    expect(text).toContain('安装: zhin install @zhin.js/plugin-60s');
+    expect(text).toContain('使用 zhin info <包名> 查看插件详情');
+    expect(text).not.toContain('zhin packages');
+  });
+
+  it('classifies npm view failures without echoing the command line', () => {
+    const missing = npmViewFailure('x', Object.assign(new Error('Command failed: npm view x --json'), {
+      stdout: JSON.stringify({ error: { code: 'E404', summary: 'Not Found - GET https://registry.npmjs.org/x' } }),
+    }));
+    expect(missing.notFound).toBe(true);
+    expect(missing.message).not.toContain('Command failed');
+    const offline = npmViewFailure('x', Object.assign(new Error('Command failed: npm view x --json'), {
+      stdout: JSON.stringify({ error: { code: 'ENOTFOUND', summary: 'request failed' } }),
+    }));
+    expect(offline.notFound).toBe(false);
+    expect(offline.message).toContain('ENOTFOUND');
+    expect(offline.message).not.toContain('Command failed');
+    expect(npmViewFailure('x', Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' })).message).toContain('找不到 npm 命令');
   });
 });
 

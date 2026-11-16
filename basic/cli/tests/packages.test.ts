@@ -4,7 +4,11 @@ import {
   classifyPackage,
   filterSearchResults,
   formatPackageBadge,
+  isZhinEcosystemPackage,
+  mergeSearchResults,
   resolveInstallRoute,
+  ZHIN_ECOSYSTEM_KEYWORDS,
+  zhinSearchQueries,
 } from '../src/utils/plugin-registry.js';
 
 describe('classifyPackage / formatPackageBadge', () => {
@@ -104,6 +108,32 @@ describe('filterSearchResults', () => {
       'community-manifest-only',
     ]);
     expect(filterSearchResults(packages, { keyword: 'rss' }).map((p) => p.name)).toEqual(['community-rss']);
+  });
+
+  it('通用 plugin 关键词不再让无关包混进结果；官方 @zhin.js/* 按 scope 仍能找到（#1250）', () => {
+    const packages = [
+      { name: '@maptiler/weather', keywords: ['maptiler', 'plugin', 'weather', 'forecast'], downloads: '9000' },
+      { name: '@zhin.js/plugin-weather', keywords: ['weather'], downloads: '50' },
+      { name: '@zhin.js/plugin-60s', keywords: [], downloads: '40' },
+      { name: 'community-skills', keywords: ['zhin-package', 'weather'], downloads: '10' },
+    ];
+    expect(ZHIN_ECOSYSTEM_KEYWORDS).not.toContain('plugin');
+    expect(isZhinEcosystemPackage(packages[0]!)).toBe(false);
+    expect(filterSearchResults(packages, { keyword: 'weather' }).map((p) => p.name)).toEqual([
+      '@zhin.js/plugin-weather',
+      'community-skills',
+    ]);
+    expect(filterSearchResults(packages, {}).map((p) => p.name)).toContain('@zhin.js/plugin-60s');
+  });
+
+  it('搜索同时查官方 scope，并按包名去重合并', () => {
+    expect(zhinSearchQueries('weather')).toEqual(['zhin.js weather', '@zhin.js weather']);
+    expect(zhinSearchQueries(undefined)).toEqual(['zhin.js plugin', '@zhin.js']);
+    expect(zhinSearchQueries('weather', true)).toEqual(['@zhin.js']);
+    expect(mergeSearchResults([
+      [{ name: 'a', version: '1' }, { name: 'b', version: '1' }],
+      [{ name: 'b', version: '2' }, { name: 'c', version: '1' }],
+    ]).map((p) => `${p.name}@${p.version}`)).toEqual(['a@1', 'b@1', 'c@1']);
   });
 
   it('limit 截断结果', () => {

@@ -67,8 +67,10 @@ describe('zhin chat-roles export|import (ADR 0060 §4.5)', () => {
   });
 
   it('formats the export / import results as stdout lines, skipped entries included', () => {
-    expect(chatRolesExportLines({ ...sample, principals: [{}, {}], roles: [{}] } as never, '/tmp/out.json'))
-      .toEqual(['✓ 已导出 2 个人、1 条角色授予到 /tmp/out.json']);
+    expect(chatRolesExportLines({ ...sample, principals: [{}, {}], identities: [{}, {}, {}], roles: [{}], consoleLinks: [{}] } as never, '/tmp/out.json'))
+      .toEqual(['✓ 已导出 2 个人、3 条聊天身份、1 条角色授予、1 条 Console 链接到 /tmp/out.json']);
+    expect(chatRolesExportLines({ ...sample, principals: [], identities: [], roles: [], consoleLinks: [] } as never, '/tmp/empty.json'))
+      .toEqual(['✓ 已导出 0 个人、0 条聊天身份、0 条角色授予、0 条 Console 链接到 /tmp/empty.json']);
     expect(chatRolesImportLines({ principals: 1, identities: 2, roles: 3, consoleLinks: 0, skipped: ['qq:42 已属于另一个人'] }))
       .toEqual(['✓ 已导入：新人 1、身份 2、角色 3、Console 链接 0', '跳过：qq:42 已属于另一个人']);
   });

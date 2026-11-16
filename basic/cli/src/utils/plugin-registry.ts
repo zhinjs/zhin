@@ -80,10 +80,12 @@ export interface SearchFilterOptions {
 
 /**
  * Keywords that mark a package as part of the Zhin ecosystem. `zhin.js` is what the authoring docs
- * recommend (plus feature words); `zhin` / `zhinjs` / `zhin-plugin` and the legacy generic `plugin`
- * are still accepted. Matching is case-insensitive.
+ * recommend (plus feature words); `zhin` / `zhinjs` / `zhin-plugin` / `zhin-package` are also
+ * accepted. Matching is case-insensitive. The generic `plugin` is deliberately absent (#1250): it
+ * let unrelated npm packages (`@maptiler/weather`) through as installable Zhin plugins. Official
+ * `@zhin.js/*` and conventional `zhin.js-*` packages match by name, whatever their keywords.
  */
-export const ZHIN_ECOSYSTEM_KEYWORDS: readonly string[] = Object.freeze(['zhin.js', 'zhin', 'zhinjs', 'zhin-plugin', 'plugin']);
+export const ZHIN_ECOSYSTEM_KEYWORDS: readonly string[] = Object.freeze(['zhin.js', 'zhin', 'zhinjs', 'zhin-plugin', 'zhin-package']);
 
 /**
  * Whether an npm search result belongs to the Zhin ecosystem: a recognised keyword, an official or
@@ -134,6 +136,32 @@ export function filterSearchResults(results: NpmSearchResult[], options: SearchF
 }
 
 /**
+ * npm search queries of `zhin search` (#1250): the text query, plus a `@zhin.js` scope query when a
+ * keyword is given so official packages are found even when unrelated packages fill the text
+ * query's result page (the ecosystem filter no longer lets generic `plugin` packages through).
+ */
+export function zhinSearchQueries(keyword: string | undefined, official = false): string[] {
+  if (official) return ['@zhin.js'];
+  const trimmed = keyword?.trim();
+  if (!trimmed) return ['zhin.js plugin', '@zhin.js'];
+  return [`zhin.js ${trimmed}`, `@zhin.js ${trimmed}`];
+}
+
+/** Concatenates npm search pages, keeping the first entry for each package name. */
+export function mergeSearchResults(pages: readonly (readonly NpmSearchResult[])[]): NpmSearchResult[] {
+  const seen = new Set<string>();
+  const merged: NpmSearchResult[] = [];
+  for (const page of pages) {
+    for (const pkg of page) {
+      if (!pkg || typeof pkg.name !== 'string' || seen.has(pkg.name)) continue;
+      seen.add(pkg.name);
+      merged.push(pkg);
+    }
+  }
+  return merged;
+}
+
+/**
  * 分类匹配：优先读发布清单的 `zhin.metadata.category`（接受旧别名如 util）；
  * 没有声明分类的包（npm search 结果通常不含 zhin 字段）退回到包名约定与 keywords。
  */
@@ -155,12 +183,53 @@ export function npmSearch(query: string): NpmSearchResult[] {
   return JSON.parse(output);
 }
 
-/** npm view（IO 包装） */
+/**
+ * `npm view` failed (#1250 `cli-info-local-workspace-plugin`): `notFound` when the registry has no
+ * such package (E404), otherwise the registry could not be reached or answered with an error. The
+ * message is meant for users; the raw `Command failed: npm view …` text is never shown.
+ */
+export class NpmViewError extends Error {
+  readonly notFound: boolean;
+  constructor(readonly packageName: string, notFound: boolean, readonly detail?: string) {
+    super(notFound
+      ? `npm registry 上没有 ${packageName}`
+      : `无法从 npm registry 查询 ${packageName}${detail ? `（${detail}）` : ''}`);
+    this.name = 'NpmViewError';
+    this.notFound = notFound;
+  }
+}
+
+/**
+ * Classifies a failed `npm view <name> --json` run: npm writes `{ "error": { "code": "E404", … } }`
+ * to stdout with `--json`, so the code says whether the package is missing or the lookup failed.
+ */
+export function npmViewFailure(packageName: string, error: unknown): NpmViewError {
+  const stdout = (error as { stdout?: unknown } | undefined)?.stdout;
+  let code: string | undefined;
+  let summary: string | undefined;
+  if (typeof stdout === 'string' && stdout.trim()) {
+    try {
+      const parsed = JSON.parse(stdout) as { error?: { code?: unknown; summary?: unknown } };
+      if (typeof parsed?.error?.code === 'string') code = parsed.error.code;
+      if (typeof parsed?.error?.summary === 'string') summary = parsed.error.summary.split('\n')[0]?.trim();
+    } catch { /* not npm's JSON error document */ }
+  }
+  if (code === 'E404' || /\bE404\b|404 Not Found/u.test(String(stdout ?? ''))) return new NpmViewError(packageName, true);
+  if ((error as { code?: unknown } | undefined)?.code === 'ENOENT') return new NpmViewError(packageName, false, '找不到 npm 命令');
+  return new NpmViewError(packageName, false, code ?? summary ?? '网络或 registry 不可用');
+}
+
+/** npm view（IO 包装）；失败时抛出 {@link NpmViewError}。 */
 export function npmView(name: string): NpmPackageInfo {
-  const output = execFileSync('npm', ['view', name, '--json'], {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'ignore'],
-  });
+  let output: string;
+  try {
+    output = execFileSync('npm', ['view', name, '--json'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+  } catch (error) {
+    throw npmViewFailure(name, error);
+  }
   const parsed: unknown = JSON.parse(output);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new TypeError(`npm view returned an invalid package document for ${name}`);
