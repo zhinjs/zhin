@@ -2,6 +2,18 @@ import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import type { MessageAliasTable } from '@zhin.js/ai';
 import { createStructuredReplyStreamParser } from '../outbound/structured-reply-stream.js';
+import { isCopiedInlineSegment, segmentMediaKind, type CopiedInlineMediaDrop, type ToolMediaKind } from '../media/media-tool-bridge.js';
+
+/**
+ * #1250 第 29 批：流式结构化回复里，本轮工具已产出的同类内嵌媒体（模型抄写的 base64）不随流发出，
+ * 与结算时 `mergeToolOutboundElements` 的去重一致。
+ */
+export interface CopiedInlineMediaFilter {
+  /** Media kinds this phase's tools produced (read on every snapshot). */
+  readonly kinds: () => ReadonlySet<ToolMediaKind>;
+  /** Called once per run, the first time a copy is dropped. */
+  readonly onDropped?: (drop: CopiedInlineMediaDrop) => void;
+}
 
 /** One public answering phase; provider consumption never waits for platform requests. */
 export class ReplyStreamRun {
@@ -20,12 +32,20 @@ export class ReplyStreamRun {
   #lastParse = -Infinity;
   #closed = false;
   readonly #failureController = new AbortController();
+  #copiedMedia?: CopiedInlineMediaFilter;
+  #copiedReported = false;
 
-  constructor(stream: CoreReplyStream, profile?: AiOutboundSegmentProfile, aliases?: MessageAliasTable) {
+  constructor(stream: CoreReplyStream, profile?: AiOutboundSegmentProfile, aliases?: MessageAliasTable, copiedMedia?: CopiedInlineMediaFilter) {
     this.stream = stream;
     this.#profile = profile;
     this.#parser = createStructuredReplyStreamParser(profile);
     this.#aliases = aliases;
+    this.#copiedMedia = copiedMedia;
+  }
+
+  /** Binds the copied-inline-media filter when the run was created before the turn's tool records existed. */
+  filterCopiedInlineMedia(filter: CopiedInlineMediaFilter): void {
+    this.#copiedMedia = filter;
   }
 
   get failureSignal(): AbortSignal { return this.#failureController.signal; }
@@ -118,12 +138,35 @@ export class ReplyStreamRun {
   }
 
   #resolve(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {
+    snapshot = this.#withoutCopiedInlineMedia(snapshot);
     if (!this.#aliases) return snapshot;
     return { ...snapshot, messages: snapshot.messages.map(message => ({ ...message,
       segments: message.segments.map(part => part.value.type === 'reply' && typeof part.value.data.message_id === 'string'
         ? { ...part, value: { ...part.value, data: { ...part.value.data, message_id: this.#aliases!.resolve(part.value.data.message_id) } } }
         : part),
     })) };
+  }
+
+  #withoutCopiedInlineMedia(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {
+    const kinds = this.#copiedMedia?.kinds();
+    if (!kinds?.size) return snapshot;
+    const dropped = new Set<ToolMediaKind>();
+    let count = 0;
+    const messages = snapshot.messages.map(message => {
+      const segments = message.segments.filter(part => {
+        if (!isCopiedInlineSegment(part.value, kinds)) return true;
+        dropped.add(segmentMediaKind(part.value.type)!);
+        count += 1;
+        return false;
+      });
+      return segments.length === message.segments.length ? message : { ...message, segments };
+    });
+    if (!count) return snapshot;
+    if (!this.#copiedReported) {
+      this.#copiedReported = true;
+      try { this.#copiedMedia?.onDropped?.({ kinds: [...dropped], count }); } catch { /* trace only */ }
+    }
+    return { ...snapshot, messages };
   }
 
   #clearTimer(): void {

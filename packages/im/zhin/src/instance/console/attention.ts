@@ -188,7 +188,7 @@ export interface AttentionSpeechIssue {
   readonly configPath: string;
   /** The command as configured. */
   readonly command: string;
-  readonly reason: 'not-found' | 'not-executable' | 'timeout';
+  readonly reason: 'not-found' | 'not-executable' | 'has-arguments' | 'timeout';
   /** When the check ran (ms). */
   readonly at?: number;
 }
@@ -625,7 +625,8 @@ const messages = createMessages({
   'speech.title.tts': { 'zh-CN': '语音合成（{provider}）不可用', en: 'Speech synthesis ({provider}) is unavailable' },
   'speech.title.stt': { 'zh-CN': '语音识别（{provider}）不可用', en: 'Speech recognition ({provider}) is unavailable' },
   'speech.detail.not-found': { 'zh-CN': '找不到命令「{command}」（{path}），voice_tts 无法合成语音。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 {path} 改为可执行文件的绝对路径：launchd / systemd 等托管环境的 PATH 通常不含 ~/.local/bin。也可以改用 openai / azure / custom TTS。', en: 'Command "{command}" ({path}) was not found, so voice_tts cannot synthesize speech. Install edge-tts (pip install edge-tts) where the bot runs and set {path} to the absolute path of the executable: under launchd / systemd the PATH usually lacks ~/.local/bin. Or switch to the openai / azure / custom TTS provider.' },
-  'speech.detail.not-executable': { 'zh-CN': '命令「{command}」（{path}）存在但没有执行权限，voice_tts 无法合成语音。请给它加上执行权限，或把 {path} 改为可执行文件的绝对路径。', en: 'Command "{command}" ({path}) exists but is not executable, so voice_tts cannot synthesize speech. Make it executable or point {path} to the executable.' },
+  'speech.detail.not-executable': { 'zh-CN': '命令「{command}」（{path}）存在但不能直接执行（没有执行权限；Windows 上 .cmd / .bat 不能直接运行，需指向 .exe），voice_tts 无法合成语音。请给它加上执行权限，或把 {path} 改为可执行文件的绝对路径。', en: 'Command "{command}" ({path}) exists but cannot be started directly (no execute permission; on Windows a .cmd / .bat cannot be started, point to the .exe), so voice_tts cannot synthesize speech. Make it executable or point {path} to the executable.' },
+  'speech.detail.has-arguments': { 'zh-CN': '{path} 填的是「{command}」：这里只能填可执行文件路径，不支持带参数（例如 `uvx edge-tts`），voice_tts 无法合成语音。请填 edge-tts 可执行文件的绝对路径（pip install edge-tts 后用 command -v edge-tts 查看）。', en: '{path} is set to "{command}": it takes the path of an executable only, without arguments (e.g. not `uvx edge-tts`), so voice_tts cannot synthesize speech. Set it to the absolute path of the edge-tts executable (see command -v edge-tts after pip install edge-tts).' },
   'speech.detail.timeout': { 'zh-CN': '启动时检查命令「{command}」（{path}）超时，无法确认 voice_tts 能否合成语音。请确认它已安装且 {path} 是可执行文件的绝对路径。', en: 'Checking command "{command}" ({path}) at startup timed out, so voice_tts may not work. Make sure it is installed and {path} is the absolute path of the executable.' },
   'speech.action': { 'zh-CN': '打开配置文件', en: 'Open configuration' },
   'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },

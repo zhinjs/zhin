@@ -85,11 +85,13 @@ speech:
     edgeTtsCommand: /Users/me/.local/bin/edge-tts   # `command -v edge-tts` 的输出
 ```
 
+`edgeTtsCommand` 只能填可执行文件路径，不支持带参数（例如 `uvx edge-tts`）。Windows 上要指向 `edge-tts.exe`：Node 不经 shell 无法直接运行 `.cmd` / `.bat`。
+
 启动时 Speech Host 会检查 `edgeTtsCommand` 能否执行（只在 `PATH` / 文件系统里查找，不运行命令，最多 3 秒）。不能执行时：
 
 - 启动日志记 warn，写成 `degraded | … | tts: edge (unavailable: not-found edge-tts)`，不再写 `ready`；
 - Console「需要你处理」出现「语音合成（edge）不可用」（`speech.unavailable`，指向 `speech.tts.edgeTtsCommand`），`zhin doctor` 在实例运行时也会列出这一条；
-- `voice_tts` 被调用时先重新检查一次（装好 edge-tts 后无需重启），仍不可用就直接返回原因（「未找到 edge-tts……」），模型据此如实告诉用户。
+- `voice_tts` 被调用时先重新检查一次（装好 edge-tts 后无需重启），仍不可用就直接返回原因（「未找到 edge-tts……」），模型据此如实告诉用户。返回给模型的报错和日志中，命令路径只保留最后一段（如 `…/edge-tts`），不暴露家目录。
 
 其他 provider（openai / azure / custom TTS，openai / ollama STT）都是 HTTP 服务，没有本机命令依赖；服务地址或密钥有问题时在调用时报出具体原因。
 
@@ -104,7 +106,7 @@ Speech Host 装配后向 Agent 注册两个工具（`source: speech`）：
 
 `voice_tts` 可按调用临时切换 provider，便于一次部署同时挂多种音色。
 
-合成的音频**不会交给模型**：Agent 在工具结果进入模型之前把音频拆出来，作为语音消息段随本轮回复经正常发送链（`Message.$reply` → OutboundRenderer → Endpoint）发出，只发一次；模型只看到元数据和「语音已发送，不要重复输出音频内容」的提示。任何工具结果里的 base64 / data URL 在进入模型前也会被替换为一行说明；本轮工具已经产出语音时，模型回复里抄写的内嵌音频不会再作为第二段语音发出。
+合成的音频**不会交给模型**：Agent 在工具结果进入模型之前把音频拆出来，作为语音消息段随本轮回复经正常发送链（`Message.$reply` → OutboundRenderer → Endpoint）发出，只发一次；模型只看到元数据和「语音已发送，不要重复输出音频内容」的提示。工具结果里 2048 字符以上的 base64 / data URL 在进入模型前会被替换为一行说明（读文件、搜索、shell 类工具只截断 64 KB 以上的串并标明「已截断」，`write_file` / `edit_file` 拒绝写入这类占位）；会话历史里已发送的语音只记占位（如「[语音 mp3 18.6KB 已发送]」）；本轮工具已经产出语音时，模型回复里抄写的内嵌音频（含流式回复）不会再作为第二段语音发出。
 
 ## 相关
 

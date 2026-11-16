@@ -13,7 +13,8 @@ import { ReplyStreamRun } from './reply-stream-run.js';
 import type { ReplyPhaseLifecycle, ReplyPhaseFacts } from './reply-phase.js';
 import { decodeStructuredReply } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
-import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
+import { isInlineMediaRef, mergeToolOutboundElements, sentInlineMediaPlaceholder, toolMediaKinds, type CopiedInlineMediaDrop } from '../media/media-tool-bridge.js';
+import type { Segment } from '@zhin.js/im-contract';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
@@ -267,7 +268,7 @@ export function createTurnReplyPhaseController(params: {
         }
       }
     } else output = parseOutput(sanitizeAssistantReply(raw));
-    output = mergeToolOutboundElements(output, calls);
+    output = mergeToolOutboundElements(output, calls, copiedInlineMediaTrace(input.turnContext, 'phase'));
     if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
     await settlePhase(output, raw, hostReply);
   };
@@ -281,7 +282,9 @@ export function createTurnReplyPhaseController(params: {
       if (!state.phaseStopped) {
         const next = replyPhases.open();
         state.replyPhaseId = next.id;
-        state.replyRun = next.stream ? new ReplyStreamRun(next.stream, input.replySegments, input.messageAliases) : undefined;
+        state.replyRun = next.stream ? new ReplyStreamRun(next.stream, input.replySegments, input.messageAliases, {
+          kinds: phaseToolMediaKinds(toolCalls, state), onDropped: copiedInlineMediaTrace(input.turnContext, 'stream'),
+        }) : undefined;
         state.phaseSettled = false;
         state.phaseAssistant = undefined;
         state.phaseLastAssistant = undefined;
@@ -425,7 +428,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     }
   }
   if (!state.phaseSettled) {
-    output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart));
+    output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart), copiedInlineMediaTrace(input.turnContext, 'final'));
   }
   // #1250: a side-effect tool that was denied or failed must not be reported as done. The framework
   // always adds one deterministic line (owner review: no keyword guessing). Before anything is
@@ -480,6 +483,19 @@ export async function finalizeTurnReplyAndOutput(params: {
   };
 }
 
+/** #1250 第 29 批：出站去重丢弃模型抄写的内嵌媒体时记一条 trace。 */
+export function copiedInlineMediaTrace(
+  turnContext: AgentLoopTurnInput['turnContext'],
+  path: 'phase' | 'final' | 'stream',
+): (drop: CopiedInlineMediaDrop) => void {
+  return (drop) => noteTurnTrace(traceTurnId(turnContext), { kind: 'copied_inline_media_dropped', kinds: drop.kinds, count: drop.count, path });
+}
+
+/** The media kinds this phase's tools produced; a copied inline payload of these kinds is not streamed (#1250 第 29 批). */
+export function phaseToolMediaKinds(toolCalls: readonly ToolCallRecord[], state: Pick<TurnReplyPhaseState, 'phaseToolStart'>) {
+  return () => toolMediaKinds(toolCalls.slice(state.phaseToolStart));
+}
+
 export function encodeConfirmedOutput(output: readonly AgentOutputElement[]): string {
   let reaction: string | undefined;
   const messages = output.flatMap(element => {
@@ -489,6 +505,14 @@ export function encodeConfirmedOutput(output: readonly AgentOutputElement[]): st
       const emoji = (segment.data as Readonly<Record<string, unknown>>).emoji;
       if (typeof emoji === 'string') reaction = emoji;
       return false;
+    }).map(segment => {
+      // #1250 第 29 批：历史里不保存内嵌媒体载荷（下一轮模型会看到它），只留占位。
+      const media = (segment.data as { media?: unknown } | undefined)?.media;
+      if (!isInlineMediaRef(media)) return segment;
+      const ref = media as { value?: unknown; mime_type?: unknown };
+      const body = typeof ref.value === 'string' ? ref.value.replace(/^(?:data:[^,]*,|base64:\/\/)/iu, '') : '';
+      const mime = typeof ref.mime_type === 'string' ? ref.mime_type : undefined;
+      return { type: 'text', data: { text: sentInlineMediaPlaceholder(segment.type, mime, Math.floor((body.length * 3) / 4)) } } as Segment;
     });
     return segments.length ? [{ segments }] : [];
   });

@@ -48,6 +48,27 @@ describe('speech dependency check (#1250 batch 29 speech-ready-without-tts-binar
     expect(await checkExecutable('edge-tts', { platform: 'win32', env: { Path: dir, PATHEXT: '.CMD' } })).toBe('not-found');
   });
 
+  it('on Windows accepts only .exe / .com: a .cmd / .bat wrapper cannot be started without a shell', async () => {
+    writeFileSync(join(dir, 'edge-tts.cmd'), '@echo off');
+    const env = { Path: dir, PATHEXT: '.COM;.EXE;.BAT;.CMD' };
+    expect(await checkExecutable('edge-tts', { platform: 'win32', env })).toBe('not-executable');
+    expect(await checkExecutable(join(dir, 'edge-tts.cmd'), { platform: 'win32', env })).toBe('not-executable');
+    const [issue] = await checkSpeechDependencies({ tts: {} }, { platform: 'win32', env });
+    expect(issue).toMatchObject({ reason: 'not-executable' });
+    expect(issue!.message).toContain('.cmd / .bat');
+    writeFileSync(join(dir, 'edge-tts.exe'), '');
+    expect(await checkExecutable('edge-tts', { platform: 'win32', env })).toBe('ok');
+  });
+
+  it('says a command line with arguments is not supported, but keeps paths with spaces as not-found', async () => {
+    executable('uvx');
+    const [args] = await checkSpeechDependencies({ tts: { edgeTtsCommand: 'uvx edge-tts' } }, { env: { PATH: dir } });
+    expect(args).toMatchObject({ reason: 'has-arguments' });
+    expect(args!.message).toContain('只能填可执行文件路径，不支持带参数（例如 `uvx edge-tts`）');
+    const [spaced] = await checkSpeechDependencies({ tts: { edgeTtsCommand: join(dir, 'John Smith', 'edge-tts') } });
+    expect(spaced).toMatchObject({ reason: 'not-found' });
+  });
+
   it('only checks the edge TTS provider, and explains the fix (absolute path for managed services)', async () => {
     expect(await checkSpeechDependencies({ tts: { provider: 'openai' } })).toEqual([]);
     expect(await checkSpeechDependencies({ tts: { enabled: false } })).toEqual([]);
@@ -86,6 +107,10 @@ describe('Speech Host with a missing edge-tts', () => {
     expect(result.error).toContain('语音合成不可用');
     expect(result.error).toContain('未找到 edge-tts');
     expect(result.error).toContain('speech.tts.edgeTtsCommand');
+    // Only the last path segment: no home directory in what the model or the log line shows.
+    expect(result.error).toContain('「…/edge-tts」');
+    expect(result.error).not.toContain(dir);
+    expect(line).not.toContain(dir);
   });
 
   it.runIf(posix)('picks up an edge-tts installed after startup without a restart', async () => {
@@ -103,6 +128,16 @@ describe('Speech Host with a missing edge-tts', () => {
     expect(formatSpeechReadyLine(host!)).toMatch(/^ready \| /u);
   });
 
+  it.runIf(posix)('keeps the command directory out of other synthesis failures shown to the model', async () => {
+    const command = executable('edge-tts');
+    writeFileSync(command, '#!/bin/sh\necho boom >&2\nexit 3\n');
+    const host = await prepareSpeechHost({ stt: { enabled: false }, tts: { provider: 'edge', edgeTtsCommand: command } });
+    const result = await host!.tools.find(item => item.name === 'voice_tts')!.execute({ text: '你好' }) as { error: string };
+    expect(result.error).toContain('语音合成失败');
+    expect(result.error).toContain('…/edge-tts');
+    expect(result.error).not.toContain(dir);
+  });
+
   it('does not block another provider chosen for one call', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => Uint8Array.from([1, 2, 3]).buffer }));
     const host = await prepareSpeechHost({ stt: { enabled: false }, tts: { provider: 'edge', edgeTtsCommand: join(dir, 'edge-tts'), apiKey: 'k' } });
@@ -112,6 +147,6 @@ describe('Speech Host with a missing edge-tts', () => {
     const split = splitToolResultMedia('voice_tts', result);
     expect(JSON.stringify(split.output)).not.toContain('AQID');
     expect(split.output).toMatchObject({ format: 'mp3', size: 3, sent: true });
-    expect(split.media).toEqual([{ type: 'audio', url: 'data:audio/mpeg;base64,AQID', base64: 'AQID' }]);
+    expect(split.media).toEqual([{ type: 'audio', url: 'data:audio/mpeg;base64,AQID', base64: 'AQID', fallbackText: '[语音 mp3 3B 已发送]' }]);
   });
 });

@@ -3,7 +3,7 @@ import { defineEvalCase } from '../framework/index.js';
 /** ~3 KB of synthesized "audio": long enough to be a real payload, unique enough to search for. */
 const AUDIO_BASE64 = Buffer.from(Array.from({ length: 3000 }, (_, index) => (index * 37 + 11) % 256)).toString('base64');
 /** Any other tool that returns a data URL: the bytes are replaced before the model sees the result. */
-const PREVIEW_BASE64 = Buffer.from(Array.from({ length: 600 }, (_, index) => (index * 53 + 7) % 256)).toString('base64');
+const PREVIEW_BASE64 = Buffer.from(Array.from({ length: 3000 }, (_, index) => (index * 53 + 7) % 256)).toString('base64');
 
 export default defineEvalCase({
   id: 'voice-tts-no-base64-in-context',
@@ -35,7 +35,7 @@ export default defineEvalCase({
   ],
   expect: {
     toolsCalled: ['voice_tts', 'card_preview'],
-    modelInputContains: ['"sent":true', '语音已发送给用户', '问候卡片', '已省略内嵌 image/png 数据'],
+    modelInputContains: ['"sent":true', '语音已发送给用户', '问候卡片', '已省略 内嵌 image/png 数据'],
     modelInputNotContains: [AUDIO_BASE64.slice(0, 64), AUDIO_BASE64.slice(-64), PREVIEW_BASE64.slice(0, 64)],
     noRawToolOutput: true,
     outboundContains: ['好的'],

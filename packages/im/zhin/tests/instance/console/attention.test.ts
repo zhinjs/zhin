@@ -612,5 +612,8 @@ describe('speech.unavailable (#1250 batch 29 speech-ready-without-tts-binary)', 
     const timeout = await collectAttention({ speech: () => [{ ...issue, reason: 'timeout' as const }] }, { allows: owner });
     expect(timeout.items[0]).toMatchObject({ severity: 'info', reason: { code: 'timeout' } });
     expect((await collectAttention({ speech: () => [] }, { allows: owner })).items).toEqual([]);
+    const args = await collectAttention({ speech: () => [{ ...issue, command: 'uvx edge-tts', reason: 'has-arguments' as const }] }, { allows: owner });
+    expect(args.items[0]).toMatchObject({ severity: 'warning', reason: { code: 'has-arguments' } });
+    expect(args.items[0]!.detail).toContain('不支持带参数（例如 `uvx edge-tts`）');
   });
 });

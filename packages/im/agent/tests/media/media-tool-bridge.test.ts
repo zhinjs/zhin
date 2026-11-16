@@ -48,7 +48,7 @@ describe('#1250 batch 29: tool media never reaches the model', () => {
     const split = splitToolResultMedia('voice_tts', { audio, format: 'mp3', size: 19_000 });
     expect(JSON.stringify(split.output)).not.toContain(audio.slice(0, 64));
     expect(split.output).toMatchObject({ format: 'mp3', size: 19_000, sent: true, note: TOOL_MEDIA_SENT_NOTE });
-    expect(split.media).toEqual([{ type: 'audio', url: `data:audio/mpeg;base64,${audio}`, base64: audio }]);
+    expect(split.media).toEqual([{ type: 'audio', url: `data:audio/mpeg;base64,${audio}`, base64: audio, fallbackText: '[语音 mp3 18.6KB 已发送]' }]);
     // The record the reply is built from carries the media once; the result text has no audio left.
     const once = extractMediaElementsFromToolCalls([{ tool: 'voice_tts', result: JSON.stringify(split.output), media: split.media }]);
     expect(once).toHaveLength(1);
@@ -62,7 +62,7 @@ describe('#1250 batch 29: tool media never reaches the model', () => {
     const generated = splitToolResultMedia('generate_image', JSON.stringify({ image, mime: 'image/jpeg', model: 'm' }));
     expect(JSON.stringify(generated.output)).not.toContain(image.slice(0, 64));
     expect(generated.output).toMatchObject({ model: 'm', mime: 'image/jpeg', sent: true });
-    expect(generated.media).toEqual([{ type: 'image', url: `data:image/jpeg;base64,${image}`, base64: image }]);
+    expect(generated.media).toEqual([{ type: 'image', url: `data:image/jpeg;base64,${image}`, base64: image, alt: '生成的图片（image/jpeg 3.9KB）' }]);
   });
 
   it('leaves failures, published image URLs and other tools unchanged', () => {
@@ -78,8 +78,8 @@ describe('#1250 batch 29: tool media never reaches the model', () => {
     const text = `{"file":"data:audio/mpeg;base64,${audio}","raw":"${audio}","short":"aGVsbG8=","id":"abc123"}`;
     const shown = omitInlineBinaryForModel(text);
     expect(shown).not.toContain(audio.slice(0, 64));
-    expect(shown).toContain('已省略内嵌 audio/mpeg 数据');
-    expect(shown).toContain('已省略 base64 数据');
+    expect(shown).toContain('[已省略 内嵌 audio/mpeg 数据（25336 字符），未提供给模型]');
+    expect(shown).toContain('[已省略 base64 数据（25336 字符），未提供给模型]');
     expect(shown).toContain('"short":"aGVsbG8="');
     expect(shown).toContain('"id":"abc123"');
     expect(omitInlineBinaryForModel('普通文本 https://example.com/a.png')).toBe('普通文本 https://example.com/a.png');
@@ -93,6 +93,7 @@ describe('#1250 batch 29: tool media never reaches the model', () => {
     ], [{ tool: 'voice_tts', result: '{"sent":true}', media: [{ type: 'audio', url: `data:audio/mpeg;base64,${audio}`, base64: audio }] }]);
     const audios = output.filter(element => element.type === 'audio');
     expect(audios).toEqual([{ type: 'audio', url: `data:audio/mpeg;base64,${audio}`, base64: audio }]);
+    // The tool's own audio carries a history placeholder; this record was built by hand without one.
     expect(output[0]).toEqual({ type: 'message', segments: [{ type: 'text', data: { text: '好的' } }] });
   });
 

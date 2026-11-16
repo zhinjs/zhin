@@ -1,0 +1,150 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentMessage, AgentTool, Context, StreamOptions } from '@zhin.js/ai';
+import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
+import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
+import { appendConversationBatches, encodeConfirmedOutput } from '../../src/core/agent-core-settlement.js';
+import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
+import { registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
+
+vi.mock('../../src/prompt/assembly.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../src/prompt/assembly.js')>(),
+  buildAgentPathSystemPromptParts: async () => ({ stable: 'system', scene: '' }),
+  buildChatPathSystemPromptParts: () => ({ stable: 'system', scene: '' }),
+  describeAgentPathPromptSections: async () => [],
+}));
+const { collectAgentLoopTurnRun, runAgentLoopTextTurnRun } = await import('../../src/core/agent-core-run.js');
+
+/** ~19 KB of "mp3": the size of the clip in the owner's report. */
+const AUDIO = Buffer.from(Array.from({ length: 19_000 }, (_, index) => (index * 31 + 5) % 256)).toString('base64');
+const voiceTts: AgentTool = { name: 'voice_tts', description: 'Synthesize a voice reply', parameters: { type: 'object', properties: { text: { type: 'string' } } } } as AgentTool;
+const structured = (segments: unknown[]) => JSON.stringify({ messages: [{ segments }] });
+
+function replyStream() {
+  const snapshots: ReplyStreamSnapshot[] = [];
+  const stream: CoreReplyStream = {
+    minIntervalMs: 0, get receipt() { return { status: 'suppressed' } as const; }, confirmed: [],
+    update: snapshot => { snapshots.push(snapshot); },
+    finish: async () => ({ status: 'sent' }), cancel: async () => ({ status: 'suppressed' }),
+  };
+  return { stream, snapshots };
+}
+
+type Answer = ReturnType<typeof assistantTextReply>;
+type Step = (context: Context, options?: StreamOptions) => Answer | Promise<Answer>;
+
+/** One session whose history survives between turns (persisted messages are loaded by the next turn). */
+function session() {
+  const persisted: AgentMessage[] = [];
+  const calls: string[] = [];
+  const turn = async (steps: Step[], stream: CoreReplyStream, turnId: string) => {
+    const llm = wireMockLlmApi({ models: ['m'] });
+    vi.spyOn(llm.runtime, 'complete').mockImplementation(async (_model, context, opts) => {
+      calls.push(JSON.stringify(context.messages));
+      const step = steps.shift();
+      if (!step) throw new Error('Unexpected extra completion');
+      return step(context, opts);
+    });
+    const executeTool = vi.fn(async () => ({ status: 'completed' as const, output: { audio: AUDIO, format: 'mp3', size: 19_000 }, durationMs: 1 }) as never);
+    const host = {
+      contextRepository: {
+        loadContext: async () => ({ messages: [...persisted] }),
+        appendMessages: async (_id: string, messages: AgentMessage[]) => { persisted.push(...messages); },
+      },
+      getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: llm.provider.name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...llm.runtime.model(llm.provider.name, llm.provider.models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
+      config: { maxIterations: 4, providerResilience: { maxRetries: 0, emptyReplyRetries: 0 },
+        toolExecution: 'sequential', compaction: {}, contextTokens: 100_000,
+        toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
+      compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
+      getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},
+    };
+    const replySegments = { types: ['text', 'audio'] } as never;
+    const result = await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({
+      host: host as never, sessionId: 'session', rawContent: 'hello', promptProfile: { kind: 'interactive' },
+      turnContext: { identity: { turnId }, input: { text: '用语音说你好' }, origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'person' },
+        principal: { subjectId: 'person', roles: ['owner'] }, session: { key: 'session' } },
+      replyStream: stream, replySegments, allTools: [voiceTts], resolvedTools: [voiceTts], toolExecution: { execute: executeTool } as never,
+      personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: 'direct',
+    } as never), () => {});
+    return { result, executeTool };
+  };
+  return { persisted, calls, turn };
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('#1250 batch 29 review: streamed replies never keep voice base64', () => {
+  it('drops a copied inline voice from the stream, keeps the tool voice once, and stores no base64 in history', async () => {
+    const trace = new TurnTraceCollector({ turnId: 'voice-1', sessionKey: 'session' });
+    const unregister = registerTurnTrace(trace);
+    const { stream, snapshots } = replyStream();
+    const s = session();
+    const copied = { type: 'audio', data: { media: { kind: 'base64', value: AUDIO.slice(0, 4000) } } };
+    const first = await s.turn([
+      () => assistantToolCallReply([{ id: 'tts', name: 'voice_tts', arguments: { text: '你好' } }]),
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      async (_context, opts) => {
+        opts?.onTextDelta?.(structured([{ type: 'text', data: { text: '好的' } }, copied]));
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return assistantTextReply(structured([{ type: 'text', data: { text: '好的' } }, copied]));
+      },
+    ], stream, 'voice-1');
+    unregister();
+    expect(first.executeTool).toHaveBeenCalledTimes(1);
+    // The model saw metadata only.
+    expect(s.calls[1]).toContain('语音已发送给用户');
+    expect(s.calls.join('\n')).not.toContain(AUDIO.slice(0, 64));
+    // The stream never offered the copy.
+    expect(snapshots.length).toBeGreaterThan(0);
+    for (const snapshot of snapshots) {
+      expect(snapshot.messages.flatMap(message => message.segments.map(part => part.value.type))).not.toContain('audio');
+    }
+    expect(trace.snapshot().timeline.some(entry => entry.kind === 'copied_inline_media_dropped')).toBe(true);
+    // Delivered: the text and the tool's voice, once.
+    const output = first.result.output ?? [];
+    expect(output.filter(element => element.type === 'audio')).toHaveLength(1);
+    await first.result.projectConversation?.({ confirmedOutput: output });
+    const history = JSON.stringify(s.persisted);
+    expect(history).not.toContain(AUDIO.slice(0, 64));
+    expect(history).toContain('[语音 mp3 18.6KB 已发送]');
+
+    // Turn 2 loads that history: the model still sees no base64.
+    const second = replyStream();
+    await s.turn([
+      () => assistantTextReply(structured([{ type: 'text', data: { text: '还在' } }])),
+    ], second.stream, 'voice-2');
+    expect(s.calls.at(-1)).toContain('已发送');
+    expect(s.calls.at(-1)).not.toContain(AUDIO.slice(0, 64));
+  });
+});
+
+describe('encodeConfirmedOutput / appendConversationBatches', () => {
+  it('stores placeholders for inline media elements and segments, never the payload', async () => {
+    const confirmedOutput = [
+      { type: 'message' as const, segments: [{ type: 'text', data: { text: '好的' } },
+        { type: 'audio', data: { media: { kind: 'base64', value: AUDIO } } },
+        { type: 'image', data: { media: { kind: 'url', value: `data:image/png;base64,${AUDIO}` } } },
+        { type: 'image', data: { media: { kind: 'url', value: 'https://images.example/a.png' } } }] },
+      { type: 'audio' as const, url: `data:audio/mpeg;base64,${AUDIO}`, base64: AUDIO },
+      { type: 'image' as const, url: `data:image/png;base64,${AUDIO}` },
+    ];
+    const encoded = encodeConfirmedOutput(confirmedOutput as never);
+    expect(encoded).not.toContain(AUDIO.slice(0, 64));
+    expect(encoded).toContain('https://images.example/a.png');
+    expect(encoded).toContain('[语音 18.6KB 已发送]');
+    expect(encoded).toContain('[语音（内嵌数据，已省略）]');
+    expect(encoded).toContain('[图片（内嵌数据，已省略）]');
+
+    const persisted: AgentMessage[] = [];
+    await appendConversationBatches({
+      loadContext: async () => ({ messages: [] }),
+      appendMessages: async (_id: string, messages: AgentMessage[]) => { persisted.push(...messages); },
+    } as never, 'session', [{
+      messages: [{ role: 'assistant', content: [{ type: 'text', text: 'draft' }], api: 'x', provider: 'p', model: 'm', usage: {} as never, stopReason: 'stop', timestamp: 0 } as AgentMessage],
+      messageExtras: [undefined],
+    } as never], { confirmedOutput: confirmedOutput as never });
+    const history = JSON.stringify(persisted);
+    expect(history).toContain('好的');
+    expect(history).not.toContain(AUDIO.slice(0, 64));
+  });
+});

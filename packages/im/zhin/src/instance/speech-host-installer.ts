@@ -1,6 +1,6 @@
 import { constants as fsConstants } from 'node:fs';
 import { access, readFile, stat } from 'node:fs/promises';
-import { delimiter, isAbsolute, join, resolve as resolvePath } from 'node:path';
+import { delimiter, extname, isAbsolute, join, resolve as resolvePath } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
@@ -39,8 +39,12 @@ export interface SpeechDependencyIssue {
   readonly configPath: string;
   /** The command as configured (`edge-tts` by default). */
   readonly command: string;
-  /** `not-found`: not on PATH / no such file; `not-executable`: exists but cannot run; `timeout`: the check did not finish. */
-  readonly reason: 'not-found' | 'not-executable' | 'timeout';
+  /**
+   * `not-found`: not on PATH / no such file; `not-executable`: exists but cannot run (no execute
+   * bit; a Windows `.cmd` / `.bat`); `has-arguments`: a command line instead of a path (`uvx edge-tts`);
+   * `timeout`: the check did not finish.
+   */
+  readonly reason: 'not-found' | 'not-executable' | 'has-arguments' | 'timeout';
   /** Model- and log-facing explanation (Chinese, with the fix). */
   readonly message: string;
   /** When the check ran (ms). */
@@ -89,33 +93,45 @@ export interface SpeechDependencyCheckOptions {
 export type ExecutableCheck = 'ok' | 'not-found' | 'not-executable';
 
 /**
+ * Windows: Node (>= 22, CVE-2024-27980) refuses to start `.cmd` / `.bat` through `execFile` without a
+ * shell (`EINVAL`), so only `.exe` / `.com` count as runnable, whatever `PATHEXT` lists.
+ */
+const WINDOWS_RUNNABLE = new Set(['.exe', '.com']);
+const WINDOWS_SCRIPTS = ['.cmd', '.bat', '.CMD', '.BAT'];
+
+/**
  * Whether `command` can be started the way `execFile` starts it: a path (absolute, or relative to
- * `cwd`) must be an executable file; a bare name must resolve to one on `PATH` (with `PATHEXT` on
- * Windows). Nothing is executed, so the check has no side effects.
+ * `cwd`) must be an executable file; a bare name must resolve to one on `PATH` (on Windows with a
+ * `PATHEXT` extension, `.exe` / `.com` only). Nothing is executed, so the check has no side effects.
  */
 export async function checkExecutable(command: string, options: SpeechDependencyCheckOptions = {}): Promise<ExecutableCheck> {
   const env = options.env ?? process.env;
   const windows = (options.platform ?? process.platform) === 'win32';
   const mode = windows ? fsConstants.F_OK : fsConstants.X_OK;
-  const extensions = windows
-    ? ['', ...new Set((env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).flatMap(ext => [ext, ext.toLowerCase()]))]
-    : [''];
+  const isFile = async (candidate: string): Promise<boolean> => {
+    try { return (await stat(candidate)).isFile(); } catch { return false; }
+  };
   const probe = async (file: string): Promise<ExecutableCheck> => {
-    for (const ext of extensions) {
-      const candidate = `${file}${ext}`;
-      try {
-        if (!(await stat(candidate)).isFile()) continue;
-      } catch {
-        continue;
+    if (windows) {
+      const ext = extname(file).toLowerCase();
+      if (ext) {
+        if (!(await isFile(file))) return 'not-found';
+        return WINDOWS_RUNNABLE.has(ext) ? 'ok' : 'not-executable';
       }
-      try {
-        await access(candidate, mode);
-        return 'ok';
-      } catch {
-        return 'not-executable';
-      }
+      const extensions = [...new Set((env.PATHEXT ?? '.COM;.EXE').split(';').filter(Boolean)
+        .filter(item => WINDOWS_RUNNABLE.has(item.toLowerCase())).flatMap(item => [item, item.toLowerCase()]))];
+      for (const item of extensions) if (await isFile(`${file}${item}`)) return 'ok';
+      // Only a script wrapper exists: present, but not startable without a shell.
+      for (const item of WINDOWS_SCRIPTS) if (await isFile(`${file}${item}`)) return 'not-executable';
+      return 'not-found';
     }
-    return 'not-found';
+    if (!(await isFile(file))) return 'not-found';
+    try {
+      await access(file, mode);
+      return 'ok';
+    } catch {
+      return 'not-executable';
+    }
   };
   const trimmed = command.trim();
   if (!trimmed) return 'not-found';
@@ -130,12 +146,27 @@ export async function checkExecutable(command: string, options: SpeechDependency
   return found;
 }
 
+/**
+ * The command as logs and the model may show it: a path keeps only its last segment, so a home
+ * directory (user name) never leaves the host (#1250 第 29 批 review).
+ */
+export function displaySpeechCommand(command: string): string {
+  if (!PATH_SEPARATOR.test(command)) return command;
+  const last = command.split(/[\\/]/u).filter(Boolean).pop() ?? command;
+  return `…/${last}`;
+}
+
 function edgeTtsIssueMessage(command: string, reason: SpeechDependencyIssue['reason']): string {
+  const shown = displaySpeechCommand(command);
+  if (reason === 'has-arguments') {
+    return `${EDGE_TTS_CONFIG_PATH}（「${shown}」）只能填可执行文件路径，不支持带参数（例如 \`uvx edge-tts\`）。`
+      + '请填 edge-tts 可执行文件的绝对路径（pip install edge-tts 安装后用 command -v edge-tts 查看）；也可以改用 openai / azure / custom TTS。';
+  }
   const what = reason === 'timeout'
-    ? `检查 edge-tts 命令「${command}」能否执行时超时`
+    ? `检查 edge-tts 命令「${shown}」能否执行时超时`
     : reason === 'not-executable'
-      ? `edge-tts 命令「${command}」存在但不可执行（没有执行权限）`
-      : `未找到 edge-tts（命令「${command}」${PATH_SEPARATOR.test(command) ? '不存在' : '不在运行环境的 PATH 中'}）`;
+      ? `edge-tts 命令「${shown}」存在但不能直接执行（没有执行权限；Windows 上 .cmd / .bat 不能直接运行，需指向 .exe）`
+      : `未找到 edge-tts（命令「${shown}」${PATH_SEPARATOR.test(command) ? '不存在' : '不在运行环境的 PATH 中'}）`;
   return `${what}。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 ${EDGE_TTS_CONFIG_PATH} 配置为可执行文件的绝对路径`
     + '（launchd / systemd 等托管环境的 PATH 通常不含 ~/.local/bin，也不展开 ~）；也可以改用 openai / azure / custom TTS。';
 }
@@ -165,13 +196,21 @@ export async function checkSpeechDependencies(
     if (timer) clearTimeout(timer);
   }
   if (result === 'ok') return [];
+  // A value with whitespace that is not itself an executable file is a command line (`uvx edge-tts`).
+  let reason: SpeechDependencyIssue['reason'] = result;
+  if (result === 'not-found' && /\s/u.test(command)) {
+    const head = command.split(/\s+/u)[0]!;
+    const probe = options.probe ?? ((value: string) => checkExecutable(value, options));
+    // `uvx edge-tts`: a program plus arguments. A path with a space in it (`/Users/John Smith/…`) stays `not-found`.
+    if (!PATH_SEPARATOR.test(head) || await probe(head).catch(() => 'not-found') === 'ok') reason = 'has-arguments';
+  }
   return [Object.freeze({
     feature: 'tts' as const,
     provider: 'edge' as const,
     configPath: EDGE_TTS_CONFIG_PATH,
     command,
-    reason: result,
-    message: edgeTtsIssueMessage(command, result),
+    reason,
+    message: edgeTtsIssueMessage(command, reason),
     at: (options.now ?? Date.now)(),
   })];
 }
@@ -214,9 +253,12 @@ export async function prepareSpeechHost(
     let issues = await checkSpeechDependencies(config, options);
     for (const issue of issues) {
       logger.warn(formatCompact({ op: 'speech_dependency_unavailable', feature: issue.feature, provider: issue.provider,
-        command: issue.command, reason: issue.reason }));
+        command: displaySpeechCommand(issue.command), reason: issue.reason }));
     }
+    const configuredCommand = typeof config.tts?.edgeTtsCommand === 'string' ? config.tts.edgeTtsCommand.trim() : '';
     const dependencies: SpeechDependencyGate = {
+      redact: (text) => configuredCommand && PATH_SEPARATOR.test(configuredCommand)
+        ? text.split(configuredCommand).join(displaySpeechCommand(configuredCommand)) : text,
       // A call while TTS is unavailable checks again, so installing edge-tts takes effect without a restart.
       async ttsBlocked(provider) {
         if ((provider ?? ttsProvider) !== 'edge' || !blockingIssue(issues)) return undefined;
@@ -288,10 +330,12 @@ export function formatSpeechReadyLine(handle: Pick<SpeechHostHandle, 'sttProvide
   const tools = handle.tools.map((tool) => tool.name).join(',');
   const blocked = blockingIssue(handle.dependencyIssues());
   if (!blocked) return `ready | stt: ${handle.sttProvider} | tts: ${handle.ttsProvider} | tools: ${tools}`;
-  return `degraded | stt: ${handle.sttProvider} | tts: ${handle.ttsProvider} (unavailable: ${blocked.reason} ${blocked.command}) | tools: ${tools}`;
+  return `degraded | stt: ${handle.sttProvider} | tts: ${handle.ttsProvider} (unavailable: ${blocked.reason} ${displaySpeechCommand(blocked.command)}) | tools: ${tools}`;
 }
 
 interface SpeechDependencyGate {
+  /** Replaces the configured command path with its display form in a message for the model. */
+  redact(text: string): string;
   /** The issue that stops `provider` (default: the configured TTS provider) from running, after a re-check. */
   ttsBlocked(provider?: string): Promise<SpeechDependencyIssue | undefined>;
 }
@@ -371,7 +415,8 @@ function buildSpeechTools(pipeline: SpeechPipelineLike, dependencies: SpeechDepe
             size: result.data.length,
           };
         } catch (error) {
-          return { error: `语音合成失败: ${error instanceof Error ? error.message : String(error)}` };
+          // Only the command's last path segment reaches the model (no home directory).
+          return { error: dependencies.redact(`语音合成失败: ${error instanceof Error ? error.message : String(error)}`) };
         }
       },
     },

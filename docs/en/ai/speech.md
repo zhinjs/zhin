@@ -85,11 +85,13 @@ speech:
     edgeTtsCommand: /Users/me/.local/bin/edge-tts   # output of `command -v edge-tts`
 ```
 
+`edgeTtsCommand` takes the path of an executable only, without arguments (not `uvx edge-tts`). On Windows point it to `edge-tts.exe`: Node cannot start a `.cmd` / `.bat` without a shell.
+
 At startup the Speech Host checks whether `edgeTtsCommand` can run (a lookup on `PATH` / the file system only; the command is not executed; at most 3 seconds). When it cannot:
 
 - the startup log is a warning, `degraded | … | tts: edge (unavailable: not-found edge-tts)`, never `ready`;
 - the Console attention inbox lists "Speech synthesis (edge) is unavailable" (`speech.unavailable`, pointing at `speech.tts.edgeTtsCommand`), and `zhin doctor` lists it while the instance runs;
-- a `voice_tts` call checks again first (no restart needed after installing edge-tts) and, if it still cannot run, returns the reason ("edge-tts not found …") so the model can tell the user exactly that.
+- a `voice_tts` call checks again first (no restart needed after installing edge-tts) and, if it still cannot run, returns the reason ("edge-tts not found …") so the model can tell the user exactly that. The error the model sees and the log keep only the last segment of the command path (e.g. `…/edge-tts`), never the home directory.
 
 The other providers (openai / azure / custom TTS, openai / ollama STT) are HTTP services without a local command; a wrong address or key is reported with its reason when they are called.
 
@@ -104,7 +106,7 @@ After the Speech Host is assembled, two tools are registered with the Agent (`so
 
 `voice_tts` can temporarily switch providers per call, making it convenient to use multiple voices within a single deployment.
 
-The synthesized audio **never reaches the model**: before the tool result goes to the model, the Agent takes the audio out and sends it once, as a voice segment with this turn's reply, through the normal send chain (`Message.$reply` → OutboundRenderer → Endpoint); the model only sees metadata and a note that the voice was sent and must not be repeated. Base64 / data URLs in any tool result are replaced by a one-line note before the model sees them, and when a tool of this turn already produced audio, inline audio copied into the model's reply is not sent as a second voice message.
+The synthesized audio **never reaches the model**: before the tool result goes to the model, the Agent takes the audio out and sends it once, as a voice segment with this turn's reply, through the normal send chain (`Message.$reply` → OutboundRenderer → Endpoint); the model only sees metadata and a note that the voice was sent and must not be repeated. Base64 / data URLs of 2048+ characters in a tool result are replaced by a one-line note before the model sees them (file, search and shell tools only cut strings of 64 KB or more and label the cut; `write_file` / `edit_file` refuse content with such a placeholder); the conversation history keeps only a placeholder for a sent voice (e.g. "[语音 mp3 18.6KB 已发送]"); and when a tool of this turn already produced audio, inline audio copied into the model's reply (streamed replies included) is not sent as a second voice message.
 
 ## Related
 

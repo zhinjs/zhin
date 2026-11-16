@@ -526,11 +526,12 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           let shown: string;
           try {
             // #1250 第 29 批：失败结果同样不把内嵌二进制交给模型。
-            shown = omitInlineBinaryForModel(redactSecretText(await applyToolToModelOutput(tool, outcome.output, effectiveArgs)));
+            shown = omitInlineBinaryForModel(redactSecretText(await applyToolToModelOutput(tool, outcome.output, effectiveArgs)), { toolName: resolvedName });
           } catch {
-            shown = redactSecretText(outcome.error);
+            shown = omitInlineBinaryForModel(redactSecretText(outcome.error), { toolName: resolvedName });
           }
-          const text = formatUnexecutedToolResult(resolvedName, 'reported', shown || outcome.error, sideEffect);
+          const text = formatUnexecutedToolResult(resolvedName, 'reported',
+            shown || omitInlineBinaryForModel(redactSecretText(outcome.error), { toolName: resolvedName }), sideEffect);
           recordProgress(resolvedName, effectiveArgs, false);
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: text, status: 'failed', sideEffect, reported: true });
           return toolResultToAgentMessage(toolCall, text, true);
@@ -539,7 +540,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
           // #1250: say plainly that the call did not run, so the reply cannot claim it did.
           const sideEffect = outcome.sideEffect ?? tool.isReadOnly !== true;
           const unexecuted = formatUnexecutedToolResult(resolvedName, outcome.status,
-            outcome.status === 'failed' ? outcome.error : outcome.reason, sideEffect);
+            omitInlineBinaryForModel(outcome.status === 'failed' ? outcome.error : outcome.reason, { toolName: resolvedName }), sideEffect);
           // #1250: a denial records the policy it was decided under, so a later policy change can retire it.
           const reason = outcome.status === 'denied' ? `${unexecuted}\n${policyStamp}` : unexecuted;
           recordProgress(resolvedName, effectiveArgs, false);
@@ -558,7 +559,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         // #1250 第 29 批：媒体工具的音频 / 图片在进入模型之前拆出，随本轮回复经出站链发送；
         // 模型只看到元数据。其余工具结果中的 base64 / data URL 统一省略。
         const split = splitToolResultMedia(resolvedName, outcome.output);
-        const rawText = omitInlineBinaryForModel(await applyToolToModelOutput(tool, split.output, effectiveArgs));
+        const rawText = omitInlineBinaryForModel(await applyToolToModelOutput(tool, split.output, effectiveArgs), { toolName: resolvedName });
         let modelOutput = split.output;
 
         // PostToolUse interception
@@ -582,13 +583,13 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
             modelOutput = postDecision.modifiedOutput;
             resultText = omitInlineBinaryForModel(typeof postDecision.modifiedOutput === 'string'
               ? postDecision.modifiedOutput
-              : JSON.stringify(postDecision.modifiedOutput));
+              : JSON.stringify(postDecision.modifiedOutput), { toolName: resolvedName });
           }
         }
         // MCP capture already removed bytes before execution returned. Only enqueue
         // an authorized metadata reference after the output hook has accepted it.
         const accepted = localInspection?.accept(modelOutput);
-        if (accepted !== undefined) resultText = omitInlineBinaryForModel(accepted);
+        if (accepted !== undefined) resultText = omitInlineBinaryForModel(accepted, { toolName: resolvedName });
 
         const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
@@ -617,7 +618,7 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
               ? err
               : new Error('Tool execution cancelled');
         }
-        const message = err instanceof Error ? err.message : String(err);
+        const message = omitInlineBinaryForModel(err instanceof Error ? err.message : String(err), { toolName: resolvedName });
         const sideEffect = tool.isReadOnly !== true;
         const failure = formatUnexecutedToolResult(resolvedName, 'failed', message, sideEffect);
         recordProgress(resolvedName, effectiveArgs, false);
