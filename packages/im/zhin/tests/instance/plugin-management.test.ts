@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createConfigDocument, RootRuntime, ProjectGraphService, type ModuleRuntime } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../../../../host/gateway/src/project/environment.js';
 import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
-import { PluginManagementWorkflow, PluginManagementOperationError } from '../../../../host/gateway/src/plugin-management/workflow.js';
+import { PluginManagementWorkflow, PluginManagementOperationError, NO_RUNNING_INSTANCE, INSTANCE_NOT_REPORTED } from '../../../../host/gateway/src/plugin-management/workflow.js';
 import { PluginManagementActivity } from '../../../../host/gateway/src/plugin-management/activity.js';
 import { createPluginManagementPort } from '../../src/instance/console/api-routes.js';
 import adapterFeature, { Adapter, endpointSpec, createEndpointSpecification, type Endpoint, type EndpointSpecification, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
@@ -85,7 +85,7 @@ it('keeps dependency and declaration writes inside one process-owned restart gua
   } });
   const operation = workflow.install('reminder');
   expect(activity.active).toBe(true);
-  expect((await operation).state).toMatchObject({ installed: true, declared: true, restartRequired: true });
+  expect(await operation).toMatchObject({ restartRequired: true, state: { installed: true, declared: true, status: 'unknown' } });
   expect(activity.active).toBe(false);
   await expect(new PluginManagementWorkflow(root, { activity, installDependencies: async () => { throw new Error('registry unavailable'); } }).install('another')).rejects.toThrow('registry unavailable');
   expect(activity.active).toBe(false);
@@ -253,7 +253,8 @@ describe('Shared CLI and Console plugin workflow', () => {
     const runner = vi.fn(runPackageManager);
     const result = await createPluginManagementPort(root, { installDependencies: runner }).install('reminder@1.2.3');
     expect(runner).toHaveBeenCalledWith(['add', 'reminder@1.2.3'], root);
-    expect(result.state).toMatchObject({ version: '1.2.3', installed: true, declared: true, dependencies: 'passed', status: 'pending-restart', published: false, verification: 'not-configured' });
+    expect(result.state).toMatchObject({ version: '1.2.3', installed: true, declared: true, dependencies: 'passed', status: 'unknown', published: false, generation: null, verification: 'not-configured' });
+    expect(result.restartRequired).toBe(true);
     expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual(application({ reminder: {} }));
   });
 
@@ -411,7 +412,8 @@ describe('Shared CLI and Console plugin workflow', () => {
     const root = await fixture();
     await mounted(root);
     const workflow = new PluginManagementWorkflow(root);
-    expect(await workflow.apply('reminder')).toMatchObject({ requested: false, state: { status: 'pending-restart' } });
+    // #1250 第 39 批：the CLI saw no running instance: it neither claims nor denies publication.
+    expect(await workflow.apply('reminder')).toMatchObject({ requested: false, state: { status: 'unknown', restartRequired: false, generation: null, statusReason: NO_RUNNING_INSTANCE } });
     const plan = await workflow.verificationPlan('reminder');
     expect(plan.checks).toEqual([]);
     expect(await workflow.verify('reminder', 'local-test', plan.generation, plan.projectRevision, plan.checkRevision)).toMatchObject({ status: 'not-configured', generation: null, current: false });
@@ -618,4 +620,38 @@ it('rejects reserved implicit aliases before the package manager runs', async ()
   const workflow = new PluginManagementWorkflow(root, {installDependencies: runner});
   await expect(workflow.install('@zhin.js/plugin-ai')).rejects.toThrow(/reserved/);
   expect(runner).not.toHaveBeenCalled();
+});
+
+describe('#1250 batch 39: status reflects the running instance, or says it was not observed', () => {
+  it('a running instance whose generation carries the plugin reports enabled, not pending-restart', async () => {
+    const f = await evidenceFixture();
+    try {
+      const state = await f.workflow.inspect('reminder');
+      expect(state).toMatchObject({ status: 'enabled', published: true, restartRequired: false, generation: expect.any(Number) });
+      expect(state).not.toHaveProperty('statusReason');
+      // Nothing to apply: no restart is requested.
+      const restart = vi.fn();
+      expect(await new PluginManagementWorkflow(f.root, { snapshots: f.runtime.snapshots, requestRestart: restart }).apply('reminder')).toMatchObject({ requested: false });
+      expect(restart).not.toHaveBeenCalled();
+    } finally { await f.runtime.stop(); }
+  });
+
+  it('without any instance view the status is unknown with a reason, not pending-restart', async () => {
+    const root = await fixture();
+    await mounted(root);
+    const state = await new PluginManagementWorkflow(root).inspect('reminder');
+    expect(state).toMatchObject({ declared: true, status: 'unknown', statusReason: NO_RUNNING_INSTANCE, restartRequired: false, published: false, generation: null });
+  });
+
+  it('an instance that has not committed a generation yet says so', async () => {
+    const root = await fixture();
+    await mounted(root);
+    const snapshots = { acquire: () => undefined } as unknown as import('@zhin.js/plugin-runtime').SnapshotReader;
+    const state = await new PluginManagementWorkflow(root, { snapshots }).inspect('reminder');
+    expect(state).toMatchObject({ status: 'unknown', statusReason: INSTANCE_NOT_REPORTED, restartRequired: false, generation: null });
+    // apply inside such an instance still asks for the restart that brings the plugin up.
+    const restart = vi.fn();
+    expect(await new PluginManagementWorkflow(root, { snapshots, requestRestart: restart }).apply('reminder')).toMatchObject({ requested: true });
+    expect(restart).toHaveBeenCalledTimes(1);
+  });
 });

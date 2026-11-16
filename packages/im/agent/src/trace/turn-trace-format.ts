@@ -131,7 +131,7 @@ function renderTrace(
   for (const tool of trace.tool_calls) {
     const details = [
       tool.duration_ms !== undefined ? `${tool.duration_ms}ms` : undefined,
-      tool.result_size !== undefined ? `${tool.result_size} 字符` : undefined,
+      tool.result_size !== undefined ? `${tool.result_size} 字符${tool.raw_result_size !== undefined ? `（工具原始输出 ${tool.raw_result_size} 字符）` : ''}` : undefined,
       tool.policy ? `策略 ${tool.policy}` : undefined,
     ].filter(Boolean).join(', ');
     lines.push(`${indent}    ${TOOL_MARK[tool.status]} ${tool.tool_name}${details ? ` (${details})` : ''} ${tool.args_summary}`.trimEnd());

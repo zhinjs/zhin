@@ -65,8 +65,14 @@ export interface TurnTraceToolCall {
   /** Milliseconds since the turn started. */
   readonly started_at_ms: number;
   readonly duration_ms?: number;
-  /** Size of the tool output in characters (output itself is never stored). */
+  /**
+   * Size in characters of the tool result the model received (output itself is never stored):
+   * after media splitting and inline-binary elision (#1250 第 39 批). Until the agent loop reports
+   * it, the size of the tool's own output.
+   */
   readonly result_size?: number;
+  /** Size of the tool's own output, when the model received a different size (e.g. audio stripped). */
+  readonly raw_result_size?: number;
   readonly error?: string;
   /** Policy that denied the call, for `denied`. */
   readonly policy?: string;
@@ -251,7 +257,12 @@ export type TurnTraceNote =
   /** #1250 b33: the visible reply is the framework's fallback text, and why. */
   | Readonly<{ kind: 'reply_fallback'; cause: string; tools?: readonly string[] }>
   /** A model request attempt hit its first-response or whole-request deadline (#1250). */
-  | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>;
+  | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>
+  /**
+   * #1250 第 39 批：the tool result as the model received it, in characters (after media splitting
+   * and inline-binary elision); replaces `result_size`, which keeps the raw size in `raw_result_size`.
+   */
+  | Readonly<{ kind: 'tool_model_result'; tool_use_id: string; size: number }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -274,6 +285,7 @@ interface MutableToolCall {
   started_at_ms: number;
   duration_ms?: number;
   result_size?: number;
+  raw_result_size?: number;
   error?: string;
   policy?: string;
 }
@@ -303,6 +315,8 @@ export class TurnTraceCollector {
   #trigger: TurnTraceTrigger | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
+  /** Timeline index of each tool's `tool_result` entry, so the model-visible size can replace it. */
+  readonly #toolResultTimeline = new Map<string, number>();
   readonly #requestTimeline = new Map<string, number>();
   #dropped = 0;
 
@@ -467,6 +481,18 @@ export class TurnTraceCollector {
       this.#addTimeline('unattended_review', `${note.tool} (${note.policy}): ${note.outcome}`);
     } else if (note.kind === 'reply_fallback') {
       this.#addTimeline('reply_fallback', `${note.cause}${note.tools?.length ? `: ${note.tools.join(', ')}` : ''}`);
+    } else if (note.kind === 'tool_model_result') {
+      const tool = this.#toolCalls.get(note.tool_use_id);
+      if (!tool || tool.status !== 'ok') return;
+      const raw = tool.raw_result_size ?? tool.result_size;
+      tool.result_size = note.size;
+      if (raw !== undefined && raw !== note.size) tool.raw_result_size = raw;
+      else delete tool.raw_result_size;
+      const index = this.#toolResultTimeline.get(note.tool_use_id);
+      const entry = index === undefined ? undefined : this.#timeline[index];
+      if (entry?.kind === 'tool_result') {
+        this.#timeline[index!] = Object.freeze({ ...entry, detail: toolResultDetail(tool) });
+      }
     } else if (note.kind === 'model_timeout') {
       this.#addTimeline('model_timeout', `${note.provider}/${note.model} ${note.phase === 'first_response' ? 'no response' : 'request'} after ${note.timeout_ms}ms (attempt ${note.attempt})`);
     } else {
@@ -515,7 +541,10 @@ export class TurnTraceCollector {
         tool.status = 'ok';
         tool.duration_ms = Math.round(event.durationMs);
         tool.result_size = outputSize(event.output);
-        this.#addTimeline('tool_result', `${event.toolName} ok ${tool.duration_ms}ms ${tool.result_size} chars`);
+        delete tool.raw_result_size;
+        const entries = this.#timeline.length;
+        this.#addTimeline('tool_result', toolResultDetail(tool));
+        if (this.#timeline.length > entries) this.#toolResultTimeline.set(event.toolUseId, entries);
         return;
       }
       case 'tool_failed': {
@@ -731,6 +760,11 @@ function summarizeText(value: unknown, max = TEXT_SUMMARY_LENGTH): string {
   return clip(scrubSecrets(text.replace(/\s+/g, ' ').trim()), max);
 }
 
+
+function toolResultDetail(tool: MutableToolCall): string {
+  const raw = tool.raw_result_size === undefined ? '' : ` (raw ${tool.raw_result_size} chars)`;
+  return `${tool.tool_name} ok ${tool.duration_ms}ms ${tool.result_size} chars${raw}`;
+}
 
 function outputSize(output: unknown): number {
   if (output == null) return 0;

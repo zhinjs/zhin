@@ -54,7 +54,9 @@ describe('installing with enable: declaration follows the plugin schema', () => 
     schemas.set('reminder', DEFAULTED_SCHEMA);
     const result = await workflow().install('reminder');
     expect(result.needsConfiguration).toBeUndefined();
-    expect(result.state).toMatchObject({ installed: true, declared: true, status: 'pending-restart' });
+    // #1250 第 39 批：no running instance was observed, so publication is unknown; the change still needs a start.
+    expect(result.state).toMatchObject({ installed: true, declared: true, status: 'unknown', restartRequired: false });
+    expect(result.restartRequired).toBe(true);
     const config = await readConfig();
     expect(config.plugins).toEqual({ reminder: 'reminder' });
     // Defaults stay in the package schema; the file gets the empty section the Runtime completes.

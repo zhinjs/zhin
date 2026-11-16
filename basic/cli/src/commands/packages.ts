@@ -22,8 +22,10 @@ import { output } from '../utils/output.js';
 import { formatVerificationPlan, type VerificationPlanView } from '../utils/verification-plan-format.js';
 import { findProjectRoot, listProjectPackages, renderProjectPackages, type SkillPackEntry } from '../utils/project-packages.js';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
-import { requestPluginConsole } from '../plugin-management/console-client.js';
-import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, normalizeHostUrl, verifyHostProject } from '../utils/host-http.js';
+import { ConsoleRpcError, requestPluginConsole } from '../plugin-management/console-client.js';
+import {
+  ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, HostConfigInvalidError, HostTargetError, loadHostHttpConfig, normalizeHostUrl, verifyHostProject,
+} from '../utils/host-http.js';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 
@@ -103,7 +105,7 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
   }
   const result = await workflow.install(source, undefined, undefined, { enable: opts.enable });
   logger.success(`✓ ${result.state.packageName}@${result.state.version ?? 'unknown'} 依赖安装完成`);
-  output.line(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+  output.line(`插件状态: ${result.state.status}${result.state.status === 'unknown' ? '（安装时不读取运行中的实例，是否已生效未知）' : ''}；功能验证: ${result.state.verification}`);
   if (result.restartRequired) output.line('配置就绪后启动/重启 Host，再检查当前 generation。');
   const hint = adapterConfigHintForPackage(resolved.package);
   if (hint) output.line(hint);
@@ -123,52 +125,103 @@ async function liveRequest<T>(live: string, request: Readonly<Record<string, unk
   return requestPluginConsole<T>(live, request, options.tokenEnv);
 }
 
+/** Where an answer about the running instance came from. */
+type InstanceAnswer<T> =
+  | { readonly data: T; readonly live?: string; readonly viaGateway?: true }
+  | { readonly unavailable: string };
+
+/**
+ * #1250 第 39 批：a request about the running instance. `--live` goes to that Host; without it, to
+ * this project's gateway over its local socket, which forwards to the supervised instance (the
+ * instance holds the current snapshot and generation). `unavailable` says why no instance answered.
+ */
+async function askInstance<T>(request: Readonly<Record<string, unknown>>, options: LiveOptions): Promise<InstanceAnswer<T>> {
+  if (options.live) return { data: await liveRequest<T>(options.live, request, options), live: options.live };
+  let http: Awaited<ReturnType<typeof loadHostHttpConfig>>;
+  try { http = await loadHostHttpConfig(process.cwd()); }
+  catch (error) {
+    if (error instanceof HostTargetError) return { unavailable: '本项目的网关未运行（zhin start 启动）' };
+    if (error instanceof HostConfigInvalidError) return { unavailable: error.message };
+    throw error;
+  }
+  if (!http?.fetch) return { unavailable: '当前目录不是 zhin 项目，找不到本项目的网关' };
+  try {
+    return { data: await requestPluginConsole<T>(http.baseUrl, request, options.tokenEnv, {
+      // Over the local socket a token is optional (the request runs as the local owner without one).
+      token: (options.tokenEnv && options.tokenEnv !== 'ZHIN_CONSOLE_TOKEN' ? process.env[options.tokenEnv]?.trim() : undefined) || http.token,
+      fetch: http.fetch,
+    }), viaGateway: true };
+  } catch (error) {
+    // The instance's own refusal (unknown instance key, invalid request) is the answer.
+    if (error instanceof ConsoleRpcError) throw error;
+    return { unavailable: `网关在运行，但实例没有给出结果（${error instanceof Error ? error.message : String(error)}）` };
+  }
+}
+
+/** Requests that change or run something need an instance; there is no offline fallback. */
+async function requireInstance<T>(request: Readonly<Record<string, unknown>>, options: LiveOptions): Promise<T> {
+  const answer = await askInstance<T>(request, options);
+  if ('unavailable' in answer) throw new Error(`没有连上运行中的实例：${answer.unavailable}；未执行任何操作。也可以加 --live <host-url> 指定 Host`);
+  return answer.data;
+}
+
 packagesCommand
   .command('status <name>')
-  .description('查看安装、声明、配置、当前 generation 与验证证据')
-  .option('--live <host-url>', '从运行中的 Host 读取当前 generation；省略时仅检查本地文件')
+  .description('查看安装、声明、配置、当前 generation 与验证证据（默认经本项目网关读取运行中的实例）')
+  .option('--live <host-url>', '从这个 Host 读取当前 generation；省略时经本项目网关读取，网关未运行时只检查本地文件')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, options: LiveOptions) => {
-    const state = options.live
-      ? await liveRequest(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options)
-      : await new PluginManagementWorkflow(process.cwd()).inspect(name);
-    console.log(JSON.stringify(state, null, 2));
+    const answer = await askInstance<PluginStatusView>({ type: PLUGIN_RPC.INSPECT, instanceKey: name }, options);
+    if (!('unavailable' in answer)) {
+      console.log(JSON.stringify(answer.data, null, 2));
+      return;
+    }
+    const state = await new PluginManagementWorkflow(process.cwd()).inspect(name) as PluginStatusView;
+    // Offline: only the files were checked. Say why no instance view is there.
+    console.log(JSON.stringify(state.status === 'unknown'
+      ? { ...state, statusReason: `${state.statusReason ?? '没有连上运行中的实例'}（${answer.unavailable}）` }
+      : state, null, 2));
   });
+
+/** The fields of `PluginManagementState` this command reads. */
+interface PluginStatusView { readonly status: string; readonly statusReason?: string }
 
 packagesCommand
   .command('apply <name>')
-  .description('请求运行中的 Host 应用配置；返回申请结果，随后用 status 检查是否真正发布')
-  .requiredOption('--live <host-url>', '运行中的 Host URL')
+  .description('请求运行中的实例应用配置；返回申请结果，随后用 status 检查是否真正发布')
+  .option('--live <host-url>', '运行中的 Host URL；省略时经本项目网关')
   .requiredOption('--project-revision <revision>', 'status/plan 返回的项目 revision')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .action(async (name: string, options: LiveOptions & { projectRevision: string }) => {
-    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options), null, 2));
+    console.log(JSON.stringify(await requireInstance({ type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options), null, 2));
   });
 
 packagesCommand
   .command('verification-plan <name>')
-  .description('列出业务检查及副作用，不执行；离线时说明没有当前 generation 与可执行的检查')
-  .option('--live <host-url>', '运行中的 Host URL')
+  .description('列出业务检查及副作用，不执行（默认经本项目网关读取运行中的实例）；没有连上实例时说明没有当前 generation 与可执行的检查')
+  .option('--live <host-url>', '运行中的 Host URL；省略时经本项目网关')
   .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
   .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
   .option('--json', '输出原始 JSON 结构（generation、projectRevision、checkRevision、checks）')
   .action(async (name: string, options: LiveOptions & { json?: boolean }) => {
-    const plan = options.live
-      ? await liveRequest<VerificationPlanView>(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options)
-      : await new PluginManagementWorkflow(process.cwd()).verificationPlan(name);
+    const answer = await askInstance<VerificationPlanView>({ type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options);
+    const offline = 'unavailable' in answer;
+    const plan = offline ? await new PluginManagementWorkflow(process.cwd()).verificationPlan(name) : answer.data;
     if (options.json) {
       output.json(plan);
       return;
     }
-    output.line(...formatVerificationPlan(plan, { live: options.live }));
+    output.line(...formatVerificationPlan(plan, offline
+      ? { unavailable: answer.unavailable }
+      : { live: answer.live, viaGateway: answer.viaGateway === true }));
   });
 
 packagesCommand
   .command('verify <name> <check-id>')
   .description('执行已查看副作用的精确业务检查；运行期变更会拒绝旧计划')
-  .requiredOption('--live <host-url>', '运行中的 Host URL')
+  .option('--live <host-url>', '运行中的 Host URL；省略时经本项目网关')
   .requiredOption('--generation <number>', '验证计划的 generation')
   .requiredOption('--project-revision <revision>', '验证计划的项目 revision')
   .requiredOption('--check-revision <revision>', '验证计划的检查摘要')
@@ -177,7 +230,7 @@ packagesCommand
   .action(async (name: string, checkId: string, options: LiveOptions & { generation: string; projectRevision: string; checkRevision: string }) => {
     const expectedGeneration = Number(options.generation);
     if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) throw new Error('generation must be a nonnegative integer');
-    console.log(JSON.stringify(await liveRequest(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options), null, 2));
+    console.log(JSON.stringify(await requireInstance({ type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options), null, 2));
   });
 
 packagesCommand

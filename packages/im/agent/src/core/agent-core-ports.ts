@@ -603,6 +603,8 @@ export function createTurnToolLoopHandlers<TLlmTool extends { readonly name: str
         }
         const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
         const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
+        // #1250 第 39 批：trace 记录模型实际拿到的大小（拆出媒体、省略内嵌二进制之后），原始大小另记。
+        noteTurnTrace(traceTurnId(input.turnContext), { kind: 'tool_model_result', tool_use_id: toolCall.id, size: finalText.length });
         // #1250: media a sub-agent produced comes back with ask / follow_up as attachments.
         const media = [...split.media, ...(tool.source === COLLABORATION_TOOL_SOURCE ? resolveAttachmentRefs(resultText) : [])];
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText, status: 'completed', ...(media.length ? { media } : {}) });

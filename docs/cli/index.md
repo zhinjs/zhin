@@ -502,13 +502,15 @@ npm 插件请用 `zhin install` / `zhin search` / `zhin info`（[ADR 0062](../ad
 **查看插件是否真正生效**：安装完成不等于已经加载、平台已上线或功能已验证。用下面的命令查看状态并执行验证：
 
 ```bash
-zhin packages status <instanceKey>
+zhin packages status <instanceKey>                       # 经本项目网关读取运行中的实例
 zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068   # --json 输出原始结构
-zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
-zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+zhin packages verification-plan <instanceKey>            # --json 输出原始结构
+zhin packages apply <instanceKey> --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>
 ```
+
+省略 `--live` 时，这四个命令经本项目网关的本地套接字（`.zhin/gateway.sock`）转给它监管的实例，由实例按当前 generation 回答，不需要 Console token；`--live <host-url>` 改为连接指定的 Host。网关未运行或实例没有应答时，`status` / `verification-plan` 只检查本地文件并说明原因，`apply` / `verify` 直接拒绝。
 
 `status` 返回的状态：
 
@@ -518,6 +520,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 | `declared` | 实例已声明 |
 | `missing-config` | 必填配置或环境变量缺失，或配置值不符合 schema |
 | `pending-restart` | 当前运行的版本还没有应用 |
+| `unknown` | 没有拿到运行中实例的状态（网关未运行、实例没有应答或尚未上报 generation），无法判断是否已生效；`statusReason` 说明原因 |
 | `enabled` | 已生效，配置与包版本一致 |
 | `degraded` | 声明与实际安装不一致，或依赖检查失败 |
 
@@ -526,7 +529,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 ::: details 实时请求、验证流程与并发规则
 - **Token**：实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可以用 `--token-env <变量名>` 指定。`verification-plan`、`apply`、`verify` 需要完整权限。不要把 token 写在 URL 或命令参数里。
 - **HTTPS**：携带 token 的远程请求必须使用 HTTPS；HTTP 只允许 `localhost`、`127.0.0.0/8` 和 `::1`。
-- **离线模式**：离线 `status` 只提供文件与包解析证据；离线验证计划没有当前版本或可执行的检查，也不会启动 Runtime。
+- **离线模式**：离线 `status` 只提供文件与包解析证据，已声明且启用的插件报 `unknown`（不是 `pending-restart`）；离线验证计划没有当前版本或可执行的检查，也不会启动 Runtime。
 - **验证步骤**：先看 `verification-plan` 的作用范围与副作用，再把返回的 `generation`、`projectRevision`、`checkRevision` 传给 `verify`。配置、版本或检查定义变化后，旧计划会被拒绝。未提供检查的插件返回 `not-configured`；本地检查通过不代表平台投递已验证。`apply` 只是申请应用，之后用实时 `status` 确认是否真正生效。
 - **Schema**：已加载的配置 schema 只适用于同一包版本，更新后改读磁盘上的 `schema.json`。如果新版本只在 TypeScript 中声明配置、没有可读的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境变量引用，完整校验要由真正的 Runtime 预检完成。
 - **生产依赖**：自动启用的插件必须安装为生产依赖；`--save-dev` 必须同时指定 `--no-enable`，这个组合会在安装前检查。
