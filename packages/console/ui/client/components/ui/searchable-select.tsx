@@ -87,6 +87,7 @@ export const SearchableSelectField = forwardRef<HTMLButtonElement, SearchableSel
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           disabled={disabled}
+          data-slot="input"
           className={cn('console-control console-searchable-select-trigger', className)}
           {...aria}
         >

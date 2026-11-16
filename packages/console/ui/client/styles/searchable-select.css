@@ -1,8 +1,8 @@
-/* SearchableSelectField (unlayered, as in the Console): tokens only; the trigger matches SelectTrigger. */
+/* SearchableSelectField (unlayered, as in the Console): semantic tokens only; the trigger matches SelectTrigger. */
 .console-searchable-select-trigger {
-  display: flex; width: 100%; height: var(--console-control-height); min-width: 0; align-items: center; justify-content: space-between; gap: 0.5rem;
-  border: var(--console-border-width) solid hsl(var(--input)); border-radius: var(--console-radius-md); background: hsl(var(--card));
-  box-shadow: var(--console-shadow-xs); padding: 0.5rem 0.75rem; color: hsl(var(--foreground)); font-size: var(--console-text-body); text-align: left; white-space: nowrap;
+  display: flex; width: 100%; height: var(--console-control-height); min-width: 0; align-items: center; justify-content: space-between; gap: var(--console-control-gap);
+  border: var(--console-control-border) solid hsl(var(--input)); border-radius: var(--console-control-radius); background: hsl(var(--card));
+  padding: 0 var(--console-control-padding-inline); color: hsl(var(--foreground)); font-size: var(--console-text-body); text-align: left; white-space: nowrap;
 }
 .console-searchable-select-trigger:hover { border-color: hsl(var(--foreground) / 0.45); }
 .console-searchable-select-trigger:focus-visible { border-color: hsl(var(--primary)); }
@@ -11,36 +11,36 @@
 .console-searchable-select-chevron { width: 1rem; height: 1rem; flex-shrink: 0; opacity: 0.5; }
 
 .console-searchable-select-popover {
-  width: max(var(--radix-popover-trigger-width), 18rem); max-width: calc(100vw - 1.5rem); padding: 0 !important; overflow: hidden;
+  width: max(var(--radix-popover-trigger-width), 18rem); max-width: calc(100vw - 1.5rem); padding: 0; overflow: hidden;
 }
 .console-searchable-select-search {
-  display: flex; align-items: center; gap: 0.5rem; border-bottom: var(--console-border-width) solid hsl(var(--border)); padding: 0 0.75rem;
+  display: flex; align-items: center; gap: var(--console-control-gap); border-bottom: var(--console-control-border) solid hsl(var(--border)); padding: 0 var(--console-control-padding-inline);
 }
 .console-searchable-select-search svg { width: 1rem; height: 1rem; flex-shrink: 0; color: hsl(var(--muted-foreground)); }
 .console-searchable-select-search input {
-  height: 2.5rem; min-width: 0; flex: 1; border: 0; background: transparent; color: hsl(var(--foreground)); font-size: var(--console-text-body); outline: none;
+  height: var(--console-control-height); min-width: 0; flex: 1; border: 0; background: transparent; color: hsl(var(--foreground)); font-size: var(--console-text-body); outline: none;
 }
 .console-searchable-select-search input::placeholder { color: hsl(var(--muted-foreground)); }
 .console-searchable-select-list {
-  max-height: min(22rem, calc(var(--radix-popover-content-available-height, 60dvh) - 3rem)); overflow-y: auto; overscroll-behavior: contain; padding: 0.25rem;
+  max-height: min(22rem, calc(var(--radix-popover-content-available-height, 60dvh) - 3rem)); overflow-y: auto; overscroll-behavior: contain; padding: var(--console-popover-padding);
 }
 .console-searchable-select-group + .console-searchable-select-group,
-[role="group"] + .console-searchable-select-group { margin-top: 0.25rem; border-top: var(--console-border-width) solid hsl(var(--border)); padding-top: 0.25rem; }
+[role="group"] + .console-searchable-select-group { margin-top: var(--console-popover-padding); border-top: var(--console-control-border) solid hsl(var(--border)); padding-top: var(--console-popover-padding); }
 .console-searchable-select-group-label {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0.625rem 0.25rem;
-  color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); font-weight: 600;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--console-control-gap); padding: var(--console-popover-padding) var(--console-control-padding-inline);
+  color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); font-weight: var(--console-weight-strong);
 }
-.console-searchable-select-group-label span { font-weight: 400; font-variant-numeric: tabular-nums; }
+.console-searchable-select-group-label span { font-weight: var(--console-weight-regular); font-variant-numeric: tabular-nums; }
 .console-searchable-select-option {
-  display: flex; min-width: 0; cursor: default; align-items: center; gap: 0.5rem; border-radius: var(--console-radius-sm);
-  padding: 0.375rem 0.625rem; font-size: var(--console-text-body); line-height: 1.4; user-select: none;
+  display: flex; min-width: 0; min-height: var(--console-control-height-compact); cursor: default; align-items: center; gap: var(--console-control-gap); border-radius: var(--console-popover-item-radius);
+  padding: 0 var(--console-control-padding-inline); font-size: var(--console-text-body); line-height: 1.4; user-select: none;
 }
 .console-searchable-select-option.is-active { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
-.console-searchable-select-option.is-selected { font-weight: 600; }
+.console-searchable-select-option.is-selected { font-weight: var(--console-weight-strong); }
 .console-searchable-select-option[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
 .console-searchable-select-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .console-searchable-select-description {
-  display: block; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: var(--console-text-caption); font-weight: 400; text-overflow: ellipsis; white-space: nowrap;
+  display: block; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: var(--console-text-label); font-weight: var(--console-weight-regular); text-overflow: ellipsis; white-space: nowrap;
 }
 .console-searchable-select-check { width: 1rem; height: 1rem; flex-shrink: 0; color: hsl(var(--primary)); }
-.console-searchable-select-empty { padding: 1rem 0.75rem; color: hsl(var(--muted-foreground)); font-size: var(--console-text-body-sm); text-align: center; }
+.console-searchable-select-empty { padding: var(--console-card-padding) var(--console-control-padding-inline); color: hsl(var(--muted-foreground)); font-size: var(--console-text-body); text-align: center; }

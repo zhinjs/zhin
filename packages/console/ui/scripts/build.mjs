@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
  * Build of @zhin.js/console-ui:
+ *   0. tokens/generate.mjs: tokens/tokens.mjs → client/styles/generated/* (ADR 0063 D17)
  *   1. tsc: client/ → dist/ (ESM + .d.ts)
  *   2. dist/version.js gets the package.json version (CONSOLE_UI_VERSION)
  *   3. Tailwind 4 (the `tailwindcss` compiler; no CLI, no native scanner) compiles
  *      client/styles/styles.css → dist/styles.css (self-contained:
  *      preflight, theme, the utilities the components use, tokens, component classes)
- *   4. dist/tokens.css: the tokens alone
+ *   4. dist/tokens.css (the tokens alone), dist/theme.css (Tailwind 4 theme with only the
+ *      on-scale keys), dist/custom-media.css, dist/scale.json (allowed values for the linters)
  *   5. dist/exports.json: the runtime named exports of the root entry (read by
  *      @zhin.js/pagemanager when it proxies this package to plugin pages)
  */
@@ -15,6 +17,7 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { generate, GENERATED_DIR } from '../tokens/generate.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(packageRoot, 'dist');
@@ -26,6 +29,7 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+generate();
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
@@ -37,7 +41,9 @@ writeFileSync(
 );
 
 writeFileSync(join(dist, 'styles.css'), await compileStyles());
-copyFileSync(join(packageRoot, 'client/styles/tokens.css'), join(dist, 'tokens.css'));
+for (const file of ['tokens.css', 'theme.css', 'custom-media.css', 'scale.json']) {
+  copyFileSync(join(GENERATED_DIR, file), join(dist, file));
+}
 
 const ts = require('typescript');
 const program = ts.createProgram([join(packageRoot, 'client/index.ts')], {
@@ -63,7 +69,7 @@ writeFileSync(
   join(dist, 'exports.json'),
   `${JSON.stringify({ name: manifest.name, version: manifest.version, exports: names }, null, 2)}\n`,
 );
-console.log(`@zhin.js/console-ui ${manifest.version}: ${names.length} runtime exports, dist/styles.css, dist/tokens.css`);
+console.log(`@zhin.js/console-ui ${manifest.version}: ${names.length} runtime exports, dist/styles.css, dist/tokens.css, dist/theme.css, dist/scale.json`);
 
 /**
  * Tailwind 4 compile of client/styles/styles.css. Candidates are the whitespace-separated words of

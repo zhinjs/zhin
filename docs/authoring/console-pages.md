@@ -526,7 +526,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 - 和 Console 自带页面放在一起时看起来是同一个产品；
 - 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
 
-统一的组件库 `@zhin.js/console-ui` 已经建立（ADR 0063 P1a：从 Console 迁入组件与令牌，外观不变，带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。插件页面接入它和页面外壳是 P2 的工作；在那之前，插件页面沿用现状：声明式页面照常写蓝图，手写页面继续使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
+统一的组件库 `@zhin.js/console-ui` 已经建立（ADR 0063 P1a 迁入组件，P1b 建立三层令牌与组件规则，带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。尺度的唯一来源是它的 `tokens/tokens.mjs`：间距 `space-1`…`space-8` 对应 Tailwind 键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 是 `p-6`），字号 `label` / `body` / `section` / `title` / `display`，字重 `regular` / `medium` / `strong`，圆角 `r-0`…`r-4` / `full`，阴影 `e-1`…`e-3`；内容宽度分 `reading`（60rem，设置、表单）和 `data`（120rem，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。插件页面接入它和页面外壳是 P2 的工作；在那之前，插件页面沿用现状：声明式页面照常写蓝图，手写页面继续使用下面「页面 UI 套件」一节的 `@zhin.js/client/ui`。
 
 **允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
 

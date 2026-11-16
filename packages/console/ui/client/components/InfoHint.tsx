@@ -12,7 +12,8 @@ export function InfoHint({ label, children, className, tone }: { label: ReactNod
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className={cn('console-info-hint', tone === 'warning' && 'is-warning', className)}>
+        {/* eslint-disable-next-line console-ui/no-native-controls -- InfoHint is the pill control itself; .console-touch gives the 44px hit area */}
+        <button type="button" className={cn('console-info-hint console-touch', tone === 'warning' && 'is-warning', className)}>
           <span>{label}</span>
           <Info aria-hidden="true" />
         </button>

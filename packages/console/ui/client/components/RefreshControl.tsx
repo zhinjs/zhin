@@ -83,12 +83,12 @@ export function RefreshControl({
 
   return (
     <div className={cn('console-refresh-control flex flex-wrap items-center gap-2', className)}>
-      <span className="console-refresh-control-time text-[length:var(--console-text-label)] text-muted-foreground tabular-nums" aria-live="polite">
+      <span className="console-refresh-control-time text-label text-muted-foreground tabular-nums" aria-live="polite">
         {time ? i18n.t('refresh.updatedAt', [time]) : i18n.t('refresh.notYet')}
       </span>
       <SelectField
         aria-label={i18n.t('refresh.interval')}
-        className="h-[var(--console-control-height-sm)] w-auto min-w-[7.5rem] text-[length:var(--console-text-body-sm)]"
+        className="h-control-compact w-auto min-w-32 text-label"
         options={options}
         value={String(interval)}
         disabled={disabled}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { cn } from '../cn.js'
 import { RefreshControl, type RefreshControlProps } from './RefreshControl.js'
+import { PageActions, type PageAction } from './actions.js'
 
 /**
  * Page chrome a page hands to the shell (ADR 0063 决策 2): the shell places the header actions and
@@ -11,6 +12,10 @@ export interface PageChrome {
   readonly actions?: ReactNode
   /** Shows a RefreshControl in the header. */
   readonly refresh?: RefreshControlProps
+  /** Labelled actions: buttons on wide headers, folded into 「更多」 below 40rem (D18 第 7 条). */
+  readonly menuActions?: readonly PageAction[]
+  /** Actions that always live in the 「更多」 menu. */
+  readonly moreActions?: readonly PageAction[]
 }
 
 export interface PageChromeStore {
@@ -65,11 +70,11 @@ export function PageChromeProvider({ store, children }: PageChromeProviderProps)
  */
 export function usePageChrome(chrome: PageChrome): boolean {
   const store = useContext(PageChromeContext)
-  const { actions, refresh } = chrome
+  const { actions, refresh, menuActions, moreActions } = chrome
   useEffect(() => {
     if (!store) return
-    return store.set({ actions, refresh })
-  }, [store, actions, refresh])
+    return store.set({ actions, refresh, menuActions, moreActions })
+  }, [store, actions, refresh, menuActions, moreActions])
   return store !== null
 }
 
@@ -95,11 +100,11 @@ export interface PageChromeActionsProps {
 /** Renders the registered refresh control and actions; the shell puts it into `PageHeader.actions`. */
 export function PageChromeActions({ store, className }: PageChromeActionsProps) {
   const chrome = usePageChromeState(store)
-  if (!chrome || (chrome.actions == null && !chrome.refresh)) return null
+  if (!chrome || (chrome.actions == null && !chrome.refresh && !chrome.menuActions?.length && !chrome.moreActions?.length)) return null
   return (
-    <div className={cn('console-page-chrome-actions flex flex-wrap items-center gap-2', className)}>
+    <PageActions className={cn('console-page-chrome-actions', className)} actions={chrome.menuActions} moreActions={chrome.moreActions}>
       {chrome.refresh ? <RefreshControl {...chrome.refresh} /> : null}
       {chrome.actions}
-    </div>
+    </PageActions>
   )
 }
