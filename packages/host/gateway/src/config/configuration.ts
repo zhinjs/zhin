@@ -688,8 +688,14 @@ export class ConsoleConfigurationStore {
     const own = await this.#schemas.readJson(pluginName, document);
     // A Plugin config also takes the framework fields (`commandNamespace`, `disabledCommands`,
     // `overrides`) Runtime composition adds to its schema; validate against that same shape.
-    const schema = own && (pluginName === 'plugin' || !HOST_CONFIG_KEYS.includes(pluginName))
+    // Child Plugins (`package.json#zhin.plugins`) keep their blocks inside this one; Runtime adds
+    // them to the composed schema, so they are not unknown fields here either.
+    const framed = own && (pluginName === 'plugin' || !HOST_CONFIG_KEYS.includes(pluginName))
       ? withFrameworkPluginConfigFields(own, { child: pluginName !== 'plugin' }) : own;
+    const childKeys = framed && framed !== own ? await this.#schemas.readChildInstanceKeys(pluginName, document) : [];
+    const schema = framed && childKeys.length
+      ? { ...framed, properties: { ...Object.fromEntries(childKeys.map(key => [key, { type: 'object' }])), ...(framed.properties as Record<string, unknown>) } }
+      : framed;
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
