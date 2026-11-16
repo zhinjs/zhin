@@ -103,7 +103,7 @@ sidebar: false
 | --- | --- | --- | --- | --- |
 | `replied` | `agent` / `agent_merged`（合流后回复） | 发起人 | 已回复。 / Replied. | 由 Agent `{agent}` 回复，回合 `{turnId}`。 / Replied by agent `{agent}`, turn `{turnId}`. |
 | `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 {command}。 / Ran command {command}. | 指令 `{command}`（插件 `{owner}`），耗时 {ms} ms。 / Command `{command}` (plugin `{owner}`) in {ms} ms. |
-| `handler_replied` | `middleware` / `handler` | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 {stage} 回复。 / Replied by `{owner}` ({stage}). |
+| `handler_replied` | `middleware` / `handler` / `middleware_replied`（中间件自己回复后停止分发，#1250） | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 {stage} 回复。 / Replied by `{owner}` ({stage}). |
 | `interaction_answered` | `prompt` / `button` | 发起人 | 已作为对「{prompt}」的回答。 / Taken as your answer to "{prompt}". | 提问方 `{owner}`，提问 `{promptId}`。 / Prompt `{promptId}` by `{owner}`. |
 | `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配 `{candidates}`。 / Near matches `{candidates}`. |
 | `refused` | `user_facing_error` | 发起人 | 插件拒绝了这次请求：{text} / The plugin declined: {text} | `UserFacingError` 来自 `{owner}`。 / `UserFacingError` from `{owner}`. |
@@ -150,6 +150,8 @@ sidebar: false
 | `filtered_by_policy` | `middleware_stopped` | 管理员 | 消息被插件拦下了。 / A plugin stopped this message. | 中间件 `{owner}/{name}`。 / Middleware `{owner}/{name}`. |
 | `filtered_by_policy` | `control_gate_failed` | 管理员 | 机器人暂时不可用。 / The bot is temporarily unavailable. | 控制面判定异常，按急停处理：{detail}。 / Control gate failed closed: {detail}. |
 | `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的{kind}我读不了（{reason 的人话}），只看了文字部分。 / I could not read your {kind} ({reason}); only the text was used. | 场景 `{scene}`，`{scheme}://{host}`，{bytes}/{limit} 字节，期望 `{want}` 实得 `{mime}`。 / Scene `{scene}`, `{scheme}://{host}`, … |
+
+`middleware_stopped` 只记中间件停止分发且**该中间件所属插件没有为本条消息送达任何回复**的情况；别的插件先送达的回复不算。中间件先自己回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
 
 `media_rejected` 通常是 facet：消息仍然得到回复，结局是 `replied` + `facets: ['media_rejected:too_large']`；只有整条消息只有媒体且全部被拒时才是主结局。`normalizeMediaRefsToPayloads` 改为返回逐项结果（`{ ok: false, reason, scheme, host }`），不再 `continue`；URL 只记 scheme 与 host，不记路径与查询串。
 

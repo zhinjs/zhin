@@ -57,7 +57,7 @@ export function buildRpsView(
     choices,
     terminal,
     buttonsPerRow: 3,
-    fallbackHint: messages(session.locale ?? undefined, 'text14'),
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
@@ -77,5 +77,4 @@ const messages = createMessages({
   text11: { 'zh-CN': "继续出拳：", en: "Choose your next move:" },
   text12: { 'zh-CN': "🔄 再来一局", en: "🔄 Play again" },
   text13: { 'zh-CN': "🏳️ 放弃", en: "🏳️ Quit" },
-  text14: { 'zh-CN': "回复数字：1石头 2布 3剪刀 4放弃", en: "Reply with a number: 1 Rock · 2 Paper · 3 Scissors · 4 Quit" },
 });

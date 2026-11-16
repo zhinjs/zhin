@@ -61,6 +61,7 @@ export function buildChainView(
     terminal,
     buttonsPerRow: 3,
     fallbackHint: messages(session.locale ?? undefined, 'text12'),
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
@@ -80,5 +81,5 @@ const messages = createMessages({
   text9: { 'zh-CN': "💡 提示", en: "💡 Hint" },
   text10: { 'zh-CN': "⏭️ 跳过", en: "⏭️ Skip" },
   text11: { 'zh-CN': "🏳️ 认输", en: "🏳️ Concede" },
-  text12: { 'zh-CN': "回复成语，或 1提示 2跳过 3认输", en: "Reply with an idiom, or 1 Hint · 2 Skip · 3 Concede" },
+  text12: { 'zh-CN': "直接回复成语接龙", en: "Reply with an idiom to continue the chain" },
 });

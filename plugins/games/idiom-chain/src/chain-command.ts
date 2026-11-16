@@ -31,7 +31,7 @@ export const CHAIN_QUICK_START = Object.freeze({ 'zh-CN': chainStartAction('piny
 export function getChainHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const locale = message.locale ?? 'zh-CN';
   const command = message.formatCommand?.('chain');
-  return [formatGameHelp({ presentation: message, title: { 'zh-CN': '📜 成语接龙（文字接龙 · 四字成语）', en: '📜 Chinese Idiom Chain' }, commandPath: 'chain', actions: ['continue', 'quit'] }),
+  return [formatGameHelp({ presentation: message, title: { 'zh-CN': '📜 成语接龙（文字接龙 · 四字成语）', en: '📜 Chinese Idiom Chain' }, commandPath: 'chain', actions: ['continue', 'forfeit'] }),
     messages(locale, 'dictionary', { count: idiomCount() }),
     ...(command ? [messages(locale, 'pinyin', { command: `${command} ${chainStartAction('pinyin', locale)}` }),
       messages(locale, 'char', { command: `${command} ${chainStartAction('char', locale)}` })] : []),

@@ -117,6 +117,19 @@ describe('InboundOutcomeLedger (ADR 0061 §4.1)', () => {
     expect(record.facets).toEqual(['media_rejected:too_large', 'replied:agent']);
   });
 
+  it('tracks delivered replies per author, and ignores replies after settle (#1250)', () => {
+    const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+    expect(ledger.replied()).toBe(false);
+    ledger.noteReplyDelivered('plugin-a');
+    expect(ledger.replied()).toBe(true);
+    expect(ledger.replied('plugin-a')).toBe(true);
+    expect(ledger.replied('plugin-b')).toBe(false);
+    ledger.report({ outcome: 'handler_replied', reason: 'middleware_replied', stage: 'middleware' });
+    ledger.settle();
+    ledger.noteReplyDelivered('plugin-b');
+    expect(ledger.replied('plugin-b')).toBe(false);
+  });
+
   it('keeps the earlier candidate on a tie and settles exactly once', () => {
     const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
     ledger.report({ outcome: 'not_addressed', reason: 'no_command_not_ambient', stage: 'ambient' });
@@ -327,7 +340,7 @@ describe('message views only expose the report port (review of #1281)', () => {
     const port = (message as unknown as Record<symbol, () => unknown>)[inboundOutcomeSink]!() as Record<string, unknown>;
     expect(port).not.toBe(ledger);
     expect(Object.isFrozen(port)).toBe(true);
-    expect(Object.keys(port).sort()).toEqual(['enter', 'report']);
+    expect(Object.keys(port).sort()).toEqual(['enter', 'replied', 'report']);
     expect(typeof (port as { settle?: unknown }).settle).toBe('undefined');
     expect(() => (port as unknown as InboundOutcomeLedger).settle()).toThrow(TypeError);
     reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'command' });

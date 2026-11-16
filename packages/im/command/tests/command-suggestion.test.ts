@@ -130,6 +130,23 @@ describe('command suggestions (#1250)', () => {
     expect(looksLikeImplicitCommand('x'.repeat(40))).toBe(false);
   });
 
+  it('lists declared subcommands instead of [action] (#1250 near-miss-suggestion-param-misleading)', async () => {
+    const game = [
+      slot('rps/$action', { ...defineCommand({ alias: ['玩石头剪刀布'], preferredAliasI18n: { 'zh-CN': '玩石头剪刀布' },
+        params: { action: { type: 'string', default: '', suggestions: ['start', 'continue', 'quit'],
+          suggestionsI18n: { 'zh-CN': ['开始', '继续', '退出'] } } }, execute: () => 'rps' }),
+      $parameter: { name: 'action', type: 'string', optional: true, rest: false } }),
+      slot('plaintext/$item', { ...defineCommand({ params: { item: { type: 'string', default: '' } }, execute: () => 'plain' }),
+        $parameter: { name: 'item', type: 'string', optional: true, rest: false } }),
+    ];
+    const index = new CommandIndex(game, snapshot(game));
+    expect(await index.suggest('石头剪刀布')).toEqual(['玩石头剪刀布 开始|继续|退出']);
+    expect(await index.suggest('RPS', { locale: 'en' as Locale, commandPrefix: '/' })).toEqual(['/rps start|continue|quit']);
+    // Without suggestions the parameter placeholder stays.
+    expect(await index.suggest('plaintxt')).toEqual(['plaintext [item]']);
+    expect(() => defineCommand({ params: { a: { type: 'string', suggestions: [''] } }, execute: () => '' })).toThrow(TypeError);
+  });
+
   it('can be tuned or disabled by root config commandSuggestion', async () => {
     expect(await new CommandIndex(slots, snapshot(slots, { commandSuggestion: false })).suggest('rss list')).toEqual([]);
     expect(await new CommandIndex(slots, snapshot(slots, { commandSuggestion: { maxDistance: 0 } })).suggest('gues')).toEqual([]);

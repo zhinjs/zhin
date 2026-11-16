@@ -174,3 +174,13 @@ it('rejects display aliases that do not exist and preserves route collision chec
   const second = command('existing', defineCommand({ execute() {} }));
   expect(() => new CommandIndex([first, second], snapshot([first, second]))).toThrow('Duplicate Command route');
 });
+
+it('lays the command menu out in one column at narrow widths instead of one character per line (#1250)', () => {
+  const menu = renderCommandMenu('zhin-workspace', [{ name: 'config set', description: 'x' }], [], undefined, '', { locale: 'zh-CN' });
+  expect(menu.data.width).toBe(1080);
+  const html = String(menu.data.html);
+  expect(html).toMatch(/@media \(max-width:860px\)\{\.grid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/u);
+  expect(html).toMatch(/@media \(max-width:560px\)\{[^\n]*\n\.grid\{grid-template-columns:minmax\(0,1fr\)\}/u);
+  // Narrow widths wrap names between words, not after every character.
+  expect(html).toContain('.name{font-size:16px;overflow-wrap:break-word}');
+});

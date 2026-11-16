@@ -45,7 +45,7 @@ export function buildBjView(
     narrative: lines.join('\n'),
     choices,
     terminal,
-    fallbackHint: terminal ? messages(session.locale ?? undefined, 'text14') : messages(session.locale ?? undefined, 'text15'),
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
@@ -86,6 +86,4 @@ const messages = createMessages({
   text11: { 'zh-CN': "➕ 要牌", en: "➕ Hit" },
   text12: { 'zh-CN': "✋ 停牌", en: "✋ Stand" },
   text13: { 'zh-CN': "🏳️ 放弃", en: "🏳️ Quit" },
-  text14: { 'zh-CN': "回复 1 再来一局", en: "Reply 1 to play again" },
-  text15: { 'zh-CN': "1 要牌 · 2 停牌 · 3 放弃", en: "1 Hit · 2 Stand · 3 Quit" },
 });

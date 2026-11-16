@@ -47,6 +47,9 @@ export function buildGuessView(
         }]
       : [{ id: 'quit', label: messages(session.locale ?? undefined, 'text10'), style: 'danger' }],
     terminal,
+    // 数字是猜测本身：只提示按钮文字，不提示序号（#1250）。
+    replyHint: 'label',
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
