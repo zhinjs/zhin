@@ -168,26 +168,52 @@ export function formatOutboundBody(payload: unknown): string {
     }
     return String(payload);
   }
-  return payload.map((seg) => {
-    if (typeof seg === 'string') return seg;
-    const item = seg as GithubWireSegment;
-    switch (item.type) {
-      case 'text':
-        return String(item.data?.text ?? '');
-      case 'mention':
-      case 'at':
-        return `@${item.data?.name || item.data?.id || item.data?.target || ''}`;
-      case 'image':
-      case 'audio':
-      case 'video':
-      case 'file':
-        return formatMediaSegment(item);
-      case 'link':
-        return `[${item.data?.text || item.data?.url || ''}](${item.data?.url || ''})`;
-      default:
-        return String(item.data?.text ?? `[${item.type}]`);
+  // Issue / PR comments are GitHub Flavored Markdown: a `markdown` segment is delivered as its source,
+  // as a block of its own (separated from neighbouring inline text by a blank line).
+  let body = '';
+  let afterBlock = false;
+  const append = (part: string, block: boolean) => {
+    if (!part) return;
+    // A single newline is no block boundary: text after `- item\n` or `> quote\n` would continue that block.
+    if (body && (block || afterBlock)) {
+      let newlines = 0;
+      for (let i = body.length - 1; i >= 0 && body[i] === '\n' && newlines < 2; i -= 1) newlines += 1;
+      for (let i = 0; i < part.length && part[i] === '\n' && newlines < 2; i += 1) newlines += 1;
+      if (newlines < 2) body += '\n'.repeat(2 - newlines);
     }
-  }).join('');
+    body += part;
+    afterBlock = block;
+  };
+  for (const seg of payload) {
+    const item = seg as GithubWireSegment;
+    if (typeof seg !== 'string' && item?.type === 'markdown') {
+      append(String(item.data?.content ?? item.data?.text ?? ''), true);
+    } else {
+      append(formatInlineSegment(seg), false);
+    }
+  }
+  return body;
+}
+
+function formatInlineSegment(seg: unknown): string {
+  if (typeof seg === 'string') return seg;
+  const item = seg as GithubWireSegment;
+  switch (item.type) {
+    case 'text':
+      return String(item.data?.text ?? '');
+    case 'mention':
+    case 'at':
+      return `@${item.data?.name || item.data?.id || item.data?.target || ''}`;
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'file':
+      return formatMediaSegment(item);
+    case 'link':
+      return `[${item.data?.text || item.data?.url || ''}](${item.data?.url || ''})`;
+    default:
+      return String(item.data?.text ?? `[${item.type}]`);
+  }
 }
 
 /**
