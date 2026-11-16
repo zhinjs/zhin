@@ -2228,6 +2228,15 @@ describe('commandNamespace with parameter segments (#1250 command-namespace-para
     expect(String(help.value)).toContain('60s fanyi <text>');
   });
 
+  it("does not list a parameter command as its own subcommand in `--help`", async () => {
+    const { index } = namespacedIndex();
+    const help = String((await index.dispatch({ input: '60s fanyi --help' })).value);
+    expect(help).toContain('60s fanyi <text>');
+    expect(help).not.toContain('子指令');
+    const douyin = String((await index.dispatch({ input: '60s douyin --help' })).value);
+    expect(douyin).not.toContain('子指令');
+  });
+
   it('lists every command under the namespace for `<namespace>` and `<namespace> --help`', async () => {
     const { index } = namespacedIndex();
     for (const input of ['60s --help', '60s']) {

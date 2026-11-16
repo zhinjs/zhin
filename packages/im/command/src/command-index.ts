@@ -669,11 +669,15 @@ export class CommandIndex {
         '', commandMessages(context.locale, 'helpHint', { command: `${context.prefix}${group} <…>` })].join('\n') });
   }
 
-  /** Commands strictly under `words` that the sender may run, as menu lines. */
+  /**
+   * Commands strictly under `words` that the sender may run, as menu lines. "Under" means at least
+   * one more literal word: `fanyi <text>` is not a subcommand of `fanyi`, so a parameter command's
+   * own `--help` does not list itself, and a bare `dungeon` does not list `dungeon [action]`.
+   */
   async #subcommandLines(words: readonly string[], { prefix, source, snapshot, locale }: GroupHelpContext): Promise<readonly string[]> {
     const lines: string[] = [];
     for (const record of this.#commands) {
-      if (record.segments.length <= words.length || !startsWithWords(record.segments, words)) continue;
+      if (staticSegmentCount(record.segments) <= words.length || !startsWithWords(record.segments, words)) continue;
       if (!(await this.#listable(record, source, snapshot))) continue;
       if (source === undefined && (record.permit?.length ?? 0) > 0) continue;
       const description = commandDescription(record.slot.definition, locale);
