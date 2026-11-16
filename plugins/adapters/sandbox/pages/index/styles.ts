@@ -494,7 +494,7 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-tts-text { min-width: 0; overflow-wrap: anywhere; }
 .zhin-sandbox .sandbox-action-feedback { display: flex; align-items: flex-start; gap: var(--console-space-1); margin: var(--console-space-1) 0 0; color: var(--sb-muted-fg); font-size: var(--console-text-label); overflow-wrap: anywhere; }
 .zhin-sandbox .sandbox-action-feedback.is-error { color: var(--sb-danger); }
-.zhin-sandbox .sandbox-action-feedback > svg { flex-shrink: 0; margin-top: 2px; }
+.zhin-sandbox .sandbox-action-feedback > svg { flex-shrink: 0; margin-top: calc(var(--console-space-1) / 2); }
 .zhin-sandbox .sandbox-reactions { display: flex; flex-wrap: wrap; gap: var(--console-space-1); margin-top: var(--console-space-1); }
 .zhin-sandbox .sandbox-reaction { display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--console-space-2); border: 1px solid var(--sb-border); border-radius: var(--console-radius-full); background: var(--sb-muted); font-size: var(--console-text-label); }
 .zhin-sandbox .im-markdown-image { display: inline-block; max-width: 100%; max-height: 320px; vertical-align: middle; border-radius: var(--console-radius-1); }
