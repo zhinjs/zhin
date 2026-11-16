@@ -12,7 +12,6 @@ const STEP_TIMEOUT = 60_000;
 const FLOW_TIMEOUT = 3 * STEP_TIMEOUT;
 class ReminderCreationCancelled extends Error {}
 class ReminderCreationDeadline extends Error {}
-class ReminderPreviewDeliveryError extends Error {}
 
 /** Personal reminder entry: no persistence is touched before explicit confirmation. */
 export async function createPersonalReminder(
@@ -42,18 +41,20 @@ export async function createPersonalReminder(
     const checkCancel = (value: string) => {
       if (value.trim().toLowerCase() === (locale === 'en' ? 'cancel' : '取消')) throw new ReminderCreationCancelled();
     };
-    const ask = async (stage: 'time' | 'body' | 'confirmation', title: string, description: string, maxLength: number,
-      answer?: Readonly<{ pattern: RegExp; invalidText: string }>): Promise<string> => {
+    const stepRemaining = (stage: 'time' | 'body' | 'confirmation') => {
       checkDeadline();
       const stepDeadline = steps.get(stage) ?? Date.now() + STEP_TIMEOUT;
       steps.set(stage, stepDeadline);
       const remaining = Math.min(deadline, stepDeadline) - Date.now();
       if (remaining <= 0) throw new ReminderCreationDeadline();
+      return remaining;
+    };
+    const ask = async (stage: 'time' | 'body', title: string, description: string, maxLength: number): Promise<string> => {
+      const remaining = stepRemaining(stage);
       // ADR 0061 P5: only the person who started the reminder answers; an invalid answer re-sends
       // the prompt at most once (Core), so chatting meanwhile is not answered with the whole prompt again.
       const reply = (await interaction.ask({ type: 'text', title, description,
         tip: t(locale, 'answerTip'), maxLength, answeredBy: 'target',
-        ...(answer ? { pattern: answer.pattern, invalidText: answer.invalidText } : {}),
         timeout: remaining, timeoutText, signal: context.signal,
       })).trim();
       checkDeadline(); checkCancel(reply); return reply;
@@ -84,19 +85,19 @@ export async function createPersonalReminder(
     const scene = `${target.kind} ${target.id}${target.parent ? `; ${t(locale, 'parent')} ${target.parent.kind} ${target.parent.id}` : ''}${target.threadId ? `; ${t(locale, 'thread')} ${target.threadId}` : ''}`;
     // #1250: the account's name, not its internal adapter / capability IDs.
     const account = reminderAccountName(context.input, target.endpoint);
-    const preview = `${t(locale, 'preview', { time: formatReminderTime(parsed.at, parsed.timezone), scene, account, text })}\n${checkExisting}`;
-    checkDeadline();
-    // Canonical text avoids interpreting reminder content as Markdown/HTML in the prompt renderer.
-    const previewContent = { type: 'text', data: { text: preview } };
-    const receipt = context.input.$reply
-      ? await context.input.$reply(previewContent)
-      : await context.input.$replyFrom!(context.owner.id, previewContent);
-    checkDeadline();
-    if (!receipt || typeof receipt !== 'object' || !('status' in receipt) || receipt.status !== 'sent') throw new ReminderPreviewDeliveryError();
-    // Only the explicit confirmation or cancellation word answers; Core keeps waiting on anything else.
-    const confirmation = locale === 'en' ? /^\s*(?:confirm|cancel)\s*$/iu : /^\s*(?:确认|取消)\s*$/u;
-    await ask('confirmation', t(locale, 'askConfirm'), t(locale, 'confirmHelp'), 500,
-      { pattern: confirmation, invalidText: t(locale, 'confirmInvalid') });
+    // #1250 (reminder-confirm-text-only): the preview is the confirmation prompt itself — one message,
+    // so other chat cannot land between them — and Core's `confirm` type gives 确认 / 取消 buttons
+    // where the platform has them and numbered text options elsewhere. Values from the sender or the
+    // platform are code, so the prompt's Markdown never interprets them (shown verbatim on both).
+    const preview = t(locale, 'preview', { time: formatReminderTime(parsed.at, parsed.timezone),
+      scene: markdownCode(scene), account: markdownCode(account), text: markdownFence(text) });
+    // ADR 0061 P5: only the person who started the reminder answers; anything that is not an
+    // explicit confirmation or cancellation keeps the prompt waiting (re-sent at most once by Core).
+    const confirmed = await interaction.ask({ type: 'confirm', title: t(locale, 'askConfirm'),
+      description: `${preview}\n\n${checkExisting}`, tip: t(locale, 'confirmHelp'), answeredBy: 'target',
+      invalidText: t(locale, 'confirmInvalid'), timeout: stepRemaining('confirmation'), timeoutText, signal: context.signal,
+    });
+    if (!confirmed) throw new ReminderCreationCancelled();
     checkDeadline();
     if (parsed.at <= Date.now()) return `${t(locale, 'expired')} ${restart}`;
     const service = context.use(reminderServiceToken);
@@ -112,7 +113,26 @@ export async function createPersonalReminder(
     if (error instanceof Error && /(?:retired|inactive generation|scope has ended)/iu.test(error.message)) return undefined;
     // Core reports ask timeouts itself; this deadline can instead expire during preview delivery.
     if (error instanceof ReminderCreationDeadline) return timeoutText;
-    if (error instanceof ReminderPreviewDeliveryError || error instanceof Error && error.name === 'UserInteractionDeliveryError') return t(locale, 'previewFailed');
+    if (error instanceof Error && error.name === 'UserInteractionDeliveryError') return t(locale, 'previewFailed');
     throw error;
   }
+}
+
+/** Inline code that no backtick run in `value` can close (CommonMark), kept verbatim in text fallback. */
+function markdownCode(value: string): string {
+  const fence = '`'.repeat(longestBacktickRun(value) + 1);
+  const padded = value.startsWith('`') || value.endsWith('`') ? ` ${value} ` : value;
+  return `${fence}${padded}${fence}`;
+}
+
+/** A fenced block no line of `value` can close: multi-line reminder text stays literal. */
+function markdownFence(value: string): string {
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(value) + 1));
+  return `${fence}\n${value}\n${fence}`;
+}
+
+function longestBacktickRun(value: string): number {
+  let longest = 0;
+  for (const run of value.match(/`+/gu) ?? []) longest = Math.max(longest, run.length);
+  return longest;
 }

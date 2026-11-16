@@ -13,7 +13,7 @@ import {
   type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
-import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   describeDeniedPermit,
   permissionHostToken,
@@ -545,8 +545,14 @@ export class CommandIndex {
     }
   }
 
-  async dispatch({ input, source, interactionFactory, commandPrefix, snapshot: operationSnapshot = this.snapshot,
-    locale: localeOverride, operation: operationFactory }: CommandDispatchRequest): Promise<CommandDispatchResult> {
+  async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
+    const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
+    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(source) : undefined;
+    const operationSnapshot = request.snapshot ?? sourceSnapshot ?? this.snapshot;
+    // A source that carries its own operation (a framework Message) also brings that operation's
+    // resources; an explicit snapshot or factory from the caller is used exactly as given.
+    const operationFactory = request.operation
+      ?? (sourceSnapshot ? readOperationInputResources(source, sourceSnapshot) : undefined);
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
@@ -615,6 +621,24 @@ export class CommandIndex {
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }
+  }
+
+  /**
+   * Issue #1250: this index was projected against a projection-time view of its generation, not the
+   * committed snapshot a message's operation runs on. Without an explicit `snapshot`, a source that
+   * carries an operation (a Message such as `context.input`) supplies that snapshot, so an index from
+   * `context.project()` in a middleware or handler dispatches as that message's real author. The
+   * operation's snapshot must hold this very index; one kept across a reload is refused.
+   */
+  #sourceSnapshot(source: unknown): RuntimeSnapshot | undefined {
+    const bound = readOperationInputSnapshot(source);
+    if (!bound || bound === this.snapshot) return undefined;
+    if (![...bound.projections.values()].includes(this)) {
+      throw new Error(`This CommandIndex (generation ${this.snapshot.generation}) is not the command projection of the message's generation `
+        + `${bound.generation}: resolve it with context.project(commandFeatureId) inside the current middleware/handler `
+        + 'instead of keeping it across a reload. See docs/authoring/commands.md#dispatch-from-middleware.');
+    }
+    return bound;
   }
 
   #denied(record: CommandRecord, permit: string | null, locale: Locale): CommandDispatchResult {
