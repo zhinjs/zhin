@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '../../cn.js'
 
 const alertVariants = cva(
-  "relative w-full rounded-[var(--console-radius-lg)] border-[length:var(--console-border-width)] px-4 py-3 text-[length:var(--console-text-body)] leading-relaxed [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-3.5 [&>svg]:text-foreground [&>svg~*]:pl-7",
+  "console-alert relative w-full rounded-card border px-4 py-3 text-body leading-relaxed [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg]:text-foreground [&>svg~*]:pl-6",
   {
     variants: {
       variant: {
@@ -12,9 +12,9 @@ const alertVariants = cva(
         destructive:
           "border-destructive/30 bg-destructive/5 text-destructive dark:border-destructive/40 [&>svg]:text-destructive",
         success:
-          "console-badge-success [&>svg]:text-[hsl(var(--success))]",
+          "console-badge-success [&>svg]:text-success",
         warning:
-          "console-badge-warning [&>svg]:text-[hsl(var(--warning))]",
+          "console-badge-warning [&>svg]:text-warning",
       },
     },
     defaultVariants: {
@@ -42,7 +42,7 @@ const AlertTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <h5
     ref={ref}
-    className={cn("mb-1 font-medium leading-normal", className)}
+    className={cn("mb-1 font-strong leading-normal", className)}
     {...props}
   />
 ))
@@ -54,7 +54,7 @@ const AlertDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-[length:var(--console-text-body)] [&_p]:leading-relaxed", className)}
+    className={cn("text-body [&_p]:leading-relaxed", className)}
     {...props}
   />
 ))

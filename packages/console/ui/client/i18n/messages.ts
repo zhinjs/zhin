@@ -29,6 +29,8 @@ const zhCN = {
   'refresh.interval': '自动刷新间隔',
   'refresh.manual': '手动刷新',
   'refresh.auto': '{0}s 自动',
+  'actions.more': '更多',
+  'listDetail.detail': '详情',
 } as const;
 
 export type ConsoleUiMessageKey = keyof typeof zhCN;
@@ -55,6 +57,8 @@ const en: ConsoleUiMessages = {
   'refresh.interval': 'Auto refresh interval',
   'refresh.manual': 'Manual refresh',
   'refresh.auto': '{0}s auto',
+  'actions.more': 'More',
+  'listDetail.detail': 'Details',
 };
 
 export const CONSOLE_UI_MESSAGES: Readonly<Record<ConsoleUiLocale, ConsoleUiMessages>> = Object.freeze({

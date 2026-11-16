@@ -31,16 +31,21 @@ export function StatCard({ icon: Icon, label, value, sub, tone, aside, onOpen, p
       {sub !== undefined ? <span className="console-stat-sub">{sub}</span> : null}
     </>
   )
-  if (!onOpen) return <div className={className}>{content}</div>
+  if (!onOpen) return <div className={className} data-slot="stat-card">{content}</div>
   return (
-    <button type="button" className={className} onClick={onOpen} aria-pressed={pressed}>
+    // eslint-disable-next-line console-ui/no-native-controls -- the stat card itself is the button (focus ring and size come from .console-stat-card)
+    <button type="button" className={className} onClick={onOpen} aria-pressed={pressed} data-slot="stat-card" data-interactive="">
       {content}
     </button>
   )
 }
 
 export function StatGrid({ children, label }: { children: ReactNode; label: string }) {
-  return <section className="console-stat-grid" aria-label={label}>{children}</section>
+  return (
+    <section className="console-cq" aria-label={label} data-slot="stat-grid">
+      <div className="console-stat-grid">{children}</div>
+    </section>
+  )
 }
 
 export function MiniRingGauge({ percent, tone = 'primary' }: { percent: number; tone?: 'primary' | 'success' | 'warning' }) {

@@ -187,7 +187,7 @@ describe('shared module registration', () => {
 });
 
 describe('styles', () => {
-  const tokens = readFileSync(join(clientRoot, 'styles/tokens.css'), 'utf8');
+  const tokens = readFileSync(join(clientRoot, 'styles/generated/tokens.css'), 'utf8');
   const defined = new Set([...tokens.matchAll(/(--[a-z0-9-]+)\s*:/gu)].map((match) => match[1]));
 
   it('defines every token the components and component styles read', () => {
@@ -196,23 +196,25 @@ describe('styles', () => {
       join(clientRoot, 'styles/components.css'),
       join(clientRoot, 'styles/searchable-select.css'),
       join(clientRoot, 'styles/base.css'),
-      join(clientRoot, 'styles/tailwind.config.js'),
+      join(clientRoot, 'styles/shell.css'),
+      join(clientRoot, 'styles/generated/theme.css'),
     ];
     const missing = new Set<string>();
     for (const file of sources) {
       for (const [, name] of readFileSync(file, 'utf8').matchAll(/var\((--[a-z0-9-]+)/gu)) {
-        // Radix sets --radix-*; Tailwind owns --tw-*.
-        if (name.startsWith('--radix-') || name.startsWith('--tw-')) continue;
+        // Radix sets --radix-*; Tailwind owns --tw-*; --grid-min is the Grid component's parameter.
+        if (name.startsWith('--radix-') || name.startsWith('--tw-') || name === '--grid-min') continue;
         if (!defined.has(name)) missing.add(`${relative(packageRoot, file)}: ${name}`);
       }
     }
     expect([...missing]).toEqual([]);
   });
 
-  it('tokens.css keeps the Console values (P1a: no value changes)', () => {
-    expect(tokens).toContain('--console-content-max: 90rem;');
-    expect(tokens).toContain('--console-control-height: 2.25rem;');
-    expect(tokens).toContain('--console-radius-md: 0.625rem;');
+  it('keeps the colors and the deprecated aliases until P4', () => {
     expect(tokens).toMatch(/\.dark \{[\s\S]*--background: var\(--palette-hue\) var\(--surface-chroma\) 5%;/u);
+    for (const alias of ['--console-radius-md', '--console-shadow-sm', '--console-space-card', '--console-space-page-x', '--console-control-height-sm', '--radius']) {
+      expect(defined.has(alias), alias).toBe(true);
+    }
+    expect(tokens).toContain('--console-content-max: var(--console-content-data);');
   });
 });

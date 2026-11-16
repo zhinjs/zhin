@@ -90,7 +90,7 @@ describe('bounded PR scope transport', () => {
     const commands = readFileSync(f.env.CI_SCOPE_CAPTURE, 'utf8').trim().split('\n').map(line => JSON.parse(line)) as {
       args: string[]; base: string; head: string; expandedScope: boolean;
     }[];
-    expect(commands).toHaveLength(15);
+    expect(commands).toHaveLength(16);
     expect(commands.every(command => command.base === f.base && command.head === f.head && !command.expandedScope)).toBe(true);
     expect(commands.find(command => command.args.includes('turbo'))?.args).toEqual([
       'exec', 'turbo', 'run', 'build', '--cache-dir=.turbo/cache', '--filter=@fixture/app...', '--filter=@fixture/other...',
@@ -103,6 +103,7 @@ describe('bounded PR scope transport', () => {
       'check:architecture', 'check:dependency-policy', 'check:release-plan', 'check:harness-paths',
       'check:no-removed-plugin-api', 'check:api-surface', 'check:plugin-runtime-api', 'check:feature-peers', 'check:doc-links',
       'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest',
+      'check:console-ui-styles',
     ].sort());
   });
 
