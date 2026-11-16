@@ -121,6 +121,68 @@ describe('TurnToolRuntime unattended review (#1250 b33)', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['an unknown decision', async () => ({ decision: 'APPROVE' }), 'rejected'],
+    ['no decision', async () => ({}), 'rejected'],
+    ['null', async () => null, 'rejected'],
+  ] as const)('denies the call when the reviewer returns %s (fail closed)', async (_label, judge, outcome) => {
+    notes.length = 0;
+    const execute = vi.fn(async () => 'sunny');
+    const { turn } = fixture({ unattendedReview: reviewPort(judge as unknown as ApprovalJudgmentPort['judge']) });
+    await expect(new TurnToolRuntime(turn, [tool(execute)]).execute('weather', {}, 'call-m'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'approval' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(notes).toContainEqual({ turnId: 'turn-b33',
+      note: { kind: 'unattended_review', tool: 'weather', policy: 'approval', outcome } });
+  });
+
+  it('cancels instead of running when the turn is aborted while the reviewer is deciding', async () => {
+    const execute = vi.fn(async () => 'sunny');
+    const controller = new AbortController();
+    const judge = vi.fn<ApprovalJudgmentPort['judge']>(async () => {
+      controller.abort(new Error('stop'));
+      return { decision: 'approve' as const };
+    });
+    const turn = createTurnIngress({
+      intent: { kind: 'new' },
+      identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn-abort' },
+      origin: { kind: 'http', sessionId: 'schedule-like' },
+      principal: { subjectId: 'owner-1', roles: ['owner'] },
+      input: { text: 'weather' },
+      session: { key: 'schedule:job-1' },
+      policy: { permissions: [], unattended: true },
+      capabilities: { tools: ['weather'], skills: [] },
+      signal: controller.signal,
+      ports: { journal: { append: () => undefined }, unattendedReview: reviewPort(judge) },
+    });
+    const result = await new TurnToolRuntime(turn, [tool(execute)]).execute('weather', {}, 'call-abort');
+    expect(result.status).not.toBe('completed');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('never lets the reviewer approve a high-risk action after external content, even with confirmHighRisk off', async () => {
+    const execute = vi.fn(async () => 'sent');
+    const judge = vi.fn<ApprovalJudgmentPort['judge']>(async () => ({ decision: 'approve' as const }));
+    const { turn } = fixture({ unattendedReview: reviewPort(judge) });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, { name: 'send_notice', qualifiedName: 'send_notice' })],
+      { injectionGuard: { confirmHighRisk: 'off' } });
+    runtime.provenance.record({ kind: 'tool_result', toolName: 'web_fetch' });
+    await expect(runtime.execute('send_notice', { text: 'hi' }, 'call-7'))
+      .resolves.toMatchObject({ status: 'denied', policy: PROVENANCE_POLICY });
+    expect(judge).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('still lets the reviewer settle a high-risk action of an unattended turn before any external content', async () => {
+    const execute = vi.fn(async () => 'sent');
+    const judge = vi.fn<ApprovalJudgmentPort['judge']>(async () => ({ decision: 'approve' as const }));
+    const { turn } = fixture({ unattendedReview: reviewPort(judge) });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, { name: 'send_notice', qualifiedName: 'send_notice' })],
+      { injectionGuard: { confirmHighRisk: 'off' } });
+    await expect(runtime.execute('send_notice', { text: 'hi' }, 'call-8')).resolves.toMatchObject({ status: 'completed' });
+    expect(judge).toHaveBeenCalledOnce();
+  });
+
   it('ignores an unattended reviewer on an attended turn (it uses its own approval port)', async () => {
     const execute = vi.fn(async () => 'sunny');
     const judge = vi.fn<ApprovalJudgmentPort['judge']>(async () => ({ decision: 'approve' as const }));

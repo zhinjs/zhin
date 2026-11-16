@@ -252,6 +252,14 @@ export class TurnToolRuntime {
     if (authorizationRequired && decision.status === 'approval_required') {
       // #1250 review: some policies only need the initiator to confirm their own intent (memory poisoning guard).
       const purpose = decision.purpose ?? 'authorization';
+      // #1250 b33 review: the automatic reviewer is a model and the very target of prompt injection. In an
+      // unattended turn it never approves a high-risk action after external content, even when
+      // `injectionGuard.confirmHighRisk: off` skipped the intent confirmation above (fail closed, as before b33).
+      if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.tainted) {
+        this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' });
+        return this.#deny(name, toolUseId, PROVENANCE_POLICY,
+          `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
+      }
       const blocked = this.#approvalBlocked(purpose);
       if (blocked) {
         this.#auditApproval(name, decision.policy, purpose, { status: 'unavailable', reason: blocked });
