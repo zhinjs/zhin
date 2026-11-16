@@ -8,6 +8,7 @@ import {
   mergeSearchResults,
   resolveInstallRoute,
   ZHIN_ECOSYSTEM_KEYWORDS,
+  runSearchQueries,
   zhinSearchQueries,
 } from '../src/utils/plugin-registry.js';
 
@@ -134,6 +135,19 @@ describe('filterSearchResults', () => {
       [{ name: 'a', version: '1' }, { name: 'b', version: '1' }],
       [{ name: 'b', version: '2' }, { name: 'c', version: '1' }],
     ]).map((p) => `${p.name}@${p.version}`)).toEqual(['a@1', 'b@1', 'c@1']);
+  });
+
+  it('一个查询失败时保留另一个查询的结果，全部失败才抛出', () => {
+    const rateLimited = new Error('E429 Too Many Requests');
+    const search = (query: string) => {
+      if (query.startsWith('@zhin.js')) throw rateLimited;
+      return [{ name: 'zhin.js-weather', version: '1' }];
+    };
+    const partial = runSearchQueries(['zhin.js weather', '@zhin.js weather'], search);
+    expect(partial.failed).toEqual(['@zhin.js weather']);
+    expect(mergeSearchResults(partial.pages).map((p) => p.name)).toEqual(['zhin.js-weather']);
+    expect(() => runSearchQueries(['@zhin.js'], search)).toThrow(rateLimited);
+    expect(runSearchQueries(['zhin.js weather'], search).failed).toEqual([]);
   });
 
   it('limit 截断结果', () => {

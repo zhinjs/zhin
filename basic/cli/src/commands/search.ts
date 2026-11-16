@@ -28,6 +28,7 @@ import {
   npmSearch,
   npmView,
   NpmViewError,
+  runSearchQueries,
   zhinSearchQueries,
   type NpmPackageInfo,
 } from '../utils/plugin-registry.js';
@@ -49,7 +50,10 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
     try {
       // A text query plus the official scope (#1250): official packages stay findable now that the
       // ecosystem filter no longer accepts the generic `plugin` keyword.
-      const results = mergeSearchResults(zhinSearchQueries(keyword, options.official).map((query) => npmSearch(query)));
+      // One failing query (rate limit, transient registry error) keeps the other's results.
+      const { pages, failed } = runSearchQueries(zhinSearchQueries(keyword, options.official), npmSearch);
+      if (failed.length > 0) logger.warn(`部分 npm 搜索失败（${failed.join('、')}），结果可能不完整`);
+      const results = mergeSearchResults(pages);
       const limit = parseInt(String(options.limit) || '20', 10);
       const filteredResults = filterSearchResults(
         options.official ? results.filter((pkg) => classifyPackage(pkg).official) : results,

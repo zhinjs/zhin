@@ -20,7 +20,7 @@ import {
 } from '../src/utils/package-capabilities.js';
 import { NpmViewError, npmViewFailure } from '../src/utils/plugin-registry.js';
 
-const plugin = vi.hoisted(() => ({ info: undefined as unknown, search: {} as Record<string, unknown[]>, queries: [] as string[] }));
+const plugin = vi.hoisted(() => ({ info: undefined as unknown, search: {} as Record<string, unknown[] | Error>, queries: [] as string[] }));
 vi.mock('../src/utils/plugin-registry.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/utils/plugin-registry.js')>(),
   npmView: () => {
@@ -30,7 +30,9 @@ vi.mock('../src/utils/plugin-registry.js', async (importOriginal) => ({
   fetchWeeklyDownloads: async () => null,
   npmSearch: (query: string) => {
     plugin.queries.push(query);
-    return plugin.search[query] ?? [];
+    const page = plugin.search[query];
+    if (page instanceof Error) throw page;
+    return page ?? [];
   },
 }));
 
@@ -221,6 +223,20 @@ describe('zhin packages info', () => {
     expect(text).toContain('安装: zhin install @zhin.js/plugin-60s');
     expect(text).toContain('使用 zhin info <包名> 查看插件详情');
     expect(text).not.toContain('zhin packages');
+  });
+
+  it('zhin search: a failing scope query keeps the text query results', async () => {
+    plugin.queries = [];
+    plugin.search = {
+      'zhin.js rss': [{ name: 'zhin.js-rss', version: '2.0.0', description: 'RSS', keywords: ['zhin.js'] }],
+      '@zhin.js rss': new Error('npm error code E429'),
+    };
+    const { runPluginSearch } = await import('../src/commands/search.js');
+    await runPluginSearch('rss', { limit: 20 });
+    expect(plugin.queries).toEqual(['zhin.js rss', '@zhin.js rss']);
+    expect(stdout.join('\n')).toContain('zhin.js-rss@2.0.0');
+    expect(stderr.join('')).toContain('部分 npm 搜索失败（@zhin.js rss）');
+    expect(process.exitCode ?? 0).toBe(0);
   });
 
   it('classifies npm view failures without echoing the command line', () => {

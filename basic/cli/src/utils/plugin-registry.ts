@@ -162,6 +162,31 @@ export function mergeSearchResults(pages: readonly (readonly NpmSearchResult[])[
 }
 
 /**
+ * Runs every `zhin search` query and keeps the pages that succeeded (#1250): the `@zhin.js` scope
+ * query is supplementary, so one failing query (rate limit, transient registry error, bad JSON)
+ * must not discard the other's results. Throws the first error only when every query failed.
+ */
+export function runSearchQueries(
+  queries: readonly string[],
+  search: (query: string) => NpmSearchResult[],
+): { readonly pages: NpmSearchResult[][]; readonly failed: readonly string[] } {
+  const pages: NpmSearchResult[][] = [];
+  const failed: string[] = [];
+  let firstError: unknown;
+  for (const query of queries) {
+    try {
+      const page = search(query);
+      pages.push(Array.isArray(page) ? page : []);
+    } catch (error) {
+      failed.push(query);
+      firstError ??= error;
+    }
+  }
+  if (pages.length === 0 && failed.length > 0) throw firstError;
+  return { pages, failed };
+}
+
+/**
  * 分类匹配：优先读发布清单的 `zhin.metadata.category`（接受旧别名如 util）；
  * 没有声明分类的包（npm search 结果通常不含 zhin 字段）退回到包名约定与 keywords。
  */
