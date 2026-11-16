@@ -36,13 +36,32 @@ describe('omitInlineBinaryForModel (#1250 batch 29)', () => {
 
   it('is linear on adversarial input (2047-character runs separated by spaces)', () => {
     const segment = run(INLINE_BINARY_MIN_CHARS - 1);
-    const text = Array.from({ length: Math.ceil(1_048_576 / INLINE_BINARY_MIN_CHARS) }, () => segment).join(' ');
-    const started = performance.now();
+    const adversarial = (bytes: number) =>
+      Array.from({ length: Math.ceil(bytes / INLINE_BINARY_MIN_CHARS) }, () => segment).join(' ');
+    const text = adversarial(1_048_576);
     expect(omitInlineBinaryForModel(text)).toBe(text);
     const plain = 'a'.repeat(4 * 1_048_576);
     expect(omitInlineBinaryForModel(plain)).toBe('[已省略 base64 数据（4194304 字符），未提供给模型]');
-    // Quadratic matching took ~2.7 s for the first input alone.
-    expect(performance.now() - started).toBeLessThan(500);
+
+    // Two guards, each measured as the best of three runs of one input:
+    // - growth: a super-linear scan grows ~16× when the input grows 4×;
+    // - a ceiling for the regex this replaced, which backtracked over every
+    //   2047-character run and took ~2.7 s for 1 MiB. The ceiling leaves room for
+    //   coverage instrumentation on slow CI runners (the old 500 ms budget for
+    //   both inputs together did not).
+    const fastest = (input: string) => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i += 1) {
+        const started = performance.now();
+        omitInlineBinaryForModel(input);
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+    const small = fastest(adversarial(262_144));
+    const large = fastest(adversarial(1_048_576));
+    expect(large / Math.max(small, 0.5)).toBeLessThan(8);
+    expect(large).toBeLessThan(1500);
   });
 
   it('recognises only its own placeholders', () => {
