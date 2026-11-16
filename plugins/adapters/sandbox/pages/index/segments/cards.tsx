@@ -3,7 +3,7 @@ import { CodeBlock, MarkdownContent, isSafeMarkdownHref, pickMediaRawUrl, resolv
 import { Button } from '@zhin.js/console-ui';
 import { Check, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import { sandboxText } from '../messages.js';
-import { stringField, type SandboxSegmentRenderer } from './context.js';
+import { recordItems, stringField, type SandboxSegmentRenderer } from './context.js';
 import { interactionVariant } from './keyboard.js';
 
 /** An external link target safe for `href`: http(s) / mailto only. */
@@ -24,10 +24,8 @@ export const renderCard: SandboxSegmentRenderer = (data, context, key) => {
   const description = stringField(d, 'description', 'content', 'summary');
   const rawImage = stringField(d, 'image', 'thumbnail', 'imageUrl') || pickMediaRawUrl(d);
   const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined;
-  const fields = Array.isArray(d.fields) ? (d.fields as Array<Record<string, unknown>>) : [];
-  const buttons = Array.isArray(d.buttons)
-    ? (d.buttons as Array<Record<string, unknown>>)
-    : Array.isArray(d.actions) ? (d.actions as Array<Record<string, unknown>>) : [];
+  const fields = recordItems(d.fields);
+  const buttons = recordItems(Array.isArray(d.buttons) ? d.buttons : d.actions);
   // Several actions on one card stay usable after a click (#1250 sandbox-submitted-without-feedback).
   const submitted = new Set(context.submittedPayloads ?? []);
   return (

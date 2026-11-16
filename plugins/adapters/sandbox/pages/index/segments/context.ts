@@ -40,3 +40,14 @@ export function stringField(data: Readonly<Record<string, unknown>>, ...names: s
   }
   return '';
 }
+
+/**
+ * The object items of a list field. Card data is loosely validated (`card` is a Core extension
+ * type) and history comes from browser storage, so a malformed item (`null`, a string, …) is
+ * skipped instead of breaking the page's render.
+ */
+export function recordItems(value: unknown): Array<Readonly<Record<string, unknown>>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Readonly<Record<string, unknown>> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+}

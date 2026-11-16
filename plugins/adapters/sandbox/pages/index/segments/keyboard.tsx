@@ -2,7 +2,7 @@ import React from 'react';
 import { Check } from 'lucide-react';
 import { Button } from '@zhin.js/console-ui';
 import { sandboxText } from '../messages.js';
-import type { SandboxSegmentRenderer } from './context.js';
+import { recordItems, type SandboxSegmentRenderer } from './context.js';
 
 /** ADR 0063 决策 5: a dangerous choice is an outline button with destructive text, never a solid red one. */
 export function interactionVariant(primary: boolean, danger: boolean): 'default' | 'destructive-outline' | 'outline' {
@@ -23,7 +23,9 @@ export function isExclusiveKeyboard(data: Readonly<Record<string, unknown>>): bo
 
 /** Native buttons for a `keyboard` segment (the Sandbox declares `interactive: 'native'`). */
 export const renderKeyboard: SandboxSegmentRenderer = (data, context, key) => {
-  const rows = (data.rows as KeyboardButton[][] | undefined) ?? [];
+  // Malformed rows / buttons (history from browser storage) are skipped, never a render failure.
+  const rows = (Array.isArray(data.rows) ? data.rows : []).map((row: unknown) => recordItems(row)
+    .filter((btn) => typeof btn.label === 'string' && typeof btn.payload === 'string') as unknown as KeyboardButton[]);
   const exclusive = isExclusiveKeyboard(data);
   const resolved = Boolean(context.messageId && context.interactionResolved) && exclusive;
   const submitted = new Set(context.submittedPayloads ?? []);
@@ -31,9 +33,9 @@ export const renderKeyboard: SandboxSegmentRenderer = (data, context, key) => {
     <div key={key} className="agent-playground-approval-actions">
       {rows.map((row, ri) => (
         <div key={ri}>
-          {row.map((btn) => (
+          {row.map((btn, bi) => (
             <Button
-              key={btn.payload}
+              key={`${btn.payload}-${bi}`}
               type="button"
               size="sm"
               variant={interactionVariant(
