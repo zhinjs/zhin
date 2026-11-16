@@ -9,6 +9,7 @@ import { createEndpointHarness, createTestEndpointEventGateway } from '../../tes
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { SandboxClient, type SandboxClientConnection } from '../src/client.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';
+import { sandboxOperations } from './sandbox-operations.js';
 
 // The ready frame is gated on a host `docker info` probe; keep this transport suite independent of the runner's Docker.
 vi.mock('node:child_process', async importOriginal => ({
@@ -40,7 +41,7 @@ async function fixture() {
   const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
     http, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'shared-owner' }),
-  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEndpointEventGateway({ receive: events }) });
+  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEndpointEventGateway({ receive: events }) });
   await endpoint.start();
   endpoint.open();
   const { port } = await http.listen();

@@ -56,9 +56,11 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "lucide-react": "^0.525.0"
+    "lucide-react": "^0.525.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/ws": "^8.18.1",
     "@zhin.js/console-ui": "workspace:*",

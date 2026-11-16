@@ -1,29 +1,12 @@
 import type { Segment } from './types.js';
 import { isCanonicalSegment } from './assert.js';
+import { OUTBOUND_SEGMENT_TYPES } from './catalog.js';
 
-/** IM 可见段白名单（thinking / tool_call 等 AI-only 段过滤） */
-const IM_VISIBLE_TYPES = new Set([
-  'text',
-  'mention',
-  'image',
-  'video',
-  'audio',
-  'voice',
-  'record',
-  'file',
-  'face',
-  'reply',
-  'forward',
-  'link',
-  'dice',
-  'rps',
-  'share',
-  'markdown',
-  'html',
-  'qrcode',
-  'tts',
-  'keyboard',
-]);
+/**
+ * IM 可见段白名单（thinking / tool_call 等 AI-only 段过滤）。
+ * ADR 0064 §1：由出站段目录派生，新增段类型只改目录一处。
+ */
+const IM_VISIBLE_TYPES: ReadonlySet<string> = new Set(OUTBOUND_SEGMENT_TYPES);
 
 const AI_ONLY_TYPES = new Set(['thinking', 'tool_call']);
 
