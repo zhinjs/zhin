@@ -12,6 +12,9 @@ import { handleGuessChoice } from '../../src/game-flow.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 import { GUESS_PREFIX } from '../../src/view.js';
 
+/** 终局后文字重开的有效期：超过它，「再来一局」按普通聊天放行。 */
+const TEXT_RESTART_WINDOW_MS = 10 * 60_000;
+
 /**
  * 按钮 payload（`guess:session:quit|restart`）与按钮文字（「放弃」「再来一局」，#1250）。
  * 数字是猜测本身（guess-digit），这里不接受序号。
@@ -28,6 +31,8 @@ export default defineMiddleware<Message>({
     if (!payload?.startsWith(`${GUESS_PREFIX}:`)) {
       const session = await services.getLatestForUser(channelKey(message), message.sender.id);
       if (!session) { await next(); return; }
+      // 终局后的「再来一局」只在刚结束的一局上生效，旧对局不再劫持普通聊天（#1250）。
+      if (session.status !== 'active' && Date.now() - session.updated_at > TEXT_RESTART_WINDOW_MS) { await next(); return; }
       const choice = session.status === 'active'
         ? { id: 'quit', label: '放弃' }
         : { id: 'restart', label: '再来一局' };

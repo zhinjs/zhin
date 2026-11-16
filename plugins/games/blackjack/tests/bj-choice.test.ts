@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import middleware from '../middlewares/bj-choice/index.ts';
 import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionService } from '../src/session-service.js';
@@ -142,5 +142,37 @@ describe('blackjack bj-choice middleware accepts the button text (#1250)', () =>
 
     expect(nextCalls).toBe(1);
     expect(replies.length).toBe(0);
+  });
+});
+
+describe('blackjack bj-choice middleware does not hijack chat (#1250 review)', () => {
+  beforeEach(() => {
+    replies.length = 0;
+    nextCalls = 0;
+    services = createMemoryGameServices(['bj_sessions'], createServices);
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it.each(['再来一局', '1'])('「%s」 long after a finished game is ordinary chat', async (text) => {
+    const session = await services.createSession(makeInput('') as never);
+    await services.updateSession(session.id, { status: 'won' });
+    const finishedAt = (await services.getById(session.id))!.updated_at;
+    vi.spyOn(Date, 'now').mockReturnValue(finishedAt + 60 * 60_000);
+
+    await middleware.handle(makeCtx(makeInput(text)), next);
+
+    expect(nextCalls).toBe(1);
+    expect(replies.length).toBe(0);
+    expect((await services.getById(session.id))?.status).toBe('won');
+  });
+
+  it('another member’s 「要牌」 in the group does not drive this player’s game', async () => {
+    const session = await services.createSession(makeInput('') as never);
+
+    await middleware.handle(makeCtx(makeInput('要牌', 'u2')), next);
+
+    expect(nextCalls).toBe(1);
+    expect(replies.length).toBe(0);
+    expect((await services.getById(session.id))?.status).toBe('active');
   });
 });

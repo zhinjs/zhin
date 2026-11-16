@@ -4,7 +4,7 @@
  * Agent (two replies). Blackjack's choice middleware was already correct; this pins the same
  * contract here: one reply, no `next()`, outcome `handler_replied` / `game_input`.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { channelKey, createMemoryGameServices } from '@zhin.js/game-kit';
 import { InboundOutcomeLedger, inboundOutcomeSink } from '@zhin.js/core/runtime';
 import digit from '../middlewares/guess-digit/index.ts';
@@ -68,5 +68,36 @@ describe('guess-number game input ends dispatch (#1250)', () => {
     expect(replies).toHaveLength(1);
     const latest = await services.getLatestForUser(channelKey({ target: conversation }), 'u1');
     expect(latest?.status).toBe('aborted');
+  });
+});
+
+describe('guess-number 「再来一局」 is bounded to a recent game (#1250 review)', () => {
+  beforeEach(() => {
+    replies.length = 0;
+    nextCalls = 0;
+    services = createMemoryGameServices(['guess_sessions'], createServices);
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('restarts a game that just ended', async () => {
+    await startGame(services, makeInput('') as never);
+    await choice.handle(makeCtx(makeInput('放弃')), next);
+    replies.length = 0;
+
+    await choice.handle(makeCtx(makeInput('再来一局')), next);
+    expect(nextCalls).toBe(0);
+    expect(replies).toHaveLength(1);
+  });
+
+  it('passes 「再来一局」 on long after the last game ended', async () => {
+    await startGame(services, makeInput('') as never);
+    await choice.handle(makeCtx(makeInput('放弃')), next);
+    replies.length = 0;
+    const ended = (await services.getLatestForUser(channelKey({ target: conversation }), 'u1'))!;
+    vi.spyOn(Date, 'now').mockReturnValue(ended.updated_at + 60 * 60_000);
+
+    await choice.handle(makeCtx(makeInput('再来一局')), next);
+    expect(nextCalls).toBe(1);
+    expect(replies).toHaveLength(0);
   });
 });

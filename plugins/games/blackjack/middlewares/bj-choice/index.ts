@@ -11,6 +11,9 @@ import type { Message } from '@zhin.js/core/runtime';
 import { resolveGameServices } from '../../src/runtime-store.js';
 import { BJ_PREFIX, handleChoice } from '../../src/game-flow.js';
 
+/** 终局后文字/序号重开的有效期：超过它，「再来一局」「1」按普通聊天放行。 */
+const TEXT_RESTART_WINDOW_MS = 10 * 60_000;
+
 /**
  * 文本入口：按钮 payload（`bj:session:hit|stand|restart`）与数字 fallback
  * （『1 要牌 2 停牌』、终局『1 再来一局』，对应 view 的 fallbackHint）。
@@ -52,6 +55,11 @@ export default defineMiddleware<Message>({
     }
 
     if (session.status !== 'active') {
+      // 终局后的文字「再来一局」/序号只在刚结束的一局上生效，旧对局不再劫持普通聊天（#1250）。
+      if (Date.now() - session.updated_at > TEXT_RESTART_WINDOW_MS) {
+        await next();
+        return;
+      }
       const map = buildChoiceFallbackMap(BJ_PREFIX, session.id, [
         { id: 'restart', label: '再来一局', keepEnabledWhenTerminal: true },
       ]);
