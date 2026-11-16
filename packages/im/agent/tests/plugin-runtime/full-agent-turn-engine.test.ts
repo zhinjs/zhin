@@ -815,7 +815,10 @@ describe('FullAgentTurnEngine', () => {
     expect(events[0]).toMatchObject({
       type: 'capability_resolution', mode: 'direct', resolvedBy: 'execution-plan',
       tools: ['weather'], skills: ['report'], missingTools: [], missingSkills: [],
+      // #1250 b33: what an unattended run cannot use without approval (informative).
+      unattendedApproval: { review: 'none', denied: [], reviewed: [] },
     });
+    expect(events[0]).not.toHaveProperty('warnings');
     expect(coreInput).toMatchObject({
       toolLoading: 'direct', conversationPersistence: 'none',
       promptProfile: { kind: 'schedule', jobId: 'daily' },

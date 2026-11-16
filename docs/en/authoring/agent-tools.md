@@ -102,6 +102,23 @@ export default defineAgentTool({
 
 `'never'` only skips the confirmation step — it **cannot** bypass permissions or network, filesystem and shell security policies.
 
+### Read-only tools need no approval
+
+A tool that only looks things up and changes nothing (weather, news, search) declares `readOnly: true`. Under the default `'on-risk'`, a tool declared read-only no longer asks for approval, so unattended turns such as scheduled tasks can call it:
+
+```ts
+export default defineAgentTool({
+  description: 'Look up the weather for a city',
+  readOnly: true,
+  // ...
+});
+```
+
+- Read-only relaxes only the approval step. Permission / role filtering, ExecPolicy, FilePolicy, the network allowlist and the dangerous-tool hard gate still apply.
+- An explicit `requiresApproval: 'always' | 'once' | 'human'` wins; read-only has no effect then.
+- The declaration is ignored, and the usual approval applies, for: built-in tools that write files, run commands or message other conversations (`write_file`, `edit_file`, `bash`, `send_*` and so on, including plugin tools with those names), built-in tools that write memory or change configuration, tools tagged or named `shell` / `outbound` / `config` / `schedule`, and tools declared `risk: 'dangerous'`.
+- Read-only also decides whether a failed run may be retried safely and which tools restricted turns get. Declare it only for tools that really change nothing.
+
 ### Declare a dangerous tool (hard gate)
 
 Tools that kick, mute or promote members, post group announcements / channel posts / comments, send red packets or transfers, or change the bot's profile must declare `risk: 'dangerous'`:
@@ -399,7 +416,7 @@ my-plugin/
 | `permissions` | No | Permission rules; all must pass |
 | `hidden` | No | Registered but not offered to the model; still callable by name |
 | `alwaysLoaded` | No | `true` sends the schema to the model on every turn; default `false` (deferred). See [Keep a tool resident](#keep-a-tool-resident) |
-| `readOnly` | No | `true` declares the tool only reads (changes nothing on the platform, in storage or for other people); restricted turns such as live danmaku turns (ADR 0038 §5) only expose tools with `readOnly: true`. Undeclared counts as writing |
+| `readOnly` | No | `true` declares the tool only reads (changes nothing on the platform, in storage or for other people); restricted turns such as live danmaku turns (ADR 0038 §5) only expose tools with `readOnly: true`; under the default `'on-risk'` it needs no approval, see [Read-only tools need no approval](#read-only-tools-need-no-approval). Undeclared counts as writing |
 | `execute(input, context)` | Yes | The function; `context` described above |
 
 ### Permission rules

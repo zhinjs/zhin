@@ -65,12 +65,14 @@ export function buildBoardInteractive(options: {
     rows: 3,
     cols: 3,
     cells: boardToCells(board, highlight),
-    statusLine,
+    // 进行中：明说回复 1–9 按棋盘位置落子（#1250 game-button-label-text-not-accepted）。
+    statusLine: terminal ? statusLine : `${statusLine}\n${messages(options.locale, 'text1')}`,
     terminal,
     omitAsciiBoard,
     renderAscii: renderTttAscii,
     highlight,
-    fallbackHint: messages(options.locale, 'text1'),
+    numbering: 'position',
+    replyHint: terminal ? 'ordinal-or-label' : false,
     postChoices: terminal
       ? [{ id: 'restart', label: messages(options.locale, 'text2'), style: 'primary' }]
       : undefined,
@@ -79,7 +81,7 @@ export function buildBoardInteractive(options: {
 }
 
 export function buildFallbackMap(sessionId: string, board: Board): Record<string, string> {
-  return buildGridFallbackMap(TTT_PREFIX, sessionId, boardToCells(board));
+  return buildGridFallbackMap(TTT_PREFIX, sessionId, boardToCells(board), 'position');
 }
 
 export function parseTttPayload(payload: string): { sessionId: string; cell: number } | null {
@@ -101,6 +103,6 @@ export function markName(mark: Cell): string {
 }
 
 const messages = createMessages({
-  text1: { 'zh-CN': "落子：回复数字 1-9（仅空格）", en: "Move: reply with a number 1–9 (empty cells only)" },
+  text1: { 'zh-CN': "回复 1–9 在对应位置落子（左上为 1，右下为 9）", en: "Reply 1–9 to place a piece (1 = top left, 9 = bottom right)" },
   text2: { 'zh-CN': "🔄 再来一局", en: "🔄 Play again" },
 });

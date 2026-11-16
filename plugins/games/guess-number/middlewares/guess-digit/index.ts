@@ -15,8 +15,10 @@ export default defineMiddleware<Message>({
     }
     const services = resolveGameServices(context);
     const message = gamePlayerFromInput(context.input);
-    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+    const consumed = await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => processGuess(services, message, Number(raw)) });
-    await next();
+    // #1250 game-input-also-reaches-agent: a guess the game answered ends dispatch here;
+    // only a number with no active game goes on to the Agent.
+    if (!consumed) await next();
   },
 });

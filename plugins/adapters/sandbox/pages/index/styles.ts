@@ -203,6 +203,8 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-media-video { display: block; max-width: min(360px, 92%); max-height: 288px; margin: 4px 0; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-md); background: var(--sb-muted); }
 .zhin-sandbox .sandbox-media-audio { display: block; width: 100%; max-width: 384px; height: 40px; margin: 8px 0; }
 .zhin-sandbox .sandbox-html-frame { display: block; width: 100%; min-width: 0; margin: 4px 0; border: 0; border-radius: var(--sb-radius-md); background: transparent; }
+.zhin-sandbox .sandbox-html-scaled { width: 100%; min-width: 0; margin: 4px 0; overflow: hidden; border-radius: var(--sb-radius-md); }
+.zhin-sandbox .sandbox-html-scaled > .sandbox-html-frame { margin: 0; max-width: none; border-radius: 0; }
 .zhin-sandbox .sandbox-reply-quote { margin-bottom: 4px; padding: 2px 8px; border: 1px dashed var(--sb-input); border-radius: var(--sb-radius-sm); font-size: 12px; color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-forward { display: grid; gap: 4px; margin: 4px 0; padding: 8px; border: 1px solid var(--sb-border); border-radius: var(--sb-radius-sm); background: var(--sb-muted); font-size: 12px; }
 .zhin-sandbox .sandbox-forward-title { font-weight: 600; }

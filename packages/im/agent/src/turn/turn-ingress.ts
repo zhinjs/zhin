@@ -340,6 +340,12 @@ export interface TurnPorts {
   readonly journal: TurnJournalPort;
   readonly reply?: ReplyPort;
   readonly approval?: ApprovalPort;
+  /**
+   * #1250 b33: automatic reviewer for an unattended turn (`execApprovalMode: auto`). It never asks a
+   * person; only authorization requests go to it, and anything but an explicit approval denies the call.
+   * Ignored on attended turns, which use `approval`.
+   */
+  readonly unattendedReview?: ApprovalPort;
   readonly activity?: ActivityPort;
   readonly delivery?: DeliveryPort;
   readonly question?: ToolQuestionPort;

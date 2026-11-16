@@ -22,6 +22,7 @@ export function inboundOutcomeFacade(sink: InboundOutcomeSink): InboundOutcomeSi
   const facade: InboundOutcomeSink = Object.freeze({
     report: (candidate: Parameters<InboundOutcomeSink['report']>[0]) => sink.report(candidate),
     enter: (stage: Parameters<InboundOutcomeSink['enter']>[0]) => sink.enter(stage),
+    replied: (owner?: string) => sink.replied?.(owner) === true,
   });
   facades.add(facade);
   return facade;

@@ -15,6 +15,8 @@ import {
 import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
 import type { TimerScheduler } from './assistant/timer-scheduler.js';
 import type { TaskExecutionResult } from './task-executor.js';
+import type { ScheduleAuditRecord } from './schedule-domain/audit-logger.js';
+import { isEmptyExecutionPlan } from './plugin-runtime/schedule-capability-plan.js';
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
@@ -117,11 +119,16 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         const parsed = parseScheduleAddFromToolArgs(input, context);
         if ('error' in parsed) return { error: parsed.error };
         const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId() });
+        // #1250 b33: a plan without tools or skills is accepted (it falls back to prompt-based selection
+        // when the job runs), but the caller is told, so it can preview and pass the tools explicitly.
+        const warning = isEmptyExecutionPlan(job.executionPlan)
+          ? '执行计划没有指定工具或技能：到点时将按提示词自动选择工具。建议先用 schedule_preview 预演，再把 execution_plan 一起传给 schedule_add。'
+          : undefined;
         if (job.schedule.kind === 'at') {
           const time = new Date(job.schedule.atMs).toLocaleString('zh-CN', { hour12: false });
-          return { success: true, id: job.id, message: `已安排一次性任务，将在 ${time} 执行` };
+          return { success: true, id: job.id, message: `已安排一次性任务，将在 ${time} 执行`, ...(warning ? { warning } : {}) };
         }
-        return { success: true, id: job.id, message: '已添加调度任务' };
+        return { success: true, id: job.id, message: '已添加调度任务', ...(warning ? { warning } : {}) };
       },
       // #1250: an admin may confirm creating a scheduled task in their own private chat (allow once).
       [ADMIN_APPROVABLE_TOOL_TAG],
@@ -139,11 +146,15 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           activityFeedback: input.activity_feedback === true,
         });
         if (!result.success) return { error: result.error || '预演失败' };
+        const unattended = describeUnattendedPreview(result.audit.unattendedApproval);
         return {
           success: true,
           preview: result.responseText,
           execution_plan: result.executionPlan,
-          message: '预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。',
+          ...(unattended ? { unattended_approval: unattended.detail } : {}),
+          ...(result.status === 'degraded' ? { warning: `预演没有完成任务：${result.error ?? ''}` } : {}),
+          message: ['预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。', unattended?.message]
+            .filter(Boolean).join(''),
         };
       },
     ),
@@ -163,4 +174,22 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       },
     )),
   ]);
+}
+
+/**
+ * #1250 b33: what `schedule_preview` tells the caller about tools an unattended run cannot use freely.
+ * Informative only: approval is decided per call when the job runs.
+ */
+export function describeUnattendedPreview(
+  info: ScheduleAuditRecord['unattendedApproval'],
+): { detail: NonNullable<ScheduleAuditRecord['unattendedApproval']>; message: string } | undefined {
+  if (!info || (info.denied.length === 0 && info.reviewed.length === 0)) return undefined;
+  const parts: string[] = [];
+  if (info.denied.length) {
+    parts.push(`无人值守执行时，这些工具会被拒绝：${info.denied.map(name => `\`${name}\``).join('、')}。`);
+  }
+  if (info.reviewed.length) {
+    parts.push(`这些工具需要审批，到点时交给自动审核，审核拒绝则不执行：${info.reviewed.map(name => `\`${name}\``).join('、')}。`);
+  }
+  return { detail: info, message: parts.join('') };
 }

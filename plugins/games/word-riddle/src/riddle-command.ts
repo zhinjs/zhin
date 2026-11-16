@@ -23,7 +23,9 @@ export function getRiddleHelp(message: Pick<GamePlayer, 'locale' | 'formatComman
   const command = message.formatCommand?.('riddle');
   return [formatGameHelp({ presentation: message, title: { 'zh-CN': '🧩 猜谜（字谜 + 猜成语）', en: '🧩 Chinese Character and Idiom Riddles' }, commandPath: 'riddle', actions: ['start', 'continue', 'quit'] }),
     messages(locale, 'counts', { chars: counts.char.toLocaleString(locale), idioms: counts.idiom.toLocaleString(locale) }),
-    ...(command ? [messages(locale, 'char', { command: command + ' char' }), messages(locale, 'idiom', { command: command + ' idiom' })] : []),
+    // 子命令与命令名同一种语言（plugins/games/README.md「命令命名约定」）。
+    ...(command ? [messages(locale, 'char', { command: command + (/\p{Script=Han}/u.test(command) ? ' 字谜' : ' char') }),
+      messages(locale, 'idiom', { command: command + (/\p{Script=Han}/u.test(command) ? ' 成语' : ' idiom') })] : []),
     messages(locale, 'instructions'),
   ].join('\n');
 }

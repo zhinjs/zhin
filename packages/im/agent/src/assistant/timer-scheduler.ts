@@ -43,6 +43,7 @@ import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config
 const logger = getLogger('timer-scheduler');
 const messages = createMessages({
   failed: { 'zh-CN': '[任务失败] {label}: {error}', en: '[Task failed] {label}: {error}' },
+  degraded: { 'zh-CN': '[任务未完成] {label}: {error}', en: '[Task not completed] {label}: {error}' },
 });
 
 export type ScheduleDispose = () => void;
@@ -320,15 +321,19 @@ export class TimerScheduler {
     const nextRunAtMs = this.#trackNextRun({ ...job, enabled: job.enabled && this.disposes.has(jobId), state: { ...job.state, lastExecutedAt } });
     await this.store.updateJobState(jobId, {
       lastExecutedAt,
-      lastStatus: result.success ? 'ok' : 'error',
-      lastError: result.success ? undefined : result.error,
+      // #1250 b33: a run that finished without doing what was asked is `degraded`, with its cause.
+      lastStatus: !result.success ? 'error' : result.status === 'degraded' ? 'degraded' : 'ok',
+      lastError: !result.success || result.status === 'degraded' ? result.error : undefined,
       nextRunAtMs,
     });
 
-    if (!result.success && (job.notifyOnFailure ?? this.notifyOnFailure)) {
+    const degraded = result.success && result.status === 'degraded' ? result.degraded : undefined;
+    // A degraded run whose delivered reply already is the fallback explanation is not announced twice.
+    const alreadyExplained = degraded?.fallback === true && result.delivery?.status === 'delivered';
+    if ((!result.success || (degraded && !alreadyExplained)) && (job.notifyOnFailure ?? this.notifyOnFailure)) {
       const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
       if (notify.channel !== 'silent' && notify.channel !== 'log') {
-        const msg = messages(job.locale, 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
+        const msg = messages(job.locale, degraded ? 'degraded' : 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
         await this.router.deliver({
           notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale),
         }).catch(() => {});
