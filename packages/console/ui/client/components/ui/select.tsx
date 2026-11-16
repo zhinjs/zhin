@@ -16,15 +16,16 @@ const SelectTrigger = forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
+    data-slot="input"
     className={cn(
-      "console-control flex h-[var(--console-control-height)] w-full items-center justify-between whitespace-nowrap rounded-[var(--console-radius-md)] border-[length:var(--console-border-width)] border-input bg-card hover:border-[hsl(var(--foreground)/0.45)] focus-visible:border-[hsl(var(--primary))] shadow-[var(--console-shadow-xs)] px-3 py-2 text-[length:var(--console-text-body)] ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 [&>span]:line-clamp-1",
+      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border border-input bg-card hover:border-foreground/45 focus-visible:border-primary px-3 text-body placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 [&>span]:line-clamp-1",
       className
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="size-4 shrink-0 opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -39,7 +40,7 @@ const SelectScrollUpButton = forwardRef<
     className={cn("flex cursor-default items-center justify-center py-1", className)}
     {...props}
   >
-    <ChevronUp className="h-4 w-4" />
+    <ChevronUp className="size-4" />
   </SelectPrimitive.ScrollUpButton>
 ))
 SelectScrollUpButton.displayName = "SelectScrollUpButton"
@@ -53,7 +54,7 @@ const SelectScrollDownButton = forwardRef<
     className={cn("flex cursor-default items-center justify-center py-1", className)}
     {...props}
   >
-    <ChevronDown className="h-4 w-4" />
+    <ChevronDown className="size-4" />
   </SelectPrimitive.ScrollDownButton>
 ))
 SelectScrollDownButton.displayName = "SelectScrollDownButton"
@@ -67,8 +68,9 @@ const SelectContent = forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      data-slot="popover"
       className={cn(
-        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,calc(100dvh-1rem)))] min-w-[8rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[var(--console-radius-lg)] border-[length:var(--console-border-width)] border-border bg-popover text-popover-foreground shadow-[var(--console-shadow-md)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "console-popover relative flex max-h-[min(24rem,var(--radix-select-content-available-height,calc(100dvh-1rem)))] min-w-32 max-w-[calc(100vw-1rem)] flex-col p-0",
         position === "popper" &&
           "w-[var(--radix-select-trigger-width)]",
         className
@@ -101,14 +103,14 @@ const SelectItem = forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center rounded-[var(--console-radius-sm)] py-1.5 pl-2.5 pr-8 text-[length:var(--console-text-body)] leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-primary/5 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-primary/5 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
       className
     )}
     {...props}
   >
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center text-primary">
+    <span className="absolute right-2 flex size-4 items-center justify-center text-primary">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        <Check className="size-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

@@ -1,11 +1,12 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * Visual regression of the @zhin.js/console-ui gallery (ADR 0063 决策 1 第 6 条): light and dark.
- * Run after `pnpm --filter @zhin.js/console-ui build`:
- *   pnpm --filter @zhin.js/console-ui test:visual
+ * @zhin.js/console-ui gallery in a real browser. Run after `pnpm --filter @zhin.js/console-ui build`:
+ *   pnpm --filter @zhin.js/console-ui test:visual   visual regression (console-ui.spec.ts), light and dark
+ *   pnpm --filter @zhin.js/console-ui test:audit    layout audit gate (audit.spec.ts, ADR 0063 D20)
  * With a preinstalled Chromium of another revision, point PLAYWRIGHT_CHROMIUM_EXECUTABLE at it.
- * Baselines depend on the fonts of the machine that rendered them; refresh with --update-snapshots.
+ * Baselines depend on the fonts of the machine that rendered them; refresh with --update-snapshots
+ * and review every changed image.
  */
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 

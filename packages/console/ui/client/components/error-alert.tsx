@@ -30,19 +30,19 @@ export function ErrorAlert({ error, onRetry, className, kind = 'other', technica
   const Icon = kind === '404' ? Info : AlertCircle
   return (
     <Alert variant={variantForKind(kind)} className={className}>
-      <Icon className="h-4 w-4" />
+      <Icon className="size-4" />
       <AlertDescription className="space-y-2">
        <div className="flex items-center justify-between gap-2">
         <span>{error}</span>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry} className="shrink-0">
-            <RefreshCw className="w-3 h-3 mr-1" />
+            <RefreshCw aria-hidden="true" />
             {i18n.t("error.retry")}</Button>
         )}
        </div>
         {technicalDetail ? (
-          <details className="text-xs">
-            <summary className="cursor-pointer">{i18n.t("error.technicalDetail")}</summary>
+          <details className="text-label">
+            <summary className="min-h-touch-min cursor-pointer">{i18n.t("error.technicalDetail")}</summary>
             <pre className="mt-2 whitespace-pre-wrap break-words">{technicalDetail}</pre>
           </details>
         ) : null}
