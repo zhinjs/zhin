@@ -681,6 +681,33 @@ flowchart LR
 
 程序化调用 `CommandIndex.dispatch({ input, source, snapshot })` 时返回 `status: unmatched | invalid | denied | executed`：`unmatched` 的 `matched` 为 `false`；`invalid` 带有 `issues: { field, message }[]` 和 `help`；`denied` 表示权限拒绝；只有 `executed` 有业务返回值。Host 可以传入真实的 `PermissionSubject` 进行鉴权。
 
+### 从中间件或按钮回调执行命令 {#dispatch-from-middleware}
+
+按钮回调（或任何入站消息）想"转成一条命令执行"时，在中间件 / handler 里用当前上下文取命令表，把**这条消息本身**作为 `source` 传进去，不要自己传 `snapshot`：
+
+```ts
+// middlewares/vote-buttons/index.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import { commandFeatureId, type CommandIndex } from '@zhin.js/command';
+
+export default defineMiddleware({
+  async handle(context, next) {
+    const payload = context.input.content;
+    if (!payload.startsWith('vote ')) return next();
+    const result = await context.project<CommandIndex>(commandFeatureId).dispatch({ input: payload, source: context.input });
+    if (result.status === 'denied') return result.denial?.reason ?? '你不能执行这个操作';
+    if (result.status === 'invalid') return result.help;
+    return undefined; // 命令自己已经 $reply
+  },
+});
+```
+
+- 命令以这条消息的**真实发送者**执行：`permit`、执行策略照常检查，命令里的 `input.sender` 和回复归属都来自原消息，中间件无法替换成别人。
+- 命令表绑定到这条消息所在操作的 generation 快照。自己缓存一份命令表跨热重载使用，或传入别的 `snapshot`，会被拒绝（`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`）——每次都在当前中间件 / handler 里调用 `context.project()`。
+- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致。
+- 这样执行的命令没有 `context.interaction`（多轮追问）；需要追问的流程请让用户直接发命令文本。
+- 不需要改写参数时也可以不经中间件：JSX `<button onClick>` 回调本身带 `permit`（见[按钮](./middleware-components.md#按钮)）；QQ 官方的 `mode: 'command'` 按钮由平台把 `payload` 预填成用户消息，按普通命令走同一条匹配与鉴权链路（其他平台的适配器目前不支持这种按钮）。
+
 ### 适配器的 endpoint 管理命令
 
 ::: details 给适配器生成 list / add / remove 命令
