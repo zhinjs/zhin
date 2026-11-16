@@ -4,6 +4,9 @@ import type { AgentMessage, AgentTool, Context, StreamOptions } from '@zhin.js/a
 import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
 import { appendConversationBatches, encodeConfirmedOutput } from '../../src/core/agent-core-settlement.js';
+import { deliverProgressiveReply } from '../../src/outbound/progressive-reply-delivery.js';
+import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../../src/core/reply-phase.js';
+import type { AgentOutputElement } from '../../src/outbound/agent-output.js';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
 import { registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 
@@ -37,7 +40,7 @@ type Step = (context: Context, options?: StreamOptions) => Answer | Promise<Answ
 function session() {
   const persisted: AgentMessage[] = [];
   const calls: string[] = [];
-  const turn = async (steps: Step[], stream: CoreReplyStream, turnId: string) => {
+  const turn = async (steps: Step[], stream: CoreReplyStream | undefined, turnId: string, replyPhases?: ReplyPhaseLifecycle) => {
     const llm = wireMockLlmApi({ models: ['m'] });
     vi.spyOn(llm.runtime, 'complete').mockImplementation(async (_model, context, opts) => {
       calls.push(JSON.stringify(context.messages));
@@ -63,7 +66,7 @@ function session() {
       host: host as never, sessionId: 'session', rawContent: 'hello', promptProfile: { kind: 'interactive' },
       turnContext: { identity: { turnId }, input: { text: '用语音说你好' }, origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'person' },
         principal: { subjectId: 'person', roles: ['owner'] }, session: { key: 'session' } },
-      replyStream: stream, replySegments, allTools: [voiceTts], resolvedTools: [voiceTts], toolExecution: { execute: executeTool } as never,
+      replyStream: stream, replyPhases, replySegments, allTools: [voiceTts], resolvedTools: [voiceTts], toolExecution: { execute: executeTool } as never,
       personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: 'direct',
     } as never), () => {});
     return { result, executeTool };
@@ -72,6 +75,53 @@ function session() {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+/**
+ * A platform stream that confirms exactly the segments of the snapshot it finishes with, like the
+ * production Core reply stream does for a platform without edit-in-place.
+ */
+function confirmingStream(id: string) {
+  const confirmed: CoreReplyStream['confirmed'][number][] = [];
+  let receipt: CoreReplyStream['receipt'] = { status: 'suppressed' };
+  const stream: CoreReplyStream = {
+    minIntervalMs: 0, get receipt() { return receipt; }, get confirmed() { return confirmed; },
+    update: () => {},
+    finish: async (snapshot) => {
+      for (const [index, message] of snapshot.messages.entries()) {
+        confirmed.push({ key: `${id}/${index}`, segments: message.segments.map(part => part.value), message: { conversation: {} as never, id: `${id}-${index}` } });
+      }
+      receipt = { status: 'sent', message: { conversation: {} as never, id: `${id}-0` } } as never;
+      return receipt;
+    },
+    cancel: async () => receipt,
+  };
+  return stream;
+}
+
+/** The turn engine's answer-phase owner: streamed phases settle through deliverProgressiveReply. */
+function phaseLifecycle(turnId: string) {
+  const sent: (readonly AgentOutputElement[])[] = [];
+  const reply = {
+    send: async (elements: readonly AgentOutputElement[]) => { sent.push(elements); return { status: 'sent' as const, messageId: `${turnId}-tail`, messages: [] }; },
+  };
+  let sequence = 0;
+  const openPhase = () => { const id = `${turnId}:answer:${++sequence}`; return { id, stream: confirmingStream(id) }; };
+  // Like the turn engine: the first phase is opened up front and handed out by the first open().
+  const first = openPhase();
+  let firstAvailable = true;
+  const lifecycle: ReplyPhaseLifecycle = {
+    open: () => { if (firstAvailable) { firstAvailable = false; return first; } return openPhase(); },
+    settle: async (phase): Promise<ReplyPhaseFacts> => {
+      if (!phase.run) {
+        const delivery = await reply.send(phase.output);
+        return { delivery, confirmedOutput: [...phase.output], messageId: delivery.messageId };
+      }
+      const { delivery, confirmedOutput } = await deliverProgressiveReply({ run: phase.run, snapshot: phase.snapshot }, phase.output, reply as never);
+      return { delivery, confirmedOutput, ...(delivery.status === 'sent' && delivery.messageId ? { messageId: delivery.messageId } : {}) };
+    },
+  };
+  return { lifecycle, sent, stream: first.stream };
+}
 
 describe('#1250 batch 29 review: streamed replies never keep voice base64', () => {
   it('drops a copied inline voice from the stream, keeps the tool voice once, and stores no base64 in history', async () => {
@@ -115,6 +165,83 @@ describe('#1250 batch 29 review: streamed replies never keep voice base64', () =
     ], second.stream, 'voice-2');
     expect(s.calls.at(-1)).toContain('已发送');
     expect(s.calls.at(-1)).not.toContain(AUDIO.slice(0, 64));
+  });
+});
+
+describe('#1250 batch 29 review: history never keeps model-written inline media', () => {
+  it('non-progressive reply: an inline audio the model wrote is stored as a placeholder only', async () => {
+    const s = session();
+    const copied = { type: 'audio', data: { media: { kind: 'base64', value: AUDIO.slice(0, 4000) } } };
+    const first = await s.turn([
+      () => assistantToolCallReply([{ id: 'tts', name: 'voice_tts', arguments: { text: '你好' } }]),
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      () => assistantTextReply(structured([{ type: 'text', data: { text: '好的' } }, copied])),
+    ], undefined, 'plain-1');
+    expect(first.result.progressive).toBeUndefined();
+    // Outbound dedup: the tool's voice once, the copy dropped.
+    const output = first.result.output ?? [];
+    expect(output.filter(element => element.type === 'audio')).toHaveLength(1);
+    expect(JSON.stringify(output.filter(element => element.type === 'message'))).not.toContain(AUDIO.slice(0, 64));
+    // The non-progressive engine path projects with a message id only (no confirmedOutput).
+    await first.result.projectConversation?.({ messageId: 'sent-1' });
+    const history = JSON.stringify(s.persisted);
+    expect(history).toContain('好的');
+    expect(history).not.toContain(AUDIO.slice(0, 64));
+    expect(history).toContain('[已省略 base64 数据（4000 字符），未提供给模型]');
+
+    await s.turn([() => assistantTextReply(structured([{ type: 'text', data: { text: '还在' } }]))], undefined, 'plain-2');
+    expect(s.calls.at(-1)).toContain('[已省略 base64 数据');
+    expect(s.calls.at(-1)).not.toContain(AUDIO.slice(0, 64));
+  });
+
+  it('streamed reply phases: deliverProgressiveReply → stream.confirmed → settlePhase keeps only placeholders', async () => {
+    const s = session();
+    // The tool's real voice (sent as a tail element) and an inline voice the model invented
+    // (no tool produced it, so the stream offers it and the platform confirms it).
+    const invented = { type: 'audio', data: { media: { kind: 'base64', value: AUDIO.slice(0, 4000) } } };
+    const phases = phaseLifecycle('phase-1');
+    const first = await s.turn([
+      () => assistantToolCallReply([{ id: 'tts', name: 'voice_tts', arguments: { text: '你好' } }]),
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      async (_context, opts) => {
+        opts?.onTextDelta?.(structured([{ type: 'text', data: { text: '好的' } }]));
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return assistantTextReply(structured([{ type: 'text', data: { text: '好的' } }]));
+      },
+    ], phases.stream, 'phase-1', phases.lifecycle);
+    // The real voice went out once, through the reply port, after the stream settled.
+    expect(phases.sent.flat().filter(element => element.type === 'audio')).toHaveLength(1);
+    // Phase path: the engine projects with no delivery (phase facts are authoritative).
+    await first.result.projectConversation?.(undefined);
+    let history = JSON.stringify(s.persisted);
+    expect(history).toContain('好的');
+    expect(history).toContain('[语音 mp3 18.6KB 已发送]');
+    expect(history).not.toContain(AUDIO.slice(0, 64));
+
+    const second = phaseLifecycle('phase-2');
+    const turnTwoStart = s.calls.length;
+    const next = await s.turn([
+      () => assistantToolCallReply([{ id: 'ready-2', name: 'prepare_reply', arguments: {} }]),
+      async (_context, opts) => {
+        const body = structured([{ type: 'text', data: { text: '再听一次' } }, invented]);
+        opts?.onTextDelta?.(body);
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return assistantTextReply(body);
+      },
+    ], second.stream, 'phase-2', second.lifecycle);
+    // The second turn's model input carries the first turn's placeholder, never the payload.
+    expect(s.calls).toHaveLength(turnTwoStart + 2);
+    for (const call of s.calls.slice(turnTwoStart)) {
+      expect(call).toContain('[语音 mp3 18.6KB 已发送]');
+      expect(call).not.toContain(AUDIO.slice(0, 64));
+    }
+    // The invented voice was streamed and confirmed by the platform.
+    expect(JSON.stringify(second.stream.confirmed)).toContain(AUDIO.slice(0, 64));
+    await next.result.projectConversation?.(undefined);
+    history = JSON.stringify(s.persisted);
+    expect(history).toContain('再听一次');
+    expect(history).toContain('[语音 2.9KB 已发送]');
+    expect(history).not.toContain(AUDIO.slice(0, 64));
   });
 });
 
