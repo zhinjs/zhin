@@ -264,7 +264,8 @@ export function resolveOutboundMaxButtons(adapter: CapabilityId, snapshot: Runti
 /**
  * Keyboards with more buttons than a native endpoint takes: the first `maxButtons` stay buttons
  * and the rest are listed as numbered text right before the keyboard, so every option stays
- * reachable by number or name. The overflow numbers are remembered like a text keyboard's.
+ * reachable by number or name. The whole keyboard's numbers are remembered like a text keyboard's,
+ * so the listed overflow numbers continue the buttons' own numbering.
  */
 export function applyOutboundButtonLimit(
   payload: unknown,
@@ -280,12 +281,15 @@ export function applyOutboundButtonLimit(
     const kept = new Set(flat.slice(0, maxButtons));
     const rows = data.rows.map(row => row.filter(button => kept.has(button))).filter(row => row.length > 0);
     const keptPayloads = new Set([...kept].map(button => button.payload));
-    const overflow = Object.fromEntries(Object.entries(effectiveKeyboardFallbackMap(data))
-      .filter(([, value]) => !keptPayloads.has(value)));
-    const remembered = remember?.(overflow);
-    const map = remembered && typeof remembered === 'object' && !Array.isArray(remembered) ? remembered : overflow;
-    const lines = Object.entries(map).sort(([a], [b]) => Number(a) - Number(b)).map(([key, value]) =>
-      `${key}. ${flat.find(button => !button.disabled && button.payload === value)?.label ?? '·'}`);
+    // Remember the whole keyboard, not just the overflow: the runtime renumbers digit labels from
+    // the conversation's next free number, so registering only options 11–12 would publish them
+    // as 「1」「2」 and a reply 「1」 would pick option 11 instead of the first button (#1250).
+    const full = effectiveKeyboardFallbackMap(data);
+    const remembered = remember?.(full);
+    const map = remembered && typeof remembered === 'object' && !Array.isArray(remembered) ? remembered : full;
+    const lines = Object.entries(map).filter(([, value]) => !keptPayloads.has(value))
+      .sort(([a], [b]) => Number(a) - Number(b)).map(([key, value]) =>
+        `${key}. ${flat.find(button => !button.disabled && button.payload === value)?.label ?? '·'}`);
     const keyboard = { ...item, data: { ...data, rows } };
     if (lines.length === 0) return [keyboard];
     return [{ type: 'text', data: { text: `${MORE_OPTIONS_HINT}\n${lines.join('\n')}` } }, keyboard];

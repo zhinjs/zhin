@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HtmlRendererHost, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { RuntimeInteractiveRouter } from '../../src/plugin-runtime/im/interactive-router.js';
 import {
   adapterDeclaresLiveDanmaku,
   applyOutboundInteractivePolicy,
@@ -571,6 +572,18 @@ describe('native button limit (#1250 select-over-10-options-no-buttons)', () => 
     expect(payload[1]!.data.text).toContain('11. 歌曲11');
     expect(payload[1]!.data.text).toContain('12. 歌曲12');
     expect(payload[2]!.data.rows.flat()).toHaveLength(10);
-    expect(remembered).toEqual([{ '11': 'p11', '12': 'p12' }]);
+    expect(remembered).toEqual([Object.fromEntries(buttons.map((b, i) => [String(i + 1), b.payload]))]);
+  });
+
+  it('numbers the overflow after the buttons when the runtime allocates fresh numbers, so 「1」 stays the first option', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const conversation = { endpoint: { adapter: 'test', id: 'default' }, kind: 'private', id: 'u1' } as never;
+    const payload = applyOutboundButtonLimit([keyboard], 10, map => router.rememberFallback(conversation, 1, map)) as Array<{ type: string; data: Record<string, any> }>;
+    expect(payload[0]!.data.text).toContain('11. 歌曲11');
+    expect(payload[0]!.data.text).toContain('12. 歌曲12');
+    expect(payload[0]!.data.text).not.toMatch(/^1\. /mu);
+    const resolve = (content: string) => router.resolvePayload({ content, conversation, generation: 1 } as never);
+    expect(resolve('1')).toBe('p1');
+    expect(resolve('11')).toBe('p11');
   });
 });
