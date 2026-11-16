@@ -1,5 +1,12 @@
 # @zhin.js/plugin-60s
 
+## 1.1.23
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.20
+- @zhin.js/tool@1.1.23
+
 ## 1.1.22
 
 ### Patch Changes
