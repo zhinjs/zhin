@@ -3,7 +3,8 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
-import type { OutboundMessageService } from '@zhin.js/core/runtime';
+import { projectOutboundPayload, type OutboundMessageService } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import defineGithubAdapter from '../adapters/github/index.js';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { GhClient } from '../src/gh-client.js';
@@ -103,6 +104,56 @@ describe('github protocol helpers', () => {
       { type: 'text', data: { text: 'hi' } },
       { type: 'at', data: { id: 'alice', name: 'alice' } },
     ])).toBe('hi@alice');
+  });
+
+  it('keeps Markdown segments as GitHub Flavored Markdown blocks (ADR 0064 F2)', () => {
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '## 结果\n\n- **通过**\n- `lint`' } },
+    ])).toBe('## 结果\n\n- **通过**\n- `lint`');
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: '总结：' } },
+      { type: 'markdown', data: { content: '| a | b |\n|---|---|\n| 1 | 2 |' } },
+      { type: 'text', data: { text: '完毕' } },
+    ])).toBe('总结：\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n完毕');
+    expect(formatOutboundBody([{ type: 'markdown', data: { content: '' } }, { type: 'text', data: { text: 'x' } }])).toBe('x');
+  });
+
+  it('separates a Markdown block ending in one newline so the next text does not continue it', () => {
+    // GFM lazy continuation: `- item\n谢谢` puts 谢谢 inside the list item, `> 引用\n谢谢` inside the quote.
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '- 条目\n' } },
+      { type: 'text', data: { text: '谢谢' } },
+    ])).toBe('- 条目\n\n谢谢');
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: '说明\n' } },
+      { type: 'markdown', data: { content: '> 引用' } },
+    ])).toBe('说明\n\n> 引用');
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '> 引用\n\n' } },
+      { type: 'text', data: { text: '\n谢谢' } },
+    ])).toBe('> 引用\n\n\n谢谢');
+  });
+
+  it('declares native Markdown so the core projection keeps the formatting (ADR 0064 F2)', async () => {
+    expect(defineGithubAdapter.segments?.markdown).toBe('native');
+    const snapshot = {
+      root: 'root',
+      tree: new Map(),
+      capabilities: new Map([['adapter:github', { id: 'adapter:github', definition: defineGithubAdapter }]]),
+      resources: new Map([['root', new Map()]]),
+    } as unknown as Parameters<typeof projectOutboundPayload>[2];
+    const conversation = {
+      endpoint: { id: 'adapter:github', adapter: 'github' },
+      kind: 'channel',
+      id: 'owner/repo/issues/7',
+    } as ConversationRef;
+    const projected = await projectOutboundPayload(
+      [{ type: 'markdown', data: { content: '**粗体** 与 [链接](https://example.org)' } }],
+      conversation,
+      snapshot,
+    );
+    expect(projected.rendering.fallbacks).toEqual([]);
+    expect(formatOutboundBody(projected.payload)).toBe('**粗体** 与 [链接](https://example.org)');
   });
 
   it('formats outbound media segments from canonical data.media only', () => {
@@ -267,6 +318,28 @@ describe('github plugin runtime adapter', () => {
     });
     expect(id).toBe('99');
     expect(gh.createIssueComment).toHaveBeenCalledWith({ repo: 'owner/repo', number: 7, body: 'reply text', signal: expect.any(AbortSignal) });
+    await endpoint.stop();
+  });
+
+  it('send posts a Markdown segment as the comment body unchanged', async () => {
+    const gh = mockGhClient();
+    const endpoint = await createEndpointHarness(() => new GithubEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'github'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: resolveGithubConfig({ id: 'api-only', app_id: 1, private_key: 'k' }),
+    }), { gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start();
+    endpoint.open();
+    await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'channel',
+        id: 'owner/repo/issues/7',
+        parent: { kind: 'channel', id: 'owner/repo' },
+      },
+      payload: [{ type: 'markdown', data: { content: '### 构建\n\n- [x] **通过**' } }],
+    });
+    expect(gh.createIssueComment).toHaveBeenCalledWith({ repo: 'owner/repo', number: 7, body: '### 构建\n\n- [x] **通过**', signal: expect.any(AbortSignal) });
     await endpoint.stop();
   });
 
