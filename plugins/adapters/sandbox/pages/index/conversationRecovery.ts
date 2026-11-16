@@ -66,3 +66,45 @@ export function prependResultPage(previous: RecoveredResultPage, earlier: Recove
   for (const result of earlier.results) if (!rows.has(result.turnId)) rows.set(result.turnId, result);
   return { ...earlier, results: [...rows.values()].sort((a, b) => a.completedAt - b.completedAt || a.turnId.localeCompare(b.turnId)) };
 }
+
+/** One settled inbound outcome (ADR 0061) as `GET /api/conversations/outcomes` returns it (#1250). */
+export interface ConversationOutcome {
+  readonly id: string;
+  readonly messageId?: string;
+  readonly settledAt: number;
+  readonly outcome: string;
+  readonly reason?: string;
+  readonly stage: string;
+  readonly addressed: boolean;
+  readonly reply: 'yes' | 'no' | 'throttled';
+  readonly text: string;
+  readonly adminText: string;
+}
+
+/**
+ * Why one sent message got (or did not get) a reply: `null` on a Host without the route,
+ * `undefined` while the message is still being processed (not settled yet).
+ */
+export async function readMessageOutcome(connectionId: string, sessionKey: string, messageId: string, locale: 'zh-CN' | 'en',
+  signal?: AbortSignal, context: SandboxRequestContext = captureSandboxRequestContext()): Promise<ConversationOutcome | null | undefined> {
+  const url = new URL('/api/conversations/outcomes', `${context.apiBase || window.location.origin}/`);
+  url.searchParams.set('connectionId', connectionId);
+  url.searchParams.set('sessionKey', sessionKey);
+  url.searchParams.set('messageId', messageId);
+  url.searchParams.set('locale', locale);
+  const response = await fetch(url, { headers: context.headers, cache: 'no-store', signal });
+  if (response.status === 404 || response.status === 405) return null;
+  const body = await response.json() as { success?: boolean; data?: { outcomes?: readonly ConversationOutcome[] }; error?: string };
+  if (!response.ok || !body.success || !body.data) throw new Error(body.error || `Outcome read failed (${response.status})`);
+  return body.data.outcomes?.[0];
+}
+
+/**
+ * The notice for a message nobody answered: only outcomes with no chat reply by design
+ * (`reply: 'no'`), with the code and reason so the run log and the trace can be matched.
+ */
+export function quietOutcomeNotice(outcome: ConversationOutcome | null | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'): string | null {
+  if (!outcome || outcome.reply !== 'no') return null;
+  const code = `${outcome.outcome}${outcome.reason ? ` · ${outcome.reason}` : ''}`;
+  return locale === 'en' ? `${outcome.text} (${code})` : `${outcome.text}（${code}）`;
+}

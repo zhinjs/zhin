@@ -22,7 +22,7 @@ import {
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
 import { commandDescription, commandMessages } from './messages.js';
-import { userFacingErrorText } from './user-facing-error.js';
+import { userFacingErrorText, userFacingRefusalReason } from './user-facing-error.js';
 import { rankCommandSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate } from './command-suggestion.js';
 export type { CommandSuggestionConfig } from './command-suggestion.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
@@ -144,6 +144,8 @@ export interface CommandDispatchResult {
    * `executed` so existing consumers keep replying as before.
    */
   readonly refused?: true;
+  /** With `refused`: the error's closed refusal code ({@link UserFacingError.reason}), when it has one. */
+  readonly refusalReason?: string;
 }
 
 /** Semantic menu navigation; the IM composition layer supplies platform controls. */
@@ -607,7 +609,9 @@ export class CommandIndex {
       // normal outbound chain; every other failure keeps propagating to the inbound runtime's logs.
       const text = userFacingErrorText(error, locale);
       if (text === undefined) throw error;
-      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text, refused: true });
+      const refusalReason = userFacingRefusalReason((error as { reason?: unknown }).reason);
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text, refused: true,
+        ...(refusalReason ? { refusalReason } : {}) });
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }

@@ -2,7 +2,7 @@ import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/messag
 import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
-import { getLogger } from '@zhin.js/logger';
+import { addTransport, getLogger, removeTransport, setLevel } from '@zhin.js/logger';
 import {
   SnapshotStore,
   Scope,
@@ -5429,6 +5429,49 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
         visibility: 'sender', reply: 'no', sceneId: 'group:quiet-group' });
       expect(fixture.im.messageOutcomes.list({ conversation: group })).toHaveLength(1);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps a UserFacingError refusal code as the refused reason (#1250 self-service-unknown-conversation-opaque)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new UserFacingError('模拟身份没有 zhin 角色', { reason: 'simulated-sender' }); },
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(latest(fixture)).toMatchObject({ outcome: 'refused', reason: 'simulated-sender', stage: 'command', reply: 'yes' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+    // A code outside the closed shape is dropped: the generic reason stays.
+    const loose = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new UserFacingError('no', { reason: 'Not A Code!' }); },
+    });
+    try {
+      await receive(loose.im, fixtureInput(loose, '/gh issue list open'));
+      expect(latest(loose)).toMatchObject({ outcome: 'refused', reason: 'user_facing_error' });
+    } finally { await loose.adapters.stop(); await loose.store.close(); }
+  });
+
+  it('logs the first unaddressed group message of a minute at info with its reason (#1250 unaddressed-message-no-record)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    const lines: string[] = [];
+    const transport = { write: (line: string) => { lines.push(line); } };
+    addTransport(transport);
+    setLevel('info', getLogger('im.inbound'), true);
+    try {
+      const privateInput = fixtureInput(fixture, 'x');
+      const group = { ...privateInput.conversation, kind: 'group' as const, id: 'weather-group' };
+      await receive(fixture.im, { ...privateInput, conversation: group, content: '天气 上海' });
+      await receive(fixture.im, { ...privateInput, conversation: group, content: '天气 北京' });
+      expect(fixture.im.messageOutcomes.list({ conversation: group })).toHaveLength(2);
+      expect(fixture.im.messageOutcomes.list({ conversation: group })[0]).toMatchObject({ outcome: 'not_addressed', addressed: false });
+      const logged = lines.filter(line => line.includes('inbound_outcome') && line.includes('weather-group'));
+      // One info line for the minute (the second message is debug only); it names the outcome and the reason.
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toContain('not_addressed');
+      expect(logged[0]).toContain('prefix_mismatch');
+      expect(logged[0]).toContain('first_per_minute');
+    } finally {
+      removeTransport(transport);
+      await fixture.adapters.stop(); await fixture.store.close();
+    }
   });
 
   it('records internal_error when the command operation fails to finish (review of #1281)', async () => {

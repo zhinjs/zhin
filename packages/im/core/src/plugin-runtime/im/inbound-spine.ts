@@ -755,6 +755,11 @@ export function isAddressedMessage(message: Pick<Message, 'conversation' | 'ment
   return typeof prefix === 'string' && prefix.length > 0 && message.content.trim().startsWith(prefix);
 }
 
+function refusalReasonOf(result: MessageDispatchResult): string | undefined {
+  const reason = (result as { refusalReason?: unknown }).refusalReason;
+  return typeof reason === 'string' && /^[a-z][a-z0-9_.:-]{0,63}$/u.test(reason) ? reason : undefined;
+}
+
 /** Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). */
 function reportCommandOutcome(message: Message, result: MessageDispatchResult): void {
   if (!result.matched) return;
@@ -775,8 +780,9 @@ function reportCommandOutcome(message: Message, result: MessageDispatchResult): 
       reportInboundOutcome(message, { ...base, outcome: 'rate_limited', reason: result.limit?.reason ?? 'limited' });
       return;
     default:
+      // The command's own closed refusal code (UserFacingError `reason`), else the generic one.
       reportInboundOutcome(message, refused
-        ? { ...base, outcome: 'refused', reason: 'user_facing_error' }
+        ? { ...base, outcome: 'refused', reason: refusalReasonOf(result) ?? 'user_facing_error' }
         : { ...base, outcome: 'command_replied', reason: result.menu ? 'menu' : 'executed' });
   }
 }

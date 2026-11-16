@@ -105,8 +105,17 @@ interface InboundRuntimeContext {
 }
 
 /** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
+/** Conversations remembered for the per-minute `not_addressed` info line (bounded; cleared when full). */
+const QUIET_LOG_CONVERSATIONS = 2_000;
+
 export class InboundRuntime {
   readonly #dispatcher: MessageDispatcher;
+  /**
+   * zhinjs/zhin#1250 (`unaddressed-message-no-record`): the minute of the last `not_addressed` line
+   * logged at info per conversation. The first unaddressed message of a conversation each minute
+   * is logged at info (the instance log the Console shows), the rest of that minute at debug.
+   */
+  readonly #quietLogged = new Map<string, number>();
 
   constructor(
     private readonly context: InboundRuntimeContext,
@@ -621,6 +630,15 @@ export class InboundRuntime {
     return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
   }
 
+  /** True for the first `not_addressed` of `conv` in the minute of `at` (see {@link InboundRuntime.#quietLogged}). */
+  #firstQuietThisMinute(conv: string, at: number): boolean {
+    const minute = Math.floor(at / 60_000);
+    if (this.#quietLogged.get(conv) === minute) return false;
+    if (this.#quietLogged.size >= QUIET_LOG_CONVERSATIONS && !this.#quietLogged.has(conv)) this.#quietLogged.clear();
+    this.#quietLogged.set(conv, minute);
+    return true;
+  }
+
   /** Settles the ledger once (ADR 0061 §4.1); never throws over the original failure. */
   #settleOutcome(ledger: InboundOutcomeLedger, failed: boolean, failure: unknown): void {
     let record: MessageOutcomeRecord;
@@ -651,7 +669,11 @@ export class InboundRuntime {
     if (record.outcome === 'unrecorded') {
       logger.warn(formatCompact({ ...fields, op: 'inbound_outcome_unrecorded', lastStage: record.lastStage }));
     } else if (!record.addressed && QUIET_MESSAGE_OUTCOMES.has(record.outcome)) {
-      logger.debug(formatCompact(fields));
+      if (record.outcome === 'not_addressed' && this.#firstQuietThisMinute(conv, record.settledAt)) {
+        logger.info(formatCompact({ ...fields, sampled: 'first_per_minute' }));
+      } else {
+        logger.debug(formatCompact(fields));
+      }
     } else {
       logger.info(formatCompact(fields));
     }

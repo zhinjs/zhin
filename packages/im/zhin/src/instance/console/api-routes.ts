@@ -17,6 +17,7 @@ import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { isKnownConversationSession } from './conversation-session.js';
 import { registerConversationHistoryRoutes } from './conversation-history-routes.js';
 import { registerConversationResultRoutes } from './conversation-result-routes.js';
+import { registerConversationOutcomeRoutes } from './conversation-outcome-routes.js';
 import { registerDataMigrationRoutes } from './data-migration-routes.js';
 import { registerInteractionRoutes } from './interaction-routes.js';
 import { registerWorkspaceConversationRoutes } from './workspace-conversation-routes.js';
@@ -107,6 +108,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerMessageSendRoutes({ http, base, im });
   registerConversationHistoryRoutes({ http, base, im, databaseHost, snapshots });
   registerConversationResultRoutes({ http, base, projectRoot, snapshots });
+  registerConversationOutcomeRoutes({ http, base, outcomes: im?.messageOutcomes, snapshots });
   registerInteractionRoutes({ http, base, im, snapshots });
   registerDataMigrationRoutes({ http, base, projectRoot, snapshots });
   registerWorkspaceConversationRoutes({ http, base, snapshots, databaseHost });

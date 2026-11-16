@@ -318,10 +318,44 @@ describe('attention.list item text', () => {
     expect((await detail('closed', 'en')).detail).toMatch(/^Connection: disconnected\. /u);
     expect((await detail('idle')).detail).toMatch(/^连接状态：未启动。/u);
     expect((await detail('connecting')).detail).toMatch(/^连接状态：连接中。/u);
+    // #1250 (`console-offline-no-reason`): a state the adapter does not report is not "offline".
     const unknown = await detail('weird-state');
-    expect(unknown.detail).toMatch(/^连接状态：未知。/u);
+    expect(unknown.title).toBe('qq / bot 未上报连接状态');
+    expect(unknown.title).not.toContain('离线');
+    expect(unknown.detail).toMatch(/^账号已启动，但适配器没有上报连接状态/u);
     expect(unknown.detail).not.toContain('weird-state');
     expect(unknown.revision).not.toBe((await detail('unknown')).revision);
+  });
+
+  it('says "no connection state reported" (not offline) for an admitted account without transport state, with causes and checks (#1250)', async () => {
+    const list = await collectAttention({ endpoints: () => [{ adapter: 'github', name: 'zhin-dev', connected: false, phase: 'offline',
+      transportState: 'unknown', admitted: true, startAttempt: 0 }] }, { allows: owner });
+    const item = list.items[0]!;
+    expect(item).toMatchObject({ kind: 'endpoint.offline', severity: 'info', title: 'github / zhin-dev 未上报连接状态',
+      reason: { code: 'state-unreported' } });
+    expect(item.title).not.toContain('离线');
+    expect(item.detail).not.toContain('未知');
+    expect(item.detail).toContain('Webhook');
+    expect(item.detail).toContain('测试连接');
+    const en = (await collectAttention({ endpoints: () => [{ adapter: 'github', name: 'zhin-dev', connected: false, phase: 'offline',
+      transportState: 'unknown', admitted: true }] }, { allows: owner, locale: 'en' })).items[0]!;
+    expect(en.title).toBe('github / zhin-dev reports no connection state');
+  });
+
+  it('keeps "offline" for a real failure and says when it failed and how often it retried (#1250)', async () => {
+    const at = Date.UTC(2026, 10, 16, 1, 2, 3);
+    const list = await collectAttention({ endpoints: () => [{ adapter: 'github', name: 'zhin-dev', connected: false, phase: 'retrying',
+      transportState: 'unknown', admitted: false, startAttempt: 3, nextRetryAt: at + 60_000,
+      lastError: { category: 'auth', message: 'Bad credentials', at } }] }, { allows: owner });
+    const item = list.items[0]!;
+    expect(item).toMatchObject({ severity: 'warning', title: 'github / zhin-dev 离线' });
+    expect(item.detail).toContain('最近一次启动失败（auth）：Bad credentials');
+    expect(item.detail).toContain(`失败时间：${new Date(at).toISOString()}`);
+    expect(item.detail).toContain(`已自动重试 3 次，下次重试：${new Date(at + 60_000).toISOString()}`);
+    // A disconnected transport keeps the offline wording too.
+    const closed = (await collectAttention({ endpoints: () => [{ adapter: 'qq', name: 'bot', connected: false, phase: 'offline',
+      transportState: 'closed', admitted: true }] }, { allows: owner })).items[0]!;
+    expect(closed.title).toBe('qq / bot 离线');
   });
 
   it('names where an approval was requested without the internal session key', async () => {

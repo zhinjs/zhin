@@ -611,6 +611,7 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('POST', '/tasks/change', P.FEATURE_CONFIGURE),
   httpRule('GET', '/conversations/history', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/results', P.ENDPOINT_VIEW),
+  httpRule('GET', '/conversations/outcomes', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/workspaces', P.ENDPOINT_VIEW),
   httpRule('PUT', '/conversations/workspaces', P.ENDPOINT_OPERATE),
   httpRule('GET', '/conversations/workspaces/commands', P.ENDPOINT_VIEW),

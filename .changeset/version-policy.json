@@ -39,17 +39,22 @@
     {
       "package": "@zhin.js/core",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 23 批新增公开导出类型 InboundSecretGuard（match / inspectNative）/ InboundSecretMatch（handle / discard）与 ImRuntimeOptions.inboundSecret（入站最早处接手携带当前认领码的消息：不记录、不进 AI、日志只显示脱敏文本；被丢弃的消息作废码；含码的 platform.receive 不派发给原生 Handler），conversation_events 写入时对开启中的认领码脱敏。npm 上 1.11.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 23 批新增公开导出类型 InboundSecretGuard（match / inspectNative）/ InboundSecretMatch（handle / discard）与 ImRuntimeOptions.inboundSecret（入站最早处接手携带当前认领码的消息：不记录、不进 AI、日志只显示脱敏文本；被丢弃的消息作废码；含码的 platform.receive 不派发给原生 Handler），conversation_events 写入时对开启中的认领码脱敏。npm 上 1.11.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增公开导出 `resolveChatRoleMessageContext()` 与类型 `ChatRoleSubjectFailure` / `ChatRoleSubjectResolution`（说明发送者为什么无法解析为聊天身份：`no-conversation` / `unknown-endpoint` / `no-adapter` / `no-sender` / `simulated-sender` / `invalid-sender`），`chatRoleMessageContext()` 行为不变；指令的 `UserFacingError` 带拒绝码时结局 `refused` 的 reason 记该码。与第 23 批合并为 1.11.0，npm 上 1.11.0 未被占用。"
     },
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增类型 `ConsoleConversationOutcome` / `ConsoleConversationOutcomeList`（`GET {base}/conversations/outcomes`，`CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`）、`ConsoleAttentionPersonLink` 与 `ConsoleAttentionItem.links`，`ConsoleMessageDiagnostic` 新增可选 `outcome`。与第 28 批合并为 1.6.0，npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
       "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——`ConsoleAgentIntrospection` 新增可选方法 `testMcp(name)`，`ConsoleRestPagesOptions` 新增可选 `mcpTestMaxConcurrent` / `mcpTestCooldownMs`，新增路由 `POST {base}/introspection/mcp/test`（MCP 服务立即连接测试）。npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/command",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 31 批——`UserFacingError` 新增可选 `reason`（构造参数 `{ reason }`，闭合的拒绝码），新增导出 `userFacingRefusalReason()`，`CommandDispatchResult` 新增可选 `refusalReason`（被拒绝的指令在入站结局里记 `refused` 与该码，不再是 `command_replied | executed`）。npm 上 1.4.0 未被占用。"
     }
   ]
 }

@@ -164,6 +164,40 @@ export interface ConsoleMessageEventData extends ConsoleEndpointEventData {
   }>;
 }
 
+/**
+ * The settled outcome of one inbound message (ADR 0061), as the Sandbox and the trace pages show it
+ * (`GET /conversations/outcomes`, zhinjs/zhin#1250). Codes plus localized text; no message body and
+ * no administrator detail.
+ */
+export interface ConsoleConversationOutcome {
+  readonly id: string;
+  readonly messageId?: string;
+  readonly settledAt: number;
+  /** ADR 0061 outcome code (`not_addressed`, `refused`, `command_replied`, `filtered_by_policy`, …). */
+  readonly outcome: string;
+  /** Closed sub-reason (`prefix_mismatch`, `no_command_not_ambient`, `simulated-sender`, …). */
+  readonly reason?: string;
+  readonly stage: string;
+  readonly addressed: boolean;
+  /** Whether the bot said something in chat: `yes`, `no` (by design) or `throttled`. */
+  readonly reply: 'yes' | 'no' | 'throttled';
+  readonly command?: string;
+  readonly turnId?: string;
+  readonly errorId?: string;
+  /** Sender-facing explanation in the requested locale. */
+  readonly text: string;
+  /** Operator explanation (codes and plugin names; never the redacted detail). */
+  readonly adminText: string;
+}
+
+/** `GET /conversations/outcomes` data (newest first, at most 20). */
+export interface ConsoleConversationOutcomeList {
+  readonly sessionKey: string;
+  /** False: the outcome log is process memory (a restart clears it). */
+  readonly persistent: boolean;
+  readonly outcomes: readonly ConsoleConversationOutcome[];
+}
+
 /** Bounded process-local processing facts, available only to full-scope operators. */
 export interface ConsoleMessageDiagnostic {
   readonly id: string;
@@ -190,6 +224,15 @@ export interface ConsoleMessageDiagnostic {
     status: string;
     at: number;
   }>[];
+  /** ADR 0061: the settled outcome (absent while processing; older Hosts omit it). */
+  readonly outcome?: Readonly<{
+    id: string;
+    outcome: string;
+    reason?: string;
+    stage: string;
+    addressed: boolean;
+    facets: readonly string[];
+  }>;
   readonly deliveries: readonly Readonly<{
     /** Actual destination; a command may explicitly send outside the source conversation. */
     conversation: NonNullable<ConsoleMessageEventData['conversation']>;
