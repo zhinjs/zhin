@@ -245,6 +245,41 @@ describe('#1250 batch 29 review: history never keeps model-written inline media'
   });
 });
 
+describe('#1250 batch 29 review: rejected or earlier assistant text goes back to the model without base64', () => {
+  it('schema repair: the correction prompt carries a placeholder, never the rejected reply\'s base64', async () => {
+    const s = session();
+    // `mime_type` is not in the media schema: strict and lenient decoding both reject the reply.
+    const invalid = structured([{ type: 'text', data: { text: '听听这个' } },
+      { type: 'audio', data: { media: { kind: 'base64', value: AUDIO.slice(0, 4000), mime_type: 'audio/mpeg' } } }]);
+    const first = await s.turn([
+      () => assistantTextReply(invalid),
+      () => assistantTextReply(structured([{ type: 'text', data: { text: '听听这个' } }])),
+    ], undefined, 'repair-1');
+    expect(s.calls).toHaveLength(2);
+    const correction = s.calls[1]!;
+    expect(correction).toContain('Rejected reply:');
+    expect(correction).toContain('[已省略 base64 数据（4000 字符），未提供给模型]');
+    expect(correction).not.toContain(AUDIO.slice(0, 64));
+    expect(JSON.stringify(first.result.output)).toContain('听听这个');
+    await first.result.projectConversation?.({ messageId: 'sent-1' });
+    expect(JSON.stringify(s.persisted)).not.toContain(AUDIO.slice(0, 64));
+  });
+
+  it('agent loop: base64 the model wrote beside a tool call is not re-sent on the next iteration', async () => {
+    const s = session();
+    await s.turn([
+      () => assistantToolCallReply([{ id: 'tts', name: 'voice_tts', arguments: { text: '你好' } }], `先发一段 data:audio/mpeg;base64,${AUDIO.slice(0, 4000)}`),
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      () => assistantTextReply(structured([{ type: 'text', data: { text: '好的' } }])),
+    ], undefined, 'loop-1');
+    expect(s.calls).toHaveLength(3);
+    for (const call of s.calls.slice(1)) {
+      expect(call).toContain('[已省略 内嵌 audio/mpeg 数据（4000 字符），未提供给模型]');
+      expect(call).not.toContain(AUDIO.slice(0, 64));
+    }
+  });
+});
+
 describe('encodeConfirmedOutput / appendConversationBatches', () => {
   it('stores placeholders for inline media elements and segments, never the payload', async () => {
     const confirmedOutput = [

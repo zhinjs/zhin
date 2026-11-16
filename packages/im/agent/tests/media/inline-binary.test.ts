@@ -4,6 +4,7 @@ import {
   INLINE_BINARY_MIN_CHARS,
   containsInlineBinaryPlaceholder,
   omitInlineBinaryForModel,
+  omitInlineBinaryInCompletions,
 } from '../../src/media/inline-binary.js';
 
 const run = (length: number, seed = 7) => Buffer.alloc(Math.ceil((length * 3) / 4), seed).toString('base64').slice(0, length);
@@ -48,5 +49,29 @@ describe('omitInlineBinaryForModel (#1250 batch 29)', () => {
     expect(containsInlineBinaryPlaceholder('已省略部分内容')).toBe(false);
     expect(containsInlineBinaryPlaceholder('[已省略 3 行]')).toBe(false);
     expect(containsInlineBinaryPlaceholder('[已省略 base64 数据（12 字符），未提供给模型]')).toBe(true);
+  });
+});
+
+describe('omitInlineBinaryInCompletions (#1250 batch 29 review)', () => {
+  it('strips inline binary from user and assistant text before an internal completion (compaction summaries)', async () => {
+    const payload = run(4000);
+    const seen: string[] = [];
+    const reply = { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } as never;
+    const port = omitInlineBinaryInCompletions({
+      complete: async (_model, context) => { seen.push(JSON.stringify(context.messages)); return reply; },
+      completeSimple: async (_model, context) => { seen.push(JSON.stringify(context.messages)); return reply; },
+    });
+    const context = { systemPrompt: '', messages: [
+      { role: 'user', content: `New conversation:\n[Assistant] data:audio/mpeg;base64,${payload}`, timestamp: 0 },
+      { role: 'user', content: [{ type: 'text', text: payload }], timestamp: 0 },
+      { role: 'assistant', content: [{ type: 'text', text: payload }] },
+    ] } as never;
+    await port.completeSimple({} as never, context);
+    await port.complete({} as never, context);
+    expect(seen).toHaveLength(2);
+    for (const request of seen) {
+      expect(request).not.toContain(payload.slice(0, 64));
+      expect(request).toContain('[已省略 内嵌 audio/mpeg 数据（4000 字符），未提供给模型]');
+    }
   });
 });

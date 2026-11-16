@@ -9,6 +9,7 @@
  *
  * 一次线性扫描（每个字符只看一次，data URL 前缀只回看有限长度），构造输入也不会退化为平方复杂度。
  */
+import type { AgentMessage, AssistantMessage, Context, LlmCompletionPort, UserMessage } from '@zhin.js/ai';
 import { EXPLORATION_TOOLS } from '../core/tool-calls-user-format.js';
 
 /** Base64 payloads shorter than this are left alone for ordinary tools (icons, ids, test fixtures). */
@@ -88,3 +89,68 @@ export function containsInlineBinaryPlaceholder(text: string): boolean {
 export const INLINE_BINARY_PLACEHOLDER_WRITE_ERROR =
   '拒绝写入：内容包含「[已省略 … 数据（N 字符）…]」或「[已截断 …]」占位。这是框架替换掉的内嵌二进制数据，不是文件原文，写入会损坏文件。'
   + '请只用 edit_file 修改不含内嵌数据的部分，或用复制命令处理原文件。';
+
+/**
+ * Assistant text is model-authored and can itself carry inline binary (a copied or invented
+ * `data:` / base64 media segment). Wherever earlier assistant text goes back to a model, or into
+ * history without a confirmed delivery, it passes through {@link omitInlineBinaryForModel} first.
+ * Returns the same object when nothing changed.
+ */
+export function omitInlineBinaryInAssistantMessage<T extends AgentMessage>(message: T): T {
+  if (message.role !== 'assistant') return message;
+  const assistant = message as AssistantMessage;
+  let changed = false;
+  const content = assistant.content.map(block => {
+    if (block.type !== 'text') return block;
+    const text = omitInlineBinaryForModel(block.text);
+    if (text === block.text) return block;
+    changed = true;
+    return { ...block, text };
+  });
+  return changed ? { ...assistant, content } as T : message;
+}
+
+/** {@link omitInlineBinaryInAssistantMessage} over a message list (same array when nothing changed). */
+export function omitInlineBinaryInAssistantMessages<T extends AgentMessage>(messages: T[]): T[];
+export function omitInlineBinaryInAssistantMessages<T extends AgentMessage>(messages: readonly T[]): readonly T[];
+export function omitInlineBinaryInAssistantMessages<T extends AgentMessage>(messages: readonly T[]): readonly T[] {
+  let changed = false;
+  const out = messages.map(message => {
+    const next = omitInlineBinaryInAssistantMessage(message);
+    if (next !== message) changed = true;
+    return next;
+  });
+  return changed ? out : messages;
+}
+
+function omitInlineBinaryInContextMessage(message: AgentMessage): AgentMessage {
+  if (message.role === 'assistant') return omitInlineBinaryInAssistantMessage(message);
+  if (message.role !== 'user') return message;
+  const user = message as UserMessage;
+  if (typeof user.content === 'string') {
+    const text = omitInlineBinaryForModel(user.content);
+    return text === user.content ? message : { ...user, content: text } as AgentMessage;
+  }
+  let changed = false;
+  const content = user.content.map(block => {
+    if (block.type !== 'text') return block;
+    const text = omitInlineBinaryForModel(block.text);
+    if (text === block.text) return block;
+    changed = true;
+    return { ...block, text };
+  });
+  return changed ? { ...user, content } as AgentMessage : message;
+}
+
+/**
+ * A completion port whose requests carry no inline binary in user / assistant text. For internal
+ * completions that re-send earlier turn text as a transcript (compaction summaries), where the
+ * agent loop's `convertToLlm` projection does not apply.
+ */
+export function omitInlineBinaryInCompletions(transport: LlmCompletionPort): LlmCompletionPort {
+  const strip = (context: Context): Context => ({ ...context, messages: context.messages.map(omitInlineBinaryInContextMessage) });
+  return {
+    complete: (model, context, options) => transport.complete(model, strip(context), options),
+    completeSimple: (model, context, options) => transport.completeSimple(model, strip(context), options),
+  };
+}

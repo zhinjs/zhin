@@ -15,7 +15,7 @@ import { decodeStructuredReply } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { isInlineMediaRef, mergeToolOutboundElements, sentInlineMediaPlaceholder, toolMediaKinds, type CopiedInlineMediaDrop } from '../media/media-tool-bridge.js';
 import type { Segment } from '@zhin.js/im-contract';
-import { omitInlineBinaryForModel } from '../media/inline-binary.js';
+import { omitInlineBinaryInAssistantMessage, omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
@@ -79,9 +79,10 @@ export function createTurnContextCallbacks(params: {
       ...(outputSchema ? { outputSchema } : {}),
       ...(state.replyRun ? { retryAllowed: () => !state.replyRun?.offered } : {}),
     },
-    convertToLlm: persistentConversation
-      ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
-      : createLlmMessageProjection(llmModel, input.messageAliases),
+    // #1250 第 29 批：本轮及历史里的助手原文（模型抄写或编造的内嵌媒体）再交给模型前统一省略载荷。
+    convertToLlm: ((base) => persistentConversation
+      ? (messages: AgentMessage[]) => base(omitInlineBinaryInAssistantMessages(historyTracker.select(sessionId, messages, historyWindow).messages))
+      : (messages: AgentMessage[]) => base(omitInlineBinaryInAssistantMessages(messages)))(createLlmMessageProjection(llmModel, input.messageAliases)),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -535,24 +536,6 @@ export function resolveReplyAliases(output: AgentOutputElement[], aliases: impor
   });
 }
 
-/**
- * #1250 第 29 批：没有已确认输出（非流式回复只带 messageId）时，历史保存的是模型原文；模型自己写的
- * 内嵌音频 / data URL 段虽已被出站去重丢弃，载荷仍在原文里。写入历史前统一省略（与工具结果同一兜底）。
- */
-function elideAssistantInlineBinary(message: AgentMessage): AgentMessage {
-  if (message.role !== 'assistant') return message;
-  const assistant = message as AssistantMessage;
-  let changed = false;
-  const content = assistant.content.map(block => {
-    if (block.type !== 'text') return block;
-    const text = omitInlineBinaryForModel(block.text);
-    if (text === block.text) return block;
-    changed = true;
-    return { ...block, text };
-  });
-  return changed ? { ...assistant, content } as AgentMessage : message;
-}
-
 export async function appendConversationBatches(
   repo: import('@zhin.js/ai').ContextRepository,
   sessionId: string,
@@ -610,7 +593,9 @@ export async function appendConversationBatches(
     const messages = clean.map((message, messageIndex) => {
       const facts = phaseFacts?.get(batch.messages[messageIndex]!);
       // Provider-authored provenance stays stripped; only the delivery owner's exact phase facts return.
-      if (!facts) return elideAssistantInlineBinary(message);
+      // #1250 第 29 批：没有已确认输出（非流式回复只带 messageId）时这里是模型原文；模型自己写的
+      // 内嵌音频 / data URL 段虽已被出站去重丢弃，载荷仍在原文里，写入历史前统一省略。
+      if (!facts) return omitInlineBinaryInAssistantMessage(message);
       const {
         messageId: _providerId,
         conversationEventId: _providerConvEventId,
@@ -619,7 +604,7 @@ export async function appendConversationBatches(
         ...authoritative
       } = message as AssistantMessage;
       const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
-      return elideAssistantInlineBinary(stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
+      return omitInlineBinaryInAssistantMessage(stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
         conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
         conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
         conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
