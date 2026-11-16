@@ -1,9 +1,11 @@
 import type * as React from 'react'
 import { forwardRef, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Search } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 import { cn } from '../../cn.js'
 import { useConsoleUiI18n } from '../../i18n/index.js'
 import { Popover, PopoverContent, PopoverTrigger } from './popover.js'
+import type { ControlVariant } from './control-variant.js'
 import { groupSelectOptions, navigableValues, type SearchableSelectOption } from './searchable-select-model.js'
 
 export type { SearchableSelectOption }
@@ -21,6 +23,8 @@ export interface SearchableSelectFieldProps {
   searchPlaceholder?: string
   /** Shown when nothing matches the search. */
   emptyText?: string
+  /** `ghost`: no border until hovered, focused or open, for secondary fields (ADR 0063 D29). */
+  variant?: ControlVariant
 }
 
 /**
@@ -29,7 +33,7 @@ export interface SearchableSelectFieldProps {
  * `group`, `description` and `keywords` per option. ↑ / ↓ move, Enter picks, Esc closes.
  */
 export const SearchableSelectField = forwardRef<HTMLButtonElement, SearchableSelectFieldProps>(({
-  options, value, onValueChange, disabled, className, id, searchPlaceholder, emptyText, ...aria
+  options, value, onValueChange, disabled, className, id, searchPlaceholder, emptyText, variant, ...aria
 }, ref) => {
   const i18n = useConsoleUiI18n()
   const listId = useId()
@@ -88,16 +92,17 @@ export const SearchableSelectField = forwardRef<HTMLButtonElement, SearchableSel
           aria-controls={open ? listId : undefined}
           disabled={disabled}
           data-slot="input"
+          data-variant={variant === 'ghost' ? 'ghost' : undefined}
           className={cn('console-control console-searchable-select-trigger', className)}
           {...aria}
         >
           <span className="console-searchable-select-value">{selected ? selected.label : value}</span>
-          <ChevronDown aria-hidden="true" className="console-searchable-select-chevron" />
+          <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" className="console-searchable-select-chevron" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="console-searchable-select-popover" sideOffset={4} onOpenAutoFocus={event => event.preventDefault()}>
         <div className="console-searchable-select-search">
-          <Search aria-hidden="true" />
+          <Search strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
           <input
             autoFocus
             value={query}
@@ -132,7 +137,7 @@ export const SearchableSelectField = forwardRef<HTMLButtonElement, SearchableSel
                   <span className="console-searchable-select-label">{option.label}</span>
                   {option.description ? <span className="console-searchable-select-description">{option.description}</span> : null}
                 </span>
-                {option.value === value ? <Check aria-hidden="true" className="console-searchable-select-check" /> : null}
+                {option.value === value ? <Check strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" className="console-searchable-select-check" /> : null}
               </div>
             ))
             return entry.group === null ? <div key="__top" role="group">{items}</div> : (

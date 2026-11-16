@@ -1,10 +1,10 @@
-import { useRef, type CSSProperties, type ReactNode } from 'react'
+import { useRef, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn.js'
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from './ui/sheet.js'
 import { CONSOLE_BREAKPOINTS_REM, useContainerAtLeast } from './use-container-width.js'
 
-export interface SectionProps {
+export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   title?: ReactNode
   /** Said once, under the title (D15 第 2 条). */
   description?: ReactNode
@@ -14,9 +14,9 @@ export interface SectionProps {
 }
 
 /** A content block of a page: title, one description, actions, then its content (stack gap). */
-export function Section({ title, description, actions, children, className }: SectionProps) {
+export function Section({ title, description, actions, children, className, ...rest }: SectionProps) {
   return (
-    <section className={cn('console-section', className)} data-slot="section">
+    <section className={cn('console-section', className)} data-slot="section" {...rest}>
       {title != null || description != null || actions != null ? (
         <div className="console-section-header">
           <div className="console-section-heading">
@@ -31,7 +31,7 @@ export function Section({ title, description, actions, children, className }: Se
   )
 }
 
-export interface GridProps {
+export interface GridProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   children?: ReactNode
   /** Narrowest column before the grid drops a column; default 16rem. */
   min?: string
@@ -41,10 +41,10 @@ export interface GridProps {
 }
 
 /** Card grid: `repeat(auto-fit, minmax(min(100%, min), 1fr))` with the grid gap (D18 第 3 条). */
-export function Grid({ children, min, className, label }: GridProps) {
-  const style = min ? ({ '--grid-min': min } as CSSProperties) : undefined
+export function Grid({ children, min, className, label, style: ownStyle, ...rest }: GridProps) {
+  const style = min ? ({ ...ownStyle, '--grid-min': min } as CSSProperties) : ownStyle
   return (
-    <div className={cn('console-grid', className)} style={style} data-slot="grid" role={label ? 'group' : undefined} aria-label={label}>
+    <div className={cn('console-grid', className)} style={style} data-slot="grid" role={label ? 'group' : undefined} aria-label={label} {...rest}>
       {children}
     </div>
   )

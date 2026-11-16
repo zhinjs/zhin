@@ -1,12 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { pluginRpc, PluginRpcError } from '../console-utils/remoteApi.js';
-import { Badge, Button, ConfirmButton, EmptyState, ErrorState, Field, LoadingState, Notice, PageHeader, PluginPage, Section, StaleNotice } from '../ui/components.js';
+import {
+  Button,
+  Card,
+  CardContent,
+  Section,
+  ContentStack,
+  FormField,
+  MediaPreview,
+  Textarea,
+} from '@zhin.js/console-ui';
 import { useLocale, type PluginUiText } from '../ui/locale.js';
 import { resolvePluginId } from '../ui/plugin-id.js';
 import { usePluginRpc } from '../ui/rpc.js';
-import { pluginUiStyles } from '../ui/styles.js';
+import { BLUEPRINT_MARK_DEPRECATION, warnDeprecatedOnce } from '../renderer/deprecation.js';
+import { ActionButton, EmptyBlock, ErrorBlock, LoadingBlock, NoticeBlock, RendererPage, ToneBadge } from '../renderer/kit.js';
 import { reviewMessages } from './messages.js';
-import { reviewConsoleStyles } from './styles.js';
 import type { CommentReviewSpec, ReviewContext, ReviewDraftBase, ReviewEndpointBase, ReviewStatus } from './types.js';
 
 const COMMENT_LIMIT = 1000;
@@ -49,20 +58,21 @@ export function ReviewResourceList({ title, items, empty, footnote }: {
   readonly footnote?: string;
 }) {
   return (
-    <Section title={title}>
+    <Section title={title} description={footnote}>
       {items.length === 0
-        ? (empty ? <p className="zk-hint">{empty}</p> : null)
+        ? (empty ? <p className="console-form-field-hint">{empty}</p> : null)
         : (
-          <ul className="zk-review-resources">
+          <ContentStack direction="row" gap="tight" data-review-resources="">
             {items.map(item => (
-              <li key={item.key}>
-                <a href={item.url} target="_blank" rel="noreferrer">{item.label}</a>
-                {item.note && <span className="zk-hint"> {item.note}</span>}
-              </li>
+              <ContentStack key={item.key} direction="row" gap="tight" align="center">
+                <Button asChild variant="outline" size="sm">
+                  <a href={item.url} target="_blank" rel="noreferrer">{item.label}</a>
+                </Button>
+                {item.note && <ToneBadge tone="warning">{item.note}</ToneBadge>}
+              </ContentStack>
             ))}
-          </ul>
+          </ContentStack>
         )}
-      {footnote && <p className="zk-hint">{footnote}</p>}
     </Section>
   );
 }
@@ -107,46 +117,59 @@ export function DraftCard({ draft, endpoint, session }: { draft: ReviewDraftBase
   };
 
   return (
-    <li className="zk-review-draft">
-      <div className="zk-review-meta">
-        <span>{spec.draftResource(draft, t)}</span>
-        <span aria-hidden="true">·</span>
-        <span>{ago(draft.createdAt, t)}</span>
-        <a href={draft.url} target="_blank" rel="noreferrer">{t(spec.openLabel ?? '查看原评论')}</a>
-      </div>
-      {draft.interrupted && (
-        <Notice tone="warning" title={t('结果未确认')}>{t('上次发送时程序中断或结果未知，这条可能已经发出。请先到{0}确认，避免重复回复。', platform)}</Notice>
-      )}
-      {draft.original !== undefined && (
-        <div className="zk-review-quote">
-          <div className="zk-review-label">{t('原评论')}{draft.author ? ` · ${draft.author}` : ''}</div>
-          <div className="zk-review-body">{draft.original}</div>
-        </div>
-      )}
-      {editing ? (
-        <Field label={t('拟回复')} hint={t('{0} / {1} 字', length, COMMENT_LIMIT)} error={over > 0 ? t('超出 {0} 字', over) : undefined}>
-          <textarea value={value} rows={4} onChange={event => setValue(event.target.value)} />
-        </Field>
-      ) : (
-        <div>
-          <div className="zk-review-label">{t('拟回复')}</div>
-          <div className="zk-review-body">{draft.message}</div>
-        </div>
-      )}
-      <div className="zk-review-actions">
-        <Button variant="primary" busy={sending} disabled={!canSend || busy !== '' || invalid} onClick={() => act('send')}>
-          {sending ? t('发送中…') : t('发送')}
-        </Button>
-        {editing
-          ? <Button busy={busy === 'save'} disabled={busy !== '' || invalid} onClick={() => act('save')}>{t('保存')}</Button>
-          : <Button disabled={busy !== '' || sending} onClick={() => setEditing(true)}>{t('修改')}</Button>}
-        {editing && <Button variant="ghost" disabled={busy !== ''} onClick={() => { setEditing(false); setValue(draft.message); }}>{t('取消')}</Button>}
-        <span className="zk-review-actions__end">
-          <ConfirmButton confirmLabel={t('丢弃草稿')} message={t('确定丢弃这条回复？不会发送。')}
-            busy={busy === 'drop'} disabled={busy !== '' || sending} onConfirm={() => act('drop')}>{t('丢弃草稿')}</ConfirmButton>
-        </span>
-      </div>
-    </li>
+    <Card data-review-draft={draft.id}>
+      <CardContent>
+        <ContentStack>
+          <ContentStack direction="row" gap="tight" align="baseline" className="console-form-field-hint">
+            <span>{spec.draftResource(draft, t)}</span>
+            <span aria-hidden="true">·</span>
+            <span>{ago(draft.createdAt, t)}</span>
+            <a className="console-touch" href={draft.url} target="_blank" rel="noreferrer">{t(spec.openLabel ?? '查看原评论')}</a>
+          </ContentStack>
+          {draft.interrupted && (
+            <NoticeBlock tone="warning">
+              <strong>{t('结果未确认')}</strong>{' '}
+              {t('上次发送时程序中断或结果未知，这条可能已经发出。请先到{0}确认，避免重复回复。', platform)}
+            </NoticeBlock>
+          )}
+          {draft.original !== undefined && (
+            <FormField label={`${t('原评论')}${draft.author ? ` · ${draft.author}` : ''}`}>
+              <blockquote data-review-quote="">{draft.original}</blockquote>
+            </FormField>
+          )}
+          {editing ? (
+            <FormField label={t('拟回复')} hint={t('{0} / {1} 字', length, COMMENT_LIMIT)} error={over > 0 ? t('超出 {0} 字', over) : undefined} htmlFor={`review-reply-${draft.id}`}>
+              <Textarea id={`review-reply-${draft.id}`} value={value} rows={4} aria-invalid={over > 0 || undefined} onChange={event => setValue(event.target.value)} />
+            </FormField>
+          ) : (
+            <FormField label={t('拟回复')}>
+              <p data-review-reply="">{draft.message}</p>
+            </FormField>
+          )}
+          <ContentStack direction="row" gap="tight" justify="between" align="center">
+            <ContentStack direction="row" gap="tight" align="center">
+              <Button type="button" variant="default" size="sm" aria-busy={sending || undefined} disabled={!canSend || busy !== '' || invalid} onClick={() => act('send')}>
+                {sending ? t('发送中…') : t('发送')}
+              </Button>
+              {editing
+                ? <Button type="button" variant="outline" size="sm" aria-busy={busy === 'save' || undefined} disabled={busy !== '' || invalid} onClick={() => act('save')}>{t('保存')}</Button>
+                : <Button type="button" variant="outline" size="sm" disabled={busy !== '' || sending} onClick={() => setEditing(true)}>{t('修改')}</Button>}
+              {editing && <Button type="button" variant="ghost" size="sm" disabled={busy !== ''} onClick={() => { setEditing(false); setValue(draft.message); }}>{t('取消')}</Button>}
+            </ContentStack>
+            <ActionButton
+              label={t('丢弃草稿')}
+              variant="danger"
+              locale={locale}
+              confirm={t('确定丢弃这条回复？不会发送。')}
+              confirmLabel={t('丢弃草稿')}
+              busy={busy === 'drop'}
+              disabled={busy !== '' || sending}
+              onRun={() => act('drop')}
+            />
+          </ContentStack>
+        </ContentStack>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -178,11 +201,11 @@ function DeclarativeLoginExtras({
 
   if (loginMode === 'cookie-check') {
     return (
-      <div className="zk-row">
-        <Button busy={pending === 'login-check'} disabled={pending !== undefined} onClick={() => act('login-check')}>
+      <ContentStack direction="row" gap="tight">
+        <Button type="button" variant="outline" size="sm" aria-busy={pending === 'login-check' || undefined} disabled={pending !== undefined} onClick={() => act('login-check')}>
           {t('重新检查登录')}
         </Button>
-      </div>
+      </ContentStack>
     );
   }
 
@@ -191,44 +214,44 @@ function DeclarativeLoginExtras({
     const configCookie = login.source === 'config';
     if (active && qr.image) {
       return (
-        <div className="zk-media">
-          <img className="zk-qr" src={qr.image} alt={t('登录二维码')} />
-          <div className="zk-media__body">
+        <ContentStack direction="row" gap="stack" align="start">
+          <MediaPreview src={qr.image} alt={t('登录二维码')} />
+          <ContentStack gap="tight">
             <strong>{t(qr.state === 'scanned' ? '已扫码，请在手机上确认登录' : '用 B 站 App 扫一扫')}</strong>
             {qr.expiresAt && (
-              <span className="zk-hint">{t('剩余 {0} 秒', Math.max(0, Math.ceil((qr.expiresAt - now) / 1000)))}</span>
+              <span className="console-form-field-hint" aria-live="polite">{t('剩余 {0} 秒', Math.max(0, Math.ceil((qr.expiresAt - now) / 1000)))}</span>
             )}
-            <span className="zk-hint">{t('登录凭据只保存在运行机器人的这台机器上，不会写进配置文件。')}</span>
-            <div>
-              <Button busy={pending === 'login-cancel'} disabled={pending !== undefined} onClick={() => act('login-cancel')}>
+            <span className="console-form-field-hint">{t('登录凭据只保存在运行机器人的这台机器上，不会写进配置文件。')}</span>
+            <ContentStack direction="row" gap="tight">
+              <Button type="button" variant="outline" size="sm" aria-busy={pending === 'login-cancel' || undefined} disabled={pending !== undefined} onClick={() => act('login-cancel')}>
                 {t('取消')}
               </Button>
-            </div>
-          </div>
-        </div>
+            </ContentStack>
+          </ContentStack>
+        </ContentStack>
       );
     }
     const retry = qr.state === 'expired' || qr.state === 'failed';
     return (
-      <div className="zk-row">
-        {qr.state === 'expired' && <Badge tone="warning">{t('二维码已过期')}</Badge>}
-        {qr.state === 'failed' && qr.error && <Badge tone="danger">{qr.error}</Badge>}
+      <ContentStack direction="row" gap="tight" align="center">
+        {qr.state === 'expired' && <ToneBadge tone="warning">{t('二维码已过期')}</ToneBadge>}
+        {qr.state === 'failed' && qr.error && <ToneBadge tone="danger">{qr.error}</ToneBadge>}
         {login.state !== 'ok' && !configCookie && (
-          <Button variant="primary" busy={pending === 'login'} disabled={pending !== undefined} onClick={() => act('login')}>
+          <Button type="button" variant="default" size="sm" aria-busy={pending === 'login' || undefined} disabled={pending !== undefined} onClick={() => act('login')}>
             {t(retry ? '重新扫码' : '扫码登录 B 站')}
           </Button>
         )}
         {login.state === 'ok' && login.source === 'qr' && (
           <>
-            <Button busy={pending === 'login'} disabled={pending !== undefined} onClick={() => act('login')}>
+            <Button type="button" variant="outline" size="sm" aria-busy={pending === 'login' || undefined} disabled={pending !== undefined} onClick={() => act('login')}>
               {t('重新扫码')}
             </Button>
-            <Button busy={pending === 'logout'} disabled={pending !== undefined} onClick={() => act('logout')}>
+            <Button type="button" variant="outline" size="sm" aria-busy={pending === 'logout' || undefined} disabled={pending !== undefined} onClick={() => act('logout')}>
               {t('退出登录')}
             </Button>
           </>
         )}
-      </div>
+      </ContentStack>
     );
   }
 
@@ -306,34 +329,37 @@ export function EndpointSection({ endpoint, showTitle, session }: { endpoint: Re
   const state = endpoint.login.state;
   const hint = spec.loginHint?.(endpoint, t);
 
+  const drafts = (
+    <Section
+      title={<ContentStack direction="row" gap="tight" align="center">{t('待审回复')}{endpoint.pendingCount > 0 && <ToneBadge tone="warning">{endpoint.pendingCount}</ToneBadge>}</ContentStack>}
+      description={!endpoint.persistent ? t('草稿只存在内存里，重启会丢失。') : undefined}
+    >
+      {endpoint.drafts.length === 0
+        ? <EmptyBlock title={t('没有待审的回复。新的 AI 回复会自动出现在这里。')} />
+        : <ContentStack gap="tight">{endpoint.drafts.map(draft => <DraftCard key={draft.id} draft={draft} endpoint={endpoint} session={session} />)}</ContentStack>}
+    </Section>
+  );
   return (
-    <div className="zk-card">
-      {showTitle && <Section title={t('账号 {0}', endpoint.id)} />}
-      <div className="zk-stack">
-        <div className="zk-row">
-          <Badge tone={state === 'ok' ? 'success' : state === 'expired' ? 'warning' : 'neutral'}>
+    <Section title={showTitle ? t('账号 {0}', endpoint.id) : undefined} data-review-endpoint={endpoint.id}>
+      <ContentStack gap="tight">
+        <ContentStack direction="row" gap="tight" align="center">
+          <ToneBadge tone={state === 'ok' ? 'success' : state === 'expired' ? 'warning' : 'neutral'}>
             {state === 'ok' ? t('已登录') : state === 'expired' ? t('登录已失效') : t('未登录')}
-          </Badge>
+          </ToneBadge>
           {identity && <span>{identity}</span>}
-        </div>
-        {hint && <p className="zk-hint">{hint}</p>}
+        </ContentStack>
+        {hint && <p className="console-form-field-hint">{hint}</p>}
         {spec.renderLoginExtras
           ? spec.renderLoginExtras(endpoint, context)
           : <DeclarativeLoginExtras endpoint={endpoint as ReviewEndpointBase & Record<string, any>} context={context} loginMode={spec.loginMode} />}
-      </div>
-      {endpoint.circuit && <Notice tone="danger">{t('触发了{0}风控或账号异常（错误码 {1}），已暂停轮询和发送。请到网页端确认账号状态，处理后重启。', platform, endpoint.circuit.code)}</Notice>}
-      {endpoint.sendMode === 'off' && <p className="zk-hint">{t('出站已关闭（sendMode: off），草稿无法发送。')}</p>}
-
-      <Section title={<>{t('待审回复')} {endpoint.pendingCount > 0 && <Badge tone="warning">{endpoint.pendingCount}</Badge>}</>}>
-        {!endpoint.persistent && <p className="zk-hint">{t('草稿只存在内存里，重启会丢失。')}</p>}
-        {endpoint.drafts.length === 0
-          ? <EmptyState title={t('没有待审的回复。新的 AI 回复会自动出现在这里。')} />
-          : <ul className="zk-list">{endpoint.drafts.map(draft => <DraftCard key={draft.id} draft={draft} endpoint={endpoint} session={session} />)}</ul>}
-      </Section>
+      </ContentStack>
+      {endpoint.circuit && <NoticeBlock tone="danger">{t('触发了{0}风控或账号异常（错误码 {1}），已暂停轮询和发送。请到网页端确认账号状态，处理后重启。', platform, endpoint.circuit.code)}</NoticeBlock>}
+      {endpoint.sendMode === 'off' && <p className="console-form-field-hint">{t('出站已关闭（sendMode: off），草稿无法发送。')}</p>}
+      {drafts}
       {spec.renderResources
         ? spec.renderResources(endpoint, context)
         : <DeclarativeResources endpoint={endpoint as ReviewEndpointBase & Record<string, any>} context={context} resourcesKey={spec.resourcesKey} />}
-    </div>
+    </Section>
   );
 }
 
@@ -342,7 +368,6 @@ export function CommentReviewSession({ spec }: { spec: AnySpec }) {
   const { t, locale } = useLocale(dictionary);
   const [pluginId, setPluginId] = useState<string | undefined>();
   const [notice, setNotice] = useState<PageNotice | undefined>();
-  const [manual, setManual] = useState(false);
   const [fast, setFast] = useState(false);
   const platform = locale === 'en' ? spec.platform.en : spec.platform.zh;
 
@@ -352,12 +377,16 @@ export function CommentReviewSession({ spec }: { spec: AnySpec }) {
     return () => { alive = false; };
   }, [spec.adapter]);
 
+  // Normal refresh follows the RefreshControl (default every 10s); while a QR login waits for the
+  // phone, the RPC hook polls fast on its own so the page notices the scan quickly.
+  const [intervalMs, setIntervalMs] = useState(spec.pollMs ?? DEFAULT_POLL_MS);
   const resource = usePluginRpc<ReviewStatus>(pluginId, 'status', undefined, {
-    pollMs: fast ? (spec.pendingPollMs ?? DEFAULT_PENDING_POLL_MS) : (spec.pollMs ?? DEFAULT_POLL_MS),
+    ...(fast ? { pollMs: spec.pendingPollMs ?? DEFAULT_PENDING_POLL_MS } : {}),
     isEmpty: status => status.endpoints.length === 0,
   });
   const pending = resource.data?.endpoints.some(endpoint => spec.isLoginPending?.(endpoint)) ?? false;
   useEffect(() => { setFast(pending); }, [pending]);
+  if (spec.mark !== undefined && spec.mark !== null) warnDeprecatedOnce('blueprint-mark', BLUEPRINT_MARK_DEPRECATION);
 
   useEffect(() => {
     if (!notice || notice.tone === 'danger') return;
@@ -368,29 +397,32 @@ export function CommentReviewSession({ spec }: { spec: AnySpec }) {
   const { refresh } = resource;
   const call = useCallback(<T,>(method: string, data?: Record<string, unknown>) => pluginRpc<T>(pluginId as string, method, data), [pluginId]);
   const session: Session = { spec, t, locale, call, refresh: () => { void refresh(); }, notify: setNotice };
-  const manualRefresh = async () => { setManual(true); try { await refresh(); } finally { setManual(false); } };
 
   const endpoints = resource.data?.endpoints ?? [];
   return (
-    <PluginPage>
-      <style>{pluginUiStyles}{reviewConsoleStyles}</style>
-      <PageHeader mark={spec.mark} title={t('{0}评论审批', platform)}
-        description={t('AI 写好的{0}评论回复先停在这里，你点「发送」才会真的发出去。', platform)}
-        actions={<Button busy={manual} onClick={manualRefresh}>{t('刷新')}</Button>} />
+    <RendererPage
+      title={t('{0}评论审批', platform)}
+      description={t('AI 写好的{0}评论回复先停在这里，你点「发送」才会真的发出去。', platform)}
+      refresh={{ onRefresh: refresh, updatedAt: resource.lastSuccessAt ?? null, intervalMs, onIntervalChange: setIntervalMs, refreshing: resource.refreshing }}
+      chromeDeps={[]}
+      data-zhin-plugin-id={pluginId}
+    >
       {notice && (
-        <Notice tone={notice.tone} onDismiss={() => setNotice(undefined)}>
+        <NoticeBlock tone={notice.tone} onDismiss={() => setNotice(undefined)} dismissLabel={t('关闭')}>
           {notice.message}
-          {notice.link && <> · <a href={notice.link} target="_blank" rel="noreferrer">{t('查看')}</a></>}
-        </Notice>
+          {notice.link && <> · <a className="console-touch" href={notice.link} target="_blank" rel="noreferrer">{t('查看')}</a></>}
+        </NoticeBlock>
       )}
-      {resource.state === 'loading' && <LoadingState />}
+      {resource.state === 'loading' && <LoadingBlock label={t('加载中…')} />}
       {resource.state === 'error' && (
-        <ErrorState title={t('无法读取评论审批状态')} message={failureText(resource.error, t)} details={resource.error?.message} onRetry={manualRefresh} retrying={manual} />
+        <ErrorBlock message={`${t('无法读取评论审批状态')}：${failureText(resource.error, t)}`} details={resource.error?.message} onRetry={() => { void refresh(); }} />
       )}
-      {resource.state === 'stale' && <StaleNotice lastSuccessAt={resource.lastSuccessAt} error={resource.error?.message} />}
-      {resource.state === 'empty' && <EmptyState title={t('{0}适配器还没有启动。请先在配置里添加 {1} 插件和至少一个账号。', platform, spec.adapter)} />}
+      {resource.state === 'stale' && (
+        <NoticeBlock tone="warning">{resource.error?.message ? t('最近一次刷新失败：{0}', resource.error.message) : t('数据可能已过期')}</NoticeBlock>
+      )}
+      {resource.state === 'empty' && <EmptyBlock title={t('{0}适配器还没有启动。请先在配置里添加 {1} 插件和至少一个账号。', platform, spec.adapter)} />}
       {endpoints.map(endpoint => <EndpointSection key={endpoint.id} endpoint={endpoint} showTitle={endpoints.length > 1} session={session} />)}
-    </PluginPage>
+    </RendererPage>
   );
 }
 

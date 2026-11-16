@@ -106,7 +106,8 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | --- | --- |
 | API Surface (`pnpm check:api-surface`) | Public API surface snapshot |
 | Plugin Runtime API (`pnpm check:plugin-runtime-api`) | Convention-based plugin runtime API surface snapshot |
-| Plugin Spec (`pnpm check:plugin`) | Plugins conform to standard spec |
+| Plugin Spec (`pnpm check:plugin`) | Plugins conform to standard spec; page UI gate for official plugins (ADR 0063 rules 1–6, list `scripts/plugin-ui-gate.json`) |
+| Plugin UI Audit (`pnpm check:plugin-ui-audit`) | Full Playwright audit gate for official plugin pages (ADR 0063; skipped until the audit tool is available) |
 | Plugin Capability Publish (`pnpm check:plugin-capability-publish`) | Plugins publish their capability directories with the required files, prepublish build, and peer dependencies |
 | Publish Repository (`pnpm check:publish-repository`) | Publishable packages have `repository.url` matching github.com/zhinjs/zhin (npm provenance) |
 | Agent Tool Schema (`pnpm check:agent-tool-schema`) | `tools` inputSchema matches defineAgentTool/execute types |

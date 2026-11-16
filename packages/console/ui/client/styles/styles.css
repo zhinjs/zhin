@@ -13,4 +13,16 @@
 @import "./base.css";
 @import "./components.css";
 @import "./searchable-select.css";
+@import "./date-field.css";
 @import "./shell.css";
+@import "./content-blocks.css";
+
+/*
+ * Numbers are the main content of the Console (zhinjs/console#125): every digit is tabular on the
+ * console-ui root, so stat values, versions and timestamps line up without per-element rules.
+ */
+@layer base {
+  :root {
+    font-variant-numeric: tabular-nums;
+  }
+}

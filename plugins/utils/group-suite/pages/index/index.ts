@@ -11,6 +11,7 @@ export const meta = definePage({
   icon: 'Users',
   order: 54,
   requiredPermissions: ['group-suite:read'],
+  keywords: { 'zh-CN': ['群管', '签到', '积分', '群问答', '入群欢迎', '词库'], en: ['group admin', 'check-in', 'points', 'welcome', 'q&a'] },
 });
 
 export default createDeclarativePage<GroupSuiteConsoleStatus>({

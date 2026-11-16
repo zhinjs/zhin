@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { Button } from './ui/button.js'
@@ -14,6 +15,11 @@ import {
 export interface RefreshControlProps {
   /** Runs on the refresh button and on every auto-refresh tick; a returned promise keeps the control busy until it settles. */
   onRefresh: () => void | Promise<unknown>
+  /**
+   * Runs on auto-refresh ticks instead of `onRefresh`, for pages whose explicit refresh does more
+   * than re-read (e.g. clears a 「请先刷新」 block) that a timer must not do.
+   */
+  onAutoRefresh?: () => void | Promise<unknown>
   /** Time of the last successful load, shown as 「更新于 hh:mm:ss」. */
   updatedAt?: Date | number | string | null
   /** Auto-refresh interval in ms (0 = manual). Controlled when set. */
@@ -35,7 +41,7 @@ export interface RefreshControlProps {
  * Auto-refresh skips ticks while the tab is hidden or a refresh is still running.
  */
 export function RefreshControl({
-  onRefresh, updatedAt, intervalMs, defaultIntervalMs = 0, onIntervalChange,
+  onRefresh, onAutoRefresh, updatedAt, intervalMs, defaultIntervalMs = 0, onIntervalChange,
   intervals = DEFAULT_REFRESH_INTERVALS, refreshing, disabled, className,
 }: RefreshControlProps) {
   const i18n = useConsoleUiI18n()
@@ -44,14 +50,16 @@ export function RefreshControl({
   const inFlightRef = useRef(false)
   const onRefreshRef = useRef(onRefresh)
   onRefreshRef.current = onRefresh
+  const onAutoRefreshRef = useRef(onAutoRefresh)
+  onAutoRefreshRef.current = onAutoRefresh
   const interval = intervalMs ?? ownInterval
   const busy = Boolean(refreshing) || inFlight
 
-  const run = useCallback(() => {
+  const run = useCallback((auto = false) => {
     if (inFlightRef.current) return
     let result: void | Promise<unknown>
     try {
-      result = onRefreshRef.current()
+      result = (auto && onAutoRefreshRef.current ? onAutoRefreshRef.current : onRefreshRef.current)()
     } catch {
       return
     }
@@ -70,7 +78,7 @@ export function RefreshControl({
     const timer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       if (refreshing) return
-      run()
+      run(true)
     }, interval)
     return () => clearInterval(timer)
   }, [interval, disabled, refreshing, run])
@@ -98,8 +106,8 @@ export function RefreshControl({
           onIntervalChange?.(value)
         }}
       />
-      <Button variant="outline" size="sm" onClick={run} disabled={disabled || busy} aria-busy={busy || undefined}>
-        <RefreshCw aria-hidden="true" className={cn(busy && 'animate-spin')} />
+      <Button variant="outline" size="sm" onClick={() => run()} disabled={disabled || busy} aria-busy={busy || undefined}>
+        <RefreshCw strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" className={cn(busy && 'animate-spin')} />
         {busy ? i18n.t('refresh.refreshing') : i18n.t('refresh.refresh')}
       </Button>
     </div>

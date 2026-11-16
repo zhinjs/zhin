@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Wallet',
   order: 50,
   requiredPermissions: ['ledger:read'],
+  keywords: { 'zh-CN': ['记账', '账本', '收支', '消费记录'], en: ['bookkeeping', 'expenses', 'budget'] },
 });
 
 export default createDeclarativePage<LedgerConsoleSnapshot>({

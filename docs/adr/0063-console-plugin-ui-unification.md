@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0063：Console 与插件页面 UI 统一——一套组件库、一个页面外壳
 
-状态：已接受（Accepted，2026-11-15）。所有者已明确要求按 P1a→P4 实施；以下为提议时的说明，保留作记录：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定，「本仓库的官方插件完整遵守全部规则」也是所有者给出的决定（2026-11-14：「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」，见 D19）；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
+状态：已接受（Accepted，2026-11-15）。所有者已明确要求按 P1a→P4 实施；实施进度：P1（P1a 组件包与共享模块、P1b 三层令牌与组件规则）与 P2（三个渲染器迁到 `@zhin.js/console-ui`、Sandbox 两步迁移、`zhin plugin check` 第 1–6 条与 Playwright 审计门禁，全部官方插件进入门禁名单）已实施，P3、P4 未开始；以下为提议时的说明，保留作记录：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定，「本仓库的官方插件完整遵守全部规则」也是所有者给出的决定（2026-11-14：「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」，见 D19）；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
 
 关联：
 - [ADR 0062](./0062-one-path-per-task.md) 第 24 项 / Q24（插件页面只放插件自己的领域视图，挂成插件详情下的页签）。本 ADR 是它的补充：第 24 项定了「挂在哪」，本 ADR 定「长成什么样」。
@@ -300,6 +300,113 @@ sidebar: false
 - **D4 与 D19 的关系**：页面外壳仍是插件页面的必选项（D4 不变）；D19 放宽的是外壳内部内容区的样式。
 - **背景第 1 节「本 ADR 不规定具体宽度」**：改为由 D16 规定两种内容宽度（`reading` 60rem、`data` 120rem）；`--console-content-max` 不再是固定的 90rem，而是外壳按页面类型解析出的值；D20 的审计按这两个宽度检查（1920px 下数据页占视口 85% 以上）。
 - **分阶段计划**：P1 拆成 P1a / P1b（D21）；P1 的验收「Console 自带页面外观不变」只适用于 P1a。
+
+## 增补：色板角色与信号色（console#125）
+
+增补日期：2026-11-16。来源：zhinjs/console#125（Console 视觉方向与质感）。所有者定下的方向：**安静的中性底色 + 一种品牌色 + 明亮但少用的信号色，数字是主角**。本节只写组件库（`@zhin.js/console-ui`）一侧的规则：色板角色、信号色、主按钮、动效和数字；空状态、字体加载、表面层级、导航宽度等由 zhinjs/console 按 #125 的后续阶段处理。本节修订决策 6 与 D22「颜色以 Console 当前视觉为准」：颜色角色从此由本节规定。
+
+### 15. 色板角色（D23）
+
+每个角色一个令牌，组件只读角色，不写色值。品牌、信号与图表令牌在 `tokens/tokens.mjs` 的 `color` 中定义（深浅两套，与配色无关），生成到 `tokens.css` 的 `--console-*`（HSL 三元组，`hsl(var(--console-brand) / 0.1)` 可带透明度），Tailwind 主题同名提供 `bg-brand`、`text-brand-text`、`bg-signal-danger-fill` 等类。
+
+| 角色 | 用途 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `neutral`（`--background`、`--card`、`--border`、`--foreground` 等） | 底、面板、分隔线、正文、次要文字 | 保留现有灰阶，色相随配色轻微偏移 | 同左 |
+| `brand` | 品牌标、每个视图唯一的实心主按钮的底色 | `#76EEC6`（`160 78% 69.8%`） | `#7FFFD4`（`159.8 100% 74.9%`） |
+| `brand-foreground` | 品牌底上的文字与品牌标的 Z | `160 80% 10%`（深青绿，10.46:1） | `160 80% 10%`（12.11:1） |
+| `brand-text` | 品牌色当文字或细线用：链接、焦点环、选中态（复选、单选、开关、下拉勾选、输入框焦点边框）、浅色下主按钮的描边 | `160 84% 25%`（在所有浅色表面上 ≥ 5.09:1） | 与 `brand` 相同，`#7FFFD4` |
+| `brand-tint` | 安静的品牌底（选中行、按下的筛选卡片） | `160 60% 94%` | `160 40% 14%` |
+| `signal-{danger,warning,success,info}-fill` | 只用于状态：圆点、进度条、仪表、图标、徽标底色；不当文字 | 见下表 | 见下表 |
+| `signal-{danger,warning,success,info}-text` | 状态文字（≥ 4.5:1） | 见下表 | 见下表 |
+| `chart-1…8`、`chart-other` | 一切数据可视化；与配色无关 | 见下表 | 见下表 |
+
+品牌色是所有者 2026-11-16 的决定（原定 `#237A57` / `#4FBF8B`，因太暗改为 `#76EEC6` / `#7FFFD4`）。品牌值**与配色无关**，8 种配色下都一样，只随深浅主题变化；品牌标在任何配色下不变色。这两个颜色很亮，不能直接当文字或细线放在白底和浅底上，所以另设 `brand-text`；也不能配白字，主按钮和品牌标上的文字用 `brand-foreground`。
+
+信号色（HSL）：
+
+| 信号 | 浅色 fill | 浅色 text | 深色 fill | 深色 text |
+| --- | --- | --- | --- | --- |
+| danger | `0 76% 54%` | `0 76% 40%` | `0 76% 58%` | `0 76% 70%` |
+| warning | `38 92% 50%` | `38 92% 26%` | `38 92% 52%` | `38 92% 62%` |
+| success | `145 60% 40%` | `145 60% 25%` | `145 60% 44%` | `145 60% 58%` |
+| info | `217 84% 56%` | `217 84% 42%` | `217 84% 62%` | `217 84% 72%` |
+
+图表色（HSL）：
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | other |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 浅色 | `217 74% 50%` | `32 94% 42%` | `164 72% 32%` | `330 66% 48%` | `262 56% 56%` | `48 92% 32%` | `192 80% 38%` | `8 66% 46%` | `220 6% 58%` |
+| 深色 | `217 80% 66%` | `32 92% 58%` | `164 60% 48%` | `330 72% 62%` | `262 70% 74%` | `48 86% 56%` | `192 70% 52%` | `8 72% 64%` | `220 6% 50%` |
+
+旧名保留并指向新角色：`--destructive`、`--success`、`--warning`、`--info` 等于对应的 `signal-*-text`，`--chart-*` 等于 `--console-chart-*`，`--ring` 等于 `brand-text`；`--primary`、`--primary-action` 仍跟随配色（`soft` 按钮、链接以外的强调）。
+
+### 16. 信号色规则（D24）
+
+1. 信号色只用于状态。每个信号分 `fill`（明亮，用于填充、图形、徽标底色）和 `text`（文字）两个值；**一值不再两用**。
+2. 同一信号在深浅主题下**色相与饱和度相同，只调亮度**；`text` 压到对比度 ≥ 4.5:1（浅色下在卡片、页面底、浮层和它自己的徽标底色上都满足）。警告填充为琥珀 `hsl(38 92% 50%)`，浅色下亮度 ≥ 45%，不再是发褐的 `32 80% 30%`。
+3. **稳态不用信号色**：运行中、已连接、成功、已完成、失败数为 0。`StatusBadge` 的 `ok` / `neutral` 与 `Badge variant="success"` 是弱化文字；`StatCard` 的数值为 0（`0`、`'0'`、`'0.0'`、`'0%'`）时忽略 `tone`。
+4. **「失败」「已拒绝」比「成功」醒目**：danger 徽标描边更深、字重为 `strong`；`StatCard tone="danger"` 的卡片另有 danger 描边。
+5. 图表一律用 `chart-*`：与配色无关，相邻两色在深浅主题下 CIEDE2000 ΔE ≥ 20；两组数据永远是两种色相（首页「收到 / 发出」= `chart-1` / `chart-2`）。
+
+### 17. 主按钮与危险按钮（D25）
+
+- `Button variant="primary"`：`brand` 底 + `brand-foreground` 字（浅色 10.46:1、深色 12.11:1）。**每个视图最多一个** `primary`（登录、保存、发送、筛选这类「下一步」）；`PageAction` 的 `tone: 'primary'` 渲染为它，非危险的 `ConfirmDialog` 确认按钮也用它。
+- 与其他按钮底色的亮度差：深色主题 ≥ 30（CIE L*，实测最小 68.9）。浅色主题做不到：`#76EEC6` 本身很亮（L* 86.6），与白色的 `outline` 只差 13.5（相对亮度差 30.9%），与配色浅色调的 `soft` 只差 7.3（15.7%）。因此浅色下主按钮加一圈 `brand-text` 70% 的描边（在卡片上 3.16:1，满足非文字 3:1），靠「实心彩色 + 深色描边」与其他按钮区分。
+- 原来的 `default`（配色浅色调）改名 `soft`；`default` 作为弃用别名保留到 P4，外观与 `soft` 相同，仍是默认变体。
+- `destructive` 平时是**幽灵样式**（红字、无底，悬停时淡红底）；`destructive-outline` 保留（描边 + 红字，决策 5）；**实心红色 `destructive-solid` 只用于确认对话框的确认按钮**，`ConfirmDialog variant="destructive"` 使用它。确认对话框以外不出现实心红色按钮。
+- 焦点环是 `brand-text`（2px，偏移 2px），与配色无关。
+
+### 18. 动效与数字（D26）
+
+- 时长只有三档：`--console-motion-fast` 120ms（悬停、按下、颜色变化）、`--console-motion-base` 200ms（展开、弹层、toast）、`--console-motion-slow` 280ms（抽屉、页面切换）；缓动统一用 `--console-ease-out`（`cubic-bezier(0.25, 1, 0.5, 1)`）。Tailwind 的 `transition-*` 默认时长与缓动也指向这两个令牌。`--console-duration-fast`（原 150ms）、`--console-duration-page` 改为 `motion-fast` / `motion-base` 的弃用别名，保留到 P4。
+- stylelint 新规则 `console/motion-tokens`：`transition`、`animation` 及其 `-duration` / `-delay` / `-timing-function` 不得写死时长（`150ms`、`0.2s`）或缓动（`ease`、`cubic-bezier(…)`）；`prefers-reduced-motion: reduce` 下的重置除外。`createConsoleStylelintConfig({ motionTokens })` 可在迁移期间降为 `'warning'`。
+- `styles.css` 的基础层在根上设置 `font-variant-numeric: tabular-nums`：统计数字、版本号、时间戳上下对齐，不再逐处添加。
+
+### 19. 品牌标（D27）
+
+`BrandMark` 是 Console favicon 的形状（圆角方块、Z、圆点），颜色固定为 `brand` / `brand-foreground`，与配色无关；可带产品名「Zhin Console」（`CONSOLE_PRODUCT_NAME`），尺寸 `sm` 20px / `md` 28px / `lg` 40px 或像素值。Console 的顶栏、登录页、设置向导改用它（zhinjs/console 的实施 PR）。
+
+### 20. 校验
+
+`packages/console/ui/tests/contrast.test.ts` 在 8 种配色 × 深浅主题下检查：主按钮文字对比度 ≥ 4.5:1 与底色亮度差（见 D25）、浅色主按钮描边 ≥ 3:1、`brand-text` 在所有表面 ≥ 4.5:1、信号文字在表面与徽标底色上 ≥ 4.5:1、`destructive-solid` ≥ 4.5:1、信号色深浅同色相同饱和度、图表色相邻 ΔE ≥ 20（实测浅色最小 23.6、深色最小 21.8，任意两色最小 16.7 / 18.7）且在卡片上 ≥ 3:1。
+
+## 增补：空状态、表单控件、图标与焦点（console#125 第三阶段）
+
+增补日期：2026-11-16。来源：zhinjs/console#125 第三阶段（第 7–12 条）。本节只写组件库一侧：组件库提供空状态、ghost 控件、日期选择、代码标识和图标规则；字体文件的加载、表面层级、找不到页面的整页、⌘K 和 toast 由 zhinjs/console 实施。Console 要等 `@zhin.js/console-ui` 下次发版后才能用上本节的组件。
+
+### 21. 空状态（D28）
+
+1. `EmptyState` 的结构固定为：**一张 64px 线稿插画（或图标）+ 一句说明 + 至多一个操作**。插画统一 1.5px 描边（任意尺寸下都保持 1.5px）、不填充、单色 `brand-text`（`currentColor`），是 SVG 组件 `EmptyIllustration`。
+2. 插画用 `illustration` 选择，首批 7 张：`messages`（无消息）、`tasks`（无任务）、`logs`（无日志）、`table`（未选中数据表）、`record`（未选中记录）、`not-found`（找不到页面）、`generic`（通用空）；清单是 `EMPTY_ILLUSTRATIONS`。紧凑模式（`compact`）下为 48px。
+3. 只给插画、不给 `title` / `description` 时，用该插画的默认说明（如「还没有任务」「在左侧选择一个数据表」「找不到这个页面」）；**不再单独显示「暂无数据」**：只给了 `title` 时只显示标题，什么都不给时显示「这里还没有内容」（`empty.noData` 的新文案）。
+4. `action` 渲染为一个 `Button`，默认 `soft`，可选 `primary`（仍受「每个视图最多一个 `primary`」约束，D25）；给 `href` 时渲染为链接；也可以直接传一个元素。
+5. 向后兼容：原有属性（`icon`、`title`、`description`、`compact`、`className`）不变。没传 `illustration` 时仍用原来的图标，但不再是 `opacity 0.3` 的灰图标，而是与插画相同的 `brand-text`、1.5px 描边。
+6. Console 的 `StatusState kind="empty"` 与找不到页面的整页（标题「找不到这个页面」、访问的地址、「返回首页」与「打开 ⌘K 搜索」）由 zhinjs/console 改用本组件实现。
+
+### 22. ghost 控件与日期选择（D29）
+
+1. `Input`、`Textarea`、`SelectTrigger` / `SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField` 接受 `variant="ghost"`：平时无边框、无底色，悬停、聚焦或展开时才出现边框（聚焦为 `brand-text`）。用于次要字段（备用模型、未设置的决策槽），让长表单不再是一面「框墙」；主字段仍用默认样式。类型 `ControlVariant`。
+2. 新增 `DateField`（值 `YYYY-MM-DD`）与 `DateTimeField`（值 `YYYY-MM-DDTHH:mm`），替代浏览器原生的 `date` / `datetime-local` 输入框。值是本地时间的 ISO 8601 字符串（与原生输入框的值格式相同，迁移时不用改数据），空值为 `''`；带时区的值（`Z`、`+08:00`）按本地时间显示，改动后输出不带时区的本地值。
+3. 实现基于 `Popover` + 一个简单的月历（grid 模式），不引入日期库。键盘：触发器上 Enter / Space / ↓ 打开，Delete / Backspace 清空；月历里 ← → ↑ ↓ 按天 / 周移动，Home / End 到本周首尾，PageUp / PageDown 按月（加 Shift 按年），Enter / Space 选中，Esc 关闭；`DateTimeField` 的时、分输入框支持 ↑ ↓ 调整。`clearable`（默认开）显示清除按钮；`min` / `max` 之外的日期不可选；`weekStartsOn` 默认 zh-CN 周一、en 周日。纯函数（`parseDateValue`、`parseDateTimeValue`、`formatDateValue`、`formatDateTimeValue`、`calendarMonth`、`addDays`、`addMonths`）一并导出。
+
+### 23. 图标（D30）
+
+1. 组件库内只用 lucide 图标，统一 `strokeWidth 1.75`（`CONSOLE_ICON_STROKE_WIDTH`）；尺寸：控件里 16px，导航 18px（`CONSOLE_ICON_SIZE`）。组件库渲染使用方传入的图标（`StatCard`、`PageAction`、`EmptyState` 的 `icon`）时也按此描边；空状态的插画与图标例外，为 1.5px（D28）。宿主可以用 lucide 的 `LucideProvider strokeWidth={1.75}` 让自己的图标一致。
+2. **列表、⌘K、工具栏不把图标放在浅色方块里**，图标直接放在表面上；只有导航可以带底。确认对话框的信号图标保留浅色底（它不是列表、⌘K 或工具栏）。
+
+### 24. 代码标识（D31）
+
+包名、RPC 名、ID、cron 表达式这类行内短标识用 `InlineCode`（或 `console-code` 类）：`--console-font-mono` 等宽字体，默认极浅底色（前景色 5%），`tone="plain"` 无底色，**不加边框**。`CodeText` 与它外观相同。
+
+### 25. 焦点环与动效（D32）
+
+1. 组件库里所有组件的焦点环只在 `:focus-visible` 时出现（`brand-text`，D25）。鼠标点开再关闭 `Dialog`、`DropdownMenu`、`Select`、`DateField` 后，焦点回到触发器但不出现焦点环；键盘操作仍然有焦点环。文本输入框聚焦时总有焦点环（浏览器规则，这是预期）。视觉回归用例 `mouse interaction leaves no focus ring` 检查这一点。
+2. 组件库的所有动画（抽屉滑入、手机宽度下的底部抽屉、骨架屏闪光）只在 `prefers-reduced-motion: no-preference` 下运行；`reduce` 下的重置同时停止过渡。
+3. 组件库没有 toast 和 Command（⌘K）组件：toast 的进出场动画（从右下滑入 8px + 淡入 `motion-base`，退出淡出 `motion-fast`，包在 `no-preference` 里）与 ⌘K 输入框去掉内层边框由 zhinjs/console 实施，规则同本条。
+
+### 26. 字体（D33）
+
+组件库**不打包字体**。令牌定义字体栈：`--console-font-sans` 以 Inter 优先、`--console-font-mono` 以 JetBrains Mono 优先，之后回退到系统字体（中文用系统字体）。宿主负责用 `@font-face` 加载 Inter 与 JetBrains Mono（Console 自托管拉丁 + 数字子集，`font-display: swap`）；没有加载时，组件按字体栈回退，布局不依赖具体字体。
 
 ## 备选方案
 

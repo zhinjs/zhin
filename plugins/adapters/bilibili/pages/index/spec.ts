@@ -40,7 +40,6 @@ const scanning = (endpoint: BilibiliEndpoint) =>
 export const spec: CommentReviewBlueprintSpec<BilibiliEndpoint, BilibiliDraft> = {
   adapter: 'bilibili',
   platform: { zh: 'B 站', en: 'Bilibili' },
-  mark: 'B',
   resource: { zh: '视频', en: 'videos' },
   loginMode: 'qr',
   resourcesKey: 'videos',

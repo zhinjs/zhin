@@ -4,20 +4,36 @@ import * as Radix from "radix-ui"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '../../cn.js'
 
+const SOFT = "border-primary-action-border bg-primary-action text-primary-action-foreground hover:border-primary hover:bg-primary-action/72"
+
+/**
+ * Button variants (ADR 0063 「色板角色与信号色」, zhinjs/console#125):
+ *   primary             solid brand, dark text — at most one per view (the next step: 登录, 保存, 发送, 筛选)
+ *   soft                palette tint, the former `default`; `default` is its deprecated alias until P4
+ *   outline / secondary / ghost / link
+ *   destructive         ghost: destructive text, no fill — every dangerous entry point on a page
+ *   destructive-outline outline button with destructive text (ADR 0063 决策 5)
+ *   destructive-solid   solid red — only the confirm button of a confirmation dialog
+ */
 const buttonVariants = cva(
-  "console-control inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control border border-transparent text-body font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "console-control inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control border border-transparent text-body font-medium transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border-primary-action-border bg-primary-action text-primary-action-foreground hover:border-primary hover:bg-primary-action/72",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        // The light-theme brand (#76EEC6) is close to white, so the brand-text hairline gives the button its edge.
+        primary: "border-brand-text/70 bg-brand text-brand-foreground hover:bg-brand/85 dark:border-transparent",
+        soft: SOFT,
+        /** @deprecated Renamed to `soft` (zhinjs/console#125); same look, kept until ADR 0063 P4. */
+        default: SOFT,
+        destructive: "text-destructive hover:bg-destructive/8",
         outline: "border-[color:var(--console-border-strong)] bg-card text-foreground hover:bg-[var(--console-surface-hover)]",
         // Page-level entry to a dangerous action (ADR 0063 决策 5): the outline button with destructive text.
-        // The solid `destructive` variant is only for the confirm button inside the confirmation dialog.
         "destructive-outline": "border-[color:var(--console-border-strong)] bg-card text-destructive hover:bg-[var(--console-surface-hover)]",
+        // Only for the confirm button inside a confirmation dialog (ConfirmDialog variant="destructive").
+        "destructive-solid": "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         secondary: "bg-secondary text-secondary-foreground hover:bg-accent",
         ghost: "text-foreground hover:bg-[var(--console-surface-hover)]",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-brand-text underline-offset-4 hover:underline",
       },
       size: {
         default: "h-control px-3",
@@ -27,7 +43,7 @@ const buttonVariants = cva(
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "soft",
       size: "default",
     },
   }

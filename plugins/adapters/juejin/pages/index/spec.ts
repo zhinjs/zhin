@@ -21,7 +21,6 @@ export interface JuejinEndpoint extends CommentReviewEndpointBase<JuejinDraft> {
 export const spec: CommentReviewBlueprintSpec<JuejinEndpoint, JuejinDraft> = {
   adapter: 'juejin',
   platform: { zh: '掘金', en: 'Juejin' },
-  mark: '掘',
   resource: { zh: '文章', en: 'articles' },
   loginMode: 'cookie-check',
   resourcesKey: 'articles',

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageCircle',
   order: 77,
   requiredPermissions: ['weixin-ilink:read'],
+  keywords: { 'zh-CN': ['微信', '个人微信', 'iLink', 'ClawBot'], en: ['wechat', 'ilink', 'clawbot'] },
 });
 
 /**

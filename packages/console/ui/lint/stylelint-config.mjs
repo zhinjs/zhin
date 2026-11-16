@@ -14,6 +14,8 @@
  *   allowTierOneIn     regex sources of files that may read tier-1 spacing / radius / elevation
  *   deprecatedTokens   severity of `console/no-deprecated-tokens` ('error' default; 'warning'
  *                      while a codebase moves off the old names, until P4)
+ *   motionTokens       severity of `console/motion-tokens` ('error' default; 'warning' while a
+ *                      codebase moves its transitions onto the motion tokens; false turns it off)
  */
 import plugins from './stylelint-plugin.mjs';
 
@@ -22,6 +24,7 @@ export function createConsoleStylelintConfig({
   semanticOnly = true,
   allowTierOneIn = [],
   deprecatedTokens = 'error',
+  motionTokens = 'error',
   ignoreFiles = [],
 } = {}) {
   return {
@@ -32,6 +35,7 @@ export function createConsoleStylelintConfig({
       'console/no-unknown-tokens': true,
       'console/no-deprecated-tokens': [true, { severity: deprecatedTokens }],
       'console/media-queries': [true, { shellFiles }],
+      'console/motion-tokens': motionTokens ? [true, { severity: motionTokens }] : null,
     },
   };
 }

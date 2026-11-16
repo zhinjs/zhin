@@ -28,36 +28,28 @@ const snippetPath = path.join(repoRoot, 'docs/snippets/platform-tiers.md');
 
 const checkOnly = process.argv.includes('--check');
 
+const GITHUB_TREE = 'https://github.com/zhinjs/zhin/tree/main';
+
 /**
+ * 把 README 中的相对链接（`./x`、`../x`）按 README 所在目录
+ * `plugins/adapters/<slug>/` 解析为仓库路径，再改写为 GitHub URL；
+ * 指向 `examples/minimal-bot` 的链接改写为站内入门页。
+ *
  * @param {string} body
  * @param {string} slug
  */
-function transformLinks(body, slug) {
-  let s = body;
-  s = s.replace(
-    /\]\((?:\.\.\/)+examples\/minimal-bot\/?\)/g,
-    '](/getting-started/)',
-  );
-  s = s.replace(
-    /\]\((?:\.\.\/)+examples\/([^)]+)\)/g,
-    '](https://github.com/zhinjs/zhin/tree/main/examples/$1)',
-  );
-  s = s.replace(
-    /\]\((?:\.\.\/)+plugins\/adapters\/([^)]+)\)/g,
-    '](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/$1)',
-  );
-  s = s.replace(
-    /\]\(\.\/([^)]+\.md)\)/g,
-    `](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/${slug}/$1)`,
-  );
-  s = s.replace(
-    /\]\(\.\.\/([^)]+\.md)\)/g,
-    (_, rel) => {
-      const normalized = path.posix.normalize(path.posix.join('plugins/adapters', slug, rel));
-      return `](https://github.com/zhinjs/zhin/tree/main/${normalized})`;
-    },
-  );
-  return s;
+export function transformLinks(body, slug) {
+  const baseDir = `plugins/adapters/${slug}/`;
+  return body.replace(/\]\((\.{1,2}\/[^)\s]*)\)/g, (match, href) => {
+    const hashIndex = href.indexOf('#');
+    const target = hashIndex === -1 ? href : href.slice(0, hashIndex);
+    const fragment = hashIndex === -1 ? '' : href.slice(hashIndex);
+    const resolved = new URL(target, `https://repo.invalid/${baseDir}`).pathname.slice(1);
+    if (resolved.replace(/\/$/, '') === 'examples/minimal-bot') {
+      return '](/getting-started/)';
+    }
+    return `](${GITHUB_TREE}/${resolved}${fragment})`;
+  });
 }
 
 /**
@@ -233,97 +225,101 @@ function buildPlatformTiersSnippet() {
   return lines.join('\n');
 }
 
-/** @type {string[]} */
-const stale = [];
-/** @type {string[]} */
-const updated = [];
-/** @type {string[]} */
-const operabilityIssues = [];
+function main() {
+  /** @type {string[]} */
+  const stale = [];
+  /** @type {string[]} */
+  const updated = [];
+  /** @type {string[]} */
+  const operabilityIssues = [];
 
-for (const slug of listAdapterSlugs()) {
-  if (!ADAPTER_META[slug]) {
-    stale.push(`${slug} (missing from scripts/adapter-meta.mjs)`);
-  }
-  const readmePath = path.join(adaptersRoot, slug, 'README.md');
-  const pkgPath = path.join(adaptersRoot, slug, 'package.json');
-  const outPath = path.join(docsRoot, `${slug}.md`);
+  for (const slug of listAdapterSlugs()) {
+    if (!ADAPTER_META[slug]) {
+      stale.push(`${slug} (missing from scripts/adapter-meta.mjs)`);
+    }
+    const readmePath = path.join(adaptersRoot, slug, 'README.md');
+    const pkgPath = path.join(adaptersRoot, slug, 'package.json');
+    const outPath = path.join(docsRoot, `${slug}.md`);
 
-  const readmeBody = fs.readFileSync(readmePath, 'utf8');
-  const requiredSections = [
-    ['prerequisites', /^## (前置条件|Prerequisites)$/mu],
-    ['configuration', /^## (最小配置(?:（[^\n]+）)?|配置(?:（[^\n]+）)?|Minimal Configuration|Minimal config)$/mu],
-    ['troubleshooting', /^## (故障排查|Troubleshooting)$/mu],
-  ];
-  for (const [section, pattern] of requiredSections) {
-    if (!pattern.test(readmeBody)) operabilityIssues.push(`${slug} (missing ${section})`);
-  }
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const next = buildDoc(slug, pkg.name, readmeBody);
+    const readmeBody = fs.readFileSync(readmePath, 'utf8');
+    const requiredSections = [
+      ['prerequisites', /^## (前置条件|Prerequisites)$/mu],
+      ['configuration', /^## (最小配置(?:（[^\n]+）)?|配置(?:（[^\n]+）)?|Minimal Configuration|Minimal config)$/mu],
+      ['troubleshooting', /^## (故障排查|Troubleshooting)$/mu],
+    ];
+    for (const [section, pattern] of requiredSections) {
+      if (!pattern.test(readmeBody)) operabilityIssues.push(`${slug} (missing ${section})`);
+    }
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const next = buildDoc(slug, pkg.name, readmeBody);
 
-  if (checkOnly) {
-    if (!fs.existsSync(outPath)) {
-      stale.push(`${slug}.md (missing)`);
+    if (checkOnly) {
+      if (!fs.existsSync(outPath)) {
+        stale.push(`${slug}.md (missing)`);
+        continue;
+      }
+      const existing = fs.readFileSync(outPath, 'utf8');
+      const expectedHash = crypto.createHash('sha256').update(readmeBody).digest('hex').slice(0, 16);
+      const match = existing.match(/<!-- sync-adapter-docs:sha256=([a-f0-9]+) -->/);
+      if (!match || match[1] !== expectedHash) {
+        stale.push(slug);
+      }
       continue;
     }
-    const existing = fs.readFileSync(outPath, 'utf8');
-    const expectedHash = crypto.createHash('sha256').update(readmeBody).digest('hex').slice(0, 16);
-    const match = existing.match(/<!-- sync-adapter-docs:sha256=([a-f0-9]+) -->/);
-    if (!match || match[1] !== expectedHash) {
-      stale.push(slug);
-    }
-    continue;
-  }
 
-  if (!fs.existsSync(outPath) || fs.readFileSync(outPath, 'utf8') !== next) {
-    fs.mkdirSync(docsRoot, { recursive: true });
-    fs.writeFileSync(outPath, next);
-    updated.push(slug);
-  }
-}
-
-const nextIndex = buildIndexMarkdown();
-const nextSnippet = buildPlatformTiersSnippet();
-
-if (operabilityIssues.length > 0) {
-  console.error('Adapter README operability contract failed:\n');
-  for (const issue of operabilityIssues) console.error(`  - ${issue}`);
-  console.error('\nEach adapter needs prerequisites, minimal configuration, and troubleshooting.');
-  process.exit(1);
-}
-
-if (checkOnly) {
-  if (!fs.existsSync(indexPath) || fs.readFileSync(indexPath, 'utf8') !== nextIndex) {
-    stale.push('index.md (tier tables out of sync with adapter-meta.mjs)');
-  }
-  if (!fs.existsSync(snippetPath) || fs.readFileSync(snippetPath, 'utf8') !== nextSnippet) {
-    stale.push('docs/snippets/platform-tiers.md (out of sync)');
-  }
-  for (const slug of Object.keys(ADAPTER_META)) {
-    const dir = path.join(adaptersRoot, slug);
-    if (!fs.existsSync(path.join(dir, 'README.md'))) {
-      stale.push(`${slug} (in ADAPTER_META but no plugins/adapters/${slug}/README.md)`);
+    if (!fs.existsSync(outPath) || fs.readFileSync(outPath, 'utf8') !== next) {
+      fs.mkdirSync(docsRoot, { recursive: true });
+      fs.writeFileSync(outPath, next);
+      updated.push(slug);
     }
   }
-  if (stale.length > 0) {
-    console.error('Adapter docs out of sync with plugin READMEs / adapter-meta:\n');
-    for (const s of stale) console.error(`  - ${s}`);
-    console.error('\nRun: pnpm sync:adapter-docs');
+
+  const nextIndex = buildIndexMarkdown();
+  const nextSnippet = buildPlatformTiersSnippet();
+
+  if (operabilityIssues.length > 0) {
+    console.error('Adapter README operability contract failed:\n');
+    for (const issue of operabilityIssues) console.error(`  - ${issue}`);
+    console.error('\nEach adapter needs prerequisites, minimal configuration, and troubleshooting.');
     process.exit(1);
   }
-  console.log(`Adapter doc sync check passed (${listAdapterSlugs().length} adapters).`);
-} else {
-  if (!fs.existsSync(indexPath) || fs.readFileSync(indexPath, 'utf8') !== nextIndex) {
-    fs.writeFileSync(indexPath, nextIndex);
-    updated.push('index');
+
+  if (checkOnly) {
+    if (!fs.existsSync(indexPath) || fs.readFileSync(indexPath, 'utf8') !== nextIndex) {
+      stale.push('index.md (tier tables out of sync with adapter-meta.mjs)');
+    }
+    if (!fs.existsSync(snippetPath) || fs.readFileSync(snippetPath, 'utf8') !== nextSnippet) {
+      stale.push('docs/snippets/platform-tiers.md (out of sync)');
+    }
+    for (const slug of Object.keys(ADAPTER_META)) {
+      const dir = path.join(adaptersRoot, slug);
+      if (!fs.existsSync(path.join(dir, 'README.md'))) {
+        stale.push(`${slug} (in ADAPTER_META but no plugins/adapters/${slug}/README.md)`);
+      }
+    }
+    if (stale.length > 0) {
+      console.error('Adapter docs out of sync with plugin READMEs / adapter-meta:\n');
+      for (const s of stale) console.error(`  - ${s}`);
+      console.error('\nRun: pnpm sync:adapter-docs');
+      process.exit(1);
+    }
+    console.log(`Adapter doc sync check passed (${listAdapterSlugs().length} adapters).`);
+  } else {
+    if (!fs.existsSync(indexPath) || fs.readFileSync(indexPath, 'utf8') !== nextIndex) {
+      fs.writeFileSync(indexPath, nextIndex);
+      updated.push('index');
+    }
+    fs.mkdirSync(path.dirname(snippetPath), { recursive: true });
+    if (!fs.existsSync(snippetPath) || fs.readFileSync(snippetPath, 'utf8') !== nextSnippet) {
+      fs.writeFileSync(snippetPath, nextSnippet);
+      updated.push('platform-tiers.md');
+    }
+    console.log(
+      updated.length > 0
+        ? `Synced adapter docs: ${updated.join(', ')}`
+        : `Adapter docs already up to date (${listAdapterSlugs().length} adapters).`,
+    );
   }
-  fs.mkdirSync(path.dirname(snippetPath), { recursive: true });
-  if (!fs.existsSync(snippetPath) || fs.readFileSync(snippetPath, 'utf8') !== nextSnippet) {
-    fs.writeFileSync(snippetPath, nextSnippet);
-    updated.push('platform-tiers.md');
-  }
-  console.log(
-    updated.length > 0
-      ? `Synced adapter docs: ${updated.join(', ')}`
-      : `Adapter docs already up to date (${listAdapterSlugs().length} adapters).`,
-  );
 }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

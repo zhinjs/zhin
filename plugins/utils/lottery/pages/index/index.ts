@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Sparkles',
   order: 60,
   requiredPermissions: ['lottery:read'],
+  keywords: { 'zh-CN': ['抽奖', '开奖', '快乐8', '双色球', '大乐透', '福彩3D', '排列三', '排列五'], en: ['lottery draw', 'kl8', 'ssq', 'dlt', 'pick 3', 'pick 5'] },
 });
 
 export default definePageBlueprint<LotteryConsoleStatus>({

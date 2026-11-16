@@ -1,6 +1,7 @@
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { useState, useCallback, useEffect, useId, type ReactNode } from 'react'
 import { AlertTriangle, Info } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter,
@@ -70,7 +71,7 @@ export function ConfirmDialog({
         <DialogHeader>
           <div className="flex items-start gap-3">
             <span className={cn('console-confirm-icon', variant === 'destructive' && 'is-destructive')} aria-hidden="true">
-              <Icon className="size-5" />
+              <Icon strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-5" />
             </span>
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle>{title}</DialogTitle>
@@ -107,7 +108,7 @@ export function ConfirmDialog({
             <Button variant="outline" size="sm">{cancelLabel ?? i18n.t("confirm.cancel")}</Button>
           </DialogClose>
           <Button
-            variant={variant === 'destructive' ? 'destructive' : 'default'}
+            variant={variant === 'destructive' ? 'destructive-solid' : 'primary'}
             size="sm"
             onClick={handleConfirm}
             disabled={!canSubmit}

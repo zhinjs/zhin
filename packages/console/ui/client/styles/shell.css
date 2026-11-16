@@ -20,7 +20,6 @@
     max-width: none !important;
     max-height: min(70dvh, var(--radix-popper-available-height, 70dvh)) !important;
     padding-bottom: max(var(--console-popover-padding), env(safe-area-inset-bottom));
-    animation: console-sheet-in-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .console-dialog {
@@ -30,7 +29,6 @@
     max-width: none;
     max-height: 90dvh;
     padding-bottom: max(var(--console-dialog-padding), env(safe-area-inset-bottom));
-    animation: console-sheet-in-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .console-dialog-footer {
@@ -41,6 +39,25 @@
   .console-sheet-content[data-side="left"] {
     width: 100vw;
     border-radius: 0;
+  }
+}
+
+/*
+ * Motion (ADR 0063 D26 / D32): every animation of the package runs only when the user has no
+ * reduced-motion preference; the reset below also stops transitions under `reduce`.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .console-sheet-content[data-side="right"] { animation: console-sheet-in-right var(--console-motion-slow) var(--console-ease-out); }
+  .console-sheet-content[data-side="left"] { animation: console-sheet-in-left var(--console-motion-slow) var(--console-ease-out); }
+  .console-sheet-content[data-side="bottom"] { animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out); }
+  /* One shimmer = five slow steps (1.4s); a loop, not a transition. */
+  .console-skeleton::after { animation: console-skeleton-shimmer calc(var(--console-motion-slow) * 5) var(--console-ease-out) infinite; }
+}
+
+@media (width < 40rem) and (prefers-reduced-motion: no-preference) {
+  .console-popover,
+  .console-dialog {
+    animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out);
   }
 }
 

@@ -430,8 +430,31 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --color-brand: hsl(var(--console-brand));
+  --color-brand-foreground: hsl(var(--console-brand-foreground));
+  --color-brand-text: hsl(var(--console-brand-text));
+  --color-brand-tint: hsl(var(--console-brand-tint));
+  --color-signal-danger-fill: hsl(var(--console-signal-danger-fill));
+  --color-signal-danger-text: hsl(var(--console-signal-danger-text));
+  --color-signal-warning-fill: hsl(var(--console-signal-warning-fill));
+  --color-signal-warning-text: hsl(var(--console-signal-warning-text));
+  --color-signal-success-fill: hsl(var(--console-signal-success-fill));
+  --color-signal-success-text: hsl(var(--console-signal-success-text));
+  --color-signal-info-fill: hsl(var(--console-signal-info-fill));
+  --color-signal-info-text: hsl(var(--console-signal-info-text));
+  --color-chart-1: hsl(var(--console-chart-1));
+  --color-chart-2: hsl(var(--console-chart-2));
+  --color-chart-3: hsl(var(--console-chart-3));
+  --color-chart-4: hsl(var(--console-chart-4));
+  --color-chart-5: hsl(var(--console-chart-5));
+  --color-chart-6: hsl(var(--console-chart-6));
+  --color-chart-7: hsl(var(--console-chart-7));
+  --color-chart-8: hsl(var(--console-chart-8));
+  --color-chart-other: hsl(var(--console-chart-other));
+  --default-transition-duration: var(--console-motion-fast);
+  --default-transition-timing-function: var(--console-ease-out);
+  --animate-accordion-down: accordion-down var(--console-motion-base) var(--console-ease-out);
+  --animate-accordion-up: accordion-up var(--console-motion-base) var(--console-ease-out);
 
   @keyframes accordion-down {
     from { height: 0; }

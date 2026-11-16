@@ -30,10 +30,15 @@ Sandbox 不需要外部账号。只需用 `zhin start` 启动项目（管理网�
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
+- `@zhin.js/console-ui`（peerDependency，由 Console 提供单例）— 页面的按钮、输入框、下拉框、开关、页签、菜单和确认对话框（ADR 0063）
 
 `zhin start` 拉起的实例装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
 `ClientBuildModuleRuntime`（HTTP 由管理网关监听并转发）。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
 （路由 `/sandbox`，与 WebSocket `/sandbox` 同 path：GET 开页、Upgrade 走 WS）内置聊天壳。
+
+页面以 `definePage({ fullWidth: true })` 占满内容区，页头（标题与「会话列表」「检查器」两个开关）交给 Console 外壳
+（`usePageChrome`）；没有外壳的旧 Console 中由页面自己画这两个开关。工作区样式随页面注入（`pages/index/workspaceStyles.ts`、
+`styles.ts`，全部限定在 `.zhin-sandbox` 内），不依赖 Console 的样式表或 Tailwind 扫描（ADR 0063 D13）。
 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
 **不是** Plugin Runtime 生产入口。

@@ -8,6 +8,13 @@ import { PageActions, type PageAction } from './actions.js'
  * the refresh control; the page itself renders only its content.
  */
 export interface PageChrome {
+  /**
+   * Page title the content knows better than the route (e.g. a localized blueprint title). A shell
+   * that already has a title area (the plugin detail page) may keep its own and use this as the tab label.
+   */
+  readonly title?: string
+  /** One-line description under the title. */
+  readonly description?: string
   /** Header actions (buttons, menus). */
   readonly actions?: ReactNode
   /** Shows a RefreshControl in the header. */
@@ -70,11 +77,11 @@ export function PageChromeProvider({ store, children }: PageChromeProviderProps)
  */
 export function usePageChrome(chrome: PageChrome): boolean {
   const store = useContext(PageChromeContext)
-  const { actions, refresh, menuActions, moreActions } = chrome
+  const { title, description, actions, refresh, menuActions, moreActions } = chrome
   useEffect(() => {
     if (!store) return
-    return store.set({ actions, refresh, menuActions, moreActions })
-  }, [store, actions, refresh, menuActions, moreActions])
+    return store.set({ title, description, actions, refresh, menuActions, moreActions })
+  }, [store, title, description, actions, refresh, menuActions, moreActions])
   return store !== null
 }
 

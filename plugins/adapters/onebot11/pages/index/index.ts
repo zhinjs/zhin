@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Bot',
   order: 70,
   requiredPermissions: ['onebot11:read'],
+  keywords: { 'zh-CN': ['OneBot v11', 'QQ', 'go-cqhttp'], en: ['onebot v11', 'qq', 'cqhttp'] },
 });
 
 /**

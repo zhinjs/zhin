@@ -1,7 +1,6 @@
 import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  cn,
   CodeBlock,
   MarkdownContent,
   resolveMediaSrc,
@@ -23,9 +22,15 @@ import {
   Square, RotateCcw, FileDiff, Terminal, FlaskConical, ChevronDown,
   FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign,
 } from 'lucide-react';
+import {
+  Alert, AlertDescription, AlertTitle, Badge, Button, ConfirmDialog, DropdownMenu, DropdownMenuCheckboxItem,
+  DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, ListItemButton,
+  SelectField, Switch, Tabs, TabsList, TabsTrigger, cn, usePageChrome,
+} from '@zhin.js/console-ui';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor.js';
 import HtmlMessage from './HtmlMessage.js';
 import { sandboxStyles } from './styles.js';
+import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
 import { quietOutcomeNotice, readMessageOutcome } from './conversationRecovery.js';
@@ -129,8 +134,6 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [identitySetup, setIdentitySetup] = useState<{ status: 'idle' | 'busy' | 'done' | 'unsupported' } | { status: 'failed'; message: string }>({ status: 'idle' })
     const asMe = wantsAsMe(speakerMode, consoleUser)
     const [showSenderSettings, setShowSenderSettings] = useState(false)
-    /** Runbar overflow: identity, run settings, inspector and clear live here (#1250). */
-    const [showMoreActions, setShowMoreActions] = useState(false)
     /** Live binding of the current socket; drives the Host-provided quick commands. */
     const [readyConnectionId, setReadyConnectionId] = useState<string | undefined>(undefined)
     const [commandHints, setCommandHints] = useState<SandboxCommandHints | null>(null)
@@ -250,7 +253,13 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const [inlineNotices, setInlineNotices] = useState<{ emoji: boolean; parse: boolean }>({ emoji: false, parse: false })
     const fetchFaceList = async () => {
-        try { const res = await fetch('https://face.viki.moe/metadata.json'); setFaceList(await res.json()) }
+        try {
+            const res = await fetch('https://face.viki.moe/metadata.json')
+            const body: unknown = res.ok ? await res.json() : undefined
+            // A failed or malformed response must not break the page (the face picker just stays empty).
+            if (!Array.isArray(body)) throw new Error(`unexpected face list response (${res.status})`)
+            setFaceList(body as Face[])
+        }
         catch (err) { console.error('[Sandbox] Failed to fetch face list:', err); setInlineNotices((n) => ({ ...n, emoji: true })) }
     }
 
@@ -781,18 +790,16 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                                 const label = String(btn.label ?? btn.text ?? btn.title ?? btn.id ?? `Action ${bi + 1}`)
                                                 const payload = String(btn.payload ?? btn.value ?? btn.url ?? btn.id ?? label)
                                                 return (
-                                                    <button
+                                                    <Button
                                                         key={`${payload}-${bi}`}
                                                         type="button"
+                                                        size="sm"
+                                                        variant={interactionVariant(btn.style === 'primary', btn.style === 'danger')}
                                                         disabled={Boolean(btn.disabled) || isSent || resolved || !canExecute || !allowInteraction}
                                                         onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
-                                                        className={cn(
-                                                            btn.style === 'primary' && 'is-primary',
-                                                            btn.style === 'danger' && 'is-danger',
-                                                        )}
                                                     >
                                                         {label}
-                                                    </button>
+                                                    </Button>
                                                 )
                                             })}
                                         </div>
@@ -840,17 +847,15 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     return (
                         <div key={index} className="agent-playground-approval-actions">
                             <div>
-                                <button
+                                <Button
                                     type="button"
+                                    size="sm"
+                                    variant={interactionVariant(d.style === 'primary', d.style === 'danger')}
                                     disabled={Boolean(d.disabled) || isSent || resolved || !canExecute || !allowInteraction}
                                     onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
-                                    className={cn(
-                                        d.style === 'primary' && 'is-primary',
-                                        d.style === 'danger' && 'is-danger',
-                                    )}
                                 >
                                     {label}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     )
@@ -863,18 +868,19 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             {rows.map((row, ri) => (
                                 <div key={ri}>
                                     {row.map((btn) => (
-                                        <button
+                                        <Button
                                             key={btn.payload}
                                             type="button"
+                                            size="sm"
+                                            variant={interactionVariant(
+                                                btn.style === 'primary' || /^允许/u.test(btn.label),
+                                                btn.style === 'danger' || /拒绝|取消/u.test(btn.label),
+                                            )}
                                             disabled={btn.disabled || isSent || resolved || !canExecute || !allowInteraction}
                                             onClick={() => { if (sendInteractiveAction(btn.payload, messageId)) onInteractionSubmitted?.() }}
-                                            className={cn(
-                                                (btn.style === 'primary' || /^允许/u.test(btn.label)) && 'is-primary',
-                                                (btn.style === 'danger' || /拒绝|取消/u.test(btn.label)) && 'is-danger',
-                                            )}
                                         >
                                             {btn.label}
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                             ))}
@@ -1066,11 +1072,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 </div>
                 <div className="agent-playground-inline-run-actions">
                     {currentTask.status === 'running' ? (
-                        <button type="button" className="is-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask}><Square size={12} />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</button>
+                        <Button type="button" size="sm" variant="destructive-outline" onClick={() => void stopActiveTask()} disabled={stoppingTask}><Square />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</Button>
                     ) : currentTaskMessage ? (
-                        <button type="button" onClick={retryCurrentTask}><RotateCcw size={13} />{sandboxText(locale, "重试")}</button>
+                        <Button type="button" size="sm" variant="outline" onClick={retryCurrentTask}><RotateCcw />{sandboxText(locale, "重试")}</Button>
                     ) : null}
-                    <button type="button" onClick={exportCurrentRun} title={sandboxText(locale, "导出 Markdown 运行报告")}><FileDown size={13} />{sandboxText(locale, "导出")}</button>
+                    <Button type="button" size="sm" variant="outline" onClick={exportCurrentRun} title={sandboxText(locale, "导出 Markdown 运行报告")}><FileDown />{sandboxText(locale, "导出")}</Button>
                 </div>
             </div>
             <dl className="agent-playground-inline-run-metrics">
@@ -1094,86 +1100,92 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 ) : <div className="agent-playground-inline-run-empty">{sandboxText(locale, "正在等待第一条运行事件…")}</div>
             )}
             <footer>
-                <button type="button" aria-expanded={inlineRunExpanded} onClick={() => setInlineRunExpanded((expanded) => !expanded)}>
-                    <ChevronDown size={13} />{inlineRunExpanded ? sandboxText(locale, "收起步骤") : sandboxText(locale, "查看 {0} 个步骤", [currentRunSteps.length])}
-                </button>
-                <button type="button" onClick={() => { setInspectorView(currentRunArtifacts.length > 0 ? 'artifacts' : 'runs'); setShowInspector(true) }}>
-                    {currentRunArtifacts.length > 0 ? sandboxText(locale, "{0} 个变更与产物", [currentRunArtifacts.length]) : sandboxText(locale, "打开运行检查器")}<PanelRight size={13} />
-                </button>
+                <Button type="button" size="sm" variant="ghost" aria-expanded={inlineRunExpanded} onClick={() => setInlineRunExpanded((expanded) => !expanded)}>
+                    <ChevronDown />{inlineRunExpanded ? sandboxText(locale, "收起步骤") : sandboxText(locale, "查看 {0} 个步骤", [currentRunSteps.length])}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => { setInspectorView(currentRunArtifacts.length > 0 ? 'artifacts' : 'runs'); setShowInspector(true) }}>
+                    {currentRunArtifacts.length > 0 ? sandboxText(locale, "{0} 个变更与产物", [currentRunArtifacts.length]) : sandboxText(locale, "打开运行检查器")}<PanelRight />
+                </Button>
             </footer>
         </article>
     ) : null
 
     const recoveryConnectionId = connectionRef.current.connectionId
-    return (
-        <section className={cn("zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
-            <style>{`${sandboxStyles}
-.sandbox-sender-trigger { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 6px; }
-.sandbox-role-badge { font-style: normal; font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: rgba(148,163,184,0.18); color: inherit; }
-.sandbox-role-badge.is-master { background: rgba(245,158,11,0.18); color: #d97706; }
-.sandbox-role-badge.is-admin { background: rgba(59,130,246,0.18); color: #2563eb; }
-.sandbox-role-badge.is-member { background: rgba(16,185,129,0.16); color: #059669; }
-.sandbox-role-badge.is-zhin { text-transform: none; background: rgba(139,92,246,0.16); color: #7c3aed; }
-.sandbox-role-switcher { display: inline-flex; gap: 4px; }
-.sandbox-role-option { padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); font-size: 12px; cursor: pointer; background: transparent; color: inherit; text-transform: capitalize; }
-.sandbox-role-option.active { font-weight: 600; border-color: currentColor; background: rgba(59,130,246,0.12); }
-.sandbox-sender-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.sandbox-sender-presets button { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.28); background: transparent; color: inherit; cursor: pointer; }
-.sandbox-quick-commands { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: 6px; }
-.sandbox-command-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(148,163,184,0.28); background: transparent; color: inherit; cursor: pointer; }
-.sandbox-command-chip:hover:not(:disabled) { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
-.sandbox-command-chip:disabled { opacity: 0.45; cursor: not-allowed; }
-.sandbox-rich-card { border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; overflow: hidden; margin-top: 6px; max-width: 440px; background: rgba(148,163,184,0.06); }
-.sandbox-rich-card-image { width: 100%; max-height: 200px; object-fit: cover; display: block; }
-.sandbox-rich-card-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
-.sandbox-rich-card-title { font-weight: 600; font-size: 14px; }
-.sandbox-rich-card-subtitle { font-size: 12px; opacity: 0.75; }
-.sandbox-rich-card-desc { font-size: 13px; }
-.sandbox-rich-card-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 4px 0 0; }
-.sandbox-rich-card-field { background: rgba(148,163,184,0.08); padding: 4px 8px; border-radius: 6px; }
-.sandbox-rich-card-field dt { font-size: 11px; opacity: 0.7; }
-.sandbox-rich-card-field dd { margin: 0; font-size: 12px; font-weight: 500; }
-.sandbox-card-link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); text-decoration: none; color: inherit; }
-.sandbox-share-card { display: flex; gap: 10px; align-items: center; border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; padding: 8px 12px; margin-top: 6px; max-width: 440px; background: rgba(148,163,184,0.06); }
-.sandbox-share-card-thumb { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
-.sandbox-share-card-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.sandbox-share-card-title { font-weight: 600; font-size: 13px; }
-.sandbox-share-card-title a { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: underline; }
-.sandbox-share-card-desc { font-size: 12px; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }
-.sandbox-share-card-url { font-size: 11px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-`}</style>
-            <div className="agent-playground-mobilebar">
-                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
-                <strong>{sandboxText(locale, "会话")}</strong>
-                <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
+    const narrowLayout = useMediaQuery(DRAWER_LAYOUT_QUERY)
+    const compactRunbar = useMediaQuery(COMPACT_RUNBAR_QUERY)
+    const openConversationDetails = () => setShowConversationDetails((visible) => !visible)
+    const directoryLoading = directoryStatus.mode === 'loading'
+    // ADR 0063 决策 2 / D18: the page header belongs to the Console shell. The two pane toggles the narrow
+    // layout needs go to the shell's header actions; without a shell the page draws them itself.
+    const chromeActions = useMemo(() => (
+        <>
+            {narrowLayout && (
+                <Button type="button" variant="outline" aria-expanded={showChannelList} onClick={() => setShowChannelList((visible) => !visible)}>
+                    <MessageSquare />{sandboxText(locale, "会话列表")}
+                </Button>
+            )}
+            <Button type="button" variant="outline" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector((visible) => !visible)}>
+                <PanelRight />{sandboxText(locale, "检查器")}
+            </Button>
+        </>
+    ), [locale, narrowLayout, showChannelList, showInspector])
+    const hosted = usePageChrome({ actions: chromeActions })
+    const connectionBadge = (
+        <span className={cn("agent-playground-connection", connected && "is-online")} role="img"
+            aria-label={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}
+            title={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}>
+            {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
+        </span>
+    )
+    const notice = (key: string, options: { title?: string; message: React.ReactNode; tone?: 'default' | 'destructive'; role?: 'alert' | 'status'; action: React.ReactNode }) => (
+        <Alert key={key} variant={options.tone ?? 'default'} role={options.role ?? 'status'} className="sandbox-alert">
+            <div className="sandbox-alert-copy">
+                {options.title && <AlertTitle>{options.title}</AlertTitle>}
+                <AlertDescription>{options.message}</AlertDescription>
             </div>
+            {options.action}
+        </Alert>
+    )
+    return (
+        <section className={cn("zhin-sandbox agent-playground-shell", showInspector && "has-inspector", hosted && "is-hosted")}>
+            <style>{`${workspaceStyles}
+${sandboxStyles}`}</style>
+            {!hosted && (
+                <div className="agent-playground-mobilebar">
+                    {chromeActions}
+                </div>
+            )}
 
             <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "会话列表")}>
-                <div className="agent-playground-brand">
-                    <div>
+                {!hosted && (
+                    <div className="agent-playground-brand">
                         <div>
-                            <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                            <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
+                            <div>
+                                <span className="agent-playground-mark"><Sparkles size={16} /></span>
+                                <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
+                            </div>
+                            {connectionBadge}
                         </div>
-                        <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}>
-                            {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-                        </span>
                     </div>
-                </div>
+                )}
 
-                <div className="agent-playground-section-label"><span>{sandboxText(locale, "会话列表")}</span><span>{channels.length}</span><button type="button" disabled={directoryStatus.mode === 'loading'} aria-label={sandboxText(locale, "刷新会话目录")} onClick={() => void directoryControllerRef.current?.refresh()}><RefreshCw size={13} /></button></div>
+                <div className="agent-playground-section-label">
+                    <span>{sandboxText(locale, "会话列表")}</span><span>{channels.length}</span>
+                    {hosted && connectionBadge}
+                    <Button type="button" variant="ghost" size="icon" disabled={directoryLoading} aria-label={sandboxText(locale, "刷新会话目录")} title={sandboxText(locale, "刷新会话目录")} onClick={() => void directoryControllerRef.current?.refresh()}><RefreshCw /></Button>
+                </div>
                 <div className="agent-playground-session-list">
                     {channels.map((channel) => {
                         const isActive = activeChannel.id === channel.id && activeChannel.type === channel.type
                         return (
-                            <button type="button" key={`${channel.type}:${channel.id}`} disabled={directoryStatus.mode === 'loading'} aria-current={isActive ? 'page' : undefined} className={cn("agent-playground-session", isActive && "active")} onClick={() => switchChannel(channel)}>
+                            <ListItemButton key={`${channel.type}:${channel.id}`} disabled={directoryLoading} aria-current={isActive ? 'page' : undefined} className={cn("agent-playground-session", isActive && "active")} onClick={() => switchChannel(channel)}>
                                 <span className="agent-playground-session-icon">{getChannelIcon(channel.type)}</span>
                                 <div className="agent-playground-session-copy">
                                     <div className="agent-playground-session-title">{channel.name}</div>
                                     <div className="agent-playground-session-scope">{channel.type === 'private' ? sandboxText(locale, "单用户作用域") : channel.type === 'group' ? sandboxText(locale, "群组作用域") : sandboxText(locale, "频道作用域")}</div>
                                 </div>
                                 {channel.unread > 0 && <span className="agent-playground-unread">{channel.unread}</span>}
-                            </button>
+                            </ListItemButton>
                         )
                     })}
                 </div>
@@ -1181,25 +1193,25 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 <div className="agent-playground-new-session">
                     {showNewSession ? (
                         <div className="agent-playground-new-form">
-                            <input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addSession() }} placeholder={sandboxText(locale, "会话名称")} autoFocus />
+                            <Input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addSession() }} placeholder={sandboxText(locale, "会话名称")} aria-label={sandboxText(locale, "会话名称")} autoFocus />
                             <div className="agent-playground-scope-picker" role="group" aria-label={sandboxText(locale, "消息作用域")}>
                                 {(['private', 'group', 'channel'] as SandboxScope[]).map((scope) => (
-                                    <button type="button" key={scope} aria-pressed={newSessionScope === scope} className={cn(newSessionScope === scope && 'active')} onClick={() => setNewSessionScope(scope)}>
+                                    <ListItemButton key={scope} aria-pressed={newSessionScope === scope} className={cn(newSessionScope === scope && 'active')} onClick={() => setNewSessionScope(scope)}>
                                         {scope === 'private' ? sandboxText(locale, "单用户") : scope === 'group' ? sandboxText(locale, "群组") : sandboxText(locale, "频道")}
-                                    </button>
+                                    </ListItemButton>
                                 ))}
                             </div>
                             <div className="agent-playground-new-actions">
-                                <button type="button" onClick={() => setShowNewSession(false)}>{sandboxText(locale, "取消")}</button>
-                                <button type="button" className="primary" onClick={addSession}>{sandboxText(locale, "创建")}</button>
+                                <Button type="button" variant="outline" onClick={() => setShowNewSession(false)}>{sandboxText(locale, "取消")}</Button>
+                                <Button type="button" onClick={addSession}>{sandboxText(locale, "创建")}</Button>
                             </div>
                         </div>
                     ) : (
-                        <button type="button" disabled={directoryStatus.mode === 'loading'} className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建会话")}</button>
+                        <Button type="button" variant="outline" disabled={directoryLoading} className="sandbox-block-button" onClick={() => setShowNewSession(true)}><Plus />{sandboxText(locale, "新建会话")}</Button>
                     )}
                 </div>
                 <div className="agent-playground-endpoint">
-                    <span>{directoryStatus.mode === 'loading' ? sandboxText(locale, "正在读取会话目录") : directoryStatus.mode === 'server' && !directoryStatus.error ? sandboxText(locale, "Host 会话目录") : persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
+                    <span>{directoryLoading ? sandboxText(locale, "正在读取会话目录") : directoryStatus.mode === 'server' && !directoryStatus.error ? sandboxText(locale, "Host 会话目录") : persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
                     <strong>{endpointId}</strong>
                 </div>
             </nav>
@@ -1211,7 +1223,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     <div className="agent-playground-run-identity">
                         <span className="agent-playground-run-icon">{getChannelIcon(activeChannel.type)}</span>
                         <div title={sessionKey}>
-                            <div className="agent-playground-run-title"><h1 title={activeChannel.name}>{activeChannel.name}</h1><span>{scopeLabel}</span></div>
+                            <div className="agent-playground-run-title"><h2 title={activeChannel.name}>{activeChannel.name}</h2><span>{scopeLabel}</span></div>
                         </div>
                     </div>
                     <div className="agent-playground-run-actions">
@@ -1220,56 +1232,57 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             {currentTask ? taskStatusLabel(currentTask.status, locale) : sandboxText(locale, "{0} 条消息", [channelMessages.length])}
                         </span>
                         {currentTask?.status === 'running' ? (
-                            <button type="button" className="agent-playground-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask} aria-label={sandboxText(locale, "停止当前任务")}><Square size={13} />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</button>
-                        ) : lastUserMessage ? (
-                            <button type="button" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw size={14} />{sandboxText(locale, "重试")}</button>
+                            <Button type="button" size="sm" variant="destructive-outline" onClick={() => void stopActiveTask()} disabled={stoppingTask} aria-label={sandboxText(locale, "停止当前任务")}><Square />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</Button>
+                        ) : lastUserMessage && !compactRunbar ? (
+                            <Button type="button" size="sm" variant="outline" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw />{sandboxText(locale, "重试")}</Button>
                         ) : null}
-                        {props.renderConversationDetails
-                            ? <button type="button" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={() => setShowConversationDetails((visible) => !visible)}><ListChecks size={14} />{sandboxText(locale, "对话与轨迹")}</button>
-                            : <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>}
-                        <div className="sandbox-more">
-                            <button
-                                type="button"
-                                className={cn("sandbox-more-trigger", (showMoreActions || showSenderSettings || showRunSettings) && 'active')}
-                                aria-haspopup="menu"
-                                aria-expanded={showMoreActions}
-                                onClick={() => setShowMoreActions((visible) => !visible)}
-                                aria-label={sandboxText(locale, "更多操作")}
-                                title={sandboxText(locale, "更多操作")}
-                            >
-                                <MoreHorizontal size={16} />
-                            </button>
-                            {showMoreActions && (
-                                <>
-                                    <div className="sandbox-more-backdrop" onClick={() => setShowMoreActions(false)} />
-                                    <div className="sandbox-more-menu" role="menu" aria-label={sandboxText(locale, "更多操作")}>
-                                        <button type="button" role="menuitemcheckbox" aria-checked={showSenderSettings}
-                                            onClick={() => { setShowSenderSettings((visible) => !visible); setShowMoreActions(false) }}>
-                                            <User size={14} />
-                                            <span>{sandboxText(locale, "模拟发送者")}</span>
-                                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)} title={locale === 'en' ? 'Simulated platform standing (not a zhin role)' : '模拟的平台身份（不是 zhin 角色）'}>{asMe ? sandboxText(locale, "我的聊天身份") : (senderName.trim() || senderId.trim() || 'dev-user')} · {platformStandingLabel(senderRole, locale)}</em>
-                                            {serverRole && (serverRole.simulated
-                                                ? <em className="sandbox-role-badge is-simulated" title={sandboxText(locale, "客户端自填的发送者不解析 zhin 角色")}>{sandboxText(locale, "模拟身份，无角色")}</em>
-                                                : <em className="sandbox-role-badge is-zhin" title={locale === 'en' ? 'Resolved by the server: zhin role · Agent trust tier' : '服务端解析：zhin 角色 · Agent 信任档位'}>
-                                                    {`zhin: ${serverRole.chatRole ?? (locale === 'en' ? 'none' : '无')} · ${serverRole.trustLevel}`}
-                                                </em>)}
-                                        </button>
-                                        <button type="button" role="menuitemcheckbox" aria-checked={showRunSettings}
-                                            onClick={() => { setShowRunSettings((visible) => !visible); setShowMoreActions(false) }}>
-                                            <SlidersHorizontal size={14} /><span>{sandboxText(locale, "配置运行环境")}</span>
-                                        </button>
-                                        <button type="button" role="menuitemcheckbox" aria-checked={showInspector} aria-controls="sandbox-run-inspector"
-                                            onClick={() => { setShowInspector(!showInspector); setShowMoreActions(false) }}>
-                                            <PanelRight size={14} /><span>{sandboxText(locale, "切换运行检查器")}</span>
-                                        </button>
-                                        <button type="button" role="menuitem" className="is-danger"
-                                            onClick={() => { setConfirmClear(true); setShowMoreActions(false) }}>
-                                            <Trash2 size={14} /><span>{sandboxText(locale, "清空当前会话")}</span>
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                        {compactRunbar ? null : props.renderConversationDetails
+                            ? <Button type="button" size="sm" variant="outline" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={openConversationDetails}><ListChecks />{sandboxText(locale, "对话与轨迹")}</Button>
+                            : <Button asChild size="sm" variant="outline"><a href={agentSessionsPath(sessionKey)}><ExternalLink />{sandboxText(locale, "对话与轨迹")}</a></Button>}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className={cn((showSenderSettings || showRunSettings) && 'is-active')}
+                                    aria-label={sandboxText(locale, "更多操作")}
+                                    title={sandboxText(locale, "更多操作")}
+                                >
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {compactRunbar && currentTask?.status !== 'running' && lastUserMessage && (
+                                    <DropdownMenuItem onSelect={retryLastTask}><RotateCcw />{sandboxText(locale, "重试")}</DropdownMenuItem>
+                                )}
+                                {compactRunbar && (props.renderConversationDetails
+                                    ? <DropdownMenuItem disabled={!canExecute} onSelect={openConversationDetails}><ListChecks />{sandboxText(locale, "对话与轨迹")}</DropdownMenuItem>
+                                    : <DropdownMenuItem asChild><a href={agentSessionsPath(sessionKey)}><ExternalLink />{sandboxText(locale, "对话与轨迹")}</a></DropdownMenuItem>)}
+                                {compactRunbar && <DropdownMenuSeparator />}
+                                <DropdownMenuCheckboxItem checked={showSenderSettings} onCheckedChange={(checked) => setShowSenderSettings(checked === true)}>
+                                    <span className="flex flex-wrap items-center gap-2">
+                                        <span>{sandboxText(locale, "模拟发送者")}</span>
+                                        <Badge variant="secondary" size="sm" title={locale === 'en' ? 'Simulated platform standing (not a zhin role)' : '模拟的平台身份（不是 zhin 角色）'}>{asMe ? sandboxText(locale, "我的聊天身份") : (senderName.trim() || senderId.trim() || 'dev-user')} · {platformStandingLabel(senderRole, locale)}</Badge>
+                                        {serverRole && (serverRole.simulated
+                                            ? <Badge variant="secondary" size="sm" title={sandboxText(locale, "客户端自填的发送者不解析 zhin 角色")}>{sandboxText(locale, "模拟身份，无角色")}</Badge>
+                                            : <Badge variant="secondary" size="sm" title={locale === 'en' ? 'Resolved by the server: zhin role · Agent trust tier' : '服务端解析：zhin 角色 · Agent 信任档位'}>
+                                                {`zhin: ${serverRole.chatRole ?? (locale === 'en' ? 'none' : '无')} · ${serverRole.trustLevel}`}
+                                            </Badge>)}
+                                    </span>
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={showRunSettings} onCheckedChange={(checked) => setShowRunSettings(checked === true)}>
+                                    {sandboxText(locale, "配置运行环境")}
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem checked={showInspector} aria-controls="sandbox-run-inspector" onCheckedChange={(checked) => setShowInspector(checked === true)}>
+                                    {sandboxText(locale, "切换运行检查器")}
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive" onSelect={() => setConfirmClear(true)}>
+                                    <Trash2 />{sandboxText(locale, "清空当前会话")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </header>
 
@@ -1277,8 +1290,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     <section className="agent-playground-run-settings sandbox-sender-settings" aria-label={locale === 'en' ? 'Simulated sender' : '模拟发送者配置'}>
                         <div className="sandbox-speaker-mode">
                             <label className="sandbox-speaker-toggle">
-                                <input type="checkbox" checked={speakerMode === 'me'} disabled={!consoleUser}
-                                    onChange={(event) => setSpeakerMode(event.target.checked ? 'me' : 'simulated')} />
+                                <Switch checked={speakerMode === 'me'} disabled={!consoleUser}
+                                    onCheckedChange={(checked) => setSpeakerMode(checked ? 'me' : 'simulated')} />
                                 <span>{sandboxText(locale, "以我的聊天身份发言")}</span>
                             </label>
                             <p>
@@ -1296,12 +1309,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             {asMe && serverRole?.asMeUnavailable === 'no-identity' && (
                                 <div className="sandbox-speaker-setup" role="status">
                                     <span>{sandboxText(locale, "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。")}</span>
-                                    <button type="button" disabled={identitySetup.status === 'busy'} onClick={() => {
+                                    <Button type="button" size="sm" variant="outline" disabled={identitySetup.status === 'busy'} onClick={() => {
                                         setIdentitySetup({ status: 'busy' })
                                         void ensureSandboxChatIdentity(socketRequestContextRef.current ?? undefined).then((result) => {
                                             setIdentitySetup(result.status === 'ok' ? { status: 'done' } : result)
                                         })
-                                    }}>{sandboxText(locale, "在 Sandbox 上创建我的聊天身份")}</button>
+                                    }}>{sandboxText(locale, "在 Sandbox 上创建我的聊天身份")}</Button>
                                     {identitySetup.status === 'done' && <em>{sandboxText(locale, "已创建，下一条消息生效。")}</em>}
                                     {identitySetup.status === 'unsupported' && <em>{sandboxText(locale, "当前 Host 不支持，请升级。")}</em>}
                                     {identitySetup.status === 'failed' && <em>{identitySetup.message}</em>}
@@ -1310,7 +1323,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         </div>
                         <label>
                             <span><User size={14} />{locale === 'en' ? 'Sender ID (simulated, no role)' : '发送者 ID（模拟身份，无角色）'}</span>
-                            <input
+                            <Input
                                 value={senderId}
                                 disabled={asMe}
                                 onChange={(event) => setSenderId(event.target.value)}
@@ -1320,7 +1333,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         </label>
                         <label>
                             <span>{locale === 'en' ? 'Sender Name' : '发送者昵称'}</span>
-                            <input
+                            <Input
                                 value={senderName}
                                 disabled={asMe}
                                 onChange={(event) => setSenderName(event.target.value)}
@@ -1328,115 +1341,123 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 spellCheck={false}
                             />
                         </label>
-                        <label>
+                        <div className="sandbox-field">
                             <span><ShieldCheck size={14} />{locale === 'en' ? 'Platform standing (not a zhin role)' : '平台身份（不是 zhin 角色）'}</span>
                             <div className="sandbox-role-switcher" role="group" aria-label={locale === 'en' ? 'Platform standing' : '平台身份'}>
                                 {(['member', 'admin', 'master'] as const).map((role) => (
-                                    <button
+                                    <ListItemButton
                                         key={role}
-                                        type="button"
                                         aria-pressed={senderRole === role}
                                         className={cn("sandbox-role-option", `is-${role}`, senderRole === role && "active")}
                                         onClick={() => setSenderRole(role)}
                                     >
                                         {platformStandingLabel(role, locale)}
-                                    </button>
+                                    </ListItemButton>
                                 ))}
                             </div>
-                        </label>
+                        </div>
                         <div className="sandbox-sender-presets">
-                            <button type="button" onClick={() => { setSenderId('dev-user'); setSenderName('Developer'); setSenderRole('master') }}>{locale === 'en' ? 'Group owner (platform standing, dev-user)' : '群主（平台身份，dev-user）'}</button>
-                            <button type="button" onClick={() => { setSenderId('admin-user'); setSenderName('Admin'); setSenderRole('admin') }}>Admin (admin-user)</button>
-                            <button type="button" onClick={() => { setSenderId('member-user'); setSenderName('Member'); setSenderRole('member') }}>Member (member-user)</button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => { setSenderId('dev-user'); setSenderName('Developer'); setSenderRole('master') }}>{locale === 'en' ? 'Group owner (platform standing, dev-user)' : '群主（平台身份，dev-user）'}</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => { setSenderId('admin-user'); setSenderName('Admin'); setSenderRole('admin') }}>Admin (admin-user)</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => { setSenderId('member-user'); setSenderName('Member'); setSenderRole('member') }}>Member (member-user)</Button>
                         </div>
                     </section>
                 )}
 
-                {cancellationFeedback && <div className="agent-playground-confirm" role={cancellationFeedback.kind === 'error' ? 'alert' : 'status'}>
-                    <div><span>{cancellationFeedback.message}</span></div>
-                    <button type="button" onClick={() => setCancellationFeedback(null)}>{sandboxText(locale, "知道了")}</button>
-                </div>}
+                {cancellationFeedback && notice('cancellation', {
+                    message: cancellationFeedback.message,
+                    tone: cancellationFeedback.kind === 'error' ? 'destructive' : 'default',
+                    role: cancellationFeedback.kind === 'error' ? 'alert' : 'status',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setCancellationFeedback(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
 
-                {confirmClear && (
-                    <div className="agent-playground-confirm" role="alert">
-                        <div><strong>{sandboxText(locale, "清空当前测试记录？")}</strong><span>{sandboxText(locale, "只移除“")}{activeChannel.name}{sandboxText(locale, "”在浏览器中的消息，不影响 Agent 会话存储。")}</span></div>
-                        <button type="button" onClick={() => setConfirmClear(false)}>{sandboxText(locale, "取消")}</button>
-                        <button type="button" className="danger" onClick={clearMessages}>{sandboxText(locale, "确认清空")}</button>
-                    </div>
-                )}
+                <ConfirmDialog
+                    open={confirmClear}
+                    onOpenChange={setConfirmClear}
+                    title={sandboxText(locale, "清空当前测试记录？")}
+                    description={`${sandboxText(locale, "只移除“")}${activeChannel.name}${sandboxText(locale, "”在浏览器中的消息，不影响 Agent 会话存储。")}`}
+                    confirmLabel={sandboxText(locale, "确认清空")}
+                    cancelLabel={sandboxText(locale, "取消")}
+                    variant="destructive"
+                    onConfirm={clearMessages}
+                />
 
-                {(['emoji', 'parse'] as const).filter((kind) => inlineNotices[kind]).map((kind) => (
-                    <div key={kind} className="sandbox-notice" role="status">
-                        <CircleAlert size={14} />
-                        <span>{kind === 'emoji' ? sandboxText(locale, "表情列表加载失败，表情选择器暂不可用。") : sandboxText(locale, "收到一条无法解析的消息，已忽略。")}</span>
-                        <button type="button" onClick={() => setInlineNotices((n) => ({ ...n, [kind]: false }))}>{sandboxText(locale, "知道了")}</button>
-                    </div>
-                ))}
+                {(['emoji', 'parse'] as const).filter((kind) => inlineNotices[kind]).map((kind) => notice(kind, {
+                    message: kind === 'emoji' ? sandboxText(locale, "表情列表加载失败，表情选择器暂不可用。") : sandboxText(locale, "收到一条无法解析的消息，已忽略。"),
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setInlineNotices((n) => ({ ...n, [kind]: false }))}>{sandboxText(locale, "知道了")}</Button>,
+                }))}
 
-                {outcomeNotice && outcomeNotice.sessionKey === sessionKey && (
-                    <div className="sandbox-notice" role="status">
-                        <CircleAlert size={14} />
-                        <span><strong>{sandboxText(locale, "这条消息没有回复：")}</strong>{outcomeNotice.text}</span>
-                        <button type="button" onClick={() => setOutcomeNotice(null)}>{sandboxText(locale, "知道了")}</button>
-                    </div>
-                )}
+                {outcomeNotice && outcomeNotice.sessionKey === sessionKey && notice('outcome', {
+                    title: sandboxText(locale, "这条消息没有回复"),
+                    message: outcomeNotice.text,
+                    role: 'status',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setOutcomeNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
 
-                {transportNotice && (
-                    <div className="agent-playground-confirm" role="status">
-                        <div><strong>{sandboxText(locale, "运行暂不可用")}</strong><span>{transportNotice}</span></div>
-                        <button type="button" onClick={() => setTransportNotice(null)}>{sandboxText(locale, "知道了")}</button>
-                    </div>
-                )}
+                {transportNotice && notice('transport', {
+                    title: sandboxText(locale, "运行暂不可用"),
+                    message: transportNotice,
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setTransportNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
 
-                {directoryStatus.error && <div className="agent-playground-confirm" role="alert">
-                    <div><strong>{sandboxText(locale, "会话目录")}</strong><span>{directoryStatus.error}</span></div>
-                    <button type="button" onClick={() => void directoryControllerRef.current?.refresh()}>{sandboxText(locale, "重新读取")}</button>
-                </div>}
+                {directoryStatus.error && notice('directory', {
+                    title: sandboxText(locale, "会话目录"),
+                    message: directoryStatus.error,
+                    tone: 'destructive',
+                    role: 'alert',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => void directoryControllerRef.current?.refresh()}>{sandboxText(locale, "重新读取")}</Button>,
+                })}
 
                 {showRunSettings && (
                     <section className="agent-playground-run-settings" aria-label={sandboxText(locale, "运行配置")}>
                         <label className="agent-playground-directory-field">
                             <span><FolderOpen size={14} />{sandboxText(locale, "工作目录")}</span>
-                            <input
-                                disabled={directoryStatus.mode === 'loading'}
+                            <Input
+                                disabled={directoryLoading}
                                 value={activeChannel.runConfig.workingDirectory}
                                 onChange={(event) => updateRunConfig({ workingDirectory: event.target.value })}
                                 placeholder={sandboxText(locale, "使用 Host 项目目录")}
                                 spellCheck={false}
                             />
                         </label>
-                        <label>
+                        <div className="sandbox-field">
                             <span><ShieldCheck size={14} />{sandboxText(locale, "安全策略")}</span>
-                            <select disabled={directoryStatus.mode === 'loading'} value={activeChannel.runConfig.safetyMode} onChange={(event) => {
-                                const safetyMode = event.target.value as SandboxAgentRunConfig['safetyMode']
-                                updateRunConfig({ safetyMode, ...(safetyMode === 'danger-full-access' ? { networkAccess: true } : {}) })
-                            }}>
-                                <option value="read-only">{sandboxText(locale, "只读")}</option>
-                                <option value="workspace-write">{sandboxText(locale, "工作区写入")}</option>
-                                <option value="danger-full-access">{sandboxText(locale, "完全访问")}</option>
-                            </select>
-                        </label>
-                        <label>
+                            <SelectField
+                                aria-label={sandboxText(locale, "安全策略")}
+                                disabled={directoryLoading}
+                                value={activeChannel.runConfig.safetyMode}
+                                options={[
+                                    { value: 'read-only', label: sandboxText(locale, "只读") },
+                                    { value: 'workspace-write', label: sandboxText(locale, "工作区写入") },
+                                    { value: 'danger-full-access', label: sandboxText(locale, "完全访问") },
+                                ]}
+                                onValueChange={(value) => {
+                                    const safetyMode = value as SandboxAgentRunConfig['safetyMode']
+                                    updateRunConfig({ safetyMode, ...(safetyMode === 'danger-full-access' ? { networkAccess: true } : {}) })
+                                }}
+                            />
+                        </div>
+                        <div className="sandbox-field">
                             <span>{sandboxText(locale, "审批策略")}</span>
-                            <select
+                            <SelectField
+                                aria-label={sandboxText(locale, "审批策略")}
                                 value={activeChannel.runConfig.safetyMode === 'read-only' ? 'auto' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'bypass' : activeChannel.runConfig.approvalMode}
                                 disabled={activeChannel.runConfig.safetyMode !== 'workspace-write'}
-                                onChange={(event) => updateRunConfig({ approvalMode: event.target.value as SandboxAgentRunConfig['approvalMode'] })}
-                            >
-                                <option value="ask">{sandboxText(locale, "按需确认")}</option>
-                                <option value="auto">{sandboxText(locale, "审核 Agent 自动判断")}</option>
-                                <option value="bypass">{sandboxText(locale, "绕过审批")}</option>
-                            </select>
-                        </label>
+                                options={[
+                                    { value: 'ask', label: sandboxText(locale, "按需确认") },
+                                    { value: 'auto', label: sandboxText(locale, "审核 Agent 自动判断") },
+                                    { value: 'bypass', label: sandboxText(locale, "绕过审批") },
+                                ]}
+                                onValueChange={(value) => updateRunConfig({ approvalMode: value as SandboxAgentRunConfig['approvalMode'] })}
+                            />
+                        </div>
                         <label className="agent-playground-network-toggle">
                             <span><Network size={14} />{sandboxText(locale, "网络访问")}</span>
-                            <input
-                                type="checkbox"
+                            <Switch
                                 checked={activeChannel.runConfig.safetyMode === 'danger-full-access' || activeChannel.runConfig.networkAccess}
                                 disabled={activeChannel.runConfig.safetyMode === 'danger-full-access'}
-                                onChange={(event) => updateRunConfig({ networkAccess: event.target.checked })}
+                                onCheckedChange={(checked) => updateRunConfig({ networkAccess: checked })}
                             />
-                            <i aria-hidden="true" />
                         </label>
                         {activeChannel.runConfig.safetyMode === 'danger-full-access' && (
                             <p><CircleAlert size={14} />{sandboxText(locale, "完全访问允许 Agent 操作工作目录之外的文件并访问网络，请仅用于可信任务。")}</p>
@@ -1466,7 +1487,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
                 {showConversationDetails && props.renderConversationDetails && (
                     <section id="sandbox-conversation-details" className="agent-playground-conversation-details" aria-label={sandboxText(locale, "对话与轨迹")}>
-                        <button type="button" className="agent-playground-details-back" onClick={() => setShowConversationDetails(false)}><MessageSquare size={14} />{sandboxText(locale, "返回会话")}</button>
+                        <Button type="button" size="sm" variant="ghost" className="sandbox-details-back" onClick={() => setShowConversationDetails(false)}><MessageSquare />{sandboxText(locale, "返回会话")}</Button>
                         {props.renderConversationDetails({ sessionKey, canExecute, connectionId: connectionRef.current.connectionId })}
                     </section>
                 )}
@@ -1475,8 +1496,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 <section className="agent-playground-conversation" hidden={showConversationDetails} aria-label={sandboxText(locale, "Agent 对话")}>
                     <div className="agent-playground-message-scroll" aria-busy={history.loading}>
                         {history.hasMore || history.error ? <div className="agent-playground-history-navigation">
-                            {history.error ? <p role="alert">{history.error} <button type="button" disabled={history.loading} onClick={() => void history.refresh()}>{sandboxText(locale, '重试')}</button></p> : null}
-                            {history.hasMore ? <button type="button" disabled={history.loading} onClick={() => void history.loadEarlier()}>{sandboxText(locale, '加载更早记录')}</button> : null}
+                            {history.error ? <p role="alert">{history.error} <Button type="button" size="sm" variant="outline" disabled={history.loading} onClick={() => void history.refresh()}>{sandboxText(locale, '重试')}</Button></p> : null}
+                            {history.hasMore ? <Button type="button" size="sm" variant="outline" disabled={history.loading} onClick={() => void history.loadEarlier()}>{sandboxText(locale, '加载更早记录')}</Button> : null}
                         </div> : null}
                         {channelMessages.length === 0 && history.loading ? (
                             // Same full-height box as the empty state, so loaded history does not move the composer under the cursor.
@@ -1488,9 +1509,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 <span className="agent-playground-empty-mark"><Sparkles size={24} /></span>
                                 <div><h2>{sandboxText(locale, "开始一次可观察的 Agent 运行")}</h2><p>{sandboxText(locale, "发送任务后，回复、工具调用、Token 与异常会在同一会话上下文中关联。")}</p></div>
                                 <div className="agent-playground-prompts">
-                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "介绍当前 Agent 可以使用的能力，并给出三个具体示例。"))}>{sandboxText(locale, "探索可用能力")}</button>
-                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "用 Markdown 表格总结当前运行环境，并附上一段 TypeScript 示例代码。"))}>{sandboxText(locale, "测试富文本输出")}</button>
-                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "分析一个任务从推理、工具调用到最终回复的完整执行路径。"))}>{sandboxText(locale, "观察执行路径")}</button>
+                                    <ListItemButton onClick={() => runPrompt(sandboxText(locale, "介绍当前 Agent 可以使用的能力，并给出三个具体示例。"))}>{sandboxText(locale, "探索可用能力")}</ListItemButton>
+                                    <ListItemButton onClick={() => runPrompt(sandboxText(locale, "用 Markdown 表格总结当前运行环境，并附上一段 TypeScript 示例代码。"))}>{sandboxText(locale, "测试富文本输出")}</ListItemButton>
+                                    <ListItemButton onClick={() => runPrompt(sandboxText(locale, "分析一个任务从推理、工具调用到最终回复的完整执行路径。"))}>{sandboxText(locale, "观察执行路径")}</ListItemButton>
                                 </div>
                             </div>
                         ) : (
@@ -1527,34 +1548,33 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 <section className="agent-playground-composer" hidden={showConversationDetails} aria-label={sandboxText(locale, "任务输入")}>
                     {/* Toolbar */}
                     <div className="sandbox-toolbar">
-                        <button type="button" className={cn("sandbox-tool-button", showFacePicker && "is-active")}
-                            onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} title={sandboxText(locale, "插入表情")}>
-                            <Smile size={16} />
-                        </button>
-                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'image' && "is-active")}
-                            onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} title={sandboxText(locale, "插入图片 URL")}>
-                            <Image size={16} />
-                        </button>
-                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'video' && "is-active")}
-                            onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} title={sandboxText(locale, "插入视频 URL")}>
-                            <Video size={16} />
-                        </button>
-                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'audio' && "is-active")}
-                            onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title={sandboxText(locale, "插入音频 URL")}>
-                            <Music size={16} />
-                        </button>
-                        <button type="button" className="sandbox-tool-button"
+                        <Button type="button" variant={showFacePicker ? 'secondary' : 'ghost'} size="icon" aria-pressed={showFacePicker}
+                            onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} aria-label={sandboxText(locale, "插入表情")} title={sandboxText(locale, "插入表情")}>
+                            <Smile />
+                        </Button>
+                        <Button type="button" variant={mediaPanel === 'image' ? 'secondary' : 'ghost'} size="icon" aria-pressed={mediaPanel === 'image'}
+                            onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} aria-label={sandboxText(locale, "插入图片 URL")} title={sandboxText(locale, "插入图片 URL")}>
+                            <Image />
+                        </Button>
+                        <Button type="button" variant={mediaPanel === 'video' ? 'secondary' : 'ghost'} size="icon" aria-pressed={mediaPanel === 'video'}
+                            onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} aria-label={sandboxText(locale, "插入视频 URL")} title={sandboxText(locale, "插入视频 URL")}>
+                            <Video />
+                        </Button>
+                        <Button type="button" variant={mediaPanel === 'audio' ? 'secondary' : 'ghost'} size="icon" aria-pressed={mediaPanel === 'audio'}
+                            onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} aria-label={sandboxText(locale, "插入音频 URL")} title={sandboxText(locale, "插入音频 URL")}>
+                            <Music />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon"
                             onClick={() => { editorRef.current?.insertAt(endpointId, endpointId); setShowFacePicker(false); setMediaPanel(null) }}
                             title={sandboxText(locale, "@ 机器人（插入 [@{0}]）", [endpointId])} aria-label={sandboxText(locale, "@ 机器人")}>
-                            <AtSign size={16} />
-                        </button>
+                            <AtSign />
+                        </Button>
                         <div className="sandbox-quick-commands" role="toolbar" aria-label={locale === 'en' ? 'Quick commands' : '快捷命令'}>
                             {(commandHints?.quick ?? []).map((cmd) => (
-                                <button
+                                <ListItemButton
                                     key={cmd}
-                                    type="button"
                                     className="sandbox-command-chip"
-                                    disabled={!canExecute || directoryStatus.mode === 'loading'}
+                                    disabled={!canExecute || directoryLoading}
                                     // Keyboard-reachable (WCAG 2.1.1). A mouse click must not keep focus on the chip,
                                     // and the prefill moves focus into the composer, so Enter sends the draft
                                     // rather than re-activating the chip after a late layout shift (#1250).
@@ -1564,10 +1584,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 >
                                     <Terminal size={11} />
                                     <span>{cmd}</span>
-                                </button>
+                                </ListItemButton>
                             ))}
-                            <button
-                                type="button"
+                            <ListItemButton
                                 className="sandbox-command-chip is-clear"
                                 disabled={channelMessages.length === 0}
                                 onClick={clearMessages}
@@ -1575,30 +1594,32 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             >
                                 <Trash2 size={11} />
                                 <span>{locale === 'en' ? 'Clear' : '清屏'}</span>
-                            </button>
+                            </ListItemButton>
                         </div>
                         <div className="sandbox-toolbar-spacer" />
-                        <div className="sandbox-composer-tabs" role="tablist" aria-label={sandboxText(locale, "消息编辑模式")}>
-                            <button type="button" role="tab" aria-selected={composerMode === 'write'} className={cn(composerMode === 'write' && 'active')} onClick={() => setComposerMode('write')}>{sandboxText(locale, "编写")}</button>
-                            <button type="button" role="tab" aria-selected={composerMode === 'preview'} className={cn(composerMode === 'preview' && 'active')} onClick={() => setComposerMode('preview')}>{sandboxText(locale, "预览")}</button>
-                        </div>
+                        <Tabs value={composerMode} onValueChange={(value) => setComposerMode(value === 'preview' ? 'preview' : 'write')}>
+                            <TabsList aria-label={sandboxText(locale, "消息编辑模式")}>
+                                <TabsTrigger value="write">{sandboxText(locale, "编写")}</TabsTrigger>
+                                <TabsTrigger value="preview">{sandboxText(locale, "预览")}</TabsTrigger>
+                            </TabsList>
+                        </Tabs>
                         {inputText && (
-                            <button type="button" className="sandbox-tool-button"
-                                onClick={() => { editorRef.current?.clear(); setInputText(''); setPreviewSegments([]); setComposerMode('write') }} aria-label={sandboxText(locale, "清空输入")}><X size={16} /></button>
+                            <Button type="button" variant="ghost" size="icon"
+                                onClick={() => { editorRef.current?.clear(); setInputText(''); setPreviewSegments([]); setComposerMode('write') }} aria-label={sandboxText(locale, "清空输入")} title={sandboxText(locale, "清空输入")}><X /></Button>
                         )}
                     </div>
 
                     {/* Face picker */}
                     {showFacePicker && (
                         <div className="sandbox-panel">
-                            <input value={faceSearchQuery} onChange={(e) => setFaceSearchQuery(e.target.value)}
-                                placeholder={sandboxText(locale, "搜索表情...")} className="sandbox-input" />
+                            <Input value={faceSearchQuery} onChange={(e) => setFaceSearchQuery(e.target.value)}
+                                placeholder={sandboxText(locale, "搜索表情...")} aria-label={sandboxText(locale, "搜索表情...")} />
                             <div className="sandbox-face-grid">
                                 {filteredFaces.slice(0, 80).map((face) => (
-                                    <button key={face.id} onClick={() => insertFace(face.id)} title={face.name}
-                                        className="sandbox-face-button" type="button">
-                                        <img src={`https://face.viki.moe/apng/${face.id}.png`} alt={face.name} className="sandbox-face-img" />
-                                    </button>
+                                    <ListItemButton key={face.id} onClick={() => insertFace(face.id)} title={face.name} aria-label={face.name}
+                                        className="sandbox-face-button">
+                                        <img src={`https://face.viki.moe/apng/${face.id}.png`} alt="" className="sandbox-face-img" />
+                                    </ListItemButton>
                                 ))}
                             </div>
                             {filteredFaces.length === 0 && (
@@ -1617,20 +1638,19 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 {mediaPanel === 'video' && sandboxText(locale, "支持浏览器可解码的视频直链（如 .mp4、.webm）")}
                                 {mediaPanel === 'audio' && sandboxText(locale, "支持 .mp3、.ogg、.wav 等音频直链")}
                             </p>
-                            <input
+                            <Input
                                 value={mediaUrl}
                                 onChange={(e) => setMediaUrl(e.target.value)}
                                 placeholder={mediaPanel === 'image' ? sandboxText(locale, "图片 URL…") : mediaPanel === 'video' ? sandboxText(locale, "视频 URL…") : sandboxText(locale, "音频 URL…")}
-                                className="sandbox-input"
+                                aria-label={mediaPanel === 'image' ? sandboxText(locale, "图片 URL…") : mediaPanel === 'video' ? sandboxText(locale, "视频 URL…") : sandboxText(locale, "音频 URL…")}
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitMediaUrl() } }}
                             />
-                            <button
+                            <Button
                                 type="button"
-                                className="sandbox-submit"
                                 onClick={commitMediaUrl}
                                 disabled={!mediaUrl.trim()}
                             >
-                                <Check size={14} /> {sandboxText(locale, "插入到输入框")}</button>
+                                <Check />{sandboxText(locale, "插入到输入框")}</Button>
                         </div>
                     )}
 
@@ -1653,13 +1673,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 </div>
                             )}
                             {atPopoverPosition && (
-                                <div className="sandbox-at-popover"
+                                <div className="sandbox-at-popover" role="listbox" aria-label={sandboxText(locale, "@ 机器人")}
                                     style={{ top: `${atPopoverPosition.top}px`, left: `${atPopoverPosition.left}px` }}>
                                     {filteredAtSuggestions.length > 0 ? filteredAtSuggestions.map((user) => (
-                                        <div key={user.id} className="sandbox-at-item" onClick={() => selectAtUser(user)}>
+                                        <ListItemButton key={user.id} role="option" aria-selected={false} className="sandbox-at-item"
+                                            onMouseDown={(event) => event.preventDefault()} onClick={() => selectAtUser(user)}>
                                             <User size={16} />
-                                            <div><div className="sandbox-at-name">{user.name}</div><div className="sandbox-at-id">ID: {user.id}</div></div>
-                                        </div>
+                                            <span><span className="sandbox-at-name">{user.name}</span><span className="sandbox-at-id">ID: {user.id}</span></span>
+                                        </ListItemButton>
                                     )) : (
                                         <div className="sandbox-empty-hint">
                                             <Search size={20} />
@@ -1669,12 +1690,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 </div>
                             )}
                         </div>
-                        <button
+                        <Button
                             type="button"
-                            className="sandbox-send"
                             onClick={() => { const c = editorRef.current?.getContent(); if (c) handleSendMessage(c.text, c.segments) }}
-                            disabled={!canExecute || directoryStatus.mode === 'loading' || !hasRenderableSegments(previewSegments)}>
-                            <Send size={16} /> {sandboxText(locale, "发送")}</button>
+                            disabled={!canExecute || directoryLoading || !hasRenderableSegments(previewSegments)}>
+                            <Send />{sandboxText(locale, "发送")}</Button>
                     </div>
 
                     {/* Hints: collapsed by default so the composer stays one line tall (#1250). */}
@@ -1700,15 +1720,17 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 <div className="agent-playground-inspector-head">
                     <div><span>Run inspector</span><h2>{sandboxText(locale, "运行检查器")}</h2></div>
                     <div>
-                        <button type="button" onClick={() => void loadTrace()} aria-label={sandboxText(locale, "刷新 Agent Trace")} disabled={traceLoading}><RefreshCw size={15} className={cn(traceLoading && 'is-spinning')} /></button>
-                        <button type="button" className="agent-playground-inspector-close" onClick={() => setShowInspector(false)} aria-label={sandboxText(locale, "关闭运行检查器")}><X size={15} /></button>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => void loadTrace()} aria-label={sandboxText(locale, "刷新 Agent Trace")} title={sandboxText(locale, "刷新 Agent Trace")} disabled={traceLoading}><RefreshCw className={cn(traceLoading && 'is-spinning')} /></Button>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => setShowInspector(false)} aria-label={sandboxText(locale, "关闭运行检查器")} title={sandboxText(locale, "关闭运行检查器")}><X /></Button>
                     </div>
                 </div>
 
-                <div className="agent-playground-inspector-tabs" role="tablist" aria-label={sandboxText(locale, "检查器视图")}>
-                    <button type="button" role="tab" aria-selected={inspectorView === 'runs'} className={cn(inspectorView === 'runs' && 'active')} onClick={() => setInspectorView('runs')}><Activity size={13} />{sandboxText(locale, "任务")}</button>
-                    <button type="button" role="tab" aria-selected={inspectorView === 'artifacts'} className={cn(inspectorView === 'artifacts' && 'active')} onClick={() => setInspectorView('artifacts')}><FileDiff size={13} />{sandboxText(locale, "变更与产物")}<span>{workbenchArtifacts.length}</span></button>
-                </div>
+                <Tabs value={inspectorView} onValueChange={(value) => setInspectorView(value === 'artifacts' ? 'artifacts' : 'runs')}>
+                    <TabsList className="sandbox-inspector-tabs" aria-label={sandboxText(locale, "检查器视图")}>
+                        <TabsTrigger value="runs"><Activity size={13} />{sandboxText(locale, "任务")}</TabsTrigger>
+                        <TabsTrigger value="artifacts"><FileDiff size={13} />{sandboxText(locale, "变更与产物")}<span className="sandbox-tab-count">{workbenchArtifacts.length}</span></TabsTrigger>
+                    </TabsList>
+                </Tabs>
 
                 <div className={"agent-playground-inspector-view"} hidden={inspectorView !== 'runs'}>
 
@@ -1790,12 +1812,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                     const expanded = expandedArtifact === artifact.id
                                     return (
                                         <article key={artifact.id} className={cn(`is-${artifact.status}`, expanded && 'is-expanded')}>
-                                            <button type="button" onClick={() => setExpandedArtifact(expanded ? null : artifact.id)} aria-expanded={expanded}>
+                                            <ListItemButton onClick={() => setExpandedArtifact(expanded ? null : artifact.id)} aria-expanded={expanded}>
                                                 <span className="agent-playground-artifact-icon"><ArtifactIcon size={14} /></span>
                                                 <span><strong>{artifact.title}</strong><small>{artifact.path ?? artifact.detail ?? artifact.kind}</small></span>
                                                 <em>{artifact.status}</em>
                                                 <ChevronDown size={14} />
-                                            </button>
+                                            </ListItemButton>
                                             {expanded && (
                                                 <div className="agent-playground-artifact-detail">
                                                     {artifact.path && <code>{artifact.path}</code>}
@@ -1821,6 +1843,30 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             {showInspector && <div className="agent-playground-inspector-overlay" onClick={() => setShowInspector(false)} />}
         </section>
     )
+}
+
+/** Below the Console `lg` breakpoint (64rem) the conversation list is a drawer (see the workspace styles), so it needs a toggle. */
+const DRAWER_LAYOUT_QUERY = '(width < 64rem)'
+/** On phones the run bar keeps only the run state, Stop and 「更多」; the rest moves into the menu (D18 第 7 条). */
+const COMPACT_RUNBAR_QUERY = '(width < 48rem)'
+function useMediaQuery(media: string): boolean {
+    const [matches, setMatches] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia(media).matches)
+    useEffect(() => {
+        if (typeof window.matchMedia !== 'function') return
+        const query = window.matchMedia(media)
+        const update = () => setMatches(query.matches)
+        update()
+        query.addEventListener('change', update)
+        return () => query.removeEventListener('change', update)
+    }, [media])
+    return matches
+}
+
+/** ADR 0063 决策 5: a dangerous choice is an outline button with destructive text, never a solid red one. */
+function interactionVariant(primary: boolean, danger: boolean): 'default' | 'destructive-outline' | 'outline' {
+    if (danger) return 'destructive-outline'
+    return primary ? 'default' : 'outline'
 }
 
 function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {

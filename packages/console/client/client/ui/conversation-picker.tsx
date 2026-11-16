@@ -7,7 +7,13 @@
  * its display name. Both read the page's shared directory ({@link useSharedConversationDirectory}).
  */
 import React, { useMemo, useState } from 'react';
-import { Badge, Button, Input, Notice, Select } from './components.js';
+import {
+  Button,
+  Grid,
+  ContentStack,
+  Input,
+} from '@zhin.js/console-ui';
+import { ChoiceSelect, NoticeBlock, ToneBadge } from '../renderer/kit.js';
 import { useLocale, type PluginUiLocale } from './locale.js';
 import {
   conversationAddressKey,
@@ -122,59 +128,66 @@ export function ConversationPicker({
     : undefined;
 
   return (
-    <div className="zk-conversation-picker" data-zhin-conversation-picker="">
+    <ContentStack gap="tight" data-zhin-conversation-picker="">
       {selected && selectedLabel && (
-        <div className="zk-row" data-conversation-selected={conversationAddressKey(selected)}>
-          <Badge tone="info">{t('已选择')}</Badge>
+        <ContentStack direction="row" gap="tight" align="center" data-conversation-selected={conversationAddressKey(selected)}>
+          <ToneBadge tone="info">{t('已选择')}</ToneBadge>
           <span>{selectedLabel}</span>
-          <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onChange('')}>{t('清除')}</Button>
-        </div>
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onChange('')}>{t('清除')}</Button>
+        </ContentStack>
       )}
       <Input
+        type="search"
         value={query}
         disabled={disabled}
-        clearable
-        onClear={() => setQuery('')}
         placeholder={t('搜索群名、昵称、ID 或账号')}
         aria-label={t('搜索会话')}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)}
       />
       {error && (
-        <Notice tone="warning">{t('无法读取账号与最近会话（需要「查看账号」权限 endpoint.view），可手动填写。')}</Notice>
+        <NoticeBlock tone="warning">{t('无法读取账号与最近会话（需要「查看账号」权限 endpoint.view），可手动填写。')}</NoticeBlock>
       )}
       {!error && !loading && !inboxAvailable && (
-        <Notice tone="info">{t('无法读取最近会话，仅列出账号；可手动填写会话 ID。')}</Notice>
+        <NoticeBlock tone="info">{t('无法读取最近会话，仅列出账号；可手动填写会话 ID。')}</NoticeBlock>
       )}
-      <ul role="listbox" aria-label={t('最近会话')} className="zk-conversation-picker__list">
-        {options.map(option => {
-          const isSelected = selected !== undefined && conversationAddressKey(selected) === option.key;
-          return (
-            <li key={option.key} role="option" aria-selected={isSelected}>
-              <button
-                type="button"
-                className="zk-conversation-picker__option"
-                disabled={disabled}
-                data-conversation-key={option.key}
-                onClick={() => choose(option.address)}
-              >
-                {option.label}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {options.length > 0 && (
+        <div role="listbox" aria-label={t('最近会话')}>
+          <ContentStack gap="tight">
+            {options.map(option => {
+              const isSelected = selected !== undefined && conversationAddressKey(selected) === option.key;
+              return (
+                <Button
+                  key={option.key}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  variant={isSelected ? 'secondary' : 'ghost'}
+                  size="sm"
+                  disabled={disabled}
+                  data-conversation-key={option.key}
+                  onClick={() => choose(option.address)}
+                >
+                  {option.label}
+                </Button>
+              );
+            })}
+          </ContentStack>
+        </div>
+      )}
       {!loading && options.length === 0 && (
-        <span className="zk-hint">{query.trim() ? t('没有匹配的最近会话') : t('暂无最近会话')}</span>
+        <span className="console-form-field-hint">{query.trim() ? t('没有匹配的最近会话') : t('暂无最近会话')}</span>
       )}
       {allowManual && (
-        <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setManual(open => !open)}>
-          {manual ? t('收起手动填写') : t('手动填写（高级）')}
-        </Button>
+        <ContentStack direction="row" gap="tight">
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} aria-expanded={manual} onClick={() => setManual(open => !open)}>
+            {manual ? t('收起手动填写') : t('手动填写（高级）')}
+          </Button>
+        </ContentStack>
       )}
       {allowManual && manual && (
-        <div className="zk-conversation-picker__manual" data-conversation-manual="">
+        <Grid min="14rem" data-conversation-manual="">
           {accountsListed ? (
-            <Select
+            <ChoiceSelect
               aria-label={t('机器人账号')}
               value={account ? `${account.adapter}\u0000${account.endpointId}` : manualAccount}
               placeholder={t('选择机器人账号')}
@@ -186,7 +199,7 @@ export function ConversationPicker({
             />
           ) : (
             <>
-              <span className="zk-hint" data-conversation-manual-hint="">
+              <span className="console-form-field-hint" data-conversation-manual-hint="">
                 {t('未列出机器人账号（读取账号列表需要「查看账号」权限 endpoint.view），请手动填写适配器与账号 ID。')}
               </span>
               <Input
@@ -203,7 +216,7 @@ export function ConversationPicker({
               />
             </>
           )}
-          <Select
+          <ChoiceSelect
             aria-label={t('会话类型')}
             value={manualKind}
             onValueChange={next => setManualKind(next as ConversationKind)}
@@ -215,17 +228,20 @@ export function ConversationPicker({
             value={manualId}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setManualId(event.target.value)}
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={disabled || !manualAddress}
-            onClick={() => { if (manualAddress) choose(manualAddress); }}
-          >
-            {t('使用该会话')}
-          </Button>
-        </div>
+          <ContentStack direction="row" gap="tight" align="end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || !manualAddress}
+              onClick={() => { if (manualAddress) choose(manualAddress); }}
+            >
+              {t('使用该会话')}
+            </Button>
+          </ContentStack>
+        </Grid>
       )}
-    </div>
+    </ContentStack>
   );
 }
 
@@ -261,13 +277,8 @@ export function ConversationLabel({ value, showAccount }: ConversationLabelProps
   );
 }
 
-/** Styles for the picker; included by the declarative page and safe to add to custom pages. */
-export const conversationPickerStyles = `
-.zk-conversation-picker { display: flex; flex-direction: column; gap: 8px; }
-.zk-conversation-picker__list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--zk-border); border-radius: 8px; }
-.zk-conversation-picker__list:empty { display: none; }
-.zk-conversation-picker__option { width: 100%; text-align: left; padding: 6px 10px; background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; }
-.zk-conversation-picker__option:hover, .zk-conversation-picker__option:focus-visible { background: var(--zk-surface-muted, rgba(127,127,127,.08)); }
-[aria-selected="true"] > .zk-conversation-picker__option { font-weight: 600; }
-.zk-conversation-picker__manual { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; }
-`;
+/**
+ * @deprecated Since ADR 0063 P2 the picker is built from `@zhin.js/console-ui` and needs no styles;
+ * this is an empty string, kept for one minor and removed with the `zk-` kit (P4).
+ */
+export const conversationPickerStyles = '';

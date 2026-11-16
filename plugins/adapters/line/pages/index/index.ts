@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageCircle',
   order: 67,
   requiredPermissions: ['line:read'],
+  keywords: { 'zh-CN': ['Messaging API', '适配器', '连接'], en: ['messaging api', 'adapter', 'connection'] },
 });
 
 /**

@@ -74,7 +74,8 @@ function fixture(options: { connectionId?: string; sessionKey?: string; requestC
     locale: 'zh-CN', requestContext: options.requestContext, pendingRefreshEpoch: 0, renderInteraction: renderedInteractions,
     onRetiredInteractions: vi.fn() };
   const bindings = { React: { createElement }, ...hooks, ...recovery, captureSandboxRequestContext, sandboxText,
-    MarkdownContent: 'markdown', captureHandlers: (value: typeof handlers) => { handlers = value; } };
+    // @zhin.js/console-ui's Button renders a native button; the fixture records it under that name.
+    MarkdownContent: 'markdown', Button: 'button', captureHandlers: (value: typeof handlers) => { handlers = value; } };
   const exports: Record<string, any> = {};
   Function('exports', ...Object.keys(bindings), code)(exports, ...Object.values(bindings));
   const f = {

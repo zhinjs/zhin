@@ -3182,6 +3182,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@zhin.js/console-ui':
+        specifier: workspace:*
+        version: link:../../../packages/console/ui
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../../packages/console/pagemanager
@@ -3191,6 +3194,9 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
