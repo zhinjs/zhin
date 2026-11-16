@@ -61,3 +61,7 @@ export {
   refreshIntervalOptions,
 } from './components/refresh-control-model.js';
 export * from './components/page-chrome.js';
+export * from './components/actions.js';
+export * from './components/layout.js';
+export * from './components/StatusBadge.js';
+export { useContainerAtLeast, CONSOLE_BREAKPOINTS_REM } from './components/use-container-width.js';

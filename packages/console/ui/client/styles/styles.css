@@ -1,20 +1,16 @@
 /*
  * Build input of `@zhin.js/console-ui/styles.css` (compiled by scripts/build.mjs with Tailwind 4).
- * The published file is self-contained: Tailwind preflight, the theme and every utility the
- * components use, the tokens and the component classes. Consumers need no Tailwind setup.
+ * The published file is self-contained: Tailwind preflight, the generated on-scale theme and every
+ * utility the components use, the generated tokens and the component classes. Consumers need no
+ * Tailwind setup.
  */
 @import "tailwindcss" source(none);
-@config "./tailwind.config.js";
+@import "./generated/theme.css";
 @source "../components";
 @source "../index.ts";
 
-@import "./tokens.css";
+@import "./generated/tokens.css";
 @import "./base.css";
 @import "./components.css";
 @import "./searchable-select.css";
-
-/* Tailwind's `text-xs` is the Console caption size (13px): secondary text never drops to 12px. */
-@theme {
-  --text-xs: 0.8125rem;
-  --text-xs--line-height: 1.25rem;
-}
+@import "./shell.css";
