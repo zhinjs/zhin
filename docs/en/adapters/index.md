@@ -69,6 +69,7 @@ _(Currently none)_
 |---------|---------|----------------------------------|------|
 | WeCom | `@zhin.js/adapter-wecom` | — | [WeCom](/adapters/wecom) |
 | WeChat iLink | `@zhin.js/adapter-weixin-ilink` | — | [WeChat iLink](/adapters/weixin-ilink) |
+| iPad WeChat | `@zhin.js/adapter-ipad-wechat` | listFriends, listGroups, listGroupMembers | [iPad WeChat](/en/adapters/ipad-wechat) |
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
 | Bilibili Comments | `@zhin.js/adapter-bilibili` | — | [Bilibili Comments](/en/adapters/bilibili) |
 | Bilibili Live Danmaku | `@zhin.js/adapter-bilibili-live` | — | [Bilibili Live Danmaku](/en/adapters/bilibili-live) |
