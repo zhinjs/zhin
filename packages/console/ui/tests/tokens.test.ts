@@ -80,6 +80,18 @@ describe('token source (ADR 0063 D16, D17)', () => {
     expect(buildScale().tailwind.spacingKeys).toEqual(['0', 'px', '1', '2', '3', '4', '6', '8', '12', '16']);
   });
 
+  it('motion: three durations and one easing curve; the old duration names are aliases (zhinjs/console#125)', () => {
+    expect(tokens.motion).toEqual({ 'motion-fast': '120ms', 'motion-base': '200ms', 'motion-slow': '280ms' });
+    expect(tokens.misc['ease-out']).toBe('cubic-bezier(0.25, 1, 0.5, 1)');
+    expect(tokens.aliases).toMatchObject({ 'duration-fast': 'motion-fast', 'duration-page': 'motion-base' });
+    const theme = themeCss();
+    expect(theme).toContain('--default-transition-duration: var(--console-motion-fast);');
+    expect(theme).toContain('--default-transition-timing-function: var(--console-ease-out);');
+    expect(theme).toContain('--color-brand: hsl(var(--console-brand));');
+    expect(theme).toContain('--color-signal-warning-fill: hsl(var(--console-signal-warning-fill));');
+    expect(tokens.composite['focus-ring']).toContain('--console-brand-text');
+  });
+
   it('publishes the scale for the linters, plugin check and the audit', () => {
     const json = JSON.parse(readFileSync(join(packageRoot, 'client/styles/generated/scale.json'), 'utf8'));
     expect(json).toEqual(JSON.parse(JSON.stringify(buildScale())));

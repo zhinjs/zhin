@@ -62,6 +62,7 @@ export function tokensCss() {
   const darkLines = [
     ...Object.entries(tokens.elevation.dark).map(([name, value]) => decl(`${PREFIX}elevation-${name.slice(2)}`, value)),
     ...Object.entries(tokens.miscDark).map(([name, value]) => decl(`${PREFIX}${name}`, value)),
+    ...Object.entries(tokens.color.dark).map(([name, value]) => decl(`${PREFIX}${name}`, value)),
   ];
   const viewport = (spec) => spec.scope === 'viewport';
   const container = (spec) => spec.scope !== 'viewport';
@@ -146,6 +147,14 @@ const THEME_COLORS = [
   ['sidebar', ['DEFAULT', 'foreground', 'primary', 'primary-foreground', 'accent', 'accent-foreground', 'border', 'ring']],
 ];
 
+/**
+ * Color roles that do not follow the palette (tokens.color): `bg-brand`, `text-brand-foreground`,
+ * `bg-signal-danger-fill`, `text-signal-warning-text`, `fill-chart-1`, …
+ */
+function roleColorLines() {
+  return Object.keys(tokens.color.light).map((name) => decl(`--color-${name}`, `hsl(var(${PREFIX}${name}))`, '  '));
+}
+
 function colorLines() {
   const lines = [];
   for (const entry of THEME_COLORS) {
@@ -186,9 +195,12 @@ export function themeCss() {
   }
   add('--font-sans', `var(${PREFIX}font-sans)`);
   add('--font-mono', `var(${PREFIX}font-mono)`);
-  lines.push(...colorLines());
-  add('--animate-accordion-down', 'accordion-down 0.2s ease-out');
-  add('--animate-accordion-up', 'accordion-up 0.2s ease-out');
+  lines.push(...colorLines(), ...roleColorLines());
+  // Every `transition-*` utility uses motion-fast and the one easing curve (zhinjs/console#125).
+  add('--default-transition-duration', `var(${PREFIX}motion-fast)`);
+  add('--default-transition-timing-function', `var(${PREFIX}ease-out)`);
+  add('--animate-accordion-down', `accordion-down var(${PREFIX}motion-base) var(${PREFIX}ease-out)`);
+  add('--animate-accordion-up', `accordion-up var(${PREFIX}motion-base) var(${PREFIX}ease-out)`);
 
   return `${HEADER('Tailwind 4 theme (D17): only on-scale keys. Import after `@import "tailwindcss"`.')}
 /*

@@ -43,7 +43,7 @@ export function baseTierVariables() {
   for (const [name, value] of Object.entries(tokens.breakpoints)) out[`bp-${name}`] = value;
   for (const [name, value] of Object.entries(tokens.contentWidth)) out[`content-${name}`] = value;
   out['touch-target'] = tokens.touchTarget;
-  Object.assign(out, tokens.misc, tokens.deprecated);
+  Object.assign(out, tokens.misc, tokens.motion, tokens.color.light, tokens.deprecated);
   return out;
 }
 

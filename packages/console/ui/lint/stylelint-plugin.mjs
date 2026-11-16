@@ -10,6 +10,11 @@
  *   console/no-deprecated-tokens  old names kept as aliases until P4 (`--console-radius-md`, …)
  *   console/media-queries         `@media` only in shell files (`{ shellFiles: [regex…] }`) and only
  *                                 with the generated breakpoints; `@container` only with breakpoints
+ *   console/motion-tokens         transition / animation (and their -duration / -delay /
+ *                                 -timing-function): no time literals (`150ms`, `0.2s`) and no easing
+ *                                 literals (`ease`, `cubic-bezier(…)`); use --console-motion-fast /
+ *                                 -base / -slow and --console-ease-out (zhinjs/console#125). The
+ *                                 `prefers-reduced-motion: reduce` reset is exempt.
  */
 import stylelint from 'stylelint';
 import { buildScale } from '../tokens/scale.mjs';
@@ -157,5 +162,34 @@ const mediaQueries = createPlugin(mediaName, (primary, secondary = {}) => (root,
   });
 });
 
-export const consoleStylelintPlugins = [scaleValues, unknownTokens, deprecatedTokens, mediaQueries];
+const motionName = 'console/motion-tokens';
+const MOTION_PROPERTY = /^(?:transition|animation)(?:-(?:duration|delay|timing-function))?$/u;
+const EASING_KEYWORDS = new Set(['ease', 'ease-in', 'ease-out', 'ease-in-out']);
+
+function inReducedMotionReset(node) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (parent.type === 'atrule' && parent.name.toLowerCase() === 'media' && /prefers-reduced-motion:\s*reduce/iu.test(parent.params)) return true;
+  }
+  return false;
+}
+
+const motionTokens = createPlugin(motionName, (primary) => (root, result) => {
+  if (!utils.validateOptions(result, motionName, { actual: primary })) return;
+  root.walkDecls((decl) => {
+    const property = decl.prop.toLowerCase();
+    if (!MOTION_PROPERTY.test(property) || inReducedMotionReset(decl)) return;
+    const rest = stripCalls(decl.value, ['var', 'env']);
+    for (const match of rest.matchAll(/(?<![\w-])(-?\d*\.?\d+)(ms|s)\b/giu)) {
+      if (Number(match[1]) === 0) continue;
+      utils.report({ ruleName: motionName, result, node: decl, word: match[0], message: `${property}: literal duration "${match[0]}"; use var(--console-motion-fast | -base | -slow) (zhinjs/console#125) (${motionName})` });
+    }
+    const easings = [...rest.matchAll(/\b(?:cubic-bezier|steps)\(/giu)].map((match) => match[0].slice(0, -1));
+    easings.push(...rest.split(/[\s,]+/u).filter((word) => EASING_KEYWORDS.has(word.toLowerCase())));
+    for (const easing of easings) {
+      utils.report({ ruleName: motionName, result, node: decl, word: easing, message: `${property}: literal easing "${easing}"; use var(--console-ease-out) (zhinjs/console#125) (${motionName})` });
+    }
+  });
+});
+
+export const consoleStylelintPlugins = [scaleValues, unknownTokens, deprecatedTokens, mediaQueries, motionTokens];
 export default consoleStylelintPlugins;
