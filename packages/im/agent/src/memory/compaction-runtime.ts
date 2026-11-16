@@ -4,6 +4,7 @@ import { projectPromptContext, AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessag
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
+import { omitInlineBinaryInCompletions } from '../media/inline-binary.js';
 
 export interface CompactionContextHost {
   readonly contextRepository: ContextRepository;
@@ -275,7 +276,8 @@ export class AgentCompactionRuntime {
 
     const state = this.#getState(options.sessionId);
     const result = await autoCompactAgentMessagesIfNeeded({
-      transport: options.transport,
+      // #1250 第 29 批：摘要请求把先前的助手原文写进转录，内嵌媒体载荷不交给摘要模型。
+      transport: omitInlineBinaryInCompletions(options.transport),
       model: options.model,
       messages,
       config: cfg,
@@ -288,7 +290,7 @@ export class AgentCompactionRuntime {
           compactionPrompt?.trim(), options.customInstructions?.trim(),
           options.toldLedger?.trim() ? `${TOLD_LEDGER_SUMMARY_INSTRUCTION}\n${options.toldLedger.trim()}` : undefined,
         ].filter(Boolean).join('\n\n') || undefined;
-        return { model: execution.model, transport: execution.transport, customInstructions };
+        return { model: execution.model, transport: omitInlineBinaryInCompletions(execution.transport), customInstructions };
       },
       signal,
     });

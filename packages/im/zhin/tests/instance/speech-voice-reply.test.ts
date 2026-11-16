@@ -17,7 +17,7 @@ it('produces a voice_tts result that reaches the automatic outbound audio bridge
   const result = await tool.execute({ text: '你好' });
   const audio = extractMediaElementsFromToolCalls([{ tool: 'voice_tts', result }]);
   expect(audio)
-    .toEqual([{ type: 'audio', url: 'data:audio/mpeg;base64,AQID', base64: 'AQID' }]);
+    .toEqual([{ type: 'audio', url: 'data:audio/mpeg;base64,AQID', base64: 'AQID', fallbackText: '[语音 mp3 3B 已发送]' }]);
   const segments = await publishOutboundElements(audio, 'icqq');
   expect(formatOutboundMessages(segments)).toEqual([{ type: 'record', file: 'base64://AQID' }]);
   const failure = await tool.execute({ text: '   ' });

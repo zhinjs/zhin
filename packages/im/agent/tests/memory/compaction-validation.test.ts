@@ -230,3 +230,26 @@ it('reports summary savings after restoring the retained full context', async ()
   expect(result.savedTokens).toBe(savings);
   expect(result.autoSavedTokens).toBe(savings);
 });
+
+describe('#1250 batch 29 review: compaction summaries never see inline base64', () => {
+  it('AgentCompactionRuntime.transformContext strips base64 from the summary transcript', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository();
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'compaction-base64' });
+    const payload = Buffer.alloc(3000, 9).toString('base64');
+    await repository.appendMessages(sessionId, [
+      createUserMessage('旧记录'.repeat(1200), undefined, 1),
+      answer(`{"messages":[{"segments":[{"type":"audio","data":{"media":{"kind":"base64","value":"${payload}"}}}]}]}`),
+      createUserMessage('最近记录'.repeat(1000), undefined, 11),
+    ]);
+    const messages = (await repository.loadContext(sessionId)).messages;
+    const transport = { complete: vi.fn(), completeSimple: vi.fn().mockResolvedValue(answer('旧记录摘要')) };
+    await new AgentCompactionRuntime().transformContext(messages, undefined, {
+      host: { contextRepository: repository }, sessionId, model, transport, contextWindow: 8192, reservedTokens: 1000,
+      compactionConfig: { keepRecentTokens: 1, minKeepCount: 1 }, force: true,
+    });
+    expect(transport.completeSimple).toHaveBeenCalledOnce();
+    const request = JSON.stringify(transport.completeSimple.mock.calls[0]![1].messages);
+    expect(request).toContain('[已省略 base64 数据（4000 字符），未提供给模型]');
+    expect(request).not.toContain(payload.slice(0, 64));
+  });
+});
