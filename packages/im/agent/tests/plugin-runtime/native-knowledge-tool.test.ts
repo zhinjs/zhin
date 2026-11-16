@@ -9,6 +9,7 @@ import {
   contentBigrams,
   createNativeKnowledgeToolFeature,
   MarkdownKnowledgeIndex,
+  markdownHeadings,
 } from '../../src/plugin-runtime/native-knowledge-tool.js'
 import { createNativeAgentToolSuite } from '../../src/plugin-runtime/native-tool-suite.js'
 
@@ -233,3 +234,28 @@ describe('knowledge base outline and discovery (#1250 b27)', () => {
     expect(definition.description).toContain('Use it first for questions about this bot or this project')
   })
 })
+
+describe('markdownHeadings parsing (CodeQL polynomial-redos)', () => {
+  it('parses ATX headings like the previous pattern', () => {
+    const text = [
+      '# 标题', '##  两个空格 ', '## 部署 ##', '## 尾部#号#', '#\t制表符\t', '   # 缩进三格', '    # 缩进四格不算标题',
+      '#不是标题', '### 三级', '# #', '##', '#  ', '## a ## b', '## x #  ',
+    ].join('\n');
+    expect(markdownHeadings(text).map((heading) => `${heading.level}:${heading.text}`)).toEqual([
+      '1:标题', '2:两个空格', '2:部署', '2:尾部#号#', '1:制表符', '1:缩进三格', '1:#', '2:a ## b', '2:x',
+    ]);
+  });
+
+  it('splits on CRLF, LF and lone CR like CommonMark', () => {
+    expect(markdownHeadings('# 标题\r\r\n## 二级').map((heading) => heading.text)).toEqual(['标题', '二级']);
+    expect(markdownHeadings('# A\r## B\rtext\r').map((heading) => heading.text)).toEqual(['A', 'B']);
+  });
+
+  it('stays linear on lines of repeated tabs', () => {
+    const line = `# a${'\t\t'.repeat(50_000)}b${'\t\t'.repeat(50_000)}`;
+    const started = performance.now();
+    markdownHeadings(`${line}\n${'#\t'.repeat(50_000)}`);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
+

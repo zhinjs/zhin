@@ -237,7 +237,8 @@ async function collectKnowledgeFiles(
 /** Level-1/2 ATX headings outside front matter and fenced code, in document order (raw text). */
 export function markdownHeadings(text: string): readonly Readonly<{ level: 1 | 2; text: string }>[] {
   const headings: Readonly<{ level: 1 | 2; text: string }>[] = [];
-  const lines = text.split(/\r?\n/u);
+  // CommonMark line endings: CRLF, LF and a lone CR.
+  const lines = text.split(/\r\n|\r|\n/u);
   let index = 0;
   if (lines[0]?.trim() === '---') {
     const end = lines.findIndex((line, position) => position > 0 && /^(?:---|\.\.\.)\s*$/u.test(line));
@@ -257,10 +258,36 @@ export function markdownHeadings(text: string): readonly Readonly<{ level: 1 | 2
       fence = opening;
       continue;
     }
-    const heading = line.match(/^\s{0,3}(#{1,2})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
-    if (heading) headings.push(Object.freeze({ level: heading[1]!.length as 1 | 2, text: heading[2]! }));
+    const heading = parseAtxHeading(line);
+    if (heading) headings.push(heading);
   }
   return Object.freeze(headings);
+}
+
+const isBlank = (char: string | undefined) => char === ' ' || char === '\t';
+
+/**
+ * A level-1/2 ATX heading (`# text`, `## text ##`), parsed by scanning instead of a backtracking regex
+ * (CodeQL js/polynomial-redos: project files are uncontrolled input).
+ */
+function parseAtxHeading(line: string): Readonly<{ level: 1 | 2; text: string }> | undefined {
+  let index = 0;
+  while (index < 3 && /\s/u.test(line[index] ?? '')) index += 1;
+  let level = 0;
+  while (line[index] === '#') { level += 1; index += 1; }
+  if (level < 1 || level > 2 || !isBlank(line[index])) return undefined;
+  while (isBlank(line[index])) index += 1;
+  let end = line.length;
+  while (end > index && isBlank(line[end - 1])) end -= 1;
+  // Optional closing sequence: blanks, then only `#` up to the end.
+  let hashes = end;
+  while (hashes > index && line[hashes - 1] === '#') hashes -= 1;
+  if (hashes < end && hashes > index && isBlank(line[hashes - 1])) {
+    end = hashes;
+    while (end > index && isBlank(line[end - 1])) end -= 1;
+  }
+  if (end <= index) return undefined;
+  return Object.freeze({ level: level as 1 | 2, text: line.slice(index, end) });
 }
 
 function chunkText(text: string, maxChunkSize = 1_000): string[] {
