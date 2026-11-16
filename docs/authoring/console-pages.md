@@ -611,6 +611,10 @@ export default function Feeds() {
 - **操作**：页头操作用 `usePageChrome({ menuActions, moreActions })` 或 `PageActions`（窄于 40rem 时收进「更多」），行操作用 `RowActions`（一个带文字的主操作，其余在 `MoreMenu`「更多」里）；所有操作都带可见文字，危险操作是描边按钮加确认对话框。
 - **浮层与触控**：下拉、弹出层与对话框在手机宽度下是底部抽屉；手机宽度下可点控件不小于 44px（复选框、单选、开关和行内链接用 `.console-touch` 扩大点击区）。
 - **状态**：`StatusBadge` 只给需要注意的状态上色，「正常」弱化显示。
+- **空状态**（ADR 0063 D28）：`EmptyState` 是一张 64px 线稿插画 + 一句说明 + 至多一个操作，例如 `illustration="tasks"` 配 `action`：`{ label: '新建定时任务', variant: 'primary', onSelect }`。插画有 `messages`、`tasks`、`logs`、`table`、`record`、`not-found`、`generic` 七张，不写说明时用插画自带的一句；不要单独写「暂无数据」。
+- **表单**（D29）：次要字段（备用模型、未设置的槽位）用 `variant="ghost"`（`Input`、`Textarea`、`SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField`），悬停或聚焦时才出现边框。日期用 `DateField`（值 `YYYY-MM-DD`）和 `DateTimeField`（值 `YYYY-MM-DDTHH:mm`），不用浏览器原生的日期框；值是本地时间的 ISO 字符串，清空为空串，支持键盘操作。
+- **短标识与图标**（D30、D31）：包名、RPC 名、ID 用 `InlineCode`（等宽、极浅底色、无边框），不要做成带边框的小块。lucide 图标统一 `strokeWidth={CONSOLE_ICON_STROKE_WIDTH}`（1.75），控件里 16px、导航 18px；列表和工具栏的图标不放在浅色方块里。
+- **字体**（D33）：组件库只定义字体栈（Inter / JetBrains Mono 优先，回退系统字体），字体由 Console 加载，插件页面不要自己引入字体。
 - **内容区块**（P2）：`ContentStack`、`FormField`、`KeyValueList`（窄容器里一列）、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`（原始 ID、JSON 默认收起）、`CodeText`、`JsonBlock`、`MediaPreview`、`RecordCard`（`Card` + `KeyValueList`）、`LoadingBlock`。它们只补充上面的组件，不重复：分区、网格、统计卡片和表格卡片直接用 P1b 的组件。
 
 这些规则写在组件里，令牌与断点只在 `tokens/tokens.mjs` 定义一次；`@zhin.js/console-ui` 自己的样式由共享的 stylelint / ESLint 规则（`@zhin.js/console-ui/stylelint`、`@zhin.js/console-ui/eslint`）把关，插件也可以在自己的样式上启用。

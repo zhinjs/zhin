@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { MoreHorizontal, type LucideIcon } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { cn } from '../cn.js'
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { Button, type ButtonProps } from './ui/button.js'
@@ -36,7 +37,7 @@ function ActionButton({ action, size }: { action: PageAction; size?: ButtonProps
   const Icon = action.icon
   return (
     <Button type="button" variant={buttonVariant(action)} size={size} disabled={action.disabled} onClick={action.onSelect}>
-      {Icon ? <Icon aria-hidden="true" /> : null}
+      {Icon ? <Icon strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" /> : null}
       {action.label}
     </Button>
   )
@@ -66,7 +67,7 @@ export function MoreMenu({ actions, label, size, align = 'end', className }: Mor
         onSelect={action.onSelect}
         className={cn(action.tone === 'destructive' && 'text-destructive focus:text-destructive')}
       >
-        {Icon ? <Icon aria-hidden="true" /> : null}
+        {Icon ? <Icon strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" /> : null}
         {action.label}
       </DropdownMenuItem>
     )
@@ -75,7 +76,7 @@ export function MoreMenu({ actions, label, size, align = 'end', className }: Mor
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="outline" size={size} className={cn('console-more-trigger', className)}>
-          <MoreHorizontal aria-hidden="true" />
+          <MoreHorizontal strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
           {label ?? i18n.t('actions.more')}
         </Button>
       </DropdownMenuTrigger>

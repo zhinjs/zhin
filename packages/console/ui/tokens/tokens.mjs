@@ -112,6 +112,8 @@ export const touchTarget = '2.75rem';
  * {@link motion}.
  */
 export const misc = {
+  // Font stacks (ADR 0063 D33): Inter / JetBrains Mono first, then system faces. The package ships
+  // no font files — the host (the Console) loads Inter and JetBrains Mono with @font-face.
   'font-sans': "'Inter', 'MiSans', 'SF Pro Text', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
   'font-mono': "'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, Consolas, 'Noto Sans Mono CJK SC', monospace",
   'line-code': '1.25rem',

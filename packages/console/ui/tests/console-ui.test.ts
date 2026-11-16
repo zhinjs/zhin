@@ -6,6 +6,24 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   BrandMark,
   Button,
+  CONSOLE_ICON_SIZE,
+  CONSOLE_ICON_STROKE_WIDTH,
+  CodeText,
+  DateField,
+  DateTimeField,
+  EMPTY_ILLUSTRATIONS,
+  EmptyIllustration,
+  InlineCode,
+  Input,
+  SearchableSelectField,
+  SelectTrigger,
+  Select,
+  Textarea,
+  addMonths,
+  calendarMonth,
+  formatDateTimeValue,
+  parseDateTimeValue,
+  parseDateValue,
   CONSOLE_PRODUCT_NAME,
   CONSOLE_SHARED_MODULE_VERSIONS_KEY,
   CONSOLE_UI_LOCALES,
@@ -146,11 +164,11 @@ describe('ConsoleUiI18nProvider', () => {
     const en = createConsoleUiI18n('en', { 'error.retry': 'Try again' });
     expect(en.t('confirm.typeToConfirm', ['db'])).toBe('Type db to confirm:');
     expect(en.t('error.retry')).toBe('Try again');
-    expect(createConsoleUiI18n().t('empty.noData')).toBe('暂无数据');
+    expect(createConsoleUiI18n().t('empty.noData')).toBe('这里还没有内容');
   });
 
   it('renders zh-CN without a provider and the host locale inside one', () => {
-    expect(renderToStaticMarkup(h(EmptyState, { compact: true }))).toContain('暂无数据');
+    expect(renderToStaticMarkup(h(EmptyState, { compact: true }))).toContain('这里还没有内容');
     const english = renderToStaticMarkup(h(ConsoleUiI18nProvider, { locale: 'en' }, h(ErrorAlert, { error: 'x', onRetry: () => undefined, technicalDetail: 'y' })));
     expect(english).toContain('Retry');
     expect(english).toContain('Technical details');
@@ -283,5 +301,124 @@ describe('styles', () => {
       expect(defined.has(alias), alias).toBe(true);
     }
     expect(tokens).toContain('--console-content-max: var(--console-content-data);');
+  });
+});
+
+describe('EmptyState (ADR 0063 D28)', () => {
+  it('draws seven 64px line-art illustrations: one 1.5px stroke, currentColor, no fill', () => {
+    expect([...EMPTY_ILLUSTRATIONS]).toEqual(['messages', 'tasks', 'logs', 'table', 'record', 'not-found', 'generic']);
+    for (const name of EMPTY_ILLUSTRATIONS) {
+      const svg = renderToStaticMarkup(h(EmptyIllustration, { name }));
+      expect(svg).toContain('viewBox="0 0 64 64"');
+      expect(svg).toContain('stroke="currentColor"');
+      expect(svg).toContain('stroke-width="1.5"');
+      expect(svg).toContain('fill="none"');
+      expect(svg).toContain('aria-hidden="true"');
+      expect(svg, name).not.toMatch(/fill="(?!none)/u);
+      expect(svg, name).not.toMatch(/stroke="(?!currentColor)/u);
+    }
+  });
+
+  it('illustration + its default sentence + one soft or primary action; no isolated 「暂无数据」', () => {
+    const html = renderToStaticMarkup(h(EmptyState, { illustration: 'tasks', action: { label: '新建定时任务', variant: 'primary' } }));
+    expect(html).toContain('data-illustration="tasks"');
+    expect(html).toContain('还没有任务');
+    expect(html).toContain('bg-brand');
+    expect(html).toContain('新建定时任务');
+    expect(renderToStaticMarkup(h(EmptyState, { illustration: 'not-found', action: { label: '返回首页', href: '/' } }))).toMatch(/<a [^>]*href="\/"[^>]*>返回首页<\/a>/u);
+    expect(renderToStaticMarkup(h(EmptyState, { action: { label: '刷新' } }))).toContain('bg-primary-action');
+    const titled = renderToStaticMarkup(h(EmptyState, { title: '没有记录' }));
+    expect(titled).toContain('没有记录');
+    expect(titled).not.toContain('这里还没有内容');
+    expect(renderToStaticMarkup(h(ConsoleUiI18nProvider, { locale: 'en' }, h(EmptyState, { illustration: 'messages' })))).toContain('No messages yet');
+  });
+
+  it('without an illustration keeps the icon, in brand-text at full opacity', () => {
+    const Icon = (props: Record<string, unknown>) => h('svg', { ...props, 'data-icon': '' });
+    const html = renderToStaticMarkup(h(EmptyState, { icon: Icon as never, title: '没有日志' }));
+    expect(html).toContain('console-empty-icon');
+    expect(html).not.toContain('opacity-30');
+  });
+});
+
+describe('ghost controls (ADR 0063 D29)', () => {
+  it('Input, Textarea, SelectTrigger and SearchableSelectField take variant="ghost"', () => {
+    const input = renderToStaticMarkup(h(Input, { variant: 'ghost', 'aria-label': 'x' }));
+    expect(input).toContain('data-variant="ghost"');
+    expect(input).toContain('border-transparent');
+    expect(input).toContain('hover:border-input');
+    expect(input).not.toContain('bg-card');
+    const plain = renderToStaticMarkup(h(Input, { 'aria-label': 'x' }));
+    expect(plain).toContain('border-input');
+    expect(plain).not.toContain('data-variant');
+    expect(renderToStaticMarkup(h(Textarea, { variant: 'ghost' }))).toContain('border-transparent');
+    expect(renderToStaticMarkup(h(Select, null, h(SelectTrigger, { variant: 'ghost' }, 'x')))).toContain('border-transparent');
+    expect(renderToStaticMarkup(h(SearchableSelectField, { variant: 'ghost', options: [], value: '', onValueChange: () => undefined }))).toContain('data-variant="ghost"');
+  });
+});
+
+describe('DateField / DateTimeField (ADR 0063 D29)', () => {
+  it('parses and formats ISO values in local time', () => {
+    expect(parseDateValue('2026-02-29')).toBeNull();
+    expect(parseDateValue('2028-02-29')).toEqual({ year: 2028, month: 2, day: 29 });
+    expect(parseDateValue('2026-11-16T09:30')).toEqual({ year: 2026, month: 11, day: 16 });
+    expect(parseDateValue('')).toBeNull();
+    expect(parseDateValue('16/11/2026')).toBeNull();
+    expect(parseDateTimeValue('2026-11-16T24:00')).toBeNull();
+    expect(parseDateTimeValue('2026-11-16')).toMatchObject({ hour: 0, minute: 0 });
+    expect(parseDateTimeValue('2026-11-16T09:30:15.250')).toMatchObject({ day: 16, hour: 9, minute: 30 });
+    const zoned = new Date('2026-11-16T01:30:00Z');
+    expect(parseDateTimeValue('2026-11-16T01:30:00Z')).toMatchObject({ hour: zoned.getHours(), minute: zoned.getMinutes() });
+    expect(formatDateTimeValue({ year: 2026, month: 1, day: 5, hour: 7, minute: 3 })).toBe('2026-01-05T07:03');
+    expect(parseDateValue(`2026-11-16${' '.repeat(50000)}x`)).toBeNull();
+  });
+
+  it('builds six-week months and clamps month steps', () => {
+    const weeks = calendarMonth(2026, 11, 1);
+    expect(weeks).toHaveLength(6);
+    expect(weeks[0][0]).toEqual({ year: 2026, month: 10, day: 26 });
+    expect(calendarMonth(2026, 11, 0)[0][0]).toEqual({ year: 2026, month: 11, day: 1 });
+    expect(addMonths({ year: 2026, month: 1, day: 31 }, 1)).toEqual({ year: 2026, month: 2, day: 28 });
+    expect(addMonths({ year: 2026, month: 1, day: 15 }, -13)).toEqual({ year: 2024, month: 12, day: 15 });
+  });
+
+  it('renders a trigger with the value, a clear button and the placeholder when empty', () => {
+    const filled = renderToStaticMarkup(h(DateTimeField, { 'aria-label': '开始时间', value: '2026-11-16T09:30', onValueChange: () => undefined }));
+    expect(filled).toContain('2026-11-16 09:30');
+    expect(filled).toContain('aria-label="清除"');
+    const empty = renderToStaticMarkup(h(DateField, { 'aria-label': '日期', value: '', onValueChange: () => undefined, variant: 'ghost' }));
+    expect(empty).toContain('选择日期');
+    expect(empty).toContain('data-variant="ghost"');
+    expect(empty).not.toContain('aria-label="清除"');
+  });
+});
+
+describe('icons and short identifiers (ADR 0063 D30, D31)', () => {
+  it('every lucide icon in the library uses strokeWidth 1.75', () => {
+    expect(CONSOLE_ICON_STROKE_WIDTH).toBe(1.75);
+    expect(CONSOLE_ICON_SIZE).toEqual({ control: 16, nav: 18 });
+    let checked = 0;
+    for (const file of files(clientRoot, /\.tsx$/u)) {
+      const source = readFileSync(file, 'utf8');
+      const icons = [...source.matchAll(/import \{([^}]+)\} from ['"]lucide-react['"]/gu)]
+        .flatMap((match) => match[1].split(',').map((name) => name.trim()).filter((name) => name && !name.startsWith('type ')));
+      for (const name of [...icons, 'Icon']) {
+        for (const tag of source.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gu'))) {
+          checked += 1;
+          expect(tag[0], relative(packageRoot, file)).toMatch(/strokeWidth=\{(?:CONSOLE_ICON_STROKE_WIDTH|1\.5)\}/u);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it('InlineCode and CodeText: monospace class, light fill or none, no border', () => {
+    expect(renderToStaticMarkup(h(InlineCode, null, 'rss.status'))).toBe('<code data-slot="code" class="console-code">rss.status</code>');
+    expect(renderToStaticMarkup(h(InlineCode, { tone: 'plain' }, 'id'))).toContain('data-tone="plain"');
+    expect(renderToStaticMarkup(h(CodeText, null, 'x'))).toContain('console-code console-code-text');
+    const css = readFileSync(join(clientRoot, 'styles/components.css'), 'utf8');
+    const rule = /\.console-code \{([^}]*)\}/u.exec(css)?.[1] ?? '';
+    expect(rule).toContain('var(--console-font-mono)');
+    expect(rule).not.toMatch(/\bborder:/u);
   });
 });

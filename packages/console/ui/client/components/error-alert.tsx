@@ -1,5 +1,6 @@
 import { useConsoleUiI18n } from '../i18n/index.js'
 import { AlertCircle, RefreshCw, Info } from 'lucide-react'
+import { CONSOLE_ICON_STROKE_WIDTH } from './icon.js'
 import { Alert, AlertDescription } from './ui/alert.js'
 import { Button } from './ui/button.js'
 
@@ -30,13 +31,13 @@ export function ErrorAlert({ error, onRetry, className, kind = 'other', technica
   const Icon = kind === '404' ? Info : AlertCircle
   return (
     <Alert variant={variantForKind(kind)} className={className}>
-      <Icon className="size-4" />
+      <Icon strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
       <AlertDescription className="space-y-2">
        <div className="flex items-center justify-between gap-2">
         <span>{error}</span>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry} className="shrink-0">
-            <RefreshCw aria-hidden="true" />
+            <RefreshCw strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
             {i18n.t("error.retry")}</Button>
         )}
        </div>

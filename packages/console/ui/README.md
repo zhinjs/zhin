@@ -2,7 +2,7 @@
 
 Zhin Console 与插件页面共用的组件库（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md)）：基于 Radix 的 React 组件、页面外壳、刷新控件，以及一份设计令牌。样式随包发布、已经编译好，使用方不需要 Tailwind。
 
-> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）。`@zhin.js/client/ui` 已弃用，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
+> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）；空状态插画、ghost 控件、日期选择、图标、代码标识、焦点环与字体见 D28–D33（#125 第三阶段）。`@zhin.js/client/ui` 已弃用，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
 
 只给浏览器用：本包与 `radix-ui`、`class-variance-authority`、`clsx`、`tailwind-merge`、`lucide-react` 不在 `zhin.js` 的依赖树里。React 是 peerDependency。
 
@@ -26,7 +26,10 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 
 | 类别 | 导出 |
 | --- | --- |
-| 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
+| 基础组件（`components/ui/*`） | `Accordion*`、`Alert`/`AlertTitle`/`AlertDescription`、`Badge`/`badgeVariants`、`Button`/`buttonVariants`、`Card*`、`Checkbox`、`DateField`/`DateTimeField`、`Dialog*`、`DropdownMenu*`、`Input`、`ListItemButton`、`Popover`/`PopoverTrigger`/`PopoverAnchor`/`PopoverContent`、`RadioGroup`/`RadioGroupItem`、`ScrollArea`/`ScrollBar`、`SearchableSelectField`、`Select*`/`SelectField`、`Separator`、`Sheet*`、`Skeleton`、`Switch`、`Table*`、`Tabs*`、`Textarea`、`Tooltip*` |
+| 表单控件（D29） | `variant="ghost"`（`Input`、`Textarea`、`SelectTrigger` / `SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField`，类型 `ControlVariant`）；日期纯函数 `parseDateValue`、`parseDateTimeValue`、`formatDateValue`、`formatDateTimeValue`、`calendarMonth`、`addDays`、`addMonths` |
+| 空状态与标识（D28、D31） | `EmptyState`（`illustration`、`action`）、`EmptyIllustration`、`EMPTY_ILLUSTRATIONS`、`InlineCode`（`tone`：`subtle` / `plain`） |
+| 图标（D30） | `CONSOLE_ICON_STROKE_WIDTH`（1.75）、`CONSOLE_ICON_SIZE`（控件 16、导航 18） |
 | 品牌 | `BrandMark`（`size`：`sm` / `md` / `lg` / 像素值，`withText` 显示「Zhin Console」）、`CONSOLE_PRODUCT_NAME` |
 | 页面与通用组件 | `PageShell`（`width`：`reading` / `data` / `full`）、`PageHeader`（`menuActions` / `moreActions`）、`Section`、`Grid`、`ListDetail`、`StatusBadge`/`isAttentionStatus`、`MoreMenu`、`RowActions`、`PageActions`、`ConfirmDialog`/`useConfirm`、`StatCard`/`StatGrid`/`MiniRingGauge`/`isZeroValue`、`EmptyState`、`ErrorAlert`、`InfoHint`、`RefreshControl` |
 | 内容区块（P2） | `ContentStack`、`FormField`、`KeyValueList`、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`、`CodeText`、`JsonBlock`、`MediaPreview`、`RecordCard`（`Card` + `KeyValueList`）、`LoadingBlock`；分区、网格、统计卡片与表格卡片直接用上面的 `Section`、`Grid`、`StatGrid` / `StatCard`、`Table` |
@@ -46,6 +49,25 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | `destructive` | **幽灵样式**：红字、无底。页面上的危险操作入口 |
 | `destructive-outline` | 描边 + 红字（ADR 0063 决策 5） |
 | `destructive-solid` | 实心红。**只用于确认对话框的确认按钮**（`ConfirmDialog variant="destructive"` 已使用） |
+
+## 空状态、ghost 控件、日期选择与代码标识（ADR 0063 D28–D31）
+
+```tsx
+import { DateTimeField, EmptyState, InlineCode, SelectField } from '@zhin.js/console-ui';
+
+<EmptyState illustration="tasks" action={{ label: '新建定时任务', variant: 'primary', onSelect: create }} />
+<EmptyState illustration="table" compact />            // 「在左侧选择一个数据表」
+<SelectField variant="ghost" aria-label="备用模型" value={fallback} onValueChange={setFallback} options={models} />
+<DateTimeField aria-label="开始时间" value={since} onValueChange={setSince} />  // '2026-11-16T09:30'，清空为 ''
+<p>插件 <InlineCode>@zhin.js/plugin-rss</InlineCode> 的 RPC <InlineCode>rss.status</InlineCode></p>
+```
+
+- **`EmptyState`**：64px 线稿插画 + 一句说明 + 至多一个操作。`illustration` 取 `messages`（无消息）、`tasks`（无任务）、`logs`（无日志）、`table`（未选中数据表）、`record`（未选中记录）、`not-found`（找不到页面）、`generic`（通用空）；插画是 `brand-text` 单色、1.5px 描边。不给说明时用插画的默认说明，不再单独显示「暂无数据」。`action` 是 `{ label, onSelect?, href?, variant?: 'soft' | 'primary', icon? }`（默认 `soft`）或一个元素。原有的 `icon` / `title` / `description` / `compact` 不变；没传 `illustration` 时图标改为 `brand-text`，不再是半透明灰色。
+- **ghost 控件**：`variant="ghost"` 平时无边框，悬停、聚焦或展开时才出现边框，用于次要字段。
+- **`DateField` / `DateTimeField`**：替代原生 `date` / `datetime-local` 输入框，值为本地时间的 ISO 字符串（`YYYY-MM-DD` / `YYYY-MM-DDTHH:mm`），空值 `''`；`min`、`max`、`clearable`（默认开）、`weekStartsOn`、`placeholder`、`variant`。键盘：触发器上 Enter / ↓ 打开、Delete / Backspace 清空；月历里方向键按天 / 周、Home / End、PageUp / PageDown 按月（Shift 按年）、Enter 选中、Esc 关闭。
+- **`InlineCode`**（或 `console-code` 类）：包名、RPC 名、ID 这类短标识；等宽字体，极浅底色（`tone="plain"` 无底色），不加边框。`CodeText` 外观相同。
+- **图标**：组件里的 lucide 图标统一 `strokeWidth 1.75`，控件里 16px、导航 18px；列表、⌘K、工具栏的图标不放在浅色方块里。宿主可用 `<LucideProvider strokeWidth={CONSOLE_ICON_STROKE_WIDTH}>` 让自己的图标一致。
+- **焦点环**：只在 `:focus-visible` 时出现，鼠标点开再关闭对话框、菜单、下拉和日期选择后不留焦点环。所有动画只在 `prefers-reduced-motion: no-preference` 下运行。
 
 `StatCard` 的 `tone`（`danger` / `warning`）只给异常值着色：数值用信号文字色、图标用信号填充色，`danger` 卡片另有红色描边；数值为 0 时不着色（稳态，`isZeroValue`）。
 
@@ -72,6 +94,8 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | `--console-chart-1`…`-8`、`--console-chart-other` | 分类色 | 分类色 | 一切数据可视化；相邻两色 ΔE2000 ≥ 20 |
 
 稳态（运行中、成功、失败数为 0）不用信号色；「失败」「已拒绝」比「成功」醒目。旧颜色名 `--destructive`、`--success`、`--warning`、`--info` 指向对应的 `signal-*-text`，`--chart-*` 指向 `--console-chart-*`，`--ring` 指向 `brand-text`。具体取值与实测对比度见 ADR 0063 D23。
+
+字体（D33）：`--console-font-sans`（Inter 优先）与 `--console-font-mono`（JetBrains Mono 优先）只定义字体栈，之后回退到系统字体。**本包不打包字体，宿主负责加载字体**（例如 Console 用 `@font-face` 自托管 Inter 与 JetBrains Mono 的拉丁 + 数字子集，`font-display: swap`）；没有加载时按字体栈回退。
 
 动效（D26）：`--console-motion-fast` 120ms、`--console-motion-base` 200ms、`--console-motion-slow` 280ms，缓动统一 `--console-ease-out`；Tailwind 的 `transition-*` 默认也用它们。`styles.css` 在根上设置 `font-variant-numeric: tabular-nums`，数字等宽。
 

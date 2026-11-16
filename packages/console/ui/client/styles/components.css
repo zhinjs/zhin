@@ -446,21 +446,18 @@
     width: min(34rem, 94vw);
     height: 100dvh;
     border-radius: var(--console-sheet-radius) 0 0 var(--console-sheet-radius);
-    animation: console-sheet-in-right var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-content[data-side="left"] {
     inset: 0 auto 0 0;
     width: min(24rem, 90vw);
     height: 100dvh;
     border-radius: 0 var(--console-sheet-radius) var(--console-sheet-radius) 0;
-    animation: console-sheet-in-left var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-content[data-side="bottom"] {
     inset: auto 0 0 0;
     width: 100%;
     max-height: 86dvh;
     border-radius: var(--console-sheet-radius) var(--console-sheet-radius) 0 0;
-    animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out);
   }
   .console-sheet-header {
     display: flex;
@@ -672,14 +669,82 @@
   .console-brand[data-size="sm"] .console-brand-name { font-size: var(--console-text-body); line-height: var(--console-leading-body); }
   .console-brand[data-size="lg"] .console-brand-name { font-size: var(--console-text-title); line-height: var(--console-leading-title); }
 
-  /* ── Empty state ── */
+  /*
+   * ── Empty state (ADR 0063 D28): 64px line art (48px compact) or an icon, both brand-text at a
+   * 1.5px stroke; one sentence; at most one action. ──
+   */
   .console-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--console-stack-gap);
+    gap: var(--console-heading-gap);
     padding: var(--console-section-gap) var(--console-card-padding);
     text-align: center;
+  }
+  .console-empty[data-compact] {
+    padding: var(--console-stack-gap) var(--console-card-padding);
+  }
+  .console-empty-art {
+    display: block;
+    flex-shrink: 0;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: var(--console-heading-gap);
+    color: hsl(var(--console-brand-text));
+  }
+  /* The stroke stays 1.5px at every size. */
+  .console-empty-art * { vector-effect: non-scaling-stroke; }
+  .console-empty[data-compact] .console-empty-art { width: 3rem; height: 3rem; margin-bottom: 0; }
+  .console-empty-icon {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: var(--console-heading-gap);
+    color: hsl(var(--console-brand-text));
+  }
+  .console-empty[data-compact] .console-empty-icon { width: 2rem; height: 2rem; margin-bottom: 0; }
+  .console-empty-title {
+    margin: 0;
+    font-size: var(--console-text-section);
+    font-weight: var(--console-weight-strong);
+    line-height: var(--console-leading-section);
+  }
+  .console-empty[data-compact] .console-empty-title {
+    font-size: var(--console-text-body);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-body);
+  }
+  .console-empty-description {
+    max-width: 24rem;
+    margin: 0;
+    color: hsl(var(--muted-foreground));
+    font-size: var(--console-text-body);
+    line-height: var(--console-leading-body);
+    text-wrap: pretty;
+  }
+  .console-empty-action {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--console-heading-gap);
+  }
+
+  /*
+   * ── Short identifiers (ADR 0063 D31): package names, RPC names, IDs. Monospace, a very light
+   * fill (`tone="plain"`: none), never a border. ──
+   */
+  .console-code {
+    padding: 0 var(--console-heading-gap);
+    border-radius: var(--console-check-radius);
+    background: hsl(var(--foreground) / 0.05);
+    color: inherit;
+    font-family: var(--console-font-mono);
+    font-size: var(--console-text-label);
+    font-variant-ligatures: none;
+    overflow-wrap: anywhere;
+  }
+  .console-code[data-tone="plain"] {
+    padding: 0;
+    background: transparent;
   }
 
   .console-skeleton {
@@ -693,8 +758,6 @@
     inset: 0;
     transform: translateX(-100%);
     background: linear-gradient(90deg, transparent, hsl(var(--background) / 0.55), transparent);
-    /* One shimmer = five slow steps (1.4s); a loop, not a transition. */
-    animation: console-skeleton-shimmer calc(var(--console-motion-slow) * 5) var(--console-ease-out) infinite;
   }
 }
 @keyframes console-sheet-in-right {
