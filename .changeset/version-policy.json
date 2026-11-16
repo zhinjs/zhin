@@ -4,7 +4,7 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。；ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：zhin plugin check 新增页面 UI 第 1–6 条检查（原生 <select>、自定义页头、固定内容宽度、原始样式数值、尺度外的 Tailwind 类名、原生基础控件，只提示并给出替换建议，不计入错误与警告），行内豁免注释 zhin-ui-ignore，检查报告新增 ui 与 hintCount 字段。"
     },
     {
       "package": "@zhin.js/console-protocol",
@@ -69,7 +69,7 @@
     {
       "package": "@zhin.js/console-ui",
       "type": "minor",
-      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。"
+      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。另含 ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：新增内容区块 ContentStack / FormField / KeyValueList / ProgressMeter / Sparkline / Timeline / Disclosure / CodeText / JsonBlock / MediaPreview / RecordCard / LoadingBlock（只用语义令牌、按 .console-cq 容器切换布局，styles.css 含其样式；分区、网格、统计卡片与表格卡片复用 P1b 的 Section / Grid / StatGrid / StatCard / Table），Section、Grid 透传 HTML 属性，StatCard 新增可选 unit / badge / footer 且 icon 改为可选并接受元素或图片 URL，PageChrome 新增可选 title / description，RefreshControl 新增可选 onAutoRefresh；./audit 的触控检查跳过视觉隐藏祖先内的元素。"
     },
     {
       "package": "@zhin.js/pagemanager",
@@ -85,6 +85,16 @@
       "package": "@zhin.js/console-contract",
       "type": "minor",
       "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+    },
+    {
+      "package": "@zhin.js/client",
+      "type": "minor",
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：DeclarativePageView、AdapterConsolePage、CommentReviewPage 改用 @zhin.js/console-ui，只渲染内容区块并经 usePageChrome 把页头交给外壳（无外壳时自绘），删除首字母方块（蓝图 mark 忽略并告警一次），danger 动作改为 destructive-outline 加确认对话框，去掉原生 select 与注入的 zk- 样式（删除 adapter-console/styles.ts、review-console/styles.ts）；非 UI 导出（usePluginRpc、usePluginData、useRpcResource、useLocale、detectLocale、translate、formatClock、resolvePluginId 等、DeclarativePageView、createDeclarativePage、DataTable）迁到根入口，新增 DECLARATIVE_PAGE_CAPABILITIES，ADAPTER_CONSOLE_PAGE_CAPABILITIES 新增 pageChrome；@zhin.js/client/ui 改为弃用的再导出层（首次使用告警一次），adapterConsoleStyles / conversationPickerStyles 弃用期内为空字符串。"
+    },
+    {
+      "package": "@zhin.js/adapter-sandbox",
+      "type": "minor",
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：Sandbox 会话页按 D13 两步迁移——Console 中只服务 Sandbox 的样式搬进插件由页面注入，页面改用 @zhin.js/console-ui 组件（新增 peerDependency @zhin.js/console-ui）、definePage({ fullWidth: true }) 与外壳页头（usePageChrome）。"
     }
   ]
 }

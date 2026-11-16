@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'Bell',
   order: 51,
   requiredPermissions: ['reminder:read'],
+  keywords: { 'zh-CN': ['提醒', '闹钟', '待办提醒'], en: ['reminder', 'alarm', 'todo'] },
 });
 
 export default definePageBlueprint<ReminderConsoleSnapshot>({

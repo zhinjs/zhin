@@ -463,7 +463,8 @@ zhin plugin check [插件目录] [--no-pack] [--json] [--strict]
 - **清单与目录**：`package.json` 的 `name`、`zhin` 清单、`zhin.entry` 指向 JavaScript 且有对应源文件；`files` 白名单覆盖入口、约定目录（`commands/`、`tools/` 等编译出的 `.js`，以及 `skills/`、`agents/`）与 `schema.json`；`prepack` / `postpack` 会生成并清理运行时入口。缺少 README 或测试只给警告。
 - **zhin 清单与依赖**：用 Runtime 加载时同一个解析器校验 `zhin` 清单（`protocol`、`type`、`entry`、`runtime`、`features`、`plugins`）；`zhin.engine` 必须是当前 Runtime 引擎满足的 semver 范围，`features[].api` 必须是有效范围；`features` / `plugins` 引用的包必须写进 `dependencies` 或 `peerDependencies`。`peerDependencies` 需要声明 `zhin.js`，范围必须是真实的 semver 范围（`latest`、`*`、`file:` / `link:` 报错），本地安装的版本不在范围内时给警告；Zhin 栈写在 `dependencies` 里时给警告。
 - **发布包**：实际运行插件的 `npm pack`（会执行 `prepack` 构建），在临时目录解包后检查入口与 `main` / `exports` 是否打包、打包的 JavaScript 里相对 import 能否解析、测试与构建配置有没有混入，以及约定目录里的每个 `.ts` 都有打包的 `.js`；最后借用插件自己的 `node_modules` 在子进程里 `import` 打包后的 `zhin.entry` 做冒烟测试（未安装依赖时跳过并给警告）。规则与仓库的 `pnpm check:pack-imports` 相同。`--no-pack` 跳过这一步。
-- 有错误时退出码为 1；`--strict` 把警告也视为失败；`--json` 输出结构化结果，便于在 CI 中使用。
+- **页面 UI**：检查 `pages/**` 是否偏离 Console 的页面规则（ADR 0063 第 1–6 条：原生 `<select>`、自定义页头、固定内容宽度、原始样式数值、尺度外的 Tailwind 类名、原生基础控件），每条附替换建议。这些只是**提示**，不计入错误和警告。规则与豁免写法见 [页面 UI 规范](../authoring/console-pages.md#plugin-check-pages)。
+- 有错误时退出码为 1；`--strict` 把警告也视为失败（页面 UI 提示除外）；`--json` 输出结构化结果（页面 UI 在 `ui` 与 `hintCount` 中），便于在 CI 中使用。
 
 ### pub：发布插件
 

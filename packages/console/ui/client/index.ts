@@ -65,3 +65,4 @@ export * from './components/actions.js';
 export * from './components/layout.js';
 export * from './components/StatusBadge.js';
 export { useContainerAtLeast, CONSOLE_BREAKPOINTS_REM } from './components/use-container-width.js';
+export * from './components/content-blocks.js';

@@ -10,6 +10,7 @@ export const meta = definePage({
   icon: 'ShieldAlert',
   order: 55,
   requiredPermissions: ['content-moderation:read'],
+  keywords: { 'zh-CN': ['审核', '敏感词', '违规消息', '风控'], en: ['moderation', 'filter', 'sensitive content'] },
 });
 
 export default createDeclarativePage<ModerationConsoleStatus>({

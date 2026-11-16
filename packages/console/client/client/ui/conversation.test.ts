@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { allNodes, createHookEnv, isComponent, textOf } from '../../tests/hook-harness.js';
+import { allNodes, createHookEnv, isComponent, renderChild, textOf } from '../../tests/hook-harness.js';
 
 const file = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 
@@ -97,7 +97,7 @@ describe('ConversationPicker / ConversationLabel (#1250)', () => {
     env.mount(() => ConversationPicker({ value: '', onChange }));
     await env.settle();
     expect(calls.sort()).toEqual(['endpoint.list', 'inbox.recent']);
-    const options = allNodes(env.tree()).filter(node => node.type === 'button' && node.props?.['data-conversation-key']);
+    const options = allNodes(env.tree()).filter(node => isComponent(node, 'Button') && node.props?.['data-conversation-key']);
     expect(options.map(textOf)).toEqual(['群聊 · 测试群（g-1） · sandbox-bot', '私聊 · 小明（sandbox-user） · sandbox-bot']);
     (options[0]!.props!.onClick as () => void)();
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -138,7 +138,7 @@ describe('ConversationPicker / ConversationLabel (#1250)', () => {
     (toggle.props!.onClick as () => void)();
     env.rerender();
     expect(textOf(env.tree())).toContain('未列出机器人账号（读取账号列表需要「查看账号」权限 endpoint.view）');
-    expect(allNodes(env.tree()).some(node => isComponent(node, 'Select') && node.props?.['aria-label'] === '机器人账号')).toBe(false);
+    expect(allNodes(env.tree()).some(node => isComponent(node, 'ChoiceSelect') && node.props?.['aria-label'] === '机器人账号')).toBe(false);
     const type = (label: string, value: string) => {
       const input = allNodes(env.tree()).find(node => isComponent(node, 'Input') && node.props?.['aria-label'] === label)!;
       (input.props!.onChange as (event: { target: { value: string } }) => void)({ target: { value } });
@@ -200,7 +200,7 @@ describe('declarative page additions (#1250)', () => {
   const mountPage = async (spec: Record<string, unknown>, status: unknown) => {
     stubHost(() => ({ data: status }));
     const env = createHookEnv();
-    const { DeclarativePageView } = env.load(file('./declarative-page.tsx'));
+    const { DeclarativePageView } = env.load(file('../declarative/DeclarativePageView.tsx'));
     env.mount(() => DeclarativePageView({ spec, pageProps: { pluginId: 'root/demo' } }));
     await env.settle();
     return env;
@@ -223,10 +223,11 @@ describe('declarative page additions (#1250)', () => {
       }],
     }, { enabled: false, cron: '0 0 18 * * *', uptimeI18n: { 'zh-CN': '1天2小时', en: '1d 2h' } });
     const nodes = allNodes(env.tree());
-    const value = nodes.find(node => typeof node.props?.className === 'string' && (node.props.className as string).includes('zk-entry-card__value'))!;
-    expect(value.props!.className).toContain('zk-entry-card__value--muted');
-    expect(textOf(value)).toContain('未启用');
-    expect(textOf(env.tree())).toContain('1天2小时');
+    const list = nodes.find(node => isComponent(node, 'KeyValueList'))!;
+    const [item] = list.props!.items as { muted?: boolean; value: unknown }[];
+    expect(item!.muted).toBe(true);
+    expect(textOf(item!.value)).toContain('未启用');
+    expect(JSON.stringify(env.tree())).toContain('1天2小时');
     env.unmount();
   });
 
@@ -245,13 +246,9 @@ describe('declarative page additions (#1250)', () => {
         ],
       }],
     }, { ok: true });
-    const inputs = allNodes(env.tree()).filter(node => node.type === 'input').map(node => node.props?.type);
+    const inputs = allNodes(env.tree()).filter(node => isComponent(node, 'Input')).map(node => node.props?.type);
     expect(inputs).toEqual(expect.arrayContaining(['date', 'time']));
-    const fields = allNodes(env.tree()).filter(node => isComponent(node, 'Field'));
-    const picker = fields.map(field => (field.props!.children as (control: unknown) => unknown))
-      .filter(child => typeof child === 'function')
-      .map(render => render({}) as { type?: { name?: string }; props?: Record<string, unknown> })
-      .find(node => node?.type?.name === 'ConversationPicker');
+    const picker = allNodes(env.tree()).find(node => isComponent(node, 'ConversationPicker'));
     expect(picker?.props?.kinds).toEqual(['group']);
     env.unmount();
   });
@@ -272,19 +269,19 @@ describe('declarative page additions (#1250)', () => {
         },
       }],
     }, { decision: 'block', decisionI18n: { 'zh-CN': '拦截', en: 'Blocked' }, hitsText: '违禁词', message: 'Moderation decision: block' });
-    const input = allNodes(env.tree()).find(node => node.type === 'input')!;
+    const input = allNodes(env.tree()).find(node => isComponent(node, 'Input'))!;
     (input.props!.onChange as (event: { target: { value: string } }) => void)({ target: { value: '含违禁词' } });
     env.rerender();
-    const run = allNodes(env.tree()).find(node => isComponent(node, 'Button') && textOf(node) === '检测文本')!;
-    await (run.props!.onClick as () => Promise<void>)();
+    const run = allNodes(env.tree()).find(node => isComponent(node, 'ActionButton') && node.props?.label === '检测文本')!;
+    await (run.props!.onRun as () => Promise<void>)();
     await env.settle();
     const inline = allNodes(env.tree()).find(node => isComponent(node, 'ActionInlineResult'))!;
     expect(inline.props).toMatchObject({ name: 'check-text', result: expect.objectContaining({ hitsText: '违禁词' }) });
-    expect(allNodes(env.tree()).some(node => isComponent(node, 'Notice') && textOf(node).includes('Moderation decision'))).toBe(false);
+    expect(allNodes(env.tree()).some(node => isComponent(node, 'NoticeBlock') && textOf(node).includes('Moderation decision'))).toBe(false);
     // The inline block itself: localized verdict and the listed details.
     const rendered = (inline.type as unknown as (props: unknown) => unknown)(inline.props);
     expect(textOf(rendered)).toContain('拦截');
-    expect(textOf(rendered)).toContain('违禁词');
+    expect(JSON.stringify(rendered)).toContain('违禁词');
     env.unmount();
   });
 
@@ -306,21 +303,22 @@ describe('declarative page additions (#1250)', () => {
       }],
     }, { passed: false, hits: 'a, b', message: '规则未通过' });
     const runAction = async (label: string) => {
-      const run = allNodes(env.tree()).find(node => isComponent(node, 'Button') && textOf(node) === label)!;
-      await (run.props!.onClick as () => Promise<void>)();
+      const run = allNodes(env.tree()).find(node => isComponent(node, 'ActionButton') && node.props?.label === label)!;
+      await (run.props!.onRun as () => Promise<void>)();
       await env.settle();
     };
     await runAction('试运行');
     await runAction('回显');
     const inlines = allNodes(env.tree()).filter(node => isComponent(node, 'ActionInlineResult'));
-    const [failed, echo] = inlines.map(node => ({ node, rendered: (node.type as unknown as (props: unknown) => unknown)(node.props) as { props: { className: string } } }));
+    const notice = (rendered: unknown) => allNodes(rendered).find(node => isComponent(node, 'NoticeBlock'))!.props as { tone: string };
+    const [failed, echo] = inlines.map(node => ({ node, rendered: (node.type as unknown as (props: unknown) => unknown)(node.props) }));
     expect(failed!.node.props).toMatchObject({ name: 'test-rule', fallbackTone: 'danger', message: '规则未通过' });
-    expect(failed!.rendered.props.className).toContain('zk-action-inline-result--danger');
+    expect(notice(failed!.rendered).tone).toBe('danger');
     expect(textOf(failed!.rendered)).toContain('规则未通过');
     // The spec's own tone wins, and a message the spec already renders is not repeated.
-    expect(echo!.rendered.props.className).toContain('zk-action-inline-result--info');
+    expect(notice(echo!.rendered).tone).toBe('info');
     expect(allNodes(echo!.rendered).filter(node => node.props?.['data-action-result-message'] !== undefined)).toHaveLength(0);
-    expect(allNodes(env.tree()).some(node => isComponent(node, 'Notice') && textOf(node).includes('规则未通过'))).toBe(false);
+    expect(allNodes(env.tree()).some(node => isComponent(node, 'NoticeBlock') && textOf(node).includes('规则未通过'))).toBe(false);
     env.unmount();
   });
 
@@ -329,7 +327,7 @@ describe('declarative page additions (#1250)', () => {
       : type === 'inbox.recent' ? { data: messages }
       : { data: { rows: [{ id: 'a', to: GROUP_KEY }, { id: 'b', to: PRIVATE_KEY }] } });
     const env = createHookEnv();
-    const { DeclarativePageView } = env.load(file('./declarative-page.tsx'));
+    const { DeclarativePageView } = env.load(file('../declarative/DeclarativePageView.tsx'));
     env.mount(() => DeclarativePageView({
       spec: { pluginId: 'root/demo', title: 'Demo', pollMs: 0, sections: [{ id: 'rows', items: 'rows', columns: [{ key: 'to', label: '会话', type: 'conversation' }] }] },
       pageProps: { pluginId: 'root/demo' },
@@ -339,7 +337,11 @@ describe('declarative page additions (#1250)', () => {
     expect(calls.filter(type => type === 'inbox.recent')).toHaveLength(1);
     const root = env.tree() as { props: { value: { directory: { describe(value: unknown): { name?: string } } } } };
     expect(root.props.value.directory.describe(GROUP_KEY)?.name).toBe('测试群');
-    const labels = allNodes(env.tree()).filter(node => isComponent(node, 'ConversationLabel')).map(node => node.props?.value);
+    // The cells live in the DataTable: render it with the page's props.
+    const table = allNodes(env.tree()).find(node => isComponent(node, 'DataTable'))!;
+    const rendered = renderChild(file('../declarative/DataTable.tsx'), 'DataTable', table.props);
+    const tableNode = allNodes(rendered.tree()).find(node => isComponent(node, 'Table'))!;
+    const labels = allNodes(tableNode).filter(node => isComponent(node, 'ConversationLabel')).map(node => node.props?.value);
     expect(labels).toEqual([GROUP_KEY, PRIVATE_KEY]);
     env.unmount();
   });

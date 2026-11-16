@@ -96,7 +96,12 @@ const checks = [
   {
     name: 'Plugin Spec',
     command: 'pnpm check:plugin',
-    description: '检查插件是否符合标准规范',
+    description: '检查插件是否符合标准规范（含官方插件页面 UI 门禁，ADR 0063）',
+  },
+  {
+    name: 'Plugin UI Audit',
+    command: 'pnpm check:plugin-ui-audit',
+    description: '官方插件页面的 Playwright 全项审计门禁（ADR 0063；默认用 @zhin.js/client 的渲染器挂载模块，需先构建 @zhin.js/console-ui 并装好 Chromium）',
   },
   {
     name: 'Plugin Capability Publish',

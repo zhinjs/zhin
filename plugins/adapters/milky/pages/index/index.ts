@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Milk',
   order: 68,
   requiredPermissions: ['milky:read'],
+  keywords: { 'zh-CN': ['QQ', 'Milky 协议', '适配器'], en: ['qq', 'milky protocol', 'adapter'] },
 });
 
 /**

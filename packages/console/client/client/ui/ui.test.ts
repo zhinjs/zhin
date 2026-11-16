@@ -240,7 +240,7 @@ describe('locale and plugin id helpers', () => {
       },
     }));
     const env = createHookEnv();
-    const { createDeclarativePage } = env.load(file('./declarative-page.tsx'));
+    const { createDeclarativePage } = env.load(file('../declarative/DeclarativePageView.tsx'));
     const Page = createDeclarativePage<{ activeCount: number; rows: { id: string; name: string; status: string }[] }>({
       pluginId: 'root/my-service',
       title: '服务状态',
@@ -273,7 +273,7 @@ describe('locale and plugin id helpers', () => {
       },
     }));
     const env = createHookEnv();
-    const { createDeclarativePage, DeclarativePageView } = env.load(file('./declarative-page.tsx'));
+    const { createDeclarativePage, DeclarativePageView } = env.load(file('../declarative/DeclarativePageView.tsx'));
     const Page = createDeclarativePage({
       pluginId: 'root/my-service',
       title: { zh: '服务状态', en: 'Service Status' },
@@ -357,7 +357,7 @@ describe('locale and plugin id helpers', () => {
       },
     }));
     const env = createHookEnv();
-    const { createDeclarativePage } = env.load(file('./declarative-page.tsx'));
+    const { createDeclarativePage } = env.load(file('../declarative/DeclarativePageView.tsx'));
     const Page = createDeclarativePage({
       pluginId: 'root/process-monitor',
       title: { zh: '进程监控', en: 'Process Monitor' },
@@ -409,13 +409,16 @@ describe('locale and plugin id helpers', () => {
     const serialized = JSON.stringify(env.tree());
     expect(serialized).toContain('"tone":"success"');
     expect(serialized).toContain('128 MB');
-    expect(serialized).toContain('zk-ext-link');
-    expect(serialized).toContain('zk-code-pill');
-    expect(serialized).toContain('zk-chip');
+    // Entry values render with console-ui pieces: a link, an inline code value with copy, and tag badges.
+    const kv = allNodes(env.tree()).find(node => isComponent(node, 'KeyValueList'))!;
+    const valueNodes = (kv.props!.items as { value: unknown }[]).flatMap(item => allNodes(item.value));
+    expect(valueNodes.some(node => node.type === 'a' && node.props?.href === 'https://example.com/rss.xml')).toBe(true);
+    expect(valueNodes.some(node => isComponent(node, 'CodeText'))).toBe(true);
+    expect(valueNodes.filter(node => isComponent(node, 'Badge') && node.props?.variant === 'secondary').length).toBeGreaterThanOrEqual(2);
     env.unmount();
   });
 
-  it('renders universal UI components (Card, Tabs, Switch, ProgressBar, RingProgress, StatCard, Timeline, DataTable, Modal)', async () => {
+  it('renders universal UI components (Card, Tabs, Switch, ProgressBar, RingProgress, StatCard, Timeline, Modal; deprecated zk- kit)', async () => {
     vi.useFakeTimers();
     stubHost(async () => ({
       data: {
@@ -463,16 +466,6 @@ describe('locale and plugin id helpers', () => {
               { id: '2', title: 'Ready', description: 'All adapters online' },
             ],
           }),
-          ui.DataTable({
-            columns: [
-              { key: 'name', label: 'Name', sortable: true },
-              { key: 'load', label: 'Load', type: 'progress' },
-            ],
-            rows: [
-              { id: '1', name: 'Worker B', load: 80 },
-              { id: '2', name: 'Worker A', load: 30 },
-            ],
-          }),
           ui.Modal({
             open: true,
             onClose: () => undefined,
@@ -490,17 +483,14 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('64%');
     expect(serialized).toContain('+12%');
     expect(serialized).toContain('All adapters online');
-    expect(serialized).toContain('Worker B');
     expect(serialized).toContain('Confirm Action');
     env.unmount();
   });
 
-  it('supports icon Radio/Checkbox/SegmentedControl, custom chart images, table fixed columns, batch actions, expandable rows, and responsive stacking', async () => {
+  it('supports icon Radio/Checkbox/SegmentedControl, custom chart images, and chart images (deprecated zk- kit)', async () => {
     vi.useFakeTimers();
     const env = createHookEnv();
     const ui = env.load(file('./index.ts'));
-    const onBatchDelete = vi.fn();
-    const onRowInspect = vi.fn();
 
     env.mount(() =>
       ui.Card({
@@ -563,36 +553,6 @@ describe('locale and plugin id helpers', () => {
             image: 'https://example.com/msg-icon.png',
             watermark: 'https://example.com/watermark.png',
           }),
-          ui.DataTable({
-            selectable: true,
-            selectedKeys: ['r1'],
-            responsiveStack: true,
-            batchActions: [
-              {
-                key: 'delete-selected',
-                label: '批量清理',
-                variant: 'danger',
-                onExecute: onBatchDelete,
-              },
-            ],
-            rowActions: [
-              {
-                key: 'inspect',
-                label: '诊断',
-                onExecute: onRowInspect,
-              },
-            ],
-            renderExpandedRow: (row: { id: string; name: string }) => `Expanded detail for ${row.name}`,
-            columns: [
-              { key: 'id', label: 'ID', fixed: 'left', width: 90, icon: '🔑' },
-              { key: 'name', label: 'Name', fixed: 'left', width: 150 },
-              { key: 'status', label: 'Status', fixed: 'right', width: 110 },
-            ],
-            rows: [
-              { id: 'r1', name: 'Node Alpha', status: 'healthy' },
-              { id: 'r2', name: 'Node Beta', status: 'degraded' },
-            ],
-          }),
         ],
       }),
     );
@@ -605,15 +565,6 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('https://example.com/bg-grid.png');
     expect(serialized).toContain('https://example.com/center.png');
     expect(serialized).toContain('https://example.com/watermark.png');
-    expect(serialized).toContain('zk-batch-bar');
-    expect(serialized).toMatch(/已选 1 项|1 selected/);
-    expect(serialized).toContain('批量清理');
-    expect(serialized).toContain('zk-cell-fixed-left');
-    expect(serialized).toContain('zk-cell-fixed-left-last');
-    expect(serialized).toContain('zk-cell-fixed-right');
-    expect(serialized).toContain('96px');
-    expect(serialized).toContain('zk-table--responsive');
-    expect(serialized).toContain('data-label');
     env.unmount();
   });
 });

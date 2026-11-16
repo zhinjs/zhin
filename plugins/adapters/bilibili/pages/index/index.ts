@@ -7,6 +7,7 @@ export const meta = definePage({
   icon: 'MessageSquare',
   order: 40,
   requiredPermissions: ['bilibili:read'],
+  keywords: { 'zh-CN': ['B站', '哔哩哔哩', '评论回复', '扫码登录'], en: ['bilibili', 'comments', 'reply approval'] },
 });
 
 /**

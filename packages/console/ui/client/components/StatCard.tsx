@@ -1,11 +1,18 @@
-import type { ReactNode } from 'react'
+import { createElement, isValidElement, type ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '../cn.js'
 
 export interface StatCardProps {
-  icon: LucideIcon
-  label: string
+  /** A Lucide icon component, an element, or an image URL (declarative stats, ADR 0063 P2). */
+  icon?: LucideIcon | ReactNode
+  label: ReactNode
   value: ReactNode
+  /** After the value, in label size (e.g. 「ms」). */
+  unit?: ReactNode
+  /** On the label row, right-aligned (status badge). */
+  badge?: ReactNode
+  /** Under the value (progress meter). */
+  footer?: ReactNode
   sub?: ReactNode
   tone?: 'danger' | 'warning'
   /** 数值右侧的附加内容，如环形进度 */
@@ -19,16 +26,21 @@ export interface StatCardProps {
 /**
  * 指标卡：图标 + 标签、大号数值、说明文字。总览页与列表页共用。
  */
-export function StatCard({ icon: Icon, label, value, sub, tone, aside, onOpen, pressed }: StatCardProps) {
+export function StatCard({ icon, label, value, unit, badge, footer, sub, tone, aside, onOpen, pressed }: StatCardProps) {
   const className = cn('console-stat-card', tone && `is-${tone}`, onOpen && 'is-link', pressed && 'is-pressed')
+  const labelRow = <span className="console-stat-label">{statIcon(icon)}{label}</span>
   const content = (
     <>
-      <span className="console-stat-label"><Icon aria-hidden="true" />{label}</span>
+      {badge != null ? <span className="console-stat-head">{labelRow}{badge}</span> : labelRow}
       <span className="console-stat-value-row">
-        <strong className="console-stat-value">{value}</strong>
+        <strong className="console-stat-value">
+          {value}
+          {unit != null ? <span className="console-stat-unit">{unit}</span> : null}
+        </strong>
         {aside}
       </span>
-      {sub !== undefined ? <span className="console-stat-sub">{sub}</span> : null}
+      {footer}
+      {sub !== undefined && sub !== null ? <span className="console-stat-sub">{sub}</span> : null}
     </>
   )
   if (!onOpen) return <div className={className} data-slot="stat-card">{content}</div>
@@ -40,9 +52,17 @@ export function StatCard({ icon: Icon, label, value, sub, tone, aside, onOpen, p
   )
 }
 
-export function StatGrid({ children, label }: { children: ReactNode; label: string }) {
+function statIcon(icon: StatCardProps['icon']): ReactNode {
+  if (icon == null || icon === '') return null
+  if (typeof icon === 'string') return <img src={icon} alt="" className="console-stat-icon" />
+  if (isValidElement(icon)) return icon
+  if (typeof icon === 'function' || (typeof icon === 'object' && '$$typeof' in icon)) return createElement(icon as LucideIcon, { 'aria-hidden': true })
+  return icon as ReactNode
+}
+
+export function StatGrid({ children, label, ...data }: { children: ReactNode; label: string; [data: `data-${string}`]: string | undefined }) {
   return (
-    <section className="console-cq" aria-label={label} data-slot="stat-grid">
+    <section className="console-cq" aria-label={label} data-slot="stat-grid" {...data}>
       <div className="console-stat-grid">{children}</div>
     </section>
   )

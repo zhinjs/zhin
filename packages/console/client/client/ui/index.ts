@@ -1,4 +1,19 @@
-/** `@zhin.js/client/ui` — 插件页与 Console 通用 UI 套件：与 Console 同一套主题变量，不依赖 Tailwind。 */
+/**
+ * `@zhin.js/client/ui` — **deprecated** (ADR 0063 P2), removed in a later minor (P4).
+ *
+ * - Data, locale and plugin ID helpers, `DeclarativePageView`, `createDeclarativePage` and
+ *   `DataTable` now live in the `@zhin.js/client` root entry; they are re-exported here unchanged.
+ * - The `zk-` components (`Button`, `Select`, `Modal`, …) and `pluginUiStyles` are replaced by
+ *   `@zhin.js/console-ui`; `PluginPage` / `PageHeader` by the Console page shell (`usePageChrome`).
+ *   The `zk-` class names are deprecated with them.
+ *
+ * Importing this entry warns once in the browser console. See docs/authoring/console-pages.md
+ * 「从 @zhin.js/client/ui 升级」.
+ */
+import { CLIENT_UI_DEPRECATION, warnDeprecatedOnce } from '../renderer/deprecation.js';
+
+warnDeprecatedOnce('client-ui', CLIENT_UI_DEPRECATION);
+
 export { pluginUiStyles } from './styles.js';
 export {
   PluginPage,
@@ -123,7 +138,7 @@ export {
   type DeclarativeRowActionSpec,
   type DeclarativeSectionSpec,
   type DeclarativeI18nText,
-} from './declarative-page.js';
+} from '../declarative/index.js';
 export {
   ConversationPicker,
   ConversationLabel,

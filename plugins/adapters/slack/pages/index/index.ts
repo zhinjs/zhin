@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Hash',
   order: 73,
   requiredPermissions: ['slack:read'],
+  keywords: { 'zh-CN': ['工作区', '适配器', '连接'], en: ['workspace', 'adapter', 'connection'] },
 });
 
 /**

@@ -451,7 +451,7 @@ export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, loc
   if (afterSequence > 0) url.searchParams.set('after', String(afterSequence));
   const response = await fetch(url, { headers: getSandboxAuthHeaders(), signal });
   const body = await response.json().catch(() => ({})) as { success?: boolean; data?: AgentTraceSnapshot; error?: string };
-  if (!response.ok || body.success === false || !body.data) {
+  if (!response.ok || body.success === false || !body.data || !Array.isArray(body.data.events)) {
     throw new Error(response.status === 503
       ? sandboxText(locale, "Agent Trace 尚未启用")
       : body.error || sandboxText(locale, "无法读取 Agent Trace"));

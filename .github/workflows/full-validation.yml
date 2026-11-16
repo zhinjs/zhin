@@ -613,6 +613,13 @@ jobs:
       - name: audit the console-ui gallery layout
         run: pnpm check:console-ui-audit
 
+      # ADR 0063 D20 第 3 条 / P2: every official plugin page (all gated) passes the same audit;
+      # blueprints, adapter and comment review pages are mounted by the @zhin.js/client renderers.
+      - name: audit official plugin pages
+        run: pnpm --filter @zhin.js/console-ui build && pnpm check:plugin-ui-audit --require-audit
+        env:
+          ZHIN_UI_AUDIT_MOUNT_MODULE: packages/console/client/audit/mount-plugin-page.tsx
+
       # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
       # cancels the whole run instead of letting the other jobs finish for nothing.
       - name: cancel the rest of this run

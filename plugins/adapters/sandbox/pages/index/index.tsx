@@ -6,6 +6,8 @@ export const meta = definePage({
   titleI18n: { en: 'Conversations' },
   icon: 'Box',
   order: 10,
+  // ADR 0063 决策 2: the one workspace page that fills the content area; the header stays the shell's.
+  fullWidth: true,
 });
 
 /**

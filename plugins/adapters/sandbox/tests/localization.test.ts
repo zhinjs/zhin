@@ -63,6 +63,10 @@ it('uses ready.locale without remounting or replacing stored conversations and d
     useState:(initial:any)=>{const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return[slots[index],(next:any)=>{slots[index]=typeof next==='function'?next(slots[index]):next}];},
     useRef:(initial:any)=>{const index=cursor++;return slots[index]??(slots[index]={current:initial});},
     useMemo:(fn:()=>unknown)=>fn(),useCallback:(fn:unknown)=>fn,useEffect:()=>{},
+    // ADR 0063 决策 2: header actions go to the Console shell; JSX is only described, never rendered here.
+    React:{createElement:()=>null,Fragment:'fragment'},Button:'button',MessageSquare:'icon',PanelRight:'icon',
+    usePageChrome:()=>false,useMediaQuery:()=>false,DRAWER_LAYOUT_QUERY:'',COMPACT_RUNBAR_QUERY:'',
+    cn:(...names:unknown[])=>names.filter(Boolean).join(' '),Wifi:'icon',WifiOff:'icon',
   };
   const render=Function(...Object.keys(bindings),code+'; return Sandbox;')(...Object.values(bindings));
   const run=()=>{cursor=0;return render();}; let view=run();

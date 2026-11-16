@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageCircle',
   order: 60,
   requiredPermissions: ['qq:read'],
+  keywords: { 'zh-CN': ['QQ 官方机器人', 'QQ 开放平台', '适配器'], en: ['qq official bot', 'qq open platform', 'adapter'] },
 });
 
 /**

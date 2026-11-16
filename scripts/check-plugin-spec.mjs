@@ -7,6 +7,8 @@
  * - 检查插件是否有测试文件
  * - 检查 plugins/ 下公开插件的市场元数据（zhin.metadata 的 descriptionI18n / category、
  *   author、有信息量的 keywords），插件市场直接展示这些字段
+ * - 官方插件页面的 UI 门禁（ADR 0063 D19）：zhin plugin check 第 1–6 条，门禁名单
+ *   scripts/plugin-ui-gate.json 中 gated 的插件违规即失败，pending 的只出报告；摘要列出所有豁免
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -16,18 +18,21 @@ import {
   informativeKeywords,
   packageAuthorName,
 } from './lib/plugin-marketplace.mjs';
+import {
+  evaluateStaticUiGate,
+  formatUiGateSummary,
+  listOfficialPluginsWithPages,
+  loadPageChecks,
+  OFFICIAL_PLUGIN_ROOTS,
+  readUiGate,
+  validateUiGate,
+  writeStepSummary,
+} from './lib/plugin-ui-gate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const pluginDirs = [
-  'plugins/adapters',
-  'packages/host',
-  'plugins/services',
-  'plugins/features',
-  'plugins/games',
-  'plugins/utils',
-];
+const pluginDirs = OFFICIAL_PLUGIN_ROOTS;
 
 /** 非插件目录（共享代码、工具文件夹） */
 const SKIP_PLUGIN_NAMES = new Set(['common']);
@@ -231,6 +236,29 @@ function scanPluginDir(dir) {
 // 扫描所有插件目录
 for (const dir of pluginDirs) {
   scanPluginDir(dir);
+}
+
+// 官方插件页面 UI 门禁（ADR 0063 D19 / D20）
+const uiGate = readUiGate(repoRoot);
+for (const problem of uiGate.problems) violations.push({ plugin: 'scripts/plugin-ui-gate.json', issue: problem });
+const pluginsWithPages = listOfficialPluginsWithPages(repoRoot);
+for (const { plugin, message } of validateUiGate(uiGate.gate, pluginsWithPages)) {
+  violations.push({ plugin, issue: `UI gate: ${message}` });
+}
+const { checkPluginPageUi, formatPageUiFinding } = await loadPageChecks(repoRoot);
+const uiReports = new Map(pluginsWithPages.map((plugin) => [plugin, checkPluginPageUi(path.join(repoRoot, plugin))]));
+const uiResult = evaluateStaticUiGate(uiGate.gate, uiReports, formatPageUiFinding);
+for (const { plugin, message } of uiResult.errors) violations.push({ plugin, issue: `UI gate (ADR 0063): ${message}` });
+writeStepSummary(formatUiGateSummary('官方插件页面 UI（zhin plugin check 第 1–6 条）', uiResult));
+const uiReportedByPlugin = new Map();
+for (const { plugin } of uiResult.reported) uiReportedByPlugin.set(plugin, (uiReportedByPlugin.get(plugin) ?? 0) + 1);
+console.log(`Plugin UI gate: ${uiGate.gate.gated.length} gated, ${uiGate.gate.pending.length} pending, ${uiResult.exemptions.length + uiResult.auditExemptions.length} exemption(s).`);
+for (const [plugin, count] of uiReportedByPlugin) console.log(`  report only (pending): ${plugin}: ${count} finding(s)`);
+for (const exemption of uiResult.exemptions) {
+  console.log(`  exemption: ${exemption.plugin} ${exemption.file}:${exemption.line} rule ${exemption.rules.join(',')}: ${exemption.reason}`);
+}
+for (const exemption of uiResult.auditExemptions) {
+  console.log(`  audit exemption: ${exemption.plugin} ${exemption.file}:${exemption.line} ${exemption.check}: ${exemption.reason}`);
 }
 
 if (violations.length) {

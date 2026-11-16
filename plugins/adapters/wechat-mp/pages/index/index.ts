@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'MessageSquare',
   order: 75,
   requiredPermissions: ['wechat-mp:read'],
+  keywords: { 'zh-CN': ['公众号', '微信', '订阅号', '服务号'], en: ['wechat', 'official account'] },
 });
 
 /**

@@ -6,6 +6,7 @@ export const meta = definePage({
   icon: 'Send',
   order: 74,
   requiredPermissions: ['telegram:read'],
+  keywords: { 'zh-CN': ['电报', 'TG', '适配器'], en: ['tg', 'bot api', 'adapter'] },
 });
 
 /**
