@@ -254,7 +254,7 @@ ai:
     execSecurity: allowlist       # deny | allowlist (default) | full
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # allowlist when execPreset=custom
-    execApprovalMode: ask         # ask (default) | bypass | auto
+    execApprovalMode: ask         # auto (default) | ask | bypass
     gitStatus: true               # default true: one-line git status in the prompt (skipped outside git repos)
     contextPaths: []              # extra context files for the system prompt (~ and relative paths ok)
     systemPromptMaxChars: 100000  # total system prompt character limit

@@ -34,7 +34,7 @@ export default defineEvalCase({
     },
     {
       toolCalls: [
-        { name: 'follow_up', args: { mail_id: 'm3', content: 'Now look up the region code for staging.' } },
+        { name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Now look up the region code for staging.' } },
       ],
     },
     {
@@ -51,7 +51,7 @@ export default defineEvalCase({
   ],
   expect: {
     toolsCalled: ['board_write', 'ask', 'board_read', 'follow_up', 'lookup_docs'],
-    modelInputContains: ['env=staging', '[Follow-up on m3]'],
+    modelInputContains: ['env=staging', '[Follow-up on m-eval-3]'],
     outboundContains: ['ap-east-1'],
     modelSteps: 7,
   },

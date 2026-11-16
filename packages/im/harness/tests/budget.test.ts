@@ -19,8 +19,12 @@ function clip(want: Part, rem: BudgetAmounts): Part {
 describe('InMemoryBudgetLedger', () => {
   it('uses incrementing default ids and custom idFactory', () => {
     const l = new InMemoryBudgetLedger();
-    expect(l.openRoot(A(1))).toBe('g1');
-    expect(l.openRoot(A(1))).toBe('g2');
+    const first = l.openRoot(A(1));
+    const run = /^g-([0-9a-z]+)-1$/.exec(first)?.[1];
+    expect(run).toBeTruthy();
+    expect(l.openRoot(A(1))).toBe(`g-${run}-2`);
+    // #1250 b35: a new ledger (an instance restart) never repeats an id.
+    expect(new InMemoryBudgetLedger().openRoot(A(1))).not.toBe(first);
     let i = 0;
     const c = new InMemoryBudgetLedger({ idFactory: () => `x${i++}` });
     expect(c.openRoot(A(1))).toBe('x0');

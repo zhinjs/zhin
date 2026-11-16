@@ -4,10 +4,7 @@
  * the service people configured. Read-only; any failure means "no names", never an error.
  */
 import { resolve } from 'node:path';
-import { createConfigDocument } from '@zhin.js/runtime';
-import { DEFAULT_ROOT_CONFIG_FILE_NAME } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
-import { findConfigFile } from '@zhin.js/gateway/project';
+import { createCliProjectDatabaseHost } from './project-database.js';
 import { createProviderDisplayIndex, type ProviderDisplayIndex } from '../inference/provider-display.js';
 
 export async function loadProviderDisplay(root: string): Promise<ProviderDisplayIndex | undefined> {
@@ -20,15 +17,7 @@ export async function loadProviderDisplay(root: string): Promise<ProviderDisplay
   }
   let stop: (() => Promise<void>) | undefined;
   try {
-    const selected = findConfigFile(root);
-    const file = selected ? `${root}/${selected}` : `${root}/${DEFAULT_ROOT_CONFIG_FILE_NAME}`;
-    let document: Record<string, unknown> = {};
-    try {
-      document = ((await createConfigDocument(file).read()).document ?? {}) as Record<string, unknown>;
-    } catch {
-      document = {};
-    }
-    const database = createDatabaseHost(await resolveDatabaseConfig(root, document));
+    const database = await createCliProjectDatabaseHost(root);
     if (!['sqlite', 'mysql', 'pg'].includes(database.dialect)) return undefined;
     const repository = new agent.DatabaseInferenceRepository({ database, normalizeGraph: provider.normalizeProviderGraph });
     await database.start();

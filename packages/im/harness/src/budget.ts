@@ -35,6 +35,7 @@ import {
   type BudgetSnapshot,
   type GrantId,
 } from './contracts.js';
+import { createRunScopedIdFactory } from './ids.js';
 
 type Mutable = { -readonly [K in BudgetKey]: number };
 
@@ -62,8 +63,8 @@ export class InMemoryBudgetLedger implements BudgetLedger {
   private readonly idFactory: () => GrantId;
 
   constructor(options: InMemoryBudgetLedgerOptions = {}) {
-    let n = 0;
-    this.idFactory = options.idFactory ?? (() => `g${++n}`);
+    // Run-scoped so grant ids never repeat across restarts (#1250 b35).
+    this.idFactory = options.idFactory ?? createRunScopedIdFactory('g');
   }
 
   openRoot(amounts: BudgetAmounts): GrantId {

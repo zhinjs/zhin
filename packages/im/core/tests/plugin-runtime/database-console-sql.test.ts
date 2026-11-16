@@ -48,6 +48,7 @@ describe('Console SQL statement analysis', () => {
     expect(writeConsoleStatements('UPDATE t SET a = 1; DELETE FROM u', 'pg')).toHaveLength(2);
     expect(writeConsoleStatements('SELECT 1 FROM console_conversations', 'sqlite')).toHaveLength(1);
     expect(refusal(() => writeConsoleStatements('INSERT INTO agent_schedule_migration VALUES (1)', 'sqlite'))).toBe('protected_table');
+    expect(refusal(() => writeConsoleStatements('DELETE FROM engagement_event_migrations', 'sqlite'))).toBe('protected_table');
     expect(refusal(() => writeConsoleStatements('SET ROLE admin', 'pg'))).toBe('refused_statement');
     expect(refusal(() => writeConsoleStatements('SELECT 1;'.repeat(51), 'pg'))).toBe('multi_statement');
   });

@@ -619,7 +619,8 @@ assistant:
 ### 定时任务里的工具与审批（#1250）
 
 - **选工具**：任务有执行计划（`schedule_preview` 预演后保存，或 `schedule_add` 传 `tools` / `skills`）时按计划给工具；没有计划，或计划里工具和技能都为空时，按提示词自动挑选（trace 里 `capability_resolution` 的 `resolvedBy: affinity`，空计划另带 `warnings: ["empty_execution_plan"]`）。一个工具都没选到时带 `no_tools` 警告。`schedule_add` 收到空计划不会拒绝，但会在结果里提示先预演。
-- **审批**：定时任务是无人值守的回合，没有人能当场确认。`execApprovalMode: auto`（默认）时，需要审批的工具交给审核 Agent 判断：批准才执行；拒绝、要求转问人、超时或出错都按拒绝处理，不会去问任何人。判断结果写进 trace（`unattended_review`）。`ask` / `bypass` 下仍直接拒绝。必须人工确认的工具（`requiresApproval: 'human'`）、危险工具硬闸和「读取外部内容后的高危动作」确认在无人值守时一律拒绝。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
+- **审批**：定时任务是无人值守的回合，没有人能当场确认。`execApprovalMode: auto`（默认）时，需要审批的工具交给审核 Agent 判断：批准才执行；拒绝、要求转问人、超时或出错都按拒绝处理，不会去问任何人。判断结果写进 trace（`unattended_review`）。`ask` / `bypass` 下仍直接拒绝。必须人工确认的工具（`requiresApproval: 'human'`）、危险工具硬闸和「读取外部内容后的高危动作」确认在无人值守时一律拒绝。
+- **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 保持默认的 `external_content`（不设为 `off`），无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
 - **预演**：`schedule_preview` 的结果列出到点时会被拒的工具（`unattended_approval.denied`）和要交给审核 Agent 的工具（`unattended_approval.reviewed`）。只是提示，实际以每次调用的判断为准。
 - **任务状态**：一次运行用了兜底文案、没有任何工具结果且回复为空，或有工具被拒时，记为 `degraded`（未完成），`last_error` 写明原因和 `zhin trace <回合 id>`；`zhin watch` 显示 `last:degraded` 和原因，`zhin schedule list` 显示「上次」一行。开启 `notifyOnFailure` 时会发「[任务未完成]」提醒；如果送达的回复本身就是兜底说明，不再重复提醒。
 - **兜底文案**：模型没有给出回复时，说明按实际原因区分（没有可用工具 / 哪个工具被拒 / 模型空回复）。定时任务的说明带任务名、任务 id 和 `zhin trace <回合 id>`，不会建议发 `/reset`。

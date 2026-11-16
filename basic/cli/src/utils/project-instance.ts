@@ -124,7 +124,8 @@ export interface InstanceCliModule {
   createDatabaseHost(config: never): ProjectDatabaseHost;
   parseComponentDefinition(value: unknown): ComponentDefinitionView;
   renderToSegments(node: never, options: Readonly<Record<string, unknown>>): Promise<readonly unknown[]>;
-  openProjectEngagementJournal(root: string): Promise<{ readonly journal: EngagementJournalView; close(): Promise<void> } | null>;
+  /** `legacyPending` (#1250 b35): pre-b35 records the instance has not split yet. */
+  openProjectEngagementJournal(root: string): Promise<{ readonly journal: EngagementJournalView; readonly legacyPending?: boolean; close(): Promise<void> } | null>;
   describeEngagement(engagementId: string, events: readonly unknown[]): { readonly summary: unknown; readonly board: unknown };
   formatEngagementCollaborationGraph(summary: never, events?: readonly never[]): string;
   formatEngagementList(summaries: readonly never[]): string;

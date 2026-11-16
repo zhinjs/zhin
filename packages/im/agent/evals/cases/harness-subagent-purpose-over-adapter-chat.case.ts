@@ -16,7 +16,7 @@ export default defineEvalCase({
   script: [
     { model: 'sandbox-chat', toolCalls: [{ name: 'delegate', args: { agent: 'planner', brief: 'List a three-line weekend plan.' } }] },
     { actor: 'planner', model: 'planner-model', text: '周六爬山\n周日看书\n周日晚上做饭' },
-    { model: 'sandbox-chat', toolCalls: [{ name: 'follow_up', args: { mail_id: 'm3', content: 'Keep it short.', budget: { modelCalls: 1, tokens: 250 } } }] },
+    { model: 'sandbox-chat', toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Keep it short.', budget: { modelCalls: 1, tokens: 250 } } }] },
     { actor: 'planner', model: 'planner-model', text: '已经很短了。' },
     { model: 'sandbox-chat', toolCalls: [{ name: 'ask', args: { agent: 'planner', question: 'Anything else?', budget: { modelCalls: 1, tokens: 250 } } }] },
     { actor: 'planner', model: 'planner-model', text: '没有了。' },
