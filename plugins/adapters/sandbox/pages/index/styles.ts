@@ -181,8 +181,12 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-media-video { display: block; max-width: min(360px, 92%); max-height: 288px; margin: var(--console-space-1) 0; border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: var(--sb-muted); }
 .zhin-sandbox .sandbox-media-audio { display: block; width: 100%; max-width: 384px; height: 40px; margin: var(--console-space-2) 0; }
 .zhin-sandbox .sandbox-html-frame { display: block; width: 100%; min-width: 0; margin: var(--console-space-1) 0; border: 0; border-radius: var(--console-radius-2); background: transparent; }
-.zhin-sandbox .sandbox-html-scaled { width: 100%; min-width: 0; margin: var(--console-space-1) 0; overflow: hidden; border-radius: var(--console-radius-2); }
-.zhin-sandbox .sandbox-html-scaled > .sandbox-html-frame { margin: 0; max-width: none; border-radius: 0; }
+/* #1250 command-menu-unreadable-in-sandbox: the scaled box takes the message column's width (never the
+   design width of its frame), and the absolutely positioned frame stays out of the bubble's sizing. */
+.zhin-sandbox .sandbox-html-scaled { position: relative; width: 100%; min-width: 0; margin: var(--console-space-1) 0; overflow: hidden; border-radius: var(--console-radius-2); }
+.zhin-sandbox .sandbox-html-scaled > .sandbox-html-frame { position: absolute; top: 0; left: 0; margin: 0; max-width: none; border-radius: 0; }
+.zhin-sandbox .agent-playground-message-main:has(.sandbox-html-scaled),
+.zhin-sandbox .agent-playground-message-content:has(.sandbox-html-scaled) { width: 100%; min-width: 0; }
 .zhin-sandbox .sandbox-reply-quote { margin-bottom: var(--console-space-1); padding: var(--console-space-1) var(--console-space-2); border: 1px dashed var(--sb-input); border-radius: var(--console-radius-1); font-size: var(--console-text-label); color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-forward { display: grid; gap: var(--console-space-1); margin: var(--console-space-1) 0; padding: var(--console-space-2); border: 1px solid var(--sb-border); border-radius: var(--console-radius-1); background: var(--sb-muted); font-size: var(--console-text-label); }
 .zhin-sandbox .sandbox-forward-title { font-weight: var(--console-weight-strong); }
