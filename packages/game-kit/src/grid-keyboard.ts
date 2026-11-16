@@ -6,7 +6,8 @@ import { segment } from '@zhin.js/core';
 import type { SendContent } from '@zhin.js/core/runtime';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { gameMessages } from './messages.js';
-import { buildChoiceFallbackMap, type ChoiceOption } from './choice-keyboard.js';
+import type { ChoiceOption } from './choice-keyboard.js';
+import { buildOrdinalFallbackMap } from './choice-label.js';
 
 import { applyInteractionProfile } from './interaction-profiles.js';
 
@@ -51,6 +52,13 @@ export interface GridKeyboardOptions<T = unknown> {
   postChoicesProfile?: 'terminal';
   /** terminal 私聊 auto-enter */
   channelType?: string;
+  /**
+   * 数字回复的编号方式：`sequential`（默认，可落子格子依次 1..n）或 `position`
+   * （按棋盘位置行优先 1..rows×cols，已占格子的号码不复用，例如井字棋 1–9）。
+   */
+  numbering?: 'sequential' | 'position';
+  /** 正文末尾的统一回复提示「回复序号或按钮文字也可以」（默认有可点按钮时添加；`false` 不加）。 */
+  replyHint?: 'ordinal-or-label' | false;
 }
 
 /**
@@ -60,13 +68,14 @@ export function buildGridFallbackMap(
   gamePrefix: string,
   sessionId: string,
   cells: GridCell[],
+  numbering: 'sequential' | 'position' = 'sequential',
 ): Record<string, string> {
   const map: Record<string, string> = {};
   let n = 1;
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i];
     if (cell && !cell.disabled) {
-      map[String(n)] = `${gamePrefix}:${sessionId}:${i}`;
+      map[String(numbering === 'position' ? i + 1 : n)] = `${gamePrefix}:${sessionId}:${i}`;
       n++;
     }
   }
@@ -92,6 +101,8 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
     postChoices,
     postChoicesProfile = 'terminal',
     channelType,
+    numbering = 'sequential',
+    replyHint = 'ordinal-or-label',
   } = options;
 
   const buttonRows: ReturnType<typeof segment.button>[][] = [];
@@ -117,7 +128,7 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
     buttonRows.push(row);
   }
 
-  const fallback = buildGridFallbackMap(gamePrefix, sessionId, cells);
+  const fallback = buildGridFallbackMap(gamePrefix, sessionId, cells, numbering);
 
   const textLines = [statusLine];
   if (!omitAsciiBoard && renderAscii) {
@@ -142,9 +153,14 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
         );
       }),
     );
-    // postChoices 编号从可落子格子数后续起，避免覆盖格子数字映射
-    Object.assign(fallback, buildChoiceFallbackMap(gamePrefix, sessionId, postChoices, Object.keys(fallback).length + 1));
+    // postChoices 编号从可落子格子数（按位置编号时从格子总数）后续起，避免覆盖格子数字映射
+    const after = numbering === 'position' ? cells.length + 1 : Object.keys(fallback).length + 1;
+    Object.assign(fallback, buildOrdinalFallbackMap(gamePrefix, sessionId, postChoices, after));
   }
+
+  const actionable = (!terminal && cells.some(cell => !cell.disabled))
+    || (postChoices ?? []).some(choice => !choice.disabled);
+  if (replyHint && actionable) textLines.push(gameMessages(options.locale, 'replyOrdinalOrLabel'));
 
   const parts = [
     segment.text(textLines.join('\n')),

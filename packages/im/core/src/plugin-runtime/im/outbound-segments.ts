@@ -264,7 +264,7 @@ export function applyOutboundInteractivePolicy(
     const data = item.data as KeyboardSegmentData;
     const remembered = remember?.(effectiveKeyboardFallbackMap(data));
     const map = remembered && typeof remembered === 'object' && !Array.isArray(remembered) ? remembered : undefined;
-    const projected = map ? { ...data, fallback: { hint: data.fallback?.hint ?? '', map } } : data;
+    const projected = map ? { ...data, fallback: { ...data.fallback, hint: data.fallback?.hint ?? '', map } } : data;
     return { type: 'text', data: { text: renderKeyboardAsText(projected, map) } };
   });
 }

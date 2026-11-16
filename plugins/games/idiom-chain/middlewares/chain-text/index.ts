@@ -35,7 +35,7 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, parsed.sessionId, parsed.choiceId) });
           return;
         }
@@ -59,7 +59,7 @@ export default defineMiddleware<Message>({
       const payload = resolveGameTextPayload(raw, map);
       const parsed = payload ? parseChoicePayload(payload, CHAIN_PREFIX) : null;
       if (parsed?.sessionId === session.id) {
-        await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+        await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, session.id, parsed.choiceId) });
         return;
       }
@@ -67,9 +67,9 @@ export default defineMiddleware<Message>({
 
     // 仅把 2-8 个汉字的纯文本当成语作答，其余放行
     if (/^[\u4e00-\u9fff]{2,8}$/.test(raw)) {
-      await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+      const consumed = await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => processIdiomText(services, message, raw) });
-      return;
+      if (consumed) return;
     }
 
     await next();

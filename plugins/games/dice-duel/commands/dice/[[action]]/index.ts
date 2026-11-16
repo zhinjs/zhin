@@ -8,7 +8,9 @@ export default defineCommand({
   descriptionI18n: { en: 'Dice Duel: roll and compare' },
   alias: ['骰子对决'],
   preferredAliasI18n: { 'zh-CN': '骰子对决' },
-  params: { action: { type: 'string', default: '' } },
+  params: { action: { type: 'string', default: '',
+    // 近似指令提示里列出真实子命令，而不是 `[action]`（#1250）。
+    suggestions: ['start', 'continue', 'quit'], suggestionsI18n: { 'zh-CN': ['开始', '继续', '退出'] } } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeDiceAction(String(params.action ?? ''));
     if (!action || action === 'help') return getDiceHelp({ locale, formatCommand });

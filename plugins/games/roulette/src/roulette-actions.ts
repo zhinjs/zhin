@@ -69,8 +69,17 @@ const messages = createMessages({
 export function getRouletteHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const command = message.formatCommand?.('roulette');
   const actions = ['open', 'join', 'start', 'fire', 'leave', 'cancel', 'status', 'mute', 'mute-on', 'mute-off'] as const;
+  // 子命令与命令名同一种语言（plugins/games/README.md「命令命名约定」）：`俄罗斯轮盘 开局` / `roulette open`。
+  const zh = command !== undefined && /\p{Script=Han}/u.test(command);
   return [messages(message.locale, 'title'),
-    ...(command === undefined ? [] : actions.map(action => `${command} ${action} — ${messages(message.locale, action)}`)),
+    ...(command === undefined ? [] : actions.map(action =>
+      `${command} ${zh ? ZH_ACTION_NAMES[action] : action} — ${messages(message.locale, action)}`)),
     '', messages(message.locale, 'rules')].join('\n');
 }
 export const ROULETTE_HELP = getRouletteHelp();
+
+/** 中文命令名下显示的子命令（都在 ACTION_WORDS 里）。 */
+const ZH_ACTION_NAMES = {
+  open: '开局', join: '加入', start: '开始', fire: '开枪', leave: '离开', cancel: '取消', status: '状态',
+  mute: '禁言', 'mute-on': '开启禁言', 'mute-off': '关闭禁言',
+} as const;

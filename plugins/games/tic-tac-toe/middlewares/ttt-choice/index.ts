@@ -30,7 +30,7 @@ export default defineMiddleware<Message>({
       if (restart?.choiceId === 'restart') {
         const session = await services.session.getById(restart.sessionId);
         if (session?.channel_key === ch) {
-          await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content),
+          await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => restartFromTerminal(services, message, restart.sessionId) });
           return;
         }
@@ -39,7 +39,7 @@ export default defineMiddleware<Message>({
       if (move) {
         const session = await services.session.getById(move.sessionId);
         if (session?.channel_key === ch) {
-          await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content),
+          await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleMove(services, message, move.sessionId, move.cell) });
           return;
         }
@@ -61,7 +61,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content),
+    await replyGameOperation({ session: services.session, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleMove(services, message, session.id, move.cell) });
   },
 });

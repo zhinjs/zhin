@@ -79,6 +79,51 @@ plugins:
     expect(output).not.toContain('obsolete');
   });
 
+  it('disabling a plugin changes only disable_plugins, keeping key-line comments elsewhere (#1250 config-write-moves-inline-comment)', async () => {
+    const original = `# project config
+ai:
+  personalPrincipals:
+    "user:7f3a": # Console 所有者（sandbox）
+      - qq:12345
+    team: # 同事
+      sandbox: [alice, bob]
+  model: gpt # inline
+disable_plugins:
+  - repeater
+plugins:
+  - code-runner
+  - repeater
+http: { port: 8086 }
+`;
+    const { file } = await configFile(original);
+    const adapter = new YamlConfigDocument(file);
+    const prepared = await adapter.prepare(await adapter.read(), [
+      { op: 'set', path: ['disable_plugins'], value: ['repeater', 'code-runner'] },
+    ]);
+    await prepared.commit();
+    const output = await readFile(file, 'utf8');
+
+    expect(output).toBe(original.replace('disable_plugins:\n  - repeater\n', 'disable_plugins:\n  - repeater\n  - code-runner\n'));
+  });
+
+  it('keeps a key-line comment in place inside the entry that changed (#1250)', async () => {
+    const { file } = await configFile(`ai:
+  personalPrincipals:
+    "user:7f3a": # Console 所有者
+      - qq:12345
+  model: gpt
+`);
+    const adapter = new YamlConfigDocument(file);
+    const prepared = await adapter.prepare(await adapter.read(), [{ op: 'set', path: ['ai', 'model'], value: 'claude' }]);
+    await prepared.commit();
+    expect(await readFile(file, 'utf8')).toBe(`ai:
+  personalPrincipals:
+    "user:7f3a": # Console 所有者
+      - qq:12345
+  model: claude
+`);
+  });
+
   it('replaces source with optimistic concurrency and preserves exact editor text', async () => {
     const { file } = await configFile('http:\n  port: 1000\n');
     const document = new YamlConfigDocument(file);

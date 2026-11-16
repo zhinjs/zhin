@@ -35,7 +35,7 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, parsed.sessionId, parsed.choiceId) });
           return;
         }
@@ -61,7 +61,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, session.id, 'roll') });
   },
 });

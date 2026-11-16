@@ -32,7 +32,7 @@ export default defineMiddleware<Message>({
     if (payloadFromText?.startsWith(`${DUNGEON_PREFIX}:`)) {
       const parsed = parseChoicePayload(payloadFromText, DUNGEON_PREFIX);
       if (parsed) {
-        await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content),
+        await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleDungeonChoice(
           service,
           message,
@@ -62,7 +62,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content),
+    await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleDungeonChoice(
       service,
       message,

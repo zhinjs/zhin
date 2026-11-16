@@ -636,7 +636,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 case 'md':
                     return <MarkdownContent key={index} text={typeof d.text === 'string' ? d.text : typeof d.content === 'string' ? d.content : segmentFallbackText(segment) ?? ''} className={isSent ? 'zhin-markdown--inverse' : undefined} />
                 case 'html':
-                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')} />
+                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')}
+                        width={typeof d.width === 'number' ? d.width : undefined} />
                 case 'code':
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':

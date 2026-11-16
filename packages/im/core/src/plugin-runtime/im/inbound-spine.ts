@@ -43,7 +43,7 @@ import type {
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type { MessageDispatchOutcome } from './message-dispatcher.js';
 import { formatConversationLog } from './message-events.js';
-import { enterInboundOutcomeStage, reportInboundOutcome } from './inbound-outcome-ledger.js';
+import { enterInboundOutcomeStage, inboundOutcomeReplied, reportInboundOutcome } from './inbound-outcome-ledger.js';
 import type { MessageOutcomeCandidate } from './message-outcome.js';
 export {
   arbitrateRoomInboundDeduplication,
@@ -528,8 +528,14 @@ export async function runInboundMiddlewareAndSpine(
   const outcome = isMiddlewareIndex(middleware)
     ? await middleware.runInbound(message, terminal, {
         stop: (owner): InboundOutcome => {
-          reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware',
-            visibility: 'admin', owner });
+          // #1250: a middleware that answered the message itself (game input, menus) and then
+          // stopped dispatch handled it; only a stop without any delivered reply is a policy drop.
+          if (inboundOutcomeReplied(message)) {
+            reportInboundOutcome(message, { outcome: 'handler_replied', reason: 'middleware_replied', stage: 'middleware', owner });
+          } else {
+            reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware',
+              visibility: 'admin', owner });
+          }
           diagnostics?.route('middleware');
           diagnostics?.step('middleware', 'stopped');
           return { dispatch: { matched: true, command: 'middleware', owner } };

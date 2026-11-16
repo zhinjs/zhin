@@ -195,7 +195,7 @@ export function sessionSummary(session: AdvSessionRow): string {
 const messages = createMessages({
   invalidScene: { 'zh-CN': '场景数据异常，请结束当前冒险后重新开始。', en: 'The scene is unavailable. End this adventure and start again.' },
   active: { 'zh-CN': '你已有进行中的冒险。', en: 'You already have an active adventure.' },
-  activeHint: { 'zh-CN': '发送「{command} continue」继续，或「{command} quit」放弃。', en: 'Send “{command} continue” to continue or “{command} quit” to leave.' },
+  activeHint: { 'zh-CN': '发送「{command} 继续」继续，或「{command} 退出」放弃。', en: 'Send “{command} continue” to continue or “{command} quit” to leave.' },
   channelBusy: { 'zh-CN': '本频道已有玩家 {player} 的冒险进行中。', en: '{player} already has an adventure in progress in this channel.' },
   ended: { 'zh-CN': '冒险不存在或已结束。', en: 'This adventure does not exist or has ended.' },
   otherPlayer: { 'zh-CN': '这是别人的冒险。', en: 'This adventure belongs to another player.' },

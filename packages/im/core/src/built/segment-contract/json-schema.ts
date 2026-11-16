@@ -171,6 +171,7 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
       fallback: interactiveDataObject({
         hint: { type: 'string' },
         map: { type: 'object', additionalProperties: { type: 'string' } },
+        layout: { type: 'string', enum: ['list', 'inline'] },
       }, ['hint', 'map']),
     }, ['rows'])),
     strictBranch('action', interactiveDataObject({

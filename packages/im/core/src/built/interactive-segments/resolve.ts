@@ -65,6 +65,15 @@ export function renderKeyboardAsText(data: KeyboardSegmentData, allocatedMap?: R
   const lines: string[] = [];
   const flat = data.rows.flat();
   const entries = Object.entries(allocatedMap ?? effectiveKeyboardFallbackMap(data)).sort(([a], [b]) => Number(a) - Number(b));
+  if (data.fallback?.layout === 'inline' && entries.length) {
+    if (data.fallback.hint) lines.push(data.fallback.hint);
+    lines.push(entries.map(([key, payload]) => {
+      const label = flat.find((b) => !b.disabled && b.payload === payload)?.label.trim() ?? '·';
+      return `${key}. ${label}`;
+    }).join('  '));
+    for (const button of flat) if (button.disabled) lines.push(`— ${button.label} (不可用)`);
+    return lines.join('\n');
+  }
   if (!entries.length) {
     lines.push('当前无可用操作。');
   } else if (data.fallback?.hint) {

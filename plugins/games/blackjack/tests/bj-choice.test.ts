@@ -116,3 +116,31 @@ describe('blackjack bj-choice middleware (text fallback)', () => {
     expect(replies.length).toBe(0);
   });
 });
+
+describe('blackjack bj-choice middleware accepts the button text (#1250)', () => {
+  beforeEach(() => {
+    replies.length = 0;
+    nextCalls = 0;
+    services = createMemoryGameServices(['bj_sessions'], createServices);
+  });
+
+  it.each(['要牌', '➕ 要牌', ' 停 牌 ', '放弃'])('「%s」 is game input: one reply, not passed on', async (text) => {
+    const input = makeInput(text);
+    await services.createSession(input as never);
+
+    await middleware.handle(makeCtx(input), next);
+
+    expect(nextCalls).toBe(0);
+    expect(replies.length).toBe(1);
+  });
+
+  it('passes ordinary chat on to the next middleware', async () => {
+    const input = makeInput('要牌吗？');
+    await services.createSession(input as never);
+
+    await middleware.handle(makeCtx(input), next);
+
+    expect(nextCalls).toBe(1);
+    expect(replies.length).toBe(0);
+  });
+});

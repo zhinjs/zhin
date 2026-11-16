@@ -23,9 +23,18 @@ const messages = createMessages({
 export function getDungeonHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const command = message.formatCommand?.('dungeon');
   const actions = ['start', 'join', 'ready', 'go', 'explore', 'attack', 'defend', 'potion', 'status', 'abort'] as const;
-  return [messages(message.locale, 'title'), ...(command === undefined ? [] : actions.map(action => `${command} ${action} — ${messages(message.locale, action)}`))].join('\n');
+  // 子命令与命令名同一种语言（plugins/games/README.md「命令命名约定」）：`地牢远征 开始` / `dungeon start`。
+  const zh = command !== undefined && /\p{Script=Han}/u.test(command);
+  return [messages(message.locale, 'title'), ...(command === undefined ? [] : actions.map(action =>
+    `${command} ${zh ? ZH_ACTION_NAMES[action] : action} — ${messages(message.locale, action)}`))].join('\n');
 }
 export const DUNGEON_HELP = getDungeonHelp();
+
+/** 中文命令名下显示的子命令（都在 {@link ACTION_ALIASES} 里）。 */
+const ZH_ACTION_NAMES = {
+  start: '开始', join: '加入', ready: '准备', go: '出发', explore: '探索', attack: '攻击', defend: '防御',
+  potion: '药水', status: '状态', abort: '放弃',
+} as const;
 
 const ACTION_ALIASES: Readonly<Record<string, string>> = {
   '': 'status',

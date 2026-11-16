@@ -98,8 +98,7 @@ export function buildDungeonView(
     choices,
     terminal: state.phase === 'completed',
     buttonsPerRow: 2,
-    fallbackHint: choices.map((choice, index) =>
-      `${index + 1} ${choice.label}`).join(' · '),
+    locale,
     interactionProfile: state.phase === 'completed' ? 'terminal' : 'gameplay',
     channelType,
   });

@@ -327,7 +327,7 @@ describe('message views only expose the report port (review of #1281)', () => {
     const port = (message as unknown as Record<symbol, () => unknown>)[inboundOutcomeSink]!() as Record<string, unknown>;
     expect(port).not.toBe(ledger);
     expect(Object.isFrozen(port)).toBe(true);
-    expect(Object.keys(port).sort()).toEqual(['enter', 'report']);
+    expect(Object.keys(port).sort()).toEqual(['enter', 'replied', 'report']);
     expect(typeof (port as { settle?: unknown }).settle).toBe('undefined');
     expect(() => (port as unknown as InboundOutcomeLedger).settle()).toThrow(TypeError);
     reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'command' });

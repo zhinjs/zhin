@@ -26,7 +26,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    await replyGameOperation({ session: services.sessions, player: message, reply: content => context.input.$reply(content),
+    await replyGameOperation({ session: services.sessions, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => runRouletteCommand(context, context.input, 'fire') });
   },
 });

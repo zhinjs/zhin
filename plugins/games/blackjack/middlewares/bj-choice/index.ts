@@ -35,7 +35,7 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, parsed.sessionId, parsed.choiceId) });
           return;
         }
@@ -58,7 +58,7 @@ export default defineMiddleware<Message>({
       const payload = resolveGameTextPayload(raw, map);
       const parsed = payload ? parseChoicePayload(payload, BJ_PREFIX) : null;
       if (parsed?.choiceId === 'restart') {
-        await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+        await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, parsed.sessionId, 'restart') });
         return;
       }
@@ -78,7 +78,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content), input: context.input,
       run: () => handleChoice(services, message, session.id, parsed.choiceId) });
   },
 });
