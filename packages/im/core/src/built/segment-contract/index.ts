@@ -49,6 +49,14 @@ export {
 } from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
 export {
+  OUTBOUND_SEGMENT_CATALOG,
+  OUTBOUND_SEGMENT_TYPES,
+  isOutboundSegmentType,
+  type OutboundSegmentCapability,
+  type OutboundSegmentCatalogEntry,
+  type OutboundSegmentType,
+} from './catalog.js';
+export {
   isMediaRef,
   collectSegmentMedia,
   type SegmentMediaRef,

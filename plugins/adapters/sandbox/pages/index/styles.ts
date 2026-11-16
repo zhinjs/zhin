@@ -181,8 +181,12 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-media-video { display: block; max-width: min(360px, 92%); max-height: 288px; margin: var(--console-space-1) 0; border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: var(--sb-muted); }
 .zhin-sandbox .sandbox-media-audio { display: block; width: 100%; max-width: 384px; height: 40px; margin: var(--console-space-2) 0; }
 .zhin-sandbox .sandbox-html-frame { display: block; width: 100%; min-width: 0; margin: var(--console-space-1) 0; border: 0; border-radius: var(--console-radius-2); background: transparent; }
-.zhin-sandbox .sandbox-html-scaled { width: 100%; min-width: 0; margin: var(--console-space-1) 0; overflow: hidden; border-radius: var(--console-radius-2); }
-.zhin-sandbox .sandbox-html-scaled > .sandbox-html-frame { margin: 0; max-width: none; border-radius: 0; }
+/* #1250 command-menu-unreadable-in-sandbox: the scaled box takes the message column's width (never the
+   design width of its frame), and the absolutely positioned frame stays out of the bubble's sizing. */
+.zhin-sandbox .sandbox-html-scaled { position: relative; width: 100%; min-width: 0; margin: var(--console-space-1) 0; overflow: hidden; border-radius: var(--console-radius-2); }
+.zhin-sandbox .sandbox-html-scaled > .sandbox-html-frame { position: absolute; top: 0; left: 0; margin: 0; max-width: none; border-radius: 0; }
+.zhin-sandbox .agent-playground-message-main:has(.sandbox-html-scaled),
+.zhin-sandbox .agent-playground-message-content:has(.sandbox-html-scaled) { width: 100%; min-width: 0; }
 .zhin-sandbox .sandbox-reply-quote { margin-bottom: var(--console-space-1); padding: var(--console-space-1) var(--console-space-2); border: 1px dashed var(--sb-input); border-radius: var(--console-radius-1); font-size: var(--console-text-label); color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-forward { display: grid; gap: var(--console-space-1); margin: var(--console-space-1) 0; padding: var(--console-space-2); border: 1px solid var(--sb-border); border-radius: var(--console-radius-1); background: var(--sb-muted); font-size: var(--console-text-label); }
 .zhin-sandbox .sandbox-forward-title { font-weight: var(--console-weight-strong); }
@@ -460,6 +464,43 @@ export const sandboxStyles = `
 .zhin-sandbox .sandbox-share-card-title { font-size: var(--console-text-label); font-weight: var(--console-weight-strong); }
 .zhin-sandbox .sandbox-share-card-desc, .zhin-sandbox .sandbox-share-card-url { overflow: hidden; color: var(--sb-muted-fg); font-size: var(--console-text-label); text-overflow: ellipsis; }
 .zhin-sandbox .sandbox-share-card-url { white-space: nowrap; }
+.zhin-sandbox .sandbox-share-card:has(.sandbox-share-card-audio) { flex-direction: column; align-items: stretch; }
+.zhin-sandbox .sandbox-share-card-row { display: flex; align-items: center; gap: var(--console-space-3); min-width: 0; }
+.zhin-sandbox .sandbox-share-card-link { color: inherit; text-decoration: none; }
+.zhin-sandbox .sandbox-share-card-link:hover { text-decoration: underline; }
+.zhin-sandbox .sandbox-share-card-audio { display: block; width: 100%; height: 36px; }
+
+/* ---------- ADR 0064: file / link / QR code / TTS segments ---------- */
+.zhin-sandbox .sandbox-file-card { display: flex; align-items: center; gap: var(--console-space-3); max-width: 440px; margin-top: var(--console-space-2); padding: var(--console-space-2) var(--console-space-3); border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: var(--sb-muted); }
+.zhin-sandbox .sandbox-file-card-icon { flex-shrink: 0; color: var(--sb-muted-fg); }
+.zhin-sandbox .sandbox-file-card-main { display: flex; flex: 1; flex-direction: column; gap: var(--console-space-1); min-width: 0; }
+.zhin-sandbox .sandbox-file-card-name { overflow: hidden; font-size: var(--console-text-label); font-weight: var(--console-weight-strong); text-overflow: ellipsis; white-space: nowrap; }
+.zhin-sandbox .sandbox-file-card-meta { color: var(--sb-muted-fg); font-size: var(--console-text-label); }
+.zhin-sandbox .sandbox-file-card-download { display: inline-flex; flex-shrink: 0; align-items: center; gap: var(--console-space-1); min-height: 32px; padding: 0 var(--console-space-2); border-radius: var(--console-radius-1); color: var(--sb-primary); font-size: var(--console-text-label); text-decoration: none; }
+.zhin-sandbox .sandbox-file-card-download:hover { background: var(--sb-primary-soft); }
+.zhin-sandbox .sandbox-link-card { display: inline-flex; align-items: center; gap: var(--console-space-2); max-width: 100%; margin: var(--console-space-1) 0; padding: var(--console-space-1) var(--console-space-3); border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: var(--sb-muted); color: var(--sb-primary); font-size: var(--console-text-label); text-decoration: none; }
+.zhin-sandbox .sandbox-link-card:hover { border-color: var(--sb-primary-line); }
+.zhin-sandbox .sandbox-link-card.is-inert { color: inherit; }
+.zhin-sandbox .sandbox-link-card-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zhin-sandbox .sandbox-link-card-host { flex-shrink: 0; color: var(--sb-muted-fg); }
+.zhin-sandbox .sandbox-qrcode { display: inline-flex; flex-direction: column; align-items: center; gap: var(--console-space-2); max-width: 240px; margin: var(--console-space-2) 0 0; padding: var(--console-space-3); border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: var(--sb-muted); }
+.zhin-sandbox .sandbox-qrcode-image { display: block; width: 180px; max-width: 100%; height: auto; }
+/* A QR code is read by cameras: dark modules on a light field in every theme. */
+.zhin-sandbox .sandbox-qrcode-light { fill: #fff; }
+.zhin-sandbox .sandbox-qrcode-dark { fill: #000; }
+.zhin-sandbox .sandbox-qrcode-text { max-width: 100%; overflow-wrap: anywhere; color: var(--sb-muted-fg); font-size: var(--console-text-label); text-align: center; }
+.zhin-sandbox .sandbox-qrcode-error { font-size: var(--console-text-label); }
+.zhin-sandbox .sandbox-tts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--console-space-2); margin-top: var(--console-space-1); }
+.zhin-sandbox .sandbox-tts-text { min-width: 0; overflow-wrap: anywhere; }
+.zhin-sandbox .sandbox-action-feedback { display: flex; align-items: flex-start; gap: var(--console-space-1); margin: var(--console-space-1) 0 0; color: var(--sb-muted-fg); font-size: var(--console-text-label); overflow-wrap: anywhere; }
+.zhin-sandbox .sandbox-action-feedback.is-error { color: var(--sb-danger); }
+.zhin-sandbox .sandbox-action-feedback > svg { flex-shrink: 0; margin-top: calc(var(--console-space-1) / 2); }
+.zhin-sandbox .sandbox-reactions { display: flex; flex-wrap: wrap; gap: var(--console-space-1); margin-top: var(--console-space-1); }
+.zhin-sandbox .sandbox-reaction { display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--console-space-2); border: 1px solid var(--sb-border); border-radius: var(--console-radius-full); background: var(--sb-muted); font-size: var(--console-text-label); }
+.zhin-sandbox .im-markdown-image { display: inline-block; max-width: 100%; max-height: 320px; vertical-align: middle; border-radius: var(--console-radius-1); }
+.zhin-sandbox .im-markdown-list .im-markdown-list { margin-top: var(--console-space-1); list-style: circle; }
+.zhin-sandbox .im-markdown-list .im-markdown-list .im-markdown-list { list-style: square; }
+.zhin-sandbox .im-markdown-list .im-markdown-list-ordered { list-style: lower-alpha; }
 
 /* ---------- Responsive ---------- */
 @media (width >= 64rem) {

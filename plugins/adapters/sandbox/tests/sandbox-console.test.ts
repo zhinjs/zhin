@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -155,7 +155,10 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'packages/page/index.ts'));
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
-  const pageFiles = (await readdir(join(pagesDir, 'index'))).map((name) => `index/${name}`);
+  // Recursive: renderers live in pages/index/segments/ (ADR 0064 §2).
+  const pageFiles = (await readdir(join(pagesDir, 'index'), { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(pagesDir, join(entry.parentPath, entry.name)));
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);
     await mkdir(dirname(dest), { recursive: true });

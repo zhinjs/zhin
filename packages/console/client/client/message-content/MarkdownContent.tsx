@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import {
   highlightCodeLine,
   parseMarkdown,
+  type MarkdownBlock,
   type MarkdownInline,
 } from './markdown.js';
 
@@ -14,16 +15,23 @@ function InlineContent({ content }: { readonly content: readonly MarkdownInline[
   const nodes: ReactNode[] = [];
   content.forEach((token, index) => {
     const key = `${token.type}-${index}`;
-    const value = token.value.split('\n').map((line, lineIndex, lines) => (
-      <Fragment key={`${key}-line-${lineIndex}`}>
-        {line}
-        {lineIndex < lines.length - 1 ? <br /> : null}
-      </Fragment>
-    ));
+    // ADR 0064 G5: nested formatting renders through `children`; `value` is its plain-text form.
+    const value = 'children' in token && token.children
+      ? <InlineContent content={token.children} />
+      : token.value.split('\n').map((line, lineIndex, lines) => (
+        <Fragment key={`${key}-line-${lineIndex}`}>
+          {line}
+          {lineIndex < lines.length - 1 ? <br /> : null}
+        </Fragment>
+      ));
     if (token.type === 'strong') nodes.push(<strong key={key}>{value}</strong>);
     else if (token.type === 'emphasis') nodes.push(<em key={key}>{value}</em>);
     else if (token.type === 'strike') nodes.push(<del key={key}>{value}</del>);
     else if (token.type === 'code') nodes.push(<code key={key} className="im-inline-code">{token.value}</code>);
+    else if (token.type === 'image') nodes.push(
+      // `src` passed the raster-only media allow-list in the parser (safeMarkdownImageSrc).
+      <img key={key} src={token.src} alt={token.value} loading="lazy" referrerPolicy="no-referrer" className="im-markdown-image" />,
+    );
     else if (token.type === 'link') nodes.push(
       <a key={key} href={token.href} target={token.href.startsWith('#') ? undefined : '_blank'} rel="noreferrer" className="im-message-link">{value}</a>,
     );
@@ -89,6 +97,14 @@ export function MarkdownContent({ text, className }: MarkdownContentProps) {
 
   return (
     <div className={['im-markdown-body', 'zhin-markdown', className].filter(Boolean).join(' ')}>
+      <MarkdownBlocks blocks={blocks} />
+    </div>
+  );
+}
+
+function MarkdownBlocks({ blocks }: { readonly blocks: readonly MarkdownBlock[] }) {
+  return (
+    <>
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
           const Heading = `h${block.level}` as keyof React.JSX.IntrinsicElements;
@@ -106,6 +122,7 @@ export function MarkdownContent({ text, className }: MarkdownContentProps) {
                 <li key={itemIndex} className={item.checked === undefined ? undefined : 'zhin-markdown-task'}>
                   {item.checked === undefined ? null : <input type="checkbox" checked={item.checked} readOnly aria-label={item.checked ? '已完成' : '未完成'} />}
                   <InlineContent content={item.content} />
+                  {item.children ? <MarkdownBlocks blocks={item.children} /> : null}
                 </li>
               ))}
             </List>
@@ -123,6 +140,6 @@ export function MarkdownContent({ text, className }: MarkdownContentProps) {
         }
         return null;
       })}
-    </div>
+    </>
   );
 }

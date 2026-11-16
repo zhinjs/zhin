@@ -26,6 +26,8 @@ export default defineAdapter<LarkEndpointConfig>({
         },
         quote: true,
         recall: {},
+        // ADR 0064 §5：端点以流式卡片承载回复（配置 streaming: false 时关闭，装配期告警提示不一致）。
+        streaming: { mode: 'card' },
       },
       actions: {
         recall: { scopes: ['private', 'group', 'channel'] },
