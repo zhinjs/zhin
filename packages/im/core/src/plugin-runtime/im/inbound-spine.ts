@@ -3,7 +3,7 @@ import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit'
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import type { ConversationRef, DeliveryReceipt, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { userFacingErrorText } from '@zhin.js/command';
+import { userFacingErrorText, userFacingRefusalReason } from '@zhin.js/command';
 import {
   MiddlewareIndex,
   isMiddlewareIndex,
@@ -756,8 +756,8 @@ export function isAddressedMessage(message: Pick<Message, 'conversation' | 'ment
 }
 
 function refusalReasonOf(result: MessageDispatchResult): string | undefined {
-  const reason = (result as { refusalReason?: unknown }).refusalReason;
-  return typeof reason === 'string' && /^[a-z][a-z0-9_.:-]{0,63}$/u.test(reason) ? reason : undefined;
+  // The same closed code shape `UserFacingError.reason` is kept to (one rule, in @zhin.js/command).
+  return userFacingRefusalReason((result as { refusalReason?: unknown }).refusalReason);
 }
 
 /** Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). */

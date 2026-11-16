@@ -184,13 +184,11 @@ export interface ConsoleConversationOutcome {
   readonly command?: string;
   readonly turnId?: string;
   readonly errorId?: string;
-  /** Sender-facing explanation in the requested locale. */
+  /** Sender-facing explanation in the requested locale (the operator text is not returned). */
   readonly text: string;
-  /** Operator explanation (codes and plugin names; never the redacted detail). */
-  readonly adminText: string;
 }
 
-/** `GET /conversations/outcomes` data (newest first, at most 20). */
+/** `GET /conversations/outcomes` data (newest first, at most 20; only the live connection owner's messages). */
 export interface ConsoleConversationOutcomeList {
   readonly sessionKey: string;
   /** False: the outcome log is process memory (a restart clears it). */

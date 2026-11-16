@@ -342,6 +342,23 @@ describe('attention.list item text', () => {
     expect(en.title).toBe('github / zhin-dev reports no connection state');
   });
 
+  it('keeps the pre-#1250 revision for an unchanged situation, so earlier dismissals stay valid', async () => {
+    // Literal values computed with the pre-PR state shapes (`{ transportState }` and the raw entry count).
+    const unreported = (await collectAttention({ endpoints: () => [{ adapter: 'github', name: 'zhin-dev', connected: false, phase: 'offline',
+      transportState: 'unknown', admitted: true }] }, { allows: owner })).items[0]!;
+    expect(unreported.reason?.code).toBe('state-unreported');
+    expect(unreported.revision).toBe('e147b14e2f0a3407');
+    // The title counts distinct identities (2); the revision still counts the raw entries (3), as before.
+    const imported = (await collectAttention({ chatRoles: async () => ({ hasGlobalOwner: true, claimOpen: false, pending: [],
+      personal: { at: 3, entries: [
+        { consoleUserId: 'u1', adapter: 'qq', userId: '10001' },
+        { consoleUserId: 'u1', adapter: 'qq', userId: '10001' },
+        { consoleUserId: 'u1', adapter: 'qq', userId: '10002' },
+      ] } }) }, { allows: owner })).items.find(item => item.kind === 'chat-roles.imported')!;
+    expect(imported.title).toBe('已从配置导入 2 条聊天角色');
+    expect(imported.revision).toBe('15919ec36e33f64b');
+  });
+
   it('keeps "offline" for a real failure and says when it failed and how often it retried (#1250)', async () => {
     const at = Date.UTC(2026, 10, 16, 1, 2, 3);
     const list = await collectAttention({ endpoints: () => [{ adapter: 'github', name: 'zhin-dev', connected: false, phase: 'retrying',

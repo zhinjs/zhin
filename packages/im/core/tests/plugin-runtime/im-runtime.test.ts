@@ -2,7 +2,7 @@ import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/messag
 import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
-import { addTransport, getLogger, removeTransport, setLevel } from '@zhin.js/logger';
+import { addTransport, getLevel, getLogger, removeTransport, setLevel } from '@zhin.js/logger';
 import {
   SnapshotStore,
   Scope,
@@ -5454,7 +5454,9 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     const lines: string[] = [];
     const transport = { write: (line: string) => { lines.push(line); } };
     addTransport(transport);
-    setLevel('info', getLogger('im.inbound'), true);
+    const inboundLogger = getLogger('im.inbound');
+    const previousLevel = getLevel(inboundLogger);
+    setLevel('info', inboundLogger, true);
     try {
       const privateInput = fixtureInput(fixture, 'x');
       const group = { ...privateInput.conversation, kind: 'group' as const, id: 'weather-group' };
@@ -5469,6 +5471,7 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
       expect(logged[0]).toContain('prefix_mismatch');
       expect(logged[0]).toContain('first_per_minute');
     } finally {
+      setLevel(previousLevel, inboundLogger, true);
       removeTransport(transport);
       await fixture.adapters.stop(); await fixture.store.close();
     }

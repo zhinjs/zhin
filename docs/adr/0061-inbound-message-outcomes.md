@@ -264,7 +264,7 @@ sidebar: false
 1. **结局账本 + `finally` 提交**：Core 新增 `InboundOutcomeLedger`，在 `#receiveMessage` 开头创建并挂在 `RuntimeMessage` 上（内部 symbol，经 `@zhin.js/core` 的 `reportInboundOutcome(message, candidate)` 提交候选；Agent 在 Core 之上，可直接调用）。`finally` 中 `settle()`：
    - 有候选 → 按优先级取主结局，其余为 `facets`；
    - 抛出了异常 → `internal_error`（生成 `errorId`，`logger.error` 带会话、消息 ID、阶段、插件），**原样重新抛出**，不改变适配器 `emitAccepted` 的确认语义；
-   - 日志（#1250 第 31 批，`unaddressed-message-no-record`）：未点名的静默结局（`QUIET_MESSAGE_OUTCOMES`）默认写 debug；其中 `not_addressed` 每个会话每分钟的第一条写 info（`sampled: first_per_minute`），这样实例日志里能看到群消息为什么没人回，又不会被闲聊刷屏。Sandbox 通过 `GET /api/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 绑定的会话）读取刚发消息的结局并提示原因。
+   - 日志（#1250 第 31 批，`unaddressed-message-no-record`）：未点名的静默结局（`QUIET_MESSAGE_OUTCOMES`）默认写 debug；其中 `not_addressed` 每个会话每分钟的第一条写 info（`sampled: first_per_minute`），这样实例日志里能看到群消息为什么没人回，又不会被闲聊刷屏。Sandbox 通过 `GET /api/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 绑定的会话，且只列当前连接 owner 本人或其模拟身份 `~sim:<owner>` 发出的消息，与任务结果路由按 `ownerId` 过滤一致）读取刚发消息的结局并提示原因；响应只含结局码和面向发送者的文案，不含运维文案（插件名、阶段）。
    - 没有候选 → `unrecorded` + `logger.warn({ op: 'inbound_outcome_unrecorded', lastStage })`。测试环境（`NODE_ENV=test`）的严格程度分阶段：P1–P5 期间各阶段只给自己接入的分支补结局，其余分支必然还是 `unrecorded`，所以测试中**只告警**并计入一份允许清单（`packages/im/core/tests/fixtures/unrecorded-allowlist.json`，按 `lastStage` 登记，每个阶段完成时删去自己负责的条目）；P6 起清单必须为空，测试中出现 `unrecorded` 直接抛错（与 §6 P6 一致）。
    - `IngressRoute.route` 的返回值从 `boolean` 扩展为 `boolean | IngressRouteResult { handled; outcome? }`，旧返回值继续可用。`halt { handled: true }` 必须带结局。
 2. **`check:silent-catch` 脚本**（`scripts/check-silent-catch.mjs`，并入 `check:all`）：

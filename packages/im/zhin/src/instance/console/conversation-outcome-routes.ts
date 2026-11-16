@@ -3,6 +3,9 @@
  * live Sandbox conversation, so the Sandbox page can say why a message got no reply ("not addressed",
  * "muted here", "feature disabled", …) instead of leaving the sender waiting. Reads the process-local
  * outcome log only: no message body is kept or returned, nothing is replayed or sent.
+ *
+ * Like the task results route, only the live connection owner's messages are listed: a record whose
+ * sender is neither the owner nor the owner's simulated id (ADR 0060 §5.4) is never returned.
  */
 import { jsonResponse, type HttpHost } from '@zhin.js/host-http';
 import { formatMessageOutcome, type MessageOutcomeReader, type MessageOutcomeRecord } from '@zhin.js/core/runtime';
@@ -12,8 +15,19 @@ import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWork
 import { noStore } from './no-store.js';
 
 const MAX_MESSAGE_ID = 2048;
+const LIMIT = 20;
+/** ADR 0060 §5.4: a simulation writes a client-chosen sender id as `~sim:<id>`. */
+const SIMULATED_SENDER_PREFIX = '~sim:';
 
-/** One record as the Sandbox shows it: codes, sender-facing text (never the administrator detail). */
+/** The sender ids the connection owner speaks as: their own id and its simulated form. */
+function ownerSenderIds(ownerId: string): readonly string[] {
+  return ownerId.startsWith(SIMULATED_SENDER_PREFIX) ? [ownerId] : [ownerId, `${SIMULATED_SENDER_PREFIX}${ownerId}`];
+}
+
+/**
+ * One record as the Sandbox shows it: codes and the sender-facing text. The operator text (plugin
+ * names, stage) is never returned: this route needs only `endpoint.view`.
+ */
 export function consoleConversationOutcome(record: MessageOutcomeRecord, locale: 'zh-CN' | 'en'): ConsoleConversationOutcome {
   return Object.freeze({
     id: record.id,
@@ -28,7 +42,6 @@ export function consoleConversationOutcome(record: MessageOutcomeRecord, locale:
     ...(record.turnId ? { turnId: record.turnId } : {}),
     ...(record.errorId ? { errorId: record.errorId } : {}),
     text: formatMessageOutcome(record, { audience: 'sender', locale }),
-    adminText: formatMessageOutcome(record, { audience: 'admin', locale }),
   });
 }
 
@@ -59,11 +72,12 @@ export function registerConversationOutcomeRoutes(options: Readonly<{
         if (session.status === 'invalid') {
           return jsonResponse(400, { success: false, code: 'invalid_outcome_query', error: '请提供当前连接和有效的 Sandbox 会话' });
         }
-        const records = outcomes.list({
-          conversation: { endpoint: scope.endpoint, kind: session.kind, id: session.id },
-          ...(messageId !== null ? { messageId } : {}),
-          limit: 20,
-        });
+        const conversation = { endpoint: scope.endpoint, kind: session.kind, id: session.id };
+        // Newest first across the owner's sender ids; another principal's messages are not listed.
+        const records = ownerSenderIds(scope.ownerId)
+          .flatMap(senderId => outcomes.list({ conversation, senderId, ...(messageId !== null ? { messageId } : {}), limit: LIMIT }))
+          .sort((a, b) => b.settledAt - a.settledAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+          .slice(0, LIMIT);
         return jsonResponse(200, { success: true, data: {
           sessionKey, persistent: outcomes.persistent,
           outcomes: records.map(record => consoleConversationOutcome(record, locale)),

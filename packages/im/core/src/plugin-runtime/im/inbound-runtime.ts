@@ -104,10 +104,10 @@ interface InboundRuntimeContext {
   publish(event: RuntimeMessageEvent): void;
 }
 
-/** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
 /** Conversations remembered for the per-minute `not_addressed` info line (bounded; cleared when full). */
 const QUIET_LOG_CONVERSATIONS = 2_000;
 
+/** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
 export class InboundRuntime {
   readonly #dispatcher: MessageDispatcher;
   /**

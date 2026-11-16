@@ -981,7 +981,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
             kind: 'endpoint.offline',
             severity: 'info',
             subject: { adapter: row.adapter, endpointKey: row.name },
-            state: { transportState: row.transportState, reported: false },
+            // The revision input stays what it was before #1250 split "unreported" from "offline",
+            // so an item a viewer dismissed earlier stays dismissed; "not reported" is display only.
+            state: { transportState: row.transportState },
             title: t('endpoint.unreported.title', { account }),
             detail: t('endpoint.unreported.detail'),
             reason: { category: 'state', code: 'state-unreported', message: t('endpoint.unreported.title', { account }) },
@@ -1343,7 +1345,9 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         const count = entries.length + countAttentionPersonalLinks(personal);
         const at = Math.min(state.imported?.at ?? Number.POSITIVE_INFINITY, state.personal?.at ?? Number.POSITIVE_INFINITY);
         drafts.push({ kind: 'chat-roles.imported', severity: 'info',
-          state: { at, count, ...(promoteMe ? { promoteMe: true } : {}) },
+          // The revision keeps counting raw entries (as before #1250 deduplicated the title's count),
+          // so a dismissal made before stays valid while the import record is unchanged.
+          state: { at, count: entries.length + personal.length, ...(promoteMe ? { promoteMe: true } : {}) },
           ...(personal.length ? { links: people(personal) } : {}),
           title: t('roles.imported.title', { count }),
           detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,

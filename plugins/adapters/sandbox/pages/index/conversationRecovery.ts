@@ -78,7 +78,6 @@ export interface ConversationOutcome {
   readonly addressed: boolean;
   readonly reply: 'yes' | 'no' | 'throttled';
   readonly text: string;
-  readonly adminText: string;
 }
 
 /**
