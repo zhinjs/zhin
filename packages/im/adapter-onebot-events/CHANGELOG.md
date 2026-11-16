@@ -1,5 +1,17 @@
 # @zhin.js/adapter-onebot-events
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [f370ec5]
+- Updated dependencies [48dc650]
+- Updated dependencies [19526a6]
+- Updated dependencies [f1affdd]
+- Updated dependencies [2ab7fb9]
+  - @zhin.js/core@1.11.0
+  - @zhin.js/adapter@1.3.3
+
 ## 0.0.11
 
 ### Patch Changes

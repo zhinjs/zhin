@@ -1,5 +1,27 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.1.33
+
+### Patch Changes
+
+- c9187c2: 官方插件页面补充命令面板别名 `keywords`（ADR 0063 P3，中英文各一组，例如彩票推荐补「抽奖」「双色球」，飞书适配器补「飞书」/ `feishu`），Console 的命令面板可以按别名找到这些页面。
+- Updated dependencies [8941172]
+- Updated dependencies [f370ec5]
+- Updated dependencies [48dc650]
+- Updated dependencies [a7f3a7c]
+- Updated dependencies [19526a6]
+- Updated dependencies [f1affdd]
+- Updated dependencies [2ab7fb9]
+  - @zhin.js/console-contract@1.3.1
+  - @zhin.js/core@1.11.0
+  - @zhin.js/host-http@1.6.0
+  - @zhin.js/page@1.2.1
+  - @zhin.js/adapter@1.3.3
+  - @zhin.js/agent-feature@1.1.20
+  - @zhin.js/feature-kit@1.1.19
+  - @zhin.js/skill@1.1.20
+  - @zhin.js/tool@1.1.23
+
 ## 1.1.32
 
 ### Patch Changes

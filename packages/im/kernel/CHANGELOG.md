@@ -1,5 +1,29 @@
 # @zhin.js/kernel
 
+## 1.3.0
+
+### Minor Changes
+
+- f370ec5: 认领码（ADR 0060 §3.3，zhinjs/zhin#1250 第 23 批）：
+
+  - 在私聊中直接发送「认领 <码>」/「claim <码>」即可认领，不再需要适配器的命令前缀（带前缀的 `#认领 <码>` 仍然有效）。此前配了 `commandPrefix` 的账号上，按提示发送的消息没有匹配到命令，被当作普通聊天交给了 AI。
+  - 认领开启期间（尚无全局 owner），含有当前认领码的消息（不论写法）在入站最早处由认领处理器接手：不交给 AI，不写入会话历史、trace、日志与诊断（日志与消息事件里只显示 `认领 ***`）；群聊里的码立即作废；被丢弃的带码消息（其他机器人贴出、会话未就绪）也作废码；含码的原生 `platform.receive` 事件不派发给原生 Handler。只有整条文本恰好代表一个码时才授予（`认领 <码>`、`认领:码`、`認領 码`、全角、码被空格或 `-` 拆开、末尾标点都算）；含码但还带了别的文字（`认领 码 谢谢`、码藏在长单词里）只作废码并提示，不授予，这样一条消息只比较一个候选，错误次数限制仍然有效。私聊里「认领 <一个词>」但码不对时回复错误并计次。不含当前码的消息（如群聊「claim it」）照常进 AI；已有 owner 后完全不拦截。
+  - 会话记录（`conversation_events`、Agent 会话消息）与 trace 的写入端加了兜底：只把当前开启的认领码写成 `***`，没有开启的认领时不做替换。
+  - `zhin status`、启动日志、「需要你处理」与自助提示的用法改为「在私聊中直接发送」。
+  - 新增公开导出：`@zhin.js/kernel` 的 `matchChatOwnerClaimText()` / `containsChatOwnerClaimCode()` / `registerChatOwnerClaimCode()` / `redactChatOwnerClaimText()`；`@zhin.js/core/runtime` 的 `InboundSecretGuard`（`match` / `inspectNative`）/ `InboundSecretMatch`（`handle` / `discard`）与 `ImRuntimeOptions.inboundSecret`。
+
+### Patch Changes
+
+- 48dc650: 认领码入站保护加固（ADR 0060 §3.3，zhinjs/zhin#1250 第 24 批，#1289 复审建议）：
+
+  - 自己账号发出的带码消息（`origin === 'self'`，自回声）被丢弃时也作废认领码，与会话未就绪、其他机器人、成员账号、去重失败几条丢弃分支一致。
+  - 写入端兜底登记表改为挂在 `globalThis` 的 `Symbol.for('zhin.kernel.chat-owner-claim-codes')` 上：项目里装了两份 `@zhin.js/kernel` 时，一份登记的码另一份也能脱敏。
+  - `redactChatOwnerClaimText()` 只替换命中的那一段：只有 NFKC 形式命中时（全角码）不再把整条文本换成 NFKC 形式，其它字符保持原样。
+  - 码比较时忽略的字符扩为空白、`-`、格式字符 `\p{Cf}`（U+2061–2064、U+200E/200F、U+180E 等）与组合符号 `\p{M}`（U+034F、U+FE0F 等）；认领的精确比较使用同一口径（新增 `foldChatOwnerClaimText()`），码中间夹着可见标点（`ABCD.2345`）时两边都不认作该码，能授予的文本一定会被识别为含码。
+  - 原生事件检查扩大到 `message.receive` 以外的所有 Endpoint 事件（`platform.receive` 及其它原生侧边事件、通知、请求附言、系统事件），含码则不记录、不派发。检查不再截断：读遍字符串、数字、字节缓冲（按 UTF-8）、数组、对象、Map 与 Set，超出预算（深度 32、5 万个值、400 万字符）、读取抛错或字节缓冲（含 `SharedArrayBuffer` 及其视图）无法解码时按含码处理（fail-closed），并按事件名限频记 warn（同一事件名 10 分钟至多一条，不带载荷内容）。被扣下的通知、请求、系统事件确实含码时还会作废码（新增 `InboundSecretGuard.discardNative`）：平台上其他人（如看入群附言的管理员）已经看到；`platform.receive` 只扣下不作废。每个字符串只折叠一次，仅非 ASCII 时做 NFKC（新增 `createChatOwnerClaimCodeScanner()`）。
+
+- 7288cd1: #1250 第 26 批：`redactSecretText` 补充脱敏 JSON 字段（`"token":"…"`、`"api_key": "…"`）、YAML / 文本字段（`api_key: …`、`password: '…'`，纯数字值如 `max_tokens: 100` 不受影响）、URL 查询参数 `?key=…` / `&key=…`，以及 Telegram Bot API 路径 `/bot<id>:<token>/`。
+
 ## 1.2.0
 
 ### Minor Changes
