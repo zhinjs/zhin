@@ -12,7 +12,8 @@ import { CommandIndex, commandFeatureId, defineCommand, type CommandDispatchResu
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { SnapshotStore, createSnapshotView, createCapabilitySlot, rootPluginId, childPluginId,
-  type RuntimeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
+  featureConversationOverridesToken, primaryConfigToken,
+  type PrimaryConfig, type RuntimeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ImRuntime, type Message, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
 
 class TestEndpoint implements EndpointContract {
@@ -29,7 +30,10 @@ declare module '@zhin.js/feature-kit' { interface AdapterRegistry { 'dispatch-te
 
 type DispatchCall = (index: CommandIndex, input: Message) => Promise<CommandDispatchResult>;
 
-async function fixture(call: DispatchCall) {
+/** ADR 0057 §2 stored switches, keyed `<plugin>|<resolution key>` (e.g. `command-author|root/one`). */
+type StoredSwitches = Readonly<Record<string, { enabled: false }>>;
+
+async function fixture(call: DispatchCall, stored: StoredSwitches = {}) {
   const root = rootPluginId();
   const author = childPluginId(root, 'command-author');
   const buttons = childPluginId(root, 'buttons');
@@ -39,6 +43,7 @@ async function fixture(call: DispatchCall) {
   const results: CommandDispatchResult[] = [];
   const errors: unknown[] = [];
   const outboundRequesters: string[] = [];
+  const inputs: Message[] = [];
 
   const adapterSlot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'dispatch-test', source: '/adapters/dispatch-test/index.ts',
     definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => adapter }) });
@@ -53,6 +58,7 @@ async function fixture(call: DispatchCall) {
   const inbound = createCapabilitySlot({ owner: buttons, feature: middlewareFeatureId, localName: 'buttons', source: '/middlewares/buttons/index.ts',
     definition: defineMiddleware<Message>({ async handle(context, next) {
       if (!context.input.content.startsWith('btn:')) return next();
+      inputs.push(context.input);
       try {
         results.push(await call(context.project<CommandIndex>(commandFeatureId), context.input));
       } catch (error) { errors.push(error); }
@@ -65,6 +71,10 @@ async function fixture(call: DispatchCall) {
   const commands = [vote, secret];
   const middlewares = [inbound, outbound];
   const slots = [adapterSlot, ...commands, ...middlewares];
+  const document = { configVersion: 2, plugins: { 'command-author': 'command', buttons: 'buttons' } };
+  const primary: PrimaryConfig = { document, expanded: document, get: () => undefined };
+  const switches = Object.keys(stored).length > 0 ? [[featureConversationOverridesToken.id, { version: 1, get: (plugin: string, key: string) =>
+    stored[`${plugin}|${key}`] ? { enabled: false as const, patch: {}, revision: 1, updatedAt: 1 } : undefined }] as const] : [];
   const state: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [author, buttons] }],
     [author, { id: author, parent: root, instanceKey: 'command-author', packageName: 'command', packageRoot: '/fixture/command', children: [] }],
@@ -72,6 +82,7 @@ async function fixture(call: DispatchCall) {
   ]), config: new Map([[root, { commandPrefix: '/', endpoints: [{ id: 'one' }] }]]),
   resources: new Map([[root, new Map<string, unknown>([
     [endpointEventGatewayToken.id, im.endpointEvents], [permissionHostToken.id, new PermissionHost()],
+    [primaryConfigToken.id, primary], ...switches,
   ])], [author, new Map()], [buttons, new Map()]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
   // Production shape: projections see a projection-time view, not the snapshot committed below.
   const view = createSnapshotView(0, state);
@@ -87,7 +98,7 @@ async function fixture(call: DispatchCall) {
     conversation: { endpoint: { id: row.canonicalId, adapter: 'dispatch-test' }, kind: 'group' as const, id: 'room' },
     content, sender, platformSentAt: 100,
   });
-  return { author, buttons, view, commandIndex, endpoint, seen, results, errors, outboundRequesters, receive, store,
+  return { author, buttons, view, commandIndex, endpoint, seen, results, errors, outboundRequesters, inputs, receive, store,
     close: async () => { await index.stop(); await store.close(); } };
 }
 
@@ -138,6 +149,32 @@ describe('CommandIndex.dispatch from a plugin middleware (issue #1250)', () => {
       expect(f.results).toEqual([]);
       expect(String(f.errors[0])).toMatch(/not the command projection of the message's generation/);
       expect(String(f.errors[0])).toMatch(/context\.project\(commandFeatureId\)/);
+    } finally { await f.close(); }
+  });
+
+  it('does not run a command of a Plugin switched off for this endpoint (ADR 0050 gate)', async () => {
+    // The command author is off on this endpoint: Core's own dispatcher does not see its commands,
+    // and a middleware dispatching through the raw projection must not reach them either.
+    const f = await fixture((commands, input) => commands.dispatch({ input: 'vote', source: input }), { 'command-author|root/one': { enabled: false } });
+    try {
+      await f.receive('/vote');
+      expect(f.seen).toEqual([]);
+      await f.receive('btn:vote:1');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ matched: false, status: 'unmatched' })]);
+      expect(f.seen).toEqual([]);
+      expect(f.endpoint.sent).toEqual([]);
+    } finally { await f.close(); }
+  });
+
+  it('fails closed when a retained message dispatches after its turn has ended', async () => {
+    const f = await fixture(async () => Object.freeze({ matched: false, status: 'unmatched' }) as CommandDispatchResult);
+    try {
+      await f.receive('btn:vote:1');
+      const retained = f.inputs[0]!;
+      await expect(f.commandIndex.dispatch({ input: 'vote', source: retained })).rejects.toThrow(/scope has ended/);
+      expect(f.seen).toEqual([]);
+      expect(f.endpoint.sent).toEqual([]);
     } finally { await f.close(); }
   });
 });

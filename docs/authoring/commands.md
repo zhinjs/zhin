@@ -704,6 +704,7 @@ export default defineMiddleware({
 
 - 命令以这条消息的**真实发送者**执行：`permit`、执行策略照常检查，命令里的 `input.sender` 和回复归属都来自原消息，中间件无法替换成别人。
 - 命令表绑定到这条消息所在操作的 generation 快照。自己缓存一份命令表跨热重载使用，或传入别的 `snapshot`，会被拒绝（`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`）——每次都在当前中间件 / handler 里调用 `context.project()`。
+- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致。
 - 这样执行的命令没有 `context.interaction`（多轮追问）；需要追问的流程请让用户直接发命令文本。
 - 不需要改写参数时也可以不经中间件：JSX `<button onClick>` 回调本身带 `permit`（见[按钮](./middleware-components.md#按钮)）；QQ 官方的 `mode: 'command'` 按钮由平台把 `payload` 预填成用户消息，按普通命令走同一条匹配与鉴权链路（其他平台的适配器目前不支持这种按钮）。
 
