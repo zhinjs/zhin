@@ -21,6 +21,8 @@ export default defineAdapter<SlackEndpointConfig>({
         segments: {
           outboundMedia: ['url', 'upload', 'path'],
           interactive: 'native',
+          // Slack: an actions block holds at most 25 elements; core lists the rest as numbered text (#1250).
+          interactiveLimits: { maxButtons: 25 },
           markdown: 'native',
         },
         recall: {},

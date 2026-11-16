@@ -33,6 +33,8 @@ export const commandMessages = createMessages({
   commandIndex: { 'zh-CN': '指令索引', en: 'Commands' },
   pluginIndex: { 'zh-CN': '插件导航', en: 'Plugins' },
   guideEmpty: { 'zh-CN': '暂无指令和子插件', en: 'No commands or plugins' },
+  groupTitle: { 'zh-CN': '{group} 下的指令：', en: 'Commands under {group}:' },
+  subcommandTitle: { 'zh-CN': '子指令：', en: 'Subcommands:' },
   helpHint: { 'zh-CN': '查看参数与用法：{command} --help', en: 'View arguments and usage: {command} --help' },
   genericHelpHint: { 'zh-CN': '在当前环境的指令后追加 --help 查看用法', en: 'Append --help to a command in this environment to view its usage' },
   expectedType: { 'zh-CN': '{field}：应为 {type}', en: '{field}: expected {type}' },

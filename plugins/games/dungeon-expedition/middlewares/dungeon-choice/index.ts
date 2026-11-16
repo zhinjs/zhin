@@ -53,13 +53,17 @@ export default defineMiddleware<Message>({
     const state = stateFromSession(session);
     // 群里远征队是整频道共享的：不在队伍里的人只能用文字「加入」，其余文字（攻击、防御、序号…）
     // 按普通聊天放行，不被别人的对局截走（#1250）。
-    const member = state.players.some(player => player.id === message.sender.id);
-    const choices = choicesForState(state).filter(choice => member || choice.id === 'join');
+    const choices = choicesForState(state, undefined, message.sender.id);
     const map = buildChoiceFallbackMap(
       DUNGEON_PREFIX,
       dungeonSessionToken(session),
       choices,
     );
+    // The leader's end confirmation (#1250) answers by its button labels too.
+    if (state.ownerId === message.sender.id) {
+      map['确认结束'] = `${DUNGEON_PREFIX}:${dungeonSessionToken(session)}:abort_confirm`;
+      map['继续远征'] = `${DUNGEON_PREFIX}:${dungeonSessionToken(session)}:status`;
+    }
     const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, DUNGEON_PREFIX) : null;
     if (!parsed) {

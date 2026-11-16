@@ -153,3 +153,27 @@ describe('command suggestions (#1250)', () => {
     expect(await new CommandIndex(slots, snapshot(slots, { commandSuggestion: { maxDistance: 0 } })).suggest('RSS-List')).toEqual(['rss-list']);
   });
 });
+
+describe('display-name near misses (#1250 dungeon-entry-unhelpful)', () => {
+  const game = childPluginId(root, 'dungeon-expedition');
+  const dungeon = createCapabilitySlot({ owner: game, feature: commandFeatureId, localName: 'dungeon',
+    source: '/plugins/dungeon/commands/dungeon/index.ts', definition: defineCommand({ alias: ['地牢远征'], execute: () => 'dungeon' }) });
+  function withGame(): RuntimeSnapshot {
+    const base = snapshot([dungeon]);
+    const tree = new Map(base.tree);
+    tree.set(root, { ...tree.get(root)!, children: [game] });
+    tree.set(game, { id: game, instanceKey: 'dungeon-expedition', packageName: 'dungeon', packageRoot: '/p/d', parent: root, children: [],
+      metadata: { displayName: 'Dungeon Expedition', displayNameI18n: { 'zh-CN': '地牢远征', en: 'Dungeon Expedition' } } } as never);
+    return { ...base, tree, config: new Map([...base.config, [game, {}]]) };
+  }
+
+  it('compares the message with plugin display names when no command name is close', async () => {
+    const index = new CommandIndex([dungeon], withGame());
+    expect(await index.suggest('地牢探险')).toEqual(['dungeon']);
+    expect(await index.suggest('Dungeon Expeditoin')).toEqual([]);
+    expect(await index.suggest('DungeonExpeditoin')).toEqual(['dungeon']);
+    // Unrelated chat and questions stay with the Agent.
+    expect(await index.suggest('天气怎么样')).toEqual([]);
+    expect(await index.suggest('地铁')).toEqual([]);
+  });
+});

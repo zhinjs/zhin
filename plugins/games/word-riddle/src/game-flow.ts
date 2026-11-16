@@ -10,6 +10,7 @@ import {
 } from './engine.js';
 import type { RiddleSessionRow } from './models.js';
 import type { RiddleType } from './riddles-catalog.js';
+import { riddleHint } from './riddle-provider.js';
 import {
   currentRiddleId,
   parseQueue,
@@ -162,12 +163,17 @@ export async function handleChoice(
     if (!entry) return messages(locale, 'text13');
 
     if (choiceId === 'hint') {
-      const hint = entry.hint ?? messages(locale, 'text14', { p0: entry.answer.length });
-      await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
+      // #1250: the hint reveals real information and costs a few points instead of the streak.
+      const revealed = riddleHint(entry);
+      const hint = revealed.kind === 'first'
+        ? messages(locale, 'hintFirst', { p0: revealed.char })
+        : messages(locale, 'hintChoices', { p0: revealed.choices.join(messages(locale, 'separator')) });
+      const penalty = Math.min(HINT_PENALTY, session.score);
+      await services.updateSession(session.id, { hints_used: session.hints_used + 1, score: session.score - penalty });
       const updated = (await services.getById(session.id))!;
       return renderView(message, updated, [
         messages(locale, 'text15', { p0: hint }),
-        messages(locale, 'text16'),
+        ...(penalty > 0 ? [messages(locale, 'hintPenalty', { p0: penalty })] : []),
       ]);
     }
 
@@ -179,18 +185,41 @@ export async function handleChoice(
       ]);
     }
 
-    if (choiceId === 'quit') {
-      await services.updateSession(session.id, { status: 'aborted' });
-      return messages(locale, 'text18');
-    }
+    if (choiceId === 'quit') return endRound(services, session);
 
     return messages(locale, 'text19');
   } });
 }
 
+/**
+ * Ends the player's round (#1250): reveals the current answer and sums up the round. Callers hold
+ * the channel scope already (the `quit` button and the `riddle quit` command).
+ */
+export async function endRound(services: SessionService, session: RiddleSessionRow): Promise<string> {
+  const locale = resolveLocale(session.locale);
+  await services.updateSession(session.id, { status: 'aborted' });
+  const riddleId = currentRiddleId(session);
+  const entry = riddleId ? getRiddleById(riddleId) : undefined;
+  const total = parseQueue(session.queue).length;
+  return [
+    messages(locale, 'text18'),
+    ...(entry && session.status === 'active' ? [messages(locale, 'quitAnswer', { p0: entry.answer })] : []),
+    messages(locale, 'quitSummary', { p0: Math.min(session.index, total), p1: total, p2: session.score, p3: session.best_streak }),
+  ].join('\n');
+}
+
 export { RIDDLE_PREFIX };
 
+/** Points one hint costs (never below zero). */
+const HINT_PENALTY = 3;
+
 const messages = createMessages({
+  hintFirst: { 'zh-CN': "第 1 个字是「{p0}」", en: "The first character is 「{p0}」" },
+  hintChoices: { 'zh-CN': "答案是这几个字之一：{p0}", en: "The answer is one of: {p0}" },
+  separator: { 'zh-CN': "、", en: ", " },
+  hintPenalty: { 'zh-CN': "（使用提示 -{p0} 分）", en: "(Hint used: -{p0} points)" },
+  quitAnswer: { 'zh-CN': "本题答案：**{p0}**", en: "Answer to this riddle: **{p0}**" },
+  quitSummary: { 'zh-CN': "本局成绩：已答 {p0}/{p1} 题 · 得分 **{p2}** · 最佳连击 {p3}", en: "This round: {p0}/{p1} answered · Score **{p2}** · Best streak {p3}" },
   text1: { 'zh-CN': "你已有进行中的猜谜（{p0}），请使用当前对局的操作入口继续。", en: "You already have an active riddle game ({p0}). Continue using its controls." },
   text2: { 'zh-CN': "本频道 {p0} 正在猜谜。", en: "{p0} is solving riddles in this channel." },
   text3: { 'zh-CN': "你没有进行中的猜谜。", en: "You have no active riddle game." },
@@ -204,9 +233,7 @@ const messages = createMessages({
   text11: { 'zh-CN': "这是别人的猜谜。", en: "This riddle game belongs to another player." },
   text12: { 'zh-CN': "本轮已结束。", en: "This round has ended." },
   text13: { 'zh-CN': "题目丢失。", en: "The riddle is unavailable." },
-  text14: { 'zh-CN': "答案共 {p0} 个字", en: "The answer has {p0} characters" },
   text15: { 'zh-CN': "💡 提示：{p0}", en: "💡 Hint: {p0}" },
-  text16: { 'zh-CN': "（连击清零）", en: "(Streak reset)" },
   text17: { 'zh-CN': "⏭️ 跳过，答案：**{p0}**", en: "⏭️ Skipped. Answer: **{p0}**" },
   text18: { 'zh-CN': "已结束猜谜。", en: "The riddle game has ended." },
   text19: { 'zh-CN': "未知操作。", en: "Unknown action." },

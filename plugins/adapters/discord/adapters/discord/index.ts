@@ -30,6 +30,8 @@ export default defineAdapter<DiscordEndpointConfig>({
         segments: {
           outboundMedia: ['url', 'upload'],
           interactive: 'native',
+          // Discord: at most 5 action rows of 5 buttons per message; core lists the rest as numbered text (#1250).
+          interactiveLimits: { maxButtons: 25 },
           markdown: 'native',
         },
         quote: true,

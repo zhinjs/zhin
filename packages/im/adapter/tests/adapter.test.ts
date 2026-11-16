@@ -1317,6 +1317,15 @@ describe('defineAdapter segments policy', () => {
       segments: { markdown: 'rich' },
     })).toThrow('markdown');
   });
+
+  it('normalizes and validates segments.interactiveLimits (#1250)', () => {
+    const definition = defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint,
+      segments: { interactive: 'native', interactiveLimits: { maxButtons: 25 } } });
+    expect(definition.segments?.interactiveLimits).toEqual({ maxButtons: 25 });
+    for (const interactiveLimits of [{ maxButtons: 0 }, { maxButtons: 2.5 }, { maxRows: 5 }, 'many']) {
+      expect(() => parseAdapterDefinition({ ...definition, segments: { interactiveLimits } as never })).toThrow('interactiveLimits');
+    }
+  });
 });
 
 describe('Adapter capability profile assembly (ADR 0044)', () => {

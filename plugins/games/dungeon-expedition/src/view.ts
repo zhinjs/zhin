@@ -21,7 +21,53 @@ export function parseDungeonSessionToken(
   return { sessionId: match[1], revision: Number(match[2]) };
 }
 
-export function choicesForState(state: Readonly<DungeonState>, locale?: Locale): ChoiceOption[] {
+/**
+ * Buttons for the current state. With `viewerId` (the player the view answers) only the actions
+ * that player can take are offered (#1250 dungeon-entry-unhelpful): members get no 「加入」, the
+ * leader gets 「开始远征」 first and is the only one offered 「结束」. Without it every action of the
+ * state is listed (text replies from anyone).
+ */
+export function choicesForState(state: Readonly<DungeonState>, locale?: Locale, viewerId?: string): ChoiceOption[] {
+  const all = allChoicesForState(state, locale);
+  if (viewerId === undefined || state.phase === 'completed') return all;
+  const member = state.players.some(player => player.id === viewerId);
+  const leader = state.ownerId === viewerId;
+  if (state.phase === 'lobby') {
+    if (!member) return state.players.length < MAX_PARTY ? all.filter(choice => choice.id === 'join') : [];
+    const order = leader ? ['start', 'ready', 'abort'] : ['ready'];
+    return order.map(id => all.find(choice => choice.id === id)!).filter(Boolean);
+  }
+  if (!member) return [];
+  return leader ? all : all.filter(choice => choice.id !== 'abort');
+}
+
+/** Party size limit (engine `joinParty`). */
+const MAX_PARTY = 4;
+
+/** Leader's confirmation before the expedition ends (#1250). */
+export function buildDungeonAbortConfirm(session: DungeonSessionRow, state: Readonly<DungeonState>, channelType?: string): SendContent {
+  const locale = resolveLocale(session.locale);
+  return buildChoiceKeyboard({
+    gamePrefix: DUNGEON_PREFIX,
+    sessionId: dungeonSessionToken(session),
+    narrative: [messages(locale, 'confirmEnd'), summaryLine(state, locale)].join('\n'),
+    choices: [
+      { id: 'abort_confirm', label: messages(locale, 'confirmEndYes'), style: 'danger' },
+      { id: 'status', label: messages(locale, 'confirmEndNo'), style: 'secondary' },
+    ],
+    buttonsPerRow: 2,
+    locale,
+    interactionProfile: 'gameplay',
+    channelType,
+  });
+}
+
+function summaryLine(state: Readonly<DungeonState>, locale?: Locale): string {
+  const gold = state.players.reduce((sum, player) => sum + player.gold, 0);
+  return messages(locale, 'summary', { floor: state.floor, rooms: state.roomsCleared, gold });
+}
+
+function allChoicesForState(state: Readonly<DungeonState>, locale?: Locale): ChoiceOption[] {
   if (state.phase === 'completed') {
     return [{
       id: 'restart',
@@ -57,6 +103,7 @@ export function buildDungeonView(
   session: DungeonSessionRow,
   state: Readonly<DungeonState>,
   channelType?: string,
+  viewerId?: string,
 ): SendContent {
   const locale = resolveLocale(session.locale);
   const current = activePlayer(state);
@@ -87,10 +134,12 @@ export function buildDungeonView(
         : state.result === 'aborted'
           ? messages(locale, 'text23')
           : messages(locale, 'text24'),
+      summaryLine(state, locale),
     );
   }
+  if (state.phase === 'lobby' && state.players.length < MAX_PARTY) lines.push('', messages(locale, 'joinHint'));
 
-  const choices = choicesForState(state, locale);
+  const choices = choicesForState(state, locale, viewerId);
   return buildChoiceKeyboard({
     gamePrefix: DUNGEON_PREFIX,
     sessionId: dungeonSessionToken(session),
@@ -114,6 +163,11 @@ function phaseLabel(state: Readonly<DungeonState>, locale?: Locale): string {
 }
 
 const messages = createMessages({
+  confirmEnd: { 'zh-CN': "确定要结束本次远征吗？", en: "End this expedition?" },
+  confirmEndYes: { 'zh-CN': "确认结束", en: "End it" },
+  confirmEndNo: { 'zh-CN': "继续远征", en: "Keep going" },
+  summary: { 'zh-CN': "本局结算：到达第 {floor} 层 · 清理 {rooms} 个房间 · 队伍金币 {gold}", en: "Round summary: reached floor {floor} · {rooms} rooms cleared · party gold {gold}" },
+  joinHint: { 'zh-CN': "其他人回复「加入队伍」入队；全员准备后由队长开始远征。", en: "Others reply 加入队伍 (Join party) to join; the leader starts once everyone is ready." },
   text1: { 'zh-CN': "再来一局", en: "Play again" },
   text2: { 'zh-CN': "加入队伍", en: "Join party" },
   text3: { 'zh-CN': "准备/取消", en: "Ready / Not ready" },

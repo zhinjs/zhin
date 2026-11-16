@@ -3,6 +3,8 @@ import type { HtmlRendererHost, RuntimeSnapshot } from '@zhin.js/plugin-runtime'
 import {
   adapterDeclaresLiveDanmaku,
   applyOutboundInteractivePolicy,
+  applyOutboundButtonLimit,
+  resolveOutboundMaxButtons,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
   resolveAiOutboundSegments,
@@ -543,5 +545,32 @@ describe('AI outbound segment types', () => {
     expect(schema.required).toEqual(['messages', 'reaction']);
     expect((schema.properties as Record<string, { enum?: string[] }>).reaction?.enum).toEqual(['', '76']);
     expect(buildAiOutboundJsonSchema(['text']).required).toEqual(['messages']);
+  });
+});
+
+describe('native button limit (#1250 select-over-10-options-no-buttons)', () => {
+  const buttons = Array.from({ length: 12 }, (_, index) => ({ id: `b${index + 1}`, label: `歌曲${index + 1}`, payload: `p${index + 1}` }));
+  const keyboard = { type: 'keyboard', data: { rows: [buttons.slice(0, 5), buttons.slice(5, 10), buttons.slice(10)], fallback: { hint: '', map: Object.fromEntries(buttons.map((b, i) => [String(i + 1), b.payload])) } } };
+
+  it('reads the declared maxButtons from the adapter profile only', () => {
+    expect(resolveOutboundMaxButtons('adapter:test' as never, mockSnapshot({ definition: { segments: { interactive: 'native', interactiveLimits: { maxButtons: 10 } } } }))).toBe(10);
+    expect(resolveOutboundMaxButtons('adapter:test' as never, mockSnapshot({ definition: { segments: { interactive: 'native' } } }))).toBeUndefined();
+    expect(resolveOutboundMaxButtons('adapter:test' as never, mockSnapshot({ definition: { segments: { interactiveLimits: { maxButtons: 0 } } } }))).toBeUndefined();
+  });
+
+  it('keeps every button without a limit', () => {
+    expect(applyOutboundButtonLimit([keyboard], undefined)).toEqual([keyboard]);
+    expect(applyOutboundButtonLimit([keyboard], 12)).toEqual([keyboard]);
+  });
+
+  it('gives the first N options buttons and lists the rest as numbered text', () => {
+    const remembered: Record<string, string>[] = [];
+    const payload = applyOutboundButtonLimit([{ type: 'markdown', data: { content: '选歌' } }, keyboard], 10, map => { remembered.push(map); }) as Array<{ type: string; data: Record<string, any> }>;
+    expect(payload.map(item => item.type)).toEqual(['markdown', 'text', 'keyboard']);
+    expect(payload[1]!.data.text).toContain('回复序号或名称');
+    expect(payload[1]!.data.text).toContain('11. 歌曲11');
+    expect(payload[1]!.data.text).toContain('12. 歌曲12');
+    expect(payload[2]!.data.rows.flat()).toHaveLength(10);
+    expect(remembered).toEqual([{ '11': 'p11', '12': 'p12' }]);
   });
 });

@@ -16,6 +16,7 @@ import {
   stateFromSession,
 } from './session-service.js';
 import {
+  buildDungeonAbortConfirm,
   buildDungeonView,
   parseDungeonSessionToken,
 } from './view.js';
@@ -26,10 +27,10 @@ export async function startDungeon(
 ): Promise<GameReply> {
   return service.runInScope({ scope: channelKey(message), run: async () => {
     const active = await service.getActiveByChannel(channelKey(message));
-    if (active) return buildDungeonView(active, stateFromSession(active), message.target.kind);
+    if (active) return buildDungeonView(active, stateFromSession(active), message.target.kind, message.sender.id);
     try {
       const session = await service.createSession(message);
-      return buildDungeonView(session, stateFromSession(session), message.target.kind);
+      return buildDungeonView(session, stateFromSession(session), message.target.kind, message.sender.id);
     } catch (error) {
       if (error instanceof GameSessionConflictError) return error.format(message.locale);
       throw error;
@@ -45,7 +46,7 @@ export async function continueDungeon(
     const locale = resolveLocale(message.locale);
     const session = await service.getActiveByChannel(channelKey(message));
     if (!session) return messages(locale, 'text1');
-    return buildDungeonView(session, stateFromSession(session), message.target.kind);
+    return buildDungeonView(session, stateFromSession(session), message.target.kind, message.sender.id);
   } });
 }
 
@@ -64,6 +65,15 @@ export async function handleDungeonChoice(
       return messages(locale, 'text3');
     }
     locale = resolveLocale(session.locale);
+    if (choiceId === 'status') {
+      return buildDungeonView(session, stateFromSession(session), message.target.kind, message.sender.id);
+    }
+    // #1250: ending asks the leader to confirm first; the confirmed end posts a summary.
+    if (choiceId === 'abort' && session.status === 'active') {
+      const state = stateFromSession(session);
+      if (state.ownerId !== message.sender.id) return messages(locale, 'leaderOnlyEnd');
+      return buildDungeonAbortConfirm(session, state, message.target.kind);
+    }
     if (choiceId === 'restart') {
       if (session.status === 'active') return messages(locale, 'text4');
       if (session.owner_id !== message.sender.id) return messages(locale, 'text5');
@@ -84,6 +94,7 @@ export async function handleDungeonChoice(
         result.session,
         stateFromSession(result.session),
         message.target.kind,
+        message.sender.id,
       );
     } catch (error) {
       if (error instanceof DungeonRuleError) return error.message;
@@ -95,6 +106,7 @@ export async function handleDungeonChoice(
           latest,
           stateFromSession(latest),
           message.target.kind,
+          message.sender.id,
         );
         return Array.isArray(view)
           ? [messages(locale, 'text8'), ...view]
@@ -129,11 +141,12 @@ function actionFromChoice(
   if (choiceId === 'attack') return { type: 'attack' };
   if (choiceId === 'defend') return { type: 'defend' };
   if (choiceId === 'potion') return { type: 'potion' };
-  if (choiceId === 'abort') return { type: 'abort' };
+  if (choiceId === 'abort_confirm') return { type: 'abort' };
   return null;
 }
 
 const messages = createMessages({
+  leaderOnlyEnd: { 'zh-CN': "只有队长可以结束整支远征。", en: "Only the leader may end the expedition." },
   text1: { 'zh-CN': "当前频道没有进行中的地牢远征。", en: "There is no active dungeon expedition in this channel." },
   text2: { 'zh-CN': "无效的地牢操作。", en: "Invalid dungeon action." },
   text3: { 'zh-CN': "远征不存在，或不属于当前频道。", en: "The expedition does not exist or belongs to another channel." },

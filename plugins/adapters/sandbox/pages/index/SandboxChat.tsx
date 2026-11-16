@@ -863,8 +863,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 case 'keyboard': {
                     const rows = (d.rows as Array<Array<{ label: string; payload: string; disabled?: boolean; style?: string }>>) ?? []
                     const resolved = Boolean(messageId && interactionResolved)
+                    // #1250: every option stays a button; a long keyboard scrolls instead of being cut.
+                    const long = rows.flat().length > 10
                     return (
-                        <div key={index} className="agent-playground-approval-actions">
+                        <div key={index} className={long ? 'agent-playground-approval-actions is-long' : 'agent-playground-approval-actions'}>
                             {rows.map((row, ri) => (
                                 <div key={ri}>
                                     {row.map((btn) => (

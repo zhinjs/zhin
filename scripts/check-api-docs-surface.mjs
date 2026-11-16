@@ -57,7 +57,7 @@ const expectedSurface = new Map([
     'AdapterContext', 'AdapterDefinition', 'AdapterRegistry', 'AdapterSegmentModelExtension', 'AdapterSegmentPolicy', 'Endpoint',
     'EndpointConversation', 'EndpointEvent', 'EndpointEventSink', 'EndpointIdentity',
     'EndpointIncomingMessage', 'EndpointSendPart', 'EndpointSendRequest', 'EndpointSendResult',
-    'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
+    'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveLimits', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
     'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter',
     'EndpointProfile', 'EndpointProfileConfiguration',

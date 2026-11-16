@@ -180,3 +180,41 @@ function namespaceMatches<T>(words: readonly string[], candidate: CommandNameCan
   return normalizeCommandName(words[0] ?? '') === normalizeCommandName(namespace);
 }
 
+
+export interface DisplayNameCandidate<T> {
+  readonly value: T;
+  /** The plugin's display names (every language). */
+  readonly names: readonly string[];
+}
+
+/**
+ * Near misses of a plugin's display name (#1250 dungeon-entry-unhelpful): `地牢探险` for the plugin
+ * shown as `地牢远征`. People type what the menu calls a game rather than its command. The whole
+ * message must be one word; a name matches within the usual edit distance, or — for names of at
+ * least four characters — within half its length when the first half is typed exactly.
+ */
+export function rankDisplayNameSuggestions<T>(
+  text: string,
+  candidates: readonly DisplayNameCandidate<T>[],
+  config: ResolvedCommandSuggestionConfig,
+): readonly T[] {
+  const trimmed = text.trim();
+  if (!config.enabled || !trimmed || /\s/u.test(trimmed) || !looksLikeImplicitCommand(trimmed)) return [];
+  const typed = normalizeCommandName(trimmed);
+  const best = new Map<T, number>();
+  for (const candidate of candidates) {
+    for (const raw of candidate.names) {
+      const name = normalizeCommandName(raw);
+      if (!name || name === typed) continue;
+      const length = [...name].length;
+      const half = Math.floor(length / 2);
+      const prefixed = length >= 4 && [...typed].slice(0, half).join('') === [...name].slice(0, half).join('');
+      const allowed = Math.max(allowedCommandDistance(name, config.maxDistance), prefixed && config.maxDistance >= 1 ? half : 0);
+      const distance = commandNameDistance(typed, name, allowed);
+      if (distance > allowed) continue;
+      const previous = best.get(candidate.value);
+      if (previous === undefined || distance < previous) best.set(candidate.value, distance);
+    }
+  }
+  return [...best.entries()].sort((left, right) => left[1] - right[1]).slice(0, config.limit).map(([value]) => value);
+}

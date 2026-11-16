@@ -20,6 +20,8 @@ export default defineAdapter<TelegramEndpointConfig>({
         segments: {
           outboundMedia: ['url', 'upload'],
           interactive: 'native',
+          // Telegram: an inline keyboard holds at most 100 buttons; core lists the rest as numbered text (#1250).
+          interactiveLimits: { maxButtons: 100 },
           markdown: 'native',
         },
         quote: true,

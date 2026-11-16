@@ -101,6 +101,15 @@ export interface AdapterSegmentPolicy {
    * Core 在最终出站阶段执行统一降级。
    */
   readonly interactive?: AdapterInteractiveMode;
+  /**
+   * Limits of native interactive controls (#1250 select-over-10-options-no-buttons). Core passes
+   * every option of a selection to the endpoint; with `interactive: 'native'` and more buttons than
+   * `maxButtons`, the first `maxButtons` stay buttons and the rest become a numbered text list
+   * (replies by number or name still work). Omitted: no limit. Draft ADR 0064 P3 plans to fold this
+   * into an object form of `interactive` (`{ buttons: { maxTotal } }`); `maxButtons` maps onto
+   * `maxTotal` and the string `interactive` stays a valid shorthand.
+   */
+  readonly interactiveLimits?: AdapterInteractiveLimits;
   /** `native` preserves Markdown for the endpoint codec; `text` strips formatting in Core. */
   readonly markdown?: AdapterMarkdownMode;
   /**
@@ -113,6 +122,11 @@ export interface AdapterSegmentPolicy {
    * person who just taps 👍. Requires `control.addReaction` on the Endpoint.
    */
   readonly reaction?: AdapterReactionDeclaration;
+}
+
+export interface AdapterInteractiveLimits {
+  /** Most buttons one message may carry (all rows together); a positive integer. */
+  readonly maxButtons?: number;
 }
 
 export interface AdapterReactionDeclaration {
@@ -329,6 +343,12 @@ function normalizeSegmentPolicy(
   ) {
     throw new TypeError("Adapter segments.interactive must be 'native' or 'text'");
   }
+  const limits = policy.interactiveLimits;
+  if (limits !== undefined && (!limits || typeof limits !== 'object' || Array.isArray(limits)
+    || Object.keys(limits).some(key => key !== 'maxButtons')
+    || (limits.maxButtons !== undefined && (!Number.isInteger(limits.maxButtons) || limits.maxButtons < 1)))) {
+    throw new TypeError('Adapter segments.interactiveLimits must be { maxButtons?: positive integer }');
+  }
   if (
     policy.markdown !== undefined
     && policy.markdown !== 'native'
@@ -345,6 +365,7 @@ function normalizeSegmentPolicy(
       ? { outboundMedia: Object.freeze([...new Set(policy.outboundMedia)]) }
       : {}),
     ...(policy.interactive ? { interactive: policy.interactive } : {}),
+    ...(limits ? { interactiveLimits: Object.freeze({ ...limits }) } : {}),
     ...(policy.markdown ? { markdown: policy.markdown } : {}),
     ...(model ? { model } : {}),
     ...(reaction ? { reaction } : {}),

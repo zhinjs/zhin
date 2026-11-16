@@ -23,7 +23,7 @@ import { commandAdapterMatches, toCommandPermissionSubject } from './permission-
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
 import { commandDescription, commandMessages } from './messages.js';
 import { userFacingErrorText, userFacingRefusalReason } from './user-facing-error.js';
-import { rankCommandSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate } from './command-suggestion.js';
+import { rankCommandSuggestions, rankDisplayNameSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate, type DisplayNameCandidate } from './command-suggestion.js';
 export type { CommandSuggestionConfig } from './command-suggestion.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
 export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
@@ -177,6 +177,8 @@ interface CommandMenuResult {
 interface CommandRecord extends CommandDescriptor {
   readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
   readonly segments: readonly string[];
+  /** The owner's `commandNamespace` words (empty without one). */
+  readonly namespace: readonly string[];
   readonly preferredSegments: Readonly<Partial<Record<Locale, readonly string[]>>>;
   readonly parameter?: CommandParameterDefinition;
   readonly pattern?: RegExp;
@@ -395,6 +397,7 @@ export class CommandIndex {
         ...(slot.definition.match ? { match: String(slot.definition.match), pattern: slot.definition.match } : {}),
         slot,
         segments: Object.freeze(primarySegments),
+        namespace,
         // A preferred alias that was skipped (taken by another command) is not displayed.
         preferredSegments: Object.freeze(Object.fromEntries(Object.entries(slot.definition.preferredAliasI18n ?? {})
           .filter(([, entry]) => routedAliases.has(splitCommand(entry).join(' ')))
@@ -500,7 +503,11 @@ export class CommandIndex {
       words: route.segments.filter(segment => !segment.startsWith('$')),
       arity: route.record.parameters.length + Object.keys(route.record.options).length,
     }));
-    const ranked = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
+    const byName = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
+    // #1250: nothing resembles a command name — compare with the plugins' display names, which
+    // is what menus and help call a game (`地牢探险` → the plugin shown as `地牢远征`).
+    const ranked = byName.length > 0 ? byName
+      : rankDisplayNameSuggestions(text, this.#displayNameCandidates(operationSnapshot), { ...config, limit: Number.MAX_SAFE_INTEGER });
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const names: string[] = [];
     for (const record of ranked) {
@@ -510,6 +517,21 @@ export class CommandIndex {
       names.push(`${commandPrefix}${commandSuggestionName(record, locale)}`);
     }
     return names;
+  }
+
+  /** Each plugin's display names, pointing at its entry command (the shortest route it owns). */
+  #displayNameCandidates(snapshot: RuntimeSnapshot): DisplayNameCandidate<CommandRecord>[] {
+    const entry = new Map<PluginId, CommandRecord>();
+    for (const record of this.#commands) {
+      const current = entry.get(record.slot.owner);
+      if (!current || record.segments.length < current.segments.length) entry.set(record.slot.owner, record);
+    }
+    return [...entry].flatMap(([owner, record]) => {
+      const metadata = snapshot.tree.get(owner)?.metadata;
+      const names = [metadata?.displayName, ...Object.values(metadata?.displayNameI18n ?? {})]
+        .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+      return names.length > 0 ? [{ value: record, names }] : [];
+    });
   }
 
   /** Localized "no such command, did you mean …" reply, or `undefined` when nothing is similar. */
@@ -569,7 +591,10 @@ export class CommandIndex {
     const match = routed ? withPattern(routed, input) : this.#matchPattern(input);
     if (!match) {
       const candidate = this.#invalidRoute(input);
-      if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
+      if (!candidate) {
+        const group = await this.#groupHelp(input, { prefix, source, snapshot: operationSnapshot, locale });
+        return group ?? Object.freeze({ matched: false, status: 'unmatched' });
+      }
       if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
       const candidateDenial = await this.#permitDenial(candidate, source, operationSnapshot);
       if (candidateDenial !== undefined) return this.#denied(candidate, candidateDenial, locale);
@@ -586,7 +611,9 @@ export class CommandIndex {
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
     const help = commandHelp(commandDisplayName(match.command, locale), definition, prefix, locale);
     if (match.helpRequested) {
-      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: help });
+      const subcommands = await this.#subcommandLines(staticPrefix(match.command.segments), { prefix, source, snapshot: operationSnapshot, locale });
+      const value = subcommands.length > 0 ? [help, '', commandMessages(locale, 'subcommandTitle'), ...subcommands].join('\n') : help;
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
     }
     const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource), locale);
     if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
@@ -615,6 +642,44 @@ export class CommandIndex {
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }
+  }
+
+  /**
+   * `<namespace>` / `<group> --help` (#1250): text that names a command group but no command lists
+   * the commands under it the sender may run. Without `--help` only a configured `commandNamespace`
+   * answers, so a chat word that happens to start a command path still reaches the Agent.
+   */
+  async #groupHelp(input: CommandMatchInput, context: GroupHelpContext): Promise<CommandDispatchResult | undefined> {
+    const text = exactMessageText(input);
+    if (text === undefined) return undefined;
+    const tokens = splitCommand(text);
+    const words = tokens.filter(token => token !== '--help' && token !== '-h');
+    if (words.length === 0) return undefined;
+    const helpFlag = words.length < tokens.length;
+    if (words.length + 1 < tokens.length) return undefined;
+    const isNamespace = this.#commands.some(record => record.namespace.length === words.length
+      && record.namespace.every((word, index) => word === words[index]));
+    if (!helpFlag && !isNamespace) return undefined;
+    const lines = await this.#subcommandLines(words, context);
+    if (lines.length === 0) return undefined;
+    const group = words.join(' ');
+    const owner = this.#commands.find(record => startsWithWords(record.segments, words))?.slot.owner ?? context.snapshot.root;
+    return Object.freeze({ matched: true, status: 'executed', command: group, owner,
+      value: [commandMessages(context.locale, 'groupTitle', { group: `${context.prefix}${group}` }), ...lines,
+        '', commandMessages(context.locale, 'helpHint', { command: `${context.prefix}${group} <…>` })].join('\n') });
+  }
+
+  /** Commands strictly under `words` that the sender may run, as menu lines. */
+  async #subcommandLines(words: readonly string[], { prefix, source, snapshot, locale }: GroupHelpContext): Promise<readonly string[]> {
+    const lines: string[] = [];
+    for (const record of this.#commands) {
+      if (record.segments.length <= words.length || !startsWithWords(record.segments, words)) continue;
+      if (!(await this.#listable(record, source, snapshot))) continue;
+      if (source === undefined && (record.permit?.length ?? 0) > 0) continue;
+      const description = commandDescription(record.slot.definition, locale);
+      lines.push(`  ${prefix}${commandDisplayName(record, locale)}${description ? `  - ${description}` : ''}`);
+    }
+    return lines;
   }
 
   #denied(record: CommandRecord, permit: string | null, locale: Locale): CommandDispatchResult {
@@ -885,6 +950,23 @@ export class CommandIndex {
       page, pages, locale, commandTotal: menu.commandTotal, pluginTotal: menu.pluginTotal, appearance: menu.appearance,
     }) };
   }
+}
+
+interface GroupHelpContext {
+  readonly prefix: string;
+  readonly source: unknown;
+  readonly snapshot: RuntimeSnapshot;
+  readonly locale: Locale;
+}
+
+function startsWithWords(segments: readonly string[], words: readonly string[]): boolean {
+  return words.every((word, index) => segments[index] === word);
+}
+
+/** The literal words before a route's parameter segment. */
+function staticPrefix(segments: readonly string[]): readonly string[] {
+  const at = segments.findIndex(segment => segment.startsWith('$'));
+  return at === -1 ? segments : segments.slice(0, at);
 }
 
 function commandDisplaySegments(record: CommandRecord, locale: Locale): readonly string[] {
@@ -1296,9 +1378,14 @@ function compareRecords(left: CommandRecord, right: CommandRecord): number {
   return left.name.localeCompare(right.name);
 }
 
+/**
+ * Route precedence: the longer literal path first (#1250 command-namespace-param-commands-swallowed:
+ * `60s fanyi <text>` must beat a bare `60s` command that would otherwise take `fanyi 你好` as
+ * ignored trailing words), then a static route before a dynamic one of the same literal length.
+ */
 function compareRoutes(left: CommandRoute, right: CommandRoute): number {
-  return dynamicWeight(left) - dynamicWeight(right)
-    || staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
+  return staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
+    || dynamicWeight(left) - dynamicWeight(right)
     || right.segments.length - left.segments.length
     || right.record.name.length - left.record.name.length
     || left.record.name.localeCompare(right.record.name);
@@ -1391,6 +1478,7 @@ function withPattern(match: CommandMatch, input: CommandMatchInput): CommandMatc
 function toDescriptor({
   slot: _slot,
   segments: _segments,
+  namespace: _namespace,
   parameter: _parameter,
   pattern: _pattern,
   ...descriptor

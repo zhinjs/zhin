@@ -16,6 +16,7 @@ import {
   defineCommand,
   isCommandIndex,
   parseCommandDefinition,
+  bindCommandSource,
   type CommandParameterDefinition,
 } from '../src/index.js';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
@@ -2176,4 +2177,66 @@ it('accepts native numeric face ids and structured catch-all media values', asyn
   const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
   const result = await index.dispatch({ input: [{ type: 'text', data: { text: 'native ' } }, { type: 'face', data: { id: 1 } }, { type: 'image', data: { media: { kind: 'url', url: 'https://example.test/image.png' } } }] });
   expect(result).toMatchObject({ status: 'executed', value: { face: 1, images: [{ kind: 'url', url: 'https://example.test/image.png' }] } });
+});
+
+describe('commandNamespace with parameter segments (#1250 command-namespace-param-commands-swallowed)', () => {
+  function namespacedIndex(extra: readonly ReturnType<typeof createCapabilitySlot>[] = []) {
+    const root = rootPluginId();
+    const owner = childPluginId(root, 'sixty');
+    const slot = (path: string, definition: ReturnType<typeof defineCommand>) => {
+      const bound = bindCommandSource(definition, `/sixty/commands/${path}/index.ts`);
+      return createCapabilitySlot({ owner, feature: commandFeatureId, localName: bound.localName, source: path, definition: bound.definition });
+    };
+    const slots = [
+      slot('60s', defineCommand({ description: '每日60秒新闻', execute: () => 'news' })),
+      slot('gold', defineCommand({ description: '金价', execute: () => 'gold' })),
+      slot('fanyi/[text]', defineCommand({ description: '翻译', params: { text: { type: 'string' } }, execute: ({ params }) => `fanyi:${String(params.text)}` })),
+      slot('douyin/[[limit]]', defineCommand({ description: '抖音', params: { limit: { type: 'integer', default: 10 } }, execute: ({ params }) => `douyin:${String(params.limit)}` })),
+      ...extra,
+    ];
+    const snapshot = snapshotWithOwners([owner], slots);
+    const index = new CommandIndex(slots, { ...snapshot, config: new Map([[root, {}], [owner, { commandNamespace: '60s' }]]) });
+    return { index, root };
+  }
+
+  it('routes `ns cmd <arg>` to the parameter command', async () => {
+    const { index } = namespacedIndex();
+    await expect(index.dispatch({ input: '60s fanyi 你好世界' })).resolves.toMatchObject({ status: 'executed', value: 'fanyi:你好世界' });
+    await expect(index.dispatch({ input: '60s douyin 3' })).resolves.toMatchObject({ status: 'executed', value: 'douyin:3' });
+    await expect(index.dispatch({ input: '60s gold' })).resolves.toMatchObject({ value: 'gold' });
+  });
+
+  it('routes `ns cmd [[opt]]` without a value to the optional parameter command', async () => {
+    const { index } = namespacedIndex();
+    await expect(index.dispatch({ input: '60s douyin' })).resolves.toMatchObject({ status: 'executed', value: 'douyin:10' });
+  });
+
+  it('keeps parameter subcommands when the namespace equals a local command name, even beside a bare command of that name', async () => {
+    const { index } = namespacedIndex();
+    await expect(index.dispatch({ input: '60s 60s' })).resolves.toMatchObject({ value: 'news' });
+    // Another plugin owning the bare `60s` route must not swallow `60s fanyi …` / `60s douyin`.
+    const root = rootPluginId();
+    const bare = createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: '60s', source: '/commands/60s/index.ts',
+      definition: defineCommand({ execute: () => 'bare' }) });
+    const { index: withBare } = namespacedIndex([bare]);
+    await expect(withBare.dispatch({ input: '60s fanyi hello' })).resolves.toMatchObject({ value: 'fanyi:hello' });
+    await expect(withBare.dispatch({ input: '60s douyin' })).resolves.toMatchObject({ value: 'douyin:10' });
+    await expect(withBare.dispatch({ input: '60s' })).resolves.toMatchObject({ value: 'bare' });
+    // The bare command's help also lists the commands under it.
+    const help = await withBare.dispatch({ input: '60s --help' });
+    expect(String(help.value)).toContain('子指令');
+    expect(String(help.value)).toContain('60s fanyi <text>');
+  });
+
+  it('lists every command under the namespace for `<namespace>` and `<namespace> --help`', async () => {
+    const { index } = namespacedIndex();
+    for (const input of ['60s --help', '60s']) {
+      const result = await index.dispatch({ input, commandPrefix: '#' });
+      expect(result).toMatchObject({ matched: true, status: 'executed' });
+      const text = String(result.value);
+      for (const name of ['#60s 60s', '#60s gold', '#60s fanyi <text>', '#60s douyin [limit]']) expect(text).toContain(name);
+    }
+    // A plain chat word that starts a command path still reaches the Agent.
+    await expect(index.dispatch({ input: 'gold' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+  });
 });

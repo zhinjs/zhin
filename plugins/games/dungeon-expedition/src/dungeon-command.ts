@@ -81,7 +81,14 @@ export async function runDungeonCommand(
     const action = normalizeDungeonAction(rawAction);
     if (!action || action === 'help') return getDungeonHelp(message);
     if (action === 'create') return startDungeon(service, message);
-    if (action === 'status') return continueDungeon(service, message);
+    if (action === 'status') {
+      // #1250: with no party here, the bare command explains how to start one instead of a dead end.
+      if (!(await service.getActiveByChannel(channelKey(message)))) {
+        return [messages(message.locale, 'empty'), '', getDungeonHelp(message), gameCommandHint(message, 'dungeon')]
+          .filter((line, index) => index < 3 || line).join('\n');
+      }
+      return continueDungeon(service, message);
+    }
 
     const session = await service.getActiveByChannel(channelKey(message));
     if (!session) return messages(message.locale, 'empty') + gameCommandHint(message, 'dungeon');

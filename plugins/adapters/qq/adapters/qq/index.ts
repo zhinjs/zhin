@@ -31,6 +31,8 @@ export default defineAdapter<QqEndpointConfig>({
           markdown: 'native',
           outboundMedia: ['url', 'upload'],
           interactive: 'native',
+          // QQ 消息按钮最多 5 行 × 5 个；超出的选项由 core 改成序号文本（#1250）。
+          interactiveLimits: { maxButtons: 25 },
           model: {
             share: {
               fields: ['description', 'image'],
@@ -70,6 +72,8 @@ export default defineAdapter<QqEndpointConfig>({
           markdown: 'native',
           outboundMedia: ['url', 'upload'],
           interactive: 'native',
+          // QQ 消息按钮最多 5 行 × 5 个；超出的选项由 core 改成序号文本（#1250）。
+          interactiveLimits: { maxButtons: 25 },
         },
       },
       prompt: {

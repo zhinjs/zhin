@@ -77,5 +77,5 @@ const messages = createMessages({
   text10: { 'zh-CN': "💡 提示", en: "💡 Hint" },
   text11: { 'zh-CN': "⏭️ 跳过", en: "⏭️ Skip" },
   text12: { 'zh-CN': "🏳️ 结束", en: "🏳️ End" },
-  text13: { 'zh-CN': "直接回复答案", en: "Reply with your answer" },
+  text13: { 'zh-CN': "直接回复答案；也可以回复「提示」「跳过」「结束」或对应序号", en: "Reply with your answer, or reply 提示 (hint), 跳过 (skip), 结束 (end) or the option number" },
 });
