@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-icqq",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "ICQQ adapter: in-process @icqqjs/icqq client for QQ groups, private chats, temporary sessions and guild channels.",
   "keywords": [
     "zhin.js",
