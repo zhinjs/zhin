@@ -42,7 +42,7 @@ const ADDS = [
   { args: ['component', 'demo-card'], js: 'components/demo-card/index.js' },
 ];
 const PLUGINS = [
-  { name: 'e2e-normal', type: 'normal', adds: ADDS, js: ['plugin.js', 'commands/e2e-normal/index.js', 'commands/e2e-normal-echo/[text]/index.js', ...ADDS.map((add) => add.js)] },
+  { name: 'e2e-normal', type: 'normal', adds: ADDS, js: ['plugin.js', 'commands/e2e-normal/index.js', 'commands/e2e-normal/echo/[text]/index.js', ...ADDS.map((add) => add.js)] },
   { name: 'e2e-service', type: 'service', js: ['plugin.js'] },
   { name: 'e2e-adapter', type: 'adapter', js: ['plugin.js', 'adapters/e2e-adapter/index.js'] },
 ];

@@ -312,7 +312,7 @@ Previews and migrates the legacy `ai.providers`-style model configuration and Se
 zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm-name>] [--is-official] [--skip-install]
 ```
 
-**This is the single official way to create a plugin.** The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively.
+**This is the single official way to create a plugin.** The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively. A non-interactive run (CI, scripts, no TTY) never prompts: give both the name and `--type`, or it exits with an error. The normal template's sample commands are `commands/<name>/index.ts` (`<name>`) and its subcommand `commands/<name>/echo/[text]/index.ts` (`<name> echo <text>`).
 
 - **Standalone plugin (an external plugin to publish to npm)**: `npx @zhin.js/cli new my-plugin --standalone` generates `./my-plugin/` in the current directory. No bot project is needed and no `package.json` is modified. The output has the `package.json#zhin` manifest, a `plugin.ts` that default-exports `definePlugin()`, convention directories, `tests/` and `README.md`, and works out of the box with `pnpm test` / `pnpm typecheck` / `pnpm publish`.
 - **Local plugin inside a bot project**: run `zhin new my-plugin` (without `--standalone`) at the project root. It generates `plugins/<name>/` and adds it to the root `package.json` `dependencies`.
@@ -446,6 +446,8 @@ zhin preview --json                    # print the scan and render result and ex
 
 Starts a local preview workbench: it scans `components/*` and `pages/*` in the project or plugin directory (the current directory by default), hot-reloads, and lets you edit Props and adjust styles live. It listens on `127.0.0.1:4176` by default; `--open` opens the browser after startup.
 
+Sample Props come from `previewProps`; plugin services that a component reads with `use(token)` come from the stand-ins in `previewServices` (see [components](../authoring/middleware-components.md#stand-in-services-for-previews-previewservices)); without one the preview names the missing token.
+
 ### build: Build a Plugin
 
 ```bash
@@ -572,7 +574,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin start` and have `assistant.enabled`.
 
 ```bash
-zhin schedule list [--host <url>]
+zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"
@@ -590,7 +592,7 @@ zhin schedule resume <id>
 | `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why. An explicit target also needs `endpoint.operate` on that account (as `zhin send` / `/message/send` does; the Console `cron:add` RPC too), otherwise 403 `schedule_target_forbidden` |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
 
-`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list).
+`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list). Multi-line content is indented line by line and cut after 2 lines; `--json` prints the full job data.
 
 ### agent: Agent Diagnostics
 

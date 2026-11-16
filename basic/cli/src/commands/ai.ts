@@ -1,12 +1,12 @@
 /**
- * `zhin ai account …` — Host model accounts that read a Host environment variable (#1250).
+ * `zhin ai account …` — Host model accounts (#1250): list them, add / re-point ones that read a Host environment variable, test one.
  *
  * Runs only over the project's gateway control socket (`.zhin/gateway.sock`) as the local owner:
  * the instance accepts these requests from no Console session. The CLI sends variable names, never
  * values, and does not import any IM layer (ADR 0054): it calls the running instance's routes.
  */
 import { Command } from 'commander';
-import { hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
+import { hostGet, hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
 
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
@@ -42,6 +42,82 @@ export function describeProbe(result: ProbeView): string {
 function fail(output: AiOutput, result: HostFetchResult<unknown>): void {
   output.error(result.error ?? `请求失败（HTTP ${result.status}）`);
   process.exitCode = 1;
+}
+
+/** One model account as `zhin ai account list` shows it: names of referenced variables, never values. */
+export interface AccountListRow {
+  readonly id: string;
+  readonly name?: string;
+  readonly serviceId: string;
+  readonly service?: string;
+  readonly method: string;
+  readonly env: readonly string[];
+  readonly status: string;
+}
+
+interface InferenceViewSlice {
+  readonly services?: Readonly<Record<string, { readonly label?: string }>>;
+  readonly accounts?: Readonly<Record<string, { readonly id: string; readonly label?: string; readonly serviceId: string;
+    readonly authentication?: { readonly method?: string; readonly source?: string } }>>;
+  readonly statuses?: Readonly<Record<string, { readonly status?: string; readonly environment?: 'present' | 'missing' }>>;
+}
+
+/** Variable names an `env://NAME` source or a `${NAME…}` expression reads. */
+function referencedVariables(source: string | undefined): string[] {
+  if (!source) return [];
+  const direct = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(source)?.[1];
+  if (direct) return [direct];
+  return [...new Set([...source.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1]!))];
+}
+
+const STATUS_TEXT: Readonly<Record<string, string>> = Object.freeze({
+  ready: '可用', authenticated: '可用', 'exchange-pending': '登录中', 'not-authorized': '未授权',
+  disconnected: '已断开', reauthorize: '需重新授权', uncertain: '状态未知',
+});
+
+/** Rows of the instance's model-management view, sorted by id. */
+export function accountRows(view: InferenceViewSlice): AccountListRow[] {
+  return Object.values(view.accounts ?? {}).map((account): AccountListRow => {
+    const status = view.statuses?.[account.id];
+    const service = view.services?.[account.serviceId];
+    return {
+      id: account.id,
+      ...(account.label ? { name: account.label } : {}),
+      serviceId: account.serviceId,
+      ...(service?.label ? { service: service.label } : {}),
+      method: account.authentication?.method ?? 'unknown',
+      env: referencedVariables(account.authentication?.source),
+      status: status?.status === 'not-authorized' && status.environment
+        ? `environment-${status.environment}` : status?.status ?? 'unknown',
+    };
+  }).sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function statusText(status: string): string {
+  if (status === 'environment-present') return '待激活（环境变量已设置，首次调用或 zhin ai account test 时激活）';
+  if (status === 'environment-missing') return '⚠ 环境变量未设置';
+  return STATUS_TEXT[status] ?? status;
+}
+
+export async function runAccountList(input: Readonly<{ client: HostHttpConfig; json?: boolean; output?: AiOutput }>): Promise<boolean> {
+  const output = input.output ?? processOutput;
+  // The view is the management root itself (`GET {base}/agent/inference`).
+  const root = { ...input.client, baseUrl: input.client.baseUrl.replace(/\/agent\/inference$/u, '') };
+  const viewed = await hostGet<InferenceViewSlice>(root, '/agent/inference');
+  if (!viewed.ok || !viewed.data) { fail(output, viewed); return false; }
+  const rows = accountRows(viewed.data);
+  if (input.json) { output.log(JSON.stringify(rows, null, 2)); return true; }
+  if (!rows.length) {
+    output.log('还没有 Host 模型账号。使用 zhin ai account add 添加，或在 Console「模型」中添加。');
+    return true;
+  }
+  for (const row of rows) {
+    output.log(`${row.id}${row.name ? `  ${row.name}` : ''}`);
+    output.log(`  服务：${row.service ? `${row.service}（${row.serviceId}）` : row.serviceId}`);
+    output.log(`  认证：${row.method}${row.env.length ? `，读取环境变量 ${row.env.join(', ')}` : ''}`);
+    output.log(`  状态：${statusText(row.status)}`);
+  }
+  return true;
 }
 
 export async function runAccountAdd(input: Readonly<{
@@ -119,6 +195,15 @@ async function requireLocal(root: string): Promise<HostHttpConfig | undefined> {
 }
 
 const accountCommand = new Command('account').description('管理引用 Host 环境变量的模型账号（仅本机）');
+
+accountCommand.command('list')
+  .description('列出 Host 模型账号：id、名称、服务、引用的环境变量名（不含值）与状态')
+  .option('--json', '以 JSON 输出')
+  .option('--cwd <dir>', '项目根目录（默认当前目录）')
+  .action(async (options: { json?: boolean; cwd?: string }) => {
+    const client = await requireLocal(options.cwd ?? process.cwd());
+    if (client) await runAccountList({ client, json: options.json });
+  });
 
 accountCommand.command('add')
   .description('新增 Host API Key 账号，从 Host 环境变量读取密钥（不回显值）')

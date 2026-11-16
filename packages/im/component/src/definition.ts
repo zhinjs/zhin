@@ -2,13 +2,24 @@
  * Component authoring API consumed from `zhin.js/component`.
  * @module zhin.js/component
  */
-import type { PluginNodeSnapshot } from '@zhin.js/plugin-runtime';
+import type { PluginNodeSnapshot, Token } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const componentBrand = 'zhin.component/1' as const;
 
 export interface ComponentContext<TConfig = unknown> extends CapabilityContext<TConfig> {
   readonly requester: PluginNodeSnapshot;
+}
+
+/**
+ * A stand-in service for `zhin preview`: what `context.use(token)` / `context.has(token)` return
+ * while the component is previewed outside a running instance. Never used at runtime.
+ *
+ * @public
+ */
+export interface ComponentPreviewService<T = unknown> {
+  readonly token: Token<T>;
+  readonly value: T;
 }
 
 export interface ComponentDefinition<
@@ -20,6 +31,12 @@ export interface ComponentDefinition<
   readonly $feature: typeof componentBrand;
   /** Optional, public example parameters for interactive previews. Do not include secrets. */
   readonly previewProps?: TProps;
+  /**
+   * Optional stand-in services for previews (`zhin preview`), the counterpart of `previewProps`
+   * for `context.use(token)`. A preview that reads a token not listed here fails with a message
+   * naming the token. Runtime rendering always uses the real plugin services. Do not include secrets.
+   */
+  readonly previewServices?: readonly ComponentPreviewService[];
   render(props: TProps, context: ComponentContext<TConfig>): TResult | Promise<TResult>;
 }
 
@@ -85,6 +102,11 @@ export function parseComponentDefinition(value: unknown): ComponentDefinition {
   const definition = value as Partial<ComponentDefinition>;
   if (definition.$feature !== componentBrand || typeof definition.render !== 'function') {
     throw invalidComponent();
+  }
+  if (definition.previewServices !== undefined && (!Array.isArray(definition.previewServices)
+    || !definition.previewServices.every(service => !!service && typeof service === 'object'
+      && !!service.token && typeof service.token === 'object' && typeof service.token.id === 'string'))) {
+    throw new TypeError('Component previewServices must be an array of { token, value }');
   }
   return definition as ComponentDefinition;
 }

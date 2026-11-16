@@ -167,6 +167,24 @@ it('shows an env-backed Host account without a credential as environment-ready, 
   } finally { await f.close(); }
 });
 
+it('names an unknown account id and a service id passed as an account id, with a Chinese message (#1250 ai-account-cli-no-list)', async () => {
+  const f = await setup();
+  try {
+    const service = await f.call('/account/test', { accountId: 'service' }, 'local');
+    expect(service.status).toBe(404);
+    expect(service.payload).toMatchObject({ success: false, code: 'account-id-is-service' });
+    expect(service.payload.error).toContain('这是模型服务的 id，不是账号 id');
+    const unknown = await f.call('/account/test', { accountId: 'ghost' }, 'owner');
+    expect(unknown.status).toBe(404);
+    expect(unknown.payload).toMatchObject({ code: 'account-not-found' });
+    expect(unknown.payload.error).toContain('zhin ai account list');
+    // Every classified code has its own text; the generic fallback stays for unknown codes only.
+    const invalid = await f.call('/account/test', {}, 'local');
+    expect(invalid.payload).toMatchObject({ code: 'invalid-input' });
+    expect(invalid.payload.error).not.toBe('模型服务操作未完成');
+  } finally { await f.close(); }
+});
+
 it('renames the env reference of a Host account keeping its identity, and re-authorizes only on request', async () => {
   const f = await setup();
   try {

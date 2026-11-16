@@ -86,3 +86,23 @@ export function nextRunSummary(job: Pick<ScheduleJobRecordCli, 'enabled' | 'stat
   if (typeof next === 'number') return formatDateTime(next);
   return (job.schedule as { kind?: string }).kind === 'event' ? undefined : '⚠ 无（不会触发）';
 }
+
+/** Lines of a job's content shown by `zhin schedule list` before it is cut (#1250). */
+export const CONTENT_PREVIEW_LINES = 2;
+
+/**
+ * `内容:` of `zhin schedule list` (#1250 `schedule-list-multiline-content`): every line is indented
+ * under the label, and content beyond {@link CONTENT_PREVIEW_LINES} lines is cut with a hint to
+ * read the full text with `--json`.
+ */
+export function contentLines(prompt: string, label = '    内容:   '): string[] {
+  // Display width: a CJK character takes two columns.
+  const indent = ' '.repeat([...label].reduce((width, char) => width + (char.codePointAt(0)! > 0xff ? 2 : 1), 0));
+  const all = prompt.replace(/\r\n?/gu, '\n').split('\n');
+  const shown = all.slice(0, CONTENT_PREVIEW_LINES);
+  const lines = shown.map((line, index) => `${index === 0 ? label : indent}${line}`);
+  if (all.length > shown.length) {
+    lines.push(`${indent}…（共 ${all.length} 行，完整内容用 zhin schedule list --json 查看）`);
+  }
+  return lines;
+}

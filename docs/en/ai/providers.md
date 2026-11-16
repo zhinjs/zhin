@@ -168,12 +168,13 @@ Console references to Host environment variables follow two rules:
 The service address itself is not restricted: a global owner may point a `*_API_KEY` account at a custom address (for example a self-hosted model relay). Both rules are re-checked when a reference is created or renamed, and when the service of an env-backed account changes; refusals carry a clear reason. Key values never appear in responses, logs, audit entries or plaintext database rows.
 
 ```bash
+zhin ai account list [--json]   # id, name, service, referenced variable names (never values) and status
 zhin ai account add --service openai --env OPENAI_API_KEY --name main --test
 zhin ai account rename-env main OPENAI_API_KEY OPENAI_PROD_API_KEY [--reauthorize]
 zhin ai account test <account id>
 ```
 
-These commands run only through the local gateway, are written to the Console audit log (account id and variable names only) and never echo values. `rename-env` also accepts a global owner's Console session (subject to the `_API_KEY` rule).
+`test` and `rename-env` take an account id, not a service id; passing a service id is reported as such. These commands run only through the local gateway, are written to the Console audit log (account id and variable names only) and never echo values. `rename-env` also accepts a global owner's Console session (subject to the `_API_KEY` rule).
 
 ### Account status and connection tests
 
