@@ -155,11 +155,13 @@ Core 会在 `$reply`、Agent 结构化输出和 Console IM 视图中保留它，
 `select` / `multiselect` / `list`，通过 `sequence()` 声明连续交互。
 
 每个请求都可以声明 `title`、`description` 与 `tip`。`UserInteraction` 隐藏呈现和回复解析：
-确认与小规模单选先转换为平台无关的
-`UserInteractionView`，再统一渲染为 `markdown` + canonical `keyboard`。声明
+确认与单选先转换为平台无关的
+`UserInteractionView`，再统一渲染为 `markdown` + canonical `keyboard`（单选的全部选项都成为按钮）。声明
 `segments.interactive: native` 的 Adapter（如 QQ）编码为原生按钮；其他 Adapter 在 Core
-中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。多选和过多选项直接使用
-列表，避免平台按钮数量限制。
+中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。按钮数量上限由 Adapter 在
+能力画像里声明（`segments.interactiveLimits.maxButtons`，如 QQ 官方 25）：超出时前 N 项保留按钮，
+其余选项在 Core 中改为紧挨按钮的编号列表。选择提示只写「回复序号或选项名称」，不承诺一定有按钮。
+多选直接使用列表。
 
 `ImRuntime` 把交互职责委托给实例私有的 `RuntimeInteractionCoordinator`：它统一拥有待回复
 claim、超时与取消、连续问答、action handler 和编号 fallback。状态同时按用户、generation

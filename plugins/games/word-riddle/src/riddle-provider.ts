@@ -39,7 +39,15 @@ const { WORD_PINYIN_MAP } = require('chinese-idiom-chengyu/src/tools/parse.js') 
 
 const FOUR_CHAR = /^[\u4e00-\u9fff]{4}$/;
 
-const charPool: RiddleEntry[] = charRiddles as RiddleEntry[];
+/**
+ * Question-bank cleanup (#1250): sources repeat sentence punctuation (「……活下去。。」); one mark
+ * is kept. Applied to every entry as it is loaded.
+ */
+export function cleanRiddleText(text: string): string {
+  return text.trim().replace(/([。．！？，、；：…!?,;:])\1+/gu, '$1').replace(/[。．]([！？!?])/gu, '$1');
+}
+
+const charPool: RiddleEntry[] = (charRiddles as RiddleEntry[]).map((entry) => ({ ...entry, question: cleanRiddleText(entry.question) }));
 const charById = new Map(charPool.map((r) => [r.id, r]));
 
 let idiomPool: RiddleEntry[] | null = null;
@@ -55,9 +63,8 @@ function buildIdiomEntry(word: string): RiddleEntry | null {
   return {
     id: `i:${word}`,
     type: 'idiom',
-    question: `${gloss}。（猜成语）`,
+    question: `${cleanRiddleText(gloss).replace(/[。．.！!？?，,、；;：:\s]+$/u, '')}。（猜成语）`,
     answer: word,
-    hint: '共 4 个字',
     explanation: gloss,
   };
 }
@@ -82,6 +89,26 @@ export function getRiddleById(id: string): RiddleEntry | undefined {
   if (id.startsWith('c:')) return charById.get(id);
   if (id.startsWith('i:')) return buildIdiomEntry(id.slice(2)) ?? undefined;
   return undefined;
+}
+
+/**
+ * A hint that tells the player something new (#1250): the first character of an idiom (the
+ * question already says it has four), or for a one-character riddle four candidates that include
+ * the answer. Decoys are drawn deterministically from other answers so a repeated hint agrees.
+ */
+export function riddleHint(entry: RiddleEntry): { readonly kind: 'first'; readonly char: string } | { readonly kind: 'choices'; readonly choices: readonly string[] } {
+  if (entry.type === 'idiom') return { kind: 'first', char: [...entry.answer][0] ?? entry.answer };
+  let seed = 0;
+  for (const char of entry.id) seed = (seed * 31 + char.codePointAt(0)!) >>> 0;
+  const decoys: string[] = [];
+  for (let step = 0; decoys.length < 3 && step < 64; step++) {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    const candidate = charPool[seed % charPool.length]?.answer;
+    if (candidate && candidate !== entry.answer && !decoys.includes(candidate)) decoys.push(candidate);
+  }
+  const choices = [...decoys];
+  choices.splice(seed % (decoys.length + 1), 0, entry.answer);
+  return { kind: 'choices', choices };
 }
 
 export function riddleCount(): { char: number; idiom: number; total: number } {

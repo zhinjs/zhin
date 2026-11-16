@@ -192,4 +192,19 @@ describe('command.conflict attention items (#1250)', () => {
     expect(warned).toHaveLength(4);
     expect(String(warned.find(fields => fields.route === '排行')!.hint)).toContain('group-suite.disabledCommands: [rank]');
   });
+
+  it('warns once when a plugin commandNamespace repeats one of its own command names (#1250)', () => {
+    const warned: Record<string, unknown>[] = [];
+    const log = new CommandConflictLog(fields => warned.push(fields));
+    const slots = [command(groupSuite, '60s', { execute: () => 'news' }), command(groupSuite, 'gold', { execute: () => 'gold' })];
+    const base = state(slots);
+    const config = new Map(base.config);
+    config.set(groupSuite, { commandNamespace: '60s' });
+    const index = new CommandIndex(slots, { ...base, config, generation: 1, projections: new Map() });
+    const snapshot = { ...base, config, projections: new Map([[commandFeatureId, index]]), generation: 1 };
+    log.report(snapshot);
+    expect(warned).toEqual([expect.objectContaining({ op: 'command_namespace_collision', plugin: 'group-suite', namespace: '60s', command: '60s 60s' })]);
+    log.report({ ...snapshot, generation: 2 });
+    expect(warned).toHaveLength(1);
+  });
 });

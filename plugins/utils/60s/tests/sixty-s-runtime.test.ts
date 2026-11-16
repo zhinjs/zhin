@@ -198,3 +198,20 @@ describe('60s owner-scoped client', () => {
     expect(second.apiBase).toBe('https://second.example.com');
   });
 });
+
+describe('gold prices (#1250 60s-gold-currency-mixed)', () => {
+  it('uses the currency symbol of the unit the API returns', async () => {
+    const { default: goldPrice, currencySymbol } = await import('../src/handlers/gold-price.js');
+    expect(currencySymbol('美元/盎司')).toBe('$');
+    expect(currencySymbol('元/克')).toBe('¥');
+    expect(currencySymbol('港元/两')).toBe('');
+    const client = { fetch: vi.fn().mockResolvedValue({ metals: [
+      { name: '伦敦金(现货黄金)', today_price: '3839.45', unit: '美元/盎司' },
+      { name: '国内金价', today_price: '780', unit: '元/克' },
+    ] }) } as unknown as SixtySClient;
+    const text = await goldPrice(client, 'zh-CN');
+    expect(text).toContain('伦敦金(现货黄金): $3839.45 美元/盎司');
+    expect(text).toContain('国内金价: ¥780 元/克');
+    expect(text).not.toContain('¥3839.45');
+  });
+});

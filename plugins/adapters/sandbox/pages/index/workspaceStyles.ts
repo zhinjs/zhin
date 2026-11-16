@@ -785,6 +785,13 @@ export const workspaceStyles = `
   border-top: 1px solid hsl(var(--warning) / 0.18);
 }
 
+/* #1250: a selection with many options keeps every button; long keyboards scroll inside the bubble. */
+:where(.zhin-sandbox) .agent-playground-approval-actions.is-long {
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 :where(.zhin-sandbox) .agent-playground-approval-actions > div {
   display: flex;
   flex-wrap: wrap;

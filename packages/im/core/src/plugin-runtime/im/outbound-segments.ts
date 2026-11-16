@@ -69,6 +69,7 @@ export type OutboundMediaPolicy = 'base64' | 'url-or-text' | 'passthrough';
 export interface OutboundSegmentsPolicy {
   readonly outboundMedia: readonly ('url' | 'path' | 'base64' | 'upload')[];
   readonly interactive?: InteractivePolicy;
+  readonly interactiveLimits?: { readonly maxButtons?: number };
   readonly markdown?: 'native' | 'text';
   readonly html?: 'direct' | 'image' | 'text';
 }
@@ -292,6 +293,59 @@ function readDeclaredInteractivePolicy(segments: Readonly<Record<string, unknown
   const declared = segments.interactive;
   return declared === 'native' || declared === 'text' ? declared : undefined;
 }
+
+/**
+ * Native button limit an adapter declares (`segments.interactiveLimits.maxButtons`, ADR 0044
+ * profile; #1250 select-over-10-options-no-buttons). `undefined` = no declared limit.
+ */
+export function resolveOutboundMaxButtons(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
+): number | undefined {
+  // ADR 0064 F1: read through the same per-conversation declaration as the interactive policy, so
+  // a kind section that declares its own `segments` (QQ channels) supplies its own limit.
+  const segments = resolveDeclaredSegments(adapter, snapshot, conversation) as Partial<OutboundSegmentsPolicy> | undefined;
+  const max = segments?.interactiveLimits?.maxButtons;
+  return typeof max === 'number' && Number.isInteger(max) && max >= 1 ? max : undefined;
+}
+
+/**
+ * Keyboards with more buttons than a native endpoint takes: the first `maxButtons` stay buttons
+ * and the rest are listed as numbered text right before the keyboard, so every option stays
+ * reachable by number or name. The whole keyboard's numbers are remembered like a text keyboard's,
+ * so the listed overflow numbers continue the buttons' own numbering.
+ */
+export function applyOutboundButtonLimit(
+  payload: unknown,
+  maxButtons: number | undefined,
+  remember?: (map: Record<string, string>) => Record<string, string> | void,
+): unknown {
+  if (maxButtons === undefined || !Array.isArray(payload)) return payload;
+  return payload.flatMap((item) => {
+    if (!isKeyboardSegment(item)) return [item];
+    const data = item.data as KeyboardSegmentData;
+    const flat = data.rows.flat();
+    if (flat.length <= maxButtons) return [item];
+    const kept = new Set(flat.slice(0, maxButtons));
+    const rows = data.rows.map(row => row.filter(button => kept.has(button))).filter(row => row.length > 0);
+    const keptPayloads = new Set([...kept].map(button => button.payload));
+    // Remember the whole keyboard, not just the overflow: the runtime renumbers digit labels from
+    // the conversation's next free number, so registering only options 11–12 would publish them
+    // as 「1」「2」 and a reply 「1」 would pick option 11 instead of the first button (#1250).
+    const full = effectiveKeyboardFallbackMap(data);
+    const remembered = remember?.(full);
+    const map = remembered && typeof remembered === 'object' && !Array.isArray(remembered) ? remembered : full;
+    const lines = Object.entries(map).filter(([, value]) => !keptPayloads.has(value))
+      .sort(([a], [b]) => Number(a) - Number(b)).map(([key, value]) =>
+        `${key}. ${flat.find(button => !button.disabled && button.payload === value)?.label ?? '·'}`);
+    const keyboard = { ...item, data: { ...data, rows } };
+    if (lines.length === 0) return [keyboard];
+    return [{ type: 'text', data: { text: `${MORE_OPTIONS_HINT}\n${lines.join('\n')}` } }, keyboard];
+  });
+}
+
+const MORE_OPTIONS_HINT = '更多选项（回复序号或名称）：';
 
 /**
  * keyboard 段降级：'text' 端点把 keyboard 渲染为编号文本，并把有效

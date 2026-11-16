@@ -21,7 +21,8 @@ export const interactionMessages = createMessages({
   confirm: { 'zh-CN': '确认', en: 'Confirm' },
   cancel: { 'zh-CN': '取消', en: 'Cancel' },
   confirmation: { 'zh-CN': '请选择确认或取消。', en: 'Choose confirm or cancel.' },
-  selection: { 'zh-CN': '可以点击按钮，或回复序号/选项名称。', en: 'Click a button, or reply with an option number or name.' },
+  // Shown whether or not the endpoint renders buttons: replying always works, buttons speak for themselves (#1250).
+  selection: { 'zh-CN': '回复序号或选项名称。', en: 'Reply with an option number or name.' },
   multiple: { 'zh-CN': '回复序号或选项名称，多项用“{separator}”分隔。', en: 'Reply with option numbers or names, separated by "{separator}".' },
   list: { 'zh-CN': '多项用“{separator}”分隔。', en: 'Separate items with "{separator}".' },
   ended: { 'zh-CN': '交互已结束', en: 'Interaction ended' },

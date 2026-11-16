@@ -1,6 +1,6 @@
 import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import { createMessages } from 'zhin.js/i18n';
-import { continueGame, startGame } from './game-flow.js';
+import { continueGame, endRound, startGame } from './game-flow.js';
 import { riddleCount, type RiddleType } from './riddles-catalog.js';
 
 import { typeLabel } from './engine.js';
@@ -13,9 +13,8 @@ const messages = createMessages({
   counts: { 'zh-CN': '字谜 {chars} 题 · 成语 {idioms} 题', en: '{chars} character riddles · {idioms} idiom riddles' },
   char: { 'zh-CN': '{command} — 字谜模式', en: '{command} — Chinese character riddles' },
   idiom: { 'zh-CN': '{command} — 猜成语模式', en: '{command} — Chinese idiom riddles' },
-  instructions: { 'zh-CN': '进行中直接回复答案；连击加分，提示/失误会清零连击。', en: 'Reply with the answer during play. Streaks earn bonus points; hints and mistakes reset the streak.' },
+  instructions: { 'zh-CN': '进行中直接回复答案；连击加分，失误会清零连击。回复「提示」看首字或候选字（-3 分，每局 3 次），「结束」公布答案并结算本局。', en: 'Reply with the answer during play. Streaks earn bonus points; mistakes reset the streak. Reply hint for the first character or candidates (-3 points, 3 per round), or end to reveal the answer and see your round score.' },
   active: { 'zh-CN': '进行中：{mode} · 得分 {score} · 连击 {streak}', en: 'Playing: {mode} · Score {score} · Streak {streak}' },
-  quit: { 'zh-CN': '已放弃猜谜。', en: 'You quit the riddle game.' },
 });
 
 export function getRiddleHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
@@ -68,8 +67,7 @@ export async function runRiddleCommand(
     if (action === 'quit' || action === '放弃') {
       const row = await services.getActiveForUser(ch, userId);
       if (!row) return gameCommandFeedback(message, 'noGame');
-      await services.updateSession(row.id, { status: 'aborted' });
-      return messages(row.locale ?? undefined, 'quit');
+      return endRound(services, row);
     }
 
     return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getRiddleHelp(message);

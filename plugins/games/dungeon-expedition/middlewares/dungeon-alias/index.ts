@@ -16,7 +16,8 @@ export default defineGameCommandAliasMiddleware({
         formatCommand: path => context.input.formatCommand?.(path, context.owner.id) }));
       return true;
     }
-    const services = resolveGameServices(context), player = gamePlayerFromInput(input);
+    const services = resolveGameServices(context), player = gamePlayerFromInput(input, { locale: context.input.locale,
+      formatCommand: (path: string) => context.input.formatCommand?.(path, context.owner.id) });
     await replyGameOperation({ session: services, player, reply: content => context.input.$reply(content),
       run: () => runDungeonCommand(services, player, action) });
     return true;

@@ -24,6 +24,8 @@ import { requireAdapters } from './endpoint-runtime.js';
 import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
 import {
   applyOutboundInteractivePolicy,
+  applyOutboundButtonLimit,
+  resolveOutboundMaxButtons,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
   resolveOutboundHtmlPolicy,
@@ -136,7 +138,10 @@ export async function projectOutboundPayload(
   if (interactive === 'text' && Array.isArray(payload) && payload.some(item => item?.type === 'keyboard')) {
     reasons.add('interactive_text_policy');
   }
-  if (!options.deferInteractive) payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
+  if (!options.deferInteractive) {
+    payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
+    if (interactive === 'native') payload = applyOutboundButtonLimit(payload, resolveOutboundMaxButtons(adapter, snapshot, conversation), options.rememberFallback);
+  }
   if (Array.isArray(payload)) {
     payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));
     assertCanonicalSegments(payload);

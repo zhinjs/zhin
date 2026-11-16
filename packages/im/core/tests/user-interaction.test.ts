@@ -125,4 +125,16 @@ describe('UserInteraction module', () => {
     expect(rendered).toHaveLength(1);
     expect(JSON.stringify(rendered)).toContain('2. 允许一次（y / 同意） — 仅执行当前操作');
   });
+
+  it('passes every select option to the endpoint and never promises buttons in the text (#1250)', () => {
+    const options = Array.from({ length: 20 }, (_, index) => ({ label: `晴天 ${index + 1}`, value: index + 1 }));
+    const view = projectUserInteraction({ type: 'select', title: '选择歌曲', options });
+    expect(view.actions).toHaveLength(20);
+    expect(view.tip).toBe('回复序号或选项名称。');
+    expect(view.tip).not.toContain('按钮');
+    const rendered = renderUserInteraction(view) as { type: string; data: { rows?: unknown[][] } }[];
+    expect(rendered[1]?.type).toBe('keyboard');
+    expect(rendered[1]?.data.rows?.flat()).toHaveLength(20);
+  });
 });
+

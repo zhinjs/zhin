@@ -10,7 +10,7 @@ import { resolveGameServices } from '../../../src/runtime-store.js';
 export default defineCommand({
   description: '地牢远征：多人组队探索地牢',
   descriptionI18n: { en: 'Multiplayer dungeon expedition' },
-  alias: ['地牢远征'],
+  alias: ['地牢远征', '地牢'],
   preferredAliasI18n: { 'zh-CN': '地牢远征' },
   params: { action: { type: 'string', default: '',
     // 近似指令提示里列出真实子命令，而不是 `[action]`（#1250）。

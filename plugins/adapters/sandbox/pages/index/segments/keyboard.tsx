@@ -29,8 +29,10 @@ export const renderKeyboard: SandboxSegmentRenderer = (data, context, key) => {
   const exclusive = isExclusiveKeyboard(data);
   const resolved = Boolean(context.messageId && context.interactionResolved) && exclusive;
   const submitted = new Set(context.submittedPayloads ?? []);
+  // #1250: every option stays a button; a long keyboard scrolls instead of being cut.
+  const long = rows.flat().length > 10;
   return (
-    <div key={key} className="agent-playground-approval-actions">
+    <div key={key} className={long ? 'agent-playground-approval-actions is-long' : 'agent-playground-approval-actions'}>
       {rows.map((row, ri) => (
         <div key={ri}>
           {row.map((btn, bi) => (

@@ -41,6 +41,12 @@ export interface DungeonState {
   readonly players: readonly DungeonPlayer[];
   readonly enemy: DungeonEnemy | null;
   readonly log: readonly string[];
+  /**
+   * The session revision at which the leader asked to end the expedition (#1250). The confirmation
+   * is valid only while the session is still at this revision: any other action, or 「继续远征」,
+   * moves the revision on and the pending confirmation lapses.
+   */
+  readonly pendingAbortRevision?: number;
 }
 
 export type DungeonAction =
