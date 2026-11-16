@@ -28,6 +28,8 @@ const SEGMENT_POLICY_CEILING: Record<string, (value: unknown) => boolean | strin
   html: (value) => value === 'direct',
   markdown: (value) => value === 'native',
   interactive: (value) => value === 'native',
+  // Not declared = no native button limit: a long keyboard scrolls in the bubble (#1250 batch 37).
+  interactiveLimits: (value) => value === undefined,
   // `upload` is a platform upload channel; the Sandbox renders inline base64 and reads paths itself.
   outboundMedia: (value) => Array.isArray(value) && ['url', 'base64', 'path'].every((form) => value.includes(form)),
   // Prompt hints for platform-specific fields: not a capability level.
