@@ -280,7 +280,7 @@ ai:
     execSecurity: allowlist       # deny | allowlist（默认）| full
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # execPreset=custom 时的白名单
-    execApprovalMode: ask         # ask（默认）| bypass | auto
+    execApprovalMode: ask         # auto（默认）| ask | bypass
     gitStatus: true               # 默认 true：在提示词中注入一行 git 状态（非 git 仓库自动跳过）
     contextPaths: []              # 额外注入系统提示词的上下文文件（支持 ~ 与相对路径）
     systemPromptMaxChars: 100000  # 系统提示词总字符上限
