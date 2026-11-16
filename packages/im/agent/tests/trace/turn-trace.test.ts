@@ -73,6 +73,28 @@ describe('TurnTraceCollector', () => {
     expect(JSON.stringify(snapshot)).not.toContain('x'.repeat(100));
   });
 
+  it('#1250 batch 39: the model-visible tool result size replaces the raw size, which is kept apart', () => {
+    const trace = collector();
+    trace.record({ type: 'tool_call', toolName: 'voice_tts', args: { text: 'hi' }, toolUseId: 'v1' });
+    trace.record({ type: 'tool_result', toolName: 'voice_tts', output: 'a'.repeat(11_559), durationMs: 7, toolUseId: 'v1' });
+    trace.note({ kind: 'tool_model_result', tool_use_id: 'v1', size: 240 });
+    trace.record({ type: 'tool_call', toolName: 'grep', args: {}, toolUseId: 'g1' });
+    trace.record({ type: 'tool_result', toolName: 'grep', output: 'hit', durationMs: 1, toolUseId: 'g1' });
+    trace.note({ kind: 'tool_model_result', tool_use_id: 'g1', size: 3 });
+    // A failed call keeps no size; an unknown id changes nothing.
+    trace.record({ type: 'tool_failed', toolName: 'bash', toolUseId: 'b1', error: 'no', durationMs: 1 });
+    trace.note({ kind: 'tool_model_result', tool_use_id: 'b1', size: 9 });
+    trace.note({ kind: 'tool_model_result', tool_use_id: 'missing', size: 9 });
+    const snapshot = trace.snapshot();
+    expect(snapshot.tool_calls[0]).toMatchObject({ tool_name: 'voice_tts', result_size: 240, raw_result_size: 11_559 });
+    expect(snapshot.tool_calls[1]).toMatchObject({ tool_name: 'grep', result_size: 3 });
+    expect(snapshot.tool_calls[1]).not.toHaveProperty('raw_result_size');
+    expect(snapshot.tool_calls[2]).not.toHaveProperty('result_size');
+    expect(snapshot.timeline.filter(entry => entry.kind === 'tool_result').map(entry => entry.detail))
+      .toEqual(['voice_tts ok 7ms 240 chars (raw 11559 chars)', 'grep ok 1ms 3 chars']);
+    expect(formatTurnTrace(snapshot)).toContain('240 字符（工具原始输出 11559 字符）');
+  });
+
   it('records how a turn was admitted behind other turns (#725)', () => {
     const trace = collector();
     trace.note({ kind: 'admission', queued_ms: 1_200, merged_messages: 3, superseded_previous: true });

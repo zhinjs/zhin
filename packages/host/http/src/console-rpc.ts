@@ -94,7 +94,14 @@ export interface PluginManagementState {
   readonly version: string | null;
   readonly revision: string | null;
   readonly projectRevision: string;
-  readonly status: 'not-installed' | 'installed' | 'declared' | 'missing-config' | 'pending-restart' | 'enabled' | 'degraded';
+  /**
+   * `unknown`: a declared, enabled instance read without a running-instance snapshot (no instance
+   * reached, or it has not reported a generation yet), so publication cannot be judged; see
+   * {@link statusReason}. Never reported as `pending-restart` on that basis (#1250 第 39 批).
+   */
+  readonly status: 'not-installed' | 'installed' | 'declared' | 'missing-config' | 'pending-restart' | 'enabled' | 'degraded' | 'unknown';
+  /** Why the status is `unknown` (plain text for people). */
+  readonly statusReason?: string;
   readonly dependencies: 'unchecked' | 'passed' | 'failed';
   readonly validation: PluginConfigValidation | null;
   readonly generation: number | null;

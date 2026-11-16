@@ -117,6 +117,19 @@ export interface PluginEnablementPlan {
 /** Keys that never name a plugin instance (Host sections and the declaration protocol). */
 const RESERVED_INSTANCE_KEYS: ReadonlySet<string> = new Set([...HOST_CONFIG_KEYS, 'configVersion', 'plugins', 'disable_plugins', 'plugin', 'root']);
 
+/** `statusReason` of an `unknown` state read without any running-instance view (CLI offline, gateway). */
+export const NO_RUNNING_INSTANCE = '没有连上运行中的实例：只检查了本地文件，无法判断插件是否已在当前 generation 发布、是否需要重启';
+/** `statusReason` of an `unknown` state read inside an instance that has not committed a generation yet. */
+export const INSTANCE_NOT_REPORTED = '实例尚未上报 generation（仍在启动或正在切换代），稍后重新查询';
+
+/**
+ * Whether a change just made needs a (re)start to reach the instance. Without a running-instance
+ * view (`unknown`) a declared, enabled instance is assumed to need one, as before #1250 第 39 批.
+ */
+function restartAfterChange(state: PluginManagementState): boolean {
+  return state.status === 'unknown' ? state.declared && !state.disabled : state.restartRequired;
+}
+
 /** One installation authority for CLI and Console. No generation or package parser of its own. */
 export class PluginManagementWorkflow implements PluginManagementPort {
   readonly #root: string;
@@ -330,14 +343,20 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     // Publication compares this file's default-completed semantics with the
     // generation authority; it does not attest an applied raw-file revision.
     const missingConfig = declared && (validation?.valid === false || Boolean(validation?.missingEnv.length));
-    const restartRequired = declared && (disabled ? Boolean(node) : !published || dependencies !== 'passed');
+    // #1250 第 39 批：没有运行中实例的 snapshot 时，无法判断是否已发布、是否需要重启：
+    // 一个声明且启用的实例报 `unknown` 并说明原因，而不是一律 `pending-restart`。
+    const unobserved = !snapshot && declared && !disabled && !issues.length && !missingConfig;
+    const restartRequired = !unobserved && declared && (disabled ? Boolean(node) : !published || dependencies !== 'passed');
     const status: PluginManagementState['status'] = issues.length ? 'degraded'
       : missingConfig ? 'missing-config'
       : published && !disabled ? 'enabled'
+      : unobserved ? 'unknown'
       : restartRequired ? 'pending-restart'
       : declared ? 'declared' : installed.installed ? 'installed' : 'not-installed';
     await this.#assertConfigurationObservation(projectRevision, snapshot);
-    return Object.freeze({ ...target, revision, projectRevision, installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
+    return Object.freeze({ ...target, revision, projectRevision, installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status,
+      ...(status === 'unknown' ? { statusReason: this.#options.snapshots ? INSTANCE_NOT_REPORTED : NO_RUNNING_INSTANCE } : {}),
+      dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
   }
 
   async #configurationObservation(snapshot?: RuntimeSnapshot) {
@@ -400,7 +419,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     const raw = config ? (await config.document.read()).document : {};
     const v2 = readApplicationPluginDeclaration(raw).version === 2;
     if (v2 && enable) readApplicationPluginDeclaration({...raw, plugins: {...raw.plugins as Record<string, unknown>, [state.instanceKey]: spec.name}});
-    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: enable ? !state.declared || state.restartRequired : state.declared && state.restartRequired, changes: Object.freeze({ packageManifest: v2 || !enable || state.declared ? 'unchanged' : 'add-plugin', config: !enable ? 'unchanged' : !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(enable && !config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
+    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: enable ? !state.declared || restartAfterChange(state) : state.declared && restartAfterChange(state), changes: Object.freeze({ packageManifest: v2 || !enable || state.declared ? 'unchanged' : 'add-plugin', config: !enable ? 'unchanged' : !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(enable && !config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
   }
 
   async #assertRevision(expectedRevision?: string, expectedProjectRevision?: string) {
@@ -530,7 +549,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       }
 
       const state = await this.inspect(spec.name);
-      const result: { readonly plan: PluginInstallPlan; readonly restartRequired: boolean; readonly state: PluginManagementState; readonly needsConfiguration?: GatewayPluginConfigurationNeed } = { plan, restartRequired: state.restartRequired, state, ...(needsConfiguration ? { needsConfiguration } : {}) };
+      const result: { readonly plan: PluginInstallPlan; readonly restartRequired: boolean; readonly state: PluginManagementState; readonly needsConfiguration?: GatewayPluginConfigurationNeed } = { plan, restartRequired: restartAfterChange(state), state, ...(needsConfiguration ? { needsConfiguration } : {}) };
       return Object.freeze(result);
     }, spec.name);
   }
@@ -589,7 +608,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       ])).commit();
       completed.push('application-declaration', 'config');
       const state = await this.inspect(plan.instanceKey);
-      return Object.freeze({ packageName: plan.packageName, instanceKey: plan.instanceKey, restartRequired: state.restartRequired, state });
+      return Object.freeze({ packageName: plan.packageName, instanceKey: plan.instanceKey, restartRequired: restartAfterChange(state), state });
     }, request);
   }
 
@@ -642,7 +661,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     }
     return Object.freeze({ packageName: state.packageName, instanceKey: state.instanceKey, enabled, changed,
       disabled: Object.freeze([...disabled]), projectRevision: state.projectRevision, configurationRevision: current.revision,
-      restartRequired: changed || state.restartRequired });
+      restartRequired: changed || restartAfterChange(state) });
   }
 
   /** Writes `disable_plugins` in one atomic config write; already in the requested state → nothing written. */
@@ -661,7 +680,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       }
       const state = await this.inspect(plan.instanceKey);
       // `revision`: the configuration revision after the write (what a running instance applies).
-      return Object.freeze({ plan, changed: plan.changed, restartRequired: plan.changed || state.restartRequired, state, revision });
+      return Object.freeze({ plan, changed: plan.changed, restartRequired: plan.changed || restartAfterChange(state), state, revision });
     }, request);
   }
 
@@ -761,7 +780,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const state = await this.inspect(request);
       if (!state.declared || !state.disabled && (!state.installed || !state.plugin || state.status === 'missing-config' || state.status === 'degraded')) throw new Error('插件未通过安装、依赖和配置检查，不能应用');
       if (!this.#options.requestRestart) return { requested: false, state };
-      if (!state.restartRequired) return { requested: false, state };
+      if (!restartAfterChange(state)) return { requested: false, state };
       // The caller receives pending-restart; only a subsequent generation can prove publication.
       await this.#options.requestRestart();
       return { requested: true, state };

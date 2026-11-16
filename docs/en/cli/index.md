@@ -515,13 +515,15 @@ For npm plugins use `zhin install` / `zhin search` / `zhin info` ([ADR 0062](../
 **Check whether a plugin is really live**: installing doesn't mean it's loaded, its platform is online, or its features are verified. Use these to inspect status and run verification:
 
 ```bash
-zhin packages status <instanceKey>
+zhin packages status <instanceKey>                       # reads the running instance through this project's gateway
 zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068   # --json for the raw structure
-zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
-zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+zhin packages verification-plan <instanceKey>            # --json for the raw structure
+zhin packages apply <instanceKey> --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>
 ```
+
+Without `--live`, these four commands go through this project's gateway over its local socket (`.zhin/gateway.sock`) to the instance it supervises, which answers from its current generation; no Console token is needed. `--live <host-url>` connects to that Host instead. When the gateway isn't running or the instance doesn't answer, `status` / `verification-plan` check only the local files and say why, and `apply` / `verify` refuse.
 
 States returned by `status`:
 
@@ -531,6 +533,7 @@ States returned by `status`:
 | `declared` | An instance is declared |
 | `missing-config` | Required config or environment variables are missing, or values don't match the schema |
 | `pending-restart` | The running version hasn't applied it yet |
+| `unknown` | No running-instance state was available (gateway not running, instance not answering or not yet reporting a generation), so whether it's live can't be told; `statusReason` says why |
 | `enabled` | Live, with config and package version consistent |
 | `degraded` | Declaration and actual installation disagree, or a dependency check failed |
 
@@ -539,7 +542,7 @@ States returned by `status`:
 ::: details Live requests, verification flow and concurrency rules
 - **Token**: live requests read the Console token from `ZHIN_CONSOLE_TOKEN`, or the variable named by `--token-env <name>`. `verification-plan`, `apply` and `verify` need full permissions. Never put tokens in URLs or command arguments.
 - **HTTPS**: remote requests carrying a token must use HTTPS; plain HTTP is allowed only for `localhost`, `127.0.0.0/8` and `::1`.
-- **Offline mode**: offline `status` provides only file and package-resolution evidence; an offline verification plan has no current version or runnable checks, and never starts the Runtime.
+- **Offline mode**: offline `status` provides only file and package-resolution evidence, and a declared, enabled plugin reports `unknown` (not `pending-restart`); an offline verification plan has no current version or runnable checks, and never starts the Runtime.
 - **Verification steps**: review the scope and side effects in `verification-plan` first, then pass the returned `generation`, `projectRevision` and `checkRevision` to `verify`. Changes to config, version or check definitions reject old plans. Plugins without checks return `not-configured`; passing local checks doesn't mean platform delivery is verified. `apply` only requests application — confirm with a live `status` afterwards.
 - **Schema**: a loaded config schema applies only to the same package version; after an update the on-disk `schema.json` is read. If the new version declares config only in TypeScript with no readable schema, `validation.schemaAvailable` is `false` and only environment references are checked; full validation needs a real Runtime pre-check.
 - **Production dependencies**: auto-enabled plugins must be production dependencies; `--save-dev` must be combined with `--no-enable`, and this is checked before installing.
