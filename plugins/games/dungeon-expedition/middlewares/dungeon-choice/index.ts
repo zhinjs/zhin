@@ -13,8 +13,10 @@ import { resolveGameServices } from '../../src/runtime-store.js';
 import { stateFromSession } from '../../src/session-service.js';
 import {
   DUNGEON_PREFIX,
+  abortConfirmChoices,
   choicesForState,
   dungeonSessionToken,
+  hasPendingAbort,
 } from '../../src/view.js';
 
 export default defineMiddleware<Message>({
@@ -51,19 +53,17 @@ export default defineMiddleware<Message>({
       return;
     }
     const state = stateFromSession(session);
-    // 群里远征队是整频道共享的：不在队伍里的人只能用文字「加入」，其余文字（攻击、防御、序号…）
-    // 按普通聊天放行，不被别人的对局截走（#1250）。
-    const choices = choicesForState(state, undefined, message.sender.id);
-    const map = buildChoiceFallbackMap(
-      DUNGEON_PREFIX,
-      dungeonSessionToken(session),
-      choices,
-    );
-    // The leader's end confirmation (#1250) answers by its button labels too.
-    if (state.ownerId === message.sender.id) {
-      map['确认结束'] = `${DUNGEON_PREFIX}:${dungeonSessionToken(session)}:abort_confirm`;
-      map['继续远征'] = `${DUNGEON_PREFIX}:${dungeonSessionToken(session)}:status`;
-    }
+    const token = dungeonSessionToken(session);
+    // The leader answering their own pending end confirmation: numbers and labels follow that
+    // card (1 确认结束 / 2 继续远征). It exists only at the revision the request created (#1250).
+    const confirming = state.ownerId === message.sender.id && hasPendingAbort(session, state);
+    // Everyone else answers the shared card (same buttons and numbers for all, #1250). 群里远征队是
+    // 整频道共享的：不在队伍里的人只能用文字「加入」，其余文字（攻击、防御、序号…）按普通聊天放行，
+    // 不被别人的对局截走（#1250）。
+    const member = state.players.some(player => player.id === message.sender.id);
+    const full = buildChoiceFallbackMap(DUNGEON_PREFIX, token, confirming ? abortConfirmChoices() : choicesForState(state));
+    // Filtering never renumbers: 「1」 is 加入 on everyone's card; a member's 「1」 / 「加入队伍」 is chat.
+    const map = Object.fromEntries(Object.entries(full).filter(([, value]) => value.endsWith(':join') !== member));
     const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, DUNGEON_PREFIX) : null;
     if (!parsed) {

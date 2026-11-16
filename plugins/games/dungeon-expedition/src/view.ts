@@ -22,23 +22,26 @@ export function parseDungeonSessionToken(
 }
 
 /**
- * Buttons for the current state. With `viewerId` (the player the view answers) only the actions
- * that player can take are offered (#1250 dungeon-entry-unhelpful): members get no 「加入」, the
- * leader gets 「开始远征」 first and is the only one offered 「结束」. Without it every action of the
- * state is listed (text replies from anyone).
+ * Buttons for the current state. A group card is shared by the whole channel, so every viewer gets
+ * the same buttons in the same order (#1250): the lobby always offers 加入 / 准备 / 开始 / 解散,
+ * and a number means the same action for everyone. Who may do what is checked when the action
+ * arrives (a non-leader's 开始 or 解散 is refused with a reason).
  */
-export function choicesForState(state: Readonly<DungeonState>, locale?: Locale, viewerId?: string): ChoiceOption[] {
-  const all = allChoicesForState(state, locale);
-  if (viewerId === undefined || state.phase === 'completed') return all;
-  const member = state.players.some(player => player.id === viewerId);
-  const leader = state.ownerId === viewerId;
-  if (state.phase === 'lobby') {
-    if (!member) return state.players.length < MAX_PARTY ? all.filter(choice => choice.id === 'join') : [];
-    const order = leader ? ['start', 'ready', 'abort'] : ['ready'];
-    return order.map(id => all.find(choice => choice.id === id)!).filter(Boolean);
-  }
-  if (!member) return [];
-  return leader ? all : all.filter(choice => choice.id !== 'abort');
+export function choicesForState(state: Readonly<DungeonState>, locale?: Locale): ChoiceOption[] {
+  return allChoicesForState(state, locale);
+}
+
+/** The leader's end-confirmation choices (#1250); numbered 1 / 2 like the confirmation card. */
+export function abortConfirmChoices(locale?: Locale): ChoiceOption[] {
+  return [
+    { id: 'abort_confirm', label: messages(locale, 'confirmEndYes'), style: 'danger' },
+    { id: 'status', label: messages(locale, 'confirmEndNo'), style: 'secondary' },
+  ];
+}
+
+/** Whether `state` carries a leader's end request made at the session's current revision. */
+export function hasPendingAbort(session: Pick<DungeonSessionRow, 'revision'>, state: Readonly<DungeonState>): boolean {
+  return state.pendingAbortRevision !== undefined && state.pendingAbortRevision === session.revision;
 }
 
 /** Party size limit (engine `joinParty`). */
@@ -51,10 +54,7 @@ export function buildDungeonAbortConfirm(session: DungeonSessionRow, state: Read
     gamePrefix: DUNGEON_PREFIX,
     sessionId: dungeonSessionToken(session),
     narrative: [messages(locale, 'confirmEnd'), summaryLine(state, locale)].join('\n'),
-    choices: [
-      { id: 'abort_confirm', label: messages(locale, 'confirmEndYes'), style: 'danger' },
-      { id: 'status', label: messages(locale, 'confirmEndNo'), style: 'secondary' },
-    ],
+    choices: abortConfirmChoices(locale),
     buttonsPerRow: 2,
     locale,
     interactionProfile: 'gameplay',
@@ -103,7 +103,6 @@ export function buildDungeonView(
   session: DungeonSessionRow,
   state: Readonly<DungeonState>,
   channelType?: string,
-  viewerId?: string,
 ): SendContent {
   const locale = resolveLocale(session.locale);
   const current = activePlayer(state);
@@ -139,7 +138,7 @@ export function buildDungeonView(
   }
   if (state.phase === 'lobby' && state.players.length < MAX_PARTY) lines.push('', messages(locale, 'joinHint'));
 
-  const choices = choicesForState(state, locale, viewerId);
+  const choices = choicesForState(state, locale);
   return buildChoiceKeyboard({
     gamePrefix: DUNGEON_PREFIX,
     sessionId: dungeonSessionToken(session),
