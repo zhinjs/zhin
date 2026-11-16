@@ -19,6 +19,7 @@ import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { turnReplyMessages } from './turn-reply-messages.js';
 import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
+import { omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
 
 const logger = getLogger('ZhinAgent:ExhaustedTurnReply');
 
@@ -74,7 +75,8 @@ export async function summarizeExhaustedTurn(
       {
         systemPrompt: input.systemPrompt,
         messages: [
-          ...input.messages,
+          // #1250 第 29 批：本轮助手原文里的内嵌媒体载荷不回送模型。
+          ...omitInlineBinaryInAssistantMessages(input.messages),
           createUserMessage(buildExhaustedTurnInstruction(input.maxIterations, input.locale)),
         ],
         tools: undefined,

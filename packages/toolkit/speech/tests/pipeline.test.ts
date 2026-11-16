@@ -308,5 +308,8 @@ describe('short voice replies', () => {
   it('reports a missing edge executable with setup guidance', async () => {
     const pipeline = createSpeechPipeline({ tts: { edgeTtsCommand: '/nonexistent/zhin-edge-tts' } });
     await expect(pipeline.synthesize({ text: '你好' })).rejects.toThrow('speech.tts.edgeTtsCommand');
+    // #1250 batch 29: names the command and says managed services need an absolute path.
+    await expect(pipeline.synthesize({ text: '你好' })).rejects.toThrow('未找到 edge-tts（命令「…/zhin-edge-tts」）');
+    await expect(pipeline.synthesize({ text: '你好' })).rejects.toThrow(/绝对路径（launchd \/ systemd 等托管环境的 PATH 通常不含 ~\/\.local\/bin/u);
   });
 });

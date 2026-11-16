@@ -53,7 +53,7 @@ export interface AttentionSourceOptions {
 }
 
 export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
-  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores, agentInsights, runtimeFailures } = composition;
+  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores, agentInsights, runtimeFailures, speechIssues } = composition;
   /** Mirrors a live failure into the journal, then fills in a reason the live row lost (restart). */
   const journalReason = (source: 'endpoint' | 'mcp', subject: string) => {
     const entry = runtimeFailures?.get(source, subject);
@@ -175,6 +175,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         });
       }),
     } : {}),
+    // #1250 第 29 批：Speech Host 的外部命令检查结果（启动时检查，voice_tts 调用时复查）。
+    ...(speechIssues ? { speech: speechIssues } : {}),
     ...(snapshots ? {
       unschedulableJobs: () => withLease(lease => resolveCurrentAgentConsole(lease.value)?.assistant?.jobs.unschedulable?.()),
     } : {}),

@@ -106,3 +106,20 @@ it.each(['en', 'zh-CN'] as const)('uses captured %s only as the summary fallback
   else expect(failed.reply).toBe(EXHAUSTED_TURN_FALLBACK_REPLY);
   expect(failed.reply).not.toContain('synthetic unavailable');
 });
+
+describe('#1250 batch 29 review: exhausted-turn summary input', () => {
+  it('does not re-send base64 the model wrote earlier in the turn', async () => {
+    const payload = Buffer.alloc(3000, 3).toString('base64');
+    const complete = vi.fn(async (_model: Model, _context: Context) => textReply('做到一半，要继续吗？'));
+    await summarizeExhaustedTurn({
+      transport: transportReturning(complete),
+      model,
+      systemPrompt: 'system',
+      messages: [textReply(`先发 data:audio/mpeg;base64,${payload}`)],
+      maxIterations: 3,
+    });
+    const sent = JSON.stringify(complete.mock.calls[0]![1].messages);
+    expect(sent).toContain('[已省略 内嵌 audio/mpeg 数据（4000 字符），未提供给模型]');
+    expect(sent).not.toContain(payload.slice(0, 64));
+  });
+});

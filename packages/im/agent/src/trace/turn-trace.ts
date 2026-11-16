@@ -236,6 +236,11 @@ export type TurnTraceNote =
    * checked for a lookup claim without any tool call, like `turn_end` output.
    */
   | Readonly<{ kind: 'final_reply'; text: string }>
+  /**
+   * #1250 第 29 批：出站去重丢弃了模型回复里抄写的内嵌媒体（本轮工具已产出同类媒体）。`path`：结算阶段
+   * （`phase` / `final`）或流式回复（`stream`）。
+   */
+  | Readonly<{ kind: 'copied_inline_media_dropped'; kinds: readonly string[]; count: number; path: 'phase' | 'final' | 'stream' }>
   /** #1250: the user was told that side-effect tools did not run (appended, sent as a follow-up, or that failed). */
   | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>
   /** The inbound message that started the turn; recorded once (#1250). */
@@ -436,6 +441,8 @@ export class TurnTraceCollector {
       this.#modelFallbacks.push(Object.freeze({ ...fallback }));
       this.#addTimeline('model_fallback', `${fallback.notice}: ${fallback.purpose} ${fallback.from_account_id}/${fallback.from_model}`
         + ` → ${fallback.to_account_id}/${fallback.to_model} (${fallback.reason})`);
+    } else if (note.kind === 'copied_inline_media_dropped') {
+      this.#addTimeline('copied_inline_media_dropped', `${note.path}: ${note.count} × ${note.kinds.join(', ')}`);
     } else if (note.kind === 'unexecuted_tool_notice') {
       this.#unexecutedNotice = Object.freeze({ tools: Object.freeze([...note.tools]), delivered: note.delivered });
       this.#addTimeline('unexecuted_tool_notice', `${note.delivered}: ${note.tools.join(', ')}`);

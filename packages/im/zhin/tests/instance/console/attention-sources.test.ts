@@ -135,6 +135,20 @@ describe('attention sources wired to the instance', () => {
     expect(sources.ready!()).toBe(false);
   });
 
+  it('reads the Speech Host dependency issues live (#1250 batch 29)', async () => {
+    let issues = [{ feature: 'tts' as const, provider: 'edge', configPath: 'speech.tts.edgeTtsCommand', command: 'edge-tts', reason: 'not-found' as const }];
+    const sources = createAttentionSources({
+      projectRoot: '/nowhere', pluginLifecycleFile: '/nowhere/x.json', configuration: { readSource: async () => ({}) },
+      speechIssues: () => issues,
+    } as unknown as ConsoleRpcComposition);
+    const first = await collectAttention({ speech: sources.speech }, { allows: () => true });
+    expect(first.items.map(item => item.id)).toEqual(['speech.unavailable:configPath=speech.tts.edgeTtsCommand']);
+    // Installing edge-tts (re-checked by voice_tts) clears the item without a restart.
+    issues = [];
+    expect((await collectAttention({ speech: sources.speech }, { allows: () => true })).items).toEqual([]);
+    expect(createAttentionSources({ projectRoot: '/nowhere', pluginLifecycleFile: '/nowhere/x.json', configuration: { readSource: async () => ({}) } } as unknown as ConsoleRpcComposition).speech).toBeUndefined();
+  });
+
   it('checks the project dependency graph once for N plugins and reports one item when it fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-attention-deps-'));
     roots.push(root);
