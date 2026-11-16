@@ -327,7 +327,7 @@ export function readStatementKind(statement: ConsoleSqlStatement, dialect: Conso
  * Tables the Console never changes: the gateway's `console_*` (never even read), migration
  * bookkeeping and engine catalogs. Reads of the latter are allowed.
  */
-const PROTECTED_TABLE = /^(?:__zhin_persistent_state|_migrations|agent_schedule_migration|sqlite_\w+|pg_\w+|information_schema|mysql|performance_schema|sys)$/;
+const PROTECTED_TABLE = /^(?:__zhin_persistent_state|_migrations|agent_schedule_migration|engagement_event_migrations|sqlite_\w+|pg_\w+|information_schema|mysql|performance_schema|sys)$/;
 
 export function isProtectedConsoleTable(name: string): boolean {
   const bare = String(name).trim().toLowerCase();

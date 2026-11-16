@@ -29,7 +29,7 @@
     {
       "package": "@zhin.js/harness",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 21 批 EngagementGraphView 新增可选方法 outstanding(mailId)（ask / delegate 是否仍在等结果）。npm 上 1.1.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 21 批 EngagementGraphView 新增可选方法 outstanding(mailId)（ask / delegate 是否仍在等结果）。npm 上 1.1.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-16）：第 35 批——新增 `createRunId` / `createRunScopedIdFactory` / `isLegacyCounterId` 与一次性迁移 `migrateEngagementEventIds`（`engagement_event_migrations` 标记表、`planEngagementIdMigration`），默认 Engagement / 信件 / 授权 id 改为跨重启唯一的 `m-<运行 id>-<序号>`。npm 上 1.1.0 未被占用。"
     },
     {
       "package": "@zhin.js/kernel",

@@ -113,6 +113,8 @@ export interface EvalRunRecord {
 
 const ENDPOINT = 'eval-bot';
 const PLATFORM = 'eval';
+/** Run id of the eval mailbox: mail ids are `m-eval-1`, `m-eval-2`, … */
+export const EVAL_MAILBOX_RUN_ID = 'eval';
 
 export interface RunEvalCaseOptions {
   /** Synthetic image publisher; tests never access a real bucket. */
@@ -220,7 +222,8 @@ async function runInWorkspace(
     ...(knowledgeIndex ? { knowledgeIndex } : {}),
   });
 
-  const mailbox = new HostMailbox({ config: normalizeMailboxConfig(definition.agentConfig?.mailbox) });
+  // Fixed run id: scripted steps address mails as `m-eval-<n>` (ids are run-scoped since #1250 b35).
+  const mailbox = new HostMailbox({ config: normalizeMailboxConfig(definition.agentConfig?.mailbox), runId: EVAL_MAILBOX_RUN_ID });
   const executedTools: EvalToolInvocation[] = [];
   const rawToolOutputs: string[] = [];
   const outbound: string[] = [];

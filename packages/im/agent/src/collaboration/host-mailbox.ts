@@ -27,6 +27,8 @@ import {
   ALL,
   DEFAULT_GUARD_LIMITS,
   InMemoryBudgetLedger,
+  createRunId,
+  createRunScopedIdFactory,
   InMemoryEngagementJournal,
   attenuate,
   classifyMail,
@@ -105,6 +107,12 @@ export interface HostMailboxOptions {
   readonly venueProjector?: VenueProjector;
   /** Optional EngagementJournal (defaults to an in-memory journal; can be swapped via {@link HostMailbox.setJournal}). */
   readonly journal?: EngagementJournal;
+  /**
+   * Run id inside engagement / mail (`m-<runId>-<n>`) and grant (`g-<runId>-<n>`) ids. Defaults to
+   * a fresh {@link createRunId} per mailbox, so ids never repeat across restarts (#1250 b35);
+   * scripted evals pin it to predict mail ids.
+   */
+  readonly runId?: string;
 }
 
 /** What a turn with peer agents registers for its engagement. */
@@ -257,9 +265,12 @@ export class HostMailbox {
       compact: (engagementId) => this.#journal.compact(engagementId),
       prune: (now) => this.#journal.prune(now),
     };
+    // One run id for engagement / mail and grant ids: unique across restarts (#1250 b35).
+    const runId = options.runId ?? createRunId();
     this.harness = createHarness({
       guard: createGuardKernel({ isAttenuationOf }),
-      ledger: new InMemoryBudgetLedger(),
+      ledger: new InMemoryBudgetLedger({ idFactory: createRunScopedIdFactory('g', runId) }),
+      newId: createRunScopedIdFactory('m', runId),
       journal: journalProxy,
       createMailbox: (mailboxOptions: MailboxOptions) => createMailbox({
         ...mailboxOptions,

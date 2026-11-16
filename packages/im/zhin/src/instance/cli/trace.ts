@@ -5,17 +5,17 @@
  */
 import {
   DatabaseEngagementJournal,
+  defineEngagementEventMigrationModel,
   defineEngagementEventModel,
+  migrateEngagementEventIds,
   reconstructBoardFromEvents,
   summarizeEngagementEvents,
   type EngagementEvent,
   type EngagementJournalDatabase,
   type EngagementSummary,
 } from '@zhin.js/harness';
-import { createConfigDocument } from '@zhin.js/runtime';
-import { DEFAULT_ROOT_CONFIG_FILE_NAME, type DatabaseHost } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
-import { findConfigFile } from '@zhin.js/gateway/project';
+import { retryRelationalOperation, type DatabaseHost } from '@zhin.js/plugin-runtime';
+import { createCliProjectDatabaseHost } from './project-database.js';
 
 /**
  * Formats an EngagementSummary (and optional raw events) into an ASCII
@@ -136,31 +136,31 @@ export async function openProjectEngagementJournal(root: string): Promise<{
   readonly journal: DatabaseEngagementJournal;
   close(): Promise<void>;
 } | null> {
+  let dbHost: Awaited<ReturnType<typeof createCliProjectDatabaseHost>>;
   try {
-    const selected = findConfigFile(root);
-    const file = selected ? `${root}/${selected}` : `${root}/${DEFAULT_ROOT_CONFIG_FILE_NAME}`;
-    let rawDoc: Record<string, unknown> = {};
-    try {
-      const doc = createConfigDocument(file);
-      rawDoc = ((await doc.read()).document ?? {}) as Record<string, unknown>;
-    } catch {
-      rawDoc = {};
-    }
-    const dbConfig = await resolveDatabaseConfig(root, rawDoc);
-    const dbHost = createDatabaseHost(dbConfig);
-    if (!['sqlite', 'mysql', 'pg'].includes(dbHost.dialect)) {
-      return null;
-    }
-    defineEngagementEventModel(dbHost);
-    await dbHost.start();
-    // The journal speaks to tables, the Host exposes models (#1250 trace-engagements-crash:
-    // passing the Host itself failed with `this[#db].select is not a function`).
-    const journal = new DatabaseEngagementJournal(hostEngagementJournalDatabase(dbHost));
-    return {
-      journal,
-      close: () => dbHost.stop(),
-    };
+    dbHost = await createCliProjectDatabaseHost(root);
   } catch {
     return null;
   }
+  if (!['sqlite', 'mysql', 'pg'].includes(dbHost.dialect)) {
+    return null;
+  }
+  try {
+    defineEngagementEventModel(dbHost);
+    defineEngagementEventMigrationModel(dbHost);
+    await dbHost.start();
+  } catch {
+    await dbHost.stop().catch(() => undefined);
+    return null;
+  }
+  // #1250 b35: a project whose instance has not started since the upgrade still holds
+  // engagements merged under pre-b35 counter ids; split them (once) before reading.
+  await retryRelationalOperation(() => migrateEngagementEventIds(dbHost)).catch(() => undefined);
+  // The journal speaks to tables, the Host exposes models (#1250 trace-engagements-crash:
+  // passing the Host itself failed with `this[#db].select is not a function`).
+  const journal = new DatabaseEngagementJournal(hostEngagementJournalDatabase(dbHost));
+  return {
+    journal,
+    close: () => dbHost.stop(),
+  };
 }

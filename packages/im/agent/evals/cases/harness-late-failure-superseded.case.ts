@@ -17,7 +17,7 @@ export default defineEvalCase({
     { toolCalls: [{ name: 'delegate', args: { agent: 'planner', brief: 'Plan tomorrow.' } }] },
     // planner's first sub-turn spends its one model call on a tool call; it stops before a second request.
     { actor: 'planner', toolCalls: [{ name: 'lookup_calendar', args: { day: 'tomorrow' } }] },
-    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm3', content: 'Just list tomorrow\'s meetings.' } }] },
+    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Just list tomorrow\'s meetings.' } }] },
     { actor: 'planner', text: '明天 9:00 例会，14:00 评审。' },
     { text: '明天的安排：9:00 例会，14:00 评审。' },
     // Trap: the stale budget stop must not wake the entry agent again.

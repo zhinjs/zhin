@@ -20,10 +20,10 @@ export default defineEvalCase({
     { actor: 'draw', toolCalls: [{ name: 'render_table', args: { cities: ['北京', '上海', '广州'] } }] },
     { toolCalls: [{ name: 'delegate', args: { agent: 'draw', brief: 'Draw the table again, smaller.' } }] },
     { actor: 'draw', toolCalls: [{ name: 'render_table', args: { cities: ['北京', '上海', '广州'], size: 'small' } }] },
-    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm3', content: 'Is the table image ready?' } }] },
+    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Is the table image ready?' } }] },
     { actor: 'draw', text: '表格图片已经生成。' },
     // Exchange #4 between zhin and draw: denied, and the engagement is stopped.
-    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm4', content: 'Make one more version.' } }] },
+    { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-4', content: 'Make one more version.' } }] },
     { text: '表格图片做好了：北京 2185 万、上海 2487 万、广州 1882 万。' },
     // Traps: stale budget stops must not wake the entry agent again.
     { text: 'draw 这次超出可用预算，没能完成任务。' },

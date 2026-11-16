@@ -105,7 +105,8 @@ export const traceCommand = new Command('trace')
         }
 
         const ids = await opened.journal.listEngagements(500);
-        const targetId = ids.find((id) => id === turn || id.startsWith(turn)) ?? turn;
+        // Exact id first: `m-<run>-1` is also a prefix of `m-<run>-17` (#1250 b35).
+        const targetId = ids.find((id) => id === turn) ?? ids.find((id) => id.startsWith(turn)) ?? turn;
         const events = await opened.journal.read(targetId);
         if (events.length === 0) {
           console.error(`找不到 Engagement ${turn}。用 zhin trace --engagements --list 查看最近的协作记录。`);

@@ -94,9 +94,11 @@ zhin trace --engagements --list
 zhin trace --engagements
 
 # Inspect causal hops, Blackboard entries, guard blocks, and budget usage (an id prefix is enough)
-zhin trace <engagementId>
+zhin trace --engagements <engagementId>
 ```
 
 Collaboration events are stored in the `engagement_events` database table, which requires SQLite, MySQL, or PostgreSQL. The Workroom page in Console (`/features/ai/workrooms`) shows the same data.
+
+Engagement, mail, and budget grant ids look like `m-<run id>-<n>` / `g-<run id>-<n>`. The run id is generated each time the instance starts, so ids never repeat after a restart. Older versions counted `m1`, `m2`, … from scratch on every start, so one id could collect unrelated collaborations from several restarts. After upgrading, the first instance start (or the first `zhin trace --engagements`) splits those records at each `engagement_opened` into separate Engagements with new ids (rewriting the mail and grant ids recorded in them) in one transaction. It runs once and keeps every row; an old id that holds a single collaboration is left unchanged.
 
 See [Agent and Tool Calling](./agent.md#multi-agent-collaboration) for full details.

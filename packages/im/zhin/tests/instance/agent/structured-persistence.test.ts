@@ -12,6 +12,7 @@ import { createScopedTraceJournal } from '@zhin.js/agent/trace';
 import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL, parseAgentMessageRow } from '@zhin.js/ai';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { installAgentPersistence } from '@zhin.js/agent/runtime';
+import { defineEngagementEventModel, ENGAGEMENT_EVENT_MIGRATIONS_TABLE } from '@zhin.js/harness';
 
 const request = {
   identity: { turnId: 'turn-1', traceId: 'trace-1' }, session: { key: 'channel:key' },
@@ -152,7 +153,7 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     await host.stop(); await rm(dir, { recursive: true, force: true });
   });
 
-  async function activate(retentionDays = 30) {
+  async function activate(retentionDays = 30, probeJournal = true) {
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
     resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
     const foundation: Record<string, unknown> = {
@@ -182,6 +183,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
       prune(now: number): Promise<number>;
     };
     const eventAt = Date.now();
+    if (probeJournal) await probe();
+    async function probe() {
     await engagementJournal.append({
       engagementId: 'eng-test-1',
       at: eventAt,
@@ -190,12 +193,44 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     });
     await expect(engagementJournal.read('eng-test-1')).resolves.toHaveLength(1);
     await expect(engagementJournal.prune(eventAt + 100 * 86_400_000)).resolves.toBe(1);
+    }
     expect(foundation.schedule.start).not.toHaveBeenCalled(); publish();
     expect((foundation.agent as { markMemoryPersistenceReady: unknown }).markMemoryPersistenceReady).toHaveBeenCalledOnce();
     expect((foundation.agent as { configure: unknown }).configure).toHaveBeenCalled(); expect((foundation.schedule as { start: unknown }).start).toHaveBeenCalledOnce();
     expect(new Scope(childPluginId(rootPluginId(), 'plugin'), resources).has(agentUsageStoreToken)).toBe(false);
     return { store: resources.use(agentUsageStoreToken), foundation };
   }
+
+  it('splits engagements merged under reused pre-b35 ids once at activation (#1250 b35)', async () => {
+    const seed = createHost();
+    defineEngagementEventModel(seed);
+    await seed.start();
+    const events = seed.models.get('engagement_events')!;
+    const rows: Array<[number, string, Record<string, unknown>]> = [
+      [1_000, 'engagement_opened', { rootMailId: 'm2', rootGrantId: 'g1' }],
+      [1_010, 'mail_admitted', { mailId: 'm2', grantId: 'g1' }],
+      [5_000, 'engagement_opened', { rootMailId: 'm2', rootGrantId: 'g1' }],
+      [5_010, 'mail_admitted', { mailId: 'm2', grantId: 'g1' }],
+      [5_020, 'engagement_closed', { status: 'completed' }],
+    ];
+    for (const [seq, [at, type, data]] of rows.entries()) {
+      // Recent rows: the activation prune keeps them.
+      await events.insert({ id: `m7:${seq}`, engagement_id: 'm7', seq, at: Date.now() - 60_000 + at, type, data: JSON.stringify(data) });
+    }
+    await seed.stop();
+
+    const { foundation } = await activate(30, false);
+    const journal = foundation.engagementJournal as { listEngagements(): Promise<readonly string[]>; read(id: string): Promise<readonly { type: string; data: Record<string, unknown> }[]> };
+    const ids = await journal.listEngagements();
+    expect(ids).toHaveLength(2);
+    expect(ids).not.toContain('m7');
+    const parts = await Promise.all(ids.map(id => journal.read(id)));
+    expect(parts.map(part => part.length).sort()).toEqual([2, 3]);
+    for (const part of parts) expect(part[0]!.type).toBe('engagement_opened');
+    expect(new Set(parts.map(part => part[0]!.data.rootMailId)).size).toBe(2);
+    const marker = await host.models.get(ENGAGEMENT_EVENT_MIGRATIONS_TABLE)!.select('id', 'version');
+    expect(marker).toEqual([expect.objectContaining({ id: 1, version: 1 })]);
+  });
 
   it('registers schedule/usage cleanup before DisposeStack seal so activateNext does not throw', async () => {
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();

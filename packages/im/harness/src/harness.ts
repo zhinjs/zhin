@@ -82,6 +82,7 @@ import {
 } from './contracts.js';
 import { agentOf } from './authority.js';
 import { reconstructBoardFromEvents } from './journal.js';
+import { createRunScopedIdFactory } from './ids.js';
 
 export type HarnessDenyCode =
   | GuardDenyCode
@@ -275,8 +276,8 @@ interface Waiter {
 export function createHarness(options: HarnessOptions): Harness {
   const limits = options.limits ?? DEFAULT_GUARD_LIMITS;
   const clock = options.clock ?? Date.now;
-  let counter = 0;
-  const newId = options.newId ?? (() => `m${++counter}`);
+  // Run-scoped so ids never repeat across restarts (#1250 b35).
+  const newId = options.newId ?? createRunScopedIdFactory('m');
   const engagements = new Map<EngagementId, EngagementState>();
   const allEngagements = new Map<EngagementId, EngagementState>();
   const sentDelegations = new Map<MailId, DelegatedMailRecord>();
