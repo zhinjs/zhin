@@ -80,6 +80,8 @@ export interface ProjectDatabaseHost {
 
 export interface ComponentDefinitionView {
   readonly previewProps?: unknown;
+  /** `@zhin.js/component` 1.2+: stand-ins for `context.use(token)` in previews. */
+  readonly previewServices?: readonly { readonly token: { readonly id: string; readonly description?: string }; readonly value: unknown }[];
   render(props: never, context: never): unknown;
 }
 

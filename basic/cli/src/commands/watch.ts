@@ -3,12 +3,16 @@
  */
 import { Command } from 'commander';
 import { ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, HOST_OPTION_DESCRIPTION, hostGet, listHostEndpoints, requireHostHttpConfig } from '../utils/host-http.js';
-import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
+import { GATEWAY_INSTANCE_RPC, isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
+import { withGateway } from '../utils/gateway.js';
 import {
+  instanceSampleFromStatus,
   jobRowsFromApi,
+  processSampleFromApi,
   renderWatchText,
   systemInfoFromApi,
   type WatchEndpointRow,
+  type WatchProcessSample,
   type WatchStats,
   type WatchSystemInfo,
 } from './watch-format.js';
@@ -45,6 +49,8 @@ export interface WatchSnapshot {
   error?: string;
   stats?: WatchStats;
   system?: WatchSystemInfo;
+  /** Per-process memory, each from one sample: `instance` (`/system/status`) and `gateway` (local socket only). */
+  processes?: WatchProcessSample[];
   endpoints?: WatchEndpointRow[];
   assistant?: {
     enabled: boolean;
@@ -53,14 +59,20 @@ export interface WatchSnapshot {
   };
 }
 
-export async function fetchWatchSnapshot(http: { baseUrl: string; token: string }): Promise<WatchSnapshot> {
+export interface WatchSnapshotOptions {
+  /** The gateway's `gateway.instance.status` answer; only for this project's gateway over the local socket. */
+  readonly gatewayStatus?: () => Promise<unknown>;
+}
+
+export async function fetchWatchSnapshot(http: { baseUrl: string; token: string }, options: WatchSnapshotOptions = {}): Promise<WatchSnapshot> {
   const fetchedAt = new Date().toISOString();
   // Independent reads: one round trip instead of four sequential ones.
-  const [statsRes, systemRes, endpointsRes, jobsRes] = await Promise.all([
+  const [statsRes, systemRes, endpointsRes, jobsRes, gatewayStatus] = await Promise.all([
     hostGet<StatsApiData>(http, '/stats'),
     hostGet<SystemStatusApiData>(http, '/system/status'),
     listHostEndpoints(http),
     hostGet<AssistantJobsApiData>(http, '/assistant/jobs'),
+    options.gatewayStatus?.().catch(() => undefined),
   ]);
 
   if (!statsRes.ok) {
@@ -77,6 +89,10 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
       ? (systemRes.data as Record<string, unknown>)
       : undefined,
   );
+
+  const instance = systemRes.ok && systemRes.data ? instanceSampleFromStatus(systemRes.data as Record<string, unknown>) : undefined;
+  const gateway = processSampleFromApi((gatewayStatus as { gateway?: unknown } | undefined)?.gateway, 'gateway');
+  const processes = [instance, gateway].filter((sample): sample is WatchProcessSample => sample !== undefined);
 
   const endpoints: WatchEndpointRow[] = (endpointsRes.data ?? []).map((row) => ({
     name: row.name,
@@ -101,6 +117,7 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
     ok: true,
     stats: statsRes.data,
     system,
+    processes,
     endpoints,
     assistant,
   };
@@ -112,6 +129,7 @@ function snapshotToScreen(snapshot: WatchSnapshot): string {
     fetchedAt: new Date(snapshot.fetchedAt),
     stats: snapshot.stats,
     system: snapshot.system,
+    processes: snapshot.processes,
     endpoints: snapshot.endpoints,
     assistantEnabled: snapshot.assistant?.enabled,
     eventsActive: snapshot.assistant?.eventsActive,
@@ -152,8 +170,13 @@ export const watchCommand = new Command('watch')
     const once = opts.once === true || !process.stdout.isTTY || opts.json === true;
     const useClear = opts.clear !== false && process.stdout.isTTY && !opts.json;
 
+    // The gateway's own sample is read over this project's local socket only (not for --host).
+    const root = process.cwd();
+    const gatewayStatus = http.fetch && !opts.host
+      ? () => withGateway({ root }, client => client.request(GATEWAY_INSTANCE_RPC.STATUS, undefined, { timeoutMs: 5_000 }))
+      : undefined;
     const tick = async () => {
-      const snapshot = await fetchWatchSnapshot(http);
+      const snapshot = await fetchWatchSnapshot(http, gatewayStatus ? { gatewayStatus } : {});
       if (opts.json) {
         console.log(JSON.stringify(snapshot, null, 2));
         return;

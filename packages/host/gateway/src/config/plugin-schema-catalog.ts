@@ -121,6 +121,20 @@ export class PluginSchemaCatalog {
       entry[1] != null));
   }
 
+  /**
+   * Instance keys of the child Plugins a declared Plugin package lists (`package.json#zhin.plugins`).
+   * Their config blocks nest inside the parent's block, and Runtime composition adds them to the
+   * parent's schema, so offline validation of the parent block must accept them as well.
+   */
+  async readChildInstanceKeys(pluginName: string, document?: RuntimeConfigDocument): Promise<readonly string[]> {
+    if (HOST_CONFIG_KEY_SET.has(pluginName)) return [];
+    if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(pluginName)
+      && !pluginName.split('/').every((key) => /^[a-z0-9][a-z0-9-]*$/u.test(key))) return [];
+    const target = await this.#resolveDeclared(pluginName, () => NodePackageResolver.create(this.#projectRoot), document);
+    const manifest = target?.packageJson.zhin;
+    return manifest?.type === 'plugin' ? manifest.plugins.map(reference => reference.instanceKey) : [];
+  }
+
   async #read(
     pluginName: string,
     resolver: () => Promise<NodePackageResolver>,
@@ -143,6 +157,20 @@ export class PluginSchemaCatalog {
       && !pluginName.split('/').every((key) => /^[a-z0-9][a-z0-9-]*$/u.test(key))) {
       return null;
     }
+    const target = await this.#resolveDeclared(pluginName, resolver, currentDocument);
+    if (!target) return null;
+    const schema = declarations?.get(target.root) ?? await readOwnSchema(target.root, pluginName, !rawSchema);
+    if (rawSchema) return schema;
+    if (schema) assertSchemaStructure(schema, `config declaration for ${pluginName}`);
+    return jsonSchemaToConsoleSchema(schema);
+  }
+
+  /** The package a declared instance key (or a package name with one instance) resolves to, as in Runtime. */
+  async #resolveDeclared(
+    pluginName: string,
+    resolver: () => Promise<NodePackageResolver>,
+    currentDocument?: RuntimeConfigDocument,
+  ): Promise<ResolvedPackage | undefined> {
     let target: ResolvedPackage | undefined;
     try {
       const packages = await resolver();
@@ -162,11 +190,7 @@ export class PluginSchemaCatalog {
       if (error instanceof Error && error.message.includes('多个插件实例')) throw error;
       throw new Error(`Cannot resolve schema for ${pluginName}: invalid or unavailable Plugin manifest`, { cause: error });
     }
-    if (!target) return null;
-    const schema = declarations?.get(target.root) ?? await readOwnSchema(target.root, pluginName, !rawSchema);
-    if (rawSchema) return schema;
-    if (schema) assertSchemaStructure(schema, `config declaration for ${pluginName}`);
-    return jsonSchemaToConsoleSchema(schema);
+    return target;
   }
 }
 

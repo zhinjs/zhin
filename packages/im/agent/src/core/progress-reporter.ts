@@ -15,6 +15,7 @@ import { looksLikeRawToolMarkup, stripHallucinatedToolCalls, stripThinkBlocks } 
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { turnReplyMessages } from './turn-reply-messages.js';
 import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
+import { omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
 
 export type ProgressUpdateTrigger = 'progress' | 'extension' | 'continuation';
 
@@ -69,7 +70,8 @@ export async function summarizeProgress(input: ProgressSummaryInput): Promise<st
       input.model,
       {
         systemPrompt: input.systemPrompt,
-        messages: [...input.messages, createUserMessage(buildProgressSummaryInstruction(input.locale))],
+        // #1250 第 29 批：本轮助手原文里的内嵌媒体载荷不回送模型。
+        messages: [...omitInlineBinaryInAssistantMessages(input.messages), createUserMessage(buildProgressSummaryInstruction(input.locale))],
         tools: undefined,
       },
       { signal, sessionId: input.sessionId },

@@ -13,7 +13,9 @@ import { ReplyStreamRun } from './reply-stream-run.js';
 import type { ReplyPhaseLifecycle, ReplyPhaseFacts } from './reply-phase.js';
 import { decodeStructuredReply } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
-import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
+import { isInlineMediaRef, mergeToolOutboundElements, sentInlineMediaPlaceholder, toolMediaKinds, type CopiedInlineMediaDrop } from '../media/media-tool-bridge.js';
+import type { Segment } from '@zhin.js/im-contract';
+import { omitInlineBinaryInAssistantMessage, omitInlineBinaryInAssistantMessages, stripFrameworkPlaceholders } from '../media/inline-binary.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
@@ -77,9 +79,10 @@ export function createTurnContextCallbacks(params: {
       ...(outputSchema ? { outputSchema } : {}),
       ...(state.replyRun ? { retryAllowed: () => !state.replyRun?.offered } : {}),
     },
-    convertToLlm: persistentConversation
-      ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
-      : createLlmMessageProjection(llmModel, input.messageAliases),
+    // #1250 第 29 批：本轮及历史里的助手原文（模型抄写或编造的内嵌媒体）再交给模型前统一省略载荷。
+    convertToLlm: ((base) => persistentConversation
+      ? (messages: AgentMessage[]) => base(omitInlineBinaryInAssistantMessages(historyTracker.select(sessionId, messages, historyWindow).messages))
+      : (messages: AgentMessage[]) => base(omitInlineBinaryInAssistantMessages(messages)))(createLlmMessageProjection(llmModel, input.messageAliases)),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -267,7 +270,7 @@ export function createTurnReplyPhaseController(params: {
         }
       }
     } else output = parseOutput(sanitizeAssistantReply(raw));
-    output = mergeToolOutboundElements(output, calls);
+    output = mergeToolOutboundElements(output, calls, copiedInlineMediaTrace(input.turnContext, 'phase'));
     if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
     await settlePhase(output, raw, hostReply);
   };
@@ -281,7 +284,9 @@ export function createTurnReplyPhaseController(params: {
       if (!state.phaseStopped) {
         const next = replyPhases.open();
         state.replyPhaseId = next.id;
-        state.replyRun = next.stream ? new ReplyStreamRun(next.stream, input.replySegments, input.messageAliases) : undefined;
+        state.replyRun = next.stream ? new ReplyStreamRun(next.stream, input.replySegments, input.messageAliases, {
+          kinds: phaseToolMediaKinds(toolCalls, state), onDropped: copiedInlineMediaTrace(input.turnContext, 'stream'),
+        }) : undefined;
         state.phaseSettled = false;
         state.phaseAssistant = undefined;
         state.phaseLastAssistant = undefined;
@@ -390,7 +395,9 @@ export async function finalizeTurnReplyAndOutput(params: {
         toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
         ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
       });
-  const textReply = proseReply.trim() ? continuationPrefix + proseReply : proseReply;
+  // #1250 第 29 批审查：非 IM 文本回复同样不带模型照抄的框架占位。
+  const shownProse = stripFrameworkPlaceholders(proseReply);
+  const textReply = shownProse.trim() ? continuationPrefix + shownProse : shownProse;
   let output: AgentOutputElement[] = state.phaseSettled ? [...state.settledPhaseOutput] : structuredReply ? [] : parseOutput(textReply);
   if (!state.phaseSettled && structuredReply) {
     try {
@@ -425,7 +432,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     }
   }
   if (!state.phaseSettled) {
-    output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart));
+    output = mergeToolOutboundElements(output, toolCalls.slice(state.phaseToolStart), copiedInlineMediaTrace(input.turnContext, 'final'));
   }
   // #1250: a side-effect tool that was denied or failed must not be reported as done. The framework
   // always adds one deterministic line (owner review: no keyword guessing). Before anything is
@@ -480,6 +487,19 @@ export async function finalizeTurnReplyAndOutput(params: {
   };
 }
 
+/** #1250 第 29 批：出站去重丢弃模型抄写的内嵌媒体时记一条 trace。 */
+export function copiedInlineMediaTrace(
+  turnContext: AgentLoopTurnInput['turnContext'],
+  path: 'phase' | 'final' | 'stream',
+): (drop: CopiedInlineMediaDrop) => void {
+  return (drop) => noteTurnTrace(traceTurnId(turnContext), { kind: 'copied_inline_media_dropped', kinds: drop.kinds, count: drop.count, path });
+}
+
+/** The media kinds this phase's tools produced; a copied inline payload of these kinds is not streamed (#1250 第 29 批). */
+export function phaseToolMediaKinds(toolCalls: readonly ToolCallRecord[], state: Pick<TurnReplyPhaseState, 'phaseToolStart'>) {
+  return () => toolMediaKinds(toolCalls.slice(state.phaseToolStart));
+}
+
 export function encodeConfirmedOutput(output: readonly AgentOutputElement[]): string {
   let reaction: string | undefined;
   const messages = output.flatMap(element => {
@@ -489,6 +509,14 @@ export function encodeConfirmedOutput(output: readonly AgentOutputElement[]): st
       const emoji = (segment.data as Readonly<Record<string, unknown>>).emoji;
       if (typeof emoji === 'string') reaction = emoji;
       return false;
+    }).map(segment => {
+      // #1250 第 29 批：历史里不保存内嵌媒体载荷（下一轮模型会看到它），只留占位。
+      const media = (segment.data as { media?: unknown } | undefined)?.media;
+      if (!isInlineMediaRef(media)) return segment;
+      const ref = media as { value?: unknown; mime_type?: unknown };
+      const body = typeof ref.value === 'string' ? ref.value.replace(/^(?:data:[^,]*,|base64:\/\/)/iu, '') : '';
+      const mime = typeof ref.mime_type === 'string' ? ref.mime_type : undefined;
+      return { type: 'text', data: { text: sentInlineMediaPlaceholder(segment.type, mime, Math.floor((body.length * 3) / 4)) } } as Segment;
     });
     return segments.length ? [{ segments }] : [];
   });
@@ -567,7 +595,9 @@ export async function appendConversationBatches(
     const messages = clean.map((message, messageIndex) => {
       const facts = phaseFacts?.get(batch.messages[messageIndex]!);
       // Provider-authored provenance stays stripped; only the delivery owner's exact phase facts return.
-      if (!facts) return message;
+      // #1250 第 29 批：没有已确认输出（非流式回复只带 messageId）时这里是模型原文；模型自己写的
+      // 内嵌音频 / data URL 段虽已被出站去重丢弃，载荷仍在原文里，写入历史前统一省略。
+      if (!facts) return omitInlineBinaryInAssistantMessage(message);
       const {
         messageId: _providerId,
         conversationEventId: _providerConvEventId,
@@ -576,11 +606,11 @@ export async function appendConversationBatches(
         ...authoritative
       } = message as AssistantMessage;
       const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
-      return stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
+      return omitInlineBinaryInAssistantMessage(stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
         conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
         conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
         conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
-      })[0]!;
+      })[0]!);
     });
     await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
   }

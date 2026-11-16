@@ -336,6 +336,23 @@ export default defineComponent.withConfig<MyConfig>()<{ title: string }>({
 });
 ```
 
+### 预览时给插件服务一个替身（`previewServices`）
+
+`zhin preview` 在实例之外渲染组件，没有真实的插件服务。组件里的 `use(token)` 读的是 `previewServices` 里给的替身，`has(token)` 只对列出的 token 返回 `true`。没有替身的 token 会让预览报错：`预览环境没有提供 <token 描述>，可在组件的 previewServices 里给一个替身`。它和 `previewProps` 一样只用于预览，实例运行时始终使用真实服务，不要写入密钥。
+
+```tsx
+import { defineComponent } from 'zhin.js/component';
+import { weatherToken } from '../../src/tokens.js';
+
+export default defineComponent<{ city: string }>({
+  previewProps: { city: '上海' },
+  previewServices: [{ token: weatherToken, value: { today: async () => '晴 22°C' } }],
+  async render({ city }, { use }) {
+    return <text>{city}：{await use(weatherToken).today()}</text>;
+  },
+});
+```
+
 ## 不同平台上的效果
 
 | 内容 | 平台能直接显示 HTML（如 Sandbox、Email） | 安装了 `@zhin.js/html-renderer` | 都没有 |

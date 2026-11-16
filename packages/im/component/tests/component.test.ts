@@ -28,6 +28,16 @@ describe('Component Feature', () => {
     expect(definition.render({ text: 'actual' }, {} as never)).toBe('actual');
   });
 
+  it('keeps typed preview stand-in services and rejects a malformed list', () => {
+    const weather = createToken<{ today(): string }>('test.weather', '天气服务');
+    const definition = defineComponent({
+      previewServices: [{ token: weather, value: { today: () => '晴' } }],
+      render: () => 'ok',
+    });
+    expect(parseComponentDefinition(definition).previewServices?.[0]?.token).toBe(weather);
+    expect(() => parseComponentDefinition({ ...definition, previewServices: [{ value: 1 }] })).toThrow('previewServices');
+  });
+
   it('brands pure render definitions without a module registry', () => {
     const component = defineComponent({ render: (props: { text: string }) => props.text });
     expect(parseComponentDefinition(component)).toBe(component);
