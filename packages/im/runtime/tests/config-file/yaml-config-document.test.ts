@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin, type ConfigPatch } from '@zhin.js/plugin-runtime';
 import { ConfigValidationError, RootRuntime, type ModuleRuntime } from '../../src/index.js';
 import {
   ConfigDocumentConflictError,
@@ -122,6 +122,49 @@ http: { port: 8086 }
       - qq:12345
   model: claude
 `);
+  });
+
+  describe('byte-preserving splice edge cases (#1250)', () => {
+    const cases: readonly (readonly [string, string, ConfigPatch[], string])[] = [
+      ['CRLF line endings', '# top\r\na: 1 # c\r\nb:\r\n  - x\r\nc: { k: v }\r\n',
+        [{ op: 'set', path: ['b'], value: ['x', 'y'] }], '# top\r\na: 1 # c\r\nb:\r\n  - x\r\n  - y\r\nc: { k: v }\r\n'],
+      ['CRLF inside a block scalar', 'a: |\r\n  x\r\n  y\r\nb: 1\r\n',
+        [{ op: 'set', path: ['b'], value: 2 }], 'a: |\r\n  x\r\n  y\r\nb: 2\r\n'],
+      ['a UTF-8 BOM', '\uFEFFa: 1 # keep\nb: 2\n', [{ op: 'set', path: ['b'], value: 3 }], 'a: 1 # keep\nb: 3\n'],
+      ['anchors and aliases', 'base: &b\n  x: 1\nuse: *b\nother: 2\n',
+        [{ op: 'set', path: ['other'], value: 3 }], 'base: &b\n  x: 1\nuse: *b\nother: 3\n'],
+      ['an alias inside the touched entry', 'base: &b\n  x: 1\nuse:\n  v: *b\n  w: 1\n',
+        [{ op: 'set', path: ['use', 'w'], value: 2 }], 'base: &b\n  x: 1\nuse:\n  v: *b\n  w: 2\n'],
+      ['comments between top-level entries', 'a: 1\n\n# about b\n# more\nb: 2\n\n# about c\nc: 3\n',
+        [{ op: 'set', path: ['b'], value: 5 }], 'a: 1\n\n# about b\n# more\nb: 5\n\n# about c\nc: 3\n'],
+      ['a directive and document markers', '%YAML 1.2\n---\na: 1 # x\nb: 2\n...\n',
+        [{ op: 'set', path: ['b'], value: 3 }], '%YAML 1.2\n---\na: 1 # x\nb: 3\n...\n'],
+      ['no trailing newline', 'a: 1\nb: [1,2] # x', [{ op: 'set', path: ['a'], value: 3 }], 'a: 3\nb: [1,2] # x\n'],
+      ['a clipped block scalar at EOF without newline', 'a: 1\nb: |\n  line',
+        [{ op: 'set', path: ['a'], value: 3 }], 'a: 3\nb: |\n  line\n'],
+      ['a kept block scalar with trailing blank lines', 'a: 1\nb: |+\n  line\n\n\n',
+        [{ op: 'set', path: ['a'], value: 3 }], 'a: 3\nb: |+\n  line\n\n\n'],
+      ['removing an entry', 'a: 1 # x\nb: 2\nc: 3 # z\n', [{ op: 'remove', path: ['b'] }], 'a: 1 # x\nc: 3 # z\n'],
+    ];
+    for (const [name, original, patches, expected] of cases) {
+      it(`keeps semantics and untouched bytes with ${name}`, async () => {
+        const { file } = await configFile(original);
+        const adapter = new YamlConfigDocument(file);
+        const current = await adapter.read();
+        const prepared = await adapter.prepare(current, patches);
+        await prepared.commit();
+        const output = await readFile(file, 'utf8');
+        expect(output).toBe(expected);
+        const intended = structuredClone(current.document) as Record<string, unknown>;
+        for (const patch of patches) {
+          let target = intended;
+          for (const key of patch.path.slice(0, -1)) target = target[key] as Record<string, unknown>;
+          if (patch.op === 'set') target[patch.path.at(-1)!] = patch.value;
+          else delete target[patch.path.at(-1)!];
+        }
+        expect((await adapter.read()).document).toEqual(intended);
+      });
+    }
   });
 
   it('replaces source with optimistic concurrency and preserves exact editor text', async () => {
