@@ -42,29 +42,94 @@ function memoryDatabase(initial: EngagementEventRow[]) {
     [ENGAGEMENT_EVENTS_TABLE]: initial.map(r => ({ ...r })),
     [ENGAGEMENT_EVENT_MIGRATIONS_TABLE]: [],
   };
-  const matches = (r: Record<string, unknown>, c: Record<string, unknown>) => Object.entries(c).every(([k, v]) => r[k] === v);
+  /** Every condition the migration used on `engagement_events`, by statement kind. */
+  const conditions: Array<{ readonly kind: 'select' | 'delete' | 'update'; readonly condition: Record<string, unknown> }> = [];
+  let transactions = 0;
+  const matches = (r: Record<string, unknown>, c: Record<string, unknown>) => Object.entries(c).every(([k, v]) =>
+    v !== null && typeof v === 'object' && Array.isArray((v as { $in?: unknown }).$in) ? ((v as { $in: unknown[] }).$in).includes(r[k]) : r[k] === v);
   const database: EngagementMigrationDatabase = {
     async transaction(callback) {
+      transactions++;
       const draft = structuredClone(tables);
+      const note = (name: string, kind: 'select' | 'delete' | 'update', condition: Record<string, unknown>) => {
+        if (name === ENGAGEMENT_EVENTS_TABLE) conditions.push({ kind, condition });
+      };
       const result = await callback({
         model: (name: string) => ({
           select: (...fields: string[]) => ({
-            where: async (c: Record<string, unknown>) => draft[name]!.filter(r => matches(r, c))
-              .map(r => Object.fromEntries(fields.map(f => [f, r[f]]))),
+            where: async (c: Record<string, unknown>) => {
+              note(name, 'select', c);
+              return draft[name]!.filter(r => matches(r, c)).map(r => Object.fromEntries(fields.map(f => [f, r[f]])));
+            },
           }),
           insert: async (r: Record<string, unknown>) => {
             if (draft[name]!.some(existing => existing.id === r.id)) throw Object.assign(new Error('duplicate'), { code: 'SQLITE_CONSTRAINT_PRIMARYKEY' });
             draft[name]!.push({ ...r });
           },
-          delete: () => ({ where: async (c: Record<string, unknown>) => { draft[name] = draft[name]!.filter(r => !matches(r, c)); } }),
+          update: (patch: Record<string, unknown>) => ({
+            where: async (c: Record<string, unknown>) => {
+              note(name, 'update', c);
+              for (const r of draft[name]!) if (matches(r, c)) Object.assign(r, patch);
+            },
+          }),
+          delete: () => ({
+            where: async (c: Record<string, unknown>) => {
+              note(name, 'delete', c);
+              draft[name] = draft[name]!.filter(r => !matches(r, c));
+            },
+          }),
         }),
       });
       tables = draft;
       return result;
     },
   };
-  return { database, rows: () => tables[ENGAGEMENT_EVENTS_TABLE] as unknown as EngagementEventRow[], markers: () => tables[ENGAGEMENT_EVENT_MIGRATIONS_TABLE]! };
+  return {
+    database,
+    rows: () => tables[ENGAGEMENT_EVENTS_TABLE] as unknown as EngagementEventRow[],
+    markers: () => tables[ENGAGEMENT_EVENT_MIGRATIONS_TABLE]!,
+    conditions: () => conditions,
+    transactions: () => transactions,
+  };
 }
+
+/** Three legacy ids reused by three runs, with `carriedBy` references between them. */
+function threeReusedIds(): EngagementEventRow[] {
+  const rows: EngagementEventRow[] = [];
+  const seqOf = new Map<string, number>();
+  const add = (id: string, at: number, type: string, data: Record<string, unknown> = {}) => {
+    const seq = seqOf.get(id) ?? 0;
+    seqOf.set(id, seq + 1);
+    rows.push(row(id, seq, at, type, data));
+  };
+  for (const [run, base] of [[1, 1_000], [2, 50_000], [3, 90_000]] as const) {
+    add('m1', base, 'engagement_opened', { rootMailId: 'm2', rootGrantId: 'g1', run });
+    add('m3', base + 1, 'engagement_opened', { rootMailId: 'm4', rootGrantId: 'g2', run });
+    add('m5', base + 2, 'engagement_opened', { rootMailId: 'm6', rootGrantId: 'g3', run });
+    // a merged batch: m5's turn carried the mails of m1 and m3
+    add('m1', base + 10, 'turn_finished', { mails: ['m2'], carriedBy: 'm5', status: 'completed' });
+    add('m3', base + 11, 'turn_finished', { mails: ['m4'], carriedBy: 'm1', status: 'completed' });
+    add('m5', base + 12, 'turn_finished', { mails: ['m6'], status: 'completed' });
+  }
+  rows.push(row('m7', 0, 50_005, 'engagement_opened', { rootMailId: 'm8' }));
+  rows.push(row('m7', 1, 50_006, 'turn_finished', { mails: ['m8'], carriedBy: 'm3' }));
+  return rows;
+}
+
+/** Fails the `n`th insert into `engagement_events` (a crash, a ready timeout, a lost connection). */
+function failingAt(database: EngagementMigrationDatabase, n: number): EngagementMigrationDatabase {
+  let inserts = 0;
+  return {
+    transaction: (callback) => database.transaction!(tx => callback({
+      model: (name) => {
+        const model = tx.model(name);
+        return { ...model, insert: async (r) => { if (name === ENGAGEMENT_EVENTS_TABLE && ++inserts === n) throw new Error('disk gone'); return model.insert(r); } };
+      },
+    })),
+  };
+}
+
+const sortById = (rows: readonly EngagementEventRow[]) => [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
 describe('engagement ids (#1250 b35 engagement-id-reused-across-restarts)', () => {
   it('never repeats engagement, mail or grant ids across a simulated restart', () => {
@@ -157,19 +222,110 @@ describe('engagement ids (#1250 b35 engagement-id-reused-across-restarts)', () =
     await expect(migrateEngagementEventIds(db.database)).resolves.toMatchObject({ status: 'already_applied' });
   });
 
-  it('rolls back when a write fails mid-way', async () => {
+  it('rolls back a failed batch: no legacy id is ever half split and no row is lost', async () => {
     const db = memoryDatabase(duplicatedRows());
-    const failing: EngagementMigrationDatabase = {
+    await expect(migrateEngagementEventIds(failingAt(db.database, 3))).rejects.toThrow('disk gone');
+    expect(sortById(db.rows().filter(r => r.engagement_id === 'm1'))).toEqual(sortById(duplicatedRows().filter(r => r.engagement_id === 'm1')));
+    expect(db.rows()).toHaveLength(duplicatedRows().length);
+    expect(db.markers()).toEqual([]);
+  });
+
+  it('keeps the batches an interrupted run committed and resumes to the same result (#1250 b35 review)', async () => {
+    const reference = memoryDatabase(threeReusedIds());
+    await migrateEngagementEventIds(reference.database, { batchRows: 6, now: () => 1 });
+
+    const db = memoryDatabase(threeReusedIds());
+    // The first split batch (m1, 6 rows) commits; the second dies on its first insert.
+    await expect(migrateEngagementEventIds(failingAt(db.database, 7), { batchRows: 6, now: () => 1 })).rejects.toThrow('disk gone');
+    const partial = db.rows();
+    expect(partial).toHaveLength(threeReusedIds().length);
+    expect(partial.some(r => r.engagement_id === 'm1')).toBe(false);
+    for (const legacy of ['m3', 'm5']) expect(partial.filter(r => r.engagement_id === legacy)).toHaveLength(6);
+    expect(db.markers()).toEqual([]);
+
+    await expect(migrateEngagementEventIds(db.database, { batchRows: 6, now: () => 1 })).resolves.toMatchObject({ status: 'applied' });
+    expect(sortById(db.rows())).toEqual(sortById(reference.rows()));
+    // carriedBy points at the part that was open then, also for ids split by the earlier run
+    const after = db.rows();
+    const ids = new Set(after.map(r => r.engagement_id));
+    for (const r of after) {
+      const carriedBy = JSON.parse(r.data).carriedBy as string | undefined;
+      if (carriedBy !== undefined) expect(ids.has(carriedBy)).toBe(true);
+    }
+    expect(db.markers()).toEqual([expect.objectContaining({ id: 1, version: 1 })]);
+  });
+
+  it('addresses rows by primary key in bounded transactions, never by engagement_id (#1250 b35 review)', async () => {
+    const rows = threeReusedIds();
+    const db = memoryDatabase(rows);
+    await migrateEngagementEventIds(db.database, { batchRows: 6 });
+    const scans = db.conditions().filter(({ condition }) => 'engagement_id' in condition);
+    expect(scans).toEqual([]);
+    // read + reference batches + one batch per 6-row legacy id + marker
+    expect(db.transactions()).toBeGreaterThan(3);
+  });
+
+  it('finishes without error when a concurrent runner split the ids after it planned', async () => {
+    const reference = memoryDatabase(threeReusedIds());
+    await migrateEngagementEventIds(reference.database, { batchRows: 6, now: () => 1 });
+
+    const db = memoryDatabase(threeReusedIds());
+    let calls = 0;
+    const late: EngagementMigrationDatabase = {
+      async transaction(callback) {
+        // After this runner read and planned, the other one (the instance or `zhin trace`) runs to the end.
+        if (++calls === 2) await migrateEngagementEventIds(db.database, { batchRows: 6, now: () => 1 });
+        return db.database.transaction!(callback);
+      },
+    };
+    await expect(migrateEngagementEventIds(late, { batchRows: 6, now: () => 1 })).resolves.toMatchObject({ status: 'applied' });
+    expect(sortById(db.rows())).toEqual(sortById(reference.rows()));
+  });
+
+  it('a batch that loses the primary-key race to an identical batch is not an error', async () => {
+    const reference = memoryDatabase(threeReusedIds());
+    await migrateEngagementEventIds(reference.database, { batchRows: 6, now: () => 1 });
+
+    const db = memoryDatabase(threeReusedIds());
+    let raced = false;
+    const racing: EngagementMigrationDatabase = {
       transaction: (callback) => db.database.transaction!(tx => callback({
         model: (name) => {
           const model = tx.model(name);
-          let inserts = 0;
-          return { ...model, insert: async (r) => { if (name === ENGAGEMENT_EVENTS_TABLE && ++inserts === 3) throw new Error('disk gone'); return model.insert(r); } };
+          return {
+            ...model,
+            insert: async (r) => {
+              if (name === ENGAGEMENT_EVENTS_TABLE && !raced) {
+                // The other runner commits the same rows between this batch's checks and its writes.
+                raced = true;
+                await migrateEngagementEventIds(db.database, { batchRows: 6, now: () => 1 });
+                throw Object.assign(new Error('duplicate'), { code: 'SQLITE_CONSTRAINT_PRIMARYKEY' });
+              }
+              return model.insert(r);
+            },
+          };
         },
       })),
     };
-    await expect(migrateEngagementEventIds(failing)).rejects.toThrow('disk gone');
-    expect(db.rows()).toEqual(duplicatedRows());
+    await expect(migrateEngagementEventIds(racing, { batchRows: 6, now: () => 1 })).resolves.toMatchObject({ status: 'applied' });
+    expect(sortById(db.rows())).toEqual(sortById(reference.rows()));
+  });
+
+  it('stops between batches when aborted and leaves no partial id', async () => {
+    const db = memoryDatabase(threeReusedIds());
+    const controller = new AbortController();
+    let inserts = 0;
+    const aborting: EngagementMigrationDatabase = {
+      transaction: (callback) => db.database.transaction!(tx => callback({
+        model: (name) => {
+          const model = tx.model(name);
+          return { ...model, insert: async (r) => { if (name === ENGAGEMENT_EVENTS_TABLE && ++inserts === 6) controller.abort(); return model.insert(r); } };
+        },
+      })),
+    };
+    await expect(migrateEngagementEventIds(aborting, { batchRows: 6, signal: controller.signal })).rejects.toThrow();
+    for (const legacy of ['m1', 'm3', 'm5']) expect([0, 6]).toContain(db.rows().filter(r => r.engagement_id === legacy).length);
+    expect(db.rows()).toHaveLength(threeReusedIds().length);
     expect(db.markers()).toEqual([]);
   });
 

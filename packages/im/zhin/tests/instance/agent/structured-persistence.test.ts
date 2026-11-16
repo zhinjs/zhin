@@ -153,9 +153,9 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     await host.stop(); await rm(dir, { recursive: true, force: true });
   });
 
-  async function activate(retentionDays = 30, probeJournal = true) {
+  async function activate(retentionDays = 30, probeJournal = true, database: typeof host = host) {
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
-    resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
+    resources.provide(databaseRootHostToken, database); handoff.add({ activateNext: () => host.start() });
     const foundation: Record<string, unknown> = {
       agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
       service: {},
@@ -201,7 +201,7 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     return { store: resources.use(agentUsageStoreToken), foundation };
   }
 
-  it('splits engagements merged under reused pre-b35 ids once at activation (#1250 b35)', async () => {
+  async function seedReusedIds() {
     const seed = createHost();
     defineEngagementEventModel(seed);
     await seed.start();
@@ -218,18 +218,50 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
       await events.insert({ id: `m7:${seq}`, engagement_id: 'm7', seq, at: Date.now() - 60_000 + at, type, data: JSON.stringify(data) });
     }
     await seed.stop();
+  }
 
+  type Journal = { listEngagements(): Promise<readonly string[]>; read(id: string): Promise<readonly { type: string; data: Record<string, unknown> }[]> };
+
+  it('splits engagements merged under reused pre-b35 ids once after activation (#1250 b35)', async () => {
+    await seedReusedIds();
     const { foundation } = await activate(30, false);
-    const journal = foundation.engagementJournal as { listEngagements(): Promise<readonly string[]>; read(id: string): Promise<readonly { type: string; data: Record<string, unknown> }[]> };
+    const journal = foundation.engagementJournal as Journal;
+    await vi.waitFor(async () => expect(await journal.listEngagements()).not.toContain('m7'), { timeout: 5_000 });
     const ids = await journal.listEngagements();
     expect(ids).toHaveLength(2);
-    expect(ids).not.toContain('m7');
     const parts = await Promise.all(ids.map(id => journal.read(id)));
     expect(parts.map(part => part.length).sort()).toEqual([2, 3]);
     for (const part of parts) expect(part[0]!.type).toBe('engagement_opened');
     expect(new Set(parts.map(part => part[0]!.data.rootMailId)).size).toBe(2);
-    const marker = await host.models.get(ENGAGEMENT_EVENT_MIGRATIONS_TABLE)!.select('id', 'version');
-    expect(marker).toEqual([expect.objectContaining({ id: 1, version: 1 })]);
+    await vi.waitFor(async () => expect(await host.models.get(ENGAGEMENT_EVENT_MIGRATIONS_TABLE)!.select('id', 'version'))
+      .toEqual([expect.objectContaining({ id: 1, version: 1 })]), { timeout: 5_000 });
+  });
+
+  it('does not hold activation for the id migration (#1250 b35 review: ready timeout)', async () => {
+    await seedReusedIds();
+    // A slow database for the migration only: its transactions wait until released (other
+    // activation steps use transactions too and must not be held).
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slow = new Proxy(host, {
+      get(target, property) {
+        if (property === 'transaction') {
+          return async (callback: Parameters<typeof host.transaction>[0]) => {
+            if (new Error().stack?.includes('migrateEngagementEventIds')) await gate;
+            return target.transaction(callback);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    const { foundation } = await activate(30, false, slow);
+    const journal = foundation.engagementJournal as Journal;
+    // Activated while the migration waits: the journal serves the legacy id as it is.
+    expect(await journal.listEngagements()).toEqual(['m7']);
+    release();
+    await vi.waitFor(async () => expect(await journal.listEngagements()).toHaveLength(2), { timeout: 5_000 });
+    expect(await journal.listEngagements()).not.toContain('m7');
   });
 
   it('registers schedule/usage cleanup before DisposeStack seal so activateNext does not throw', async () => {

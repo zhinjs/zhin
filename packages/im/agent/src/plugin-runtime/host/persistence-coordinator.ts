@@ -41,15 +41,21 @@ function createHostEngagementJournalDatabase(database: DatabaseHost): Engagement
   };
 }
 
-/** One-time `engagement_events` id split (#1250 b35); a failure is logged and retried next start. */
-export async function migrateProjectEngagementIds(database: DatabaseHost): Promise<void> {
+/**
+ * One-time `engagement_events` id split (#1250 b35). Runs in the background: a large journal on a
+ * remote database takes longer than the gateway's ready timeout, and a killed start would never
+ * finish it. Committed batches survive a stop or a crash; the next start continues. A failure is
+ * logged and retried at the next start.
+ */
+export async function migrateProjectEngagementIds(database: DatabaseHost, signal?: AbortSignal): Promise<void> {
   try {
-    const result = await retryRelationalOperation(() => migrateEngagementEventIds(database));
+    const result = await retryRelationalOperation(() => migrateEngagementEventIds(database, { ...(signal ? { signal } : {}) }));
     if (result.status === 'applied' && result.splits.length > 0) {
       const parts = result.splits.reduce((sum, split) => sum + split.newIds.length, 0);
       getLogger('agent').info(formatCompact({ op: 'engagement_id_migration', status: 'applied', detail: `拆分了 ${result.splits.length} 个重复的协作 id（共 ${parts} 个 Engagement，${result.rows} 行）` }));
     }
   } catch (error) {
+    if (signal?.aborted) return;
     getLogger('agent').warn(formatCompact({ op: 'engagement_id_migration', status: 'failed', detail: `协作 id 迁移失败，下次启动重试：${error instanceof Error ? error.message : String(error)}` }));
   }
 }
@@ -111,6 +117,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   let stopped = false;
   let pendingPrune: Promise<void> | undefined;
   let pendingStart: Promise<void> | undefined;
+  let pendingIdMigration: Promise<void> | undefined;
+  const idMigrationAbort = new AbortController();
   let timer: ReturnType<typeof setInterval> | undefined;
   let off = () => {};
   const pruneTraceArchive = async () => {
@@ -126,6 +134,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     off();
     stopSceneFactPruning();
     if (timer) clearInterval(timer);
+    idMigrationAbort.abort();
+    await pendingIdMigration;
     await pendingStart;
     await pendingPrune;
   });
@@ -139,11 +149,12 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       foundation.agent.markMemoryPersistenceReady();
     }
     if (sql) {
-      // #1250 b35: split engagements that pre-b35 counter ids merged across restarts (once).
-      await migrateProjectEngagementIds(database);
       foundation.setEngagementJournal?.(
         new DatabaseEngagementJournal(createHostEngagementJournalDatabase(database)),
       );
+      // #1250 b35: split engagements that pre-b35 counter ids merged across restarts (once, in the
+      // background). The journal only writes run-scoped ids, so it never touches the rows moved.
+      pendingIdMigration ??= migrateProjectEngagementIds(database, idMigrationAbort.signal);
       await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
       foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
       foundation.agent.turnCheckpoints?.activateDatabase(new DatabaseTurnCheckpointStorage(database));
