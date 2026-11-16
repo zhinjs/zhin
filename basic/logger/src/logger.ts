@@ -156,8 +156,31 @@ class LogSanitizer {
 }
 
 /**
- * 默认格式化器 - 【date】【level】【name】：【message】
- * 只负责格式化，不处理安全净化（由Transport处理）
+ * {@link DefaultFormatter} 选项。
+ */
+export interface DefaultFormatterOptions {
+  /**
+   * 时间戳是否带日期（`[2026-11-15 16:22:15.448]`）。默认：stdout 不是终端时带日期（文件、管道、
+   * 网关托管的实例日志），终端里保持 `[16:22:15.448]`（#1250）。
+   */
+  date?: boolean
+}
+
+/** 本地时间的 `YYYY-MM-DD`。 */
+function formatLogDate(timestamp: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${timestamp.getFullYear()}-${pad(timestamp.getMonth() + 1)}-${pad(timestamp.getDate())}`
+}
+
+/** 本地时间的 `HH:mm:ss.SSS`。 */
+function formatLogClock(timestamp: Date): string {
+  const pad = (value: number, length = 2) => String(value).padStart(length, '0')
+  return `${pad(timestamp.getHours())}:${pad(timestamp.getMinutes())}:${pad(timestamp.getSeconds())}.${pad(timestamp.getMilliseconds(), 3)}`
+}
+
+/**
+ * 默认格式化器 - `[YYYY-MM-DD HH:mm:ss.SSS][LEVEL] [name] message`（终端里省略日期）。
+ * 只负责格式化，不处理安全净化（由Transport处理）。解析见 {@link parseLogLine}。
  */
 export class DefaultFormatter implements LogFormatter {
   private nameColorMap = new Map<string, ColorFunction>()
@@ -168,8 +191,10 @@ export class DefaultFormatter implements LogFormatter {
   private levelColors: Record<LogLevelType, ColorFunction>
   private nameColors: ColorFunction[]
   private dateColor: ColorFunction
+  private readonly withDate: boolean
 
-  constructor(colorOptions?: LoggerColorOptions) {
+  constructor(colorOptions?: LoggerColorOptions, options: DefaultFormatterOptions = {}) {
+    this.withDate = options.date ?? !(typeof process !== 'undefined' && process.stdout?.isTTY === true)
     // 初始化级别颜色（可覆盖默认值）
     this.levelColors = {
       ...LOG_LEVEL_COLORS,
@@ -211,10 +236,9 @@ export class DefaultFormatter implements LogFormatter {
     const { name, message, timestamp, error } = entry
     const level = parseLogLevel(entry.level)
 
-    // [HH:mm:ss.SSS][LEVEL] [category] message（category 空则省略该段）
-    const pad = (value: number, length = 2) => String(value).padStart(length, '0')
-    const time = `${pad(timestamp.getHours())}:${pad(timestamp.getMinutes())}:${pad(timestamp.getSeconds())}.${pad(timestamp.getMilliseconds(), 3)}`
-    const dateStr = this.dateColor(`[${time}]`)
+    // [YYYY-MM-DD HH:mm:ss.SSS][LEVEL] [category] message（终端省略日期；category 空则省略该段）
+    const time = formatLogClock(timestamp)
+    const dateStr = this.dateColor(`[${this.withDate ? `${formatLogDate(timestamp)} ` : ''}${time}]`)
 
     const levelName = LOG_LEVEL_NAMES[level]
     const levelStr = this.levelColors[level](`[${levelName}]`)
@@ -232,6 +256,50 @@ export class DefaultFormatter implements LogFormatter {
     }
 
     return result
+  }
+}
+
+/** {@link parseLogLine} 的结果：一行 {@link DefaultFormatter} 输出的各段。 */
+export interface ParsedLogLine {
+  /** 本地日期 `YYYY-MM-DD`；终端格式（或升级前写入的行）没有日期。 */
+  readonly date?: string
+  /** 本地时间 `HH:mm:ss.SSS`。 */
+  readonly time: string
+  /** 带日期时的本地时刻；没有日期时为 undefined。 */
+  readonly timestamp?: Date
+  readonly level: LogLevelType
+  /** `[name]` 段；名称为空的日志没有这一段。 */
+  readonly category?: string
+  readonly message: string
+}
+
+const ANSI_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mGKHF]`, 'g')
+const LOG_LINE_PATTERN = /^\[(?:(\d{4})-(\d{2})-(\d{2}) )?((\d{2}):(\d{2}):(\d{2})\.(\d{3}))\]\[([A-Z]+)\](?: \[([^[\]]+)\])?(?: ([\s\S]*))?$/u
+const LEVEL_BY_NAME: Readonly<Record<string, LogLevelType>> = Object.fromEntries(
+  Object.entries(LOG_LEVEL_NAMES).map(([level, name]) => [name, level as LogLevelType]),
+)
+
+/**
+ * 解析 {@link DefaultFormatter} 输出的一行（先去掉 ANSI 颜色）。日期段可有可无，因此终端格式、
+ * 文件格式与升级前写入的行都能解析；不是这种格式的行（堆栈、第三方输出、表格续行）返回 undefined。
+ * 消息本身以 `[x]` 开头且日志名为空时，`[x]` 会被当作 category，与格式本身的歧义一致。
+ */
+export function parseLogLine(line: string): ParsedLogLine | undefined {
+  const match = LOG_LINE_PATTERN.exec(line.replace(ANSI_PATTERN, '').replace(/\r$/u, ''))
+  if (!match) return undefined
+  const level = LEVEL_BY_NAME[match[9]!]
+  if (!level) return undefined
+  const [year, month, day, time, hours, minutes, seconds, millis] = match.slice(1, 9)
+  const timestamp = year
+    ? new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds), Number(millis))
+    : undefined
+  return {
+    ...(year ? { date: `${year}-${month}-${day}` } : {}),
+    time: time!,
+    ...(timestamp && !Number.isNaN(timestamp.getTime()) ? { timestamp } : {}),
+    level,
+    ...(match[10] ? { category: match[10] } : {}),
+    message: match[11] ?? '',
   }
 }
 

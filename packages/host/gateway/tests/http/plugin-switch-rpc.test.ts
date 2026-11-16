@@ -99,6 +99,20 @@ describe('gateway global plugin switch (ADR 0054 §4)', () => {
     expect(isGatewayPluginSwitch({ type: 'feature.set-override', data: { level: 'global' } })).toBe(false);
   });
 
+  it('reports a hot apply as no restart and a fallback restart with its reason (#1250)', async () => {
+    const hot = fakePackages(transaction({ plugin: { instanceKey: 'rss', packageName: '@zhin.js/plugin-rss', enabled: false, changed: true, apply: 'hot' } }));
+    const first = await serve({ packages: hot, document: { configVersion: 2, plugins: { rss: '@zhin.js/plugin-rss' } } });
+    const feature = await first.post('admin-token', { type: 'feature.set-enabled', requestId: 1, data: { plugin: 'rss', level: 'global', enabled: false } });
+    expect(feature.body.data).toMatchObject({ status: 'saved', restartRequired: false, apply: 'hot', message: expect.stringContaining('未重启') });
+    const plugin = await first.post('admin-token', { type: 'plugin:set-enabled', requestId: 2, instanceKey: 'rss', enabled: false });
+    expect(plugin.body.data).toMatchObject({ success: true, restartRequired: false, apply: 'hot' });
+    const restarted = fakePackages(transaction({ plugin: { instanceKey: 'rss', packageName: '@zhin.js/plugin-rss', enabled: false, changed: true,
+      apply: 'restart', restartReason: 'manifest', restartDetail: '插件声明启停需要重启实例' } }));
+    const second = await serve({ packages: restarted, document: { configVersion: 2, plugins: { rss: '@zhin.js/plugin-rss' } } });
+    const reply = await second.post('admin-token', { type: 'plugin:set-enabled', requestId: 3, instanceKey: 'rss', enabled: false });
+    expect(reply.body.data).toMatchObject({ restartRequired: true, apply: 'restart', restartReason: 'manifest', message: expect.stringContaining('插件声明启停需要重启实例') });
+  });
+
   it('runs feature.set-enabled at global as a gateway transaction and replies with the feature write shape', async () => {
     const packages = fakePackages();
     const { transport, audits, post } = await serve({

@@ -158,3 +158,39 @@ it('keeps the leased Adapter generation and reports missing source metadata expl
     await store.close();
   }
 });
+
+it('lists sub-agents with their qualified names and whether the bare name is usable (#1270)', async () => {
+  // `zhin.agent-index/1` projection, keyed by the Agent feature id (`@zhin.js/agent-feature`).
+  const agentFeatureId = 'zhin.agent' as never;
+  const { agentHostToken, readAgentPurposeTargets } = await import('@zhin.js/agent/runtime');
+  const base = snapshot();
+  const agents = [
+    { name: 'planner', qualifiedName: 'tools__planner' },
+    { name: 'evaluator', qualifiedName: 'a__evaluator' },
+    { name: 'evaluator', qualifiedName: 'b__evaluator' },
+    { name: 'reviewer', qualifiedName: 'tools__reviewer' },
+  ];
+  const state: SnapshotState = {
+    ...base,
+    projections: new Map([...base.projections, [agentFeatureId, { $projection: 'zhin.agent-index/1', list: () => agents }]]),
+    resources: new Map([[base.root, new Map([[agentHostToken.id, { protocol: { listBindings: () => [{ name: 'planner' }] } }]])]]),
+  };
+  const store = new SnapshotStore(state);
+  const lease = store.acquire();
+  try {
+    expect(readAgentPurposeTargets(lease.value)).toEqual({
+      bindingNames: ['zhin', 'planner'],
+      subAgents: [
+        { qualifiedName: 'a__evaluator', name: 'evaluator', kind: 'shared' },
+        { qualifiedName: 'b__evaluator', name: 'evaluator', kind: 'shared' },
+        { qualifiedName: 'tools__planner', name: 'planner', kind: 'binding' },
+        { qualifiedName: 'tools__reviewer', name: 'reviewer', kind: 'bare' },
+      ],
+    });
+    const targets = await createInferenceTargetsReader({ rootId: '/root', lease })();
+    expect(targets.subAgents.map(agent => agent.qualifiedName)).toEqual(['a__evaluator', 'b__evaluator', 'tools__planner', 'tools__reviewer']);
+  } finally {
+    lease.release();
+    await store.close();
+  }
+});

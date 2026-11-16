@@ -110,6 +110,30 @@ describe.runIf(process.platform !== 'win32')('zhin enable / disable through a ru
     expect((await readConfig(root)).disable_plugins).toBeUndefined();
   });
 
+  it('says whether the change applied in place or why the instance restarted (#1250)', async () => {
+    const root = await project();
+    const base = { id: 't3', operation: 'disable' as const, packages: [{ name: 'reminder', spec: 'reminder', source: 'npm' as const }], ok: true, status: 'succeeded' as const,
+      instance: { before: 'running' as const, after: 'running' as const }, startedAt: 1, finishedAt: 2 };
+    let plugin: GatewayPackageTransactionResult['plugin'] = { instanceKey: 'reminder', packageName: 'reminder', enabled: false, changed: true, apply: 'hot' };
+    servers.push(await LocalControlServer.open({
+      path: gatewaySocketPath(root),
+      handler: async (request, emit) => {
+        if (request.type === 'gateway.info') return { ok: true, data: {} };
+        emit({ type: 'phase', id: 't3', phase: 'apply-hot' });
+        return { ok: true, data: { ...base, plugin } };
+      },
+    }));
+    const hot = capture();
+    expect(await runPluginEnablement('reminder', false, { cwd: root, log: hot, output: hot })).toBe(0);
+    expect(hot.text()).toContain('· 在运行中的实例里应用（不重启）');
+    expect(hot.text()).toContain('✓ 已停用插件实例 reminder（reminder），已更新 disable_plugins，已热生效，实例未重启');
+    plugin = { ...plugin, apply: 'restart', restartReason: 'native-module', restartDetail: 'reminder 包含原生扩展（binding.gyp）' };
+    const restarted = capture();
+    expect(await runPluginEnablement('reminder', false, { cwd: root, log: restarted, output: restarted })).toBe(0);
+    expect(restarted.text()).toContain('（实例已重启：running → running）');
+    expect(restarted.text()).toContain('重启原因：reminder 包含原生扩展（binding.gyp）');
+  });
+
   it('exits with 1 when the gateway rolls the change back or refuses it', async () => {
     const root = await project();
     servers.push(await LocalControlServer.open({

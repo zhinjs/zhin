@@ -56,6 +56,10 @@ interface InteractionClaimRequest {
   readonly prompt: UserInteractionView;
   readonly locale: Locale;
   readonly actions?: readonly { readonly value: string }[];
+  /** Whether a plain-text answer parses for this request (ADR 0061: answered vs consumed). */
+  readonly classify?: (raw: string, action: boolean) => boolean;
+  /** Plugin that asked, when known. */
+  readonly owner?: string;
 }
 
 /** Authority belongs to the participant and captured operation, never to rendered text. */
@@ -73,6 +77,8 @@ interface UserInteractionClaim {
   readonly incarnation?: PluginIncarnationRef;
   readonly isLiveFor: (generation: number, currentSnapshot?: RuntimeSnapshot) => boolean;
   readonly actions: ReadonlyMap<string, string>;
+  readonly classify?: (raw: string, action: boolean) => boolean;
+  readonly owner?: string;
   readonly accept: (raw: string, action?: boolean) => boolean;
   readonly reject: (error: Error) => void;
   readonly delivered: () => void;
@@ -93,6 +99,15 @@ export interface PendingUserInteraction {
 }
 
 const ASK_ACTION_PREFIX = 'zhin:ask:';
+/** Claim subject of a prompt that anyone in the conversation may answer (`answeredBy: 'anyone'`). */
+const ANYONE_SUBJECT = '\u0000anyone';
+
+/** ADR 0061 P5 / decision 11: how a claimed message was taken. */
+export interface InteractionClaimResolution {
+  /** The message parses as an answer to the prompt (otherwise it was consumed). */
+  readonly answerLike: boolean;
+  readonly owner?: string;
+}
 
 export interface UserInteractionSource {
   readonly locale?: Locale;
@@ -201,8 +216,15 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   }
 
   resolveClaim(message: Message, snapshot?: RuntimeSnapshot): boolean {
+    return this.resolveClaimDetailed(message, snapshot) !== false;
+  }
+
+  /** {@link resolveClaim} plus whether the text was answer-like (ADR 0061 `interaction_answered` / `interaction_consumed`). */
+  resolveClaimDetailed(message: Message, snapshot?: RuntimeSnapshot): false | InteractionClaimResolution {
     const effectiveSnapshot = snapshot ?? (message instanceof RuntimeMessage ? message[interactionOperationScope]()?.snapshot : undefined);
-    const claim = this.#claims.get(this.#conversationKey(message));
+    const own = this.#claims.get(this.#conversationKey(message));
+    const claim = own?.isLiveFor(message.generation, effectiveSnapshot)
+      ? own : this.#claims.get(this.#conversationKey(message, ANYONE_SUBJECT)) ?? own;
     const claimLive = claim?.isLiveFor(message.generation, effectiveSnapshot) === true;
     if (claim && !claimLive && effectiveSnapshot && claim.incarnation && !isPluginIncarnationAlive(claim.incarnation, effectiveSnapshot)) {
       claim.reject(new Error('User interaction operation retired'));
@@ -221,14 +243,19 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     // Another feature's callback is not a plain-text answer to this question.
     if (explicit && !explicit.startsWith(ASK_ACTION_PREFIX)) return false;
     if (!claim || !claimLive) return false;
+    const taken = (raw: string, action: boolean): false | InteractionClaimResolution => {
+      let answerLike = true;
+      try { answerLike = claim.classify?.(raw, action) ?? true; } catch { answerLike = false; }
+      return claim.accept(raw, action) ? Object.freeze({ answerLike, ...(claim.owner ? { owner: claim.owner } : {}) }) : false;
+    };
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);
-      if (answer !== undefined) return claim.accept(answer, true);
+      if (answer !== undefined) return taken(answer, true);
       // Native stale callbacks never answer a new question. Plain text remains
       // the current question's input even if an old fallback once used its label.
-      return explicit ? false : claim.accept(message.content);
+      return explicit ? false : taken(message.content, false);
     }
-    return claim.accept(payload ?? message.content);
+    return taken(payload ?? message.content, false);
   }
 
   /**
@@ -244,7 +271,9 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     input?: { readonly content: string; readonly segments?: readonly Segment[] },
     snapshot?: RuntimeSnapshot,
   ): boolean {
-    const claim = this.#claims.get(`${conversationRefKey(conversation)}:${senderId}`);
+    const own = this.#claims.get(`${conversationRefKey(conversation)}:${senderId}`);
+    const claim = own?.isLiveFor(generation, snapshot) ? own
+      : this.#claims.get(`${conversationRefKey(conversation)}:${ANYONE_SUBJECT}`) ?? own;
     const explicit = actionPayloadFromSegments(input?.segments);
     if (explicit?.startsWith(ASK_ACTION_PREFIX)
       && (!claim?.isLiveFor(generation, snapshot) || !claim.actions.has(explicit))) return false;
@@ -305,23 +334,32 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const deadline = Date.now() + timeout;
       const view = projectUserInteraction(request, progress, locale);
       let prompt = view;
+      // ADR 0061 decision 11: after an invalid answer the prompt is sent again at most once;
+      // later invalid answers keep waiting silently until the deadline.
+      let invalidAnswers = 0;
+      const classify = (raw: string, action: boolean) => parseUserInteractionAnswer(request, raw, locale, action).ok;
+      const answeredBy = request.answeredBy === 'anyone' ? ANYONE_SUBJECT : undefined;
       while (true) {
-        const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions }, {
-          conversation: source.conversation, subjectId: subjectId ?? source.sender?.id ?? '',
+        const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions, classify,
+          ...(operation?.owner ? { owner: String(operation.owner) } : {}) }, {
+          conversation: source.conversation, subjectId: answeredBy ?? subjectId ?? source.sender?.id ?? '',
           generation: source.generation, signal: request.signal, operation, source: retained,
         });
         try {
           claim.check();
-          const actions = [...claim.actions.keys()];
-          const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
-          assertLifetime();
-          if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
+          if (invalidAnswers <= 1) {
+            const actions = [...claim.actions.keys()];
+            const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+            assertLifetime();
+            if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
+            if (receipt.message) this.#markPrompt?.(receipt.message);
+          }
           claim.delivered();
-          if (receipt.message) this.#markPrompt?.(receipt.message);
           const raw = await claim.answer;
           claim.check();
           const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
           if (result.ok) return result.value as UserInteractionValue<Request>;
+          invalidAnswers += 1;
           prompt = {
             ...view,
             tip: [request.invalidText ?? result.message, view.tip].filter(Boolean).join('\n'),
@@ -444,6 +482,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       ...(incarnation ? { incarnation } : {}),
       isLiveFor,
       actions: answers,
+      ...(request.classify ? { classify: request.classify } : {}),
+      ...(request.owner ? { owner: request.owner } : {}),
       answer,
       accept: (raw, action = false) => {
         if (failure || buffered !== undefined) return false;

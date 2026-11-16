@@ -16,7 +16,9 @@ import {
 } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
-import { hostPost, requireHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
+import {
+  ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION, HOST_OPTION_DESCRIPTION, hostPost, requireHostHttpConfig, type HostFetchResult, type HostHttpConfig,
+} from '../utils/host-http.js';
 
 /** Where `export` writes without a file argument (also where the instance puts its pre-migration backup). */
 export function defaultChatRolesExportPath(root: string, now = new Date()): string {
@@ -65,17 +67,27 @@ export function chatRolesImportLines(result: ConsoleChatRolesImportResult): read
     ...skipped.map(line => `跳过：${line}`)];
 }
 
-/** This project's running gateway only (#1250): a refused target is reported and exits 1, nothing is sent. */
-function requireHost(): Promise<HostHttpConfig> {
-  return requireHostHttpConfig({}, message => logger.error(message));
+interface HostOptions {
+  readonly host?: string;
+  readonly allowUnverifiedHost?: boolean;
+}
+
+/**
+ * This project's running gateway, or an explicit `--host` (verified like send / schedule, #1250):
+ * a refused target is reported and exits 1, nothing is sent.
+ */
+function requireHost(options: HostOptions): Promise<HostHttpConfig> {
+  return requireHostHttpConfig({ host: options.host, allowUnverifiedHost: options.allowUnverifiedHost === true }, message => logger.error(message));
 }
 
 const exportCommand = new Command('export')
   .description('导出人、聊天身份、角色授予与 Console 链接为 JSON（需要实例正在运行）')
   .argument('[file]', '输出文件（默认 .zhin/backups/chat-roles-<时间>.json）')
-  .action(async (file: string | undefined) => {
+  .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
+  .action(async (file: string | undefined, options: HostOptions) => {
     const target = path.resolve(file ?? defaultChatRolesExportPath(process.cwd()));
-    const result = await exportChatRoles(await requireHost(), target);
+    const result = await exportChatRoles(await requireHost(options), target);
     if (!result.ok) { logger.error(result.error); process.exit(1); }
     output.line(...chatRolesExportLines(result.data, result.file));
   });
@@ -83,8 +95,10 @@ const exportCommand = new Command('export')
 const importCommand = new Command('import')
   .description('导入 zhin chat-roles export 的文件：只新增或提升，不降级、不删除（需要实例正在运行与全局 iam.manage）')
   .argument('<file>', '导出文件')
-  .action(async (file: string) => {
-    const result = await importChatRoles(await requireHost(), path.resolve(file));
+  .option('--host <url>', HOST_OPTION_DESCRIPTION)
+  .option('--allow-unverified-host', ALLOW_UNVERIFIED_HOST_OPTION_DESCRIPTION)
+  .action(async (file: string, options: HostOptions) => {
+    const result = await importChatRoles(await requireHost(options), path.resolve(file));
     if (!result.ok) { logger.error(result.error); process.exit(1); }
     output.line(...chatRolesImportLines(result.result));
   });

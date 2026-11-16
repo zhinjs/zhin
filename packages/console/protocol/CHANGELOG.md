@@ -1,5 +1,16 @@
 # @zhin.js/console-protocol
 
+## 1.5.0
+
+### Minor Changes
+
+- efa87bf: 失败原因看得见（#1270 第 14 批）：新增 `ConsoleErrorDetails`、`ConsoleErrorNextStep`、`isConsoleErrorNextStep()`，`ConsoleApiErrorBody` 新增可选 `details` / `nextStep`；attention 新增 `inference.account`、`config.ineffective` 两类条目与 `CONSOLE_ATTENTION_KIND_PERMISSIONS`，条目新增可选结构化 `reason`（`ConsoleAttentionReason`，含「重启前记录」标记 `restored`），主体新增 `inferenceAccount` / `configPath`，列表新增 `status: 'starting'`；新增运行时失败记录契约 `RUNTIME_FAILURES_FILE`、`ConsoleRuntimeFailure`、`ConsoleRuntimeFailureJournal`、`ConsoleRuntimeFailureSource`。
+- 0e6a82f: 普通插件启停热生效，不再重启实例（zhinjs/zhin#1250 `toggle-plugin-restarts-instance`，ADR 0054 修订 2026-11-15）：实例运行时 `zhin enable` / `zhin disable` 与 Console 全局开关先写 `disable_plugins`，再经控制通道 `plugins.apply` 让实例按该修订换代（退役或装配该插件实例的全部能力），实例不重启、适配器不重新登录。插件声明 `package.json#zhin.toggle: "restart"`、含原生模块、实例启动后依赖有变化、实例不支持或热应用失败时，自动回退为停止 → 启动实例（启动失败照旧恢复配置并启动原实例），结果的 `plugin.apply` / `restartReason` / `restartDetail` 与新阶段 `apply-hot` 说明生效方式和原因；Console RPC 的 `restartRequired` 只在实例确实重启时为 true；CLI 输出「已热生效，实例未重启」或重启原因。
+
+### Patch Changes
+
+- 92e6c1e: 更正上一版发布说明：认领码只由 `zhin status` 显示（或读 `.zhin/chat-owner-claim.json`），实例日志里只记它的哈希前 8 位，不会出现认领码本身。1.4.0 / 1.5.0 发布说明中「实例日志与 `zhin status` 给出一次性认领码」的写法有误（ADR 0060「安全复核」）。
+
 ## 1.4.0
 
 ### Minor Changes

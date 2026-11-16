@@ -6,9 +6,9 @@ import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhi
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile, loadRuntimeEnvironmentLayers, projectIdentity } from '@zhin.js/gateway/project';
 import { createLocalGatewayFetch, probeLocalGateway, type LocalGatewayFetch } from '@zhin.js/gateway/local';
-import { isLocalMachineUrl, isLoopbackUrl } from './loopback.js';
+import { isLoopbackUrl, resolvesToLocalMachine } from './loopback.js';
 
-export { isLocalMachineUrl, isLoopbackHostname, isLoopbackUrl } from './loopback.js';
+export { isLocalMachineUrl, isLocalhostSubdomain, isLoopbackHostname, isLoopbackUrl, resolvesToLocalMachine } from './loopback.js';
 
 export interface HostHttpConfig {
   baseUrl: string;
@@ -80,18 +80,19 @@ export function normalizeHostUrl(host: string): string {
  * reports none (older versions, a `--standalone` instance) unless `allowUnverifiedHost`
  * (`--allow-unverified-host`) accepts it with a warning. Only the `/pub/health` probe is sent before
  * that decision, never a token; a probe that fails is unverified too. "This machine" is loopback
- * (incl. `0.0.0.0`, `::ffff:127.x`, `*.localhost`) or one of its interface addresses. Remote hosts are
- * not checked: the operator named them explicitly and they cannot share this checkout's path.
+ * (incl. `0.0.0.0`, `::ffff:127.x`), `*.localhost`, one of its interface addresses, or a host name
+ * that resolves to one of those (looked up with a short timeout). Remote hosts are not checked: the
+ * operator named them explicitly and they cannot share this checkout's path.
  */
 export async function verifyHostProject(
   baseUrl: string,
   projectRoot: string,
   options: Pick<LoadHostHttpOptions, 'fetch' | 'warn' | 'allowUnverifiedHost'> & {
     /** Whether the target is this machine (tests); default: loopback or a local interface address. */
-    readonly isLocal?: (baseUrl: string) => boolean;
+    readonly isLocal?: (baseUrl: string) => boolean | Promise<boolean>;
   } = {},
 ): Promise<void> {
-  if (!(options.isLocal ?? isLocalMachineUrl)(baseUrl)) return;
+  if (!await (options.isLocal ?? resolvesToLocalMachine)(baseUrl)) return;
   const origin = new URL(baseUrl).origin;
   const warn = options.warn ?? ((message: string) => console.error(message));
   let reported: unknown;
@@ -239,8 +240,9 @@ export interface HostFetchResult<T> {
 export async function hostGet<T>(
   http: HostHttpConfig,
   apiPath: string,
+  timeoutMs = 5_000,
 ): Promise<HostFetchResult<T>> {
-  return hostFetch(http, apiPath, { method: 'GET' });
+  return hostFetch(http, apiPath, { method: 'GET', timeoutMs });
 }
 
 /** 带 Bearer 的 JSON POST。 */

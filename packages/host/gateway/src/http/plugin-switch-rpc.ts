@@ -4,15 +4,19 @@
  * `disable_plugins`, which is plugin lifecycle rather than a feature switch. The gateway
  * intercepts them on `POST {base}/console/request` before anything is forwarded, authorizes them
  * with `plugin.manage` (the shared permission map refines `feature.set-enabled` by level), and
- * runs the enable / disable transaction of {@link GatewayPackageService.setEnabled}: stop the
- * instance → write `disable_plugins` → start it, restoring the file and the old instance on
- * failure. `feature.set-enabled` below the global level is forwarded to the instance untouched.
+ * runs the enable / disable transaction of {@link GatewayPackageService.setEnabled}: write
+ * `disable_plugins` and apply it in the running instance (no restart, zhinjs/zhin#1250), or —
+ * when the plugin needs it or the in-place apply fails — stop the instance → start it, restoring
+ * the file and the old instance on failure. `feature.set-enabled` below the global level is
+ * forwarded to the instance untouched.
  *
  * Replies keep the shapes the instance used to send, so a published Console keeps working:
  * - `plugin:set-enabled`: `{ success, instanceKey, enabled, disabled, restartRequired, message }`;
  * - `feature.set-enabled`: `ConsoleFeatureWriteResult` (`saved` / `unchanged`) with the
  *   configuration revision after the write and the override warnings of the new state.
- * Both add `transaction` (the gateway transaction result). A failed or rolled-back transaction
+ * Both add `transaction` (the gateway transaction result) and `apply` (`hot` / `restart` / `none`,
+ * with `restartReason` / `restartDetail` for `restart`); `restartRequired` is true only when the
+ * instance was restarted for the change. A failed or rolled-back transaction
  * answers the RPC's error envelope (`success: false`, `code`, `error`) with `transaction`.
  */
 import { join } from 'node:path';
@@ -138,6 +142,7 @@ async function setPluginEnabled(
   const config = await readConfig().catch(() => undefined);
   const key = result.plugin?.instanceKey ?? instanceKey;
   const changed = result.plugin?.changed === true;
+  const restarted = changed && result.plugin?.apply !== 'hot' && result.plugin?.apply !== 'none';
   return {
     status: 200,
     body: {
@@ -149,8 +154,9 @@ async function setPluginEnabled(
         enabled,
         disabled: disabledPlugins(config?.document),
         // The gateway restarted the instance for a change (it already is back): the Console re-syncs.
-        restartRequired: changed,
-        message: switchMessage(key, enabled, changed),
+        restartRequired: restarted,
+        ...applyFields(result),
+        message: switchMessage(key, enabled, changed, result),
         transaction: result,
       },
     },
@@ -195,10 +201,11 @@ async function setFeatureGlobal(
       data: Object.freeze({
         status: 'saved',
         revision,
-        // The instance was restarted by the gateway transaction (it already is back).
-        restartRequired: true,
+        // True only when the gateway restarted the instance for it (it already is back).
+        restartRequired: result.plugin?.apply !== 'hot' && result.plugin?.apply !== 'none',
+        ...applyFields(result),
         warnings: config ? overrideWarnings(config.document, plugin) : Object.freeze([]),
-        message: switchMessage(plugin, enabled, true),
+        message: switchMessage(plugin, enabled, true, result),
         transaction: result,
       }),
     },
@@ -247,9 +254,25 @@ function error(status: number, code: string | undefined, message: string, type: 
   return { status, body: { success: false, ...(code ? { code } : {}), error: message, type, ...extra } };
 }
 
-function switchMessage(plugin: string, enabled: boolean, changed: boolean): string {
+function switchMessage(plugin: string, enabled: boolean, changed: boolean, result?: GatewayPackageTransactionResult): string {
   const action = enabled ? '启用' : '停用';
-  return changed ? `${plugin} 已${action}，实例已由管理网关重启` : `${plugin} 已处于${action}状态`;
+  if (!changed) return `${plugin} 已处于${action}状态`;
+  const apply = result?.plugin?.apply;
+  if (apply === 'hot') return `${plugin} 已${action}，已在运行中的实例里生效（未重启）`;
+  if (apply === 'none') return `${plugin} 已${action}，实例未运行，下次启动时生效`;
+  const detail = result?.plugin?.restartDetail;
+  return `${plugin} 已${action}，实例已由管理网关重启${detail ? `（${detail}）` : ''}`;
+}
+
+/** `apply` / `restartReason` / `restartDetail` of the transaction (absent from older gateways). */
+function applyFields(result: GatewayPackageTransactionResult): Record<string, unknown> {
+  const plugin = result.plugin;
+  if (!plugin?.apply) return {};
+  return {
+    apply: plugin.apply,
+    ...(plugin.restartReason ? { restartReason: plugin.restartReason } : {}),
+    ...(plugin.restartDetail ? { restartDetail: plugin.restartDetail } : {}),
+  };
 }
 
 function disabledPlugins(document: Readonly<Record<string, unknown>> | undefined): readonly string[] {

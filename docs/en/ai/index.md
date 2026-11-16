@@ -197,6 +197,16 @@ How it works:
 
 Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
 
+##### Switching interjection per group
+
+`conversations` is the global default. To switch one group off, or only one group on, use the feature switch instead of editing the configuration file (the configuration needs an `ai.trigger.ambient` section, `conversations` may be empty; without the section there is no interjection at all):
+
+- A group admin (zhin `admin` role, with `features.selfService.enabled`) sends `feature disable ambient`, `feature enable ambient` or `feature reset ambient` in the group (Chinese: 「功能 关闭 插话」); add a level (`endpoint`, `adapter`) at the end, the default is this conversation.
+- Once an upper level switches it off, lower levels cannot switch it back on (as for plugins).
+- For example `conversations: ["*"]` plus `feature disable ambient` in a noisy group means "every group except this one"; new groups join automatically.
+
+A message that does not mention the bot, is not a command, and arrives in a group without interjection gets no reply but records an outcome: `not_addressed` (reason `no_command_not_ambient` and others). A judgment not to chime in records `ambient_silent`. These records stay in process memory for 24 hours, go to the instance log (`op=inbound_outcome`) and are attached to the Console message diagnostics record.
+
 ##### Structured decisions
 
 Configure a decision Profile per task under the import proposal's `purposes.decisions`, or in Console. The six tasks are skills, tools, memory, agents, approval and ambient. Missing tasks are off; shadow records raw evidence, while active lets the owning task apply it. Public `evaluate` returns genuine Choice/Score/Noul evidence, not task application state. See [structured decisions](./structured-decisions.md).

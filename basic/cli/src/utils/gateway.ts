@@ -24,7 +24,7 @@ import {
 import { GatewayPackageService } from '@zhin.js/gateway/packages';
 import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
 import { supervisedNodeArguments } from '@zhin.js/gateway/supervisor';
-import { consoleLink } from '@zhin.js/gateway/server';
+import { consoleLink, loadGatewayHttpConfig } from '@zhin.js/gateway/server';
 import { isProcessRunning } from './process.js';
 
 export interface GatewayTarget {
@@ -86,14 +86,31 @@ export function describeInstance(status: GatewayInstanceStatus): string {
   return `${status.state}${parts.length ? `（${parts.join('，')}）` : ''}`;
 }
 
-export function renderStatus(result: LocalGatewayInfoResult, now = Date.now()): string[] {
+export interface RenderStatusOptions {
+  /**
+   * The bootstrap token, from {@link consoleSetupToken}: while the Console is not initialized the
+   * Console link carries it after `#` (ADR 0053 §1, #1250 start-bg-no-setup-link).
+   */
+  readonly setupToken?: string;
+}
+
+export function renderStatus(result: LocalGatewayInfoResult, now = Date.now(), options: RenderStatusOptions = {}): string[] {
   const { gateway, instance } = result;
   const lines = [
     `网关：运行中（pid ${gateway.pid}，${gateway.mode}，v${gateway.version}，已运行 ${formatDuration(now - gateway.startedAt)}）`,
   ];
   for (const origin of gateway.origins) lines.push(`  HTTP：${origin}`);
-  if (gateway.origins[0]) lines.push(`  Console：${consoleLink(gateway.origins[0])}`);
-  if (!result.consoleInitialized) lines.push('  Console 尚未初始化：用 .env 的 HTTP_TOKEN（初始化令牌）登录，或运行 zhin console init');
+  const origin = gateway.origins[0];
+  if (origin && !result.consoleInitialized && options.setupToken) {
+    lines.push(`  Console 尚未初始化，打开此链接完成初始化：${consoleLink(origin, options.setupToken)}`);
+    lines.push('    （令牌在 # 之后，不会发给 console.zhin.dev；也可以运行 zhin console init）');
+  } else {
+    if (origin) lines.push(`  Console：${consoleLink(origin)}`);
+    if (!result.consoleInitialized) {
+      lines.push('  Console 尚未初始化：在登录页填写 .env 的 HTTP_TOKEN（初始化令牌），或运行 zhin console init'
+        + '（输出不是终端时，链接里不带令牌）');
+    }
+  }
   lines.push(`实例：${describeInstance(instance)}`);
   if (instance.lastFailure && instance.state !== 'running') {
     lines.push(`  最近失败：${instance.lastFailure.message}`);
@@ -102,11 +119,40 @@ export function renderStatus(result: LocalGatewayInfoResult, now = Date.now()): 
   return lines;
 }
 
+export interface ConsoleSetupTokenOptions {
+  /** Whether stdout is an interactive terminal (the token is never written to logs or pipes). */
+  readonly interactive?: boolean;
+  /** Reads the resolved `http.token` (tests). */
+  readonly readToken?: (root: string, environment: string) => Promise<string | undefined>;
+}
+
+/**
+ * The bootstrap token to print in the Console link: only while the Console has no owner, only to
+ * an interactive terminal, and only when `http.token` resolves (ADR 0053 §1).
+ */
+export async function consoleSetupToken(
+  root: string,
+  status: LocalGatewayInfoResult,
+  environment: string,
+  options: ConsoleSetupTokenOptions = {},
+): Promise<string | undefined> {
+  if (status.consoleInitialized || !status.gateway.origins[0]) return undefined;
+  if (!(options.interactive ?? process.stdout.isTTY === true)) return undefined;
+  const read = options.readToken ?? (async (projectRoot: string, name: string) => (await loadGatewayHttpConfig(projectRoot, name)).token);
+  try {
+    const token = await read(root, environment);
+    return token?.trim() ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const PHASE_LABELS: Readonly<Record<string, string>> = {
   snapshot: '备份项目文件',
   'stop-instance': '停止实例',
   'package-manager': '执行包管理器',
   configure: '写入插件声明与配置',
+  'apply-hot': '在运行中的实例里应用（不重启）',
   'start-instance': '启动实例',
   rollback: '回滚',
   'restore-files': '恢复项目文件',
@@ -159,11 +205,17 @@ function rollbackFailureLines(result: GatewayPackageTransactionResult): string[]
 export function renderTransactionResult(result: GatewayPackageTransactionResult): string[] {
   const names = result.packages.map((item) => item.spec).join(' ') || '(全部依赖)';
   if (result.ok && result.plugin) {
-    const { instanceKey, packageName, enabled, changed } = result.plugin;
+    const { instanceKey, packageName, enabled, changed, apply, restartDetail } = result.plugin;
     const state = enabled ? '启用' : '停用';
-    return [changed
-      ? `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins（实例 ${result.instance.before} → ${result.instance.after}）`
-      : `✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
+    if (!changed) return [`✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
+    const head = `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins`;
+    // #1250: say whether the change applied in place or needed a restart, and why.
+    if (apply === 'hot') return [`${head}，已热生效，实例未重启`];
+    if (apply === 'none') return [`${head}（实例未运行，下次启动时生效）`];
+    // An older gateway does not say how it applied the change.
+    if (apply === undefined) return [`${head}（实例 ${result.instance.before} → ${result.instance.after}）`];
+    return [`${head}（实例已重启：${result.instance.before} → ${result.instance.after}）`,
+      ...(restartDetail ? [`  重启原因：${restartDetail}`] : [])];
   }
   const ignored = result.ignoredBuilds ? [`! ${ignoredBuildsHint(result.ignoredBuilds)}`] : [];
   if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`,

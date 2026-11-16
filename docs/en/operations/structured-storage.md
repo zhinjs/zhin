@@ -38,7 +38,7 @@ FROM agent_usage_calls
 GROUP BY provider, model;
 ```
 
-Cache tokens are input components; reasoning tokens are output components. These are provider-reported facts, not a billing ledger. Independent calls outside the turn event chain and failures without usage are not estimated. Records commit atomically when a turn ends, so an unfinished turn lost in a process crash may have no final record. Persistence failure logs `op=usage_persist status=failed` without changing delivery or repeating the model call.
+Cache tokens are input components; reasoning tokens are output components. These are provider-reported facts, not a billing ledger. Independent calls outside the turn event chain and failures without usage are not estimated. Records commit atomically when a turn ends, so an unfinished turn lost in a process crash may have no final record. Persistence failure logs `usage_persist | status: failed` without changing delivery or repeating the model call.
 
 Usage tables contain no chat body, prompt, reasoning text, tool arguments/results or exception body. Identity columns still contain business data and follow existing database/Console access controls.
 

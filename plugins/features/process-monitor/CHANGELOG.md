@@ -1,5 +1,14 @@
 # @zhin.js/process-monitor
 
+## 1.1.22
+
+### Patch Changes
+
+- Updated dependencies [941d534]
+  - @zhin.js/console-contract@1.3.0
+  - @zhin.js/page@1.2.0
+  - @zhin.js/tool@1.1.22
+
 ## 1.1.21
 
 ### Patch Changes

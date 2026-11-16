@@ -193,7 +193,8 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       requireSetup(principal);
       const input = await body();
       const result = await options.setup.applyDatabase({ dialect: input.dialect, connection: input.connection });
-      if (!options.requestRestart) return ok({ restarting: false, ...result });
+      // The database in use was chosen again: nothing written, nothing to restart (#1250).
+      if (!result.changed || !options.requestRestart) return ok({ restarting: false, ...result });
       // Respond first; the database is a process resource and needs a restart.
       setTimeout(() => options.requestRestart?.(), 300).unref?.();
       return ok({ restarting: true, notice: result.notice });
