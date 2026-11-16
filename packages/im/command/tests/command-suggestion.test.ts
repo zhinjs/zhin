@@ -169,11 +169,27 @@ describe('display-name near misses (#1250 dungeon-entry-unhelpful)', () => {
 
   it('compares the message with plugin display names when no command name is close', async () => {
     const index = new CommandIndex([dungeon], withGame());
-    expect(await index.suggest('地牢探险')).toEqual(['dungeon']);
+    const prefixed = { explicitPrefix: true, commandPrefix: '/' };
+    expect(await index.suggest('地牢探险', prefixed)).toEqual(['/dungeon']);
+    // Without a prefix a two-character half (`地牢`) is too weak a signal: it would also catch chat.
+    expect(await index.suggest('地牢探险')).toEqual([]);
     expect(await index.suggest('Dungeon Expeditoin')).toEqual([]);
     expect(await index.suggest('DungeonExpeditoin')).toEqual(['dungeon']);
     // Unrelated chat and questions stay with the Agent.
     expect(await index.suggest('天气怎么样')).toEqual([]);
     expect(await index.suggest('地铁')).toEqual([]);
+  });
+
+  it('does not answer unprefixed chat that only shares the first half of a display name', async () => {
+    const weather = createCapabilitySlot({ owner: game, feature: commandFeatureId, localName: 'tianqi',
+      source: '/plugins/weather/commands/tianqi/index.ts', definition: defineCommand({ execute: () => 'weather' }) });
+    const base = withGame();
+    const tree = new Map(base.tree);
+    tree.set(game, { ...tree.get(game)!, metadata: { displayName: '天气预报' } } as never);
+    const index = new CommandIndex([weather], { ...base, tree, capabilities: new Map([[weather.id, weather]]) });
+    for (const chat of ['天气不错', '天气', '天气真好']) expect(await index.suggest(chat)).toEqual([]);
+    // One edit still counts without a prefix; the looser half-name match needs the prefix.
+    expect(await index.suggest('天汽预报')).toEqual(['tianqi']);
+    expect(await index.suggest('天气不错', { explicitPrefix: true, commandPrefix: '/' })).toEqual(['/tianqi']);
   });
 });

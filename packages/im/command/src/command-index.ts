@@ -507,7 +507,7 @@ export class CommandIndex {
     // #1250: nothing resembles a command name — compare with the plugins' display names, which
     // is what menus and help call a game (`地牢探险` → the plugin shown as `地牢远征`).
     const ranked = byName.length > 0 ? byName
-      : rankDisplayNameSuggestions(text, this.#displayNameCandidates(operationSnapshot), { ...config, limit: Number.MAX_SAFE_INTEGER });
+      : rankDisplayNameSuggestions(text, this.#displayNameCandidates(operationSnapshot), { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const names: string[] = [];
     for (const record of ranked) {

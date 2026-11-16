@@ -181,6 +181,9 @@ function namespaceMatches<T>(words: readonly string[], candidate: CommandNameCan
 }
 
 
+/** Shortest exactly-typed display-name half that counts without a command prefix. */
+const MIN_IMPLICIT_DISPLAY_NAME_HALF = 4;
+
 export interface DisplayNameCandidate<T> {
   readonly value: T;
   /** The plugin's display names (every language). */
@@ -191,12 +194,16 @@ export interface DisplayNameCandidate<T> {
  * Near misses of a plugin's display name (#1250 dungeon-entry-unhelpful): `地牢探险` for the plugin
  * shown as `地牢远征`. People type what the menu calls a game rather than its command. The whole
  * message must be one word; a name matches within the usual edit distance, or — for names of at
- * least four characters — within half its length when the first half is typed exactly.
+ * least four characters — within half its length when the first half is typed exactly. Without an
+ * explicit command prefix (private chat, an @mention) that looser match needs a first half of at
+ * least {@link MIN_IMPLICIT_DISPLAY_NAME_HALF} characters: a two-character half such as `天气` (of
+ * `天气预报`) is ordinary chat (`天气不错`, or just `天气`) that must reach the AI, not "did you mean".
  */
 export function rankDisplayNameSuggestions<T>(
   text: string,
   candidates: readonly DisplayNameCandidate<T>[],
   config: ResolvedCommandSuggestionConfig,
+  { explicitPrefix = false }: CommandSuggestionOptions = {},
 ): readonly T[] {
   const trimmed = text.trim();
   if (!config.enabled || !trimmed || /\s/u.test(trimmed) || !looksLikeImplicitCommand(trimmed)) return [];
@@ -208,7 +215,7 @@ export function rankDisplayNameSuggestions<T>(
       if (!name || name === typed) continue;
       const length = [...name].length;
       const half = Math.floor(length / 2);
-      const prefixed = length >= 4 && [...typed].slice(0, half).join('') === [...name].slice(0, half).join('');
+      const prefixed = length >= 4 && (explicitPrefix || half >= MIN_IMPLICIT_DISPLAY_NAME_HALF) && [...typed].slice(0, half).join('') === [...name].slice(0, half).join('');
       const allowed = Math.max(allowedCommandDistance(name, config.maxDistance), prefixed && config.maxDistance >= 1 ? half : 0);
       const distance = commandNameDistance(typed, name, allowed);
       if (distance > allowed) continue;
