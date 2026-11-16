@@ -222,6 +222,7 @@ export default defineAdapter({
 - **没声明 = 不支持**。画像在 `defineAdapter` 时校验，未知字段、类型错误直接抛错。
 - **声明了动作就要实现端口**。每个动作对应一个现有端口方法（`reaction` → `control.addReaction`，`recall` → `control.recall`，`mute` → `management.muteGroupMember`，`kick` → `management.kickGroupMember`，`announce` → `management.sendGroupNotice`，`poke` → `management.pokeUser`，`unmute` → `management.unmuteGroupMember`，`muteAll` → `management.muteAllGroupMembers`，`setCard` → `management.setGroupCard`，`setTitle` → `management.setGroupTitle`，`essence` → `management.setGroupEssence`，`invite` → `management.inviteGroupMember`，`quoteReply` / `forward` → `send()`）。缺端口时装配期报错并指出缺的方法。声明了画像的适配器，`recall / edit / reaction / typing` 等 `operations` 由画像推出，不必再写一遍。
 - **只收窄，不放宽**。回合内先合并 `default` 和当前会话类型段，再做通用收窄（Bot 的平台角色不满足 `requiresRole` 时动作关闭，角色未知也关闭；Bot 被禁言时发送与发消息类动作关闭；被动回复窗口用尽时关闭发送），最后应用 `resolveCapabilities` 的补丁。
+- **`segments` 按会话类型整段生效**。`messaging.segments` 是一整份声明：会话类型段（如 `channel`）写了 `segments`，就整段替换继承来的那份，不逐字段合并；出站投影（Markdown / HTML / 媒体 / 按钮的降级、`supported` 白名单）和模型可用的段都按当前会话类型的那份判断，没写的类型沿用 `default`（[ADR 0064](../adr/0064-sandbox-capability-parity.md) F1）。
 - **不写画像也能用**。没有 `profile` 的适配器按 `capabilities`、`operations`、`segments` 得到一个保守画像（能发送、已声明的撤回/编辑/回应/输入中、已有的段策略），其余一律不支持。
 - 回合内读取：`turn.input.platformCapabilities?.has('actions.mute')`、`.get('actions.mute.durationSeconds')`（动作的 `params` 在路径里可省略）。能力描述平台允许什么；谁能让 Bot 这么做，仍由角色、硬闸和审批决定。
 

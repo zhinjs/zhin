@@ -14,13 +14,15 @@ export type { GithubEndpointOptions } from '../../src/endpoint.js';
 
 export default defineAdapter<GithubEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  // Issue/PR 评论以 markdown 图片链接消费远程 URL；无交互面，交互段降级纯文本。
+  // Issue/PR 评论本身就是 GitHub Flavored Markdown：markdown 段原样发送（ADR 0064 F2）；
+  // 媒体以 markdown 图片链接消费远程 URL；无交互面，交互段降级纯文本。
   profile: {
     default: {
       messaging: {
         segments: {
           outboundMedia: ['url'],
           interactive: 'text',
+          markdown: 'native',
         },
       },
       delivery: { send: true, spool: true },
