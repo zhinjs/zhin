@@ -13,10 +13,12 @@ import {
   ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
 import {
-  DEFAULT_FEATURE_SELF_SERVICE, executeFeatureChat, executeRoleChat, featureChatActor, featureChatTokens,
-  readFeatureSelfServiceConfig,
+  DEFAULT_FEATURE_SELF_SERVICE, executeFeatureChat, executeRoleChat, featureChatActor, featureChatActorFailureText, featureChatTokens,
+  FeatureChatRefusal, readFeatureSelfServiceConfig, resolveFeatureChatActor, runFeatureChat, runRoleChat,
   type FeatureChatActor, type FeatureSelfServiceConfig,
 } from '../../src/instance/feature-self-service.js';
+import { executeOwnerClaim, ChatOwnerClaim } from '../../src/instance/chat-owner-claim.js';
+import { executeIdentityBind } from '../../src/instance/chat-identity-bind.js';
 
 const root = rootPluginId();
 const repeater = childPluginId(root, 'repeater');
@@ -584,5 +586,84 @@ describe('角色 授予 #<person id prefix> (ADR 0060 §7)', () => {
     });
     expect(await role(owner, '授予 #cp_abcd admin 全局')).toBe('有多个人的 id 以 #cp_abcd 开头，请多写几位。');
     expect(roles.store.list().filter(entry => entry.role === 'admin')).toEqual([]);
+  });
+});
+
+/**
+ * zhinjs/zhin#1250 (`self-service-unknown-conversation-opaque`): in the Console Sandbox「测试群」,
+ * `功能` / `角色` answered only 「无法识别当前会话。」 and the outcome read `command_replied | executed`.
+ * Root cause: since the Sandbox speaks as a typed sender only as a simulated, role-less id (`~sim:<id>`,
+ * ADR 0060 P3), `chatRoleMessageContext` rejected that sender id and the commands collapsed every
+ * reason into one sentence. Each reason is now named, and the outcome is `refused` with it.
+ */
+describe('Sandbox group conversation (#1250 self-service-unknown-conversation-opaque)', () => {
+  /** A Sandbox group message as the inbound runtime hands it to commands. */
+  const sandboxGroup = (sender: unknown, extra: Record<string, unknown> = {}) => ({
+    conversation: { kind: 'group', id: '测试群', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, ...(sender === undefined ? {} : { sender }), ...extra,
+  });
+
+  it('names why no actor resolves instead of one opaque sentence', () => {
+    expect(resolveFeatureChatActor(snapshot(), sandboxGroup({ id: '~sim:dev-user', name: '测试用户' }))).toEqual({ ok: false, reason: 'simulated-sender' });
+    expect(resolveFeatureChatActor(snapshot(), sandboxGroup(undefined))).toEqual({ ok: false, reason: 'no-sender' });
+    expect(resolveFeatureChatActor(snapshot(), sandboxGroup({ id: 'bad\u0000id' }))).toEqual({ ok: false, reason: 'invalid-sender' });
+    expect(resolveFeatureChatActor(snapshot(), { sender: { id: 'u1' } })).toEqual({ ok: false, reason: 'no-conversation' });
+    // A conversation the adapter reports without a usable kind resolves only to the endpoint.
+    expect(resolveFeatureChatActor(snapshot(), { conversation: { kind: 'thread', id: 'x', endpoint: { id: 'qq:bot-1' } }, sender: { id: 'u1' } }))
+      .toEqual({ ok: false, reason: 'unkeyed-conversation' });
+    // The Sandbox speaking as the linked chat identity resolves.
+    const resolved = resolveFeatureChatActor(snapshot(), sandboxGroup({ id: 'sandbox-user' }));
+    expect(resolved).toMatchObject({ ok: true, actor: { identity: { adapter: 'qq', userId: 'sandbox-user' }, conversationKey: 'qq/bot-1/group:测试群' } });
+  });
+
+  it('replies to 功能 / 角色 from a simulated sender with the reason and the next step, and refuses with that reason', async () => {
+    const { deps } = await harness();
+    const reason = resolveFeatureChatActor(snapshot(), sandboxGroup({ id: '~sim:dev-user' }));
+    expect(reason.ok).toBe(false);
+    const actor = reason.ok ? reason.actor : reason.reason;
+    const text = await executeFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, deps);
+    expect(text).toContain('模拟身份');
+    expect(text).toContain('以我的身份发言');
+    expect(text).not.toBe('无法识别当前会话。');
+    expect(await executeRoleChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).toBe(text);
+    // The installed commands throw the refusal: the reply is the same, the outcome reason is `simulated-sender`.
+    await expect(runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'simulated-sender', message: text });
+    await expect(runRoleChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).rejects.toBeInstanceOf(FeatureChatRefusal);
+    expect(featureChatActorFailureText('unkeyed-conversation', 'zh-CN')).toContain('适配器没有提供可用的会话类型或会话 id');
+    expect(featureChatActorFailureText('unkeyed-conversation', 'zh-CN')).toContain('账号与会话');
+  });
+
+  it('lists features and roles for an admin speaking as the linked identity, on a bare 功能 / 角色', async () => {
+    const { deps, roles } = await harness();
+    await promote(roles, 'sandbox-user', 'qq/bot-1/group:测试群');
+    const resolved = resolveFeatureChatActor(snapshot(), sandboxGroup({ id: 'sandbox-user' }));
+    const actor = resolved.ok ? resolved.actor : undefined;
+    expect(await runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).toMatch(/^本会话功能状态：/u);
+    expect(await runRoleChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).toMatch(/^本会话生效的聊天角色：/u);
+  });
+
+  it('refuses a non-admin with not-admin and a usage error with usage', async () => {
+    const { deps } = await harness();
+    const resolved = resolveFeatureChatActor(snapshot(), sandboxGroup({ id: 'sandbox-user' }));
+    const actor = resolved.ok ? resolved.actor : undefined;
+    await expect(runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'not-admin' });
+    await expect(runRoleChat({ tokens: ['列表'], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'not-admin' });
+    await expect(runRoleChat({ tokens: ['nonsense'], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'usage' });
+    // Turned off: the reply says so and the outcome reason is `self-service-disabled`.
+    await expect(runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, { ...deps, config: DEFAULT_FEATURE_SELF_SERVICE }))
+      .rejects.toMatchObject({ reason: 'self-service-disabled' });
+  });
+
+  it('gives 认领 / 绑定 the same reasons (their own wording for a simulated sender)', async () => {
+    const claim = new ChatOwnerClaim({ roles: new ChatRoleService({ store: new ChatRoleStore() }), logger: { info() {}, warn() {} },
+      code: () => 'AAAA2222', now: () => 1, pid: 1 });
+    await claim.refresh();
+    expect(await executeOwnerClaim({ code: 'AAAA2222', actor: 'simulated-sender', adapterKind: 'platform', locale: 'zh-CN' }, claim)).toContain('不接受认领');
+    expect(await executeOwnerClaim({ code: 'AAAA2222', actor: 'no-sender', adapterKind: 'platform', locale: 'zh-CN' }, claim))
+      .toBe(featureChatActorFailureText('no-sender', 'zh-CN'));
+    await claim.dispose();
+    const codes = { redeem: vi.fn() } as never;
+    expect(await executeIdentityBind({ code: 'X', actor: 'unknown-endpoint', adapterKind: 'platform', locale: 'zh-CN' }, codes))
+      .toBe(featureChatActorFailureText('unknown-endpoint', 'zh-CN'));
+    expect(await executeIdentityBind({ code: 'X', actor: 'simulated-sender', adapterKind: 'platform', locale: 'zh-CN' }, codes)).toContain('不接受绑定');
   });
 });

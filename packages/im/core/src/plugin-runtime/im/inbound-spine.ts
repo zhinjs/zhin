@@ -3,7 +3,7 @@ import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit'
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import type { ConversationRef, DeliveryReceipt, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { userFacingErrorText } from '@zhin.js/command';
+import { userFacingErrorText, userFacingRefusalReason } from '@zhin.js/command';
 import {
   MiddlewareIndex,
   isMiddlewareIndex,
@@ -755,6 +755,11 @@ export function isAddressedMessage(message: Pick<Message, 'conversation' | 'ment
   return typeof prefix === 'string' && prefix.length > 0 && message.content.trim().startsWith(prefix);
 }
 
+function refusalReasonOf(result: MessageDispatchResult): string | undefined {
+  // The same closed code shape `UserFacingError.reason` is kept to (one rule, in @zhin.js/command).
+  return userFacingRefusalReason((result as { refusalReason?: unknown }).refusalReason);
+}
+
 /** Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). */
 function reportCommandOutcome(message: Message, result: MessageDispatchResult): void {
   if (!result.matched) return;
@@ -775,8 +780,9 @@ function reportCommandOutcome(message: Message, result: MessageDispatchResult): 
       reportInboundOutcome(message, { ...base, outcome: 'rate_limited', reason: result.limit?.reason ?? 'limited' });
       return;
     default:
+      // The command's own closed refusal code (UserFacingError `reason`), else the generic one.
       reportInboundOutcome(message, refused
-        ? { ...base, outcome: 'refused', reason: 'user_facing_error' }
+        ? { ...base, outcome: 'refused', reason: refusalReasonOf(result) ?? 'user_facing_error' }
         : { ...base, outcome: 'command_replied', reason: result.menu ? 'menu' : 'executed' });
   }
 }

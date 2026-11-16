@@ -14,10 +14,17 @@ export const userFacingErrorBrand: unique symbol = Symbol.for('zhin.command.user
  */
 export class UserFacingError extends Error {
   readonly [userFacingErrorBrand] = true as const;
+  /**
+   * Closed, machine-readable refusal code (for example `no-sender`). The inbound outcome of the
+   * message records it as the `refused` reason (ADR 0061); never shown to the sender by itself.
+   */
+  readonly reason?: string;
 
-  constructor(message: string, options?: ErrorOptions) {
+  constructor(message: string, options?: ErrorOptions & { readonly reason?: string }) {
     super(message, options);
     this.name = 'UserFacingError';
+    const reason = userFacingRefusalReason(options?.reason);
+    if (reason) this.reason = reason;
   }
 
   /** Localized sender-facing text. Defaults to `message`. */
@@ -29,6 +36,13 @@ export class UserFacingError extends Error {
 /** True for a {@link UserFacingError} from any package copy. */
 export function isUserFacingError(error: unknown): error is UserFacingError {
   return error instanceof Error && (error as { [userFacingErrorBrand]?: unknown })[userFacingErrorBrand] === true;
+}
+
+const REFUSAL_REASON = /^[a-z][a-z0-9_.:-]{0,63}$/u;
+
+/** A refusal code as kept on an outcome: lowercase code characters, at most 64; anything else is dropped. */
+export function userFacingRefusalReason(value: unknown): string | undefined {
+  return typeof value === 'string' && REFUSAL_REASON.test(value) ? value : undefined;
 }
 
 /** Sender-facing text of a {@link UserFacingError}; `undefined` for every other value. */

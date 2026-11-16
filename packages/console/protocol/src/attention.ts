@@ -228,6 +228,24 @@ export interface ConsoleAttentionItem {
   readonly source: string;
   /** Structured reason (added later, #1270; older Hosts omit it). */
   readonly reason?: ConsoleAttentionReason;
+  /**
+   * `chat-roles.import-pending` / `chat-roles.imported`: the people the item is about (#1250). The
+   * instance cannot read Console user names (ADR 0059), so `detail` names only the viewer; the
+   * Console replaces `Console 用户 #<id prefix>` with the user's name from `iam.users.list`.
+   */
+  readonly links?: readonly ConsoleAttentionPersonLink[];
+}
+
+/** One Console user and the chat identities a configured link gives them (platform ids masked, #1250). */
+export interface ConsoleAttentionPersonLink {
+  readonly consoleUserId: string;
+  readonly identities: readonly Readonly<{
+    adapter: string;
+    /** Account the link is for, when the configuration names one. */
+    endpoint?: string;
+    /** Last four characters of the platform user id (never the full id on the home page). */
+    userIdTail: string;
+  }>[];
 }
 
 export interface ConsoleAttentionListRequest {

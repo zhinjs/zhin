@@ -43,6 +43,7 @@ import {
   type ConsoleAttentionKind,
   type ConsoleAttentionList,
   type ConsoleAttentionReason,
+  type ConsoleAttentionPersonLink,
   type ConsoleAttentionSeverity,
   type ConsoleAttentionSubject,
   type ConsoleConfigSource,
@@ -85,6 +86,12 @@ export interface AttentionEndpoint {
   readonly transportState: string;
   /** An unfinished login flow of this account waits for a person (ADR 0058). */
   readonly pendingLogin?: boolean;
+  /** Started and accepting events (the Adapter admitted it), whatever its transport reports (#1250). */
+  readonly admitted?: boolean;
+  /** Start attempts of the current background supervision (0 = none pending). */
+  readonly startAttempt?: number;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
   /** Classified, redacted reason of the last failed start (#1250). */
   readonly lastError?: Readonly<{ category: string; message: string; at?: number;
     /** From the runtime failure journal: observed before the last restart (#1270). */
@@ -261,10 +268,50 @@ export interface AttentionChatRoles {
    */
   readonly personal?: {
     readonly at: number;
-    readonly entries: readonly { readonly consoleUserId: string; readonly adapter: string; readonly userId: string }[];
+    readonly entries: readonly AttentionPersonalLink[];
   };
   /** `ai.personalPrincipals` links waiting for confirmation (ADR 0060 §4.1, security review). */
-  readonly personalPending?: readonly { readonly id: string; readonly consoleUserId: string; readonly adapter: string; readonly userId: string; readonly at: number }[];
+  readonly personalPending?: readonly (AttentionPersonalLink & { readonly id: string; readonly at: number })[];
+}
+
+/** One `ai.personalPrincipals` link: a Console user ↔ a chat identity on one account (#1250). */
+export interface AttentionPersonalLink {
+  readonly consoleUserId: string;
+  readonly adapter: string;
+  /** The account the link is for, when the configuration names one. */
+  readonly endpoint?: string;
+  readonly userId: string;
+}
+
+/**
+ * `尾号 1234`: a platform id shown on the home page keeps only its last four characters (#1250
+ * `principal-link-attention-ids`: the page is screenshotted). Ids of four characters or fewer are shown as they are.
+ */
+export function maskAttentionPlatformId(id: string, locale: Locale = 'zh-CN'): string {
+  const chars = [...id];
+  if (chars.length <= 4) return id;
+  const tail = chars.slice(-4).join('');
+  return locale === 'en' ? `…${tail}` : `尾号 ${tail}`;
+}
+
+/** Links grouped by Console user (first appearance order), each identity once per (adapter, endpoint, userId). */
+export function groupAttentionPersonalLinks(entries: readonly AttentionPersonalLink[]): readonly {
+  readonly consoleUserId: string;
+  readonly identities: readonly Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>[];
+}[] {
+  const people = new Map<string, Map<string, Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>>>();
+  for (const entry of entries) {
+    const person = people.get(entry.consoleUserId) ?? new Map();
+    people.set(entry.consoleUserId, person);
+    const key = JSON.stringify([entry.adapter, entry.endpoint ?? null, entry.userId]);
+    if (!person.has(key)) person.set(key, { adapter: entry.adapter, ...(entry.endpoint ? { endpoint: entry.endpoint } : {}), userId: entry.userId });
+  }
+  return [...people].map(([consoleUserId, identities]) => ({ consoleUserId, identities: [...identities.values()] }));
+}
+
+/** Distinct (adapter, endpoint, userId) among `entries` (#1250: the count matches what is listed). */
+export function countAttentionPersonalLinks(entries: readonly AttentionPersonalLink[]): number {
+  return new Set(entries.map(entry => JSON.stringify([entry.adapter, entry.endpoint ?? null, entry.userId]))).size;
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -515,6 +562,15 @@ const messages = createMessages({
   'login.step.other': { 'zh-CN': '登录步骤', en: 'sign-in' },
   'endpoint.title': { 'zh-CN': '{account} 离线', en: '{account} is offline' },
   'endpoint.detail': { 'zh-CN': '连接状态：{state}。检查凭据、网络和适配器日志，或在「接入」里测试连接。', en: 'Connection: {state}. Check credentials, network and adapter logs, or test the connection under Connection.' },
+  // #1250 (`console-offline-no-reason`): no transport state is not "offline".
+  'endpoint.unreported.title': { 'zh-CN': '{account} 未上报连接状态', en: '{account} reports no connection state' },
+  'endpoint.unreported.detail': {
+    'zh-CN': '账号已启动，但适配器没有上报连接状态，所以无法判断它是否在线。常见原因：适配器按 Webhook 或轮询收消息、不维护长连接；适配器版本较旧，还不支持上报连接状态；或账号刚启动、尚未完成首次连接。检查方法：在「接入」里测试连接，或给机器人发一条消息，看运行日志里有没有这条消息的 receive / inbound_outcome 记录。',
+    en: 'The account is started, but its adapter reports no connection state, so whether it is online cannot be told. Common causes: the adapter receives through webhooks or polling and keeps no connection; an older adapter version does not report connection state yet; or the account has just started and not connected yet. To check: test the connection under Connection, or message the bot and look for its receive / inbound_outcome lines in the run log.',
+  },
+  'endpoint.retry': { 'zh-CN': '已自动重试 {count} 次，下次重试：{at}。', en: 'Retried {count} times automatically; next retry: {at}.' },
+  'endpoint.retryNow': { 'zh-CN': '已自动重试 {count} 次。', en: 'Retried {count} times automatically.' },
+  'endpoint.failedAt': { 'zh-CN': '失败时间：{at}。', en: 'Failed at {at}.' },
   'endpoint.state.idle': { 'zh-CN': '未启动', en: 'not started' },
   'endpoint.state.connecting': { 'zh-CN': '连接中', en: 'connecting' },
   'endpoint.state.open': { 'zh-CN': '已连接', en: 'connected' },
@@ -628,8 +684,8 @@ const messages = createMessages({
     en: 'An account-level owner is not the host owner; with no global owner yet, you may promote one of them to global owner under Chat roles.',
   },
   'roles.imported.personalLine': {
-    'zh-CN': 'ai.personalPrincipals：Console 用户 {user} ↔ {identity}（只链接，不授予角色）',
-    en: 'ai.personalPrincipals: Console user {user} ↔ {identity} (linked only, no role)',
+    'zh-CN': 'ai.personalPrincipals：{user} 已链接 {count} 个聊天身份：{identities}（只链接，不授予角色）',
+    en: 'ai.personalPrincipals: {user} is linked to {count} chat identities: {identities} (linked only, no role)',
   },
   'roles.imported.promoteMe': {
     'zh-CN': '其中链接到你的 Console 账号的人还没有角色，而这里还没有全局 owner：是否同时把这个人设为全局 owner？请在「我的聊天身份」中确认。',
@@ -638,9 +694,13 @@ const messages = createMessages({
   'roles.imported.promoteMeAction': { 'zh-CN': '设为全局 owner…', en: 'Make global owner…' },
   'roles.pending.title': { 'zh-CN': '配置中有 {count} 条人员名单或身份链接等待确认', en: '{count} people-list or identity-link entries from the configuration wait for review' },
   'roles.pending.personalLine': {
-    'zh-CN': 'Console 用户 {user} ↔ {identity}',
-    en: 'Console user {user} ↔ {identity}',
+    'zh-CN': '{user} 将链接 {count} 个聊天身份：{identities}',
+    en: '{user} would be linked to {count} chat identities: {identities}',
   },
+  'roles.link.user': { 'zh-CN': 'Console 用户 #{id}', en: 'Console user #{id}' },
+  'roles.link.viewer': { 'zh-CN': '你（{name}）', en: 'you ({name})' },
+  'roles.link.viewerUnnamed': { 'zh-CN': '你', en: 'you' },
+  'roles.link.identity': { 'zh-CN': '{account}（{id}）', en: '{account} ({id})' },
   'roles.pending.personalDetail': {
     'zh-CN': 'ai.personalPrincipals 中新的或已修改的链接：{entries}。链接不授予角色，但会让该 Console 账号以这个人发言（Sandbox），因此不会自动生效；逐条「导入」或「忽略」。',
     en: 'New or changed ai.personalPrincipals links: {entries}. A link grants no role but lets that Console account speak as the person (Sandbox), so it never applies by itself; import or ignore each.',
@@ -751,6 +811,8 @@ export interface CollectAttentionOptions {
   readonly warnings?: AttentionWarnings;
   /** The signed-in Console user (`user:<id>` without the prefix); items about the viewer's own link use it. */
   readonly viewerUserId?: string;
+  /** The viewer's Console display name (forwarded principal), shown for links to the viewer's own account. */
+  readonly viewerName?: string;
 }
 
 /** Inference preparation reasons that a retry may fix. */
@@ -788,6 +850,8 @@ interface AttentionDraft {
   readonly visible?: boolean;
   /** Structured reason (#1270). */
   readonly reason?: ConsoleAttentionReason;
+  /** People a chat-roles item is about (#1250); not part of the id or the revision. */
+  readonly links?: readonly ConsoleAttentionPersonLink[];
 }
 
 interface ConfigRead {
@@ -855,6 +919,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         action: Object.freeze({ ...draft.action }),
         source: name,
         ...(draft.reason ? { reason: Object.freeze({ ...draft.reason }) } : {}),
+        ...(draft.links?.length ? { links: Object.freeze(draft.links.map(link => Object.freeze({ ...link }))) } : {}),
       }));
     }
     observations.settle(name, present);
@@ -906,17 +971,44 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       return rows.filter(row => !row.connected
         && (START_FAILED_PHASES.has(row.phase) || (row.phase === 'offline' && row.transportState !== 'stopped'))
         && !row.pendingLogin && !waiting.has(accountKey(row.adapter, row.name))).map((row): AttentionDraft => {
+        const account = `${row.adapter} / ${row.name}`;
+        const gap = locale === 'en' ? ' ' : '';
+        // #1250 (`console-offline-no-reason`): an admitted account whose adapter reports no transport
+        // state and that has no failure is "not reported", never "offline"; title and detail agree.
+        const unreported = !TRANSPORT_STATES.has(row.transportState) && !row.lastError && !START_FAILED_PHASES.has(row.phase) && row.admitted !== false;
+        if (unreported) {
+          return {
+            kind: 'endpoint.offline',
+            severity: 'info',
+            subject: { adapter: row.adapter, endpointKey: row.name },
+            // The revision input stays what it was before #1250 split "unreported" from "offline",
+            // so an item a viewer dismissed earlier stays dismissed; "not reported" is display only.
+            state: { transportState: row.transportState },
+            title: t('endpoint.unreported.title', { account }),
+            detail: t('endpoint.unreported.detail'),
+            reason: { category: 'state', code: 'state-unreported', message: t('endpoint.unreported.title', { account }) },
+            action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(row.adapter, row.name) },
+            visible: allowsEndpointAccount(allows, P.ENDPOINT_VIEW, row),
+          };
+        }
         const detail = t('endpoint.detail', { state: t(`endpoint.state.${TRANSPORT_STATES.has(row.transportState) ? row.transportState as 'idle' : 'unknown'}`) });
+        const when = (value: number) => new Date(value).toISOString();
+        const retries = row.startAttempt && row.startAttempt > 0
+          ? row.nextRetryAt !== undefined ? t('endpoint.retry', { count: row.startAttempt, at: when(row.nextRetryAt) }) : t('endpoint.retryNow', { count: row.startAttempt })
+          : '';
+        const failedAt = row.lastError?.at !== undefined ? t('endpoint.failedAt', { at: when(row.lastError.at) }) : '';
+        const facts = [failedAt, retries].filter(Boolean).join(gap);
         return {
           kind: 'endpoint.offline',
           severity: 'warning',
           subject: { adapter: row.adapter, endpointKey: row.name },
           state: { transportState: row.transportState, ...(START_FAILED_PHASES.has(row.phase) ? { phase: row.phase } : {}) },
-          title: t('endpoint.title', { account: `${row.adapter} / ${row.name}` }),
-          // #1250: the classified, redacted reason of the last failed start, when there is one.
+          title: t('endpoint.title', { account }),
+          // #1250: the classified, redacted reason of the last failed start, when there is one, with
+          // when it failed and the automatic retries.
           detail: row.lastError
-            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}${row.lastError.restored ? t('restored') : ''}`
-            : detail,
+            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}${row.lastError.restored ? t('restored') : ''}${facts ? `${locale === 'en' ? '. ' : '。'}${facts}` : ''}`
+            : facts ? `${detail}${gap}${facts}` : detail,
           ...(row.lastError ? { reason: {
             category: row.lastError.category, code: 'start-failed', message: attentionFailureReason(row.lastError.message),
             ...(row.lastError.restored ? { restored: true } : {}),
@@ -1213,7 +1305,24 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       const state = await sources.chatRoles!();
       const action = { label: t('roles.action'), path: ATTENTION_PATHS.chatRoles };
       const drafts: AttentionDraft[] = [];
-      const who = (entry: { adapter: string; userId: string; role: string; source: string }) => `${entry.source}：${entry.adapter}:${entry.userId} → ${entry.role}`;
+      // #1250 (`principal-link-attention-ids`): platform ids keep their last four characters only.
+      const who = (entry: { adapter: string; userId: string; role: string; source: string }) =>
+        `${entry.source}：${entry.adapter}（${maskAttentionPlatformId(entry.userId, locale)}） → ${entry.role}`;
+      // The instance never reads gateway.db (ADR 0059): it names only the viewer; other users are a
+      // short id here and the item's `links` carry the full ids for the Console to name them.
+      const userLabel = (consoleUserId: string) => consoleUserId === options.viewerUserId
+        ? options.viewerName?.trim() ? t('roles.link.viewer', { name: options.viewerName.trim().slice(0, 64) }) : t('roles.link.viewerUnnamed')
+        : t('roles.link.user', { id: consoleUserId.slice(0, 8) });
+      const identityLabel = (identity: Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>) => t('roles.link.identity', {
+        account: identity.endpoint ? `${identity.adapter}·${identity.endpoint}` : identity.adapter,
+        id: maskAttentionPlatformId(identity.userId, locale) });
+      const personLines = (links: readonly AttentionPersonalLink[], key: 'roles.pending.personalLine' | 'roles.imported.personalLine') =>
+        groupAttentionPersonalLinks(links).map(person => t(key, { user: userLabel(person.consoleUserId), count: person.identities.length,
+          identities: listed(person.identities.map(identityLabel), locale) }));
+      const people = (links: readonly AttentionPersonalLink[]) => groupAttentionPersonalLinks(links).map(person => ({
+        consoleUserId: person.consoleUserId,
+        identities: person.identities.map(identity => ({ adapter: identity.adapter, ...(identity.endpoint ? { endpoint: identity.endpoint } : {}),
+          userIdTail: [...identity.userId].slice(-4).join('') })) }));
       if (!state.hasGlobalOwner) {
         drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning', state: { claimOpen: state.claimOpen },
           title: t('roles.noOwner.title'),
@@ -1231,12 +1340,16 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           && personal.some(entry => entry.consoleUserId === options.viewerUserId);
         const lines = [
           ...entries.map(entry => `${who(entry)}（${entry.result}）`),
-          ...personal.map(entry => t('roles.imported.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })),
+          ...personLines(personal, 'roles.imported.personalLine'),
         ];
+        const count = entries.length + countAttentionPersonalLinks(personal);
         const at = Math.min(state.imported?.at ?? Number.POSITIVE_INFINITY, state.personal?.at ?? Number.POSITIVE_INFINITY);
         drafts.push({ kind: 'chat-roles.imported', severity: 'info',
-          state: { at, count: lines.length, ...(promoteMe ? { promoteMe: true } : {}) },
-          title: t('roles.imported.title', { count: lines.length }),
+          // The revision keeps counting raw entries (as before #1250 deduplicated the title's count),
+          // so a dismissal made before stays valid while the import record is unchanged.
+          state: { at, count: entries.length + personal.length, ...(promoteMe ? { promoteMe: true } : {}) },
+          ...(personal.length ? { links: people(personal) } : {}),
+          title: t('roles.imported.title', { count }),
           detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,
           action: promoteMe ? { label: t('roles.imported.promoteMeAction'), path: ATTENTION_PATHS.chatIdentityMe } : action, since: at });
       }
@@ -1245,12 +1358,14 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         const gap = locale === 'en' ? ' ' : '';
         const details = [
           ...(state.pending.length ? [t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) })] : []),
-          ...(personalPending.length ? [t('roles.pending.personalDetail', { entries: listed(personalPending.map(entry =>
-            t('roles.pending.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })), locale) })] : []),
+          ...(personalPending.length ? [t('roles.pending.personalDetail', {
+            entries: listed(personLines(personalPending, 'roles.pending.personalLine'), locale) })] : []),
         ];
-        const count = state.pending.length + personalPending.length;
+        // #1250: counted as listed — one per distinct (adapter, endpoint, userId).
+        const count = state.pending.length + countAttentionPersonalLinks(personalPending);
         drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning',
           state: { ids: [...state.pending.map(entry => entry.id), ...personalPending.map(entry => entry.id)] },
+          ...(personalPending.length ? { links: people(personalPending) } : {}),
           title: t('roles.pending.title', { count }),
           detail: details.join(gap),
           action, since: Math.min(...state.pending.map(entry => entry.seenAt), ...personalPending.map(entry => entry.at)) });
@@ -1290,6 +1405,7 @@ function formatPath(path: readonly string[]): string {
 export interface AttentionRpcContext {
   readonly sources: AttentionSources;
   readonly viewerUserId?: string;
+  readonly viewerName?: string;
   readonly allows: AttentionAllows;
   readonly allowsPluginPermission?: (permission: string) => boolean;
   readonly observations?: AttentionObservations;
@@ -1318,6 +1434,7 @@ export async function dispatchAttentionConsoleRpc(message: Record<string, unknow
     ...(context.warnings ? { warnings: context.warnings } : {}),
     ...(context.now ? { now: context.now } : {}),
     ...(context.viewerUserId ? { viewerUserId: context.viewerUserId } : {}),
+    ...(context.viewerName ? { viewerName: context.viewerName } : {}),
   });
   return { status: 200, body: { success: true, data, type: ATTENTION_RPC.LIST, requestId: message.requestId } };
 }

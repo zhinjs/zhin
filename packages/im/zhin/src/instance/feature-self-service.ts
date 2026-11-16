@@ -10,7 +10,7 @@
  * Replies are the command's return value (normal send chain); writes are audited.
  */
 import { randomInt } from 'node:crypto';
-import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
+import { commandFeatureId, defineCommand, UserFacingError, type CommandContext } from '@zhin.js/command';
 import { operationClientAdapter } from '@zhin.js/feature-kit';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import {
@@ -21,8 +21,8 @@ import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceI
 import { containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
 import { AMBIENT_FEATURE_ID, AMBIENT_FEATURE_WORDS } from '@zhin.js/core/runtime';
 import {
-  chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
-  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry,
+  chatRoleIncludes, chatScopeChain, isChatIdentity, isChatRole, resolveChatRoleMessageContext,
+  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleSubjectFailure,
 } from '@zhin.js/core';
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
 
@@ -54,23 +54,99 @@ export interface FeatureChatActor {
   readonly displayName?: string;
 }
 
-/** Resolves who sent the command and where; undefined outside a keyed conversation. */
-export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>, message: unknown): FeatureChatActor | undefined {
-  const subject = chatRoleMessageContext(snapshot, message);
+/**
+ * Why a chat command cannot act for its sender here (zhinjs/zhin#1250 `self-service-unknown-conversation-opaque`):
+ * the chat-role reasons ({@link ChatRoleSubjectFailure}) plus `unkeyed-conversation` — the message
+ * resolves only to its endpoint (the adapter reports no conversation kind / id a setting can be
+ * stored under, or the account id cannot carry conversations).
+ */
+export type FeatureChatActorFailure = ChatRoleSubjectFailure | 'unkeyed-conversation';
+
+export type FeatureChatActorResolution =
+  | Readonly<{ ok: true; actor: FeatureChatActor }>
+  | Readonly<{ ok: false; reason: FeatureChatActorFailure }>;
+
+/** Resolves who sent the command and where, or why that is not possible. */
+export function resolveFeatureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>, message: unknown): FeatureChatActorResolution {
+  const subject = resolveChatRoleMessageContext(snapshot, message);
+  if (!subject.ok) return Object.freeze({ ok: false as const, reason: subject.reason });
   // Chat commands act on a conversation; an unkeyable conversation (endpoint-level fallback) has none.
-  if (!subject || !parseFeatureConversationKey(subject.context.conversationKey)) return undefined;
+  if (!parseFeatureConversationKey(subject.context.conversationKey)) return Object.freeze({ ok: false as const, reason: 'unkeyed-conversation' as const });
   const parsed = parseFeatureResolutionKey(subject.context.conversationKey);
   const sender = record(message) && record(message.sender) ? message.sender : undefined;
   const displayName = typeof sender?.name === 'string' && sender.name.trim() && sender.name !== subject.identity.userId
     ? sender.name.trim() : undefined;
-  return Object.freeze({
+  return Object.freeze({ ok: true as const, actor: Object.freeze({
     identity: subject.identity,
     conversationKey: subject.context.conversationKey,
     endpointKey: `${parsed.adapter}/${parsed.endpointId}`,
     kind: parsed.conversation!.kind,
     context: subject.context,
     ...(displayName ? { displayName } : {}),
-  });
+  }) });
+}
+
+/** Resolves who sent the command and where; undefined outside a keyed conversation ({@link resolveFeatureChatActor} without the reason). */
+export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>, message: unknown): FeatureChatActor | undefined {
+  const resolved = resolveFeatureChatActor(snapshot, message);
+  return resolved.ok ? resolved.actor : undefined;
+}
+
+const actorFailureMessages = createMessages({
+  'no-conversation': {
+    'zh-CN': '无法识别当前会话：这条消息没有带会话信息（适配器没有提供会话和账号）。请在 Console「功能」或「聊天角色」页设置。',
+    en: 'This conversation cannot be identified: the message carries no conversation (the adapter reported no conversation or account). Use the Console "Features" or "Chat roles" page instead.',
+  },
+  'unknown-endpoint': {
+    'zh-CN': '无法识别当前会话：收到消息的账号不在当前运行的账号列表里（可能刚被停用、改名或正在重载）。稍后重试；仍不行请在 Console「接入」中检查该账号。',
+    en: 'This conversation cannot be identified: the receiving account is not among the running accounts (it may have just been disabled, renamed or reloaded). Try again shortly, or check the account under Connection in the Console.',
+  },
+  'no-adapter': {
+    'zh-CN': '无法识别当前会话：收到消息的账号没有对应的适配器实例。请在 Console「接入」中检查该账号的配置。',
+    en: 'This conversation cannot be identified: the receiving account belongs to no adapter instance. Check its configuration under Connection in the Console.',
+  },
+  'no-sender': {
+    'zh-CN': '无法识别发送者：适配器没有提供发送者 id，无法判断你的角色。请在 Console「功能」或「聊天角色」页设置。',
+    en: 'The sender cannot be identified: the adapter reported no sender id, so your role cannot be checked. Use the Console "Features" or "Chat roles" page instead.',
+  },
+  'simulated-sender': {
+    'zh-CN': '你正以模拟身份发言（Sandbox 里手填的发送者），模拟身份没有 zhin 角色，不能管理功能或角色。请在 Sandbox 打开「以我的身份发言」（需要先在「我的聊天身份」里链接 sandbox 身份），或在 Console「功能」/「聊天角色」页设置。',
+    en: 'You are speaking as a simulated sender (a sender typed in the Sandbox); simulated senders hold no zhin role and cannot manage features or roles. Turn on "Speak as me" in the Sandbox (link a sandbox identity under My chat identity first), or use the Console "Features" / "Chat roles" page.',
+  },
+  'invalid-sender': {
+    'zh-CN': '无法识别发送者：适配器提供的发送者 id 不能作为聊天身份（含控制字符或超过 256 个字符）。请在 Console「功能」或「聊天角色」页设置。',
+    en: 'The sender cannot be identified: the sender id the adapter reported cannot be a chat identity (control characters or over 256 characters). Use the Console "Features" or "Chat roles" page instead.',
+  },
+  'unkeyed-conversation': {
+    'zh-CN': '这个会话无法按会话保存设置：适配器没有提供可用的会话类型或会话 id（或该账号 id 不能承载会话）。请在 Console「账号与会话」里设置，或在命令末尾指定层级「账号」/「适配器」。',
+    en: 'Settings cannot be stored for this conversation: the adapter reported no usable conversation kind or id (or the account id cannot carry conversations). Use "Accounts and conversations" in the Console, or add the level "endpoint" / "adapter" to the command.',
+  },
+});
+
+/** The sender-facing reply for a {@link FeatureChatActorFailure}: what failed and what to do instead. */
+export function featureChatActorFailureText(reason: FeatureChatActorFailure, locale: Locale): string {
+  return actorFailureMessages(locale, reason);
+}
+
+/**
+ * A chat self-service refusal: its text is the reply (through the normal send chain) and `reason`
+ * becomes the message's `refused` outcome reason instead of `command_replied | executed` (ADR 0061).
+ */
+export class FeatureChatRefusal extends UserFacingError {
+  constructor(text: string, reason: string) {
+    super(text, { reason });
+    this.name = 'FeatureChatRefusal';
+  }
+}
+
+const refuse = (reason: string, text: string): never => { throw new FeatureChatRefusal(text, reason); };
+
+/** Runs `run`; a refusal comes back as its reply text (the exported string-returning executors). */
+async function replyText(run: () => Promise<string>): Promise<string> {
+  try { return await run(); } catch (error) {
+    if (error instanceof FeatureChatRefusal) return error.message;
+    throw error;
+  }
 }
 
 const LEVEL_WORDS: Readonly<Record<string, FeatureConfigLevel>> = Object.freeze({
@@ -108,7 +184,6 @@ const messages = createMessages({
     'zh-CN': '未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。',
     en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg); the current database cannot persist them.',
   },
-  unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   privateConversation: { 'zh-CN': '私聊的会话级覆盖只能在 Console 修改；可指定层级（账号 / 适配器 / 全局）。', en: 'Private conversation overrides are Console-only; pass a level (endpoint / adapter / global).' },
   usage: {
     'zh-CN': '用法：功能 列表 [页码] | 开启 <插件> [层级] | 关闭 <插件> [层级] | 设置 <插件> <字段> <值> [层级] | 重置 <插件> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局。含空格的值可用引号包裹，如 "欢迎 新朋友"',
@@ -284,7 +359,7 @@ function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, loca
   const standing = actor.context.platform?.standing;
   const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
   const ownerless = !deps.roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
-  return ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply;
+  return refuse('not-admin', ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply);
 }
 
 /** One `feature.list` row as the chat list reads it. */
@@ -341,26 +416,41 @@ function chatListView(deps: FeatureSelfServiceDeps, clientAdapter: string | unde
   }
 }
 
-/** Runs one `功能` / `feature` invocation and returns the reply text. */
-export async function executeFeatureChat(
-  input: Readonly<{
-    tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale;
-    /** The message's native client adapter: `功能 列表` hides plugins whose chat capabilities all target another one. */
-    clientAdapter?: string;
-  }>,
-  deps: FeatureSelfServiceDeps,
-): Promise<string> {
-  const { locale, actor } = input;
-  if (!deps.config.enabled) return messages(locale, 'disabled');
-  if (!actor) return messages(locale, 'unknownConversation');
+export interface FeatureChatInput {
+  readonly tokens: readonly FeatureChatToken[];
+  /** The sender, or why there is none (a bare `undefined` reads as `no-conversation`). */
+  readonly actor: FeatureChatActor | FeatureChatActorFailure | undefined;
+  readonly locale: Locale;
+  /** The message's native client adapter: `功能 列表` hides plugins whose chat capabilities all target another one. */
+  readonly clientAdapter?: string;
+}
+
+/** The resolved actor, or a refusal naming why there is none. */
+function requireActor(actor: FeatureChatInput['actor'], locale: Locale): FeatureChatActor {
+  if (actor && typeof actor === 'object') return actor;
+  const reason = actor ?? 'no-conversation';
+  return refuse(reason, featureChatActorFailureText(reason, locale));
+}
+
+/** Runs one `功能` / `feature` invocation and returns the reply text (refusals included). */
+export async function executeFeatureChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
+  return replyText(() => runFeatureChat(input, deps));
+}
+
+/** {@link executeFeatureChat}, throwing a {@link FeatureChatRefusal} for a refusal. */
+export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
+  const { locale } = input;
+  if (!deps.config.enabled) return refuse('self-service-disabled', messages(locale, 'disabled'));
+  const actor = requireActor(input.actor, locale);
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
   if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
     && !deps.roles.heldBy(actor.identity).some(entry => chatRoleIncludes(entry.role, 'admin'))) {
     return deniedReply(deps, actor, locale);
   }
   const words = input.tokens.map(tokenText);
-  const sub = SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
-  if (!sub) return messages(locale, 'usage');
+  // A bare `功能` lists (#1250): the list is what someone typing only the command wants.
+  const sub = words.length === 0 ? 'list' : SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
+  if (!sub) return refuse('usage', messages(locale, 'usage'));
   const { mayReferenceEnvironment: _never, ...base } = deps.context;
   const context: FeatureRpcContext = {
     ...base,
@@ -376,32 +466,32 @@ export async function executeFeatureChat(
   const audit = auditor(deps, actor, 'feature.chat');
   const pickLevel = levelPicker;
   const describe = (reply: FeatureRpcReply | null, plugin: string, level: FeatureConfigLevel): string => {
-    if (!reply) return messages(locale, 'usage');
+    if (!reply) return refuse('usage', messages(locale, 'usage'));
     const body = reply.body as Record<string, any>;
     if (!body.success) {
-      if (body.code === 'ambient-not-configured') return messages(locale, 'ambientNotConfigured');
-      if (body.code === 'locked') return messages(locale, 'locked', { plugin, level: levelName(locale, body.lockedBy) });
-      if (body.code === 'environment-reference') return messages(locale, 'environmentReference');
-      if (body.code === 'field-not-allowed') return messages(locale, 'fieldDenied', { field: String(body.field) });
-      if (reply.status === 403) return messages(locale, 'denied');
-      if (reply.status === 404) return messages(locale, 'notFound', { plugin });
-      if (body.code === 'conflict') return messages(locale, 'conflict');
-      if (body.code === 'feature-overrides-unpersisted') return messages(locale, 'overridesUnpersisted');
-      return messages(locale, 'failed', { error: String(body.error ?? '') });
+      if (body.code === 'ambient-not-configured') return refuse('ambient-not-configured', messages(locale, 'ambientNotConfigured'));
+      if (body.code === 'locked') return refuse('locked', messages(locale, 'locked', { plugin, level: levelName(locale, body.lockedBy) }));
+      if (body.code === 'environment-reference') return refuse('environment-reference', messages(locale, 'environmentReference'));
+      if (body.code === 'field-not-allowed') return refuse('field-not-allowed', messages(locale, 'fieldDenied', { field: String(body.field) }));
+      if (reply.status === 403) return refuse('not-admin', messages(locale, 'denied'));
+      if (reply.status === 404) return refuse('not-found', messages(locale, 'notFound', { plugin }));
+      if (body.code === 'conflict') return refuse('conflict', messages(locale, 'conflict'));
+      if (body.code === 'feature-overrides-unpersisted') return refuse('overrides-unpersisted', messages(locale, 'overridesUnpersisted'));
+      return refuse('failed', messages(locale, 'failed', { error: String(body.error ?? '') }));
     }
     const data = body.data as Record<string, any>;
     if (data?.status === 'saved') return messages(locale, 'saved', { level: levelName(locale, level) });
     if (data?.status === 'unchanged') return messages(locale, 'unchanged');
-    if (data?.status === 'conflict') return messages(locale, 'conflict');
+    if (data?.status === 'conflict') return refuse('conflict', messages(locale, 'conflict'));
     if (data?.status === 'invalid') {
-      return messages(locale, 'invalid', { errors: (data.errors as { path: string; message: string }[] ?? []).map(error => `${error.path || '/'} ${error.message}`).join('; ').slice(0, 300) });
+      return refuse('invalid-value', messages(locale, 'invalid', { errors: (data.errors as { path: string; message: string }[] ?? []).map(error => `${error.path || '/'} ${error.message}`).join('; ').slice(0, 300) }));
     }
     return messages(locale, 'unchanged');
   };
-  const target = (level: FeatureConfigLevel): { key: string } | { error: string } => {
-    if (level === 'conversation' && actor.kind === 'private') return { error: messages(locale, 'privateConversation') };
+  const target = (level: FeatureConfigLevel): { key: string } | { error: string; reason: string } => {
+    if (level === 'conversation' && actor.kind === 'private') return { error: messages(locale, 'privateConversation'), reason: 'private-conversation' };
     const key = scopeAt(actor, level);
-    if (!administers(key)) return { error: messages(locale, 'denied') };
+    if (!administers(key)) return { error: messages(locale, 'denied'), reason: 'not-admin' };
     return { key };
   };
 
@@ -409,7 +499,7 @@ export async function executeFeatureChat(
     case 'list': {
       const pageWord = words[1];
       const page = pageWord === undefined ? 1 : /^[1-9]\d{0,5}$/u.test(pageWord) ? Number(pageWord) : NaN;
-      if (!Number.isInteger(page) || words.length > 2) return messages(locale, 'usage');
+      if (!Number.isInteger(page) || words.length > 2) return refuse('usage', messages(locale, 'usage'));
       const listed = await call('feature.list', {});
       const features = ((listed?.body as Record<string, any>)?.data?.features ?? []) as FeatureListItem[];
       const view = chatListView(deps, input.clientAdapter);
@@ -446,7 +536,7 @@ export async function executeFeatureChat(
         }
       }
       const pages = Math.max(1, Math.ceil(lines.length / FEATURE_LIST_PAGE_SIZE));
-      if (page > pages) return messages(locale, 'listPageOutOfRange', { pages });
+      if (page > pages) return refuse('usage', messages(locale, 'listPageOutOfRange', { pages }));
       const out = [messages(locale, 'listHeader')];
       if (pages > 1) out.push(messages(locale, 'listPage', { page, pages, total: lines.length }));
       out.push(...(lines.length ? lines.slice((page - 1) * FEATURE_LIST_PAGE_SIZE, page * FEATURE_LIST_PAGE_SIZE) : [messages(locale, 'listEmpty')]));
@@ -458,11 +548,11 @@ export async function executeFeatureChat(
     case 'disable': {
       const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
-      if (!plugin || level === null || words.length > 3) return messages(locale, 'usage');
+      if (!plugin || level === null || words.length > 3) return refuse('usage', messages(locale, 'usage'));
       const enabled = sub === 'enable';
-      if (plugin === AMBIENT_FEATURE_ID && level === 'global') return messages(locale, 'ambientGlobal');
+      if (plugin === AMBIENT_FEATURE_ID && level === 'global') return refuse('ambient-global', messages(locale, 'ambientGlobal'));
       const scope = target(level);
-      if ('error' in scope) { audit(sub, level, scopeAt(actor, level), 'denied', { plugin }); return scope.error; }
+      if ('error' in scope) { audit(sub, level, scopeAt(actor, level), 'denied', { plugin }); return refuse(scope.reason, scope.error); }
       if (level === 'global') {
         const code = deps.code?.() ?? String(randomInt(100000, 1000000));
         deps.pending?.set(actorName(actor), { code, conversationKey: actor.conversationKey, plugin, enabled,
@@ -477,10 +567,10 @@ export async function executeFeatureChat(
       const pending = deps.pending?.get(actorName(actor));
       const now = deps.now?.() ?? Date.now();
       if (!pending || pending.code !== words[1] || pending.expiresAt < now || pending.conversationKey !== actor.conversationKey) {
-        return messages(locale, 'confirmMissing');
+        return refuse('confirm-missing', messages(locale, 'confirmMissing'));
       }
       deps.pending?.delete(actorName(actor));
-      if (!administers('')) return messages(locale, 'denied');
+      if (!administers('')) return refuse('not-admin', messages(locale, 'denied'));
       const reply = await call('feature.set-enabled', { plugin: pending.plugin, level: 'global', enabled: pending.enabled });
       audit(pending.enabled ? 'enable' : 'disable', 'global', '', reply?.body.success ? 'ok' : 'error', { plugin: pending.plugin });
       const data = (reply?.body as Record<string, any>)?.data;
@@ -497,19 +587,19 @@ export async function executeFeatureChat(
       const levelWord = !isQuoted(input.tokens.at(-1)) && rest.length > 1 && rest.at(-1) !== undefined && LEVEL_WORDS[rest.at(-1)!.toLowerCase()] ? rest.pop() : undefined;
       const raw = rest.length && rest.every(word => word !== undefined) ? rest.join(' ') : undefined;
       const level = pickLevel(levelWord);
-      if (!plugin || !field || raw === undefined || level === null) return messages(locale, 'usage');
+      if (!plugin || !field || raw === undefined || level === null) return refuse('usage', messages(locale, 'usage'));
       const parsed = parseValue(raw);
-      if (!parsed) return messages(locale, 'value');
+      if (!parsed) return refuse('invalid-value', messages(locale, 'value'));
       // Configuration files are environment-expanded: chat never plants `${…}` / `env://` at any level.
       if (containsEnvironmentReference(parsed.value)) {
         audit('set', level, scopeAt(actor, level), 'denied', { plugin, field, reason: 'environment-reference' });
-        return messages(locale, 'environmentReference');
+        return refuse('environment-reference', messages(locale, 'environmentReference'));
       }
       const scope = target(level);
-      if ('error' in scope) { audit('set', level, scopeAt(actor, level), 'denied', { plugin, field }); return scope.error; }
+      if ('error' in scope) { audit('set', level, scopeAt(actor, level), 'denied', { plugin, field }); return refuse(scope.reason, scope.error); }
       if (!chatAllowedFields(schemaOf(deps, plugin), level).includes(field)) {
         audit('set', level, scope.key, 'denied', { plugin, field });
-        return messages(locale, 'fieldDenied', { field });
+        return refuse('field-not-allowed', messages(locale, 'fieldDenied', { field }));
       }
       let reply: FeatureRpcReply | null;
       if (level === 'global') {
@@ -523,15 +613,15 @@ export async function executeFeatureChat(
     case 'reset': {
       const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
-      if (!plugin || level === null || level === 'global' || words.length > 3) return messages(locale, 'usage');
+      if (!plugin || level === null || level === 'global' || words.length > 3) return refuse('usage', messages(locale, 'usage'));
       const scope = target(level);
-      if ('error' in scope) { audit('reset', level, scopeAt(actor, level), 'denied', { plugin }); return scope.error; }
+      if ('error' in scope) { audit('reset', level, scopeAt(actor, level), 'denied', { plugin }); return refuse(scope.reason, scope.error); }
       const reply = await call('feature.remove-override', { plugin, level, key: scope.key });
       audit('reset', level, scope.key, reply?.body.success ? 'ok' : 'error', { plugin });
       return describe(reply, plugin === AMBIENT_FEATURE_ID ? messages(locale, 'ambientName') : plugin, level);
     }
   }
-  return messages(locale, 'usage');
+  return refuse('usage', messages(locale, 'usage'));
 }
 
 /** Global field write through the configuration store (whole-document validation and application). */
@@ -589,21 +679,24 @@ export function chatRoleChangeDenial(
   return undefined;
 }
 
-/** Runs one `角色` / `role` invocation (ADR 0056 §3 grant rules) and returns the reply text. */
-export async function executeRoleChat(
-  input: Readonly<{ tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale }>,
-  deps: FeatureSelfServiceDeps,
-): Promise<string> {
-  const { locale, actor } = input;
-  if (!deps.config.enabled) return messages(locale, 'disabled');
-  if (!actor) return messages(locale, 'unknownConversation');
+/** Runs one `角色` / `role` invocation (ADR 0056 §3 grant rules) and returns the reply text (refusals included). */
+export async function executeRoleChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
+  return replyText(() => runRoleChat(input, deps));
+}
+
+/** {@link executeRoleChat}, throwing a {@link FeatureChatRefusal} for a refusal. */
+export async function runRoleChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
+  const { locale } = input;
+  if (!deps.config.enabled) return refuse('self-service-disabled', messages(locale, 'disabled'));
+  const actor = requireActor(input.actor, locale);
   const words = input.tokens.map(tokenText);
-  const sub = ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
-  if (!sub) return messages(locale, 'roleUsage');
+  // A bare `角色` lists (#1250).
+  const sub = words.length === 0 ? 'list' : ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
+  if (!sub) return refuse('usage', messages(locale, 'roleUsage'));
   if (sub === 'list') {
     // Who holds roles is not public: listing needs admin here, and identities granted above the
     // scopes the actor administers (e.g. global owners) are not shown.
-    if (!deps.roles.hasRole(actor.identity, actor.conversationKey, 'admin')) return messages(locale, 'listDenied');
+    if (!deps.roles.hasRole(actor.identity, actor.conversationKey, 'admin')) return refuse('not-admin', messages(locale, 'listDenied'));
     const lines = [messages(locale, 'rolesHeader')];
     for (const entry of deps.roles.list(actor.conversationKey)) {
       const visible = deps.roles.hasRole(actor.identity, entry.key, 'admin');
@@ -615,15 +708,15 @@ export async function executeRoleChat(
   }
   const user = input.tokens[1];
   const userId = typeof user === 'object' ? ('user' in user ? user.user : user.text) : user;
-  if (!userId) return messages(locale, 'userMissing');
+  if (!userId) return refuse('usage', messages(locale, 'userMissing'));
   // ADR 0060 §7: `#<person id prefix>` names a person (grant the same person across platforms).
   const person = typeof user === 'string' && user.startsWith('#') ? resolvePersonRef(deps.roles.store, user.slice(1)) : undefined;
-  if (person && 'error' in person) return messages(locale, person.error, { prefix: person.prefix });
+  if (person && 'error' in person) return refuse(person.error === 'principalAmbiguous' ? 'person-ambiguous' : 'person-not-found', messages(locale, person.error, { prefix: person.prefix }));
   const role = ROLE_WORDS[(words[2] ?? '').toLowerCase()];
   const level = levelAt(input.tokens, 3);
-  if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return messages(locale, 'roleUsage');
+  if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return refuse('usage', messages(locale, 'roleUsage'));
   const audit = auditor(deps, actor, 'chat-roles.chat');
-  if (level === 'conversation' && actor.kind === 'private') return messages(locale, 'privateConversation');
+  if (level === 'conversation' && actor.kind === 'private') return refuse('private-conversation', messages(locale, 'privateConversation'));
   const scope = scopeAt(actor, level);
   let target: ChatIdentity = { adapter: actor.identity.adapter, userId: String(userId) };
   if (person) {
@@ -631,10 +724,10 @@ export async function executeRoleChat(
     // scope's adapter counts (ADR 0060 Q10); globally any (the actor's adapter first).
     const local = person.identities.find(identity => identity.adapter === actor.identity.adapter);
     const chosen = level === 'global' ? local ?? person.identities[0] : local;
-    if (!chosen) return messages(locale, 'principalNoIdentity', { adapter: actor.identity.adapter });
+    if (!chosen) return refuse('person-no-identity', messages(locale, 'principalNoIdentity', { adapter: actor.identity.adapter }));
     target = { adapter: chosen.adapter, userId: chosen.userId };
   }
-  if (!isChatIdentity(target)) return messages(locale, 'userMissing');
+  if (!isChatIdentity(target)) return refuse('usage', messages(locale, 'userMissing'));
   const current = deps.roles.store.get(level, scope, target);
   // A revoke with nothing stored is checked like handling the named role (no silent "unchanged" for outsiders).
   const denial = sub === 'revoke' && !current
@@ -642,8 +735,8 @@ export async function executeRoleChat(
     : chatRoleChangeDenial(deps.roles, actor.identity, scope, sub === 'grant' ? role : undefined, current?.role);
   if (denial) {
     audit(sub, level, scope, 'denied', { role: denial.role, reason: denial.reason });
-    return denial.reason === 'owner' ? messages(locale, 'ownerDenied')
-      : messages(locale, denial.reason === 'peer' ? 'peerDenied' : 'roleDenied', { role: denial.role });
+    return denial.reason === 'owner' ? refuse('owner-denied', messages(locale, 'ownerDenied'))
+      : refuse(denial.reason === 'peer' ? 'peer-denied' : 'role-denied', messages(locale, denial.reason === 'peer' ? 'peerDenied' : 'roleDenied', { role: denial.role }));
   }
   let status: 'saved' | 'unchanged';
   try {
@@ -652,8 +745,8 @@ export async function executeRoleChat(
       : current && current.role === role ? await deps.roles.store.revoke({ level, key: scope, ...target }) : 'unchanged';
   } catch (error) {
     audit(sub, level, scope, 'error', { role });
-    if (error instanceof ChatRoleStorageUnavailableError) return messages(locale, 'unpersisted');
-    return messages(locale, 'failed', { error: (error as Error).message });
+    if (error instanceof ChatRoleStorageUnavailableError) return refuse('roles-unpersisted', messages(locale, 'unpersisted'));
+    return refuse('failed', messages(locale, 'failed', { error: (error as Error).message }));
   }
   audit(sub, level, scope, 'ok', { role });
   if (status === 'saved') deps.publishEvent?.('chat-roles:updated', { level, key: scope });
@@ -738,14 +831,16 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
   return context => {
     if (!context.hasFeature?.(commandFeatureId)) return;
     if (!options.config.enabled) return;
-    const actorOf = (command: CommandContext): FeatureChatActor | undefined => {
+    const actorOf = (command: CommandContext): FeatureChatActor | FeatureChatActorFailure => {
       const lease = options.snapshots.acquire();
-      let actor: FeatureChatActor | undefined;
-      try { actor = featureChatActor(lease.value, command.input); } finally { lease.release(); }
-      if (actor) options.onActor?.(actor);
-      return actor;
+      let resolved: FeatureChatActorResolution;
+      try { resolved = resolveFeatureChatActor(lease.value, command.input); } finally { lease.release(); }
+      if (!resolved.ok) return resolved.reason;
+      options.onActor?.(resolved.actor);
+      return resolved.actor;
     };
-    const run = (command: CommandContext, execute: typeof executeFeatureChat) => {
+    // Refusals throw (FeatureChatRefusal): the reply is the same, the outcome is `refused` with the reason.
+    const run = (command: CommandContext, execute: typeof runFeatureChat) => {
       const clientAdapter = operationClientAdapter(command.input);
       return execute({ tokens: featureChatTokens(command), actor: actorOf(command), locale: command.locale,
         ...(clientAdapter ? { clientAdapter } : {}) }, { ...options, pending });
@@ -753,12 +848,12 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
     context.addFeature(commandFeatureId, 'feature', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
       alias: ['功能'], options: {},
-      execute: (command: CommandContext) => run(command, executeFeatureChat),
+      execute: (command: CommandContext) => run(command, runFeatureChat),
     }));
     context.addFeature(commandFeatureId, 'role', defineCommand({
       description: messages('zh-CN', 'roleDescription'), descriptionI18n: { en: messages('en', 'roleDescription') },
       alias: ['角色'], options: {},
-      execute: (command: CommandContext) => run(command, executeRoleChat),
+      execute: (command: CommandContext) => run(command, runRoleChat),
     }));
   };
 }
