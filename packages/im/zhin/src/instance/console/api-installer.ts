@@ -50,6 +50,8 @@ export interface ConsoleControlPlaneOptions {
   readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
   /** Instance runtime failure journal (#1270) for the attention inbox. */
   readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
+  /** Speech features whose external command cannot run (#1250 第 29 批), for the attention inbox. */
+  readonly speechIssues?: () => readonly import('./attention.js').AttentionSpeechIssue[];
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -108,6 +110,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       ...(options.featureStores ? { featureStores: options.featureStores } : {}),
       ...(options.agentInsights ? { agentInsights: options.agentInsights } : {}),
       ...(options.runtimeFailures ? { runtimeFailures: options.runtimeFailures } : {}),
+      ...(options.speechIssues ? { speechIssues: options.speechIssues } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();

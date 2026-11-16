@@ -31,6 +31,8 @@ export interface ConsoleRpcComposition {
   readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
   /** Instance runtime failure journal (#1270): reasons kept across restarts. */
   readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
+  /** Speech features whose external command cannot run (#1250 第 29 批), for the attention inbox. */
+  readonly speechIssues?: () => readonly import('./attention.js').AttentionSpeechIssue[];
 }
 
 /**

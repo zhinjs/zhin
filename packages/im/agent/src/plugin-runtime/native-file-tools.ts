@@ -11,6 +11,7 @@ import {
 import { MAX_EDIT_FILE_SIZE, MAX_READ_FILE_SIZE, isFileStale } from '../security/file-policy.js';
 import { findActualStringInFile, preserveQuoteStyleInEdit } from './file-edit-quote-utils.js';
 import { walkWorkspaceFiles } from './file-search-scope.js';
+import { INLINE_BINARY_PLACEHOLDER_WRITE_ERROR, containsInlineBinaryPlaceholder } from '../media/inline-binary.js';
 
 /** Output budgets keep one exploratory call from flooding the model context. */
 const MAX_READ_LINES = 2_000;
@@ -133,6 +134,8 @@ async function readFile(input: Record<string, unknown>, context: ToolExecutionCo
 async function writeFile(input: Record<string, unknown>, context: ToolExecutionContext): Promise<string> {
   const target = authorizedAbsolutePath(input.file_path, context);
   const content = requiredString(input.content, 'content', true);
+  // #1250 第 29 批：工具结果里被替换掉的内嵌二进制占位不能当作文件原文写回。
+  if (containsInlineBinaryPlaceholder(content)) throw new Error(INLINE_BINARY_PLACEHOLDER_WRITE_ERROR);
   context.signal.throwIfAborted();
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, content, { encoding: 'utf8', signal: context.signal });
@@ -144,6 +147,9 @@ async function editFile(input: Record<string, unknown>, context: ToolExecutionCo
   const target = authorizedAbsolutePath(input.file_path, context);
   const oldString = requiredString(input.old_string, 'old_string', true);
   const newString = requiredString(input.new_string, 'new_string', true);
+  if (containsInlineBinaryPlaceholder(newString) && !containsInlineBinaryPlaceholder(oldString)) {
+    throw new Error(INLINE_BINARY_PLACEHOLDER_WRITE_ERROR);
+  }
   context.signal.throwIfAborted();
   const stat = await fs.stat(target);
   if (stat.size > MAX_EDIT_FILE_SIZE) throw new Error(`File exceeds the ${MAX_EDIT_FILE_SIZE} byte edit limit`);

@@ -530,6 +530,28 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it('lists an unavailable speech feature of the running instance (#1250 batch 29 speech-ready-without-tts-binary)', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [] },
+      attention: {
+        available: true,
+        items: [{
+          kind: 'speech.unavailable', severity: 'warning', source: 'speech',
+          title: '语音合成（edge）不可用',
+          detail: '找不到命令「edge-tts」（speech.tts.edgeTtsCommand），voice_tts 无法合成语音。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 speech.tts.edgeTtsCommand 改为可执行文件的绝对路径',
+        }],
+        unavailable: [],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：语音合成（edge）不可用: 找不到命令「edge-tts」（speech.tts.edgeTtsCommand）');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('warns when the attention list cannot be read', async () => {
     runningGateway.current = gatewayInfo(true);
     const { output, directory } = await runDoctor(() => {});

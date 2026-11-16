@@ -170,6 +170,7 @@ describe('attention.list failure reasons (#1270)', () => {
       },
       toolApprovals: () => [{ id: 'appr-1', toolName: 'group_kick', sessionKey: 's', createdAt: NOW - 1 }],
       mcpServers: () => [{ name: 'search', connected: false, lastError: { category: 'network', message: 'ECONNREFUSED', at: 1 } }],
+      speech: () => [{ feature: 'tts', provider: 'edge', configPath: 'speech.tts.edgeTtsCommand', command: 'edge-tts', reason: 'not-found' }],
       unschedulableJobs: () => [{ jobId: 'job-1', reason: 'no_next_run', since: NOW - 1 }],
       errorLogs: async () => ({ count: 1, latest: new Date(NOW).toISOString() }),
       chatRoles: async () => ({ hasGlobalOwner: false, claimOpen: false,

@@ -13,6 +13,7 @@
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
  * | `mcp.disconnected` | Agent MCP servers whose last connect failed (not those still waiting for their first connect) | `status.view` |
+ * | `speech.unavailable` | Speech Host: a configured speech feature whose external command cannot run (`edge-tts`, #1250) | `status.view` |
  * | `inference.account` | Host model accounts: reauthorize / disconnected / uncertain / preparation failed (#1270) | `agent.view` |
  * | `config.ineffective` | `purposes.agents.<key>` choices the runtime ignores (#1270) | `agent.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
@@ -183,6 +184,22 @@ export interface AttentionMcpServer {
   readonly restored?: boolean;
 }
 
+/**
+ * A configured speech feature that cannot run (#1250 第 29 批): its external command is not
+ * executable. Mirrors `SpeechDependencyIssue` of the Speech Host.
+ */
+export interface AttentionSpeechIssue {
+  readonly feature: 'tts' | 'stt';
+  readonly provider: string;
+  /** Configuration path of the setting to fix (`speech.tts.edgeTtsCommand`). */
+  readonly configPath: string;
+  /** The command as configured. */
+  readonly command: string;
+  readonly reason: 'not-found' | 'not-executable' | 'has-arguments' | 'timeout';
+  /** When the check ran (ms). */
+  readonly at?: number;
+}
+
 /** A Host model account that needs an operator (#1270). */
 export interface AttentionInferenceAccount {
   readonly accountId: string;
@@ -326,6 +343,8 @@ export interface AttentionSources {
   /** `undefined` when the Agent (and its queue) is not running. */
   readonly toolApprovals?: () => readonly AttentionToolApproval[] | undefined;
   readonly mcpServers?: () => readonly AttentionMcpServer[];
+  /** Speech features whose external command cannot run (#1250 第 29 批); absent without a Speech Host. */
+  readonly speech?: () => readonly AttentionSpeechIssue[];
   /** `undefined` when the persistent scheduler (Agent assistant) is not running. */
   readonly unschedulableJobs?: () => readonly AttentionUnschedulableJob[] | undefined;
   /** `null` when the log store is not available. */
@@ -352,7 +371,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'commands' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'commands' | 'config' | 'tool-approvals' | 'mcp' | 'speech' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -659,6 +678,13 @@ const messages = createMessages({
   'ineffective.detail.no-target': { 'zh-CN': '没有 Agent 绑定或子 Agent 叫这个名字，这个模型选择不会被使用。请改为子 Agent 的完整名称（插件名__Agent 名），或删除它。', en: 'No Agent binding or sub-agent has this name, so this model choice is never used. Use a sub-agent qualified name (plugin__agent) or remove it.' },
   'ineffective.action': { 'zh-CN': '打开模型用途', en: 'Open model purposes' },
   'mcp.action': { 'zh-CN': '查看 MCP', en: 'Open MCP' },
+  'speech.title.tts': { 'zh-CN': '语音合成（{provider}）不可用', en: 'Speech synthesis ({provider}) is unavailable' },
+  'speech.title.stt': { 'zh-CN': '语音识别（{provider}）不可用', en: 'Speech recognition ({provider}) is unavailable' },
+  'speech.detail.not-found': { 'zh-CN': '找不到命令「{command}」（{path}），voice_tts 无法合成语音。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 {path} 改为可执行文件的绝对路径：launchd / systemd 等托管环境的 PATH 通常不含 ~/.local/bin。也可以改用 openai / azure / custom TTS。', en: 'Command "{command}" ({path}) was not found, so voice_tts cannot synthesize speech. Install edge-tts (pip install edge-tts) where the bot runs and set {path} to the absolute path of the executable: under launchd / systemd the PATH usually lacks ~/.local/bin. Or switch to the openai / azure / custom TTS provider.' },
+  'speech.detail.not-executable': { 'zh-CN': '命令「{command}」（{path}）存在但不能直接执行（没有执行权限；Windows 上 .cmd / .bat 不能直接运行，需指向 .exe），voice_tts 无法合成语音。请给它加上执行权限，或把 {path} 改为可执行文件的绝对路径。', en: 'Command "{command}" ({path}) exists but cannot be started directly (no execute permission; on Windows a .cmd / .bat cannot be started, point to the .exe), so voice_tts cannot synthesize speech. Make it executable or point {path} to the executable.' },
+  'speech.detail.has-arguments': { 'zh-CN': '{path} 填的是「{command}」：这里只能填可执行文件路径，不支持带参数（例如 `uvx edge-tts`），voice_tts 无法合成语音。请填 edge-tts 可执行文件的绝对路径（pip install edge-tts 后用 command -v edge-tts 查看）。', en: '{path} is set to "{command}": it takes the path of an executable only, without arguments (e.g. not `uvx edge-tts`), so voice_tts cannot synthesize speech. Set it to the absolute path of the edge-tts executable (see command -v edge-tts after pip install edge-tts).' },
+  'speech.detail.timeout': { 'zh-CN': '启动时检查命令「{command}」（{path}）超时，无法确认 voice_tts 能否合成语音。请确认它已安装且 {path} 是可执行文件的绝对路径。', en: 'Checking command "{command}" ({path}) at startup timed out, so voice_tts may not work. Make sure it is installed and {path} is the absolute path of the executable.' },
+  'speech.action': { 'zh-CN': '打开配置文件', en: 'Open configuration' },
   'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },
   'logs.detail': { 'zh-CN': '只统计最近 {hours} 小时的错误；更早的错误不再提醒，仍可在错误日志里查看。', en: 'Counts errors from the last {hours} hours only; older errors no longer raise this item and stay in the error log.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
@@ -1211,6 +1237,24 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           } } : {}),
         };
       }));
+  }
+
+  // #1250 第 29 批：配置的语音能力因外部命令不可执行而不可用（如 edge TTS 没有可运行的 edge-tts）。
+  if (sources.speech && allows(P.STATUS_VIEW)) {
+    await read('speech', () => sources.speech!().map((issue): AttentionDraft => {
+      // Only the command's last path segment is shown; the configured value may be a home path.
+      const command = attentionFailureReason(issue.command);
+      return {
+        kind: 'speech.unavailable', severity: issue.reason === 'timeout' ? 'info' : 'warning',
+        subject: { configPath: issue.configPath },
+        state: { feature: issue.feature, provider: issue.provider, reason: issue.reason, command },
+        title: t(`speech.title.${issue.feature}`, { provider: issue.provider }),
+        detail: t(`speech.detail.${issue.reason}`, { command, path: issue.configPath }),
+        action: { label: t('speech.action'), path: ATTENTION_PATHS.config },
+        reason: { category: 'config', code: issue.reason, ...(issue.at !== undefined ? { at: new Date(issue.at).toISOString() } : {}) },
+        ...(issue.at !== undefined ? { since: issue.at } : {}),
+      };
+    }));
   }
 
   if (sources.unschedulableJobs && allows(P.OPS_SCHEDULE_READ)) {
