@@ -61,7 +61,11 @@ export function StatCard({ icon, label, value, unit, badge, footer, sub, tone, a
 /** `0`, `'0'`, `'0.0'`, `'0%'`: a steady value that never takes a signal tone. */
 export function isZeroValue(value: ReactNode): boolean {
   if (typeof value === 'number') return value === 0
-  return typeof value === 'string' && /^\s*0+(?:[.,]0+)?\s*%?\s*$/u.test(value)
+  if (typeof value !== 'string') return false
+  // Trim first: `\s*%?\s*` inside the pattern backtracks polynomially on long whitespace runs.
+  const text = value.trim()
+  const number = text.endsWith('%') ? text.slice(0, -1).trimEnd() : text
+  return /^0+(?:[.,]0+)?$/u.test(number)
 }
 
 function statIcon(icon: StatCardProps['icon']): ReactNode {
