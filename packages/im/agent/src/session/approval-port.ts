@@ -142,6 +142,23 @@ export function formatApprovalDenial(
 }
 
 /**
+ * #1250 b33: denial of an unattended call that the automatic reviewer did not approve (rejected, asked
+ * for a human, timed out or failed). Nobody is in this turn, so the model must not ask anyone.
+ */
+export function formatUnattendedReviewDenial(
+  outcome: Exclude<ApprovalOutcome, { status: 'approved' }>,
+  context: ApprovalDenialContext,
+): string {
+  const why = outcome.status === 'denied'
+    ? 'the automatic approval reviewer rejected it'
+    : outcome.status === 'timed_out'
+      ? 'the automatic approval review timed out, which counts as a rejection'
+      : `the automatic approval review could not approve it (${outcome.reason})`;
+  return `Tool call not approved: this is an unattended turn (for example a scheduled task) and ${why}. `
+    + 'No person can confirm it here. Do not retry it in this turn. ' + approvalAlternativeHint(context, true);
+}
+
+/**
  * Denial for a call that needed approval but could not ask anyone (#1250): tells an unattended turn
  * apart from a conversation that has no approval surface, and names where the user can act instead.
  */

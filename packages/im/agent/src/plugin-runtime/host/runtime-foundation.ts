@@ -166,6 +166,10 @@ export class AgentRuntimeFoundation {
       ?? (approvalMode === 'auto'
         ? createAutoApprovalPort(approvalReviewer)
         : approvalMode === 'bypass' ? bypassApprovalPort : undefined);
+    // #1250 b33: unattended turns (scheduled tasks) have nobody to ask. Under `auto` their approval
+    // requests go to the same reviewer, without any human escalation; a rejection, an "ask a human",
+    // a timeout or an error all deny the call (fail closed). Other modes keep denying them outright.
+    const unattendedReviewPort = approvalMode === 'auto' ? createAutoApprovalPort(approvalReviewer) : undefined;
 
     try {
       const created = createRuntimeZhinAgent({ service, im: options.im,
@@ -190,6 +194,7 @@ export class AgentRuntimeFoundation {
         options.assistantConfig,
         traceRuntime,
         resolveLocale(options.resources.has(projectLocaleToken) ? options.resources.use(projectLocaleToken) : undefined),
+        unattendedReviewPort,
       );
       options.lifecycle.add(schedule.dispose);
       const home = await createAssistantHomeRuntime(

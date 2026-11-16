@@ -22,9 +22,13 @@ import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
 import { isAmbientTurn } from '../user-relation-turn.js';
 import { ADMIN_APPROVABLE_TOOL_TAG } from './admin-approvable.js';
+import { classifyHighRiskAction } from './provenance.js';
 import {
   TRUST_LEVEL_POLICY,
   TRUST_RESTRICTION_REASON,
+  hasNonAsciiToolName,
+  isBuiltinSideEffectToolName,
+  toolNameSpellings,
   isToolAboveTrust,
   resolveTurnTrustLevel,
 } from './trust-level.js';
@@ -348,7 +352,40 @@ const NATIVE_MEMORY_WRITE_TOOL = 'memory_upsert';
 function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
   if (tool.requiresApproval === 'never') return false;
   if (tool.requiresApproval === 'always' || tool.requiresApproval === 'once' || tool.requiresApproval === 'human') return true;
-  return !hasCanonicalRiskPolicy(tool.name);
+  if (hasCanonicalRiskPolicy(tool.name)) return false;
+  // #1250 b33: under the default `on-risk`, a tool its author declared read-only needs no approval.
+  return !readOnlyDeclarationApplies(tool);
+}
+
+/**
+ * #1250 b33: whether a tool's `readOnly: true` declaration counts. It only relaxes the declarative
+ * approval of an `on-risk` tool; every other layer (role / trust filtering, ExecPolicy, FilePolicy,
+ * network allowlist, hard gate) still runs. Ignored for built-in tools that write files, run commands or
+ * message other conversations, for high-risk categories (shell / outbound / config / schedule) and for
+ * tools declared `risk: 'dangerous'`.
+ */
+export function readOnlyDeclarationApplies(
+  tool: Pick<ToolDescriptor, 'name' | 'readOnly' | 'tags' | 'risk' | 'riskCategory'>,
+): boolean {
+  if (tool.readOnly !== true) return false;
+  if (tool.risk === 'dangerous') return false;
+  // b33 review: a risk category (member / publish / funds / identity) contradicts a read-only declaration.
+  if (tool.riskCategory !== undefined) return false;
+  // b33 review: spelling variants and possible homoglyphs of a side-effect name never earn the relaxation.
+  if (hasNonAsciiToolName(tool.name) || isBuiltinSideEffectToolName(tool.name)) return false;
+  return toolNameSpellings(tool.name).every(name => classifyHighRiskAction({ ...tool, name }) === undefined);
+}
+
+/**
+ * #1250 b33: how an unattended turn (scheduled task, background event) treats a call of `tool` before
+ * its arguments are known. `human`: never runs unattended (fresh human approval or the hard gate);
+ * `approval`: needs an approval, which only the automatic reviewer can give unattended
+ * (`execApprovalMode: auto`); `none`: needs no approval by declaration (argument-dependent policies such
+ * as ExecPolicy or FilePolicy can still ask or deny at call time).
+ */
+export function unattendedApprovalNeed(tool: ToolDescriptor): 'none' | 'approval' | 'human' {
+  if (tool.requiresApproval === 'human' || tool.risk === 'dangerous') return 'human';
+  return requiresDeclarativeApproval(tool) ? 'approval' : 'none';
 }
 
 /**

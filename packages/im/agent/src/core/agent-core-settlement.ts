@@ -16,8 +16,8 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { isInlineMediaRef, mergeToolOutboundElements, sentInlineMediaPlaceholder, toolMediaKinds, type CopiedInlineMediaDrop } from '../media/media-tool-bridge.js';
 import type { Segment } from '@zhin.js/im-contract';
 import { omitInlineBinaryInAssistantMessage, omitInlineBinaryInAssistantMessages, stripFrameworkPlaceholders } from '../media/inline-binary.js';
-import { sanitizeAssistantReply } from './text-sanitize.js';
-import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { sanitizeAssistantReply, sanitizeAssistantReplyDetailed } from './text-sanitize.js';
+import { describeToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
@@ -390,11 +390,24 @@ export async function finalizeTurnReplyAndOutput(params: {
   // A chat member does not announce how many steps a task took; only non-IM callers get the notice.
   const continuationPrefix = state.continuations > 0 && input.turnContext.origin.kind !== 'im'
     ? `（任务步骤较多，已自动续跑 ${state.continuations} 次）\n\n` : '';
-  const proseReply = structuredReply ? ''
-    : sanitizeAssistantReply(rawReply, {
-        toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
+  // #1250 b33: a fallback names the actual cause; a scheduled job's names the job and its trace.
+  const scheduleProfile = input.promptProfile.kind === 'schedule' ? input.promptProfile : undefined;
+  const turnId = traceTurnId(input.turnContext);
+  // A chat-path turn has no tools by design; only a scheduled job is expected to have them.
+  const toolSummary = describeToolCallsForUser(finalPhaseToolCalls, {
+    ...(scheduleProfile ? { toolsAvailable: hasTools } : {}),
+    ...(scheduleProfile ? { schedule: { jobId: scheduleProfile.jobId, ...(turnId ? { turnId } : {}) } } : {}),
+  });
+  const sanitized = structuredReply ? undefined
+    : sanitizeAssistantReplyDetailed(rawReply, {
+        toolSummary: toolSummary.text,
         ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
       });
+  const proseReply = sanitized?.text ?? '';
+  const fallback = sanitized?.source === 'summary' && !stopped ? toolSummary.fallback : undefined;
+  if (fallback) {
+    noteTurnTrace(turnId, { kind: 'reply_fallback', cause: fallback.cause, ...(fallback.tools ? { tools: fallback.tools } : {}) });
+  }
   // #1250 第 29 批审查：非 IM 文本回复同样不带模型照抄的框架占位。
   const shownProse = stripFrameworkPlaceholders(proseReply);
   const textReply = shownProse.trim() ? continuationPrefix + shownProse : shownProse;
@@ -484,6 +497,7 @@ export async function finalizeTurnReplyAndOutput(params: {
     stopped,
     progressive,
     ...(unexecutedNotice ? { unexecutedNotice } : {}),
+    ...(fallback ? { fallback } : {}),
   };
 }
 

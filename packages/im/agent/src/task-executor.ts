@@ -150,6 +150,9 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       } else if (previewSource) {
         event('finish');
       } else {
+        if (result.status === 'degraded') {
+          logger.warn(formatCompact({ op: 'schedule_execute_degraded', jobId: job.id, error: result.error ?? 'degraded' }));
+        }
         if (result.output) {
           void attempt.history.observe({ type: 'attempt_progress', ...attempt.identity, at: Date.now(), phase: 'delivery', status: 'started' });
           try {

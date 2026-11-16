@@ -25,7 +25,7 @@ export interface ScheduleAttemptIdentity {
 /** A presentation snapshot; never an input to retry admission. */
 export interface ScheduleHistoryResult {
   readonly success: boolean;
-  readonly status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial';
+  readonly status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'degraded';
   readonly output: string;
   readonly error?: string;
   readonly durationMs: number;

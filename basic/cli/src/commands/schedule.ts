@@ -85,6 +85,16 @@ function scheduleSummary(s: JobScheduleCli): string {
   return `${s.kind} ${(s as { cron?: string }).cron ?? ''}`.trimEnd();
 }
 
+/** #1250 b33: the last run's status, with its cause when it failed or was degraded. */
+export function lastRunSummary(job: Pick<ScheduleJobRecordCli, 'state'>): string | undefined {
+  const status = job.state?.lastStatus;
+  if (!status) return undefined;
+  const label = status === 'ok' ? '成功' : status === 'error' ? '失败' : status === 'degraded' ? '未完成（降级）'
+    : status === 'skipped' ? '跳过' : status;
+  const error = (status === 'error' || status === 'degraded') && job.state.lastError ? `：${job.state.lastError}` : '';
+  return `${label}${error}`;
+}
+
 const listCommand = new Command('list')
   .description('列出运行中实例的持久化调度任务')
   .option('--json', '以 JSON 输出（含完整的任务内容）')
@@ -116,6 +126,8 @@ const listCommand = new Command('list')
       if (target) output.line(`    目标:   ${target}`);
       const next = nextRunSummary(j);
       if (next) output.line(`    下次:   ${next}`);
+      const last = lastRunSummary(j);
+      if (last) output.line(`    上次:   ${last}`);
       for (const line of contentLines(j.action.prompt)) output.line(line);
     }
   });

@@ -563,6 +563,7 @@ export async function* runAgentLoopTextTurnRun(
     stopped,
     progressive,
     unexecutedNotice,
+    fallback,
   } = await finalizeTurnReplyAndOutput({
     input,
     state,
@@ -602,6 +603,7 @@ export async function* runAgentLoopTextTurnRun(
     type: 'turn_end',
     output,
     usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
+    ...(fallback ? { fallback } : {}),
   };
   emitTurnEvent(endEvent);
   yield endEvent;

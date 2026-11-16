@@ -25,6 +25,21 @@ export interface ScheduleAuditRecord {
   outputLength: number;
   outputStripped: string[];
   error?: string;
+  /** #1250 b33: capability warnings of the run (`empty_execution_plan`, `no_tools`). */
+  warnings?: string[];
+  /** #1250 b33: selected tools an unattended run cannot use without approval (informative). */
+  unattendedApproval?: Readonly<{ review: 'auto' | 'none'; denied: string[]; reviewed: string[] }>;
+  /** #1250 b33: the run finished but did not do what was asked (see `ScheduleExecutionResult.degraded`). */
+  degraded?: ScheduleRunDegradation;
+}
+
+/** #1250 b33: why a finished run counts as degraded. */
+export interface ScheduleRunDegradation {
+  /** `no_tools` / `empty_reply` / `tool_denied`: see `ReplyFallback`; `tool_denied` also when the model still replied. */
+  readonly cause: 'no_tools' | 'tool_denied' | 'empty_reply';
+  readonly tools?: readonly string[];
+  /** The delivered text is the framework's fallback (it already tells the reader what went wrong). */
+  readonly fallback: boolean;
 }
 
 export function createScheduleAuditRecord(

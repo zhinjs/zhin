@@ -31,7 +31,8 @@ export type JobNotify =
 
 export interface ScheduleJobState {
   lastExecutedAt?: number;
-  lastStatus?: 'ok' | 'error' | 'skipped';
+  /** `degraded` (#1250 b33): the run finished but did not do what was asked; `lastError` says why. */
+  lastStatus?: 'ok' | 'error' | 'skipped' | 'degraded';
   lastError?: string;
   nextRunAtMs?: number;
   retryCount?: number;
