@@ -237,7 +237,8 @@ async function collectKnowledgeFiles(
 /** Level-1/2 ATX headings outside front matter and fenced code, in document order (raw text). */
 export function markdownHeadings(text: string): readonly Readonly<{ level: 1 | 2; text: string }>[] {
   const headings: Readonly<{ level: 1 | 2; text: string }>[] = [];
-  const lines = text.split(/\r?\n/u);
+  // CommonMark line endings: CRLF, LF and a lone CR.
+  const lines = text.split(/\r\n|\r|\n/u);
   let index = 0;
   if (lines[0]?.trim() === '---') {
     const end = lines.findIndex((line, position) => position > 0 && /^(?:---|\.\.\.)\s*$/u.test(line));
