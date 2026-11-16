@@ -129,7 +129,7 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
   const replySegments = resolveAiOutboundSegments(
     replyConversation.endpoint.id as CapabilityId,
     snapshot,
-    replyConversation.kind,
+    replyConversation,
   );
   let replyOperation: CapturedEndpointOperation | undefined;
   let danmakuAudited = false;

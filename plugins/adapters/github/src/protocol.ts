@@ -168,26 +168,46 @@ export function formatOutboundBody(payload: unknown): string {
     }
     return String(payload);
   }
-  return payload.map((seg) => {
-    if (typeof seg === 'string') return seg;
+  // Issue / PR comments are GitHub Flavored Markdown: a `markdown` segment is delivered as its source,
+  // as a block of its own (separated from neighbouring inline text by a blank line).
+  let body = '';
+  let afterBlock = false;
+  const append = (part: string, block: boolean) => {
+    if (!part) return;
+    if (body && (block || afterBlock) && !body.endsWith('\n') && !part.startsWith('\n')) body += '\n\n';
+    body += part;
+    afterBlock = block;
+  };
+  for (const seg of payload) {
     const item = seg as GithubWireSegment;
-    switch (item.type) {
-      case 'text':
-        return String(item.data?.text ?? '');
-      case 'mention':
-      case 'at':
-        return `@${item.data?.name || item.data?.id || item.data?.target || ''}`;
-      case 'image':
-      case 'audio':
-      case 'video':
-      case 'file':
-        return formatMediaSegment(item);
-      case 'link':
-        return `[${item.data?.text || item.data?.url || ''}](${item.data?.url || ''})`;
-      default:
-        return String(item.data?.text ?? `[${item.type}]`);
+    if (typeof seg !== 'string' && item?.type === 'markdown') {
+      append(String(item.data?.content ?? item.data?.text ?? ''), true);
+    } else {
+      append(formatInlineSegment(seg), false);
     }
-  }).join('');
+  }
+  return body;
+}
+
+function formatInlineSegment(seg: unknown): string {
+  if (typeof seg === 'string') return seg;
+  const item = seg as GithubWireSegment;
+  switch (item.type) {
+    case 'text':
+      return String(item.data?.text ?? '');
+    case 'mention':
+    case 'at':
+      return `@${item.data?.name || item.data?.id || item.data?.target || ''}`;
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'file':
+      return formatMediaSegment(item);
+    case 'link':
+      return `[${item.data?.text || item.data?.url || ''}](${item.data?.url || ''})`;
+    default:
+      return String(item.data?.text ?? `[${item.type}]`);
+  }
 }
 
 /**
