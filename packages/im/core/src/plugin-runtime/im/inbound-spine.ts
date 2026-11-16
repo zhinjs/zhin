@@ -529,8 +529,9 @@ export async function runInboundMiddlewareAndSpine(
     ? await middleware.runInbound(message, terminal, {
         stop: (owner): InboundOutcome => {
           // #1250: a middleware that answered the message itself (game input, menus) and then
-          // stopped dispatch handled it; only a stop without any delivered reply is a policy drop.
-          if (inboundOutcomeReplied(message)) {
+          // stopped dispatch handled it. A reply some other plugin sent earlier does not count:
+          // a stop by an owner that delivered no reply is still a policy drop.
+          if (inboundOutcomeReplied(message, owner)) {
             reportInboundOutcome(message, { outcome: 'handler_replied', reason: 'middleware_replied', stage: 'middleware', owner });
           } else {
             reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware',

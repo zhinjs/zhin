@@ -330,7 +330,7 @@ export class InboundRuntime {
           const delivery = commandOperation && this.context.runCommandOperation
             ? this.context.runCommandOperation(commandOperation, deliver) : deliver();
           return Promise.resolve(delivery).then((receipt) => {
-            if (receipt?.status === 'sent') ledger.noteReplyDelivered();
+            if (receipt?.status === 'sent') ledger.noteReplyDelivered(replyRequester);
             if (receipt && receipt.status !== 'sent') {
               ledger.report({ outcome: 'delivery_failed', reason: receipt.failure?.code ?? receipt.status, stage: 'delivery',
                 ...(receipt.failure?.deliveryUnknown ? { facets: ['delivery_unknown'] } : {}) });

@@ -148,10 +148,10 @@ sidebar: false
 | `filtered_by_policy` | `control_emergency_stop` / `control_muted_instance` / `control_muted_session` / `control_read_only` / `control_mention_only` | 发起人 | 机器人在本群暂停回复（{switch}）。 / The bot is paused here ({switch}). | 由 `{actor}` 于 {at} 设置，层级 `{level}`。 / Set by `{actor}` at {at}, level `{level}`. |
 | `filtered_by_policy` | `cannot_speak_muted` / `cannot_speak_muted_all` / `cannot_speak_restricted` | 发起人 | 机器人在本群被禁言，无法回复。 / The bot is muted here. | 平台状态 `{blocked}`。 / Platform state `{blocked}`. |
 | `filtered_by_policy` | `middleware_stopped` | 管理员 | 消息被插件拦下了。 / A plugin stopped this message. | 中间件 `{owner}/{name}`。 / Middleware `{owner}/{name}`. |
-
-`middleware_stopped` 只记中间件停止分发且**本条消息没有任何已送达回复**的情况。中间件先回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
 | `filtered_by_policy` | `control_gate_failed` | 管理员 | 机器人暂时不可用。 / The bot is temporarily unavailable. | 控制面判定异常，按急停处理：{detail}。 / Control gate failed closed: {detail}. |
 | `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的{kind}我读不了（{reason 的人话}），只看了文字部分。 / I could not read your {kind} ({reason}); only the text was used. | 场景 `{scene}`，`{scheme}://{host}`，{bytes}/{limit} 字节，期望 `{want}` 实得 `{mime}`。 / Scene `{scene}`, `{scheme}://{host}`, … |
+
+`middleware_stopped` 只记中间件停止分发且**该中间件所属插件没有为本条消息送达任何回复**的情况；别的插件先送达的回复不算。中间件先自己回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
 
 `media_rejected` 通常是 facet：消息仍然得到回复，结局是 `replied` + `facets: ['media_rejected:too_large']`；只有整条消息只有媒体且全部被拒时才是主结局。`normalizeMediaRefsToPayloads` 改为返回逐项结果（`{ ok: false, reason, scheme, host }`），不再 `continue`；URL 只记 scheme 与 host，不记路径与查询串。
 
