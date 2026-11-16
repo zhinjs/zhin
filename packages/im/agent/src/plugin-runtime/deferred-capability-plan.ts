@@ -14,6 +14,7 @@ import {
   type ToolInputSchema,
 } from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { SKILL_KEYWORD_MAX_CHARS } from '../skill/capability-catalog.js';
 import { getLogger } from '@zhin.js/logger';
 import { rankDecisionCandidates } from '../decision/rank.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
@@ -128,6 +129,140 @@ export function primeAgentSkillForIntent(options: Readonly<{
     new Set(config.alwaysLoadedTools),
   );
   return Object.freeze({ snapshot: withTools, projected: snapshot, skill });
+}
+
+/** Most public Skills one turn's hint names (#1250 b27). */
+export const PUBLIC_SKILL_HINT_MAX = 2;
+
+/** Only the first this many declared keywords of a Skill count towards its hint score. */
+export const PUBLIC_SKILL_HINT_KEYWORDS = 12;
+/**
+ * Shortest usable hint keyword, counted on its content (spaces, stopwords and function characters
+ * removed): CJK keywords need 2 content CJK characters, others 3 letters / digits with a letter.
+ */
+const HINT_MIN_CJK_CHARS = 2;
+const HINT_MIN_WORD_CHARS = 3;
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const CJK_CHARS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu;
+const WORD_CHARS = /[\p{L}\p{N}]/gu;
+const LETTER = /\p{L}/u;
+/** Invisible format characters (zero-width space / joiners, BOM, bidi marks): never content, never a word break. */
+const FORMAT_CHARS = /\p{Cf}/gu;
+/** Content that is one 1-2 character unit repeated: laughter and fillers such as 呵呵, 嘻嘻, hhh, hahaha. */
+const REPEATED_UNIT = /^(.{1,2}?)\1+$/u;
+/**
+ * Greetings, fillers and function words that say nothing about a task. A Skill cannot earn a hint
+ * by listing them (keyword stuffing), and small talk never triggers one.
+ */
+const HINT_STOPWORDS: ReadonlySet<string> = new Set([
+  'the', 'and', 'for', 'you', 'your', 'with', 'this', 'that', 'what', 'how', 'can', 'are', 'was', 'not', 'have',
+  'has', 'from', 'about', 'please', 'hello', 'hey', 'thanks', 'thank', 'help', 'want', 'need', 'just', 'get',
+  'let', 'make', 'some', 'any', 'all', 'yes', 'okay', 'open', 'show', 'tell', 'give', 'use', 'new', 'now',
+  'hi', 'ok', 'is', 'it', 'its', 'me', 'my', 'we', 'our', 'do', 'does', 'did', 'be', 'to', 'of', 'in', 'on', 'a', 'an',
+  'bye', 'goodbye', 'thx', 'pls', 'plz', 'sorry', 'lol', 'lmao', 'yeah', 'yep', 'yup', 'nope', 'sure', 'cool', 'nice',
+  'great', 'good', 'morning', 'afternoon', 'evening', 'night', 'welcome',
+]);
+/**
+ * CJK greetings, fillers and function words, cut out of a CJK keyword (as substrings, longest
+ * first) before it is scored: "能不能帮我" / "你好啊" / "我的" keep no content and are ignored.
+ */
+const HINT_CJK_STOPWORDS: readonly string[] = Object.freeze([
+  '可不可以', '为什么', '是不是', '有没有', '能不能', '怎么样', '不好意思', '没关系',
+  '你好', '您好', '谢谢', '感谢', '多谢', '好的', '哈哈', '嘿嘿', '嗯嗯', '在吗', '请问', '帮我', '帮忙', '麻烦',
+  '一下', '这个', '那个', '这些', '那些', '什么', '怎么', '怎样', '如何', '哪些', '哪个', '可以', '能否', '是否',
+  '我们', '你们', '他们', '一个', '一些', '没有', '就是', '不是', '知道', '现在', '今天', '我想', '我要', '想要',
+  '需要', '还是', '然后', '东西', '问题', '事情', '应该', '的话', '告诉', '给我', '看看', '试试', '行吗', '好吗',
+  '对吗', '是吗', '了吗',
+  '早上好', '中午好', '下午好', '晚上好', '早安', '午安', '晚安', '再见', '拜拜', '收到', '好滴', '好哒', '辛苦',
+  '在不在', '有人在吗', '有人吗', '你是谁',
+  // Particles, pronouns and fillers on their own: no topic word is built from them. (哈 is not one:
+  // 哈哈 above covers laughter, and 哈希 is a topic word.)
+  '的', '了', '吗', '呢', '吧', '啊', '呀', '哦', '噢', '嗯', '啦', '嘛', '哇', '哎', '喂', '我', '你', '您', '帮',
+].sort((left, right) => [...right].length - [...left].length));
+
+/** The normalized keyword and its content score when it may score a hint, else undefined. */
+function hintKeyword(value: string): { readonly keyword: string; readonly score: number } | undefined {
+  const keyword = normalizeHintText(value);
+  if (!keyword || [...keyword].length > SKILL_KEYWORD_MAX_CHARS || HINT_STOPWORDS.has(keyword)) return undefined;
+  if (CJK_CHAR.test(keyword)) {
+    // CJK keywords match with spaces removed, so they also score without them.
+    const compact = keyword.replace(/\s+/gu, '');
+    let content = compact;
+    for (const word of HINT_CJK_STOPWORDS) content = content.split(word).join(' ');
+    content = content.split(/[^\p{L}\p{N}]+/u).filter(word => word && !HINT_STOPWORDS.has(word)).join('');
+    if ((content.match(CJK_CHARS)?.length ?? 0) < HINT_MIN_CJK_CHARS || REPEATED_UNIT.test(content)) return undefined;
+    return { keyword: compact, score: content.match(WORD_CHARS)?.length ?? 0 };
+  }
+  const words = keyword.split(/[^\p{L}\p{N}]+/u).filter(word => word && !HINT_STOPWORDS.has(word));
+  const content = words.join('');
+  if (!LETTER.test(content) || REPEATED_UNIT.test(content)) return undefined;
+  const score = content.match(WORD_CHARS)?.length ?? 0;
+  return score >= HINT_MIN_WORD_CHARS ? { keyword, score } : undefined;
+}
+
+/**
+ * Public Skills whose frontmatter keywords occur in the current intent: the best-scoring ones (at
+ * most {@link PUBLIC_SKILL_HINT_MAX}), already loaded ones excluded. Only a hint for the prompt
+ * (#1250 b27): public Skills are third-party guidance and are never activated by keyword, because
+ * activation injects their instructions and unlocks their tools for the session (see
+ * {@link primeAgentSkillForIntent}); the model still decides whether to `load_skill`.
+ *
+ * Third-party keywords must not buy a hint by stuffing: a Skill scores the length of its single
+ * longest matching keyword (no sum), only its first {@link PUBLIC_SKILL_HINT_KEYWORDS} keywords
+ * count, and a keyword scores only its content: spaces, stopwords and CJK function characters do not
+ * count. Keywords left with under 2 content CJK characters, non-CJK keywords under 3 letters /
+ * digits or without a letter (numbers, symbols, emoji), content that only repeats a 1-2 character
+ * unit (呵呵, hhh, hahaha), stopwords and keywords over {@link SKILL_KEYWORD_MAX_CHARS} characters
+ * are ignored; invisible format characters (zero-width space, BOM) are dropped from keywords and
+ * intent alike. ASCII keywords match whole ASCII words
+ * (`api` does not match `rapid` but matches `写api`); CJK keywords ignore spaces. The hint names the
+ * top {@link PUBLIC_SKILL_HINT_MAX} scores, so one higher-scoring Skill never hides every other.
+ */
+export function suggestPublicSkillsForIntent(
+  skills: readonly SkillDescriptor[],
+  intent: string,
+  loadedSkills: readonly string[] = [],
+): readonly SkillDescriptor[] {
+  const haystack = normalizeHintText(intent);
+  if (!haystack) return Object.freeze([]);
+  const loaded = new Set(loadedSkills);
+  const scored = skills
+    .filter((skill) => !skill.agentName && skill.keywords?.length
+      && !loaded.has(skill.qualifiedName) && !loaded.has(skill.name))
+    .map((skill) => ({ skill, score: longestKeywordHit(skill.keywords ?? [], haystack) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score
+      || left.skill.qualifiedName.localeCompare(right.skill.qualifiedName));
+  // The top scores, not only the tied best: one Skill with a higher score cannot push every other
+  // match out of the hint.
+  return Object.freeze(scored
+    .slice(0, PUBLIC_SKILL_HINT_MAX)
+    .map((entry) => entry.skill));
+}
+
+function longestKeywordHit(keywords: readonly string[], normalizedIntent: string): number {
+  const unspaced = normalizedIntent.replace(/\s+/gu, '');
+  let best = 0;
+  for (const value of keywords.slice(0, PUBLIC_SKILL_HINT_KEYWORDS)) {
+    const scored = hintKeyword(value);
+    if (!scored) continue;
+    const { keyword } = scored;
+    const hit = CJK_CHAR.test(keyword)
+      ? unspaced.includes(keyword)
+      // CJK text has no spaces: only a neighbouring ASCII letter or digit breaks a word match.
+      : new RegExp(`(?<![a-z0-9])${escapeRegExp(keyword)}(?![a-z0-9])`, 'u').test(normalizedIntent);
+    if (hit) best = Math.max(best, scored.score);
+  }
+  return best;
+}
+
+/** NFKC, lower case, format characters removed and whitespace collapsed: keywords and intent alike. */
+function normalizeHintText(text: string): string {
+  return text.normalize('NFKC').replace(FORMAT_CHARS, '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 /** Model recommendation never enlarges the immutable, already-authorized projection. */

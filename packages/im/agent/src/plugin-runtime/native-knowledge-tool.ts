@@ -23,8 +23,25 @@ export interface KnowledgeSearchResult {
   readonly matches: readonly KnowledgeMatch[];
 }
 
+/** One indexed document as the prompt's knowledge index lists it: path and level-1/2 headings (#1250 b27). */
+export interface KnowledgeOutlineFile {
+  /** Path relative to the knowledge root, `/`-separated. */
+  readonly source: string;
+  readonly headings: readonly Readonly<{ level: 1 | 2; text: string }>[];
+}
+
+export interface KnowledgeOutline {
+  readonly status: KnowledgeSearchResult['status'];
+  readonly files: readonly KnowledgeOutlineFile[];
+}
+
 export interface KnowledgeIndex {
   search(query: string, limit: number, signal: AbortSignal): Promise<KnowledgeSearchResult>;
+  /**
+   * Document paths and level-1/2 headings for the system prompt's knowledge index (#1250 b27).
+   * Shares the search cache: the same TTL and {@link invalidate} apply.
+   */
+  outline?(signal: AbortSignal): Promise<KnowledgeOutline>;
   /** Drops cached documents so the next search reads the directory again (#1250 file watching). */
   invalidate?(): void;
 }
@@ -33,6 +50,12 @@ interface KnowledgeChunk {
   readonly source: string;
   readonly chunk: number;
   readonly text: string;
+}
+
+interface KnowledgeCache {
+  readonly loadedAt: number;
+  readonly chunks: readonly KnowledgeChunk[];
+  readonly outline: readonly KnowledgeOutlineFile[];
 }
 
 export interface MarkdownKnowledgeIndexOptions {
@@ -49,7 +72,7 @@ export class MarkdownKnowledgeIndex implements KnowledgeIndex {
   readonly #maxDepth: number;
   readonly #maxFiles: number;
   readonly #maxFileBytes: number;
-  #cache: Readonly<{ loadedAt: number; chunks: readonly KnowledgeChunk[] }> | undefined;
+  #cache: KnowledgeCache | undefined;
 
   constructor(root: string, options: MarkdownKnowledgeIndexOptions = {}) {
     if (!root.trim()) throw new TypeError('Knowledge root cannot be empty');
@@ -70,7 +93,7 @@ export class MarkdownKnowledgeIndex implements KnowledgeIndex {
   async search(query: string, limit: number, signal: AbortSignal): Promise<KnowledgeSearchResult> {
     signal.throwIfAborted();
     if (!await this.#isDirectory()) return frozenResult('missing', 0, []);
-    const chunks = await this.#loadChunks(signal);
+    const { chunks } = await this.#load(signal);
     if (chunks.length === 0) return frozenResult('empty', 0, []);
     const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
     const matches = chunks
@@ -84,6 +107,13 @@ export class MarkdownKnowledgeIndex implements KnowledgeIndex {
     return frozenResult('ready', chunks.length, matches);
   }
 
+  async outline(signal: AbortSignal): Promise<KnowledgeOutline> {
+    signal.throwIfAborted();
+    if (!await this.#isDirectory()) return Object.freeze({ status: 'missing', files: Object.freeze([]) });
+    const { outline } = await this.#load(signal);
+    return Object.freeze({ status: outline.length ? 'ready' : 'empty', files: outline });
+  }
+
   async #isDirectory(): Promise<boolean> {
     try {
       return (await stat(this.#root)).isDirectory();
@@ -92,29 +122,43 @@ export class MarkdownKnowledgeIndex implements KnowledgeIndex {
     }
   }
 
-  async #loadChunks(signal: AbortSignal): Promise<readonly KnowledgeChunk[]> {
+  async #load(signal: AbortSignal): Promise<KnowledgeCache> {
     const now = Date.now();
-    if (this.#cache && now - this.#cache.loadedAt < this.#cacheTtlMs) return this.#cache.chunks;
+    if (this.#cache && now - this.#cache.loadedAt < this.#cacheTtlMs) return this.#cache;
     const files = await collectKnowledgeFiles(this.#root, this.#maxDepth, this.#maxFiles, signal);
     const chunks: KnowledgeChunk[] = [];
+    const outline: KnowledgeOutlineFile[] = [];
     for (const file of files) {
       signal.throwIfAborted();
       try {
         const metadata = await stat(file);
         if (!metadata.isFile() || metadata.size > this.#maxFileBytes) continue;
         const text = await readFile(file, { encoding: 'utf8', signal });
+        const source = relative(this.#root, file);
         for (const [chunk, content] of chunkText(text).entries()) {
-          chunks.push(Object.freeze({ source: relative(this.#root, file), chunk, text: content }));
+          chunks.push(Object.freeze({ source, chunk, text: content }));
         }
+        outline.push(Object.freeze({ source: source.split('\\').join('/'), headings: markdownHeadings(text) }));
       } catch (error) {
         if (signal.aborted) throw error;
       }
     }
-    const value = Object.freeze([...chunks]);
-    this.#cache = Object.freeze({ loadedAt: now, chunks: value });
-    return value;
+    const cache: KnowledgeCache = Object.freeze({
+      loadedAt: now,
+      chunks: Object.freeze([...chunks]),
+      outline: Object.freeze([...outline]),
+    });
+    this.#cache = cache;
+    return cache;
   }
 }
+
+/** Model-facing description of `knowledge_search` (#1250 b27). */
+export const KNOWLEDGE_SEARCH_DESCRIPTION = 'Search this project\'s knowledge base: the Markdown and text documents in the '
+  + 'configured knowledge directory (FAQs, guides, how-tos about this bot and this project). Use it first for '
+  + 'questions about this bot or this project (what it can do, how to use, configure or extend it) before '
+  + 'answering from general knowledge; the system prompt lists the indexed files and headings. Returns the best '
+  + 'matching passages with their file names; cite the file, and say so when nothing matches.';
 
 export interface NativeKnowledgeToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -130,9 +174,12 @@ export function createNativeKnowledgeToolFeature(
     feature: toolFeatureId,
     name: 'knowledge_search',
     definition: defineAgentTool<Record<string, unknown>, string>({
-      description: 'Search explicitly configured project Markdown and text documentation.',
+      description: KNOWLEDGE_SEARCH_DESCRIPTION,
       inputSchema: objectSchema({
-        query: { type: 'string', description: 'Search keywords or phrase' },
+        query: {
+          type: 'string',
+          description: 'A few distinctive keywords from the question or the index headings, separated by spaces, e.g. "添加 知识" or "deploy docker"',
+        },
         limit: { type: 'number', minimum: 1, maximum: 20 },
       }, ['query']),
       requiresApproval: 'never',
@@ -187,6 +234,62 @@ async function collectKnowledgeFiles(
   return files;
 }
 
+/** Level-1/2 ATX headings outside front matter and fenced code, in document order (raw text). */
+export function markdownHeadings(text: string): readonly Readonly<{ level: 1 | 2; text: string }>[] {
+  const headings: Readonly<{ level: 1 | 2; text: string }>[] = [];
+  // CommonMark line endings: CRLF, LF and a lone CR.
+  const lines = text.split(/\r\n|\r|\n/u);
+  let index = 0;
+  if (lines[0]?.trim() === '---') {
+    const end = lines.findIndex((line, position) => position > 0 && /^(?:---|\.\.\.)\s*$/u.test(line));
+    if (end > 0) index = end + 1;
+  }
+  let fence: string | undefined;
+  for (; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    if (fence) {
+      // CommonMark: a closing fence is the same character, at least as long, then only whitespace.
+      const closing = line.match(/^\s{0,3}(`{3,}|~{3,})[ \t]*$/u)?.[1];
+      if (closing && closing[0] === fence[0] && closing.length >= fence.length) fence = undefined;
+      continue;
+    }
+    const opening = line.match(/^\s{0,3}(`{3,}|~{3,})/u)?.[1];
+    if (opening) {
+      fence = opening;
+      continue;
+    }
+    const heading = parseAtxHeading(line);
+    if (heading) headings.push(heading);
+  }
+  return Object.freeze(headings);
+}
+
+const isBlank = (char: string | undefined) => char === ' ' || char === '\t';
+
+/**
+ * A level-1/2 ATX heading (`# text`, `## text ##`), parsed by scanning instead of a backtracking regex
+ * (CodeQL js/polynomial-redos: project files are uncontrolled input).
+ */
+function parseAtxHeading(line: string): Readonly<{ level: 1 | 2; text: string }> | undefined {
+  let index = 0;
+  while (index < 3 && /\s/u.test(line[index] ?? '')) index += 1;
+  let level = 0;
+  while (line[index] === '#') { level += 1; index += 1; }
+  if (level < 1 || level > 2 || !isBlank(line[index])) return undefined;
+  while (isBlank(line[index])) index += 1;
+  let end = line.length;
+  while (end > index && isBlank(line[end - 1])) end -= 1;
+  // Optional closing sequence: blanks, then only `#` up to the end.
+  let hashes = end;
+  while (hashes > index && line[hashes - 1] === '#') hashes -= 1;
+  if (hashes < end && hashes > index && isBlank(line[hashes - 1])) {
+    end = hashes;
+    while (end > index && isBlank(line[end - 1])) end -= 1;
+  }
+  if (end <= index) return undefined;
+  return Object.freeze({ level: level as 1 | 2, text: line.slice(index, end) });
+}
+
 function chunkText(text: string, maxChunkSize = 1_000): string[] {
   const chunks: string[] = [];
   for (const paragraph of text.split(/\n{2,}/u).map((part) => part.trim()).filter(Boolean)) {
@@ -201,9 +304,50 @@ function chunkText(text: string, maxChunkSize = 1_000): string[] {
   return chunks;
 }
 
+/** Share of a CJK term's content bigrams a chunk must contain to count as a partial match. */
+const CJK_PARTIAL_MATCH_MIN = 0.3;
+const CJK_RUN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{2,}/gu;
+/**
+ * Function words and fillers of Chinese questions. They carry no topic, so they are cut out of a
+ * term before its bigrams are taken: "量子力学怎么可以知道" must not match a document through
+ * "怎么" / "可以", and "我想知道怎么可以把这个机器人部署一下" is scored on "机器人部署" only.
+ */
+const CJK_STOP_WORDS: readonly string[] = Object.freeze([
+  '为什么', '是不是', '有没有', '能不能', '可不可以', '怎么样',
+  '怎么', '怎样', '如何', '什么', '哪些', '哪个', '可以', '能否', '这个', '那个', '这些', '那些', '一下', '一个',
+  '一些', '知道', '我想', '我要', '想要', '需要', '请问', '帮我', '麻烦', '你好', '我们', '你们', '他们', '就是',
+  '还是', '然后', '没有', '不是', '应该', '是否', '的话', '告诉', '给我',
+]);
+
 function scoreChunk(text: string, terms: readonly string[]): number {
   const normalized = text.toLowerCase();
-  return terms.reduce((score, term) => score + (normalized.includes(term) ? 1 : 0), 0);
+  const score = terms.reduce((total, term) => total + (normalized.includes(term) ? 1 : partialCjkMatch(normalized, term)), 0);
+  return Math.round(score * 100) / 100;
+}
+
+/** Character bigrams of a term's CJK text with the stop words cut out (#1250 b27). */
+export function contentBigrams(term: string): ReadonlySet<string> {
+  let text = term;
+  for (const word of CJK_STOP_WORDS) text = text.split(word).join(' ');
+  const bigrams = new Set<string>();
+  for (const run of text.match(CJK_RUN) ?? []) {
+    const chars = [...run];
+    for (let index = 0; index + 1 < chars.length; index += 1) bigrams.add(chars[index]! + chars[index + 1]!);
+  }
+  return bigrams;
+}
+
+/**
+ * CJK questions arrive without spaces ("怎么给这个机器人添加新知识"), so a whole-term match rarely
+ * hits. Such a term scores the share of its content bigrams (stop words removed) found in the chunk.
+ */
+function partialCjkMatch(normalized: string, term: string): number {
+  const bigrams = contentBigrams(term);
+  if (bigrams.size === 0) return 0;
+  let hits = 0;
+  for (const bigram of bigrams) if (normalized.includes(bigram)) hits += 1;
+  const share = hits / bigrams.size;
+  return share >= CJK_PARTIAL_MATCH_MIN ? share : 0;
 }
 
 function formatKnowledgeResult(query: string, result: KnowledgeSearchResult): string {

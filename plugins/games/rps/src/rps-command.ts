@@ -1,6 +1,7 @@
 import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import { createMessages } from 'zhin.js/i18n';
 import { continueGame, handleChoice, startGame } from './game-flow.js';
+import { parseMove } from './engine.js';
 import type { SessionService } from './session-service.js';
 
 export function getRpsHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
@@ -36,6 +37,18 @@ export async function runRpsCommand(
       const row = await services.getActiveForUser(ch, userId);
       if (!row) return gameCommandFeedback(message, 'noGame');
       return (await handleChoice(services, message, row.id, 'quit')) ?? '';
+    }
+
+    // 「玩石头剪刀布 石头」一步到位：没有对局就先开局，再出这一拳（#1250 near-miss-suggestion-param-misleading）。
+    const move = parseMove(action);
+    if (move) {
+      let row = await services.getActiveForUser(ch, userId);
+      if (!row) {
+        const started = await startGame(services, message);
+        row = await services.getActiveForUser(ch, userId);
+        if (!row) return started ?? '';
+      }
+      return (await handleChoice(services, message, row.id, move)) ?? '';
     }
 
     return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getRpsHelp(message);

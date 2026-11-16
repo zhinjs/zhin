@@ -98,9 +98,11 @@ zhin trace --engagements --list
 zhin trace --engagements
 
 # 查看指定 Engagement 的完整因果链、黑板快照、护栏阻断与预算消耗（id 可只写前缀）
-zhin trace <engagementId>
+zhin trace --engagements <engagementId>
 ```
 
 协作事件保存在数据库的 `engagement_events` 表中，需要 SQLite、MySQL 或 PostgreSQL。Console 的 Workroom 页面（`/features/ai/workrooms`）展示同一份数据。
+
+Engagement、信件与预算授权的 id 形如 `m-<运行 id>-<序号>` / `g-<运行 id>-<序号>`：运行 id 在每次实例启动时生成，所以重启后 id 不会重复。旧版本的 id 是每次启动都从头计数的 `m1`、`m2`……，同一个 id 下会混进几次重启里互不相干的协作；升级后实例启动时会在后台把这些记录按每条 `engagement_opened` 拆成各自的 Engagement 并换上新 id（连同记录里的信件与授权 id）。迁移分批进行、不阻塞启动，每个旧 id 在一个事务里整体拆分，不丢行；中途停止时下次启动接着做，完成后不再执行；只含一次协作的旧 id 保持不变。`zhin trace` 不做这项整理，也不写数据库：实例还没整理完时它照常展示旧记录，并提示「旧版协作记录尚未拆分，重启实例后会自动整理」。
 
 更多说明见 [Agent 与工具调用](./agent.md#多-agent-协作)。

@@ -4,87 +4,72 @@
     {
       "package": "@zhin.js/cli",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 15 批——`zhin status` 显示适配器账号在线状态、MCP 服务状态与「需要你处理」（`--json` 新增 `endpoints` / `mcp` / `attention` 与 `gateway.installedVersion` / `versionSkew`），网关版本与已安装版本不一致时给出重启命令（含 launchd `launchctl kickstart -k`）；`zhin doctor` 列出运行状态与上次运行的失败；`zhin migrate` 升级 pnpm 工作区里的包并同步 pnpm-workspace.yaml 的 overrides；`zhin chat-roles export|import` 新增 `--host` / `--allow-unverified-host`；未知子命令（含 `--help`）以非 0 退出。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增命令 zhin service start / stop / restart，zhin console init 新增 --json（与 --status 同用；--status 默认改为中文说明）；zhin service install 按当前系统现场生成服务文件（绝对 node 与 CLI 路径、只在异常退出时重启、macOS 改用 launchctl bootstrap）；后台 zhin start / zhin status 在 Console 未初始化时打印带 #token= 的初始化链接；zhin stop 识别服务托管。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`zhin logs` 新增 `--level` / `--since` / `--until` / `--grep` / `--name`（带过滤条件时搜索日志文件及轮转文件）；`zhin update` 新增 `--dry-run`（按根项目与工作区成员列出会升级的版本，不写文件、不重启）；`zhin packages list` 分组列出项目依赖并新增 `--json`，`packages install <npm 包>` / `search` / `info` 提示已弃用（ADR 0062 第 11 项）；`zhin doctor` 经 `/pub/health` 识别占用端口的 Zhin 网关属于哪个项目，并提示旧版脚手架留下的服务文件。npm 上 1.6.0 未被占用。；ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：zhin plugin check 新增页面 UI 第 1–6 条检查（原生 <select>、自定义页头、固定内容宽度、原始样式数值、尺度外的 Tailwind 类名、原生基础控件，只提示并给出替换建议，不计入错误与警告），行内豁免注释 zhin-ui-ignore，检查报告新增 ui 与 hintCount 字段。"
-    },
-    {
-      "package": "@zhin.js/console-protocol",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批 GatewayPluginEnablement 新增可选 apply / restartReason / restartDetail，新增导出类型 GatewayPluginApplyMode、GatewayPluginRestartReason，GatewayPackagePhase 新增 apply-hot。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 ConsoleErrorDetails / ConsoleErrorNextStep / isConsoleErrorNextStep()、CONSOLE_ATTENTION_KIND_PERMISSIONS、ConsoleAttentionReason、RUNTIME_FAILURES_FILE / ConsoleRuntimeFailure / ConsoleRuntimeFailureJournal / ConsoleRuntimeFailureSource，attention 新增 inference.account / config.ineffective 与 status: starting。npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`zhin console user list` 显示用户 id 并新增 `--json`；`zhin agent info` 按来源（项目根目录 / 本地插件 / 已安装插件）统计、帮助双语并新增 `--locale`；CLI 日期时间统一为 `YYYY-MM-DD HH:mm:ss`（24 小时制）；`zhin trace -l` 显示可读会话名，`--json` 新增 `session_display_name`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-16）：第 32 批——新增 `zhin ai account list [--json]`（id、名称、服务、引用的环境变量名与状态，不含值）与 `zhin schedule list --json`；`zhin preview` 的组件渲染上下文提供 `use()` / `has()`（来自组件的 `previewServices`）；`zhin watch` 按进程（instance / gateway）分别显示内存。npm 上 1.7.0 未被占用。；ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：zhin plugin check 新增页面 UI 第 1–6 条检查（原生 <select>、自定义页头、固定内容宽度、原始样式数值、尺度外的 Tailwind 类名、原生基础控件，只提示并给出替换建议，不计入错误与警告），行内豁免注释 zhin-ui-ignore，检查报告新增 ui 与 hintCount 字段。"
     },
     {
       "package": "zhin.js",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批实例在 ready.features 声明 plugins.apply，并按网关请求在当前进程内换代应用插件启停（不重启实例）。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0062 §23）：「功能 开启 / 关闭 / 重置 插话」与 feature.get / set-enabled / remove-override 支持保留功能 @ambient（适配器 / 账号 / 会话层插话开关）"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——收紧 `ai.personalPrincipals` 导入语义（行为变化）：首次导入之后新增、适配器当时未加载的条目加载后改为等待确认，1.4.0 记录中晚于首次导入的 `unknown-adapter` 条目同样；首次导入时键无效而跳过的条目在 30 天内改正可按首次导入处理（每个身份一次，确认 / 忽略 / 导入过的身份除外）。与第 20 批合并为 1.5.0，npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批普通插件启停热生效——启停事务在实例运行时改为写配置后经 plugins.apply 热应用，新增事务阶段 apply-hot 与结果字段 plugin.apply / restartReason / restartDetail；新增公开 API InstanceSupervisor.supportsPluginApply / applyPlugin()、InstancePluginApplyResult、DEFAULT_PLUGIN_APPLY_TIMEOUT_MS、PluginManagementWorkflow.hotToggleBlocker()，PackageTransactionInstance / PackageWorkflowPort 新增可选成员。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19a 批新增公开导出 consoleSetupLink()（/server）与 SetupDatabaseApplyResult 类型（/iam）；ConsoleSetupService.applyDatabase() 返回值新增 changed，选择与当前一致的数据库时不写配置、不提示、不重启（restartRequired: false），gateway.console.setup.database 与 POST /auth/setup/database 的回复相应新增 changed；前台网关在 Console 未初始化时向终端打印带 #token= 的初始化链接。npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 lookupClaimsOf() / TraceLookupClaim，UsageStats 新增 totals.claimsWithoutToolCall / unexecutedToolNotices 与 byModel[].claimsWithoutToolCall。npm 上 1.5.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/host-http",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批控制通道新增可选消息 plugins.apply / plugins.apply.result 与 ready.features（协议版本仍为 3），新增公开导出 INSTANCE_BRIDGE_FEATURES、InstanceBridgeFeature、PluginApplyPayload、PluginApplyResultPayload、PluginApplyOutcome、GatewayPluginApplyMessage、InstancePluginApplyResultMessage，InstanceReadyDetails 新增可选 features。npm 上 1.5.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/runtime",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 20 批插件清单新增可选字段 package.json#zhin.toggle（\"hot\" | \"restart\"，ZhinPluginManifest.toggle），声明启停是否需要重启实例。npm 上 1.5.0 未被占用。"
-    },
-    {
-      "package": "@zhin.js/scaffold-wizard",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 19a 批 InitOptions 新增可选 httpPort（生成配置的 http.port，脚手架遇到端口占用时改用空闲端口）；删除不再使用的 templates.systemd / templates.windowsService 模板文本，项目 README 模板改为推荐 zhin service install。npm 上 1.4.0 未被占用。"
-    },
-    {
-      "package": "create-zhin-app",
-      "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 19a 批（ADR 0062 §2）脚手架默认不再生成 systemd / launchd / Windows 服务文件与 PM2（devDependency、ecosystem.config.cjs、pm2:* 脚本），新增 --with pm2 选项；8068 被占用时改用其后第一个空闲端口并说明占用者是否为 Zhin 网关。npm 上 1.3.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `personalPrincipalKeyHints()` / `personalPrincipalKeysOf()`（/iam）与 `shortSessionKey()` / `sessionLabelOf()`（/usage）；实例启动后把 `ai.personalPrincipals` 的建议键写进网关自己的日志（不写进实例日志）。npm 上 1.5.0 未被占用；所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `projectPinsExactZhinVersions()` / `isRegistryPackageRequest()` / `installSavesExact()`（/plugin-management），项目的 zhin 依赖都锁精确版本时安装插件加 `--save-exact`；包管理器参数翻译支持 `add --save-exact`。npm 上 1.6.0 未被占用。"
     },
     {
       "package": "@zhin.js/agent",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：#1270 第 14 批新增公开导出 InferenceFailureJournal 端口及其类型、subAgentPurposeEffect() / purposeKeyEffects() / inferencePurposeEffects()、readAgentPurposeTargets() / SubAgentTarget，管理视图新增 purposeEffects，目标列表新增 subAgents，HostInference 新增 accountAttention() / purposeEffects() / pruneFailureJournal()，新增 pruneInferenceFailures()。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P2、ADR 0062 §23）：Agent 入口为每条消息上报结局（not_addressed / ambient_silent / filtered_by_policy / replied / model_silent / model_error 等），群插话按功能开关（feature_overrides）逐层生效"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——`formatTurnTraceList()` 新增可选参数 `{ sessionLabel }`（新增导出类型 `FormatTurnTraceListOptions`），`formatAgentSurfaceInfoReport()` 新增可选参数 `locale`，Agent 能力报告新增 `source` / `bySource` 并统计项目根目录的约定目录，新增导出类型 `AgentSurfaceSource`、`AgentSurfaceCounts`。npm 上 1.6.0 未被占用；所有者已批准（zhinjs/zhin#1250）：第 21 批——子 Agent 与被路由到的专家 Agent 显式绑定的模型优先于适配器 / 场景的聊天覆盖（ModelTurnAcquireInput 新增可选 agent，新增导出 specialistModelKey() / traceModelSelection()，TurnTraceModelSelection 新增 source_key / agent；项目自己的子 Agent 使用同名绑定的 purposes.agents 键，purposeKeyEffects / purposeEffects 相应在 binding 目标上列出 agents；AgentHostProtocolPort 新增可选 listConfiguredBindingNames()，管理视图按运行时口径取绑定名）；委派工具对模型自设的预算加下限（不超过剩余额度的一半），ask 对未完成的委派对象返回 delegation_in_progress。npm 上 1.7.0 未被占用；所有者已批准（zhinjs/zhin#1250）：第 27 批——`@zhin.js/agent/plugin-runtime` 新增导出 `suggestPublicSkillsForIntent()` / `PUBLIC_SKILL_HINT_MAX`（公开技能关键词命中时只给提示、不激活）、`KNOWLEDGE_SEARCH_DESCRIPTION`、`markdownHeadings()` 与类型 `KnowledgeOutline` / `KnowledgeOutlineFile`；`KnowledgeIndex` 新增可选方法 `outline()`（系统提示的知识库索引），`MarkdownKnowledgeIndex` 实现它；`FullAgentTurnEngineOptions` 新增可选 `knowledgeIndex`；`buildCapabilityContext()` 新增可选第 5 个参数 `intent`（`{ text, loadedSkills? }`，用于公开技能提示）；新增导出 `PUBLIC_SKILL_HINT_KEYWORDS`、`contentBigrams()`；上下文预算 `ContextBudgetSegment` 新增 `knowledge_index` 段。npm 上 1.7.0 未被占用；所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `HostMcpStatusBoard`（`@zhin.js/agent/runtime`，记录 `ai.mcpServers` 各客户端的连接结果并提供一次性连接测试 `probe()`）与类型 `HostMcpStatusEvent` / `HostMcpStatusBoardOptions` / `HostMcpProbeResult`、常量 `DEFAULT_MCP_PROBE_TIMEOUT_MS`；`projectHostMcp()` 新增可选参数 `status`，`PublishAgentToolFeaturesOptions` 新增可选 `mcpStatus`，`AgentHostPublicationCoordinatorOptions` 新增可选 `mcp`，`AgentHostIntrospectionPort` 新增可选 `testMcpServer()`。npm 上 1.7.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 29 批——`@zhin.js/agent/trace` 的 `TurnTraceNote` 新增 `copied_inline_media_dropped` 变体（出站去重丢弃模型抄写的内嵌媒体时记录 `kinds` / `count` / `path`）。并入 1.7.0，npm 上 1.7.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 33 批——无人值守回合（定时任务）在 `execApprovalMode: auto` 下把审批交给自动审核（`TurnPorts` 新增可选 `unattendedReview`，审核拒绝 / 转问人 / 超时 / 出错一律拒绝，结果写进 trace 的 `unattended_review`），`createAssistantScheduleRuntime()` 新增可选参数 `unattendedReview`；插件工具声明 `readOnly: true` 后在默认 `on-risk` 下不再要求审批（行为变化；内置写文件 / 执行命令 / 发消息工具与高危类别不受影响，显式 `requiresApproval` 优先）；`TurnEndEvent` 新增可选 `fallback`，`CapabilityResolutionEvent` 新增可选 `warnings` / `unattendedApproval`；调度任务状态新增 `degraded`（`ScheduleJobState.lastStatus`、`ScheduleExecutionResult.status`、执行历史状态），`formatToolCallsForUser()` 新增可选参数 `context`。与第 21 / 27 / 28 批合并为 1.7.0，npm 上 1.7.0 未被占用。"
     },
     {
-      "package": "@zhin.js/logger",
+      "package": "@zhin.js/plugin-runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 §5）：新增公开导出 createErrorId()、ERROR_ID_PATTERN（Console API 与消息结局 internal_error 共用的错误号）。npm 上 1.3.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 19b 批——`DefaultFormatter` 在 stdout 不是终端时（文件、管道、网关托管的实例日志）时间戳带日期 `[YYYY-MM-DD HH:mm:ss.SSS]`，终端里不变；新增构造参数 `{ date?: boolean }`（`DefaultFormatterOptions`）与公开导出 `parseLogLine()` / `ParsedLogLine`。npm 上 1.3.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `formatDateTime()` 与 `FormatDateTimeOptions`（CLI 与日志共用的 `YYYY-MM-DD HH:mm:ss` 日期时间格式）。npm 上 1.4.0 未被占用。"
     },
     {
-      "package": "@zhin.js/core",
+      "package": "@zhin.js/harness",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P1/P2/P5、ADR 0062 §23）：新增入站消息结局公开导出 MESSAGE_OUTCOMES / MessageOutcome / MessageOutcomeCandidate / MessageOutcomeRecord / messageOutcomePriority / formatMessageOutcome / MESSAGE_OUTCOME_TEMPLATES 等、InboundOutcomeLedger、MessageOutcomeLog、reportInboundOutcome、enterInboundOutcomeStage、onUnrecordedInboundOutcome，ImRuntime.messageOutcomes 读取器，RuntimeMessageDiagnostic.outcome，IngressRoute.route / preRoute 可返回 IngressRouteResult，交互态 resolveClaimDetailed 与 answeredBy，群插话功能开关 AMBIENT_FEATURE_ID / resolveAmbientSwitch / resolveAmbientSwitchAt。npm 上 1.10.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 21 批 EngagementGraphView 新增可选方法 outstanding(mailId)（ask / delegate 是否仍在等结果）。npm 上 1.1.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-16）：第 35 批——新增 `createRunId` / `createRunScopedIdFactory` / `isLegacyCounterId` 与一次性迁移 `migrateEngagementEventIds`（`engagement_event_migrations` 标记表、`planEngagementIdMigration`），默认 Engagement / 信件 / 授权 id 改为跨重启唯一的 `m-<运行 id>-<序号>`。npm 上 1.1.0 未被占用。"
     },
     {
       "package": "@zhin.js/kernel",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P1）：redactDecisionPayload / redactSecretText / redactApprovalDisplay / isSecretLikeKey / isPromptPayloadKey 从 @zhin.js/agent 下移为 kernel 公开导出（新增类型 RedactablePayload），供 Core 的消息结局脱敏使用。npm 上 1.2.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 23 批新增公开导出 matchChatOwnerClaimText() / containsChatOwnerClaimCode() / registerChatOwnerClaimCode() / redactChatOwnerClaimText()（按当前认领码识别消息与写入端只脱敏开启中的码，ADR 0060 §3.3）。npm 上 1.3.0 未被占用。"
     },
     {
-      "package": "@zhin.js/im-contract",
+      "package": "@zhin.js/core",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 18 批（ADR 0061 P5）：UserInteractionControl 新增可选 answeredBy: 'target' | 'anyone'（谁的回答算数）。npm 上 1.3.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 23 批新增公开导出类型 InboundSecretGuard（match / inspectNative）/ InboundSecretMatch（handle / discard）与 ImRuntimeOptions.inboundSecret（入站最早处接手携带当前认领码的消息：不记录、不进 AI、日志只显示脱敏文本；被丢弃的消息作废码；含码的 platform.receive 不派发给原生 Handler），conversation_events 写入时对开启中的认领码脱敏。npm 上 1.11.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增公开导出 `resolveChatRoleMessageContext()` 与类型 `ChatRoleSubjectFailure` / `ChatRoleSubjectResolution`（说明发送者为什么无法解析为聊天身份：`no-conversation` / `unknown-endpoint` / `no-adapter` / `no-sender` / `simulated-sender` / `invalid-sender`），`chatRoleMessageContext()` 行为不变；指令的 `UserFacingError` 带拒绝码时结局 `refused` 的 reason 记该码。与第 23 批合并为 1.11.0，npm 上 1.11.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增类型 `ConsoleConversationOutcome` / `ConsoleConversationOutcomeList`（`GET {base}/conversations/outcomes`，`CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`）、`ConsoleAttentionPersonLink` 与 `ConsoleAttentionItem.links`，`ConsoleMessageDiagnostic` 新增可选 `outcome`。与第 28 批合并为 1.6.0，npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——`ConsoleAgentIntrospection` 新增可选方法 `testMcp(name)`，`ConsoleRestPagesOptions` 新增可选 `mcpTestMaxConcurrent` / `mcpTestCooldownMs`，新增路由 `POST {base}/introspection/mcp/test`（MCP 服务立即连接测试）。npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/command",
+      "type": "minor",
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 31 批——`UserFacingError` 新增可选 `reason`（构造参数 `{ reason }`，闭合的拒绝码），新增导出 `userFacingRefusalReason()`，`CommandDispatchResult` 新增可选 `refusalReason`（被拒绝的指令在入站结局里记 `refused` 与该码，不再是 `command_replied | executed`）。npm 上 1.4.0 未被占用。"
     },
     {
       "package": "@zhin.js/console-ui",
       "type": "minor",
-      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。另含 ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：新增内容区块 ContentStack / FormField / KeyValueList / ProgressMeter / Sparkline / Timeline / Disclosure / CodeText / JsonBlock / MediaPreview / RecordCard / LoadingBlock（只用语义令牌、按 .console-cq 容器切换布局，styles.css 含其样式；分区、网格、统计卡片与表格卡片复用 P1b 的 Section / Grid / StatGrid / StatCard / Table），Section、Grid 透传 HTML 属性，StatCard 新增可选 unit / badge / footer 且 icon 改为可选并接受元素或图片 URL，PageChrome 新增可选 title / description，RefreshControl 新增可选 onAutoRefresh；./audit 的触控检查跳过视觉隐藏祖先内的元素；ADR 0063 色板角色与信号色（zhinjs/console#125，所有者 2026-11-16 定品牌色 #76EEC6 / #7FFFD4）：新增与配色无关的颜色令牌 brand / brand-foreground / brand-text / brand-tint、signal-{danger,warning,success,info}-{fill,text}、chart-1…8，动效令牌 motion-fast / base / slow（duration-fast / duration-page 改为弃用别名），stylelint 新规则 console/motion-tokens；新增 BrandMark、CONSOLE_PRODUCT_NAME、isZeroValue；Button 新增 primary 与 destructive-solid，default 改名 soft（default 保留为弃用别名），destructive 改为幽灵样式，ConfirmDialog 危险确认改用 destructive-solid；徽标与统计卡片改用信号 fill / text，稳态不着色；全局 tabular-nums；ADR 0063 D28–D33（zhinjs/console#125 第三阶段）：EmptyState 新增 illustration（7 张 64px 线稿插画，1.5px 描边、brand-text 单色）与 action，新增 EmptyIllustration、EMPTY_ILLUSTRATIONS，图标不再半透明，不再单独显示「暂无数据」（empty.noData 改为「这里还没有内容」）；Input、Textarea、SelectTrigger / SelectField、SearchableSelectField 新增 variant=\"ghost\"（ControlVariant）；新增 DateField / DateTimeField（本地时间 ISO 值、可清空、键盘操作）与日期纯函数；lucide 图标统一 strokeWidth 1.75，新增 CONSOLE_ICON_STROKE_WIDTH、CONSOLE_ICON_SIZE；新增 InlineCode 与 console-code 类；动画只在 prefers-reduced-motion: no-preference 下运行；文档写明字体由宿主加载。"
+      "reason": "ADR 0063 P1b（所有者 2026-11-15 批准按 P1a→P4 实施）：在 1.0.0 首发（zhinjs/zhin#1283）之上的 minor（1.0.0 → 1.1.0），有意改变外观与令牌——三层令牌（基础尺度 / 语义 / 按尺寸取值）由 tokens/tokens.mjs 单一来源生成 tokens.css、Tailwind 主题 theme.css（间距只保留 0/px/1/2/3/4/6/8/12/16，清空默认字号、字重、圆角、阴影、断点与颜色）、custom-media.css 与 scale.json；--console-content-max 默认改为 data 120rem（PageShell width=\"reading\" 为 60rem）；旧令牌名（--console-radius-sm/md/lg、--console-shadow-*、--console-space-* 等）改为别名、保留到 P4；组件改用容器查询与语义令牌（窄容器下表格变卡片、浮层在手机上为底部抽屉、44px 触控、「正常」徽标弱化、PageHeader / usePageChrome 的「更多」菜单），新增 Section、Grid、ListDetail、StatusBadge、MoreMenu、RowActions、PageActions；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。；新增子路径 ./theme.css、./custom-media.css、./scale.json、./tokens、./scale、./stylelint、./stylelint-plugin、./eslint、./tailwind-classes、./audit。另含 ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：新增内容区块 ContentStack / FormField / KeyValueList / ProgressMeter / Sparkline / Timeline / Disclosure / CodeText / JsonBlock / MediaPreview / RecordCard / LoadingBlock（只用语义令牌、按 .console-cq 容器切换布局，styles.css 含其样式；分区、网格、统计卡片与表格卡片复用 P1b 的 Section / Grid / StatGrid / StatCard / Table），Section、Grid 透传 HTML 属性，StatCard 新增可选 unit / badge / footer 且 icon 改为可选并接受元素或图片 URL，PageChrome 新增可选 title / description，RefreshControl 新增可选 onAutoRefresh；./audit 的触控检查跳过视觉隐藏祖先内的元素；ADR 0063 色板角色与信号色（zhinjs/console#125，所有者 2026-11-16 定品牌色 #76EEC6 / #7FFFD4）：新增与配色无关的颜色令牌 brand / brand-foreground / brand-text / brand-tint、signal-{danger,warning,success,info}-{fill,text}、chart-1…8，动效令牌 motion-fast / base / slow（duration-fast / duration-page 改为弃用别名），stylelint 新规则 console/motion-tokens；新增 BrandMark、CONSOLE_PRODUCT_NAME、isZeroValue；Button 新增 primary 与 destructive-solid，default 改名 soft（default 保留为弃用别名），destructive 改为幽灵样式，ConfirmDialog 危险确认改用 destructive-solid；徽标与统计卡片改用信号 fill / text，稳态不着色；全局 tabular-nums；ADR 0063 D28–D33（zhinjs/console#125 第三阶段）：EmptyState 新增 illustration（7 张 64px 线稿插画，1.5px 描边、brand-text 单色）与 action，新增 EmptyIllustration、EMPTY_ILLUSTRATIONS，图标不再半透明，不再单独显示「暂无数据」（empty.noData 改为「这里还没有内容」）；Input、Textarea、SelectTrigger / SelectField、SearchableSelectField 新增 variant=\"ghost\"（ControlVariant）；新增 DateField / DateTimeField（本地时间 ISO 值、可清空、键盘操作）与日期纯函数；lucide 图标统一 strokeWidth 1.75，新增 CONSOLE_ICON_STROKE_WIDTH、CONSOLE_ICON_SIZE；新增 InlineCode 与 console-code 类；动画只在 prefers-reduced-motion: no-preference 下运行；文档写明字体由宿主加载。"
     },
     {
-      "package": "@zhin.js/pagemanager",
+      "package": "@zhin.js/runtime",
       "type": "minor",
-      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：@zhin.js/console-ui 成为 Console 共享单例（ALLOWED_ESM_CANONICAL / HOST_PROXIED_MODULES），新增共享模块版本核对（代理模块按插件 peerDependencies 比对 Console 登记的版本，缺失具名导出按名字报出）及公开导出 compilePeerRange、classifySharedModuleVersion、sharedModuleQuery、sharedModuleRequestFromSearchParams、peerRangeForPage、importedNames、buildHostProxyModule 等；register 包装把 definePage 的 keywords 写进路由 meta。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-16）：第 32 批——新增公开导出 `withFrameworkPluginConfigFields()`：插件自身配置 schema 加上框架字段 `commandNamespace` / `disabledCommands`（Root 之下再加 `overrides`），Runtime 组合配置与网关离线校验（`zhin packages status`、Console 保存）共用同一形状。npm 上 1.6.0 未被占用。"
     },
     {
-      "package": "@zhin.js/page",
+      "package": "@zhin.js/component",
       "type": "minor",
-      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageDefinition 与 PageIndex 透传 definePage 的 keywords，PageIndex 条目新增 packageName / pluginDescription；新增再导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
-    },
-    {
-      "package": "@zhin.js/console-contract",
-      "type": "minor",
-      "reason": "ADR 0063 P1（所有者 2026-11-15 批准按 P1a→P4 实施）：PageMetadata 新增 keywords（命令面板别名，可按 zh-CN / en 分语言），PageManifest 新增可选 keywords / packageName / pluginDescription；新增导出 optionalPageKeywords、pageKeywordsFor 与类型 PageKeywords、PageKeywordLocale。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-16）：第 32 批——`ComponentDefinition` 新增可选字段 `previewServices`（新增导出类型 `ComponentPreviewService`），`zhin preview` 用它为 `context.use(token)` 提供替身；`parseComponentDefinition()` 拒绝格式错误的 `previewServices`。npm 上 1.2.0 未被占用。"
     },
     {
       "package": "@zhin.js/client",

@@ -256,7 +256,7 @@ export interface EvalExpectations {
   readonly contextBudget?: EvalContextBudgetExpectation;
   /**
    * Tool events that stream consumers must see, in order, as `type:toolName`
-   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
+   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`, `tool_failed:voice_tts`).
    */
   readonly streamToolEvents?: readonly string[];
   /** Statuses of every self-change in the store after the run, oldest first (seeded ones included). */
@@ -355,6 +355,11 @@ export interface EvalCase {
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
   /**
+   * Knowledge base files (relative path → content), as under `ai.knowledge.baseDir`: the driver
+   * publishes `knowledge_search` over them and hands the index to the turn engine (#1250 b27).
+   */
+  readonly knowledge?: Readonly<Record<string, string>>;
+  /**
    * Load SOUL.md / AGENTS.md / TOOLS.md from the cwd into the system-prompt bootstrap section the way the
    * CLI host does (`## <name>` blocks), so prompt measurements match production.
    */
@@ -375,6 +380,13 @@ export interface EvalCase {
   readonly promptSections?: readonly EvalPromptSection[];
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
+  /**
+   * Model purposes (#1250 agent-purpose-binding-ignored), by model id of the scripted service (`scripted-model` or
+   * one of `models`): a sub-agent binding (`agents.<key>`, Console 用途 → Agent) and an adapter chat override for
+   * the eval platform (`adapterChat`, `purposes.adapters.eval.chat`). The turn context carries the adapter key as
+   * Host ingress does for an IM conversation.
+   */
+  readonly purposes?: Readonly<{ agents?: Readonly<Record<string, string>>; adapterChat?: string }>;
   /**
    * Session ops written before the first turn, as an operator would via Console
    * (`AiSessionOps.set`, ADR 0037). E.g. `{ defaults: { ops: { cooldownMs: 0 } } }`

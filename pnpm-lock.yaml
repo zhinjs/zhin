@@ -1390,6 +1390,9 @@ importers:
 
   packages/im/ai:
     dependencies:
+      '@zhin.js/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1856,6 +1859,9 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
+      '@zhin.js/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger

@@ -71,3 +71,35 @@ describe('dungeon choice middleware', () => {
     expect(replies).toHaveLength(0);
   });
 });
+
+describe('dungeon choice middleware in a group (#1250 review)', () => {
+  beforeEach(() => {
+    service = createMemoryGameServices(['dungeon_sessions'], createServices);
+    nextCalls = 0;
+    replies.length = 0;
+  });
+
+  const run = (input: ReturnType<typeof makeInput>) => middleware.handle({
+    input, owner: {}, generation: 0, config: {}, use: () => service,
+  } as never, async () => { nextCalls += 1; });
+
+  it.each(['开始远征', '解散队伍', '3', '4'])('a non-member’s 「%s」 is ordinary chat', async (text) => {
+    await service.createSession(makeInput(''));
+    const bob = { ...makeInput(text), sender: { id: 'bob', name: 'Bob' } };
+
+    await run(bob);
+
+    expect(nextCalls).toBe(1);
+    expect(replies).toHaveLength(0);
+  });
+
+  it('a non-member can still join by text', async () => {
+    await service.createSession(makeInput(''));
+    const bob = { ...makeInput('加入队伍'), sender: { id: 'bob', name: 'Bob' } };
+
+    await run(bob);
+
+    expect(nextCalls).toBe(0);
+    expect(replies).toHaveLength(1);
+  });
+});

@@ -34,6 +34,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import { describeHmrReloadLog, describeManifestIgnoredLog, describeRestartLog } from './hmr-log.js';
+import { CommandConflictLog } from './command-conflict-log.js';
 import {
   ConfigValidationError,
   createConfigDocument,
@@ -74,6 +75,7 @@ import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
 import { createFeatureHost } from './feature-host-installer.js';
+import { createChatOwnerClaimGuard } from './chat-owner-claim.js';
 import { PersonalPrincipalImportBook } from './chat-personal-principals.js';
 import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
@@ -298,7 +300,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   chatPeopleRef.current = featureHost.people;
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
-  const im = new ImRuntime({ enrichSender: senderEnricher });
+  // #1250: claim-shaped messages are taken before anything records, logs or routes them.
+  const im = new ImRuntime({ enrichSender: senderEnricher, inboundSecret: createChatOwnerClaimGuard({ claim: featureHost.claim }) });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
@@ -406,12 +409,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     configFile,
     restartSupported,
   });
+  // #1250: command route conflicts are skipped by the Command index; say so once per conflict.
+  const commandConflictLog = new CommandConflictLog(fields => getLogger('command').warn(formatCompact(fields)));
   const host = new RootHost({
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
     watch: parsed.once ? [] : parsed.watch,
     onGenerationCommit: (generation) => {
+      try { commandConflictLog.report(host.runtime.snapshot); } catch { /* diagnostics only */ }
       // Route table follows hot reloads (ADR 0054 §3 `routes`).
       bridgedHttpHost?.publishRoutes(generation);
       consoleEventHub.publish('hmr:reload', { generation });
@@ -599,6 +605,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     featureStores: featureHost.stores,
     ...(agentHost ? { agentInsights: agentHost } : {}),
     runtimeFailures,
+    ...(speechHandle ? { speechIssues: () => speechHandle.dependencyIssues() } : {}),
   });
   const runtimeFailureSources = {
     journal: runtimeFailures,

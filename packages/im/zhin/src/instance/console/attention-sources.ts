@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { commandFeatureId, isCommandIndex, type CommandRouteClaimant } from '@zhin.js/command';
 import type {
+  AttentionCommandClaimant,
+  AttentionCommandConflict,
   AttentionEndpoint,
   AttentionEndpointDrift,
   AttentionErrorLogs,
@@ -16,7 +19,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { hasGlobalOwner } from '../chat-owner-claim.js';
-import { personalPrincipalPending } from '../chat-personal-principals.js';
+import { personalPrincipalEndpointOf, personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
 import { buildManagedPluginList } from './plugin-projection.js';
@@ -50,7 +53,7 @@ export interface AttentionSourceOptions {
 }
 
 export function createAttentionSources(composition: ConsoleRpcComposition, options: AttentionSourceOptions = {}): AttentionSources {
-  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores, agentInsights, runtimeFailures } = composition;
+  const { im, snapshots, pluginManagement, configuration, databaseHost, projectRoot, pluginLifecycleFile, featureStores, agentInsights, runtimeFailures, speechIssues } = composition;
   /** Mirrors a live failure into the journal, then fills in a reason the live row lost (restart). */
   const journalReason = (source: 'endpoint' | 'mcp', subject: string) => {
     const entry = runtimeFailures?.get(source, subject);
@@ -80,6 +83,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
             id: row.id, adapter: row.adapter, name: row.name, connected: row.connected, phase: row.phase,
             ...(typeof row.endpoint?.adapter === 'string' ? { adapterType: row.endpoint.adapter } : {}),
             transportState: row.transportState, pendingLogin: row.pendingLogin,
+            admitted: row.admitted, startAttempt: row.startAttempt,
+            ...(row.nextRetryAt !== undefined ? { nextRetryAt: row.nextRetryAt } : {}),
             ...(lastError ? { lastError } : {}),
           };
         });
@@ -131,6 +136,16 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         return { states, ...(dependencies ? { dependencies } : {}) };
       },
     } : {}),
+    ...(snapshots ? {
+      // #1250: routes the Command index skipped because another registration holds them.
+      commandConflicts: (): readonly AttentionCommandConflict[] => withLease(lease => {
+        const index = lease.value.projections.get(commandFeatureId);
+        return isCommandIndex(index)
+          ? index.conflicts().map(conflict => ({ route: conflict.route, skipped: claimant(conflict.skipped), kept: claimant(conflict.kept),
+            ...(conflict.takenByLater ? { takenByLater: true as const } : {}) }))
+          : [];
+      }),
+    } : {}),
     configuration: Object.freeze({
       projectRoot,
       source: () => configuration.readSource(),
@@ -160,6 +175,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         });
       }),
     } : {}),
+    // #1250 第 29 批：Speech Host 的外部命令检查结果（启动时检查，voice_tts 调用时复查）。
+    ...(speechIssues ? { speech: speechIssues } : {}),
     ...(snapshots ? {
       unschedulableJobs: () => withLease(lease => resolveCurrentAgentConsole(lease.value)?.assistant?.jobs.unschedulable?.()),
     } : {}),
@@ -190,7 +207,10 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const personalState = featureStores.personalPrincipalImports ? await featureStores.personalPrincipalImports.read() : undefined;
         const personal = personalState && !personalState.acknowledgedAt
           ? personalState.entries.filter(entry => entry.status === 'imported' && entry.adapter)
-            .map(entry => ({ consoleUserId: entry.consoleUserId, adapter: entry.adapter!, userId: entry.subjectId, at: entry.at }))
+            .map(entry => {
+              const endpoint = personalPrincipalEndpointOf(entry.adapterId);
+              return { consoleUserId: entry.consoleUserId, adapter: entry.adapter!, ...(endpoint ? { endpoint } : {}), userId: entry.subjectId, at: entry.at };
+            })
           : [];
         return {
           hasGlobalOwner: hasGlobalOwner(roles),
@@ -198,7 +218,7 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
           ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
           pending: state?.pending ?? [],
           ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),
-            entries: personal.map(({ consoleUserId, adapter, userId }) => ({ consoleUserId, adapter, userId })) } } : {}),
+            entries: personal.map(({ consoleUserId, adapter, endpoint, userId }) => ({ consoleUserId, adapter, ...(endpoint ? { endpoint } : {}), userId })) } } : {}),
           ...(personalState ? { personalPending: personalPrincipalPending(personalState.entries) } : {}),
         };
       },
@@ -238,6 +258,11 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
       return `${generation}|${files.join('|')}`;
     },
   });
+}
+
+function claimant(side: CommandRouteClaimant): AttentionCommandClaimant {
+  return { plugin: side.plugin, owner: String(side.owner), command: side.command, localPath: side.localPath, kind: side.kind,
+    ...(side.entry !== undefined ? { entry: side.entry } : {}), ...(side.root ? { root: true as const } : {}) };
 }
 
 function isFailure(value: unknown): value is { category: string; message: string; at?: number; exitCode?: number } {

@@ -208,7 +208,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         warnings: attentionWarnings,
         allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
         allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
-        ...(isUserPrincipal(principal) ? { viewerUserId: principal.userId } : {}),
+        ...(isUserPrincipal(principal) ? { viewerUserId: principal.userId, viewerName: principal.displayName } : {}),
       });
       if (attentionReply) {
         return reply(attentionReply.status, attentionReply.body, noStore);

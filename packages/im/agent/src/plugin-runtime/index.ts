@@ -42,6 +42,7 @@ export * from './deferred-capability-plan.js';
 export * from './full-agent-turn-engine.js';
 export * from './host-tool-projection.js';
 export * from './host-mcp-projection.js';
+export * from './host-mcp-status.js';
 export * from './native-file-tools.js';
 export * from './native-web-tools.js';
 export * from './native-image-tool.js';

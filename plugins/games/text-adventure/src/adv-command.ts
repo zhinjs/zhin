@@ -23,8 +23,10 @@ export function getAdvHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'>
   const lines = [formatGameHelp({ presentation: message, title: { 'zh-CN': '秘境探险 · 文字冒险', en: 'Hidden Ruins · Text Adventure' }, commandPath: 'adv', actions: ['start', 'continue', 'quit'] })];
   const command = message.formatCommand?.('adv');
   if (command !== undefined) {
-    lines.push(`${command} map — ${messages(locale, 'map')}`);
-    lines.push(`${command} achievements — ${messages(locale, 'achievements')}`);
+    // 子命令与命令名同一种语言（plugins/games/README.md「命令命名约定」）。
+    const zh = /\p{Script=Han}/u.test(command);
+    lines.push(`${command} ${zh ? '地图' : 'map'} — ${messages(locale, 'map')}`);
+    lines.push(`${command} ${zh ? '成就' : 'achievements'} — ${messages(locale, 'achievements')}`);
   }
   lines.push('', messages(locale, 'choices'));
   return lines.join('\n');

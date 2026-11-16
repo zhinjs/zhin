@@ -22,6 +22,7 @@ export function inboundOutcomeFacade(sink: InboundOutcomeSink): InboundOutcomeSi
   const facade: InboundOutcomeSink = Object.freeze({
     report: (candidate: Parameters<InboundOutcomeSink['report']>[0]) => sink.report(candidate),
     enter: (stage: Parameters<InboundOutcomeSink['enter']>[0]) => sink.enter(stage),
+    replied: (owner?: string) => sink.replied?.(owner) === true,
   });
   facades.add(facade);
   return facade;
@@ -272,6 +273,52 @@ export interface OutboundMessageService {
   ): () => void;
 }
 
+
+/**
+ * Inbound secret guard (ADR 0060 §3.3, zhinjs/zhin#1250): recognizes a message that carries a one-time
+ * secret (the chat-owner claim code) before anything else sees it. A recognized message is never
+ * recorded in the conversation history, never handed to middlewares, handlers, commands, interaction
+ * prompts or the Agent, and is logged and published only as {@link InboundSecretMatch.redacted}.
+ */
+export interface InboundSecretGuard {
+  match(input: Readonly<{
+    /** The text a command would be matched against (leading quotes and mentions dropped, trimmed). */
+    text: string;
+    /** The command prefix of this conversation (`''`: none). */
+    prefix: string;
+    conversation: ConversationRef;
+    snapshot: RuntimeSnapshot;
+  }>): InboundSecretMatch | undefined;
+  /**
+   * Whether an Endpoint event other than `message.receive` carries the secret: native platform events
+   * (`platform.receive` and any other side event) and canonical notices, requests (a friend or join
+   * request's comment) and system events. Such an event is neither recorded nor dispatched to Handlers:
+   * its payload is platform-shaped, so it cannot be redacted reliably. A payload too large to inspect
+   * completely should count as carrying it (fail closed).
+   */
+  inspectNative?(payload: unknown, event?: Readonly<{ name: string }>): boolean;
+  /**
+   * A notice, request or system event withheld by {@link inspectNative} was still seen on the platform
+   * (a join request's comment is shown to the group's admins): revoke the secret when the payload
+   * really carries it (not merely too large to inspect). Not called for `platform.receive`: the same
+   * message's `message.receive` still reaches {@link match}.
+   */
+  discardNative?(payload: unknown, event?: Readonly<{ name: string }>): Promise<void> | void;
+}
+
+export interface InboundSecretMatch {
+  /** Reported as the outcome's command (for example `claim`). */
+  readonly name: string;
+  /** What logs and the message event stream show instead of the text (for example `认领 ***`). */
+  readonly redacted: string;
+  /** Handles the message; the returned content is replied through the normal send chain by the root Plugin. */
+  handle(message: Message): Promise<SendContent | undefined> | SendContent | undefined;
+  /**
+   * The message is dropped before {@link handle} (not ready, another bot or one of ours posted it, dedup
+   * failure): a secret it carries was still seen by others, so the guard revokes it.
+   */
+  discard?(): Promise<void> | void;
+}
 
 export interface MessageDispatchResult {
   readonly matched: boolean;

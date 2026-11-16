@@ -8,6 +8,7 @@ import {
   sanitizeToolResult,
 } from '@zhin.js/ai';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
+import type { ReplyFallback } from '../event/turn-event.js';
 
 export interface ToolCallRecord {
   tool: string;
@@ -22,6 +23,8 @@ export interface ToolCallRecord {
   status?: 'completed' | 'denied' | 'failed';
   /** The tool is not declared read-only, so a denial or failure means a write/change did not happen. */
   sideEffect?: boolean;
+  /** #1250 batch 26: the tool ran and reported a failure in its result; part of it may have taken effect. */
+  reported?: boolean;
 }
 
 const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);
@@ -60,19 +63,67 @@ function formatGenericToolResult(tool: string, result: unknown): string {
   return cleaned;
 }
 
-/**
- * Build a single user-facing message from tool call history.
- */
-export function formatToolCallsForUser(toolCalls: ToolCallRecord[]): string {
-  if (toolCalls.length === 0) {
-    return '模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /reset 后重试，或换用非推理模型。';
-  }
+/** Where the reply is being produced, so a fallback can name the right next step (#1250 b33). */
+export interface ReplyFallbackContext {
+  /** The turn offered the model at least one tool. Absent: unknown (treated as available). */
+  readonly toolsAvailable?: boolean;
+  /** A scheduled job's run: named in the text with `zhin trace`; `/reset` is never suggested. */
+  readonly schedule?: Readonly<{ jobId: string; label?: string; turnId?: string }>;
+}
 
+/** Inline-code a tool name so Markdown cannot eat `__` or `*` in it (#1250 b33). */
+export function inlineToolName(name: string): string {
+  const fence = name.includes('`') ? '``' : '`';
+  return `${fence}${name}${fence}`;
+}
+
+/**
+ * #1250 b33: the fallback text for a turn whose model wrote no visible reply, stating the actual cause.
+ * Interactive turns get a next step; a scheduled job gets its name / id and `zhin trace <turnId>` instead
+ * of `/reset` (the job's own session is not the chat the owner would reset).
+ */
+export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallbackContext = {}): string {
+  const tools = fallback.tools?.length ? fallback.tools.map(inlineToolName).join('、') : '';
+  const cause = fallback.cause === 'no_tools'
+    ? '本轮没有可用的工具，模型也没有给出回复'
+    : fallback.cause === 'tool_denied'
+      ? `需要的工具${tools ? ` ${tools} ` : ''}被拒绝，没有运行`
+      : '模型未返回可见内容（可能为推理型模型空回复或上下文过长）';
+  const schedule = context.schedule;
+  if (schedule) {
+    const name = schedule.label ? `「${schedule.label}」（${schedule.jobId}）` : schedule.jobId;
+    const next = fallback.cause === 'no_tools'
+      ? '请检查任务的执行计划和可用工具，或先用 schedule_preview 预演'
+      : fallback.cause === 'tool_denied'
+        ? '无人值守时需要审批的工具会被拒绝，请检查审批设置或任务的工具'
+        : '可以换用其他模型后手动运行一次';
+    const trace = schedule.turnId ? `排查：zhin trace ${schedule.turnId}` : '排查：zhin trace';
+    return `定时任务 ${name} 没有完成：${cause}。${next}。${trace}`;
+  }
+  if (fallback.cause === 'no_tools') return `${cause}，所以没能完成这个请求。可以换一种说法再试。`;
+  if (fallback.cause === 'tool_denied') return `${cause}，所以没能完成这个请求。需要有权限的人批准后再试。`;
+  return `${cause}。可发送 /reset 后重试，或换用非推理模型。`;
+}
+
+/**
+ * User-facing text built from the tool-call history when the model wrote no reply, and whether that text
+ * is a fallback (no usable tool output) rather than the tools' own results.
+ */
+export function describeToolCallsForUser(
+  toolCalls: readonly ToolCallRecord[],
+  context: ReplyFallbackContext = {},
+): { text: string; fallback?: ReplyFallback } {
   const otherParts: string[] = [];
+  const denied: string[] = [];
   let exploredOnly = false;
 
   for (const tc of toolCalls) {
     if (INTERNAL_META_TOOLS.has(tc.tool)) continue;
+    if (tc.status === 'denied') {
+      // A denial is not a tool result; its model-facing text must not reach the user (#1250 b33).
+      if (!denied.includes(tc.tool)) denied.push(tc.tool);
+      continue;
+    }
     if (EXPLORATION_TOOLS.has(tc.tool)) {
       exploredOnly = true;
       continue;
@@ -82,14 +133,32 @@ export function formatToolCallsForUser(toolCalls: ToolCallRecord[]): string {
   }
 
   if (otherParts.length > 0) {
-    return truncate(otherParts.join('\n\n'), MAX_SUMMARY_CHARS);
+    return { text: truncate(otherParts.join('\n\n'), MAX_SUMMARY_CHARS) };
   }
-
-  if (exploredOnly) {
-    return EXPLORATION_ONLY_REPLY;
+  if (denied.length > 0) {
+    const fallback: ReplyFallback = { cause: 'tool_denied', tools: denied };
+    return { text: formatReplyFallback(fallback, context), fallback };
   }
+  if (toolCalls.length === 0) {
+    const fallback: ReplyFallback = { cause: context.toolsAvailable === false ? 'no_tools' : 'empty_reply' };
+    return { text: formatReplyFallback(fallback, context), fallback };
+  }
+  if (exploredOnly && !context.schedule) {
+    return { text: EXPLORATION_ONLY_REPLY, fallback: { cause: 'empty_reply' } };
+  }
+  const fallback: ReplyFallback = { cause: 'empty_reply' };
+  return {
+    text: context.schedule ? formatReplyFallback(fallback, context)
+      : '未能从工具结果中提取有效信息，请换一种说法或缩小问题范围后重试。',
+    fallback,
+  };
+}
 
-  return '未能从工具结果中提取有效信息，请换一种说法或缩小问题范围后重试。';
+/**
+ * Build a single user-facing message from tool call history.
+ */
+export function formatToolCallsForUser(toolCalls: ToolCallRecord[], context?: ReplyFallbackContext): string {
+  return describeToolCallsForUser(toolCalls, context).text;
 }
 
 /** Agent 内置兜底正文（如 max-iter / error recover）是否应改用 formatToolCallsForUser */

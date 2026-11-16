@@ -335,6 +335,11 @@ export interface EngagementGraphView {
   readonly mails: readonly Mail[];
   /** Mail by id within this engagement. */
   get(id: MailId): Mail | undefined;
+  /**
+   * Whether this ask / delegate mail still waits for its result (#1250 delegate-budget-self-sabotage):
+   * collaboration tools keep one line of work per delegation instead of asking the same agent again.
+   */
+  outstanding?(id: MailId): boolean;
 }
 
 export interface GuardContext {

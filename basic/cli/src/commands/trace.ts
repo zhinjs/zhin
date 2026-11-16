@@ -4,6 +4,8 @@
  * graph from `engagement_events` (ADR 0048 H5).
  */
 import { Command } from 'commander';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
+import { sessionDisplayNameOf, sessionLabelOf } from '@zhin.js/gateway/usage';
 import { importProjectInstanceCli, type InstanceCliModule } from '../utils/project-instance.js';
 
 interface TraceCommandOptions {
@@ -20,6 +22,8 @@ interface TraceCommandOptions {
   readonly limit?: string;
 }
 
+/** #1250 b35: pre-b35 records still merged; only the instance splits them. */
+const LEGACY_ENGAGEMENTS_PENDING_NOTICE = '旧版协作记录尚未拆分，重启实例后会自动整理。';
 const RELATIVE = /^(\d+(?:\.\d+)?)\s*(m|h|d)$/i;
 const UNIT_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 };
 
@@ -33,6 +37,11 @@ export function parseTraceTime(value: string | undefined, now = Date.now()): num
   const parsed = Date.parse(text);
   if (Number.isNaN(parsed)) throw new Error(`无法解析时间：${value}（示例：2h、7d、2026-10-14、2026-10-14T08:00）`);
   return parsed;
+}
+
+function withSessionDisplayName(trace: unknown): unknown {
+  const name = sessionDisplayNameOf(trace);
+  return name && trace && typeof trace === 'object' ? { ...trace, session_display_name: name } : trace;
 }
 
 export const traceCommand = new Command('trace')
@@ -69,6 +78,8 @@ export const traceCommand = new Command('trace')
         process.exitCode = 1;
         return;
       }
+      // #1250 b35: the CLI never splits pre-b35 records itself (stderr keeps --json output clean).
+      if (opened.legacyPending) console.error(LEGACY_ENGAGEMENTS_PENDING_NOTICE);
       try {
         if (options.list || turn === 'last') {
           const ids = await opened.journal.listEngagements(effectiveLimit);
@@ -98,7 +109,8 @@ export const traceCommand = new Command('trace')
         }
 
         const ids = await opened.journal.listEngagements(500);
-        const targetId = ids.find((id) => id === turn || id.startsWith(turn)) ?? turn;
+        // Exact id first: `m-<run>-1` is also a prefix of `m-<run>-17` (#1250 b35).
+        const targetId = ids.find((id) => id === turn) ?? ids.find((id) => id.startsWith(turn)) ?? turn;
         const events = await opened.journal.read(targetId);
         if (events.length === 0) {
           console.error(`找不到 Engagement ${turn}。用 zhin trace --engagements --list 查看最近的协作记录。`);
@@ -146,14 +158,18 @@ export const traceCommand = new Command('trace')
       if (options.json) console.log(JSON.stringify(sessions, null, 2));
       else if (sessions.length === 0) console.log(`没有 trace 记录（${dir}）。`);
       else for (const s of sessions) {
-        console.log(`${s.session_key}  ${s.turns} 回合  最近 ${new Date(s.last_started_at).toLocaleString()}  ${s.last_status}  ${s.total_tokens} tokens`);
+        console.log(`${s.session_key}  ${s.turns} 回合  最近 ${formatDateTime(s.last_started_at)}  ${s.last_status}  ${s.total_tokens} tokens`);
       }
       return;
     }
 
     if (options.list || options.session || options.since || options.until) {
       const traces = await store.query(filter);
-      console.log(options.json ? JSON.stringify(traces, null, 2) : mod.formatTurnTraceList(traces));
+      // Readable conversation as in `zhin usage report` (#1250); `--json` keeps the full session_key
+      // and adds that name as `session_display_name`.
+      console.log(options.json
+        ? JSON.stringify(traces.map(trace => withSessionDisplayName(trace)), null, 2)
+        : mod.formatTurnTraceList(traces, { sessionLabel: trace => sessionLabelOf(trace) }));
       return;
     }
 
@@ -163,10 +179,11 @@ export const traceCommand = new Command('trace')
       if (opened) {
         try {
           const ids = await opened.journal.listEngagements(500);
-          const matchedId = ids.find((id) => id === turn || id.startsWith(turn));
+          const matchedId = ids.find((id) => id === turn) ?? ids.find((id) => id.startsWith(turn));
           if (matchedId) {
             const events = await opened.journal.read(matchedId);
             if (events.length > 0) {
+              if (opened.legacyPending) console.error(LEGACY_ENGAGEMENTS_PENDING_NOTICE);
               const { summary, board } = instance!.describeEngagement(matchedId, events);
                             console.log(
                 options.json

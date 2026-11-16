@@ -2,6 +2,7 @@
  * 持久化调度任务 CLI — 通过运行中 Host 的 `/assistant/jobs` 操作。
  * 调度器在首次启动后以数据库为准，离线改 data/schedule-jobs.json 不会生效，因此不再直接改文件。
  */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { Command } from 'commander';
 import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
@@ -14,6 +15,7 @@ import {
   withNotifyTarget,
   targetSummary,
   nextRunSummary,
+  contentLines,
   normalizeCronExpression,
 } from '../utils/assistant-jobs.js';
 import {
@@ -71,7 +73,7 @@ function notifySummary(notify: ScheduleJobRecordCli['notify']): string {
 }
 
 function scheduleSummary(s: JobScheduleCli): string {
-  if (s.kind === 'at') return `at ${new Date(s.atMs).toISOString()}`;
+  if (s.kind === 'at') return `at ${formatDateTime(s.atMs)}`;
   if (s.kind === 'every') {
     const m = s.everyMs / (60 * 1000);
     if (m < 60) return `every ${m}m`;
@@ -83,9 +85,20 @@ function scheduleSummary(s: JobScheduleCli): string {
   return `${s.kind} ${(s as { cron?: string }).cron ?? ''}`.trimEnd();
 }
 
+/** #1250 b33: the last run's status, with its cause when it failed or was degraded. */
+export function lastRunSummary(job: Pick<ScheduleJobRecordCli, 'state'>): string | undefined {
+  const status = job.state?.lastStatus;
+  if (!status) return undefined;
+  const label = status === 'ok' ? '成功' : status === 'error' ? '失败' : status === 'degraded' ? '未完成（降级）'
+    : status === 'skipped' ? '跳过' : status;
+  const error = (status === 'error' || status === 'degraded') && job.state.lastError ? `：${job.state.lastError}` : '';
+  return `${label}${error}`;
+}
+
 const listCommand = new Command('list')
   .description('列出运行中实例的持久化调度任务')
-  .action(async () => {
+  .option('--json', '以 JSON 输出（含完整的任务内容）')
+  .action(async (opts: { json?: boolean }) => {
     const data = await requireOk(
       await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
     );
@@ -94,6 +107,10 @@ const listCommand = new Command('list')
       process.exit(1);
     }
     const jobs = data?.jobs ?? [];
+    if (opts.json) {
+      output.line(JSON.stringify(jobs, null, 2));
+      return;
+    }
     if (jobs.length === 0) {
       output.line('暂无调度任务。使用 zhin schedule add 添加。');
       return;
@@ -109,7 +126,9 @@ const listCommand = new Command('list')
       if (target) output.line(`    目标:   ${target}`);
       const next = nextRunSummary(j);
       if (next) output.line(`    下次:   ${next}`);
-      output.line(`    内容:   ${j.action.prompt}`);
+      const last = lastRunSummary(j);
+      if (last) output.line(`    上次:   ${last}`);
+      for (const line of contentLines(j.action.prompt)) output.line(line);
     }
   });
 

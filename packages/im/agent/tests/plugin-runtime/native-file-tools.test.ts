@@ -54,6 +54,26 @@ describe('native file ToolFeatures', () => {
       .resolves.toBe('export const created = true;\n');
   });
 
+  it('refuses to write an inline-binary placeholder from a tool result into a file (#1250 batch 29)', async () => {
+    const workspace = await tempWorkspace();
+    const original = 'body { background: url(data:image/png;base64,iVBORw0KGgo=); }\n';
+    await writeFiles(workspace, { 'style.css': original });
+    const index = createIndex();
+    const invocation = createInvocation(workspace);
+    const placeholder = '[已省略 内嵌 image/png 数据（4096 字符），未提供给模型]';
+    await expect(index.execute({ requester: rootPluginId(), name: 'write_file', input: {
+      file_path: join(workspace, 'style.css'), content: `body { background: url(${placeholder}); }\n`,
+    }, invocation })).rejects.toThrow('拒绝写入');
+    await expect(index.execute({ requester: rootPluginId(), name: 'edit_file', input: {
+      file_path: join(workspace, 'style.css'), old_string: 'body {', new_string: `/* ${'[已截断 base64 数据（70000 字符），未提供给模型；原文仍完整保留，不要把这段写回文件]'} */ body {`,
+    }, invocation })).rejects.toThrow('拒绝写入');
+    await expect(readFile(join(workspace, 'style.css'), 'utf8')).resolves.toBe(original);
+    // Ordinary text that merely mentions omissions is written.
+    await expect(index.execute({ requester: rootPluginId(), name: 'write_file', input: {
+      file_path: join(workspace, 'notes.md'), content: '已省略部分内容，见原文。\n',
+    }, invocation })).resolves.toContain('Wrote');
+  });
+
   it('skips dependency, VCS, state and gitignored trees unless the path targets them', async () => {
     const workspace = await tempWorkspace();
     await writeFiles(workspace, {

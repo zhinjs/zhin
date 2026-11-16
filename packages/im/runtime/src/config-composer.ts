@@ -289,6 +289,21 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
   assertFeatureLevelDeclarations(schema, file);
   return deepFreeze({
     $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,
+    ...withFrameworkPluginConfigFields(schema, { child: Boolean(node.parent) }),
+  });
+}
+
+/**
+ * A Plugin's own config schema plus the fields the framework adds to every Plugin config
+ * (#1250 `plugin-status-ignores-framework-config-keys`): `commandNamespace`, `disabledCommands`
+ * and, below the Root, the ADR 0050 `overrides` block. Runtime composition and the gateway's
+ * offline validation (`zhin packages status`, Console saves) both validate against this one
+ * shape, so a schema with `additionalProperties: false` accepts those fields in either place.
+ * Idempotent: a schema that already carries them (a generation's committed declaration) is
+ * returned with the same properties.
+ */
+export function withFrameworkPluginConfigFields(schema: JsonSchema, options: { readonly child: boolean }): JsonSchema {
+  return {
     type: 'object',
     additionalProperties: false,
     ...schema,
@@ -309,10 +324,10 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
       },
       // ADR 0050: the reserved per adapter / endpoint override block. Since ADR 0057 §2 it is only
       // read by the one-time import into the database (the instance refuses it afterwards).
-      ...(node.parent ? { [FEATURE_OVERRIDES_KEY]: FEATURE_OVERRIDES_SCHEMA } : {}),
-      ...properties,
+      ...(options.child ? { [FEATURE_OVERRIDES_KEY]: FEATURE_OVERRIDES_SCHEMA } : {}),
+      ...schemaProperties(schema),
     },
-  });
+  };
 }
 
 function schemaProperties(schema: JsonSchema): Record<string, JsonSchema> {

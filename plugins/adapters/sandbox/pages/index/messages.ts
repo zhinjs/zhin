@@ -261,7 +261,8 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "输入 {0} · 输出 {1}": "Input {0} · output {1}",
   "执行完成": "Execution completed",
   "运行中": "Running",
-  "已完成": "Completed"
+  "已完成": "Completed",
+  "这条消息没有回复：": "No reply to this message: "
 };
 
 export function sandboxText(locale: SandboxLocale, message: string, values: readonly unknown[] = []): string {

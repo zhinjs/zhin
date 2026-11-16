@@ -54,6 +54,10 @@ import {
   guardedReply,
   labelSkillInstructions,
   recallTurnMemory,
+  knowledgeIndexSection,
+  KNOWLEDGE_INDEX_SEGMENT_ID,
+  KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS,
+  KNOWLEDGE_INDEX_WEIGHT,
   hardGateOptions,
   type BufferedExecution,
   type FullAgentTurnEngineOptions,
@@ -183,6 +187,7 @@ async function* runInteractiveTurn(
     host,
     core: options.core,
     turn: context.turn,
+    sessionId: prep.sessionId,
     capabilities: { ...context.capabilities, tools: context.toolCapabilities },
     entry: entryAgentName,
     resolveModel: () => actorModel.current,
@@ -301,6 +306,7 @@ async function* runInteractiveTurn(
     context.capabilities.skills,
     context.selection.agent,
     context.capabilities.tools,
+    { text: prep.turnUser.rawContent, loadedSkills: sessionSnapshot.loadedSkills },
   );
   if (capabilityContext.stable) {
     // Only sender-neutral (scene-tier) capabilities stay in the cached system prefix, so master and
@@ -313,6 +319,20 @@ async function* runInteractiveTurn(
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
       inject: () => fillPromptSlots(capabilityContext.stable, agentNickname),
+    });
+  }
+  const knowledgeIndex = await knowledgeIndexSection(options.knowledgeIndex, plan.capabilities, context.turn.signal);
+  if (knowledgeIndex) {
+    // Project files, not session facts: cached prefix, last of the stable kinds (just before
+    // `scene`), so editing a knowledge file leaves the cache of everything before it intact.
+    turnSegments.push({
+      id: KNOWLEDGE_INDEX_SEGMENT_ID,
+      kind: 'platform',
+      weight: KNOWLEDGE_INDEX_WEIGHT,
+      budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat - 1 : BOOTSTRAP_PROMPT_ORDER.task - 1,
+      retention: 'preferred',
+      maxChars: KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS,
+      inject: () => knowledgeIndex,
     });
   }
   const promptRuntime = Object.freeze({

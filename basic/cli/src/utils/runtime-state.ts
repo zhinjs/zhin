@@ -10,6 +10,7 @@
  * `packages/im/zhin/src/instance/console/runtime-failures.ts`, added by #1270 batch 14); until a
  * release with that writer runs, the file does not exist and nothing is shown.
  */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -200,7 +201,7 @@ const PHASE_LABELS: Readonly<Record<string, string>> = {
 };
 
 const MCP_LABELS: Readonly<Record<RuntimeMcpServer['status'], string>> = {
-  connected: '已连接', failed: '连接失败', idle: '未连接（首次使用时连接）', not_loaded: '未加载', disconnected: '未连接',
+  connected: '已连接', failed: '连接失败', idle: '待连接', not_loaded: '未加载', disconnected: '未连接',
 };
 
 /** `zhin status` lines for the runtime state (Chinese). */
@@ -316,7 +317,7 @@ export function formatRecordedFailure(entry: RecordedRuntimeFailure): string {
   const notes = [
     entry.code,
     entry.count > 1 ? `共 ${entry.count} 次` : undefined,
-    entry.lastAt ? `最近 ${new Date(entry.lastAt).toISOString()}` : undefined,
+    entry.lastAt ? `最近 ${formatDateTime(entry.lastAt)}` : undefined,
   ].filter((note): note is string => note !== undefined);
   return `${SOURCE_LABELS[entry.source] ?? entry.source} ${entry.subject}：${entry.message}${notes.length ? `（${notes.join('，')}）` : ''}`;
 }

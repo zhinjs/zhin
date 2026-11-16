@@ -76,21 +76,32 @@ export function sanitizeAssistantReply(
   raw: string,
   options: SanitizeAssistantReplyOptions = {},
 ): string {
+  return sanitizeAssistantReplyDetailed(raw, options).text;
+}
+
+/**
+ * {@link sanitizeAssistantReply}, also saying where the text came from (#1250 b33): the model's own reply,
+ * the tool summary (`toolSummary`), or the empty-reply message.
+ */
+export function sanitizeAssistantReplyDetailed(
+  raw: string,
+  options: SanitizeAssistantReplyOptions = {},
+): { text: string; source: 'model' | 'summary' | 'empty' } {
   const cwd = options.cwd;
   const stripped = stripHallucinatedToolCalls(stripThinkBlocks(unwrapJsonStringLayers(raw)));
   const summary = options.toolSummary?.trim() ?? '';
 
   if (looksLikeInternalToolDump(stripped) && summary && !looksLikeRawToolMarkup(summary)) {
-    return outboundText(summary, cwd);
+    return { text: outboundText(summary, cwd), source: 'summary' };
   }
 
   if (stripped && !looksLikeRawToolMarkup(stripped) && !looksLikeInternalToolDump(stripped)) {
-    return outboundText(stripped, cwd);
+    return { text: outboundText(stripped, cwd), source: 'model' };
   }
 
   if (summary && !looksLikeRawToolMarkup(summary)) {
-    return outboundText(summary, cwd);
+    return { text: outboundText(summary, cwd), source: 'summary' };
   }
 
-  return outboundText(options.emptyMessage ?? DEFAULT_EMPTY_REPLY, cwd);
+  return { text: outboundText(options.emptyMessage ?? DEFAULT_EMPTY_REPLY, cwd), source: 'empty' };
 }

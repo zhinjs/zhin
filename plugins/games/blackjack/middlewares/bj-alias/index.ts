@@ -7,6 +7,7 @@ function normalizeBjAction(raw: string): string {
   if (a === '帮助') return 'help';
   if (a === '开始') return 'start';
   if (a === '继续') return 'continue';
+  if (a === '退出' || a === '放弃') return 'quit';
   return a;
 }
 

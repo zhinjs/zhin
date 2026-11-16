@@ -80,6 +80,8 @@ export interface ProjectDatabaseHost {
 
 export interface ComponentDefinitionView {
   readonly previewProps?: unknown;
+  /** `@zhin.js/component` 1.2+: stand-ins for `context.use(token)` in previews. */
+  readonly previewServices?: readonly { readonly token: { readonly id: string; readonly description?: string }; readonly value: unknown }[];
   render(props: never, context: never): unknown;
 }
 
@@ -106,13 +108,15 @@ export interface AgentTraceModuleView {
   defaultTurnTraceDir(root: string): string;
   defaultTurnTraceFile(root: string): string;
   createTurnTraceArchive(dir: string, options: { readonly legacyFile?: string; readonly secrets: readonly string[] }): AgentTraceStoreView;
-  formatTurnTraceList(traces: readonly unknown[]): string;
+  /** `sessionLabel` is ignored by @zhin.js/agent before 1.6 (the session key is shown). */
+  formatTurnTraceList(traces: readonly unknown[], options?: { readonly sessionLabel?: (trace: never) => string | undefined }): string;
   formatTurnTrace(trace: unknown, options: { readonly timeline: boolean; readonly providerLabel?: (provider: string) => string | undefined }): string;
 }
 
 export interface AgentModuleView {
   buildAgentSurfaceInfoReport(root: string): Promise<unknown>;
-  formatAgentSurfaceInfoReport(report: never): string;
+  /** `locale` is ignored by @zhin.js/agent before 1.6 (English output). */
+  formatAgentSurfaceInfoReport(report: never, locale?: 'zh-CN' | 'en'): string;
 }
 
 export interface InstanceCliModule {
@@ -120,7 +124,8 @@ export interface InstanceCliModule {
   createDatabaseHost(config: never): ProjectDatabaseHost;
   parseComponentDefinition(value: unknown): ComponentDefinitionView;
   renderToSegments(node: never, options: Readonly<Record<string, unknown>>): Promise<readonly unknown[]>;
-  openProjectEngagementJournal(root: string): Promise<{ readonly journal: EngagementJournalView; close(): Promise<void> } | null>;
+  /** `legacyPending` (#1250 b35): pre-b35 records the instance has not split yet. */
+  openProjectEngagementJournal(root: string): Promise<{ readonly journal: EngagementJournalView; readonly legacyPending?: boolean; close(): Promise<void> } | null>;
   describeEngagement(engagementId: string, events: readonly unknown[]): { readonly summary: unknown; readonly board: unknown };
   formatEngagementCollaborationGraph(summary: never, events?: readonly never[]): string;
   formatEngagementList(summaries: readonly never[]): string;

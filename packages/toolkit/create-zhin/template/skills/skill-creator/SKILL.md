@@ -7,6 +7,9 @@ keywords:
   - agent skill
   - workflow
   - 创建技能
+  - 写 SKILL
+  - 加 skill
+  - 写技能
 tags:
   - agent
   - skills
@@ -47,6 +50,8 @@ tags:
 ```
 
 - `description` 必须包含：**能力**、**触发场景**、**典型用户说法**
+- 推荐格式：`一句话能力。Use when …。Triggers: 中文触发词, english trigger`。系统提示的技能目录只保留第一句、`Use when` 句、`Triggers:` 列表和 `keywords`，其余正文要 `load_skill` 后才可见
+- 用户会用中文说的触发词（如「PR 描述」「写周报」）同时写进 `keywords`：目录预算紧张时触发词最后才被截断
 - 禁止在 description 末尾加「灵活应用」「视情况而定」等空话
 
 ### 第 3 步：写正文（最小结构）

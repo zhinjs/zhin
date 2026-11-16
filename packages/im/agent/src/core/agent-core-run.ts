@@ -50,6 +50,8 @@ import {
   createTurnContextCallbacks,
   finalizeTurnReplyAndOutput,
   appendConversationBatches,
+  copiedInlineMediaTrace,
+  phaseToolMediaKinds,
   type ConversationBatch,
   type TurnReplyPhaseState,
 } from './agent-core-settlement.js';
@@ -155,6 +157,10 @@ export async function* runAgentLoopTextTurnRun(
   };
 
   const toolCalls: ToolCallRecord[] = [];
+  // #1250 第 29 批：流式回复不发出模型抄写的、本轮工具已产出的内嵌媒体。
+  initialReplyRun?.filterCopiedInlineMedia({
+    kinds: phaseToolMediaKinds(toolCalls, state), onDropped: copiedInlineMediaTrace(input.turnContext, 'stream'),
+  });
   const conversationBatches: ConversationBatch[] = [];
   const conversationProjectionCopies = new Map<AgentMessage, AgentMessage[]>();
   const conversationPhaseFacts = new Map<AgentMessage, ReplyPhaseFacts>();
@@ -557,6 +563,7 @@ export async function* runAgentLoopTextTurnRun(
     stopped,
     progressive,
     unexecutedNotice,
+    fallback,
   } = await finalizeTurnReplyAndOutput({
     input,
     state,
@@ -596,6 +603,7 @@ export async function* runAgentLoopTextTurnRun(
     type: 'turn_end',
     output,
     usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
+    ...(fallback ? { fallback } : {}),
   };
   emitTurnEvent(endEvent);
   yield endEvent;

@@ -90,6 +90,37 @@ async function discoverCandidateRoots(projectRoot: string): Promise<{ owner: str
   return roots;
 }
 
+interface PreviewTokenView { readonly id: string; readonly description?: string }
+
+/**
+ * The render context of a previewed component (#1250 `preview-context-missing-use`): the same
+ * shape as the runtime `ComponentContext` (`config`, `has`, `use`, `project`, `signal`,
+ * `requester`), served by the component's `previewServices` stand-ins instead of a running
+ * instance. A token without a stand-in fails with a message that names it and says where to add one.
+ */
+export function createPreviewContext(definition: Pick<ComponentDefinitionView, 'previewServices'>): Readonly<Record<string, unknown>> {
+  const services = new Map<string, unknown>();
+  for (const service of definition.previewServices ?? []) services.set(service.token.id, service.value);
+  const describe = (token: PreviewTokenView) => token.description ? `${token.description}（${token.id}）` : token.id;
+  return Object.freeze({
+    signal: new AbortController().signal,
+    owner: Object.freeze({}),
+    requester: Object.freeze({}),
+    generation: 0,
+    config: Object.freeze({}),
+    has: (token: PreviewTokenView) => services.has(token.id),
+    use: (token: PreviewTokenView) => {
+      if (!services.has(token.id)) {
+        throw new Error(`预览环境没有提供 ${describe(token)}，可在组件的 previewServices 里给一个替身`);
+      }
+      return services.get(token.id);
+    },
+    project: (feature: string) => {
+      throw new Error(`预览环境没有运行中的实例，无法读取 Feature 投影 ${String(feature)}；可在组件的 previewServices 里给依赖的服务一个替身`);
+    },
+  });
+}
+
 async function renderComponentNodeToPreview(
   instance: InstanceCliModule,
   definition: ComponentDefinition<any>,
@@ -99,16 +130,10 @@ async function renderComponentNodeToPreview(
   const renderNested = async (name: string, nestedProps: Record<string, unknown>) => {
     const nested = allDefinitions.get(name);
     if (!nested) throw new Error(`未找到嵌套组件 <${name} />`);
-    return await nested.render(nestedProps as never, {
-      requester: {} as never,
-      signal: new AbortController().signal,
-    } as never);
+    return await nested.render(nestedProps as never, createPreviewContext(nested) as never);
   };
 
-  const rawNode = await definition.render((props ?? {}) as never, {
-    requester: {} as never,
-    signal: new AbortController().signal,
-  } as never);
+  const rawNode = await definition.render((props ?? {}) as never, createPreviewContext(definition) as never);
 
   let segments: readonly any[];
   try {

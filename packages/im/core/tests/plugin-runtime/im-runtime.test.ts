@@ -2,7 +2,7 @@ import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/messag
 import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
-import { getLogger } from '@zhin.js/logger';
+import { addTransport, getLevel, getLogger, removeTransport, setLevel } from '@zhin.js/logger';
 import {
   SnapshotStore,
   Scope,
@@ -3396,6 +3396,7 @@ async function createFixture(
     inboundDeduper?: Pick<InboundDeduper, 'claim'>;
     inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
     messageHandler?: (event: unknown) => unknown;
+    inboundSecret?: ConstructorParameters<typeof ImRuntime>[0] extends infer O ? O extends { inboundSecret?: infer G } ? G : never : never;
   },
 ) {
   const root = rootPluginId();
@@ -3508,6 +3509,7 @@ async function createFixture(
   const im = new ImRuntime({
     inboundClaim: options?.inboundClaim,
     ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
+    ...(options?.inboundSecret ? { inboundSecret: options.inboundSecret } : {}),
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
     // Test transports declare the sender's chat role directly (production resolves it from chat_roles).
@@ -4585,6 +4587,48 @@ describe('IM Runtime inbound origin routing', () => {
     f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
   };
 
+  it.each(['peer_bot', 'member', 'unready'] as const)('revokes a secret in a %s group message it drops, without recording it (ADR 0060 §3.3)', async (kind) => {
+    const discard = vi.fn();
+    const handle = vi.fn();
+    const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+      ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); }, { inboundSecret });
+    if (kind === 'member') commitMembership(f, { isMember: () => true });
+    if (kind === 'unready') commitMembership(f, { isMember: () => false, isRoomReady: () => ({ ready: false, unreadyEndpoints: [] }) });
+    try {
+      await receive(f.im, groupInput(f, kind === 'unready' ? 'human' : 'other-bot', 'claim SECRET'));
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(handle).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+      // Text without the secret is untouched.
+      discard.mockClear();
+      await receive(f.im, groupInput(f, kind === 'unready' ? 'human' : 'other-bot', 'hello'));
+      expect(discard).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it('revokes a secret in a self echo it drops, without recording or routing it (#1289 review)', async () => {
+    const discard = vi.fn();
+    const handle = vi.fn();
+    const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+      ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); },
+      { inboundSecret });
+    try {
+      await expect(receive(f.im, groupInput(f, 'bot-self', 'claim SECRET'))).resolves.toEqual({ matched: false });
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(handle).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+      expect(f.im.messageDiagnostics.list()[0]).toMatchObject({ route: 'self_echo' });
+      discard.mockClear();
+      await receive(f.im, groupInput(f, 'bot-self', 'hello'));
+      expect(discard).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
   it.each(['peer_bot', 'member'] as const)('records %s group messages as history only', async (kind) => {
     const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
     if (kind === 'member') commitMembership(f, { isMember: () => true });
@@ -4746,6 +4790,32 @@ describe('IM Runtime inbound origin routing', () => {
         await receive(f.im, dedupInput(f, a!, undefined));
         await receive(f.im, dedupInput(f, b!, undefined));
         expect(f.route).toHaveBeenCalledTimes(2);
+      } finally { await close(f); }
+    });
+
+    it('revokes a secret in a message it drops on a dedup failure, without recording or routing it (#1289 review)', async () => {
+      const discard = vi.fn();
+      const handle = vi.fn();
+      const inboundSecret = { match: ({ text }: { text: string }) => text.includes('SECRET')
+        ? { name: 'claim', redacted: 'claim ***', handle, discard } : undefined };
+      const f = await twoEndpoints({ inboundDeduper: { claim: () => { throw new Error('boom'); } }, inboundSecret });
+      const published: unknown[] = [];
+      f.im.messageEvents.subscribe((event) => published.push(event));
+      try {
+        const [a] = endpointIds(f);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-secret', 'group', 'alice', 'claim SECRET'))).resolves.toEqual({ matched: false });
+        expect(discard).toHaveBeenCalledTimes(1);
+        expect(handle).not.toHaveBeenCalled();
+        expect(f.route).not.toHaveBeenCalled();
+        expect(await countRecords(f, a!)).toBe(0);
+        // Published only as the redacted text.
+        expect(JSON.stringify(published)).not.toContain('SECRET');
+        expect(JSON.stringify(published)).toContain('claim ***');
+        expect(f.im.messageOutcomes.list({ limit: 1 })[0]).toMatchObject({ outcome: 'dropped_dedup_error' });
+        discard.mockClear();
+        await receive(f.im, dedupInput(f, a!, 'dup-plain', 'group', 'alice', 'hello'));
+        expect(discard).not.toHaveBeenCalled();
+        expect(await countRecords(f, a!)).toBe(1);
       } finally { await close(f); }
     });
 
@@ -5311,6 +5381,40 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('records handler_replied when a middleware replies and stops, filtered_by_policy only for a silent stop (#1250)', async () => {
+    const sent: unknown[] = [];
+    let replies = true;
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundMiddleware: async (input) => { if (replies) await input.$reply('📉 太大了！'); },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '50'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'handler_replied', reason: 'middleware_replied', stage: 'middleware', reply: 'yes' });
+      replies = false;
+      await receive(fixture.im, fixtureInput(fixture, '51'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'filtered_by_policy', reason: 'middleware_stopped', stage: 'middleware', visibility: 'admin' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps filtered_by_policy when the stopping middleware sent nothing and another plugin replied (#1250)', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'policy-gate');
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundOwner: child,
+      inboundMiddleware: async (input) => { await input.$replyFrom(root, 'ack from another plugin'); },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, 'blocked'));
+      expect(sent).toHaveLength(1);
+      expect(latest(fixture)).toMatchObject({ outcome: 'filtered_by_policy', reason: 'middleware_stopped', owner: child });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('settles a throwing command as internal_error with an errorId and still rethrows', async () => {
     const fixture = await createFixture([], [], undefined, undefined, undefined, {
       middleware: false, commandResult: () => { throw new Error('PRIVATE-ERROR token=sk-abcdefghijklmnop'); },
@@ -5359,6 +5463,52 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
         visibility: 'sender', reply: 'no', sceneId: 'group:quiet-group' });
       expect(fixture.im.messageOutcomes.list({ conversation: group })).toHaveLength(1);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps a UserFacingError refusal code as the refused reason (#1250 self-service-unknown-conversation-opaque)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new UserFacingError('模拟身份没有 zhin 角色', { reason: 'simulated-sender' }); },
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(latest(fixture)).toMatchObject({ outcome: 'refused', reason: 'simulated-sender', stage: 'command', reply: 'yes' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+    // A code outside the closed shape is dropped: the generic reason stays.
+    const loose = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new UserFacingError('no', { reason: 'Not A Code!' }); },
+    });
+    try {
+      await receive(loose.im, fixtureInput(loose, '/gh issue list open'));
+      expect(latest(loose)).toMatchObject({ outcome: 'refused', reason: 'user_facing_error' });
+    } finally { await loose.adapters.stop(); await loose.store.close(); }
+  });
+
+  it('logs the first unaddressed group message of a minute at info with its reason (#1250 unaddressed-message-no-record)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    const lines: string[] = [];
+    const transport = { write: (line: string) => { lines.push(line); } };
+    addTransport(transport);
+    const inboundLogger = getLogger('im.inbound');
+    const previousLevel = getLevel(inboundLogger);
+    setLevel('info', inboundLogger, true);
+    try {
+      const privateInput = fixtureInput(fixture, 'x');
+      const group = { ...privateInput.conversation, kind: 'group' as const, id: 'weather-group' };
+      await receive(fixture.im, { ...privateInput, conversation: group, content: '天气 上海' });
+      await receive(fixture.im, { ...privateInput, conversation: group, content: '天气 北京' });
+      expect(fixture.im.messageOutcomes.list({ conversation: group })).toHaveLength(2);
+      expect(fixture.im.messageOutcomes.list({ conversation: group })[0]).toMatchObject({ outcome: 'not_addressed', addressed: false });
+      const logged = lines.filter(line => line.includes('inbound_outcome') && line.includes('weather-group'));
+      // One info line for the minute (the second message is debug only); it names the outcome and the reason.
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toContain('not_addressed');
+      expect(logged[0]).toContain('prefix_mismatch');
+      expect(logged[0]).toContain('first_per_minute');
+    } finally {
+      setLevel(previousLevel, inboundLogger, true);
+      removeTransport(transport);
+      await fixture.adapters.stop(); await fixture.store.close();
+    }
   });
 
   it('records internal_error when the command operation fails to finish (review of #1281)', async () => {

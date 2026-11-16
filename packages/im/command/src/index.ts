@@ -8,7 +8,7 @@ export * from './command-index.js';
 export * from './definition.js';
 export * from './permission-explanation.js';
 /** @public Sender-facing command refusal turned into the command's reply. */
-export { UserFacingError, isUserFacingError, userFacingErrorText } from './user-facing-error.js';
+export { UserFacingError, isUserFacingError, userFacingErrorText, userFacingRefusalReason } from './user-facing-error.js';
 export {
   CONVERSATION_MANAGER_PERMIT,
   canManageConversation,

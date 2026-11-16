@@ -43,6 +43,7 @@ import {
 } from '../index.js';
 import { observeAgentTurnTrace } from '../ingress/ports.js';
 import { createRuntimeProactiveOutbound } from './runtime-factory.js';
+import type { ApprovalPort } from '../../session/approval-port.js';
 
 const logger = getLogger('agent');
 
@@ -59,6 +60,11 @@ export function createAssistantScheduleRuntime(
   assistantRaw: AssistantConfig | undefined,
   trace: AgentTraceRecorder,
   locale: Locale = 'zh-CN',
+  /**
+   * #1250 b33: reviewer-only approval for unattended schedule turns (`execApprovalMode: auto`). Absent:
+   * a call that needs approval is denied in a scheduled run, as before.
+   */
+  unattendedReview?: ApprovalPort,
 ): {
   tools: ReturnType<typeof createScheduleTools>;
   store: ReturnType<typeof createScheduleJobStoreFromConfig>;
@@ -121,7 +127,7 @@ export function createAssistantScheduleRuntime(
     },
   });
   const executor = createTaskExecutor({
-    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
+    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace, unattendedReview),
     config: agent.config,
     dataDir,
     router: notificationRouter,
@@ -240,6 +246,7 @@ function createRuntimeScheduleTurnPort(
   service: AIService,
   projectRoot: string,
   trace: AgentTraceRecorder,
+  unattendedReview?: ApprovalPort,
 ) {
   return Object.freeze({
     execute: async (input: ScheduleTurnExecutionRequest): Promise<TurnOutcome> => {
@@ -280,7 +287,7 @@ function createRuntimeScheduleTurnPort(
           },
         },
         signal: input.signal,
-        ports: { operationEvidence: input.operationEvidence },
+        ports: { operationEvidence: input.operationEvidence, ...(unattendedReview ? { unattendedReview } : {}) },
       };
       return runtime.execute(rootPluginId(), request, {
         binding,

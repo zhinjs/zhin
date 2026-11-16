@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import {
   FIXED_SEGMENTS, PromptCacheProbe, dayKeyOf, defaultUsageTimeZone, isOpaqueProviderId, isUsageTimeZone, num, scanTraces,
-  sessionDisplayNameOf, usageModelDisplayName, type PromptCacheHint, type UsageProviderResolver,
+  sessionDisplayNameOf, shortSessionKey, usageModelDisplayName, type PromptCacheHint, type UsageProviderResolver,
 } from '@zhin.js/gateway/usage';
 import { parseTraceTime } from './trace.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
@@ -198,11 +198,6 @@ export async function buildUsageReport(dir: string, options: UsageReportOptions 
     prompt_cache_hints: cacheProbe.hints() };
 }
 
-/** Hashed session keys stay identifiable without filling the column. */
-function shortKey(key: string): string {
-  const hashed = /^([a-z-]+):v\d+:([0-9a-f]{16,})$/u.exec(key);
-  return hashed ? `${hashed[1]}:${hashed[2]!.slice(0, 8)}` : key;
-}
 
 const pct = (value: number | undefined): string => (value === undefined ? 'n/a' : `${(value * 100).toFixed(1)}%`);
 const dist = (d: Distribution): string => `${d.p50} / ${d.p90} / ${d.max}`;
@@ -224,10 +219,10 @@ export function formatUsageReport(report: UsageReport): string {
         for (const m of d.models) out.push(`| ${m.display_name} | ${m.calls} | ${m.input_tokens} | ${m.output_tokens} |`);
       }
       out.push('', `Top 会话（${d.day}，按输入 token）`, '', '| 会话 | 回合 | 调用 | 输入 tokens |', '|---|---:|---:|---:|');
-      for (const s of d.top_sessions) out.push(`| ${s.display_name ? `${s.display_name}（${shortKey(s.session_key)}）` : s.session_key} | ${s.turns} | ${s.calls} | ${s.input_tokens} |`);
+      for (const s of d.top_sessions) out.push(`| ${s.display_name ? `${s.display_name}（${shortSessionKey(s.session_key)}）` : s.session_key} | ${s.turns} | ${s.calls} | ${s.input_tokens} |`);
     }
     out.push('', `日期按时区 ${report.time_zone} 划分。输入 tokens = 每次模型调用上报的输入之和（含多轮迭代与子 Agent）。`);
-    out.push('', '历史/固定/用户为各回合首次请求的估算占比（固定 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap）；其余段不单列。撞迭代上限 = 出现 last_iteration_nudge 或以 budget_exceeded 结束的回合。');
+    out.push('', '历史/固定/用户为各回合首次请求的估算占比（固定 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + knowledge_index + memory + bootstrap）；其余段不单列。撞迭代上限 = 出现 last_iteration_nudge 或以 budget_exceeded 结束的回合。');
   }
   out.push(...formatPromptCacheHints(report.prompt_cache_hints));
   out.push('', `读取 ${report.files} 个文件、${report.lines} 行${report.malformed_lines > 0 ? `，跳过 ${report.malformed_lines} 行损坏记录` : ''}。`);

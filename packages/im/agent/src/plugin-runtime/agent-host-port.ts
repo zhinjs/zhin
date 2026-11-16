@@ -6,6 +6,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
 import type { ScheduleExecutionHistoryPort } from '../schedule-domain/execution-history-store.js';
 import type { McpConnectionFailure } from '../mcp-client/failure.js';
+import type { HostMcpProbeResult } from './host-mcp-status.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -24,6 +25,12 @@ export interface AgentHostPort {
  */
 export interface AgentHostProtocolPort {
   listBindings(): readonly ResolvedAgentBinding[];
+  /**
+   * Names configured under `ai.agents` (`zhin` included), without names only discovered from
+   * `agents/<name>/` files: the binding names the model runtime keeps sub-agents' purpose keys
+   * apart from (#1250 batch 21). Management views use it to report what the runtime does.
+   */
+  listConfiguredBindingNames?(): readonly string[];
   execute(bindingName: string, request: TurnRequest): Promise<TurnOutcome>;
 }
 
@@ -37,7 +44,16 @@ export interface AgentHostMcpSummary {
 
 /** Read-only projection for Console; no concrete ZhinAgent may escape through it. */
 export interface AgentHostIntrospectionPort {
+  /**
+   * Configured servers (`ai.mcpServers`) with the outcome of their generation clients' connect,
+   * plus servers in the Agent's own registry. Not connected without `lastError`: not connected yet.
+   */
   listMcpServers(): readonly AgentHostMcpSummary[];
+  /**
+   * Connects once to a configured server with a throw-away client and reports the outcome
+   * (#1250 Console "test connection"); `undefined` for a name not in `ai.mcpServers`.
+   */
+  testMcpServer?(name: string): Promise<HostMcpProbeResult | undefined>;
 }
 
 export interface AgentHostConsolePort {

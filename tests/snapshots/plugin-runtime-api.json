@@ -57,6 +57,7 @@
     "export * from './deferred-capability-plan.js';",
     "export * from './full-agent-turn-engine.js';",
     "export * from './host-mcp-projection.js';",
+    "export * from './host-mcp-status.js';",
     "export * from './host-tool-projection.js';",
     "export * from './host/index.js';",
     "export * from './inference/index.js';",
@@ -188,7 +189,7 @@
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
     "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
-    "export{UserFacingError,isUserFacingError,userFacingErrorText}from './user-facing-error.js';",
+    "export{UserFacingError,isUserFacingError,userFacingErrorText,userFacingRefusalReason}from './user-facing-error.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
   ],
@@ -311,6 +312,7 @@
     "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
     "export{importLegacyIamTables,ensureGatewayStoreMarker,isTransientLegacyImportError,LEGACY_IMPORT_FAILURE_KEY,resetGatewayStore,type LegacyImportFailure,inspectLegacyIamImport,LEGACY_IMPORT_KEY,LegacyImportError,legacyImportSettled,readLegacyImportRecord,revertLegacyIamImport,tableChecksum,type LegacyIamSource,type LegacyImportErrorCode,type LegacyImportInspection,type LegacyImportOptions,type LegacyImportRecord,type LegacySourceSummary,type RevertLegacyImportResult,}from './legacy-import.js';",
     "export{installConsoleIam,projectEnvironment,type ConsoleIamInstallation,type InstallConsoleIamOptions}from './install.js';",
+    "export{personalPrincipalKeyHints,personalPrincipalKeysOf}from './personal-principal-keys.js';",
     "export{registerConsoleAuthRoutes}from './routes.js';"
   ],
   "gateway/onboarding": [

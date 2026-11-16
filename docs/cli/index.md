@@ -45,6 +45,8 @@ npx zhin --help        # 查看全部命令
 
 下面按用途分组列出全部命令。
 
+命令输出里的日期时间一律是本机时区的 `2026-11-15 00:15:56`（24 小时制，只有日期时为 `2026-11-15`），中英文界面相同：ISO 顺序在各地都不会读错，也能按文本排序，与 `zhin usage report` 的日期一致。
+
 ## 运行
 
 ### start / stop / restart / status / logs：网关与实例
@@ -155,7 +157,7 @@ zhin console user create <用户名> [--role viewer] [--display-name <显示名>
 zhin console user passwd <用户名> [--password-stdin]
 zhin console user disable <用户名>
 zhin console user enable <用户名>
-zhin console user list
+zhin console user list [--json]
 zhin console migrate [--revert]
 ```
 
@@ -167,7 +169,7 @@ Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
-- **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
+- **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户名、显示名、状态、角色绑定和**用户 id**（`ai.personalPrincipals` 的键写 `user:<用户 id>`），`--json` 输出 `{ users: [{ id, username, displayName, disabled, roles }] }`。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
 - **`init --reset-store`**：`.zhin/gateway.db` 丢失或被替换（项目数据库的标记 `zhin_gateway_store` 指向另一个 store）时 Console 保持关闭；确认放弃原有账号后用它重置（需先 `zhin stop`，会要求确认，`--yes` 跳过），重置记入新的审计日志，然后继续初始化。
 - **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。
 - `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
@@ -310,7 +312,7 @@ zhin migrate inference --sessions-only --mapping <file> --output <file>   # 只�
 zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm 包名>] [--is-official] [--skip-install]
 ```
 
-**这是创建插件的唯一官方入口。** 插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。
+**这是创建插件的唯一官方入口。** 插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。非交互环境（CI、脚本、无 TTY）不会提问，必须同时给出插件名称和 `--type`，否则立即报错退出。普通插件模板的示例命令是 `commands/<name>/index.ts`（`<name>`）和它的子命令 `commands/<name>/echo/[text]/index.ts`（`<name> echo <文本>`）。
 
 - **独立插件（要发布到 npm 的外部插件）**：`npx @zhin.js/cli new my-plugin --standalone`，在当前目录下生成 `./my-plugin/`，不需要事先有 Bot 项目，也不会修改任何 `package.json`。生成物包含 `package.json#zhin` 清单、默认导出 `definePlugin()` 的 `plugin.ts`、约定目录、`tests/`、`README.md`，开箱可 `pnpm test` / `pnpm typecheck` / `pnpm publish`。
 - **项目内本地插件**：在 Bot 项目根执行 `zhin new my-plugin`（不加 `--standalone`），生成到 `plugins/<name>/` 并把它加进根 `package.json` 的 `dependencies`。
@@ -444,6 +446,8 @@ zhin preview --json                    # 输出扫描与渲染结果后退出
 
 启动本地预览工作台：自动扫描项目或插件目录（默认当前目录）的 `components/*` 与 `pages/*`，支持热重载，并可在线修改 Props、调整样式。默认监听 `127.0.0.1:4176`，`--open` 启动后自动打开浏览器。
 
+组件的示例 Props 来自 `previewProps`；组件里 `use(token)` 读取的插件服务来自 `previewServices` 里的替身（见[组件](../authoring/middleware-components.md#预览时给插件服务一个替身previewservices)），没有替身时预览会指出缺的是哪个 token。
+
 ### build：构建插件
 
 ```bash
@@ -558,7 +562,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin start` 启动并启用 `assistant.enabled`。
 
 ```bash
-zhin schedule list [--host <url>]
+zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "早上好，汇报今日日程" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "检查一下 RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
@@ -576,29 +580,34 @@ zhin schedule resume <id>
 | `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
-`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。
+`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。多行内容逐行缩进，超过 2 行时截断；`--json` 输出完整的任务数据。
 
 ### agent：Agent 诊断
 
 需要安装 AI 栈（`@zhin.js/agent` + `zod` + `ai`）。
 
 ```bash
-zhin agent info [--json]
+zhin agent info [--json] [--locale zh-CN|en]
 ```
 
 | 命令 | 作用 |
 | --- | --- |
-| `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
+| `info` | 按来源列出 Agent 能力与命名 Agent（工具、技能、Hook 等）：**项目根目录**的约定目录（`tools/`、`skills/`、`agents/*/tools` …，即应用插件本身）、**本地插件**（`plugins/`）与**已安装的插件**（`node_modules` 中带 `package.json#zhin` 清单的包）。合计行之下给出每个来源的包数、工具数与技能数；`--json` 的 `bySource` 是同样的分组。框架内置工具与 MCP 工具不是项目文件，不在统计内，运行时实际可用的工具数看 `zhin trace` |
+
+输出语言取项目的 `locale`（`zhin.config.yml` 根级，默认中文），`--locale` 可临时指定；帮助文字为中英双语。
 
 ### ai account：引用 Host 环境变量的模型账号 {#ai-account}
 
 ```bash
+zhin ai account list [--json]
 zhin ai account add --service <服务 id／名称／内置类型> --env <变量名> [--name <名称>] [--test]
 zhin ai account rename-env <账号> <原变量名> <新变量名> [--reauthorize]
 zhin ai account test <账号 id>
 ```
 
 只经本机网关控制套接字执行（需先 `zhin start`），不接受 Console 会话或 `ZHIN_CONSOLE_TOKEN`；只发送变量名，不回显值，写入审计。规则与限制见[账号来源与 Host 环境变量](../ai/providers.md#account-sources)。
+
+`list` 列出 Host 模型账号的 id、名称、所属服务、引用的环境变量名（不含值）和状态，`--json` 输出同样的字段；`test`、`rename-env` 需要的是账号 id，不是服务 id（传错时会提示）。
 
 ### trace：查看 Agent 回合
 
@@ -619,7 +628,7 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 
 | 选项 | 作用 |
 | --- | --- |
-| `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数 |
+| `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数。会话显示为与 `zhin usage report` 相同的可读名称加短键（如 `sandbox · 私聊 Developer（personal-session:ab12cd34）`），没有记录来源时显示短键；`--json` 保留完整的 `session_key`，并加上 `session_display_name` |
 | `--sessions` | 每个会话一行：回合数、最近一次时间与状态、累计 token |
 | `--engagements` | 改为读取多 Agent 协作记录（数据库 `engagement_events` 表，需要 SQLite、MySQL 或 PostgreSQL）：配合 `--list` 列出最近的协作，否则显示最近一次或指定协作的参与者、消息跳数、黑板与预算。见[多 Agent 协作与场所](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | 只看这个会话（sessionKey），会自动按列表输出 |
@@ -675,7 +684,7 @@ zhin usage report --session 'icqq:*:group:*' --json
 
 每天还会列出按「服务名 · 模型」合并的模型用量：同一服务经 `services:` 与 `accounts:` 两种 ID 记录的调用合为一行，服务名读自项目数据库里的模型配置；读不到时只显示模型名。会话列优先显示 trace 里记录的会话名（如 `qq · 群 测试群`），括号里是会话键的短形式。输入 tokens 是每次模型调用上报的输入之和（含多轮迭代与子 Agent），和下面基于首次请求估算的段占比不是同一口径。
 
-每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
+每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + knowledge_index + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
 
 **提示缓存提示。** 每次模型调用都会记录请求前缀哈希（system 提示词 + 工具定义，trace 字段 `prefix_hash`）。某个服务最近连续至少 20 次调用、跨至少 3 个会话都没有缓存命中（`cache_read_tokens` 为 0 或未上报），而同一会话相邻请求的前缀有一半以上相同时，报告末尾会提示「该服务可能不支持或未透传 prompt 缓存」，并给出前缀相同的请求比例作为依据。`zhin doctor` 读最近 7 天的 trace 做同样的检查，Console 用量统计（`usage-stats` RPC 的 `promptCacheHints`）也带这条提示。
 

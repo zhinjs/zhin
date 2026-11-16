@@ -28,7 +28,10 @@ import { chatOwnerClaimCodeHash } from './chat-owner-claim.js';
 import { chatRoleMigrationAdapterKinds, type ChatRoleMigrationAdapterKind } from './chat-role-migration.js';
 import type { ChatBindOutcome, ChatPeople } from './chat-people.js';
 import { ChatRoleStorageUnavailableError } from './chat-roles.js';
-import { featureChatActor, featureChatTokens } from './feature-self-service.js';
+import {
+  FeatureChatRefusal, featureChatActorFailureText, featureChatTokens, resolveFeatureChatActor,
+  type FeatureChatActor, type FeatureChatActorFailure,
+} from './feature-self-service.js';
 
 export const CHAT_BIND_CODE_TTL_MS = 10 * 60_000;
 export const CHAT_BIND_MAX_FAILURES = 5;
@@ -203,7 +206,6 @@ const messages = createMessages({
     'zh-CN': '未绑定：这个码来自 Console 账号 {account}，绑定会把聊天角色带给该账号或带到另一个身份上，需要持有全局 iam.manage 的 Console 用户生成绑定码，或由主人在 Console 链接 / 归并。若你不认识这个账号，请忽略并告知主人。',
     en: 'Not bound: the code comes from the Console account {account}; binding would hand chat roles to that account or carry them to another identity. A Console user with global iam.manage must create the code, or the owner links / merges in the Console. If you do not know that account, ignore it and tell the owner.',
   },
-  unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   failed: { 'zh-CN': '绑定失败：{error}', en: 'Binding failed: {error}' },
 });
 
@@ -218,11 +220,11 @@ function consoleAccountText(account: ChatBindRedemption['consoleAccount'], local
 
 /** Runs one `绑定` / `bind` invocation and returns the reply text (normal send chain). */
 export async function executeIdentityBind(
-  input: Readonly<{ code: string | undefined; actor: ReturnType<typeof featureChatActor>; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale }>,
+  input: Readonly<{ code: string | undefined; actor: FeatureChatActor | FeatureChatActorFailure | undefined; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale }>,
   codes: ChatIdentityBindCodes,
 ): Promise<string> {
   const { locale, actor } = input;
-  if (!actor) return messages(locale, 'unknownConversation');
+  if (!actor || typeof actor !== 'object') return identityBindActorFailureText(actor ?? 'no-conversation', locale);
   if (!input.code) return messages(locale, 'usage');
   let redemption: ChatBindRedemption;
   try {
@@ -244,6 +246,11 @@ export async function executeIdentityBind(
   }
 }
 
+/** Why a bind cannot name its sender: a simulated sender gets the bind's own wording (#1250). */
+function identityBindActorFailureText(reason: FeatureChatActorFailure, locale: Locale): string {
+  return reason === 'simulated-sender' ? messages(locale, 'simulated') : featureChatActorFailureText(reason, locale);
+}
+
 /** Root command `bind` (alias `绑定`); installed whenever commands are. */
 export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityBindCodes; snapshots: SnapshotReader }>): RootResourceInstaller {
   return context => {
@@ -253,14 +260,16 @@ export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityB
       alias: ['绑定'], options: {},
       execute: (command: CommandContext) => {
         const lease = options.snapshots.acquire();
-        let actor: ReturnType<typeof featureChatActor>;
+        let resolved: ReturnType<typeof resolveFeatureChatActor>;
         let adapterKind: ChatRoleMigrationAdapterKind;
         try {
-          actor = featureChatActor(lease.value, command.input);
-          adapterKind = actor ? chatRoleMigrationAdapterKinds(lease.value)(actor.identity.adapter) : undefined;
+          resolved = resolveFeatureChatActor(lease.value, command.input);
+          adapterKind = resolved.ok ? chatRoleMigrationAdapterKinds(lease.value)(resolved.actor.identity.adapter) : undefined;
         } finally { lease.release(); }
+        // #1250: a sender that cannot be named is a refusal with its reason, not `command_replied`.
+        if (!resolved.ok) throw new FeatureChatRefusal(identityBindActorFailureText(resolved.reason, command.locale), resolved.reason);
         const first = featureChatTokens(command).find((token): token is string => typeof token === 'string');
-        return executeIdentityBind({ code: first, actor, adapterKind, locale: command.locale }, options.codes);
+        return executeIdentityBind({ code: first, actor: resolved.actor, adapterKind, locale: command.locale }, options.codes);
       },
     }));
   };

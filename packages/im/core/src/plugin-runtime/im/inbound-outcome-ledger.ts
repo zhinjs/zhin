@@ -33,6 +33,12 @@ export const inboundOutcomeSink = Symbol('zhin.im.inbound-outcome-sink');
 export interface InboundOutcomeSink {
   report(candidate: MessageOutcomeCandidate): boolean;
   enter(stage: MessageOutcomeStage): void;
+  /**
+   * True once a reply to this message was delivered (`status: 'sent'`); with `owner`, only a reply
+   * sent by that plugin counts. Lets the framework tell a middleware that answered and then stopped
+   * dispatch from one that dropped the message (#1250).
+   */
+  replied?(owner?: string): boolean;
 }
 
 const MAX_DETAIL_CHARS = 200;
@@ -90,6 +96,8 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
   #best: MessageOutcomeCandidate | undefined;
   readonly #facets: string[] = [];
   #lastStage: MessageOutcomeStage = 'ingress';
+  #replies = 0;
+  readonly #replyOwners = new Set<string>();
   #settled: MessageOutcomeRecord | undefined;
 
   constructor(init: InboundOutcomeLedgerInit) {
@@ -102,6 +110,14 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
   get lastStage(): MessageOutcomeStage { return this.#lastStage; }
   /** Current winning candidate (before settle). */
   get current(): MessageOutcomeCandidate | undefined { return this.#best; }
+
+  /** Records one delivered reply and its author (called by the inbound reply port on `status: 'sent'`). */
+  noteReplyDelivered(owner?: string): void {
+    if (this.#settled) return;
+    this.#replies++;
+    if (owner) this.#replyOwners.add(String(owner));
+  }
+  replied(owner?: string): boolean { return owner === undefined ? this.#replies > 0 : this.#replyOwners.has(String(owner)); }
 
   markAddressed(addressed: boolean): void { if (addressed) this.#addressed = true; }
   linkDiagnostic(id: string | undefined): void { if (id) this.#diagnosticId = id; }
@@ -221,6 +237,14 @@ function stageThrow(stage: MessageOutcomeStage): string {
  */
 export function reportInboundOutcome(message: unknown, candidate: MessageOutcomeCandidate): boolean {
   return inboundOutcomeSinkOf(message)?.report(candidate) ?? false;
+}
+
+/**
+ * Whether a reply to this inbound message has been delivered so far (ADR 0061 §1.1); with `owner`,
+ * only a reply that plugin sent counts. @internal
+ */
+export function inboundOutcomeReplied(message: unknown, owner?: string): boolean {
+  return inboundOutcomeSinkOf(message)?.replied?.(owner) === true;
 }
 
 /** Marks the stage a message is entering, for `unrecorded` diagnosis. @public */

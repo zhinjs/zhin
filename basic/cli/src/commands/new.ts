@@ -45,12 +45,13 @@ export function toCapitalizedName(pluginName: string): string {
 
 export const newCommand = new Command('new')
   .description('创建约定式插件包模板（Plugin Runtime）；独立插件包的官方入口：zhin new <name> --standalone')
+  .addHelpText('after', '\n非交互环境（CI、脚本、无 TTY）必须同时给出插件名称和 --type，例如：\n  zhin new my-plugin --type normal --skip-install\n')
   .argument('[plugin-name]', '插件名称（如: my-plugin，需匹配 /^[a-z][a-z0-9-]*$/）')
   .option('--is-official', '官方插件（包名使用 @zhin.js/ 作用域，仅限本仓库）', false)
   .option('--package-name <name>', 'npm 包名（默认 zhin.js-<插件名>；也可用自己的 scope，如 @me/zhin-plugin-x）')
   .option('--skip-install', '跳过依赖安装（插件目录与 app 根都不运行 pnpm install）', false)
   .option('--standalone', '独立插件：在当前目录下创建 ./<name>/，不依赖也不修改任何 Bot 项目（外部插件作者使用）', false)
-  .option('--type <type>', '插件类型 (normal|service|adapter)')
+  .option('--type <type>', '插件类型 (normal|service|adapter)；非交互环境（CI、脚本、无 TTY）必填，交互终端里未指定时会询问')
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
       let name = pluginName;
@@ -203,7 +204,7 @@ async function createPluginPackage({ pluginDir, pluginName, packageName, options
   await fs.ensureDir(path.join(pluginDir, 'src'));
   await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
   if (kind === 'normal') {
-    await fs.ensureDir(path.join(pluginDir, 'commands', `${pluginName}-echo`));
+    await fs.ensureDir(path.join(pluginDir, 'commands', pluginName, 'echo'));
   }
   if (kind === 'adapter') {
     await fs.ensureDir(path.join(pluginDir, 'adapters'));
@@ -289,7 +290,7 @@ export interface ${capitalizedName}Config {
   readonly echoPrefix?: string;
 }
 
-/** 回显命令的文本格式（commands/${pluginName}-echo/[text] 使用）。 */
+/** 回显命令的文本格式（commands/<plugin>/echo/[text] 使用）。 */
 export function formatEcho(text: string, prefix = '你说：'): string {
   return \`\${prefix}\${text}\`;
 }
@@ -393,11 +394,11 @@ export default defineCommand({
     await fs.outputFile(path.join(pluginDir, 'commands', pluginName, 'index.ts'), commandTs, 'utf8');
 
     const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
-import { formatEcho, type ${capitalizedName}Config } from '../../../src/index.js';
+import { formatEcho, type ${capitalizedName}Config } from '../../../../src/index.js';
 
 /**
- * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
- * 聊天中发送 \`${pluginName}-echo 你好\` 即可触发，params.text 为「你好」。
+ * 子命令 + 动态段：目录 commands/${pluginName}/echo 是 ${pluginName} 的子命令，[text] 声明一个必需参数，类型在 params 中定义。
+ * 聊天中发送 \`${pluginName} echo 你好\` 即可触发，params.text 为「你好」。
  * defineCommand.withConfig<Config>() 先固定 config 类型，params 仍从定义推断（params.text: string）。
  */
 export default defineCommand.withConfig<${capitalizedName}Config>()({
@@ -411,7 +412,7 @@ export default defineCommand.withConfig<${capitalizedName}Config>()({
 });
 `;
     await fs.outputFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'),
+      path.join(pluginDir, 'commands', pluginName, 'echo', '[text]', 'index.ts'),
       echoCommandTs,
       'utf8',
     );
@@ -713,12 +714,12 @@ import { createFakeMessage, runCommand, runPluginSetup } from '@zhin.js/testing'
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}/index.ts';
-import echoCommand from '../commands/${pluginName}-echo/[text]/index.ts';
+import echoCommand from '../commands/${pluginName}/echo/[text]/index.ts';
 
 // source: runCommand first applies the Runtime's convention-path rules, so a directory layout the
 // Runtime would reject (e.g. commands/a/[x]/[...y]) fails here instead of only at startup.
 const mainSource = new URL('../commands/${pluginName}/index.ts', import.meta.url);
-const echoSource = new URL('../commands/${pluginName}-echo/[text]/index.ts', import.meta.url);
+const echoSource = new URL('../commands/${pluginName}/echo/[text]/index.ts', import.meta.url);
 
 describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -743,7 +744,7 @@ describe('${packageName}', () => {
     const fake = await runPluginSetup(plugin);
     const result = await runCommand(fake, echoCommand, {
       source: echoSource,
-      input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
+      input: createFakeMessage({ content: '${pluginName} echo 你好' }),
       args: ['你好'],
       params: { text: '你好' },
     });
@@ -755,7 +756,7 @@ describe('${packageName}', () => {
     const fake = await runPluginSetup(plugin, { config: { echoPrefix: '> ' } });
     const result = await runCommand(fake, echoCommand, {
       source: echoSource,
-      input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
+      input: createFakeMessage({ content: '${pluginName} echo 你好' }),
       args: ['你好'],
       params: { text: '你好' },
     });

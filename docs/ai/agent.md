@@ -139,7 +139,7 @@ ai:
 
 其余工具不发送参数定义，只在系统提示的 `## Deferred tools` 段里列出名称和一句不超过 60 字符的说明，最多 40 个，超出部分提示用 `discover` 检索。模型可以先 `load_tool(name)` 拿到参数定义；直接调用也会自动加载。这份索引只包含本回合有权使用的工具，被策略拿掉的工具（例如没有 shell 权限时的 `bash`）不会出现。
 
-技能采用渐进披露：系统提示只列出技能名称和第一行触发说明（最多 96 字符，最多 40 个），专家 agent 目录同样如此。技能正文在 `load_skill` 之后，或意图匹配自动激活后才进入上下文。
+技能采用渐进披露：系统提示的 `## Available skills` 目录每个技能一行，保留描述的第一句、`Use when …` 句、`Triggers:` 触发词和 SKILL.md frontmatter 的 `keywords`（最多 40 个技能）。整个目录共用约 4000 字符预算（单条最多 320 字符）：超出时先截说明，再截 `Use when`，触发词最后才截。专家 agent 目录只列名称和第一行说明。技能正文在 `load_skill` 之后，或意图匹配自动激活后才进入上下文：按关键词自动激活只用于 Agent 私有技能；公开技能是第三方说明，激活会注入正文并解锁工具，所以只在当前消息命中它的 `keywords` 时，在本条消息的运行时尾部加一句「建议加载技能 X」，是否 `load_skill` 由模型决定。为防关键词堆砌，提示只看每个技能前 12 个关键词、按命中的最长一个计分（不累加），忽略单字、不足 3 个字符的英文词、常见寒暄与虚词，以及超过 32 字符的关键词（超长关键词也不进目录）。
 
 每轮第一次模型请求的上下文开销会按段估算，写进回合追踪的 `context_budget` 字段，`zhin trace last` 会显示：系统提示、工具 schema、按需工具索引、技能目录、专家 agent 目录、已加载技能、记忆、bootstrap、历史消息、本轮输入各占多少 token，以及最大的几个提示段。这是估算值（中日韩字符约 1 字 1 token，其余约 4 字符 1 token），真实用量仍以模型调用记录为准。
 
@@ -209,8 +209,12 @@ ai:
 
 - **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时收窄的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会放大调用方权限。
 - **守恒预算账本**：每个 Engagement 有根预算池（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。每次 `ask` / `delegate` 从父级剩余额度中划拨子配额，子树总消耗绝不超过父级授信。
+- **预算下限**：模型在 `ask` / `delegate` / `follow_up` 里自己写的预算不能低于一次完整回答所需：`modelCalls` 至少 4、`tokens` 至少 32000、`wallMs` 至少 60000（不超过调用方剩余额度的一半，与账本对未写字段的默认分法一致，并行委派时每个都能放下）。更低的值会被抬到下限，工具结果里写明「budget raised to the minimum…」，并记一条 `ai.collaboration` info 日志。`sideEffects` 没有下限（压低它只会限制写操作）；`agent.json` 里作者配置的 `collaboration.budget` 不受影响。
+- **一项委派一条线**：对某个 Agent 的 `delegate` 还没出结果时，再 `ask` 同一个 Agent 会被拒绝（`delegation_in_progress`），提示等结果自动回来，或用 `follow_up`（带那封委派的 `mail_id`）补充指令；`follow_up` 只用来补充或修改指令，不用来催。
+- **少走冤枉路**：子 Agent 的提示要求能直接回答就直接回答，不为用不到的工具搜索；在按需工具目录里连续 3 次搜不到（`discover` / `load_tool` / `load_skill`）会收到一次「换个办法或直接回答」的提示。
 - **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
-- **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后自动冻结 Engagement 并 `escalate`。
+- **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后冻结 Engagement：本次请求的协作到此为止，无法恢复。拦截原因只写进 `ai.collaboration` warn 日志和协作 journal，不发到聊天。主 Agent 自己的协作调用被拒绝时，由它在回复里用一句话交代；否则（例如两个子 Agent 之间触发、主 Agent 没有察觉）在没有主 Agent 回合运行时补发一句「后台任务已停止：这次请求的协作次数到了上限。」
+- **一条请求一条结论**：子 Agent 的内部结局（失败、预算用完、取消、拒绝）回到主 Agent 时：同一委派之后的 `follow_up` 已经完成的，只留在 trace（另一项对同一 Agent 的 ask / delegate 不算）；协作已被拦截停止的，只留在 trace；本次请求的第一项失败会唤醒主 Agent 用一句话交代，之后其他委派的失败不再唤醒主 Agent，只发一句「另有 N 项后台任务没有完成。」消息确实发出后才算已告知。主 Agent 调用 `escalate` 向用户提问时，提问会记入本会话的「已告知」记录，用户下一条回复所在的回合能看到问了什么。
 - **身份来自传输**：消息发送方由框架填写，正文里自称"主人"或"审核员"无效。
 
 ## 会话与会话树
@@ -434,7 +438,7 @@ ai:
 
 - 群成员（`group_member`）只能写自己的 `user` 范围或当前 `session`，不能写 `global` / `platform`；不指定 `scope` 时默认写 `user`。主人和信任成员不指定时仍默认 `global`。
 - 已有的 `user_fact` / `preference` 不能被更低信任级别覆盖，所以群成员改不了主人记下的事实。同级或更高级别写入时以新值为准，旧值进入 `history`。
-- **审批等级（#1250）**：`memory_upsert` 有独立的审批等级，不再一律走普通审批。实时回合里写**发起人自己的 `user` 记忆**直接执行，任何 `execApprovalMode`（包括 `ask`）都不弹审批；`user` 范围的 `scope_key` 永远取自本回合的发起人，模型传的 `scope_key` 等参数一律忽略，所以写不到别人的个人记忆。写 `global` / `platform` / `session`（会话里其他人共享、也可能是别人写的）仍按普通审批（策略名 `memory-scope`）；无人值守回合（定时任务、后台事件）写任何范围都仍需审批；未知 `scope` 直接拒绝。本回合读过外部内容（`web_fetch` 等工具结果、群聊背景）、合流回合或旁听回合里，写自己的 `user` 记忆也要先请发起人确认意图（防止外部内容借模型写入记忆）；发起人不在场（合流、旁听）时无人可问，直接拒绝。`global` / `platform` 记忆只有主人能批，`session` 记忆在管理员自己的私聊里可由管理员本人批准。主人和信任成员不指定 `scope` 时默认写 `global`，因此仍需审批——要记个人偏好请让模型写 `user`（工具说明已提示）。同名的插件工具不享受这一等级。
+- **审批等级（#1250）**：`memory_upsert` 有独立的审批等级，不再一律走普通审批。实时回合里写**发起人自己的 `user` 记忆**直接执行，任何 `execApprovalMode`（包括 `ask`）都不弹审批；`user` 范围的 `scope_key` 永远取自本回合的发起人，模型传的 `scope_key` 等参数一律忽略，所以写不到别人的个人记忆。写 `global` / `platform` / `session`（会话里其他人共享、也可能是别人写的）仍按普通审批（策略名 `memory-scope`）；无人值守回合（定时任务、后台事件）写任何范围都仍需审批（`auto` 下由审核 Agent 判断，其他模式直接拒绝）；未知 `scope` 直接拒绝。本回合读过外部内容（`web_fetch` 等工具结果、群聊背景）、合流回合或旁听回合里，写自己的 `user` 记忆也要先请发起人确认意图（防止外部内容借模型写入记忆）；发起人不在场（合流、旁听）时无人可问，直接拒绝。`global` / `platform` 记忆只有主人能批，`session` 记忆在管理员自己的私聊里可由管理员本人批准。主人和信任成员不指定 `scope` 时默认写 `global`，因此仍需审批——要记个人偏好请让模型写 `user`（工具说明已提示）。同名的插件工具不享受这一等级。
 - `task_state` 一定会过期：默认 24 小时，`ttl_hours` 最多 168 小时；可用 `task_id` 绑定任务，宿主通过 `SemanticMemoryRuntime` 的 `isTaskActive` 告知任务已结束时，这条状态不再被检索到。
 - 文件记忆（`data/memory/**/MEMORY.md`）保持不变，仍可直接阅读；`renderMemoryEntriesMarkdown()` 可把结构化记忆导出为 Markdown。
 
@@ -611,6 +615,15 @@ assistant:
   defaults:
     notifyOnFailure: false
 ```
+
+### 定时任务里的工具与审批（#1250）
+
+- **选工具**：任务有执行计划（`schedule_preview` 预演后保存，或 `schedule_add` 传 `tools` / `skills`）时按计划给工具；没有计划，或计划里工具和技能都为空时，按提示词自动挑选（trace 里 `capability_resolution` 的 `resolvedBy: affinity`，空计划另带 `warnings: ["empty_execution_plan"]`）。一个工具都没选到时带 `no_tools` 警告。`schedule_add` 收到空计划不会拒绝，但会在结果里提示先预演。
+- **审批**：定时任务是无人值守的回合，没有人能当场确认。`execApprovalMode: auto`（默认）时，需要审批的工具交给审核 Agent 判断：批准才执行；拒绝、要求转问人、超时或出错都按拒绝处理，不会去问任何人。判断结果写进 trace（`unattended_review`）。`ask` / `bypass` 下仍直接拒绝。必须人工确认的工具（`requiresApproval: 'human'`）、危险工具硬闸和「读取外部内容后的高危动作」确认在无人值守时一律拒绝。
+- **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 保持默认的 `external_content`（不设为 `off`），无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
+- **预演**：`schedule_preview` 的结果列出到点时会被拒的工具（`unattended_approval.denied`）和要交给审核 Agent 的工具（`unattended_approval.reviewed`）。只是提示，实际以每次调用的判断为准。
+- **任务状态**：一次运行用了兜底文案、没有任何工具结果且回复为空，或有工具被拒时，记为 `degraded`（未完成），`last_error` 写明原因和 `zhin trace <回合 id>`；`zhin watch` 显示 `last:degraded` 和原因，`zhin schedule list` 显示「上次」一行。开启 `notifyOnFailure` 时会发「[任务未完成]」提醒；如果送达的回复本身就是兜底说明，不再重复提醒。
+- **兜底文案**：模型没有给出回复时，说明按实际原因区分（没有可用工具 / 哪个工具被拒 / 模型空回复）。定时任务的说明带任务名、任务 id 和 `zhin trace <回合 id>`，不会建议发 `/reset`。
 
 `SOUL.md` 用第一人称描述性格、价值观和表达方式，不再使用昵称占位符。当前账号的昵称、
 性别、年龄等资料由 Endpoint 单独提供；配置仅补充平台无法提供的字段。这样同一份人设

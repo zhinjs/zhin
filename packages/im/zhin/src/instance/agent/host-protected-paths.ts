@@ -15,6 +15,13 @@ import { resolvePluginLifecycleFile } from '@zhin.js/runtime';
 export async function resolveHostProtectedPaths(
   projectRoot: string,
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  options: Readonly<{
+    /**
+     * `ai.knowledge.baseDir` (#1250 b27): its file names and headings are injected into the system
+     * prompt as owner content, so writing there is a `self` operation (fresh human approval).
+     */
+    knowledgeDir?: string;
+  }> = {},
 ): Promise<HostProtectedPaths> {
   const selfFiles: string[] = [];
   try {
@@ -35,6 +42,7 @@ export async function resolveHostProtectedPaths(
     projectRoot,
     selfFiles,
     denyFiles: [lifecycleFile],
+    ...(options.knowledgeDir?.trim() ? { selfDirs: [options.knowledgeDir.trim()] } : {}),
     ...(endpoint ? { controlEndpoints: [endpoint] } : {}),
   });
 }

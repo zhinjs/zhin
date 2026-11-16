@@ -50,7 +50,7 @@ export function buildDiceView(
     narrative: lines.join('\n'),
     choices,
     terminal,
-    fallbackHint: messages(session.locale ?? undefined, 'text15'),
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
@@ -71,5 +71,4 @@ const messages = createMessages({
   text12: { 'zh-CN': "🔄 再来一局", en: "🔄 Play again" },
   text13: { 'zh-CN': "🎲 掷骰", en: "🎲 Roll" },
   text14: { 'zh-CN': "🏳️ 放弃", en: "🏳️ Quit" },
-  text15: { 'zh-CN': "回复 1 掷骰 · 2 放弃", en: "Reply 1 to roll · 2 to quit" },
 });

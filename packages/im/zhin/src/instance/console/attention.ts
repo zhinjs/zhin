@@ -8,10 +8,12 @@
  * | `endpoint.offline` | Endpoint registry (offline, not stopped, no login task; or start `failed` / `retrying`, with `lastError`) | `endpoint.view` on that account |
  * | `endpoint.config-drift` | `zhin.config.yml` `endpoints` vs persisted accounts (#1250) | `endpoint.view` on that adapter instance |
  * | `plugin.error` / `plugin.config` | plugin management `inspect` of declared plugins | `feature.view` |
+ * | `command.conflict` | Command index routes skipped because another registration holds them (#1250) | `feature.view` |
  * | `plugin.dependencies` | one project-wide dependency graph check per read (one item, not one per plugin) | `feature.view` |
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
- * | `mcp.disconnected` | Agent MCP servers (configured + connected, with the last connect failure) | `status.view` |
+ * | `mcp.disconnected` | Agent MCP servers whose last connect failed (not those still waiting for their first connect) | `status.view` |
+ * | `speech.unavailable` | Speech Host: a configured speech feature whose external command cannot run (`edge-tts`, #1250) | `status.view` |
  * | `inference.account` | Host model accounts: reauthorize / disconnected / uncertain / preparation failed (#1270) | `agent.view` |
  * | `config.ineffective` | `purposes.agents.<key>` choices the runtime ignores (#1270) | `agent.view` |
  * | `logs.errors` | SystemLog error rows | `status.view` |
@@ -42,6 +44,7 @@ import {
   type ConsoleAttentionKind,
   type ConsoleAttentionList,
   type ConsoleAttentionReason,
+  type ConsoleAttentionPersonLink,
   type ConsoleAttentionSeverity,
   type ConsoleAttentionSubject,
   type ConsoleConfigSource,
@@ -84,6 +87,12 @@ export interface AttentionEndpoint {
   readonly transportState: string;
   /** An unfinished login flow of this account waits for a person (ADR 0058). */
   readonly pendingLogin?: boolean;
+  /** Started and accepting events (the Adapter admitted it), whatever its transport reports (#1250). */
+  readonly admitted?: boolean;
+  /** Start attempts of the current background supervision (0 = none pending). */
+  readonly startAttempt?: number;
+  /** Epoch milliseconds of the next automatic start retry. */
+  readonly nextRetryAt?: number;
   /** Classified, redacted reason of the last failed start (#1250). */
   readonly lastError?: Readonly<{ category: string; message: string; at?: number;
     /** From the runtime failure journal: observed before the last restart (#1270). */
@@ -175,6 +184,22 @@ export interface AttentionMcpServer {
   readonly restored?: boolean;
 }
 
+/**
+ * A configured speech feature that cannot run (#1250 第 29 批): its external command is not
+ * executable. Mirrors `SpeechDependencyIssue` of the Speech Host.
+ */
+export interface AttentionSpeechIssue {
+  readonly feature: 'tts' | 'stt';
+  readonly provider: string;
+  /** Configuration path of the setting to fix (`speech.tts.edgeTtsCommand`). */
+  readonly configPath: string;
+  /** The command as configured. */
+  readonly command: string;
+  readonly reason: 'not-found' | 'not-executable' | 'has-arguments' | 'timeout';
+  /** When the check ran (ms). */
+  readonly at?: number;
+}
+
 /** A Host model account that needs an operator (#1270). */
 export interface AttentionInferenceAccount {
   readonly accountId: string;
@@ -194,6 +219,32 @@ export interface AttentionIneffectiveConfig {
   readonly reason: 'binding-name' | 'ambiguous' | 'no-target';
   /** Sub-agents (qualified names) the setting was meant for. */
   readonly agents?: readonly string[];
+}
+
+/** One side of a command route conflict (#1250); mirrors `CommandRouteClaimant` of `@zhin.js/command`. */
+export interface AttentionCommandClaimant {
+  /** Plugin instance key. */
+  readonly plugin: string;
+  /** Full plugin id (owner): instance keys can repeat under different parent plugins. */
+  readonly owner: string;
+  /** Command display name. */
+  readonly command: string;
+  /** Plugin-local path, as `disabledCommands` takes it. */
+  readonly localPath: string;
+  readonly kind: 'command' | 'alias' | 'shortcut';
+  /** Alias or shortcut text. */
+  readonly entry?: string;
+  /** The project's Root plugin: shown as such, linked to the plugin list (it has no plugin page). */
+  readonly root?: true;
+}
+
+/** A command route two registrations claim: `skipped` lost it, `kept` holds it (#1250). */
+export interface AttentionCommandConflict {
+  readonly route: string;
+  readonly skipped: AttentionCommandClaimant;
+  readonly kept: AttentionCommandClaimant;
+  /** A later plugin's command took an earlier plugin's alias / shortcut: `danger`. */
+  readonly takenByLater?: true;
 }
 
 /** Error-log items only count recent errors, so an old error does not keep the inbox lit. */
@@ -234,10 +285,50 @@ export interface AttentionChatRoles {
    */
   readonly personal?: {
     readonly at: number;
-    readonly entries: readonly { readonly consoleUserId: string; readonly adapter: string; readonly userId: string }[];
+    readonly entries: readonly AttentionPersonalLink[];
   };
   /** `ai.personalPrincipals` links waiting for confirmation (ADR 0060 §4.1, security review). */
-  readonly personalPending?: readonly { readonly id: string; readonly consoleUserId: string; readonly adapter: string; readonly userId: string; readonly at: number }[];
+  readonly personalPending?: readonly (AttentionPersonalLink & { readonly id: string; readonly at: number })[];
+}
+
+/** One `ai.personalPrincipals` link: a Console user ↔ a chat identity on one account (#1250). */
+export interface AttentionPersonalLink {
+  readonly consoleUserId: string;
+  readonly adapter: string;
+  /** The account the link is for, when the configuration names one. */
+  readonly endpoint?: string;
+  readonly userId: string;
+}
+
+/**
+ * `尾号 1234`: a platform id shown on the home page keeps only its last four characters (#1250
+ * `principal-link-attention-ids`: the page is screenshotted). Ids of four characters or fewer are shown as they are.
+ */
+export function maskAttentionPlatformId(id: string, locale: Locale = 'zh-CN'): string {
+  const chars = [...id];
+  if (chars.length <= 4) return id;
+  const tail = chars.slice(-4).join('');
+  return locale === 'en' ? `…${tail}` : `尾号 ${tail}`;
+}
+
+/** Links grouped by Console user (first appearance order), each identity once per (adapter, endpoint, userId). */
+export function groupAttentionPersonalLinks(entries: readonly AttentionPersonalLink[]): readonly {
+  readonly consoleUserId: string;
+  readonly identities: readonly Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>[];
+}[] {
+  const people = new Map<string, Map<string, Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>>>();
+  for (const entry of entries) {
+    const person = people.get(entry.consoleUserId) ?? new Map();
+    people.set(entry.consoleUserId, person);
+    const key = JSON.stringify([entry.adapter, entry.endpoint ?? null, entry.userId]);
+    if (!person.has(key)) person.set(key, { adapter: entry.adapter, ...(entry.endpoint ? { endpoint: entry.endpoint } : {}), userId: entry.userId });
+  }
+  return [...people].map(([consoleUserId, identities]) => ({ consoleUserId, identities: [...identities.values()] }));
+}
+
+/** Distinct (adapter, endpoint, userId) among `entries` (#1250: the count matches what is listed). */
+export function countAttentionPersonalLinks(entries: readonly AttentionPersonalLink[]): number {
+  return new Set(entries.map(entry => JSON.stringify([entry.adapter, entry.endpoint ?? null, entry.userId]))).size;
 }
 
 /** Every source is optional and only read when the caller may view something it reports. */
@@ -246,10 +337,14 @@ export interface AttentionSources {
   readonly endpoints?: () => readonly AttentionEndpoint[] | Promise<readonly AttentionEndpoint[]>;
   readonly endpointConfigDrift?: () => Promise<readonly AttentionEndpointDrift[]>;
   readonly plugins?: () => Promise<AttentionPluginsRead>;
+  /** Command routes skipped because another registration holds them (#1250); read live. */
+  readonly commandConflicts?: () => readonly AttentionCommandConflict[];
   readonly configuration?: AttentionConfiguration;
   /** `undefined` when the Agent (and its queue) is not running. */
   readonly toolApprovals?: () => readonly AttentionToolApproval[] | undefined;
   readonly mcpServers?: () => readonly AttentionMcpServer[];
+  /** Speech features whose external command cannot run (#1250 第 29 批); absent without a Speech Host. */
+  readonly speech?: () => readonly AttentionSpeechIssue[];
   /** `undefined` when the persistent scheduler (Agent assistant) is not running. */
   readonly unschedulableJobs?: () => readonly AttentionUnschedulableJob[] | undefined;
   /** `null` when the log store is not available. */
@@ -276,7 +371,7 @@ export interface AttentionSources {
 export type AttentionAllows = (permission: string, target?: ConsoleScopeTarget) => boolean;
 
 /** Source names, as reported in `unavailable`. */
-export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'config' | 'tool-approvals' | 'mcp' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
+export type AttentionSourceName = 'login-assist' | 'endpoints' | 'endpoint-config' | 'plugins' | 'commands' | 'config' | 'tool-approvals' | 'mcp' | 'speech' | 'logs' | 'schedule' | 'chat-roles' | 'inference' | 'agent-config';
 
 // ---------------------------------------------------------------- account addresses
 
@@ -486,6 +581,15 @@ const messages = createMessages({
   'login.step.other': { 'zh-CN': '登录步骤', en: 'sign-in' },
   'endpoint.title': { 'zh-CN': '{account} 离线', en: '{account} is offline' },
   'endpoint.detail': { 'zh-CN': '连接状态：{state}。检查凭据、网络和适配器日志，或在「接入」里测试连接。', en: 'Connection: {state}. Check credentials, network and adapter logs, or test the connection under Connection.' },
+  // #1250 (`console-offline-no-reason`): no transport state is not "offline".
+  'endpoint.unreported.title': { 'zh-CN': '{account} 未上报连接状态', en: '{account} reports no connection state' },
+  'endpoint.unreported.detail': {
+    'zh-CN': '账号已启动，但适配器没有上报连接状态，所以无法判断它是否在线。常见原因：适配器按 Webhook 或轮询收消息、不维护长连接；适配器版本较旧，还不支持上报连接状态；或账号刚启动、尚未完成首次连接。检查方法：在「接入」里测试连接，或给机器人发一条消息，看运行日志里有没有这条消息的 receive / inbound_outcome 记录。',
+    en: 'The account is started, but its adapter reports no connection state, so whether it is online cannot be told. Common causes: the adapter receives through webhooks or polling and keeps no connection; an older adapter version does not report connection state yet; or the account has just started and not connected yet. To check: test the connection under Connection, or message the bot and look for its receive / inbound_outcome lines in the run log.',
+  },
+  'endpoint.retry': { 'zh-CN': '已自动重试 {count} 次，下次重试：{at}。', en: 'Retried {count} times automatically; next retry: {at}.' },
+  'endpoint.retryNow': { 'zh-CN': '已自动重试 {count} 次。', en: 'Retried {count} times automatically.' },
+  'endpoint.failedAt': { 'zh-CN': '失败时间：{at}。', en: 'Failed at {at}.' },
   'endpoint.state.idle': { 'zh-CN': '未启动', en: 'not started' },
   'endpoint.state.connecting': { 'zh-CN': '连接中', en: 'connecting' },
   'endpoint.state.open': { 'zh-CN': '已连接', en: 'connected' },
@@ -511,6 +615,19 @@ const messages = createMessages({
   'plugin.config.title': { 'zh-CN': '插件 {plugin} 的配置需要修正', en: 'Configuration of plugin {plugin} needs fixing' },
   'plugin.missingEnv': { 'zh-CN': '未设置的环境变量：{names}', en: 'Unset environment variables: {names}' },
   'plugin.action': { 'zh-CN': '查看插件', en: 'Open plugin' },
+  'command.title.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」与插件 {other} 重名，没有注册', en: 'Command "{command}" of plugin {plugin} clashes with plugin {other} and was not registered' },
+  'command.title.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」已被占用，已跳过该别名', en: 'Alias "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.title.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」已被占用，已跳过', en: 'Shortcut "{entry}" of command "{command}" (plugin {plugin}) is taken and was skipped' },
+  'command.holder.command': { 'zh-CN': '插件 {plugin} 的命令「{command}」', en: 'command "{command}" of plugin {plugin}' },
+  'command.holder.alias': { 'zh-CN': '插件 {plugin} 的命令「{command}」的别名「{entry}」', en: 'alias "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.holder.shortcut': { 'zh-CN': '插件 {plugin} 的命令「{command}」的快捷方式「{entry}」', en: 'shortcut "{entry}" of command "{command}" (plugin {plugin})' },
+  'command.detail.command': { 'zh-CN': '「{route}」已由{holder}使用，先注册的保留，{plugin} 的这条命令（连同它的别名）没有注册。', en: '"{route}" is already used by {holder}; the earlier registration keeps it, so this command of {plugin} (and its aliases) is not registered.' },
+  'command.detail.entry': { 'zh-CN': '「{route}」已由{holder}使用，只跳过了这个{what}，命令本身照常可用。', en: '"{route}" is already used by {holder}; only this {what} was skipped, the command itself still works.' },
+  'command.what.alias': { 'zh-CN': '别名', en: 'alias' },
+  'command.what.shortcut': { 'zh-CN': '快捷方式', en: 'shortcut' },
+  'command.advice': { 'zh-CN': '建议让其中一个插件改名（或给 {plugin} 配置 commandNamespace），或在配置里禁用其中一条：{plugin} 的 disabledCommands: [{path}]，或 {other} 的 disabledCommands: [{otherPath}]；也可以停用其中一个插件。', en: 'Rename one of them (or give {plugin} a commandNamespace), or disable one in the configuration: disabledCommands: [{path}] on {plugin}, or disabledCommands: [{otherPath}] on {other}; or disable one of the plugins.' },
+  'command.takenByLater': { 'zh-CN': '注意：「{entry}」原来由 {plugin} 处理，现在改由后加载的 {other} 的命令处理，用户熟悉的指令已经换了处理方。', en: 'Note: "{entry}" used to run {plugin}; it now runs a command of {other}, which loads later, so users get a different command for text they know.' },
+  'command.rootPlugin': { 'zh-CN': '项目根插件', en: 'the project root plugin' },
   'config.invalid.title': { 'zh-CN': '配置文件无法读取', en: 'The configuration file cannot be read' },
   'config.invalid.detail': { 'zh-CN': '{where}：{kind}。修正文件后重新读取。', en: '{where}: {kind}. Fix the file and reload.' },
   'config.invalid.file': { 'zh-CN': '配置文件', en: 'Configuration file' },
@@ -537,7 +654,7 @@ const messages = createMessages({
   'approval.session.private': { 'zh-CN': '{account} 的私聊 {scene}', en: 'a private chat ({scene}) on {account}' },
   'approval.session.other': { 'zh-CN': '一个会话', en: 'a conversation' },
   'approval.action': { 'zh-CN': '去审批', en: 'Review' },
-  'mcp.title': { 'zh-CN': 'MCP 服务 {server} 未连接', en: 'MCP server {server} is not connected' },
+  'mcp.title': { 'zh-CN': 'MCP 服务 {server} 连接失败', en: 'MCP server {server} failed to connect' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
   'mcp.reason': { 'zh-CN': '最近一次连接失败（{category}）：{message}', en: 'Last connect failed ({category}): {message}' },
   'restored': { 'zh-CN': '（重启前记录）', en: ' (recorded before the restart)' },
@@ -561,6 +678,13 @@ const messages = createMessages({
   'ineffective.detail.no-target': { 'zh-CN': '没有 Agent 绑定或子 Agent 叫这个名字，这个模型选择不会被使用。请改为子 Agent 的完整名称（插件名__Agent 名），或删除它。', en: 'No Agent binding or sub-agent has this name, so this model choice is never used. Use a sub-agent qualified name (plugin__agent) or remove it.' },
   'ineffective.action': { 'zh-CN': '打开模型用途', en: 'Open model purposes' },
   'mcp.action': { 'zh-CN': '查看 MCP', en: 'Open MCP' },
+  'speech.title.tts': { 'zh-CN': '语音合成（{provider}）不可用', en: 'Speech synthesis ({provider}) is unavailable' },
+  'speech.title.stt': { 'zh-CN': '语音识别（{provider}）不可用', en: 'Speech recognition ({provider}) is unavailable' },
+  'speech.detail.not-found': { 'zh-CN': '找不到命令「{command}」（{path}），voice_tts 无法合成语音。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 {path} 改为可执行文件的绝对路径：launchd / systemd 等托管环境的 PATH 通常不含 ~/.local/bin。也可以改用 openai / azure / custom TTS。', en: 'Command "{command}" ({path}) was not found, so voice_tts cannot synthesize speech. Install edge-tts (pip install edge-tts) where the bot runs and set {path} to the absolute path of the executable: under launchd / systemd the PATH usually lacks ~/.local/bin. Or switch to the openai / azure / custom TTS provider.' },
+  'speech.detail.not-executable': { 'zh-CN': '命令「{command}」（{path}）存在但不能直接执行（没有执行权限；Windows 上 .cmd / .bat 不能直接运行，需指向 .exe），voice_tts 无法合成语音。请给它加上执行权限，或把 {path} 改为可执行文件的绝对路径。', en: 'Command "{command}" ({path}) exists but cannot be started directly (no execute permission; on Windows a .cmd / .bat cannot be started, point to the .exe), so voice_tts cannot synthesize speech. Make it executable or point {path} to the executable.' },
+  'speech.detail.has-arguments': { 'zh-CN': '{path} 填的是「{command}」：这里只能填可执行文件路径，不支持带参数（例如 `uvx edge-tts`），voice_tts 无法合成语音。请填 edge-tts 可执行文件的绝对路径（pip install edge-tts 后用 command -v edge-tts 查看）。', en: '{path} is set to "{command}": it takes the path of an executable only, without arguments (e.g. not `uvx edge-tts`), so voice_tts cannot synthesize speech. Set it to the absolute path of the edge-tts executable (see command -v edge-tts after pip install edge-tts).' },
+  'speech.detail.timeout': { 'zh-CN': '启动时检查命令「{command}」（{path}）超时，无法确认 voice_tts 能否合成语音。请确认它已安装且 {path} 是可执行文件的绝对路径。', en: 'Checking command "{command}" ({path}) at startup timed out, so voice_tts may not work. Make sure it is installed and {path} is the absolute path of the executable.' },
+  'speech.action': { 'zh-CN': '打开配置文件', en: 'Open configuration' },
   'logs.title': { 'zh-CN': '最近 {hours} 小时日志里有 {count} 条错误', en: 'Errors in the logs (last {hours} h): {count}' },
   'logs.detail': { 'zh-CN': '只统计最近 {hours} 小时的错误；更早的错误不再提醒，仍可在错误日志里查看。', en: 'Counts errors from the last {hours} hours only; older errors no longer raise this item and stay in the error log.' },
   'logs.action': { 'zh-CN': '打开错误日志', en: 'Open error logs' },
@@ -575,8 +699,8 @@ const messages = createMessages({
     en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
   },
   'roles.noOwner.claim': {
-    'zh-CN': '也可以私聊机器人发送「认领 <码>」，认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
-    en: 'Or send 「claim <code>」 to the bot in a private chat; zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
+    'zh-CN': '也可以在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀），认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
+    en: 'Or send 「claim <code>」 to the bot in a private chat (no command prefix needed); zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
   },
   'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
   'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
@@ -586,8 +710,8 @@ const messages = createMessages({
     en: 'An account-level owner is not the host owner; with no global owner yet, you may promote one of them to global owner under Chat roles.',
   },
   'roles.imported.personalLine': {
-    'zh-CN': 'ai.personalPrincipals：Console 用户 {user} ↔ {identity}（只链接，不授予角色）',
-    en: 'ai.personalPrincipals: Console user {user} ↔ {identity} (linked only, no role)',
+    'zh-CN': 'ai.personalPrincipals：{user} 已链接 {count} 个聊天身份：{identities}（只链接，不授予角色）',
+    en: 'ai.personalPrincipals: {user} is linked to {count} chat identities: {identities} (linked only, no role)',
   },
   'roles.imported.promoteMe': {
     'zh-CN': '其中链接到你的 Console 账号的人还没有角色，而这里还没有全局 owner：是否同时把这个人设为全局 owner？请在「我的聊天身份」中确认。',
@@ -596,9 +720,13 @@ const messages = createMessages({
   'roles.imported.promoteMeAction': { 'zh-CN': '设为全局 owner…', en: 'Make global owner…' },
   'roles.pending.title': { 'zh-CN': '配置中有 {count} 条人员名单或身份链接等待确认', en: '{count} people-list or identity-link entries from the configuration wait for review' },
   'roles.pending.personalLine': {
-    'zh-CN': 'Console 用户 {user} ↔ {identity}',
-    en: 'Console user {user} ↔ {identity}',
+    'zh-CN': '{user} 将链接 {count} 个聊天身份：{identities}',
+    en: '{user} would be linked to {count} chat identities: {identities}',
   },
+  'roles.link.user': { 'zh-CN': 'Console 用户 #{id}', en: 'Console user #{id}' },
+  'roles.link.viewer': { 'zh-CN': '你（{name}）', en: 'you ({name})' },
+  'roles.link.viewerUnnamed': { 'zh-CN': '你', en: 'you' },
+  'roles.link.identity': { 'zh-CN': '{account}（{id}）', en: '{account} ({id})' },
   'roles.pending.personalDetail': {
     'zh-CN': 'ai.personalPrincipals 中新的或已修改的链接：{entries}。链接不授予角色，但会让该 Console 账号以这个人发言（Sandbox），因此不会自动生效；逐条「导入」或「忽略」。',
     en: 'New or changed ai.personalPrincipals links: {entries}. A link grants no role but lets that Console account speak as the person (Sandbox), so it never applies by itself; import or ignore each.',
@@ -709,6 +837,8 @@ export interface CollectAttentionOptions {
   readonly warnings?: AttentionWarnings;
   /** The signed-in Console user (`user:<id>` without the prefix); items about the viewer's own link use it. */
   readonly viewerUserId?: string;
+  /** The viewer's Console display name (forwarded principal), shown for links to the viewer's own account. */
+  readonly viewerName?: string;
 }
 
 /** Inference preparation reasons that a retry may fix. */
@@ -746,6 +876,8 @@ interface AttentionDraft {
   readonly visible?: boolean;
   /** Structured reason (#1270). */
   readonly reason?: ConsoleAttentionReason;
+  /** People a chat-roles item is about (#1250); not part of the id or the revision. */
+  readonly links?: readonly ConsoleAttentionPersonLink[];
 }
 
 interface ConfigRead {
@@ -813,6 +945,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         action: Object.freeze({ ...draft.action }),
         source: name,
         ...(draft.reason ? { reason: Object.freeze({ ...draft.reason }) } : {}),
+        ...(draft.links?.length ? { links: Object.freeze(draft.links.map(link => Object.freeze({ ...link }))) } : {}),
       }));
     }
     observations.settle(name, present);
@@ -864,17 +997,44 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       return rows.filter(row => !row.connected
         && (START_FAILED_PHASES.has(row.phase) || (row.phase === 'offline' && row.transportState !== 'stopped'))
         && !row.pendingLogin && !waiting.has(accountKey(row.adapter, row.name))).map((row): AttentionDraft => {
+        const account = `${row.adapter} / ${row.name}`;
+        const gap = locale === 'en' ? ' ' : '';
+        // #1250 (`console-offline-no-reason`): an admitted account whose adapter reports no transport
+        // state and that has no failure is "not reported", never "offline"; title and detail agree.
+        const unreported = !TRANSPORT_STATES.has(row.transportState) && !row.lastError && !START_FAILED_PHASES.has(row.phase) && row.admitted !== false;
+        if (unreported) {
+          return {
+            kind: 'endpoint.offline',
+            severity: 'info',
+            subject: { adapter: row.adapter, endpointKey: row.name },
+            // The revision input stays what it was before #1250 split "unreported" from "offline",
+            // so an item a viewer dismissed earlier stays dismissed; "not reported" is display only.
+            state: { transportState: row.transportState },
+            title: t('endpoint.unreported.title', { account }),
+            detail: t('endpoint.unreported.detail'),
+            reason: { category: 'state', code: 'state-unreported', message: t('endpoint.unreported.title', { account }) },
+            action: { label: t('endpoint.action'), path: ATTENTION_PATHS.endpointAccess(row.adapter, row.name) },
+            visible: allowsEndpointAccount(allows, P.ENDPOINT_VIEW, row),
+          };
+        }
         const detail = t('endpoint.detail', { state: t(`endpoint.state.${TRANSPORT_STATES.has(row.transportState) ? row.transportState as 'idle' : 'unknown'}`) });
+        const when = (value: number) => new Date(value).toISOString();
+        const retries = row.startAttempt && row.startAttempt > 0
+          ? row.nextRetryAt !== undefined ? t('endpoint.retry', { count: row.startAttempt, at: when(row.nextRetryAt) }) : t('endpoint.retryNow', { count: row.startAttempt })
+          : '';
+        const failedAt = row.lastError?.at !== undefined ? t('endpoint.failedAt', { at: when(row.lastError.at) }) : '';
+        const facts = [failedAt, retries].filter(Boolean).join(gap);
         return {
           kind: 'endpoint.offline',
           severity: 'warning',
           subject: { adapter: row.adapter, endpointKey: row.name },
           state: { transportState: row.transportState, ...(START_FAILED_PHASES.has(row.phase) ? { phase: row.phase } : {}) },
-          title: t('endpoint.title', { account: `${row.adapter} / ${row.name}` }),
-          // #1250: the classified, redacted reason of the last failed start, when there is one.
+          title: t('endpoint.title', { account }),
+          // #1250: the classified, redacted reason of the last failed start, when there is one, with
+          // when it failed and the automatic retries.
           detail: row.lastError
-            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}${row.lastError.restored ? t('restored') : ''}`
-            : detail,
+            ? `${detail} ${t('endpoint.reason', { category: row.lastError.category, message: attentionFailureReason(row.lastError.message) })}${row.lastError.restored ? t('restored') : ''}${facts ? `${locale === 'en' ? '. ' : '。'}${facts}` : ''}`
+            : facts ? `${detail}${gap}${facts}` : detail,
           ...(row.lastError ? { reason: {
             category: row.lastError.category, code: 'start-failed', message: attentionFailureReason(row.lastError.message),
             ...(row.lastError.restored ? { restored: true } : {}),
@@ -903,6 +1063,38 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         detail: t('drift.detail', { parts: parts.join(locale === 'en' ? '; ' : '；') }),
         action: { label: t('drift.action'), path: ATTENTION_PATHS.adapterAccounts(drift.instanceKey) },
         visible: allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'adapter', adapter: drift.instanceKey })),
+      };
+    }));
+  }
+
+  // #1250: command routes another registration already holds (the instance keeps running).
+  if (sources.commandConflicts && allows(P.FEATURE_VIEW)) {
+    await read('commands', () => sources.commandConflicts!().map((conflict): AttentionDraft => {
+      const { skipped, kept, route } = conflict;
+      // The Root plugin (the project's own `commands/`) has no plugin page and no instance key to show.
+      const pluginName = (side: AttentionCommandClaimant) => side.root ? t('command.rootPlugin') : side.plugin;
+      const display = (side: AttentionCommandClaimant) => ({ plugin: pluginName(side), command: side.command, entry: side.entry ?? '' });
+      // What users type: the command's display name, or the alias / shortcut text (never a route shape).
+      const typed = (side: AttentionCommandClaimant) => side.kind === 'command' ? side.command : side.entry ?? side.command;
+      const holder = t(`command.holder.${kept.kind}`, display(kept));
+      const detail = skipped.kind === 'command'
+        ? t('command.detail.command', { route: typed(skipped), holder, plugin: pluginName(skipped) })
+        : t('command.detail.entry', { route: typed(skipped), holder, what: t(`command.what.${skipped.kind}`) });
+      const gap = locale === 'en' ? ' ' : '';
+      const advice = t('command.advice', { plugin: pluginName(skipped), other: pluginName(kept),
+        path: skipped.localPath || typed(skipped), otherPath: kept.localPath || typed(kept) });
+      // #1250: a later plugin's command took an alias / shortcut of an earlier plugin: what users
+      // were used to typing now silently runs another plugin's command.
+      const taken = conflict.takenByLater
+        ? t('command.takenByLater', { entry: typed(skipped), plugin: pluginName(skipped), other: pluginName(kept) }) : '';
+      return {
+        kind: 'command.conflict', severity: conflict.takenByLater ? 'danger' : 'warning',
+        subject: { plugin: skipped.plugin, pluginId: skipped.owner, commandRoute: route, command: skipped.command, commandKind: skipped.kind },
+        state: { skipped, kept, takenByLater: conflict.takenByLater === true },
+        title: t(`command.title.${skipped.kind}`, { ...display(skipped), other: pluginName(kept) }),
+        detail: [taken, detail, advice].filter(Boolean).join(gap),
+        action: { label: t('plugin.action'), path: skipped.root ? ATTENTION_PATHS.plugins : ATTENTION_PATHS.plugin(skipped.plugin) },
+        reason: { category: 'config', code: `command-${skipped.kind}-conflict` },
       };
     }));
   }
@@ -1023,8 +1215,10 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   }
 
   if (sources.mcpServers && allows(P.STATUS_VIEW)) {
+    // #1250: only a failed connect is something to act on. A server that has not connected yet
+    // (waiting to connect) or is not loaded by the running Agent is shown on the MCP page only.
     await read('mcp', async () => (await shared('mcp', async () => sources.mcpServers!()))
-      .filter(server => !server.connected).map((server): AttentionDraft => {
+      .filter(server => !server.connected && server.lastError !== undefined).map((server): AttentionDraft => {
         const failure = server.lastError;
         const message = failure ? attentionFailureReason(failure.message) : undefined;
         return {
@@ -1043,6 +1237,24 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           } } : {}),
         };
       }));
+  }
+
+  // #1250 第 29 批：配置的语音能力因外部命令不可执行而不可用（如 edge TTS 没有可运行的 edge-tts）。
+  if (sources.speech && allows(P.STATUS_VIEW)) {
+    await read('speech', () => sources.speech!().map((issue): AttentionDraft => {
+      // Only the command's last path segment is shown; the configured value may be a home path.
+      const command = attentionFailureReason(issue.command);
+      return {
+        kind: 'speech.unavailable', severity: issue.reason === 'timeout' ? 'info' : 'warning',
+        subject: { configPath: issue.configPath },
+        state: { feature: issue.feature, provider: issue.provider, reason: issue.reason, command },
+        title: t(`speech.title.${issue.feature}`, { provider: issue.provider }),
+        detail: t(`speech.detail.${issue.reason}`, { command, path: issue.configPath }),
+        action: { label: t('speech.action'), path: ATTENTION_PATHS.config },
+        reason: { category: 'config', code: issue.reason, ...(issue.at !== undefined ? { at: new Date(issue.at).toISOString() } : {}) },
+        ...(issue.at !== undefined ? { since: issue.at } : {}),
+      };
+    }));
   }
 
   if (sources.unschedulableJobs && allows(P.OPS_SCHEDULE_READ)) {
@@ -1137,7 +1349,24 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       const state = await sources.chatRoles!();
       const action = { label: t('roles.action'), path: ATTENTION_PATHS.chatRoles };
       const drafts: AttentionDraft[] = [];
-      const who = (entry: { adapter: string; userId: string; role: string; source: string }) => `${entry.source}：${entry.adapter}:${entry.userId} → ${entry.role}`;
+      // #1250 (`principal-link-attention-ids`): platform ids keep their last four characters only.
+      const who = (entry: { adapter: string; userId: string; role: string; source: string }) =>
+        `${entry.source}：${entry.adapter}（${maskAttentionPlatformId(entry.userId, locale)}） → ${entry.role}`;
+      // The instance never reads gateway.db (ADR 0059): it names only the viewer; other users are a
+      // short id here and the item's `links` carry the full ids for the Console to name them.
+      const userLabel = (consoleUserId: string) => consoleUserId === options.viewerUserId
+        ? options.viewerName?.trim() ? t('roles.link.viewer', { name: options.viewerName.trim().slice(0, 64) }) : t('roles.link.viewerUnnamed')
+        : t('roles.link.user', { id: consoleUserId.slice(0, 8) });
+      const identityLabel = (identity: Pick<AttentionPersonalLink, 'adapter' | 'endpoint' | 'userId'>) => t('roles.link.identity', {
+        account: identity.endpoint ? `${identity.adapter}·${identity.endpoint}` : identity.adapter,
+        id: maskAttentionPlatformId(identity.userId, locale) });
+      const personLines = (links: readonly AttentionPersonalLink[], key: 'roles.pending.personalLine' | 'roles.imported.personalLine') =>
+        groupAttentionPersonalLinks(links).map(person => t(key, { user: userLabel(person.consoleUserId), count: person.identities.length,
+          identities: listed(person.identities.map(identityLabel), locale) }));
+      const people = (links: readonly AttentionPersonalLink[]) => groupAttentionPersonalLinks(links).map(person => ({
+        consoleUserId: person.consoleUserId,
+        identities: person.identities.map(identity => ({ adapter: identity.adapter, ...(identity.endpoint ? { endpoint: identity.endpoint } : {}),
+          userIdTail: [...identity.userId].slice(-4).join('') })) }));
       if (!state.hasGlobalOwner) {
         drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning', state: { claimOpen: state.claimOpen },
           title: t('roles.noOwner.title'),
@@ -1155,12 +1384,16 @@ export async function collectAttention(sources: AttentionSources, options: Colle
           && personal.some(entry => entry.consoleUserId === options.viewerUserId);
         const lines = [
           ...entries.map(entry => `${who(entry)}（${entry.result}）`),
-          ...personal.map(entry => t('roles.imported.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })),
+          ...personLines(personal, 'roles.imported.personalLine'),
         ];
+        const count = entries.length + countAttentionPersonalLinks(personal);
         const at = Math.min(state.imported?.at ?? Number.POSITIVE_INFINITY, state.personal?.at ?? Number.POSITIVE_INFINITY);
         drafts.push({ kind: 'chat-roles.imported', severity: 'info',
-          state: { at, count: lines.length, ...(promoteMe ? { promoteMe: true } : {}) },
-          title: t('roles.imported.title', { count: lines.length }),
+          // The revision keeps counting raw entries (as before #1250 deduplicated the title's count),
+          // so a dismissal made before stays valid while the import record is unchanged.
+          state: { at, count: entries.length + personal.length, ...(promoteMe ? { promoteMe: true } : {}) },
+          ...(personal.length ? { links: people(personal) } : {}),
+          title: t('roles.imported.title', { count }),
           detail: `${t('roles.imported.detail', { entries: listed(lines, locale) })}${promote ? `${gap}${t('roles.imported.promote')}` : ''}${promoteMe ? `${gap}${t('roles.imported.promoteMe')}` : ''}`,
           action: promoteMe ? { label: t('roles.imported.promoteMeAction'), path: ATTENTION_PATHS.chatIdentityMe } : action, since: at });
       }
@@ -1169,12 +1402,14 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         const gap = locale === 'en' ? ' ' : '';
         const details = [
           ...(state.pending.length ? [t('roles.pending.detail', { entries: listed(state.pending.map(who), locale) })] : []),
-          ...(personalPending.length ? [t('roles.pending.personalDetail', { entries: listed(personalPending.map(entry =>
-            t('roles.pending.personalLine', { user: entry.consoleUserId, identity: `${entry.adapter}:${entry.userId}` })), locale) })] : []),
+          ...(personalPending.length ? [t('roles.pending.personalDetail', {
+            entries: listed(personLines(personalPending, 'roles.pending.personalLine'), locale) })] : []),
         ];
-        const count = state.pending.length + personalPending.length;
+        // #1250: counted as listed — one per distinct (adapter, endpoint, userId).
+        const count = state.pending.length + countAttentionPersonalLinks(personalPending);
         drafts.push({ kind: 'chat-roles.import-pending', severity: 'warning',
           state: { ids: [...state.pending.map(entry => entry.id), ...personalPending.map(entry => entry.id)] },
+          ...(personalPending.length ? { links: people(personalPending) } : {}),
           title: t('roles.pending.title', { count }),
           detail: details.join(gap),
           action, since: Math.min(...state.pending.map(entry => entry.seenAt), ...personalPending.map(entry => entry.at)) });
@@ -1214,6 +1449,7 @@ function formatPath(path: readonly string[]): string {
 export interface AttentionRpcContext {
   readonly sources: AttentionSources;
   readonly viewerUserId?: string;
+  readonly viewerName?: string;
   readonly allows: AttentionAllows;
   readonly allowsPluginPermission?: (permission: string) => boolean;
   readonly observations?: AttentionObservations;
@@ -1242,6 +1478,7 @@ export async function dispatchAttentionConsoleRpc(message: Record<string, unknow
     ...(context.warnings ? { warnings: context.warnings } : {}),
     ...(context.now ? { now: context.now } : {}),
     ...(context.viewerUserId ? { viewerUserId: context.viewerUserId } : {}),
+    ...(context.viewerName ? { viewerName: context.viewerName } : {}),
   });
   return { status: 200, body: { success: true, data, type: ATTENTION_RPC.LIST, requestId: message.requestId } };
 }

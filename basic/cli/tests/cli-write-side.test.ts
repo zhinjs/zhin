@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import yaml from 'yaml';
 import { diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { findConfigFile, readConfig, saveConfig } from '../../../packages/host/gateway/src/project/config-file.js';
 import { configCommand } from '../src/commands/config.js';
 import { createDefaultConfig } from '../src/commands/doctor.js';
@@ -950,7 +951,26 @@ describe('schedule (running Host)', () => {
     expect(output).toContain('⚠ 无效：目标账号不存在（gone（sandbox）· 私聊 u1）');
     expect(output).toContain('⚠ 无（不会触发）');
     expect(output).toContain('sandbox-bot（sandbox）· 私聊 u1');
-    expect(output).toContain(new Date(Date.UTC(2026, 10, 16, 0)).toLocaleString());
+    // `YYYY-MM-DD HH:mm:ss`, 24-hour, local time (#1250 cli-datetime-us-locale).
+    expect(output).toContain(`下次:   ${formatDateTime(Date.UTC(2026, 10, 16, 0))}`);
+    expect(output).not.toMatch(/\b[AP]M\b/u);
+  });
+
+  it('list 缩进多行内容、超过 2 行截断并提示 --json；--json 输出完整内容 (#1250)', async () => {
+    const prompt = '第一行\n第二行\n第三行';
+    stubHost(() => ({ status: 200, body: { success: true, data: { jobs: [
+      { id: 'multi', enabled: false, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+        action: { kind: 'agent', prompt }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} },
+    ] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const text = lines.join('\n');
+    expect(text).toContain('    内容:   第一行\n            第二行\n            …（共 3 行，完整内容用 zhin schedule list --json 查看）');
+    expect(text).not.toContain('第三行');
+    lines.length = 0;
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list', '--json']);
+    expect(JSON.parse(lines.join('\n'))[0].action.prompt).toBe(prompt);
   });
 
   it('--target 格式无效时不发请求 (#1250)', async () => {

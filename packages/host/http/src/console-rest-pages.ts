@@ -16,7 +16,7 @@ import {
   MarketplaceRegistry,
   isValidNpmPackageName,
 } from './marketplace-registry.js';
-import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
+import type { ConsoleMcpConnectTestResult, ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   informativeKeywords,
   isLocale,
@@ -81,6 +81,12 @@ export interface ConsoleAgentIntrospection {
   tools?(): readonly unknown[];
   promptSections?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
+  /**
+   * One throw-away connection to the configured MCP server `name` (`POST …/introspection/mcp/test`,
+   * #1250); `undefined` when `name` is not configured, `'agent-unavailable'` when no Agent runs
+   * in the request's generation (answered 503).
+   */
+  testMcp?(name: string): Promise<ConsoleMcpConnectTestResult | undefined | 'agent-unavailable'>;
   renderComponent?(input: Readonly<{
     requester: string;
     name: string;
@@ -126,6 +132,10 @@ export interface ConsoleRestPagesOptions {
   readonly componentPreviewMaxBytes?: number;
   /** Maximum in-flight Component previews per Console route set; default 2. */
   readonly componentPreviewMaxConcurrent?: number;
+  /** Maximum in-flight MCP connection tests per Console route set; default 2 (#1250). */
+  readonly mcpTestMaxConcurrent?: number;
+  /** Cooldown after each MCP connection test of one server (429 + Retry-After); default 5 seconds. */
+  readonly mcpTestCooldownMs?: number;
 }
 
 type LogModelLike = {
@@ -178,7 +188,7 @@ export function registerConsoleRestPages(
 
   registerLogsRoutes(route, base, ctx);
   registerMarketplaceRoutes(route, base, ctx, fetchFn, pluginRegistryUrl, npmRegistryUrl);
-  registerIntrospectionRoutes(route, base, ctx, options);
+  registerIntrospectionRoutes(route, base, ctx, options, (entry) => host.tokenRegistry?.accessProvider?.audit?.(entry));
   registerAgentSessionRoutes(route, base, ctx);
 
   return () => {

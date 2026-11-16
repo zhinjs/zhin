@@ -347,32 +347,62 @@ export function platformStandingIncludes(held: PlatformStandingLevel | undefined
 }
 
 /**
- * Identity + context of a message's sender. `context.conversationKey` is the conversation key, or —
- * when the conversation cannot be keyed (unknown kind, an id that cannot be part of a key) — the
- * receiving endpoint's key, so roles granted at the endpoint level and above still resolve.
- * Threads / topics (`conversation.threadId`) share their parent conversation's key, and a platform
- * container (`conversation.parent`, e.g. a guild) adds no level (ADR 0056 §2).
- * Undefined when not even the endpoint can be addressed.
+ * Why a message's sender could not be resolved for chat roles (ADR 0056 / zhinjs/zhin#1250):
+ * - `no-conversation`: the message carries no conversation with an endpoint id;
+ * - `unknown-endpoint`: that endpoint is not an account of this generation's adapters;
+ * - `no-adapter`: the endpoint resolves to no adapter instance alias;
+ * - `no-sender`: the message has no sender id;
+ * - `simulated-sender`: the sender id is reserved (`~…`, e.g. a Sandbox simulated sender), which never holds a role;
+ * - `invalid-sender`: any other sender id that cannot be a chat identity (control characters, over 256 characters).
+ * @public
+ */
+export type ChatRoleSubjectFailure =
+  | 'no-conversation' | 'unknown-endpoint' | 'no-adapter' | 'no-sender' | 'simulated-sender' | 'invalid-sender';
+
+/** @public */
+export type ChatRoleSubjectResolution =
+  | Readonly<{ ok: true; identity: ChatIdentity; context: ChatRoleContext & { conversationKey: string } }>
+  | Readonly<{ ok: false; reason: ChatRoleSubjectFailure }>;
+
+/**
+ * Identity + context of a message's sender, or why there is none. `context.conversationKey` is the
+ * conversation key, or — when the conversation cannot be keyed (unknown kind, an id that cannot be
+ * part of a key) — the receiving endpoint's key, so roles granted at the endpoint level and above
+ * still resolve. Threads / topics (`conversation.threadId`) share their parent conversation's key,
+ * and a platform container (`conversation.parent`, e.g. a guild) adds no level (ADR 0056 §2).
+ * @public
+ */
+export function resolveChatRoleMessageContext(snapshot: ChatRoleSnapshot, message: unknown): ChatRoleSubjectResolution {
+  const fail = (reason: ChatRoleSubjectFailure) => Object.freeze({ ok: false as const, reason });
+  if (!record(message) || !record(message.conversation) || !record(message.conversation.endpoint)) return fail('no-conversation');
+  const conversation = message.conversation as { endpoint: { id: unknown }; kind?: unknown; id?: unknown };
+  if (typeof conversation.endpoint.id !== 'string') return fail('no-conversation');
+  const key = resolveEndpointFeatureKey(snapshot, conversation.endpoint.id, typeof message.endpointId === 'string' ? message.endpointId : undefined, conversation);
+  if (!key) return fail('unknown-endpoint');
+  let adapter: string | undefined;
+  try { adapter = parseFeatureResolutionKey(key).adapter; } catch { return fail('no-adapter'); }
+  if (!adapter) return fail('no-adapter');
+  const parsed = parseFeatureConversationKey(key);
+  const sender = record(message.sender) ? message.sender : undefined;
+  const userId = typeof sender?.id === 'string' ? sender.id : '';
+  if (!userId) return fail('no-sender');
+  const identity = { adapter, userId };
+  if (!isChatIdentity(identity)) return fail(userId.startsWith(RESERVED_SENDER_PREFIX) ? 'simulated-sender' : 'invalid-sender');
+  const kind = parsed?.conversation.kind ?? conversation.kind;
+  const platform = kind === 'private' ? undefined : platformStandingOf(sender);
+  return Object.freeze({ ok: true as const, identity, context: { conversationKey: key, ...(platform ? { platform } : {}) } });
+}
+
+/**
+ * Identity + context of a message's sender ({@link resolveChatRoleMessageContext} without the
+ * reason). Undefined when not even the endpoint can be addressed or the sender is no chat identity.
  */
 export function chatRoleMessageContext(
   snapshot: ChatRoleSnapshot,
   message: unknown,
 ): { identity: ChatIdentity; context: ChatRoleContext & { conversationKey: string } } | undefined {
-  if (!record(message) || !record(message.conversation) || !record(message.conversation.endpoint)) return undefined;
-  const conversation = message.conversation as { endpoint: { id: unknown }; kind?: unknown; id?: unknown };
-  if (typeof conversation.endpoint.id !== 'string') return undefined;
-  const key = resolveEndpointFeatureKey(snapshot, conversation.endpoint.id, typeof message.endpointId === 'string' ? message.endpointId : undefined, conversation);
-  if (!key) return undefined;
-  let adapter: string | undefined;
-  try { adapter = parseFeatureResolutionKey(key).adapter; } catch { return undefined; }
-  if (!adapter) return undefined;
-  const parsed = parseFeatureConversationKey(key);
-  const sender = record(message.sender) ? message.sender : undefined;
-  const identity = { adapter, userId: typeof sender?.id === 'string' ? sender.id : '' };
-  if (!isChatIdentity(identity)) return undefined;
-  const kind = parsed?.conversation.kind ?? conversation.kind;
-  const platform = kind === 'private' ? undefined : platformStandingOf(sender);
-  return { identity, context: { conversationKey: key, ...(platform ? { platform } : {}) } };
+  const resolved = resolveChatRoleMessageContext(snapshot, message);
+  return resolved.ok ? { identity: resolved.identity, context: resolved.context } : undefined;
 }
 
 // ============================================================================

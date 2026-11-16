@@ -7,6 +7,8 @@ import {
   formatUptime,
   jobRowsFromApi,
   renderMemorySection,
+  instanceSampleFromStatus,
+  processSampleFromApi,
   renderWatchText,
   systemInfoFromApi,
 } from '../src/commands/watch-format.js';
@@ -39,6 +41,28 @@ describe('zhin watch format', () => {
     expect(text).toContain('freeMem');
     expect(text).toContain('totalMem');
     expect(text).toContain('usedMem');
+  });
+
+  // #1250 watch-memory-figures-inconsistent: every figure names its process and comes from that
+  // process's one sample; rss below heapUsed (one sample, compressed pages) is explained.
+  it('labels memory per process (instance / gateway), each from its own sample', () => {
+    const MB = 1024 * 1024;
+    const instance = instanceSampleFromStatus({
+      pid: 7, memory: { rss: 1, heapUsed: 1, heapTotal: 1 },
+      process: { role: 'instance', pid: 7, uptime: 1, sampledAt: 0, memory: { rss: 86.7 * MB, heapUsed: 222 * MB, heapTotal: 240 * MB, external: 2 * MB } },
+    });
+    expect(instance).toMatchObject({ role: 'instance', pid: 7, memory: { rss: 86.7 * MB, heapUsed: 222 * MB } });
+    const gateway = processSampleFromApi({ role: 'gateway', pid: 3, uptime: 1, sampledAt: 0, memory: { rss: 60 * MB, heapUsed: 20 * MB, heapTotal: 30 * MB } }, 'gateway');
+    expect(processSampleFromApi({ role: 'instance', memory: {} }, 'gateway')).toBeUndefined();
+    const text = renderMemorySection({ osMemory: { freeMem: 1, totalMem: 2 } }, [instance!, gateway!]).join('\n');
+    expect(text).toMatch(/instance +pid 7/u);
+    expect(text).toMatch(/gateway +pid 3/u);
+    expect(text.indexOf('86.7 MB')).toBeGreaterThan(text.indexOf('instance'));
+    expect(text.indexOf('86.7 MB')).toBeLessThan(text.indexOf('gateway'));
+    expect(text.indexOf('60.0 MB')).toBeGreaterThan(text.indexOf('gateway'));
+    expect(text).toContain('同一次采样');
+    // An older instance without `process`: its `memory` + `pid` are still one call.
+    expect(instanceSampleFromStatus({ pid: 9, memory: { rss: 5, heapUsed: 4, heapTotal: 4 } })).toEqual({ role: 'instance', pid: 9, memory: { rss: 5, heapUsed: 4, heapTotal: 4, external: undefined, arrayBuffers: undefined } });
   });
 
   it('systemInfoFromApi parses osMemory', () => {
@@ -158,5 +182,40 @@ describe('fetchWatchSnapshot', () => {
     expect(snapshot.ok).toBe(true);
     expect(snapshot.endpoints).toEqual([{ name: 'bot', adapter: 'icqq', status: 'online' }]);
     expect(snapshot.assistant).toEqual({ enabled: true, eventsActive: false, jobs: [] });
+  });
+
+  it('adds the gateway sample from gateway.instance.status next to the instance sample', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const pathname = new URL(url).pathname;
+      const data = pathname.endsWith('/system/status')
+        ? { pid: 7, memory: { rss: 3, heapUsed: 2, heapTotal: 2 }, process: { role: 'instance', pid: 7, uptime: 1, sampledAt: 5, memory: { rss: 3, heapUsed: 2, heapTotal: 2 } } }
+        : pathname.endsWith('/introspection/endpoints') ? { items: [], totalPages: 1 } : {};
+      return { ok: true, status: 200, json: async () => ({ success: true, data }) } as Response;
+    }));
+    const snapshot = await fetchWatchSnapshot({ baseUrl: 'http://127.0.0.1:8086/api', token: '' }, {
+      gatewayStatus: async () => ({ state: 'running', gateway: { role: 'gateway', pid: 3, uptime: 1, sampledAt: 6, memory: { rss: 9, heapUsed: 8, heapTotal: 8 } } }),
+    });
+    expect(snapshot.processes).toEqual([
+      { role: 'instance', pid: 7, sampledAt: 5, memory: expect.objectContaining({ rss: 3, heapUsed: 2 }) },
+      { role: 'gateway', pid: 3, sampledAt: 6, memory: expect.objectContaining({ rss: 9, heapUsed: 8 }) },
+    ]);
+  });
+});
+
+describe('degraded schedule runs (#1250 b33)', () => {
+  it('zhin watch shows the cause of a degraded run like an error', () => {
+    const jobs = jobRowsFromApi([{ id: 'j1', label: '早报', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
+      notify: { channel: 'im' }, state: { lastStatus: 'degraded', lastError: '没有可用的工具；排查：zhin trace t1' } }]);
+    const text = renderWatchText({ baseUrl: 'http://127.0.0.1:8086/api', fetchedAt: new Date('2026-11-16T09:00:00'), jobs });
+    expect(text).toContain('last:degraded');
+    expect(text).toContain('err: 没有可用的工具；排查：zhin trace t1');
+  });
+
+  it('zhin schedule list summarises the last run with its cause', async () => {
+    const { lastRunSummary } = await import('../src/commands/schedule.js');
+    expect(lastRunSummary({ state: { lastStatus: 'degraded', lastError: '工具 `w` 被拒绝' } })).toBe('未完成（降级）：工具 `w` 被拒绝');
+    expect(lastRunSummary({ state: { lastStatus: 'error', lastError: 'boom' } })).toBe('失败：boom');
+    expect(lastRunSummary({ state: { lastStatus: 'ok', lastError: 'stale' } })).toBe('成功');
+    expect(lastRunSummary({ state: {} })).toBeUndefined();
   });
 });

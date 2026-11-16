@@ -7,6 +7,7 @@ import { SKILL_DISCLOSURE_PROMPT_HINT } from '../skill/progressive-disclosure.js
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { resolveSkillTools, type SkillToolCandidate } from './skill-tool-resolution.js';
+import { suggestPublicSkillsForIntent } from './deferred-capability-plan.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -31,10 +32,14 @@ import type { TurnContextView } from '../context/turn-envelope.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import { unattendedApprovalNeed } from '../security/policy-facade.js';
+import { isApprovalPortAvailable } from '../session/approval-port.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import type { ContextFile } from '../bootstrap.js';
+import type { KnowledgeIndex } from './native-knowledge-tool.js';
+import { renderKnowledgeIndexSection } from '../prompt/knowledge-index.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -50,9 +55,34 @@ export interface FullAgentTurnEngineOptions {
    * replaces `bootstrapContext` / `contextFiles`.
    */
   readonly bootstrap?: () => Readonly<{ bootstrapContext: string; contextFiles?: readonly ContextFile[] }>;
+  /**
+   * Configured project knowledge base (`ai.knowledge.baseDir`). While the turn may call
+   * `knowledge_search`, its file and heading index goes into the system prompt (#1250 b27).
+   */
+  readonly knowledgeIndex?: KnowledgeIndex;
 }
 
 const logger = getLogger('FullAgentTurnEngine');
+
+/**
+ * #1250 b33: which selected tools an unattended turn cannot run without approval. Informative only
+ * (`schedule_preview`, trace); the decision is made per call by the tool runtime.
+ */
+export function describeUnattendedApproval(
+  tools: readonly import('./capability-ingress.js').ToolCapability[],
+  turn: Readonly<{ policy: Readonly<{ unattended: boolean }>; ports: Pick<import('../turn/turn-ingress.js').TurnPorts, 'unattendedReview'> }>,
+): NonNullable<import('../event/turn-event.js').CapabilityResolutionEvent['unattendedApproval']> | undefined {
+  if (!turn.policy.unattended) return undefined;
+  const review = isApprovalPortAvailable(turn.ports.unattendedReview, 'authorization') ? 'auto' as const : 'none' as const;
+  const denied: string[] = [];
+  const reviewed: string[] = [];
+  for (const tool of tools) {
+    const need = unattendedApprovalNeed(tool);
+    if (need === 'human' || (need === 'approval' && review === 'none')) denied.push(tool.name);
+    else if (need === 'approval') reviewed.push(tool.name);
+  }
+  return Object.freeze({ review, denied, reviewed });
+}
 
 export async function* runScheduleTurn(
   options: FullAgentTurnEngineOptions,
@@ -71,6 +101,11 @@ export async function* runScheduleTurn(
     tools: context.toolCapabilities,
     skills: context.capabilities.skills,
   });
+  const unattendedApproval = describeUnattendedApproval(plan.capabilities, context.turn);
+  if (plan.warnings.length > 0) {
+    logger.warn(formatCompact({ op: 'schedule_capability_warning', job: origin.jobId,
+      turn: context.turn.identity.turnId, warnings: plan.warnings.join(','), tools: plan.resolvedTools.length }));
+  }
   yield {
     type: 'capability_resolution',
     mode: 'direct',
@@ -79,6 +114,8 @@ export async function* runScheduleTurn(
     skills: plan.skills.map((skill) => skill.qualifiedName),
     missingTools: [...plan.missingTools],
     missingSkills: [...plan.missingSkills],
+    ...(plan.warnings.length ? { warnings: [...plan.warnings] } : {}),
+    ...(unattendedApproval ? { unattendedApproval } : {}),
   };
 
   const activeSkillsContext = plan.skills.map((skill) => skill.instructions).join('\n\n');
@@ -411,13 +448,15 @@ const byQualifiedName = <T extends { qualifiedName: string }>(a: T, b: T): numbe
 
 /**
  * `stable`: sender-neutral catalog (system prefix, cached). `tail`: entries that depend on the
- * sender's permissions, the bot's role or the selected specialist (current message runtime tail).
+ * sender's permissions, the bot's role or the selected specialist, plus the public Skill hint for
+ * the current message's `intent` (current message runtime tail).
  */
 export function buildCapabilityContext(
   agents: readonly AgentDescriptor[],
   skills: readonly SkillDescriptor[],
   selectedName?: string,
   tools: readonly CatalogTool[] = [],
+  intent?: Readonly<{ text: string; loadedSkills?: readonly string[] }>,
 ): { stable: string; tail: string } {
   const stable: string[] = [];
   const tail: string[] = [];
@@ -427,7 +466,11 @@ export function buildCapabilityContext(
   if (selectedName && !selected) {
     throw new Error(`Selected Agent capability is not visible: ${selectedName}`);
   }
-  const entry = (item: { qualifiedName: string; description: string }) => ({ name: item.qualifiedName, description: item.description });
+  const entry = (item: { qualifiedName: string; description: string; keywords?: readonly string[] }) => ({
+    name: item.qualifiedName,
+    description: item.description,
+    ...(item.keywords?.length ? { keywords: item.keywords } : {}),
+  });
   if (selected) {
     tail.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
   } else {
@@ -446,10 +489,29 @@ export function buildCapabilityContext(
     if (!neutralSkills) tail.push(SKILL_DISCLOSURE_PROMPT_HINT);
     tail.push(gatedSkills);
   }
+  const available = tail.length
+    ? ['Also available to you this turn (depends on the sender, your account role or selected specialist):', ...tail].join('\n\n')
+    : '';
+  // #1250 b27: a hint only — public Skills are never activated by keyword (primeAgentSkillForIntent).
+  const hint = intent?.text ? renderSkillHint(suggestPublicSkillsForIntent(
+    skills, intent.text, intent.loadedSkills)) : '';
   return {
     stable: stable.join('\n\n'),
-    tail: tail.length ? ['Also available to you this turn (depends on the sender, your account role or selected specialist):', ...tail].join('\n\n') : '',
+    tail: [available, hint].filter(Boolean).join('\n\n'),
   };
+}
+
+/** Heading of the per-message public Skill hint (#1250 b27). */
+export const SKILL_HINT_HEADING = '## Suggested skill';
+
+function renderSkillHint(skills: readonly SkillDescriptor[]): string {
+  if (skills.length === 0) return '';
+  const names = skills.map(skill => skill.qualifiedName);
+  return [
+    SKILL_HINT_HEADING,
+    `The current message matches the trigger words of ${names.join(', ')}. If it fits the request, call `
+      + `${names.map(name => `load_skill("${name}")`).join(' or ')} before answering. It is not loaded automatically.`,
+  ].join('\n');
 }
 
 export function terminal(text: string, usage: Usage): TurnEndEvent {
@@ -552,4 +614,38 @@ export function hardGateOptions(
     ...(host.opsCooldown ? { opsCooldown: host.opsCooldown } : {}),
     ...(audit && typeof audit.record === 'function' ? { decisionAudit: audit as DecisionAuditSink } : {}),
   };
+}
+
+/** Tool name whose presence in the turn enables the knowledge base index (#1250 b27). */
+export const KNOWLEDGE_SEARCH_TOOL = 'knowledge_search';
+/** Prompt segment id of the knowledge base index. */
+export const KNOWLEDGE_INDEX_SEGMENT_ID = '§11b_knowledge_index';
+/**
+ * Lowest weight of the stable kinds: the index renders after every other `platform` segment and
+ * right before `scene`, so a knowledge base change only invalidates the cache from there on.
+ */
+export const KNOWLEDGE_INDEX_WEIGHT = -1_000_000;
+/** Hard cap of the segment (index budget plus heading and guidance lines). */
+export const KNOWLEDGE_INDEX_SEGMENT_MAX_CHARS = 2_000;
+
+/**
+ * Knowledge base index section for this turn, when a knowledge base is configured and the turn
+ * may call `knowledge_search` with no permission or bot-role gate. Advisory: a read failure is
+ * logged and the turn goes on without it.
+ */
+export async function knowledgeIndexSection(
+  index: KnowledgeIndex | undefined,
+  tools: readonly ({ readonly name: string } & AccessGated)[],
+  signal: AbortSignal,
+): Promise<string | undefined> {
+  // Only while knowledge_search is open to every sender of the scene: the index sits in the cached
+  // prefix, which must be byte-identical for every sender (a gated tool would make it differ).
+  if (!index?.outline || !tools.some(tool => tool.name === KNOWLEDGE_SEARCH_TOOL && isSenderNeutral(tool))) return undefined;
+  try {
+    return renderKnowledgeIndexSection(await index.outline(signal));
+  } catch (error) {
+    signal.throwIfAborted();
+    logger.warn(`knowledge index unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
 }

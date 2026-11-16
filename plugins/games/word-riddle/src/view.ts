@@ -56,6 +56,7 @@ export function buildRiddleView(
     terminal,
     buttonsPerRow: terminal ? 2 : 3,
     fallbackHint: messages(session.locale ?? undefined, 'text13'),
+    locale: session.locale ?? undefined,
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
@@ -76,5 +77,5 @@ const messages = createMessages({
   text10: { 'zh-CN': "💡 提示", en: "💡 Hint" },
   text11: { 'zh-CN': "⏭️ 跳过", en: "⏭️ Skip" },
   text12: { 'zh-CN': "🏳️ 结束", en: "🏳️ End" },
-  text13: { 'zh-CN': "回复答案，或 1提示 2跳过 3结束", en: "Reply with your answer, or 1 Hint · 2 Skip · 3 End" },
+  text13: { 'zh-CN': "直接回复答案", en: "Reply with your answer" },
 });

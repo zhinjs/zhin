@@ -148,6 +148,13 @@ describe('package manager', () => {
     expect(translatePackageManagerArgs('bun', ['add', '-w', 'pg'])).toEqual(['add', 'pg']);
     expect(() => translatePackageManagerArgs('pnpm', ['exec', 'rm'])).toThrow();
     expect(() => translatePackageManagerArgs('pnpm', ['add', '--registry=http://evil', 'pg'])).toThrow();
+    // #1250: exact pins follow the project's style; only `add` takes the flag.
+    expect(translatePackageManagerArgs('pnpm', ['add', '-w', '--save-exact', 'pg'])).toEqual(['add', '-w', '--save-exact', 'pg']);
+    expect(translatePackageManagerArgs('npm', ['add', '-w', '--save-exact', 'pg'])).toEqual(['install', '--save-exact', 'pg']);
+    expect(translatePackageManagerArgs('yarn', ['add', '--save-exact', 'pg'])).toEqual(['add', '--exact', 'pg']);
+    expect(translatePackageManagerArgs('bun', ['add', '--save-exact', 'pg'])).toEqual(['add', '--exact', 'pg']);
+    expect(() => translatePackageManagerArgs('pnpm', ['remove', '--save-exact', 'pg'])).toThrow();
+    expect(() => translatePackageManagerArgs('pnpm', ['update', '--save-exact', 'pg'])).toThrow();
   });
 
   it('spawns without a shell and streams output; non-zero exit rejects', async () => {

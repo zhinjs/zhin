@@ -60,6 +60,14 @@ export type ConsoleAttentionKind =
   | 'plugin.dependencies'
   /** A declared plugin's configuration does not validate or references unset variables. */
   | 'plugin.config'
+  /**
+   * Two registrations claim the same command route (#1250): the later command (primary route) or
+   * only its alias / shortcut was skipped, the earlier one keeps the route. `subject.plugin` (instance key) and
+   * `subject.pluginId` (full id) name the plugin that lost it, `subject.commandRoute` the route, `subject.command` / `commandKind` the
+   * skipped command and which of its routes. `danger` when a later plugin's command took an earlier
+   * plugin's alias or shortcut. Visible with `feature.view`.
+   */
+  | 'command.conflict'
   /** The project configuration file cannot be read or parsed. */
   | 'config.invalid'
   /** The last configuration change was not applied (failed / blocked / unconfirmed). */
@@ -73,6 +81,13 @@ export type ConsoleAttentionKind =
    * reason of its last failed connect when there is one (#1270).
    */
   | 'mcp.disconnected'
+  /**
+   * A configured speech feature cannot run because the external command it needs is not executable
+   * (#1250 第 29 批: `speech.tts.provider: edge` without a runnable `edge-tts`). `subject.configPath`
+   * names the setting (`speech.tts.edgeTtsCommand`); `reason.code` is `not-found` / `not-executable` /
+   * `timeout`. Visible with `status.view`.
+   */
+  | 'speech.unavailable'
   /**
    * A Host model account needs an operator (#1270): it must sign in again (`reauthorize`), was
    * disconnected, its last sign-in has an unknown outcome (`uncertain`), or it is signed in but its
@@ -105,7 +120,7 @@ export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.f
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
   'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
-  'inference.account', 'config.ineffective',
+  'inference.account', 'config.ineffective', 'command.conflict', 'speech.unavailable',
 ]);
 
 /**
@@ -132,6 +147,8 @@ export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentio
   'chat-roles.import-pending': 'iam.manage',
   'inference.account': 'agent.view',
   'config.ineffective': 'agent.view',
+  'command.conflict': 'feature.view',
+  'speech.unavailable': 'status.view',
 });
 
 /** The object an item is about. Absent fields do not apply. */
@@ -154,6 +171,17 @@ export interface ConsoleAttentionSubject {
   readonly inferenceAccount?: string;
   /** Configuration path of an ineffective setting (e.g. `purposes.agents.planner`, #1270). */
   readonly configPath?: string;
+  /** Command route a `command.conflict` is about (words separated by spaces, #1250). */
+  readonly commandRoute?: string;
+  /** Display name of the command whose route a `command.conflict` skipped (#1250). */
+  readonly command?: string;
+  /** Which of its routes was skipped: `command` (the whole command), `alias` or `shortcut` (#1250). */
+  readonly commandKind?: string;
+  /**
+   * Full plugin id of `plugin` (`command.conflict`, #1250): instance keys can repeat under different
+   * parent plugins, so the id keeps such items apart.
+   */
+  readonly pluginId?: string;
 }
 
 /**
@@ -208,6 +236,24 @@ export interface ConsoleAttentionItem {
   readonly source: string;
   /** Structured reason (added later, #1270; older Hosts omit it). */
   readonly reason?: ConsoleAttentionReason;
+  /**
+   * `chat-roles.import-pending` / `chat-roles.imported`: the people the item is about (#1250). The
+   * instance cannot read Console user names (ADR 0059), so `detail` names only the viewer; the
+   * Console replaces `Console 用户 #<id prefix>` with the user's name from `iam.users.list`.
+   */
+  readonly links?: readonly ConsoleAttentionPersonLink[];
+}
+
+/** One Console user and the chat identities a configured link gives them (platform ids masked, #1250). */
+export interface ConsoleAttentionPersonLink {
+  readonly consoleUserId: string;
+  readonly identities: readonly Readonly<{
+    adapter: string;
+    /** Account the link is for, when the configuration names one. */
+    endpoint?: string;
+    /** Last four characters of the platform user id (never the full id on the home page). */
+    userIdTail: string;
+  }>[];
 }
 
 export interface ConsoleAttentionListRequest {

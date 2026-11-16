@@ -75,6 +75,11 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
 export class MessageDispatcher {
   constructor(private readonly resolvePrefix: CommandPrefixResolver = defaultCommandPrefixResolver) {}
 
+  /** The command prefix this message must carry (`''`: none). */
+  prefixOf(message: Pick<Message, 'conversation' | 'endpointId'> & Readonly<{ commandPrefix?: string }>, snapshot: RuntimeSnapshot): string {
+    return message.commandPrefix ?? this.resolvePrefix(message as Message, snapshot);
+  }
+
   commandEnvironment(message: Message, snapshot: RuntimeSnapshot): Readonly<{ prefix: string; menu?: string }> {
     const prefix = this.resolvePrefix(message, snapshot);
     const commands = gatedCommandIndex(message, snapshot);
@@ -167,7 +172,8 @@ function hasTextAfterLeadingMentions(segments: readonly Readonly<CommandSegment>
   return false;
 }
 
-function normalizeCommandInputText(message: Message): string {
+/** @internal The text a command is matched against: leading quotes and mentions dropped, trimmed. */
+export function normalizeCommandInputText(message: Pick<Message, 'content' | 'segments' | 'conversation'>): string {
   const raw = message.content.trim();
   const segments = message.segments;
   if (segments && hasTextAfterLeadingMentions(segments)) {

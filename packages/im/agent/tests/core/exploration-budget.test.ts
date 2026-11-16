@@ -60,6 +60,13 @@ describe('SpinDetector (ADR 0042 §7)', () => {
         spin.record('grep', { pattern: 'ban' }, "No matches for 'ban'");
         expect(spin.record('grep', { pattern: 'mute' }, "No matches for 'mute'")?.reason).toBe('no_matches');
     });
+    it('flags searching the deferred catalog for tools that are not there (#1250 delegate-budget-self-sabotage)', () => {
+        const spin = new SpinDetector();
+        spin.record('discover', { query: 'orchestration_status' }, 'No matches.');
+        spin.record('load_tool', { name: 'orchestration_status' }, 'Tool "orchestration_status" not found in catalog.');
+        const hint = spin.record('discover', { query: 'orchestration_add_task' }, 'No matches.');
+        expect(hint).toMatchObject({ family: 'catalog', reason: 'no_matches' });
+    });
     it('flags re-reading the same file even if the digest differs', () => {
         const spin = new SpinDetector();
         spin.record('read_file', { file_path: 'a.ts', offset: 0 }, 'v1');

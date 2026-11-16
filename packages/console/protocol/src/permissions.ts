@@ -599,6 +599,8 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/introspection/recent-turns', P.AGENT_VIEW),
   httpRule('GET', '/introspection', P.STATUS_VIEW, true),
   httpRule('POST', '/introspection/components/render', P.STATUS_VIEW),
+  // #1250: a throw-away MCP connection (may start the configured stdio command).
+  httpRule('POST', '/introspection/mcp/test', P.AGENT_CONFIGURE),
   httpRule('GET', '/commands/permissions', P.STATUS_VIEW),
   httpRule('POST', '/commands/permissions/explain', P.STATUS_VIEW),
   httpRule('GET', '/marketplace/updates', P.FEATURE_VIEW),
@@ -609,6 +611,7 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('POST', '/tasks/change', P.FEATURE_CONFIGURE),
   httpRule('GET', '/conversations/history', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/results', P.ENDPOINT_VIEW),
+  httpRule('GET', '/conversations/outcomes', P.ENDPOINT_VIEW),
   httpRule('GET', '/conversations/workspaces', P.ENDPOINT_VIEW),
   httpRule('PUT', '/conversations/workspaces', P.ENDPOINT_OPERATE),
   httpRule('GET', '/conversations/workspaces/commands', P.ENDPOINT_VIEW),

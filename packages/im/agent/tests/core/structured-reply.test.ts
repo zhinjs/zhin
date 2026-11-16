@@ -40,6 +40,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   deferred?: boolean;
   conversation?: { repository: ContextRepository; sessionId: string };
   delivered?: { messageId?: string; messageIds?: readonly (string | null)[]; contextRefs?: readonly string[] };
+  scheduleJobId?: string;
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -69,8 +70,11 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   const tools = options.tools ?? [];
   const result = await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({
     host: host as never, sessionId: options.conversation?.sessionId ?? 's', rawContent: '请 @ Alice 提醒她',
-    promptProfile: { kind: 'interactive' },
+    promptProfile: options.scheduleJobId
+      ? { kind: 'schedule', jobId: options.scheduleJobId, prompt: 'p', security: { execPreset: 'readonly', rejectOwnerApproval: true, allowedDomains: [] } }
+      : { kind: 'interactive' },
     turnContext: {
+      ...(options.scheduleJobId ? { identity: { turnId: 'exec-1' } } : {}),
       input: { text: 'Please respond', locale: options.locale },
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g' },
       principal: { subjectId: '123', roles: options.roles ?? ['user'] }, session: { key: 's' },
@@ -131,6 +135,20 @@ describe('structured Agent final replies', () => {
     expect(member.result.reply).not.toContain(cause);
     const owner = await run([failed()], { roles: ['owner'] });
     expect(owner.result.reply).toContain(`（${cause}）`);
+  });
+
+  it('marks a scheduled turn with no tools and an empty reply as a "no tools" fallback (#1250 b33)', async () => {
+    const { result, events } = await run([assistantTextReply('')], { scheduleJobId: 'daily', detached: true });
+    expect(events.find(event => event.type === 'turn_end')).toMatchObject({ fallback: { cause: 'no_tools' } });
+    expect(result.reply).toContain('定时任务 daily');
+    expect(result.reply).toContain('没有可用的工具');
+    expect(result.reply).toContain('zhin trace exec-1');
+    expect(result.reply).not.toContain('/reset');
+  });
+
+  it('does not mark a model reply as a fallback (#1250 b33)', async () => {
+    const { events } = await run([assistantTextReply(JSON.stringify({ segments: [text('上海晴')] }))], { scheduleJobId: 'daily', detached: true });
+    expect(events.find(event => event.type === 'turn_end')).not.toHaveProperty('fallback');
   });
 
   it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {

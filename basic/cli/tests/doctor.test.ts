@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -507,6 +508,50 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it('lists a command route conflict of the running instance as a warning (#1250 duplicate-command-route)', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [] },
+      attention: {
+        available: true,
+        items: [{
+          kind: 'command.conflict', severity: 'warning', source: 'commands',
+          title: '插件 game-hub 的命令「排行」与插件 group-suite 重名，没有注册',
+          detail: '「排行」已由插件 group-suite 的命令「排行」使用，先注册的保留。建议让其中一个插件改名',
+        }],
+        unavailable: [],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：插件 game-hub 的命令「排行」与插件 group-suite 重名，没有注册: 「排行」已由插件 group-suite 的命令「排行」使用');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('lists an unavailable speech feature of the running instance (#1250 batch 29 speech-ready-without-tts-binary)', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [] },
+      attention: {
+        available: true,
+        items: [{
+          kind: 'speech.unavailable', severity: 'warning', source: 'speech',
+          title: '语音合成（edge）不可用',
+          detail: '找不到命令「edge-tts」（speech.tts.edgeTtsCommand），voice_tts 无法合成语音。请在 Bot 运行环境安装 edge-tts（pip install edge-tts），并把 speech.tts.edgeTtsCommand 改为可执行文件的绝对路径',
+        }],
+        unavailable: [],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：语音合成（edge）不可用: 找不到命令「edge-tts」（speech.tts.edgeTtsCommand）');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('warns when the attention list cannot be read', async () => {
     runningGateway.current = gatewayInfo(true);
     const { output, directory } = await runDoctor(() => {});
@@ -524,7 +569,10 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
       ] }));
     });
     try {
-      expect(output).toContain('上次运行: MCP 服务 github：401 Unauthorized（connect-failed，共 3 次，最近 2026-11-14T00:00:00.000Z）');
+      // Local time, `YYYY-MM-DD HH:mm:ss` (#1250 cli-datetime-us-locale).
+      expect(output).toContain(`上次运行: MCP 服务 github：401 Unauthorized（connect-failed，共 3 次，最近 ${formatDateTime(Date.UTC(2026, 10, 14))}）`);
+      expect(output).toMatch(/最近 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}）/u);
+      expect(output).not.toMatch(/\b(?:AM|PM)\b/u);
       expect(output).toContain('上次运行: 适配器账号 icqq/1659488338：缺少 password');
       expect(output).not.toContain('所有检查通过');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }

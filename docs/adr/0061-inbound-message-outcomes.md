@@ -103,10 +103,11 @@ sidebar: false
 | --- | --- | --- | --- | --- |
 | `replied` | `agent` / `agent_merged`（合流后回复） | 发起人 | 已回复。 / Replied. | 由 Agent `{agent}` 回复，回合 `{turnId}`。 / Replied by agent `{agent}`, turn `{turnId}`. |
 | `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 {command}。 / Ran command {command}. | 指令 `{command}`（插件 `{owner}`），耗时 {ms} ms。 / Command `{command}` (plugin `{owner}`) in {ms} ms. |
-| `handler_replied` | `middleware` / `handler` | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 {stage} 回复。 / Replied by `{owner}` ({stage}). |
+| `handler_replied` | `middleware` / `handler` / `middleware_replied`（中间件自己回复后停止分发，#1250） | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 {stage} 回复。 / Replied by `{owner}` ({stage}). |
 | `interaction_answered` | `prompt` / `button` | 发起人 | 已作为对「{prompt}」的回答。 / Taken as your answer to "{prompt}". | 提问方 `{owner}`，提问 `{promptId}`。 / Prompt `{promptId}` by `{owner}`. |
 | `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配 `{candidates}`。 / Near matches `{candidates}`. |
 | `refused` | `user_facing_error` | 发起人 | 插件拒绝了这次请求：{text} / The plugin declined: {text} | `UserFacingError` 来自 `{owner}`。 / `UserFacingError` from `{owner}`. |
+| `refused` | 指令自带的拒绝码（`UserFacingError` 的 `reason`，如 `simulated-sender`、`unkeyed-conversation`、`not-admin`、`usage`；#1250 第 31 批） | 发起人 | 同上 | 同上；`reason` 为该码，回复文字仍是错误本身。码须匹配 `^[a-z][a-z0-9_.:-]{0,63}$`，否则记 `user_facing_error`。 |
 
 #### 1.2 未执行但已在聊天里说明（`reply: yes`）
 
@@ -149,6 +150,8 @@ sidebar: false
 | `filtered_by_policy` | `middleware_stopped` | 管理员 | 消息被插件拦下了。 / A plugin stopped this message. | 中间件 `{owner}/{name}`。 / Middleware `{owner}/{name}`. |
 | `filtered_by_policy` | `control_gate_failed` | 管理员 | 机器人暂时不可用。 / The bot is temporarily unavailable. | 控制面判定异常，按急停处理：{detail}。 / Control gate failed closed: {detail}. |
 | `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的{kind}我读不了（{reason 的人话}），只看了文字部分。 / I could not read your {kind} ({reason}); only the text was used. | 场景 `{scene}`，`{scheme}://{host}`，{bytes}/{limit} 字节，期望 `{want}` 实得 `{mime}`。 / Scene `{scene}`, `{scheme}://{host}`, … |
+
+`middleware_stopped` 只记中间件停止分发且**该中间件所属插件没有为本条消息送达任何回复**的情况；别的插件先送达的回复不算。中间件先自己回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
 
 `media_rejected` 通常是 facet：消息仍然得到回复，结局是 `replied` + `facets: ['media_rejected:too_large']`；只有整条消息只有媒体且全部被拒时才是主结局。`normalizeMediaRefsToPayloads` 改为返回逐项结果（`{ ok: false, reason, scheme, host }`），不再 `continue`；URL 只记 scheme 与 host，不记路径与查询串。
 
@@ -263,6 +266,7 @@ sidebar: false
 1. **结局账本 + `finally` 提交**：Core 新增 `InboundOutcomeLedger`，在 `#receiveMessage` 开头创建并挂在 `RuntimeMessage` 上（内部 symbol，经 `@zhin.js/core` 的 `reportInboundOutcome(message, candidate)` 提交候选；Agent 在 Core 之上，可直接调用）。`finally` 中 `settle()`：
    - 有候选 → 按优先级取主结局，其余为 `facets`；
    - 抛出了异常 → `internal_error`（生成 `errorId`，`logger.error` 带会话、消息 ID、阶段、插件），**原样重新抛出**，不改变适配器 `emitAccepted` 的确认语义；
+   - 日志（#1250 第 31 批，`unaddressed-message-no-record`）：未点名的静默结局（`QUIET_MESSAGE_OUTCOMES`）默认写 debug；其中 `not_addressed` 每个会话每分钟的第一条写 info（`sampled: first_per_minute`），这样实例日志里能看到群消息为什么没人回，又不会被闲聊刷屏。Sandbox 通过 `GET /api/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 绑定的会话，且只列当前连接 owner 本人或其模拟身份 `~sim:<owner>` 发出的消息，与任务结果路由按 `ownerId` 过滤一致）读取刚发消息的结局并提示原因；响应只含结局码和面向发送者的文案，不含运维文案（插件名、阶段）。
    - 没有候选 → `unrecorded` + `logger.warn({ op: 'inbound_outcome_unrecorded', lastStage })`。测试环境（`NODE_ENV=test`）的严格程度分阶段：P1–P5 期间各阶段只给自己接入的分支补结局，其余分支必然还是 `unrecorded`，所以测试中**只告警**并计入一份允许清单（`packages/im/core/tests/fixtures/unrecorded-allowlist.json`，按 `lastStage` 登记，每个阶段完成时删去自己负责的条目）；P6 起清单必须为空，测试中出现 `unrecorded` 直接抛错（与 §6 P6 一致）。
    - `IngressRoute.route` 的返回值从 `boolean` 扩展为 `boolean | IngressRouteResult { handled; outcome? }`，旧返回值继续可用。`halt { handled: true }` 必须带结局。
 2. **`check:silent-catch` 脚本**（`scripts/check-silent-catch.mjs`，并入 `check:all`）：

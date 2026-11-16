@@ -69,7 +69,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'commands', pluginName, 'index.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(false)
     expect(
-      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'))
+      await fs.pathExists(path.join(pluginDir, 'commands', pluginName, 'echo', '[text]', 'index.ts'))
     ).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'tests'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'))).toBe(true)
@@ -151,11 +151,11 @@ describe('CLI new command integration', () => {
     expect(commandTs).toContain('defineCommand')
     expect(commandTs).toContain('zhin.js/command')
     const echoTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'),
+      path.join(pluginDir, 'commands', pluginName, 'echo', '[text]', 'index.ts'),
       'utf-8'
     )
     expect(echoTs).toContain('params.text')
-    expect(echoTs).toContain("from '../../../src/index.js'")
+    expect(echoTs).toContain("from '../../../../src/index.js'")
     expect(echoTs).toContain("text: { type: 'string', description: '要回显的文本' }")
     // Typed config without losing params inference (#857)
     expect(echoTs).toContain(`defineCommand.withConfig<TestNormalPluginConfig>()({`)
@@ -176,7 +176,7 @@ describe('CLI new command integration', () => {
     expect(testFile).toContain('parseCommandDefinition')
     expect(testFile).toContain('../plugin.ts')
     expect(testFile).toContain(`source: echoSource`)
-    expect(testFile).toContain(`new URL('../commands/${pluginName}-echo/[text]/index.ts', import.meta.url)`)
+    expect(testFile).toContain(`new URL('../commands/${pluginName}/echo/[text]/index.ts', import.meta.url)`)
 
     // Check README.md（新挂载方式提示 + 渐进披露工具与声明式页面指导）
     const readmePath = path.join(pluginDir, 'README.md')
@@ -414,6 +414,14 @@ describe('CLI new command integration', () => {
     expect(failure?.status).toBe(1)
     expect(`${failure?.stdout ?? ''}${failure?.stderr ?? ''}`).toContain('--type')
     expect(await fs.pathExists(path.join(testDir, 'no-type-demo'))).toBe(false)
+  }, 30000)
+
+  // #1250 new-type-required-not-in-help: the help says --type is required without a TTY.
+  it('says in --help that --type is required in non-interactive mode', () => {
+    // Commander wraps long descriptions; compare with whitespace collapsed.
+    const help = execSync(`node "${cliPath}" new --help`, { cwd: testDir, encoding: 'utf8', timeout: 10000 }).replace(/\s+/gu, ' ')
+    expect(help).toContain('插件类型 (normal|service|adapter)；非交互环境（CI、脚本、无 TTY）必填')
+    expect(help).toContain('zhin new my-plugin --type normal --skip-install')
   }, 30000)
 
   it('should reject invalid plugin identity names', async () => {

@@ -79,8 +79,15 @@ export interface TurnTraceModelSelection {
   readonly profile_id: string;
   readonly account_id: string;
   readonly model: string;
-  /** Selection layer (`default`, `agent`, `session`, …) when known. */
+  /** Selection layer (`default`, `agent`, `session`, `adapter`, `endpoint`, `scene`, …) when known. */
   readonly source?: string;
+  /** Key of that layer: the agent key, or the adapter / endpoint / scene key of a chat override. */
+  readonly source_key?: string;
+  /**
+   * Sub-agent or routed specialist whose `purposes.agents` key was looked up (qualified name). With
+   * `purpose: chat` it has no effective key of its own (#1250 agent-purpose-binding-ignored).
+   */
+  readonly agent?: string;
 }
 
 /**
@@ -229,11 +236,20 @@ export type TurnTraceNote =
    * checked for a lookup claim without any tool call, like `turn_end` output.
    */
   | Readonly<{ kind: 'final_reply'; text: string }>
+  /**
+   * #1250 第 29 批：出站去重丢弃了模型回复里抄写的内嵌媒体（本轮工具已产出同类媒体）。`path`：结算阶段
+   * （`phase` / `final`）或流式回复（`stream`）。
+   */
+  | Readonly<{ kind: 'copied_inline_media_dropped'; kinds: readonly string[]; count: number; path: 'phase' | 'final' | 'stream' }>
   /** #1250: the user was told that side-effect tools did not run (appended, sent as a follow-up, or that failed). */
   | Readonly<{ kind: 'unexecuted_tool_notice'; tools: readonly string[]; delivered: 'appended' | 'followup' | 'failed' }>
   /** The inbound message that started the turn; recorded once (#1250). */
   | Readonly<{ kind: 'trigger'; text: string; sender_id?: string; sender_name?: string; conversation?: string;
       message_id?: string; received_at?: number; merged_messages?: number; queued_ms?: number }>
+  /** #1250 b33: the automatic reviewer's verdict on an approval request of an unattended turn. */
+  | Readonly<{ kind: 'unattended_review'; tool: string; policy: string; outcome: 'approved' | 'rejected' | 'unavailable' }>
+  /** #1250 b33: the visible reply is the framework's fallback text, and why. */
+  | Readonly<{ kind: 'reply_fallback'; cause: string; tools?: readonly string[] }>
   /** A model request attempt hit its first-response or whole-request deadline (#1250). */
   | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>;
 
@@ -425,6 +441,8 @@ export class TurnTraceCollector {
       this.#modelFallbacks.push(Object.freeze({ ...fallback }));
       this.#addTimeline('model_fallback', `${fallback.notice}: ${fallback.purpose} ${fallback.from_account_id}/${fallback.from_model}`
         + ` → ${fallback.to_account_id}/${fallback.to_model} (${fallback.reason})`);
+    } else if (note.kind === 'copied_inline_media_dropped') {
+      this.#addTimeline('copied_inline_media_dropped', `${note.path}: ${note.count} × ${note.kinds.join(', ')}`);
     } else if (note.kind === 'unexecuted_tool_notice') {
       this.#unexecutedNotice = Object.freeze({ tools: Object.freeze([...note.tools]), delivered: note.delivered });
       this.#addTimeline('unexecuted_tool_notice', `${note.delivered}: ${note.tools.join(', ')}`);
@@ -445,6 +463,10 @@ export class TurnTraceCollector {
         ...(note.merged_messages !== undefined ? { merged_messages: note.merged_messages } : {}),
         ...(note.queued_ms !== undefined ? { queued_ms: note.queued_ms } : {}),
       });
+    } else if (note.kind === 'unattended_review') {
+      this.#addTimeline('unattended_review', `${note.tool} (${note.policy}): ${note.outcome}`);
+    } else if (note.kind === 'reply_fallback') {
+      this.#addTimeline('reply_fallback', `${note.cause}${note.tools?.length ? `: ${note.tools.join(', ')}` : ''}`);
     } else if (note.kind === 'model_timeout') {
       this.#addTimeline('model_timeout', `${note.provider}/${note.model} ${note.phase === 'first_response' ? 'no response' : 'request'} after ${note.timeout_ms}ms (attempt ${note.attempt})`);
     } else {

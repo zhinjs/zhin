@@ -6,3 +6,5 @@ export * from './journal.js';
 export * from './mailbox.js';
 export * from './harness.js';
 export * from './policies/index.js';
+export * from './ids.js';
+export * from './engagement-id-migration.js';

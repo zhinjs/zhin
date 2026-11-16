@@ -8,7 +8,9 @@ export default defineCommand({
   descriptionI18n: { en: 'Idiom Chain' },
   alias: ['成语接龙'],
   preferredAliasI18n: { 'zh-CN': '成语接龙' },
-  params: { action: { type: 'string', default: '' } },
+  params: { action: { type: 'string', default: '',
+    // 近似指令提示里列出真实子命令，而不是 `[action]`（#1250）。
+    suggestions: ['start', 'continue', 'quit'], suggestionsI18n: { 'zh-CN': ['开始', '继续', '认输'] } } },
   async execute({ params, input, use, locale, formatCommand, session }) {
     const action = normalizeChainAction(String(params.action ?? ''));
     if (!action || action === 'help') return getChainHelp({ locale, formatCommand });

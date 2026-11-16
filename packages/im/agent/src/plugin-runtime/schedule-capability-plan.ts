@@ -16,6 +16,18 @@ export interface ScheduleCapabilityPlan {
   readonly resolvedBy: 'execution-plan' | 'affinity';
   readonly missingTools: readonly string[];
   readonly missingSkills: readonly string[];
+  /**
+   * #1250 b33: `empty_execution_plan`: the job has an execution plan that names no tool and no skill, so
+   * the tools were chosen from the prompt instead; `no_tools`: the turn runs without any tool.
+   */
+  readonly warnings: readonly ScheduleCapabilityWarning[];
+}
+
+export type ScheduleCapabilityWarning = 'empty_execution_plan' | 'no_tools';
+
+/** A plan that names neither tools nor skills cannot select anything (#1250 b33). */
+export function isEmptyExecutionPlan(plan: Readonly<ScheduleJobExecutionPlan> | undefined): boolean {
+  return plan !== undefined && !(plan.tools?.length) && !(plan.skills?.length);
 }
 
 export function createScheduleCapabilityPlan(input: {
@@ -26,7 +38,10 @@ export function createScheduleCapabilityPlan(input: {
 }): ScheduleCapabilityPlan {
   const eligible = input.tools.filter((tool) => !UNATTENDED_FORBIDDEN_TOOLS.has(localName(tool.name)));
   const allTools = eligible.map(capabilityAsAgentTool);
-  if (!input.executionPlan) {
+  // #1250 b33: a plan written without tools or skills (`schedule_add` without `tools`) used to leave the
+  // turn with no tool at all; it now falls back to the same prompt-based selection as a job without plan.
+  const emptyPlan = isEmptyExecutionPlan(input.executionPlan);
+  if (!input.executionPlan || emptyPlan) {
     const resolvedTools = filterTools(input.prompt, [...allTools], { maxTools: 20, minScore: 0.05 });
     const selectedNames = new Set(resolvedTools.map((tool) => tool.name));
     const skills = selectSkillsByAffinity(input.skills, input.prompt);
@@ -38,6 +53,7 @@ export function createScheduleCapabilityPlan(input: {
       resolvedBy: 'affinity',
       missingTools: [],
       missingSkills: [],
+      warnings: planWarnings(emptyPlan, resolvedTools.length),
     });
   }
 
@@ -78,7 +94,12 @@ export function createScheduleCapabilityPlan(input: {
     resolvedBy: 'execution-plan',
     missingTools,
     missingSkills,
+    warnings: planWarnings(false, selectedNames.size),
   });
+}
+
+function planWarnings(emptyPlan: boolean, tools: number): ScheduleCapabilityWarning[] {
+  return [...(emptyPlan ? ['empty_execution_plan' as const] : []), ...(tools === 0 ? ['no_tools' as const] : [])];
 }
 
 function selectSkillsByAffinity(skills: readonly SkillDescriptor[], prompt: string): SkillDescriptor[] {
@@ -109,6 +130,7 @@ function freezePlan(plan: {
   resolvedBy: 'execution-plan' | 'affinity';
   missingTools: string[];
   missingSkills: string[];
+  warnings: ScheduleCapabilityWarning[];
 }): ScheduleCapabilityPlan {
   return Object.freeze({
     ...plan,
@@ -118,5 +140,6 @@ function freezePlan(plan: {
     skills: Object.freeze([...plan.skills]),
     missingTools: Object.freeze([...plan.missingTools]),
     missingSkills: Object.freeze([...plan.missingSkills]),
+    warnings: Object.freeze([...plan.warnings]),
   });
 }

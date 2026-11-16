@@ -44,6 +44,7 @@ export default defineAgentTool({
 
 - `description` 和 `inputSchema` 是**写给模型看的**：清楚地说明这个工具做什么、参数是什么，模型才会在正确的时机调用它。
 - `execute` 的返回值会交给模型，由模型组织成回复。
+- 失败时抛出错误，或返回带非空 `error` 字段的对象（`{ error: '…' }`；MCP 工具的 `isError: true` 同样算）：两者都按失败记录（trace、用量统计记失败，实例日志写一条脱敏 warn）。抛错表示操作没有完成；返回的失败结果可能已经部分生效，模型会读到脱敏后的完整返回值（经过 `toModelOutput`，提示、候选项等字段都在）和「是否已部分生效不确定」的说明，回复末尾的提示也相应写成「…操作报告失败，是否已部分生效不确定」。`error: null` / `''` 之类不算失败，结果里同时带 `ok: true` / `success: true` 也不算。
 
 ### 参数 Schema 写法
 
@@ -108,6 +109,23 @@ export default defineAgentTool({
 | `'never'` | 不需要确认 |
 
 `'never'` 只是跳过确认步骤，**不能**绕过权限、网络、文件系统和 Shell 等安全策略。
+
+### 只读工具不需要审批
+
+只查询、不改任何东西的工具（查天气、查新闻、搜索）声明 `readOnly: true`。在默认的 `'on-risk'` 下，声明只读的工具不再要求审批，定时任务这类无人值守的回合也能直接调用：
+
+```ts
+export default defineAgentTool({
+  description: '查询城市天气',
+  readOnly: true,
+  // ...
+});
+```
+
+- 只读只放宽「需要审批」这一项。权限 / 角色过滤、ExecPolicy、FilePolicy、网络白名单、危险工具硬闸照常生效。
+- 显式写了 `requiresApproval: 'always' | 'once' | 'human'` 时，以它为准，只读不生效。
+- 下列工具声明只读也不生效，仍按原规则审批：写文件、执行命令、向其他会话发消息的内置工具（`write_file`、`edit_file`、`bash`、`send_*` 等，也包括插件里同名的工具），写记忆、改配置的内置工具，带 `shell` / `outbound` / `config` / `schedule` 标签或名字属于这些类别的工具，以及 `risk: 'dangerous'` 的工具。
+- 只读还用于判断失败是否可以安全重试、受限回合能用哪些工具。只有确实不改任何东西的工具才能声明。
 
 ### 声明危险工具（硬闸）
 
@@ -439,7 +457,7 @@ my-plugin/
 | `permissions` | 否 | 权限规则列表（发起人 zhin 角色、发起人平台身份、机器人自身平台身份），全部满足才提供 |
 | `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
 | `alwaysLoaded` | 否 | 设为 `true` 时参数定义每轮常驻给模型；默认 `false`（延迟加载），见[让工具常驻](#让工具常驻) |
-| `readOnly` | 否 | 设为 `true` 表示工具只读（不改平台、存储，也不影响别人）；受限回合（如直播弹幕回合，ADR 0038 §5）只开放声明了 `readOnly: true` 的工具。不声明视为会写 |
+| `readOnly` | 否 | 设为 `true` 表示工具只读（不改平台、存储，也不影响别人）；受限回合（如直播弹幕回合，ADR 0038 §5）只开放声明了 `readOnly: true` 的工具；在默认 `'on-risk'` 下不再要求审批，见[只读工具不需要审批](#只读工具不需要审批)。不声明视为会写 |
 | `execute(input, context)` | 是 | 执行函数，`context` 见上文 |
 
 ### 权限规则

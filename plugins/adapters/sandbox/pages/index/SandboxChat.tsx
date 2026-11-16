@@ -33,6 +33,7 @@ import { sandboxStyles } from './styles.js';
 import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
+import { quietOutcomeNotice, readMessageOutcome } from './conversationRecovery.js';
 import {
   agentSessionsPath,
   buildAgentRunReport,
@@ -97,6 +98,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [directoryStatus, setDirectoryStatus] = useState<DirectoryStatus>({ mode: 'loading', error: null })
     const [workspaceScope, setWorkspaceScope] = useState<SandboxWorkspaceScope | null>(null)
     const [transportNotice, setTransportNotice] = useState<string | null>(null)
+    // #1250 (`unaddressed-message-no-record`): why the last message got no reply, from its settled outcome.
+    const [outcomeNotice, setOutcomeNotice] = useState<{ messageId: string; sessionKey: string; text: string } | null>(null)
     const [shellIsolation, setShellIsolation] = useState<{ available: boolean; provider: string; message: string } | null>(null)
     const [inspectorView, setInspectorView] = useState<'runs' | 'artifacts'>('runs')
     const [expandedArtifact, setExpandedArtifact] = useState<string | null>(null)
@@ -642,7 +645,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 case 'md':
                     return <MarkdownContent key={index} text={typeof d.text === 'string' ? d.text : typeof d.content === 'string' ? d.content : segmentFallbackText(segment) ?? ''} className={isSent ? 'zhin-markdown--inverse' : undefined} />
                 case 'html':
-                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')} />
+                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')}
+                        width={typeof d.width === 'number' ? d.width : undefined} />
                 case 'code':
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':
@@ -894,6 +898,26 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         })
     }
 
+    /** Reads the sent message's outcome a few times while it settles; a reply-less one gets a notice. */
+    const watchQuietOutcome = (messageId: string, scene: Channel) => {
+        const connectionId = connectionRef.current.connectionId
+        if (!connectionId) return
+        const key = buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+        const requestContext = socketRequestContextRef.current ?? captureSandboxRequestContext()
+        const delays = [3_000, 8_000, 20_000]
+        const attempt = (index: number) => {
+            window.setTimeout(() => {
+                if (connectionRef.current.connectionId !== connectionId) return
+                void readMessageOutcome(connectionId, key, messageId, localeRef.current, undefined, requestContext).then((outcome) => {
+                    if (outcome === undefined) { if (index + 1 < delays.length) attempt(index + 1); return }
+                    const text = quietOutcomeNotice(outcome, localeRef.current)
+                    if (text) setOutcomeNotice({ messageId, sessionKey: key, text })
+                }).catch(() => { /* silent-ok: the notice is optional; the run log keeps the outcome */ })
+            }, delays[index])
+        }
+        attempt(0)
+    }
+
     const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
         if (!connectionRef.current.canExecute || directoryModeRef.current === 'loading' || !hasRenderableSegments(segments)) return
         const scene = activeChannelRef.current
@@ -914,6 +938,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
         void directoryControllerRef.current?.save(scene, true)
         setPendingRefreshEpoch((epoch) => epoch + 1)
+        setOutcomeNotice(null)
+        watchQuietOutcome(newMessage.id, scene)
         setMessages((prev) => mergePlaygroundMessage(prev, newMessage))
         setInputText(''); setPreviewSegments([]); setComposerMode('write')
         editorRef.current?.clear()
@@ -1360,6 +1386,13 @@ ${sandboxStyles}`}</style>
                     message: kind === 'emoji' ? sandboxText(locale, "表情列表加载失败，表情选择器暂不可用。") : sandboxText(locale, "收到一条无法解析的消息，已忽略。"),
                     action: <Button type="button" size="sm" variant="outline" onClick={() => setInlineNotices((n) => ({ ...n, [kind]: false }))}>{sandboxText(locale, "知道了")}</Button>,
                 }))}
+
+                {outcomeNotice && outcomeNotice.sessionKey === sessionKey && notice('outcome', {
+                    title: sandboxText(locale, "这条消息没有回复"),
+                    message: outcomeNotice.text,
+                    role: 'status',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setOutcomeNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
 
                 {transportNotice && notice('transport', {
                     title: sandboxText(locale, "运行暂不可用"),

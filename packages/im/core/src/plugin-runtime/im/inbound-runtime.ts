@@ -22,6 +22,8 @@ import {
   type CaptureEndpointOperationInput,
   type CapturedEndpointOperation,
   type IncomingMessage,
+  type InboundSecretGuard,
+  type InboundSecretMatch,
   type Message,
   type MessageDispatchResult,
   type MessageSenderRef,
@@ -50,7 +52,7 @@ import {
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-ledger.js';
 import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
-import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
+import { defaultCommandPrefixResolver, MessageDispatcher, normalizeCommandInputText } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
 import {
   formatConversationLog,
@@ -70,6 +72,8 @@ interface InboundRuntimeContext {
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
   createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
+  readonly inboundSecret?: InboundSecretGuard;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
   readonly originClassifier?: InboundOriginClassifier;
   /** Cross-Endpoint dedup of human group messages. Absent: no dedup. */
@@ -100,9 +104,18 @@ interface InboundRuntimeContext {
   publish(event: RuntimeMessageEvent): void;
 }
 
+/** Conversations remembered for the per-minute `not_addressed` info line (bounded; cleared when full). */
+const QUIET_LOG_CONVERSATIONS = 2_000;
+
 /** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
 export class InboundRuntime {
   readonly #dispatcher: MessageDispatcher;
+  /**
+   * zhinjs/zhin#1250 (`unaddressed-message-no-record`): the minute of the last `not_addressed` line
+   * logged at info per conversation. The first unaddressed message of a conversation each minute
+   * is logged at info (the instance log the Console shows), the rest of that minute at debug.
+   */
+  readonly #quietLogged = new Map<string, number>();
 
   constructor(
     private readonly context: InboundRuntimeContext,
@@ -209,11 +222,14 @@ export class InboundRuntime {
         ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
       });
       this.context.diagnostics?.identify(conversation);
+      // ADR 0060 §3.3: a one-time secret is recognized before it is logged, recorded or routed.
+      const secret = this.#matchSecret(input, lease.value);
+      const visibleContent = secret ? secret.redacted : input.content;
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
         sender: `${input.sender?.name || 'undefined'}(${input.sender?.id || 'undefined'})`,
-        preview: truncatePreview(input.content),
+        preview: truncatePreview(visibleContent),
       }));
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
@@ -230,6 +246,8 @@ export class InboundRuntime {
       const origin = classified?.origin;
       this.context.diagnostics?.step('origin', origin ?? 'unclassified');
       if (origin === 'self') {
+        // One of our own accounts posted the secret where others saw it: revoke it like any drop.
+        await this.#discardSecret(secret);
         ledger.report({ outcome: 'ignored_self', reason: 'self_echo', stage: 'ingress' });
         this.context.diagnostics?.route('self_echo');
         logger.debug(formatCompact({
@@ -247,6 +265,7 @@ export class InboundRuntime {
           ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
         });
         if (!readiness.ready) {
+          await this.#discardSecret(secret);
           ledger.markAddressed(input.mentioned === true || conversation.kind === 'private');
           ledger.report({ outcome: 'dropped_unready', reason: 'venue_unready', stage: 'ingress',
             detail: readiness.unreadyEndpoints?.join(',') ?? '' });
@@ -298,8 +317,8 @@ export class InboundRuntime {
             content,
             incoming: {
               sender: enrichedSender,
-              content: input.content,
-              segments: input.segments,
+              content: visibleContent,
+              ...(secret ? {} : { segments: input.segments }),
               messageId: input.message?.id,
               timestamp: receivedAt,
               endpointId: input.endpointId,
@@ -311,6 +330,7 @@ export class InboundRuntime {
           const delivery = commandOperation && this.context.runCommandOperation
             ? this.context.runCommandOperation(commandOperation, deliver) : deliver();
           return Promise.resolve(delivery).then((receipt) => {
+            if (receipt?.status === 'sent') ledger.noteReplyDelivered(replyRequester);
             if (receipt && receipt.status !== 'sent') {
               ledger.report({ outcome: 'delivery_failed', reason: receipt.failure?.code ?? receipt.status, stage: 'delivery',
                 ...(receipt.failure?.deliveryUnknown ? { facets: ['delivery_unknown'] } : {}) });
@@ -391,7 +411,8 @@ export class InboundRuntime {
             },
           },
         );
-        const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
+        // A secret-bearing message never enters the conversation history.
+        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender);
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));
@@ -406,19 +427,21 @@ export class InboundRuntime {
           return result;
         }
         if (recordOnly === 'dedup_error') {
+          await this.#discardSecret(secret);
           ledger.report({ outcome: 'dropped_dedup_error', reason: 'dedup_error', stage: 'ingress' });
           this.context.diagnostics?.route('dedup_error');
           this.context.publish({
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(input.content),
+            contentPreview: previewMessageContent(visibleContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
           return result;
         }
         if (origin === 'member' || origin === 'peer_bot') {
+          await this.#discardSecret(secret);
           ledger.report({ outcome: 'ignored_bot', reason: origin, stage: 'ingress' });
           this.context.diagnostics?.route('bot_origin');
           logger.debug(formatCompact({
@@ -431,7 +454,27 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(input.content),
+            contentPreview: previewMessageContent(visibleContent),
+            ...(input.message?.id ? { messageId: input.message.id } : {}),
+            timestamp: receivedAt,
+          });
+          return result;
+        }
+        if (secret) {
+          // Handled here alone: no middleware, handler, command, interaction prompt or Agent sees it.
+          ledger.enter('command');
+          this.context.diagnostics?.route('command');
+          const content = await secret.handle(message);
+          ledger.report({ outcome: 'command_replied', reason: 'secret', stage: 'command', command: secret.name, owner: lease.value.root });
+          result = Object.freeze({ matched: true, status: 'executed', command: secret.name, owner: lease.value.root });
+          this.context.diagnostics?.dispatch(result);
+          await commandOperation?.stopProgress();
+          if (content !== undefined) await message.$replyFrom(lease.value.root, content);
+          this.context.publish({
+            direction: 'inbound',
+            conversation,
+            ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
+            contentPreview: previewMessageContent(visibleContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -511,7 +554,7 @@ export class InboundRuntime {
           direction: 'inbound',
           conversation,
           ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-          contentPreview: previewMessageContent(input.content),
+          contentPreview: previewMessageContent(visibleContent),
           ...(input.message?.id ? { messageId: input.message.id } : {}),
           timestamp: receivedAt,
         });
@@ -528,11 +571,73 @@ export class InboundRuntime {
     }
   }
 
+  /** The guard's match for this message; a throwing guard matches nothing (logged). */
+  #matchSecret(input: IncomingMessage, snapshot: RuntimeSnapshot): InboundSecretMatch | undefined {
+    const guard = this.context.inboundSecret;
+    if (!guard) return undefined;
+    try {
+      return guard.match({ text: normalizeCommandInputText(input), prefix: this.#dispatcher.prefixOf(input, snapshot),
+        conversation: input.conversation, snapshot });
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
+      return undefined;
+    }
+  }
+
+  /**
+   * ADR 0060 §3.3 (#1289 review): an Endpoint event other than a message (native platform events,
+   * notices, requests and their comments, system events) that carries the secret is neither recorded
+   * nor dispatched to Handlers.
+   */
+  #withholdSecretEvent(event: EndpointEvent): boolean {
+    if (!this.#nativeCarriesSecret(event)) return false;
+    logger.debug(formatCompact({ op: 'native_secret_withheld', event: event.name, endpoint: String(event.endpoint.id) }));
+    return true;
+  }
+
+  #nativeCarriesSecret(event: EndpointEvent): boolean {
+    const inspect = this.context.inboundSecret?.inspectNative;
+    if (!inspect) return false;
+    try { return inspect.call(this.context.inboundSecret, event.payload, { name: event.name }) === true; } catch (error) {
+      // Fail closed: an event that cannot be inspected is not dispatched while a secret is open.
+      logger.warn(formatCompact({ op: 'inbound_secret_guard_failed', error: logSafeError(error) }));
+      return true;
+    }
+  }
+
+  /**
+   * A withheld notice, request or system event was still seen on the platform (an admin reads a join
+   * request's comment): the guard revokes the secret it carries (#1291 review). `platform.receive` is
+   * not revoked here: the same message's `message.receive` still reaches the claim.
+   */
+  async #discardNativeSecret(event: EndpointEvent): Promise<void> {
+    const guard = this.context.inboundSecret;
+    try { await guard?.discardNative?.(event.payload, { name: event.name }); } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_discard_failed', error: logSafeError(error) }));
+    }
+  }
+
+  /** A dropped message's secret is revoked; a failing guard is logged, never the message's failure. */
+  async #discardSecret(secret: InboundSecretMatch | undefined): Promise<void> {
+    try { await secret?.discard?.(); } catch (error) {
+      logger.warn(formatCompact({ op: 'inbound_secret_discard_failed', error: logSafeError(error) }));
+    }
+  }
+
   /** Claim resolution with the answer classification, when the coordinator offers it. */
   #resolveClaim(message: Message): { answerLike: boolean; owner?: string } | undefined {
     const interactions = this.context.interactions;
     if (typeof interactions.resolveClaimDetailed === 'function') return interactions.resolveClaimDetailed(message) || undefined;
     return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
+  }
+
+  /** True for the first `not_addressed` of `conv` in the minute of `at` (see {@link InboundRuntime.#quietLogged}). */
+  #firstQuietThisMinute(conv: string, at: number): boolean {
+    const minute = Math.floor(at / 60_000);
+    if (this.#quietLogged.get(conv) === minute) return false;
+    if (this.#quietLogged.size >= QUIET_LOG_CONVERSATIONS && !this.#quietLogged.has(conv)) this.#quietLogged.clear();
+    this.#quietLogged.set(conv, minute);
+    return true;
   }
 
   /** Settles the ledger once (ADR 0061 §4.1); never throws over the original failure. */
@@ -565,7 +670,11 @@ export class InboundRuntime {
     if (record.outcome === 'unrecorded') {
       logger.warn(formatCompact({ ...fields, op: 'inbound_outcome_unrecorded', lastStage: record.lastStage }));
     } else if (!record.addressed && QUIET_MESSAGE_OUTCOMES.has(record.outcome)) {
-      logger.debug(formatCompact(fields));
+      if (record.outcome === 'not_addressed' && this.#firstQuietThisMinute(conv, record.settledAt)) {
+        logger.info(formatCompact({ ...fields, sampled: 'first_per_minute' }));
+      } else {
+        logger.debug(formatCompact(fields));
+      }
     } else {
       logger.info(formatCompact(fields));
     }
@@ -574,6 +683,10 @@ export class InboundRuntime {
   async #receiveCanonicalEndpointEvent(
     source: EndpointEvent<IncomingNotice | IncomingRequest | IncomingSystemEvent>,
   ): Promise<void> {
+    if (this.#withholdSecretEvent(source)) {
+      await this.#discardNativeSecret(source);
+      return;
+    }
     const lease = this.context.acquire();
     let active = true;
     let endpointLease: EndpointChildLease | undefined;
@@ -626,6 +739,7 @@ export class InboundRuntime {
   }
 
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
+    if (this.#withholdSecretEvent(event)) return;
     let active = true;
     const lease = this.context.acquire();
     let endpointLease: EndpointChildLease | undefined;

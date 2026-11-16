@@ -17,6 +17,9 @@ import {
 } from '../index.js';
 import { observeAgentTurnTrace } from '../ingress/ports.js';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
+import type { AgentHostMcpSummary } from '../agent-host-port.js';
+import type { HostMcpStatusBoard } from '../host-mcp-status.js';
+import type { McpServerEntry } from '../../resource-hub/types.js';
 
 type RootResources = Parameters<RootResourceInstaller>[0]['resources'];
 
@@ -28,6 +31,11 @@ export interface AgentHostPublicationCoordinatorOptions {
   readonly agent: AgentRuntimeFoundation;
   readonly bootstrapText: string;
   readonly contextFiles?: readonly ContextFile[];
+  /**
+   * Configured MCP servers (`ai.mcpServers`) and their connect outcomes (#1250). They run as
+   * generation-owned MCP features, not in `resourceHub.mcps`, so introspection reads them here.
+   */
+  readonly mcp?: Readonly<{ entries: readonly McpServerEntry[]; status: HostMcpStatusBoard }>;
   /** Live bootstrap the host re-reads when its files change (#1250); overrides the two above. */
   readonly bootstrap?: () => Readonly<{ bootstrapContext: string; contextFiles?: readonly ContextFile[] }>;
 }
@@ -45,6 +53,7 @@ export class AgentHostPublicationCoordinator {
     resources.provide(agentHostToken, Object.freeze({
       protocol: Object.freeze({
         listBindings: () => agent.listBindings(),
+        listConfiguredBindingNames: () => Object.freeze(service.getBindingRegistry().listConfiguredBindingNames()),
         execute: (bindingName: string, request: TurnRequest) => {
           const selected = service.getBindingRegistry().getBinding(bindingName);
           if (!selected) throw new Error(`Agent binding not found: ${bindingName}`);
@@ -56,16 +65,27 @@ export class AgentHostPublicationCoordinator {
         },
       }),
       introspection: Object.freeze({
-        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => {
-          const connected = resourceHub.mcps.isConnected(entry.name);
-          const lastError = connected ? undefined : resourceHub.mcps.getLastFailure(entry.name);
-          return Object.freeze({
-            name: entry.name,
-            connected,
-            toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
-            ...(lastError ? { lastError } : {}),
-          });
-        }),
+        listMcpServers: () => {
+          const rows = new Map<string, AgentHostMcpSummary>();
+          for (const entry of options.mcp?.entries ?? []) rows.set(entry.name, options.mcp!.status.summary(entry.name));
+          // Servers added to the Agent's own registry at run time (not from `ai.mcpServers`).
+          for (const entry of resourceHub.mcps.getAll()) {
+            if (rows.has(entry.name)) continue;
+            const connected = resourceHub.mcps.isConnected(entry.name);
+            const lastError = connected ? undefined : resourceHub.mcps.getLastFailure(entry.name);
+            rows.set(entry.name, Object.freeze({
+              name: entry.name,
+              connected,
+              toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
+              ...(lastError ? { lastError } : {}),
+            }));
+          }
+          return Object.freeze([...rows.values()]);
+        },
+        testMcpServer: async (name: string) => {
+          const entry = options.mcp?.entries.find(candidate => candidate.name === name);
+          return entry ? await options.mcp!.status.probe(entry) : undefined;
+        },
       }),
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
@@ -121,6 +141,7 @@ export class AgentHostPublicationCoordinator {
       bootstrapContext: options.bootstrapText,
       contextFiles: options.contextFiles,
       ...(options.bootstrap ? { bootstrap: options.bootstrap } : {}),
+      ...(agent.knowledgeIndex ? { knowledgeIndex: agent.knowledgeIndex } : {}),
     }));
   }
 }

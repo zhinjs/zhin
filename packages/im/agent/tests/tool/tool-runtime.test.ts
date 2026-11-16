@@ -193,6 +193,23 @@ describe('ToolRuntime', () => {
     }
   });
 
+  it('journals a returned { error } as tool_failed and reports it (#1250)', async () => {
+    const events: Array<{ type: string; error?: string }> = [];
+    const rt = new ToolRuntime(makeCtx({ journal: { append: (event) => { events.push(event as never); } } }));
+    const result = await rt.execute(makeTool({ execute: async () => ({ error: '语音识别失败: timeout' }) }), {}, { toolCallId: 'tc-err' });
+    expect(result.failed).toBe('语音识别失败: timeout');
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_failed']);
+    expect(events[1]!.error).toBe('语音识别失败: timeout');
+  });
+
+  it('keeps a result with error: null as a normal result', async () => {
+    const events: Array<{ type: string }> = [];
+    const rt = new ToolRuntime(makeCtx({ journal: { append: (event) => { events.push(event); } } }));
+    const result = await rt.execute(makeTool({ execute: async () => ({ text: 'hi', error: null }) }), {}, { toolCallId: 'tc-ok' });
+    expect(result.failed).toBeUndefined();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_result']);
+  });
+
   it('exposes generation on the runtime instance', () => {
     const rt = new ToolRuntime(makeCtx({ generation: 42 }));
     expect(rt.generation).toBe(42);

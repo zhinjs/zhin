@@ -75,6 +75,16 @@ export interface CapabilityResolutionEvent {
   skills: string[];
   missingTools: string[];
   missingSkills: string[];
+  /**
+   * #1250 b33: `empty_execution_plan` (the plan named no tool or skill, so the tools were chosen from the
+   * prompt) and `no_tools` (the turn runs without any tool). Absent when there is nothing to warn about.
+   */
+  warnings?: string[];
+  /**
+   * #1250 b33, unattended turns only: selected tools that will be denied before running (`denied`), and
+   * tools whose approval goes to the automatic reviewer (`reviewed`, `execApprovalMode: auto`).
+   */
+  unattendedApproval?: Readonly<{ review: 'auto' | 'none'; denied: string[]; reviewed: string[] }>;
 }
 
 /** Durable terminal fact for one inbound media item. */
@@ -165,12 +175,23 @@ export interface TurnEndEvent {
   type: 'turn_end';
   output: AgentOutputElement[];
   usage: TurnUsage;
+  /**
+   * #1250 b33: the visible reply is the framework's fallback text, not model output. `no_tools`: the model
+   * had no tool and wrote nothing; `tool_denied`: every tool call was denied (`tools` names them);
+   * `empty_reply`: the model returned no visible text.
+   */
+  fallback?: ReplyFallback;
   /** Control-only ingress links its own principal/journal to the affected turn. */
   control?: Readonly<{
     intent: 'steer' | 'follow_up' | 'observe';
     targetTurnId?: string;
   }>;
 }
+
+export type ReplyFallback = Readonly<{
+  cause: 'no_tools' | 'tool_denied' | 'empty_reply';
+  tools?: readonly string[];
+}>;
 
 export interface TurnErrorEvent {
   type: 'error';

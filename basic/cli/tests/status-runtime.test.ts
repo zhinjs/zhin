@@ -123,6 +123,19 @@ describe('zhin status runtime state', () => {
     expect(parsed.endpoints).toEqual({ available: false, error: '实例未运行' });
   });
 
+  it('shows a server that has not connected yet as waiting to connect, not as a problem (#1250)', () => {
+    const lines = renderRuntimeState({
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [
+        { name: 'github', status: 'idle', toolCount: 0 },
+        { name: 'docs', status: 'failed', toolCount: 0, lastError: 'HTTP 401' },
+      ] },
+      attention: { available: true, items: [], unavailable: [] },
+    });
+    expect(lines).toContain('  ✓ github：待连接');
+    expect(lines).toContain('  ✗ docs：连接失败（HTTP 401）');
+  });
+
   it('times out a read that never answers', async () => {
     const http: HostHttpConfig = { baseUrl: 'http://127.0.0.1:1/api', token: '', fetch: (() => new Promise(() => undefined)) as never };
     const state = await readRuntimeState('/nonexistent', { http, timeoutMs: 50 });

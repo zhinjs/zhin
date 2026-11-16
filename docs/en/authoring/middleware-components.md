@@ -326,6 +326,23 @@ export default defineComponent.withConfig<MyConfig>()<{ title: string }>({
 });
 ```
 
+### Stand-in services for previews (`previewServices`)
+
+`zhin preview` renders components outside a running instance, so there are no real plugin services. While previewing, `use(token)` returns the stand-in listed in `previewServices`, and `has(token)` is `true` only for listed tokens. A token without a stand-in fails the preview with a message naming it (`预览环境没有提供 <token>，可在组件的 previewServices 里给一个替身`). Like `previewProps`, it is used only for previews; the running instance always uses the real services. Do not put secrets in it.
+
+```tsx
+import { defineComponent } from 'zhin.js/component';
+import { weatherToken } from '../../src/tokens.js';
+
+export default defineComponent<{ city: string }>({
+  previewProps: { city: 'Shanghai' },
+  previewServices: [{ token: weatherToken, value: { today: async () => 'Sunny 22°C' } }],
+  async render({ city }, { use }) {
+    return <text>{city}: {await use(weatherToken).today()}</text>;
+  },
+});
+```
+
 ## How it looks on each platform
 
 | Content | Platform shows HTML directly (e.g. Sandbox, Email) | `@zhin.js/html-renderer` installed | Neither |

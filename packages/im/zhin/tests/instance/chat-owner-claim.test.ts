@@ -150,6 +150,41 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     expect(await reopened.attempt({ code: 'ZZZZ7999', identity: mallory, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
   });
 
+  it('one attempt compares one candidate: text carrying the code among other symbols revokes it (#1289 review)', async () => {
+    const { make, roles } = setup();
+    const claim = make();
+    await claim.refresh();
+    const identity = { adapter: 'qq', userId: 'mallory' };
+    expect(await claim.attempt({ code: `${'Z'.repeat(400)}AAAA2222ZZZZ`, identity, kind: 'private', adapterKind: 'platform' })).toBe('revoked');
+    expect(hasGlobalOwner(roles)).toBe(false);
+    expect(await claim.attempt({ code: 'AAAA2222', identity, kind: 'private', adapterKind: 'platform' })).toBe('invalid');
+    expect(await claim.attempt({ code: '认领:ｂｂｂｂ ３３３３!', identity: { adapter: 'qq', userId: 'alice' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
+  });
+
+  it('compares codes with the same gap characters as the containment check (#1289 review)', async () => {
+    // Format characters and combining marks inside the code are ignored by both: such text grants.
+    for (const gap of ['\u2062', '\u200E', '\u180E', '\u034F', '\uFE0F']) {
+      const { make, roles } = setup();
+      const claim = make();
+      await claim.refresh();
+      const text = `AA${gap}AA${gap}2222`;
+      expect(claim.carries(text), JSON.stringify(gap)).toBe(true);
+      expect(await claim.attempt({ code: `认领:${text}`, identity: { adapter: 'qq', userId: 'alice' }, kind: 'private', adapterKind: 'platform' }), JSON.stringify(gap)).toBe('claimed');
+      expect(hasGlobalOwner(roles)).toBe(true);
+    }
+    // Visible punctuation inside the code separates symbols for both: such text neither carries nor grants.
+    const { make, roles } = setup();
+    const claim = make();
+    await claim.refresh();
+    for (const code of ['AAAA.2222', 'AAAA_2222', 'AA/AA2222']) {
+      expect(claim.carries(code), code).toBe(false);
+      expect(await claim.attempt({ code, identity: { adapter: 'qq', userId: `u-${code}` }, kind: 'private', adapterKind: 'platform' }), code).toBe('invalid');
+    }
+    expect(hasGlobalOwner(roles)).toBe(false);
+    // Punctuation around the code and after the keyword is still ignored.
+    expect(await claim.attempt({ code: '「认领：<aaaa-2222>」！', identity: { adapter: 'qq', userId: 'alice' }, kind: 'private', adapterKind: 'platform' })).toBe('claimed');
+  });
+
   it('the claim file is not reachable through the Console project-file routes (security review)', () => {
     expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE)).toBe(false);
     expect(isProjectPathAllowed(CHAT_OWNER_CLAIM_FILE.replace(/\\/gu, '/'))).toBe(false);

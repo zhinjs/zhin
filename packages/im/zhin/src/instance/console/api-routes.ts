@@ -17,6 +17,7 @@ import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { isKnownConversationSession } from './conversation-session.js';
 import { registerConversationHistoryRoutes } from './conversation-history-routes.js';
 import { registerConversationResultRoutes } from './conversation-result-routes.js';
+import { registerConversationOutcomeRoutes } from './conversation-outcome-routes.js';
 import { registerDataMigrationRoutes } from './data-migration-routes.js';
 import { registerInteractionRoutes } from './interaction-routes.js';
 import { registerWorkspaceConversationRoutes } from './workspace-conversation-routes.js';
@@ -62,6 +63,8 @@ export interface RegisterConsoleRoutesOptions {
   readonly agentInsights?: import('./agent-insights.js').AgentInsightsSource;
   /** Instance runtime failure journal (#1270). */
   readonly runtimeFailures?: import('./runtime-failures.js').RuntimeFailureJournal;
+  /** Speech features whose external command cannot run (#1250 第 29 批), for the attention inbox. */
+  readonly speechIssues?: () => readonly import('./attention.js').AttentionSpeechIssue[];
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -107,6 +110,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerMessageSendRoutes({ http, base, im });
   registerConversationHistoryRoutes({ http, base, im, databaseHost, snapshots });
   registerConversationResultRoutes({ http, base, projectRoot, snapshots });
+  registerConversationOutcomeRoutes({ http, base, outcomes: im?.messageOutcomes, snapshots });
   registerInteractionRoutes({ http, base, im, snapshots });
   registerDataMigrationRoutes({ http, base, projectRoot, snapshots });
   registerWorkspaceConversationRoutes({ http, base, snapshots, databaseHost });
@@ -147,6 +151,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     ...(options.featureStores ? { featureStores: options.featureStores } : {}),
     ...(options.agentInsights ? { agentInsights: options.agentInsights } : {}),
     ...(options.runtimeFailures ? { runtimeFailures: options.runtimeFailures } : {}),
+    ...(options.speechIssues ? { speechIssues: options.speechIssues } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
   registerAgentConsoleRoutes({ http, base, snapshots, projectRoot, ...(im ? { im } : {}) });

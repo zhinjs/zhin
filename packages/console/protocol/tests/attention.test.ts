@@ -2,6 +2,8 @@ import {
   ATTENTION_RPC,
   CONSOLE_RPC_PERMISSIONS,
   CONSOLE_WRITE_PERMISSIONS,
+  CONSOLE_ATTENTION_KINDS,
+  CONSOLE_ATTENTION_KIND_PERMISSIONS,
   attentionItemId,
   attentionRevision,
   compareAttentionItems,
@@ -65,5 +67,13 @@ describe('attention.list (Console attention inbox)', () => {
       { id: 'd', severity: 'danger' as const, since: '2026-01-03T00:00:00.000Z' },
     ];
     expect([...items].sort(compareAttentionItems).map(item => item.id)).toEqual(['d', 'a', 'b', 'c']);
+  });
+
+  it('registers speech.unavailable (#1250 第 29 批) as a status.view kind', () => {
+    expect(CONSOLE_ATTENTION_KINDS).toContain('speech.unavailable');
+    expect(CONSOLE_ATTENTION_KIND_PERMISSIONS['speech.unavailable']).toBe('status.view');
+    expect(Object.keys(CONSOLE_ATTENTION_KIND_PERMISSIONS).sort()).toEqual([...CONSOLE_ATTENTION_KINDS].sort());
+    expect(attentionItemId('speech.unavailable', { configPath: 'speech.tts.edgeTtsCommand' }))
+      .toBe('speech.unavailable:configPath=speech.tts.edgeTtsCommand');
   });
 });

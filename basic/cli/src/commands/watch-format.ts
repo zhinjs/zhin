@@ -1,4 +1,5 @@
 /** `zhin watch` 纯函数（可单测） */
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 
 export interface WatchProcessMemory {
   rss?: number;
@@ -11,6 +12,15 @@ export interface WatchProcessMemory {
 export interface WatchOsMemory {
   freeMem?: number;
   totalMem?: number;
+}
+
+/** One process's figures from a single sample (#1250 `watch-memory-figures-inconsistent`). */
+export interface WatchProcessSample {
+  role: 'gateway' | 'instance';
+  pid?: number;
+  memory: WatchProcessMemory;
+  /** Epoch ms of the sample, when the source reports it. */
+  sampledAt?: number;
 }
 
 export interface WatchSystemInfo {
@@ -87,6 +97,35 @@ export function parseProcessMemory(raw: Record<string, unknown> | undefined): Wa
   };
 }
 
+/**
+ * A `ConsoleProcessSample` (`GET /system/status` → `process`, `gateway.instance.status` → `gateway`),
+ * the source the Console home「进程与资源」panel reads. Undefined unless it has the expected role.
+ */
+export function processSampleFromApi(raw: unknown, role: WatchProcessSample['role']): WatchProcessSample | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const sample = raw as Record<string, unknown>;
+  if (sample.role !== role || !sample.memory || typeof sample.memory !== 'object') return undefined;
+  return {
+    role,
+    ...(typeof sample.pid === 'number' ? { pid: sample.pid } : {}),
+    memory: parseProcessMemory(sample.memory as Record<string, unknown>),
+    ...(typeof sample.sampledAt === 'number' ? { sampledAt: sample.sampledAt } : {}),
+  };
+}
+
+/** The instance's sample of a `/system/status` answer; older instances only have `memory` + `pid`, still one call. */
+export function instanceSampleFromStatus(data: Record<string, unknown> | undefined): WatchProcessSample | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const labeled = processSampleFromApi(data.process, 'instance');
+  if (labeled) return labeled;
+  if (!data.memory || typeof data.memory !== 'object') return undefined;
+  return {
+    role: 'instance',
+    ...(typeof data.pid === 'number' ? { pid: data.pid } : {}),
+    memory: parseProcessMemory(data.memory as Record<string, unknown>),
+  };
+}
+
 export function systemInfoFromApi(data: Record<string, unknown> | undefined): WatchSystemInfo | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const osRaw = data.osMemory as Record<string, unknown> | undefined;
@@ -107,23 +146,43 @@ export function systemInfoFromApi(data: Record<string, unknown> | undefined): Wa
   };
 }
 
-export function renderMemorySection(system?: WatchSystemInfo): string[] {
-  const lines: string[] = ['Memory'];
-  const pm = system?.processMemory ?? {};
-  const om = system?.osMemory ?? {};
-  lines.push(`  process rss          ${formatBytes(pm.rss)}`);
-  lines.push(`  process heapUsed     ${formatBytes(pm.heapUsed)}`);
-  lines.push(`  process heapTotal    ${formatBytes(pm.heapTotal)}`);
-  lines.push(`  process external     ${formatBytes(pm.external)}`);
-  if (pm.arrayBuffers != null) {
-    lines.push(`  process arrayBuffers ${formatBytes(pm.arrayBuffers)}`);
+function processLines(sample: WatchProcessSample): string[] {
+  const pm = sample.memory;
+  const lines = [`  ${sample.role.padEnd(8)} ${sample.pid != null ? `pid ${sample.pid}` : 'pid -'}${sample.sampledAt != null
+    ? `  采样 ${formatDateTime(sample.sampledAt, undefined, { part: 'time' })}` : ''}`];
+  lines.push(`    rss          ${formatBytes(pm.rss)}`);
+  lines.push(`    heapUsed     ${formatBytes(pm.heapUsed)}`);
+  lines.push(`    heapTotal    ${formatBytes(pm.heapTotal)}`);
+  lines.push(`    external     ${formatBytes(pm.external)}`);
+  if (pm.arrayBuffers != null) lines.push(`    arrayBuffers ${formatBytes(pm.arrayBuffers)}`);
+  // Both figures are from one sample: rss only counts resident pages, so compressed / swapped heap
+  // pages (macOS memory compression) can make it smaller than heapUsed.
+  if (pm.rss != null && pm.heapUsed != null && pm.rss < pm.heapUsed) {
+    lines.push('    （同一次采样：rss 只计常驻物理内存，部分堆内存被系统压缩或换出时会小于 heapUsed）');
   }
+  return lines;
+}
+
+/**
+ * Memory per process (#1250 `watch-memory-figures-inconsistent`): every figure is labeled with its
+ * process and all of one process's figures come from one sample — the instance from
+ * `GET /system/status`, the gateway from `gateway.instance.status`, as the Console home panel.
+ */
+export function renderMemorySection(system?: WatchSystemInfo, samples: readonly WatchProcessSample[] = []): string[] {
+  const lines: string[] = ['Memory'];
+  const om = system?.osMemory ?? {};
+  const instance = samples.find(sample => sample.role === 'instance')
+    ?? { role: 'instance' as const, ...(system?.pid != null ? { pid: system.pid } : {}), memory: system?.processMemory ?? {} };
+  lines.push(...processLines(instance));
+  const gateway = samples.find(sample => sample.role === 'gateway');
+  if (gateway) lines.push(...processLines(gateway));
   if (om.totalMem != null || om.freeMem != null) {
     const used = om.totalMem != null && om.freeMem != null ? om.totalMem - om.freeMem : undefined;
-    lines.push(`  host totalMem        ${formatBytes(om.totalMem)}`);
-    lines.push(`  host freeMem         ${formatBytes(om.freeMem)}`);
+    lines.push('  host');
+    lines.push(`    totalMem     ${formatBytes(om.totalMem)}`);
+    lines.push(`    freeMem      ${formatBytes(om.freeMem)}`);
     if (used != null) {
-      lines.push(`  host usedMem         ${formatBytes(used)}`);
+      lines.push(`    usedMem      ${formatBytes(used)}`);
     }
   }
   return lines;
@@ -141,7 +200,7 @@ export function formatJobSchedule(schedule: Record<string, unknown> | undefined)
     return `every ${Math.round(ms / 1000)}s`;
   }
   if (kind === 'at' && schedule.atMs != null) {
-    return `at ${new Date(Number(schedule.atMs)).toISOString().slice(0, 16).replace('T', ' ')}`;
+    return `at ${formatDateTime(Number(schedule.atMs)).slice(0, 16)}`;
   }
   if (kind === 'event') {
     const src = schedule.source ? String(schedule.source) : 'event';
@@ -189,6 +248,8 @@ export function renderWatchText(options: {
   fetchedAt: Date;
   stats?: WatchStats;
   system?: WatchSystemInfo;
+  /** Labeled per-process samples (instance, and the gateway when reachable over the local socket). */
+  processes?: readonly WatchProcessSample[];
   endpoints?: WatchEndpointRow[];
   assistantEnabled?: boolean;
   eventsActive?: boolean;
@@ -196,7 +257,7 @@ export function renderWatchText(options: {
   error?: string;
 }): string {
   const lines: string[] = [];
-  const ts = options.fetchedAt.toLocaleTimeString('zh-CN', { hour12: false });
+  const ts = formatDateTime(options.fetchedAt, undefined, { part: 'time' });
   lines.push(`Zhin watch  ${options.baseUrl}  @ ${ts}`);
   lines.push('─'.repeat(72));
 
@@ -222,7 +283,7 @@ export function renderWatchText(options: {
     `         bots ${bots.online ?? 0}/${bots.total ?? 0}  plugins ${st.plugins?.active ?? '-'}/${st.plugins?.total ?? '-'}  cmds ${st.commands ?? '-'}  components ${st.components ?? '-'}`,
   );
   lines.push('');
-  lines.push(...renderMemorySection(sys));
+  lines.push(...renderMemorySection(sys, options.processes));
   lines.push('');
 
   const botList = options.endpoints ?? [];
@@ -251,7 +312,8 @@ export function renderWatchText(options: {
         const label = j.label ? ` ${j.label}` : '';
         lines.push(`  [${status}] ${j.id}${label}`);
         lines.push(`       ${j.schedule}  notify:${j.notify}  last:${last}`);
-        if (j.lastError && j.lastStatus === 'error') {
+        // #1250 b33: a degraded run (finished, but did not do what was asked) shows its cause too.
+        if (j.lastError && (j.lastStatus === 'error' || j.lastStatus === 'degraded')) {
           lines.push(`       err: ${truncateText(j.lastError, 64)}`);
         }
       }

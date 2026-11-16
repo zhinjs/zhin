@@ -45,6 +45,8 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 
 All commands, grouped by purpose, follow.
 
+Dates and times in command output are always local time as `2026-11-15 00:15:56` (24-hour; `2026-11-15` for a date alone), in both display languages: ISO order cannot be misread on either side of the Atlantic (unlike `11/15/2026` or `15/11/2026`), sorts as text and matches the days of `zhin usage report`.
+
 ## Running
 
 ### start / stop / restart / status / logs: Gateway and Instance
@@ -155,7 +157,7 @@ zhin console user create <username> [--role viewer] [--display-name <name>] [--p
 zhin console user passwd <username> [--password-stdin]
 zhin console user disable <username>
 zhin console user enable <username>
-zhin console user list
+zhin console user list [--json]
 zhin console migrate [--revert]
 ```
 
@@ -167,7 +169,7 @@ Console users, roles, sessions, API tokens and the audit log live in the gateway
   - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
   - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
-- **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
+- **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints username, display name, state, role bindings and the **user id** (`ai.personalPrincipals` keys are `user:<user id>`); `--json` prints `{ users: [{ id, username, displayName, disabled, roles }] }`. Adapter- or account-scoped bindings are set in the Console's Access pages.
 - **`init --reset-store`**: when `.zhin/gateway.db` was lost or replaced (the project database's marker `zhin_gateway_store` names another store) the Console stays closed; once you accept that the old accounts are gone, this resets it (gateway stopped first, asks for confirmation, `--yes` skips it), records the reset in the new audit log and continues with setup.
 - **`migrate`** moves the Console account tables an earlier version kept in the project database into `.zhin/gateway.db` (the gateway also does it when it starts; while a gateway runs the command only reports the state). `--revert` writes them back into the project database and empties gateway.db — required before downgrading, with the gateway stopped (`zhin stop`). See the [upgrade notes](../migrations/gateway-storage.md).
 - `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
@@ -310,7 +312,7 @@ Previews and migrates the legacy `ai.providers`-style model configuration and Se
 zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm-name>] [--is-official] [--skip-install]
 ```
 
-**This is the single official way to create a plugin.** The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively.
+**This is the single official way to create a plugin.** The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively. A non-interactive run (CI, scripts, no TTY) never prompts: give both the name and `--type`, or it exits with an error. The normal template's sample commands are `commands/<name>/index.ts` (`<name>`) and its subcommand `commands/<name>/echo/[text]/index.ts` (`<name> echo <text>`).
 
 - **Standalone plugin (an external plugin to publish to npm)**: `npx @zhin.js/cli new my-plugin --standalone` generates `./my-plugin/` in the current directory. No bot project is needed and no `package.json` is modified. The output has the `package.json#zhin` manifest, a `plugin.ts` that default-exports `definePlugin()`, convention directories, `tests/` and `README.md`, and works out of the box with `pnpm test` / `pnpm typecheck` / `pnpm publish`.
 - **Local plugin inside a bot project**: run `zhin new my-plugin` (without `--standalone`) at the project root. It generates `plugins/<name>/` and adds it to the root `package.json` `dependencies`.
@@ -444,6 +446,8 @@ zhin preview --json                    # print the scan and render result and ex
 
 Starts a local preview workbench: it scans `components/*` and `pages/*` in the project or plugin directory (the current directory by default), hot-reloads, and lets you edit Props and adjust styles live. It listens on `127.0.0.1:4176` by default; `--open` opens the browser after startup.
 
+Sample Props come from `previewProps`; plugin services that a component reads with `use(token)` come from the stand-ins in `previewServices` (see [components](../authoring/middleware-components.md#stand-in-services-for-previews-previewservices)); without one the preview names the missing token.
+
 ### build: Build a Plugin
 
 ```bash
@@ -571,7 +575,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin start` and have `assistant.enabled`.
 
 ```bash
-zhin schedule list [--host <url>]
+zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"
@@ -589,19 +593,21 @@ zhin schedule resume <id>
 | `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why. An explicit target also needs `endpoint.operate` on that account (as `zhin send` / `/message/send` does; the Console `cron:add` RPC too), otherwise 403 `schedule_target_forbidden` |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
 
-`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list).
+`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list). Multi-line content is indented line by line and cut after 2 lines; `--json` prints the full job data.
 
 ### agent: Agent Diagnostics
 
 Requires the AI stack (`@zhin.js/agent` + `zod` + `ai`).
 
 ```bash
-zhin agent info [--json]
+zhin agent info [--json] [--locale zh-CN|en]
 ```
 
 | Command | Purpose |
 | --- | --- |
-| `info` | List discovered Agent capabilities and named Agents (Tools, Skills, Hooks…) |
+| `info` | Lists Agent capabilities and named Agents (tools, skills, hooks…) by source: the **project root**'s convention directories (`tools/`, `skills/`, `agents/*/tools` …, i.e. the application plugin itself), **local plugins** (`plugins/`) and **installed plugins** (`node_modules` packages with a `package.json#zhin` manifest). Below the totals line it gives the packages, tools and skills of each source; `--json` has the same grouping as `bySource`. Framework built-in tools and MCP tools are not project files and are not counted — `zhin trace` shows the tools available at run time |
+
+The output language is the project's `locale` (top level of `zhin.config.yml`, Chinese by default); `--locale` overrides it once. Help texts are bilingual.
 
 ### trace: Inspect Agent Turns
 
@@ -622,7 +628,7 @@ zhin trace <engagementId>         # a specific collaboration; an id prefix is en
 
 | Option | Purpose |
 | --- | --- |
-| `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens |
+| `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens. The session is shown by the same readable name as `zhin usage report` plus a short key (e.g. `sandbox · 私聊 Developer（personal-session:ab12cd34）`), or the short key when no origin was recorded; `--json` keeps the full `session_key` and adds `session_display_name` |
 | `--sessions` | One line per session: turn count, last time and status, total tokens |
 | `--engagements` | Read multi-Agent collaboration records instead (the `engagement_events` database table; requires SQLite, MySQL, or PostgreSQL): with `--list`, list recent collaborations; otherwise show the participants, mail hops, Blackboard, and budget of the latest or the given collaboration. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | Only this session (sessionKey); output switches to the list format |
@@ -678,7 +684,7 @@ zhin usage report --session 'icqq:*:group:*' --json
 
 Each day also lists model usage merged by "service · model": calls recorded under a service's `services:` and `accounts:` ids become one row, with the service name read from the model configuration in the project database (the model alone when it cannot be read). The session column shows the conversation name recorded in the trace (e.g. `qq · 群 Test`) with a short session key. Input tokens are the provider-reported input of every model call (iterations and sub-agents included), a different basis from the first-request segment estimate below.
 
-Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
+Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + knowledge_index + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
 
 **Prompt-cache hint.** Every model call records a request-prefix hash (system prompt + tool definitions, trace field `prefix_hash`). When a service's last 20 or more consecutive calls, across at least 3 sessions, had no cache read (`cache_read_tokens` 0 or not reported) while more than half of the adjacent same-session requests shared their prefix, the report ends with "this service may not support or pass through prompt caching" and shows the same-prefix share as evidence. `zhin doctor` runs the same check over the last 7 days of traces, and the Console usage statistics carry it too (`promptCacheHints` of the `usage-stats` RPC).
 

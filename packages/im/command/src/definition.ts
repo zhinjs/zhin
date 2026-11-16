@@ -102,11 +102,18 @@ export interface CommandParamSchema {
   readonly min?: number;
   readonly max?: number;
   readonly choices?: readonly CommandParameterValue[];
+  /**
+   * Display-only values (not validated), shown instead of `[name]` in the near-miss "did you mean"
+   * reply, e.g. a game's subcommands (`玩石头剪刀布 开始|继续|退出`). #1250
+   */
+  readonly suggestions?: readonly string[];
+  /** Per-locale {@link suggestions}; a locale without an entry falls back to `suggestions`. */
+  readonly suggestionsI18n?: Readonly<Partial<Record<Locale, readonly string[]>>>;
   readonly pattern?: RegExp;
   readonly validate?: (value: CommandParameterValue, session: CommandSession) => boolean | string;
 }
 
-export interface CommandOptionSchema extends Omit<CommandParamSchema, 'rest'> {
+export interface CommandOptionSchema extends Omit<CommandParamSchema, 'rest' | 'suggestions' | 'suggestionsI18n'> {
   readonly alias?: string;
 }
 
