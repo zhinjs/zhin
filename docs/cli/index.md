@@ -86,10 +86,10 @@ zhin logs --name icqq --grep reconnect -f
 
 ```bash
 zhin runtime start [...]    # 前台运行网关，等同于 zhin start --foreground
-zhin runtime inspect
+zhin runtime inspect [--json]
 zhin runtime codegen [dir] [--write] [--json]
-zhin runtime build
-zhin runtime publish [--execute|--resume] [--tag latest]
+zhin runtime build [--json]
+zhin runtime publish [--execute|--resume] [--tag latest] [--json]
 zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
@@ -98,9 +98,9 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | 子命令 | 作用 |
 | --- | --- |
 | `start` | 前台运行网关与实例（`zhin start --foreground` 的别名），详见 [zhin start](./runtime.md) |
-| `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
+| `inspect` | 输出插件实例表：实例、包、来源（workspace / node_modules）、启用状态、features 数；`disable_plugins` 里的实例也列出并标「已停用」。`--json` 输出完整结构（各实例的 features 与子插件、构建顺序、已停用实例） |
 | `codegen` | 扫描约定目录，输出插件能力的静态类型声明与 `capabilityGraph` 摘要；`--write` 写入目标目录的 `plugin.capabilities.d.ts`，`--json` 输出扫描结果。`dir` 默认当前目录 |
-| `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
+| `build` / `publish` | 作用于整个 workspace，按依赖顺序处理（单个插件用 `zhin build` / `zhin pub`）。两者都先打印计划：会处理哪些包、版本，跳过了哪些包及原因（没有 `build` 脚本 / `private: true`）；计划为空时明确说明。`publish` 默认 dry-run（打印计划并运行 `pnpm publish --dry-run`），加 `--execute` 才把全部非 private 包发到 npm（需要 npm 登录；先用临时 dist-tag 发布，全部成功后改到 `--tag`），进度写入 `.zhin/publish-journal.json`，中断后用 `--resume` 继续。`--json` 只输出计划（含 `empty` 字段），不执行任何命令。dry-run 计划为空时退出码为 0，`--execute` / `--resume` 计划为空时退出码为 1 |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
 脚手架生成的项目里已有这些惯例脚本：
@@ -420,7 +420,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-搜索插件市场，或查看单个插件的详情。详情含作者（`author`，缺省时取 `maintainers`）；插件已安装到当前项目时，还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
+搜索插件市场，或查看单个插件的详情。`zhin search` 只列出 Zhin 生态的包（官方 `@zhin.js/*`、`zhin.js-*` 命名，或带 `zhin.js` / `zhin` / `zhinjs` / `zhin-plugin` / `zhin-package` 关键词、带 `package.json#zhin` 的包），通用的 `plugin` 关键词不算。`zhin info` 先查本项目的 workspace 包与已安装的包（本地读取，不查询 npm），都没有时再查 npm registry。详情含作者（`author`，缺省时取 `maintainers`）；本地包还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
 
 ### use-cases：按用途找到配置入口 {#use-cases}
 
@@ -504,7 +504,7 @@ npm 插件请用 `zhin install` / `zhin search` / `zhin info`（[ADR 0062](../ad
 ```bash
 zhin packages status <instanceKey>
 zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
+zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068   # --json 输出原始结构
 zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
 zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>

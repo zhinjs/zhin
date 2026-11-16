@@ -202,9 +202,9 @@ export async function commandMenuReply(result: CommandDispatchResult, { commands
   const content = await presentCommandMenu(menu, result.value as SendContent, snapshot, conversation);
   if (menu.pages <= 1) return content;
   const endpoint = conversation.endpoint.id as CapabilityId;
-  const supported = resolveOutboundSupportedSegments(endpoint, snapshot);
-  if (resolveOutboundMarkdownPolicy(endpoint, snapshot) !== 'native'
-    || resolveOutboundInteractivePolicy(endpoint, snapshot) !== 'native'
+  const supported = resolveOutboundSupportedSegments(endpoint, snapshot, conversation);
+  if (resolveOutboundMarkdownPolicy(endpoint, snapshot, conversation) !== 'native'
+    || resolveOutboundInteractivePolicy(endpoint, snapshot, conversation) !== 'native'
     || supported && (!supported.includes('markdown') || !supported.includes('keyboard'))) return content;
 
   const button = (page: number, label: string, disabled: boolean) => jsx('button', {

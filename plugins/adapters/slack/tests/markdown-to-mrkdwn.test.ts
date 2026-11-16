@@ -54,11 +54,32 @@ describe('mrkdwnToPlainFallback', () => {
     expect(mrkdwnToPlainFallback('<x <y|z> w>')).toBe('z (x y) w');
   });
 
-  it('handles 100k adversarial angle input in linear time (no ReDoS)', () => {
-    const input = `<${'a|'.repeat(50_000)}`;
-    const start = performance.now();
-    const result = mrkdwnToPlainFallback(input);
-    expect(performance.now() - start).toBeLessThan(100);
-    expect(result.length).toBeGreaterThan(0);
+  it('handles adversarial angle input in linear time (no ReDoS)', () => {
+    // An unclosed `<` keeps its text, so long unclosed inputs come back unchanged.
+    const unclosed = `<${'a|'.repeat(50_000)}`;
+    expect(mrkdwnToPlainFallback(unclosed)).toBe(unclosed);
+    // Every `<` opens a candidate link and no `>` closes one. The regexes this replaced
+    // (`/<([^|>]+)\|([^>]+)>/g`, then `/<([^>]+)>/g`) rescanned the rest of the input from
+    // each `<`: ~90 ms for 18 750 characters and ~1.8 s for 75 000.
+    const adversarial = (repeats: number) => '<a|'.repeat(repeats);
+    expect(mrkdwnToPlainFallback(adversarial(4))).toBe('<a|<a|<a|<a|');
+
+    // Two guards, each measured as the best of three runs of one input, so a loaded
+    // runner (the full suite, coverage instrumentation) does not decide the result:
+    // - growth: a quadratic scan grows ~16x when the input grows 4x;
+    // - a ceiling far below the ~1.8 s the replaced regexes needed for the large input.
+    const fastest = (input: string) => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i += 1) {
+        const started = performance.now();
+        mrkdwnToPlainFallback(input);
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+    const small = fastest(adversarial(6_250));
+    const large = fastest(adversarial(25_000));
+    expect(large / Math.max(small, 0.5)).toBeLessThan(8);
+    expect(large).toBeLessThan(500);
   });
 });

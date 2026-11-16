@@ -13,6 +13,11 @@ import {
 
 export const buildCommand = new Command("build")
   .description("构建插件：按目录自动编译 src（tsc）与 client（esbuild）；也可在 zhin workspace 下批量构建 plugins/*")
+  .addHelpText(
+    "after",
+    "\n另见: zhin runtime build 按依赖顺序对整个 workspace 中带 build 脚本的包运行 pnpm run build（先打印构建计划）；\n" +
+      "      本命令针对单个插件（或 plugins/* 批量），不走 workspace 依赖顺序。",
+  )
   .argument("[plugin]", "插件路径（相对 plugins/，如 adapters/icqq）；省略时在智能目录下构建当前包，或在 workspace 根构建全部插件")
   .option("--clean", "清理 lib/ 与 dist/ 后再构建", false)
   .option("--production", "生产构建（client 压缩，默认开启）", true)

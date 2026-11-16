@@ -31,7 +31,7 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   dingtalk: { outboundMedia: ['url'], interactive: 'native', markdown: 'native' },
   discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native', html: 'direct' },
-  github: { outboundMedia: ['url'], interactive: 'text' },
+  github: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
   icqq: {
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
     outboundMedia: ['base64', 'url', 'path'],

@@ -3,6 +3,8 @@ import type {
   HtmlRendererHost,
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
+import { activeCapabilityKinds, resolveStaticCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { htmlToFallbackText } from '../../built/html-to-text.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { toCanonicalSegments } from '../../built/generic-segment-mapper.js';
@@ -84,10 +86,56 @@ export interface NormalizeOutboundOptions {
 export function resolveOutboundHtmlPolicy(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
 ): 'direct' | 'image' | 'text' {
-  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const policy = (slot?.definition as { segments?: OutboundSegmentsPolicy } | undefined)?.segments?.html;
+  const policy = (resolveDeclaredSegments(adapter, snapshot, conversation) as Partial<OutboundSegmentsPolicy> | undefined)?.html;
   return policy === 'direct' || policy === 'text' ? policy : 'image';
+}
+
+/**
+ * The conversation an outbound decision is made for. Only `kind` and `threadId` matter: they select
+ * the profile sections (`private | group | channel`, then `thread`) merged over `default` (ADR 0044 §2).
+ */
+export type OutboundConversationScope = Pick<ConversationRef, 'kind' | 'threadId'>;
+
+const declaredSegmentsCache = new WeakMap<object, Map<string, Readonly<Record<string, unknown>> | null>>();
+
+/**
+ * ADR 0064 F1: the segment policy that applies to one conversation. A kind section that declares
+ * `messaging.segments` replaces the inherited declaration as a whole (`segments` is a fixed node of the
+ * profile); without a conversation, or without a kind-specific declaration, the `default` declaration
+ * (`definition.segments`, the alias of `profile.default.messaging.segments`) applies.
+ * Multi-endpoint record ids (`slot~entry`) fall back to the slot's declaration.
+ */
+function resolveDeclaredSegments(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
+): Readonly<Record<string, unknown>> | undefined {
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const definition = slot?.definition;
+  if (!definition || typeof definition !== 'object') return undefined;
+  const base = asRecord((definition as { segments?: unknown }).segments);
+  const profile = (definition as { profile?: unknown }).profile;
+  if (!conversation || !profile || typeof profile !== 'object') return base;
+  const kinds = activeCapabilityKinds(conversation);
+  const key = kinds.join('\u0000');
+  let byKinds = declaredSegmentsCache.get(definition);
+  if (!byKinds) declaredSegmentsCache.set(definition, byKinds = new Map());
+  if (!byKinds.has(key)) {
+    let scoped: Readonly<Record<string, unknown>> | undefined;
+    try {
+      scoped = asRecord(resolveStaticCapabilities(profile as AdapterCapabilityProfile, kinds).messaging?.segments);
+    } catch {
+      scoped = undefined;
+    }
+    byKinds.set(key, scoped ?? null);
+  }
+  return byKinds.get(key) ?? base;
+}
+
+function asRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Readonly<Record<string, unknown>> : undefined;
 }
 
 const DEFAULT_CARD_WIDTH = 540;
@@ -102,17 +150,14 @@ const DEFAULT_MEDIA_POLICY: OutboundMediaPolicy = 'url-or-text';
 export function resolveOutboundMediaPolicy(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
 ): OutboundMediaPolicy {
-  const slot = snapshot.capabilities.get(adapter)
-    ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  return readDeclaredMediaPolicy(slot?.definition) ?? DEFAULT_MEDIA_POLICY;
+  return readDeclaredMediaPolicy(resolveDeclaredSegments(adapter, snapshot, conversation)) ?? DEFAULT_MEDIA_POLICY;
 }
 
-function readDeclaredMediaPolicy(definition: unknown): OutboundMediaPolicy | undefined {
-  if (!definition || typeof definition !== 'object') return undefined;
-  const segments = (definition as { segments?: unknown }).segments;
-  if (!segments || typeof segments !== 'object') return undefined;
-  const declared = (segments as OutboundSegmentsPolicy).outboundMedia;
+function readDeclaredMediaPolicy(segments: Readonly<Record<string, unknown>> | undefined): OutboundMediaPolicy | undefined {
+  if (!segments) return undefined;
+  const declared = segments.outboundMedia;
   if (!Array.isArray(declared)) return undefined;
   if (declared.includes('base64')) return 'base64';
   if (declared.includes('upload') || declared.includes('path')) return 'passthrough';
@@ -134,20 +179,21 @@ export function isOutboundSegment(value: unknown): value is OutboundSegment {
 export function resolveOutboundInteractivePolicy(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
 ): InteractivePolicy {
-  const slot = snapshot.capabilities.get(adapter)
-    ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const declared = readDeclaredInteractivePolicy(slot?.definition);
+  const declared = readDeclaredInteractivePolicy(resolveDeclaredSegments(adapter, snapshot, conversation));
   if (declared) return declared;
   return DEFAULT_INTERACTIVE_POLICY;
 }
 
 /** Read declared support from this operation's snapshot without requiring live admission. */
-export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot: RuntimeSnapshot): readonly string[] | undefined {
-  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  if (!slot?.definition || typeof slot.definition !== 'object') return undefined;
-  const segments = (slot.definition as { segments?: { supported?: unknown } }).segments;
-  return Array.isArray(segments?.supported) && segments.supported.every(type => typeof type === 'string') ? segments.supported : undefined;
+export function resolveOutboundSupportedSegments(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
+): readonly string[] | undefined {
+  const supported = resolveDeclaredSegments(adapter, snapshot, conversation)?.supported;
+  return Array.isArray(supported) && supported.every(type => typeof type === 'string') ? supported as readonly string[] : undefined;
 }
 
 /**
@@ -169,21 +215,25 @@ export function adapterDeclaresLiveDanmaku(adapter: CapabilityId, snapshot: Runt
 export function resolveAiOutboundSegments(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
-  /** The reply target scene; callers must additionally omit reactions without an eligible source message. */
-  conversationKind?: 'private' | 'group' | 'channel',
+  /**
+   * The reply target scene (a kind, or the conversation itself so a thread section applies too);
+   * callers must additionally omit reactions without an eligible source message.
+   */
+  conversation?: ConversationKind | OutboundConversationScope,
 ): AiOutboundSegmentProfile {
-  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
+  const scope: OutboundConversationScope | undefined = typeof conversation === 'string' ? { kind: conversation } : conversation;
+  const conversationKind = scope?.kind;
+  const supported = resolveOutboundSupportedSegments(adapter, snapshot, scope);
   const degradesToText = (type: AiOutboundSegmentType) =>
-    (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot) !== 'native')
-    || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot) !== 'native');
+    (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot, scope) !== 'native')
+    || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot, scope) !== 'native');
   const deliverableTypes = supported
     ? AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type))
     : DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
-  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const segments = (slot?.definition as { segments?: {
+  const segments = resolveDeclaredSegments(adapter, snapshot, scope) as {
     model?: Record<string, AiSegmentExtension & { scopes?: readonly string[] }>;
     reaction?: AiReactionProfile & { scopes?: readonly string[] };
-  } } | undefined)?.segments;
+  } | undefined;
   const declared = segments?.model;
   const inScene = (type: AiOutboundSegmentType) => {
     const scopes = declared?.[type]?.scopes;
@@ -217,13 +267,9 @@ export function resolveAiOutboundSegments(
 export function resolveOutboundMarkdownPolicy(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  conversation?: OutboundConversationScope,
 ): 'native' | 'text' {
-  const slot = snapshot.capabilities.get(adapter)
-    ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  if (!slot?.definition || typeof slot.definition !== 'object') return 'text';
-  const segments = (slot.definition as { segments?: unknown }).segments;
-  if (!segments || typeof segments !== 'object') return 'text';
-  return (segments as OutboundSegmentsPolicy).markdown === 'native' ? 'native' : 'text';
+  return resolveDeclaredSegments(adapter, snapshot, conversation)?.markdown === 'native' ? 'native' : 'text';
 }
 
 export function applyOutboundMarkdownPolicy(
@@ -241,11 +287,9 @@ export function applyOutboundMarkdownPolicy(
   return Array.isArray(payload) ? payload.map(convert) : convert(payload);
 }
 
-function readDeclaredInteractivePolicy(definition: unknown): InteractivePolicy | undefined {
-  if (!definition || typeof definition !== 'object') return undefined;
-  const segments = (definition as { segments?: unknown }).segments;
-  if (!segments || typeof segments !== 'object') return undefined;
-  const declared = (segments as OutboundSegmentsPolicy).interactive;
+function readDeclaredInteractivePolicy(segments: Readonly<Record<string, unknown>> | undefined): InteractivePolicy | undefined {
+  if (!segments) return undefined;
+  const declared = segments.interactive;
   return declared === 'native' || declared === 'text' ? declared : undefined;
 }
 
