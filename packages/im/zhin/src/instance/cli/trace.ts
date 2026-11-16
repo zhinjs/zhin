@@ -5,16 +5,17 @@
  */
 import {
   DatabaseEngagementJournal,
-  defineEngagementEventMigrationModel,
+  ENGAGEMENT_EVENT_MIGRATIONS_TABLE,
+  ENGAGEMENT_ID_MIGRATION_VERSION,
   defineEngagementEventModel,
-  migrateEngagementEventIds,
+  isLegacyCounterId,
   reconstructBoardFromEvents,
   summarizeEngagementEvents,
   type EngagementEvent,
   type EngagementJournalDatabase,
   type EngagementSummary,
 } from '@zhin.js/harness';
-import { retryRelationalOperation, type DatabaseHost } from '@zhin.js/plugin-runtime';
+import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 import { createCliProjectDatabaseHost } from './project-database.js';
 
 /**
@@ -132,8 +133,46 @@ function hostEngagementJournalDatabase(database: Pick<DatabaseHost, 'models'>): 
   };
 }
 
+/** The id split's marker row exists (read with raw SQL: the CLI never defines or creates the table). */
+async function engagementIdMigrationApplied(database: DatabaseHost): Promise<boolean> {
+  const raw = database.getRawDatabase() as { query?(sql: string): Promise<unknown> } | undefined;
+  if (typeof raw?.query !== 'function') return false;
+  try {
+    const rows = await raw.query(`SELECT version FROM ${ENGAGEMENT_EVENT_MIGRATIONS_TABLE} WHERE id = 1`);
+    const first = Array.isArray(rows) ? rows[0] as { version?: unknown } | undefined : undefined;
+    return first !== undefined && Number(first.version) >= ENGAGEMENT_ID_MIGRATION_VERSION;
+  } catch {
+    return false; // no marker table yet
+  }
+}
+
+/**
+ * Pre-b35 records the instance has not split yet: no marker, and a legacy counter id with two or
+ * more `engagement_opened` events. Reads only the opening events, and nothing once the marker exists.
+ */
+async function legacyEngagementsPending(database: DatabaseHost): Promise<boolean> {
+  if (await engagementIdMigrationApplied(database)) return false;
+  const events = database.models.get('engagement_events');
+  if (!events) return false;
+  const opened = await events.select('engagement_id').where({ type: 'engagement_opened' });
+  const seen = new Set<string>();
+  for (const row of opened) {
+    const id = String((row as { engagement_id?: unknown }).engagement_id);
+    if (!isLegacyCounterId(id, 'm')) continue;
+    if (seen.has(id)) return true;
+    seen.add(id);
+  }
+  return false;
+}
+
+/**
+ * Opens the project journal read-only as far as the id split goes (#1250 b35): the CLI never runs
+ * the migration or writes its marker; only the instance does, in the background after activation.
+ * `legacyPending` says pre-b35 records are still merged, so the caller can say so.
+ */
 export async function openProjectEngagementJournal(root: string): Promise<{
   readonly journal: DatabaseEngagementJournal;
+  readonly legacyPending: boolean;
   close(): Promise<void>;
 } | null> {
   let dbHost: Awaited<ReturnType<typeof createCliProjectDatabaseHost>>;
@@ -147,20 +186,18 @@ export async function openProjectEngagementJournal(root: string): Promise<{
   }
   try {
     defineEngagementEventModel(dbHost);
-    defineEngagementEventMigrationModel(dbHost);
     await dbHost.start();
   } catch {
     await dbHost.stop().catch(() => undefined);
     return null;
   }
-  // #1250 b35: a project whose instance has not started since the upgrade still holds
-  // engagements merged under pre-b35 counter ids; split them (once) before reading.
-  await retryRelationalOperation(() => migrateEngagementEventIds(dbHost)).catch(() => undefined);
+  const legacyPending = await legacyEngagementsPending(dbHost).catch(() => false);
   // The journal speaks to tables, the Host exposes models (#1250 trace-engagements-crash:
   // passing the Host itself failed with `this[#db].select is not a function`).
   const journal = new DatabaseEngagementJournal(hostEngagementJournalDatabase(dbHost));
   return {
     journal,
+    legacyPending,
     close: () => dbHost.stop(),
   };
 }

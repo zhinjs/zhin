@@ -26,7 +26,7 @@
  * (stop, crash, timeout) keeps the batches it committed: the plan is deterministic, so the next
  * run plans the remaining ids the same way and continues. The marker row in
  * `engagement_event_migrations` is written last and makes later runs a no-op. Concurrent runners
- * (the instance and `zhin trace`, or two instances) write identical rows: a batch that loses a
+ * (two instances on one database, or a new generation while the last run still finishes) write identical rows: a batch that loses a
  * primary-key race rolls back, and the caller's contention retry re-plans from what is committed.
  */
 import { ENGAGEMENT_EVENTS_TABLE } from './journal.js';

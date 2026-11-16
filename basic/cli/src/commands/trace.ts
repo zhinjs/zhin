@@ -22,6 +22,8 @@ interface TraceCommandOptions {
   readonly limit?: string;
 }
 
+/** #1250 b35: pre-b35 records still merged; only the instance splits them. */
+const LEGACY_ENGAGEMENTS_PENDING_NOTICE = '旧版协作记录尚未拆分，重启实例后会自动整理。';
 const RELATIVE = /^(\d+(?:\.\d+)?)\s*(m|h|d)$/i;
 const UNIT_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 };
 
@@ -76,6 +78,8 @@ export const traceCommand = new Command('trace')
         process.exitCode = 1;
         return;
       }
+      // #1250 b35: the CLI never splits pre-b35 records itself (stderr keeps --json output clean).
+      if (opened.legacyPending) console.error(LEGACY_ENGAGEMENTS_PENDING_NOTICE);
       try {
         if (options.list || turn === 'last') {
           const ids = await opened.journal.listEngagements(effectiveLimit);
@@ -175,10 +179,11 @@ export const traceCommand = new Command('trace')
       if (opened) {
         try {
           const ids = await opened.journal.listEngagements(500);
-          const matchedId = ids.find((id) => id === turn || id.startsWith(turn));
+          const matchedId = ids.find((id) => id === turn) ?? ids.find((id) => id.startsWith(turn));
           if (matchedId) {
             const events = await opened.journal.read(matchedId);
             if (events.length > 0) {
+              if (opened.legacyPending) console.error(LEGACY_ENGAGEMENTS_PENDING_NOTICE);
               const { summary, board } = instance!.describeEngagement(matchedId, events);
                             console.log(
                 options.json

@@ -2,8 +2,8 @@
  * `zhin trace --engagements` against a real SQLite project database (#1250 b35):
  * - trace-engagements-crash: the command must read `engagement_events` (1.5.0 failed with
  *   `this[#db].select is not a function`);
- * - engagement-id-reused-across-restarts: pre-b35 rows that reuse `m1` across restarts are split
- *   into distinct engagements once, and the command reads them by their new ids.
+ * - engagement-id-reused-across-restarts: the command never splits pre-b35 rows that reuse `m1`
+ *   (only the instance does, in the background); it shows them as they are, with a notice.
  * Runs the CLI command itself; the project resolves `zhin.js/instance/cli` from its own
  * node_modules (a link to the workspace package), as an installed project does.
  */
@@ -70,36 +70,67 @@ async function trace(args: string[]): Promise<{ out: string; first: string; err:
   return { out: out.join('\n'), first: out[0] ?? '', err: err.join('\n'), exitCode };
 }
 
+function snapshot(root: string): { tables: string[]; rows: unknown[] } {
+  const db = new sqlite!.DatabaseSync(join(root, 'data', 'bot.db'));
+  try {
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as Array<{ name: string }>).map(row => row.name);
+    const rows = db.prepare('SELECT id, engagement_id, seq, at, type, data FROM engagement_events ORDER BY id').all();
+    return { tables, rows };
+  } finally {
+    db.close();
+  }
+}
+
+const NOTICE = '旧版协作记录尚未拆分，重启实例后会自动整理';
+
 describe.skipIf(!sqlite)('zhin trace --engagements on a real SQLite data/bot.db (#1250 b35)', () => {
-  it('lists, splits and reads engagements whose ids were reused across restarts', { timeout: 60_000 }, async () => {
+  it('reads pre-b35 records as they are, never migrates them, and says the instance will split them', { timeout: 60_000 }, async () => {
     const root = project();
     const strayFile = join(process.cwd(), 'data', 'bot.db');
     const strayExisted = existsSync(strayFile);
+    const before = snapshot(root);
 
     const listed = await trace(['--engagements', '--list', '-n', '100', '--json', '--cwd', root]);
     expect(listed.err).not.toMatch(/select is not a function/);
     expect(listed.exitCode ?? 0).toBe(0);
-    const summaries = JSON.parse(listed.first) as Array<{ engagementId: string; status: string; mailCount: number; initiator?: { id: string } }>;
-    expect(summaries).toHaveLength(2);
-    const ids = summaries.map(summary => summary.engagementId);
-    expect(new Set(ids).size).toBe(2);
-    expect(ids).not.toContain('m1');
-    for (const id of ids) expect(id).toMatch(/^m-[0-9a-z]+-1$/);
-    expect(summaries.map(summary => summary.initiator?.id).sort()).toEqual(['alice', 'bob']);
-    expect(summaries.every(summary => summary.status === 'completed')).toBe(true);
+    // The notice goes to stderr: --json output stays parseable.
+    expect(listed.err).toContain(NOTICE);
+    const summaries = JSON.parse(listed.first) as Array<{ engagementId: string; initiator?: { id: string } }>;
+    expect(summaries.map(summary => summary.engagementId)).toEqual(['m1']);
     // `--cwd` reads <root>/data/bot.db, not a new file next to the process cwd.
     expect(existsSync(strayFile)).toBe(strayExisted);
 
-    const bob = summaries.find(summary => summary.initiator?.id === 'bob')!;
-    expect(bob.mailCount).toBe(2);
-    const shown = await trace(['--engagements', bob.engagementId, '--cwd', root]);
+    const shown = await trace(['--engagements', 'm1', '--cwd', root]);
     expect(shown.exitCode ?? 0).toBe(0);
-    expect(shown.out).toContain(`Engagement ${bob.engagementId}`);
-    expect(shown.out).toContain('Initiator: bob');
-    expect(shown.out).not.toContain('alice');
+    expect(shown.out).toContain('Engagement m1');
+    expect(shown.err).toContain(NOTICE);
 
-    // The migration ran once: a second run sees the same ids.
-    const again = await trace(['--engagements', '--list', '-n', '100', '--json', '--cwd', root]);
-    expect((JSON.parse(again.first) as Array<{ engagementId: string }>).map(summary => summary.engagementId).sort()).toEqual([...ids].sort());
+    // Read-only as far as the id split goes: same rows, no marker table.
+    const after = snapshot(root);
+    expect(after.rows).toEqual(before.rows);
+    expect(after.tables).not.toContain('engagement_event_migrations');
+  });
+
+  it('checks the marker first and reads split ids exactly before by prefix', { timeout: 60_000 }, async () => {
+    const root = project();
+    const db = new sqlite!.DatabaseSync(join(root, 'data', 'bot.db'));
+    db.exec('CREATE TABLE engagement_event_migrations (id INTEGER PRIMARY KEY NOT NULL, version INTEGER NOT NULL, applied_at BIGINT NOT NULL, detail TEXT)');
+    db.exec('INSERT INTO engagement_event_migrations (id, version, applied_at, detail) VALUES (1, 1, 0, NULL)');
+    const insert = db.prepare('INSERT INTO engagement_events (id, engagement_id, seq, at, type, data) VALUES (?, ?, ?, ?, ?, ?)');
+    insert.run('m-run-1:0', 'm-run-1', 0, 20_000, 'engagement_opened', JSON.stringify({ entry: 'zhin', initiator: { kind: 'human', id: 'carol', trust: 'master' } }));
+    insert.run('m-run-17:0', 'm-run-17', 0, 30_000, 'engagement_opened', JSON.stringify({ entry: 'zhin', initiator: { kind: 'human', id: 'dave', trust: 'master' } }));
+    db.close();
+    const before = snapshot(root);
+
+    // The marker exists, so no notice even though the seeded `m1` still holds two openings.
+    const listed = await trace(['--engagements', '--list', '-n', '100', '--json', '--cwd', root]);
+    expect(listed.err).not.toContain(NOTICE);
+    expect((JSON.parse(listed.first) as Array<{ engagementId: string }>).map(summary => summary.engagementId).sort()).toEqual(['m-run-1', 'm-run-17', 'm1']);
+
+    // `m-run-1` is also a prefix of `m-run-17` (the more recent one): exact match first.
+    const shown = await trace(['--engagements', 'm-run-1', '--cwd', root]);
+    expect(shown.out).toContain('Engagement m-run-1  [');
+    expect(shown.out).toContain('Initiator: carol');
+    expect(snapshot(root).rows).toEqual(before.rows);
   });
 });
