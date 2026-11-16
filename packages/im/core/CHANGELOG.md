@@ -1,5 +1,72 @@
 # @zhin.js/core
 
+## 1.11.0
+
+### Minor Changes
+
+- f370ec5: 认领码（ADR 0060 §3.3，zhinjs/zhin#1250 第 23 批）：
+
+  - 在私聊中直接发送「认领 <码>」/「claim <码>」即可认领，不再需要适配器的命令前缀（带前缀的 `#认领 <码>` 仍然有效）。此前配了 `commandPrefix` 的账号上，按提示发送的消息没有匹配到命令，被当作普通聊天交给了 AI。
+  - 认领开启期间（尚无全局 owner），含有当前认领码的消息（不论写法）在入站最早处由认领处理器接手：不交给 AI，不写入会话历史、trace、日志与诊断（日志与消息事件里只显示 `认领 ***`）；群聊里的码立即作废；被丢弃的带码消息（其他机器人贴出、会话未就绪）也作废码；含码的原生 `platform.receive` 事件不派发给原生 Handler。只有整条文本恰好代表一个码时才授予（`认领 <码>`、`认领:码`、`認領 码`、全角、码被空格或 `-` 拆开、末尾标点都算）；含码但还带了别的文字（`认领 码 谢谢`、码藏在长单词里）只作废码并提示，不授予，这样一条消息只比较一个候选，错误次数限制仍然有效。私聊里「认领 <一个词>」但码不对时回复错误并计次。不含当前码的消息（如群聊「claim it」）照常进 AI；已有 owner 后完全不拦截。
+  - 会话记录（`conversation_events`、Agent 会话消息）与 trace 的写入端加了兜底：只把当前开启的认领码写成 `***`，没有开启的认领时不做替换。
+  - `zhin status`、启动日志、「需要你处理」与自助提示的用法改为「在私聊中直接发送」。
+  - 新增公开导出：`@zhin.js/kernel` 的 `matchChatOwnerClaimText()` / `containsChatOwnerClaimCode()` / `registerChatOwnerClaimCode()` / `redactChatOwnerClaimText()`；`@zhin.js/core/runtime` 的 `InboundSecretGuard`（`match` / `inspectNative`）/ `InboundSecretMatch`（`handle` / `discard`）与 `ImRuntimeOptions.inboundSecret`。
+
+- 19526a6: 没回复、被拒绝、离线都说清原因（zhinjs/zhin#1250 第 31 批）：
+
+  - `self-service-unknown-conversation-opaque`（回退的根因）：第 9 批（ADR 0060 P3，b6ec01464「Sandbox speaks as the linked chat identity; typed ids are simulated and role-less」）起，Sandbox 里手填的发送者以 `~sim:<id>` 进入运行时，而 `chatRoleMessageContext()` 把这种保留 id 当成「无法识别」，`功能` / `角色` / `认领` / `绑定` 都只回「无法识别当前会话。」；之前同一个群里 `功能 关闭 repeater` 能用，是因为当时手填的 id 还会被当成真实身份。现在 `@zhin.js/core` 新增 `resolveChatRoleMessageContext()`，返回 `{ ok: false, reason }`（`no-conversation` / `unknown-endpoint` / `no-adapter` / `no-sender` / `simulated-sender` / `invalid-sender`），实例侧再加 `unkeyed-conversation`（适配器没有提供可用的会话类型或会话 id）；四个指令按原因回复下一步（如「你正以模拟身份发言……请在 Sandbox 打开『以我的身份发言』，或在 Console『功能』/『聊天角色』页设置」）。不带参数的 `功能` / `角色` 直接列出。
+  - 被拒绝或失败的自助指令不再记成 `command_replied | executed`：`UserFacingError` 新增闭合的拒绝码 `reason`，指令派发结果带 `refusalReason`，入站结局记 `refused` 与该码（如 `simulated-sender`、`not-admin`、`usage`、`locked`、`self-service-disabled`），回复文字不变。没有码的 `UserFacingError` 仍记 `user_facing_error`。
+  - `unaddressed-message-no-record`（复测失败的根因）：第 18 批之后，没被 @、不是指令的群消息其实已经记了 `not_addressed`，但未点名的静默结局一律只写 debug 日志，Console 的运行日志看不到；结局只存在进程内，Sandbox 和轨迹页也没有入口，看起来就像「什么都没记」。现在每个会话每分钟第一条 `not_addressed` 写 info（`inbound_outcome | … | sampled: first_per_minute`），其余仍为 debug；新增 `GET {base}/conversations/outcomes`（`endpoint.view`，只限当前 Sandbox 连接绑定的会话、且只列该连接 owner 本人或其模拟身份发出的消息；只返回结局码和面向发送者的文案，不含插件名、阶段等运维文案），Sandbox 发消息后读取这条消息的结局，没有回复时显示原因（如「这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。（not_addressed · no_command_not_ambient）」）。`ConsoleMessageDiagnostic` 补上已有的 `outcome` 字段。
+  - `console-offline-no-reason`：适配器不上报连接状态（如 GitHub 这类 Webhook 适配器）且没有失败记录的已启动账号，不再显示「离线 · 连接状态：未知」，改为「未上报连接状态」（提示级），并说明常见原因与检查方法；确实离线时附上最近一次失败的原因、失败时间与自动重试次数 / 下次重试时间。这些只改显示文字：条目的 revision 与之前相同，已忽略的待办不会重新出现（「已从配置导入聊天角色」的 revision 也仍按原始条目数计算）。
+  - `principal-link-attention-ids`：「人员名单或身份链接等待确认」按人分组，每个身份写出适配器与账号（`qq·bot-a`），平台 id 只显示后 4 位（`尾号 1234`），数量按去重后的 (adapter, endpoint, userId) 计算；查看者本人显示为「你（显示名）」，其他 Console 用户显示 id 前 8 位，条目新增 `links`（`ConsoleAttentionItem.links`）供 Console 按 `iam.users.list` 换成用户名。
+
+- f1affdd: 游戏输入与入站结局（zhinjs/zhin#1250 第 34 批）：
+
+  - `game-input-also-reaches-agent`：猜数字的数字中间件在游戏回复之后仍调用 `next()`，同一条「50」又流到 Agent，于是有两条回复。现在游戏处理过的输入就结束分发，只有没有对局时才放行。`replyGameOperation()` 返回游戏是否回复了（`boolean`），并接受可选的 `input`：传入后把消息结局记成 `handler_replied` / `game_input`。所有游戏的对局中间件都会传入它。成语接龙和猜谜的自由文本作答也改为只在游戏真正处理了输入时才结束分发。
+  - `inbound-outcome-middleware-reply-mislabeled`：中间件先回复（回执 `sent`）再停止分发的，结局记 `handler_replied` / `middleware_replied`。只看停止分发的那个中间件所属插件自己送达的回复：别的插件先回复过、而它没回复就停止的，仍记 `filtered_by_policy` / `middleware_stopped`。入站结局端口 `InboundOutcomeSink` 新增可选方法 `replied(owner?)`。ADR 0061 已同步；没有改动已有的 reason 取值。
+  - `game-button-label-text-not-accepted`：游戏会话同时接受序号和按钮文字（忽略 emoji、空白与大小写），例如「要牌」「🏳️ 放弃」。对局结束后的文字「再来一局」（以及二十一点的序号 1）只在结束后 10 分钟内有效，之后按普通聊天放行。地牢远征在群里由整个频道共享：不在队伍里的人只能用文字「加入」，其余文字和序号都放行。`buildChoiceKeyboard()` / `buildGridKeyboard()` 统一在卡片上加一行「回复序号或按钮文字也可以」：猜数字的数字是猜测本身，所以只提示按钮文字；对局结束后没有可点按钮时不加。键盘段新增 `fallback.layout: 'inline'`，在能力画像为 `interactive: 'text'` 的适配器上，按钮渲染成一行 `1. 要牌  2. 停牌  3. 放弃`。井字棋改为按棋盘位置编号：回复 1–9 落在对应格，卡片上写明「回复 1–9 在对应位置落子（左上为 1，右下为 9）」。
+  - `game-command-names-mixed-language`：所有游戏的子命令都有中英两种写法，都能用（开始 / 继续 / 退出 / 认输 / 加入 / 离开 / 观战 / 人机）。帮助和提示里的写法跟命令名同一种语言，`formatGameHelp()` / `gameCommandHint()` 统一处理。井字棋的中文命令改为与标题一致的「井字棋」，旧名「井字游戏」仍可用。约定写在 `plugins/games/README.md`。
+  - `near-miss-suggestion-param-misleading`：指令参数新增只用于显示的 `suggestions` / `suggestionsI18n`。「你是不是想用」改为列出真实子命令（`玩石头剪刀布 开始|继续|退出`），不再显示 `[action]`。「玩石头剪刀布 石头」/「猜拳 石头」现在一步开局并出拳。
+  - `game-quit-means-forfeit`：会判负的退出（井字棋、成语接龙）在帮助里写「认输并结束对局」；其他游戏的退出写「结束当前对局（不计胜负）」。
+  - `command-menu-unreadable-in-sandbox`：指令菜单模板加了媒体查询：宽度 860px 以下为两列，560px 以下为单列，名称按词换行。Sandbox 按 HTML 段请求的 `width` 渲染，再等比缩小到聊天栏宽度，和平台实际收到的图片一致。
+  - `config-write-moves-inline-comment`：YAML 逐键补丁不再把写在键行上的注释（`"user:…": # …` 后接块状列表或映射）挪到下一行。补丁没有触及的顶层条目逐字节保留原文，flow 集合的空格风格也沿用原文件。`zhin disable` 现在只改 `disable_plugins`。
+
+### Patch Changes
+
+- 48dc650: 认领码入站保护加固（ADR 0060 §3.3，zhinjs/zhin#1250 第 24 批，#1289 复审建议）：
+
+  - 自己账号发出的带码消息（`origin === 'self'`，自回声）被丢弃时也作废认领码，与会话未就绪、其他机器人、成员账号、去重失败几条丢弃分支一致。
+  - 写入端兜底登记表改为挂在 `globalThis` 的 `Symbol.for('zhin.kernel.chat-owner-claim-codes')` 上：项目里装了两份 `@zhin.js/kernel` 时，一份登记的码另一份也能脱敏。
+  - `redactChatOwnerClaimText()` 只替换命中的那一段：只有 NFKC 形式命中时（全角码）不再把整条文本换成 NFKC 形式，其它字符保持原样。
+  - 码比较时忽略的字符扩为空白、`-`、格式字符 `\p{Cf}`（U+2061–2064、U+200E/200F、U+180E 等）与组合符号 `\p{M}`（U+034F、U+FE0F 等）；认领的精确比较使用同一口径（新增 `foldChatOwnerClaimText()`），码中间夹着可见标点（`ABCD.2345`）时两边都不认作该码，能授予的文本一定会被识别为含码。
+  - 原生事件检查扩大到 `message.receive` 以外的所有 Endpoint 事件（`platform.receive` 及其它原生侧边事件、通知、请求附言、系统事件），含码则不记录、不派发。检查不再截断：读遍字符串、数字、字节缓冲（按 UTF-8）、数组、对象、Map 与 Set，超出预算（深度 32、5 万个值、400 万字符）、读取抛错或字节缓冲（含 `SharedArrayBuffer` 及其视图）无法解码时按含码处理（fail-closed），并按事件名限频记 warn（同一事件名 10 分钟至多一条，不带载荷内容）。被扣下的通知、请求、系统事件确实含码时还会作废码（新增 `InboundSecretGuard.discardNative`）：平台上其他人（如看入群附言的管理员）已经看到；`platform.receive` 只扣下不作废。每个字符串只折叠一次，仅非 ASCII 时做 NFKC（新增 `createChatOwnerClaimCodeScanner()`）。
+
+- 2ab7fb9: 协作 id 跨重启唯一，并修复 `zhin trace --engagements` 读错数据库（#1250 第 35 批）。
+
+  - `engagement-id-reused-across-restarts`：Engagement、信件与预算授权 id 原先是每次启动从头计数的 `m1`、`m2`……（授权 `g1`……），重启后重复，一个 `engagement_events` id 下混进几次重启里互不相干的协作（Workroom `?engagementId=m17`、`zhin trace --engagements` 都会混在一起）。现在 id 形如 `m-<运行 id>-<序号>` / `g-<运行 id>-<序号>`：运行 id 在每次实例启动时由启动时间（base36）加随机字符生成，Agent 的 Harness 与预算账本共用同一个运行 id。id 对 Console 协议、Workroom 与 CLI 仍是不透明字符串，格式没有对外约定。`@zhin.js/harness` 新增 `createRunId`、`createRunScopedIdFactory`、`isLegacyCounterId`，`createHarness` / `InMemoryBudgetLedger` 未传 `newId` / `idFactory` 时也改用运行 id。
+  - 一次性数据迁移：新增 `migrateEngagementEventIds`（标记表 `engagement_event_migrations`），只由实例在启动后于后台执行，把同一个旧 id 下的记录按 `seq` 顺序、在每条 `engagement_opened` 处拆成各自的 Engagement，换上新 id，并改写记录里的信件 id（`mailId`、`rootMailId`、`causationId`、`mails` 等）、授权 id（`grantId`、`rootGrantId`、`parentId`）以及协作之间的 `carriedBy` 引用。分批执行，每批一个事务、按主键读写：读者看到的每个旧 id 要么完整未拆、要么已全部拆完；每批核对行数，不丢行；中途停止或崩溃时已提交的批次保留，下次启动接着做；全部完成后写标记，之后再运行是空操作。迁移不阻塞实例启动（大表在远程数据库上可能超过网关的就绪超时），进行中协作日志照常读写。只含一次协作的旧 id 不变。支持 SQLite、MySQL、PostgreSQL（与协作事件日志相同）；失败只记日志，下次启动重试。`zhin trace` 等 CLI 只读：不执行迁移、不建也不写标记表；库里还有未拆分的旧 id 时照常展示，并在标准错误输出提示「旧版协作记录尚未拆分，重启实例后会自动整理」（先查标记，有标记就不再检测）。Console SQL 不能写这张标记表。
+  - `trace-engagements-crash` 复测：1.5.0（2cf215e0）里 CLI 仍把数据库 Host 直接交给日志，修复在第 21 批（a460a46f0）才合入、晚于 1.5.0，当前版本已不再报 `this[#db].select is not a function`。另外修复 `zhin trace --engagements --cwd <dir>`（以及 `zhin usage report` 的服务名查找）把相对的 SQLite 路径按当前目录解析、打开一个新的空库的问题：现在按项目根目录解析，与网关一致（绝对路径、`:memory:` 与 `file:` URI 原样使用）；数据库文件不存在时（拼错的 `filename`、从未启动过的项目）CLI 不再新建空库，而是报告无法打开。`zhin trace --engagements <id>` 与 `zhin trace <id>` 都优先精确匹配，再按前缀匹配。
+  - 文档（第 33 批的无人值守自动审核）：`execApprovalMode` 默认就是 `auto`，所以定时任务等无人值守回合里需要审批的工具默认交给审核 Agent 判断；不想要时设 `ai.agent.execApprovalMode: ask`（人工审批），无人值守时这些调用直接拒绝（没有只关掉无人值守审核的单独开关）。只要 `confirmHighRisk` 保持默认的 `external_content`，任何模式下读取外部内容之后的高危动作在无人值守时一律拒绝，审核 Agent 也不能放行。`docs/ai/index.md` 示例里把默认值误写成 `ask`，已改正。
+
+- Updated dependencies [d216b84]
+- Updated dependencies [f370ec5]
+- Updated dependencies [48dc650]
+- Updated dependencies [2386370]
+- Updated dependencies [7288cd1]
+- Updated dependencies [19526a6]
+- Updated dependencies [cbe2c3f]
+- Updated dependencies [f1affdd]
+  - @zhin.js/plugin-runtime@1.4.0
+  - @zhin.js/kernel@1.3.0
+  - @zhin.js/command@1.4.0
+  - @zhin.js/component@1.2.0
+  - @zhin.js/adapter@1.3.3
+  - @zhin.js/feature-kit@1.1.19
+  - @zhin.js/handler@1.1.20
+  - @zhin.js/middleware@1.1.20
+  - @zhin.js/permission@1.2.3
+  - @zhin.js/schedule-feature@1.1.19
+
 ## 1.10.0
 
 ### Minor Changes

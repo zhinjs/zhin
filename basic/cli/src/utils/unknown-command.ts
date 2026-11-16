@@ -23,7 +23,7 @@ const HINTS: Readonly<Record<string, string>> = {
   ' endpoints': '查看适配器账号是否在线：zhin status（--json 里是 endpoints）；账号管理在 Console「适配器」页',
   'plugin list': 'zhin plugin 是插件作者工具（目前只有 check）；查看已安装的插件请用 zhin packages list',
   'plugin ls': 'zhin plugin 是插件作者工具（目前只有 check）；查看已安装的插件请用 zhin packages list',
-  'plugin install': 'zhin plugin 是插件作者工具；安装插件请用 zhin install <包名>（或 zhin packages install）',
+  'plugin install': 'zhin plugin 是插件作者工具；安装插件请用 zhin install <包名>，查看详情用 zhin info <包名>',
 };
 
 function hasAction(command: Command): boolean {
