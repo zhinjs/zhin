@@ -15,7 +15,7 @@ import { decodeStructuredReply } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { isInlineMediaRef, mergeToolOutboundElements, sentInlineMediaPlaceholder, toolMediaKinds, type CopiedInlineMediaDrop } from '../media/media-tool-bridge.js';
 import type { Segment } from '@zhin.js/im-contract';
-import { omitInlineBinaryInAssistantMessage, omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
+import { omitInlineBinaryInAssistantMessage, omitInlineBinaryInAssistantMessages, stripFrameworkPlaceholders } from '../media/inline-binary.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { formatUnexecutedNotice, unresolvedSideEffectFailures } from './unexecuted-tool-notice.js';
@@ -395,7 +395,9 @@ export async function finalizeTurnReplyAndOutput(params: {
         toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
         ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
       });
-  const textReply = proseReply.trim() ? continuationPrefix + proseReply : proseReply;
+  // #1250 第 29 批审查：非 IM 文本回复同样不带模型照抄的框架占位。
+  const shownProse = stripFrameworkPlaceholders(proseReply);
+  const textReply = shownProse.trim() ? continuationPrefix + shownProse : shownProse;
   let output: AgentOutputElement[] = state.phaseSettled ? [...state.settledPhaseOutput] : structuredReply ? [] : parseOutput(textReply);
   if (!state.phaseSettled && structuredReply) {
     try {

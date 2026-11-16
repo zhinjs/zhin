@@ -10,6 +10,8 @@
  * 一次线性扫描（每个字符只看一次，data URL 前缀只回看有限长度），构造输入也不会退化为平方复杂度。
  */
 import type { AgentMessage, AssistantMessage, Context, LlmCompletionPort, UserMessage } from '@zhin.js/ai';
+import type { Segment } from '@zhin.js/im-contract';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { EXPLORATION_TOOLS } from '../core/tool-calls-user-format.js';
 
 /** Base64 payloads shorter than this are left alone for ordinary tools (icons, ids, test fixtures). */
@@ -153,4 +155,84 @@ export function omitInlineBinaryInCompletions(transport: LlmCompletionPort): Llm
     complete: (model, context, options) => transport.complete(model, strip(context), options),
     completeSimple: (model, context, options) => transport.completeSimple(model, strip(context), options),
   };
+}
+
+/**
+ * #1250 第 29 批审查：框架自己写给模型 / 历史的占位，模型照抄进回复时不发给用户。只认这些固定形态：
+ * - {@link omitInlineBinaryForModel}：`[已省略 … 数据（N 字符），未提供给模型]` / `[已截断 … 数据（N 字符），…]`；
+ * - 已发送媒体（`sentInlineMediaPlaceholder`）：`[语音 mp3 18.6KB 已发送]`、`[图片 image/png 3.1KB 已发送]`；
+ * - 文本投影（`renderAgentOutput`）：`[语音（内嵌数据，已省略）]`、`[文件: a.pdf（内嵌数据，已省略）]`、
+ *   `[图片: 生成的图片（image/png 3.1KB）]`。
+ * 普通文字（含其他方括号内容）不受影响。
+ */
+const FRAMEWORK_PLACEHOLDERS = new RegExp([
+  /\[已(?:省略|截断) [^[\]\n]{0,80}数据（\d+ 字符）[^[\]\n]{0,120}\]/u.source,
+  /\[(?:语音|图片|视频|文件)(?: [\w.+/-]{1,80})?(?: \d+(?:\.\d)?(?:B|KB|MB))? 已发送\]/u.source,
+  /\[(?:图片|语音|视频|文件: [^[\]\n]{1,120})（内嵌数据，已省略）\]/u.source,
+  /\[图片: 生成的图片（[\w.+/-]{1,80} \d+(?:\.\d)?(?:B|KB|MB)）\]/u.source,
+].join('|'), 'gu');
+/** Starts of the placeholders above; an unfinished streamed tail that may become one is held back. */
+const PLACEHOLDER_HEADS = ['[已省略', '[已截断', '[语音', '[图片', '[视频', '[文件'];
+
+/** Remove framework placeholders the model copied into reply text (see {@link FRAMEWORK_PLACEHOLDERS}). */
+export function stripFrameworkPlaceholders(text: string): string {
+  return text.includes('[') ? text.replace(FRAMEWORK_PLACEHOLDERS, '') : text;
+}
+
+/**
+ * Streaming: strip complete placeholders and hold back an unfinished tail that could still turn
+ * into one, so a placeholder is never offered to the platform piece by piece.
+ */
+export function stripFrameworkPlaceholdersInStream(text: string, complete: boolean): string {
+  const stripped = stripFrameworkPlaceholders(text);
+  if (complete) return stripped;
+  const open = stripped.lastIndexOf('[');
+  if (open < 0) return stripped;
+  const tail = stripped.slice(open);
+  if (tail.length > 240 || tail.includes(']') || tail.includes('\n')) return stripped;
+  const pending = PLACEHOLDER_HEADS.some(head => head.startsWith(tail) || tail.startsWith(head));
+  return pending ? stripped.slice(0, open) : stripped;
+}
+
+function textOf(segment: Segment): string | undefined {
+  if (segment.type !== 'text' && segment.type !== 'markdown') return undefined;
+  const value = (segment.data as Readonly<Record<string, unknown>> | undefined)?.[segment.type === 'text' ? 'text' : 'content'];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** A text / markdown segment with placeholders stripped; `null` when only placeholders (and blanks) were left. */
+export function stripFrameworkPlaceholdersInSegment(segment: Segment, complete = true): Segment | null {
+  const text = textOf(segment);
+  if (text === undefined) return segment;
+  const next = complete ? stripFrameworkPlaceholders(text) : stripFrameworkPlaceholdersInStream(text, false);
+  if (next === text) return segment;
+  if (complete && !next.trim()) return null;
+  return { ...segment, data: { ...segment.data, [segment.type === 'text' ? 'text' : 'content']: next } } as Segment;
+}
+
+/** Outbound reply elements with copied framework placeholders removed (empty texts / messages dropped). */
+export function stripFrameworkPlaceholdersInOutput(elements: AgentOutputElement[]): AgentOutputElement[] {
+  let changed = false;
+  const out: AgentOutputElement[] = [];
+  for (const element of elements) {
+    if (element.type === 'message') {
+      const segments = element.segments.flatMap(segment => {
+        const next = stripFrameworkPlaceholdersInSegment(segment);
+        if (next !== segment) changed = true;
+        return next ? [next] : [];
+      });
+      if (segments.length) out.push(segments.length === element.segments.length && segments.every((s, i) => s === element.segments[i]) ? element : { ...element, segments });
+      continue;
+    }
+    if (element.type === 'text') {
+      const content = stripFrameworkPlaceholders(element.content);
+      if (content !== element.content) {
+        changed = true;
+        if (content.trim()) out.push({ ...element, content });
+        continue;
+      }
+    }
+    out.push(element);
+  }
+  return changed ? out : elements;
 }

@@ -75,3 +75,27 @@ describe('omitInlineBinaryInCompletions (#1250 batch 29 review)', () => {
     }
   });
 });
+
+describe('stripFrameworkPlaceholders (#1250 batch 29 review)', () => {
+  it('removes only the framework placeholder shapes', async () => {
+    const { stripFrameworkPlaceholders, stripFrameworkPlaceholdersInStream, stripFrameworkPlaceholdersInOutput } = await import('../../src/media/inline-binary.js');
+    expect(stripFrameworkPlaceholders('a[已省略 base64 数据（4000 字符），未提供给模型]b')).toBe('ab');
+    expect(stripFrameworkPlaceholders('a[已截断 内嵌 image/png 数据（70000 字符），未提供给模型；原文仍完整保留，不要把这段写回文件]b')).toBe('ab');
+    expect(stripFrameworkPlaceholders('a[语音 mp3 18.6KB 已发送][语音 2.9KB 已发送][图片 image/png 3.1KB 已发送]b')).toBe('ab');
+    expect(stripFrameworkPlaceholders('a[语音（内嵌数据，已省略）][文件: a.pdf（内嵌数据，已省略）][图片: 生成的图片（image/png 3.1KB）]b')).toBe('ab');
+    for (const ordinary of ['[注意] 已发送', '[语音] 我发了', '[图片: 一只猫]', '[已省略部分]', '数组 [1, 2]', '[语音消息 已发送了吗]']) {
+      expect(stripFrameworkPlaceholders(ordinary)).toBe(ordinary);
+    }
+    // Streaming holds back an unfinished tail that could still become a placeholder.
+    expect(stripFrameworkPlaceholdersInStream('好的[语音 mp3 18', false)).toBe('好的');
+    expect(stripFrameworkPlaceholdersInStream('好的[已', false)).toBe('好的');
+    expect(stripFrameworkPlaceholdersInStream('好的[注', false)).toBe('好的[注');
+    expect(stripFrameworkPlaceholdersInStream('好的[语音 mp3 18', true)).toBe('好的[语音 mp3 18');
+    // Output: blank segments and messages left behind are dropped.
+    expect(stripFrameworkPlaceholdersInOutput([
+      { type: 'message', segments: [{ type: 'text', data: { text: '[语音 mp3 18.6KB 已发送]' } }] },
+      { type: 'message', segments: [{ type: 'text', data: { text: '还在 [语音 已发送]' } }, { type: 'markdown', data: { content: ' [已省略 base64 数据（9 字符），未提供给模型] ' } }] },
+      { type: 'text', content: '[语音（内嵌数据，已省略）]' },
+    ] as never)).toEqual([{ type: 'message', segments: [{ type: 'text', data: { text: '还在 ' } }] }]);
+  });
+});

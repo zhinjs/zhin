@@ -80,12 +80,13 @@ afterEach(() => vi.restoreAllMocks());
  * A platform stream that confirms exactly the segments of the snapshot it finishes with, like the
  * production Core reply stream does for a platform without edit-in-place.
  */
+const offeredSnapshots: ReplyStreamSnapshot[] = [];
 function confirmingStream(id: string) {
   const confirmed: CoreReplyStream['confirmed'][number][] = [];
   let receipt: CoreReplyStream['receipt'] = { status: 'suppressed' };
   const stream: CoreReplyStream = {
     minIntervalMs: 0, get receipt() { return receipt; }, get confirmed() { return confirmed; },
-    update: () => {},
+    update: snapshot => { offeredSnapshots.push(snapshot); },
     finish: async (snapshot) => {
       for (const [index, message] of snapshot.messages.entries()) {
         confirmed.push({ key: `${id}/${index}`, segments: message.segments.map(part => part.value), message: { conversation: {} as never, id: `${id}-${index}` } });
@@ -276,7 +277,74 @@ describe('#1250 batch 29 review: rejected or earlier assistant text goes back to
     for (const call of s.calls.slice(1)) {
       expect(call).toContain('[已省略 内嵌 audio/mpeg 数据（4000 字符），未提供给模型]');
       expect(call).not.toContain(AUDIO.slice(0, 64));
+      // The protocol pair survives the projection: the tool call and its result are both still there.
+      const messages = JSON.parse(call) as { role: string; content: unknown; toolCallId?: string }[];
+      const assistant = messages.find(message => message.role === 'assistant'
+        && Array.isArray(message.content) && (message.content as { type: string; id?: string }[]).some(block => block.type === 'toolCall' && block.id === 'tts'));
+      expect(assistant).toBeDefined();
+      expect(messages.some(message => message.role === 'toolResult' && message.toolCallId === 'tts')).toBe(true);
     }
+  });
+});
+
+describe('#1250 batch 29 review: copied framework placeholders never reach the user', () => {
+  const OMITTED = '[已省略 base64 数据（4000 字符），未提供给模型]';
+  const SENT = '[语音 mp3 18.6KB 已发送]';
+
+  it('schema repair: a placeholder the correction model echoes is not sent', async () => {
+    const s = session();
+    const invalid = structured([{ type: 'text', data: { text: '听听这个' } },
+      { type: 'audio', data: { media: { kind: 'base64', value: AUDIO.slice(0, 4000), mime_type: 'audio/mpeg' } } }]);
+    const first = await s.turn([
+      () => assistantTextReply(invalid),
+      () => assistantTextReply(structured([{ type: 'text', data: { text: `听听这个${OMITTED}` } }, { type: 'text', data: { text: OMITTED } }])),
+    ], undefined, 'echo-1');
+    expect(s.calls[1]).toContain('delete each placeholder');
+    const shown = JSON.stringify(first.result.output);
+    expect(shown).toContain('听听这个');
+    expect(shown).not.toContain('已省略');
+    expect(first.result.reply).not.toContain('已省略');
+  });
+
+  it('agent loop, non-progressive: placeholders copied from history are stripped from the final reply', async () => {
+    const s = session();
+    const first = await s.turn([
+      () => assistantTextReply(structured([{ type: 'text', data: { text: `还在${SENT}，刚才那段 ${OMITTED} 也收到了 [注意] 这句保留` } }])),
+    ], undefined, 'echo-2');
+    const shown = JSON.stringify(first.result.output);
+    expect(shown).not.toContain('已发送');
+    expect(shown).not.toContain('已省略');
+    expect(shown).toContain('还在');
+    expect(shown).toContain('[注意] 这句保留');
+  });
+
+  it('agent loop, streamed reply phases: copied placeholders are never offered or confirmed', async () => {
+    const s = session();
+    offeredSnapshots.length = 0;
+    const phases = phaseLifecycle('echo-3');
+    const body = structured([{ type: 'text', data: { text: `还在${SENT}` } }, { type: 'text', data: { text: OMITTED } }]);
+    const first = await s.turn([
+      () => assistantToolCallReply([{ id: 'ready', name: 'prepare_reply', arguments: {} }]),
+      async (_context, opts) => {
+        // Deliver the reply in small pieces so unfinished placeholder tails pass through the stream.
+        for (let start = 0; start < body.length; start += 7) {
+          opts?.onTextDelta?.(body.slice(start, start + 7));
+          await new Promise(resolve => setTimeout(resolve, 1));
+        }
+        return assistantTextReply(body);
+      },
+    ], phases.stream, 'echo-3', phases.lifecycle);
+    expect(offeredSnapshots.length).toBeGreaterThan(1);
+    for (const snapshot of offeredSnapshots) {
+      const offered = JSON.stringify(snapshot);
+      expect(offered).not.toMatch(/\[(?:语|语音|已|已省|已省略)(?:[^\]"]*)?"/u);
+      expect(offered).not.toContain('已发送');
+    }
+    const confirmed = JSON.stringify(phases.stream!.confirmed);
+    expect(confirmed).toContain('还在');
+    expect(confirmed).not.toContain('已发送');
+    expect(confirmed).not.toContain('已省略');
+    expect(JSON.stringify(first.result.output)).not.toContain('已省略');
   });
 });
 

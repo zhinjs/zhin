@@ -2,6 +2,7 @@ import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import type { MessageAliasTable } from '@zhin.js/ai';
 import { createStructuredReplyStreamParser } from '../outbound/structured-reply-stream.js';
+import { stripFrameworkPlaceholdersInSegment } from '../media/inline-binary.js';
 import { isCopiedInlineSegment, segmentMediaKind, type CopiedInlineMediaDrop, type ToolMediaKind } from '../media/media-tool-bridge.js';
 
 /**
@@ -138,13 +139,31 @@ export class ReplyStreamRun {
   }
 
   #resolve(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {
-    snapshot = this.#withoutCopiedInlineMedia(snapshot);
+    snapshot = this.#withoutFrameworkPlaceholders(this.#withoutCopiedInlineMedia(snapshot));
     if (!this.#aliases) return snapshot;
     return { ...snapshot, messages: snapshot.messages.map(message => ({ ...message,
       segments: message.segments.map(part => part.value.type === 'reply' && typeof part.value.data.message_id === 'string'
         ? { ...part, value: { ...part.value, data: { ...part.value.data, message_id: this.#aliases!.resolve(part.value.data.message_id) } } }
         : part),
     })) };
+  }
+
+  /** #1250 第 29 批审查：模型照抄的框架占位不进入流；未写完的可能占位先不提交。 */
+  #withoutFrameworkPlaceholders(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {
+    let changed = false;
+    const messages = snapshot.messages.map(message => {
+      let touched = false;
+      const segments = message.segments.flatMap(part => {
+        const value = stripFrameworkPlaceholdersInSegment(part.value, part.complete);
+        if (value === part.value) return [part];
+        touched = true;
+        return value ? [{ ...part, value }] : [];
+      });
+      if (!touched) return message;
+      changed = true;
+      return { ...message, segments };
+    });
+    return changed ? { ...snapshot, messages } : snapshot;
   }
 
   #withoutCopiedInlineMedia(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {

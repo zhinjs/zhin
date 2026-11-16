@@ -2,6 +2,7 @@ import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { isMediaBlockRef } from '@zhin.js/ai';
 import type { Segment } from '@zhin.js/im-contract';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
+import { stripFrameworkPlaceholdersInOutput } from './inline-binary.js';
 
 function parseToolResultObject(result: unknown): Record<string, unknown> | null {
   if (result && typeof result === 'object' && !Array.isArray(result)) {
@@ -213,6 +214,8 @@ export function mergeToolOutboundElements(
   toolCalls: readonly ToolCallRecord[],
   onCopiedInlineMediaDropped?: (drop: CopiedInlineMediaDrop) => void,
 ): AgentOutputElement[] {
+  // #1250 第 29 批审查：模型照抄的框架占位（「[已省略 …]」「[语音 … 已发送]」等）不发给用户。
+  elements = stripFrameworkPlaceholdersInOutput(elements);
   const media = extractMediaElementsFromToolCalls(toolCalls);
   if (!media.length) return elements;
   elements = withoutCopiedInlineMedia(elements, new Set(media.flatMap(element =>
