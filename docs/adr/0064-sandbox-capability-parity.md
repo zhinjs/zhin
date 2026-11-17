@@ -446,4 +446,10 @@ messaging: {
 - **Agent**：`.zhin/sandbox` 加入 `SENSITIVE_DIR_NAMES`，Shell 命令文本检查新增 `zhin/sandbox`。
 - **网关**：无需改动（见 §5），补了转发测试。
 - **未做**（按计划留给 I2）：`LocalMediaSource` 端口与 core 侧的信任；在此之前插件与 Agent 在进程内读不到上传的文件（README 写明）。
+- **复审修复**（I1 合并前的独立安全审查）：
+  - 入站帧里指向本机路径的媒体（`media.kind: 'path'`，或会被 core 入站映射成 path 的 `path` / `file_path` / 以 `/`、`./`、`~/` 开头的 `file`，任意嵌套深度）整条拒绝（`local_path`）。Agent 的入站媒体对 `path` 不经文件策略直接读盘，不拒绝就能读出任意会话的上传或签名密钥，绕过会话与上传者绑定。
+  - 对象个数上限：每个上传者 1000 个、每个端点 10000 个（含上传中的），见 D12.2。
+  - 地址只认签发时的原样（查询串与签名的规范拼写），见 D12.4。
+  - Agent 文件策略的敏感目录名不区分大小写、忽略末尾的点和空格（macOS / Windows 上 `.ZHIN/sandbox/media/secret` 是同一个文件）。
+  - 已知余量（不属于 I1）：Shell 命令的文本检查挡不住变量拼接与命令替换（`a=.zh; cat ${a}in/…`），与 `.zhin/keys`、`gateway.db` 相同，依赖 ADR 0059 §7 的系统级隔离把 `.zhin/` 换成空目录；没有隔离时 Sandbox 页已经提示。其他适配器（weixin-ilink、email）合法地产出入站 `path` 引用，Agent 入站媒体对 `path` 不校验来源这一点留给后续统一处理。
 
