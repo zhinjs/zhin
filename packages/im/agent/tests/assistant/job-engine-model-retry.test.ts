@@ -173,6 +173,46 @@ describe('TimerScheduler model failures (#1250 b40)', () => {
     } finally { engine.unload(); await engine.stop(); }
   });
 
+  it('does not keep promising a retry that a pause dropped', async () => {
+    const { engine, fire, state } = await scheduler([failed('turn-1'), failed('turn-2'), failed('turn-3')]);
+    try {
+      await fire();
+      expect((await state())?.lastError).toContain('5 分钟后自动重试（第 1/2 次）');
+      await engine.pauseJob('weather');
+      expect((await state())?.lastError).toBe('模型调用失败（network）：连接模型服务失败，请检查网络后再试；排查：zhin trace turn-1；自动重试已取消');
+      expect((await state())?.retryCount).toBeUndefined();
+      await engine.resumeJob('weather');
+      await fire();
+      await vi.advanceTimersByTimeAsync(5 * MINUTE);
+      await vi.waitFor(async () => expect((await state())?.lastError).toContain('10 分钟后自动重试（第 2/2 次）'));
+      await engine.pauseJob('weather');
+      expect(await state()).toMatchObject({ retryCount: 1,
+        lastError: '模型调用失败（network）：连接模型服务失败，请检查网络后再试；排查：zhin trace turn-3；已自动重试 1 次，其余自动重试已取消' });
+    } finally { engine.unload(); await engine.stop(); }
+  });
+
+  it('does not keep promising a retry that a restart lost', async () => {
+    const { engine, fire, state, store, execute } = await scheduler([failed('turn-1')]);
+    await fire();
+    expect(engine.pendingModelRetries()).toEqual(['weather']);
+    engine.unload();
+    await engine.stop();
+    const restarted = new TimerScheduler({ store, due: { run: async () => { throw new Error('not run'); } },
+      router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm: async () => {} }) });
+    try {
+      await restarted.load();
+      expect(restarted.pendingModelRetries()).toEqual([]);
+      const after = await state();
+      expect(after?.lastError).toBe('模型调用失败（network）：连接模型服务失败，请检查网络后再试；排查：zhin trace turn-1；自动重试已取消');
+      expect(after?.retryCount).toBeUndefined();
+      expect(after?.lastStatus).toBe('error');
+      // The next run is the regular one again, not the lost retry.
+      expect(after?.nextRunAtMs).toBe(after!.lastExecutedAt! + DAY);
+      await vi.advanceTimersByTimeAsync(30 * MINUTE);
+      expect(execute).toHaveBeenCalledOnce();
+    } finally { restarted.unload(); await restarted.stop(); }
+  });
+
   it('words timeouts and unnamed services, in both languages', () => {
     const failure = { kind: 'timeout', transient: true } as const;
     expect(scheduleModelFailureNotice('zh-CN', { label: '早报', failure, turnId: 't', retries: 0, retryInMs: 10 * MINUTE }))

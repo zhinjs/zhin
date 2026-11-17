@@ -35,7 +35,7 @@ import type {
 } from '../schedule-domain/execution-history.js';
 import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
-import type { ScheduleJob, JobSchedule } from './types.js';
+import type { ScheduleJob, ScheduleJobState, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
@@ -48,6 +48,29 @@ const messages = createMessages({
 });
 
 export type ScheduleDispose = () => void;
+
+/** `lastError` note of a run whose automatic retry after a transient model failure is pending (#1250 b40). */
+function pendingModelRetryNote(retryInMs: number, attempt: number): string {
+  return `；${Math.round(retryInMs / 60_000)} 分钟后自动重试（第 ${attempt}/${SCHEDULE_MODEL_RETRY_DELAYS_MS.length} 次）`;
+}
+const PENDING_MODEL_RETRY_NOTE = /；\d+ 分钟后自动重试（第 \d+\/\d+ 次）$/;
+
+/**
+ * The stored state once a pending automatic retry will no longer run (the job was paused, or the
+ * process restarted and the in-memory retry was lost): `lastError` must not keep promising it, and
+ * `retryCount` counts only the retries that were made.
+ */
+function withoutPendingModelRetry<T extends ScheduleJobState | undefined>(state: T): T {
+  const lastError = state?.lastError;
+  if (!state || !lastError || !PENDING_MODEL_RETRY_NOTE.test(lastError)) return state;
+  const made = Math.max(0, (state.retryCount ?? 1) - 1);
+  return {
+    ...state,
+    lastError: lastError.replace(PENDING_MODEL_RETRY_NOTE,
+      made > 0 ? `；已自动重试 ${made} 次，其余自动重试已取消` : '；自动重试已取消'),
+    retryCount: made > 0 ? made : undefined,
+  } as T;
+}
 
 export function jobPrompt(job: ScheduleJob): string {
   if (job.action.kind === 'heartbeat' || job.action.kind === 'agent') {
@@ -208,6 +231,14 @@ export class TimerScheduler {
     const jobs = await this.store.listJobs();
     for (const job of jobs) {
       if (isRuntimeSchedulable(job)) this.registerOne(job);
+      // #1250 b40: automatic retries live in memory only; one promised before a restart will not run.
+      if (!this.#modelRetries.has(job.id)) {
+        const state = withoutPendingModelRetry(job.state);
+        if (state && state !== job.state) {
+          await this.store.updateJobState(job.id, { lastError: state.lastError, retryCount: state.retryCount });
+          job.state = state;
+        }
+      }
       // Self-heal: jobs written before the next run was persisted (or by a profile sync that reset
       // `state`) have no `nextRunAtMs`; recompute it for every job on start.
       await this.#syncNextRun(job, { repair: true });
@@ -353,7 +384,7 @@ export class TimerScheduler {
     const nextRunAtMs = retryAt !== undefined && (regularNext === undefined || retryAt < regularNext) ? retryAt : regularNext;
     const lastError = !result.success || result.status === 'degraded'
       ? retryInMs !== undefined
-        ? `${result.error ?? 'unknown error'}；${Math.round(retryInMs / 60_000)} 分钟后自动重试（第 ${retried + 1}/${SCHEDULE_MODEL_RETRY_DELAYS_MS.length} 次）`
+        ? `${result.error ?? 'unknown error'}${pendingModelRetryNote(retryInMs, retried + 1)}`
         : modelFailure && retried > 0 ? `${result.error ?? 'unknown error'}；已自动重试 ${retried} 次，不再重试` : result.error
       : undefined;
     if (retryInMs !== undefined) {
@@ -556,7 +587,8 @@ export class TimerScheduler {
     const job = await this.store.getJob(id);
     if (!job) return false;
     job.enabled = false;
-    job.state = { ...job.state, nextRunAtMs: undefined };
+    // A pending automatic retry is dropped below (#1250 b40): the stored error no longer promises it.
+    job.state = { ...withoutPendingModelRetry(job.state), nextRunAtMs: undefined };
     await this.store.upsertJob(job);
     const dispose = this.disposes.get(id);
     if (dispose) {
