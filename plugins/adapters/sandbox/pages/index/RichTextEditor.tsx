@@ -1,5 +1,10 @@
 import { sandboxText, type SandboxLocale } from './messages.js';
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import {
+    sandboxInboundFaceSegment,
+    sandboxInboundMediaSegment,
+    sandboxInboundMentionSegment,
+} from '../../src/inbound-syntax.js'
 
 export interface MessageSegment {
     type: 'text' | 'mention' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'record' | 'file'
@@ -63,27 +68,24 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                     if (el.classList.contains('editor-face')) {
                         const faceId = el.dataset.id
                         text += `[face:${faceId}]`
-                        segments.push({ type: 'face', data: { id: Number(faceId) } })
+                        segments.push(sandboxInboundFaceSegment(faceId ?? '') as MessageSegment)
                     } else if (el.classList.contains('editor-image')) {
                         const imageUrl = el.dataset.url
                         text += `[image:${imageUrl}]`
-                        segments.push({ type: 'image', data: { media: { kind: 'url', value: imageUrl } } })
+                        segments.push(sandboxInboundMediaSegment('image', imageUrl ?? '') as MessageSegment)
                     } else if (el.classList.contains('editor-video')) {
                         const u = el.dataset.url || ''
                         text += `[video:${u}]`
-                        segments.push({ type: 'video', data: { media: { kind: 'url', value: u } } })
+                        segments.push(sandboxInboundMediaSegment('video', u) as MessageSegment)
                     } else if (el.classList.contains('editor-audio')) {
                         const u = el.dataset.url || ''
                         text += `[audio:${u}]`
-                        segments.push({ type: 'audio', data: { media: { kind: 'url', value: u } } })
+                        segments.push(sandboxInboundMediaSegment('audio', u) as MessageSegment)
                     } else if (el.classList.contains('editor-at')) {
                         const name = el.dataset.name
                         const id = el.dataset.id
                         text += `[@${name}]`
-                        segments.push({
-                            type: 'mention',
-                            data: id ? { target: id, name } : { target: name, name },
-                        })
+                        segments.push(sandboxInboundMentionSegment(name ?? '', id) as MessageSegment)
                     } else if (el.tagName === 'BR') {
                         appendText('\n')
                     } else {

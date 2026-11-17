@@ -63,6 +63,7 @@ import {
   type PlaygroundSession,
 } from './playgroundState.js';
 import type { SandboxAgentRunConfig } from '../../src/run-config.js';
+import { SANDBOX_INBOUND_SYNTAX, expandSandboxInboundSyntax, parseSandboxInboundText } from '../../src/inbound-syntax.js';
 
 type Message = PlaygroundMessage
 type Channel = PlaygroundSession
@@ -100,6 +101,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [directoryStatus, setDirectoryStatus] = useState<DirectoryStatus>({ mode: 'loading', error: null })
     const [workspaceScope, setWorkspaceScope] = useState<SandboxWorkspaceScope | null>(null)
     const [transportNotice, setTransportNotice] = useState<string | null>(null)
+    // #1250 (`sandbox-typed-media-syntax-sent-as-text`): a typed media token whose link was not accepted.
+    const [syntaxNotice, setSyntaxNotice] = useState<string | null>(null)
     // #1250 (`unaddressed-message-no-record`): why the last message got no reply, from its settled outcome.
     const [outcomeNotice, setOutcomeNotice] = useState<{ messageId: string; sessionKey: string; text: string } | null>(null)
     const [shellIsolation, setShellIsolation] = useState<{ available: boolean; provider: string; message: string } | null>(null)
@@ -640,28 +643,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
     }, [sessionKey, loadTrace])
 
+    // Same table and parser as the send path and the endpoint (src/inbound-syntax.ts).
     const parseTextToSegments = (text: string): MessageSegment[] => {
-        const segments: MessageSegment[] = []
-        const regex = /\[@([^\[\]]+)\]|\[face:(\d+)\]|\[image:([^\[\]]+)\]|\[video:([^\[\]]+)\]|\[audio:([^\[\]]+)\]/g
-        let lastIndex = 0
-        let match: RegExpExecArray | null
-        while ((match = regex.exec(text)) !== null) {
-            if (match.index > lastIndex) {
-                const t = text.substring(lastIndex, match.index)
-                if (t) segments.push({ type: 'text', data: { text: t } })
-            }
-            if (match[1]) segments.push({ type: 'mention', data: { target: match[1], name: match[1] } })
-            else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
-            else if (match[3]) segments.push({ type: 'image', data: { media: { kind: 'url', value: match[3] } } })
-            else if (match[4]) segments.push({ type: 'video', data: { media: { kind: 'url', value: match[4] } } })
-            else if (match[5]) segments.push({ type: 'audio', data: { media: { kind: 'url', value: match[5] } } })
-            lastIndex = regex.lastIndex
-        }
-        if (lastIndex < text.length) {
-            const r = text.substring(lastIndex)
-            if (r) segments.push({ type: 'text', data: { text: r } })
-        }
-        return segments.length > 0 ? segments : [{ type: 'text', data: { text } }]
+        const { segments } = parseSandboxInboundText(text)
+        return segments.length > 0 ? segments as MessageSegment[] : [{ type: 'text', data: { text } }]
     }
 
     const hasRenderableSegments = (segments: MessageSegment[]) => {
@@ -717,7 +702,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         attempt(0)
     }
 
-    const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
+    const handleSendMessage = (_text: string, editorSegments: MessageSegment[]) => {
+        // Typed `[image:URL]` etc. become the segments the buttons insert; rejected links stay text.
+        const typed = expandSandboxInboundSyntax(editorSegments)
+        const segments = typed.segments as MessageSegment[]
         if (!connectionRef.current.canExecute || directoryModeRef.current === 'loading' || !hasRenderableSegments(segments)) return
         const scene = activeChannelRef.current
         const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
@@ -738,6 +726,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         void directoryControllerRef.current?.save(scene, true)
         setPendingRefreshEpoch((epoch) => epoch + 1)
         setOutcomeNotice(null)
+        setSyntaxNotice(typed.issues.length > 0
+            ? sandboxText(localeRef.current, "{0} 不是可用的链接（只支持 http(s) 链接，图片、视频、音频也可用对应类型的 data URL），已按文本发送。", [typed.issues.map((issue) => issue.token).join(' ')])
+            : null)
         watchQuietOutcome(newMessage.id, scene)
         setMessages((prev) => mergePlaygroundMessage(prev, newMessage))
         setInputText(''); setPreviewSegments([]); setComposerMode('write')
@@ -1193,6 +1184,13 @@ ${sandboxStyles}`}</style>
                     action: <Button type="button" size="sm" variant="outline" onClick={() => setOutcomeNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
                 })}
 
+                {syntaxNotice && notice('syntax', {
+                    title: sandboxText(locale, "有写法没有生效"),
+                    message: syntaxNotice,
+                    role: 'status',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setSyntaxNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
+
                 {transportNotice && notice('transport', {
                     title: sandboxText(locale, "运行暂不可用"),
                     message: transportNotice,
@@ -1512,11 +1510,14 @@ ${sandboxStyles}`}</style>
                         <ul>
                             <li><span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}</li>
                             <li><span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}</li>
-                            <li><span className="sandbox-hint-key">```ts</span> {sandboxText(locale, "代码块")}</li>
-                            <li><span className="sandbox-hint-key">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}</li>
-                            <li><span className="sandbox-hint-key">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}</li>
-                            <li><span className="sandbox-hint-key">[@{endpointId}]</span> {sandboxText(locale, "@机器人（群聊里唤起机器人，也可点 @ 按钮插入）")}</li>
-                            <li><span className="sandbox-hint-key">[image:URL]</span> <span className="sandbox-hint-key">[video:URL]</span> <span className="sandbox-hint-key">[audio:URL]</span> {sandboxText(locale, "媒体")}</li>
+                            {/* Only forms the send path really parses: rendered from the parser's own table. */}
+                            {SANDBOX_INBOUND_SYNTAX.map((entry) => (
+                                <li key={entry.kind} data-syntax={entry.kind}>
+                                    <span className="sandbox-hint-key">{sandboxText(locale, entry.syntax)}</span>
+                                    {entry.kind === 'mention' && <> <span className="sandbox-hint-key">[@{endpointId}]</span></>}
+                                    {' '}{sandboxText(locale, entry.label)}
+                                </li>
+                            ))}
                             {commandHints && <li><Terminal size={11} /> {commandHints.prefix
                                 ? sandboxText(locale, "命令以 {0} 开头", [commandHints.prefix])
                                 : sandboxText(locale, "命令无需前缀")}</li>}

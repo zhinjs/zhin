@@ -15,7 +15,7 @@ sidebar: false
 | [ADR 0034](./0034-activity-feedback-service-plugin.md) | Activity Feedback 服务插件 | Accepted / Implemented | `plugins/services/activity-feedback/`、`@zhin.js/core` |
 | [ADR 0035](./0035-comment-reply-adapter-contract.md) | 评论型平台适配器契约（Bilibili 先行） | Accepted（Experimental 实现） | `plugins/adapters/bilibili/`、`plugins/adapters/github/` |
 | [ADR 0044](./0044-adapter-capability-profile.md) | 适配器能力画像——规范在 zhin，能力由适配器注入，功能按能力组合 | Implemented | `@zhin.js/im-contract`、`@zhin.js/adapter`、`@zhin.js/core` |
-| [ADR 0064](./0064-sandbox-capability-parity.md) | Sandbox 全能力渲染与「按平台预览」——Sandbox 是能力上界，降级只在 core 投影里发生并产出逐段报告，预览读真实适配器画像（按会话类型解析）；新增 `select` 语义段，`interactive` 声明扩展为对象，流式进入画像（D1–D11 按推荐） | Accepted（P0 已实施） | `@zhin.js/core`（`plugin-runtime/im/outbound-segments.ts`、`outbound-renderer.ts`、`built/segment-contract/`、`built/user-interaction.ts`）、`@zhin.js/adapter`（`capability-profile.ts`）、`plugins/adapters/sandbox`、`plugins/adapters/github`、`plugins/adapters/qq` |
+| [ADR 0064](./0064-sandbox-capability-parity.md) | Sandbox 全能力渲染与「按平台预览」——Sandbox 是能力上界，降级只在 core 投影里发生并产出逐段报告，预览读真实适配器画像（按会话类型解析）；新增 `select` 语义段，`interactive` 声明扩展为对象，流式进入画像（D1–D11 按推荐）；2026-11-17 增补入站能力对齐（D12–D17：本地文件由 Sandbox 托管并签发限时地址、托管地址按签发者视为本机可信来源、引用经 `reply` 段提升 `replyTo`、平台事件经 control 帧上报） | Accepted（P0、I0 已实施） | `@zhin.js/core`（`plugin-runtime/im/outbound-segments.ts`、`outbound-renderer.ts`、`built/segment-contract/`、`built/user-interaction.ts`）、`@zhin.js/adapter`（`capability-profile.ts`）、`plugins/adapters/sandbox`、`plugins/adapters/github`、`plugins/adapters/qq` |
 
 ### 受控落地、群运营与自我演进
 
