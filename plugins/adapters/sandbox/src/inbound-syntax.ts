@@ -85,11 +85,26 @@ export function isSandboxInboundMediaUrl(kind: SandboxMediaKind, value: string):
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (DATA_URL.test(trimmed)) return inlineDataUrl(kind, trimmed) !== null;
+  return remoteMediaUrl(trimmed) !== null;
+}
+
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+
+/**
+ * An absolute `http(s)` link in its serialized form (`URL.href`), or null. Control characters
+ * (which the URL parser would silently drop, e.g. `java\tscript:`) and embedded credentials are
+ * refused, so what is stored, shown and fetched is the same visible link.
+ */
+function remoteMediaUrl(value: string): string | null {
+  if (CONTROL_CHARACTER.test(value)) return null;
   try {
-    const url = new URL(trimmed);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (!url.hostname || url.username || url.password) return null;
+    return url.href;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -111,11 +126,13 @@ export function sandboxInboundMediaSegment(kind: SandboxMediaKind, url: string):
   const value = url.trim();
   const data = inlineDataUrl(kind, value);
   if (data) return { type: kind, data: { media: { kind: 'base64', value: data.value, mime_type: data.mime } } };
+  // An accepted link is stored as `URL.href`; anything else keeps the picked value as before.
+  const link = remoteMediaUrl(value) ?? value;
   if (kind === 'file') {
-    const name = fileNameOf(value);
-    return { type: 'file', data: { media: { kind: 'url', value }, ...(name ? { name } : {}) } };
+    const name = fileNameOf(link);
+    return { type: 'file', data: { media: { kind: 'url', value: link }, ...(name ? { name } : {}) } };
   }
-  return { type: kind, data: { media: { kind: 'url', value } } };
+  return { type: kind, data: { media: { kind: 'url', value: link } } };
 }
 
 export function sandboxInboundFaceSegment(id: number | string): SandboxInboundSegment {

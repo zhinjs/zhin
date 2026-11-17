@@ -90,6 +90,18 @@ describe('Sandbox typed inbound syntax (#1250 sandbox-typed-media-syntax-sent-as
     ]);
   });
 
+  it('refuses links with control characters or credentials and stores the serialized link', () => {
+    for (const token of ['[image:https://e.com/a\r.png]', '[image:https://e.com/\ta.png]', '[image:java\tscript:alert(1)]',
+      '[image:https://user:secret@e.com/a.png]', '[file:https://user@e.com/a.pdf]']) {
+      const parsed = parseSandboxInboundText(token);
+      expect(parsed.expanded, JSON.stringify(token)).toBe(false);
+      expect(parsed.issues, JSON.stringify(token)).toHaveLength(1);
+    }
+    expect(parseSandboxInboundText('[image: HTTPS://E.com/a b.png ]').segments).toEqual([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://e.com/a%20b.png' } } },
+    ]);
+  });
+
   it('expands only text segments and leaves picked segments untouched', () => {
     const picked = sandboxInboundMediaSegment('image', LOGO);
     const result = expandSandboxInboundSyntax([picked, { type: 'text', data: { text: ' and [image:https://e.com/b.png]' } }]);
