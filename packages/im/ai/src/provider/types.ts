@@ -7,7 +7,8 @@ import type { ImageGenerateRequest, ImageGenerateResult } from '../image-generat
 export type JsonObject = Readonly<Record<string, JsonValue>>;
 export type ModelKind = 'language' | 'decision' | 'image';
 export type AuthenticationMethod = 'none' | 'api-key' | 'oauth';
-export type DecisionPurpose = 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
+/** Decision purposes (ADR 0047 §7). `ambient` moved to the interjection judge `purposes.ambient` (ADR 0066 D1). */
+export type DecisionPurpose = 'skills' | 'tools' | 'memory' | 'agents' | 'approval';
 export type LanguagePurpose = 'chat' | 'summary' | 'perception' | 'ambient';
 export type InferencePurpose = LanguagePurpose | 'image' | `decision:${DecisionPurpose}` | `agent:${string}`;
 
@@ -82,13 +83,40 @@ export interface ScopedModelSelection {
   readonly chatFallbacks?: readonly string[];
   readonly perception?: PerceptionSelection;
 }
+/**
+ * The interjection judge (ADR 0066 D1): decides only whether to speak in a group nobody addressed;
+ * what to say is written by `chat`. Its chain `[profile, ...fallbacks]` may mix language and
+ * decision Profiles; without `profile` it follows the deployment chat model and its fallbacks.
+ */
+export interface AmbientJudgePolicy {
+  /** Main judge, a language or decision Profile; absent: the deployment chat model. */
+  readonly profile?: string;
+  /** Ordered fallbacks, language or decision, mixed; only next to `profile`. */
+  readonly fallbacks?: readonly string[];
+  /** Compared model (D3): judges the same input, recorded only, never decides. */
+  readonly compare?: string;
+  /** The one threshold, 0..1 (default 0.7): engage only when `engage && confidence >= minConfidence`. */
+  readonly minConfidence?: number;
+  /** `shadow`: judge and record, never speak (default `active`). */
+  readonly mode?: 'active' | 'shadow';
+  /** One decision-model evaluation, ms (default 3000); language members do not use it. */
+  readonly timeoutMs?: number;
+}
 export interface PurposePolicy {
   readonly defaults: ScopedModelSelection & Readonly<{
     summary?: string; summaryFallbacks?: readonly string[];
     image?: string;
-    ambient?: string; ambientFallbacks?: readonly string[];
+    /** @deprecated ADR 0066: legacy language ambient purpose, migrated into {@link PurposePolicy.ambient}. */
+    ambient?: string;
+    /** @deprecated ADR 0066: legacy fallbacks of `defaults.ambient`, migrated into {@link PurposePolicy.ambient}. */
+    ambientFallbacks?: readonly string[];
   }>;
-  readonly decisions?: Readonly<Partial<Record<DecisionPurpose, DecisionPurposePolicy>>>;
+  /** The interjection judge (ADR 0066). */
+  readonly ambient?: AmbientJudgePolicy;
+  readonly decisions?: Readonly<Partial<Record<DecisionPurpose, DecisionPurposePolicy>>> & Readonly<{
+    /** @deprecated ADR 0066: legacy decision ambient purpose, migrated into {@link PurposePolicy.ambient}. */
+    ambient?: DecisionPurposePolicy;
+  }>;
   readonly agents?: Readonly<Record<string, string>>;
   /** Ordered fallbacks of `agents[key]`; a key without an `agents` entry is invalid. */
   readonly agentFallbacks?: Readonly<Record<string, readonly string[]>>;

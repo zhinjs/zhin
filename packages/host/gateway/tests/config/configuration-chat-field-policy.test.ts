@@ -36,7 +36,7 @@ async function fixture() {
   await writeFile(join(root, 'demo/schema.json'), JSON.stringify(schema));
   const file = join(root, 'zhin.config.json');
   await writeFile(file, JSON.stringify({ configVersion: 2, plugins: { demo: './demo' }, demo: initial,
-    ai: { trigger: { masters: ['global-private'], trusted: ['global-trusted-private'], ambient: { mode: 'active' } } } }));
+    ai: { trigger: { masters: ['global-private'], trusted: ['global-trusted-private'], ambient: { mode: 'active', quietMs: 4000 } } } }));
   const document = createConfigDocument(file);
   const store = new ConsoleConfigurationStore({ projectRoot: root, document, environmentForPlugin: () => ({ has: () => true }) });
   return { file, store, document };
@@ -80,7 +80,11 @@ describe('chat field policy units', () => {
   });
   it('keeps the Host chat whitelist identical to HOST_CONFIG_PATCH_PATHS', () => {
     const scope = { hostKeys: ['ai', 'locale', 'http'], hostPaths: HOST_CONFIG_PATCH_PATHS, declarationKeys: new Set(['plugins']) };
-    expect(() => assertChatConfigurationScope(['ai', 'trigger', 'ambient', 'mode'], scope)).not.toThrow();
+    expect(() => assertChatConfigurationScope(['ai', 'trigger', 'ambient', 'quietMs'], scope)).not.toThrow();
+    // ADR 0066 D5.7: the retired threshold / mode keys are out of chat scope.
+    for (const key of ['minConfidence', 'mode']) {
+      expect(() => assertChatConfigurationScope(['ai', 'trigger', 'ambient', key], scope)).toThrow(expect.objectContaining({ kind: 'scope' }));
+    }
     for (const path of [['ai', 'trigger', 'enabled'], ['ai', 'trigger'], ['locale'], ['http', 'port']]) {
       expect(() => assertChatConfigurationScope(path, scope)).toThrow(expect.objectContaining({ kind: 'scope' }));
     }
@@ -121,7 +125,8 @@ describe('chat field policy through the store', () => {
     const f = await fixture();
     const result = await f.store.readChat([], 'fields');
     const paths = result.fields!.map(field => field.path.join('.'));
-    expect(paths).toEqual(expect.arrayContaining(['demo.name', 'demo.nickname', 'demo.tags', 'demo.profile.bio', 'ai.trigger.ambient.mode']));
+    expect(paths).toEqual(expect.arrayContaining(['demo.name', 'demo.nickname', 'demo.tags', 'demo.profile.bio', 'ai.trigger.ambient.quietMs']));
+    expect(paths).not.toContain('ai.trigger.ambient.mode');
     expect(paths).toContain('demo.inbound.enabled');
     expect(paths.some(path => /master|trusted|Admins|adminIds|whitelist|bypass|toolHardGate|endpoints|rows/iu.test(path))).toBe(false);
     expect(paths.some(path => path.startsWith('ai.') && !path.startsWith('ai.trigger.ambient.'))).toBe(false);
@@ -161,7 +166,7 @@ describe('chat field policy through the store', () => {
     const prepare = vi.spyOn(f.document, 'prepare');
     for (const [path, value] of [
       [['demo', 'nickname'], '${HOME}'], [['demo', 'nickname'], 'x ${DB_URL} y'], [['demo', 'nickname'], 'env://GITHUB_PAT'],
-      [['demo', 'nickname'], 'ENV://PATH'], [['demo', 'tags'], ['ok', '${OPENAI_KEY}']], [['ai', 'trigger', 'ambient', 'mode'], '${MODE}'],
+      [['demo', 'nickname'], 'ENV://PATH'], [['demo', 'tags'], ['ok', '${OPENAI_KEY}']], [['ai', 'trigger', 'ambient', 'quietMs'], '${MODE}'],
     ] as const) {
       await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path, value }] }))
         .rejects.toMatchObject({ kind: 'sensitive' });

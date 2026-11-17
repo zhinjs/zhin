@@ -21,6 +21,8 @@ import {
 const GRAPH = 'agent_inference_graphs';
 const MUTATION = 'agent_inference_mutations';
 const CREDENTIAL = 'agent_inference_credentials';
+/** One-time migrations of the graph and their records (ADR 0066 D5: `before` for a revert, `noticedAt`). */
+const MIGRATION_RECORD = 'agent_inference_migrations';
 const fields = ['id', 'revision', 'value'] as const;
 
 export class InferenceStoreError extends Error {
@@ -161,7 +163,7 @@ function parseReceipt(input: unknown): ProviderMutationReceipt {
 /** Root-private SQL repository: graph, commit receipt and encrypted credentials share one transaction. */
 export class DatabaseInferenceRepository implements ProviderRepository {
   constructor(private readonly options: RepositoryOptions) {
-    for (const table of [GRAPH, MUTATION, CREDENTIAL])
+    for (const table of [GRAPH, MUTATION, CREDENTIAL, MIGRATION_RECORD])
       options.database.define(table, {
         id: {
           type: 'text',
@@ -236,6 +238,45 @@ export class DatabaseInferenceRepository implements ProviderRepository {
     return record;
   }
 
+  /** A migration record of this root (ADR 0066), or undefined when that migration never ran. */
+  async readMigrationRecord(input: Readonly<{ rootId: string; id: string }>): Promise<JsonObject | undefined> {
+    let stored: StoredRow | undefined;
+    try {
+      stored = await read(this.#model(MIGRATION_RECORD), key([input.rootId, 'migration', input.id]));
+    } catch (error) {
+      throw error instanceof InferenceStoreError ? error : new InferenceStoreError('unavailable');
+    }
+    if (!stored) return undefined;
+    const value = object(stored.value);
+    if (value.id !== input.id) throw new InferenceStoreError('integrity');
+    return structuredClone(value) as JsonObject;
+  }
+
+  /** Writes (or replaces) a migration record outside a graph commit (a failure, `noticedAt`). */
+  async writeMigrationRecord(input: Readonly<{ rootId: string; id: string; record: JsonObject }>): Promise<void> {
+    this.#model(MIGRATION_RECORD);
+    const id = key([input.rootId, 'migration', input.id]);
+    const value = { ...structuredClone(input.record), id: input.id };
+    try {
+      await this.options.database.transaction!(async (transaction) => {
+        const current = await read(transaction.model(MIGRATION_RECORD), id);
+        if (current) await transaction.model(MIGRATION_RECORD).update({ revision: current.revision + 1, value }).where({ id, revision: current.revision });
+        else await transaction.model(MIGRATION_RECORD).insert({ id, revision: 1, value });
+      });
+    } catch (error) {
+      throw error instanceof InferenceStoreError ? error : new InferenceStoreError('unavailable');
+    }
+  }
+
+  /** A graph commit and its migration record in one transaction (ADR 0066 D5.1). */
+  async commitMigration(input: CommitProviderGraphInput & Readonly<{ migration: Readonly<{ id: string; record: JsonObject }> }>): Promise<ProviderMutationResult> {
+    const graph = this.options.normalizeGraph(input.graph);
+    if (graph.rootId !== input.rootId || graph.revision !== input.expectedRevision + 1 || !text(input.mutationId) || !text(input.fingerprint))
+      throw new InferenceStoreError('integrity');
+    try { this.#model(MIGRATION_RECORD); } catch { return { status: 'not-committed' }; }
+    return this.#commit(input, graph, input.migration);
+  }
+
   async commit(input: CommitProviderGraphInput): Promise<ProviderMutationResult> {
     const graph = this.options.normalizeGraph(input.graph);
     if (
@@ -260,7 +301,8 @@ export class DatabaseInferenceRepository implements ProviderRepository {
 
   async #commit(
     input: Omit<CommitProviderGraphInput, 'graph'>,
-    nextGraph?: ProviderGraph
+    nextGraph?: ProviderGraph,
+    migration?: Readonly<{ id: string; record: JsonObject }>
   ): Promise<ProviderMutationResult> {
     try {
       this.#model(GRAPH);
@@ -337,6 +379,13 @@ export class DatabaseInferenceRepository implements ProviderRepository {
           revision: graph.revision,
           value: receipt,
         });
+        if (migration) {
+          const recordId = key([input.rootId, 'migration', migration.id]);
+          const value = { ...structuredClone(migration.record), id: migration.id };
+          const previous = await read(transaction.model(MIGRATION_RECORD), recordId);
+          if (previous) await transaction.model(MIGRATION_RECORD).update({ revision: previous.revision + 1, value }).where({ id: recordId, revision: previous.revision });
+          else await transaction.model(MIGRATION_RECORD).insert({ id: recordId, revision: 1, value });
+        }
         return { status: 'committed', receipt, replayed: false };
       });
     } catch (error) {

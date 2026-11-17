@@ -21,6 +21,11 @@ import {
   type ProviderSchema,
   type ProviderSupportMetadata,
   normalizeProviderJson,
+  ambientJudgeChain,
+  effectiveAmbientJudgePolicy,
+  type AmbientJudgePolicy,
+  type AmbientJudgePolicySource,
+  type ProviderPlanWarning,
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { MODEL_FALLBACK_NOTICE, modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent, type ModelUnavailability } from '@zhin.js/ai';
@@ -30,6 +35,13 @@ import { createPersonalModelFetch } from './personal-network.js';
 import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js';
 import { DatabaseInferenceRepository } from './repository.js';
 import { purposeKeyEffects, type PurposeIgnoredReason } from '../../model-runtime/purpose-effect.js';
+import {
+  noticeAmbientJudgeMigration,
+  readAmbientJudgeMigration,
+  revertAmbientJudgeMigration,
+  type AmbientJudgeMigrationRecord,
+  type AmbientJudgeRevertResult,
+} from './ambient-judge-migration.js';
 import type { AgentPurposeTargets } from './targets.js';
 
 /**
@@ -224,6 +236,26 @@ export interface PreparedInferenceChange {
   readonly baseRevision: number;
   readonly changes?: ReviewedProviderPlan['changes'];
   readonly bindings?: ReviewedProviderPlan['bindings'];
+  /** Deprecated forms that were accepted and converted (ADR 0066 `purposes.decisions.ambient`). */
+  readonly warnings?: readonly ProviderPlanWarning[];
+}
+/** The interjection judge in effect (ADR 0066), as `GET {base}/agent/inference/ambient-judge` returns it. */
+export interface InferenceAmbientJudgeView {
+  readonly policy: AmbientJudgePolicy;
+  /** `stored`: `purposes.ambient`; `legacy`: converted in memory (not migrated yet); `default`: nothing stored. */
+  readonly source: AmbientJudgePolicySource;
+  /** Chain members in order; `kind` undefined when the Profile is missing or neither language nor decision. */
+  readonly chain: readonly Readonly<{ profile: string; kind?: 'language' | 'decision' }>[];
+  /** Set when the chain is the deployment chat model's. */
+  readonly inheritedFrom?: 'chat';
+  /** The ADR 0066 migration record, without the saved `before`. */
+  readonly migration?: Omit<AmbientJudgeMigrationRecord, 'before'>;
+}
+function engagementKind(graph: ProviderGraph, id: string): 'language' | 'decision' | undefined {
+  const profile = Object.hasOwn(graph.profiles, id) ? graph.profiles[id] : undefined;
+  const account = profile ? graph.accounts[profile.accountId] : undefined;
+  const kinds = account && profile ? graph.services[account.serviceId]?.models[profile.model]?.kinds ?? [] : [];
+  return kinds.includes('language') ? 'language' : kinds.includes('decision') ? 'decision' : undefined;
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -446,7 +478,38 @@ export class InferenceManagementService {
       })),
       changes: reviewed.changes,
       bindings: reviewed.bindings,
+      ...(reviewed.warnings ? { warnings: reviewed.warnings } : {}),
     };
+  }
+  /**
+   * The interjection judge in effect (ADR 0066) and its migration record, for `zhin doctor` and
+   * the Console. Host administrators only; the record's `before` stays private.
+   */
+  async ambientJudge(principal: InferenceManagementPrincipal): Promise<InferenceAmbientJudgeView> {
+    this.#principal(principal);
+    if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
+    const graph = await this.graph();
+    const { policy, source } = effectiveAmbientJudgePolicy(graph.purposes);
+    const chain = ambientJudgeChain(graph.purposes);
+    const record = await readAmbientJudgeMigration(this.options.repository, this.options.rootId).catch(() => undefined);
+    const { before: _before, ...migration } = record ?? {};
+    return Object.freeze({ policy, source, chain: chain.ids.map(id => Object.freeze({ profile: id, kind: engagementKind(graph, id) })),
+      ...(chain.inheritedFrom ? { inheritedFrom: chain.inheritedFrom } : {}),
+      ...(record ? { migration: Object.freeze(migration) as InferenceAmbientJudgeView['migration'] } : {}) });
+  }
+  /** `zhin doctor` showed the migration result (ADR 0066 D5.4): later runs show it with `--verbose` only. */
+  async noticeAmbientJudgeMigration(principal: InferenceManagementPrincipal): Promise<Readonly<{ noticedAt?: number }>> {
+    this.#principal(principal);
+    if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
+    const record = await noticeAmbientJudgeMigration({ store: this.options.repository, rootId: this.options.rootId });
+    return Object.freeze({ ...(record?.noticedAt !== undefined ? { noticedAt: record.noticedAt } : {}) });
+  }
+  /** `zhin ai purposes revert ambient-judge` (ADR 0066 D5.5): local CLI of the Host administrator only. */
+  async revertAmbientJudge(principal: InferenceManagementPrincipal): Promise<AmbientJudgeRevertResult> {
+    this.#principal(principal);
+    if (!principal.hostAdministrator || principal.environmentReferences !== 'local-cli')
+      throw new InferenceManagementError('forbidden', 'environment-local-only');
+    return revertAmbientJudgeMigration({ store: this.options.repository, rootId: this.options.rootId });
   }
   /**
    * `zhin ai account add` (#1250 host-account-add-path): a Host API-key account reading `env://NAME`,
@@ -868,16 +931,18 @@ export class InferenceManagementService {
       ...(value.chat ? { chat: reference(value.chat, value.chatFallbacks) } : {}),
       ...(value.perception ? { perception: value.perception } : {}),
     });
+    // ADR 0066: the interjection judge exports as `purposes.ambient` only (a legacy stored form converted).
+    const ambientJudge = effectiveAmbientJudgePolicy(graph.purposes).policy;
+    const decisions = graph.purposes.decisions
+      ? Object.fromEntries(Object.entries(graph.purposes.decisions).filter(([task]) => task !== 'ambient')) : undefined;
     const purposes = {
       ...selection(graph.purposes.defaults),
       ...(graph.purposes.defaults.summary
         ? { summary: reference(graph.purposes.defaults.summary, graph.purposes.defaults.summaryFallbacks) }
         : {}),
-      ...(graph.purposes.defaults.ambient
-        ? { ambient: reference(graph.purposes.defaults.ambient, graph.purposes.defaults.ambientFallbacks) }
-        : {}),
+      ...(Object.keys(ambientJudge).length ? { ambient: { ...ambientJudge, ...(ambientJudge.fallbacks ? { fallbacks: [...ambientJudge.fallbacks] } : {}) } } : {}),
       ...(graph.purposes.defaults.image ? { image: reference(graph.purposes.defaults.image) } : {}),
-      ...(graph.purposes.decisions ? { decisions: graph.purposes.decisions } : {}),
+      ...(decisions && Object.keys(decisions).length ? { decisions } : {}),
       ...(graph.purposes.agents
         ? {
             agents: Object.fromEntries(

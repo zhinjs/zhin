@@ -650,6 +650,16 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       { from: String(body.from), to: String(body.to), credential: renamed.credential, status: renamed.result.status }, renamed.accountId);
     return renamed;
   });
+  // ADR 0066: the interjection judge in effect and its migration record (doctor, Console).
+  register('GET', '/ambient-judge', async ({ lease, principal }) => lease.management.ambientJudge(principal));
+  register('POST', '/ambient-judge/migration/noticed', async ({ lease, principal }) => lease.management.noticeAmbientJudgeMigration(principal));
+  // `zhin ai purposes revert ambient-judge`: local CLI only (the management service checks it), audited.
+  register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, consolePrincipal }) => {
+    const reverted = await lease.management.revertAmbientJudge(principal);
+    record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',
+      reverted.status === 'reverted' ? { graphRevision: reverted.graphRevision } : { reason: reverted.reason });
+    return reverted;
+  });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),
       account = await accountById(lease, principal, text(body.accountId));

@@ -101,14 +101,16 @@ it('accepts exact Driver identity and refuses a resolver that ignores its owner 
   await expect(reviewer(graph)(explicit, { services: { product: 'service' } })).rejects.toThrow('plan-conflict');
 });
 
-it('compiles and explicitly clears the independent ambient Language purpose', async () => {
+it('compiles and explicitly clears the interjection judge (ADR 0066), which may also be a decision Profile', async () => {
   const configured = await reviewer()({ ...document, purposes: { ...document.purposes, ambient: { profile: 'daily' } } });
-  expect(configured.graph.purposes.defaults.ambient).toBe(configured.bindings.profiles.daily);
+  expect(configured.graph.purposes.ambient).toEqual({ profile: configured.bindings.profiles.daily });
+  expect(configured.graph.purposes.defaults.ambient).toBeUndefined();
   const cleared = await reviewer(configured.graph)({ version: 1, purposes: { ambient: null } });
-  expect(cleared.graph.purposes.defaults.ambient).toBeUndefined();
-  await expect(reviewer()({ ...document, purposes: { ambient: { profile: 'review' } } })).rejects.toThrow('invalid-graph');
+  expect(cleared.graph.purposes.ambient).toBeUndefined();
+  // D1.2: a decision Profile can judge too (the judge follows the Profile's model kind).
+  const decision = await reviewer()({ ...document, purposes: { ambient: { profile: 'review', fallbacks: ['daily'] } } });
+  expect(decision.graph.purposes.ambient).toEqual({ profile: decision.bindings.profiles.review, fallbacks: [decision.bindings.profiles.daily] });
 });
-
 
 it('updates non-identity Service settings in place while requiring new identity for audience changes', async () => {
   const source = graphFixture();

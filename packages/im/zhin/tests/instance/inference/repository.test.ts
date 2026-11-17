@@ -295,3 +295,32 @@ it('does not let a stale credential handle recreate or erase credentials after a
     await db.stop();
   }
 });
+
+it('commits a migration and its record in one transaction and keeps the record across restarts (ADR 0066 D5)', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'inference-migration-'));
+  const config = { dialect: 'sqlite', filename: join(directory, 'state.sqlite') };
+  let db = createDatabaseHost(config);
+  let repo = new DatabaseInferenceRepository({ database: db, normalizeGraph });
+  try {
+    await db.start();
+    await repo.commit(initial());
+    expect(await repo.readMigrationRecord({ rootId, id: 'adr-0066-ambient-judge' })).toBeUndefined();
+    const record = { status: 'migrated', at: 1, before: { defaults: { ambient: 'x' } }, after: { profile: 'x' } };
+    expect(await repo.commitMigration({ rootId, expectedRevision: 1, mutationId: 'migrate', fingerprint: 'm', graph: graph(2), result: {},
+      migration: { id: 'adr-0066-ambient-judge', record } })).toMatchObject({ status: 'committed' });
+    // A stale revision commits neither the graph nor the record.
+    expect(await repo.commitMigration({ rootId, expectedRevision: 1, mutationId: 'again', fingerprint: 'a', graph: graph(2), result: {},
+      migration: { id: 'adr-0066-ambient-judge', record: { ...record, at: 2 } } })).toEqual({ status: 'conflict', reason: 'revision' });
+    await repo.writeMigrationRecord({ rootId, id: 'adr-0066-ambient-judge', record: { ...record, noticedAt: 9 } });
+    await db.stop();
+    db = createDatabaseHost(config);
+    repo = new DatabaseInferenceRepository({ database: db, normalizeGraph });
+    await db.start();
+    expect((await repo.readGraph({ rootId }))?.revision).toBe(2);
+    expect(await repo.readMigrationRecord({ rootId, id: 'adr-0066-ambient-judge' })).toEqual({ ...record, noticedAt: 9, id: 'adr-0066-ambient-judge' });
+    expect(await repo.readMigrationRecord({ rootId: '/other-host', id: 'adr-0066-ambient-judge' })).toBeUndefined();
+  } finally {
+    await db.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

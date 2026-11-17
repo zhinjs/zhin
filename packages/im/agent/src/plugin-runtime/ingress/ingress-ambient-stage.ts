@@ -1,6 +1,8 @@
 import { readOperationSession } from '@zhin.js/core';
 import type { ModelAvailabilityRegistry, ModelFallbackEvent } from '@zhin.js/ai';
-import { providerPurposeSelections, type InferenceOperationScope } from '@zhin.js/ai/provider';
+import {
+  ambientJudgeChain, DEFAULT_AMBIENT_MIN_CONFIDENCE, effectiveAmbientJudgePolicy, type InferenceOperationScope, type LegacyAmbientTrigger,
+} from '@zhin.js/ai/provider';
 import { reportInboundOutcome, resolveAmbientSwitch, type ImRuntime, type Message, type MessageOutcomeCandidate } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
@@ -11,6 +13,7 @@ import {
   EngagementJudgeChain,
   ShadowEngagementJudge,
   type AmbientDecision,
+  type AmbientJudgeGate,
   type EngagementJudge,
   type EngagementJudgeCall,
   type EngagementJudgeMember,
@@ -119,6 +122,11 @@ export function createAmbientEngagementJudge(input: Readonly<{
   ) => Promise<T>;
   /** The model runtime's skip state (#1250); defaults to the process-wide registry. */
   modelAvailability?: ModelAvailabilityRegistry;
+  /**
+   * `ai.trigger.ambient` of the configuration: its retired `minConfidence` / `mode` apply only
+   * while `purposes.ambient` is not stored yet (in-memory migration, ADR 0066 D5.3).
+   */
+  trigger?: LegacyAmbientTrigger;
 }>): EngagementJudge {
   const { lease, key, assistantStatus, withInference, modelAvailability } = input;
   const onCall = (call: EngagementJudgeCall): void => {
@@ -133,33 +141,30 @@ export function createAmbientEngagementJudge(input: Readonly<{
     judge: judgeInput => withInference(
       { lease, sessionKey: key, signal: AbortSignal.any([judgeInput.signal, lease.stopSignal]) },
       async scope => {
-        const policy = scope.graph.purposes.decisions?.ambient;
-        const decision = policy && policy.mode !== 'off' && policy.profile ? policy : undefined;
-        const member = (profileId: string) => createEngagementJudgeMember({ scope, profileId, onCall, observe,
-          ...(decision && profileId === decision.profile ? { decisionPolicy: decision } : {}) });
-        const chain = (ids: readonly string[]): EngagementJudgeChain => {
-          const members = ids.map(member).filter((entry): entry is EngagementJudgeMember => entry !== undefined);
-          if (!members.length) throw new Error('No engagement judgment is available');
-          return new EngagementJudgeChain({ members, ...(modelAvailability ? { registry: modelAvailability } : {}),
-            onFallback: (event, ends) => logAmbientJudgeFallback(key, event, ends) });
-        };
-        // ADR 0066 P0: the chain's members still come from the existing configuration.
-        if (decision?.mode === 'active') return chain([decision.profile!]).judge(judgeInput);
-        const base = chain(providerPurposeSelections({ graph: scope.graph, context: scope.context, purpose: 'ambient' }).map(entry => entry.id));
-        if (decision?.mode !== 'shadow') return base.judge(judgeInput);
-        const shadow = member(decision.profile!);
-        if (!shadow) return base.judge(judgeInput);
-        return new ShadowEngagementJudge(base, { judge: async shadowInput => (await shadow.create({})).judge(shadowInput) }, (compared, primary) => {
-          assistantStatus?.recordAmbientShadow(compared?.engage, primary?.engage);
-          logger.info(formatCompact({
-            op: 'ambient_decision_shadow',
-            conv: key,
-            decision: compared ? (compared.engage ? 'engage' : 'declined') : 'failed',
-            confidence: compared?.confidence,
-            judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
-            judgeConfidence: primary?.confidence,
-          }));
-        }).judge(judgeInput);
+        // ADR 0066: one policy, `purposes.ambient` (the legacy stored fields convert in memory until migrated).
+        const { policy } = effectiveAmbientJudgePolicy(scope.graph.purposes, input.trigger);
+        const gate: AmbientJudgeGate = Object.freeze({ minConfidence: policy.minConfidence ?? DEFAULT_AMBIENT_MIN_CONFIDENCE, mode: policy.mode ?? 'active' });
+        const member = (profileId: string, mode: 'active' | 'shadow' = 'active') => createEngagementJudgeMember({ scope, profileId, onCall, observe, mode,
+          ...(policy.timeoutMs !== undefined ? { timeoutMs: policy.timeoutMs } : {}) });
+        const members = ambientJudgeChain(scope.graph.purposes).ids.map(id => member(id))
+          .filter((entry): entry is EngagementJudgeMember => entry !== undefined);
+        if (!members.length) throw new Error('No engagement judgment is available');
+        const chain = new EngagementJudgeChain({ members, ...(modelAvailability ? { registry: modelAvailability } : {}),
+          onFallback: (event, ends) => logAmbientJudgeFallback(key, event, ends) });
+        const compared = policy.compare ? member(policy.compare, 'shadow') : undefined;
+        const judge: EngagementJudge = !compared ? chain
+          : new ShadowEngagementJudge(chain, { judge: async compareInput => (await compared.create({})).judge(compareInput) }, (other, primary) => {
+            assistantStatus?.recordAmbientShadow(other?.engage, primary?.engage);
+            logger.info(formatCompact({
+              op: 'ambient_decision_shadow',
+              conv: key,
+              decision: other ? (other.engage ? 'engage' : 'declined') : 'failed',
+              confidence: other?.confidence,
+              judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
+              judgeConfidence: primary?.confidence,
+            }));
+          });
+        return Object.freeze({ ...await judge.judge(judgeInput), gate });
       },
     ),
   };
@@ -237,6 +242,7 @@ export async function considerAmbientEngagement(input: Readonly<{
     assistantStatus,
     withInference,
     ...(modelAvailability ? { modelAvailability } : {}),
+    ...(trigger?.ambient ? { trigger: trigger.ambient } : {}),
   });
   const decision = await ambientEngagement.consider({
     key,

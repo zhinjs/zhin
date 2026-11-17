@@ -85,10 +85,20 @@ function startsWith(path: readonly string[], prefix: readonly string[]): boolean
   return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
 }
 
+/**
+ * Retired keys (ADR 0066 D5.7): `ai.trigger.ambient.minConfidence` / `mode` moved to the
+ * interjection judge `purposes.ambient` (Console「插话判断」); chat can no longer write them.
+ */
+const RETIRED_CHAT_PATHS: readonly (readonly string[])[] = Object.freeze([
+  Object.freeze(['ai', 'trigger', 'ambient', 'minConfidence']),
+  Object.freeze(['ai', 'trigger', 'ambient', 'mode']),
+]);
+
 /** C3/C4 scope gate, checked before any schema proof or value read. */
 export function assertChatConfigurationScope(path: readonly string[], scope: ChatConfigurationScope): void {
   if (!path.length) throw new ConfigChatAccessError('leaf');
   if (scope.declarationKeys.has(path[0]!)) throw new ConfigChatAccessError('scope');
+  if (RETIRED_CHAT_PATHS.some(prefix => startsWith(path, prefix))) throw new ConfigChatAccessError('scope');
   if (path.some(isChatPermissionSegment) || isChatIdentityRemapPath(path)) throw new ConfigChatAccessError('permission');
   if (scope.hostKeys.includes(path[0]!) && !scope.hostPaths.some(prefix => startsWith(path, prefix))) {
     throw new ConfigChatAccessError('scope');

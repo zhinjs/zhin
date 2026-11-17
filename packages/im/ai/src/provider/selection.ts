@@ -2,6 +2,7 @@ import {
   ProviderError, type ExecutionBinding, type InferencePurpose, type ModelKind, type ProfileRef,
   type ProviderCallContext, type ProviderGraph, type ScopedModelSelection, type ProfileView, type ProfileSelection, type ProviderSelectionSource, type DecisionPurpose,
 } from './types.js';
+import { ambientJudgeChain } from './ambient-judge.js';
 
 export interface ResolveProviderProfileInput<K extends ModelKind> {
   readonly graph: ProviderGraph;
@@ -20,10 +21,16 @@ function selectedProfiles(graph: ProviderGraph, context: ProviderCallContext, pu
     const frozen = Object.freeze(source);
     return [id, ...(fallbacks ?? [])].map(candidate => ({ id: candidate, source: frozen }));
   };
-  if (purpose === 'summary' || purpose === 'ambient') {
-    const own = policy.defaults[purpose];
-    return own ? chain(own, policy.defaults[`${purpose}Fallbacks`], { level: 'default', purpose })
+  if (purpose === 'summary') {
+    const own = policy.defaults.summary;
+    return own ? chain(own, policy.defaults.summaryFallbacks, { level: 'default', purpose })
       : chain(policy.defaults.chat, policy.defaults.chatFallbacks, { level: 'default', purpose, inheritedFrom: 'chat' });
+  }
+  if (purpose === 'ambient') {
+    // ADR 0066: the interjection judge chain (language and decision Profiles mixed), or chat's.
+    const judge = ambientJudgeChain(policy);
+    const [head, ...rest] = judge.ids;
+    return chain(head, rest, { level: 'default', purpose, ...(judge.inheritedFrom ? { inheritedFrom: judge.inheritedFrom } : {}) });
   }
   if (purpose === 'image') return entry(policy.defaults.image, { level: 'default', purpose });
   if (purpose.startsWith('agent:')) {

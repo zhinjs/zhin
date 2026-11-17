@@ -1,5 +1,6 @@
 /**
  * `zhin ai account …` — Host model accounts (#1250): list them, add / re-point ones that read a Host environment variable, test one.
+ * `zhin ai purposes revert ambient-judge` — undo the ADR 0066 interjection judge migration (before a downgrade).
  *
  * Runs only over the project's gateway control socket (`.zhin/gateway.sock`) as the local owner:
  * the instance accepts these requests from no Console session. The CLI sends variable names, never
@@ -185,6 +186,35 @@ export async function runRenameEnv(input: Readonly<{
   return true;
 }
 
+/** Why `zhin ai purposes revert ambient-judge` was refused, in words (ADR 0066 D5.5). */
+const REVERT_REFUSALS: Readonly<Record<string, string>> = Object.freeze({
+  'no-migration': '没有可回退的插话判断迁移记录（从未迁移，或迁移没有成功）',
+  'already-reverted': '插话判断迁移已经回退过',
+  changed: '插话判断（purposes.ambient）在迁移后被修改过，不能自动回退；需要时可按迁移记录手动恢复',
+  conflict: '模型配置正在被其他操作修改，请稍后重试',
+  'not-committed': '没有写入成功，请重试',
+});
+
+/**
+ * `zhin ai purposes revert ambient-judge`: restores the purposes the ADR 0066 migration replaced,
+ * only while `purposes.ambient` is unchanged since. Run it before downgrading to a version without
+ * `purposes.ambient` (it cannot read the migrated graph).
+ */
+export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpConfig; output?: AiOutput }>): Promise<boolean> {
+  const output = input.output ?? processOutput;
+  const reverted = await hostPost<{ status: 'reverted'; graphRevision: number } | { status: 'refused'; reason: string }>(
+    input.client, '/cli/purposes/revert-ambient-judge', {});
+  if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
+  if (reverted.data.status !== 'reverted') {
+    output.error(`未回退：${REVERT_REFUSALS[reverted.data.reason] ?? reverted.data.reason}`);
+    process.exitCode = 1;
+    return false;
+  }
+  output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${reverted.data.graphRevision}）。现在可以降级到旧版本。`);
+  output.log('不降级时，当前版本会按旧写法换算运行，行为不变；在 Console「插话判断」保存一次即改回新写法。');
+  return true;
+}
+
 async function requireLocal(root: string): Promise<HostHttpConfig | undefined> {
   const client = await localInstanceClient(root);
   if (!client) {
@@ -238,4 +268,20 @@ accountCommand.command('test')
     if (client) await runAccountTest({ client, account });
   });
 
-export const aiCommand = new Command('ai').description('模型服务管理（本机）').addCommand(accountCommand);
+const purposesCommand = new Command('purposes').description('模型用途（本机）');
+
+purposesCommand.command('revert')
+  .description('回退一次配置迁移：ambient-judge 把插话判断恢复为迁移前的旧写法（降级到旧版本前运行）')
+  .argument('<migration>', '迁移名：ambient-judge')
+  .option('--cwd <dir>', '项目根目录（默认当前目录）')
+  .action(async (migration: string, options: { cwd?: string }) => {
+    if (migration !== 'ambient-judge') {
+      console.error(`未知的迁移：${migration}（可回退：ambient-judge）`);
+      process.exitCode = 1;
+      return;
+    }
+    const client = await requireLocal(options.cwd ?? process.cwd());
+    if (client) await runRevertAmbientJudge({ client });
+  });
+
+export const aiCommand = new Command('ai').description('模型服务管理（本机）').addCommand(accountCommand).addCommand(purposesCommand);

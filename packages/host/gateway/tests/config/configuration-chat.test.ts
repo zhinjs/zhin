@@ -135,9 +135,12 @@ describe('Console project/chat configuration entrypoints', () => {
       await expect(f.store.readChat(path, 'get')).rejects.toMatchObject({ kind: 'scope' });
     }
     expect(prepare).not.toHaveBeenCalled(); expect(await readFile(f.file, 'utf8')).toBe(before);
-    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' }] }))
+    // ADR 0066 D5.7: the retired `mode` is refused; other ambient leaves stay writable.
+    await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' }] }))
+      .rejects.toMatchObject({ kind: 'scope' });
+    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'quietMs'], value: 5000 }] }))
       .toMatchObject({ status: 'saved' });
-    expect(JSON.parse(await readFile(f.file, 'utf8')).ai.trigger.ambient.mode).toBe('shadow');
+    expect(JSON.parse(await readFile(f.file, 'utf8')).ai.trigger.ambient.quietMs).toBe(5000);
   });
   it('writes a literal dot key, array index and escaped slash/tilde through the real project CAS path', async () => {
     const f = await fixture();
@@ -165,7 +168,7 @@ describe('Console project/chat configuration entrypoints', () => {
     const summary = JSON.stringify(await f.store.readChat(['demo'], 'fields'));
     expect(summary).not.toMatch(/private-|writeOnly|default|examples|enum/);
     const all = (await f.store.readChat([], 'fields')).fields!.map(field => field.path.join('.'));
-    expect(all).toContain('demo.label'); expect(all).toContain('ai.trigger.ambient.mode');
+    expect(all).toContain('demo.label'); expect(all).toContain('ai.trigger.ambient.quietMs'); expect(all).not.toContain('ai.trigger.ambient.mode');
     expect(all.some(path => /^(?:locale|http|database|plugins|configVersion)\b/u.test(path) || path === 'ai.trigger.enabled')).toBe(false);
   });
   it.each([['demo', 'password'], ['demo'], ['demo', 'nested'], ['demo', 'unspecified'], ['demo', 'absent']])('rejects sensitive or unknown target %j without returning data', async (...path) => {

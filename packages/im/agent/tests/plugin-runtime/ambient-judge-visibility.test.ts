@@ -195,9 +195,15 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       await setup({ decision: 'active', decisionUsage: false }).judge.judge(input());
       expect(usage.lines()[0]).toMatch(/^judge \| scene: ambient \| conv: qq:g1 \| status: completed \| kind: decision \| model: jev \| calls: 1 \| ms: \d+$/u);
+      // ADR 0066 D5: the legacy active decision judge keeps the former language judge as its first fallback,
+      // so a failed decision model (5xx) is handed over instead of failing the judgment.
       const failing = setup({ decision: 'active', decisionFails: true });
-      await expect(failing.judge.judge(input())).rejects.toThrow('Ambient decision failed: provider_error');
-      expect(failing.calls).toEqual([expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'failed', errorCategory: 'server' })]);
+      await expect(failing.judge.judge(input())).resolves.toMatchObject({ sourceLabel: 'language:主站/chat-a', fallbackFrom: 'decision:jev',
+        source: { kind: 'language', profile: 'primary', fallbackFrom: { profile: 'jev', model: 'jev' } } });
+      expect(failing.calls).toEqual([
+        expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'failed', errorCategory: 'server' }),
+        expect.objectContaining({ kind: 'language', source: 'language:主站/chat-a', fallbackFrom: 'decision:jev', status: 'completed' }),
+      ]);
       expect(usage.lines().join('\n')).not.toContain(SECRET);
     } finally { usage.restore(); }
   });

@@ -3050,7 +3050,8 @@
                     "number",
                     "string"
                   ],
-                  "description": "判断模型置信度门槛 0..1（默认 0.7）"
+                  "deprecated": true,
+                  "description": "已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除"
                 },
                 "mode": {
                   "type": "string",
@@ -3058,7 +3059,8 @@
                     "active",
                     "shadow"
                   ],
-                  "description": "shadow 只记录判断结果、不回复（默认 active）"
+                  "deprecated": true,
+                  "description": "已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除"
                 }
               }
             },

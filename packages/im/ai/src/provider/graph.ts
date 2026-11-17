@@ -3,11 +3,14 @@ import {
   ProviderError, type ProviderGraph, type ProviderResource, type ProviderService,
   type ProviderAccount, type ModelProfile, type ModelDefinition, type JsonObject,
   type ModelKind, type PurposePolicy, type ScopedModelSelection, type PerceptionSelection,
-  type DecisionPurposePolicy, type DecisionPurpose,
+  type DecisionPurposePolicy, type DecisionPurpose, type AmbientJudgePolicy,
 } from './types.js';
+import { AMBIENT_JUDGE_KEYS } from './ambient-judge.js';
 
 export const MODEL_KINDS = ['language', 'decision', 'image'] as const;
-export const DECISION_PURPOSES = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'] as const;
+export const DECISION_PURPOSES = ['skills', 'tools', 'memory', 'agents', 'approval'] as const;
+/** Stored decision keys: the five purposes plus the legacy `ambient`, read until migrated (ADR 0066 D5). */
+const STORED_DECISION_KEYS: readonly string[] = [...DECISION_PURPOSES, 'ambient'];
 const MODALITIES = ['text', 'image', 'audio', 'video', 'file'] as const;
 function invalid(): never { throw new ProviderError('invalid-graph'); }
 function object(input: unknown): Record<string, unknown> {
@@ -162,10 +165,41 @@ function decision(input: unknown): DecisionPurposePolicy {
   }
   return Object.freeze(result) as unknown as DecisionPurposePolicy;
 }
+/**
+ * `purposes.ambient` (ADR 0066 D1): only the six keys; a chain without duplicates that never names
+ * its `profile`, `fallbacks` only next to a `profile`, a `compare` outside the chain. Each error
+ * names its path (`purposes.ambient.fallbacks[1]`).
+ */
+export function normalizeAmbientJudgePolicy(input: unknown, path = 'purposes.ambient', fail: (path: string) => never = invalidAt): AmbientJudgePolicy {
+  let raw: Record<string, unknown>;
+  try { raw = object(input); } catch { return fail(path); }
+  for (const key of Reflect.ownKeys(raw)) if (typeof key !== 'string' || !(AMBIENT_JUDGE_KEYS as readonly string[]).includes(key)) fail(`${path}.${String(key)}`);
+  const id = (value: unknown, at: string): string => typeof value === 'string' && value && value === value.trim() ? value : fail(at);
+  const profile = raw.profile === undefined ? undefined : id(raw.profile, `${path}.profile`);
+  let fallbacks: readonly string[] | undefined;
+  if (raw.fallbacks !== undefined) {
+    // A chain without a primary has nothing to stand in for (D1.7).
+    if (!Array.isArray(raw.fallbacks) || raw.fallbacks.length === 0 || profile === undefined) fail(`${path}.fallbacks`);
+    const ids = (raw.fallbacks as unknown[]).map((value, index) => id(value, `${path}.fallbacks[${index}]`));
+    ids.forEach((value, index) => { if (value === profile || ids.indexOf(value) !== index) fail(`${path}.fallbacks[${index}]`); });
+    fallbacks = Object.freeze(ids);
+  }
+  const compare = raw.compare === undefined ? undefined : id(raw.compare, `${path}.compare`);
+  if (compare !== undefined && (compare === profile || fallbacks?.includes(compare))) fail(`${path}.compare`);
+  const minConfidence = raw.minConfidence;
+  if (minConfidence !== undefined && (typeof minConfidence !== 'number' || !Number.isFinite(minConfidence) || minConfidence < 0 || minConfidence > 1)) fail(`${path}.minConfidence`);
+  if (raw.mode !== undefined && raw.mode !== 'active' && raw.mode !== 'shadow') fail(`${path}.mode`);
+  const timeoutMs = raw.timeoutMs;
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || Number(timeoutMs) < 1 || Number(timeoutMs) > 2_147_483_647)) fail(`${path}.timeoutMs`);
+  return Object.freeze({ ...(profile !== undefined ? { profile } : {}), ...(fallbacks ? { fallbacks } : {}), ...(compare !== undefined ? { compare } : {}),
+    ...(minConfidence !== undefined ? { minConfidence: minConfidence as number } : {}), ...(raw.mode !== undefined ? { mode: raw.mode as 'active' | 'shadow' } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs: timeoutMs as number } : {}) });
+}
 function purposes(input: unknown): PurposePolicy {
   const raw = object(input);
-  fields(raw, ['defaults', 'decisions', 'agents', 'agentFallbacks', 'adapters', 'endpoints', 'scenes']);
+  fields(raw, ['defaults', 'ambient', 'decisions', 'agents', 'agentFallbacks', 'adapters', 'endpoints', 'scenes']);
   const result: PurposePolicy = { defaults: scoped(raw.defaults, true),
+    ...(raw.ambient !== undefined ? { ambient: normalizeAmbientJudgePolicy(raw.ambient) } : {}),
     ...(raw.agents !== undefined ? { agents: dictionary(raw.agents, text) } : {}),
     ...(raw.agentFallbacks !== undefined ? { agentFallbacks: dictionary(raw.agentFallbacks, (chain, key) => {
       const agents = raw.agents === undefined ? undefined : object(raw.agents);
@@ -178,7 +212,7 @@ function purposes(input: unknown): PurposePolicy {
       return Object.freeze(withFallbacks(value, 'chat', `purposes.scenes.${key}`));
     }) } : {}),
     ...(raw.decisions !== undefined ? { decisions: dictionary(raw.decisions, (entry, key) => {
-      if (!DECISION_PURPOSES.includes(key as DecisionPurpose)) return invalid();
+      if (!STORED_DECISION_KEYS.includes(key as DecisionPurpose)) return invalid();
       return decision(entry);
     }) } : {}) };
   return Object.freeze(result);
@@ -216,6 +250,18 @@ export function normalizeProviderGraph(input: unknown): ProviderGraph {
   checkScoped(defaults, 'purposes');
   check(defaults.summary, 'language', 'purposes.summary'); chain(defaults.summaryFallbacks, 'purposes.summary.fallbacks');
   check(defaults.ambient, 'language', 'purposes.ambient'); chain(defaults.ambientFallbacks, 'purposes.ambient.fallbacks');
+  // ADR 0066 D1.6: the interjection judge takes language or decision Profiles, never image ones.
+  const judge = (id: string | undefined, path: string): void => {
+    if (id === undefined) return;
+    const profile = graph.profiles[id];
+    const account = profile && graph.accounts[profile.accountId];
+    const kinds = profile && account ? graph.services[account.serviceId].models[profile.model].kinds : [];
+    if (!kinds.includes('language') && !kinds.includes('decision')) invalidAt(path);
+  };
+  const ambient = graph.purposes.ambient;
+  judge(ambient?.profile, 'purposes.ambient.profile');
+  ambient?.fallbacks?.forEach((id, index) => judge(id, `purposes.ambient.fallbacks[${index}]`));
+  judge(ambient?.compare, 'purposes.ambient.compare');
   check(defaults.image, 'image', 'purposes.image');
   for (const [key, entry] of Object.entries(graph.purposes.adapters ?? {})) checkScoped(entry, `purposes.adapters.${key}`);
   for (const [key, entry] of Object.entries(graph.purposes.endpoints ?? {})) checkScoped(entry, `purposes.endpoints.${key}`);

@@ -3,17 +3,19 @@ import yaml from 'yaml';
 import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import {
   describeSnapshotAiProvider,
+  legacyAmbientTriggerKeys,
   listSnapshotAiProviders,
   provideAiProviders,
   ProviderError,
   providerPlanFingerprint,
   reviewProviderPlan,
   type JsonObject,
+  type LegacyAmbientTrigger,
   type ProviderGraph,
   type ProviderService,
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults, builtinAiProviders } from '@zhin.js/ai/providers';
-import type { HostInference } from '@zhin.js/agent/runtime';
+import { migrateAmbientJudge, type HostInference } from '@zhin.js/agent/runtime';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
 import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
 import { pluginDataMigrationProviderToken, rootPluginId, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
@@ -242,6 +244,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       async activateNext(handoffSignal) {
         handoffSignal.throwIfAborted();
         await seedInitialAiPlanIfEmpty(options.projectRoot, options.inference, readCandidateSnapshot, false);
+        await migrateAmbientJudgeOnLoad(options.inference, aiConfig.trigger?.ambient);
       },
     });
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
@@ -560,6 +563,22 @@ async function readBootstrapBody(projectRoot: string, name: string): Promise<str
 function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, Math.max(0, max - 1))}…`;
+}
+
+/**
+ * ADR 0066 D5: once the Provider graph is available, move the legacy ambient settings into
+ * `purposes.ambient` (one CAS write with a revertable record). The retired yml keys
+ * `ai.trigger.ambient.minConfidence` / `mode` are read by that migration only; afterwards every
+ * generation warns once while they are still in the file.
+ */
+async function migrateAmbientJudgeOnLoad(inference: HostInference, trigger: LegacyAmbientTrigger | undefined): Promise<void> {
+  const result = await migrateAmbientJudge({ store: inference.repository, rootId: inference.rootId, hostOwnerId: inference.hostOwnerId,
+    ...(trigger ? { trigger } : {}), logger: { info: message => logger.info(message), error: message => logger.error(message) } });
+  const retired = legacyAmbientTriggerKeys(trigger);
+  if (retired.length && result.status !== 'failed') {
+    logger.warn(formatCompact({ op: 'ambient_trigger_keys_retired', keys: retired.map(key => `ai.trigger.ambient.${key}`).join(','),
+      detail: 'no longer applied: the interjection judge reads purposes.ambient (Console「插话判断」); remove them with zhin doctor --fix' }));
+  }
 }
 
 async function seedInitialAiPlanIfEmpty(

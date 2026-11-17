@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+// ADR 0066 D5.7: `ai.trigger.ambient.mode` is retired (self-changes may not write it); `cooldownMs` is the writable leaf here.
 import { join } from 'node:path';
 import { SelfChangeApplier, SelfChangeStore, createHostProtectedPaths, configPatchImpact, type DecisionEventInput } from '@zhin.js/agent';
 import { createConfigDocument, ConfigurationSupersededError, ConfigValidationError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
@@ -21,7 +22,7 @@ async function fixture(options: { outcome?: 'unconfirmed' | 'superseded' | 'inva
   const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-self-change-config-')); roots.push(projectRoot);
   const configFile = join(projectRoot, 'zhin.config.json');
   const initial = JSON.stringify({ configVersion: 2, plugins: options.multipleSections ? { extra: './extra' } : {},
-    ...(options.multipleSections ? { extra: { level: 1 } } : {}), ai: { trigger: { ambient: { mode: 'shadow', quietMs: 100 } } } });
+    ...(options.multipleSections ? { extra: { level: 1 } } : {}), ai: { trigger: { ambient: { cooldownMs: 1000, quietMs: 100 } } } });
   await writeFile(configFile, initial);
   await writeFile(join(projectRoot, 'package.json'), JSON.stringify({ name: 'self-change-config',
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
@@ -48,7 +49,7 @@ async function fixture(options: { outcome?: 'unconfirmed' | 'superseded' | 'inva
       calls++;
       if (options.outcome === 'unconfirmed' || options.outcome === 'restore-unconfirmed' && calls === 2) throw new Error('synthetic-private-error');
       if (options.outcome === 'superseded') {
-        await writeFile(configFile, JSON.stringify({ configVersion: 2, plugins: {}, ai: { trigger: { ambient: { mode: 'shadow', quietMs: 200 } } } }));
+        await writeFile(configFile, JSON.stringify({ configVersion: 2, plugins: {}, ai: { trigger: { ambient: { cooldownMs: 1000, quietMs: 200 } } } }));
         throw new ConfigurationSupersededError();
       }
       if (options.outcome === 'invalid' && calls === 1 || options.outcome === 'restore-invalid' && calls === 2) throw new ConfigValidationError(['synthetic-invalid']);
@@ -69,7 +70,7 @@ async function fixture(options: { outcome?: 'unconfirmed' | 'superseded' | 'inva
     protectedPaths: await createHostProtectedPaths({ projectRoot }), audit: () => ({ record: event => events.push(event) }) });
   const draft = await store.draft({ origin: { platform: 'fixture', endpoint: 'bot', sceneId: 'private:owner', userId: 'owner' },
     files: options.files ? [{ path: 'commands/ping.ts', content: 'export default "new";\n' }] : [],
-    configPatch: { expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'active' },
+    configPatch: { expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'cooldownMs'], value: 2000 },
       ...(options.multipleSections ? [{ op: 'set', path: ['extra', 'level'], value: 2 }] : [])] } });
   const configImpact = options.processPlan ? configPatchImpact(draft.configPatch!, HOST_CONFIG_KEYS) : null;
   await store.attachPlan(draft.id, draft.contentHash, { version: 1, contentHash: draft.contentHash, summary: 'bounded config change', files: [],
@@ -92,7 +93,7 @@ async function fixture(options: { outcome?: 'unconfirmed' | 'superseded' | 'inva
 it.each(['unconfirmed', 'superseded', 'group-unknown', 'write-unconfirmed', 'unsaved-receipt', 'zero-generation-receipt'] as const)('preserves a saved %s application without reload, rollback, restart or false success through the real Console/Host/applier path', async outcome => {
   const f = await fixture({ outcome });
   expect(await f.applier.apply(f.draft.id)).toBe('failed');
-  expect(JSON.parse(await readFile(f.configFile, 'utf8')).ai.trigger.ambient.mode).toBe(outcome === 'superseded' ? 'shadow' : 'active');
+  expect(JSON.parse(await readFile(f.configFile, 'utf8')).ai.trigger.ambient.cooldownMs).toBe(outcome === 'superseded' ? 1000 : 2000);
   expect(f.calls()).toBe(outcome === 'write-unconfirmed' ? 0 : 1);
   expect(f.reload).not.toHaveBeenCalled(); expect(f.restart).not.toHaveBeenCalled(); expect(f.emergencyStop).not.toHaveBeenCalled();
   expect((await f.store.get(f.draft.id))?.slimmed).toBe(false);
@@ -174,7 +175,7 @@ it.each(['superseded', 'legacy', 'in-flight', 'owned'] as const)('a fresh recove
   const record = (await f.store.get(f.draft.id))!;
   expect(record.apply?.configRevision).toBe((await f.configuration.readSource()).revision);
   if (scenario === 'superseded') await writeFile(f.configFile, JSON.stringify({ configVersion: 2, plugins: {},
-    ai: { trigger: { ambient: { mode: 'shadow', quietMs: 999 } } } }));
+    ai: { trigger: { ambient: { cooldownMs: 1000, quietMs: 999 } } } }));
   else if (scenario !== 'owned') await f.store.setApplyState(record.id, { ...record.apply!, configRevision: scenario === 'legacy' ? undefined : record.apply!.configRevision,
     configApplication: scenario === 'in-flight' ? 'unconfirmed' : record.apply!.configApplication });
   const source = await readFile(f.configFile, 'utf8');
@@ -217,7 +218,7 @@ it.each([['applying', true], ['verifying', true], ['applying', false], ['verifyi
   // The older build already wrote the change before the process went away.
   await mkdir(join(f.projectRoot, 'commands'), { recursive: true });
   await writeFile(join(f.projectRoot, 'commands/ping.ts'), 'export default "new";\n');
-  await writeFile(f.configFile, JSON.stringify({ configVersion: 2, plugins: {}, ai: { trigger: { ambient: { mode: 'active', quietMs: 100 } } } }));
+  await writeFile(f.configFile, JSON.stringify({ configVersion: 2, plugins: {}, ai: { trigger: { ambient: { cooldownMs: 2000, quietMs: 100 } } } }));
   const legacyApply = { phase: 'forward' as const, mode: 'process' as const, restarts: 0, failure: null };
   await f.store.transition(f.draft.id, 'applying', { actor: 'policy', reasonCode: 'change_restart_requested', apply: legacyApply });
   if (status === 'verifying') await f.store.transition(f.draft.id, 'verifying', { actor: 'policy', apply: { ...legacyApply, restarts: 1 } });

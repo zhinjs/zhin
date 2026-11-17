@@ -1,4 +1,4 @@
-import { accountRows, describeProbe, runAccountAdd, runAccountList, runAccountTest, runRenameEnv, aiCommand } from '../src/commands/ai.js';
+import { accountRows, describeProbe, runAccountAdd, runAccountList, runAccountTest, runRenameEnv, runRevertAmbientJudge, aiCommand } from '../src/commands/ai.js';
 import type { HostHttpConfig } from '../src/utils/host-http.js';
 
 function client(handler: (path: string, body: Record<string, unknown>) => { status: number; body: unknown }) {
@@ -119,6 +119,30 @@ describe('zhin ai account list (#1250 ai-account-cli-no-list)', () => {
     const out = output();
     expect(await runAccountList({ client: config, output: out.sink })).toBe(false);
     expect(out.errors).toEqual(['模型服务管理暂时不可用']);
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
+  it('is registered under purposes', () => {
+    const purposes = aiCommand.commands.find(command => command.name() === 'purposes')!;
+    expect(purposes.commands.map(command => command.name())).toEqual(['revert']);
+  });
+
+  it('asks the instance over the local socket and reports the restored revision', async () => {
+    const { config, requests } = client(() => ({ status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 7 } } }));
+    const out = output();
+    expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(true);
+    expect(requests).toEqual([{ path: '/api/agent/inference/cli/purposes/revert-ambient-judge', body: {} }]);
+    expect(out.lines.join('\n')).toContain('修订号 7');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('explains a refusal (changed since the migration) and exits 1', async () => {
+    const { config } = client(() => ({ status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } }));
+    const out = output();
+    expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(false);
+    expect(out.errors.join('\n')).toContain('被修改过');
     expect(process.exitCode).toBe(1);
   });
 });

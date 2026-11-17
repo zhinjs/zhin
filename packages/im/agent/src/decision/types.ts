@@ -1,7 +1,8 @@
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { DecisionPurposePolicy } from '@zhin.js/ai/provider';
 
-export type DecisionTask = 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
+/** The five decision purposes; the interjection judge left them for `purposes.ambient` (ADR 0066 D1.8). */
+export type DecisionTask = 'skills' | 'tools' | 'memory' | 'agents' | 'approval';
 export type DecisionMode = 'off' | 'shadow' | 'active';
 
 export type DecisionTaskPolicy = DecisionPurposePolicy;
@@ -9,7 +10,8 @@ export type AgentDecisionConfig = Readonly<Partial<Record<DecisionTask, Decision
 
 /** Observations contain no message, candidate name, parameter, or private text. */
 export interface DecisionObservation {
-  readonly task: DecisionTask;
+  /** `ambient`: a decision model of the interjection judge chain (ADR 0066), not a decision purpose. */
+  readonly task: DecisionTask | 'ambient';
   readonly mode: DecisionMode;
   readonly outcome: 'selected' | 'abstained' | 'failed' | 'shadow';
   readonly candidates: number;

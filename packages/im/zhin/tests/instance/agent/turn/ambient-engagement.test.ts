@@ -183,13 +183,37 @@ describe('AmbientEngagement', () => {
     expect(idle.judge.judge.mock.calls[1]![0]).toMatchObject({ inConversation: true });
   });
 
-  it('logs only in shadow mode and does not start a cooldown', async () => {
-    const h = harness(yes, { mode: 'shadow' });
+  it('logs only in shadow mode (purposes.ambient.mode, ADR 0066 D4) and does not start a cooldown', async () => {
+    const shadowed: EngagementJudgment = { ...yes, gate: { minConfidence: 0.7, mode: 'shadow' } };
+    const h = harness(shadowed);
     for (let i = 0; i < 2; i++) {
       const decision = h.consider();
       await h.release();
-      await expect(decision).resolves.toEqual({ kind: 'shadow', judgment: yes });
+      await expect(decision).resolves.toEqual({ kind: 'shadow', judgment: shadowed });
       h.advance(31_000);
+    }
+  });
+
+  it('no longer reads ai.trigger.ambient.minConfidence / mode (ADR 0066 D4)', async () => {
+    const h = harness(yes, { mode: 'shadow', minConfidence: 0.99 });
+    const decision = h.consider();
+    await h.release();
+    await expect(decision).resolves.toMatchObject({ kind: 'engage' });
+  });
+
+  it('applies the one threshold of purposes.ambient once, the same for language and decision judgments', async () => {
+    for (const [source, engage, confidence, minConfidence, kind] of [
+      [{ kind: 'language', model: 'chat' }, true, 0.8, 0.8, 'engage'],
+      [{ kind: 'decision', model: 'jev' }, true, 0.8, 0.8, 'engage'],
+      [{ kind: 'language', model: 'chat' }, true, 0.79, 0.8, 'declined'],
+      [{ kind: 'decision', model: 'jev' }, true, 0.79, 0.8, 'declined'],
+      // Choosing to stay quiet never speaks, however sure the judge is.
+      [{ kind: 'decision', model: 'jev' }, false, 0.99, 0.1, 'declined'],
+    ] as const) {
+      const h = harness({ engage, confidence, reason: 'x', source, gate: { minConfidence, mode: 'active' } });
+      const decision = h.consider();
+      await h.release();
+      await expect(decision).resolves.toMatchObject({ kind });
     }
   });
 
@@ -274,11 +298,11 @@ describe('DecisionEngagementJudge', () => {
     await expect(judge.judge(input())).resolves.toMatchObject({ engage: false, confidence: 0.9 });
   });
 
-  it('gates engagement with ai.decisions.ambient.minConfidence', async () => {
+  it('sets no threshold of its own: the confidence is the probability of the chosen option (ADR 0066 D4)', async () => {
     const observe = vi.fn();
     const judge = new DecisionEngagementJudge({ provider: provider(answer('engage', 0.6)), policy: { mode: 'active', minConfidence: 0.8 }, observe });
-    await expect(judge.judge(input())).resolves.toMatchObject({ engage: false });
-    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'abstained', reason: 'low_confidence' }));
+    await expect(judge.judge(input())).resolves.toMatchObject({ engage: true, confidence: 0.6 });
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'selected' }));
   });
 
   it('preserves invalid answers, provider errors and timeouts as failed judgments', async () => {
@@ -304,7 +328,7 @@ describe('DecisionEngagementJudge', () => {
 
   it('rejects an invalid policy', () => {
     expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', timeoutMs: 0 } })).toThrow('Invalid ambient decision policy');
-    expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', minConfidence: 2 } })).toThrow('Invalid ambient decision policy');
+    expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), timeoutMs: 2_147_483_648 })).toThrow('Invalid ambient decision policy');
   });
 });
 

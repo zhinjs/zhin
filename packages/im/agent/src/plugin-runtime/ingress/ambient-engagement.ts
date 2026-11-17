@@ -1,5 +1,7 @@
 import {
+  ambientJudgeWouldSpeak,
   createProfileReference,
+  DEFAULT_AMBIENT_MIN_CONFIDENCE,
   type DecisionPurposePolicy,
   type ExecutionBinding,
   type InferenceOperationScope,
@@ -111,6 +113,17 @@ export interface EngagementJudgment {
   readonly usage?: EngagementJudgeUsage;
   /** Wall time of that call. */
   readonly durationMs?: number;
+  /**
+   * The threshold and mode the judgment is held to, set by the judge that read `purposes.ambient`
+   * (ADR 0066 D4). Absent: the defaults (0.7, `active`).
+   */
+  readonly gate?: AmbientJudgeGate;
+}
+
+/** `purposes.ambient.minConfidence` / `mode` as {@link AmbientEngagement} applies them (ADR 0066 D4). */
+export interface AmbientJudgeGate {
+  readonly minConfidence: number;
+  readonly mode: 'active' | 'shadow';
 }
 
 /** One member of a judge chain that failed, by Profile and failure class (ADR 0066 D2). */
@@ -574,8 +587,15 @@ const DEFAULT_DECISION_TIMEOUT_MS = 3_000;
 
 export interface DecisionEngagementJudgeOptions {
   readonly provider: DecisionProvider;
-  /** `purposes.decisions.ambient`; `minConfidence`, when set, also gates engagement inside this judge. */
-  readonly policy: DecisionPurposePolicy;
+  /** One evaluation's timeout (`purposes.ambient.timeoutMs`, default 3000), never beyond the caller's budget. */
+  readonly timeoutMs?: number;
+  /** Recorded as the observation mode: `shadow` for a compared model (ADR 0066 D3). Default `active`. */
+  readonly mode?: 'active' | 'shadow';
+  /**
+   * @deprecated ADR 0066: use `timeoutMs` / `mode`. Its `minConfidence` no longer gates inside this
+   * judge — the one threshold is `purposes.ambient.minConfidence`, applied by {@link AmbientEngagement} (D4).
+   */
+  readonly policy?: Pick<DecisionPurposePolicy, 'mode' | 'timeoutMs' | 'minConfidence'>;
   /** Metadata only: never the chat lines or the judgment reason. */
   readonly observe?: (observation: DecisionObservation) => void;
   /** Called once per judge call, successful or not; observer failures are ignored. */
@@ -589,23 +609,24 @@ export interface DecisionEngagementJudgeOptions {
 }
 
 /**
- * Structured-decision judge (`purposes.decisions.ambient`, e.g. TypeSafe Jev): one binary choice over the
- * same evidence the chat-model judge sees. Throws on provider failure, timeout or an invalid answer
- * so a {@link FallbackEngagementJudge} can hand the turn to the chat-model judges.
+ * Decision-model judge (a decision Profile of `purposes.ambient`, e.g. TypeSafe Jev): one binary
+ * choice over the same evidence the chat-model judge sees. Its confidence is the probability of the
+ * chosen option (ADR 0066 D4); it sets no threshold of its own. Throws on provider failure, timeout
+ * or an invalid answer so an {@link EngagementJudgeChain} can hand the judgment to the next member.
  */
 export class DecisionEngagementJudge implements EngagementJudge {
   readonly #options: DecisionEngagementJudgeOptions;
   readonly #timeoutMs: number;
+  readonly #mode: 'active' | 'shadow';
 
   constructor(options: DecisionEngagementJudgeOptions) {
-    const timeoutMs = options.policy.timeoutMs ?? DEFAULT_DECISION_TIMEOUT_MS;
-    const minConfidence = options.policy.minConfidence;
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647
-      || (minConfidence !== undefined && !(Number.isFinite(minConfidence) && minConfidence >= 0 && minConfidence <= 1))) {
+    const timeoutMs = options.timeoutMs ?? options.policy?.timeoutMs ?? DEFAULT_DECISION_TIMEOUT_MS;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
       throw new Error('Invalid ambient decision policy');
     }
     this.#options = options;
     this.#timeoutMs = timeoutMs;
+    this.#mode = (options.mode ?? options.policy?.mode) === 'shadow' ? 'shadow' : 'active';
   }
 
   async judge(input: EngagementJudgeInput): Promise<EngagementJudgment> {
@@ -632,14 +653,8 @@ export class DecisionEngagementJudge implements EngagementJudge {
       if (!answer) {
         reason = 'invalid_response';
       } else {
-        const confidence = answer.probabilities[answer.choice];
-        const minimum = this.#options.policy.minConfidence;
-        if (answer.choice === 'engage' && minimum !== undefined && confidence < minimum) {
-          reason = 'low_confidence';
-          judgment = { engage: false, confidence: answer.probabilities.stay_quiet, reason: 'decision below purposes.decisions.ambient.minConfidence' };
-        } else {
-          judgment = { engage: answer.choice === 'engage', confidence, reason: `decision: ${answer.choice}` };
-        }
+        // ADR 0066 D4: the confidence is the probability of the chosen option; the one threshold is applied by the caller.
+        judgment = { engage: answer.choice === 'engage', confidence: answer.probabilities[answer.choice], reason: `decision: ${answer.choice}` };
       }
     } catch (error) {
       reason = signal.aborted && !input.signal.aborted ? 'timeout' : 'provider_error';
@@ -662,8 +677,8 @@ export class DecisionEngagementJudge implements EngagementJudge {
     const failed = judgment === undefined;
     const observation: DecisionObservation = {
       task: 'ambient',
-      mode: this.#options.policy.mode,
-      outcome: failed ? 'failed' : this.#options.policy.mode === 'shadow' ? 'shadow' : judgment!.engage ? 'selected' : 'abstained',
+      mode: this.#mode,
+      outcome: failed ? 'failed' : this.#mode === 'shadow' ? 'shadow' : judgment!.engage ? 'selected' : 'abstained',
       candidates: 2,
       selected: judgment?.engage ? 1 : 0,
       durationMs: Date.now() - started,
@@ -739,8 +754,7 @@ export interface CreateEngagementJudgeMemberInput {
   readonly timeoutMs?: number;
   /** Decision members: recorded as the observation mode. Default `active`. */
   readonly mode?: 'active' | 'shadow';
-  /** @deprecated ADR 0066 P0 only: the legacy decision policy (with its own `minConfidence`). */
-  readonly decisionPolicy?: DecisionPurposePolicy;
+
 }
 
 /**
@@ -789,7 +803,8 @@ export function createEngagementJudgeMember(input: CreateEngagementJudgeMemberIn
       }) as DecisionProvider;
       return new DecisionEngagementJudge({
         provider,
-        policy: input.decisionPolicy ?? { mode: input.mode ?? 'active', ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}) },
+        mode: input.mode ?? 'active',
+        ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
         ...(input.onCall ? { onCall: input.onCall } : {}),
         ...(input.observe ? { observe: input.observe } : {}),
         model: binding.model.id,
@@ -831,7 +846,9 @@ export class ShadowEngagementJudge implements EngagementJudge {
   }
 }
 
+/** @deprecated ADR 0066: the interjection judge chain replaces the decision purpose `ambient`. */
 export interface AmbientDecisionJudgeOptions extends DecisionEngagementJudgeOptions {
+  readonly policy: DecisionPurposePolicy;
   /** The configured chat-model judge(s) of `ai.trigger.ambient.judge`. */
   readonly base?: EngagementJudge;
   /** Shadow mode only: the decision judgment (undefined when it failed) next to the deciding one. */
@@ -839,7 +856,8 @@ export interface AmbientDecisionJudgeOptions extends DecisionEngagementJudgeOpti
 }
 
 /**
- * Applies `purposes.decisions.ambient.mode` to the ambient judge. `active`: the DecisionProvider decides and
+ * @deprecated ADR 0066: build an {@link EngagementJudgeChain} (and a compared judge) from `purposes.ambient`.
+ * Applies the legacy `purposes.decisions.ambient.mode` to the ambient judge. `active`: the DecisionProvider decides and
  * a failed decision remains a failed judgment. `shadow`: the chat-model judge decides
  * and the decision is reported only. `off`: undefined, meaning the configured judges as before.
  */
@@ -889,7 +907,7 @@ const MAX_SPOKE_ENTRIES = 4096;
  * between interjections and `maxPerHour`.
  */
 export class AmbientEngagement {
-  readonly #config: Required<Omit<AmbientEngagementConfig, 'judge' | 'conversations'>> & { conversations: readonly string[] };
+  readonly #config: Required<Omit<AmbientEngagementConfig, 'judge' | 'conversations' | 'minConfidence' | 'mode'>> & { conversations: readonly string[] };
   readonly #lastJudged = new Map<string, number>();
   readonly #judge?: EngagementJudge;
   readonly #now: () => number;
@@ -908,8 +926,6 @@ export class AmbientEngagement {
       maxPerHour: nonNegative(config.maxPerHour, 3),
       conversationWindowMs: nonNegative(config.conversationWindowMs, 180_000),
       judgeIntervalMs: nonNegative(config.judgeIntervalMs, 30_000),
-      minConfidence: Math.min(1, Math.max(0, config.minConfidence ?? 0.7)),
-      mode: config.mode === 'shadow' ? 'shadow' : 'active',
     };
     this.#judge = options.judge;
     this.#now = options.now ?? Date.now;
@@ -998,8 +1014,11 @@ export class AmbientEngagement {
     } catch (error) {
       return { kind: 'skipped', reason: 'judge_failed', failure: engagementJudgeFailure(error) };
     }
-    if (!judgment.engage || judgment.confidence < this.#config.minConfidence) return { kind: 'declined', judgment };
-    if (this.#config.mode === 'shadow') return { kind: 'shadow', judgment };
+    // ADR 0066 D4: one threshold, applied once, the same for language and decision judges;
+    // `ai.trigger.ambient.minConfidence` / `mode` are no longer read here.
+    const gate = judgment.gate;
+    if (!ambientJudgeWouldSpeak(judgment, gate ? Math.min(1, Math.max(0, gate.minConfidence)) : DEFAULT_AMBIENT_MIN_CONFIDENCE)) return { kind: 'declined', judgment };
+    if (gate?.mode === 'shadow') return { kind: 'shadow', judgment };
     // Re-check: another burst in this group may have engaged while the judge was running.
     if (this.#latest.get(input.key) !== ticket) return { kind: 'skipped', reason: 'superseded' };
     (inConversation ? conversationReplies : interjections).push(this.#now());
