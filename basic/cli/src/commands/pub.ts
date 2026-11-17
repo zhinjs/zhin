@@ -133,6 +133,23 @@ function resolvePublishCandidate(
   return undefined;
 }
 
+export type PublishAccess = 'public' | 'restricted';
+
+/**
+ * npm 访问级别：显式 `--access` 优先，其次是包自己的 `publishConfig.access`，都没有时为 `public`。
+ * 不能无条件传 `--access public`：它会覆盖私有包的 `publishConfig.access: restricted`，把 scoped 私有包公开发布。
+ */
+export function resolvePublishAccess(
+  cliAccess: string | undefined,
+  packageJson: { readonly publishConfig?: { readonly access?: unknown } },
+): PublishAccess {
+  const access = cliAccess ?? packageJson.publishConfig?.access ?? 'public';
+  if (access !== 'public' && access !== 'restricted') {
+    throw new Error(`访问级别只能是 public 或 restricted，收到：${String(access)}`);
+  }
+  return access;
+}
+
 /**
  * Runs `zhin plugin check` (pack included) before publishing. Errors stop the publish; warnings are
  * shown and the publish continues. Returns whether publishing may proceed.
@@ -161,7 +178,7 @@ export const pubCommand = new Command('pub')
     '在插件包目录内可省略（发布当前目录）；也可以是插件目录路径（如 . 或 ../my-plugin）；在 Bot 项目根是相对 plugins/ 的路径（如 my-plugin 或 adapters/icqq）',
   )
   .option('--tag <tag>', '发布标签', 'latest')
-  .option('--access <access>', '访问级别 (public|restricted)', 'public')
+  .option('--access <access>', '访问级别 (public|restricted)；默认取 package.json 的 publishConfig.access，未声明时为 public')
   .option('--registry <url>', '自定义 npm registry')
   .option('--dry-run', '试运行，不实际发布', false)
   .option('--skip-build', '跳过构建步骤', false)
@@ -237,8 +254,9 @@ export const pubCommand = new Command('pub')
       const packageJson = await fs.readJson(packageJsonPath);
       const packageName = packageJson.name;
       const version = packageJson.version;
+      const access = resolvePublishAccess(options.access, packageJson);
 
-      logger.info(formatCompact( { cmd: 'pub', op: 'prepare', package: packageName, version }));
+      logger.info(formatCompact( { cmd: 'pub', op: 'prepare', package: packageName, version, access }));
       output.line();
 
       if (packageJson.private === true) {
@@ -267,7 +285,7 @@ export const pubCommand = new Command('pub')
           {
             type: 'confirm',
             name: 'confirm',
-            message: `确认发布 ${packageName}@${version} 到 npm？`,
+            message: `确认发布 ${packageName}@${version}（${access === 'restricted' ? '私有 restricted' : '公开 public'}）？`,
             default: false
           }
         ]);
@@ -294,11 +312,7 @@ export const pubCommand = new Command('pub')
       }
 
       // 构建 npm publish 命令
-      const publishArgs = ['publish'];
-      
-      if (options.access) {
-        publishArgs.push('--access', options.access);
-      }
+      const publishArgs = ['publish', '--access', access];
       
       if (options.tag) {
         publishArgs.push('--tag', options.tag);
@@ -335,9 +349,14 @@ export const pubCommand = new Command('pub')
           output.line();
           output.line('📦 安装命令:');
           output.line(`  pnpm add ${packageName}`);
-          output.line();
-          output.line('🔗 npm 链接:');
-          output.line(`  https://www.npmjs.com/package/${packageName}`);
+          if (access === 'restricted') {
+            output.line();
+            output.line('🔒 私有包：安装方需要在 .npmrc 配置该 scope 的 registry 与访问令牌');
+          } else if (!options.registry && !packageJson.publishConfig?.registry) {
+            output.line();
+            output.line('🔗 npm 链接:');
+            output.line(`  https://www.npmjs.com/package/${packageName}`);
+          }
         }
       } catch (error) {
         logger.error('发布失败');

@@ -5,7 +5,7 @@ inputs:
     description: Node.js version
     default: '24'
   npm-token:
-    description: Existing credential for the cross-organization @icqqjs packages; only the script-free install receives it
+    description: Existing credential for the cross-organization @icqqjs and @wchats packages; only the script-free install receives it
     required: true
   build:
     description: Run `pnpm build` after installing

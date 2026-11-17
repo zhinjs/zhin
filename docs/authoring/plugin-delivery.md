@@ -79,6 +79,23 @@ npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --
 
 建议写 `npx @zhin.js/cli`：插件目录里没有安装 `@zhin.js/cli` 时，`npx zhin` 会从 npm 下载名为 `zhin` 的包。从 `zhin@4` 起它就是 `@zhin.js/cli` 的别名；但 npx 缓存或锁定里残留的 `zhin@3.x` 是已停止维护的旧版框架包。Bot 项目里装了 `@zhin.js/cli`，`npx zhin` 直接指向它。
 
+### 私有插件包 {#private-packages}
+
+不能公开源码的插件（闭源适配器、依赖私有 SDK 的插件）走私有 npm registry，安装方式与公开插件相同：
+
+1. 用自己的 scope 命名（`zhin new <name> --standalone --package-name @your-scope/zhin-adapter-x`），在 `package.json` 写 `"publishConfig": { "access": "restricted" }`，`license` 按实际授权写（如 `UNLICENSED`）。不要设置 `private: true`，那会让 npm 拒绝发布。
+2. 选一个 registry：npm 私有 scope、GitHub Packages 或自建 Verdaccio / Nexus。发布方和安装方的项目根都放一份 `.npmrc`，令牌只从环境变量读取：
+
+   ```ini
+   @your-scope:registry=https://npm.example.internal/
+   //npm.example.internal/:_authToken=${NPM_TOKEN}
+   ```
+
+3. 发布：`npx @zhin.js/cli pub --dry-run` 预览后 `npx @zhin.js/cli pub`。不带 `--access` 时沿用 `publishConfig.access`，私有包不会被改成公开发布。
+4. Bot 项目里 `pnpm add @your-scope/zhin-adapter-x`（或 `zhin install`），在 `plugins:` 挂载。Console 的依赖操作也在项目目录运行 pnpm，读同一份 `.npmrc`；私有包不会出现在插件市场里。
+
+插件依赖的私有 SDK 也发布到同一 scope，并声明为 `peerDependencies`（版本写死），由 Bot 项目一起安装。源码仓库保持私有，`.npmrc`、运行数据和凭据都写进 `.gitignore`。
+
 ### 插件市场元数据 {#marketplace-metadata}
 
 插件市场（文档站 `plugins.json`、Console 插件市场、`zhin search` / `zhin info`）只读发布到 npm 的 `package.json`，不执行插件代码。下列字段决定市场里怎么展示你的插件：
