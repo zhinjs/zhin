@@ -30,12 +30,13 @@
     "directory": "plugins/adapters/ipad-wechat"
   },
   "files": [
-    "adapters",
-    "pages",
+    "lib",
     "plugin.js",
     "schema.json",
-    "src",
-    "lib",
+    "adapters",
+    "!adapters/**/*.ts",
+    "pages",
+    "!pages/**/*.ts",
     "README.md",
     "CHANGELOG.md"
   ],
