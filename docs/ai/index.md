@@ -230,7 +230,7 @@ ai:
    - **没有对话时**：主动插话受 `cooldownMs` 和 `maxPerHour` 限制；判断本身至多每 `judgeIntervalMs` 一次，窗口内到达的消息会顺延到窗口结束再判（期间有新消息就改判最新的那串），不会被丢掉。
 3. 达到门槛后交给主 Agent 正常处理。这一轮的上下文会注明"没人叫你"，Agent 仍然可以选择不说话。
 
-每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
+每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由，以及判断用的模型 `judge`：聊天模型写成 `language:服务名/模型`，决策模型写成 `decision:模型`；切到备用模型时多一个 `fallbackFrom`；判断失败时写 `judge` 与错误类别 `error`，不写错误原文），每次判断调用还会记一条 `[ai.usage] judge`（`scene: ambient`，见 [Agent 用量日志](./agent.md)）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
 
 ##### 按群开关插话
 
