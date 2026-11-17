@@ -102,6 +102,17 @@ describe('Sandbox typed inbound syntax (#1250 sandbox-typed-media-syntax-sent-as
     ]);
   });
 
+  it('a typed [file:URL] never carries a path in its name', () => {
+    for (const link of ['https://e.com/%2e%2e%2fetc%2fpasswd', 'https://e.com/a%5C..%5Cb.txt', 'https://e.com/%2e%2e',
+      'https://e.com/a%0Ab.txt', 'https://e.com/a%ZZ', 'https://e.com/']) {
+      const [segment] = parseSandboxInboundText(`[file:${link}]`).segments;
+      expect(segment?.type, link).toBe('file');
+      expect(segment?.data, link).not.toHaveProperty('name');
+      expect((segment?.data.media as { kind: string }).kind, link).toBe('url');
+    }
+    expect(parseSandboxInboundText('[file:https://e.com/d/%E6%8A%A5%E5%91%8A%20v2.pdf]').segments[0]?.data.name).toBe('报告 v2.pdf');
+  });
+
   it('expands only text segments and leaves picked segments untouched', () => {
     const picked = sandboxInboundMediaSegment('image', LOGO);
     const result = expandSandboxInboundSyntax([picked, { type: 'text', data: { text: ' and [image:https://e.com/b.png]' } }]);

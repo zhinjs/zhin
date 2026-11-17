@@ -108,10 +108,18 @@ function remoteMediaUrl(value: string): string | null {
   }
 }
 
+/**
+ * Display name of a linked file: the last path segment, decoded. It is only a label, but plugins
+ * may save attachments under `data.name`, so a decoded separator (`%2F`, `%5C`), a dot segment or a
+ * control character drops the name instead of carrying a path into it.
+ */
 function fileNameOf(value: string): string | undefined {
   try {
     const last = new URL(value).pathname.split('/').filter(Boolean).at(-1);
-    return last ? decodeURIComponent(last) : undefined;
+    if (!last) return undefined;
+    const name = decodeURIComponent(last).trim();
+    if (!name || name === '.' || name === '..' || /[\\/]/u.test(name) || CONTROL_CHARACTER.test(name)) return undefined;
+    return name.length > 255 ? undefined : name;
   } catch {
     return undefined;
   }
