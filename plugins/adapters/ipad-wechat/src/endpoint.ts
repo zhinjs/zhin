@@ -16,6 +16,7 @@ export class IpadWechatEndpoint extends IpadWechatClient implements Endpoint {
       send: (request: EndpointSendRequest) => this.sendPayload(request),
       name: this.configName(),
       management: this.endpointManagement,
+      inboundMedia: this.endpointInboundMedia,
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState, enumerable: true });
     return createEndpointSpecification(this, hooks);
