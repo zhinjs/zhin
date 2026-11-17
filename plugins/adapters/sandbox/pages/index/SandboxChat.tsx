@@ -18,7 +18,7 @@ import {
   Sparkles, Activity, Wrench, Coins, CircleAlert, Gauge,
   SlidersHorizontal, FolderOpen, ShieldCheck, Network,
   Square, RotateCcw, FileDiff, Terminal, FlaskConical, ChevronDown,
-  FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign,
+  FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign, Paperclip, Mic, Upload,
 } from 'lucide-react';
 import {
   Alert, AlertDescription, AlertTitle, Badge, Button, ConfirmDialog, DropdownMenu, DropdownMenuCheckboxItem,
@@ -64,6 +64,7 @@ import {
 } from './playgroundState.js';
 import type { SandboxAgentRunConfig } from '../../src/run-config.js';
 import { SANDBOX_INBOUND_SYNTAX, expandSandboxInboundSyntax, parseSandboxInboundText } from '../../src/inbound-syntax.js';
+import { createSandboxHostedMediaResolver, uploadSandboxMedia } from './sandboxMedia.js';
 
 type Message = PlaygroundMessage
 type Channel = PlaygroundSession
@@ -114,6 +115,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     /** 输入区：插入图片 / 视频 / 音频 URL */
     const [mediaPanel, setMediaPanel] = useState<null | 'image' | 'video' | 'audio'>(null)
     const [mediaUrl, setMediaUrl] = useState('')
+    // ADR 0064 D13 (I1): files being uploaded (or that failed) before they become hosted links.
+    const [uploads, setUploads] = useState<Array<{ key: string; name: string; state: 'uploading' | 'failed'; message?: string }>>([])
+    const [dragActive, setDragActive] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const voiceInputRef = useRef<HTMLInputElement>(null)
+    const previewUrlsRef = useRef<string[]>([])
     const [atPopoverPosition, setAtPopoverPosition] = useState<{ top: number; left: number } | null>(null)
     const [atSearchQuery, setAtSearchQuery] = useState('')
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
@@ -658,6 +665,18 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         })
     }
 
+    // Hosted links of the active conversation, shown through the Console download (D12.5).
+    const hostedMedia = useMemo(() => createSandboxHostedMediaResolver({
+        endpointId, scene: { type: activeChannel.type, id: activeChannel.id },
+        context: socketRequestContextRef.current ?? captureSandboxRequestContext(),
+    }), [endpointId, activeChannel.type, activeChannel.id, connected])
+    useEffect(() => () => hostedMedia.dispose(), [hostedMedia])
+    useEffect(() => () => {
+        for (const url of previewUrlsRef.current.splice(0)) {
+            try { URL.revokeObjectURL(url) } catch { /* already revoked */ }
+        }
+    }, [])
+
     const renderMessageSegments = (
         segments: (MessageSegment | string)[],
         isSent: boolean,
@@ -678,6 +697,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 return sent
             },
             renderNested: (nested) => renderSandboxSegments(nested, { ...context, canInteract: false, messageId: undefined }),
+            resolveHostedMedia: hostedMedia.resolve,
         }
         return renderSandboxSegments(segments, context)
     }
@@ -776,6 +796,37 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     }
     const getChannelIcon = (type: string) => { switch (type) { case 'private': return <User size={16} />; case 'group': return <Users size={16} />; case 'channel': return <Hash size={16} />; default: return <MessageSquare size={16} /> } }
     const insertFace = (faceId: number) => { editorRef.current?.insertFace(faceId); setShowFacePicker(false) }
+    /** Uploads picked / pasted / dropped files, then inserts each one's hosted link (D13.3). */
+    const uploadFiles = (files: readonly File[]) => {
+        setDragActive(false)
+        if (!files.length) return
+        const scene = { type: activeChannel.type, id: activeChannel.id }
+        const context = socketRequestContextRef.current ?? captureSandboxRequestContext()
+        const endpoint = endpointIdRef.current
+        for (const file of files) {
+            const key = createSandboxMessageId()
+            const name = file.name || sandboxText(locale, "未命名文件")
+            setUploads((current) => [...current, { key, name, state: 'uploading' }])
+            void uploadSandboxMedia(file, { endpointId: endpoint, scene, context }).then((result) => {
+                if (!result.ok) {
+                    setUploads((current) => current.map((entry) => entry.key === key ? { ...entry, state: 'failed', message: result.message } : entry))
+                    return
+                }
+                let preview: string | undefined
+                if (result.reply.kind === 'image' && typeof URL.createObjectURL === 'function') {
+                    preview = URL.createObjectURL(file)
+                    previewUrlsRef.current.push(preview)
+                }
+                editorRef.current?.insertUploaded(result.segment, preview)
+                setUploads((current) => current.filter((entry) => entry.key !== key))
+            })
+        }
+    }
+    const pickFiles = (input: HTMLInputElement | null) => {
+        if (!input) return
+        input.value = ''
+        input.click()
+    }
     const commitMediaUrl = () => {
         const u = mediaUrl.trim()
         if (!u || !mediaPanel) return
@@ -1371,6 +1422,20 @@ ${sandboxStyles}`}</style>
                             onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} aria-label={sandboxText(locale, "插入音频 URL")} title={sandboxText(locale, "插入音频 URL")}>
                             <Music />
                         </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={!canExecute}
+                            onClick={() => { setShowFacePicker(false); setMediaPanel(null); pickFiles(fileInputRef.current) }}
+                            aria-label={sandboxText(locale, "上传文件")} title={sandboxText(locale, "上传文件（图片、语音、任意文件；也可拖放或粘贴）")}>
+                            <Paperclip />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={!canExecute}
+                            onClick={() => { setShowFacePicker(false); setMediaPanel(null); pickFiles(voiceInputRef.current) }}
+                            aria-label={sandboxText(locale, "上传语音")} title={sandboxText(locale, "上传语音（本地音频文件）")}>
+                            <Mic />
+                        </Button>
+                        <Input ref={fileInputRef} type="file" multiple hidden className="sandbox-file-input" tabIndex={-1} aria-hidden="true" data-testid="sandbox-file-input"
+                            onChange={(event) => uploadFiles(Array.from(event.currentTarget.files ?? []))} />
+                        <Input ref={voiceInputRef} type="file" accept="audio/*" hidden className="sandbox-file-input" tabIndex={-1} aria-hidden="true" data-testid="sandbox-voice-input"
+                            onChange={(event) => uploadFiles(Array.from(event.currentTarget.files ?? []))} />
                         <Button type="button" variant="ghost" size="icon"
                             onClick={() => { editorRef.current?.insertAt(endpointId, endpointId); setShowFacePicker(false); setMediaPanel(null) }}
                             title={sandboxText(locale, "@ 机器人（插入 [@{0}]）", [endpointId])} aria-label={sandboxText(locale, "@ 机器人")}>
@@ -1461,14 +1526,36 @@ ${sandboxStyles}`}</style>
                         </div>
                     )}
 
+                    {uploads.length > 0 && (
+                        <ul className="sandbox-upload-list" aria-label={sandboxText(locale, "上传")}>
+                            {uploads.map((entry) => (
+                                <li key={entry.key} className={cn("sandbox-upload-item", entry.state === 'failed' && "is-failed")}
+                                    role={entry.state === 'failed' ? 'alert' : 'status'}>
+                                    {entry.state === 'failed' ? <CircleAlert size={14} aria-hidden="true" /> : <Upload size={14} aria-hidden="true" />}
+                                    <span className="sandbox-upload-name">{entry.name}</span>
+                                    <span className="sandbox-upload-state">{entry.state === 'failed'
+                                        ? sandboxText(locale, "上传失败：{0}", [entry.message ?? ''])
+                                        : sandboxText(locale, "正在上传…")}</span>
+                                    {entry.state === 'failed' && (
+                                        <Button type="button" variant="ghost" size="icon" aria-label={sandboxText(locale, "关闭")}
+                                            onClick={() => setUploads((current) => current.filter((item) => item.key !== entry.key))}><X /></Button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
                     {/* Editor + send */}
                     <div className="sandbox-editor-row">
-                        <div className="sandbox-editor-wrap">
+                        <div className={cn("sandbox-editor-wrap", dragActive && "is-drag-active")}
+                            onDragEnter={(event) => { if (canExecute && Array.from(event.dataTransfer.types ?? []).includes('Files')) setDragActive(true) }}
+                            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false) }}>
                             <div hidden={composerMode !== 'write'}>
                                 <RichTextEditor
                                     locale={locale}
                                     ref={editorRef} placeholder={sandboxText(locale, "向 {0} 发送消息，支持 Markdown...", [activeChannel.name])}
                                     onSend={handleSendMessage} onChange={handleEditorChange} onAtTrigger={handleAtTrigger}
+                                    onFiles={canExecute ? uploadFiles : undefined}
                                     minHeight="44px" maxHeight="200px"
                                 />
                             </div>
@@ -1510,6 +1597,7 @@ ${sandboxStyles}`}</style>
                         <ul>
                             <li><span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}</li>
                             <li><span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}</li>
+                            <li><Paperclip size={11} /> {sandboxText(locale, "拖放、粘贴或用附件按钮上传本地文件，发送时带 Sandbox 托管的签名地址")}</li>
                             {/* Only forms the send path really parses: rendered from the parser's own table. */}
                             {SANDBOX_INBOUND_SYNTAX.map((entry) => (
                                 <li key={entry.kind} data-syntax={entry.kind}>

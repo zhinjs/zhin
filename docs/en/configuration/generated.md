@@ -1398,6 +1398,16 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `sandbox.endpoints[].profile.avatar` | string \| null | no | — | — |
 | `sandbox.endpoints[].profile.interests` | array \| null | no | — | — |
 | `sandbox.endpoints[].profile.bio` | string \| null | no | — | — |
+| `sandbox.endpoints[].media` | object | no | — | Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download |
+| `sandbox.endpoints[].media.ttlHours` | integer | no | `24` | Lifetime of signed links and files in hours (1–168); delete a file to revoke it earlier |
+| `sandbox.endpoints[].media.publicDownload` | boolean | no | `false` | Open signed downloads under /pub/sandbox-media (time-limited external links; a valid signature is still required). Off by default |
+| `sandbox.endpoints[].media.maxBytes` | object | no | — | Per-type byte limit of one file; hard ceiling 64 MiB (the gateway's request body limit); larger needs the gateway raised too |
+| `sandbox.endpoints[].media.maxBytes.image` | integer | no | `10485760` | Images |
+| `sandbox.endpoints[].media.maxBytes.audio` | integer | no | `20971520` | Voice / audio |
+| `sandbox.endpoints[].media.maxBytes.video` | integer | no | `33554432` | Video |
+| `sandbox.endpoints[].media.maxBytes.file` | integer | no | `33554432` | Other files |
+| `sandbox.endpoints[].media.uploaderQuotaBytes` | integer | no | `209715200` | Bytes one uploader may hold on this endpoint; over it uploads are refused, nobody else's files are evicted |
+| `sandbox.endpoints[].media.quotaBytes` | integer | no | `524288000` | Total quota of this endpoint; over it uploads are refused |
 | `sandbox.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `sandbox.nickname` | string \| null | no | — | Fallback account nickname |
 | `sandbox.profile` | object | no | — | Fallback account profile |
@@ -1408,6 +1418,16 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `sandbox.profile.avatar` | string \| null | no | — | — |
 | `sandbox.profile.interests` | array \| null | no | — | — |
 | `sandbox.profile.bio` | string \| null | no | — | — |
+| `sandbox.media` | object | no | — | Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download |
+| `sandbox.media.ttlHours` | integer | no | `24` | Lifetime of signed links and files in hours (1–168); delete a file to revoke it earlier |
+| `sandbox.media.publicDownload` | boolean | no | `false` | Open signed downloads under /pub/sandbox-media (time-limited external links; a valid signature is still required). Off by default |
+| `sandbox.media.maxBytes` | object | no | — | Per-type byte limit of one file; hard ceiling 64 MiB (the gateway's request body limit); larger needs the gateway raised too |
+| `sandbox.media.maxBytes.image` | integer | no | `10485760` | Images |
+| `sandbox.media.maxBytes.audio` | integer | no | `20971520` | Voice / audio |
+| `sandbox.media.maxBytes.video` | integer | no | `33554432` | Video |
+| `sandbox.media.maxBytes.file` | integer | no | `33554432` | Other files |
+| `sandbox.media.uploaderQuotaBytes` | integer | no | `209715200` | Bytes one uploader may hold on this endpoint; over it uploads are refused, nobody else's files are evicted |
+| `sandbox.media.quotaBytes` | integer | no | `524288000` | Total quota of this endpoint; over it uploads are refused |
 
 ### satori
 

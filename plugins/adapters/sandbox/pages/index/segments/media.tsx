@@ -1,10 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { pickMediaRawUrl, resolveMediaSrc } from '@zhin.js/client';
 import { Download, FileText } from 'lucide-react';
-import { sandboxText } from '../messages.js';
-import { stringField, type SandboxSegmentRenderer } from './context.js';
+import { sandboxText, type SandboxLocale } from '../messages.js';
+import { stringField, type SandboxSegmentContextResolver, type SandboxSegmentRenderer } from './context.js';
+import { isSandboxMediaPath } from '../../../src/media-url.js';
 
-export const renderImage: SandboxSegmentRenderer = (data, { locale }, key) => {
+type HostedKind = 'image' | 'video' | 'audio' | 'file';
+
+/**
+ * A Sandbox-hosted file (ADR 0064 D12, I1). The public signed route is closed by default, so the
+ * bytes come from the Console download as a blob URL; until then (or when the file is gone) a
+ * placeholder is shown. SVG and HTML are stored as `file`, so they only ever reach `HostedFile`.
+ */
+function HostedMedia({ kind, url, resolve, locale, alt, name }: {
+  readonly kind: HostedKind; readonly url: string; readonly resolve: SandboxSegmentContextResolver; readonly locale: SandboxLocale;
+  readonly alt?: string; readonly name?: string;
+}): React.ReactElement {
+  const [src, setSrc] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void resolve(url).then((value) => { if (live) setSrc(value ?? null); });
+    return () => { live = false; };
+  }, [url, resolve]);
+  if (src === undefined) return <span className="sandbox-segment-note" role="status">{sandboxText(locale, "正在载入文件…")}</span>;
+  if (src === null) return <span className="sandbox-segment-note">{sandboxText(locale, "文件已删除或已过期")}</span>;
+  if (kind === 'image') return <img src={src} alt={alt ?? ''} className="sandbox-media-image" />;
+  if (kind === 'video') return <video src={src} controls playsInline preload="metadata" className="sandbox-media-video" />;
+  if (kind === 'audio') return <audio src={src} controls preload="metadata" className="sandbox-media-audio" />;
+  return <a className="sandbox-file-card-download" href={src} download={name || true} aria-label={sandboxText(locale, "下载 {0}", [name ?? ''])}>
+    <Download size={16} aria-hidden="true" />{sandboxText(locale, "下载")}</a>;
+}
+
+function hostedUrl(data: Readonly<Record<string, unknown>>): string | undefined {
+  const raw = pickMediaRawUrl(data as Record<string, unknown>);
+  return typeof raw === 'string' && isSandboxMediaPath(raw) ? raw : undefined;
+}
+
+export const renderImage: SandboxSegmentRenderer = (data, { locale, resolveHostedMedia }, key) => {
+  const hosted = hostedUrl(data);
+  if (hosted && resolveHostedMedia) return <HostedMedia key={key} kind="image" url={hosted} resolve={resolveHostedMedia} locale={locale} alt={stringField(data, 'alt')} />;
   const src = resolveMediaSrc(pickMediaRawUrl(data as Record<string, unknown>), 'image');
   if (!src) return <span key={key} className="sandbox-segment-note">{sandboxText(locale, "[图片]")}</span>;
   const alt = stringField(data, 'alt');
@@ -18,7 +52,9 @@ export const renderImage: SandboxSegmentRenderer = (data, { locale }, key) => {
   );
 };
 
-export const renderVideo: SandboxSegmentRenderer = (data, { locale }, key) => {
+export const renderVideo: SandboxSegmentRenderer = (data, { locale, resolveHostedMedia }, key) => {
+  const hosted = hostedUrl(data);
+  if (hosted && resolveHostedMedia) return <HostedMedia key={key} kind="video" url={hosted} resolve={resolveHostedMedia} locale={locale} />;
   const src = resolveMediaSrc(pickMediaRawUrl(data as Record<string, unknown>), 'video');
   if (!src) return <span key={key} className="sandbox-segment-note">{sandboxText(locale, "[视频无地址]")}</span>;
   // resolveMediaSrc allowlists non-executable URL schemes and video data MIME types.
@@ -27,7 +63,9 @@ export const renderVideo: SandboxSegmentRenderer = (data, { locale }, key) => {
 };
 
 /** `audio`, and the legacy `record` / `voice` aliases Core normalizes to it. */
-export const renderAudio: SandboxSegmentRenderer = (data, { locale }, key) => {
+export const renderAudio: SandboxSegmentRenderer = (data, { locale, resolveHostedMedia }, key) => {
+  const hosted = hostedUrl(data);
+  if (hosted && resolveHostedMedia) return <HostedMedia key={key} kind="audio" url={hosted} resolve={resolveHostedMedia} locale={locale} />;
   const src = resolveMediaSrc(pickMediaRawUrl(data as Record<string, unknown>), 'audio');
   if (!src) return <span key={key} className="sandbox-segment-note">{sandboxText(locale, "[音频无地址]")}</span>;
   // resolveMediaSrc allowlists non-executable URL schemes and audio data MIME types.
@@ -81,9 +119,10 @@ function fileNameOf(data: Readonly<Record<string, unknown>>, media: Record<strin
 }
 
 /** ADR 0064 G6: a file card with name, size and a download link. */
-export const renderFile: SandboxSegmentRenderer = (data, { locale }, key) => {
+export const renderFile: SandboxSegmentRenderer = (data, { locale, resolveHostedMedia }, key) => {
   const media = data.media && typeof data.media === 'object' ? data.media as Record<string, unknown> : undefined;
-  const name = fileNameOf(data, media) || sandboxText(locale, "未命名文件");
+  const hosted = media?.kind === 'url' && typeof media.value === 'string' && isSandboxMediaPath(media.value) ? media.value : undefined;
+  const name = (hosted ? stringField(data, 'name') || (typeof media?.file_name === 'string' ? media.file_name : '') : fileNameOf(data, media)) || sandboxText(locale, "未命名文件");
   const size = formatFileSize(media?.size ?? data.size);
   const href = sandboxFileHref(media ?? (typeof data.url === 'string' ? { kind: 'url', value: data.url } : undefined));
   const mime = typeof media?.mime_type === 'string' ? media.mime_type : '';
@@ -94,7 +133,9 @@ export const renderFile: SandboxSegmentRenderer = (data, { locale }, key) => {
         <div className="sandbox-file-card-name" title={name}>{name}</div>
         <div className="sandbox-file-card-meta">{[size, mime].filter(Boolean).join(' · ') || sandboxText(locale, "文件")}</div>
       </div>
-      {href
+      {hosted && resolveHostedMedia
+        ? <HostedMedia kind="file" url={hosted} resolve={resolveHostedMedia} locale={locale} name={name} />
+        : href
         // sandboxFileHref only yields http(s) URLs or an octet-stream data URL (downloaded, never rendered).
         ? <a className="sandbox-file-card-download" href={href} download={name} target="_blank" rel="noreferrer"
           aria-label={sandboxText(locale, "下载 {0}", [name])}><Download size={16} aria-hidden="true" />{sandboxText(locale, "下载")}</a>

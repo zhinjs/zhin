@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { expandSandboxInboundSyntax, stripSandboxInboundSyntax } from './inbound-syntax.js';
+import { resolveSandboxMediaConfig, type ResolvedSandboxMediaConfig, type SandboxMediaConfig } from './media-config.js';
 import {
   normalizeSandboxAgentRunConfig,
   type SandboxAgentRunConfig,
@@ -78,6 +79,8 @@ export type ResolvedSandboxBot = {
   readonly streamingIntervalMs: number;
   /** Configured `nickname`; `[@nickname]` also mentions this bot. */
   readonly nickname?: string;
+  /** Hosted uploads (ADR 0064 D12, I1). */
+  readonly media: ResolvedSandboxMediaConfig;
 };
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
@@ -86,6 +89,8 @@ export interface SandboxEndpointConfig extends EndpointProfileConfiguration {
   readonly owner?: string;
   readonly streaming?: boolean;
   readonly streamingIntervalMs?: number;
+  /** Hosted uploads: size limits, quotas, link lifetime, public download (ADR 0064 D12). */
+  readonly media?: SandboxMediaConfig;
 }
 
 export function resolveSandboxEndpoint(
@@ -106,6 +111,7 @@ export function resolveSandboxEndpoint(
     streaming: config.streaming !== false,
     streamingIntervalMs,
     ...(optionalEndpointField(config.nickname) ? { nickname: optionalEndpointField(config.nickname)! } : {}),
+    media: resolveSandboxMediaConfig(config.media),
   };
 }
 

@@ -130,17 +130,35 @@ function fileNameOf(value: string): string | undefined {
  * A `data:` URL (a pasted image) is inline media, so it is a `base64` ref: the Agent's inbound media
  * path refuses `data:` as a network URL and would otherwise never see the pasted image.
  */
-export function sandboxInboundMediaSegment(kind: SandboxMediaKind, url: string): SandboxInboundSegment {
+/** What the store reports about an uploaded file (ADR 0064 D13.3); every field is optional. */
+export interface SandboxInboundMediaMeta {
+  readonly mime_type?: string;
+  readonly size?: number;
+  readonly file_name?: string;
+}
+
+function mediaMeta(meta: SandboxInboundMediaMeta | undefined): Record<string, unknown> {
+  if (!meta) return {};
+  return {
+    ...(typeof meta.mime_type === 'string' && /^[a-z]+\/[a-z0-9.+-]+$/iu.test(meta.mime_type) ? { mime_type: meta.mime_type } : {}),
+    ...(typeof meta.size === 'number' && Number.isSafeInteger(meta.size) && meta.size >= 0 ? { size: meta.size } : {}),
+    ...(typeof meta.file_name === 'string' && meta.file_name && meta.file_name.length <= 255 && !/[\\/]/u.test(meta.file_name) && !CONTROL_CHARACTER.test(meta.file_name)
+      ? { file_name: meta.file_name } : {}),
+  };
+}
+
+export function sandboxInboundMediaSegment(kind: SandboxMediaKind, url: string, meta?: SandboxInboundMediaMeta): SandboxInboundSegment {
   const value = url.trim();
   const data = inlineDataUrl(kind, value);
   if (data) return { type: kind, data: { media: { kind: 'base64', value: data.value, mime_type: data.mime } } };
   // An accepted link is stored as `URL.href`; anything else keeps the picked value as before.
   const link = remoteMediaUrl(value) ?? value;
+  const extra = mediaMeta(meta);
   if (kind === 'file') {
-    const name = fileNameOf(link);
-    return { type: 'file', data: { media: { kind: 'url', value: link }, ...(name ? { name } : {}) } };
+    const name = (extra.file_name as string | undefined) ?? fileNameOf(link);
+    return { type: 'file', data: { media: { kind: 'url', value: link, ...extra }, ...(name ? { name } : {}) } };
   }
-  return { type: kind, data: { media: { kind: 'url', value: link } } };
+  return { type: kind, data: { media: { kind: 'url', value: link, ...extra } } };
 }
 
 export function sandboxInboundFaceSegment(id: number | string): SandboxInboundSegment {

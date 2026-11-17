@@ -1398,6 +1398,16 @@ outline: [2, 3]
 | `sandbox.endpoints[].profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.interests` | array \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.endpoints[].media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.endpoints[].media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.endpoints[].media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.endpoints[].media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.endpoints[].media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.endpoints[].media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.endpoints[].media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.endpoints[].media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.endpoints[].media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 | `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `sandbox.nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `sandbox.profile` | object | 否 | — | 账号资料兜底 |
@@ -1408,6 +1418,16 @@ outline: [2, 3]
 | `sandbox.profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.profile.interests` | array \| null | 否 | — | — |
 | `sandbox.profile.bio` | string \| null | 否 | — | — |
+| `sandbox.media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 
 ### satori
 
