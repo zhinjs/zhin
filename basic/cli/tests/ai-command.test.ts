@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accountRows, describeProbe, runAccountAdd, runAccountList, runAccountTest, runRenameEnv, runRevertAmbientJudge, aiCommand } from '../src/commands/ai.js';
@@ -130,12 +131,20 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5, R2)', () => {
   type Answer = { status: number; body: unknown };
   const ok = (data: unknown): Answer => ({ status: 200, body: { success: true, data } });
   /** A fake instance: the judge view, the pending mark and the dry / real revert answers. */
-  function instance(options: { view?: unknown; pending?: string; dry?: unknown; revert?: unknown }) {
+  function instance(options: { view?: unknown; after?: Answer; pending?: string; dry?: unknown; revert?: unknown | Answer; onRevert?: () => void }) {
+    let views = 0;
     return client((path, body) => {
-      if (path.endsWith('/ambient-judge')) return ok(options.view ?? { migration: { status: 'migrated', at: 1 } });
+      if (path.endsWith('/ambient-judge')) {
+        views += 1;
+        if (views > 1 && options.after) return options.after;
+        // Migrated from a yml `mode: active` the instance has already acted on.
+        return ok(options.view ?? { migration: { status: 'migrated', at: 1, triggerValues: { mode: 'active' }, triggerSeen: { mode: 'active' } } });
+      }
       if (path.endsWith('/pending')) return ok({ status: body.pending ? options.pending ?? 'pending' : 'cleared' });
       if (body.dryRun) return ok(options.dry ?? { status: 'ready' });
-      return ok(options.revert ?? { status: 'reverted', graphRevision: 7 });
+      options.onRevert?.();
+      const revert = options.revert ?? { status: 'reverted', graphRevision: 7 };
+      return revert && typeof revert === 'object' && 'body' in revert ? revert as Answer : ok(revert);
     });
   }
   async function withYml(text: string, run: (file: string) => Promise<void>) {
@@ -157,8 +166,8 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5, R2)', () => {
     expect(pathsOf(requests)).toEqual([
       ['/ambient-judge', {}],
       ['/cli/purposes/revert-ambient-judge/pending', { pending: true }],
-      ['/cli/purposes/revert-ambient-judge', { dryRun: true }],
-      ['/cli/purposes/revert-ambient-judge', {}],
+      ['/cli/purposes/revert-ambient-judge', { dryRun: true, trigger: {} }],
+      ['/cli/purposes/revert-ambient-judge', { trigger: {} }],
       ['/cli/purposes/revert-ambient-judge/pending', { pending: false }],
     ]);
     expect(out.lines.join('\n')).toContain('修订号 7');
@@ -176,7 +185,7 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5, R2)', () => {
 
   it('case D: a seeded shadow over yml active — writes the shadow the instance runs with before the revert, listing what it overwrote', async () => {
     await withYml('ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n      mode: active\n', async file => {
-      const { config, requests } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } } });
+      const { config, requests } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 'reverted', graphRevision: 7, yml: { mode: 'shadow' } } });
       const out = output();
       expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
       expect(await readFile(file, 'utf8')).toContain('mode: shadow');
@@ -229,5 +238,87 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5, R2)', () => {
     expect(out.errors.join('\n')).toContain('旧版本无法读取');
     expect(out.lines.join('\n')).not.toContain('可以降级');
     expect(process.exitCode).toBe(1);
+  });
+
+  describe('review round 4', () => {
+    const fileWith = (mode: string) => `ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n      mode: ${mode}\n`;
+    const caseF = { migration: { status: 'migrated', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'active' }, triggerSeen: { mode: 'active' }, after: { profile: 'small', mode: 'active' } },
+      policy: { profile: 'small', mode: 'active' } };
+
+    it('case F: refuses when the instance reports a yml write not converted yet, and writes nothing (S1)', async () => {
+      await withYml(fileWith('shadow'), async file => {
+        const { config, requests } = instance({ view: caseF, dry: { status: 'refused', reason: 'pending-trigger-writes', keys: ['ai.trigger.ambient.mode'] } });
+        const out = output();
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+        expect(out.errors.join('\n')).toContain('还没转到插话判断');
+        expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+        // The file's current values went to the instance with the dry run.
+        expect(requests.find(request => request.body.dryRun)?.body).toEqual({ dryRun: true, trigger: { mode: 'shadow' } });
+      });
+    });
+
+    it('case F: checks the file once more right before writing, with the same rule (S1)', async () => {
+      await withYml(fileWith('shadow'), async file => {
+        const { config, requests } = instance({ view: caseF, dry: { status: 'ready', yml: { mode: 'active' } } });
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: output().sink })).toBe(false);
+        expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+        expect(requests.filter(request => request.path.endsWith('/revert-ambient-judge') && !request.body.dryRun)).toEqual([]);
+      });
+    });
+
+    it('a lost answer, then the instance says reverted: keeps the yml and reports success (S2)', async () => {
+      await withYml(fileWith('active'), async file => {
+        const { config } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 502, body: {} },
+          after: ok({ migration: { status: 'reverted', at: 1 } }) });
+        // (the instance did revert; the answer was lost on the way)
+        const out = output();
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
+        expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+        expect(out.lines.join('\n')).toContain('已回退插话判断迁移');
+      });
+    });
+
+    it('a lost answer, then the instance says still migrated: undoes the yml (S2)', async () => {
+      await withYml(fileWith('active'), async file => {
+        const { config } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 502, body: {} },
+          after: ok({ migration: { status: 'migrated', at: 1 } }) });
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: output().sink })).toBe(false);
+        expect(await readFile(file, 'utf8')).toContain('mode: active');
+      });
+    });
+
+    it('a lost answer and no state: keeps the yml and gives the manual steps (S2)', async () => {
+      await withYml(fileWith('active'), async file => {
+        const { config } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 502, body: {} }, after: { status: 502, body: {} } });
+        const out = output();
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+        expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+        expect(out.errors.join('\n')).toContain('无法确认是否已回退');
+        expect(out.errors.join('\n')).toContain('mode: "active"');
+        expect(process.exitCode).toBe(1);
+      });
+    });
+
+    it('says what the file said when it cannot be restored (S4)', async () => {
+      await withYml(fileWith('active'), async file => {
+        const { config } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 'refused', reason: 'conflict' },
+          onRevert: () => { rmSync(file); mkdirSync(file); } });
+        const out = output();
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+        expect(out.errors.join('\n')).toContain('配置文件没能恢复');
+        expect(out.errors.join('\n')).toContain('mode: "active"');
+        expect(process.exitCode).toBe(1);
+      });
+    });
+
+    it('treats a committed yml different from the dry run as changed and undoes the write', async () => {
+      await withYml(fileWith('active'), async file => {
+        const { config } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } }, revert: { status: 'reverted', graphRevision: 9, yml: { mode: 'active' } } });
+        const out = output();
+        expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+        expect(out.errors.join('\n')).toContain('被修改过');
+        expect(await readFile(file, 'utf8')).toContain('mode: active');
+      });
+    });
   });
 });

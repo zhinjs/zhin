@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { hostGet, hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
-import { normalizedTrigger, type AmbientJudgeView } from '../utils/ambient-judge-check.js';
+import { normalizedTrigger, pendingAmbientTriggerKeys, retiredAmbientTriggerValues, type AmbientJudgeView } from '../utils/ambient-judge-check.js';
 
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
@@ -198,6 +198,7 @@ const REVERT_REFUSALS: Readonly<Record<string, string>> = Object.freeze({
   conflict: '模型配置正在被其他操作修改，请稍后重试',
   'not-committed': '没有写入成功，请重试',
   'invalid-graph': '迁移前的旧写法现在已不成立（例如它引用的模型配置已被删除）',
+  'pending-trigger-writes': '配置文件里有实例还没转换的插话设置',
 });
 
 /**
@@ -278,33 +279,85 @@ export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpCo
     }
   }
   try {
-    const dry = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', { dryRun: true });
+    // The file's retired keys before anything is written: a write not converted yet blocks the revert (S1).
+    let fileTrigger: Readonly<Record<string, unknown>> = {};
+    if (input.configPath) {
+      try { fileTrigger = retiredAmbientTriggerValues((await createConfigDocument(input.configPath).read()).document); }
+      catch { /* An unreadable file fails the write below, before anything is reverted. */ }
+    }
+    const pendingWrites = (keys: readonly string[]): false => {
+      output.error(`未回退：配置文件里的 ${keys.join('、')} 是迁移之后写入、实例还没转到插话判断的值，现在回退会把它覆盖掉。`);
+      output.error('请先让实例重新加载配置（或重启实例）完成转换，再重新运行本命令。');
+      process.exitCode = 1;
+      return false;
+    };
+    const dry = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', { dryRun: true, trigger: fileTrigger });
     if (!dry.ok || !dry.data) { fail(output, dry); return false; }
-    if (dry.data.status === 'refused') return refuse(dry.data.reason, dry.data.path);
+    if (dry.data.status === 'refused') {
+      const refusal = dry.data as { reason: string; path?: string; keys?: string[] };
+      if (refusal.reason === 'pending-trigger-writes') return pendingWrites(refusal.keys ?? []);
+      return refuse(refusal.reason, refusal.path);
+    }
     const yml = dry.data.yml ?? {};
     const lost = [...(dry.data.lost ?? [])];
     let written: Awaited<ReturnType<typeof writeAmbientYml>> = { previous: new Map(), overwritten: [] };
     if (Object.keys(yml).length) {
       const manual = Object.entries(yml).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
+      let pending: string[] = [];
       try {
         if (!input.configPath) throw new Error('未找到配置文件');
-        written = await writeAmbientYml(input.configPath, yml);
+        // The same rule once more on the file as it is right before the write (S1).
+        const current = retiredAmbientTriggerValues((await createConfigDocument(input.configPath).read()).document);
+        pending = pendingAmbientTriggerKeys(viewed.data, current).map(key => `ai.trigger.ambient.${key}`);
+        if (!pending.length) written = await writeAmbientYml(input.configPath, yml);
       } catch (error) {
         output.error(`未回退：配置文件需要 ${manual}，但无法写入（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
         output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工写上 ${manual}，再重新运行本命令。`);
         process.exitCode = 1;
         return false;
       }
+      if (pending.length) return pendingWrites(pending);
     }
-    const reverted = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', {});
-    if (!reverted.ok || !reverted.data || reverted.data.status !== 'reverted') {
-      // Nothing was reverted: the file goes back to what it said.
-      if (input.configPath) await undoAmbientYml(input.configPath, written.previous).catch(() => undefined);
-      if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
-      const refusal = reverted.data as { reason?: string; path?: string };
+    /** Puts the yml back; when that fails, says what the file said so a person can restore it (S4). */
+    const undo = async (): Promise<void> => {
+      if (!input.configPath || !written.previous.size) return;
+      try { await undoAmbientYml(input.configPath, written.previous); }
+      catch (error) {
+        output.error(`配置文件没能恢复（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。请手工把 ${input.configPath} 的 ai.trigger.ambient 改回：`);
+        for (const [key, value] of written.previous) output.error(`  · ${key}: ${value === undefined ? '（删除这一项）' : JSON.stringify(value)}`);
+        process.exitCode = 1;
+      }
+    };
+    const reverted = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', { trigger: fileTrigger });
+    let graphRevision: number | undefined;
+    if (!reverted.ok || !reverted.data) {
+      // No answer is no proof that nothing was reverted (S2): ask the instance what happened.
+      const state = await hostGet<AmbientJudgeView>(input.client, '/ambient-judge').catch(() => undefined);
+      const status = state?.ok ? state.data?.migration?.status : undefined;
+      if (status === 'migrated') {
+        await undo();
+        fail(output, reverted);
+        return false;
+      }
+      if (status !== 'reverted') {
+        output.error(`回退请求没有得到回应（${reverted.error ?? `HTTP ${reverted.status}`}），也读不到迁移状态，无法确认是否已回退；配置文件保持写入后的样子。`);
+        output.error('请运行 zhin doctor --verbose 查看「插话判断迁移」：显示已回退就不用再处理；仍显示已迁移，就把配置文件的 ai.trigger.ambient 按下面恢复后重新运行本命令：');
+        for (const [key, value] of written.previous) output.error(`  · ${key}: ${value === undefined ? '（删除这一项）' : JSON.stringify(value)}`);
+        process.exitCode = 1;
+        return false;
+      }
+      // Reverted after all: the yml stays.
+    } else if (reverted.data.status !== 'reverted') {
+      await undo();
+      const refusal = reverted.data as { reason?: string; path?: string; keys?: string[] };
+      if (refusal.reason === 'pending-trigger-writes') return pendingWrites(refusal.keys ?? []);
       return refuse(refusal.reason ?? 'not-committed', refusal.path);
-    }
-    output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${reverted.data.graphRevision}）。`);
+    } else if (JSON.stringify(reverted.data.yml ?? {}) !== JSON.stringify(yml)) {
+      // The revert committed with other yml values than the dry run gave: treat it as a concurrent change.
+      await undo();
+      return refuse('changed');
+    } else graphRevision = reverted.data.graphRevision;
+    output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法${graphRevision !== undefined ? `（修订号 ${graphRevision}）` : ''}。`);
     if (written.previous.size) {
       output.log(`已在配置文件写入 ${[...written.previous.keys()].map(key => `ai.trigger.ambient.${key}: ${JSON.stringify(yml[key])}`).join('、')}；当前版本已按这些值运行。`);
     }

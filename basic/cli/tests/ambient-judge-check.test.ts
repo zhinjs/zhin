@@ -78,6 +78,17 @@ describe('retired ai.trigger.ambient keys (H1)', () => {
     }, 'ai:\n  trigger:\n    ambient:\n      mode: shadow\n');
   });
 
+  it('refuses --fix while a revert is running, and allows it once the mark is gone or expired (S3)', async () => {
+    const running = { migration: { ...migratedView.migration, revertPending: { at: Date.now() } } };
+    await withYml(async file => {
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view: running }))
+        .resolves.toMatchObject({ status: 'warn', message: expect.stringContaining('正在执行 zhin ai purposes revert ambient-judge') });
+      expect(await readFile(file, 'utf8')).toBe(YML);
+      const expired = { migration: { ...migratedView.migration, revertPending: { at: Date.now() - 11 * 60_000 } } };
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view: expired })).resolves.toMatchObject({ status: 'ok' });
+    });
+  });
+
   it('keeps a key written after the migration (the next load converts it) and removes only the settled one', async () => {
     const view = { migration: { ...migratedView.migration, triggerKeys: ['ai.trigger.ambient.minConfidence'], triggerValues: { minConfidence: 0.8 }, triggerSeen: { minConfidence: 0.8 } } };
     await withYml(async file => {

@@ -665,7 +665,10 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, request, consolePrincipal }) => {
     const body = object(await readJsonBody(request).catch(() => ({})));
     const dryRun = body.dryRun === true;
-    const reverted = await lease.management.revertAmbientJudge(principal, { dryRun });
+    // The yml's retired keys as the CLI read them (numbers / strings only).
+    const raw = body.trigger && typeof body.trigger === 'object' && !Array.isArray(body.trigger) ? body.trigger as Record<string, unknown> : undefined;
+    const trigger = raw ? { ...(raw.minConfidence !== undefined ? { minConfidence: raw.minConfidence } : {}), ...(raw.mode !== undefined ? { mode: raw.mode } : {}) } : undefined;
+    const reverted = await lease.management.revertAmbientJudge(principal, { dryRun, ...(trigger ? { trigger } : {}) });
     // A dry run writes nothing and is not audited as a change.
     if (!dryRun) {
       record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',

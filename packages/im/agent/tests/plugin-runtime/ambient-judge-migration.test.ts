@@ -360,3 +360,40 @@ describe('revert dry run (review R2)', () => {
     await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true })).resolves.toEqual({ status: 'ready', yml: { minConfidence: 0.6, mode: 'shadow' } });
   });
 });
+
+describe('the revert never overwrites a yml write the instance has not converted yet (review S1)', () => {
+  it('case F: yml active, an old Console writes shadow, no reload yet — the revert is refused; after the reload it reverts and stays shadow', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+    const file = { mode: 'shadow' };
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true, trigger: file }))
+      .resolves.toEqual({ status: 'refused', reason: 'pending-trigger-writes', keys: ['ai.trigger.ambient.mode'] });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', trigger: file })).resolves.toMatchObject({ reason: 'pending-trigger-writes' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'active' });
+    // The reload converts the write; now the revert goes through and the yml it needs is shadow.
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: file });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true, trigger: file })).resolves.toEqual({ status: 'ready', yml: { mode: 'shadow' } });
+    const reverted = await revertAmbientJudgeMigration({ store, rootId: 'root', trigger: file });
+    expect(reverted).toMatchObject({ status: 'reverted', yml: { mode: 'shadow' } });
+    expect(effectiveAmbientJudgePolicy(store.graph.purposes, file).policy).toEqual({ profile: 'small', mode: 'shadow' });
+  });
+
+  it('a converted threshold keeps gating an active legacy decision after the revert', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' }, decisions: { ambient: { profile: 'jev', mode: 'active', minConfidence: 0.8 } } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.6 } });
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.9 } });
+    expect(store.graph.purposes.ambient).toMatchObject({ minConfidence: 0.9 });
+    const reverted = await revertAmbientJudgeMigration({ store, rootId: 'root', trigger: { minConfidence: 0.9 } });
+    expect(reverted).toMatchObject({ status: 'reverted', yml: { minConfidence: 0.9 } });
+    expect(store.graph.purposes.decisions?.ambient).toMatchObject({ minConfidence: 0.9 });
+    expect(effectiveAmbientJudgePolicy(store.graph.purposes, { minConfidence: 0.9 }).policy.minConfidence).toBe(0.9);
+  });
+
+  it('a Console edit of the threshold (not from the yml) still refuses the revert', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.6 } });
+    store.graph = normalizeProviderGraph({ ...store.graph, revision: store.graph.revision + 1, purposes: { ...store.graph.purposes, ambient: { profile: 'small', minConfidence: 0.95 } } });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toEqual({ status: 'refused', reason: 'changed' });
+  });
+});

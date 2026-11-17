@@ -45,6 +45,8 @@ export interface AmbientJudgeView {
     triggerKeys?: readonly string[];
     triggerValues?: Readonly<Record<string, unknown>>;
     triggerSeen?: Readonly<Record<string, unknown>>;
+    /** Set while `zhin ai purposes revert ambient-judge` runs. */
+    revertPending?: Readonly<{ at: number }>;
     /** The `purposes.ambient` the migration wrote. */
     after?: Readonly<Record<string, unknown>>;
     noticedAt?: number;
@@ -61,6 +63,39 @@ export async function readAmbientJudgeView(client: HostHttpConfig | undefined): 
 }
 
 const NAME = '插话判断（旧配置项）';
+
+/** A revert that never cleared its pending mark stops counting after this long (as the instance's `AMBIENT_JUDGE_REVERT_PENDING_MS`). */
+export const AMBIENT_JUDGE_REVERT_PENDING_MS = 10 * 60_000;
+
+/** Whether `zhin ai purposes revert ambient-judge` is running right now (its unexpired mark). */
+export function ambientRevertPending(view: AmbientJudgeView | undefined, now: number = Date.now()): boolean {
+  const at = view?.migration?.revertPending?.at;
+  return typeof at === 'number' && now - at < AMBIENT_JUDGE_REVERT_PENDING_MS;
+}
+
+/**
+ * The retired yml keys holding a write the instance has not converted yet (the instance's
+ * `pendingAmbientTriggerWrites`, S1): normalized value different from the one acted on, and not
+ * the migration's own value while the stored judge still holds what the migration wrote.
+ */
+export function pendingAmbientTriggerKeys(view: AmbientJudgeView | undefined, present: Readonly<Record<string, unknown>>): string[] {
+  const migration = view?.migration;
+  if (migration?.status !== 'migrated') return [];
+  const seen = migration.triggerSeen ?? migration.triggerValues ?? {};
+  const original = migration.triggerValues ?? {};
+  const after = migration.after ?? {};
+  const policy = (view?.policy ?? {}) as Readonly<Record<string, unknown>>;
+  return Object.keys(present).filter(key => {
+    const value = normalizedTrigger(key, present[key]);
+    return value !== undefined && !(Object.hasOwn(seen, key) && seen[key] === value)
+      && !(Object.hasOwn(original, key) && original[key] === value && policy[key] === after[key]);
+  });
+}
+
+/** The retired keys present in a configuration document, raw. */
+export function retiredAmbientTriggerValues(document: unknown): Readonly<Record<string, unknown>> {
+  return retiredValuesOf(document);
+}
 
 /**
  * A retired key's value as the instance uses it (same rules as `legacyAmbientTriggerValues`):
@@ -102,17 +137,15 @@ export async function checkRetiredAmbientTriggerKeys(input: Readonly<{
   // Migrated: a value the instance has already acted on (its `triggerSeen`, or the value the
   // migration read and folded in), or one it ignores, no longer applies by itself. Both sides are
   // normalized as the instance does (N3); a value written since is converted on the next load.
-  // The migration's own value counts only while the stored judge still holds what the migration
-  // wrote for that key (R1: switched since, a write of the original value is a real change).
-  const seen = migration!.triggerSeen ?? migration!.triggerValues ?? {};
-  const original = migration!.triggerValues ?? {};
-  const after = migration!.after ?? {};
-  const policy = (input.view?.policy ?? {}) as Readonly<Record<string, unknown>>;
-  const settled = keys.filter(key => {
-    const value = normalizedTrigger(key, present[key]);
-    return value === undefined || (Object.hasOwn(seen, key) && seen[key] === value)
-      || (Object.hasOwn(original, key) && original[key] === value && policy[key] === after[key]);
-  });
+  // The same rule as the instance's conversion (R1): what is not a pending write is settled.
+  const pendingWrites = pendingAmbientTriggerKeys(input.view, present);
+  const settled = keys.filter(key => !pendingWrites.includes(key));
+  // A revert is writing these keys right now (S3): leave the file alone until it is done.
+  if (input.fix && ambientRevertPending(input.view)) {
+    return { name: NAME, status: 'warn',
+      message: `正在执行 zhin ai purposes revert ambient-judge，它会改写 ${input.label} 中的这些键；没有删除。`,
+      fix: '回退结束后再运行 zhin doctor --fix' };
+  }
   const pending = keys.filter(key => !settled.includes(key));
   let removed: string[] = [];
   if (input.fix && settled.length) {

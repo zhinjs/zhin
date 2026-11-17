@@ -248,10 +248,7 @@ async function convertTriggerWrites(input: Readonly<{
   // migration read is no new information while the stored judge still holds what the migration
   // folded it into (N1); once that key was changed since (an older Console switched it, R1), the
   // original value is a real write back and is converted like any other.
-  const original = record.triggerValues ?? {};
-  const after = record.after ?? {};
-  const changed = (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key]
-    && !(values[key] === original[key] && stored[key] === after[key]));
+  const changed = pendingAmbientTriggerWrites(record, stored, values);
   const next: AmbientJudgeMigrationRecord = Object.freeze({ ...record, triggerSeen: values });
   if (!changed.length) {
     await store.writeMigrationRecord({ rootId, id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(next), expectedRevision: previous.revision, requireStatus: 'migrated' }).catch(() => 'conflict');
@@ -275,6 +272,20 @@ async function convertTriggerWrites(input: Readonly<{
   return Object.freeze({ status: 'converted', record: next, keys: Object.freeze(keys) });
 }
 
+/**
+ * The yml keys whose (normalized) value is a write not yet converted into `purposes.ambient`
+ * (R1 / S1): different from the value already acted on, and not the migration's own value while
+ * the stored judge still holds what the migration wrote for that key. One rule for the conversion
+ * on load, the revert's refusal and `zhin doctor`.
+ */
+export function pendingAmbientTriggerWrites(record: AmbientJudgeMigrationRecord, stored: AmbientJudgePolicy, values: AmbientTriggerValues): ('minConfidence' | 'mode')[] {
+  const seen = record.triggerSeen ?? record.triggerValues ?? {};
+  const original = record.triggerValues ?? {};
+  const after = record.after ?? {};
+  return (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key]
+    && !(values[key] === original[key] && stored[key] === after[key]));
+}
+
 export type AmbientJudgeRevertResult =
   /**
    * `yml`: threshold / mode of a `purposes.ambient` seeded before the migration, which an older
@@ -286,7 +297,12 @@ export type AmbientJudgeRevertResult =
   | Readonly<{ status: 'ready'; yml?: AmbientTriggerValues; lost?: readonly string[] }>
   | Readonly<{ status: 'refused'; reason: 'no-migration' | 'already-reverted' | 'changed' | 'conflict' | 'not-committed' }>
   /** The restored form does not validate (e.g. a Profile it names was removed since); `path` names it. */
-  | Readonly<{ status: 'refused'; reason: 'invalid-graph'; path?: string }>;
+  | Readonly<{ status: 'refused'; reason: 'invalid-graph'; path?: string }>
+  /**
+   * The yml has a write to the retired keys not converted yet (S1): reverting now would replace it
+   * with the migration's values. Reload or restart the instance, then revert.
+   */
+  | Readonly<{ status: 'refused'; reason: 'pending-trigger-writes'; keys: readonly string[] }>;
 
 /**
  * `zhin ai purposes revert ambient-judge` (D5.5): restores the stored legacy fields of the record's
@@ -296,14 +312,29 @@ export type AmbientJudgeRevertResult =
  */
 export async function revertAmbientJudgeMigration(input: Readonly<{ store: AmbientJudgeMigrationStore; rootId: string; now?: () => number;
   /** Compute only (R2): the yml values and what cannot be expressed, without committing anything. */
-  dryRun?: boolean }>): Promise<AmbientJudgeRevertResult> {
+  dryRun?: boolean;
+  /** The yml's retired keys as the file says now (read before the revert writes it, S1). */
+  trigger?: LegacyAmbientTrigger }>): Promise<AmbientJudgeRevertResult> {
   const { store, rootId } = input;
   const record = await readAmbientJudgeMigration(store, rootId);
   if (!record || !record.before || record.status === 'failed') return Object.freeze({ status: 'refused', reason: 'no-migration' });
   if (record.status === 'reverted') return Object.freeze({ status: 'refused', reason: 'already-reverted' });
   const graph = await store.readGraph({ rootId });
-  if (!graph || !isDeepStrictEqual(plain(graph.purposes.ambient ?? null), plain(record.after ?? null))) {
+  if (!graph) return Object.freeze({ status: 'refused', reason: 'changed' });
+  // Unchanged since the migration, except for threshold / mode values converted from the yml (they
+  // are still in the yml and go back there, S1): anything else changed is not reverted automatically.
+  const stored: AmbientJudgePolicy = graph.purposes.ambient ?? {};
+  const after: AmbientJudgePolicy = record.after ?? {};
+  const seen = record.triggerSeen ?? record.triggerValues ?? {};
+  const converted = (['minConfidence', 'mode'] as const).filter(key => stored[key] !== after[key]);
+  const rest = (policy: AmbientJudgePolicy) => { const { minConfidence: _m, mode: _o, ...others } = policy; return plain(others); };
+  if (!graph.purposes.ambient || !isDeepStrictEqual(rest(stored), rest(after)) || converted.some(key => stored[key] === undefined || seen[key] !== stored[key])) {
     return Object.freeze({ status: 'refused', reason: 'changed' });
+  }
+  // A write to the yml keys not converted yet would be overwritten by the migration's values (S1).
+  if (input.trigger) {
+    const pending = pendingAmbientTriggerWrites(record, graph.purposes.ambient ?? {}, legacyAmbientTriggerValues(input.trigger));
+    if (pending.length) return Object.freeze({ status: 'refused', reason: 'pending-trigger-writes', keys: Object.freeze(pending.map(key => `ai.trigger.ambient.${key}`)) });
   }
   // Every other purpose stays as it is now; only the judge goes back to its legacy stored form. A
   // `purposes.ambient` that existed before the migration (seeded) is converted back by the D5 table
@@ -312,7 +343,12 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
   const { ambient: _ambient, ...current } = withoutLegacyAmbientJudge(graph.purposes);
   const reversed = before.ambient ? reverseAmbientJudge(before.ambient, graph) : undefined;
   const language = reversed ? reversed.language : { profile: before.defaults.ambient, fallbacks: before.defaults.ambientFallbacks };
-  const decision = reversed ? reversed.decision : before.decisions?.ambient;
+  let decision = reversed ? reversed.decision : before.decisions?.ambient;
+  // A threshold converted from the yml since: an active legacy decision gates with it too, so the
+  // older version's max(yml, decision) is that value (S1).
+  if (converted.includes('minConfidence') && decision?.mode === 'active' && stored.minConfidence !== undefined) {
+    decision = { ...decision, minConfidence: stored.minConfidence };
+  }
   const purposes = { ...current,
     defaults: { ...current.defaults, ...(language.profile !== undefined ? { ambient: language.profile } : {}),
       ...(language.profile !== undefined && language.fallbacks?.length ? { ambientFallbacks: language.fallbacks } : {}) },
@@ -327,7 +363,9 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
   // The yml values an older version must read so it runs as this version does now (R2): the yml
   // values the migration read, overridden by the seeded judge's own threshold / mode (which won
   // over them in the migration).
-  const yml: AmbientTriggerValues = Object.freeze({ ...(record.triggerValues ?? {}), ...(reversed?.yml ?? {}) });
+  const yml: AmbientTriggerValues = Object.freeze({ ...(record.triggerValues ?? {}), ...(reversed?.yml ?? {}),
+    // Values converted from the yml since the migration are what this version runs with now.
+    ...Object.fromEntries(converted.map(key => [key, stored[key]])) });
   const facts = { ...(Object.keys(yml).length ? { yml } : {}), ...(reversed?.lost.length ? { lost: Object.freeze([...reversed.lost]) } : {}) };
   if (input.dryRun) return Object.freeze({ status: 'ready', ...facts });
   const { revertPending: _pending, ...settled } = record;
