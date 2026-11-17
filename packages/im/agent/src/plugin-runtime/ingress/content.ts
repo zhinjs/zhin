@@ -1,6 +1,9 @@
 import { renderAgentOutput, type TurnOutcome } from '../../index.js';
 import type { Segment } from '@zhin.js/im-contract';
 import type { Message } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('agent');
 
 type OutputElementLike = {
   readonly type: string;
@@ -47,20 +50,50 @@ export function completedOutput(
   throw new Error(`${outcome.error.code}: ${outcome.error.message}`);
 }
 
+/**
+ * The transcriber refused the voice address (#1250 第 45 批): not a public HTTPS URL, a redirect to
+ * one that is not, or a name resolving to a private address. Nothing was downloaded.
+ */
+export interface InboundAudioUrlRefusal {
+  readonly status: 'refused';
+  readonly code: 'speech_url_blocked';
+}
+
+/** A transcript, `null` when nothing usable came back, or a refused address. */
+export type InboundAudioUrlTranscription = string | null | InboundAudioUrlRefusal;
+
+/** Inbound voice message transcription (Speech Host `transcribeUrl`). Must not fetch private targets. */
+export type InboundAudioUrlTranscriber = (audioUrl: string) => Promise<InboundAudioUrlTranscription>;
+
+/** Model-facing note in place of a refused voice address; the address itself is not shown. */
+export const SPEECH_URL_BLOCKED_NOTE = '[语音地址不可用，未转写（speech_url_blocked）]';
+
 export async function preprocessInboundTurn(
   message: Message,
   content: string,
-  transcribeUrl?: (audioUrl: string) => Promise<string | null>,
-): Promise<{ readonly text: string; readonly sttApplied: boolean }> {
+  transcribeUrl?: InboundAudioUrlTranscriber,
+): Promise<{ readonly text: string; readonly sttApplied: boolean; readonly sttRefusal?: InboundAudioUrlRefusal['code'] }> {
   const audioUrl = resolveInboundAudioUrl(message);
   if (!audioUrl || !transcribeUrl) {
     return { text: stripAudioPlaceholders(content), sttApplied: false };
   }
-  const transcript = await transcribeUrl(audioUrl);
+  let transcript: InboundAudioUrlTranscription;
+  try {
+    transcript = await transcribeUrl(audioUrl);
+  } catch (error) {
+    // A transcriber failure never ends the turn: the text goes on without a transcript.
+    logger.warn(formatCompact({ op: 'agent_inbound_stt_failed', error: error instanceof Error ? error.name : 'unknown' }));
+    transcript = null;
+  }
+  const rest = stripAudioPlaceholders(content).trim();
+  if (transcript && typeof transcript === 'object') {
+    logger.info(formatCompact({ op: 'agent_inbound_stt_refused', reason: transcript.code }));
+    const text = rest ? `${rest}\n${SPEECH_URL_BLOCKED_NOTE}` : SPEECH_URL_BLOCKED_NOTE;
+    return { text, sttApplied: false, sttRefusal: transcript.code };
+  }
   if (!transcript) {
     return { text: stripAudioPlaceholders(content) || content, sttApplied: false };
   }
-  const rest = stripAudioPlaceholders(content).trim();
   const text = rest ? `${rest}\n${transcript}` : transcript;
   return { text, sttApplied: true };
 }

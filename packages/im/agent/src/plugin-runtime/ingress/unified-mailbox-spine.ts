@@ -28,7 +28,7 @@ import type { TurnIntentResolver } from '../turn-intent-resolver.js';
 import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
-import { isClearCommand } from './content.js';
+import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
@@ -368,7 +368,7 @@ export interface AgentTurnIngressRouteOptions {
     operation: () => Promise<T>) => Promise<T>;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
-  readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
+  readonly transcribeUrl?: InboundAudioUrlTranscriber;
   readonly approvalPort?: ApprovalPort;
   readonly resolveTurnIntent?: TurnIntentResolver;
   readonly resolveEndpointOwner?: (adapterLocalName: string, endpointKey: string) => string | undefined;

@@ -37,6 +37,7 @@ import {
   completedOutput,
   flattenOutputElements,
   preprocessInboundTurn,
+  type InboundAudioUrlTranscriber,
 } from './content.js';
 import {
   auditModelError,
@@ -342,7 +343,7 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
 export async function admitIngressMailTurn(input: {
   readonly message: Message;
   readonly matchedContent: string;
-  readonly transcribeUrl: ((audioUrl: string) => Promise<string | null>) | undefined;
+  readonly transcribeUrl: InboundAudioUrlTranscriber | undefined;
   readonly matchedVenue: VenueDefinition | undefined;
   readonly venueRoute: VenueRouteResult | undefined;
   readonly mailbox: HostMailbox;

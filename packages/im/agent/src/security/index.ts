@@ -14,6 +14,7 @@ export * from './file-policy.js';
 export * from './exec-policy.js';
 export * from './sensitive-exec-commands.js';
 export * from './network-policy.js';
+export * from './public-media-fetch.js';
 export * from './comm-message-context.js';
 export * from './owner-approval-runtime.js';
 export * from './sandbox.js';
