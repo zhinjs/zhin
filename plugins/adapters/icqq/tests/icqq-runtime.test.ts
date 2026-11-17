@@ -29,6 +29,9 @@ import {
   scheduleMockIcqqReconnect,
 } from './_icqq-mock.js';
 
+/** Deterministic stand-in for the pinned outbound media download: the bytes are the URL text. */
+const fakeMediaDownload = async (url: string) => ({ bytes: Buffer.from(url), url });
+
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveIcqqConfig({
@@ -53,6 +56,8 @@ async function createEndpoint(overrides: {
     config: overrides.config ?? baseConfig,
     ...(overrides.notifier ? { notifier: overrides.notifier } : {}),
     ...createIcqqTestPorts(),
+    // Media URLs are downloaded on this host through the outbound media fetcher (#1250 第 46 批).
+    fetchMedia: fakeMediaDownload,
   }, gateway, undefined, overrides.events);
   const friends = overrides.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', sex: 'unknown', age: 0 }]]);
   const groups = overrides.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200, owner_id: 1, admin_flag: false, last_join_time: 0, last_sent_time: 0, shutup_time_whole: 0, shutup_time_me: 0, create_time: 0, grade: 0, max_admin_count: 0, active_member_count: 0 }]]);

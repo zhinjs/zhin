@@ -4,6 +4,7 @@
 import path from 'node:path';
 import { createKookApiAgent, type KookApiProxy } from './api-proxy.js';
 import { readFile } from 'node:fs/promises';
+import { fetchOutboundMedia, isOutboundMediaRefused } from '@zhin.js/core';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Client, WebsocketReceiver } from 'kook-client';
 import { createKookStreamSocket } from './stream-proxy.js';
@@ -137,9 +138,13 @@ export class RuntimeKookClient extends Client {
     let bytes: Buffer;
     if (Buffer.isBuffer(data)) bytes = data;
     else if (/^https?:\/\//.test(data)) {
-      const downloaded = await fetch(data, { signal: AbortSignal.timeout(30_000) });
-      if (!downloaded.ok) throw new EndpointDeliveryError('media_download_failed', 'KOOK source download failed', 'rejected');
-      bytes = Buffer.from(await downloaded.arrayBuffer());
+      // Downloaded on this host, so only through the pinned public-HTTPS fetch (#1250 第 46 批).
+      try {
+        bytes = (await fetchOutboundMedia(data, { source: 'kook' })).bytes;
+      } catch (error) {
+        if (isOutboundMediaRefused(error)) throw new EndpointDeliveryError(error.code, 'KOOK source URL is not allowed', 'not_sent', { cause: error });
+        throw new EndpointDeliveryError('media_download_failed', 'KOOK source download failed', 'rejected', { cause: error });
+      }
     } else if (/^data:[^,]*;base64,/.test(data) || data.startsWith('base64://')) {
       bytes = Buffer.from(data.replace(/^data:[^,]*,|^base64:\/\//, ''), 'base64');
     } else bytes = await readFile(data.replace(/^file:\/\//, ''));

@@ -5,6 +5,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { fetchOutboundMedia, type OutboundMediaFetcher } from '@zhin.js/core';
 import { isMediaRef, type MediaRef } from '@zhin.js/im-contract';
 
 export interface MediaBinary {
@@ -21,14 +22,19 @@ const MIME_EXT: Record<string, string> = {
   'image/bmp': 'bmp',
 };
 
-/** 从 canonical MediaRef 解析二进制：base64 解码 / 本地读盘 / URL 下载。 */
+/**
+ * 从 canonical MediaRef 解析二进制：base64 解码 / 本地读盘 / URL 下载。
+ * URL 在本机下载，只走 core 的 `fetchOutboundMedia`（仅公网 HTTPS、固定已校验 IP、逐跳校验重定向、
+ * 限大小与超时）；被拒抛 `OutboundMediaFetchError`（`refused`），调用方把该媒体换成说明文字（#1250 第 46 批）。
+ */
 export interface MediaResolveOptions {
-  readonly download?: (url: string, signal?: AbortSignal) => Promise<Buffer>;
+  /** Downloads an outbound media URL on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
   readonly signal?: AbortSignal;
 }
 export async function resolveMediaBinary(
   media: MediaRef,
-  { download = defaultDownload, signal }: MediaResolveOptions = {},
+  { fetchMedia = fetchOutboundMedia, signal }: MediaResolveOptions = {},
 ): Promise<MediaBinary> {
   signal?.throwIfAborted();
   const mimeType = media.mime_type ?? 'image/png';
@@ -43,14 +49,9 @@ export async function resolveMediaBinary(
     const path = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
     return { data: await readFile(path, { signal }), mimeType, fileName: basename(path) };
   }
-  return { data: await download(media.value, signal), mimeType, fileName: `image.${ext}` };
+  return { data: (await fetchMedia(media.value, { ...(signal ? { signal } : {}), source: 'lark' })).bytes, mimeType, fileName: `image.${ext}` };
 }
 
-async function defaultDownload(url: string, signal?: AbortSignal): Promise<Buffer> {
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`download failed: HTTP ${response.status}`);
-  return Buffer.from(await response.arrayBuffer());
-}
 
 /** /im/v1/images 的 multipart body（image_type=message 用于消息内图片）。 */
 export function buildImageUploadForm(binary: MediaBinary): FormData {

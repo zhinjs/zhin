@@ -4,6 +4,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { IlinkClientMetadata } from "./ilink-meta.js";
+import { OutboundMediaFetchError } from "@zhin.js/core";
 
 vi.mock("./ilink-logger.js", () => ({
   logger: {
@@ -55,17 +56,15 @@ beforeEach(() => {
 });
 
 describe("downloadRemoteImageToTemp", () => {
+  // Downloads go through the injected outbound media fetcher, never the global fetch (#1250 第 46 批).
   it("downloads and saves file to temp dir", async () => {
     const tmpDir = fsSync.mkdtempSync(path.join(os.tmpdir(), "upload-test-"));
     try {
       const imageBytes = Buffer.from("fake-image-data");
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        arrayBuffer: () => Promise.resolve(imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength)),
-        headers: new Headers({ "content-type": "image/png" }),
-      });
-      const filePath = await downloadRemoteImageToTemp("https://example.com/photo.png", tmpDir);
+      const fetchMedia = vi.fn(async (url: string) => ({ bytes: imageBytes, mimeType: "image/png", url }));
+      const filePath = await downloadRemoteImageToTemp("https://example.com/photo.png", tmpDir, undefined, fetchMedia);
+      expect(fetchMedia).toHaveBeenCalledWith("https://example.com/photo.png", expect.objectContaining({ source: "weixin-ilink" }));
+      expect(mockFetch).not.toHaveBeenCalled();
       expect(filePath).toContain(tmpDir);
       expect(filePath).toMatch(/\.png$/);
       const content = await fs.readFile(filePath);
@@ -76,13 +75,9 @@ describe("downloadRemoteImageToTemp", () => {
   });
 
   it("throws on non-ok response", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      statusText: "Not Found",
-    });
+    const fetchMedia = vi.fn(async () => { throw new OutboundMediaFetchError("outbound_media_http_status", { host: "example.com", status: 404 }); });
     await expect(
-      downloadRemoteImageToTemp("https://example.com/missing.png", "/tmp/test"),
+      downloadRemoteImageToTemp("https://example.com/missing.png", "/tmp/test", undefined, fetchMedia),
     ).rejects.toThrow("remote media download failed");
   });
 });

@@ -25,6 +25,7 @@ import {
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import { isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
   buildImageUploadForm,
@@ -73,6 +74,8 @@ export interface LarkEndpointOptions {
   readonly config: ResolvedLarkConfig;
   readonly signal?: AbortSignal;
   readonly fetch?: LarkFetch;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 export interface LarkClientApi {
@@ -336,6 +339,7 @@ export class LarkClient extends SdkClient {
    * im/v1 消息 image 段只接受 image_key：canonical MediaRef（base64/本地路径/URL）
    * 先经 /im/v1/images 物化，产物回写为 MediaRef kind=file（平台不透明引用）；
    * 上传失败阻止消息发送并保留拒绝或未知分类。
+   * URL 被本机抓取策略拒绝（内网 / 非 HTTPS / 重定向到内网 / 过大）时该图换成说明文字，消息照常发出（#1250 第 46 批）。
    */
   async #materializeOutboundMedia(payload: unknown, request: EndpointManagementRequest): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
@@ -346,7 +350,13 @@ export class LarkClient extends SdkClient {
       const data = seg.data ?? {};
       const media = readOutboundImageMedia(data);
       if (!media) return item;
-      const imageKey = await this.uploadImage(media, request);
+      let imageKey: string;
+      try {
+        imageKey = await this.uploadImage(media, request);
+      } catch (error) {
+        if (!isOutboundMediaRefused(error)) throw error;
+        return { type: 'text', data: { text: outboundMediaNotice('image') } };
+      }
       if (!imageKey) throw new EndpointDeliveryError('delivery_unconfirmed', 'Lark image upload returned no image key', 'unknown');
       return {
         type: 'image',
@@ -359,7 +369,10 @@ export class LarkClient extends SdkClient {
   async uploadImage(media: Parameters<typeof resolveMediaBinary>[0], request: EndpointManagementRequest = {}): Promise<string> {
     const operation = createEndpointOperation(request);
     const token = await operation.prepare(() => this.#ensureAccessToken());
-    const binary = await operation.prepare(() => resolveMediaBinary(media, request));
+    const binary = await operation.prepare(() => resolveMediaBinary(media, {
+      ...(request.signal ? { signal: request.signal } : {}),
+      ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}),
+    }));
     const form = buildImageUploadForm(binary);
     const response = await this.#fetch(`${this.#options.config.apiBaseUrl}/im/v1/images`, {
       method: 'POST',

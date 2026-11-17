@@ -28,7 +28,14 @@ import {
   type EndpointTransportState,
 } from 'zhin.js/adapter';
 import { EndpointDeliveryError, type MediaRef } from '@zhin.js/im-contract';
-import type { LoginAssist, LoginAssistEndpointIdentity } from '@zhin.js/core';
+import {
+  fetchOutboundMedia,
+  isOutboundMediaRefused,
+  outboundMediaNotice,
+  type LoginAssist,
+  type LoginAssistEndpointIdentity,
+  type OutboundMediaFetcher,
+} from '@zhin.js/core';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import {
   loadIpadSdk,
@@ -62,6 +69,8 @@ export interface IpadWechatEndpointOptions {
   readonly loginAssist?: LoginAssist;
   readonly endpointIdentity?: LoginAssistEndpointIdentity;
   readonly signal?: AbortSignal;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 /** The finite login ended without an online session (verification, rejection, risk …). */
@@ -433,7 +442,15 @@ export class IpadWechatClient extends EventEmitter {
         if (part.kind === 'text') {
           sent.push({ messageId: await operation.run(() => this.#sendText(client, target, part.text, part.at)) });
         } else {
-          const source = await operation.prepare(() => mediaSource(part.media, signal));
+          let source: Uint8Array | string;
+          try {
+            source = await operation.prepare(() => mediaSource(part.media, signal, this.#options.fetchMedia));
+          } catch (error) {
+            // #1250 第 46 批：URL 被本机抓取策略拒绝 → 改发说明文字，其余部分照常发出。
+            if (!isOutboundMediaRefused(error)) throw error;
+            sent.push({ messageId: await operation.run(() => this.#sendText(client, target, outboundMediaNotice('image'), [])) });
+            continue;
+          }
           sent.push({ messageId: await operation.run(() => this.#sendImage(client, target, source, signal)) });
         }
       } catch (error) {
@@ -522,18 +539,24 @@ function loginFailureMessage(status: string): string {
   }
 }
 
-/** Canonical MediaRef → an SDK image source (bytes, `base64://…` or an https URL). */
-export async function mediaSource(media: MediaRef, signal?: AbortSignal): Promise<Uint8Array | string> {
+/**
+ * Canonical MediaRef → an SDK image source (bytes or `base64://…`). The SDK uploads image bytes to the
+ * WeChat CDN from this host, so a URL is never handed to it: it is downloaded here through core
+ * `fetchOutboundMedia` (public HTTPS only, pinned DNS, every redirect checked; #1250 第 46 批).
+ */
+export async function mediaSource(
+  media: MediaRef,
+  signal?: AbortSignal,
+  fetchMedia: OutboundMediaFetcher = fetchOutboundMedia,
+): Promise<Uint8Array | string> {
   switch (media.kind) {
     case 'base64': {
       const value = media.value.replace(/^data:[^,]*;base64,/u, '').replace(/^base64:\/\//u, '');
       return `base64://${value}`;
     }
     case 'url': {
-      if (media.value.startsWith('https://')) return media.value;
-      const response = await fetch(media.value, signal ? { signal } : {});
-      if (!response.ok) throw new Error(`ipad-wechat: image download failed with HTTP ${response.status}`);
-      return new Uint8Array(await response.arrayBuffer());
+      const { bytes } = await fetchMedia(media.value, { ...(signal ? { signal } : {}), source: 'ipad-wechat' });
+      return new Uint8Array(bytes);
     }
     case 'path':
     case 'file':

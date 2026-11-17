@@ -68,8 +68,10 @@ describe('planOutbound', () => {
 });
 
 describe('mediaSource', () => {
-  it('passes https URLs and normalizes base64', async () => {
-    await expect(mediaSource({ kind: 'url', value: 'https://x.invalid/a.png' })).resolves.toBe('https://x.invalid/a.png');
+  it('downloads URLs on this host through the outbound media fetch and normalizes base64', async () => {
+    // The SDK uploads bytes from this host, so a URL is never handed to it (#1250 第 46 批).
+    const fetchMedia = async () => ({ bytes: Buffer.from('png'), url: 'https://x.invalid/a.png' });
+    await expect(mediaSource({ kind: 'url', value: 'https://x.invalid/a.png' }, undefined, fetchMedia)).resolves.toEqual(new Uint8Array(Buffer.from('png')));
     await expect(mediaSource({ kind: 'base64', value: 'data:image/png;base64,QUJD' })).resolves.toBe('base64://QUJD');
     await expect(mediaSource({ kind: 'base64', value: 'base64://QUJD' })).resolves.toBe('base64://QUJD');
   });

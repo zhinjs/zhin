@@ -5,7 +5,13 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  */
 
 import type { Attachment } from 'mailparser';
-import { htmlToPlainTextWithBlockBreaks } from '@zhin.js/core';
+import {
+  fetchOutboundMedia,
+  htmlToPlainTextWithBlockBreaks,
+  isOutboundMediaRefused,
+  outboundMediaNotice,
+  type OutboundMediaFetcher,
+} from '@zhin.js/core';
 import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { randomUUID } from 'node:crypto';
 import { escapeMailHtml, renderMailMarkdown } from './rich-mail.js';
@@ -267,7 +273,7 @@ export type EmailOutboundAttachment = (
 
 /**
  * image/audio/video/file 段 → nodemailer 附件（canonical MediaRef 唯一来源）：
- * - kind=url / path → attachment.path；
+ * - kind=url / path → attachment.path（http(s) 地址发送前由 {@link materializeRemoteMailAttachments} 下载为内容）；
  * - kind=base64 → attachment.content（data: URL 前缀剥离）；
  * - kind=file（平台不透明引用）邮件无对应概念，投递前拒绝；
  * - 缺 media 同样投递前拒绝。
@@ -412,4 +418,53 @@ export function formatOutboundMail(
     ...(htmlParts.length > 0 ? { html: htmlParts.join('<br>') } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
   };
+}
+
+export type OutboundMail = ReturnType<typeof formatOutboundMail>;
+
+/**
+ * nodemailer downloads an `attachment.path` that is an http(s) URL on this host. Before sending, such an
+ * attachment is downloaded through core `fetchOutboundMedia` (public HTTPS only, pinned DNS, every
+ * redirect checked) and attached as content; a refused URL is dropped and replaced by a notice in the
+ * text and HTML bodies, and the mail is still sent (#1250 第 46 批).
+ */
+export async function materializeRemoteMailAttachments(
+  mail: OutboundMail,
+  { fetchMedia = fetchOutboundMedia, signal }: { readonly fetchMedia?: OutboundMediaFetcher; readonly signal?: AbortSignal } = {},
+): Promise<OutboundMail> {
+  if (!mail.attachments?.some(isRemoteAttachment)) return mail;
+  const attachments: EmailOutboundAttachment[] = [];
+  const notices: string[] = [];
+  let html = mail.html;
+  for (const attachment of mail.attachments) {
+    if (!isRemoteAttachment(attachment)) { attachments.push(attachment); continue; }
+    const { path: url, ...rest } = attachment;
+    try {
+      const { bytes } = await fetchMedia(url, { ...(signal ? { signal } : {}), source: 'email' });
+      attachments.push({ ...rest, content: bytes.toString('base64'), encoding: 'base64' });
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (!isOutboundMediaRefused(error)) {
+        throw new EndpointDeliveryError('media_download_failed', 'Email attachment download failed', 'not_sent', { cause: error });
+      }
+      const notice = outboundMediaNotice(attachment.cid ? 'image' : 'file');
+      notices.push(notice);
+      const tag = attachment.cid && html !== undefined ? html.indexOf(`<img src="cid:${attachment.cid}"`) : -1;
+      const end = tag >= 0 ? html!.indexOf('>', tag) : -1;
+      if (end >= 0) html = `${html!.slice(0, tag)}${escapeMailHtml(notice)}${html!.slice(end + 1)}`;
+      else if (html !== undefined) html = `${html}<br>${escapeMailHtml(notice)}`;
+    }
+  }
+  const text = notices.length ? [mail.text, ...notices].filter(Boolean).join('\n') : mail.text;
+  const { attachments: _previous, text: _text, html: _html, ...rest } = mail;
+  return {
+    ...rest,
+    ...(text !== undefined ? { text } : {}),
+    ...(html !== undefined ? { html } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
+  };
+}
+
+function isRemoteAttachment(attachment: EmailOutboundAttachment): attachment is EmailOutboundAttachment & { path: string } {
+  return 'path' in attachment && typeof attachment.path === 'string' && /^https?:\/\//iu.test(attachment.path);
 }

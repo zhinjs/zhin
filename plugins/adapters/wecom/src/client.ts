@@ -11,6 +11,7 @@ import {
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import { isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
   buildMediaUploadForm,
@@ -52,6 +53,8 @@ export interface WecomEndpointOptions {
   readonly http?: HttpHost;
   readonly config: ResolvedWecomConfig;
   readonly fetch?: WecomFetch;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 export interface WecomClientApi {
@@ -209,6 +212,8 @@ export class WecomClient extends EventEmitter {
         return { type: 'image', data: { media_id: mediaId } };
       } catch (error) {
         if (request.signal?.aborted) throw error;
+        // #1250 第 46 批：URL 被本机抓取策略拒绝（已由 core 记录主机名）→ 说明文字，消息照常发出。
+        if (isOutboundMediaRefused(error)) return { type: 'text', data: { text: outboundMediaNotice('image') } };
         this.#logger.warn(formatCompact({
           op: 'wecom_media_upload_failed',
           endpoint: this.#options.config.id,
@@ -224,7 +229,7 @@ export class WecomClient extends EventEmitter {
   /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
   async #uploadMedia({ media, signal }: WecomMediaUploadRequest): Promise<string> {
     await createEndpointOperation({ signal }).prepare(() => this.#ensureAccessToken());
-    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal }));
+    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal, ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) }));
     const form = buildMediaUploadForm(binary);
     const query = new URLSearchParams({ access_token: this.#accessToken.access_token, type: 'image' });
     const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?${query.toString()}`;
