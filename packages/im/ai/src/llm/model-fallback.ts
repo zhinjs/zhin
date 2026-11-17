@@ -23,8 +23,15 @@
  *   operations reach that threshold within {@link TIMEOUT_GLOBAL_WINDOW_MS} is the model
  *   skipped globally ({@link TIMEOUT_FALLBACK_COOLDOWN_MS}). A one-off timeout behaves
  *   as before (same-model retry).
- * - 5xx, rate limits, network errors, bad requests, content refusals and
- *   context overflow never switch.
+ * - Network errors and 5xx (#1250 fallback-skips-network-and-5xx) switch once the selected
+ *   model's same-model retries are used up (the request `provider-resilience` would give up on,
+ *   see `StreamOptions.willRetry`); a fallback in use switches when its own retries are used up.
+ *   Like timeouts the switch is operation-local; the model is skipped globally
+ *   ({@link TRANSIENT_FALLBACK_COOLDOWN_MS}) only when {@link TIMEOUT_GLOBAL_OPERATIONS} distinct
+ *   operations gave up on it within {@link TIMEOUT_GLOBAL_WINDOW_MS}.
+ * - Rate limits, bad requests, content refusals and context overflow never switch.
+ * - A failure that is not switched is reported (`onFallbackSkipped`) with why: no fallback is
+ *   configured, the failure class does not switch, or every fallback was tried / passed over.
  * - Switching happens per request, from the current transcript. A failed
  *   request produced no tool calls, so nothing is replayed: executed tool calls
  *   stay in the transcript as results. A request that already streamed text to
@@ -59,7 +66,8 @@ import { estimateTextTokens } from "../compaction/token-counter.js";
 
 /** Failure classes that switch to the next fallback. */
 /** `context_overflow`: a fallback in use no longer fits the growing context, so the next one takes over. */
-export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout" | "context_overflow";
+/** `network` / `server`: the selected model's same-model retries were used up (#1250 fallback-skips-network-and-5xx). */
+export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout" | "network" | "server" | "context_overflow";
 
 /** User-visible note for a turn answered by a fallback model. */
 export const MODEL_FALLBACK_NOTICE = "本轮由备用模型回答";
@@ -72,6 +80,8 @@ export const BILLING_FALLBACK_COOLDOWN_MS = 60 * 60_000;
 export const AUTH_FALLBACK_COOLDOWN_MS = 15 * 60_000;
 /** Cooldown after repeated timeouts: short, a slow model usually recovers soon. */
 export const TIMEOUT_FALLBACK_COOLDOWN_MS = 5 * 60_000;
+/** Cooldown after several operations gave up on a model for network errors / 5xx (same as timeouts). */
+export const TRANSIENT_FALLBACK_COOLDOWN_MS = TIMEOUT_FALLBACK_COOLDOWN_MS;
 /** Consecutive timeouts of one account + model within one operation before the next attempt switches (#1270). */
 export const CONSECUTIVE_TIMEOUTS_TO_SWITCH = 2;
 /** Distinct operations that must hit the timeout threshold before a model is skipped globally. */
@@ -163,6 +173,7 @@ export function modelFallbackResetAt(
     return now + QUOTA_FALLBACK_COOLDOWN_MS;
   }
   if (failure.kind === "timeout") return now + TIMEOUT_FALLBACK_COOLDOWN_MS;
+  if (failure.kind === "network" || failure.kind === "server") return now + TRANSIENT_FALLBACK_COOLDOWN_MS;
   return now + (failure.kind === "billing" ? BILLING_FALLBACK_COOLDOWN_MS : AUTH_FALLBACK_COOLDOWN_MS);
 }
 
@@ -204,7 +215,7 @@ export interface ModelFallbackEvent {
 export class ModelAvailabilityRegistry {
   readonly #entries = new Map<string, ModelUnavailability>();
   readonly #recent: ModelFallbackEvent[] = [];
-  readonly #timeouts = new Map<string, Array<{ readonly operation: object; readonly at: number }>>();
+  readonly #operationFailures = new Map<string, Array<{ readonly operation: object; readonly at: number }>>();
   readonly #now: () => number;
   readonly #recentLimit: number;
 
@@ -256,14 +267,23 @@ export class ModelAvailabilityRegistry {
    * true when {@link TIMEOUT_GLOBAL_OPERATIONS} distinct operations did so within
    * {@link TIMEOUT_GLOBAL_WINDOW_MS}: then the caller may skip the model globally.
    */
-  noteOperationTimeouts(input: Readonly<{ accountId: string; model: string; operation: object }>): boolean {
+  noteOperationTimeouts(input: Readonly<{
+    accountId: string;
+    model: string;
+    operation: object;
+    /**
+     * Which failure is counted; each is counted on its own. Default `timeout`; `transient` is an
+     * operation that gave up on the model for network errors / 5xx (#1250 fallback-skips-network-and-5xx).
+     */
+    failure?: "timeout" | "transient";
+  }>): boolean {
     const now = this.#now();
-    const key = JSON.stringify([input.accountId, input.model]);
-    const recent = (this.#timeouts.get(key) ?? []).filter(entry => now - entry.at <= TIMEOUT_GLOBAL_WINDOW_MS);
+    const key = JSON.stringify([input.failure ?? "timeout", input.accountId, input.model]);
+    const recent = (this.#operationFailures.get(key) ?? []).filter(entry => now - entry.at <= TIMEOUT_GLOBAL_WINDOW_MS);
     if (!recent.some(entry => entry.operation === input.operation)) recent.push({ operation: input.operation, at: now });
-    this.#timeouts.set(key, recent);
+    this.#operationFailures.set(key, recent);
     if (recent.length < TIMEOUT_GLOBAL_OPERATIONS) return false;
-    this.#timeouts.delete(key);
+    this.#operationFailures.delete(key);
     return true;
   }
 
@@ -279,7 +299,7 @@ export class ModelAvailabilityRegistry {
 
   clear(): void {
     this.#entries.clear();
-    this.#timeouts.clear();
+    this.#operationFailures.clear();
     this.#recent.length = 0;
   }
 }
@@ -315,6 +335,25 @@ export interface FallbackCompletionOptions {
   readonly onCandidateError?: (endpoint: ModelFallbackEndpoint, error: unknown) => void;
   /** A fallback that cannot serve this request is skipped; this only reports it. */
   readonly onCandidateUnfit?: (endpoint: ModelFallbackEndpoint, reason: FallbackUnfitReason) => void;
+  /**
+   * A failed request that does not switch (#1250 fallback-skips-network-and-5xx), reported once per
+   * final failure (one the same-model retries will not re-ask). `reason`: `no_fallbacks` (none
+   * configured), `not_switching` (the failure class does not switch, or a single timeout),
+   * `exhausted` (every fallback was used, is being skipped, or cannot serve the request),
+   * `streamed` (text already reached the user), `retry_forbidden` (the caller allows no other attempt).
+   */
+  readonly onFallbackSkipped?: (event: Readonly<{
+    purpose: string;
+    /** The model whose failure was not switched. */
+    from: ModelFallbackEndpoint;
+    /** Classified failure (`network`, `server`, `rate_limit`, ...). */
+    kind: ProviderErrorClassification["kind"];
+    reason: "no_fallbacks" | "not_switching" | "exhausted" | "streamed" | "retry_forbidden";
+    /** Epoch ms. */
+    at: number;
+  }>) => void;
+  /** Reason reported when `fallbacks` is empty: `exhausted` when the selection already used them up. Default `no_fallbacks`. */
+  readonly emptyFallbacksReason?: "no_fallbacks" | "exhausted";
   /** Attribute a fallback's answer (e.g. map its account id to the id usage reports use). */
   readonly annotate?: (message: AssistantMessage, endpoint: ModelFallbackEndpoint) => AssistantMessage;
 }
@@ -399,7 +438,9 @@ interface ActiveTarget extends ModelFallbackTarget {
  * fallback for the rest of the operation.
  */
 export function createFallbackCompletionPort(options: FallbackCompletionOptions): LlmCompletionPort {
-  if (options.fallbacks.length === 0) return options.primary.completion;
+  if (options.fallbacks.length === 0) {
+    return options.onFallbackSkipped ? reportUnswitched(options) : options.primary.completion;
+  }
   const registry = options.registry ?? modelAvailability;
   /** This port serves one operation; its identity counts distinct operations for global timeout skips. */
   const operation = {};
@@ -419,6 +460,10 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
   };
   const quietly = (run: () => void) => {
     try { run(); } catch { /* Diagnostic only. */ }
+  };
+  const skipped = (from: ModelFallbackEndpoint, kind: ProviderErrorClassification["kind"],
+    reason: "not_switching" | "exhausted" | "streamed" | "retry_forbidden") => {
+    quietly(() => options.onFallbackSkipped?.(Object.freeze({ purpose: options.purpose, from, kind, reason, at: registry.now() })));
   };
 
   /** The next configured candidate that is not skipped, resolves and can serve `context`. */
@@ -486,12 +531,16 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
     }).then(message => options.annotate ? options.annotate(message, target.endpoint) : message);
   };
 
-  /** Operation-local timeout switch; a global skip only once several operations time out (see module comment). */
-  const timeoutSkip = (endpoint: ModelFallbackEndpoint): number | undefined => {
-    if (!registry.noteOperationTimeouts({ accountId: endpoint.accountId, model: endpoint.model, operation })) return undefined;
+  /**
+   * Operation-local timeout / network / 5xx switch; a global skip only once several operations
+   * fail the same way (see module comment).
+   */
+  const operationSkip = (endpoint: ModelFallbackEndpoint, reason: "timeout" | "network" | "server"): number | undefined => {
+    if (!registry.noteOperationTimeouts({ accountId: endpoint.accountId, model: endpoint.model, operation,
+      failure: reason === "timeout" ? "timeout" : "transient" })) return undefined;
     const now = registry.now();
-    return registry.markUnavailable({ accountId: endpoint.accountId, model: endpoint.model, reason: "timeout",
-      until: modelFallbackResetAt({ kind: "timeout" }, now) }).until;
+    return registry.markUnavailable({ accountId: endpoint.accountId, model: endpoint.model, reason,
+      until: modelFallbackResetAt({ kind: reason }, now) }).until;
   };
 
   const run =
@@ -538,6 +587,8 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
           const causeKind = countsAsTimeout(classified) ? "timeout" : classified;
           if (signal?.aborted && (causeKind !== "timeout" || isCallerTimeout(cause))) throw error;
           const failure = signal?.aborted ? undefined : modelFallbackFailure(error);
+          // A fallback in use runs its own retries (see `invoke`): its failure is already final.
+          const final = current.switched || streamOptions?.willRetry?.(error) !== true;
           let reason: ModelFallbackReason;
           let until: number | undefined;
           const now = registry.now();
@@ -545,31 +596,73 @@ export function createFallbackCompletionPort(options: FallbackCompletionOptions)
             reason = failure.kind;
             until = registry.markUnavailable({ accountId: current.endpoint.accountId, model: current.endpoint.model,
               reason: failure.kind, until: modelFallbackResetAt(failure, now) }).until;
+          } else if (causeKind === "network" || causeKind === "server") {
+            // Same-model retries first (#1250 fallback-skips-network-and-5xx): switch on the request they give up on.
+            if (!final) throw error;
+            reason = causeKind;
+            until = operationSkip(current.endpoint, causeKind);
           } else {
-            if (causeKind !== "timeout") throw error;
+            if (causeKind !== "timeout") {
+              if (final) skipped(current.endpoint, causeKind, "not_switching");
+              throw error;
+            }
             const key = endpointKey(current.endpoint);
             const count = (timeouts.get(key) ?? 0) + 1;
             timeouts.set(key, count);
             // A one-off timeout keeps the same-model retry of provider-resilience.
-            if (count < CONSECUTIVE_TIMEOUTS_TO_SWITCH) throw error;
+            if (count < CONSECUTIVE_TIMEOUTS_TO_SWITCH) {
+              if (final && !signal?.aborted) skipped(current.endpoint, causeKind, "not_switching");
+              throw error;
+            }
             timeouts.delete(key);
             reason = "timeout";
-            until = timeoutSkip(current.endpoint);
+            until = operationSkip(current.endpoint, "timeout");
           }
           // Text already reached the user, or the caller forbids another attempt: no switch.
-          if (streamed || streamOptions?.retryAllowed?.() === false) throw error;
+          if (streamed || streamOptions?.retryAllowed?.() === false) {
+            skipped(current.endpoint, causeKind, streamed ? "streamed" : "retry_forbidden");
+            throw error;
+          }
           // The attempt's signal is gone (resilience timer): the next attempt switches.
           if (signal?.aborted) {
             pending = { from: current.endpoint, ...(until !== undefined ? { until } : {}) };
             throw error;
           }
           const target = await advance(context);
-          if (!target) throw error;
+          if (!target) {
+            skipped(current.endpoint, causeKind, "exhausted");
+            throw error;
+          }
           switchTo(target, current.endpoint, reason, now, until);
         }
       }
     };
 
+  return Object.freeze({ complete: run("complete"), completeSimple: run("completeSimple") });
+}
+
+/**
+ * The selected model's port when the purpose has no fallback left: it only reports a final failure
+ * as not switched (`no_fallbacks`, or `exhausted` when the selection already used the fallbacks up).
+ */
+function reportUnswitched(options: FallbackCompletionOptions): LlmCompletionPort {
+  const registry = options.registry ?? modelAvailability;
+  const run =
+    (method: keyof LlmCompletionPort) =>
+    async (model: Model, context: Context, streamOptions?: StreamOptions): Promise<AssistantMessage> => {
+      try {
+        return await options.primary.completion[method](model, context, streamOptions);
+      } catch (error) {
+        const signal = streamOptions?.signal;
+        if (!signal?.aborted && sameModel(model, options.primary.model) && streamOptions?.willRetry?.(error) !== true) {
+          try {
+            options.onFallbackSkipped?.(Object.freeze({ purpose: options.purpose, from: options.primary.endpoint,
+              kind: classify(error).kind, reason: options.emptyFallbacksReason ?? "no_fallbacks", at: registry.now() }));
+          } catch { /* Diagnostic only. */ }
+        }
+        throw error;
+      }
+    };
   return Object.freeze({ complete: run("complete"), completeSimple: run("completeSimple") });
 }
 

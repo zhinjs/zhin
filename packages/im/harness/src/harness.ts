@@ -462,7 +462,18 @@ export function createHarness(options: HarnessOptions): Harness {
       createdAt: clock(),
     });
     options.ledger.close(request.grantId);
-    state.outstanding.delete(request.id);
+    // The request stays outstanding until its result is posted (or handed to a waiting asker): the
+    // journal writes below yield, and an engagement with no pending turn and nothing outstanding
+    // would close in between, dropping the result that is about to be posted.
+    try {
+      await deliverReply(state, request, back, result, requester, content);
+    } finally {
+      state.outstanding.delete(request.id);
+    }
+  }
+
+  async function deliverReply(state: EngagementState, request: Mail, back: Mail, result: ActorTurnResult,
+    requester: string, content: string): Promise<void> {
     const ceiling = options.ceilingOf(agentOf(requester), state.engagement.id);
     const decision = ceiling
       ? options.guard.admitMail(back, { graph: graphOf(state), targetCeiling: ceiling, limits })
