@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0066：插话判断合并——「旁听」用途与「旁听参与判断」决策合成一项，语言模型和决策模型共用一条备用链
 
-状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施。实施进度：P0–P3 都还没开始。
+状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施。实施进度：本仓库 P0–P3 已实施（分支 `feat/adr-0066-ambient-judge`，每个阶段一个提交）；zhinjs/console 前端的部分（「zhinjs/console 仓库要做的部分」1–5）尚未开始。实施中按本文推荐和最小惊讶原则补充的决定见下方「实施记录」。
 
 关联：[ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md)（Provider 图、用途、多决策模型；增补「用途备用模型」的切换条件与跳过表，含第 40 批修订）、[ADR 0037](./0037-controlled-landing-phase1-group-ops.md)（冷场计数）、[ADR 0061](./0061-inbound-message-outcomes.md)（`ambient_silent` / `not_addressed` 结局）、[ADR 0062](./0062-one-path-per-task.md) §23（插话按群开关；数据库为事实来源）、[ADR 0057](./0057-config-storage.md)（声明放 yml，运行时状态放数据库）。
 
@@ -261,3 +261,21 @@ Console 前端在 zhinjs/console（ADR 0052）。本仓库提供 P1–P3 的数�
 5. yml 里留着 `ai.trigger.ambient.mode: shadow`：迁移后 `purposes.ambient.mode` 为 `shadow`；之后删掉 yml 里这一行不改变行为；`zhin doctor --fix` 能删掉它。
 6. 决策「启用」的部署，Console 模型页不再显示没被调用的语言模型为「默认旁听」；配置里没有 `ai.trigger.ambient` 时，插话判断的模型显示为「插话未开启」。
 7. 迁移后运行 `zhin ai purposes revert ambient-judge`，图恢复为迁移前的 `purposes`；改过 `purposes.ambient` 后运行则被拒绝。
+
+## 实施记录
+
+本节记录实施时对本文未写明之处的取舍（2026-11-17）。
+
+1. **结构化 `source`**：`EngagementJudgment.source` 改为 `{ kind, profile, model, fallbackFrom? }`，显示字符串移到新增的 `sourceLabel`；`fallbackFrom`（显示字符串）和第 47 批的 `ref`（与 `source` 同一对象）保留到废弃期结束。`EngagementJudgeCall` / `EngagementJudgeFailure` 的字符串 `source` 不变（它们已有 `ref`）。
+2. **D2 表未列出的失败类别**：`length`、`empty_response`、`non_json_response`、`malformed_tool_call` 按「回答无效」处理（换、不写跳过表）；`bad_request` 与 `aborted` 不换；决策模型没有类别的失败（`provider_error`）按网络错误处理。成员无法构造（Profile 不可用）或上下文装不下时跳过，不计失败。
+3. **决策 Driver 的错误分类**：仓库里的决策 Driver 只有 `plugins/services/typesafe`（不在 `packages/im/ai/src/providers/`）。`@zhin.js/ai` 的 `ProviderErrorKind` 新增 `invalid_response`，驱动以 `code: 'invalid-response'` 报告；TypeSafe 驱动保留 HTTP 状态、`Retry-After` 和响应体的错误码（不含正文）。
+4. **门槛与模式的传递**：链读 `purposes.ambient` 后，在判断结果上带 `gate`（`minConfidence`、`mode`），`AmbientEngagement` 只按它判一次；没有 `gate` 时取默认 0.7 / `active`，不再读 `ai.trigger.ambient.minConfidence` / `mode`。
+5. **只有 yml 旧键的部署也迁移**：存储里没有旧字段、也没有 `purposes.ambient`，但 yml 里有 `minConfidence` / `mode` 时同样触发迁移（否则升级后 `mode: shadow` 会失效，开始真的插话，见验收 5）；迁移成功后不再因 yml 触发。
+6. **迁移记录的存放**：模型配置库新增表 `agent_inference_migrations`，迁移写图与记录在同一个事务里；`noticedAt` 单独更新。`zhin doctor` 通过本机网关读写（实例未运行时不显示迁移记录）。
+7. **回退的范围**：`zhin ai purposes revert ambient-judge` 只把插话判断恢复为迁移前的旧字段，其他用途保持当前值（迁移后改过的聊天等用途不被回滚）；未改过其他用途时结果与 `before` 相同（验收 7）。回退后记录为 `reverted`，不再自动迁移，当前版本仍按旧写法在内存里换算（行为不变）。
+8. **废弃期开关**：`purposes.decisions.ambient` 导入与 doctor 的报错级别由常量控制（`AMBIENT_JUDGE_LEGACY_IMPORT`、`RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED`），到期时在后续 minor 中切换。导入 `purposes.decisions.ambient: null` 不改插话判断，只给警告。
+9. **D5.7 的范围**：自我变更不能写这两个键（含在父对象里一并写入），仍可删除；聊天 `config set` 不能读写这两个键。Console 的 `config:patch` 未拦截，以免旧版 Console 的「只观察」开关直接报错；Console 前端改写 `purposes.ambient.mode` 后这条路径自然不再写它们。
+10. **`no-conversations` 的判断**：只有能列出功能开关、且确认没有任何开关把插话打开时才报 `no-conversations`；无法确定时按生效显示，不误报。
+11. **插话状态的 `judges`**：保留字符串数组（改为实际判断器链的显示名），另加结构化的 `judgeChain`（成员、类型、角色、是否在跳过期）与 `minConfidence`，避免旧 Console 读取出错。`HostInference.purposeEffects()`（Console 待办来源）仍只含 `agents.*`；`ambient` 与 `decisions.*` 只在管理视图的 `purposeEffects` 中。
+12. **对照模型的审计键**：只写 `compare`（结论）和 `compareJudge*`（与 `judge*` 同后缀），不写对照模型的置信度，遵守「其他键不得以 `compare` 开头」。
+

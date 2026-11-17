@@ -22,6 +22,8 @@ export {
   type AmbientCompareCounts,
   type AmbientCompareStatus,
   type AmbientJudgeDay,
+  type AmbientJudgeMember,
+  type AmbientJudgeView,
   type AmbientStatus,
   type SkillsStatus,
 } from './assistant-status.js';

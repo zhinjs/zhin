@@ -187,17 +187,14 @@ ai:
   trigger:
     ambient:
       conversations: ["icqq:1048877509"]  # platform:groupId; "*" for every group
-      judge:                              # judge model, defaults to the main Agent model; prefer a cheap, fast one
-        - groq/openai/gpt-oss-120b        # a list is tried in order when one fails or is rate limited
-        - groq/openai/gpt-oss-20b
       quietMs: 4000                       # wait until the group is quiet, then judge the burst once
       cooldownMs: 120000                  # minimum gap between two unprompted interjections
       maxPerHour: 3                       # unprompted interjections per group per hour
       conversationWindowMs: 180000        # after the bot speaks, the group is in a conversation for this long
       judgeIntervalMs: 30000              # outside a conversation, judge a group at most this often (deferred, not dropped)
-      minConfidence: 0.7                  # judge confidence required to engage
-      mode: active                        # shadow: log the judgment without replying
 ```
+
+This section only says which groups take part and how often. The judging model, the threshold and "watch only" are set in the interjection judge (`purposes.ambient`), see "Interjection judge" below. `ai.trigger.ambient.minConfidence` / `mode` are deprecated ([migration notes](../migrations/ambient-judge.md)).
 
 How it works:
 1. After a new message, wait `quietMs` for the group to go quiet; messages in that window are judged together.
@@ -206,7 +203,7 @@ How it works:
    - **Otherwise**: unprompted interjections are limited by `cooldownMs` and `maxPerHour`; the judge runs at most once per `judgeIntervalMs`, and a burst that arrives inside that window is judged when it ends (or superseded by a newer message) instead of being dropped.
 3. Above the threshold, the main Agent handles the message as usual. Its context says nobody called it, and it can still stay quiet.
 
-Each judgment logs an `ambient_engagement` line (decision, confidence, reason, and the judging model `judge`: `language:<service>/<model>` for a chat model, `decision:<model>` for a decision model; `fallbackFrom` after a switch to a fallback; on `judge_failed`, `judge` and the error class `error`, never the error text). Each judge call also writes an `[ai.usage] judge` line (`scene: ambient`, see [Agent usage logs](./agent.md)). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
+Each judgment logs an `ambient_engagement` line (decision, confidence, reason, and the judging model `judge`: `language:<service>/<model>` for a chat model, `decision:<model>` for a decision model; `fallbackFrom` after a switch to a fallback; on `judge_failed`, `judge` and the error class `error`, never the error text). Each judge call also writes an `[ai.usage] judge` line (`scene: ambient`, see [Agent usage logs](./agent.md)). Set the interjection judge to watch only (`purposes.ambient.mode: shadow`) first to see whether the judgments are sound, then switch back to `active`.
 
 ##### Switching interjection per group
 
@@ -218,11 +215,39 @@ Each judgment logs an `ambient_engagement` line (decision, confidence, reason, a
 
 A message that does not mention the bot, is not a command, and arrives in a group without interjection gets no reply but records an outcome: `not_addressed` (reason `no_command_not_ambient` and others). A judgment not to chime in records `ambient_silent`. These records stay in process memory for 24 hours, go to the instance log (`op=inbound_outcome`) and are attached to the Console message diagnostics record.
 
-##### Structured decisions
+##### Interjection judge
 
-Configure a decision Profile per task under the import proposal's `purposes.decisions`, or in Console. The six tasks are skills, tools, memory, agents, approval and ambient. Missing tasks are off; shadow records raw evidence, while active lets the owning task apply it. Public `evaluate` returns genuine Choice/Score/Noul evidence, not task application state. See [structured decisions](./structured-decisions.md).
+The interjection judge decides **whether** to speak when nobody addressed the bot in a group; what to say is written by the `chat` purpose. It is one deployment-level setting, in Console "Interjection judge" or an imported `ai.plan.yml`:
 
-The independent Language `ambient` purpose supplies the normal engagement judge, inheriting deployment chat when omitted. It is distinct from `decisions.ambient`; personal chat overrides do not select either Host task. Existing trigger timing and addressed-message rules remain in effect.
+```yaml
+purposes:
+  ambient:
+    profile: jev-ambient            # main judge: a language model or a decision model (e.g. TypeSafe); omitted: the deployment chat model and its fallbacks
+    fallbacks: [deepseek-flash]     # fallback chain, both model kinds may be mixed; only next to profile
+    compare: gpt-mini               # optional compared model: recorded only, never decides
+    minConfidence: 0.7              # the one threshold, 0..1, default 0.7
+    mode: active                    # shadow: record only, never speak (Console "watch only"); default active
+    timeoutMs: 3000                 # one decision-model evaluation, default 3000; language members do not use it
+```
+
+The string form `ambient: <profile>` equals `{ profile: <profile> }`; a write always replaces the whole item, `null` clears it.
+
+**Fallback chain**: one judgment is one operation; members are tried in order and share the 15-second budget of the judgment, which stops at once when the budget is used up or a newer message supersedes it. Members in their skip period are passed over (all of them skipped: `judge_failed`, reason `all_unavailable`). Every judgment starts at the head again, so a recovered primary is used again. On a member's failure:
+
+| Failure | Next member | Global skip table |
+|---|---|---|
+| Quota exhausted, billing, rejected credential (401 …) | yes | yes, until the reset time |
+| Timeout, network error, 5xx | yes | this judgment only; skipped globally for 5 minutes once 2 judgments gave up on the model within 2 minutes (timeouts and network / 5xx counted apart) |
+| Invalid answer (an invalid decision result; a language answer that is not valid JSON or misses fields) | yes | no |
+| Plain 403, rate limit, content block, context overflow | no, `judge_failed` | no |
+
+Every switch logs `ambient_judge_fallback` and shows in Console "recent switches" (`purpose: ambient`). When the whole chain fails, the `ambient_silent` outcome lists the failure class of every member.
+
+**Confidence**: for both model kinds the confidence is how sure the judge is of the choice it made: the self-reported `confidence` of a language model, the probability of the chosen option for a decision model. The bot speaks only when the judge chose to engage with at least `minConfidence`; a choice to stay quiet never speaks. The same 0.7 does not mean exactly the same for both kinds; a binary decision that chose "engage" already has a probability ≥ 0.5, so a threshold below 0.5 does nothing for a decision model (`zhin doctor` says so). Use a compared model to see the difference.
+
+**Compared model**: judges the same input at the same time and only records what it would have done (`ambient_compare` log, `compare*` audit fields); it never changes the result, has no fallback chain, and a failure is only `compare_failed`. Agreement compares "would it speak after the same threshold"; the Console ambient status shows the last 24 hours (per deciding chain member). A compared model doubles the model calls of each judgment.
+
+Temperature and output limits come from the selected Profile. For the other decision purposes see [structured decisions](./structured-decisions.md).
 
 ### ai.access
 

@@ -205,7 +205,7 @@ ai:
 
 被 @、引用和私聊的消息总会交给 Agent，Agent 也可以判断不需要回复，返回空消息（`{"messages":[]}`）后什么都不发。
 
-#### 群聊旁听（ambient）
+#### 群聊插话（ambient）
 
 群里没人叫 Bot 时，可以让它自己决定要不要接话：
 
@@ -219,9 +219,9 @@ ai:
       maxPerHour: 3                       # 每个群每小时最多主动插话次数
       conversationWindowMs: 180000        # Bot 说话后这段时间内算作对话进行中
       judgeIntervalMs: 30000              # 没在对话时，同一个群至少隔这么久才判断一次（窗口内的消息顺延判断，不丢）
-      minConfidence: 0.7                  # 判断模型的置信度门槛
-      mode: active                        # shadow：只记录判断结果，不回复
 ```
+
+这一节只管哪些群开启和节流。用哪个模型判断、门槛和「只观察」都在「插话判断」（`purposes.ambient`）里设置，见下文「插话判断」。`ai.trigger.ambient.minConfidence` / `mode` 已废弃（[迁移说明](../migrations/ambient-judge.md)）。
 
 流程：
 1. 群里有新消息后等群安静 `quietMs`，期间的新消息合并为一次判断。
@@ -230,7 +230,7 @@ ai:
    - **没有对话时**：主动插话受 `cooldownMs` 和 `maxPerHour` 限制；判断本身至多每 `judgeIntervalMs` 一次，窗口内到达的消息会顺延到窗口结束再判（期间有新消息就改判最新的那串），不会被丢掉。
 3. 达到门槛后交给主 Agent 正常处理。这一轮的上下文会注明"没人叫你"，Agent 仍然可以选择不说话。
 
-每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由，以及判断用的模型 `judge`：聊天模型写成 `language:服务名/模型`，决策模型写成 `decision:模型`；切到备用模型时多一个 `fallbackFrom`；判断失败时写 `judge` 与错误类别 `error`，不写错误原文），每次判断调用还会记一条 `[ai.usage] judge`（`scene: ambient`，见 [Agent 用量日志](./agent.md)）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
+每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由，以及判断用的模型 `judge`：聊天模型写成 `language:服务名/模型`，决策模型写成 `decision:模型`；切到备用模型时多一个 `fallbackFrom`；判断失败时写 `judge` 与错误类别 `error`，不写错误原文），每次判断调用还会记一条 `[ai.usage] judge`（`scene: ambient`，见 [Agent 用量日志](./agent.md)）。建议先把插话判断设为「只观察」（`purposes.ambient.mode: shadow`）跑一段时间，看判断是否靠谱，再改回 `active`。
 
 ##### 按群开关插话
 
@@ -242,11 +242,39 @@ ai:
 
 没被 @、也不是指令、本群又没开插话的消息，不回复，但会记一条结局：`not_addressed`（原因 `no_command_not_ambient` 等）。判断后决定不插话记 `ambient_silent`。这些记录在进程内保留 24 小时，写入实例日志（`op=inbound_outcome`），也附在 Console 的消息诊断记录上。
 
-##### 判断模型
+##### 插话判断
 
-旁听语言模型通过 Console 的 `ambient` 用途选择，未配置时继承部署聊天 Profile。显式选定模型失败时不自动换模型。模型温度和输出上限由该 Profile 决定。
+「插话判断」决定群里没人叫机器人时**要不要说**；说什么由「聊天」用途写。它是部署级的一项，在 Console「插话判断」或导入的 `ai.plan.yml` 里设置：
 
-如使用 TypeSafe 等结构化决策，为 `decisions.ambient` 选择一个 `decision` Profile，并按既有策略设置 `off`／`shadow`／`active`。它与旁听语言模型是不同合同：结构化决策只提供证据，实际旁听业务继续负责冷却、次数、阈值和回复。见[结构化决策](./structured-decisions.md)。
+```yaml
+purposes:
+  ambient:
+    profile: jev-ambient            # 主判断：普通语言模型或决策模型（如 TypeSafe）；省略时跟随部署聊天的主项和备用链
+    fallbacks: [deepseek-flash]     # 备用链，两类模型可以混排；只能与 profile 一起写
+    compare: gpt-mini               # 可选：对照模型，只记录、不作决定
+    minConfidence: 0.7              # 唯一的门槛，0..1，默认 0.7
+    mode: active                    # shadow：只记录、不插话（Console「只观察」）；默认 active
+    timeoutMs: 3000                 # 决策模型成员的单次超时，默认 3000；语言模型成员不用它
+```
+
+字符串写法 `ambient: <profile>` 等同于 `{ profile: <profile> }`；写入总是整项替换，`null` 清除整项。
+
+**备用链**：一次判断就是一次操作，成员按顺序尝试，共用整次判断的 15 秒预算；预算用完或被更新的消息顶替时立即停止。正在跳过期的成员直接跳过（全部在跳过期时记 `judge_failed`，原因 `all_unavailable`）。每次判断都从链首开始，主判断恢复后自动用回。成员失败时：
+
+| 失败类别 | 换下一个 | 写全局跳过表 |
+|---|---|---|
+| 配额用完、欠费、凭据被拒（401 等） | 换 | 写，到重置时间为止 |
+| 超时、网络错误、5xx | 换 | 只在本次判断内；2 分钟内至少 2 次不同判断都这样放弃同一模型时，全局跳过 5 分钟（超时与网络 / 5xx 分开计数） |
+| 回答无效（决策模型的结果无效；语言模型输出不是合法 JSON 或缺字段） | 换 | 不写 |
+| 单纯 403、限流、内容拦截、上下文超长 | 不换，记 `judge_failed` | 不写 |
+
+每次切换写一行 `ambient_judge_fallback` 日志，并出现在 Console 模型页「最近切换」（`purpose: ambient`）。整条链失败时，`ambient_silent` 结局列出每个成员的失败类别。
+
+**置信度**：两类模型的置信度都表示「判断器对自己的选择有多大把握」：语言模型是它自报的 `confidence`，决策模型是所选选项的概率。只有选了「插话」且置信度不低于 `minConfidence` 才插话；选了「不插话」，把握再大也不插话。同一个 0.7 对两类模型的含义不完全一样；决策模型二选一时选「插话」本身就意味着概率 ≥ 0.5，所以低于 0.5 的门槛对决策模型等于没设（`zhin doctor` 会提示）。想看两类模型差多少，用对照模型。
+
+**对照模型**：对同一份输入同时判一次，只记录它会怎么判（`ambient_compare` 日志、审计里的 `compare*` 字段），从不影响结果；它没有备用链，失败只记 `compare_failed`。一致率按「经过同一门槛后会不会开口」比较，Console 插话状态显示最近 24 小时的统计（按给出结论的链成员分别列出）。开了对照模型，每次判断的模型调用翻倍。
+
+模型温度和输出上限由所选 Profile 决定。结构化决策模型的其他用途见[结构化决策](./structured-decisions.md)。
 
 ### ai.access
 

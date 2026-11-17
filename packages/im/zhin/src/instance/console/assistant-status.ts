@@ -126,14 +126,36 @@ interface AmbientCompareEntry {
   readonly compared?: string;
 }
 
+/** One interjection judge member (structural copy of the Agent host's view; the Agent package is optional). */
+export interface AmbientJudgeMember {
+  readonly profile: string;
+  readonly label: string;
+  readonly kind?: 'language' | 'decision';
+  readonly role: 'primary' | 'fallback' | 'compare';
+  readonly skippedUntil?: number;
+  readonly skipReason?: string;
+}
+/** The interjection judge in effect, as the Agent host reports it (ADR 0066 D7). */
+export interface AmbientJudgeView {
+  readonly chain: readonly AmbientJudgeMember[];
+  readonly inheritedFrom?: 'chat';
+  readonly compare?: AmbientJudgeMember;
+  readonly mode: 'active' | 'shadow';
+  readonly minConfidence: number;
+}
+
 export interface AmbientStatus {
   readonly enabled: boolean;
-  /** `off` when no group is configured; `shadow` judges without replying. */
+  /** `off` when no group is configured; `shadow` judges without replying (`purposes.ambient.mode`, ADR 0066 D4). */
   readonly mode: 'off' | 'shadow' | 'active';
   /** Configured groups: a count, or `all` for `*`. */
   readonly groups: number | 'all';
-  /** Selected ambient language model (`service/model`), or an empty list when unconfigured. */
+  /** The judge chain actually used (`service/model`, primary first), or an empty list when unconfigured. */
   readonly judges: readonly string[];
+  /** The same chain as data (ADR 0066 D7): kind, role and skip period of each member, then the compared model. */
+  readonly judgeChain: readonly AmbientJudgeMember[];
+  /** The one threshold of `purposes.ambient` (ADR 0066 D4), when known. */
+  readonly minConfidence?: number;
   readonly last24h: Readonly<Record<AmbientOutcome, number>>;
   /**
    * @deprecated ADR 0066 D3: read `compare`. Kept for the deprecation window with the same data
@@ -239,7 +261,7 @@ export class AssistantStatus {
   }
 
   /** Request-owned metadata reader; no model runtime is cached by this process status store. */
-  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<readonly string[]> }> = {}): PluginConsoleRpc {
+  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<AmbientJudgeView | readonly string[]> }> = {}): PluginConsoleRpc {
     return definePluginConsoleRpc({
       // Control switches, session ops, announcement / group-rule drafts are day-to-day operator work;
       // approving them stays `ops:approve` (manage). `control:write` would otherwise infer `manage`.
@@ -410,7 +432,14 @@ export class AssistantStatus {
     });
   }
 
-  ambient(judges: readonly string[] = []): AmbientStatus {
+  /** The current `ai.trigger.ambient` section (undefined when the configuration has none). */
+  ambientTriggerConfig(): AmbientEngagementConfig | undefined {
+    return this.#readAmbientConfig();
+  }
+
+  ambient(judge: AmbientJudgeView | readonly string[] = []): AmbientStatus {
+    const view = Array.isArray(judge) ? undefined : judge as AmbientJudgeView;
+    const judges = view ? view.chain.map(member => member.label) : judge as readonly string[];
     const now = this.#now();
     const since = now - WINDOW_MS;
     const judgeCutoff = this.#judgeCutoff(now);
@@ -432,9 +461,12 @@ export class AssistantStatus {
     const members = [...new Set(compared.map(row => row.member))].sort((a, b) => a - b);
     return Object.freeze({
       enabled,
-      mode: !enabled ? 'off' : config?.mode === 'shadow' ? 'shadow' : 'active',
+      // ADR 0066 D4: `purposes.ambient.mode`; the retired yml key only without the Agent host's view.
+      mode: !enabled ? 'off' : (view ? view.mode : config?.mode) === 'shadow' ? 'shadow' : 'active',
       groups: conversations.includes('*') ? 'all' : conversations.length,
-      judges: Object.freeze(judges.map((judge) => judge.trim()).filter(Boolean)),
+      judges: Object.freeze(judges.map((entry) => entry.trim()).filter(Boolean)),
+      judgeChain: Object.freeze(view ? [...view.chain, ...(view.compare ? [view.compare] : [])].map(member => Object.freeze({ ...member })) : []),
+      ...(view ? { minConfidence: view.minConfidence } : {}),
       last24h: Object.freeze(last24h),
       decisionShadow: Object.freeze({
         agreed: shadow.filter((entry) => entry.agreed).length + total.agreed,

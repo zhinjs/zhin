@@ -188,3 +188,18 @@ it('counts agreement with the compared model over 24 hours, by deciding member, 
   time.advance(24 * HOUR + 1);
   expect(status.ambient().compare).toMatchObject({ agreed: 0, primaryOnly: 0, comparedOnly: 0, failed: 0, byMember: [] });
 });
+
+it('shows the judge chain actually used and reads the mode from purposes.ambient (ADR 0066 D7)', () => {
+  const status = new AssistantStatus({ now: clock().now });
+  // The retired yml mode no longer decides; the Agent host's view does.
+  status.bindAmbientConfig(() => ({ conversations: ['*'], mode: 'active' }));
+  const view = { mode: 'shadow' as const, minConfidence: 0.8,
+    chain: [{ profile: 'jev', label: 'TypeSafe/jev', kind: 'decision' as const, role: 'primary' as const, skippedUntil: 5, skipReason: 'billing' },
+      { profile: 'small', label: '主站/small', kind: 'language' as const, role: 'fallback' as const }],
+    compare: { profile: 'chat', label: '主站/chat', kind: 'language' as const, role: 'compare' as const } };
+  const ambient = status.ambient(view);
+  expect(ambient).toMatchObject({ mode: 'shadow', minConfidence: 0.8, judges: ['TypeSafe/jev', '主站/small'] });
+  expect(ambient.judgeChain.map(member => [member.profile, member.role])).toEqual([['jev', 'primary'], ['small', 'fallback'], ['chat', 'compare']]);
+  // Older callers passing labels keep working.
+  expect(status.ambient(['a/b'])).toMatchObject({ judges: ['a/b'], judgeChain: [], mode: 'active' });
+});

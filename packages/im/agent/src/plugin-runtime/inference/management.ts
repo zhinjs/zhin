@@ -128,6 +128,40 @@ export interface InferenceManagementOptions {
   readonly modelAvailability?: ModelAvailabilityRegistry;
   /** Binding names and sub-agents of the held generation, for `purposeEffects` (#1270). */
   readonly agentTargets?: () => AgentPurposeTargets;
+  /** Whether interjection runs at all in the held generation, for `purposeEffects.ambient` (ADR 0066 D7). */
+  readonly ambientDeployment?: () => AmbientDeploymentView | undefined;
+}
+
+/** Whether interjection can run (ADR 0066 D7): the `ai.trigger.ambient` section and what turns it on. */
+export interface AmbientDeploymentView {
+  /** The configuration has an `ai.trigger.ambient` section. */
+  readonly configured: boolean;
+  /** Groups in `ai.trigger.ambient.conversations` (`*` counts as one). */
+  readonly conversations: number;
+  /** Some feature switch turns interjection on; undefined when unknown (then never reported as ignored). */
+  readonly switchesOn?: boolean;
+}
+
+/**
+ * `purposeEffects.ambient` and `purposeEffects['decisions.<task>']` (ADR 0066 D7): the interjection
+ * judge chain that is really used (or why it is not used at all), and decision purposes that are off.
+ */
+export function ambientPurposeEffects(graph: ProviderGraph, deployment: AmbientDeploymentView | undefined): Readonly<Record<string, InferencePurposeEffect>> {
+  const { policy } = effectiveAmbientJudgePolicy(graph.purposes);
+  const chain = ambientJudgeChain(graph.purposes);
+  const member = (profile: string) => { const kind = engagementKind(graph, profile); return Object.freeze({ profile, ...(kind ? { kind } : {}) }); };
+  const reason: PurposeIgnoredReason | undefined = !deployment ? undefined : !deployment.configured ? 'ambient-not-configured'
+    : deployment.conversations === 0 && deployment.switchesOn === false ? 'no-conversations' : undefined;
+  const effects: Record<string, InferencePurposeEffect> = {
+    ambient: Object.freeze({ status: reason ? 'ignored' : 'effective', ...(reason ? { reason } : {}),
+      chain: Object.freeze(chain.ids.map(member)), ...(chain.inheritedFrom ? { inheritedFrom: chain.inheritedFrom } : {}),
+      ...(policy.compare ? { compare: member(policy.compare) } : {}) }),
+  };
+  for (const [task, value] of Object.entries(graph.purposes.decisions ?? {})) {
+    if (task === 'ambient') continue;
+    effects[`decisions.${task}`] = Object.freeze(value.mode === 'off' ? { status: 'ignored', reason: 'mode-off' } : { status: 'effective' });
+  }
+  return Object.freeze(effects);
 }
 
 /**
@@ -139,6 +173,12 @@ export interface InferenceManagementOptions {
 export type InferencePurposeEffect = Readonly<{
   status: 'effective' | 'ignored';
   reason?: PurposeIgnoredReason;
+  /** `ambient` only (ADR 0066 D7): the judge chain actually used, in order. */
+  chain?: readonly Readonly<{ profile: string; kind?: 'language' | 'decision' }>[];
+  /** `ambient` only: the chain is the deployment chat model's. */
+  inheritedFrom?: 'chat';
+  /** `ambient` only: the compared model. */
+  compare?: Readonly<{ profile: string; kind?: 'language' | 'decision' }>;
   /** What uses the key when effective. */
   target?: 'binding' | 'sub-agent';
   /** Sub-agents (qualified names) the key applies to, or was meant for when ignored. */
@@ -213,7 +253,10 @@ export interface InferenceManagementView {
   readonly environmentReferences?: InferenceEnvironmentAuthority;
   /** Host administrators only (#1250). */
   readonly modelAvailability?: InferenceModelAvailabilityView;
-  /** Host administrators only (#1270): effect of each `purposes.agents` key, keyed `agents.<key>`. */
+  /**
+   * Host administrators only (#1270): effect of each `purposes.agents` key, keyed `agents.<key>`;
+   * `ambient` (the interjection judge chain, ADR 0066 D7) and `decisions.<task>`.
+   */
   readonly purposeEffects?: Readonly<Record<string, InferencePurposeEffect>>;
 }
 interface PreparedMutation {
@@ -293,6 +336,9 @@ export class InferenceManagementService {
       }
     );
   }
+  #ambientDeployment(): AmbientDeploymentView | undefined {
+    try { return this.options.ambientDeployment?.(); } catch { return undefined; }
+  }
   #principal(principal: InferenceManagementPrincipal): void {
     text(principal.ownerId);
     if (principal.hostAdministrator !== (principal.ownerId === this.options.hostOwnerId))
@@ -358,8 +404,10 @@ export class InferenceManagementService {
       deployment,
       drivers,
       ...(principal.hostAdministrator ? { purposes: graph.purposes, modelAvailability: this.#availability() } : {}),
-      ...(principal.hostAdministrator && graph.purposes.agents && this.options.agentTargets
-        ? { purposeEffects: inferencePurposeEffects(graph.purposes.agents, this.options.agentTargets()) } : {}),
+      ...(principal.hostAdministrator ? { purposeEffects: Object.freeze({
+        ...(graph.purposes.agents && this.options.agentTargets ? inferencePurposeEffects(graph.purposes.agents, this.options.agentTargets()) : {}),
+        ...ambientPurposeEffects(graph, this.#ambientDeployment()),
+      }) } : {}),
       ...(principal.environmentReferences ? { environmentReferences: principal.environmentReferences } : {}),
     };
   }

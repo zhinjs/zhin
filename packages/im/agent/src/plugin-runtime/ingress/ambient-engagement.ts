@@ -925,7 +925,7 @@ export class CompareEngagementJudge implements EngagementJudge {
 /** @deprecated ADR 0066: the interjection judge chain replaces the decision purpose `ambient`. */
 export interface AmbientDecisionJudgeOptions extends DecisionEngagementJudgeOptions {
   readonly policy: DecisionPurposePolicy;
-  /** The configured chat-model judge(s) of `ai.trigger.ambient.judge`. */
+  /** The deciding judge (the language judge chain). */
   readonly base?: EngagementJudge;
   /** Shadow mode only: the decision judgment (undefined when it failed) next to the deciding one. */
   readonly reportShadow?: (decision: EngagementJudgment | undefined, judge: EngagementJudgment | undefined) => void;
@@ -1037,7 +1037,7 @@ export class AmbientEngagement {
     readonly key: string;
     readonly botName: string;
     readonly readRecent: () => Promise<readonly string[]>;
-    /** Judge for this call only (e.g. the generation's `purposes.decisions.ambient` route); default: the configured judge. */
+    /** Judge for this call only (the generation's `purposes.ambient` judge chain); default: the configured judge. */
     readonly judge?: EngagementJudge;
   }): Promise<AmbientDecision> {
     const ticket = (this.#latest.get(input.key) ?? 0) + 1;

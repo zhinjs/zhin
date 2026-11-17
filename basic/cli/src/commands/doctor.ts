@@ -52,6 +52,8 @@ import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
 import { findProjectLiteralSecrets, moveLiteralSecretsToEnv } from '@zhin.js/gateway/config';
+import { checkAmbientJudgeMigration, checkRetiredAmbientTriggerKeys } from '../utils/ambient-judge-check.js';
+import { localInstanceClient } from './ai.js';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -73,6 +75,7 @@ export const doctorCommand = new Command('doctor')
   .alias('health')
   .description('检查系统环境和项目配置')
   .option('--fix', '自动修复可修复的问题')
+  .option('--verbose', '再次显示只提示一次的记录（如插话判断迁移结果）')
   .option('--upgrade-l4', '诊断 minimal→L4 升级路径（AI 栈 + optional peer）')
   .option('--live <host-url>', '检查运行中的 Host；自定义 API base 可包含在 URL 路径中')
   .option('--json', '以 JSON 输出 --live 就绪报告')
@@ -845,6 +848,16 @@ export const doctorCommand = new Command('doctor')
         });
       }
     }
+
+    // 10e. 插话判断（ADR 0066）：yml 里废弃的 minConfidence / mode（--fix 删除），以及运行中实例的迁移结果（只提示一次）
+    if (existingConfig && !configParseFailed) {
+      try {
+        results.push(await checkRetiredAmbientTriggerKeys({ configPath: path.join(cwd, existingConfig), label: existingConfig, fix: options.fix === true }));
+      } catch (error) {
+        results.push({ name: '插话判断（旧配置项）', status: 'warn', message: `无法检查：${error instanceof Error ? error.message.split('\n')[0] : String(error)}` });
+      }
+    }
+    results.push(...await checkAmbientJudgeMigration({ client: await localInstanceClient(cwd).catch(() => undefined), verbose: options.verbose === true }));
 
     // 10d. 管理网关与 Console 初始化状态（ADR 0054）
     if (!gateway) {

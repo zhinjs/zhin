@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import type { DatabaseHost, SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
+import { readFeatureConversationOverrides, type DatabaseHost, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { AMBIENT_ENGAGE_FIELD, AMBIENT_FEATURE_ID } from '@zhin.js/core/runtime';
+import { modelAvailability, type ModelAvailabilityRegistry } from '@zhin.js/ai';
 import {
+  ambientJudgeChain,
   createInferenceRuntime,
   createSnapshotProviderResolver,
+  DEFAULT_AMBIENT_MIN_CONFIDENCE,
+  effectiveAmbientJudgePolicy,
+  type LegacyAmbientTrigger,
+  type ProviderGraph,
   describeSnapshotAiProvider,
   listSnapshotAiProviders,
   normalizeProviderGraph,
@@ -30,7 +37,7 @@ import { DatabaseInferenceRepository } from './repository.js';
 import { InferenceCredentialStore, type EnvironmentExpressionSource, type OAuthExchangeFailure } from './credentials.js';
 import { HostAccountRuntime } from './account-runtime.js';
 import { createProviderNetwork, matchesProviderTarget } from './network.js';
-import { InferenceManagementService, InferenceManagementError, inferencePurposeEffects, type InferencePurposeEffect } from './management.js';
+import { InferenceManagementService, InferenceManagementError, inferencePurposeEffects, type AmbientDeploymentView, type InferencePurposeEffect } from './management.js';
 import type { AccountStatusView } from './account-runtime-helpers.js';
 import { pruneInferenceFailures, type InferenceFailureJournal } from './failure-journal.js';
 import { projectProviderSupport } from './support-metadata.js';
@@ -68,6 +75,11 @@ export interface HostInferenceOptions {
   readonly observeCredentialTransport?: (fact: CredentialTransportFact) => void | Promise<void>;
   /** Instance runtime failure journal (#1270); preparation and model call failures survive a restart. */
   readonly failureJournal?: InferenceFailureJournal;
+  /**
+   * The current `ai.trigger.ambient` section (undefined when absent), for `purposeEffects.ambient`
+   * (ADR 0066 D7). Without it the interjection judge is always reported as effective.
+   */
+  readonly ambientTrigger?: () => Readonly<{ conversations?: readonly string[] }> | undefined;
 }
 
 /**
@@ -85,6 +97,53 @@ export interface InferenceAccountAttention {
   /** Uncertain sign-in exchanges: the classified failure kind and the upstream HTTP status. */
   readonly failure?: OAuthExchangeFailure['kind'];
   readonly failureStatus?: number;
+}
+
+/** One member of the interjection judge as the Console ambient status shows it (ADR 0066 D7). */
+export interface AmbientJudgeMemberView {
+  readonly profile: string;
+  /** `<service>/<model>` for display. */
+  readonly label: string;
+  readonly kind?: 'language' | 'decision';
+  readonly role: 'primary' | 'fallback' | 'compare';
+  /** In the shared skip table until this time (epoch ms). */
+  readonly skippedUntil?: number;
+  readonly skipReason?: string;
+}
+/** The interjection judge in effect (ADR 0066 D7). */
+export interface AmbientJudgeStatusView {
+  readonly chain: readonly AmbientJudgeMemberView[];
+  readonly inheritedFrom?: 'chat';
+  readonly compare?: AmbientJudgeMemberView;
+  readonly mode: 'active' | 'shadow';
+  readonly minConfidence: number;
+}
+
+/**
+ * The interjection judge in effect for `graph` (ADR 0066 D7): chain members in order with their
+ * kind and skip period, the compared model, the mode and the threshold. Pure over the inputs.
+ */
+export function ambientJudgeStatusView(graph: ProviderGraph, trigger: LegacyAmbientTrigger | undefined, registry: ModelAvailabilityRegistry): AmbientJudgeStatusView {
+  const { policy } = effectiveAmbientJudgePolicy(graph.purposes, trigger);
+  const chain = ambientJudgeChain(graph.purposes);
+  const member = (profileId: string, role: AmbientJudgeMemberView['role']): AmbientJudgeMemberView => {
+    const profile = Object.hasOwn(graph.profiles, profileId) ? graph.profiles[profileId] : undefined;
+    const account = profile ? graph.accounts[profile.accountId] : undefined;
+    const service = account ? graph.services[account.serviceId] : undefined;
+    const kinds = profile && service ? service.models[profile.model]?.kinds ?? [] : [];
+    const kind = kinds.includes('language') ? 'language' as const : kinds.includes('decision') ? 'decision' as const : undefined;
+    const skipped = profile && account ? registry.unavailable(account.id, profile.model) : undefined;
+    return Object.freeze({ profile: profileId, ...(kind ? { kind } : {}), role,
+      label: profile && service ? `${service.label ?? service.driver.id}/${profile.model}` : profileId,
+      ...(skipped ? { skippedUntil: skipped.until, skipReason: skipped.reason } : {}) });
+  };
+  return Object.freeze({
+    chain: Object.freeze(chain.ids.map((id, index) => member(id, index === 0 ? 'primary' : 'fallback'))),
+    ...(chain.inheritedFrom ? { inheritedFrom: chain.inheritedFrom } : {}),
+    ...(policy.compare ? { compare: member(policy.compare, 'compare') } : {}),
+    mode: policy.mode ?? 'active',
+    minConfidence: policy.minConfidence ?? DEFAULT_AMBIENT_MIN_CONFIDENCE,
+  });
 }
 
 /** One process owns encrypted authentication; each invocation borrows exactly its operation generation. */
@@ -334,25 +393,18 @@ export class HostInference {
     }
   }
 
-  /** Metadata-only selection for the authenticated Console request's exact generation. */
+  /**
+   * The interjection judge actually used in the Console request's generation (ADR 0066 D7): the
+   * chain members in order (kind, whether in their skip period), the compared model, the mode and
+   * the threshold. Metadata only.
+   */
   async ambientModels(
     input: Readonly<{ lease: SnapshotLease; signal: AbortSignal }>
-  ): Promise<readonly string[]> {
-    return this.withInferenceScope(
-      { ...input, sessionKey: 'console:ambient-status' },
-      async (scope) => {
-        try {
-          const binding = await scope.resolve({
-            kind: 'language',
-            purpose: 'ambient',
-          });
-          return [`${binding.service.label ?? binding.service.driver.id}/${binding.model.id}`];
-        } catch (error) {
-          if (error instanceof ProviderError && error.code === 'not-configured') return [];
-          throw error;
-        }
-      }
-    );
+  ): Promise<AmbientJudgeStatusView> {
+    const graph = await this.repository.readGraph({ rootId: this.rootId });
+    input.signal.throwIfAborted();
+    if (!graph) return Object.freeze({ chain: Object.freeze([]), mode: 'active', minConfidence: DEFAULT_AMBIENT_MIN_CONFIDENCE });
+    return ambientJudgeStatusView(graph, this.options.ambientTrigger?.() as LegacyAmbientTrigger | undefined, modelAvailability);
   }
 
   createInference(lease: SnapshotLease, beforeSubmit?: () => void) {
@@ -406,6 +458,18 @@ export class HostInference {
     });
   }
 
+  /** ADR 0066 D7: whether interjection can run in `snapshot`'s generation. */
+  #ambientDeployment(snapshot: RuntimeSnapshot): AmbientDeploymentView | undefined {
+    if (!this.options.ambientTrigger) return undefined;
+    const trigger = this.options.ambientTrigger();
+    // Stored feature switches (ADR 0062 §23): only a reader that can list them tells "none is on".
+    const reader = readFeatureConversationOverrides(snapshot) as { list?: () => readonly Readonly<{ plugin: string; enabled?: boolean; patch?: Readonly<Record<string, unknown>> }>[] } | undefined;
+    const switchesOn = typeof reader?.list === 'function'
+      ? reader.list().some(row => row.plugin === AMBIENT_FEATURE_ID && row.enabled !== false && row.patch?.[AMBIENT_ENGAGE_FIELD] === true) : undefined;
+    return Object.freeze({ configured: trigger !== undefined, conversations: trigger?.conversations?.length ?? 0,
+      ...(switchesOn !== undefined ? { switchesOn } : {}) });
+  }
+
   acquireManagement(): InferenceManagementLease {
     const snapshots = this.options.snapshots(),
       lease = snapshots.acquire();
@@ -421,6 +485,7 @@ export class HostInference {
     };
     const management = new InferenceManagementService({
       agentTargets: () => readAgentPurposeTargets(lease.value),
+      ambientDeployment: () => this.#ambientDeployment(lease.value),
       rootId: this.rootId,
       hostOwnerId: this.hostOwnerId,
       directory: join(this.options.projectRoot, '.zhin', 'inference'),
