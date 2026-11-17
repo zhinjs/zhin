@@ -82,6 +82,13 @@ export type ConsoleAttentionKind =
    */
   | 'mcp.disconnected'
   /**
+   * A configured MCP server is connected but no Agent binds it in `ai.agents.<name>.mcpServers`, so
+   * no Agent can use its tools (#1250 第 41 批 `mcp-connected-but-unbound`): `ai.mcpServers` only
+   * connects. `subject.mcpServer` names the server, `subject.configPath` is `ai.agents`. Visible with
+   * `status.view`.
+   */
+  | 'mcp.unbound'
+  /**
    * A configured speech feature cannot run because the external command it needs is not executable
    * (#1250 第 29 批: `speech.tts.provider: edge` without a runnable `edge-tts`). `subject.configPath`
    * names the setting (`speech.tts.edgeTtsCommand`); `reason.code` is `not-found` / `not-executable` /
@@ -118,7 +125,7 @@ export type ConsoleAttentionKind =
 export const CONSOLE_ATTENTION_KINDS: readonly ConsoleAttentionKind[] = Object.freeze([
   'login.pending', 'endpoint.offline', 'endpoint.config-drift', 'plugin.error', 'plugin.dependencies', 'plugin.config',
   'config.invalid', 'config.apply-failed', 'config.literal-secrets', 'tool-approval.pending',
-  'mcp.disconnected', 'logs.errors', 'schedule.unschedulable',
+  'mcp.disconnected', 'mcp.unbound', 'logs.errors', 'schedule.unschedulable',
   'chat-roles.no-owner', 'chat-roles.imported', 'chat-roles.import-pending',
   'inference.account', 'config.ineffective', 'command.conflict', 'speech.unavailable',
 ]);
@@ -140,6 +147,7 @@ export const CONSOLE_ATTENTION_KIND_PERMISSIONS: Readonly<Record<ConsoleAttentio
   'config.literal-secrets': 'ops.config.read',
   'tool-approval.pending': 'tool_approvals:read',
   'mcp.disconnected': 'status.view',
+  'mcp.unbound': 'status.view',
   'logs.errors': 'status.view',
   'schedule.unschedulable': 'ops.schedule.read',
   'chat-roles.no-owner': 'iam.manage',

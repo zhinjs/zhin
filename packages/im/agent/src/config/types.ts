@@ -22,6 +22,10 @@ export interface RouteMatchConfig {
 }
 
 export interface AgentBindingConfig {
+  /**
+   * 该 Agent 能用哪些 MCP 服务器的工具：填 `ai.mcpServers` 中的 `name`。不在这里列出的服务器
+   * 即使已连接，这个 Agent 也用不了它的工具（例：`ai.agents.zhin.mcpServers: [github]`）。
+   */
   mcpServers?: readonly string[];
   /**
    * @deprecated Never took effect; accepted with a warning and removed by

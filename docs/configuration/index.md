@@ -396,7 +396,7 @@ ai:
 | 字段 | 说明 |
 | --- | --- |
 | `nickname` | 任务角色显示名；当前账号资料仍由 Endpoint 提供 |
-| `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
+| `mcpServers` | 该 Agent 能用的 MCP Server 名列表（`ai.mcpServers` 的 `name`）；不列出的服务器即使已连接，这个 Agent 也用不了 |
 
 模型角色绑定在运行时用途配置中管理。IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除。
 
@@ -417,7 +417,7 @@ ai:
       env: { FOO: bar }
 ```
 
-连接成功后，这些 Server 的工具进入 Agent 工具池（按 `agents.<name>.mcpServers` 分配）。
+`ai.mcpServers` 只负责连接。连接成功后，Server 的工具只给在 `ai.agents.<name>.mcpServers` 里绑定了它的 Agent 用；没有任何 Agent 绑定的 Server，`zhin status`、`zhin doctor` 与 Console「需要你处理」会提示「已连接但没有 Agent 能用」。完整示例见 [ai.mcpServers](../ai/index.md#ai-mcpservers)。
 
 ### 其余 ai 子段
 

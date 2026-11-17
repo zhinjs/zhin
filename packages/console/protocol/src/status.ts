@@ -71,4 +71,9 @@ export interface ConsoleMcpServerRow {
   readonly transport?: string;
   readonly status?: ConsoleMcpServerStatus;
   readonly lastError?: ConsoleMcpFailure;
+  /**
+   * Agents that bind this server in `ai.agents.<name>.mcpServers` (#1250 第 41 批): only they can use
+   * its tools — `ai.mcpServers` only connects. Empty: no Agent can use it. Absent on older instances.
+   */
+  readonly boundAgents?: readonly string[];
 }
