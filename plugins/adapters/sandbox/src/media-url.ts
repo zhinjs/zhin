@@ -17,9 +17,8 @@ export const SANDBOX_MEDIA_API_PREFIX = '/api/sandbox/media/';
 export const SANDBOX_MEDIA_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 /** First 16 hex characters of SHA-256(endpoint id). */
 export const SANDBOX_MEDIA_DIR_PATTERN = /^[0-9a-f]{16}$/u;
-/** HMAC-SHA256 in base64url: 43 characters. */
-const SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
-const EXPIRY_PATTERN = /^[1-9][0-9]{0,11}$/u;
+/** `exp` (Unix seconds, no leading zero) and the HMAC-SHA256 in base64url (43 characters). */
+const QUERY_PATTERN = /^\?exp=([1-9][0-9]{0,11})&sig=([A-Za-z0-9_-]{43})$/u;
 
 export interface SandboxMediaAddress {
   readonly dir: string;
@@ -58,11 +57,11 @@ export function parseSandboxMediaUrl(url: unknown): SandboxMediaAddress | undefi
   if (parts.length !== 2) return undefined;
   const [dir, id] = parts as [string, string];
   if (!SANDBOX_MEDIA_DIR_PATTERN.test(dir) || !SANDBOX_MEDIA_ID_PATTERN.test(id)) return undefined;
-  const keys = [...parsed.searchParams.keys()];
-  if (keys.length !== 2 || !keys.includes('exp') || !keys.includes('sig')) return undefined;
-  const exp = parsed.searchParams.get('exp') ?? '';
-  const sig = parsed.searchParams.get('sig') ?? '';
-  if (!EXPIRY_PATTERN.test(exp) || !SIGNATURE_PATTERN.test(sig)) return undefined;
+  // The raw query, exactly as issued: `?exp=<seconds>&sig=<43 characters>`. Percent-encoded,
+  // reordered, repeated, re-cased or extra parameters never parse, so one object has one address.
+  const query = QUERY_PATTERN.exec(parsed.search);
+  if (!query) return undefined;
+  const [, exp, sig] = query as unknown as [string, string, string];
   return Object.freeze({ dir, id, exp: Number(exp), sig });
 }
 

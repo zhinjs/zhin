@@ -358,6 +358,8 @@ export class SandboxMediaStore {
     const secrets = this.#secrets(false);
     if (!secrets) return { ok: false, reason: 'signature' };
     const presented = Buffer.from(address.sig, 'base64url');
+    // The last of the 43 characters has two spare bits: only the canonical spelling is genuine.
+    if (presented.length !== 32 || presented.toString('base64url') !== address.sig) return { ok: false, reason: 'signature' };
     let valid = false;
     for (const key of [secrets.current, secrets.previous]) {
       if (!key) continue;

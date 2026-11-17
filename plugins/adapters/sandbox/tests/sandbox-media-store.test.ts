@@ -95,6 +95,34 @@ describe('Sandbox media store (ADR 0064 D12, I1)', () => {
     }
   });
 
+  it('accepts only the exact address it issued: no encoded, reordered, repeated or re-cased parameters, one spelling of the signature', async () => {
+    const { media } = await store();
+    const meta = await put(media, PNG);
+    const url = media.signedUrl(meta, 'http://127.0.0.1:8086');
+    const address = parseSandboxMediaUrl(url)!;
+    const base = url.split('?')[0]!;
+    for (const bad of [
+      `${base}?%65xp=${address.exp}&sig=${address.sig}`,
+      `${base}?exp=${address.exp}&%73ig=${address.sig}`,
+      `${base}?sig=${address.sig}&exp=${address.exp}`,
+      `${base}?exp=${address.exp}&sig=${address.sig}&exp=${address.exp}`,
+      `${base}?exp=${address.exp}&exp=${address.exp}`,
+      `${base}?EXP=${address.exp}&SIG=${address.sig}`,
+      `${base}?exp=0${address.exp}&sig=${address.sig}`,
+      `${base}?exp=${address.exp}&sig=${address.sig}&`,
+      `${base}?&exp=${address.exp}&sig=${address.sig}`,
+      `${base}?exp=${address.exp}&sig=${address.sig.slice(0, 20)}%2B${address.sig.slice(21)}`,
+    ]) {
+      expect(parseSandboxMediaUrl(bad), bad).toBeUndefined();
+      expect(media.verifyUrl(bad).ok, bad).toBe(false);
+    }
+    // 43 base64url characters carry 258 bits for a 256-bit digest: the last character has spare
+    // bits, so three other spellings decode to the same bytes. Only the canonical one verifies.
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const accepted = [...alphabet].map(char => url.replace(address.sig, `${address.sig.slice(0, -1)}${char}`)).filter(variant => media.verifyUrl(variant).ok);
+    expect(accepted).toEqual([url]);
+  });
+
   it('verifies links signed with the previous key after a rotation; revoke-all voids every link', async () => {
     const { media } = await store();
     const meta = await put(media, PNG);

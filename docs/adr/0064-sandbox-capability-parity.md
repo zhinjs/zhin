@@ -309,7 +309,7 @@ messaging: {
 3. **有效期**：默认 24 小时（`media.ttlHours`，1–168，即最长 168 小时）。端点启动时和之后每小时清扫一次过期对象；过期后下载返回 404，content port 返回 `expired`。有效期内随时可以撤销：删除对象即作废它的所有链接，「全部作废」见 D12.4（修订第 5 条）。
 4. **地址签发**：插件拿到的是 `<origin>/pub/sandbox-media/<端点目录键>/<id>?exp=<到期秒>&sig=<签名>`，`sig = base64url(HMAC-SHA256(key, 端点 id \0 id \0 exp))`。路径里带端点目录键（与磁盘目录同名），每个端点挂自己的路由前缀，多个 Sandbox 端点不必共用一张登记表。`exp` 等于对象的 `expiresAt`，所以链接和文件同时失效。`origin` 取 `HttpHost.address`，没有时取上传请求的 origin；**origin 只是给人和外部服务用的，不参与任何判断**（修订第 2 条）。
    - **密钥**（修订第 5 条）：`.zhin/sandbox/media/secret`（权限 0600）保存 `{ current, previous? }`，每把 32 字节随机数，重启不变。签发只用 `current`，验签两把都试；轮换（`rotate`）生成新的 `current`，旧的变成 `previous`，此前签发的链接继续有效；「全部作废」（`revoke-all`）轮换并丢弃 `previous`，此前签发的所有链接立即失效（对象本身保留）。两者都只允许所有者调用（`POST /api/sandbox/media/<endpoint>/secret`）。
-   - **比较**：签名按 base64url 解码后用 `crypto.timingSafeEqual` 做常量时间比较，两把密钥都比完再出结果（修订第 4 条）。
+   - **比较**：签名按 base64url 解码后用 `crypto.timingSafeEqual` 做常量时间比较，两把密钥都比完再出结果（修订第 4 条）。地址只认签发时的原样：查询串必须正好是 `?exp=<秒>&sig=<43 个字符>`（不接受百分号编码、换序、重复、改大小写或多余参数），签名只认规范的 base64url 拼写（43 个字符多出 2 位，否则同一签名有 4 种写法），这样一个对象只有一个地址（I1 复审补充）。
 5. **访问控制**（修订第 1、3 条）：**签名有效且未过期是唯一的授权依据；来源地址不是。** 同机反向代理后面所有请求都显示为 `127.0.0.1`，插件在进程里 `fetch` 也会经过网关，所以「只接受回环来源」既挡不住外人，也证明不了是本机插件。三条入口：
    - **进程内的使用方**（插件、Agent）只走 `LocalMediaSource.read`（D14，I2），**不发 HTTP 请求**。`read` 校验签名与有效期，并要求当前 Turn 的会话与对象记录的会话一致；不一致时拒绝并记一条审计（防止把一个会话的上传拿到另一个会话里读）。
    - **Console 页面**显示上传的文件：`GET /api/sandbox/media/<endpoint>/<id>?type=&id=`，在 `CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`（前缀规则），处理器再按端点范围检查（`principalAllows(…, { kind: 'endpoint', adapter: 'sandbox', endpoint })`），并要求查询里的会话与对象记录的会话一致，不一致返回 404 并记审计。
