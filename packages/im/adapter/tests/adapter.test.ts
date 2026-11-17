@@ -41,6 +41,7 @@ import adapterFeature, {
   createRecallEndpointControl,
   endpointContentOf,
   endpointInboundMediaOf,
+  endpointInboundMediaRoots,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
   type AdapterContext,
@@ -216,6 +217,10 @@ describe('Adapter Feature', () => {
     expect(index.inboundMediaRoots(silent.id)).toEqual([]);
     expect(index.inboundMediaRoots(throwing.id)).toEqual([]);
     expect(endpointInboundMediaOf({ inboundMedia: { roots: ['/x'] } })).toBeUndefined();
+    // A throwing `inboundMedia` getter declares nothing instead of failing the Turn (#1250 review).
+    const throwingGetter = Object.defineProperty({}, 'inboundMedia', { get() { throw new Error('boom'); } });
+    expect(endpointInboundMediaOf(throwingGetter)).toBeUndefined();
+    expect(endpointInboundMediaRoots(throwingGetter)).toEqual([]);
     await index.stop();
     expect(index.inboundMediaRoots(owning.id)).toEqual([]);
   });

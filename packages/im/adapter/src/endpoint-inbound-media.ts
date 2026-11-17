@@ -15,13 +15,18 @@ export interface EndpointInboundMediaPort {
   roots(): readonly string[];
 }
 
+/** The Endpoint's inbound media port; a missing, malformed or throwing declaration is none. */
 export function endpointInboundMediaOf(endpoint: unknown): EndpointInboundMediaPort | undefined {
   if (!endpoint || typeof endpoint !== 'object') return undefined;
-  const port = (endpoint as { readonly inboundMedia?: unknown }).inboundMedia;
-  if (!port || typeof port !== 'object') return undefined;
-  return typeof (port as { readonly roots?: unknown }).roots === 'function'
-    ? port as EndpointInboundMediaPort
-    : undefined;
+  try {
+    const port = (endpoint as { readonly inboundMedia?: unknown }).inboundMedia;
+    if (!port || typeof port !== 'object') return undefined;
+    return typeof (port as { readonly roots?: unknown }).roots === 'function'
+      ? port as EndpointInboundMediaPort
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The declared roots, trimmed; a malformed or throwing port declares none. */
