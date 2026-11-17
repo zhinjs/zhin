@@ -25,14 +25,21 @@ export interface SubAgentPurposeTarget {
   readonly bareNameShared?: boolean;
 }
 
-/** Why a key does not reach a sub-agent. */
-export type PurposeIgnoredReason = 'binding-name' | 'ambiguous' | 'no-target';
+/** Why a `purposes.agents` key does not reach a sub-agent. */
+export type AgentPurposeIgnoredReason = 'binding-name' | 'ambiguous' | 'no-target';
+/**
+ * Why a purpose choice takes no effect (`purposeEffects`). Agent keys: {@link AgentPurposeIgnoredReason}.
+ * ADR 0066 D7: `ambient-not-configured` (no `ai.trigger.ambient` section: interjection never runs),
+ * `no-conversations` (no group has it on and no feature switch turns it on), `mode-off` (a decision
+ * purpose that is off: its Profile is never called).
+ */
+export type PurposeIgnoredReason = AgentPurposeIgnoredReason | 'ambient-not-configured' | 'no-conversations' | 'mode-off';
 
 export type SubAgentPurposeEffect =
   /** The sub-agent runs on `purposes.agents.<key>`. */
   | Readonly<{ status: 'effective'; key: string }>
   /** A configured key names the sub-agent, but the sub-agent runs on chat because of `reason`. */
-  | Readonly<{ status: 'ignored'; key: string; reason: Exclude<PurposeIgnoredReason, 'no-target'> }>
+  | Readonly<{ status: 'ignored'; key: string; reason: Exclude<AgentPurposeIgnoredReason, 'no-target'> }>
   /** No key is configured for the sub-agent: it runs on chat. */
   | Readonly<{ status: 'unconfigured' }>;
 
@@ -74,7 +81,7 @@ export type PurposeKeyEffect =
     ignoredAgents?: readonly string[];
     reason?: 'binding-name';
   }>
-  | Readonly<{ status: 'ignored'; reason: PurposeIgnoredReason; agents?: readonly string[] }>;
+  | Readonly<{ status: 'ignored'; reason: AgentPurposeIgnoredReason; agents?: readonly string[] }>;
 
 /**
  * Effect of every configured `purposes.agents` key: used by an Agent binding, by sub-agents
@@ -90,7 +97,7 @@ export function purposeKeyEffects(
   const counts = new Map<string, number>();
   for (const agent of subAgents) counts.set(agent.name, (counts.get(agent.name) ?? 0) + 1);
   const effective = new Map<string, string[]>();
-  const ignored = new Map<string, { reason: Exclude<PurposeIgnoredReason, 'no-target'>; agents: string[] }>();
+  const ignored = new Map<string, { reason: Exclude<AgentPurposeIgnoredReason, 'no-target'>; agents: string[] }>();
   for (const agent of subAgents) {
     const target = { ...agent, bareNameShared: agent.bareNameShared ?? (counts.get(agent.name) ?? 0) > 1 };
     const effect = subAgentPurposeEffect(keys, target, bindingNames);

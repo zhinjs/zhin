@@ -355,8 +355,8 @@ outline: [2, 3]
 | `ai.trigger.ambient.maxPerHour` | number \| string | 否 | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
 | `ai.trigger.ambient.conversationWindowMs` | number \| string | 否 | — | 机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000） |
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | 否 | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢 |
-| `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 判断模型置信度门槛 0..1（默认 0.7） |
-| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
+| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | 已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
 | `ai.trigger.sceneEvents` | object | 否 | — | 状态感知：禁言/解禁、入群申请、成员进出、公告变更、戳 Bot 等高优先社交事件独立唤醒一次回合（不必等下一条人话）；表情回应、名片/头衔变更等低优先事件不单独唤醒，只在下一轮 [Scene events] 摘要里出现。Bot 不能发言时只更新会话画像，不调用模型。 |
 | `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | 否 | — | 允许被社交事件唤醒的群/频道，格式 platform:sceneId；* 表示所有群。缺省沿用 ai.trigger.ambient.conversations（都没配则不唤醒） |
 | `ai.trigger.sceneEvents.coalesceMs` | number \| string | 否 | — | 同一场景的合并窗口（毫秒，限定 3000～5000，默认 4000） |
@@ -514,7 +514,7 @@ outline: [2, 3]
 | `purposes` | object | 否 | — | — |
 | `purposes.chat` | string \| object \| null | 否 | — | — |
 | `purposes.summary` | string \| object \| null | 否 | — | — |
-| `purposes.ambient` | string \| object \| null | 否 | — | — |
+| `purposes.ambient` | string \| object \| null | 否 | — | 插话判断（ADR 0066）：群里没人叫机器人时决定要不要插话。字符串等同于 { profile }；null 清除整项。 |
 | `purposes.image` | string \| object \| null | 否 | — | — |
 | `purposes.perception` | object \| null | 否 | — | — |
 | `purposes.decisions` | object | 否 | — | — |
@@ -523,7 +523,7 @@ outline: [2, 3]
 | `purposes.decisions.memory` | object \| null | 否 | — | — |
 | `purposes.decisions.agents` | object \| null | 否 | — | — |
 | `purposes.decisions.approval` | object \| null | 否 | — | — |
-| `purposes.decisions.ambient` | object \| null | 否 | — | — |
+| `purposes.decisions.ambient` | object \| null | 否 | — | 已废弃（ADR 0066）：改写 purposes.ambient；废弃期内按迁移表合并转换并给出警告 |
 | `purposes.agents` | object | 否 | — | — |
 | `purposes.adapters` | object | 否 | — | — |
 | `purposes.endpoints` | object | 否 | — | — |

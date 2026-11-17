@@ -11,6 +11,7 @@ import {
   assertConfigPatchAllowed,
   canTransitionSelfChange,
   findForbiddenConfigKey,
+  findRetiredConfigKey,
   isSelfChangeTerminal,
   normalizeChangeConfigPatch,
   normalizeChangeTarget,
@@ -270,5 +271,23 @@ describe('decision outcome', () => {
   // The change record ends `failed` (stopped for manual verification); the decision event stays `defer`.
   it.each(['change_config_unconfirmed', 'change_config_superseded'] as const)('maps %s to defer, not error or deny', code => {
     expect(selfChangeOutcome(code)).toBe('defer');
+  });
+});
+
+describe('retired interjection keys (ADR 0066 D5.7)', () => {
+  const patch = (patches: unknown[]) => ({ expectedRevision: 'r1', patches });
+
+  it('refuses writing ai.trigger.ambient.minConfidence / mode, directly or inside a parent object', () => {
+    for (const operation of [
+      { op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' },
+      { op: 'set', path: ['ai', 'trigger', 'ambient', 'minConfidence'], value: 0.5 },
+      { op: 'set', path: ['ai', 'trigger', 'ambient'], value: { conversations: ['*'], mode: 'shadow' } },
+    ]) expect(() => normalizeChangeConfigPatch(patch([operation]))).toThrow(SelfChangeConfigKeyError);
+  });
+
+  it('still allows removing them and writing the other ambient keys', () => {
+    expect(() => normalizeChangeConfigPatch(patch([{ op: 'remove', path: ['ai', 'trigger', 'ambient', 'mode'] }]))).not.toThrow();
+    expect(() => normalizeChangeConfigPatch(patch([{ op: 'set', path: ['ai', 'trigger', 'ambient'], value: { conversations: ['*'], quietMs: 1 } }]))).not.toThrow();
+    expect(findRetiredConfigKey(['ai', 'trigger', 'ambient', 'quietMs'], 1)).toBeNull();
   });
 });

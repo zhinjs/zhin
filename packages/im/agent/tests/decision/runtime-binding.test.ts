@@ -47,8 +47,10 @@ it('validates per-task Profile policies and rejects the removed global Provider 
   for (const input of [null, [], { provider: 'root/typesafe' }, { skills: { mode: 'active' } },
     { skills: { profile: 'first', mode: 'auto' } }, { tools: { profile: 'first', mode: 'active', timeoutMs: 0 } },
     { memory: { profile: 'first', mode: 'shadow', minConfidence: 2 } }]) expect(() => normalizeAgentDecisionConfig(input)).toThrow(TypeError);
-  const policy = normalizeAgentDecisionConfig({ skills: { profile: 'first', mode: 'shadow' }, ambient: { mode: 'off' } });
-  expect(policy).toEqual({ skills: { profile: 'first', mode: 'shadow' }, ambient: { mode: 'off' } });
+  // ADR 0066 D1.8: `ambient` is the interjection judge `purposes.ambient` now, not a decision task.
+  expect(() => normalizeAgentDecisionConfig({ ambient: { mode: 'off' } })).toThrow(TypeError);
+  const policy = normalizeAgentDecisionConfig({ skills: { profile: 'first', mode: 'shadow' }, approval: { mode: 'off' } });
+  expect(policy).toEqual({ skills: { profile: 'first', mode: 'shadow' }, approval: { mode: 'off' } });
   expect(Object.isFrozen(policy)).toBe(true); expect(Object.isFrozen(policy?.skills)).toBe(true);
 });
 

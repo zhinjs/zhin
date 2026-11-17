@@ -43,6 +43,7 @@ const messages = createMessages({
   billing: { 'zh-CN': '模型账户欠费', en: 'Model account billing issue' },
   auth: { 'zh-CN': '模型 API 密钥有问题', en: 'Model API credentials rejected' },
   non_json_response: { 'zh-CN': '服务返回的不是 JSON（可能少了 /v1）', en: 'The model service did not return JSON (is /v1 missing from its address?)' },
+  invalid_response: { 'zh-CN': '模型回的格式不对', en: 'Unusable model answer' },
   context_overflow: { 'zh-CN': '上下文超长', en: 'Context limit exceeded' },
   safety_block: { 'zh-CN': '内容被模型拦截', en: 'Blocked by model safety policy' },
   withCause: { 'zh-CN': '{line}（{cause}）', en: '{line} ({cause})' },
@@ -56,7 +57,7 @@ const REFUSE_LINES = ['refuse'] as const;
 const LINES: Readonly<Record<ChatFailureKind, readonly MessageKey[]>> = {
   rate_limit: TRANSIENT_LINES, timeout: TRANSIENT_LINES, no_response: TRANSIENT_LINES, server: TRANSIENT_LINES, network: TRANSIENT_LINES,
   empty_response: TRANSIENT_LINES, malformed_tool_call: TRANSIENT_LINES, provider_error: TRANSIENT_LINES,
-  length: TRANSIENT_LINES, bad_request: TRANSIENT_LINES, unknown: TRANSIENT_LINES, format: TRANSIENT_LINES,
+  length: TRANSIENT_LINES, invalid_response: TRANSIENT_LINES, bad_request: TRANSIENT_LINES, unknown: TRANSIENT_LINES, format: TRANSIENT_LINES,
   turn_timeout: TRANSIENT_LINES, turn_error: TRANSIENT_LINES,
   quota_exhausted: TIRED_LINES, billing: TIRED_LINES, auth: TIRED_LINES, non_json_response: TIRED_LINES,
   context_overflow: CONFUSED_LINES,

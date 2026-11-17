@@ -1,9 +1,12 @@
 import type { JsonValue } from '../decision/types.js';
 import { createHash } from 'node:crypto';
-import { normalizeProviderGraph, normalizeProviderJson } from './graph.js';
+import { normalizeAmbientJudgePolicy, normalizeProviderGraph, normalizeProviderJson } from './graph.js';
+import {
+  AMBIENT_JUDGE_LEGACY_IMPORT, DEFAULT_AMBIENT_MIN_CONFIDENCE, effectiveAmbientJudgePolicy, withoutLegacyAmbientJudge, type LegacyAmbientTrigger,
+} from './ambient-judge.js';
 import {
   ProviderError, type ProviderGraph, type ProviderService, type ProviderAccount, type ModelProfile,
-  type ProviderDriverReference, type ModelDefinition, type JsonObject, type PurposePolicy,
+  type ProviderDriverReference, type ModelDefinition, type JsonObject, type PurposePolicy, type AmbientJudgePolicy,
 } from './types.js';
 
 type ResourceKind = 'services' | 'accounts' | 'profiles';
@@ -38,6 +41,26 @@ export interface ReviewProviderPlanOptions {
   readonly resolveService: (input: ResolvePlanServiceInput) => ResolvedPlanService | Promise<ResolvedPlanService>;
   /** The same held Driver normalizes context-specific parameters; this callback has no I/O. */
   readonly validateProfile?: (input: Readonly<{ service: ProviderService; account: ProviderAccount; profile: ModelProfile }>) => JsonObject | Promise<JsonObject>;
+  /**
+   * `purposes.decisions.ambient` in the plan (ADR 0066 D5.6): `convert` (default during the
+   * deprecation window, {@link AMBIENT_JUDGE_LEGACY_IMPORT}) merges it into `purposes.ambient` with
+   * a warning; `reject` fails with `invalid-plan` at that path.
+   */
+  readonly legacyAmbientDecisions?: 'convert' | 'reject';
+  /**
+   * The yml `ai.trigger.ambient` while its `minConfidence` / `mode` still apply (ADR 0066 M1: no
+   * migration has stored them yet). A written `purposes.ambient` without those keys takes them, so
+   * a write never drops a shadow mode or threshold in force.
+   */
+  readonly ambientTrigger?: LegacyAmbientTrigger;
+  /** The language judge before the migration (its record's `before`), restored by `decisions.ambient: off / null`. */
+  readonly legacyAmbientLanguage?: Readonly<{ profile?: string; fallbacks?: readonly string[] }>;
+}
+/** A plan value that was accepted in a deprecated form (ADR 0066 D5.6). */
+export interface ProviderPlanWarning {
+  readonly path: string;
+  readonly code: 'deprecated-decisions-ambient';
+  readonly message: string;
 }
 export interface ReviewedProviderPlan {
   readonly rootId: string;
@@ -47,6 +70,8 @@ export interface ReviewedProviderPlan {
   readonly graph: ProviderGraph;
   readonly bindings: Readonly<Required<ProviderPlanBindings>>;
   readonly changes: Readonly<Record<ResourceKind, Readonly<{ created: readonly string[]; updated: readonly string[]; removed: readonly string[] }>>>;
+  /** Deprecated forms that were accepted and converted (ADR 0066); absent when none. */
+  readonly warnings?: readonly ProviderPlanWarning[];
 }
 function driverReference(input: unknown): string | ProviderDriverReference {
   if (typeof input === 'string') return text(input);
@@ -227,6 +252,7 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
     if (profiles[id] !== previous) changes.profiles[previous ? 'updated' : 'created'].push(id);
   }
   let purposes: PurposePolicy = graph.purposes;
+  const warnings: ProviderPlanWarning[] = [];
   if (input.purposes !== undefined) {
     if (!isHost) throw new ProviderError('forbidden');
     const raw = record(input.purposes); keys(raw, ['chat', 'summary', 'ambient', 'perception', 'image', 'decisions', 'agents', 'adapters', 'endpoints', 'scenes']);
@@ -295,9 +321,102 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
         else delete agentFallbacks[key];
       }
     }
-    purposes = compact({ ...purposes, defaults: compact({ ...purposes.defaults,
+    /**
+     * The interjection judge (ADR 0066 D1). The object form replaces the whole item; `null` clears
+     * it. The string form is the legacy language purpose「旁听」: it replaces only the language judge
+     * (the profile, or the first fallback behind a decision judge) and keeps `mode`, `compare`,
+     * `minConfidence` and `timeoutMs` (D1.3). Writing it drops the legacy stored fields.
+     */
+    const invalidAt = (path: string): never => { throw new ProviderError('invalid-plan', path); };
+    // Kind of a Profile of the resulting resources (new Profiles of this plan included).
+    const decisionOnly = (id: string | undefined): boolean => {
+      if (id === undefined) return false;
+      const profile = Object.hasOwn(profiles, id) ? profiles[id] : undefined;
+      const account = profile ? accounts[profile.accountId] : undefined;
+      const kinds = profile && account ? services[account.serviceId]?.models[profile.model]?.kinds ?? [] : [];
+      return kinds.includes('decision') && !kinds.includes('language');
+    };
+    // What is in effect now: the stored judge, the legacy form converted, or the yml T (M1: T is
+    // passed only while it still applies, i.e. no migration has stored it).
+    const current = effectiveAmbientJudgePolicy(purposes, options.ambientTrigger);
+    const triggerDefaults = (written: AmbientJudgePolicy): AmbientJudgePolicy => {
+      if (current.source === 'stored' || !options.ambientTrigger) return written;
+      const legacy = effectiveAmbientJudgePolicy({ defaults: {} }, options.ambientTrigger).policy;
+      return { ...(legacy.minConfidence !== undefined ? { minConfidence: legacy.minConfidence } : {}), ...(legacy.mode ? { mode: legacy.mode } : {}), ...written };
+    };
+    let ambient: AmbientJudgePolicy | null | undefined;
+    if (raw.ambient === null) ambient = null;
+    else if (typeof raw.ambient === 'string') {
+      const language = referenceAt(raw.ambient, 'purposes.ambient');
+      const base = current.policy;
+      ambient = decisionOnly(base.profile)
+        ? { ...base, fallbacks: [language] }
+        : { ...base, profile: language, fallbacks: undefined };
+      if (ambient.compare === language) ambient = { ...ambient, compare: undefined };
+      ambient = normalizeAmbientJudgePolicy(JSON.parse(JSON.stringify(ambient)), 'purposes.ambient', invalidAt);
+    } else if (raw.ambient !== undefined) {
+      const entry = raw.ambient;
+      const parsed = normalizeAmbientJudgePolicy(entry, 'purposes.ambient', invalidAt);
+      const value = entry as Record<string, unknown>;
+      ambient = Object.freeze(triggerDefaults({ ...parsed,
+        ...(parsed.profile !== undefined ? { profile: referenceAt(value.profile, 'purposes.ambient.profile') } : {}),
+        ...(parsed.fallbacks ? { fallbacks: (value.fallbacks as unknown[]).map((alias, index) => referenceAt(alias, `purposes.ambient.fallbacks[${index}]`)) } : {}),
+        ...(parsed.compare !== undefined ? { compare: referenceAt(value.compare, 'purposes.ambient.compare') } : {}) }));
+      // Ids again after alias resolution: two aliases can name one Profile.
+      normalizeAmbientJudgePolicy(ambient, 'purposes.ambient', invalidAt);
+    }
+    // Deprecated: `purposes.decisions.ambient` (ADR 0066 D5.6), converted by the D5 table.
+    const decisionInput = raw.decisions === undefined ? undefined : record(raw.decisions);
+    if (decisionInput && Object.hasOwn(decisionInput, 'ambient')) {
+      if ((options.legacyAmbientDecisions ?? AMBIENT_JUDGE_LEGACY_IMPORT) === 'reject') invalidAt('purposes.decisions.ambient');
+      const legacy = decisionInput.ambient;
+      // The judge this plan writes, else the one in effect.
+      const base: AmbientJudgePolicy = ambient ?? current.policy;
+      let mode: unknown = 'off';
+      let profile: string | undefined;
+      let timeout: { timeoutMs?: number } = {};
+      let legacyConfidence: unknown;
+      if (legacy !== null) {
+        let value: Record<string, unknown>;
+        try { value = record(legacy); keys(value, ['profile', 'mode', 'timeoutMs', 'minConfidence']); } catch { return invalidAt('purposes.decisions.ambient'); }
+        mode = value.mode;
+        if (!['off', 'shadow', 'active'].includes(String(mode))) invalidAt('purposes.decisions.ambient.mode');
+        profile = value.profile === undefined ? undefined : referenceAt(value.profile, 'purposes.decisions.ambient.profile');
+        if (mode !== 'off' && profile === undefined) invalidAt('purposes.decisions.ambient.profile');
+        legacyConfidence = value.minConfidence;
+        if (legacyConfidence !== undefined && (typeof legacyConfidence !== 'number' || !Number.isFinite(legacyConfidence) || legacyConfidence < 0 || legacyConfidence > 1)) {
+          invalidAt('purposes.decisions.ambient.minConfidence');
+        }
+        timeout = value.timeoutMs === undefined ? {} : { timeoutMs: value.timeoutMs as number };
+      }
+      let next: AmbientJudgePolicy;
+      // The D5 table, with the judge above as `L` and its threshold / mode as `T`.
+      if (mode === 'active') {
+        const fallbacks = [...new Set([...(base.profile ? [base.profile] : []), ...(base.fallbacks ?? [])])].filter(id => id !== profile && id !== base.compare);
+        next = { ...base, profile, ...(fallbacks.length ? { fallbacks } : { fallbacks: undefined }), ...timeout,
+          minConfidence: Math.max(base.minConfidence ?? DEFAULT_AMBIENT_MIN_CONFIDENCE, (legacyConfidence as number | undefined) ?? 0) };
+      } else if (mode === 'shadow') {
+        next = { ...base, compare: profile, ...timeout };
+      } else {
+        // `off` / `null`: the old switch-off. The decision judge leaves, the language judge it
+        // stood in front of comes back (from the migration record when known, else the language
+        // members of the chain), and a decision compared model (the old shadow) goes too.
+        next = { ...base };
+        if (decisionOnly(base.profile)) {
+          const languages = (base.fallbacks ?? []).filter(id => !decisionOnly(id));
+          const original = options.legacyAmbientLanguage;
+          const head = original ? original.profile : languages[0];
+          next = { ...next, profile: head, fallbacks: head ? (original ? original.fallbacks : languages.slice(1)) : undefined };
+        }
+        if (decisionOnly(base.compare)) next = { ...next, compare: undefined };
+      }
+      ambient = normalizeAmbientJudgePolicy(JSON.parse(JSON.stringify(next)), 'purposes.decisions.ambient', invalidAt);
+      warnings.push(Object.freeze({ path: 'purposes.decisions.ambient', code: 'deprecated-decisions-ambient',
+        message: 'purposes.decisions.ambient is deprecated (ADR 0066): write the interjection judge as purposes.ambient' }));
+    }
+    if (ambient !== undefined) purposes = withoutLegacyAmbientJudge(purposes);
+    purposes = compact({ ...purposes, ...(ambient !== undefined ? { ambient: ambient ?? undefined } : {}), defaults: compact({ ...purposes.defaults,
       ...languageFields('chat', raw.chat, 'purposes.chat'),
-      ...languageFields('ambient', raw.ambient, 'purposes.ambient'),
       ...languageFields('summary', raw.summary, 'purposes.summary'),
       // Image generation has no fallback chain: a different image model is a different result.
       ...(raw.image !== undefined ? { image: raw.image === null ? undefined : (() => {
@@ -307,7 +426,8 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
         return languageSelection(raw.image, 'purposes.image').profile;
       })() } : {}),
       ...(raw.perception !== undefined ? { perception: raw.perception === null ? undefined : perception(raw.perception) as unknown as PurposePolicy['defaults']['perception'] } : {}) }),
-    ...(raw.decisions !== undefined ? { decisions: mergeValues(purposes.decisions, raw.decisions, entry => {
+    ...(raw.decisions !== undefined ? { decisions: mergeValues(purposes.decisions,
+      Object.fromEntries(Object.entries(record(raw.decisions)).filter(([task]) => task !== 'ambient')), entry => {
         const value = record(entry);
         return { ...value, ...(value.profile !== undefined ? { profile: reference('profiles', value.profile) } : {}) };
       }) } : {}),
@@ -351,6 +471,7 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
   const defaults = next.purposes.defaults;
   const hostProfiles = [defaults.chat, ...(defaults.chatFallbacks ?? []), defaults.summary, ...(defaults.summaryFallbacks ?? []),
     defaults.ambient, ...(defaults.ambientFallbacks ?? []), defaults.image,
+    next.purposes.ambient?.profile, ...(next.purposes.ambient?.fallbacks ?? []), next.purposes.ambient?.compare,
     defaults.perception?.profile, ...(defaults.perception?.fallbacks ?? []),
     ...Object.values(next.purposes.decisions ?? {}).map(policy => policy.profile), ...Object.values(next.purposes.agents ?? {}),
     ...Object.values(next.purposes.agentFallbacks ?? {}).flat(),
@@ -362,6 +483,7 @@ export async function reviewProviderPlan(options: ReviewProviderPlanOptions): Pr
     graph: next, bindings: frozenBindings,
     changes: Object.freeze(Object.fromEntries(Object.entries(changes).map(([kind, change]) => [kind,
       Object.freeze({ created: Object.freeze(change.created), updated: Object.freeze(change.updated), removed: Object.freeze(change.removed) })]))) as ReviewedProviderPlan['changes'],
+    ...(warnings.length ? { warnings: Object.freeze(warnings) } : {}),
   });
 }
 
@@ -383,6 +505,9 @@ export function changedPurposeProfileIds(before: PurposePolicy, after: PurposePo
     for (const [name, id] of Object.entries(policy.agents ?? {})) put(['agents', name], id);
     for (const [name, ids] of Object.entries(policy.agentFallbacks ?? {})) chain(['agentFallbacks', name], ids);
     for (const [task, value] of Object.entries(policy.decisions ?? {})) put(['decisions', task], value.profile);
+    put(['ambient', 'profile'], policy.ambient?.profile);
+    chain(['ambient', 'fallbacks'], policy.ambient?.fallbacks);
+    put(['ambient', 'compare'], policy.ambient?.compare);
     for (const kind of ['adapters', 'endpoints'] as const) for (const [key, value] of Object.entries(policy[kind] ?? {})) {
       put([kind, key, 'chat'], value.chat);
       chain([kind, key, 'chatFallbacks'], value.chatFallbacks);

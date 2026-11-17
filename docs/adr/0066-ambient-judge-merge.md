@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0066：插话判断合并——「旁听」用途与「旁听参与判断」决策合成一项，语言模型和决策模型共用一条备用链
 
-状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施。实施进度：P0–P3 都还没开始。
+状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施。实施进度：本仓库 P0–P3 已实施（分支 `feat/adr-0066-ambient-judge`，每个阶段一个提交）；zhinjs/console 前端的部分（「zhinjs/console 仓库要做的部分」1–5）尚未开始。实施中按本文推荐和最小惊讶原则补充的决定见下方「实施记录」。
 
 关联：[ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md)（Provider 图、用途、多决策模型；增补「用途备用模型」的切换条件与跳过表，含第 40 批修订）、[ADR 0037](./0037-controlled-landing-phase1-group-ops.md)（冷场计数）、[ADR 0061](./0061-inbound-message-outcomes.md)（`ambient_silent` / `not_addressed` 结局）、[ADR 0062](./0062-one-path-per-task.md) §23（插话按群开关；数据库为事实来源）、[ADR 0057](./0057-config-storage.md)（声明放 yml，运行时状态放数据库）。
 
@@ -57,8 +57,9 @@ sidebar: false
        timeoutMs: 3000                 # 决策模型成员的单次超时，默认 3000；语言模型成员不用它（D2）
    ```
 
-   - 字符串写法 `ambient: deepseek-flash` 仍然有效，等同于 `{ profile: deepseek-flash }`，与现在的含义相同。
-   - 写入这一项总是整项替换（与 0047 增补第 8 条一致）；`null` 清除整项，回到「继承部署聊天、其余取默认值」。
+   - 字符串写法 `ambient: deepseek-flash` 仍然有效，含义与现在相同：它是旧的「旁听」语言模型写法，只替换语言判断（主项；决策模型作主项时替换第一个备用），保留已有的 `mode`、`compare`、`minConfidence`、`timeoutMs`（实施时补充，见「实施记录」第 13 条）。
+   - 对象写法总是整项替换（与 0047 增补第 8 条一致）；`null` 清除整项，回到「继承部署聊天、其余取默认值」。
+   - 废弃期内的旧写法 `purposes.decisions.ambient` 按旧语义撤销：`mode: off` 或 `null` 去掉决策主项，恢复原来的语言主项（迁移记录里的，或跟随聊天），并去掉作为对照的决策模型（原「仅评估」）；`active` / `shadow` 按迁移表合并。
    - 只允许上面 6 个键，其他键报错，错误带 `path`（如 `purposes.ambient.fallbacks[1]`）。
 4. **存储形状**：`PurposePolicy` 新增顶层字段 `ambient?: AmbientJudgePolicy`：
 
@@ -261,3 +262,33 @@ Console 前端在 zhinjs/console（ADR 0052）。本仓库提供 P1–P3 的数�
 5. yml 里留着 `ai.trigger.ambient.mode: shadow`：迁移后 `purposes.ambient.mode` 为 `shadow`；之后删掉 yml 里这一行不改变行为；`zhin doctor --fix` 能删掉它。
 6. 决策「启用」的部署，Console 模型页不再显示没被调用的语言模型为「默认旁听」；配置里没有 `ai.trigger.ambient` 时，插话判断的模型显示为「插话未开启」。
 7. 迁移后运行 `zhin ai purposes revert ambient-judge`，图恢复为迁移前的 `purposes`；改过 `purposes.ambient` 后运行则被拒绝。
+
+## 实施记录
+
+本节记录实施时对本文未写明之处的取舍（2026-11-17）。
+
+1. **结构化 `source`**：`EngagementJudgment.source` 改为 `{ kind, profile, model, fallbackFrom? }`，显示字符串移到新增的 `sourceLabel`；`fallbackFrom`（显示字符串）和第 47 批的 `ref`（与 `source` 同一对象）保留到废弃期结束。`EngagementJudgeCall` / `EngagementJudgeFailure` 的字符串 `source` 不变（它们已有 `ref`）。
+2. **D2 表未列出的失败类别**：`length`、`empty_response`、`non_json_response`、`malformed_tool_call` 按「回答无效」处理（换、不写跳过表）；`bad_request` 与 `aborted` 不换；决策模型没有类别的失败（`provider_error`）按网络错误处理。成员无法构造（Profile 不可用）或上下文装不下时跳过，不计失败。
+3. **决策 Driver 的错误分类**：仓库里的决策 Driver 只有 `plugins/services/typesafe`（不在 `packages/im/ai/src/providers/`）。`@zhin.js/ai` 的 `ProviderErrorKind` 新增 `invalid_response`，驱动以 `code: 'invalid-response'` 报告；TypeSafe 驱动保留 HTTP 状态、`Retry-After` 和响应体的错误码（不含正文）。
+4. **门槛与模式的传递**：链读 `purposes.ambient` 后，在判断结果上带 `gate`（`minConfidence`、`mode`），`AmbientEngagement` 只按它判一次；没有 `gate` 时取默认 0.7 / `active`，不再读 `ai.trigger.ambient.minConfidence` / `mode`。
+5. **yml 旧键在所有路径上都不丢**：只有 yml 旧键的部署也迁移（否则升级后 `mode: shadow` 会失效，见验收 5）。`purposes.ambient` 已存在但还没迁移过时（例如空库首次启动从 `ai.plan.yml` seed，或迁移失败 / 回退后又写入），迁移只把它缺少的 `minConfidence` / `mode` 从 yml 补上；seed 本身和 Console / 导入的写入在旧键仍生效时也做同样的合并。管理视图、`purposeEffects`、导出与插话状态都按「仍然生效的 yml 旧键」计算，显示的门槛和模式与实际运行一致。
+6. **迁移记录的存放**：模型配置库新增表 `agent_inference_migrations`，迁移写图与记录在同一个事务里；`noticedAt` 单独更新。`zhin doctor` 通过本机网关读写（实例未运行时不显示迁移记录）。
+7. **回退的范围**：`zhin ai purposes revert ambient-judge` 只把插话判断恢复为迁移前的存储形状（旧字段，或迁移前已有的 `purposes.ambient`），其他用途保持当前值；未改过其他用途时结果与 `before` 相同（验收 7）。迁移时读入、之后被 `zhin doctor --fix` 删掉的 yml 旧键由 CLI 经配置写锁写回；写不回时不回退并给出手工步骤，回退被拒时撤销刚写回的键。旧形状已不成立（例如引用的 Profile 已删除）时拒绝并给出路径。回退后记录为 `reverted`，不再自动迁移，当前版本按旧写法在内存里换算（行为不变）。
+8. **废弃期开关**：`purposes.decisions.ambient` 导入与 doctor 的报错级别由常量控制（`AMBIENT_JUDGE_LEGACY_IMPORT`、`RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED`），到期时在后续 minor 中切换。导入 `purposes.decisions.ambient: null` 不改插话判断，只给警告。
+9. **D5.7 与旧键写入的转换**：迁移完成后，任何入口写到 yml 的这两个键（旧版 Console 的 `config:patch`、导入的配置、手工编辑）都不会静默失效：实例在下一次加载时发现它们与迁移记录里已处理过的值（`triggerSeen`）不同，就把新值写进 `purposes.ambient`，并记一行 info 日志 `ambient_trigger_write_converted`；同样的值不重复转换，之后在 Console 改的 `purposes.ambient` 不会被旧值覆盖，删掉这两个键不改变插话判断。自我变更不能写这两个键（含在父对象里一并写入），仍可删除；聊天 `config set` 按 D5.7 拒绝读写它们（明确报错，不是静默失效）。`zhin doctor` 只在实例的迁移记录为 `migrated`、键已被迁移读入且值未再改动时，才提示「不再生效」并允许 `--fix` 删除；实例未运行、未迁移、迁移失败或已回退时它们仍然生效，只给警告并拒绝 `--fix`。
+10. **`no-conversations` 的判断**：只有能列出功能开关、且确认没有任何开关把插话打开时才报 `no-conversations`；无法确定时按生效显示，不误报。
+11. **插话状态的 `judges`**：保留字符串数组（改为实际判断器链的显示名），另加结构化的 `judgeChain`（成员、类型、角色、是否在跳过期）与 `minConfidence`，避免旧 Console 读取出错。`HostInference.purposeEffects()`（Console 待办来源）仍只含 `agents.*`；`ambient` 与 `decisions.*` 只在管理视图的 `purposeEffects` 中。
+12. **对照模型的审计键**：只写 `compare`（结论）和 `compareJudge*`（与 `judge*` 同后缀），不写对照模型的置信度，遵守「其他键不得以 `compare` 开头」。
+13. **旧写法的撤销语义**（见 D1.3）：字符串写法只替换语言判断并保留模式、对照和门槛；`purposes.decisions.ambient` 的 `off` / `null` 撤销决策主项与决策对照，恢复迁移记录里的语言主项。
+14. **没有 `gate` 的判断**：自定义判断器给出的结果不带 `gate` 时，`AmbientEngagement` 回退读已废弃的 `ai.trigger.ambient.minConfidence` / `mode`，不会比以前多插话；直接构造 `DecisionEngagementJudge({ policy: { minConfidence } })` 的旧调用方仍在判断器内按它把关。判断器链不设这两项，所以门槛只判一次。
+15. **不兼容的类型变化**（已批准的 minor）：`EngagementJudgment.source` 由字符串改为对象（改读 `sourceLabel` 或 `source.kind` / `source.profile`），无法在不破坏类型的前提下同时保留字符串；`DecisionPurpose`、`InferencePurpose` 的 `decision:ambient`、`DecisionTask` / `DECISION_TASKS` 去掉 `ambient`；`PurposeIgnoredReason`、`ProviderErrorKind`、`ModelFallbackReason` 新增成员（穷举这些联合类型的代码要补分支）。迁移路径写在 changeset 里。
+16. **迁移记录的并发**：`noticedAt` 用带期望 revision、且要求状态仍为 `migrated` 的 CAS 写入，与回退并发时回退优先；失败记录也只在记录没变时写入。
+17. **写回原值不算新写入**：yml 里出现的值与迁移时读入的值（`triggerValues`，已按 D5 表折算进 `after`）相同，或与已处理过的值（`triggerSeen`）相同，都不转换；两边都按运行时规则规范化后比较（`minConfidence` 截到 0..1，`mode` 只认 `active` / `shadow`）。回退命令开始时在迁移记录上做 CAS 写入 `revertPending`，期间暂停转换，结束时无论成败都清除；标记 10 分钟后失效，避免 CLI 中断后一直卡住。
+18. **seed 过的 `purposes.ambient` 也能回退给旧版本**：迁移前已存在的 `purposes.ambient` 按 D5 表反向换成旧字段（决策主项 → 启用的 `decisions.ambient`，其语言备用 → 语言用途；决策对照 → 「仅评估」的 `decisions.ambient`），门槛和模式由 CLI 写入 yml 的 `ai.trigger.ambient`。旧写法表达不了的部分（备用链里的决策模型、语言对照模型、决策启用时还设了对照、决策失败时换语言模型）列在回退结果里；有这类内容时 CLI 明确说旧版本无法读取、给出手工步骤，不提示「可以降级」。
+19. **doctor 的「已处理」判断**：按 `triggerSeen`（及迁移读入的 `triggerValues`）的键和规范化后的值判断，而不是只看 `triggerKeys`；迁移后新写入、已被转换过的键也算已处理。
+20. **改回原值也算写入**（复审 R1）：第 17 条「等于迁移读入的值就跳过」只在存储的 `purposes.ambient` 该键仍等于迁移写下的值（`after`）时成立；该键被改过之后（例如旧 Console 先关「只观察」），再写回原值按新写入转换。`zhin doctor` 用同样的条件判断「已处理」。
+21. **回退的顺序**（复审 R2）：CLI 先取得 `revertPending` 标记（拿不到就中止），再让实例干跑（`dryRun`，不提交，返回 yml 应有的值与 `lost`），然后写 yml——与配置文件现有值不同时，以当前版本实际运行的值为准覆盖并列出覆盖项，写不了就不回退；接着提交回退，提交被拒时把 yml 恢复原样；最后清除标记。yml 应有的值是迁移读入的值，再由迁移前已存在的 `purposes.ambient` 自己的门槛 / 模式覆盖。回退相关的两个路由都写审计。
+22. **回退不覆盖未转换的写入**（复审 S1）：CLI 把配置文件当前的旧键值随干跑和提交一起发给实例，实例按与加载时转换相同的规则（`pendingAmbientTriggerWrites`）检查；有还没转换的写入就拒绝（`pending-trigger-writes`，列出键），提示先重新加载或重启实例。CLI 写入前用同一条规则再查一次文件。已转换进 `purposes.ambient` 的门槛 / 模式（它们仍在 yml 里）不算「迁移后被改过」：回退照常进行，yml 应有的值取当前运行的值，启用的旧决策的 `minConfidence` 同步为该门槛。
+23. **回退请求的结果不明时**（复审 S2–S4）：提交请求没有回应时先重读迁移状态——已回退就保留 yml 按成功处理，仍是已迁移就撤销 yml，读不到就不动 yml 并给出手工确认步骤。提交返回的 yml 与干跑不一致按 `changed` 处理并撤销。撤销 yml 失败时列出原值和手工恢复步骤，退出码为 1。回退进行中（`revertPending` 未过期）`zhin doctor --fix` 不删旧键。
+24. **第五轮复审**：提交成功但返回的 yml 与干跑不一致时，图已经回退，CLI 按提交返回的值重写配置文件并报告已回退；写不进去时列出要手工改的值，退出码为 1（T1）。提交没有回应、第一次查到仍是已迁移时，等一会儿再查一次，两次都是已迁移才撤销 yml，否则按「读不到状态」保留 yml 并提示手工确认（T2）。门槛 / 模式与迁移写下的值不同、而配置文件里没有这个值时（例如转换后被 `zhin doctor --fix` 删掉，或在 Console 里改过），回退拒绝时附上 `restore`，CLI 提示「把 yml 的 X 改回 Y 后，就可以回退」；配置文件写回这个值后，它与正在运行的值相同，不算待转换的写入（T3）。
+

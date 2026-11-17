@@ -5,6 +5,7 @@ export * from './environment-source.js';
 export * from './driver.js';
 export * from './repository.js';
 export * from './graph.js';
+export * from './ambient-judge.js';
 export * from './selection.js';
 export * from './requirements.js';
 export * from './state.js';

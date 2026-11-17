@@ -50,8 +50,9 @@ describe('purpose fallbacks in the plan and graph (#1250)', () => {
     expect(purposes.defaults.chat).toBe(id('free'));
     expect(purposes.defaults.chatFallbacks).toEqual([id('cnb'), id('deep')]);
     expect(purposes.defaults.summaryFallbacks).toEqual([id('deep')]);
-    expect(purposes.defaults.ambient).toBe(id('free'));
-    expect(purposes.defaults.ambientFallbacks).toBeUndefined();
+    // ADR 0066: `purposes.ambient: free` is the interjection judge `{ profile: free }`.
+    expect(purposes.ambient).toEqual({ profile: id('free') });
+    expect(purposes.defaults.ambient).toBeUndefined();
     expect(purposes.agents).toEqual({ researcher: id('free') });
     expect(purposes.agentFallbacks).toEqual({ researcher: [id('cnb')] });
     expect(purposes.adapters?.qq).toEqual({ chat: id('free'), chatFallbacks: [id('deep')] });

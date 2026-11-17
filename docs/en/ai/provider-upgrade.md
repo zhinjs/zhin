@@ -103,6 +103,12 @@ zhin migrate inference --apply session-preview.json --maintenance --backup-confi
 
 A SQLite preview reads the database read-only and validates targets ahead of time. A non-SQLite database uses the explicit source snapshot from `--state-snapshot`, is marked `targetValidation: deferred-until-apply`, and does not connect to the remote. For every database, before the first Session CAS of apply, all targets, the static owner, the complete Account identity, and the original source revision are verified again; if any check fails, no other selected Session is written. This mode does not switch the startup file, read model credentials, load Drivers, or delete the old catalog. It stores only the Profile identity; parameters and the native model still follow that Profile on the next turn.
 
+### Deprecated interjection settings (ADR 0066)
+
+- `ai.trigger.ambient.minConfidence` / `mode` in `zhin.config.yml`: the threshold and "watch only" are set in the interjection judge `purposes.ambient`. The first load after the upgrade reads them once; afterwards they no longer apply. Every generation warns once at startup, `zhin doctor` warns and `zhin doctor --fix` removes them. After the deprecation window `zhin doctor` reports them as errors (startup only warns).
+- The legacy stored forms `purposes.ambient` (language purpose, stored as `defaults.ambient` / `ambientFallbacks`) and `purposes.decisions.ambient` (decision purpose) are migrated to the new `purposes.ambient` on load; importing `purposes.decisions.ambient` is converted by the migration table with a warning during the deprecation window, and fails with `invalid-plan` afterwards.
+- **Run `zhin ai purposes revert ambient-judge` before a downgrade**: older versions cannot read a model configuration with `purposes.ambient`. See [interjection judge migration](../migrations/ambient-judge.md).
+
 ## Author interfaces
 
 - `SdkProviderAdapter`, `createSdkProviderAdapter`, `sdkEntryFromProvider`, and `@zhin.js/ai/model-catalog` are removed. A Driver is a declaration / protocol implementation; the Host owns configuration, credentials, and the call lifecycle.

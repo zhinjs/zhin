@@ -1,7 +1,7 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
-import type { AmbientDecision, EngagementJudgeCall } from '@zhin.js/agent/runtime';
+import type { AmbientDecision, EngagementCompareReport, EngagementJudgeCall } from '@zhin.js/agent/runtime';
 import { dayKeyOf, defaultUsageTimeZone } from '@zhin.js/gateway/usage';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 import { CONTROL_WRITE_PERMISSION, controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
@@ -94,17 +94,76 @@ export interface AmbientJudgeDay {
   readonly unreportedCalls: number;
 }
 
+/**
+ * Agreement with the compared model (ADR 0066 D3), after the same threshold: would each side
+ * have spoken. Only judgments where both sides answered count as agreed / disagreed.
+ */
+export interface AmbientCompareCounts {
+  readonly agreed: number;
+  /** The deciding judge would speak, the compared model would not. */
+  readonly primaryOnly: number;
+  /** The compared model would speak, the deciding judge would not. */
+  readonly comparedOnly: number;
+  /** The compared model failed (`compare_failed`). */
+  readonly failed: number;
+}
+export interface AmbientCompareStatus extends AmbientCompareCounts {
+  /** The window, ms (24 hours). */
+  readonly windowMs: number;
+  /** The same counts by the chain member that decided: 0 = the configured judge, n = the n-th fallback. */
+  readonly byMember: readonly (AmbientCompareCounts & Readonly<{ member: number; profile?: string }>)[];
+  /** Compared models seen in the window (Profile ids). */
+  readonly comparedProfiles: readonly string[];
+}
+
+interface AmbientCompareEntry {
+  readonly at: number;
+  readonly primarySpeaks: boolean;
+  /** Undefined: the compared model failed. */
+  readonly comparedSpeaks?: boolean;
+  readonly member: number;
+  readonly profile?: string;
+  readonly compared?: string;
+}
+
+/** One interjection judge member (structural copy of the Agent host's view; the Agent package is optional). */
+export interface AmbientJudgeMember {
+  readonly profile: string;
+  readonly label: string;
+  readonly kind?: 'language' | 'decision';
+  readonly role: 'primary' | 'fallback' | 'compare';
+  readonly skippedUntil?: number;
+  readonly skipReason?: string;
+}
+/** The interjection judge in effect, as the Agent host reports it (ADR 0066 D7). */
+export interface AmbientJudgeView {
+  readonly chain: readonly AmbientJudgeMember[];
+  readonly inheritedFrom?: 'chat';
+  readonly compare?: AmbientJudgeMember;
+  readonly mode: 'active' | 'shadow';
+  readonly minConfidence: number;
+}
+
 export interface AmbientStatus {
   readonly enabled: boolean;
-  /** `off` when no group is configured; `shadow` judges without replying. */
+  /** `off` when no group is configured; `shadow` judges without replying (`purposes.ambient.mode`, ADR 0066 D4). */
   readonly mode: 'off' | 'shadow' | 'active';
   /** Configured groups: a count, or `all` for `*`. */
   readonly groups: number | 'all';
-  /** Selected ambient language model (`service/model`), or an empty list when unconfigured. */
+  /** The judge chain actually used (`service/model`, primary first), or an empty list when unconfigured. */
   readonly judges: readonly string[];
+  /** The same chain as data (ADR 0066 D7): kind, role and skip period of each member, then the compared model. */
+  readonly judgeChain: readonly AmbientJudgeMember[];
+  /** The one threshold of `purposes.ambient` (ADR 0066 D4), when known. */
+  readonly minConfidence?: number;
   readonly last24h: Readonly<Record<AmbientOutcome, number>>;
-  /** Structured-decision shadow comparison over 24h: same / different call than the chat-model judge. */
+  /**
+   * @deprecated ADR 0066 D3: read `compare`. Kept for the deprecation window with the same data
+   * (`agreed`, and both kinds of disagreement summed) plus legacy shadow records.
+   */
   readonly decisionShadow: Readonly<{ agreed: number; disagreed: number }>;
+  /** The compared model of `purposes.ambient.compare` over the last 24 hours (ADR 0066 D3). */
+  readonly compare: AmbientCompareStatus;
   /** Newest first, at most 20. */
   readonly recent: readonly AmbientRecentItem[];
   readonly updatedAt: number | null;
@@ -166,6 +225,7 @@ export class AssistantStatus {
   readonly #now: () => number;
   readonly #ambient: AmbientRecentItem[] = [];
   readonly #shadow: Array<{ at: number; agreed: boolean }> = [];
+  readonly #compare: AmbientCompareEntry[] = [];
   readonly #decisions: Array<SkillsRecentItem & Readonly<{ inputTokens: number; outputTokens: number }>> = [];
   readonly #judgeDays = new Map<string, MutableJudgeDay>();
   readonly #timeZone: string;
@@ -201,7 +261,7 @@ export class AssistantStatus {
   }
 
   /** Request-owned metadata reader; no model runtime is cached by this process status store. */
-  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<readonly string[]> }> = {}): PluginConsoleRpc {
+  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<AmbientJudgeView | readonly string[]> }> = {}): PluginConsoleRpc {
     return definePluginConsoleRpc({
       // Control switches, session ops, announcement / group-rule drafts are day-to-day operator work;
       // approving them stays `ops:approve` (manage). `control:write` would otherwise infer `manage`.
@@ -298,7 +358,7 @@ export class AssistantStatus {
           group,
           outcome: decision.kind === 'engage' ? 'spoke' : decision.kind === 'shadow' ? 'watched' : 'stayed_quiet',
           confidence: Math.round(clamp01(decision.judgment.confidence) * 100) / 100,
-          judge: decision.judgment.source?.startsWith('decision:') ? 'decision' : 'chat-model',
+          judge: (decision.judgment.source ?? decision.judgment.ref)?.kind === 'decision' ? 'decision' : 'chat-model',
         };
     push(this.#ambient, entry);
   }
@@ -307,6 +367,15 @@ export class AssistantStatus {
   recordAmbientShadow(decisionEngage: boolean | undefined, judgeEngage: boolean | undefined): void {
     if (decisionEngage === undefined || judgeEngage === undefined) return;
     push(this.#shadow, { at: this.#now(), agreed: decisionEngage === judgeEngage });
+  }
+
+  /** One judgment compared with `purposes.ambient.compare` (ADR 0066 D3); metadata only. */
+  recordAmbientCompare(report: EngagementCompareReport): void {
+    // A judgment whose deciding side failed compares nothing.
+    if (report.primarySpeaks === undefined) return;
+    push(this.#compare, Object.freeze({ at: this.#now(), primarySpeaks: report.primarySpeaks, ...(report.comparedSpeaks !== undefined ? { comparedSpeaks: report.comparedSpeaks } : {}),
+      member: report.member ?? 0, ...(report.primary?.profile ? { profile: report.primary.profile } : {}),
+      ...(report.compared?.profile ? { compared: report.compared.profile } : {}) }));
   }
 
   /** One ambient judge model call (#1250); metadata only, never chat text or error text. */
@@ -363,7 +432,14 @@ export class AssistantStatus {
     });
   }
 
-  ambient(judges: readonly string[] = []): AmbientStatus {
+  /** The current `ai.trigger.ambient` section (undefined when the configuration has none). */
+  ambientTriggerConfig(): AmbientEngagementConfig | undefined {
+    return this.#readAmbientConfig();
+  }
+
+  ambient(judge: AmbientJudgeView | readonly string[] = []): AmbientStatus {
+    const view = Array.isArray(judge) ? undefined : judge as AmbientJudgeView;
+    const judges = view ? view.chain.map(member => member.label) : judge as readonly string[];
     const now = this.#now();
     const since = now - WINDOW_MS;
     const judgeCutoff = this.#judgeCutoff(now);
@@ -374,15 +450,37 @@ export class AssistantStatus {
     const last24h: Record<AmbientOutcome, number> = { spoke: 0, watched: 0, stayed_quiet: 0, skipped: 0 };
     for (const entry of window) last24h[entry.outcome] += 1;
     const shadow = this.#shadow.filter((entry) => entry.at >= since);
+    const compared = this.#compare.filter((entry) => entry.at >= since);
+    const counts = (rows: readonly AmbientCompareEntry[]): AmbientCompareCounts => Object.freeze({
+      agreed: rows.filter(row => row.comparedSpeaks !== undefined && row.comparedSpeaks === row.primarySpeaks).length,
+      primaryOnly: rows.filter(row => row.comparedSpeaks === false && row.primarySpeaks).length,
+      comparedOnly: rows.filter(row => row.comparedSpeaks === true && !row.primarySpeaks).length,
+      failed: rows.filter(row => row.comparedSpeaks === undefined).length,
+    });
+    const total = counts(compared);
+    const members = [...new Set(compared.map(row => row.member))].sort((a, b) => a - b);
     return Object.freeze({
       enabled,
-      mode: !enabled ? 'off' : config?.mode === 'shadow' ? 'shadow' : 'active',
+      // ADR 0066 D4: `purposes.ambient.mode`; the retired yml key only without the Agent host's view.
+      mode: !enabled ? 'off' : (view ? view.mode : config?.mode) === 'shadow' ? 'shadow' : 'active',
       groups: conversations.includes('*') ? 'all' : conversations.length,
-      judges: Object.freeze(judges.map((judge) => judge.trim()).filter(Boolean)),
+      judges: Object.freeze(judges.map((entry) => entry.trim()).filter(Boolean)),
+      judgeChain: Object.freeze(view ? [...view.chain, ...(view.compare ? [view.compare] : [])].map(member => Object.freeze({ ...member })) : []),
+      ...(view ? { minConfidence: view.minConfidence } : {}),
       last24h: Object.freeze(last24h),
       decisionShadow: Object.freeze({
-        agreed: shadow.filter((entry) => entry.agreed).length,
-        disagreed: shadow.filter((entry) => !entry.agreed).length,
+        agreed: shadow.filter((entry) => entry.agreed).length + total.agreed,
+        disagreed: shadow.filter((entry) => !entry.agreed).length + total.primaryOnly + total.comparedOnly,
+      }),
+      compare: Object.freeze({
+        windowMs: WINDOW_MS,
+        ...total,
+        byMember: Object.freeze(members.map(member => {
+          const rows = compared.filter(row => row.member === member);
+          const profile = [...rows].reverse().find(row => row.profile)?.profile;
+          return Object.freeze({ member, ...(profile ? { profile } : {}), ...counts(rows) });
+        })),
+        comparedProfiles: Object.freeze([...new Set(compared.flatMap(row => row.compared ? [row.compared] : []))]),
       }),
       recent: Object.freeze(window.slice(-RECENT_LIMIT).reverse().map((item) => Object.freeze({ ...item }))),
       updatedAt: window.at(-1)?.at ?? null,

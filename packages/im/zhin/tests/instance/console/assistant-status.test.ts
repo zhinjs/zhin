@@ -18,7 +18,7 @@ it('summarizes ambient decisions without chat text or judge reasons', () => {
   status.bindAmbientConfig(() => ({ conversations: ['qq:1', 'qq:2'], mode: 'shadow' }));
   status.recordAmbient('qq:1', { kind: 'engage', judgment: { engage: true, confidence: 0.876, reason: SECRET } });
   time.advance(1);
-  status.recordAmbient('qq:1', { kind: 'declined', judgment: { engage: false, confidence: 0.2, reason: SECRET, source: 'decision:small' } });
+  status.recordAmbient('qq:1', { kind: 'declined', judgment: { engage: false, confidence: 0.2, reason: SECRET, source: { kind: 'decision', model: 'small' }, sourceLabel: 'decision:small' } });
   time.advance(1);
   status.recordAmbient('qq:2', { kind: 'shadow', judgment: { engage: true, confidence: 0.9, reason: SECRET } });
   status.recordAmbient('qq:2', { kind: 'skipped', reason: 'superseded' });
@@ -157,4 +157,49 @@ it('serves plugin.root.ambient / plugin.root.skills to tokens holding the matchi
   expect(await call('plugin.root.ambient', publicConsoleAccess)).toMatchObject({ status: 403 });
   expect(await call('plugin.root.skills', unrestrictedConsoleAccess)).toMatchObject({ status: 200, body: { data: { tasks: [] } } });
   expect(await call('plugin.root.status', unrestrictedConsoleAccess)).toMatchObject({ status: 404 });
+});
+
+it('counts agreement with the compared model over 24 hours, by deciding member, and keeps decisionShadow (ADR 0066 D3)', () => {
+  const time = clock();
+  const status = new AssistantStatus({ now: time.now });
+  const chat = { kind: 'language' as const, profile: 'chat', model: 'chat' };
+  const spare = { kind: 'language' as const, profile: 'spare', model: 'spare' };
+  const jev = { kind: 'decision' as const, profile: 'jev', model: 'jev' };
+  // Older than the window: dropped.
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: true, primary: chat, compared: jev, member: 0 });
+  time.advance(25 * HOUR);
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: true, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: false, comparedSpeaks: false, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: false, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: false, comparedSpeaks: true, primary: spare, compared: jev, member: 1 });
+  status.recordAmbientCompare({ primarySpeaks: true, primary: spare, member: 1, comparedFailure: 'timeout' });
+  // The deciding side failed: nothing to compare.
+  status.recordAmbientCompare({ comparedSpeaks: true, compared: jev });
+  const ambient = status.ambient();
+  expect(ambient.compare).toEqual({
+    windowMs: 24 * HOUR, agreed: 2, primaryOnly: 1, comparedOnly: 1, failed: 1,
+    byMember: [
+      { member: 0, profile: 'chat', agreed: 2, primaryOnly: 1, comparedOnly: 0, failed: 0 },
+      { member: 1, profile: 'spare', agreed: 0, primaryOnly: 0, comparedOnly: 1, failed: 1 },
+    ],
+    comparedProfiles: ['jev'],
+  });
+  expect(ambient.decisionShadow).toEqual({ agreed: 2, disagreed: 2 });
+  time.advance(24 * HOUR + 1);
+  expect(status.ambient().compare).toMatchObject({ agreed: 0, primaryOnly: 0, comparedOnly: 0, failed: 0, byMember: [] });
+});
+
+it('shows the judge chain actually used and reads the mode from purposes.ambient (ADR 0066 D7)', () => {
+  const status = new AssistantStatus({ now: clock().now });
+  // The retired yml mode no longer decides; the Agent host's view does.
+  status.bindAmbientConfig(() => ({ conversations: ['*'], mode: 'active' }));
+  const view = { mode: 'shadow' as const, minConfidence: 0.8,
+    chain: [{ profile: 'jev', label: 'TypeSafe/jev', kind: 'decision' as const, role: 'primary' as const, skippedUntil: 5, skipReason: 'billing' },
+      { profile: 'small', label: '主站/small', kind: 'language' as const, role: 'fallback' as const }],
+    compare: { profile: 'chat', label: '主站/chat', kind: 'language' as const, role: 'compare' as const } };
+  const ambient = status.ambient(view);
+  expect(ambient).toMatchObject({ mode: 'shadow', minConfidence: 0.8, judges: ['TypeSafe/jev', '主站/small'] });
+  expect(ambient.judgeChain.map(member => [member.profile, member.role])).toEqual([['jev', 'primary'], ['small', 'fallback'], ['chat', 'compare']]);
+  // Older callers passing labels keep working.
+  expect(status.ambient(['a/b'])).toMatchObject({ judges: ['a/b'], judgeChain: [], mode: 'active' });
 });

@@ -32,7 +32,7 @@ const JUDGMENT = JSON.stringify({ engage: true, confidence: 0.9, reason: 'chat q
 type Failure = () => Error;
 const unauthorized: Failure = () => Object.assign(new Error(`bad key ${SECRET}`), { statusCode: 401 });
 
-function graph(options: Readonly<{ fallbacks?: boolean; decision?: 'active' | 'shadow' }> = {}) {
+function graph(options: Readonly<{ fallbacks?: boolean; decision?: 'active' | 'shadow'; ambient?: Record<string, unknown> }> = {}) {
   const service = (id: string, label: string, models: Record<string, unknown>) => ({ ...base, id, label,
     driver: { id: 'fixture', owner: 'root/providers', contractVersion: '1' }, options: {}, models });
   const account = (id: string, serviceId: string) => ({ ...base, id, serviceId, incarnation: id, authentication: { method: 'none' } });
@@ -48,7 +48,8 @@ function graph(options: Readonly<{ fallbacks?: boolean; decision?: 'active' | 's
     accounts: { main: account('main', 'main'), spare: account('spare', 'spare') },
     profiles: { primary: profile('primary', 'main', 'chat-a'), backup: profile('backup', 'spare', 'chat-b'), jev: profile('jev', 'main', 'jev') },
     purposes: {
-      defaults: { chat: 'primary', ambient: 'primary', ...(options.fallbacks ? { ambientFallbacks: ['backup'] } : {}) },
+      defaults: { chat: 'primary', ...(options.ambient ? {} : { ambient: 'primary', ...(options.fallbacks ? { ambientFallbacks: ['backup'] } : {}) }) },
+      ...(options.ambient ? { ambient: options.ambient } : {}),
       ...(options.decision ? { decisions: { ambient: { profile: 'jev', mode: options.decision } } } : {}),
     },
   });
@@ -62,7 +63,7 @@ function answer(provider: string, model: string): AssistantMessage {
 }
 
 function setup(options: Readonly<{
-  fallbacks?: boolean; decision?: 'active' | 'shadow'; failing?: Record<string, Failure>; decisionFails?: boolean; decisionUsage?: boolean;
+  fallbacks?: boolean; decision?: 'active' | 'shadow'; ambient?: Record<string, unknown>; failing?: Record<string, Failure>; decisionFails?: boolean; decisionUsage?: boolean;
   /** Fails a request by account and request text (concurrent judgments with different outcomes). */
   failWhen?: (accountId: string, text: string) => Failure | undefined;
   registry?: ModelAvailabilityRegistry;
@@ -92,17 +93,19 @@ function setup(options: Readonly<{
     credentials: () => ({ bindRequest: (input: { request: Request }) => input.request, authorize: async () => ({ headers: {}, revision: '1' }) }),
     fetch: () => async () => { throw new Error('unexpected network'); } });
   const calls: EngagementJudgeCall[] = [];
+  const compares: unknown[] = [];
   const judge = createAmbientEngagementJudge({
     lease: { stopSignal: new AbortController().signal } as never,
     key: 'qq:g1',
-    assistantStatus: { recordAmbientJudgeCall: (call: EngagementJudgeCall) => calls.push(call), recordDecision() {}, recordAmbientShadow() {} } as never,
+    assistantStatus: { recordAmbientJudgeCall: (call: EngagementJudgeCall) => calls.push(call), recordDecision() {}, recordAmbientShadow() {},
+      recordAmbientCompare: (report: unknown) => compares.push(report) } as never,
     modelAvailability: options.registry ?? new ModelAvailabilityRegistry(),
     withInference: async <T>(_input: unknown, run: (scope: InferenceOperationScope) => Promise<T>) => {
       const scope = await runtime.openScope({ context });
       try { return await run(scope); } finally { await scope.close(); }
     },
   });
-  return { judge, calls };
+  return { judge, calls, compares };
 }
 
 const input = () => ({ botName: '小知', recent: ['小林 (1): 有人知道怎么配代理吗'], signal: new AbortController().signal });
@@ -120,7 +123,7 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup();
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, source: 'language:主站/chat-a',
+      expect(judgment).toMatchObject({ engage: true, sourceLabel: 'language:主站/chat-a', source: { kind: 'language', profile: 'primary', model: 'chat-a' },
         usage: { inputTokens: 120, outputTokens: 8, cacheReadTokens: 100, totalTokens: 128 }, durationMs: expect.any(Number) });
       expect(judgment).not.toHaveProperty('fallbackFrom');
       expect(calls).toEqual([expect.objectContaining({ kind: 'language', source: 'language:主站/chat-a', status: 'completed' })]);
@@ -136,9 +139,14 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ fallbacks: true, failing: { main: unauthorized } });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
-      expect(calls).toEqual([expect.objectContaining({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a', status: 'completed' })]);
-      expect(usage.lines()[0]).toContain('model: 备用站/chat-b | fallback_from: 主站/chat-a');
+      expect(judgment).toMatchObject({ engage: true, sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
+        source: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
+      // ADR 0066 P0: each chain member is one call — the failed primary, then the fallback that answered.
+      expect(calls).toEqual([
+        expect.objectContaining({ source: 'language:主站/chat-a', status: 'failed', errorCategory: 'auth' }),
+        expect.objectContaining({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a', status: 'completed' }),
+      ]);
+      expect(usage.lines()[1]).toContain('model: 备用站/chat-b | fallback_from: 主站/chat-a');
     } finally { usage.restore(); }
   });
 
@@ -166,7 +174,12 @@ describe('ambient judge visibility (#1250)', () => {
     const engagement = new AmbientEngagement({ config: { conversations: ['*'] }, judge, sleep: async () => undefined });
     await expect(engagement.consider({ key: 'qq:g1', botName: '小知', readRecent: async () => ['a'] })).resolves.toEqual({ kind: 'skipped', reason: 'judge_failed',
       failure: { category: 'auth', source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
-        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } } });
+        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } },
+        // ADR 0066 D2: every member the chain tried, with its failure class.
+        attempts: [
+          { ref: { kind: 'language', profile: 'primary', model: 'chat-a' }, label: 'language:主站/chat-a', category: 'auth' },
+          { ref: { kind: 'language', profile: 'backup', model: 'chat-b' }, label: 'language:备用站/chat-b', category: 'auth' },
+        ] } });
   });
 
   it('keeps the decision-model path: decision source, usage line and audit fields', async () => {
@@ -174,7 +187,7 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ decision: 'active' });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, confidence: 0.8, source: 'decision:jev', usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
+      expect(judgment).toMatchObject({ engage: true, confidence: 0.8, sourceLabel: 'decision:jev', source: { kind: 'decision', profile: 'jev', model: 'jev' }, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
       expect(calls).toEqual([expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'completed' })]);
       expect(usage.lines()[0]).toMatch(/^judge \| scene: ambient \| conv: qq:g1 \| status: completed \| kind: decision \| model: jev \| calls: 1 \| input: 40 \| output: 2 \| cache_read: \? \| cache_write: \? \| ms: \d+$/u);
     } finally { usage.restore(); }
@@ -185,9 +198,15 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       await setup({ decision: 'active', decisionUsage: false }).judge.judge(input());
       expect(usage.lines()[0]).toMatch(/^judge \| scene: ambient \| conv: qq:g1 \| status: completed \| kind: decision \| model: jev \| calls: 1 \| ms: \d+$/u);
+      // ADR 0066 D5: the legacy active decision judge keeps the former language judge as its first fallback,
+      // so a failed decision model (5xx) is handed over instead of failing the judgment.
       const failing = setup({ decision: 'active', decisionFails: true });
-      await expect(failing.judge.judge(input())).rejects.toThrow('Ambient decision failed: provider_error');
-      expect(failing.calls).toEqual([expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'failed', errorCategory: 'server' })]);
+      await expect(failing.judge.judge(input())).resolves.toMatchObject({ sourceLabel: 'language:主站/chat-a', fallbackFrom: 'decision:jev',
+        source: { kind: 'language', profile: 'primary', fallbackFrom: { profile: 'jev', model: 'jev' } } });
+      expect(failing.calls).toEqual([
+        expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'failed', errorCategory: 'server' }),
+        expect.objectContaining({ kind: 'language', source: 'language:主站/chat-a', fallbackFrom: 'decision:jev', status: 'completed' }),
+      ]);
       expect(usage.lines().join('\n')).not.toContain(SECRET);
     } finally { usage.restore(); }
   });
@@ -196,7 +215,7 @@ describe('ambient judge visibility (#1250)', () => {
     const usage = captureUsage();
     try {
       const { judge, calls } = setup({ decision: 'shadow' });
-      await expect(judge.judge(input())).resolves.toMatchObject({ source: 'language:主站/chat-a' });
+      await expect(judge.judge(input())).resolves.toMatchObject({ sourceLabel: 'language:主站/chat-a' });
       expect(calls.map(call => call.kind).sort()).toEqual(['decision', 'language']);
       expect(usage.lines()).toHaveLength(2);
     } finally { usage.restore(); }
@@ -250,8 +269,8 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ fallbacks: true, registry });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
-        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
+      expect(judgment).toMatchObject({ sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
+        source: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
       expect(calls).toHaveLength(1);
       expect(calls[0]).toMatchObject({ status: 'completed', fallbackFrom: 'language:主站/chat-a' });
       expect(usage.lines()).toHaveLength(1);
@@ -264,11 +283,13 @@ describe('ambient judge visibility (#1250)', () => {
       judge.judge({ ...input(), recent: ['小林 (1): FAIL-ME'] }),
       judge.judge(input()),
     ]);
-    expect(failed).toMatchObject({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
-    expect(plain.source).toBe('language:主站/chat-a');
+    expect(failed).toMatchObject({ sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
+    expect(plain.sourceLabel).toBe('language:主站/chat-a');
     expect(plain).not.toHaveProperty('fallbackFrom');
-    expect(plain.ref).toEqual({ kind: 'language', profile: 'primary', model: 'chat-a' });
-    expect(calls).toHaveLength(2);
+    expect(plain.source).toEqual({ kind: 'language', profile: 'primary', model: 'chat-a' });
+    expect(plain.ref).toEqual(plain.source);
+    // The failing judgment made two calls (primary, then fallback), the plain one a single call.
+    expect(calls).toHaveLength(3);
     expect(calls.filter(call => call.fallbackFrom)).toHaveLength(1);
   });
 
@@ -355,5 +376,41 @@ describe('ambient judge failure classes (#1250)', () => {
     expect(engagementJudgeFailure(await pending)).toMatchObject({ category: 'aborted', source: 'decision:jev' });
     expect(calls.map(call => call.errorCategory)).toEqual(['timeout', 'aborted']);
     expect(observed).toHaveLength(2);
+  });
+});
+
+describe('purposes.ambient at run time (ADR 0066 P1/P2)', () => {
+  it('judges with a mixed chain, carries the policy gate and compares after the same threshold, also in shadow mode', async () => {
+    const { judge, calls, compares } = setup({ ambient: { profile: 'jev', fallbacks: ['backup'], compare: 'primary', minConfidence: 0.85, mode: 'shadow' } });
+    const judgment = await judge.judge(input());
+    // The decision model decides (P(engage) = 0.8); the compared chat model reports 0.9.
+    expect(judgment).toMatchObject({ sourceLabel: 'decision:jev', confidence: 0.8, gate: { minConfidence: 0.85, mode: 'shadow' },
+      compare: { verdict: 'engage', judgment: { sourceLabel: 'language:主站/chat-a' } } });
+    expect(compares).toEqual([expect.objectContaining({ primarySpeaks: false, comparedSpeaks: true, member: 0 })]);
+    expect(calls.map(call => call.kind).sort()).toEqual(['decision', 'language']);
+    const engagement = new AmbientEngagement({ config: { conversations: ['*'] }, judge, sleep: async () => undefined });
+    // Below the one threshold: declined, whatever the compared model thought.
+    await expect(engagement.consider({ key: 'qq:g1', botName: '小知', readRecent: async () => ['a'] })).resolves.toMatchObject({ kind: 'declined' });
+  });
+
+  it('writes the compared model under the compare prefix of the audit payload, never its reason', async () => {
+    const { judge } = setup({ ambient: { profile: 'primary', compare: 'jev', mode: 'shadow' } });
+    const judgment = await judge.judge(input());
+    const log = new DecisionEventLog();
+    auditAmbientDecision(createDecisionAudit(log, decisionScopeOf({ turnId: 't1', platform: 'qq', scope: 'group', sceneId: 'g1' })), { kind: 'shadow', judgment });
+    await new Promise(resolve => setImmediate(resolve));
+    const payload = log.recent().find(row => row.kind === 'ambient_decision')?.payload as Record<string, unknown>;
+    expect(payload).toMatchObject({ judge: 'language:主站/chat-a', judgeProfile: 'primary', compare: 'engage', compareJudge: 'decision:jev',
+      compareJudgeKind: 'decision', compareJudgeProfile: 'jev', compareJudgeModel: 'jev', compareJudgeMs: expect.any(Number), compareJudgeUsage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
+    expect(Object.keys(payload).filter(key => key.startsWith('compare')).every(key => key === 'compare' || key.startsWith('compareJudge'))).toBe(true);
+    expect(JSON.stringify(payload)).not.toContain('chat quote');
+  });
+
+  it('records a failed compared model as compare_failed without changing the judgment or the skip table', async () => {
+    const registry = new ModelAvailabilityRegistry();
+    const { judge } = setup({ ambient: { profile: 'primary', compare: 'jev' }, decisionFails: true, registry });
+    const judgment = await judge.judge(input());
+    expect(judgment).toMatchObject({ sourceLabel: 'language:主站/chat-a', compare: { verdict: 'failed', failure: { category: 'server' } } });
+    expect(registry.list()).toEqual([]);
   });
 });

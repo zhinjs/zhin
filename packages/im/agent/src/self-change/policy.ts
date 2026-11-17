@@ -312,10 +312,35 @@ export function findForbiddenConfigKey(segments: readonly string[]): readonly st
   return null;
 }
 
-function assertConfigPathAllowed(segments: readonly string[]): void {
+/**
+ * Keys retired from the configuration (ADR 0066 D5.7): `ai.trigger.ambient.minConfidence` / `mode`
+ * moved to the interjection judge `purposes.ambient`. A patch may not write them (or set a parent
+ * object that contains them); removing them stays allowed.
+ */
+export const RETIRED_CHANGE_CONFIG_KEYS: readonly (readonly string[])[] = Object.freeze([
+  Object.freeze(['ai', 'trigger', 'ambient', 'minConfidence']),
+  Object.freeze(['ai', 'trigger', 'ambient', 'mode']),
+]);
+
+/** The retired key a `set` would write (the key itself, below it, or inside an object set on a parent). */
+export function findRetiredConfigKey(segments: readonly string[], value: unknown): readonly string[] | null {
+  for (const retired of RETIRED_CHANGE_CONFIG_KEYS) {
+    if (!sharesPrefix(retired, segments)) continue;
+    if (segments.length >= retired.length) return retired;
+    let node: unknown = value;
+    for (const segment of retired.slice(segments.length)) {
+      node = node && typeof node === 'object' && !Array.isArray(node) ? (node as Record<string, unknown>)[segment] : undefined;
+    }
+    if (node !== undefined) return retired;
+  }
+  return null;
+}
+
+function assertConfigPathAllowed(segments: readonly string[], operation?: Readonly<{ op: 'set' | 'remove'; value?: unknown }>): void {
   const forbidden = findForbiddenConfigKey(segments);
-  if (!forbidden) return;
-  throw new SelfChangeConfigKeyError(segments.join('.'), `touches ${forbidden.join('.')}`);
+  if (forbidden) throw new SelfChangeConfigKeyError(segments.join('.'), `touches ${forbidden.join('.')}`);
+  const retired = operation?.op === 'set' ? findRetiredConfigKey(segments, operation.value) : null;
+  if (retired) throw new SelfChangeConfigKeyError(segments.join('.'), `${retired.join('.')} is retired: set purposes.ambient (the interjection judge) instead`);
 }
 
 /**
@@ -324,7 +349,7 @@ function assertConfigPathAllowed(segments: readonly string[]): void {
  */
 export function assertConfigPatchAllowed(patch: SelfChangeConfigPatch): void {
   for (const operation of patch.patches) {
-    assertConfigPathAllowed(operation.path);
+    assertConfigPathAllowed(operation.path, operation);
   }
 }
 
@@ -346,7 +371,7 @@ export function normalizeChangeConfigPatch(input: unknown): SelfChangeConfigPatc
       || !segments.every(s => typeof s === 'string' && s.length > 0 && s.length <= MAX_CONFIG_SEGMENT_CHARS)) {
       throw new SelfChangeValidationError('configPatch path must be 1-16 non-empty string segments');
     }
-    assertConfigPathAllowed(segments as string[]);
+    assertConfigPathAllowed(segments as string[], { op, value: (raw as { value?: unknown }).value });
     const pathCopy = Object.freeze([...(segments as string[])]);
     out.push(op === 'set'
       ? Object.freeze({ op, path: pathCopy, value: (raw as { value?: unknown }).value })

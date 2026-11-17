@@ -13,7 +13,7 @@ import type { ApprovalJudgmentPort } from '../../session/index.js';
 import type { AgentTraceRecorder } from '../agent-trace-runtime.js';
 import type { SemanticMemoryRuntime } from '../native-semantic-memory-tools.js';
 import type { ZhinAgent } from '../../zhin-agent/index.js';
-import type { AmbientDecision, EngagementJudgeCall } from './ambient-engagement.js';
+import type { AmbientDecision, EngagementCompareReport, EngagementJudgeCall } from './ambient-engagement.js';
 import type { AnnouncementDispatcher } from './announcement-dispatch.js';
 import type { MemberLifecycle } from './member-lifecycle.js';
 
@@ -73,7 +73,10 @@ export interface AgentAssistantStatusPort {
   bindGroupRules(read: () => ReturnType<ZhinAgent['getGroupRules']>): void;
   bindUsageTraces(read: () => string | undefined): void;
   recordAmbient(group: string, decision: AmbientDecision): void;
+  /** @deprecated ADR 0066 D3: use `recordAmbientCompare` (kept for the deprecation window). */
   recordAmbientShadow(decisionEngage: boolean | undefined, judgeEngage: boolean | undefined): void;
+  /** One judgment compared with `purposes.ambient.compare` (ADR 0066 D3), both sides after the threshold. */
+  recordAmbientCompare?(report: EngagementCompareReport): void;
   recordDecision(observation: DecisionObservation): void;
   /** One ambient judge model call (language or decision), for the Console daily totals (#1250). */
   recordAmbientJudgeCall?(call: EngagementJudgeCall): void;
