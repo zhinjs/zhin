@@ -79,6 +79,23 @@ npx @zhin.js/cli pub             # publish after confirming; add --yes in CI and
 
 Prefer `npx @zhin.js/cli`: without `@zhin.js/cli` installed in the plugin directory, `npx zhin` downloads the npm package named `zhin`. Since `zhin@4` that is an alias of `@zhin.js/cli`, but a `zhin@3.x` left in the npx cache or a lockfile is the old, unmaintained framework package. Inside a bot project, where `@zhin.js/cli` is installed, `npx zhin` uses it directly.
 
+### Private plugin packages {#private-packages}
+
+A plugin whose source cannot be public (a closed-source adapter, a plugin on a private SDK) goes through a private npm registry and installs like any other plugin:
+
+1. Name it under your own scope (`zhin new <name> --standalone --package-name @your-scope/zhin-adapter-x`) and set `"publishConfig": { "access": "restricted" }` in `package.json`; set `license` to the actual terms (e.g. `UNLICENSED`). Do not set `private: true`: npm refuses to publish such a package.
+2. Pick a registry: an npm private scope, GitHub Packages, or a self-hosted Verdaccio / Nexus. Put an `.npmrc` in both the publishing and the installing project root, reading the token from the environment:
+
+   ```ini
+   @your-scope:registry=https://npm.example.internal/
+   //npm.example.internal/:_authToken=${NPM_TOKEN}
+   ```
+
+3. Publish: `npx @zhin.js/cli pub --dry-run`, then `npx @zhin.js/cli pub`. Without `--access` it keeps `publishConfig.access`, so a private package is not turned public.
+4. In the bot project, `pnpm add @your-scope/zhin-adapter-x` (or `zhin install`) and mount it under `plugins:`. Console dependency actions also run pnpm in the project directory and read the same `.npmrc`; private packages do not show up in the plugin marketplace.
+
+Publish a private SDK the plugin needs to the same scope and declare it as an exact-version `peerDependency`, installed by the bot project. Keep the source repository private and list `.npmrc`, runtime data and credentials in `.gitignore`.
+
 ### Marketplace metadata {#marketplace-metadata}
 
 The plugin market (the docs site `plugins.json`, the Console plugin market, `zhin search` / `zhin info`) only reads the `package.json` published to npm; it never runs plugin code. These fields decide how your plugin appears there:

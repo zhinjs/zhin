@@ -22,6 +22,7 @@ sidebar: false
 | douyin-live | Experimental | 抖音直播弹幕 | `@zhin.js/adapter-douyin-live` | — |
 | email | Experimental | Email | `@zhin.js/adapter-email` | — |
 | github | Experimental | GitHub | `@zhin.js/adapter-github` | — |
+| ipad-wechat | Experimental | 微信 iPad | `@zhin.js/adapter-ipad-wechat` | listFriends, listGroups, listGroupMembers |
 | juejin | Experimental | 掘金评论 | `@zhin.js/adapter-juejin` | — |
 | line | Experimental | LINE | `@zhin.js/adapter-line` | — |
 | milky | Experimental | Milky | `@zhin.js/adapter-milky` | — |

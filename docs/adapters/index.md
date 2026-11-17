@@ -73,6 +73,7 @@ _（当前无）_
 | 掘金评论 | `@zhin.js/adapter-juejin` | — | [掘金评论](/adapters/juejin) |
 | 企业微信 | `@zhin.js/adapter-wecom` | — | [企业微信](/adapters/wecom) |
 | 微信 iLink | `@zhin.js/adapter-weixin-ilink` | — | [微信 iLink](/adapters/weixin-ilink) |
+| 微信 iPad | `@zhin.js/adapter-ipad-wechat` | listFriends, listGroups, listGroupMembers | [微信 iPad](/adapters/ipad-wechat) |
 | Bilibili 评论 | `@zhin.js/adapter-bilibili` | — | [Bilibili 评论](/adapters/bilibili) |
 | Bilibili 直播弹幕 | `@zhin.js/adapter-bilibili-live` | — | [Bilibili 直播弹幕](/adapters/bilibili-live) |
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
