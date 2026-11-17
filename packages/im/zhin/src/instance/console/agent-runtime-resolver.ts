@@ -112,6 +112,8 @@ export type McpServerRowStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';
  * `server → Agents that bind it` (#1250 第 41 批 `mcp-connected-but-unbound`). A turn only gets the
  * tools of the servers its Agent lists in `ai.agents.<name>.mcpServers`; `ai.mcpServers` only
  * connects. The running Agent's bindings win; without a running Agent the configuration is read.
+ * An entry is a server name or an object naming it (`{ name, permit }`, ADR 0065 D2); either one
+ * binds the server, so an object entry never makes its server read as unbound.
  */
 export function mcpServerBindings(
   bindings: readonly { readonly name: string; readonly mcpServers?: unknown }[],
@@ -119,14 +121,23 @@ export function mcpServerBindings(
   const byServer = new Map<string, string[]>();
   for (const binding of bindings) {
     if (!Array.isArray(binding.mcpServers)) continue;
-    for (const server of binding.mcpServers) {
-      if (typeof server !== 'string' || !server) continue;
+    for (const entry of binding.mcpServers) {
+      const server = mcpBindingServerName(entry);
+      if (!server) continue;
       const agents = byServer.get(server) ?? [];
       if (!agents.includes(binding.name)) agents.push(binding.name);
       byServer.set(server, agents);
     }
   }
   return byServer;
+}
+
+function mcpBindingServerName(entry: unknown): string | undefined {
+  if (typeof entry === 'string') return entry || undefined;
+  if (entry && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string') {
+    return (entry as { name: string }).name || undefined;
+  }
+  return undefined;
 }
 
 function bindingsOf(configuration: AgentConfigProjection, snapshot: RuntimeSnapshot) {

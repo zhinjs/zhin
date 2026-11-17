@@ -67,4 +67,24 @@ describe('MCP server status rows (#1250)', () => {
       ['github', 'connected', []], ['docs', 'connected', ['zhin', 'researcher']],
     ]);
   });
+
+  it('counts an object binding entry ({ name, permit }, ADR 0065) as binding its server', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-mcp-status-'));
+    roots.push(root);
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({
+      configVersion: 2,
+      ai: {
+        mcpServers: [{ name: 'github', transport: 'streamable-http' }, { name: 'docs', transport: 'stdio' }],
+        agents: { zhin: { mcpServers: [{ name: 'github', permit: { default: 'owner' } }] }, researcher: { mcpServers: ['docs'] } },
+      },
+    }));
+    expect(listMcpServerStatus(root, snapshotWith(undefined)).map(row => [row.name, row.boundAgents])).toEqual([
+      ['github', ['zhin']], ['docs', ['researcher']],
+    ]);
+    const rows = listMcpServerStatus(root, snapshotWith(
+      [{ name: 'github', connected: true, toolCount: 49 }, { name: 'docs', connected: true, toolCount: 2 }],
+      [{ name: 'zhin', mcpServers: [{ name: 'github' }, ''] }, { name: 'researcher', mcpServers: ['docs', { permit: {} }] }],
+    ));
+    expect(rows.map(row => [row.name, row.boundAgents])).toEqual([['github', ['zhin']], ['docs', ['researcher']]]);
+  });
 });
