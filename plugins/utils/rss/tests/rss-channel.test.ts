@@ -2,6 +2,20 @@ import { encodeStorageIdentity } from 'zhin.js/plugin-runtime';
 import { projectLocaleToken } from 'zhin.js/i18n';
 import Parser from 'rss-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// In production fetchPublic connects through a pinned socket (`requestPinned`, covered by
+// public-fetch.test.ts); here each checked hop goes to the stubbed global fetch instead.
+vi.mock('../src/public-fetch.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/public-fetch.js')>();
+  const viaGlobalFetch: import('../src/public-fetch.js').PinnedRequest = (url, _address, init, signal) =>
+    fetch(url.href, { method: init.method, headers: init.headers, redirect: 'manual', signal });
+  return {
+    ...actual,
+    fetchPublic: (input: string, options: import('../src/public-fetch.js').PublicFetchOptions = {}) =>
+      actual.fetchPublic(input, { request: viaGlobalFetch, ...options }),
+  };
+});
+
 import plugin from '../plugin.ts';
 import addCommand from '../commands/rss-add/[url]/index.ts';
 import listCommand from '../commands/rss-list/index.ts';
