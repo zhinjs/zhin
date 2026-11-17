@@ -4,6 +4,7 @@ import type {
 } from '../../index.js';
 import { validateVenueDefinitions, type VenueDefinition } from '@zhin.js/core';
 import { existsSync, realpathSync } from 'node:fs';
+import { parseMcpToolPermit } from '../mcp-tool-permit.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import {
   expandEnvironmentValue,
@@ -119,7 +120,7 @@ export function resolveAgentHostMcpServers(
   if (raw == null) return Object.freeze([]);
   if (!Array.isArray(raw)) throw new TypeError('ai.mcpServers must be an array');
   return Object.freeze(raw.map((item, index) => {
-    const entry = toMcpServerEntry(item);
+    const entry = toMcpServerEntry(item, index);
     if (!entry) throw new TypeError(`Invalid ai.mcpServers[${index}] declaration`);
     return entry;
   }));
@@ -164,7 +165,7 @@ function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
   return typeof candidate.read === 'function';
 }
 
-function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | undefined {
+function toMcpServerEntry(raw: McpServerConfig, index: number): McpServerEntry | undefined {
   if (!raw || typeof raw.name !== 'string' || !raw.name.trim()) return undefined;
   const transport = raw.transport;
   if (transport !== 'stdio' && transport !== 'streamable-http' && transport !== 'sse') return undefined;
@@ -173,6 +174,7 @@ function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | undefined {
   } else if (!raw.url?.trim()) {
     return undefined;
   }
+  const permit = parseMcpToolPermit((raw as { permit?: unknown }).permit, `ai.mcpServers[${index}].permit`);
   return {
     name: raw.name.trim(),
     transport,
@@ -181,5 +183,6 @@ function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | undefined {
     ...(raw.args ? { args: [...raw.args] } : {}),
     ...(raw.env ? { env: { ...raw.env } } : {}),
     ...(raw.headers ? { headers: { ...raw.headers } } : {}),
+    ...(permit ? { permit } : {}),
   };
 }

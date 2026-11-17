@@ -13,6 +13,7 @@ const COLLABORATION_MIGRATION_HINT = 'sub-agents and deferred workers were repla
   + ' delete these keys; declare who an agent may contact in agents/<name>/agent.json `collaboration`.';
 
 import { MAILBOX_MIGRATION_HINT, validateMailboxConfig, type MailboxConfig } from '../turn/mailbox-config.js';
+import { parseAgentMcpServers, parseMcpToolPermit } from '../plugin-runtime/mcp-tool-permit.js';
 
 /** Startup validation only: model resources now require an explicit runtime import. */
 export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string): string[] {
@@ -77,6 +78,12 @@ export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string)
   const servers = Array.isArray(raw.mcpServers) ? raw.mcpServers : [];
   const names = servers.flatMap(server => server && typeof server === 'object' && 'name' in server && typeof server.name === 'string' ? [server.name] : []);
   if (new Set(names).size !== names.length) errors.push('ai.mcpServers: duplicate server name');
+  // ADR 0065 D2: a bad `permit` fails startup instead of exposing tools.
+  for (const [index, server] of servers.entries()) {
+    if (!server || typeof server !== 'object' || !('permit' in server)) continue;
+    try { parseMcpToolPermit(server.permit, `ai.mcpServers[${index}].permit`); }
+    catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+  }
   errors.push(...validateAgentMcpBindings({ agents: raw.agents }));
   return errors;
 }
@@ -89,10 +96,13 @@ export function validateAgentMcpBindings(input: Readonly<{ agents: unknown; mcpS
   for (const [name, value] of Object.entries(input.agents)) {
     if (!value || typeof value !== 'object' || !('mcpServers' in value) || value.mcpServers == null) continue;
     if (!Array.isArray(value.mcpServers)) { errors.push(`ai.agents.${name}: invalid mcpServers`); continue; }
-    for (const server of value.mcpServers) {
-      if (typeof server !== 'string' || !server.trim()) errors.push(`ai.agents.${name}: empty mcpServers entry`);
-      else if (server !== server.trim()) errors.push(`ai.agents.${name}: MCP server names must not contain surrounding whitespace`);
-      else if (known && !known.has(server)) errors.push(`ai.agents.${name}: unknown MCP server "${server}"`);
+    // ADR 0065 D2.4: each entry is a server name or `{ name, permit }`; a server appears once.
+    try {
+      for (const server of parseAgentMcpServers(value.mcpServers, `ai.agents.${name}`).names) {
+        if (known && !known.has(server)) errors.push(`ai.agents.${name}: unknown MCP server "${server}"`);
+      }
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
     }
   }
   return errors;

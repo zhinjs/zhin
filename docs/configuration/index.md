@@ -391,12 +391,15 @@ ai:
       mcpServers: [icqq]             # 引用 ai.mcpServers 的 name
     researcher:
       nickname: '搜搜'               # 任务角色显示名；IM 资料优先取当前 Endpoint
+      mcpServers:
+        - name: icqq                 # 对象形式：再叠加一层权限，只能收窄
+          permit: { default: deny }
 ```
 
 | 字段 | 说明 |
 | --- | --- |
 | `nickname` | 任务角色显示名；当前账号资料仍由 Endpoint 提供 |
-| `mcpServers` | 该 Agent 能用的 MCP Server 名列表（`ai.mcpServers` 的 `name`）；不列出的服务器即使已连接，这个 Agent 也用不了 |
+| `mcpServers` | 该 Agent 能用的 MCP Server：服务器名（`ai.mcpServers` 的 `name`），或 `{ name, permit }`；不列出的服务器即使已连接，这个 Agent 也用不了。对象形式的 `permit` 与服务器级结果取 AND，只能收窄，省略的键不额外限制；同一服务器只能出现一次 |
 
 模型角色绑定在运行时用途配置中管理。IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除。
 
@@ -418,6 +421,35 @@ ai:
 ```
 
 `ai.mcpServers` 只负责连接。连接成功后，Server 的工具只给在 `ai.agents.<name>.mcpServers` 里绑定了它的 Agent 用；没有任何 Agent 绑定的 Server，`zhin status`、`zhin doctor` 与 Console「需要你处理」会提示「已连接但没有 Agent 能用」。完整示例见 [ai.mcpServers](../ai/index.md#ai-mcpservers)。
+
+绑定后的工具还按本轮发送者的聊天角色过滤。
+
+#### permit：谁能用哪些工具 {#ai-mcpservers-permit}
+
+```yaml
+ai:
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ['-y', '@modelcontextprotocol/server-github']
+      permit:
+        readOnly: everyone          # 上游标注只读、且没被 tools 命中的工具；缺省 everyone
+        default: owner@global       # 其余工具；缺省 owner@global
+        tools:                      # 按上游工具名覆盖；缺省 {}
+          get_me: trusted
+          search_*: everyone
+          create_*: deny
+          merge_pull_request: [owner@global, private(*)]
+```
+
+| 键 | 说明 |
+| --- | --- |
+| `readOnly` | 上游标注 `readOnlyHint: true`（且不是 `destructiveHint: true`）、没被 `tools` 命中的工具的档位，缺省 `everyone` |
+| `default` | 其余工具（未标注、标注为写、标注矛盾）的档位，缺省 `owner@global` |
+| `tools` | 按上游原始工具名（不带服务器前缀，区分大小写）覆盖。精确名优先；否则取字面字符最多的 `*` 模式，并列的模式都要满足；非 ASCII 工具名只能被精确名命中 |
+
+档位写法：`everyone`（所有人）、`deny`（谁都不能用，工具不展开）、一个 permit 字符串（与插件工具 `permissions` 的一项相同，如 `trusted`、`owner@global`、`platform:admin`），或字符串数组（各项都要满足）。`everyone` / `deny` 不能放进数组，空数组、未知键、写错的 permit（含已移除的 `master`）都会让启动报错。上游标注只决定档位，不放宽审批。升级影响与常见写法见[升级：MCP 工具按聊天角色授权](../migrations/mcp-tool-permit.md)。
 
 ### 其余 ai 子段
 

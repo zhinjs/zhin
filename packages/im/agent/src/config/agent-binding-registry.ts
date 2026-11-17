@@ -1,15 +1,20 @@
 import type { AgentMeta } from '../discovery/agents.js';
 import { resolveAgentBinding } from './agent-bindings.js';
+import type { McpToolPermit } from '../plugin-runtime/mcp-tool-permit.js';
 import { type AgentBindingConfig, type ResolvedAgentBinding, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export class AgentBindingRegistry {
   private readonly agents: Record<string, AgentBindingConfig>;
   private readonly fileNames: Set<string>;
   private readonly configured: Set<string>;
+  private readonly serverPermits: Readonly<Record<string, McpToolPermit | undefined>>;
 
   constructor(
     agents: Record<string, AgentBindingConfig>,
     fileMetas: AgentMeta[] = [],
+    /** ADR 0065: parsed `ai.mcpServers[].permit` by server name (the server layer of every binding). */
+    serverPermits: Readonly<Record<string, McpToolPermit | undefined>> = {},
   ) {
+    this.serverPermits = serverPermits;
     this.agents = { ...Object.fromEntries(fileMetas.map(meta => [meta.name, {}])), ...agents };
     this.fileNames = new Set(fileMetas.map(m => m.name));
     this.configured = new Set(Object.keys(agents));
@@ -20,7 +25,7 @@ export class AgentBindingRegistry {
   }
 
   getBinding(name: string): ResolvedAgentBinding | null {
-    return resolveAgentBinding(name, this.agents);
+    return resolveAgentBinding(name, this.agents, this.serverPermits);
   }
 
   requireZhinBinding(): ResolvedAgentBinding {

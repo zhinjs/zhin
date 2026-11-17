@@ -62,6 +62,8 @@
     "export * from './host/index.js';",
     "export * from './inference/index.js';",
     "export * from './ingress/index.js';",
+    "export * from './mcp-tool-access.js';",
+    "export * from './mcp-tool-permit.js';",
     "export * from './native-announcement-tools.js';",
     "export * from './native-bash-tool.js';",
     "export * from './native-file-tools.js';",

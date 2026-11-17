@@ -317,6 +317,20 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 **白名单配置**：需要放开某个群成员或私聊用户时，把他的用户 ID 加入 `trigger.trusted`，他发起的回合会按 `trusted_member` 处理。没有额外的开关。
 
+### MCP 工具按聊天角色授权（ADR 0065） {#mcp-tool-permit}
+
+`ai.mcpServers` 接入的工具与插件工具走同一个聊天角色判定（`PermissionHost`）。每个工具按服务器的 `permit`（见[配置参考](../configuration/index.md#ai-mcpservers-permit)）定出一个档位，不写时：
+
+- 上游标注 `readOnlyHint: true`（且没有同时标 `destructiveHint: true`）的工具所有人可用；
+- 其余工具（未标注、标注为写、标注矛盾）只给全局主人 `owner@global`，与危险工具同一档。
+
+判定分两次：
+
+1. **组装工具池时**：在信任分级之前，按本轮发送者的 `principal.chatRole` / `chatRoleLevels` 过滤。看不到的工具不在模型的工具列表里，`discover` / `load_tool` 搜不到，写进 `deferredTools.alwaysLoadedTools` 也不会常驻；系统提示不提它们。会话层的 `owner` 按会话层算，不满足 `owner@global`。
+2. **每次执行前**：按角色存储里的当前角色再判一次。会话历史里重放的旧调用、回合中被撤销的角色、子 Agent 沿用的父回合工具都会被拒绝，记 `tool_denied`，策略 `mcp-permit`，原因写「这个 MCP 工具只对主人开放」。
+
+上游标注只决定档位，**不放宽审批**：MCP 工具仍是 `on-risk`，照常走审批、文件策略、网络白名单和硬闸，也不会被当作 `readOnly` 工具进入弹幕回合或让定时任务的重放判定视为安全。定时任务按创建者当前的角色降一档运行，全局主人建的任务默认也拿不到「仅主人」的 MCP 写工具，需要时在 `permit.tools` 里把该工具放宽到 `trusted`。升级影响见[升级：MCP 工具按聊天角色授权](../migrations/mcp-tool-permit.md)。
+
 ## 注入防护与用量配额
 
 信任分级管“谁发起”，这一节管“回合里读到了什么”和“发出去的是什么”。

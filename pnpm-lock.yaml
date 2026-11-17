@@ -1106,6 +1106,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../http
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../im/permission
       rimraf:
         specifier: ^6.1.4
         version: 6.1.4

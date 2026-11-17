@@ -11,6 +11,7 @@ import {
 } from '@zhin.js/feature-kit';
 import {
   assertMcpClient,
+  normalizeMcpToolHints,
   type McpClientInstance,
   type McpDefinition,
   type McpToolDescriptor,
@@ -104,7 +105,9 @@ export class McpIndex {
     const record = this.#resolve(requester, name);
     return Object.freeze((await record.client.listTools()).map((tool) => {
       if (!tool.name.trim()) throw new TypeError(`MCP ${name} returned a Tool without a name`);
-      return Object.freeze({ ...tool });
+      const { hints: rawHints, ...rest } = tool;
+      const hints = normalizeMcpToolHints(rawHints);
+      return Object.freeze({ ...rest, ...(hints ? { hints } : {}) });
     }));
   }
 

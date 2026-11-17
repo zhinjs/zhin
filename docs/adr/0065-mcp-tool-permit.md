@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0065：MCP 工具按聊天角色授权——上游标注只读的工具对所有人开放，其余默认只给全局 owner
 
-状态：已接受（所有者 2026-11-17 批准）。依据：zhinjs/zhin#1250 评论 6934895336、6935017999，所有者原话：「让上游加权限验证，这样我们才能给 master 开全量，给普通用户开只读」。所有者 2026-11-17 批准了本文的 D1–D7 和默认值。核对基线：`origin/feat/friendly-volta-ejc3wl`（`4353901993dcc1a87e66c2120a079b6cae27d05c`）。实施进度：四个阶段都还没开始。
+状态：已接受（所有者 2026-11-17 批准）。依据：zhinjs/zhin#1250 评论 6934895336、6935017999，所有者原话：「让上游加权限验证，这样我们才能给 master 开全量，给普通用户开只读」。所有者 2026-11-17 批准了本文的 D1–D7 和默认值。核对基线：`origin/feat/friendly-volta-ejc3wl`（`4353901993dcc1a87e66c2120a079b6cae27d05c`）。实施进度：P0、P1 已实施（同一版本发布）；P2、P3 还没开始。
 
 关联：[ADR 0056](./0056-chat-roles.md)（聊天角色、`<角色>@<层级>` 写法、`PermissionHost`、执行时复检）、[ADR 0036](./0036-controlled-landing-phase0.md)（危险工具硬闸）、[ADR 0049](./0049-console-rbac.md)（Console 权限映射：新增的接口要登记权限）、[ADR 0061](./0061-inbound-message-outcomes.md)（每个结局都要有原因：被隐藏的工具要进 trace）。
 
@@ -39,7 +39,7 @@ sidebar: false
 3. **插件工具的字段名是 `permissions`（字符串数组）**；`permit` 是命令、中间件、按钮用的字段名。两者用同一套 DSL。
 4. **DSL 里没有 `everyone` 和 `deny`**：插件工具不写 `permissions` 就是所有人可用，DSL 也没有「永不满足」的写法。本 ADR 的 `everyone` / `deny` 是 MCP permit 配置里的保留字，不加进 DSL（D2）。
 5. **定时任务不是按创建者的原始角色运行的**：到期时先按创建者**当前**的角色重算（`currentScheduleCreator`，`packages/im/agent/src/assistant/job-creator.ts:75-89`），再统一降一档（`demoteScheduleCreator`，`packages/im/agent/src/schedule-domain/security-harness.ts:26-33`；`owner` → `trusted`，`trusted` / `admin` → `user`），回合主体只有 `roles`、没有 `chatRoleLevels`（`assistant-runtime.ts:257-266`；层级由 `turn-ingress.ts:510-516` 一律补成 `global`）。所以 D6「与现有 schedule 信任档位一致」的结果是：**全局 owner 创建的定时任务也拿不到默认「仅主人」的 MCP 工具**，只能用对 `trusted` 或所有人开放的工具。见 D6。
-6. **协议入口的主体没有聊天角色**：A2A 是 `roles: ['user']`（`packages/host/a2a/src/agent-executor.ts:184`），zhin 自己的 MCP Server 入口是 `authenticated` / `localhost`（`packages/host/mcp/src/runtime.ts:225`）。新默认值下，这些入口也只能用只读 MCP 工具（见「迁移」）。
+6. **协议入口的主体没有聊天角色**：A2A 是 `roles: ['user']`（`packages/host/a2a/src/agent-executor.ts:184`），zhin 自己的 MCP Server 入口是 `authenticated` / `localhost`（`packages/host/mcp/src/runtime.ts:225`）。跨进程 A2A Mailbox 的远端信件（`packages/host/a2a/src/mailbox-remote-transport.ts`）同样一律是 `user`、不带聊天角色：对端在信件里声明的 `authority.trust`（如 `trusted`）不映射成本地角色，签名只证明信件来自哪个对端（所有者 2026-11-17 决定；此前按声明的信任级别生成 `roles`，会被推导成 `trusted@global`）。新默认值下，这些入口也只能用只读 MCP 工具，开放给 `trusted` 的 MCP 工具和插件工具也用不了（见「迁移」）。
 
 ## 决策
 
@@ -80,7 +80,7 @@ ai:
           get_me: trusted
           search_*: everyone
           create_*: deny
-          merge_pull_request: [owner@global, private]
+          merge_pull_request: [owner@global, private(*)]
   agents:
     helper:
       mcpServers:
@@ -99,7 +99,7 @@ ai:
 | `everyone` | 所有人 | 等价于插件工具不写 `permissions`（空列表） |
 | `deny` | 谁都不能用 | 工具不展开：不进工具池、不能执行 |
 | 一个 DSL 字符串，如 `trusted`、`admin`、`owner@global`、`role(owner@global,admin@adapter)`、`private(*)`、`platform:admin` | 与插件工具 `permissions` 里的一项相同 | `PermissionHost.checkAll([x])` |
-| DSL 字符串数组，如 `[owner@global, private]` | 各项都满足（AND），与插件工具 `permissions` 相同 | `PermissionHost.checkAll(list)` |
+| DSL 字符串数组，如 `[owner@global, private(*)]` | 各项都满足（AND），与插件工具 `permissions` 相同 | `PermissionHost.checkAll(list)` |
 
 规则：
 
@@ -111,7 +111,7 @@ ai:
    3. 否则 → 用 `default`。
 4. **`ai.agents.<name>.mcpServers` 的覆盖只能收窄**：每一项可以是服务器名字符串，也可以是 `{ name, permit }`。对象形式的 `permit` 按同样的规则对同一个工具定出一档，**与服务器级的结果取 AND**（两层都满足才可用；任一层是 `deny` 就是 `deny`）。AND 只会变严，所以不需要比较两个 permit 谁更窄。Agent 层省略的键按 `everyone` 处理（不额外限制），**不是** D3 的默认值，因为服务器级已经兜底。同一个 Agent 里同名服务器只能出现一次，否则报错。
 5. 实现上，`expandMcpTools` 把定出的 permit 转成 `ToolCapability.permissions`（`everyone` → 空列表，两层 AND → 列表拼接；`deny` → 不展开）。之后 MCP 工具与插件工具走同一个 `canAccessDescriptor` / `assertStillAllowed`，不另写判定逻辑。
-6. `permit` 属于 `ai.mcpServers`，受自我变更策略保护：Agent 不能用 `self_change` 改它（`packages/im/agent/src/self-change/policy.ts:257`）。
+6. `permit` 属于 `ai.mcpServers`，受自我变更策略保护：Agent 不能用 `self_change` 改它（`packages/im/agent/src/self-change/policy.ts` 的 `SELF_CHANGE_SECURITY_CONFIG_KEYS`）。Agent 层的 `ai.agents.<name>.mcpServers` 同样受保护（禁改名单里的 `ai.agents.*.mcpServers`）：删掉 Agent 层收窄或给绑定加服务器都会放宽工具面。
 
 ### D3：默认值偏安全
 

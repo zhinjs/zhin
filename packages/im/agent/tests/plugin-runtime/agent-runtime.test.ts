@@ -627,10 +627,11 @@ describe('Agent CapabilityIngress', () => {
       identity: { traceId: 'trace-1', turnId: 'turn-1' },
       origin: { kind: 'http', sessionId: 'http-1' },
       intent: { kind: 'new' },
-      principal: { subjectId: 'user-1', roles: ['user'] },
+      // ADR 0065: the fixture's MCP tool is not annotated read-only, so only the global owner gets it.
+      principal: { subjectId: 'user-1', roles: ['owner'] },
       input: { text: 'hello' },
       session: { key: 'http:http-1' },
-      policy: { permissions: ['user'], unattended: false },
+      policy: { permissions: ['owner'], unattended: false },
       signal: new AbortController().signal,
       ports: {},
     }, selection(['memory']));

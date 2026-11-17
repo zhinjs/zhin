@@ -137,6 +137,23 @@ describe('Host configuration field coverage', () => {
     } });
   });
 
+  it('declares ai.mcpServers[].permit and { name, permit } Agent MCP bindings (ADR 0065)', () => {
+    const server = { name: 'github', transport: 'stdio', command: 'npx', permit: {
+      readOnly: 'everyone', default: 'owner@global',
+      tools: { get_me: 'trusted', 'search_*': 'everyone', 'create_*': 'deny', merge_pull_request: ['owner@global', 'private(*)'] },
+    } };
+    const agents = { helper: { mcpServers: ['github', { name: 'github', permit: { default: 'deny', tools: { get_me: 'everyone' } } }] } };
+    expect(check({ ai: { mcpServers: [server], agents } })).toEqual({ ai: { mcpServers: [server], agents } });
+    check({ ai: { mcpServers: [{ name: 'fs', transport: 'stdio', command: 'x', permit: null }] } });
+    const errors = (ai: unknown) => parsePluginConfigSchema(hostSchema, { ai }).errors;
+    expect(errors({ mcpServers: [{ ...server, permit: { allow: 'everyone' } }] })).not.toEqual([]);
+    expect(errors({ mcpServers: [{ ...server, permit: { default: [] } }] })).not.toEqual([]);
+    expect(errors({ mcpServers: [{ ...server, permit: { tools: { x: 1 } } }] })).not.toEqual([]);
+    expect(errors({ agents: { helper: { mcpServers: [{ permit: {} }] } } })).not.toEqual([]);
+    expect(errors({ agents: { helper: { mcpServers: [{ name: 'github', extra: true }] } } })).not.toEqual([]);
+    expect(errors({ agents: { helper: { mcpServers: [''] } } })).not.toEqual([]);
+  });
+
   it('declares Speech, Assistant and MCP/A2A inputs as structured objects', () => {
     for (const path of [
       ['speech', 'stt', 'provider'], ['speech', 'tts', 'headers'],

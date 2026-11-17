@@ -20,6 +20,7 @@ import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentT
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
+import { MCP_PERMIT_POLICY, McpPermitDeniedError, formatMcpPermitDenial } from './mcp-permit-denial.js';
 import {
   PROVENANCE_NO_CHANNEL_REASON,
   PROVENANCE_POLICY,
@@ -135,7 +136,14 @@ export class TurnToolRuntime {
   ): Promise<TurnToolOutcome> {
     const tool = this.#tools.get(name);
     const causedBy = freezeToolExecutionCause(cause);
-    if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`, causedBy);
+    if (!tool) {
+      // ADR 0065 D4: an MCP tool withheld for the sender's role (e.g. replayed from history) says why.
+      const withheld = this.turn.capabilities.withheldMcpTools;
+      if (withheld && Object.hasOwn(withheld, name)) {
+        return this.#deny(name, toolUseId, MCP_PERMIT_POLICY, formatMcpPermitDenial(withheld[name]), causedBy);
+      }
+      return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`, causedBy);
+    }
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     // The journal keeps what the model wrote; policies and the tool see platform ids.
@@ -342,7 +350,7 @@ export class TurnToolRuntime {
       if (error instanceof TurnJournalCommitError) throw error;
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs, causedBy);
-      if (error instanceof NetworkAccessDeniedError) {
+      if (error instanceof NetworkAccessDeniedError || error instanceof McpPermitDeniedError) {
         return this.#deny(name, toolUseId, error.policy, error.message, causedBy);
       }
       const message = error instanceof Error ? error.message : String(error);
