@@ -145,10 +145,10 @@ ai:
     zhin:
       mcpServers: [github, filesystem]  # step 2: bind to zhin, which handles IM messages
     researcher:
-      mcpServers: [github]              # other Agents bind what they need
+      mcpServers: [github]              # turns that name researcher (schedules, A2A) use its own binding
 ```
 
-- Once connected, the server's tools join the tool pool under names prefixed with the server name, but each Agent only sees the tools of the servers listed in its own `mcpServers`. With `ai.agents.zhin: {}` and no `mcpServers`, `zhin` cannot use a single MCP tool.
+- Once connected, the server's tools join the tool pool under names prefixed with the server name, but a turn only gets the tools of the servers listed in the `mcpServers` of the Agent it runs as. IM messages (including turns routed to a plugin sub-agent) always use `ai.agents.zhin.mcpServers`; another Agent's binding applies only to turns that name that Agent (schedules, A2A and other protocol entries). With `ai.agents.zhin: {}` and no `mcpServers`, chat cannot use a single MCP tool.
 - A server that is connected but bound to no Agent is marked "connected, but no Agent can use it" in `zhin status`, and listed by `zhin doctor` and the Console attention inbox (`mcp.unbound`); the Agent's ready log reads `ready | zhin | mcp: - | 未绑定: github(待连接)` — the `mcp:` part lists only the servers that Agent is bound to.
 - **If any server fails to connect, the new config doesn't take effect** and the old version keeps serving.
 - `ai.agents.<name>.mcpServers` may only reference names declared here, or config validation fails.

@@ -172,10 +172,10 @@ ai:
     zhin:
       mcpServers: [github, filesystem]  # 第 2 步：绑定给处理 IM 消息的 zhin
     researcher:
-      mcpServers: [github]              # 其他 Agent 需要的话各自绑定
+      mcpServers: [github]              # 点名 researcher 的回合（定时任务、A2A）用它自己的绑定
 ```
 
-- 连接成功后，对方的工具以带服务器名前缀的名字加入工具池，但每个 Agent 只看得到自己 `mcpServers` 里列出的服务器的工具。只写 `ai.agents.zhin: {}` 而不写 `mcpServers`，`zhin` 一个 MCP 工具也用不了。
+- 连接成功后，对方的工具以带服务器名前缀的名字加入工具池，但每个回合只拿得到所用 Agent 的 `mcpServers` 里列出的服务器的工具。IM 消息（包括路由给插件子 Agent 的回合）一律按 `ai.agents.zhin.mcpServers` 取；其他 Agent 的绑定只用于点名该 Agent 的回合（定时任务、A2A 等协议入口）。只写 `ai.agents.zhin: {}` 而不写 `mcpServers`，聊天里一个 MCP 工具也用不了。
 - 已连接却没有任何 Agent 绑定的服务器，`zhin status` 会在该行注明「已连接但没有 Agent 能用」，`zhin doctor` 与 Console「需要你处理」也会列出它（`mcp.unbound`）；Agent 的就绪日志写成 `ready | zhin | mcp: - | 未绑定: github(待连接)`，`mcp:` 段只列这个 Agent 真正绑定的服务器。
 - **任何一个服务器连接失败，新配置都不会生效**，旧版本继续服务。
 - `ai.agents.<name>.mcpServers` 只能引用这里声明过的名字，否则配置校验失败。
