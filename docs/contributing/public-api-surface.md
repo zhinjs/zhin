@@ -126,6 +126,7 @@
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | `endpointInboundMediaOf()` / `endpointInboundMediaRoots()` / `AdapterIndex.inboundMediaRoots()` / `ImRuntime.inboundMediaRoots()` / `TurnInput.inboundMediaRoots` | `internal` | `@zhin.js/adapter` · `@zhin.js/core/runtime` · `@zhin.js/agent` | 入站媒体目录的读取链：Runtime ingress 取产出端点声明的目录写进回合输入，插件作者只需实现 `inboundMedia.roots()` |
+| `fetchPublicMediaBytes()` / `InboundAudioUrlTranscriber`（`transcribeUrl` 的返回含 `{ status: 'refused', code: 'speech_url_blocked' }`） | `internal` | `@zhin.js/agent/security` · `@zhin.js/agent/runtime` | 下载用户给的媒体地址：只连公网 HTTPS、按解析出的地址连接、逐跳校验重定向、限大小与超时；Speech Host 的语音下载与 `voice_stt` 共用（#1250 第 45 批） |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
 | Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent（`agent/host-installer.ts`）、configuration、feature、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `packages/im/zhin/src/instance/`；装配细节随时可变 |
