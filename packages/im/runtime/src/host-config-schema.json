@@ -2290,7 +2290,10 @@
                     }
                   ]
                 },
-                "description": "绑定的 MCP 服务器：服务器名，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。同一服务器只能出现一次。"
+                "description": "绑定的 MCP 服务器：服务器名，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。同一服务器只能出现一次。",
+                "x-zhin-config": {
+                  "security": true
+                }
               },
               "nickname": {
                 "type": "string",

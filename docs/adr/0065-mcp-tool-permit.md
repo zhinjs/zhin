@@ -111,7 +111,7 @@ ai:
    3. 否则 → 用 `default`。
 4. **`ai.agents.<name>.mcpServers` 的覆盖只能收窄**：每一项可以是服务器名字符串，也可以是 `{ name, permit }`。对象形式的 `permit` 按同样的规则对同一个工具定出一档，**与服务器级的结果取 AND**（两层都满足才可用；任一层是 `deny` 就是 `deny`）。AND 只会变严，所以不需要比较两个 permit 谁更窄。Agent 层省略的键按 `everyone` 处理（不额外限制），**不是** D3 的默认值，因为服务器级已经兜底。同一个 Agent 里同名服务器只能出现一次，否则报错。
 5. 实现上，`expandMcpTools` 把定出的 permit 转成 `ToolCapability.permissions`（`everyone` → 空列表，两层 AND → 列表拼接；`deny` → 不展开）。之后 MCP 工具与插件工具走同一个 `canAccessDescriptor` / `assertStillAllowed`，不另写判定逻辑。
-6. `permit` 属于 `ai.mcpServers`，受自我变更策略保护：Agent 不能用 `self_change` 改它（`packages/im/agent/src/self-change/policy.ts:257`）。
+6. `permit` 属于 `ai.mcpServers`，受自我变更策略保护：Agent 不能用 `self_change` 改它（`packages/im/agent/src/self-change/policy.ts` 的 `SELF_CHANGE_SECURITY_CONFIG_KEYS`）。Agent 层的 `ai.agents.<name>.mcpServers` 同样受保护（禁改名单里的 `ai.agents.*.mcpServers`）：删掉 Agent 层收窄或给绑定加服务器都会放宽工具面。
 
 ### D3：默认值偏安全
 
