@@ -530,3 +530,20 @@ export function runtimeApprovalPolicy(
 ): ToolCapability['requiresApproval'] {
   return requiresApproval;
 }
+
+/**
+ * #1250 第 45 批: a voice segment counts as platform-produced (plain-http voice links allowed) only
+ * when the Endpoint's capabilities resolve and it is not `runtime.sandbox`, whose clients send
+ * structured segments themselves. Anything unknown is treated as user-typed (HTTPS only).
+ */
+export function inboundVoiceSegmentsFromPlatform(
+  snapshot: Pick<RuntimeSnapshot, 'projections'>,
+  conversation: ConversationRef,
+): boolean {
+  try {
+    const capabilities = resolveRuntimeTurnCapabilities(snapshot, conversation, undefined);
+    return capabilities !== undefined && !capabilities.has('runtime.sandbox');
+  } catch {
+    return false;
+  }
+}

@@ -8,6 +8,7 @@ import type {
   TextMatch,
 } from '../types.js';
 import { isSeverity } from '../types.js';
+import { fetchPublic, readCappedBody } from '../public-fetch.js';
 import type { ModerationProvider } from './types.js';
 
 export interface HttpProviderDeps {
@@ -27,7 +28,7 @@ export class HttpModerationProvider implements ModerationProvider {
 
   async scan(input: ScanInput): Promise<ProviderResult> {
     try {
-      const images = await prepareImages(input.images, this.#config.forceUpload, this.#fetch);
+      const images = await prepareImages(input.images, this.#config.forceUpload, this.#config.timeoutMs);
       const useMultipart = images.some((img) => img.mode === 'upload');
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.#config.timeoutMs);
@@ -117,7 +118,7 @@ type PreparedImage =
 async function prepareImages(
   images: readonly ExtractedImage[],
   forceUpload: boolean,
-  fetchImpl: typeof fetch,
+  timeoutMs: number,
 ): Promise<PreparedImage[]> {
   const out: PreparedImage[] = [];
   for (const image of images) {
@@ -139,7 +140,7 @@ async function prepareImages(
       continue;
     }
     if (image.url) {
-      const downloaded = await downloadAsBase64(image.url, fetchImpl);
+      const downloaded = await downloadAsBase64(image.url, timeoutMs);
       out.push({ mode: 'upload', base64: downloaded.base64, mime: downloaded.mime ?? image.mime });
       continue;
     }
@@ -148,14 +149,26 @@ async function prepareImages(
   return out;
 }
 
+/** Largest image this plugin downloads to upload to a moderation service. */
+export const MODERATION_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * The image URL comes from a chat message, so this host connects only to a public address
+ * (`public-fetch`: every redirect hop checked, private / loopback / link-local / metadata refused;
+ * #1250 第 45 批). A refused address fails the scan like an unreachable one (`onError` decides).
+ */
 async function downloadAsBase64(
   url: string,
-  fetchImpl: typeof fetch,
+  timeoutMs: number,
 ): Promise<{ base64: string; mime?: string }> {
-  const response = await fetchImpl(url);
-  if (!response.ok) throw new Error(`download failed: HTTP ${response.status}`);
+  const { response } = await fetchPublic(url, { timeoutMs });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`download failed: HTTP ${response.status}`);
+  }
   const mime = response.headers.get('content-type') ?? undefined;
-  const buf = Buffer.from(await response.arrayBuffer());
+  const buf = await readCappedBody(response, MODERATION_IMAGE_MAX_BYTES);
+  if (!buf) throw new Error(`download failed: image exceeds ${MODERATION_IMAGE_MAX_BYTES} bytes`);
   return { base64: buf.toString('base64'), mime };
 }
 

@@ -3,6 +3,8 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { delimiter, extname, isAbsolute, join, resolve as resolvePath } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
+import type { PublicMediaFetchOptions, PublicMediaFetchResult } from '@zhin.js/agent/security';
+import type { InboundAudioUrlOrigin, InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
@@ -59,8 +61,71 @@ export interface SpeechHostHandle extends AudioTranscriptionPort {
   readonly ttsAvailable: boolean;
   /** Current dependency issues (checked again when `voice_tts` is called while TTS is unavailable). */
   dependencyIssues(): readonly SpeechDependencyIssue[];
-  /** Inbound preprocess: download URL and transcribe. */
-  transcribeUrl(audioUrl: string): Promise<string | null>;
+  /**
+   * Inbound preprocess: download URL and transcribe. Only a public address is downloaded
+   * ({@link fetchSpeechAudio}): HTTPS, or also plain HTTP when `origin` is `platform` (a voice link
+   * the adapter produced); anything else is refused with `speech_url_blocked` (#1250 第 45 批).
+   */
+  transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription>;
+}
+
+/** Largest voice download (bytes); a longer recording is not transcribed. */
+export const SPEECH_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
+/** Budget of one voice download, redirects included. */
+export const SPEECH_AUDIO_FETCH_TIMEOUT_MS = 30_000;
+
+/** Downloads the audio behind a URL a remote user controls; see `fetchPublicMediaBytes`. */
+export type SpeechAudioFetcher = (url: string, options: PublicMediaFetchOptions) => Promise<PublicMediaFetchResult>;
+
+export type SpeechAudioDownload =
+  | Readonly<{ ok: true; data: Buffer; mimeType: string }>
+  /** `speech_url_blocked`: not a public HTTPS target; `speech_url_fetch_failed`: anything else. */
+  | Readonly<{ ok: false; code: 'speech_url_blocked' | 'speech_url_fetch_failed'; host?: string; detail: string }>;
+
+/**
+ * Same rules as other inbound media (#1250 第 45 批 `speech-url-ssrf`): HTTPS only (plain HTTP too with
+ * `allowHttp`, for a platform-produced voice link; never https → http on redirect), no private,
+ * loopback, link-local or metadata target (checked on the resolved address the connection uses, and
+ * again on every redirect hop), at most {@link SPEECH_AUDIO_MAX_BYTES}, {@link SPEECH_AUDIO_FETCH_TIMEOUT_MS}.
+ * Without the Agent package there is no checked fetcher and every address is refused.
+ */
+export async function fetchSpeechAudio(
+  url: string,
+  fetcher: SpeechAudioFetcher | undefined,
+  options: Readonly<{ allowHttp?: boolean }> = {},
+): Promise<SpeechAudioDownload> {
+  if (!fetcher) return Object.freeze({ ok: false as const, code: 'speech_url_blocked' as const, detail: 'no_checked_fetcher' });
+  const result = await fetcher(url, {
+    maxBytes: SPEECH_AUDIO_MAX_BYTES,
+    timeoutMs: SPEECH_AUDIO_FETCH_TIMEOUT_MS,
+    ...(options.allowHttp === true ? { allowHttp: true } : {}),
+  });
+  if (result.ok) return Object.freeze({ ok: true as const, data: result.bytes, mimeType: result.mimeType || 'audio/wav' });
+  return Object.freeze({
+    ok: false as const,
+    code: result.code === 'blocked' ? 'speech_url_blocked' as const : 'speech_url_fetch_failed' as const,
+    ...(result.host ? { host: result.host } : {}),
+    detail: result.status !== undefined ? `${result.code}:${result.status}` : result.code,
+  });
+}
+
+/** Log line of a refused or failed voice download: host name only, never the URL (path and query may carry tokens). */
+function logSpeechDownloadFailure(source: 'inbound' | 'voice_stt', download: Extract<SpeechAudioDownload, { ok: false }>): void {
+  logger.warn(formatCompact({
+    op: download.code,
+    source,
+    host: download.host ?? '-',
+    reason: download.detail,
+  }));
+}
+
+async function loadCheckedFetcher(): Promise<SpeechAudioFetcher | undefined> {
+  try {
+    const mod = await import('@zhin.js/agent/security') as { fetchPublicMediaBytes?: SpeechAudioFetcher };
+    return mod.fetchPublicMediaBytes;
+  } catch {
+    return undefined;
+  }
 }
 
 interface SpeechPipelineLike {
@@ -235,9 +300,14 @@ export async function resolveSpeechConfig(
  * - top-level `speech:` → create one host-owned Speech pipeline
  * - exposes voice_stt / voice_tts tools for Agent Host
  */
+export interface PrepareSpeechHostOptions extends SpeechDependencyCheckOptions {
+  /** Replaces the checked audio download (tests). Default: `fetchPublicMediaBytes` from `@zhin.js/agent/security`. */
+  readonly fetchAudio?: SpeechAudioFetcher;
+}
+
 export async function prepareSpeechHost(
   config: SpeechHostConfig | undefined,
-  options: SpeechDependencyCheckOptions = {},
+  options: PrepareSpeechHostOptions = {},
 ): Promise<SpeechHostHandle | undefined> {
   if (!config) return undefined;
   try {
@@ -248,6 +318,7 @@ export async function prepareSpeechHost(
       ) => SpeechPipelineLike;
     };
     const pipeline = mod.createSpeechPipeline(config, logger);
+    const fetchAudio = options.fetchAudio ?? await loadCheckedFetcher();
     const sttProvider = typeof config.stt?.provider === 'string' ? config.stt.provider : 'ollama';
     const ttsProvider = typeof config.tts?.provider === 'string' ? config.tts.provider : 'edge';
     let issues = await checkSpeechDependencies(config, options);
@@ -266,7 +337,7 @@ export async function prepareSpeechHost(
         return blockingIssue(issues);
       },
     };
-    const tools = buildSpeechTools(pipeline, dependencies).filter((tool) =>
+    const tools = buildSpeechTools(pipeline, dependencies, fetchAudio).filter((tool) =>
       tool.name === 'voice_tts' ? config.tts?.enabled !== false : config.stt?.enabled !== false);
     return Object.freeze({
       tools,
@@ -283,15 +354,19 @@ export async function prepareSpeechHost(
         signal?.throwIfAborted();
         return text.trim() || undefined;
       },
-      async transcribeUrl(audioUrl: string): Promise<string | null> {
+      async transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription> {
         const url = audioUrl.trim();
         if (!url) return null;
         try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`download failed: ${response.status}`);
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const mimeType = response.headers.get('content-type') || 'audio/wav';
-          const text = await pipeline.transcribe({ data: buffer, mimeType });
+          // Plain http only for a voice link the platform adapter produced; user-typed addresses stay HTTPS.
+          const download = await fetchSpeechAudio(url, fetchAudio, { allowHttp: source?.origin === 'platform' });
+          if (!download.ok) {
+            logSpeechDownloadFailure('inbound', download);
+            return download.code === 'speech_url_blocked'
+              ? Object.freeze({ status: 'refused' as const, code: 'speech_url_blocked' as const })
+              : null;
+          }
+          const text = await pipeline.transcribe({ data: download.data, mimeType: download.mimeType });
           const trimmed = text.trim();
           return trimmed || null;
         } catch (error) {
@@ -340,7 +415,11 @@ interface SpeechDependencyGate {
   ttsBlocked(provider?: string): Promise<SpeechDependencyIssue | undefined>;
 }
 
-function buildSpeechTools(pipeline: SpeechPipelineLike, dependencies: SpeechDependencyGate): SpeechHostTool[] {
+function buildSpeechTools(
+  pipeline: SpeechPipelineLike,
+  dependencies: SpeechDependencyGate,
+  fetchAudio: SpeechAudioFetcher | undefined,
+): SpeechHostTool[] {
   return [
     {
       name: 'voice_stt',
@@ -349,7 +428,7 @@ function buildSpeechTools(pipeline: SpeechPipelineLike, dependencies: SpeechDepe
       parameters: {
         type: 'object',
         properties: {
-          audio_url: { type: 'string', description: '音频文件 URL' },
+          audio_url: { type: 'string', description: '音频文件 URL（仅公网 HTTPS 地址）' },
           file_path: { type: 'string', description: '本地音频绝对路径' },
         },
       },
@@ -363,10 +442,18 @@ function buildSpeechTools(pipeline: SpeechPipelineLike, dependencies: SpeechDepe
           if (filePath) {
             buffer = await readFile(filePath);
           } else {
-            const response = await fetch(audioUrl);
-            if (!response.ok) throw new Error(`下载音频失败: ${response.status}`);
-            buffer = Buffer.from(await response.arrayBuffer());
-            mimeType = response.headers.get('content-type') || mimeType;
+            // The model may take audio_url from a user's message: same checked download as inbound voice.
+            const download = await fetchSpeechAudio(audioUrl, fetchAudio);
+            if (!download.ok) {
+              logSpeechDownloadFailure('voice_stt', download);
+              return {
+                error: download.code === 'speech_url_blocked'
+                  ? '语音地址不可用（speech_url_blocked）：只能下载公网 HTTPS 地址，内网、本机和元数据地址不会被访问'
+                  : `下载音频失败（speech_url_fetch_failed: ${download.detail}）`,
+              };
+            }
+            buffer = download.data;
+            mimeType = download.mimeType;
           }
           const text = await pipeline.transcribe({ data: buffer, mimeType });
           return { text: text || '(无法识别语音内容)' };

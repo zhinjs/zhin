@@ -514,7 +514,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           extraTools: speechHandle?.tools,
           audioTranscriber: speechHandle,
           transcribeUrl: speechHandle
-            ? (url) => speechHandle.transcribeUrl(url)
+            ? (url, source) => speechHandle.transcribeUrl(url, source)
             : undefined,
         })(context);
       }
@@ -914,7 +914,7 @@ interface ConfiguredAgentHost {
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
-    readonly transcribeUrl?: (url: string) => Promise<string | null>;
+    readonly transcribeUrl?: import('@zhin.js/agent/runtime').InboundAudioUrlTranscriber;
     readonly assistantStatus?: AssistantStatus;
     readonly selfChanges?: HostSelfChanges;
     readonly selfChangeApply?: HostSelfChangeApply;
