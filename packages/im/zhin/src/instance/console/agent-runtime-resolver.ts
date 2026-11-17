@@ -108,11 +108,42 @@ export function listMcpServerStatus(projectRoot: string, snapshot: RuntimeSnapsh
  */
 export type McpServerRowStatus = 'connected' | 'failed' | 'idle' | 'not_loaded';
 
+/**
+ * `server → Agents that bind it` (#1250 第 41 批 `mcp-connected-but-unbound`). A turn only gets the
+ * tools of the servers its Agent lists in `ai.agents.<name>.mcpServers`; `ai.mcpServers` only
+ * connects. The running Agent's bindings win; without a running Agent the configuration is read.
+ */
+export function mcpServerBindings(
+  bindings: readonly { readonly name: string; readonly mcpServers?: unknown }[],
+): ReadonlyMap<string, readonly string[]> {
+  const byServer = new Map<string, string[]>();
+  for (const binding of bindings) {
+    if (!Array.isArray(binding.mcpServers)) continue;
+    for (const server of binding.mcpServers) {
+      if (typeof server !== 'string' || !server) continue;
+      const agents = byServer.get(server) ?? [];
+      if (!agents.includes(binding.name)) agents.push(binding.name);
+      byServer.set(server, agents);
+    }
+  }
+  return byServer;
+}
+
+function bindingsOf(configuration: AgentConfigProjection, snapshot: RuntimeSnapshot) {
+  const live = resolveCurrentAgentConsole(snapshot)?.listBindings() as
+    readonly { readonly name: string; readonly mcpServers?: unknown }[] | undefined;
+  if (live?.length) return live;
+  return configuration.listBindings()
+    .filter((binding): binding is Record<string, unknown> & { name: string } => typeof binding.name === 'string');
+}
+
 function mergeMcpServers(
   configuration: AgentConfigProjection,
   snapshot: RuntimeSnapshot,
 ): { rows: readonly Record<string, unknown>[] } {
   const rows = new Map<string, Record<string, unknown>>();
+  const bound = mcpServerBindings(bindingsOf(configuration, snapshot));
+  const boundAgents = (name: string): readonly string[] => [...(bound.get(name) ?? [])];
   for (const entry of configuration.listMcpServers()) {
     rows.set(entry.name, {
       name: entry.name,
@@ -120,6 +151,7 @@ function mergeMcpServers(
       toolCount: 0,
       transport: entry.transport,
       status: 'not_loaded' satisfies McpServerRowStatus,
+      boundAgents: boundAgents(entry.name),
     });
   }
   const introspection = resolveCurrentAgentIntrospection(snapshot);
@@ -133,6 +165,7 @@ function mergeMcpServers(
       ...(configured?.transport === undefined ? {} : { transport: configured.transport }),
       status,
       ...(!entry.connected && entry.lastError ? { lastError: entry.lastError } : {}),
+      boundAgents: boundAgents(entry.name),
     });
   }
   return { rows: [...rows.values()] };

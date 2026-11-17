@@ -272,7 +272,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | no | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | no | — | — |
 | `ai.agents` | object \| null | no | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
+| `ai.agents.<key>.mcpServers` | array \| null | no | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。 |
 | `ai.agents.<key>.nickname` | string | no | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
@@ -332,7 +332,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.githubMcp` | object | no | — | PAT for adapter-github auto-registered server-github MCP (overrides env when set). |
 | `ai.githubMcp.token` | string | no | — | — |
 | `ai.githubMcp.enabled` | boolean \| string | no | — | 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 |
-| `ai.mcpServers` | array \| null | no | — | External MCP servers for the Agent MCP client (global, all bots). Listed servers are exposed to ZhinAgent tool pool when connected. |
+| `ai.mcpServers` | array \| null | no | — | 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在 ai.agents.&lt;name&gt;.mcpServers 里写上服务器的 name，对应的 Agent 才能调用它的工具（例：ai.agents.zhin.mcpServers: [github]）。没有任何 Agent 绑定的服务器，zhin status、zhin doctor 与 Console「需要你处理」会提示。 |
 | `ai.access` | object \| null | no | — | AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） |
 | `ai.access.mode` | string | no | — | open \| closed \| whitelist，默认 open |
 | `ai.access.users` | array&lt;string&gt; | no | — | 允许触发 AI 的 sender.id |

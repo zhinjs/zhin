@@ -552,6 +552,29 @@ describe('doctor: runtime health (#1250 doctor-blind-to-runtime-health)', () => 
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it('lists a connected MCP server that no Agent binds (#1250 第 41 批 mcp-connected-but-unbound)', async () => {
+    runningGateway.current = gatewayInfo(true);
+    runtime.current = {
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [{ name: 'github', status: 'connected', toolCount: 49, boundAgents: [] }] },
+      attention: {
+        available: true,
+        items: [{
+          kind: 'mcp.unbound', severity: 'warning', source: 'mcp',
+          title: 'MCP 服务 github 已连接但没有 Agent 能用',
+          detail: 'ai.mcpServers 只负责连接，没有任何 Agent 绑定它，所以它的工具不会出现在任何回合里。在 ai.agents.<name>.mcpServers 里绑定，例如 ai.agents.zhin.mcpServers: [github]（zhin 处理 IM 消息）。',
+        }],
+        unavailable: [],
+      },
+    };
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('需要你处理：MCP 服务 github 已连接但没有 Agent 能用: ai.mcpServers 只负责连接');
+      expect(output).toContain('在 ai.agents.<name>.mcpServers 里绑定');
+      expect(output).not.toContain('所有检查通过');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('warns when the attention list cannot be read', async () => {
     runningGateway.current = gatewayInfo(true);
     const { output, directory } = await runDoctor(() => {});

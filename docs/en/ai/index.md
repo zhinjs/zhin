@@ -124,21 +124,32 @@ Service, Account, Profile, and purpose selection (`chat`, `compaction`, `ambient
 
 Connect the AI to **external MCP servers** and use their tools. Requires `@modelcontextprotocol/sdk`.
 
+It takes two steps, and **without the second one no Agent can use the tools**:
+
+1. `ai.mcpServers` **only connects**: it declares how to reach each server.
+2. `ai.agents.<name>.mcpServers` **binds**: list a server's `name` there and that Agent can call its tools. IM messages are handled by `zhin`, so you usually bind on `ai.agents.zhin`.
+
 ```yaml
 ai:
-  mcpServers:
-    - name: icqq
+  mcpServers:                         # step 1: connect
+    - name: github
       transport: streamable-http      # stdio | streamable-http | sse
-      url: ${ICQQ_MCP_URL}
+      url: https://api.githubcopilot.com/mcp/
       headers:
-        Authorization: Bearer ${ICQQ_MCP_TOKEN}
+        Authorization: Bearer ${GITHUB_MCP_TOKEN}
     - name: filesystem
       transport: stdio
       command: npx
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
+  agents:
+    zhin:
+      mcpServers: [github, filesystem]  # step 2: bind to zhin, which handles IM messages
+    researcher:
+      mcpServers: [github]              # other Agents bind what they need
 ```
 
-- Once connected, the server's tools join the tool pool under names prefixed with the server name.
+- Once connected, the server's tools join the tool pool under names prefixed with the server name, but each Agent only sees the tools of the servers listed in its own `mcpServers`. With `ai.agents.zhin: {}` and no `mcpServers`, `zhin` cannot use a single MCP tool.
+- A server that is connected but bound to no Agent is marked "connected, but no Agent can use it" in `zhin status`, and listed by `zhin doctor` and the Console attention inbox (`mcp.unbound`); the Agent's ready log reads `ready | zhin | mcp: - | 未绑定: github(待连接)` — the `mcp:` part lists only the servers that Agent is bound to.
 - **If any server fails to connect, the new config doesn't take effect** and the old version keeps serving.
 - `ai.agents.<name>.mcpServers` may only reference names declared here, or config validation fails.
 

@@ -40,6 +40,11 @@ export interface RuntimeMcpServer {
   readonly status: 'connected' | 'failed' | 'idle' | 'not_loaded' | 'disconnected';
   readonly toolCount: number;
   readonly lastError?: string;
+  /**
+   * Agents that bind the server in `ai.agents.<name>.mcpServers` (#1250 第 41 批); empty: no Agent
+   * can use its tools. Absent on instances that do not report it.
+   */
+  readonly boundAgents?: readonly string[];
 }
 
 export interface RuntimeAttentionItem {
@@ -116,8 +121,19 @@ function mcpRow(row: Partial<ConsoleMcpServerRow>): RuntimeMcpServer | undefined
     status,
     toolCount: typeof row.toolCount === 'number' ? row.toolCount : 0,
     ...(row.lastError && typeof row.lastError.message === 'string' ? { lastError: row.lastError.message } : {}),
+    ...(Array.isArray(row.boundAgents)
+      ? { boundAgents: row.boundAgents.filter((name): name is string => typeof name === 'string') }
+      : {}),
   };
 }
+
+/** Connected, but no Agent binds it: its tools reach no turn (#1250 第 41 批). */
+export function isUnboundMcpServer(row: RuntimeMcpServer): boolean {
+  return row.status === 'connected' && row.boundAgents !== undefined && row.boundAgents.length === 0;
+}
+
+/** The hint `zhin status` shows for {@link isUnboundMcpServer} rows. */
+export const MCP_UNBOUND_HINT = '已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定';
 
 export async function readEndpoints(http: HostHttpConfig, timeoutMs = RUNTIME_READ_TIMEOUT_MS): Promise<RuntimeRead<RuntimeEndpoint>> {
   try {
@@ -221,9 +237,12 @@ export function renderRuntimeState(state: RuntimeState): string[] {
   else if (state.mcp.items.length > 0) {
     lines.push('MCP 服务：');
     for (const row of state.mcp.items) {
-      const ok = row.status === 'connected' || row.status === 'idle';
+      const unbound = isUnboundMcpServer(row);
+      const ok = !unbound && (row.status === 'connected' || row.status === 'idle');
       const tools = row.status === 'connected' ? `，${row.toolCount} 个工具` : '';
-      lines.push(`  ${ok ? '✓' : '✗'} ${row.name}：${MCP_LABELS[row.status]}${tools}${row.lastError ? `（${row.lastError}）` : ''}`);
+      const bound = row.status === 'connected' && row.boundAgents?.length ? `，绑定：${row.boundAgents.join('、')}` : '';
+      const note = unbound ? `（${MCP_UNBOUND_HINT}）` : row.lastError ? `（${row.lastError}）` : '';
+      lines.push(`  ${ok ? '✓' : unbound ? '!' : '✗'} ${row.name}：${MCP_LABELS[row.status]}${tools}${bound}${note}`);
     }
   }
   if (!state.attention.available) lines.push(`需要你处理：无法读取（${state.attention.error}）`);

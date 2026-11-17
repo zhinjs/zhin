@@ -8,10 +8,13 @@ import { listMcpServerStatus } from '../../../src/instance/console/agent-runtime
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
-function snapshotWith(servers: readonly unknown[] | undefined): RuntimeSnapshot {
+function snapshotWith(servers: readonly unknown[] | undefined, bindings?: readonly unknown[]): RuntimeSnapshot {
   const root = rootPluginId();
   const resources = new Map<string, unknown>();
-  if (servers) resources.set(tokenId('zhin.host.agent'), { introspection: { listMcpServers: () => servers, listTools: () => [] } });
+  if (servers) resources.set(tokenId('zhin.host.agent'), {
+    introspection: { listMcpServers: () => servers, listTools: () => [] },
+    ...(bindings ? { console: { listBindings: () => bindings } } : {}),
+  });
   return { root, resources: new Map([[root, resources]]) } as unknown as RuntimeSnapshot;
 }
 
@@ -33,10 +36,35 @@ describe('MCP server status rows (#1250)', () => {
       { name: 'web', connected: true, toolCount: 3 },
     ]));
     expect(rows).toEqual([
-      { name: 'search', connected: false, toolCount: 0, transport: 'stdio', status: 'failed', lastError },
-      { name: 'docs', connected: false, toolCount: 0, transport: 'sse', status: 'idle' },
-      { name: 'files', connected: false, toolCount: 0, transport: 'stdio', status: 'not_loaded' },
-      { name: 'web', connected: true, toolCount: 3, transport: 'streamable-http', status: 'connected' },
+      { name: 'search', connected: false, toolCount: 0, transport: 'stdio', status: 'failed', lastError, boundAgents: [] },
+      { name: 'docs', connected: false, toolCount: 0, transport: 'sse', status: 'idle', boundAgents: [] },
+      { name: 'files', connected: false, toolCount: 0, transport: 'stdio', status: 'not_loaded', boundAgents: [] },
+      { name: 'web', connected: true, toolCount: 3, transport: 'streamable-http', status: 'connected', boundAgents: [] },
+    ]);
+  });
+
+  it('names the Agents that bind each server: the running Agent first, else the configuration (#1250 第 41 批)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-mcp-status-'));
+    roots.push(root);
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({
+      configVersion: 2,
+      ai: {
+        mcpServers: [{ name: 'github', transport: 'streamable-http' }, { name: 'docs', transport: 'stdio' }],
+        // `ai.agents.zhin: {}` without mcpServers: github is connected but no Agent binds it.
+        agents: { zhin: {}, researcher: { mcpServers: ['docs'] } },
+      },
+    }));
+    // Without a running Agent: from the configuration.
+    expect(listMcpServerStatus(root, snapshotWith(undefined)).map(row => [row.name, row.boundAgents])).toEqual([
+      ['github', []], ['docs', ['researcher']],
+    ]);
+    // The running Agent's bindings win over the file (e.g. edited but not reloaded yet).
+    const rows = listMcpServerStatus(root, snapshotWith(
+      [{ name: 'github', connected: true, toolCount: 49 }, { name: 'docs', connected: true, toolCount: 2 }],
+      [{ name: 'zhin', mcpServers: ['docs'] }, { name: 'researcher', mcpServers: ['docs', 'docs'] }],
+    ));
+    expect(rows.map(row => [row.name, row.status, row.boundAgents])).toEqual([
+      ['github', 'connected', []], ['docs', 'connected', ['zhin', 'researcher']],
     ]);
   });
 });

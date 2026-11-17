@@ -151,21 +151,32 @@ ai:
 
 让 AI 连接**外部的 MCP 服务器**，使用对方提供的工具。需要安装 `@modelcontextprotocol/sdk`。
 
+配置分两步，**缺一步 Agent 就用不了这些工具**：
+
+1. `ai.mcpServers` **只负责连接**：声明服务器怎么连。
+2. `ai.agents.<name>.mcpServers` **负责绑定**：写上服务器的 `name`，这个 Agent 才能调用它的工具。处理 IM 消息的是 `zhin`，所以通常要绑在 `ai.agents.zhin` 上。
+
 ```yaml
 ai:
-  mcpServers:
-    - name: icqq
+  mcpServers:                         # 第 1 步：连接
+    - name: github
       transport: streamable-http      # stdio | streamable-http | sse
-      url: ${ICQQ_MCP_URL}
+      url: https://api.githubcopilot.com/mcp/
       headers:
-        Authorization: Bearer ${ICQQ_MCP_TOKEN}
+        Authorization: Bearer ${GITHUB_MCP_TOKEN}
     - name: filesystem
       transport: stdio
       command: npx
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
+  agents:
+    zhin:
+      mcpServers: [github, filesystem]  # 第 2 步：绑定给处理 IM 消息的 zhin
+    researcher:
+      mcpServers: [github]              # 其他 Agent 需要的话各自绑定
 ```
 
-- 连接成功后，对方的工具以带服务器名前缀的名字加入工具池。
+- 连接成功后，对方的工具以带服务器名前缀的名字加入工具池，但每个 Agent 只看得到自己 `mcpServers` 里列出的服务器的工具。只写 `ai.agents.zhin: {}` 而不写 `mcpServers`，`zhin` 一个 MCP 工具也用不了。
+- 已连接却没有任何 Agent 绑定的服务器，`zhin status` 会在该行注明「已连接但没有 Agent 能用」，`zhin doctor` 与 Console「需要你处理」也会列出它（`mcp.unbound`）；Agent 的就绪日志写成 `ready | zhin | mcp: - | 未绑定: github(待连接)`，`mcp:` 段只列这个 Agent 真正绑定的服务器。
 - **任何一个服务器连接失败，新配置都不会生效**，旧版本继续服务。
 - `ai.agents.<name>.mcpServers` 只能引用这里声明过的名字，否则配置校验失败。
 

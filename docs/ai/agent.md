@@ -87,7 +87,7 @@ sequenceDiagram
 - **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：只在额度用完、余额不足或鉴权失败时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
-一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
+一个回合可用的工具 = 插件注册的工具 + 当前 Agent 在 `ai.agents.<name>.mcpServers` 里绑定的 MCP 服务器的工具（只在 `ai.mcpServers` 连接而没有绑定的不算） + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
 ### 显示进度
 
