@@ -25,6 +25,8 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import {
   SANDBOX_MEDIA_HARD_MAX_FILE_BYTES,
+  SANDBOX_MEDIA_MAX_OBJECTS,
+  SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER,
   type ResolvedSandboxMediaConfig,
   type SandboxMediaKind,
 } from './media-config.js';
@@ -63,6 +65,7 @@ export interface SandboxMediaMeta {
 
 export type SandboxMediaErrorCode =
   | 'length_required' | 'too_large' | 'length_mismatch' | 'empty' | 'quota_exceeded' | 'uploader_quota_exceeded'
+  | 'object_limit_exceeded' | 'uploader_object_limit_exceeded'
   | 'invalid_name' | 'invalid_conversation' | 'aborted';
 
 export class SandboxMediaError extends Error {
@@ -86,6 +89,8 @@ export interface SandboxMediaStoreOptions {
   readonly endpointId: string;
   readonly config: ResolvedSandboxMediaConfig;
   readonly now?: () => number;
+  /** @internal Lower object-count limits for tests; never above the hard constants. */
+  readonly objectLimits?: { readonly endpoint?: number; readonly uploader?: number };
 }
 
 export interface SandboxMediaPutInput {
@@ -172,9 +177,15 @@ export class SandboxMediaStore {
   readonly #index = new Map<string, SandboxMediaMeta>();
   /** Bytes of uploads in flight, per uploader (quota checks see them). */
   readonly #reserved = new Map<string, number>();
+  /** Uploads in flight, per uploader (object-count checks see them). */
+  readonly #inFlight = new Map<string, number>();
+  readonly #maxObjects: number;
+  readonly #maxObjectsPerUploader: number;
   #loaded = false;
 
   constructor(options: SandboxMediaStoreOptions) {
+    this.#maxObjects = Math.min(options.objectLimits?.endpoint ?? SANDBOX_MEDIA_MAX_OBJECTS, SANDBOX_MEDIA_MAX_OBJECTS);
+    this.#maxObjectsPerUploader = Math.min(options.objectLimits?.uploader ?? SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER, SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER);
     this.endpointId = options.endpointId;
     this.dirKey = sandboxMediaDirKey(options.endpointId);
     this.config = options.config;
@@ -213,6 +224,17 @@ export class SandboxMediaStore {
     return total;
   }
 
+  /** Live objects plus uploads in flight, of one uploader or of the endpoint. */
+  objectCount(uploader?: string): number {
+    this.#ensureLoaded();
+    let total = 0;
+    for (const meta of this.#index.values()) {
+      if (meta.expiresAt > this.#now() && (uploader === undefined || meta.uploader === uploader)) total += 1;
+    }
+    for (const [who, count] of this.#inFlight) if (uploader === undefined || who === uploader) total += count;
+    return total;
+  }
+
   async put(input: SandboxMediaPutInput): Promise<SandboxMediaMeta> {
     const name = validateSandboxMediaFileName(input.fileName);
     const conversation = validConversation(input.conversation, this.endpointId);
@@ -230,7 +252,14 @@ export class SandboxMediaStore {
     if (this.usage() + length > this.config.quotaBytes) {
       throw new SandboxMediaError('quota_exceeded', 507, 'The Sandbox media quota of this endpoint is used up');
     }
+    if (this.objectCount(input.uploader) >= this.#maxObjectsPerUploader) {
+      throw new SandboxMediaError('uploader_object_limit_exceeded', 507, `You already hold ${this.#maxObjectsPerUploader} Sandbox files; delete uploads or wait until they expire`);
+    }
+    if (this.objectCount() >= this.#maxObjects) {
+      throw new SandboxMediaError('object_limit_exceeded', 507, `This endpoint already holds ${this.#maxObjects} Sandbox files`);
+    }
     this.#reserved.set(input.uploader, (this.#reserved.get(input.uploader) ?? 0) + length);
+    this.#inFlight.set(input.uploader, (this.#inFlight.get(input.uploader) ?? 0) + 1);
     const id = randomBytes(16).toString('base64url');
     const part = join(this.#dir, `${id}.part`);
     let fd: number | undefined;
@@ -285,6 +314,8 @@ export class SandboxMediaStore {
     } finally {
       const left = (this.#reserved.get(input.uploader) ?? 0) - length;
       if (left > 0) this.#reserved.set(input.uploader, left); else this.#reserved.delete(input.uploader);
+      const pending = (this.#inFlight.get(input.uploader) ?? 0) - 1;
+      if (pending > 0) this.#inFlight.set(input.uploader, pending); else this.#inFlight.delete(input.uploader);
     }
   }
 

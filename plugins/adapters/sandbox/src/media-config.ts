@@ -17,6 +17,13 @@ export const SANDBOX_MEDIA_KINDS: readonly SandboxMediaKind[] = Object.freeze(['
 export const SANDBOX_MEDIA_HARD_MAX_FILE_BYTES = 64 * MiB;
 /** Ceiling of an endpoint's total quota (and so of a per-uploader quota). */
 export const SANDBOX_MEDIA_HARD_MAX_QUOTA_BYTES = 5 * GiB;
+/**
+ * Live objects one endpoint may hold, and one uploader on it (uploads in flight included). Byte
+ * quotas alone do not bound the count: a stream of 1-byte uploads would fill the in-memory index,
+ * the directory (two files per object) and the start-up scan long before any quota.
+ */
+export const SANDBOX_MEDIA_MAX_OBJECTS = 10_000;
+export const SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER = 1_000;
 export const SANDBOX_MEDIA_MIN_TTL_HOURS = 1;
 /** Longest link lifetime; until then an object is revoked only by deleting it (or by revoke-all). */
 export const SANDBOX_MEDIA_MAX_TTL_HOURS = 168;

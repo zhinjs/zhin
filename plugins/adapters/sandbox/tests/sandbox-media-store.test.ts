@@ -8,6 +8,8 @@ import { inspectMediaBytes } from '../../../../packages/im/agent/src/media/media
 import {
   SANDBOX_MEDIA_DEFAULTS,
   SANDBOX_MEDIA_HARD_MAX_FILE_BYTES,
+  SANDBOX_MEDIA_MAX_OBJECTS,
+  SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER,
   resolveSandboxMediaConfig,
   type ResolvedSandboxMediaConfig,
 } from '../src/media-config.js';
@@ -162,6 +164,32 @@ describe('Sandbox media store (ADR 0064 D12, I1)', () => {
     await expect(put(media, PNG, { uploader: 'user:carol' })).rejects.toMatchObject({ code: 'quota_exceeded', status: 507 });
     expect(media.list()).toHaveLength(4);
     expect(media.usage('user:alice')).toBe(24);
+  });
+
+  it('bounds the number of objects per uploader and per endpoint, uploads in flight included', async () => {
+    // Byte quotas alone let a stream of 1-byte uploads grow the index and the directory without bound.
+    expect(SANDBOX_MEDIA_MAX_OBJECTS_PER_UPLOADER).toBeLessThan(SANDBOX_MEDIA_MAX_OBJECTS);
+    const root = await mkdtemp(join(tmpdir(), 'zhin-sandbox-media-'));
+    roots.push(root);
+    const media = new SandboxMediaStore({ root: join(root, '.zhin', 'sandbox', 'media'), endpointId: 'bot',
+      config: SANDBOX_MEDIA_DEFAULTS, now: () => 1_800_000_000_000, objectLimits: { uploader: 3, endpoint: 5 } });
+    const one = new Uint8Array([1]);
+    for (let i = 0; i < 3; i += 1) await put(media, one);
+    await expect(put(media, one)).rejects.toMatchObject({ code: 'uploader_object_limit_exceeded', status: 507 });
+    // Concurrent uploads count before they finish: two at once with room for one.
+    await put(media, one, { uploader: 'user:bob' });
+    const stalled = new TransformStream<Uint8Array, Uint8Array>();
+    const pending = media.put({ body: stalled.readable, declaredLength: 1, conversation: room, uploader: 'user:bob' });
+    await expect(put(media, one, { uploader: 'user:carol' })).rejects.toMatchObject({ code: 'object_limit_exceeded' });
+    const writer = stalled.writable.getWriter();
+    await writer.write(one);
+    await writer.close();
+    await pending;
+    expect(media.objectCount()).toBe(5);
+    // Deleting frees a slot; nothing is evicted to make one.
+    media.delete(media.list()[0]!.id);
+    await put(media, one, { uploader: 'user:carol' });
+    expect(media.objectCount()).toBe(5);
   });
 
   it('limits size by type, before and while receiving', async () => {

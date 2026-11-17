@@ -305,7 +305,7 @@ messaging: {
 #### D12 本地文件由 Sandbox 托管：存在哪里、地址怎么签发、多大、多久、谁能读
 
 1. **存储位置**：项目的 `.zhin/sandbox/media/<端点键的 SHA-256 前 16 位>/` 下，每个对象两份文件：`<id>`（字节）和 `<id>.json`（`kind`、`mime`、`size`、`name`、`sha256`、`createdAt`、`expiresAt`、上传者、会话）。**会话**是上传时的端点 + 会话（`{ endpoint, type, id }`），**上传者**是上传请求的 Console principal（`auditActor`：`user:<id>` / `api-token:<id>` / `bootstrap`）；两者是授权的一部分（D12.5、D14.3，修订第 3 条）。`id` 是 128 位随机数的 base64url（`^[A-Za-z0-9_-]{22}$`）。**磁盘上的文件名只用 `id`**，上传者给的文件名只进元数据；读取只按 `id` 查元数据，不接受任何路径。`.zhin/` 已在 Agent 的检索范围之外（`plugin-runtime/file-search-scope.ts`），文件策略与 Shell 命令检查（`packages/im/agent/src/security/file-policy.ts`）另把 `.zhin/sandbox/` 显式列为拒绝访问的目录，测试覆盖 `read_file` / `write_file` 与读写、间接访问它的 Shell 命令（修订第 5 条）。不放内存：重启后，页面历史里的图片还能显示、引用还能解析（在有效期内）。
-2. **大小与配额**（修订第 6、7 条）：单个文件按类型设上限，默认图片 10 MiB、语音 / 音频 20 MiB、视频 32 MiB、其他文件 32 MiB。上传都经过网关，网关转发的请求体上限是 `DEFAULT_GATEWAY_MAX_REQUEST_BODY_BYTES`（64 MiB），所以单文件硬顶就是 64 MiB（测试守住两个数相等），默认值留出余量；**要放更大的文件，需要同时调大网关的请求体上限**。配额**按上传者计**（`uploaderQuotaBytes`，默认 200 MiB），端点另有总配额（`quotaBytes`，默认 500 MiB，硬顶 5 GiB）；任一超出都直接拒绝上传（`uploader_quota_exceeded` / `quota_exceeded`，507），**不淘汰任何人的对象**。都可在端点配置 `media`（`schema.json`）里调整，超出硬顶的配置值让端点配置失败，而不是悄悄截断。比 Agent 多模态上限（`maxFileBytes`）大的文件照样能上传——插件可能要处理大文件——Agent 一侧按它现有的结局（`media_validation_failed`）如实报告。
+2. **大小与配额**（修订第 6、7 条）：单个文件按类型设上限，默认图片 10 MiB、语音 / 音频 20 MiB、视频 32 MiB、其他文件 32 MiB。上传都经过网关，网关转发的请求体上限是 `DEFAULT_GATEWAY_MAX_REQUEST_BODY_BYTES`（64 MiB），所以单文件硬顶就是 64 MiB（测试守住两个数相等），默认值留出余量；**要放更大的文件，需要同时调大网关的请求体上限**。配额**按上传者计**（`uploaderQuotaBytes`，默认 200 MiB），端点另有总配额（`quotaBytes`，默认 500 MiB，硬顶 5 GiB）；任一超出都直接拒绝上传（`uploader_quota_exceeded` / `quota_exceeded`，507），**不淘汰任何人的对象**。字节配额之外还限制**对象个数**：每个上传者最多 1000 个、每个端点最多 10000 个（含正在上传的；`uploader_object_limit_exceeded` / `object_limit_exceeded`，507），否则一串 1 字节的上传就能在配额用完之前撑大内存索引、目录（每个对象两份文件）和启动时的扫描（I1 复审补充）。都可在端点配置 `media`（`schema.json`）里调整，超出硬顶的配置值让端点配置失败，而不是悄悄截断。比 Agent 多模态上限（`maxFileBytes`）大的文件照样能上传——插件可能要处理大文件——Agent 一侧按它现有的结局（`media_validation_failed`）如实报告。
 3. **有效期**：默认 24 小时（`media.ttlHours`，1–168，即最长 168 小时）。端点启动时和之后每小时清扫一次过期对象；过期后下载返回 404，content port 返回 `expired`。有效期内随时可以撤销：删除对象即作废它的所有链接，「全部作废」见 D12.4（修订第 5 条）。
 4. **地址签发**：插件拿到的是 `<origin>/pub/sandbox-media/<端点目录键>/<id>?exp=<到期秒>&sig=<签名>`，`sig = base64url(HMAC-SHA256(key, 端点 id \0 id \0 exp))`。路径里带端点目录键（与磁盘目录同名），每个端点挂自己的路由前缀，多个 Sandbox 端点不必共用一张登记表。`exp` 等于对象的 `expiresAt`，所以链接和文件同时失效。`origin` 取 `HttpHost.address`，没有时取上传请求的 origin；**origin 只是给人和外部服务用的，不参与任何判断**（修订第 2 条）。
    - **密钥**（修订第 5 条）：`.zhin/sandbox/media/secret`（权限 0600）保存 `{ current, previous? }`，每把 32 字节随机数，重启不变。签发只用 `current`，验签两把都试；轮换（`rotate`）生成新的 `current`，旧的变成 `previous`，此前签发的链接继续有效；「全部作废」（`revoke-all`）轮换并丢弃 `previous`，此前签发的所有链接立即失效（对象本身保留）。两者都只允许所有者调用（`POST /api/sandbox/media/<endpoint>/secret`）。
@@ -375,7 +375,7 @@ messaging: {
 
 | 风险 | 措施 |
 |---|---|
-| 上传撑满磁盘 | 单文件按类型限额（硬顶为网关请求体上限 64 MiB）、按上传者计的配额与端点总配额（超出即拒绝，不淘汰他人）、配置值的硬顶、到期清扫（D12.2、D12.3） |
+| 上传撑满磁盘 | 单文件按类型限额（硬顶为网关请求体上限 64 MiB）、按上传者计的配额与端点总配额（超出即拒绝，不淘汰他人）、按上传者与按端点的对象个数上限、配置值的硬顶、到期清扫（D12.2、D12.3） |
 | 上传可执行内容 | 按魔数判定类型、`nosniff`；SVG / HTML 不作为图片，强制 `attachment`（D12.6） |
 | 托管地址变成任意文件读取 | 路由与 `read` 只接受随机 `id`，磁盘文件名只用 `id`，从不拼接用户给的路径（D12.1） |
 | 托管地址变成公开外链 | `/pub/sandbox-media` 默认关闭；开启后签名 + 到期是唯一依据，来源地址不算授权；进程内读取走 `LocalMediaSource.read`，不经 HTTP；Console 入口要 `endpoint.view`、范围覆盖该端点且会话一致；`publicDownload` 的含义写进文档（D12.5） |
