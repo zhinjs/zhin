@@ -1,5 +1,12 @@
 # @zhin.js/client
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [d7f8100]
+  - @zhin.js/console-ui@1.1.1
+
 ## 1.3.0
 
 ### Minor Changes
