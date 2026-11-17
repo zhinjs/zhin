@@ -13,6 +13,7 @@
  * | `config.invalid` / `config.apply-failed` / `config.literal-secrets` | configuration store | `ops.config.read` |
  * | `tool-approval.pending` | the Agent Root's tool approval queue | `tool_approvals:read` or `ops:approve` |
  * | `mcp.disconnected` | Agent MCP servers whose last connect failed (not those still waiting for their first connect) | `status.view` |
+ * | `mcp.unbound` | Agent MCP servers that are connected but bound by no Agent in `ai.agents.<name>.mcpServers` (#1250) | `status.view` |
  * | `speech.unavailable` | Speech Host: a configured speech feature whose external command cannot run (`edge-tts`, #1250) | `status.view` |
  * | `inference.account` | Host model accounts: reauthorize / disconnected / uncertain / preparation failed (#1270) | `agent.view` |
  * | `config.ineffective` | `purposes.agents.<key>` choices the runtime ignores (#1270) | `agent.view` |
@@ -182,6 +183,11 @@ export interface AttentionMcpServer {
   readonly lastError?: Readonly<{ category: string; message: string; at?: number; exitCode?: number }>;
   /** The reason comes from the runtime failure journal (before the last restart). */
   readonly restored?: boolean;
+  /**
+   * Agents that bind the server in `ai.agents.<name>.mcpServers` (#1250 第 41 批); empty: connected
+   * or not, no Agent can use its tools. Absent when unknown (no `mcp.unbound` item then).
+   */
+  readonly boundAgents?: readonly string[];
 }
 
 /**
@@ -657,6 +663,12 @@ const messages = createMessages({
   'mcp.title': { 'zh-CN': 'MCP 服务 {server} 连接失败', en: 'MCP server {server} failed to connect' },
   'mcp.detail': { 'zh-CN': 'Agent 暂时无法调用它提供的工具。', en: 'The Agent cannot use its tools for now.' },
   'mcp.reason': { 'zh-CN': '最近一次连接失败（{category}）：{message}', en: 'Last connect failed ({category}): {message}' },
+  'mcp.unbound.title': { 'zh-CN': 'MCP 服务 {server} 已连接但没有 Agent 能用', en: 'MCP server {server} is connected, but no Agent can use it' },
+  'mcp.unbound.detail': {
+    'zh-CN': 'ai.mcpServers 只负责连接，没有任何 Agent 绑定它，所以它的工具不会出现在任何回合里。在 ai.agents.<name>.mcpServers 里绑定，例如 ai.agents.zhin.mcpServers: [{server}]（zhin 处理 IM 消息）。',
+    en: 'ai.mcpServers only connects; no Agent binds this server, so its tools never reach a turn. Bind it in ai.agents.<name>.mcpServers, e.g. ai.agents.zhin.mcpServers: [{server}] (zhin handles IM messages).',
+  },
+  'mcp.unbound.action': { 'zh-CN': '打开配置文件', en: 'Open configuration' },
   'restored': { 'zh-CN': '（重启前记录）', en: ' (recorded before the restart)' },
   'inference.title.reauthorize': { 'zh-CN': '模型账号 {account} 需要重新登录', en: 'Model account {account} must sign in again' },
   'inference.title.disconnected': { 'zh-CN': '模型账号 {account} 已断开', en: 'Model account {account} is disconnected' },
@@ -1215,10 +1227,12 @@ export async function collectAttention(sources: AttentionSources, options: Colle
   }
 
   if (sources.mcpServers && allows(P.STATUS_VIEW)) {
-    // #1250: only a failed connect is something to act on. A server that has not connected yet
-    // (waiting to connect) or is not loaded by the running Agent is shown on the MCP page only.
-    await read('mcp', async () => (await shared('mcp', async () => sources.mcpServers!()))
-      .filter(server => !server.connected && server.lastError !== undefined).map((server): AttentionDraft => {
+    // #1250: a failed connect, or a connected server no Agent binds (第 41 批), is something to act
+    // on. A server that has not connected yet (waiting to connect) or is not loaded by the running
+    // Agent is shown on the MCP page only.
+    await read('mcp', async () => {
+      const servers = await shared('mcp', async () => sources.mcpServers!());
+      return servers.filter(server => !server.connected && server.lastError !== undefined).map((server): AttentionDraft => {
         const failure = server.lastError;
         const message = failure ? attentionFailureReason(failure.message) : undefined;
         return {
@@ -1236,7 +1250,19 @@ export async function collectAttention(sources: AttentionSources, options: Colle
             ...(failure.at !== undefined ? { at: new Date(failure.at).toISOString() } : {}),
           } } : {}),
         };
-      }));
+      }).concat(servers
+        // #1250 第 41 批 mcp-connected-but-unbound: `ai.mcpServers` only connects; a turn gets the
+        // tools of the servers its Agent binds. Connected but bound by no Agent: nobody can use it.
+        .filter(server => server.connected && server.boundAgents !== undefined && server.boundAgents.length === 0)
+        .map((server): AttentionDraft => ({
+          kind: 'mcp.unbound', severity: 'warning', subject: { mcpServer: server.name, configPath: 'ai.agents' },
+          state: { connected: true, boundAgents: 0 },
+          title: t('mcp.unbound.title', { server: server.name }),
+          detail: t('mcp.unbound.detail', { server: server.name }),
+          action: { label: t('mcp.unbound.action'), path: ATTENTION_PATHS.config },
+          reason: { code: 'unbound' },
+        })));
+    });
   }
 
   // #1250 第 29 批：配置的语音能力因外部命令不可执行而不可用（如 edge TTS 没有可运行的 edge-tts）。

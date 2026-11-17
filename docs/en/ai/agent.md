@@ -88,7 +88,7 @@ The model may call tools several times and keep reasoning on the results; each r
 - **No response and timeouts**: every attempt has two deadlines under `ai.agent.providerResilience`. If no first response (response headers or first stream event) arrives within `firstResponseTimeoutMs` (default 30000), the attempt fails as `no_response`: it is not retried on the same model and the turn replies through the normal outbound chain (the owner sees the cause "model service not responding"). `requestTimeoutMs` (default 120000) bounds the whole output and is retried as `timeout`. Both write a `provider_timeout` warning (session, turn id, purpose, provider alias, model, phase, limit; no request content or keys) and a `model_timeout` entry on the turn trace timeline. Both count toward the purpose fallbacks' consecutive-timeout switch: after 2 consecutive `no_response` / `timeout` failures of the same model within one operation, the next request of that operation goes to the next configured fallback (a deadline the caller sets itself never counts); see [fallback models](./model-policy.md#fallback-models).
 - **Consistent behavior**: the main Agent, delegated Agents and `AIService.runAgent` all use the same agentLoop.
 
-The tools available to a turn = plugin tools + tools from `ai.mcpServers` + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
+The tools available to a turn = plugin tools + tools of the MCP servers the current Agent binds in `ai.agents.<name>.mcpServers` (a server only connected in `ai.mcpServers` does not count) + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
 
 ### Showing progress
 
