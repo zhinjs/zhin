@@ -420,6 +420,8 @@ ai:
 
 入站消息里的本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）只在两个条件同时满足时才读：产出这条消息的端点声明了自己的入站媒体目录（`inboundMedia.roots()`，见[端点生命周期](../authoring/endpoint-lifecycle.md#入站媒体目录)），且解析符号链接、`..` 之后的真实路径落在该目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。其他路径一律不读，记录 `op=inbound_media_rejected` 警告（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，整轮照常进行。平台字段 `data.file` 不再被猜成本机路径。引用消息、合并转发只把内容交给模型，不会读其中的本地文件。
 
+`ZhinAgent` 的旧回合入口（`process()`、`processTurn()`、`processStream()`、`prompt()`，即 `processTextTurn()` 链）拿不到产出端点声明的目录，入站本机路径一律不读（同样只给占位）；仓内只有测试和 Agent eval 使用它们。IM 消息的正式回合走 Plugin Runtime 入站链（`zhin start`），由入口把端点目录写进 `TurnInput.inboundMediaRoots`。
+
 ### 用量配额
 
 回合用量累计该回合经模型完成接口返回的所有响应，包括工具选择、最终回答、上下文压缩、进度或耗尽总结，以及格式纠正。已返回但格式不合法的响应仍计入；没有返回用量的传输异常不估算为账单用量。它是供应商报告用量的累计值，不是账单对账结果。
