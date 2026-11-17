@@ -353,13 +353,15 @@ describe('email plugin runtime adapter', () => {
         metadata: expect.objectContaining({
           attachments: [expect.objectContaining({
             filename: 'a.txt',
-            path: path.join(dir, 'a.txt'),
+            path: expect.stringMatching(/[/\\]mail-[^/\\]+[/\\]a\.txt$/u),
           })],
         }),
       }));
+      const saved = (receive.mock.calls[0]?.[0]?.metadata as { attachments: Array<{ path: string }> }).attachments[0]!.path;
+      expect(path.dirname(path.dirname(saved))).toBe(path.resolve(dir));
       // 超限附件被跳过，未落盘
-      await expect(readFile(path.join(dir, 'a.txt'), 'utf8')).resolves.toBe('hello');
-      await expect(readFile(path.join(dir, 'big.bin'), 'utf8')).rejects.toThrow();
+      await expect(readFile(saved, 'utf8')).resolves.toBe('hello');
+      await expect(readFile(path.join(path.dirname(saved), 'big.bin'), 'utf8')).rejects.toThrow();
       await endpoint.stop();
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -410,25 +412,48 @@ describe('email plugin runtime adapter', () => {
         date: new Date(1_700_000_000_000),
         uid: 4,
       });
+      // A second email with the same attachment name must not overwrite the first (#1250 review).
+      endpoint.endpoint.admit({
+        messageId: '<seg2@mock.com>',
+        from: 'other@example.com',
+        to: ['bot@mock.com'],
+        subject: '图',
+        text: '看图',
+        attachments: [
+          { filename: 'pic.png', contentType: 'image/png', size: 3, content: Buffer.from('PNG') },
+        ] as unknown as import('mailparser').Attachment[],
+        date: new Date(1_700_000_000_000),
+        uid: 5,
+      });
 
-      await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
       expect(receive).toHaveBeenCalledWith(expect.objectContaining({
         segments: [
           { type: 'text', data: { text: expect.stringContaining('[image: pic.png]') } },
           {
             type: 'image',
             data: {
-              media: { kind: 'path', value: path.join(dir, 'pic.png'), mime_type: 'image/png' },
+              media: { kind: 'path', value: expect.stringMatching(/[/\\]pic\.png$/u), mime_type: 'image/png' },
               name: 'pic.png',
               alt: 'pic.png',
             },
           },
         ],
       }));
+      const pathOf = (call: number) => (receive.mock.calls[call]?.[0] as {
+        segments: Array<{ data: { media?: { value: string } } }>;
+      }).segments[1]!.data.media!.value;
+      const first = pathOf(0);
+      const second = pathOf(1);
+      expect(first).not.toBe(second);
+      await expect(readFile(first, 'utf8')).resolves.toBe('png');
+      await expect(readFile(second, 'utf8')).resolves.toBe('PNG');
       // #1250: the Agent reads an inbound path only inside the Endpoint's declared directory.
       const roots = endpoint.index.inboundMediaRoots(endpoint.canonicalId);
       expect(roots).toEqual([dir]);
-      expect(path.relative(roots[0]!, path.join(dir, 'pic.png')).startsWith('..')).toBe(false);
+      for (const saved of [first, second]) {
+        expect(path.relative(path.resolve(roots[0]!), saved).startsWith('..')).toBe(false);
+      }
       await endpoint.stop();
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -502,12 +527,14 @@ describe('email plugin runtime adapter', () => {
       await vi.waitFor(() => expect(receive).toHaveBeenCalled());
       // 穿越文件名被 basename 化后落进 downloadPath；目录外不落盘
       await expect(readFile(path.resolve(dir, '../evil.txt'), 'utf8')).rejects.toThrow();
-      await expect(readFile(path.join(dir, 'evil.txt'), 'utf8')).resolves.toBe('evil');
       const metadata = receive.mock.calls[0]?.[0]?.metadata as {
         attachments?: Array<{ filename: string; path: string }>;
       };
       expect(metadata.attachments).toHaveLength(1);
-      expect(metadata.attachments?.[0]?.path).toBe(path.join(dir, 'evil.txt'));
+      const saved = metadata.attachments![0]!.path;
+      expect(path.basename(saved)).toBe('evil.txt');
+      expect(path.dirname(path.dirname(saved))).toBe(path.resolve(dir));
+      await expect(readFile(saved, 'utf8')).resolves.toBe('evil');
       await endpoint.stop();
     } finally {
       await rm(dir, { recursive: true, force: true });
