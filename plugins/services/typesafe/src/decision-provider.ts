@@ -1,4 +1,4 @@
-import { TypeSafeClient, APIError, type Fetch, type Questions, type SystemOneRequest, type TypeSafeClientConfig } from '@typesafe-ai/sdk';
+import { TypeSafeClient, APIError, APIConnectionError, APITimeoutError, type Fetch, type Questions, type SystemOneRequest, type TypeSafeClientConfig } from '@typesafe-ai/sdk';
 import type { DecisionOptions, DecisionProvider, DecisionQuestions, DecisionRequest, DecisionResult, JsonValue } from '@zhin.js/ai';
 import { ProviderAdmissionError } from '@zhin.js/ai/provider';
 import { TypeSafeDecisionError, validateDecisionResult } from './response-validator.js';
@@ -128,7 +128,10 @@ export class TypeSafeDecisionProvider implements DecisionProvider {
       if (error instanceof ProviderAdmissionError) throw error;
       if (error instanceof TypeSafeDecisionError) throw error;
       if (signal.aborted) throw abortError();
-      throw new TypeSafeDecisionError('request-failed', error instanceof APIError ? error.status : undefined);
+      // ADR 0066 D2: classifiable without the body text (status, Retry-After, error code / type).
+      if (error instanceof APITimeoutError) throw new TypeSafeDecisionError('timeout');
+      if (error instanceof APIError) throw new TypeSafeDecisionError('request-failed', error.status, { headers: error.headers, body: error.body });
+      throw new TypeSafeDecisionError('request-failed', undefined, { network: error instanceof APIConnectionError });
     } finally {
       clearTimeout(timer);
       if (onAbort) signal.removeEventListener('abort', onAbort);

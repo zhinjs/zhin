@@ -120,7 +120,7 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup();
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, source: 'language:主站/chat-a',
+      expect(judgment).toMatchObject({ engage: true, sourceLabel: 'language:主站/chat-a', source: { kind: 'language', profile: 'primary', model: 'chat-a' },
         usage: { inputTokens: 120, outputTokens: 8, cacheReadTokens: 100, totalTokens: 128 }, durationMs: expect.any(Number) });
       expect(judgment).not.toHaveProperty('fallbackFrom');
       expect(calls).toEqual([expect.objectContaining({ kind: 'language', source: 'language:主站/chat-a', status: 'completed' })]);
@@ -136,9 +136,14 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ fallbacks: true, failing: { main: unauthorized } });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
-      expect(calls).toEqual([expect.objectContaining({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a', status: 'completed' })]);
-      expect(usage.lines()[0]).toContain('model: 备用站/chat-b | fallback_from: 主站/chat-a');
+      expect(judgment).toMatchObject({ engage: true, sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
+        source: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
+      // ADR 0066 P0: each chain member is one call — the failed primary, then the fallback that answered.
+      expect(calls).toEqual([
+        expect.objectContaining({ source: 'language:主站/chat-a', status: 'failed', errorCategory: 'auth' }),
+        expect.objectContaining({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a', status: 'completed' }),
+      ]);
+      expect(usage.lines()[1]).toContain('model: 备用站/chat-b | fallback_from: 主站/chat-a');
     } finally { usage.restore(); }
   });
 
@@ -166,7 +171,12 @@ describe('ambient judge visibility (#1250)', () => {
     const engagement = new AmbientEngagement({ config: { conversations: ['*'] }, judge, sleep: async () => undefined });
     await expect(engagement.consider({ key: 'qq:g1', botName: '小知', readRecent: async () => ['a'] })).resolves.toEqual({ kind: 'skipped', reason: 'judge_failed',
       failure: { category: 'auth', source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
-        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } } });
+        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } },
+        // ADR 0066 D2: every member the chain tried, with its failure class.
+        attempts: [
+          { ref: { kind: 'language', profile: 'primary', model: 'chat-a' }, label: 'language:主站/chat-a', category: 'auth' },
+          { ref: { kind: 'language', profile: 'backup', model: 'chat-b' }, label: 'language:备用站/chat-b', category: 'auth' },
+        ] } });
   });
 
   it('keeps the decision-model path: decision source, usage line and audit fields', async () => {
@@ -174,7 +184,7 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ decision: 'active' });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ engage: true, confidence: 0.8, source: 'decision:jev', usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
+      expect(judgment).toMatchObject({ engage: true, confidence: 0.8, sourceLabel: 'decision:jev', source: { kind: 'decision', profile: 'jev', model: 'jev' }, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
       expect(calls).toEqual([expect.objectContaining({ kind: 'decision', source: 'decision:jev', status: 'completed' })]);
       expect(usage.lines()[0]).toMatch(/^judge \| scene: ambient \| conv: qq:g1 \| status: completed \| kind: decision \| model: jev \| calls: 1 \| input: 40 \| output: 2 \| cache_read: \? \| cache_write: \? \| ms: \d+$/u);
     } finally { usage.restore(); }
@@ -196,7 +206,7 @@ describe('ambient judge visibility (#1250)', () => {
     const usage = captureUsage();
     try {
       const { judge, calls } = setup({ decision: 'shadow' });
-      await expect(judge.judge(input())).resolves.toMatchObject({ source: 'language:主站/chat-a' });
+      await expect(judge.judge(input())).resolves.toMatchObject({ sourceLabel: 'language:主站/chat-a' });
       expect(calls.map(call => call.kind).sort()).toEqual(['decision', 'language']);
       expect(usage.lines()).toHaveLength(2);
     } finally { usage.restore(); }
@@ -250,8 +260,8 @@ describe('ambient judge visibility (#1250)', () => {
     try {
       const { judge, calls } = setup({ fallbacks: true, registry });
       const judgment = await judge.judge(input());
-      expect(judgment).toMatchObject({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
-        ref: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
+      expect(judgment).toMatchObject({ sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a',
+        source: { kind: 'language', profile: 'backup', model: 'chat-b', fallbackFrom: { profile: 'primary', model: 'chat-a' } } });
       expect(calls).toHaveLength(1);
       expect(calls[0]).toMatchObject({ status: 'completed', fallbackFrom: 'language:主站/chat-a' });
       expect(usage.lines()).toHaveLength(1);
@@ -264,11 +274,13 @@ describe('ambient judge visibility (#1250)', () => {
       judge.judge({ ...input(), recent: ['小林 (1): FAIL-ME'] }),
       judge.judge(input()),
     ]);
-    expect(failed).toMatchObject({ source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
-    expect(plain.source).toBe('language:主站/chat-a');
+    expect(failed).toMatchObject({ sourceLabel: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a' });
+    expect(plain.sourceLabel).toBe('language:主站/chat-a');
     expect(plain).not.toHaveProperty('fallbackFrom');
-    expect(plain.ref).toEqual({ kind: 'language', profile: 'primary', model: 'chat-a' });
-    expect(calls).toHaveLength(2);
+    expect(plain.source).toEqual({ kind: 'language', profile: 'primary', model: 'chat-a' });
+    expect(plain.ref).toEqual(plain.source);
+    // The failing judgment made two calls (primary, then fallback), the plain one a single call.
+    expect(calls).toHaveLength(3);
     expect(calls.filter(call => call.fallbackFrom)).toHaveLength(1);
   });
 

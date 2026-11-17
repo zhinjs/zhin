@@ -18,7 +18,7 @@ it('summarizes ambient decisions without chat text or judge reasons', () => {
   status.bindAmbientConfig(() => ({ conversations: ['qq:1', 'qq:2'], mode: 'shadow' }));
   status.recordAmbient('qq:1', { kind: 'engage', judgment: { engage: true, confidence: 0.876, reason: SECRET } });
   time.advance(1);
-  status.recordAmbient('qq:1', { kind: 'declined', judgment: { engage: false, confidence: 0.2, reason: SECRET, source: 'decision:small' } });
+  status.recordAmbient('qq:1', { kind: 'declined', judgment: { engage: false, confidence: 0.2, reason: SECRET, source: { kind: 'decision', model: 'small' }, sourceLabel: 'decision:small' } });
   time.advance(1);
   status.recordAmbient('qq:2', { kind: 'shadow', judgment: { engage: true, confidence: 0.9, reason: SECRET } });
   status.recordAmbient('qq:2', { kind: 'skipped', reason: 'superseded' });

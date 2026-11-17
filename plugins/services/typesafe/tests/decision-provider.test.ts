@@ -1,9 +1,9 @@
 import { expectTypeOf, vi } from 'vitest';
-import type { DecisionRequest } from '@zhin.js/ai';
 import { TypeSafeDecisionProvider } from '../src/decision-provider.js';
 import { TypeSafeDecisionError } from '../src/response-validator.js';
 import { ProviderAdmissionError } from '@zhin.js/ai/provider';
 import { TypeSafeClient } from '@typesafe-ai/sdk';
+import { classifyProviderError, type DecisionRequest } from '@zhin.js/ai';
 
 const questions = {
   route: { type: 'choice', instructions: 'Choose a route', criteria: { billing: null, other: null } },
@@ -42,7 +42,8 @@ it('retains configured SDK connection retries and sanitizes exhausted transport 
   await expect(provider.evaluate(request, options())).resolves.toMatchObject({ usage: { inputTokens: 30, outputTokens: 10 } });
   expect(fetch).toHaveBeenCalledTimes(2); provider.dispose();
   const failed = new TypeSafeDecisionProvider({ apiKey: 'synthetic-key', maxRetries: 0 }, { fetch: async () => { throw new Error('synthetic private connection cause'); } });
-  await expect(failed.evaluate(request, options())).rejects.toMatchObject({ code: 'request-failed', message: 'TypeSafe decision request-failed' });
+  // ADR 0066 D2: a connection that never answered is a network failure, without the private cause.
+  await expect(failed.evaluate(request, options())).rejects.toMatchObject({ code: 'request-failed', message: 'TypeSafe decision request-failed (network)' });
   failed.dispose();
 });
 
@@ -201,4 +202,29 @@ it('validates unsupported JSON entries and empty questions before dispatch', asy
 
 it.each([{ apiKey: '' }, { apiKey: '  \t\n' }, { apiKey: '${TYPESAFE_API_KEY}' }, { apiKey: 'test', model: '  ' }, { apiKey: 'test', timeoutMs: 0 }, { apiKey: 'test', maxRetries: -1 }, ...['https://secret:password@example.com', 'https://@example.com', 'https://example.com?', 'https://example.com#', 'https://example.com/path?token=secret', 'https://example.com/path#fragment', ' https://example.com', 'https://exa mple.com'].map(baseUrl => ({ apiKey: 'test', baseUrl }))])('rejects invalid config safely', config => {
   expect(() => new TypeSafeDecisionProvider(config)).toThrow('TypeSafe decision invalid-config');
+});
+
+describe('ADR 0066 D2: TypeSafe errors are classified by classifyProviderError', () => {
+  const failure = async (fetch: (url: string, init?: RequestInit) => Promise<Response>, config: { timeoutMs?: number } = {}) => {
+    const provider = new TypeSafeDecisionProvider({ apiKey: 'test-key', maxRetries: 0, ...config }, { fetch });
+    try { return await provider.evaluate(request, options()).then(() => undefined, (error: unknown) => error); } finally { provider.dispose(); }
+  };
+
+  it('keeps the status, Retry-After and the error code of the body, never its text', async () => {
+    const quota = await failure(async () => Response.json({ error: { code: 'insufficient_quota', message: 'private-prompt' } }, { status: 429, headers: { 'Retry-After': '30' } }));
+    expect(classifyProviderError(quota)).toMatchObject({ kind: 'billing', status: 429 });
+    expect(JSON.stringify(quota)).not.toContain('private-prompt');
+    const limited = await failure(async () => Response.json({ message: 'slow down private-prompt' }, { status: 429, headers: { 'Retry-After': '7' } }));
+    expect(classifyProviderError(limited)).toMatchObject({ kind: 'rate_limit', status: 429, retryAfterMs: 7_000 });
+    expect(classifyProviderError(await failure(async () => Response.json({}, { status: 401 })))).toMatchObject({ kind: 'auth', credential: true });
+    expect(classifyProviderError(await failure(async () => Response.json({}, { status: 503 })))).toMatchObject({ kind: 'server' });
+  });
+
+  it('classifies a connection failure as network, a timeout as timeout and an unusable answer as invalid_response', async () => {
+    expect(classifyProviderError(await failure(async () => { throw new Error('private connection cause'); }))).toMatchObject({ kind: 'network' });
+    expect(classifyProviderError(await failure(() => new Promise<Response>(() => undefined), { timeoutMs: 20 }))).toMatchObject({ kind: 'timeout' });
+    const invalid = await failure(async () => Response.json({ model: 'jev', answers: {}, usage: { input_tokens: 1, output_tokens: 1 } }));
+    expect(invalid).toMatchObject({ code: 'invalid-response' });
+    expect(classifyProviderError(invalid)).toMatchObject({ kind: 'invalid_response' });
+  });
 });

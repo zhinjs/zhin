@@ -258,8 +258,8 @@ describe('DecisionEngagementJudge', () => {
     const service = provider(answer('engage', 0.86));
     const observe = vi.fn();
     const judge = new DecisionEngagementJudge({ provider: service, policy: { mode: 'active', timeoutMs: 1500 }, observe });
-    await expect(judge.judge(input())).resolves.toEqual({ engage: true, confidence: 0.86, reason: 'decision: engage', source: 'decision:jev-1.14',
-      ref: { kind: 'decision', model: 'jev-1.14' }, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 }, durationMs: expect.any(Number) });
+    await expect(judge.judge(input())).resolves.toEqual({ engage: true, confidence: 0.86, reason: 'decision: engage', sourceLabel: 'decision:jev-1.14',
+      source: { kind: 'decision', model: 'jev-1.14' }, ref: { kind: 'decision', model: 'jev-1.14' }, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 }, durationMs: expect.any(Number) });
     const [request, options] = service.evaluate.mock.calls[0]!;
     expect(request.state).toEqual({ bot: '小知', botIsInConversation: true, minutesSinceBotSpoke: 2, recentMessages: ['小林 (1): 有人知道怎么配代理吗'] });
     expect(Object.keys(request.questions)).toEqual(['engagement']);
@@ -310,7 +310,7 @@ describe('DecisionEngagementJudge', () => {
 
 describe('ShadowEngagementJudge', () => {
   it('returns the primary judgment and reports the shadow one', async () => {
-    const shadowJudgment: EngagementJudgment = { engage: false, confidence: 0.8, reason: 'decision: stay_quiet', source: 'decision:jev-1.14' };
+    const shadowJudgment: EngagementJudgment = { engage: false, confidence: 0.8, reason: 'decision: stay_quiet', source: { kind: 'decision', model: 'jev-1.14' }, sourceLabel: 'decision:jev-1.14' };
     const report = vi.fn();
     const judge = new ShadowEngagementJudge({ judge: async () => yes }, { judge: async () => shadowJudgment }, report);
     await expect(judge.judge({ botName: '小知', recent: ['a'], signal: new AbortController().signal })).resolves.toEqual(yes);
@@ -329,11 +329,11 @@ describe('ShadowEngagementJudge', () => {
 describe('AmbientEngagement judge override', () => {
   it('uses the per-call judge while keeping the throttles', async () => {
     const h = harness(yes, { cooldownMs: 60_000, conversationWindowMs: 0 });
-    const override = { judge: vi.fn(async (): Promise<EngagementJudgment> => ({ ...yes, source: 'decision:jev-1.14' })) } satisfies EngagementJudge;
+    const override = { judge: vi.fn(async (): Promise<EngagementJudgment> => ({ ...yes, sourceLabel: 'decision:jev-1.14' })) } satisfies EngagementJudge;
     const consider = () => h.engagement.consider({ key: 'icqq:1048877509', botName: '小知', readRecent: async () => ['x'], judge: override });
     const first = consider();
     await h.release();
-    await expect(first).resolves.toMatchObject({ kind: 'engage', judgment: { source: 'decision:jev-1.14' } });
+    await expect(first).resolves.toMatchObject({ kind: 'engage', judgment: { sourceLabel: 'decision:jev-1.14' } });
     const second = consider();
     await h.release();
     await expect(second).resolves.toEqual({ kind: 'skipped', reason: 'cooldown' });
@@ -354,7 +354,7 @@ describe('createAmbientDecisionJudge', () => {
   it('active: the selected decision model fails without invoking another model', async () => {
     const base = { judge: vi.fn(async () => yes) } satisfies EngagementJudge;
     const active = createAmbientDecisionJudge({ base, provider: service(quiet), policy: { mode: 'active' } })!;
-    await expect(active.judge(input())).resolves.toMatchObject({ engage: false, source: 'decision:jev-1.14' });
+    await expect(active.judge(input())).resolves.toMatchObject({ engage: false, sourceLabel: 'decision:jev-1.14', source: { kind: 'decision', model: 'jev-1.14' } });
     expect(base.judge).not.toHaveBeenCalled();
     const failing = createAmbientDecisionJudge({ base, provider: service(new Error('down')), policy: { mode: 'active' } })!;
     await expect(failing.judge(input())).rejects.toThrow('provider_error');

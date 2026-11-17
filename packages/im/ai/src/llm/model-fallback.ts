@@ -67,7 +67,11 @@ import { estimateTextTokens } from "../compaction/token-counter.js";
 /** Failure classes that switch to the next fallback. */
 /** `context_overflow`: a fallback in use no longer fits the growing context, so the next one takes over. */
 /** `network` / `server`: the selected model's same-model retries were used up (#1250 fallback-skips-network-and-5xx). */
-export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout" | "network" | "server" | "context_overflow";
+/**
+ * `invalid_response`: the interjection judge's answer was unusable (ADR 0066 D2). Only that judge
+ * switches on it (it has no side effects to repeat); it never marks a model unavailable.
+ */
+export type ModelFallbackReason = "quota_exhausted" | "billing" | "auth" | "timeout" | "network" | "server" | "context_overflow" | "invalid_response";
 
 /** User-visible note for a turn answered by a fallback model. */
 export const MODEL_FALLBACK_NOTICE = "本轮由备用模型回答";
@@ -95,6 +99,15 @@ function classify(error: unknown): ProviderErrorClassification {
   return error instanceof ProviderRequestError
     ? { ...classifyProviderError(error.cause), kind: error.kind }
     : classifyProviderError(error);
+}
+
+/**
+ * The failure class a fallback chain acts on: the resilience layer's final kind when it gave up
+ * (`ProviderRequestError`), with the reset hints of the provider error underneath it. Used by the
+ * purpose fallback port and the interjection judge chain (ADR 0066 D2).
+ */
+export function classifyFallbackFailure(error: unknown): ProviderErrorClassification {
+  return classify(error);
 }
 
 /**
@@ -196,6 +209,7 @@ export interface ModelFallbackEndpoint {
 
 /** One switch to a fallback model; `phase: 'selection'` = the primary was already being skipped. */
 export interface ModelFallbackEvent {
+  /** A language purpose (`chat`, `summary`, `agent:<name>` …) or `ambient`, the interjection judge chain (ADR 0066). */
   readonly purpose: string;
   readonly from: ModelFallbackEndpoint;
   readonly to: ModelFallbackEndpoint;

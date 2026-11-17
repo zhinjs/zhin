@@ -1,11 +1,39 @@
 import type { DecisionQuestions, DecisionResult, JsonValue } from '@zhin.js/ai/provider';
 
 /** Never includes a remote body, credential, prompt or candidate label. */
+/**
+ * Detail of a failed request that `classifyProviderError` reads (ADR 0066 D2): the response
+ * headers (`Retry-After`), the error code / type of the response body (billing, quota) and
+ * whether the connection itself failed. Never the body text in the message.
+ */
+export interface TypeSafeDecisionErrorDetail {
+  readonly headers?: Headers;
+  readonly body?: unknown;
+  readonly network?: boolean;
+}
+
 export class TypeSafeDecisionError extends Error {
-  constructor(readonly code: 'invalid-request' | 'invalid-response' | 'invalid-config' | 'disposed' | 'cancelled' | 'timeout' | 'request-failed', readonly status?: number) {
-    super(`TypeSafe decision ${code}${status === undefined ? '' : ` (HTTP ${status})`}`);
+  /** Response headers of a failed request (`Retry-After`), for `classifyProviderError`. */
+  readonly responseHeaders?: Headers;
+  /** JSON of the response body's `error.code` / `error.type` only, for `classifyProviderError`. */
+  readonly responseBody?: string;
+  constructor(readonly code: 'invalid-request' | 'invalid-response' | 'invalid-config' | 'disposed' | 'cancelled' | 'timeout' | 'request-failed', readonly status?: number,
+    detail: TypeSafeDecisionErrorDetail = {}) {
+    super(`TypeSafe decision ${code}${status === undefined ? '' : ` (HTTP ${status})`}${detail.network ? ' (network)' : ''}`);
     this.name = 'TypeSafeDecisionError';
+    if (detail.headers) this.responseHeaders = detail.headers;
+    const codes = errorCodes(detail.body);
+    if (codes) this.responseBody = JSON.stringify({ error: codes });
   }
+}
+
+/** Only the machine-readable `code` / `type` of an error body: no message text leaves the driver. */
+function errorCodes(body: unknown): { code?: string; type?: string } | undefined {
+  const outer = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : undefined;
+  const inner = outer?.error && typeof outer.error === 'object' && !Array.isArray(outer.error) ? outer.error as Record<string, unknown> : outer;
+  const pick = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/u.test(value) ? value : undefined;
+  const code = pick(inner?.code), type = pick(inner?.type);
+  return code || type ? { ...(code ? { code } : {}), ...(type ? { type } : {}) } : undefined;
 }
 function fail(): never { throw new TypeSafeDecisionError('invalid-response'); }
 function object(value: unknown): Record<string, unknown> {

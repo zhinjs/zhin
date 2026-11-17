@@ -298,7 +298,7 @@ export class AssistantStatus {
           group,
           outcome: decision.kind === 'engage' ? 'spoke' : decision.kind === 'shadow' ? 'watched' : 'stayed_quiet',
           confidence: Math.round(clamp01(decision.judgment.confidence) * 100) / 100,
-          judge: decision.judgment.source?.startsWith('decision:') ? 'decision' : 'chat-model',
+          judge: (decision.judgment.source ?? decision.judgment.ref)?.kind === 'decision' ? 'decision' : 'chat-model',
         };
     push(this.#ambient, entry);
   }
