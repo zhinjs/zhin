@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-ipad-wechat",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "iPad WeChat adapter: personal WeChat through the @wchats/ipad SDK (iPad protocol, local signing) — private and group text, images and mentions.",
   "keywords": [
