@@ -54,6 +54,12 @@ export const ADAPTER_META = {
   'douyin-live': { tier: 'Experimental', label: '抖音直播弹幕', packageName: '@zhin.js/adapter-douyin-live' },
   wecom: { tier: 'Experimental', label: '企业微信', packageName: '@zhin.js/adapter-wecom' },
   'weixin-ilink': { tier: 'Experimental', label: '微信 iLink', packageName: '@zhin.js/adapter-weixin-ilink' },
+  'ipad-wechat': {
+    tier: 'Experimental',
+    label: '微信 iPad',
+    packageName: '@zhin.js/adapter-ipad-wechat',
+    management: ['listFriends', 'listGroups', 'listGroupMembers'],
+  },
 };
 
 /** @type {Record<AdapterTier, number>} */

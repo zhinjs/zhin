@@ -955,6 +955,63 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.profile.interests` | array \| null | no | — | — |
 | `icqq.profile.bio` | string \| null | no | — | — |
 
+### ipad-wechat
+
+[`plugins/adapters/ipad-wechat/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/ipad-wechat/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `ipad-wechat.dataDir` | string | no | `"data/ipad-wechat"` | SDK 状态根目录；每个账号使用 &lt;dataDir&gt;/accounts/&lt;实例&gt;，同一目录不能交给两个进程 |
+| `ipad-wechat.loginTimeoutMs` | integer | no | `600000` | 首次扫码/恢复登录的超时 |
+| `ipad-wechat.qrPollIntervalMs` | integer | no | `1000` | 扫码状态轮询间隔 |
+| `ipad-wechat.heartbeatIntervalSeconds` | integer | no | — | 业务心跳间隔；不填使用 SDK 默认值 |
+| `ipad-wechat.reconnect` | boolean | no | `true` | 长链断开后由 SDK 自动重连 |
+| `ipad-wechat.ignoreSelfMessages` | boolean | no | `true` | 忽略本账号在其他设备发出的消息 |
+| `ipad-wechat.downloadImages` | boolean | no | `true` | 收到图片时先下载到本地再分发 |
+| `ipad-wechat.verification` | object | no | — | Device verification page (slider / face), used only when WeChat asks to verify the device. |
+| `ipad-wechat.verification.key` | string | yes | — | 页面 TLS 私钥 PEM 文件路径 |
+| `ipad-wechat.verification.cert` | string | yes | — | 页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin） |
+| `ipad-wechat.verification.host` | string | no | `"127.0.0.1"` | 监听地址；手机访问时用 0.0.0.0 |
+| `ipad-wechat.verification.port` | integer | no | `8443` | — |
+| `ipad-wechat.verification.publicOrigin` | string | no | — | 手机可访问的 https 源，如 https://192.168.1.10:8443 |
+| `ipad-wechat.verification.timeoutMs` | integer | no | `600000` | 等待完成验证的时长 |
+| `ipad-wechat.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `ipad-wechat.endpoints[].id` | string | yes | — | 账号名（Endpoint id） |
+| `ipad-wechat.endpoints[].dataDir` | string | no | — | SDK 状态根目录；每个账号使用 &lt;dataDir&gt;/accounts/&lt;实例&gt;，同一目录不能交给两个进程 |
+| `ipad-wechat.endpoints[].loginTimeoutMs` | integer | no | — | 首次扫码/恢复登录的超时 |
+| `ipad-wechat.endpoints[].qrPollIntervalMs` | integer | no | — | 扫码状态轮询间隔 |
+| `ipad-wechat.endpoints[].heartbeatIntervalSeconds` | integer | no | — | 业务心跳间隔；不填使用 SDK 默认值 |
+| `ipad-wechat.endpoints[].reconnect` | boolean | no | — | 长链断开后由 SDK 自动重连 |
+| `ipad-wechat.endpoints[].ignoreSelfMessages` | boolean | no | — | 忽略本账号在其他设备发出的消息 |
+| `ipad-wechat.endpoints[].downloadImages` | boolean | no | — | 收到图片时先下载到本地再分发 |
+| `ipad-wechat.endpoints[].verification` | object | no | — | Device verification page (slider / face), used only when WeChat asks to verify the device. |
+| `ipad-wechat.endpoints[].verification.key` | string | yes | — | 页面 TLS 私钥 PEM 文件路径 |
+| `ipad-wechat.endpoints[].verification.cert` | string | yes | — | 页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin） |
+| `ipad-wechat.endpoints[].verification.host` | string | no | `"127.0.0.1"` | 监听地址；手机访问时用 0.0.0.0 |
+| `ipad-wechat.endpoints[].verification.port` | integer | no | `8443` | — |
+| `ipad-wechat.endpoints[].verification.publicOrigin` | string | no | — | 手机可访问的 https 源，如 https://192.168.1.10:8443 |
+| `ipad-wechat.endpoints[].verification.timeoutMs` | integer | no | `600000` | 等待完成验证的时长 |
+| `ipad-wechat.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `ipad-wechat.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `ipad-wechat.endpoints[].profile` | object | no | — | Fallback account profile |
+| `ipad-wechat.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `ipad-wechat.endpoints[].profile.age` | integer \| null | no | — | — |
+| `ipad-wechat.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `ipad-wechat.endpoints[].profile.signature` | string \| null | no | — | — |
+| `ipad-wechat.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `ipad-wechat.endpoints[].profile.interests` | array \| null | no | — | — |
+| `ipad-wechat.endpoints[].profile.bio` | string \| null | no | — | — |
+| `ipad-wechat.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `ipad-wechat.nickname` | string \| null | no | — | Fallback account nickname |
+| `ipad-wechat.profile` | object | no | — | Fallback account profile |
+| `ipad-wechat.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `ipad-wechat.profile.age` | integer \| null | no | — | — |
+| `ipad-wechat.profile.birthday` | string \| null | no | — | — |
+| `ipad-wechat.profile.signature` | string \| null | no | — | — |
+| `ipad-wechat.profile.avatar` | string \| null | no | — | — |
+| `ipad-wechat.profile.interests` | array \| null | no | — | — |
+| `ipad-wechat.profile.bio` | string \| null | no | — | — |
+
 ### juejin
 
 [`plugins/adapters/juejin/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/juejin/schema.json)
