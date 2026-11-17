@@ -151,6 +151,50 @@ describe('fetchPublicMediaBytes (#1250 第 45 批 speech-url-ssrf)', () => {
     expect(loop.requestBytes).toHaveBeenCalledTimes(3);
   });
 
+  describe('allowHttp (platform-produced voice links)', () => {
+    it('downloads a public http address only when allowed; the default stays HTTPS only', async () => {
+      const { transport, requestBytes } = fakeTransport({ 'http://multimedia.example/v.amr': ok(Uint8Array.from([7]), 'audio/amr') });
+      await expect(fetchPublicMediaBytes('http://multimedia.example/v.amr', { maxBytes: 1024, transport }))
+        .resolves.toMatchObject({ ok: false, code: 'blocked' });
+      expect(requestBytes).not.toHaveBeenCalled();
+      await expect(fetchPublicMediaBytes('http://multimedia.example/v.amr', { maxBytes: 1024, transport, allowHttp: true }))
+        .resolves.toMatchObject({ ok: true, mimeType: 'audio/amr' });
+    });
+
+    it.each(['http://127.0.0.1/v.amr', 'http://10.0.0.2/v.amr', 'http://169.254.169.254/latest/meta-data/', 'http://[64:ff9b::a00:1]/'])(
+      'still refuses the internal http address %s without connecting', async (url) => {
+        const { transport, requestBytes } = fakeTransport({});
+        await expect(fetchPublicMediaBytes(url, { maxBytes: 1024, transport, allowHttp: true }))
+          .resolves.toMatchObject({ ok: false, code: 'blocked' });
+        expect(requestBytes).not.toHaveBeenCalled();
+      });
+
+    it('refuses an http name resolving privately, on the pinned connection', async () => {
+      lookup.mockResolvedValue([{ address: '172.16.5.5', family: 4 }]);
+      await expect(fetchPublicMediaBytes('http://voice.example/v.amr', { maxBytes: 1024, transport: new NodeNetworkTransport(), allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: 'voice.example' });
+    });
+
+    it('never downgrades https to http on redirect; http to http is allowed and re-checked', async () => {
+      const down = fakeTransport({ 'https://cdn.example/v.amr': redirect('http://cdn.example/v.amr') });
+      await expect(fetchPublicMediaBytes('https://cdn.example/v.amr', { maxBytes: 1024, transport: down.transport, allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: 'cdn.example' });
+      expect(down.requestBytes).toHaveBeenCalledTimes(1);
+
+      const plain = fakeTransport({
+        'http://cdn.example/v.amr': redirect('http://cdn2.example/v.amr'),
+        'http://cdn2.example/v.amr': ok(Uint8Array.from([1])),
+      });
+      await expect(fetchPublicMediaBytes('http://cdn.example/v.amr', { maxBytes: 1024, transport: plain.transport, allowHttp: true }))
+        .resolves.toMatchObject({ ok: true, url: 'http://cdn2.example/v.amr' });
+
+      const inward = fakeTransport({ 'http://cdn.example/v.amr': redirect('http://192.168.0.1/admin') });
+      await expect(fetchPublicMediaBytes('http://cdn.example/v.amr', { maxBytes: 1024, transport: inward.transport, allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: '192.168.0.1' });
+      expect(inward.requestBytes).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('gives up when the time budget runs out', async () => {
     const hang: NetworkTransport = {
       request: vi.fn(),

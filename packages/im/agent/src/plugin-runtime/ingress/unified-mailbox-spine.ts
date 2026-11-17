@@ -29,6 +29,7 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
+import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
@@ -743,6 +744,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     try {
       const admittedResult = await admitIngressMailTurn({
         message, matchedContent: matched.content, transcribeUrl: options.transcribeUrl,
+        platformSegments: inboundVoiceSegmentsFromPlatform(snapshot, message.conversation),
         matchedVenue, venueRoute, mailbox, gate, sessionKey, turnId, senderId, entryActorName,
         senderRoles, plainText, liveRoom, mergeable, turnAccess, audit, reply,
       });
@@ -793,3 +795,4 @@ export class AgentTurnIngressRoute implements IngressRoute {
     }
   }
 }
+

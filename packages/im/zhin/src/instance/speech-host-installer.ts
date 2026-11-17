@@ -4,7 +4,7 @@ import { delimiter, extname, isAbsolute, join, resolve as resolvePath } from 'no
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
 import type { PublicMediaFetchOptions, PublicMediaFetchResult } from '@zhin.js/agent/security';
-import type { InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
+import type { InboundAudioUrlOrigin, InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
@@ -62,10 +62,11 @@ export interface SpeechHostHandle extends AudioTranscriptionPort {
   /** Current dependency issues (checked again when `voice_tts` is called while TTS is unavailable). */
   dependencyIssues(): readonly SpeechDependencyIssue[];
   /**
-   * Inbound preprocess: download URL and transcribe. Only a public HTTPS address is downloaded
-   * ({@link fetchSpeechAudio}); anything else is refused with `speech_url_blocked` (#1250 第 45 批).
+   * Inbound preprocess: download URL and transcribe. Only a public address is downloaded
+   * ({@link fetchSpeechAudio}): HTTPS, or also plain HTTP when `origin` is `platform` (a voice link
+   * the adapter produced); anything else is refused with `speech_url_blocked` (#1250 第 45 批).
    */
-  transcribeUrl(audioUrl: string): Promise<InboundAudioUrlTranscription>;
+  transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription>;
 }
 
 /** Largest voice download (bytes); a longer recording is not transcribed. */
@@ -82,7 +83,8 @@ export type SpeechAudioDownload =
   | Readonly<{ ok: false; code: 'speech_url_blocked' | 'speech_url_fetch_failed'; host?: string; detail: string }>;
 
 /**
- * Same rules as other inbound media (#1250 第 45 批 `speech-url-ssrf`): HTTPS only, no private,
+ * Same rules as other inbound media (#1250 第 45 批 `speech-url-ssrf`): HTTPS only (plain HTTP too with
+ * `allowHttp`, for a platform-produced voice link; never https → http on redirect), no private,
  * loopback, link-local or metadata target (checked on the resolved address the connection uses, and
  * again on every redirect hop), at most {@link SPEECH_AUDIO_MAX_BYTES}, {@link SPEECH_AUDIO_FETCH_TIMEOUT_MS}.
  * Without the Agent package there is no checked fetcher and every address is refused.
@@ -90,9 +92,14 @@ export type SpeechAudioDownload =
 export async function fetchSpeechAudio(
   url: string,
   fetcher: SpeechAudioFetcher | undefined,
+  options: Readonly<{ allowHttp?: boolean }> = {},
 ): Promise<SpeechAudioDownload> {
   if (!fetcher) return Object.freeze({ ok: false as const, code: 'speech_url_blocked' as const, detail: 'no_checked_fetcher' });
-  const result = await fetcher(url, { maxBytes: SPEECH_AUDIO_MAX_BYTES, timeoutMs: SPEECH_AUDIO_FETCH_TIMEOUT_MS });
+  const result = await fetcher(url, {
+    maxBytes: SPEECH_AUDIO_MAX_BYTES,
+    timeoutMs: SPEECH_AUDIO_FETCH_TIMEOUT_MS,
+    ...(options.allowHttp === true ? { allowHttp: true } : {}),
+  });
   if (result.ok) return Object.freeze({ ok: true as const, data: result.bytes, mimeType: result.mimeType || 'audio/wav' });
   return Object.freeze({
     ok: false as const,
@@ -347,11 +354,12 @@ export async function prepareSpeechHost(
         signal?.throwIfAborted();
         return text.trim() || undefined;
       },
-      async transcribeUrl(audioUrl: string): Promise<InboundAudioUrlTranscription> {
+      async transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription> {
         const url = audioUrl.trim();
         if (!url) return null;
         try {
-          const download = await fetchSpeechAudio(url, fetchAudio);
+          // Plain http only for a voice link the platform adapter produced; user-typed addresses stay HTTPS.
+          const download = await fetchSpeechAudio(url, fetchAudio, { allowHttp: source?.origin === 'platform' });
           if (!download.ok) {
             logSpeechDownloadFailure('inbound', download);
             return download.code === 'speech_url_blocked'
