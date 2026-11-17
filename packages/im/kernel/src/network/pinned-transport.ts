@@ -7,11 +7,12 @@
  * the original host name (SNI + `Host`).
  *
  * Moved from `@zhin.js/agent` (`security/turn-network-client.ts`, which re-exports it) so the IM core
- * and adapters share one implementation (#1250 第 46 批).
+ * and adapters share one implementation (#1250 第 46 批). `node:http` / `node:https` are loaded on the
+ * first request, not at import: the kernel is loaded by every instance, and a supervised instance must
+ * not load the Node HTTP stack (ADR 0054 §2).
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
-import * as http from 'node:http';
-import * as https from 'node:https';
+import type * as http from 'node:http';
 import { isIP } from 'node:net';
 import { isBlockedSsrfHostname, NetworkAccessDeniedError } from './ssrf.js';
 
@@ -106,16 +107,16 @@ export function bareUrlHost(url: URL): string {
   return url.hostname.replace(/^\[|\]$/g, '');
 }
 
-function requestPinnedAddress(
+async function requestPinnedAddress(
   url: URL,
   address: string,
   headers: Readonly<Record<string, string>>,
   signal: AbortSignal,
   maxBytes: number,
 ): Promise<Omit<NetworkBinaryResponse, 'url'>> {
-  const requester = url.protocol === 'https:' ? https : http;
+  const send = (url.protocol === 'https:' ? (await import('node:https')).request : (await import('node:http')).request) as typeof http.request;
   return new Promise((resolve, reject) => {
-    const request = requester.request({
+    const request = send({
       protocol: url.protocol,
       hostname: address,
       port: url.port || undefined,
