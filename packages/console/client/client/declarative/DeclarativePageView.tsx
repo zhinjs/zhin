@@ -4,8 +4,7 @@
  *
  * It renders only content blocks. Title, description, the actions without a form, status badges
  * and the refresh control go to the page shell (`usePageChrome`); without a shell (an older
- * Console) the page draws that header itself. The blueprint `mark` (letter tile) is ignored with a
- * one-time deprecation warning.
+ * Console) the page draws that header itself.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -41,7 +40,6 @@ import { ConversationPicker } from '../ui/conversation-picker.js';
 import { useLocale, type PluginUiLocale, type PluginUiText } from '../ui/locale.js';
 import { resolveSyncPluginId } from '../ui/plugin-id.js';
 import { usePluginRpc } from '../ui/rpc.js';
-import { BLUEPRINT_MARK_DEPRECATION, warnDeprecatedOnce } from '../renderer/deprecation.js';
 import {
   ActionButton,
   CheckboxChoices,
@@ -98,15 +96,6 @@ type Tone = 'info' | 'success' | 'warning' | 'danger';
 
 const contentTone = (tone: BadgeTone | 'primary' | 'default' | undefined): ContentTone =>
   tone === 'danger' || tone === 'warning' || tone === 'success' || tone === 'primary' ? tone : 'neutral';
-
-/** Whether a blueprint (or the spec inside it) still sets the deprecated `mark`. */
-export function blueprintUsesMark(raw: unknown): boolean {
-  if (!raw || (typeof raw !== 'object' && typeof raw !== 'function')) return false;
-  const record = raw as Record<string, unknown>;
-  if (record.mark !== undefined && record.mark !== null) return true;
-  const inner = record.spec as Record<string, unknown> | undefined;
-  return Boolean(inner && typeof inner === 'object' && inner.mark !== undefined && inner.mark !== null);
-}
 
 function useCopyState(): CopyState {
   const [copiedKey, setCopiedKey] = useState('');
@@ -178,7 +167,6 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   if (reviewSpec) {
     return <CommentReviewSession spec={reviewSpec as never} />;
   }
-  if (blueprintUsesMark(rawSpec)) warnDeprecatedOnce('blueprint-mark', BLUEPRINT_MARK_DEPRECATION);
 
   const spec = useMemo(() => coerceDeclarativeSpec(rawSpec), [rawSpec]);
   const { locale, t } = useLocale(spec.dictionary);
@@ -393,7 +381,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const headerActions = spec.actions?.filter((a) => !a.fields || a.fields.length === 0) ?? [];
   const formActions = spec.actions?.filter((a) => a.fields && a.fields.length > 0) ?? [];
 
-  const renderActionButton = (action: DeclarativeActionSpec<TData>, fallbackVariant: 'default' | 'outline') => {
+  const renderActionButton = (action: DeclarativeActionSpec<TData>, fallbackVariant: 'soft' | 'outline') => {
     const label = pickText(action.label, locale, t);
     return (
       <ActionButton
@@ -811,7 +799,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       <Grid min="14rem">
                         {fields.map((field) => renderField(action, field, fields.length >= 2, isDisabled || isBusy))}
                       </Grid>
-                      <ContentStack direction="row" gap="tight">{renderActionButton(action, 'default')}</ContentStack>
+                      <ContentStack direction="row" gap="tight">{renderActionButton(action, 'soft')}</ContentStack>
                       {renderActionResultPreview(action.name, actionResults[action.name])}
                       {action.result && action.name in inlineResults ? (
                         <ActionInlineResult

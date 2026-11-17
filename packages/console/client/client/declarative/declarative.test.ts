@@ -10,7 +10,6 @@ const VIEW = file('./DeclarativePageView.tsx');
 const TABLE = file('./DataTable.tsx');
 const VALUES = file('./values.tsx');
 const KIT = file('../renderer/kit.tsx');
-const DEPRECATION = file('../renderer/deprecation.ts');
 const UI_ENTRY = resolve(dirname(createRequire(import.meta.url).resolve('@zhin.js/console-ui/package.json')), 'client/index.ts');
 
 function stubHost(handler: (type: string, data: unknown) => { code?: number; data?: unknown; error?: string }) {
@@ -131,17 +130,10 @@ describe('DeclarativePageView content mode (ADR 0063 P2)', () => {
     expect(allNodes(embedded.tree()).some(node => isComponent(node, 'PageHeader'))).toBe(false);
   });
 
-  it('ignores the blueprint mark and warns once', async () => {
-    const env = createHookEnv();
-    env.load(DEPRECATION).resetDeprecationWarnings();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const first = await mountPage({ kind: 'zhin.console.page-blueprint', version: 1, title: '订阅', mark: 'R', sections: [] });
-    const second = await mountPage({ title: '订阅', mark: 'R' });
-    const markWarnings = warn.mock.calls.filter(([message]) => String(message).includes('`mark`'));
-    expect(markWarnings).toHaveLength(1);
-    expect(JSON.stringify(first.env.tree())).not.toContain('"mark"');
-    expect(second.find('PageHeader')).toBeUndefined();
-    first.env.unmount(); second.env.unmount();
+  it('draws no letter tile: a leftover blueprint `mark` (removed in ADR 0063 P4) is not rendered', async () => {
+    const page = await mountPage({ kind: 'zhin.console.page-blueprint', version: 1, title: '订阅', mark: 'R', sections: [] });
+    expect(JSON.stringify(page.env.tree())).not.toContain('"mark"');
+    page.env.unmount();
   });
 });
 
@@ -172,7 +164,7 @@ describe('dangerous actions (ADR 0063 决策 5)', () => {
     const kit = env.load(KIT);
     expect(kit.buttonVariantFor('danger')).toBe('destructive-outline');
     expect(kit.buttonVariantFor('destructive')).toBe('destructive-outline');
-    expect(kit.buttonVariantFor('primary')).toBe('default');
+    expect(kit.buttonVariantFor('primary')).toBe('soft');
     expect(kit.buttonVariantFor('secondary')).toBe('outline');
     expect(kit.resolveConfirmMessage({ variant: 'danger', label: '删除', confirm: '真的删除？' }, 'zh-CN')).toBe('真的删除？');
     expect(kit.resolveConfirmMessage({ variant: 'danger', label: 'Delete' }, 'en')).toBe('Confirm Delete?');
@@ -328,8 +320,8 @@ describe('actions and forms', () => {
     for (const source of sources) {
       const text = readFileSync(source, 'utf8');
       expect(text, source).not.toMatch(/<select[\s>]|createElement\(\s*['"]select['"]/u);
-      expect(text, source).not.toMatch(/<style>|pluginUiStyles|from '\.\.\/ui\/components\.js'|from '\.\/components\.js'/u);
-      expect(text, source).not.toMatch(/className=["'{`][^"'`}]*\bzk-(?!account-editor-host)/u);
+      expect(text, source).not.toMatch(/<style>/u);
+      expect(text, source).not.toMatch(/className=["'{`][^"'`}]*\bzk-/u);
     }
   });
 });

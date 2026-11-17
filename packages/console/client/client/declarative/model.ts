@@ -376,7 +376,6 @@ export interface DeclarativePageSpec<TData = Record<string, unknown>> {
   readonly pluginId?: string;
   readonly title: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
-  readonly mark?: React.ReactNode;
   /** Status RPC method name; defaults to `'status'`. */
   readonly statusMethod?: string;
   /** Optional polling interval in ms; defaults to 10_000. Pass `0` to disable polling. */

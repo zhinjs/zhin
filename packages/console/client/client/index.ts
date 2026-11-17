@@ -115,7 +115,7 @@ export {
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 
-// Data, locale and plugin ID helpers for plugin pages (moved here from `@zhin.js/client/ui`, ADR 0063 D14).
+// Data, locale and plugin ID helpers for plugin pages (ADR 0063 D14).
 export { resolveAdapterConsolePluginId, resolvePluginId, resolveSyncPluginId, type ResolvePluginIdOptions } from './ui/plugin-id.js';
 export {
   usePluginRpc,
@@ -161,7 +161,6 @@ export {
   ConversationPicker,
   ConversationLabel,
   filterConversationOptions,
-  conversationPickerStyles,
   type ConversationPickerProps,
   type ConversationLabelProps,
   type ConversationOption,
@@ -185,12 +184,6 @@ export {
   type ConversationDescription,
   type ConversationDirectoryState,
 } from './ui/conversation-directory.js';
-/**
- * @deprecated ADR 0063 P2: the adapter page is built from `@zhin.js/console-ui` and injects no styles;
- * this is an empty string, kept for one minor and removed with the `zk-` kit (P4).
- */
-export const adapterConsoleStyles = '';
-
 export {
   ADAPTER_CONSOLE_PAGE_CAPABILITIES,
   AdapterConsolePage,

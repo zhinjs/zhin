@@ -7,7 +7,8 @@
  *                                 (also inside calc / min / max / clamp). With `{ semanticOnly: true }`
  *                                 spacing, radius and elevation must be tier-2 (semantic) tokens.
  *   console/no-unknown-tokens     `var(--console-…)` names that are not defined
- *   console/no-deprecated-tokens  old names kept as aliases until P4 (`--console-radius-md`, …)
+ *   console/no-deprecated-tokens  old names removed in ADR 0063 P4 (`--console-radius-md`, …), with
+ *                                 their successor
  *   console/media-queries         `@media` only in shell files (`{ shellFiles: [regex…] }`) and only
  *                                 with the generated breakpoints; `@container` only with breakpoints
  *   console/motion-tokens         transition / animation (and their -duration / -delay /
@@ -23,8 +24,9 @@ const { createPlugin, utils } = stylelint;
 const scale = buildScale();
 const BASE = new Set(scale.css.baseTokens);
 const SEMANTIC = new Set(scale.css.semanticTokens);
-const ALIASES = new Set(scale.css.aliasTokens.filter((name) => name.startsWith('--console-')));
-const KNOWN = new Set([...BASE, ...SEMANTIC, ...ALIASES]);
+/** Names removed in ADR 0063 P4 → successor (`null`: none); reported by no-deprecated-tokens, not as unknown. */
+const REMOVED = new Map(Object.entries(scale.css.removedTokens));
+const KNOWN = new Set([...BASE, ...SEMANTIC]);
 /** Tier-1 tokens that have semantic replacements (D16: components use tier 2). */
 const TIER_ONE_SIZED = /^--console-(?:space-[1-8]|radius-(?:\d|full)|elevation-\d|border-(?:hairline|focus))$/u;
 const MEDIA = new Set(scale.css.mediaParams.map(normalizeParams));
@@ -115,7 +117,7 @@ const unknownTokens = createPlugin(unknownName, (primary) => (root, result) => {
   root.walkDecls(/^--console-/u, (decl) => defined.add(decl.prop));
   root.walkDecls((decl) => {
     for (const name of varsIn(decl.value)) {
-      if (!name.startsWith('--console-') || KNOWN.has(name) || defined.has(name)) continue;
+      if (!name.startsWith('--console-') || KNOWN.has(name) || REMOVED.has(name) || defined.has(name)) continue;
       utils.report({ ruleName: unknownName, result, node: decl, word: name, message: `${name} is not a Console token (${unknownName})` });
     }
   });
@@ -126,7 +128,10 @@ const deprecatedTokens = createPlugin(deprecatedName, (primary) => (root, result
   if (!utils.validateOptions(result, deprecatedName, { actual: primary })) return;
   root.walkDecls((decl) => {
     for (const name of varsIn(decl.value)) {
-      if (ALIASES.has(name)) utils.report({ ruleName: deprecatedName, result, node: decl, word: name, message: `${name} is deprecated (alias until ADR 0063 P4); use its successor (${deprecatedName})` });
+      if (!REMOVED.has(name)) continue;
+      const successor = REMOVED.get(name);
+      const hint = successor ? `use ${successor}` : 'it has no successor (use a hairline border or a semantic elevation)';
+      utils.report({ ruleName: deprecatedName, result, node: decl, word: name, message: `${name} was removed in ADR 0063 P4; ${hint} (${deprecatedName})` });
     }
   });
 });

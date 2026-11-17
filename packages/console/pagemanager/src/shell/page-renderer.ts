@@ -42,21 +42,6 @@ export const BASE_STYLE = `
     --status-danger: 0 84% 64%;
     --status-info: 213 94% 68%;
   }
-  html.dark .zk-root, .dark .zk-root, .zk-root {
-    --zk-fg: #fafafa !important;
-    --zk-muted: #a1a1aa !important;
-    --zk-line: #27272a !important;
-    --zk-input-line: #3f3f46 !important;
-    --zk-surface: rgba(255, 255, 255, 0.035) !important;
-    --zk-inset: rgba(255, 255, 255, 0.065) !important;
-    --zk-primary: #14b8a6 !important;
-    --zk-on-primary: #042f2e !important;
-    --zk-ring: #14b8a6 !important;
-    --zk-success: #34d399 !important;
-    --zk-warning: #fbbf24 !important;
-    --zk-danger: #f87171 !important;
-    --zk-info: #60a5fa !important;
-  }
   *, *::before, *::after { box-sizing: border-box; }
   body {
     margin: 0;

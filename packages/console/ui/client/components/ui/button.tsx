@@ -9,7 +9,7 @@ const SOFT = "border-primary-action-border bg-primary-action text-primary-action
 /**
  * Button variants (ADR 0063 「色板角色与信号色」, zhinjs/console#125):
  *   primary             solid brand, dark text — at most one per view (the next step: 登录, 保存, 发送, 筛选)
- *   soft                palette tint, the former `default`; `default` is its deprecated alias until P4
+ *   soft                palette tint, the default variant (the `default` alias was removed in ADR 0063 P4)
  *   outline / secondary / ghost / link
  *   destructive         ghost: destructive text, no fill — every dangerous entry point on a page
  *   destructive-outline outline button with destructive text (ADR 0063 决策 5)
@@ -23,8 +23,6 @@ const buttonVariants = cva(
         // The light-theme brand (#76EEC6) is close to white, so the brand-text hairline gives the button its edge.
         primary: "border-brand-text/70 bg-brand text-brand-foreground hover:bg-brand/85 dark:border-transparent",
         soft: SOFT,
-        /** @deprecated Renamed to `soft` (zhinjs/console#125); same look, kept until ADR 0063 P4. */
-        default: SOFT,
         destructive: "text-destructive hover:bg-destructive/8",
         outline: "border-[color:var(--console-border-strong)] bg-card text-foreground hover:bg-[var(--console-surface-hover)]",
         // Page-level entry to a dangerous action (ADR 0063 决策 5): the outline button with destructive text.

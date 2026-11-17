@@ -526,7 +526,7 @@ The Console follows one set of rules for information density, typography, spacin
 - your page looks like part of the same product when it sits next to the Console's own pages;
 - the type scale, spacing, narrow-screen layout changes (tables turning into cards, for example), touch target sizes, focus styles and light/dark mode all come with the components, and your page follows when the Console adjusts its styles later.
 
-The unified component library is `@zhin.js/console-ui` (with a precompiled `styles.css`; see [its README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)). The renderers of declarative, adapter and comment review pages use it (ADR 0063 P2); hand-written pages follow "[Page shell and components](#page-shell)" below. `@zhin.js/client/ui` is deprecated, see "[Upgrading from @zhin.js/client/ui](#upgrade-client-ui)".
+The unified component library is `@zhin.js/console-ui` (with a precompiled `styles.css`; see [its README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)). The renderers of declarative, adapter and comment review pages use it (ADR 0063 P2); hand-written pages follow "[Page shell and components](#page-shell)" below. `@zhin.js/client/ui` was removed in ADR 0063 P4, see "[Upgrading from @zhin.js/client/ui](#upgrade-client-ui)".
 
 Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b): spacing `space-1`…`space-8` is the Tailwind keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16` (`space-5` is `p-6`), font sizes `label` / `body` / `section` / `title` / `display`, weights `regular` / `medium` / `strong`, radii `r-0`…`r-4` / `full`, shadows `e-1`…`e-3`; content width is `reading` (60rem, settings and forms) or `data` (120rem, lists and tables, the default). Hand-written pages that use Tailwind can import the generated `@zhin.js/console-ui/theme.css`, so off-scale keys simply do not exist; `@zhin.js/console-ui/audit` is the same layout audit and can be run against your own pages.
 
@@ -553,7 +553,7 @@ Use colors by role (ADR 0063 D23–D25, zhinjs/console#125): the brand color `br
 | Rule | What it checks | Use instead |
 | --- | --- | --- |
 | 1 | Native `<select>` (JSX or `createElement('select')`) | `Select` from `@zhin.js/console-ui` (`SearchableSelect` when it needs search) |
-| 2 | Custom page header: `<h1>`, or `PageHeader` / `PluginPage` imported from `@zhin.js/client/ui` | Put the title in `definePage({ title })` and header actions in `usePageChrome()`; start sections at `<h2>` |
+| 2 | Custom page header: `<h1>`, or `PageHeader` / `PluginPage` imported from `@zhin.js/client/ui` (removed; importing it fails the build) | Put the title in `definePage({ title })` and header actions in `usePageChrome()`; start sections at `<h2>` |
 | 3 | Fixed content width: `width` / `max-width` of at least 640px or 40rem (styles, CSS, `max-w-[…]` / `w-[…]`, `max-w-2xl` and up, `max-w-prose`, `max-w-screen-*`), or setting `--console-content-max` yourself | Remove it and leave it to the shell; use `definePage({ fullWidth: true })` for full width |
 | 4 | Raw style values: literal font size, font weight, radius, shadow, padding, margin or gap in a `style` attribute, a style object whose name ends in `style` / `styles`, a CSS string or a stylesheet (`0`, keywords such as `auto` / `none`, and `var(--console-…)` are fine) | Components, or `var(--console-…)` semantic tokens |
 | 5 | Off-scale Tailwind classes: arbitrary values (`p-[…]`, `rounded-[…]`, `text-[…]`; references to Console tokens such as `p-(--console-…)` are fine), off-scale spacing keys (`p-5`, `gap-2.5`), default `shadow` / `shadow-sm` … `shadow-2xl` | Spacing keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16`, radius `0`–`4` / `full`, shadows `e1`–`e3`, or components |
@@ -586,7 +586,7 @@ Plugin pages do not draw their own header or container. **The Console renders th
 | Content width (`--console-content-max`), page padding, header actions folded into "More" on phones | The page's own data and actions (`usePluginRpc`, `pluginRpc`) |
 | Under the plugin detail page: plugin name, description and status (the page `title` becomes the tab label) | Confirmation of dangerous actions (built into the components) |
 
-- **Declarative pages** (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`) get the shell automatically: the renderer hands the blueprint's `title`, `description`, form-less `actions`, status badges and refresh setting to the shell and renders only content blocks. The blueprint `mark` (letter tile) is no longer shown and warns once in the console; remove it. Actions with `variant: 'danger'` render as outline buttons with a confirmation dialog, and get the default text `Confirm <action>?` when they have no `confirm`, with no change to the plugin. Without a shell around it (an older Console) the renderer draws the header at the top of its content.
+- **Declarative pages** (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`) get the shell automatically: the renderer hands the blueprint's `title`, `description`, form-less `actions`, status badges and refresh setting to the shell and renders only content blocks. The `mark` field (letter tile) of blueprints and comment review specs was removed in ADR 0063 P4; setting it is a type error, so delete it. Actions with `variant: 'danger'` render as outline buttons with a confirmation dialog, and get the default text `Confirm <action>?` when they have no `confirm`, with no change to the plugin. Without a shell around it (an older Console) the renderer draws the header at the top of its content.
 - **Hand-written `.tsx` pages** render only content from their default export, with components from `@zhin.js/console-ui` (declare it in `peerDependencies`; the Console provides one shared copy). For header actions or the refresh control call `usePageChrome` and let the shell place them; it returns `false` when no shell listens, and the page may then draw them itself:
 
 ```tsx
@@ -621,7 +621,7 @@ The rules live in the components, and tokens and breakpoints are defined once in
 
 ### Upgrading from @zhin.js/client/ui {#upgrade-client-ui}
 
-`@zhin.js/client/ui` is deprecated (ADR 0063 P2): for the deprecation period (at least one minor) it re-exports everything unchanged and warns once in the browser console on first import; the `zk-` class names are deprecated with it. A later minor (P4) removes it. Migrate as follows:
+`@zhin.js/client/ui` was deprecated in ADR 0063 P2 (`@zhin.js/client` 1.3.0) and, after a deprecation period of one minor, removed in P4 (`@zhin.js/client` 1.4.0): importing it fails the build, and the `zk-` components, `zk-` class names and `--zk-*` variables are gone with it. Migrate as follows:
 
 | Old export (`@zhin.js/client/ui`) | New home |
 | --- | --- |
@@ -629,9 +629,24 @@ The rules live in the components, and tokens and breakpoints are defined once in
 | `useLocale`, `detectLocale`, `translate`, `formatClock` and their types | `@zhin.js/client` root entry |
 | `resolvePluginId`, `resolveSyncPluginId`, `resolveAdapterConsolePluginId` | `@zhin.js/client` root entry |
 | `DeclarativePageView`, `createDeclarativePage`, `DataTable` and the declarative types | `@zhin.js/client` root entry (`DataTable` now uses the new table component; column `fixed` and `responsiveStack` no longer apply, a narrow container shows cards instead) |
+| Conversation helpers such as `ConversationPicker`, `ConversationLabel`, `useConversationDirectory` | `@zhin.js/client` root entry |
 | `zk-` components such as `Button`, `Badge`, `Select`, `Modal`, `Card`, `Tabs`, `Input` | The same or matching components of `@zhin.js/console-ui`; the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) lists the property differences (for example `Button variant="danger"` → `variant="destructive-outline"` plus `ConfirmDialog`, `Select` → `SelectField`, `Modal` → `Dialog`) |
 | `PluginPage`, `PageHeader` | None: the page shell owns the header; hand-written pages use `usePageChrome` |
 | `pluginUiStyles` | None: the styles come from `@zhin.js/console-ui/styles.css`, which the Console loads |
+
+### Other interfaces removed in ADR 0063 P4 {#p4-removals}
+
+These were deprecated in P1b / P2 and, after a deprecation period of at least one minor, removed in P4 (`@zhin.js/client` 1.4.0, `@zhin.js/console-ui` 1.2.0, `@zhin.js/console-contract` 1.4.0):
+
+| Removed | Change |
+| --- | --- |
+| `adapterConsoleStyles`, `conversationPickerStyles` of `@zhin.js/client` (empty strings during the deprecation period) | Delete the imports and the `<style>` elements that inject them; the styles come from `@zhin.js/console-ui/styles.css` |
+| `zk-` class names (`zk-root`, `zk-page`, `zk-card`, `zk-account-editor-host`, …) and `--zk-*` variables | Use `@zhin.js/console-ui` components and `--console-*` tokens; find the adapter page's account editor by `[data-adapter-account-editor]` |
+| `mark` of blueprints (`definePageBlueprint` / `DeclarativePageSpec`) and comment review specs (`defineCommentReviewPage`) | Delete it; the shell renders the header and there is no letter tile |
+| `Button variant="default"` of `@zhin.js/console-ui` | `variant="soft"`, or no `variant` (`soft` is the default) |
+| Old token aliases of `@zhin.js/console-ui`: `--console-radius-sm/md/lg/xl/2xl`, `--console-shadow-*`, `--console-space-page-x/-y`, `--console-space-section/-stack/-card(-sm)`, `--console-control-height-sm/-lg`, `--console-border-width`, `--console-focus-width`, `--console-duration-fast/-page`, `--console-text-caption/-code/-body-sm/-section-sm/-title-compact`, `--radius` | Use the new names, listed in the "令牌" (tokens) section of the [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md); the stylelint rule `console/no-deprecated-tokens` (`@zhin.js/console-ui/stylelint`) points at each old name in a stylesheet and names its successor |
+
+Third-party plugins that are already built bundle the `@zhin.js/client` they use, so removing `@zhin.js/client/ui`, the `zk-` components and `mark` does not break them; they keep their old look until their authors upgrade the dependencies and rebuild, which is when the table above applies. `@zhin.js/console-ui` is different: it is a shared singleton provided by the Console, so once the Console moves to 1.2 a button still written as `variant="default"` loses the soft look (it falls back to the button's base style), and stylesheets that read an old token name such as `var(--console-radius-md)` no longer get it from the component library and may get no value (unless they give a fallback). Move to the new names now. Rule 2 of `zhin plugin check` still points out `PageHeader` / `PluginPage` imported from `@zhin.js/client/ui`.
 
 ## Adapter Console pages
 

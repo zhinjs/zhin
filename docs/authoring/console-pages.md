@@ -526,7 +526,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 - 和 Console 自带页面放在一起时看起来是同一个产品；
 - 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
 
-统一的组件库是 `@zhin.js/console-ui`（带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。声明式页面、适配器页和评论审批页的渲染器已经改用它（ADR 0063 P2），手写页面的写法见下面「[页面外壳与组件](#page-shell)」；`@zhin.js/client/ui` 已弃用，见「[从 @zhin.js/client/ui 升级](#upgrade-client-ui)」。
+统一的组件库是 `@zhin.js/console-ui`（带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。声明式页面、适配器页和评论审批页的渲染器已经改用它（ADR 0063 P2），手写页面的写法见下面「[页面外壳与组件](#page-shell)」；`@zhin.js/client/ui` 已在 ADR 0063 P4 删除，见「[从 @zhin.js/client/ui 升级](#upgrade-client-ui)」。
 
 尺度的唯一来源是它的 `tokens/tokens.mjs`（ADR 0063 P1b）：间距 `space-1`…`space-8` 对应 Tailwind 键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 是 `p-6`），字号 `label` / `body` / `section` / `title` / `display`，字重 `regular` / `medium` / `strong`，圆角 `r-0`…`r-4` / `full`，阴影 `e-1`…`e-3`；内容宽度分 `reading`（60rem，设置、表单）和 `data`（120rem，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。
 
@@ -553,7 +553,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 | 条 | 检查什么 | 改成 |
 | --- | --- | --- |
 | 1 | 原生 `<select>`（JSX 或 `createElement('select')`） | `@zhin.js/console-ui` 的 `Select`（需要搜索时用 `SearchableSelect`） |
-| 2 | 自定义页头：`<h1>`，或从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage` | 标题写在 `definePage({ title })`，页头操作用 `usePageChrome()`；页内小节从 `<h2>` 起 |
+| 2 | 自定义页头：`<h1>`，或从 `@zhin.js/client/ui`（已删除，导入会直接构建失败）引入 `PageHeader` / `PluginPage` | 标题写在 `definePage({ title })`，页头操作用 `usePageChrome()`；页内小节从 `<h2>` 起 |
 | 3 | 固定内容宽度：`width` / `max-width` 不小于 640px 或 40rem（样式、CSS、`max-w-[…]` / `w-[…]`、`max-w-2xl` 及以上、`max-w-prose`、`max-w-screen-*`），或自己设置 `--console-content-max` | 删掉，交给外壳；需要占满宽度时用 `definePage({ fullWidth: true })` |
 | 4 | 原始样式数值：`style` 属性、名字以 `style` / `styles` 结尾的样式对象、CSS 字符串和样式文件里，字号、字重、圆角、阴影、内外边距、间隔写了字面值（`0`、`auto` / `none` 等关键字和 `var(--console-…)` 除外） | 组件，或 `var(--console-…)` 语义令牌 |
 | 5 | 尺度外的 Tailwind 类名：任意值（`p-[…]`、`rounded-[…]`、`text-[…]`；`p-(--console-…)` 这种引用 Console 令牌的除外）、尺度外的间距键（`p-5`、`gap-2.5`）、默认 `shadow` / `shadow-sm` … `shadow-2xl` | 间距键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`，圆角 `0`–`4` / `full`，阴影 `e1`–`e3`，或组件 |
@@ -586,7 +586,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 | 内容宽度（`--console-content-max`）、页面边距、手机上收进「更多」的页头操作 | 页面自己的数据与操作（`usePluginRpc`、`pluginRpc`） |
 | 挂在插件详情下时：插件名、说明和状态（页面的 `title` 变成页签名） | 危险操作的确认（组件自带） |
 
-- **声明式页面**（`definePageBlueprint`、`defineAdapterPage`、`defineCommentReviewPage`）自动获得外壳：渲染器把蓝图的 `title`、`description`、无表单的 `actions`、状态徽标和刷新设置交给外壳，自己只渲染内容区块。蓝图的 `mark`（首字母方块）不再显示，写了会在控制台告警一次，请删掉。`variant: 'danger'` 的动作渲染为描边按钮并弹出确认对话框，没写 `confirm` 时自动补「确认<动作名>？」，不用改插件。外层没有外壳（旧版 Console）时，渲染器在内容区顶部自己画页头。
+- **声明式页面**（`definePageBlueprint`、`defineAdapterPage`、`defineCommentReviewPage`）自动获得外壳：渲染器把蓝图的 `title`、`description`、无表单的 `actions`、状态徽标和刷新设置交给外壳，自己只渲染内容区块。蓝图和评论审批 spec 的 `mark` 字段（首字母方块）已在 ADR 0063 P4 删除，写了会报类型错误，删掉即可。`variant: 'danger'` 的动作渲染为描边按钮并弹出确认对话框，没写 `confirm` 时自动补「确认<动作名>？」，不用改插件。外层没有外壳（旧版 Console）时，渲染器在内容区顶部自己画页头。
 - **手写 `.tsx` 页面**的默认导出只渲染内容，组件来自 `@zhin.js/console-ui`（在 `package.json` 里声明为 `peerDependencies`，Console 提供单例）。需要页头操作或刷新控件时调用 `usePageChrome`，由外壳摆放；返回 `false` 表示外层没有外壳，可以自己画：
 
 ```tsx
@@ -621,7 +621,7 @@ export default function Feeds() {
 
 ### 从 @zhin.js/client/ui 升级 {#upgrade-client-ui}
 
-`@zhin.js/client/ui` 已弃用（ADR 0063 P2）：弃用期（至少一个 minor）内原样再导出，首次导入时在浏览器控制台告警一次，`zk-` 类名同样弃用；之后的 minor（P4）删除。按下表迁移：
+`@zhin.js/client/ui` 在 ADR 0063 P2（`@zhin.js/client` 1.3.0）弃用，经过一个 minor 的弃用期后在 P4（`@zhin.js/client` 1.4.0）删除：从它导入会直接构建失败，`zk-` 组件、`zk-` 类名和 `--zk-*` 变量也一起删除。按下表迁移：
 
 | 原导出（`@zhin.js/client/ui`） | 去向 |
 | --- | --- |
@@ -629,9 +629,24 @@ export default function Feeds() {
 | `useLocale`、`detectLocale`、`translate`、`formatClock` 及其类型 | `@zhin.js/client` 根入口 |
 | `resolvePluginId`、`resolveSyncPluginId`、`resolveAdapterConsolePluginId` | `@zhin.js/client` 根入口 |
 | `DeclarativePageView`、`createDeclarativePage`、`DataTable` 及声明式类型 | `@zhin.js/client` 根入口（`DataTable` 改为基于新表格组件；列的 `fixed` 与 `responsiveStack` 不再起作用，窄容器里自动变卡片） |
+| `ConversationPicker`、`ConversationLabel`、`useConversationDirectory` 等会话选择工具 | `@zhin.js/client` 根入口 |
 | `Button`、`Badge`、`Select`、`Modal`、`Card`、`Tabs`、`Input` 等 `zk-` 组件 | `@zhin.js/console-ui` 的同名或对应组件，属性差异见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) 的对照表（例如 `Button variant="danger"` → `variant="destructive-outline"` 加 `ConfirmDialog`，`Select` → `SelectField`，`Modal` → `Dialog`） |
 | `PluginPage`、`PageHeader` | 无对应组件：由页面外壳负责，手写页面改用 `usePageChrome` |
 | `pluginUiStyles` | 无：样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供 |
+
+### ADR 0063 P4 删除的其他接口 {#p4-removals}
+
+下面这些在 P1b / P2 弃用，经过至少一个 minor 的弃用期后在 P4 删除（`@zhin.js/client` 1.4.0、`@zhin.js/console-ui` 1.2.0、`@zhin.js/console-contract` 1.4.0）：
+
+| 已删除 | 改法 |
+| --- | --- |
+| `@zhin.js/client` 的 `adapterConsoleStyles`、`conversationPickerStyles`（弃用期内为空字符串） | 删掉导入和注入它们的 `<style>`；样式来自 `@zhin.js/console-ui/styles.css` |
+| `zk-` 类名（`zk-root`、`zk-page`、`zk-card`、`zk-account-editor-host` 等）和 `--zk-*` 变量 | 改用 `@zhin.js/console-ui` 的组件和 `--console-*` 令牌；要定位适配器页的账号编辑器，用 `[data-adapter-account-editor]` |
+| 蓝图（`definePageBlueprint` / `DeclarativePageSpec`）与评论审批 spec（`defineCommentReviewPage`）的 `mark` | 删掉；页头由外壳渲染，没有首字母方块 |
+| `@zhin.js/console-ui` 的 `Button variant="default"` | `variant="soft"`，或不写 `variant`（默认就是 `soft`） |
+| `@zhin.js/console-ui` 的旧令牌别名：`--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-*`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card(-sm)`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-duration-fast/-page`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius` | 换成新名，对照表见 [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md) 的「令牌」一节；stylelint 规则 `console/no-deprecated-tokens`（`@zhin.js/console-ui/stylelint`）会在样式里指出旧名并给出新名 |
+
+已经构建好的第三方插件把自己用到的 `@zhin.js/client` 打进了包里，`@zhin.js/client/ui`、`zk-` 组件和 `mark` 的删除不会让它们失效，只是保持旧外观；升级依赖、重新构建时才需要按上表修改。`@zhin.js/console-ui` 不同：它是 Console 提供的共享单例，Console 升级到 1.2 之后，页面里还写着 `variant="default"` 的按钮会失去「浅色调」样式（退回按钮的基础样式），样式里读的旧令牌名（如 `var(--console-radius-md)`）不再由组件库定义，可能取不到值（除非写了回退值）。请在弃用期内或尽快改成新名。`zhin plugin check` 的第 2 条仍会指出从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage` 的写法。
 
 ## 适配器 Console 页面
 
