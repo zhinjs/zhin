@@ -898,7 +898,7 @@ interface ConfiguredAgentHost {
    */
   personalPrincipalSeeds(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot | undefined): readonly import('./chat-personal-principals.js').PersonalPrincipalSeed[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
-  ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<import('./console/assistant-status.js').AmbientJudgeView>;
+  ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<import('./console/module.js').AmbientJudgeView>;
   /** Drops journaled account / model failures that are no longer current (#1270). */
   pruneFailureJournal(): Promise<void>;
   /** Host model accounts that need an operator (#1270). */

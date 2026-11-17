@@ -118,6 +118,7 @@
     "export * from './account-runtime-helpers.js';",
     "export * from './account-runtime-oauth.js';",
     "export * from './account-runtime.js';",
+    "export * from './ambient-judge-migration.js';",
     "export * from './credential-fingerprint-migration.js';",
     "export * from './credentials.js';",
     "export * from './current-operation.js';",

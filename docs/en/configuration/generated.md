@@ -355,8 +355,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.ambient.maxPerHour` | number \| string | no | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
 | `ai.trigger.ambient.conversationWindowMs` | number \| string | no | — | 机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000） |
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | no | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢 |
-| `ai.trigger.ambient.minConfidence` | number \| string | no | — | 判断模型置信度门槛 0..1（默认 0.7） |
-| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.ambient.minConfidence` | number \| string | no | — | 已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
+| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | 已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
 | `ai.trigger.sceneEvents` | object | no | — | Scene awareness: high-priority social events (bot muted/unmuted, join request, member joined/left, notice updated, bot poked) wake one turn on their own without waiting for the next human message; low-priority events (reactions, card/title changes) never wake alone and only appear in the next turn's [Scene events] summary. When the bot cannot speak, only the session profile is updated and the model is not called. |
 | `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | no | — | Groups/channels that social events may wake, as platform:sceneId; * for every group. Defaults to ai.trigger.ambient.conversations (no wake when neither is set) |
 | `ai.trigger.sceneEvents.coalesceMs` | number \| string | no | — | Coalesce window per scene in ms, clamped to 3000–5000 (default 4000) |
@@ -514,7 +514,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `purposes` | object | no | — | — |
 | `purposes.chat` | string \| object \| null | no | — | — |
 | `purposes.summary` | string \| object \| null | no | — | — |
-| `purposes.ambient` | string \| object \| null | no | — | — |
+| `purposes.ambient` | string \| object \| null | no | — | 插话判断（ADR 0066）：群里没人叫机器人时决定要不要插话。字符串等同于 { profile }；null 清除整项。 |
 | `purposes.image` | string \| object \| null | no | — | — |
 | `purposes.perception` | object \| null | no | — | — |
 | `purposes.decisions` | object | no | — | — |
@@ -523,7 +523,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `purposes.decisions.memory` | object \| null | no | — | — |
 | `purposes.decisions.agents` | object \| null | no | — | — |
 | `purposes.decisions.approval` | object \| null | no | — | — |
-| `purposes.decisions.ambient` | object \| null | no | — | — |
+| `purposes.decisions.ambient` | object \| null | no | — | 已废弃（ADR 0066）：改写 purposes.ambient；废弃期内按迁移表合并转换并给出警告 |
 | `purposes.agents` | object | no | — | — |
 | `purposes.adapters` | object | no | — | — |
 | `purposes.endpoints` | object | no | — | — |
