@@ -2,6 +2,7 @@ import type { GenerationAdmissionGate } from '@zhin.js/plugin-runtime';
 import { EndpointRuntime, bindEndpoint, isEndpointRuntime, type EndpointEventSink, type EndpointSendRequest,
   type EndpointSendResult, type EndpointTransportState } from './endpoint.js';
 import type { EndpointContentPort } from './endpoint-content.js';
+import type { EndpointInboundMediaPort } from './endpoint-inbound-media.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
@@ -34,6 +35,8 @@ export interface EndpointHooks {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  /** #1250: directories this Endpoint downloads inbound media into; see `EndpointInboundMediaPort`. */
+  readonly inboundMedia?: EndpointInboundMediaPort;
   readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
   /** ADR 0058: login control hooks; declare support with `defineAdapter({ login })`. */
@@ -53,6 +56,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     this.profile = hooks.profile;
     this.login = hooks.login;
     Object.defineProperty(this, 'content', { get: () => hooks.content });
+    Object.defineProperty(this, 'inboundMedia', { get: () => hooks.inboundMedia });
     Object.defineProperty(this, 'streaming', { get: () => hooks.streaming });
     if (!hooks.send) Object.defineProperty(this, 'send', { value: undefined });
   }

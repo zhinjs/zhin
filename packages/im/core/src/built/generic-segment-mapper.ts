@@ -42,12 +42,14 @@ function legacyMediaRef(data: Record<string, unknown>): MediaRef | undefined {
   const value = url ?? path ?? base64 ?? file;
   if (!value) return undefined;
 
+  // `data.file` is never guessed to be a local path (#1250): on ingress it is a platform-supplied
+  // field (a file name, a platform token), and a value like `/root/.env` must not become a host file
+  // read. A local file is only ever an explicit `data.path` / `data.file_path` or `media.kind: 'path'`.
   const kind = url ? 'url'
     : path ? 'path'
       : base64 ? 'base64'
         : /^(?:[a-z][a-z0-9+.-]*:)?\/\//iu.test(value) ? 'url'
-          : /^(?:\.{1,2}\/|\/|~\/)/u.test(value) ? 'path'
-            : 'file';
+          : 'file';
   const mimeType = nonEmptyString(data.mime_type) ?? nonEmptyString(data.mimeType);
   // Legacy top-level fileName names the rendered file segment. Keep source
   // metadata reserved for an explicit media object instead of duplicating it.

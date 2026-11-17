@@ -56,6 +56,14 @@ export class EmailClient extends EventEmitter {
   #open = false;
   #started = false;
 
+  /** #1250: saved attachments live only under `attachments.downloadPath` (none while disabled). */
+  protected readonly endpointInboundMedia: import('zhin.js/adapter').EndpointInboundMediaPort = Object.freeze({
+    roots: () => {
+      const attachments = this.#options.config.attachments;
+      return attachments?.enabled && attachments.downloadPath ? [attachments.downloadPath] : [];
+    },
+  });
+
   protected configName(): string { return this.#options.config.id; }
   protected executionSignal?: AbortSignal;
   protected setExecutionSignal(signal: AbortSignal): void { this.executionSignal = signal; }

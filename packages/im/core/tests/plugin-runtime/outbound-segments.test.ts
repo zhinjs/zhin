@@ -209,6 +209,7 @@ describe('normalizeOutboundPayload canonical 归一矩阵', () => {
       [
         { type: 'image', data: { url: 'https://cdn.example.com/a.png' } },
         { type: 'image', data: { file: '/tmp/local.png' } },
+        { type: 'image', data: { path: '/tmp/explicit.png' } },
       ],
       undefined,
       { mediaPolicy: 'base64' },
@@ -218,9 +219,14 @@ describe('normalizeOutboundPayload canonical 归一矩阵', () => {
         type: 'image',
         data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } },
       },
+      // #1250: `data.file` is a platform token, never guessed to be a local path.
       {
         type: 'image',
-        data: { media: { kind: 'path', value: '/tmp/local.png' } },
+        data: { media: { kind: 'file', value: '/tmp/local.png' } },
+      },
+      {
+        type: 'image',
+        data: { media: { kind: 'path', value: '/tmp/explicit.png' } },
       },
     ]);
   });

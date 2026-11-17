@@ -168,7 +168,24 @@ interface EndpointContentPort {
 - The result must be one of `resolved | not_found | unsupported | forbidden | expired | failed`. Without platform support return `unsupported` — never empty or guessed content.
 - `resolve()` must honor `signal` and the depth, entry and character budgets; Core holds the current version's snapshot lease for the whole async call.
 - Authors inside messages and forwards are written as neutral `actor` data and must **never** be mapped to model roles.
-- Media may return a stable URL, validated base64 / path, or an explicit failure; never expose token-bearing download URLs to the Agent.
+- Media may return a stable URL, validated base64 / path, or an explicit failure; never expose token-bearing download URLs to the Agent. A returned path is bound by the inbound media directories below as well.
+
+## Inbound media directories
+
+An inbound message is remote input: a local path in it may come from a platform field, parsed text or a forwarded node. The Agent reads only one kind of local path: a file whose real path (symbolic links resolved) lies inside an inbound media directory declared by the Endpoint that produced the message, and which also passes the file policy's secret checks (`.zhin/`, `.env*`, keys, databases). Every other path is not read; the model sees a placeholder saying the message carries a file that cannot be read (`inbound_path_not_owned` / `inbound_path_sensitive`), and the turn continues.
+
+An adapter writes the files it downloads into a dedicated directory, declares it on the specification and emits `media: { kind: 'path' }` explicitly:
+
+```ts
+createEndpointSpecification(this, {
+  // ...
+  inboundMedia: { roots: () => [this.#state.mediaDirectory('inbound')] },
+});
+```
+
+- `roots()` is read when each turn is built, so it may follow configuration (an attachment download directory, or an empty list while attachments are off).
+- Declare only directories the Endpoint itself writes; never the project root, `data/` or a home directory.
+- A platform `data.file` is no longer guessed to be a local path (values starting with `/`, `./`, `~/` are opaque platform refs, `kind: 'file'`); write `data.path` or `media.kind: 'path'` for a real local file.
 
 ## Going deeper
 

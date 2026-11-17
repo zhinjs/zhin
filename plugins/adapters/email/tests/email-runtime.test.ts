@@ -425,10 +425,32 @@ describe('email plugin runtime adapter', () => {
           },
         ],
       }));
+      // #1250: the Agent reads an inbound path only inside the Endpoint's declared directory.
+      const roots = endpoint.index.inboundMediaRoots(endpoint.canonicalId);
+      expect(roots).toEqual([dir]);
+      expect(path.relative(roots[0]!, path.join(dir, 'pic.png')).startsWith('..')).toBe(false);
       await endpoint.stop();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('declares no inbound media directory while attachments are disabled (#1250)', async () => {
+    const config = resolveEmailConfig({
+      id: 'test-endpoint',
+      smtp: { host: 'smtp.mock', port: 465, secure: true, auth: { user: 'bot@mock.com', pass: 'pass' } },
+      imap: { host: 'imap.mock', port: 993, tls: true, user: 'bot@mock.com', password: 'pass' },
+    });
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      config,
+      createSmtp: () => createMockSmtp(),
+      createImap: () => createMockImap(),
+    }), { capabilities: ['inbound', 'outbound'] });
+    await endpoint.start();
+    expect(endpoint.index.inboundMediaRoots(endpoint.canonicalId)).toEqual([]);
+    await endpoint.stop();
   });
 
   it('neutralizes attachment filename path traversal', async () => {

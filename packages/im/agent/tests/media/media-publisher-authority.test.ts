@@ -87,8 +87,12 @@ describe('publishOutboundElements with Turn media authority', () => {
     expect(segments.some(segment => segment.type === 'file')).toBe(false);
   });
 
-  it('keeps the previous behaviour for trusted host callers that pass no authority', async () => {
+  it('fails closed for callers that pass no authority: a local path is not read (#1250)', async () => {
     const segments = await publishOutboundElements([imageSegment({ kind: 'path', value: path.join(outside, 'secret.png') })], 'sandbox');
-    expect(segments[0]?.type).toBe('image');
+    expect(unavailable(segments)).toBe(true);
+    const element = await publishOutboundElements(
+      [{ type: 'file', url: path.join(outside, 'secret.txt') } as never], 'sandbox',
+    );
+    expect(element.some(segment => segment.type === 'file')).toBe(false);
   });
 });

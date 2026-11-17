@@ -490,6 +490,12 @@ Adapters read and upload local paths (`MediaRef kind: 'path'`), and OneBot / Nap
 
 Legitimate local files still work: screenshots and charts that tools write into the workspace (for example `data/media/`) can be referenced by `path`; the Agent reads them inline or spools them as a trusted reference. A plugin tool that puts model arguments into a message gets the same protection by wrapping it with `untrustedContent()`.
 
+A plugin that calls `normalizeMediaRefsToPayloads()` / `publishOutboundElements()` without an authority reads no local path (the same as `NO_MEDIA_AUTHORITY`); pass `{ filesystem: { workspaceRoot }, fileRole }` to read workspace files.
+
+## Inbound media policy
+
+A local path in an inbound message (`MediaRef kind: 'path'`, including a path a platform reference resolves to) is read only when both hold: the Endpoint that produced the message declared its inbound media directories (`inboundMedia.roots()`, see [Endpoint lifecycle](../authoring/endpoint-lifecycle.md#inbound-media-directories)), and the real path, symbolic links and `..` resolved, lies inside one of them. Even inside, the file policy's secret checks (`.zhin/`, `.env*`, keys, databases) still apply. Every other path is not read: it is logged as `op=inbound_media_rejected` (`reason=inbound_path_not_owned` or `inbound_path_sensitive`, never the path), the model sees a placeholder saying the message carries a file that cannot be read, and the turn continues. A platform `data.file` is no longer guessed to be a local path. Quoted messages and merged forwards only hand their content to the model; local files inside them are never read.
+
 ## MCP tools by chat role (ADR 0065) {#mcp-tool-permit}
 
 Tools from `ai.mcpServers` go through the same chat-role check (`PermissionHost`) as plugin tools. Each tool gets a tier from the server's `permit` (see the [configuration reference](../configuration/index.md#ai-mcpservers-permit)); without one:
