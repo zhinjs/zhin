@@ -130,3 +130,58 @@ describe('Speech Host voice downloads (#1250 第 45 批 speech-url-ssrf)', () =>
     expect(requestBytes).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('platform voice links over plain http (#1250 第 45 批, owner decision)', () => {
+  /** A QQ-style voice CDN link: plain http on a public host. */
+  const QQ_VOICE = 'http://multimedia.nt.example.qq.com/download?appid=1402&fileid=abc&rkey=xyz';
+
+  it('transcribes a public http voice link the platform adapter produced', async () => {
+    const sttFetch = stubSttService('平台语音');
+    const { transport, requestBytes } = transportFor({
+      [QQ_VOICE]: { status: 200, statusText: 'OK', headers: { 'content-type': 'audio/amr' }, body: OGG },
+    });
+    const fetchAudio = vi.fn((url: string, options: PublicMediaFetchOptions) => fetchPublicMediaBytes(url, { ...options, transport }));
+    const host = await prepareSpeechHost(STT, { fetchAudio });
+    await expect(host!.transcribeUrl(QQ_VOICE, { origin: 'platform' })).resolves.toBe('平台语音');
+    expect(fetchAudio).toHaveBeenCalledWith(QQ_VOICE, expect.objectContaining({ allowHttp: true, maxBytes: SPEECH_AUDIO_MAX_BYTES }));
+    expect(requestBytes).toHaveBeenCalledTimes(1);
+    expect(sttFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the same http address when the user typed it ([audio:URL]) or passed it to voice_stt', async () => {
+    const sttFetch = stubSttService();
+    const { transport, requestBytes } = transportFor({
+      [QQ_VOICE]: { status: 200, statusText: 'OK', headers: { 'content-type': 'audio/amr' }, body: OGG },
+    });
+    const host = await prepareSpeechHost(STT, { fetchAudio: (url, options) => fetchPublicMediaBytes(url, { ...options, transport }) });
+    await expect(host!.transcribeUrl(QQ_VOICE, { origin: 'user' })).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    await expect(host!.transcribeUrl(QQ_VOICE)).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    const tool = host!.tools.find(item => item.name === 'voice_stt')!;
+    await expect(tool.execute({ audio_url: QQ_VOICE })).resolves.toEqual({ error: expect.stringContaining('speech_url_blocked') });
+    expect(requestBytes).not.toHaveBeenCalled();
+    expect(sttFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a platform http link whose name resolves to a private address (default pinned fetcher)', async () => {
+    const sttFetch = stubSttService();
+    lookup.mockResolvedValue([{ address: '10.1.1.1', family: 4 }]);
+    const host = await prepareSpeechHost(STT);
+    await expect(host!.transcribeUrl('http://voice.example/a.amr', { origin: 'platform' }))
+      .resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    expect(lookup).toHaveBeenCalledWith('voice.example', { all: true, verbatim: true });
+    expect(sttFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a platform http link that redirects into the internal network or down from https', async () => {
+    const sttFetch = stubSttService();
+    const { transport, requestBytes } = transportFor({
+      [QQ_VOICE]: { status: 302, statusText: 'Found', headers: { location: 'http://169.254.169.254/latest/meta-data/' }, body: new Uint8Array() },
+      'https://cdn.example/v.amr': { status: 302, statusText: 'Found', headers: { location: 'http://cdn.example/v.amr' }, body: new Uint8Array() },
+    });
+    const host = await prepareSpeechHost(STT, { fetchAudio: (url, options) => fetchPublicMediaBytes(url, { ...options, transport }) });
+    await expect(host!.transcribeUrl(QQ_VOICE, { origin: 'platform' })).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    await expect(host!.transcribeUrl('https://cdn.example/v.amr', { origin: 'platform' })).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    expect(requestBytes).toHaveBeenCalledTimes(2);
+    expect(sttFetch).not.toHaveBeenCalled();
+  });
+});

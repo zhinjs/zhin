@@ -62,8 +62,23 @@ export interface InboundAudioUrlRefusal {
 /** A transcript, `null` when nothing usable came back, or a refused address. */
 export type InboundAudioUrlTranscription = string | null | InboundAudioUrlRefusal;
 
-/** Inbound voice message transcription (Speech Host `transcribeUrl`). Must not fetch private targets. */
-export type InboundAudioUrlTranscriber = (audioUrl: string) => Promise<InboundAudioUrlTranscription>;
+/**
+ * Where an inbound voice address came from (#1250 第 45 批):
+ * - `platform`: a voice segment or `metadata.audio_url` the platform adapter produced from the
+ *   platform's own payload (a QQ voice CDN link may be plain http);
+ * - `user`: text the sender typed (`[audio:URL]`), or a segment on an Endpoint whose clients send
+ *   structured segments themselves (`runtime.sandbox`, or capabilities that cannot be resolved).
+ */
+export type InboundAudioUrlOrigin = 'platform' | 'user';
+
+/**
+ * Inbound voice message transcription (Speech Host `transcribeUrl`). Must not fetch private targets;
+ * may accept `http:` only for `origin: 'platform'` (default `user`: HTTPS only).
+ */
+export type InboundAudioUrlTranscriber = (
+  audioUrl: string,
+  source?: Readonly<{ origin: InboundAudioUrlOrigin }>,
+) => Promise<InboundAudioUrlTranscription>;
 
 /** Model-facing note in place of a refused voice address; the address itself is not shown. */
 export const SPEECH_URL_BLOCKED_NOTE = '[语音地址不可用，未转写（speech_url_blocked）]';
@@ -72,14 +87,21 @@ export async function preprocessInboundTurn(
   message: Message,
   content: string,
   transcribeUrl?: InboundAudioUrlTranscriber,
+  options: Readonly<{
+    /**
+     * The Endpoint's adapter builds segments from the platform payload, so a segment field cannot be
+     * user text. False (the default) treats every address as user-typed: HTTPS only.
+     */
+    platformSegments?: boolean;
+  }> = {},
 ): Promise<{ readonly text: string; readonly sttApplied: boolean; readonly sttRefusal?: InboundAudioUrlRefusal['code'] }> {
-  const audioUrl = resolveInboundAudioUrl(message);
-  if (!audioUrl || !transcribeUrl) {
+  const audio = resolveInboundAudioUrl(message, options.platformSegments === true);
+  if (!audio || !transcribeUrl) {
     return { text: stripAudioPlaceholders(content), sttApplied: false };
   }
   let transcript: InboundAudioUrlTranscription;
   try {
-    transcript = await transcribeUrl(audioUrl);
+    transcript = await transcribeUrl(audio.url, { origin: audio.origin });
   } catch (error) {
     // A transcriber failure never ends the turn: the text goes on without a transcript.
     logger.warn(formatCompact({ op: 'agent_inbound_stt_failed', error: error instanceof Error ? error.name : 'unknown' }));
@@ -98,27 +120,31 @@ export async function preprocessInboundTurn(
   return { text, sttApplied: true };
 }
 
+/** The voice address of `message` and where it came from; see {@link InboundAudioUrlOrigin}. */
 function resolveInboundAudioUrl(
   message: Message,
-): string | undefined {
+  platformSegments: boolean,
+): { readonly url: string; readonly origin: InboundAudioUrlOrigin } | undefined {
+  const fromAdapter: InboundAudioUrlOrigin = platformSegments ? 'platform' : 'user';
   if (message.segments) {
     for (const seg of message.segments) {
       if (seg.type === 'audio' || seg.type === 'record') {
         const media = seg.data?.media as { kind?: string; value?: string } | undefined;
         if (media?.kind === 'url' && typeof media.value === 'string' && media.value.trim()) {
-          return media.value.trim();
+          return { url: media.value.trim(), origin: fromAdapter };
         }
         const d = seg.data as Record<string, unknown> | undefined;
         const url = d?.url ?? d?.src ?? d?.file;
-        if (typeof url === 'string' && url.trim()) return url.trim();
+        if (typeof url === 'string' && url.trim()) return { url: url.trim(), origin: fromAdapter };
       }
     }
   }
   const fromMeta = message.metadata?.audio_url;
-  if (typeof fromMeta === 'string' && fromMeta.trim()) return fromMeta.trim();
+  if (typeof fromMeta === 'string' && fromMeta.trim()) return { url: fromMeta.trim(), origin: fromAdapter };
+  // Text the sender typed is never a platform address.
   const match = message.content.match(/\[audio:([^\[\]]+)\]/u);
   const fromContent = match?.[1]?.trim();
-  return fromContent || undefined;
+  return fromContent ? { url: fromContent, origin: 'user' } : undefined;
 }
 
 function stripAudioPlaceholders(content: string): string {

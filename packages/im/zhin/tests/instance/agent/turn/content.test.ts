@@ -40,7 +40,7 @@ describe('Agent turn content boundary', () => {
       'context [audio:https://media.example/voice.mp3]',
       transcribe,
     )).resolves.toEqual({ text: 'context\nvoice transcript', sttApplied: true });
-    expect(transcribe).toHaveBeenCalledWith('https://media.example/voice.mp3');
+    expect(transcribe).toHaveBeenCalledWith('https://media.example/voice.mp3', { origin: 'user' });
   });
 
   it('keeps the turn going with a note when the voice address is refused (#1250 第 45 批)', async () => {
@@ -57,7 +57,7 @@ describe('Agent turn content boundary', () => {
       sttRefusal: 'speech_url_blocked',
     });
     expect(result.text).not.toContain('169.254.169.254');
-    expect(transcribe).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/');
+    expect(transcribe).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/', { origin: 'user' });
 
     const voiceOnly = { metadata: {}, content: '[audio:https://10.0.0.1/a.ogg]' } as unknown as Message;
     await expect(preprocessInboundTurn(voiceOnly, voiceOnly.content, transcribe))

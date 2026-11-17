@@ -3,11 +3,13 @@
  * argument). Same address rules as other inbound media (`fetchUrlAsBase64`), plus a pinned
  * connection (#1250 第 45 批 `speech-url-ssrf`):
  *
- * - HTTPS only; private, loopback, link-local and metadata hosts are refused by name;
+ * - HTTPS only unless `allowHttp` (an address the platform itself produced, never a user-typed
+ *   one); private, loopback, link-local and metadata hosts are refused by name either way;
  * - the name is resolved once, every address must be public, and the request connects to the
  *   address that was checked (`NodeNetworkTransport`), so DNS rebinding cannot swap in a private
  *   address between the check and the connection;
- * - redirects are followed by hand and every hop is checked again;
+ * - redirects are followed by hand and every hop is checked again; a redirect from https to http is
+ *   always refused, http to http only with `allowHttp`;
  * - the body is capped at `maxBytes` and the whole download at `timeoutMs`.
  *
  * There is no allow-list for private hosts: an operator who needs one transcribes from a public URL.
@@ -23,6 +25,12 @@ export interface PublicMediaFetchOptions {
   readonly maxBytes: number;
   readonly timeoutMs?: number;
   readonly maxRedirects?: number;
+  /**
+   * Also accept `http:` (default false). Only for an address the platform adapter produced (a QQ voice
+   * CDN link), never for one a user typed: the address rules, pinning, redirect checks, size and
+   * time limits stay the same, and a redirect from https down to http is still refused.
+   */
+  readonly allowHttp?: boolean;
   readonly signal?: AbortSignal;
   /** Replaces the pinned Node transport (tests). */
   readonly transport?: NetworkTransport;
@@ -63,9 +71,13 @@ export async function fetchPublicMediaBytes(
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   if (!transport.requestBytes) return withHost('failed', url);
   let current = url.trim();
+  let previousProtocol: string | undefined;
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
-    if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [] }).allowed) return withHost('blocked', current);
+    if (!checkUrlNetworkAccess(current, { httpsOnly: options.allowHttp !== true, allowedDomains: [] }).allowed) return withHost('blocked', current);
     const parsed = new URL(current);
+    // Never downgrade: once a hop was https, an http hop would expose the download in clear text.
+    if (previousProtocol === 'https:' && parsed.protocol !== 'https:') return withHost('blocked', current);
+    previousProtocol = parsed.protocol;
     let response: Awaited<ReturnType<NonNullable<NetworkTransport['requestBytes']>>>;
     try {
       signal.throwIfAborted();
