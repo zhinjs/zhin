@@ -14,6 +14,19 @@ export {
   type OutboundMediaTrust,
   type UntrustedMediaDecision,
 } from './built/outbound-media-trust.js'
+export {
+  createOutboundMediaFetcher,
+  fetchOutboundMedia,
+  isOutboundMediaRefused,
+  OUTBOUND_MEDIA_FETCH_TIMEOUT_MS,
+  OutboundMediaFetchError,
+  outboundMediaNotice,
+  type OutboundMediaFetchCode,
+  type OutboundMediaFetched,
+  type OutboundMediaFetcher,
+  type OutboundMediaFetcherOptions,
+  type OutboundMediaFetchOptions,
+} from './built/outbound-media-fetch.js'
 export type { MessageChannel, MessageType } from './message.js'
 export { Message, type MessageBase } from './plugin-runtime/im/contracts.js'
 export * from './im-scene.js'
