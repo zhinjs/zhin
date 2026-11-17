@@ -63,3 +63,28 @@ export {
   redactSecretText,
 } from './redaction.js';
 export type { ChatOwnerClaimCodeScanner, RedactablePayload } from './redaction.js';
+
+// ── Network (#1250 第 46 批: SSRF rules and the pinned download shared by Agent, core and adapters) ──
+export {
+  checkUrlNetworkAccess,
+  hostnameMatchesList,
+  isBlockedIpAddress,
+  isBlockedSsrfHostname,
+  NetworkAccessDeniedError,
+} from './network/ssrf.js';
+export type { UrlNetworkPolicyConfig } from './network/ssrf.js';
+export { bareUrlHost, NodeNetworkTransport } from './network/pinned-transport.js';
+export type {
+  NetworkAddressLookup,
+  NetworkBinaryResponse,
+  NetworkTextResponse,
+  NetworkTransport,
+  NodeNetworkTransportOptions,
+  PinnedAddressConnect,
+} from './network/pinned-transport.js';
+export { fetchPublicMediaBytes, PUBLIC_MEDIA_FETCH_TIMEOUT_MS } from './network/public-media-fetch.js';
+export type {
+  PublicMediaFetchFailure,
+  PublicMediaFetchOptions,
+  PublicMediaFetchResult,
+} from './network/public-media-fetch.js';

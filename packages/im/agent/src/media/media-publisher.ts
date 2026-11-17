@@ -93,7 +93,7 @@ async function elementToPayload(
   };
   const fetchUrl = (url: string) => {
     const network = authorizeOutboundMediaUrl(url, authority);
-    return network ? fetchUrlAsBase64(url, maxBytes, undefined, undefined, network.allowedDomains) : null;
+    return network ? fetchUrlAsBase64(url, maxBytes, undefined, undefined, network.allowedDomains, authority?.mediaTransport) : null;
   };
 
   if (el.type === 'image') {

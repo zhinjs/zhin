@@ -1,47 +1,30 @@
-import { lookup } from 'node:dns/promises';
 import { NETWORK_DISABLED_REASON } from './network-authority.js';
-import * as http from 'node:http';
-import * as https from 'node:https';
-import { isIP } from 'node:net';
 import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import {
   checkUrlNetworkAccess,
-  isBlockedSsrfHostname,
   NetworkAccessDeniedError,
-} from './network-policy.js';
+  NodeNetworkTransport,
+  type NetworkBinaryResponse,
+  type NetworkTextResponse,
+  type NetworkTransport,
+} from '@zhin.js/kernel';
 
-export interface NetworkTextResponse {
-  readonly url: string;
-  readonly status: number;
-  readonly statusText: string;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly body: string;
-}
-/** Binary media uses the same authorized hops and pinned connection as text requests. */
-export interface NetworkBinaryResponse extends Omit<NetworkTextResponse, 'body'> {
-  readonly body: Uint8Array;
-}
+// The pinned transport lives in `@zhin.js/kernel` so the IM core and adapters share it (#1250 第 46 批).
+export { bareUrlHost, NodeNetworkTransport } from '@zhin.js/kernel';
+export type {
+  NetworkAddressLookup,
+  NetworkBinaryResponse,
+  NetworkTextResponse,
+  NetworkTransport,
+  NodeNetworkTransportOptions,
+  PinnedAddressConnect,
+} from '@zhin.js/kernel';
 
 export interface NetworkRequestOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
   readonly maxRedirects?: number;
   readonly maxBytes?: number;
-}
-
-export interface NetworkTransport {
-  request(
-    url: URL,
-    headers: Readonly<Record<string, string>>,
-    signal: AbortSignal,
-    maxBytes: number,
-  ): Promise<Omit<NetworkTextResponse, 'url'>>;
-  requestBytes?(
-    url: URL,
-    headers: Readonly<Record<string, string>>,
-    signal: AbortSignal,
-    maxBytes: number,
-  ): Promise<Omit<NetworkBinaryResponse, 'url'>>;
 }
 
 /** One policy-authorized hop; credentials may narrow when its redirect changes origin. */
@@ -105,43 +88,6 @@ export class TurnNetworkClient {
   }
 }
 
-export class NodeNetworkTransport implements NetworkTransport {
-  async request(
-    url: URL,
-    headers: Readonly<Record<string, string>>,
-    signal: AbortSignal,
-    maxBytes: number,
-  ): Promise<Omit<NetworkTextResponse, 'url'>> {
-    const response = await this.requestBytes(url, headers, signal, maxBytes);
-    return Object.freeze({ ...response, body: Buffer.from(response.body).toString('utf8') });
-  }
-
-  async requestBytes(
-    url: URL,
-    headers: Readonly<Record<string, string>>,
-    signal: AbortSignal,
-    maxBytes: number,
-  ): Promise<Omit<NetworkBinaryResponse, 'url'>> {
-    const host = bareUrlHost(url);
-    const addresses = isIP(host)
-      ? [{ address: host, family: isIP(host) }]
-      : await lookup(host, { all: true, verbatim: true });
-    if (addresses.length === 0) throw new Error(`DNS returned no address for ${url.hostname}`);
-    for (const entry of addresses) {
-      if (isBlockedSsrfHostname(entry.address)) {
-        throw new NetworkAccessDeniedError(`DNS target ${entry.address} for ${url.hostname} is private or dangerous`);
-      }
-    }
-    const selected = addresses[0]!;
-    return requestPinnedAddress(url, selected.address, headers, signal, maxBytes);
-  }
-}
-
-/** `URL.hostname` keeps the brackets of an IPv6 literal; `isIP`, DNS and SNI need the bare address. */
-export function bareUrlHost(url: URL): string {
-  return url.hostname.replace(/^\[|\]$/g, '');
-}
-
 export function authorizeNetworkUrl(url: string, policy: ToolInvocationPolicy): URL {
   if (!policy.network.enabled) {
     throw new NetworkAccessDeniedError(NETWORK_DISABLED_REASON);
@@ -152,54 +98,4 @@ export function authorizeNetworkUrl(url: string, policy: ToolInvocationPolicy): 
   });
   if (!decision.allowed) throw new NetworkAccessDeniedError(decision.reason ?? 'Network target denied');
   return new URL(url);
-}
-
-function requestPinnedAddress(
-  url: URL,
-  address: string,
-  headers: Readonly<Record<string, string>>,
-  signal: AbortSignal,
-  maxBytes: number,
-): Promise<Omit<NetworkBinaryResponse, 'url'>> {
-  const requester = url.protocol === 'https:' ? https : http;
-  return new Promise((resolve, reject) => {
-    const request = requester.request({
-      protocol: url.protocol,
-      hostname: address,
-      port: url.port || undefined,
-      path: `${url.pathname}${url.search}`,
-      method: 'GET',
-      headers: { ...headers, Host: url.host, 'Accept-Encoding': 'identity' },
-      signal,
-      ...(url.protocol === 'https:' && !isIP(bareUrlHost(url)) ? { servername: bareUrlHost(url) } : {}),
-    }, (response) => {
-      const chunks: Buffer[] = [];
-      let size = 0;
-      response.on('data', (chunk: Buffer | string) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        size += buffer.length;
-        if (size > maxBytes) {
-          response.destroy(new Error(`Network response exceeds ${maxBytes} bytes`));
-          return;
-        }
-        chunks.push(buffer);
-      });
-      response.once('error', reject);
-      response.once('end', () => resolve(Object.freeze({
-        status: response.statusCode ?? 0,
-        statusText: response.statusMessage ?? '',
-        headers: Object.freeze(normalizeHeaders(response.headers)),
-        body: Buffer.concat(chunks),
-      })));
-    });
-    request.once('error', reject);
-    request.end();
-  });
-}
-
-function normalizeHeaders(headers: http.IncomingHttpHeaders): Record<string, string> {
-  return Object.fromEntries(Object.entries(headers).flatMap(([name, value]) => {
-    if (value === undefined) return [];
-    return [[name.toLowerCase(), Array.isArray(value) ? value.join(', ') : value]];
-  }));
 }

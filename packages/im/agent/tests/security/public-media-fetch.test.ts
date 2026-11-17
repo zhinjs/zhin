@@ -1,10 +1,19 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const lookup = vi.hoisted(() => vi.fn());
 vi.mock('node:dns/promises', () => ({ lookup }));
 
-import { fetchPublicMediaBytes } from '../../src/security/public-media-fetch.js';
-import { NodeNetworkTransport, type NetworkTransport } from '../../src/security/turn-network-client.js';
+import type { NetworkTransport } from '../../src/security/turn-network-client.js';
+
+// The pinned transport lives in `@zhin.js/kernel`, which the Vitest setup file has already loaded with
+// the real resolver; reload the module graph so it binds the mocked `node:dns/promises`.
+let fetchPublicMediaBytes: typeof import('../../src/security/public-media-fetch.js').fetchPublicMediaBytes;
+let NodeNetworkTransport: typeof import('../../src/security/turn-network-client.js').NodeNetworkTransport;
+beforeAll(async () => {
+  vi.resetModules();
+  ({ fetchPublicMediaBytes } = await import('../../src/security/public-media-fetch.js'));
+  ({ NodeNetworkTransport } = await import('../../src/security/turn-network-client.js'));
+});
 
 type BinaryResponse = Awaited<ReturnType<NonNullable<NetworkTransport['requestBytes']>>>;
 

@@ -5,7 +5,9 @@ import type { OutboundMediaTrust } from '@zhin.js/core';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
-import { checkUrlNetworkAccess, hostnameResolvesToBlockedAddress } from '../security/network-policy.js';
+import { checkUrlNetworkAccess } from '../security/network-policy.js';
+import { fetchPublicMediaBytes } from '../security/public-media-fetch.js';
+import type { NetworkTransport } from '../security/turn-network-client.js';
 import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
 import { checkFilePermission, type FileRole } from '../security/file-role-policy.js';
 import type { ImageAssetPublisher } from './image-assets.js';
@@ -27,6 +29,8 @@ export interface OutboundMediaAuthority {
    * because a reply attachment has no approval step. Absent: `user` (fail closed).
    */
   readonly fileRole?: FileRole;
+  /** Replaces the pinned Node transport that downloads model-referenced URLs (tests, embedding hosts). */
+  readonly mediaTransport?: NetworkTransport;
 }
 
 /**
@@ -174,61 +178,35 @@ export async function readLocalFileAsBase64(
   }
 }
 
+/**
+ * Download a media URL someone outside the host controls (inbound image / video / file, a model-referenced
+ * URL) and sniff its real type. Uses the pinned download shared with speech and outbound adapters
+ * (`fetchPublicMediaBytes`, #1250 第 46 批): HTTPS only, private hosts refused, the name resolved once
+ * and the connection made to the checked address (no DNS rebinding between check and connect), every
+ * redirect hop checked again (including `allowedDomains`), body capped at `maxBytes`, 30 s overall.
+ * Any refusal or failure yields `null`.
+ */
 export async function fetchUrlAsBase64(
   url: string,
   maxBytes: number,
   expectedKind?: MediaKind,
   signal?: AbortSignal,
   allowedDomains: readonly string[] = [],
+  transport?: NetworkTransport,
 ): Promise<MediaBinaryPayload | null> {
   try {
-    let current = url;
-    let res: Response | undefined;
-    for (let redirects = 0; redirects <= 5; redirects += 1) {
-      if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [...allowedDomains] }).allowed) return null;
-      // No Turn network client here: at least refuse names that resolve to private addresses.
-      if (await hostnameResolvesToBlockedAddress(new URL(current).hostname)) return null;
-      res = await fetch(current, {
-        redirect: 'manual',
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
-      });
-      if (![301, 302, 303, 307, 308].includes(res.status)) break;
-      const location = res.headers.get('location');
-      if (!location || redirects === 5) return null;
-      current = new URL(location, current).toString();
-    }
-    if (!res?.ok) return null;
-    const declaredLength = Number(res.headers.get('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
-    const buf = await readBoundedResponse(res, maxBytes);
-    if (!buf) return null;
-    const detected = inspectMediaBytes(buf, expectedKind);
+    const result = await fetchPublicMediaBytes(url, {
+      maxBytes,
+      ...(signal ? { signal } : {}),
+      ...(allowedDomains.length ? { allowedDomains } : {}),
+      ...(transport ? { transport } : {}),
+    });
+    if (!result.ok) return null;
+    const detected = inspectMediaBytes(result.bytes, expectedKind);
     if (!detected) return null;
-    return { kind: detected.kind, base64: buf.toString('base64'), mimeType: detected.mimeType };
+    return { kind: detected.kind, base64: result.bytes.toString('base64'), mimeType: detected.mimeType };
   } catch {
     return null;
-  }
-}
-
-async function readBoundedResponse(response: Response, maxBytes: number): Promise<Buffer | null> {
-  if (!response.body) return Buffer.alloc(0);
-  const reader = response.body.getReader();
-  const chunks: Buffer[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel('media_byte_limit_exceeded');
-        return null;
-      }
-      chunks.push(Buffer.from(value));
-    }
-    return Buffer.concat(chunks, total);
-  } finally {
-    reader.releaseLock();
   }
 }
 
@@ -242,6 +220,7 @@ export async function normalizeMediaRefsToPayloads(
   maxBytes: number,
   signal?: AbortSignal,
   authority?: OutboundMediaAuthority,
+  transport: NetworkTransport | undefined = authority?.mediaTransport,
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
@@ -271,7 +250,7 @@ export async function normalizeMediaRefsToPayloads(
 
     const network = authorizeOutboundMediaUrl(media.value, authority);
     if (!network) continue;
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains);
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport);
     if (fetched) out.push({ ...fetched, ...fileName });
   }
 
