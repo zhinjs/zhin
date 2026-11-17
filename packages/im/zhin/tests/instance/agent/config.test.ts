@@ -69,6 +69,25 @@ describe('Agent Host configuration', () => {
     } as never)).toThrow('Invalid ai.mcpServers[0] declaration');
   });
 
+  it('parses and validates ai.mcpServers[].permit (ADR 0065)', () => {
+    const [entry] = resolveAgentHostMcpServers({ mcpServers: [{
+      name: 'github', transport: 'streamable-http', url: 'https://mcp.example/rpc',
+      permit: { readOnly: 'everyone', default: 'owner@global', tools: { get_me: 'trusted', 'create_*': 'deny',
+        merge_pull_request: ['owner@global', 'private(*)'] } },
+    }] } as never);
+    expect(entry?.permit).toEqual({ readOnly: 'everyone', default: ['owner@global'], tools: {
+      get_me: ['trusted'], 'create_*': 'deny', merge_pull_request: ['owner@global', 'private(*)'],
+    } });
+    const invalid = (permit: unknown) => () => resolveAgentHostMcpServers({ mcpServers: [{
+      name: 'github', transport: 'sse', url: 'https://mcp.example/sse', permit,
+    }] } as never);
+    expect(invalid({ default: [] })).toThrow('ai.mcpServers[0].permit.default must not be an empty array');
+    expect(invalid({ readOnly: ['everyone'] })).toThrow('"everyone" must stand alone');
+    expect(invalid({ tools: { x: ['owner', 'deny'] } })).toThrow('"deny" must stand alone');
+    expect(invalid({ default: 'master' })).toThrow(/removed.*owner/u);
+    expect(invalid({ allow: 'everyone' })).toThrow('permit.allow is not supported');
+  });
+
   it('normalizes and validates multi-bot Venue declarations', () => {
     expect(resolveAgentHostVenues(undefined)).toEqual([]);
     const venues = resolveAgentHostVenues({

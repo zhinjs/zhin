@@ -60,6 +60,7 @@ export class AgentHostPublicationCoordinator {
           return options.processRuntime.execute(rootPluginId(), request, {
             binding: selected,
             mcpServers: selected.mcpServers,
+            ...(selected.mcpPermits ? { mcpPermits: selected.mcpPermits } : {}),
             ...(selected.name === 'zhin' ? {} : { agent: selected.name }),
           }, observeAgentTurnTrace(traceRuntime, request));
         },

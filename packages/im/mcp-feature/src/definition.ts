@@ -2,10 +2,60 @@ import type { ConstructionContext } from '@zhin.js/feature-kit';
 
 const mcpBrand = 'zhin.mcp/1' as const;
 
+/**
+ * Upstream MCP tool annotations (`readOnlyHint` / `destructiveHint` / `idempotentHint` /
+ * `openWorldHint`), kept as the tool's own facts (ADR 0065 D1). They come from an out-of-process
+ * server: hosts may use them to pick a permission tier, never to relax approval.
+ */
+export interface McpToolHints {
+  readonly readOnly?: boolean;
+  readonly destructive?: boolean;
+  readonly idempotent?: boolean;
+  readonly openWorld?: boolean;
+}
+
 export interface McpToolDescriptor {
   readonly name: string;
   readonly description?: string;
   readonly inputSchema?: unknown;
+  /** Upstream annotations; absent when the server declared none (ADR 0065 D1). */
+  readonly hints?: McpToolHints;
+}
+
+const HINT_KEYS = ['readOnly', 'destructive', 'idempotent', 'openWorld'] as const;
+const ANNOTATION_KEYS = {
+  readOnly: 'readOnlyHint',
+  destructive: 'destructiveHint',
+  idempotent: 'idempotentHint',
+  openWorld: 'openWorldHint',
+} as const;
+
+/**
+ * Reads the upstream `tools/list` `annotations` object into {@link McpToolHints}. Only boolean values
+ * count; any other type is treated as "not annotated". Display fields such as `title` are ignored.
+ */
+export function mcpToolHintsFromAnnotations(annotations: unknown): McpToolHints | undefined {
+  if (!annotations || typeof annotations !== 'object' || Array.isArray(annotations)) return undefined;
+  const source = annotations as Record<string, unknown>;
+  const hints: Record<string, boolean> = {};
+  for (const key of HINT_KEYS) {
+    // Own properties only: an inherited `readOnlyHint` (a polluted prototype) is not an annotation.
+    if (!Object.hasOwn(source, ANNOTATION_KEYS[key])) continue;
+    const value = source[ANNOTATION_KEYS[key]];
+    if (typeof value === 'boolean') hints[key] = value;
+  }
+  return Object.keys(hints).length ? Object.freeze(hints) as McpToolHints : undefined;
+}
+
+/** Keeps only the boolean fields of a {@link McpToolHints}-shaped value (client output is untrusted). */
+export function normalizeMcpToolHints(value: unknown): McpToolHints | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const hints: Record<string, boolean> = {};
+  for (const key of HINT_KEYS) {
+    if (Object.hasOwn(source, key) && typeof source[key] === 'boolean') hints[key] = source[key] as boolean;
+  }
+  return Object.keys(hints).length ? Object.freeze(hints) as McpToolHints : undefined;
 }
 
 export interface McpClientInstance {

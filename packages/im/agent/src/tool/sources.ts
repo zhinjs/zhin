@@ -11,6 +11,8 @@ import type { UserProfileStore } from '../user-profile.js';
 import { normalizeTool } from '../resource-hub/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type { RegisteredAgentTool, ToolFilter, ToolSource } from './contracts.js';
+import type { McpAgentTool } from '../mcp-client/bridge.js';
+import { resolveMcpToolPermit, type McpBindingPermits } from '../plugin-runtime/mcp-tool-permit.js';
 const logger = getLogger('ToolSystem');
 
 export interface CollectToolsContext {
@@ -24,6 +26,8 @@ export interface CollectToolsContext {
   externalRegistered: Map<string, RegisteredAgentTool>;
   userProfiles: UserProfileStore;
   mcpTools?: AgentTool[];
+  /** ADR 0065: per-server MCP tool permits of the active binding (server + Agent layer). */
+  mcpPermits?: McpBindingPermits;
   /** PermissionHost（permit 声明的工具经其判定；缺省 fail-closed）。 */
   permissionHost?: PermissionHost | null;
 }
@@ -104,7 +108,11 @@ export class McpToolSource implements ToolSource {
   name = 'mcp';
   priority = 50;
 
-  collectTools(context: CollectToolsContext): AgentTool[] {
+  /**
+   * Same tier as the production path (ADR 0065 D4.5): a `deny` tier is dropped, any other tier is
+   * checked against the message sender through `canAccessTool` (no PermissionHost → fail closed).
+   */
+  async collectTools(context: CollectToolsContext): Promise<AgentTool[]> {
     const tools: AgentTool[] = [];
     for (const mcpTool of context.mcpTools ?? []) {
       if (isReservedToolName(mcpTool.name, {
@@ -114,7 +122,22 @@ export class McpToolSource implements ToolSource {
         logger.warn(`[MCP] Skipping tool "${mcpTool.name}": conflicts with reserved tool name`);
         continue;
       }
-      tools.push(mcpTool);
+      const origin = (mcpTool as McpAgentTool).mcpOrigin;
+      const permits = origin && context.mcpPermits && Object.hasOwn(context.mcpPermits, origin.server)
+        ? context.mcpPermits[origin.server]
+        : undefined;
+      const decision = resolveMcpToolPermit(permits, {
+        name: origin?.tool ?? mcpTool.name,
+        ...(origin?.hints ? { hints: origin.hints } : {}),
+      });
+      if (decision.status === 'denied') continue;
+      if (!decision.permissions.length) {
+        tools.push(mcpTool);
+        continue;
+      }
+      const gated = { ...mcpTool, permissions: [...decision.permissions] } as AgentTool;
+      if (!(await canAccessTool(gated as unknown as CoreTool, context.message, context.permissionHost))) continue;
+      tools.push(gated);
     }
     return tools;
   }

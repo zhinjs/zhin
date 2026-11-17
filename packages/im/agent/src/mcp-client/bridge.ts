@@ -6,6 +6,7 @@
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 import { formatMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
+import { mcpToolHintsFromAnnotations, type McpToolHints } from '@zhin.js/mcp-feature';
 import type { McpResource, McpPrompt } from '../resource-hub/types.js';
 
 export interface McpToolDefinition {
@@ -17,13 +18,25 @@ export interface McpToolDefinition {
     required?: string[];
     [key: string]: unknown;
   };
+  /** Upstream `tools/list` annotations; read through {@link mcpToolHintsFromAnnotations} (ADR 0065 D1). */
+  annotations?: unknown;
 }
+
+/** Where a bridged MCP tool came from: the server, the upstream (unprefixed) tool name and its hints. */
+export interface McpAgentToolOrigin {
+  readonly server: string;
+  readonly tool: string;
+  readonly hints?: McpToolHints;
+}
+
+export type McpAgentTool = AgentTool & { readonly mcpOrigin?: McpAgentToolOrigin };
 
 export function mcpToolToAgentTool(
   mcpTool: McpToolDefinition,
   serverName: string,
   callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>,
-): AgentTool {
+): McpAgentTool {
+  const hints = mcpToolHintsFromAnnotations(mcpTool.annotations);
   const parameters: JsonSchema = {
     type: 'object',
     properties: mcpTool.inputSchema?.properties as Record<string, JsonSchema> ?? {},
@@ -38,7 +51,13 @@ export function mcpToolToAgentTool(
     tags: ['mcp', serverName],
     kind: 'mcp',
     source: `mcp:${serverName}`,
+    // Upstream hints never relax approval (ADR 0065 D1.3): the bridged tool stays "may write".
     isReadOnly: false,
+    mcpOrigin: Object.freeze({
+      server: serverName,
+      tool: mcpTool.name,
+      ...(hints ? { hints } : {}),
+    }),
   };
 }
 

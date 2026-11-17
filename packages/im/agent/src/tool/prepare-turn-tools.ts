@@ -10,6 +10,7 @@ import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../interna
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
+import type { McpBindingPermits } from '../plugin-runtime/mcp-tool-permit.js';
 
 export interface TurnToolsPrep {
   contextForTools: Message;
@@ -74,6 +75,9 @@ export async function prepareTurnTools(
     externalRegistered: host.externalTools,
     userProfiles: host.userProfiles,
     mcpTools,
+    // ADR 0065 D4.5: the legacy path tiers MCP tools like production; without a host it fails closed.
+    mcpPermits: legacyMcpPermits(host, opts.mcpServerNames),
+    permissionHost: host.permissionHost ?? null,
   });
 
   const resolved = await toolSystem.resolveForTurn(
@@ -101,4 +105,14 @@ export async function prepareTurnTools(
     catalog,
     sessionSnapshot,
   };
+}
+
+/** Server layer from the registered `ai.mcpServers` entry, Agent layer from the active binding. */
+function legacyMcpPermits(host: ZhinAgentPrivate, serverNames: readonly string[]): McpBindingPermits {
+  const bindingPermits = host.activeBinding?.mcpPermits;
+  return Object.freeze(Object.fromEntries(serverNames.map((name) => {
+    const server = host.resourceHub?.mcps.get(name)?.permit;
+    const agent = bindingPermits && Object.hasOwn(bindingPermits, name) ? bindingPermits[name]?.agent : undefined;
+    return [name, Object.freeze({ ...(server ? { server } : {}), ...(agent ? { agent } : {}) })];
+  })));
 }

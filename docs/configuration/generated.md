@@ -272,7 +272,7 @@ outline: [2, 3]
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | 否 | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | 否 | — | — |
 | `ai.agents` | object \| null | 否 | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。 |
+| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。同一服务器只能出现一次。 |
 | `ai.agents.<key>.nickname` | string | 否 | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |

@@ -215,6 +215,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   approvalPort?: ApprovalPort;
   /** #1030: this generation's host-protected paths; set by the host installer, absent for embedders. */
   hostProtectedPaths?: HostProtectedPaths;
+  /**
+   * PermissionHost for the legacy `process` path (tests / eval): permit-gated plugin and MCP tools are
+   * checked through it; unset keeps the fail-closed behavior (ADR 0065 D4.5).
+   */
+  permissionHost?: import('@zhin.js/permission').PermissionHost | null;
   lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   /** ADR 0048 H3: every turn of this agent is a Mail turn of its long-lived host Mailbox. */
   readonly hostMailbox: HostMailbox;

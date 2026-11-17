@@ -225,7 +225,9 @@ export interface SelfChangeConfigPatch {
  * 放松安全或扩大工具面的 Host 配置键（点分路径，ADR 0040 §1，#1051 F2）。
  *
  * 补丁写到这些键本身、其子键，或整体覆盖 / 删除其祖先，都直接拒绝，不进审批（「模型不能自解禁」）。
- * `packages/im/runtime/src/host-config-schema.json` 中对应字段必须标 `"x-zhin-config": { "security": true }`，
+ * 段 `*` 匹配任意一段（如 `ai.agents.*.mcpServers` 覆盖每个 Agent 绑定）。
+ * `packages/im/runtime/src/host-config-schema.json` 中对应字段必须标 `"x-zhin-config": { "security": true }`
+ * （`*` 对应 schema 的 `additionalProperties`），
  * 守卫测试断言两边一一对应：新增安全开关时只在 schema 标记而忘记登记（或反之）会直接失败。
  */
 export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze([
@@ -256,6 +258,8 @@ export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze
   'mcp',
   'ai.mcpServers',
   'ai.githubMcp',
+  // Agent 绑定的 MCP 服务器与 Agent 层 permit（ADR 0065 D2.4）：删掉收窄或加绑服务器都会放宽工具面
+  'ai.agents.*.mcpServers',
 ]);
 
 /** {@link SELF_CHANGE_SECURITY_CONFIG_KEYS} 的分段形式。 */
@@ -284,8 +288,16 @@ export class SelfChangeValidationError extends Error {
   }
 }
 
-function isPrefix(prefix: readonly string[], of: readonly string[]): boolean {
-  return prefix.length <= of.length && prefix.every((segment, index) => segment === of[index]);
+/** 段 `*` 匹配任意一段（只出现在禁改名单里）。 */
+const ANY_SEGMENT = '*';
+
+/** `forbidden` 与 `path` 在两者共同长度内逐段相同（`forbidden` 的 `*` 段匹配任意一段）。 */
+function sharesPrefix(forbidden: readonly string[], path: readonly string[]): boolean {
+  const length = Math.min(forbidden.length, path.length);
+  for (let index = 0; index < length; index += 1) {
+    if (forbidden[index] !== ANY_SEGMENT && forbidden[index] !== path[index]) return false;
+  }
+  return true;
 }
 
 /**
@@ -294,9 +306,8 @@ function isPrefix(prefix: readonly string[], of: readonly string[]): boolean {
  */
 export function findForbiddenConfigKey(segments: readonly string[]): readonly string[] | null {
   for (const forbidden of FORBIDDEN_CHANGE_CONFIG_KEYS) {
-    const writesInsideForbidden = isPrefix(forbidden, segments);
-    const overwritesAncestor = isPrefix(segments, forbidden);
-    if (writesInsideForbidden || overwritesAncestor) return forbidden;
+    // 写在禁改键内（path 更长）或覆盖其祖先（path 更短 / 等长），共同前缀一致即算改到。
+    if (sharesPrefix(forbidden, segments)) return forbidden;
   }
   return null;
 }

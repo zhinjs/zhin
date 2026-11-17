@@ -13,6 +13,8 @@ import mcpFeature, {
   McpIndex,
   defineMcp,
   mcpFeatureId,
+  mcpToolHintsFromAnnotations,
+  normalizeMcpToolHints,
   parseMcpDefinition,
 } from '../src/index.js';
 
@@ -85,6 +87,58 @@ describe('MCP Feature', () => {
     await index.stop();
 
     expect(events).toEqual(['start', 'call:search', 'stop']);
+  });
+
+  it('reads only boolean upstream annotations into tool hints (ADR 0065 D1)', () => {
+    expect(mcpToolHintsFromAnnotations({
+      readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false, title: 'Search',
+    })).toEqual({ readOnly: true, destructive: false, idempotent: true, openWorld: false });
+    expect(mcpToolHintsFromAnnotations({ readOnlyHint: 'true', destructiveHint: 1, idempotentHint: null })).toBeUndefined();
+    expect(mcpToolHintsFromAnnotations({ readOnlyHint: 'yes', destructiveHint: true })).toEqual({ destructive: true });
+    for (const value of [undefined, null, 'x', [], [true]]) expect(mcpToolHintsFromAnnotations(value)).toBeUndefined();
+    expect(normalizeMcpToolHints({ readOnly: true, destructive: 'no', extra: true })).toEqual({ readOnly: true });
+    expect(normalizeMcpToolHints({ readOnly: 'true' })).toBeUndefined();
+  });
+
+  it('ignores inherited annotation properties: only the tool\'s own fields count', () => {
+    expect(mcpToolHintsFromAnnotations(Object.create({ readOnlyHint: true }))).toBeUndefined();
+    expect(mcpToolHintsFromAnnotations(Object.assign(Object.create({ readOnlyHint: true }), { openWorldHint: true })))
+      .toEqual({ openWorld: true });
+    expect(normalizeMcpToolHints(Object.create({ readOnly: true }))).toBeUndefined();
+    // An own `__proto__` key from JSON is a plain field, not a prototype.
+    expect(mcpToolHintsFromAnnotations(JSON.parse('{"__proto__":{"readOnlyHint":true}}'))).toBeUndefined();
+  });
+
+  it('passes client tool hints through listTools and drops non-boolean values', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: mcpFeatureId,
+      localName: 'github',
+      source: '/mcps/github/index.ts',
+      definition: defineMcp({
+        create: () => ({
+          listTools: () => [
+            { name: 'list_issues', hints: { readOnly: true, openWorld: true } },
+            { name: 'create_issue', hints: { readOnly: 'true', destructive: false } as never },
+            { name: 'plain', hints: { readOnly: 1 } as never },
+            { name: 'bare' },
+          ],
+          callTool: () => undefined,
+        }),
+      }),
+    });
+    const index = await createMcpIndex([slot], snapshot([slot]));
+    await index.start(new AbortController().signal);
+    const tools = await index.listTools(root, 'github');
+    expect(tools).toEqual([
+      { name: 'list_issues', hints: { readOnly: true, openWorld: true } },
+      { name: 'create_issue', hints: { destructive: false } },
+      { name: 'plain' },
+      { name: 'bare' },
+    ]);
+    expect(Object.isFrozen(tools[0]!.hints)).toBe(true);
+    await index.stop();
   });
 
   it('cleans up previously started clients when a sibling fails to start', async () => {
