@@ -24,6 +24,10 @@ import {
   type SandboxConversation,
 } from './protocol.js';
 import { SandboxClient } from './client.js';
+import { join } from 'node:path';
+import { SandboxMediaStore } from './media-store.js';
+import { mountSandboxMediaRoutes, sandboxMediaActor } from './media-routes.js';
+import { SANDBOX_MEDIA_PUBLIC_PREFIX, isSandboxMediaPath } from './media-url.js';
 
 /**
  * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
@@ -129,7 +133,27 @@ const messages = createMessages({
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
   receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
+  mediaRejected: { 'zh-CN': '消息里的 Sandbox 文件不属于这个会话、已过期或签名无效，没有发送。', en: 'A Sandbox file in this message belongs to another conversation, has expired or has an invalid signature; the message was not sent.' },
 });
+
+/** How often expired uploads are swept (also once at start). */
+const MEDIA_SWEEP_INTERVAL_MS = 3_600_000;
+
+/**
+ * Every address-like string a segment carries, nested segments (forward records) included, but not
+ * its text: a hosted link typed as plain words is not a media reference.
+ */
+function segmentStrings(segment: unknown, depth = 0): string[] {
+  // Fail closed: content nested deeper than any real segment counts as an unverifiable hosted link.
+  if (depth > 16) return [SANDBOX_MEDIA_PUBLIC_PREFIX];
+  if (!segment || typeof segment !== 'object') return [];
+  if (Array.isArray(segment)) return segment.flatMap(item => segmentStrings(item, depth + 1));
+  return Object.entries(segment as Record<string, unknown>).flatMap(([key, value]) => {
+    if (key === 'text') return [];
+    if (typeof value === 'string') return [value];
+    return segmentStrings(value, depth + 1);
+  });
+}
 
 export interface SandboxEndpointOptions {
   /** Project language captured from this endpoint generation's resources. */
@@ -139,6 +163,8 @@ export interface SandboxEndpointOptions {
   readonly defaults: ResolvedSandboxBot;
   /** Chat roles (`chatRolesToken`, ADR 0060 §6): the sender's zhin role shown on the page. */
   readonly chatRoles?: ChatRoleReader;
+  /** Hosted upload root; default `<cwd>/.zhin/sandbox/media` (ADR 0064 D12.1). */
+  readonly mediaRoot?: string;
 }
 
 /**
@@ -190,6 +216,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
   #wsPathRelease?: () => void;
+  readonly #media: SandboxMediaStore;
+  #mediaRoutesRelease?: () => void;
+  #mediaSweep?: ReturnType<typeof setInterval>;
   #open = false;
   #started = false;
 
@@ -198,6 +227,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#logger = getAdapterLogger('sandbox', options.defaults.id);
     this.#options = options;
     this.#locale = resolveLocale(options.locale);
+    // Lazy on disk: nothing is created until the first upload.
+    this.#media = new SandboxMediaStore({ root: options.mediaRoot ?? join(process.cwd(), '.zhin', 'sandbox', 'media'),
+      endpointId: options.defaults.id, config: options.defaults.media });
     const readTransportState = () => this.#transportState;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.defaults.id,
@@ -231,6 +263,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.id, this.#options.defaults.owner);
     }
+    this.#mediaRoutesRelease = mountSandboxMediaRoutes({ http: this.#options.http, store: this.#media, logger: this.#logger });
+    this.#sweepMedia();
+    this.#mediaSweep = setInterval(() => this.#sweepMedia(), MEDIA_SWEEP_INTERVAL_MS);
+    this.#mediaSweep.unref?.();
     this.#logger.info(`ws mounted ${claim.path}`);
   }
 
@@ -252,6 +288,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#wsHandleRelease = undefined;
     this.#wsPathRelease?.();
     this.#wsPathRelease = undefined;
+    this.#mediaRoutesRelease?.();
+    this.#mediaRoutesRelease = undefined;
+    if (this.#mediaSweep) clearInterval(this.#mediaSweep);
+    this.#mediaSweep = undefined;
     for (const connection of this.connectionRecords.values()) {
       connection.release();
       if (!connection.placeholder) {
@@ -454,8 +494,22 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             return;
           }
           const parsed = frame.message;
-          void this.#emitPlatformEvent('message', raw);
           const sceneId = parsed.id || owner;
+          // ADR 0064 D12 (revised): a hosted file may only be sent in the conversation it was uploaded
+          // in, by its uploader, with a genuine unexpired link. Anything else is refused and audited.
+          const mediaRefusal = this.#hostedMediaRefusal(parsed.content, { type: parsed.type, id: sceneId }, connection.principal);
+          if (mediaRefusal) {
+            this.#logger.warn(formatCompact({ op: 'sandbox_media_inbound_rejected', target, connectionId,
+              actor: sandboxMediaActor(connection.principal), conversation: `${parsed.type}:${sceneId}`, reason: mediaRefusal }));
+            socket.send(JSON.stringify({
+              type: 'error', code: 'sandbox_media_rejected', endpoint: target, connectionId,
+              id: sceneId, conversation: { type: parsed.type, id: sceneId }, ...(parsed.messageId ? { messageId: parsed.messageId } : {}),
+              content: [{ type: 'text', data: { text: messages(this.#locale, 'mediaRejected') } }],
+              timestamp: Date.now(),
+            }));
+            return;
+          }
+          void this.#emitPlatformEvent('message', raw);
           const conversation = { ...sandboxInboundConversation(String(this.#options.id), {
             type: parsed.type,
             id: sceneId,
@@ -607,6 +661,34 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (identity) return { identity };
     // Tell 「no identity yet」 apart from 「the person holds global grants」.
     return { unavailable: !user.canManageGlobal && speaker(true) ? 'needs-global-iam' : 'no-identity' };
+  }
+
+  /** Why a hosted file in an inbound message is refused, or undefined when every one is admitted. */
+  #hostedMediaRefusal(content: readonly unknown[], scene: { readonly type: string; readonly id: string },
+    principal: WsConnection['principal']): string | undefined {
+    const uploader = sandboxMediaActor(principal);
+    for (const value of segmentStrings(content)) {
+      if (!isSandboxMediaPath(value)) continue;
+      const decision = this.#media.authorize(value, {
+        conversation: { endpoint: this.#options.defaults.id, type: scene.type as 'private', id: scene.id }, uploader,
+      });
+      if (!decision.ok) return decision.reason;
+    }
+    return undefined;
+  }
+
+  #sweepMedia(): void {
+    try {
+      const removed = this.#media.sweep();
+      if (removed) this.#logger.debug(formatCompact({ op: 'sandbox_media_swept', removed }));
+    } catch (error) {
+      this.#logger.warn(formatCompact({ op: 'sandbox_media_sweep_failed', error: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
+  /** @internal Tests and the I2 local source read the store directly, never over HTTP. */
+  get mediaStore(): SandboxMediaStore {
+    return this.#media;
   }
 
   #ensurePlaceholder(name: string, owner: string): void {

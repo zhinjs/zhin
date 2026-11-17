@@ -235,6 +235,17 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(CONSOLE_RPC_PERMISSIONS[ONBOARDING_RPC.UPDATE]).toBe('plugin.manage');
   });
 
+  it('maps the Sandbox hosted-media routes (ADR 0064 I1): upload / delete operate, download view', () => {
+    expect(resolveConsoleHttpPermission('POST', '/sandbox/media/sandbox-bot')?.permission).toBe('endpoint.operate');
+    expect(resolveConsoleHttpPermission('POST', '/sandbox/media/sandbox-bot/secret')?.permission).toBe('endpoint.operate');
+    expect(resolveConsoleHttpPermission('DELETE', '/sandbox/media/sandbox-bot/AAAAAAAAAAAAAAAAAAAAAA')?.permission).toBe('endpoint.operate');
+    expect(resolveConsoleHttpPermission('GET', '/sandbox/media/sandbox-bot/AAAAAAAAAAAAAAAAAAAAAA')?.permission).toBe('endpoint.view');
+    // Not a blanket /sandbox rule, and no other verb.
+    expect(resolveConsoleHttpPermission('GET', '/sandbox')).toBeNull();
+    expect(resolveConsoleHttpPermission('PUT', '/sandbox/media/sandbox-bot')).toBeNull();
+    expect(resolveConsoleHttpPermission('GET', '/sandbox/mediax')).toBeNull();
+  });
+
   it('maps only the Console WebSocket paths, including per-endpoint sandbox sockets', () => {
     expect(resolveConsoleWsPermission('/sandbox')).toBe('endpoint.operate');
     expect(resolveConsoleWsPermission('/sandbox/bot-1')).toBe('endpoint.operate');

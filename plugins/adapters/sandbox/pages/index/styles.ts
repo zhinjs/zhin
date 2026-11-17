@@ -313,6 +313,17 @@ export const sandboxStyles = `
 .zhin-sandbox .editor-image { max-width: 100%; max-height: 100px; display: inline-block; vertical-align: middle; border-radius: var(--console-radius-1); }
 .zhin-sandbox .editor-video, .zhin-sandbox .editor-audio, .zhin-sandbox .editor-at { display: inline-flex; align-items: center; margin: 0 var(--console-space-1); padding: 0 var(--console-space-2); border-radius: var(--console-radius-1); background: var(--sb-accent); font-size: var(--console-text-label); vertical-align: baseline; }
 .zhin-sandbox .editor-at { color: var(--sb-primary); }
+/* ADR 0064 D13 (I1): uploaded files in the composer, the upload list and the drop target. */
+.zhin-sandbox img.editor-uploaded { max-width: min(200px, 100%); max-height: 100px; display: inline-block; vertical-align: middle; border-radius: var(--console-radius-1); }
+.zhin-sandbox span.editor-uploaded { display: inline-flex; align-items: center; max-width: 100%; margin: 0 var(--console-space-1); padding: 0 var(--console-space-2); border-radius: var(--console-radius-1); background: var(--sb-accent); font-size: var(--console-text-label); vertical-align: baseline; overflow-wrap: anywhere; }
+.zhin-sandbox .sandbox-editor-wrap.is-drag-active [contenteditable="true"] { border-color: var(--sb-ring); outline: 2px dashed var(--sb-ring); outline-offset: 1px; }
+.zhin-sandbox .sandbox-file-input { display: none; }
+.zhin-sandbox .sandbox-upload-list { display: flex; flex-direction: column; gap: var(--console-space-1); margin: 0 0 var(--console-space-2); padding: 0; list-style: none; }
+.zhin-sandbox .sandbox-upload-item { display: flex; align-items: center; gap: var(--console-space-2); min-width: 0; color: var(--sb-muted-fg); font-size: var(--console-text-label); }
+.zhin-sandbox .sandbox-upload-item.is-failed { color: var(--sb-danger); }
+.zhin-sandbox .sandbox-upload-item > svg { flex-shrink: 0; }
+.zhin-sandbox .sandbox-upload-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--console-weight-strong); }
+.zhin-sandbox .sandbox-upload-state { min-width: 0; overflow-wrap: anywhere; }
 .zhin-sandbox .sandbox-markdown-preview { min-height: 44px; max-height: 240px; padding: var(--console-space-3) var(--console-space-3); overflow: auto; background: var(--sb-muted); border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); }
 .zhin-sandbox .sandbox-markdown-preview-empty { font-size: var(--console-text-label); color: var(--sb-muted-fg); }
 .zhin-sandbox .sandbox-at-popover { position: absolute; z-index: 50; min-width: 240px; max-height: 288px; overflow-y: auto; padding: var(--console-space-1); border: 1px solid var(--sb-border); border-radius: var(--console-radius-2); background: hsl(var(--popover, 0 0% 100%)); box-shadow: var(--console-elevation-2); }

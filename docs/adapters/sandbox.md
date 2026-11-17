@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7fcaa572acb6b001 -->
+<!-- sync-adapter-docs:sha256=7905c92eaf52e3a1 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -119,6 +119,34 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 
 每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
+
+## 本地文件上传（ADR 0064 增补 I1）
+
+页面输入区可以**拖放**、**粘贴**或用「上传文件」「上传语音」按钮选择本地文件（图片、语音 / 音频、任意文件）。文件先以原始字节上传到 Sandbox，再以签名地址插入消息，发出的入站段与其他平台一致：
+
+```ts
+{ type: 'image', data: { media: { kind: 'url', value: '<签名地址>', mime_type, size, file_name } } }
+```
+
+- **存储**：项目的 `.zhin/sandbox/media/<端点目录键>/`，对象只按 128 位随机 `id` 命名，上传者给的文件名只记在元数据里。元数据记录上传时的会话（端点 + 会话）、上传者、按内容嗅探的 MIME、大小与过期时间。签名密钥在 `.zhin/sandbox/media/secret`（0600）。Agent 的文件工具与 Shell 命令不能访问 `.zhin/sandbox/`。
+- **会话绑定**：文件只能在上传它的会话里、由上传者发送；带着别的会话或别人上传的托管地址发消息，会被拒绝（错误帧 `sandbox_media_rejected`）并记一条日志。
+- **上传接口**：`POST /api/sandbox/media/<endpoint>?type=<private|group|channel>&id=<会话>`，请求体是原始字节，必须带 `Content-Length`，文件名放在 URL 编码的 `X-Zhin-File-Name`。需要 `endpoint.operate`。
+- **大小与配额**（`media` 配置，可放在顶层或 `endpoints[i]`）：
+
+  | 字段 | 默认 | 上限 |
+  |---|---|---|
+  | `maxBytes.image` | 10 MiB | 64 MiB |
+  | `maxBytes.audio` | 20 MiB | 64 MiB |
+  | `maxBytes.video` / `maxBytes.file` | 32 MiB | 64 MiB |
+  | `uploaderQuotaBytes`（每个上传者） | 200 MiB | 5 GiB，且不超过 `quotaBytes` |
+  | `quotaBytes`（整个端点） | 500 MiB | 5 GiB |
+  | `ttlHours` | 24 | 1–168 |
+
+  单文件上限是网关的请求体上限（64 MiB）；要放更大的文件，需要同时调大网关的请求体上限。超过配额时直接拒绝上传，不会删除别人的文件。
+- **下载**：Console 页面经 `GET /api/sandbox/media/<endpoint>/<id>?type=&id=`（需要 `endpoint.view`，且必须是文件所属的会话）显示文件。`/pub/sandbox-media/...` 签名下载**默认关闭**；端点配置 `media.publicDownload: true` 才开放，开放后仍要求签名有效、未过期——这等于生成限时外链，只在远程部署、需要外部服务取文件时打开。来源地址（是否回环）从不作为授权依据。SVG、HTML 和其他非图片 / 音视频文件一律以附件下载，带 `X-Content-Type-Options: nosniff`。
+- **撤销**：过期文件每小时清扫一次；`DELETE /api/sandbox/media/<endpoint>/<id>`（上传者或所有者）立即作废该文件的所有链接；所有者可 `POST /api/sandbox/media/<endpoint>/secret` `{ "action": "rotate" }`（新密钥签发，旧密钥仍可验签）或 `{ "action": "revoke-all" }`（丢弃旧密钥，此前签发的链接全部失效）。
+
+> **I1 阶段的限制**：插件和 Agent 在进程内读取上传的文件要等 I2（`LocalMediaSource` 端口与 core 侧的信任）。在此之前，插件按网络地址下载签名链接时仍受它自己的域名白名单约束，Agent 的入站媒体也会按现有网络策略拒绝本机地址（只取 HTTPS、拒绝私有地址），所以 Agent 暂时看不到上传的图片。
 
 ## 在 Console 管理账号
 

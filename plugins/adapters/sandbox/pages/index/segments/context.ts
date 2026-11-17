@@ -24,7 +24,15 @@ export interface SandboxSegmentRenderContext {
   readonly submittedPayloads?: readonly string[];
   /** Renders nested segments (forward records) with the same registry, never interactively. */
   readonly renderNested: (segments: readonly unknown[]) => ReactNode;
+  /**
+   * ADR 0064 D12 (I1): a Sandbox-hosted link (`/pub/sandbox-media/…`) as a displayable blob URL,
+   * fetched through the Console download with the page's credentials; undefined when it is gone.
+   */
+  readonly resolveHostedMedia?: SandboxSegmentContextResolver;
 }
+
+/** Hosted link → blob URL (undefined when the file is deleted, expired or not in this conversation). */
+export type SandboxSegmentContextResolver = (url: string) => Promise<string | undefined>;
 
 /** One segment's best-effect renderer (ADR 0064 §0.1: the Sandbox is the capability ceiling). */
 export type SandboxSegmentRenderer = (

@@ -166,7 +166,7 @@ async function createProject(): Promise<string> {
   }
   // Browser-safe src modules the page imports (shipped in the package's `files`).
   await mkdir(join(root, 'src'), { recursive: true });
-  for (const name of ['run-config.ts', 'inbound-syntax.ts']) {
+  for (const name of ['run-config.ts', 'inbound-syntax.ts', 'media-url.ts']) {
     const source = join(dirname(fileURLToPath(import.meta.url)), '../src', name);
     await writeFile(join(root, 'src', name), await readFile(source, 'utf8'));
   }
