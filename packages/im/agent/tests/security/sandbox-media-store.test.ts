@@ -18,6 +18,11 @@ describe('Agent tools and the Sandbox media store', () => {
     for (const file of files) expect(checkFileAccess(file, '/srv/bot').allowed, file).toBe(false);
     const reason = checkFileAccess('/srv/bot/.zhin/sandbox/media/secret', '/srv/bot').reason ?? '';
     expect(reason).toMatch(/\.zhin/u);
+    // Case-insensitive file systems (macOS, Windows) and Windows' trailing-dot stripping open the
+    // same directory under another spelling.
+    for (const file of ['/srv/bot/.ZHIN/sandbox/media/secret', '/srv/bot/.Zhin/Sandbox/media/secret', '/srv/bot/.zhin./sandbox/media/secret', '/srv/bot/.SSH/id_x']) {
+      expect(checkFileAccess(file, '/srv/bot').allowed, file).toBe(false);
+    }
     // Ordinary sources named sandbox stay readable.
     expect(checkFileAccess('/srv/bot/plugins/adapters/sandbox/src/media-store.ts', '/srv/bot').allowed).toBe(true);
   });

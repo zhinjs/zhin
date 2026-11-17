@@ -523,7 +523,9 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   }
 
   // 2. 检查敏感目录
-  const parts = normalizePathSeparators(resolved).split('/');
+  // Compared case-insensitively and without trailing dots / spaces: on macOS and Windows
+  // `.ZHIN/sandbox/media/secret` (or `.zhin./…` on Windows) opens the same file as `.zhin/…`.
+  const parts = normalizePathSeparators(resolved).split('/').map(part => part.toLowerCase().replace(/(?<=[^.])[. ]+$/u, ''));
   for (let i = 0; i < parts.length; i++) {
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
