@@ -7,7 +7,7 @@ import { normalizeProviderGraph, type ExecutionBinding, type ProviderExecution }
 import { assistant, graphFixture, HOST } from '../../../ai/tests/provider/fixtures.js';
 import { modelRuntimeFixture } from '../helpers/model-runtime.js';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
-import { traceModelFallback, turnUsageTarget } from '../../src/model-runtime/purpose-fallback.js';
+import { traceModelFallback, traceModelFallbackSkip, turnUsageTarget } from '../../src/model-runtime/purpose-fallback.js';
 
 const dailyQuota = () => Object.assign(new Error('quota'), {
   statusCode: 429,
@@ -16,6 +16,7 @@ const dailyQuota = () => Object.assign(new Error('quota'), {
 });
 const unauthorized = () => Object.assign(new Error('bad key'), { statusCode: 401 });
 const outage = () => Object.assign(new Error('outage'), { statusCode: 503 });
+const badRequest = () => Object.assign(new Error('unsupported parameter'), { statusCode: 400 });
 
 function graph() {
   const base = graphFixture();
@@ -154,7 +155,7 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
   });
 
   it('does not switch on errors another account cannot fix', async () => {
-    const { acquire, answered, registry } = setup({ account: outage });
+    const { acquire, answered, registry } = setup({ account: badRequest });
     const scope = await acquire();
     try {
       const resilient = createResilientCompletionPort(scope.chat.completion, { config: { maxRetries: 1 }, sleep: async () => undefined });
@@ -162,6 +163,47 @@ describe('purpose fallbacks in the model runtime (#1250)', () => {
       expect(answered).toEqual([]);
       expect(scope.modelFallbacks?.()).toEqual([]);
       expect(registry.list()).toEqual([]);
+    } finally { await scope.release(); }
+  });
+
+  it('switches on a 5xx only after the same-model retries, and traces it (#1250 b40)', async () => {
+    const { acquire, answered, registry } = setup({ account: outage });
+    const scope = await acquire();
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' });
+    try {
+      const resilient = createResilientCompletionPort(scope.chat.completion, { config: { maxRetries: 1 }, sleep: async () => undefined });
+      const answer = await resilient.complete(scope.chat.model, context);
+      expect(answer.content).toEqual([{ type: 'text', text: 'from cnb' }]);
+      expect(answered).toEqual(['cnb']);
+      expect(scope.modelFallbacks?.()).toEqual([expect.objectContaining({ reason: 'server', phase: 'request',
+        from: expect.objectContaining({ profileId: 'text' }), to: expect.objectContaining({ profileId: 'cnb' }) })]);
+      // Operation-local: one operation does not skip the model for everyone.
+      expect(registry.list()).toEqual([]);
+      scope.observeModelFallback?.(event => trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) }));
+      trace.finalize();
+      expect(trace.snapshot().model_fallbacks).toEqual([expect.objectContaining({ reason: 'server', to_profile_id: 'cnb' })]);
+    } finally { await scope.release(); }
+  });
+
+  it('traces fallback_skipped with the reason when no fallback can take over (#1250 b40)', async () => {
+    const { acquire } = setup({ account: outage, cnb: outage, deep: outage });
+    const scope = await acquire();
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' });
+    try {
+      const resilient = createResilientCompletionPort(scope.chat.completion, { config: { maxRetries: 0 }, sleep: async () => undefined });
+      // Fallbacks run their own retries with backoff: no real waiting in the test.
+      vi.useFakeTimers();
+      try {
+        const failed = expect(resilient.complete(scope.chat.model, context)).rejects.toThrow();
+        await vi.runAllTimersAsync();
+        await failed;
+      } finally { vi.useRealTimers(); }
+      scope.observeModelFallbackSkipped?.(event => trace.note({ kind: 'model_fallback_skipped', skip: traceModelFallbackSkip(event) }));
+      trace.finalize();
+      const snapshot = trace.snapshot();
+      expect(snapshot.model_fallbacks?.map(entry => entry.to_profile_id)).toBeUndefined();
+      expect(snapshot.model_fallback_skips).toEqual([expect.objectContaining({ purpose: 'chat', profile_id: 'deep', kind: 'server', reason: 'exhausted' })]);
+      expect(snapshot.timeline.some(entry => entry.kind === 'fallback_skipped' && entry.detail.includes('(exhausted)'))).toBe(true);
     } finally { await scope.release(); }
   });
 

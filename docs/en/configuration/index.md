@@ -406,7 +406,7 @@ ai:
 | Field | Description |
 | --- | --- |
 | `nickname` | Task role display name; the Endpoint supplies the current account profile |
-| `mcpServers` | MCP Servers visible to this Agent: a server name, or `{ name, permit }`. The object form's `permit` is ANDed with the server layer, can only narrow, and omitted keys add no restriction; a server may appear only once |
+| `mcpServers` | MCP Servers this Agent can use: a server name (a `name` from `ai.mcpServers`), or `{ name, permit }`; a server not listed here is unusable for this Agent even when connected. The object form's `permit` is ANDed with the server layer, can only narrow, and omitted keys add no restriction; a server may appear only once |
 
 Model role bindings belong to runtime purpose configuration. IM messages always enter `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` removes them.
 
@@ -427,7 +427,9 @@ ai:
       env: { FOO: bar }
 ```
 
-Once connected successfully, these Servers' tools enter the Agent tool pool (assigned by `agents.<name>.mcpServers`) and are filtered by the turn sender's chat role.
+`ai.mcpServers` only connects. A connected Server's tools go only to the Agents that bind it in `ai.agents.<name>.mcpServers`; for a Server no Agent binds, `zhin status`, `zhin doctor` and the Console attention inbox say "connected, but no Agent can use it". See [ai.mcpServers](../ai/index.md#ai-mcpservers) for a complete example.
+
+Bound tools are also filtered by the turn sender's chat role.
 
 #### permit: who may use which tools {#ai-mcpservers-permit}
 

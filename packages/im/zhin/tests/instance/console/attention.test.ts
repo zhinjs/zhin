@@ -668,3 +668,40 @@ describe('speech.unavailable (#1250 batch 29 speech-ready-without-tts-binary)', 
     expect(args.items[0]!.detail).toContain('不支持带参数（例如 `uvx edge-tts`）');
   });
 });
+
+describe('mcp.unbound (#1250 第 41 批 mcp-connected-but-unbound)', () => {
+  it('lists a connected server that no Agent binds, pointing at ai.agents.<name>.mcpServers', async () => {
+    const list = await collectAttention({ mcpServers: () => [
+      { name: 'github', connected: true, boundAgents: [] },
+      { name: 'docs', connected: true, boundAgents: ['zhin'] },
+      // Bindings unknown (older row shape): not reported.
+      { name: 'legacy', connected: true },
+      // Not connected: only a failed connect is reported, as mcp.disconnected.
+      { name: 'idle', connected: false, boundAgents: [] },
+    ] }, { allows: owner, now: () => NOW });
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]).toMatchObject({
+      id: attentionItemId('mcp.unbound', { mcpServer: 'github', configPath: 'ai.agents' }),
+      kind: 'mcp.unbound', severity: 'warning', source: 'mcp',
+      subject: { mcpServer: 'github', configPath: 'ai.agents' },
+      title: 'MCP 服务 github 已连接但没有 Agent 能用',
+      action: { path: ATTENTION_PATHS.config },
+      reason: { code: 'unbound' },
+    });
+    expect(list.items[0]!.detail).toContain('在 ai.agents.<name>.mcpServers 里绑定');
+    expect(list.items[0]!.detail).toContain('ai.agents.zhin.mcpServers: [github]');
+    const en = await collectAttention({ mcpServers: () => [{ name: 'github', connected: true, boundAgents: [] }] }, { allows: owner, locale: 'en' });
+    expect(en.items[0]!.title).toBe('MCP server github is connected, but no Agent can use it');
+  });
+
+  it('is a status.view item, listed next to a failed connect', async () => {
+    const viewer: ConsoleGrant[] = [{ scope: { kind: 'global' }, permissions: ['status.view'] }];
+    const sources: AttentionSources = { mcpServers: () => [
+      { name: 'github', connected: true, boundAgents: [] },
+      { name: 'search', connected: false, boundAgents: [], lastError: { category: 'auth', message: 'HTTP 401', at: NOW } },
+    ] };
+    const kinds = (await collectAttention(sources, { allows: allowsFor(viewer) })).items.map(item => `${item.kind}:${item.subject?.mcpServer}`);
+    expect(kinds.sort()).toEqual(['mcp.disconnected:search', 'mcp.unbound:github']);
+    expect((await collectAttention(sources, { allows: allowsFor([]) })).items).toEqual([]);
+  });
+});

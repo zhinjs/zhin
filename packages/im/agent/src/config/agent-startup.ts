@@ -115,8 +115,10 @@ export interface AgentStartupConfig {
     enabled?: boolean;
   };
   /**
-   * External MCP servers for the Agent MCP client (global, all bots).
-   * Listed servers are exposed to ZhinAgent tool pool when connected.
+   * 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在
+   * `ai.agents.<name>.mcpServers` 里写上服务器的 `name`，对应的 Agent 才能调用它的工具
+   * （例：`ai.agents.zhin.mcpServers: [github]`）。没有任何 Agent 绑定的服务器，
+   * `zhin status`、`zhin doctor` 与 Console「需要你处理」会提示。
    */
   mcpServers?: Array<{
     name: string;

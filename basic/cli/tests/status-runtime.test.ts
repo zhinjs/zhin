@@ -136,6 +136,35 @@ describe('zhin status runtime state', () => {
     expect(lines).toContain('  ✗ docs：连接失败（HTTP 401）');
   });
 
+  it('flags a connected server that no Agent binds (#1250 第 41 批 mcp-connected-but-unbound)', () => {
+    const lines = renderRuntimeState({
+      endpoints: { available: true, items: [] },
+      mcp: { available: true, items: [
+        { name: 'github', status: 'connected', toolCount: 49, boundAgents: [] },
+        { name: 'docs', status: 'connected', toolCount: 3, boundAgents: ['zhin', 'researcher'] },
+        // Older instances do not report bindings: shown as before.
+        { name: 'legacy', status: 'connected', toolCount: 1 },
+      ] },
+      attention: { available: true, items: [], unavailable: [] },
+    });
+    expect(lines).toContain('  ! github：已连接，49 个工具（已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定）');
+    expect(lines).toContain('  ✓ docs：已连接，3 个工具，绑定：zhin、researcher');
+    expect(lines).toContain('  ✓ legacy：已连接，1 个工具');
+  });
+
+  it('reads boundAgents from the instance MCP rows (#1250 第 41 批)', async () => {
+    gateway.info = running;
+    gateway.reply = (url, body) => (url.endsWith('/introspection/mcp?page=1&pageSize=200')
+      ? { status: 200, body: { success: true, data: { items: [
+        { name: 'github', connected: true, toolCount: 49, status: 'connected', boundAgents: [] },
+      ], total: 1 } } }
+      : healthy(url, body));
+    const root = await project();
+    const parsed = JSON.parse((await status(root, ['--json'])).stdout);
+    expect(parsed.mcp.items).toEqual([{ name: 'github', status: 'connected', toolCount: 49, boundAgents: [] }]);
+    expect((await status(root)).stdout).toContain('已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定');
+  });
+
   it('times out a read that never answers', async () => {
     const http: HostHttpConfig = { baseUrl: 'http://127.0.0.1:1/api', token: '', fetch: (() => new Promise(() => undefined)) as never };
     const state = await readRuntimeState('/nonexistent', { http, timeoutMs: 50 });

@@ -31,8 +31,7 @@ function ceiling(agent: string, tools: NameScope, contacts: NameScope = ALL, acc
   return { agent, tools, contacts, maxTrust: 'master', egress: { network: false, hosts: ALL }, acceptsFrom };
 }
 
-function setup(ceilings: AgentCeiling[], behaviours: Record<string, Behaviour>) {
-  const journal = new InMemoryEngagementJournal();
+function setup(ceilings: AgentCeiling[], behaviours: Record<string, Behaviour>, journal = new InMemoryEngagementJournal()) {
   const escalations: EscalationNotice[] = [];
   const seen: Array<{ actor: string; mails: Mail[] }> = [];
   const byAgent = new Map(ceilings.map((c) => [c.agent, c]));
@@ -93,6 +92,49 @@ describe('harness: engagement lifecycle', () => {
 });
 
 describe('harness: collaboration', () => {
+  it('keeps the engagement open while a delegated result is being posted', async () => {
+    // The second result is journalled (an await) while the entry's turn on the first result ends:
+    // that turn's close check must not see "nothing pending, nothing outstanding" in between.
+    const journal = new InMemoryEngagementJournal();
+    const append = journal.append.bind(journal);
+    let resultAdmitting: (() => void) | undefined;
+    const secondAdmitting = new Promise<void>((resolve) => { resultAdmitting = resolve; });
+    journal.append = async (event) => {
+      const appended = await append(event);
+      if (event.type === 'mail_admitted' && event.data.kind === 'result' && event.data.from === 'b') {
+        resultAdmitting?.();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return appended;
+    };
+    let releaseB: (() => void) | undefined;
+    const bMayFinish = new Promise<void>((resolve) => { releaseB = resolve; });
+    const results: string[] = [];
+    const { harness, seen } = setup([ceiling('zhin', ALL), ceiling('a', ALL), ceiling('b', ALL)], {
+      zhin: async (mail, h) => {
+        if (mail.body.kind === 'result') {
+          results.push(mail.from.kind === 'actor' ? mail.from.actor : '?');
+          if (results.length === 1) {
+            releaseB?.();
+            await secondAdmitting;
+          }
+          return { status: 'completed', content: 'told' };
+        }
+        await h.send('zhin', mail, { kind: 'delegate', to: 'a', text: 'one' });
+        await h.send('zhin', mail, { kind: 'delegate', to: 'b', text: 'two' });
+        return { status: 'completed', content: 'delegated' };
+      },
+      a: async () => ({ status: 'budget_exceeded', content: 'a ran out' }),
+      b: async () => { await bMayFinish; return { status: 'budget_exceeded', content: 'b ran out' }; },
+    }, journal);
+    const opened = await harness.open({ principal: master, entry: 'zhin', body: humanBody('two'), budget: BUDGET });
+    if (!opened.ok) throw new Error('open failed');
+    await harness.idle();
+    expect(results).toEqual(['a', 'b']);
+    expect(seen.filter((turn) => turn.actor === 'zhin')).toHaveLength(3);
+    expect((await eventTypes(journal, opened.engagement.id)).at(-1)).toBe('engagement_closed');
+  });
+
   it('ask resolves with the target reply inside the asker turn and is not re-posted', async () => {
     let reply: unknown;
     const { harness, journal, seen } = setup([ceiling('zhin', ALL), ceiling('researcher', only(['lookup']))], {

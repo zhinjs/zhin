@@ -166,7 +166,8 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
         const rows = listMcpServerStatus(projectRoot, lease.value)
           .filter(row => typeof row.name === 'string')
           .map(row => ({ name: row.name as string, connected: row.connected === true,
-            ...(isFailure(row.lastError) ? { lastError: row.lastError } : {}) }));
+            ...(isFailure(row.lastError) ? { lastError: row.lastError } : {}),
+            ...(Array.isArray(row.boundAgents) ? { boundAgents: row.boundAgents as readonly string[] } : {}) }));
         if (runtimeFailures) syncMcpFailures(runtimeFailures, rows);
         return rows.map((row): AttentionMcpServer => {
           if (row.connected || row.lastError) return row;

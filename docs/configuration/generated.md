@@ -272,7 +272,7 @@ outline: [2, 3]
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | 否 | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | 否 | — | — |
 | `ai.agents` | object \| null | 否 | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | 绑定的 MCP 服务器：服务器名，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。同一服务器只能出现一次。 |
+| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。同一服务器只能出现一次。 |
 | `ai.agents.<key>.nickname` | string | 否 | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
@@ -332,7 +332,7 @@ outline: [2, 3]
 | `ai.githubMcp` | object | 否 | — | PAT for adapter-github auto-registered server-github MCP (overrides env when set). |
 | `ai.githubMcp.token` | string | 否 | — | — |
 | `ai.githubMcp.enabled` | boolean \| string | 否 | — | 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 |
-| `ai.mcpServers` | array \| null | 否 | — | External MCP servers for the Agent MCP client (global, all bots). Listed servers are exposed to ZhinAgent tool pool when connected. |
+| `ai.mcpServers` | array \| null | 否 | — | 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在 ai.agents.&lt;name&gt;.mcpServers 里写上服务器的 name，对应的 Agent 才能调用它的工具（例：ai.agents.zhin.mcpServers: [github]）。没有任何 Agent 绑定的服务器，zhin status、zhin doctor 与 Console「需要你处理」会提示。 |
 | `ai.access` | object \| null | 否 | — | AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） |
 | `ai.access.mode` | string | 否 | — | open \| closed \| whitelist，默认 open |
 | `ai.access.users` | array&lt;string&gt; | 否 | — | 允许触发 AI 的 sender.id |

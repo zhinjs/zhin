@@ -460,14 +460,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
     // Same wording as the Console / `zhin status` rows: the clients connect when this generation is
     // activated, after this line, which is logged as `mcp_connected` / `mcp_connect_failed`.
+    // #1250 第 41 批：`mcp:` lists only the servers this Agent binds (`ai.agents.<name>.mcpServers`);
+    // connected-only servers (`ai.mcpServers`) are listed apart as 「未绑定」.
     logger.info(
       `ready | ${binding.name}`
-      + ` | mcp: ${describeMcpServers(mcpStatus, mcpEntries.map((entry) => entry.name))}`
+      + ` | ${describeAgentMcpServers(mcpStatus, mcpEntries.map((entry) => entry.name), binding.mcpServers)}`
       + ` | ${features}`,
     );
     logger.debug(
       `ready detail | runtime model selection`
-      + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
+      + ` | mcp configured: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | tools: ${(options.extraTools ?? []).map((tool) => tool.name).join(',') || '-'}`,
     );
   };
@@ -484,6 +486,23 @@ export function describeMcpServers(status: HostMcpStatusBoard, names: readonly s
     const state = summary.connected ? 'connected' : summary.lastError ? 'failed' : 'pending';
     return `${name}(${MCP_LOG_STATES[state]})`;
   }).join(',');
+}
+
+/**
+ * The ready log's MCP part for one Agent (#1250 第 41 批 `mcp-connected-but-unbound`):
+ * `mcp: docs(已连接)` lists only the servers the Agent binds in `ai.agents.<name>.mcpServers` — a
+ * turn gets only their tools; configured servers it does not bind follow as
+ * ` | 未绑定: github(待连接)` instead of looking like its own.
+ */
+export function describeAgentMcpServers(
+  status: HostMcpStatusBoard,
+  configured: readonly string[],
+  bound: readonly string[],
+): string {
+  const boundSet = new Set(bound);
+  const unbound = configured.filter((name) => !boundSet.has(name));
+  return `mcp: ${describeMcpServers(status, [...boundSet])}`
+    + (unbound.length > 0 ? ` | 未绑定: ${describeMcpServers(status, unbound)}` : '');
 }
 
 function logMcpStatusEvent(event: HostMcpStatusEvent): void {

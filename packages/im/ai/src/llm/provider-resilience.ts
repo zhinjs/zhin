@@ -775,10 +775,22 @@ export function createResilientCompletionPort(
     let attempts = 0,
       retries = 0,
       emptyRetries = 0;
+    /** Whether a failure of this attempt with `error` is retried on the same model (mirrors the catch below). */
+    const willRetry = (error: unknown): boolean => {
+      if (signal?.aborted || streamOptions?.retryAllowed?.() === false) return false;
+      const info = classifyProviderError(error);
+      if (!info.retryable || info.kind === "no_response") return false;
+      const budgetLeft = error instanceof EmptyResponseError
+        ? emptyRetries < config.emptyReplyRetries
+        : retries < config.maxRetries;
+      const retryAfterTooLong = info.retryAfterMs !== undefined && info.retryAfterMs > config.maxRetryAfterMs;
+      return budgetLeft && !retryAfterTooLong;
+    };
+    const attemptOptions: StreamOptions = { ...streamOptions, willRetry };
     while (true) {
       attempts++;
       try {
-        const reply = await attempt(call, model, context, streamOptions, attempts);
+        const reply = await attempt(call, model, context, attemptOptions, attempts);
         if (
           reply.stopReason === "error" &&
           finishFailureKind(reply.errorMessage) === "safety_block"

@@ -28,6 +28,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
+import { chatFailureKindOf } from '../outbound/chat-failure.js';
 import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import {
@@ -156,6 +157,8 @@ export async function* runAgentLoopTextTurnRun(
     continuations: 0, stopProgress: () => { stopProgressFn?.(); },
   };
 
+  /** #1250 b40: the last assistant message when its model request failed (reported on `turn_end`). */
+  let lastFailedAssistant: AssistantMessage | undefined;
   const toolCalls: ToolCallRecord[] = [];
   // #1250 第 29 批：流式回复不发出模型抄写的、本轮工具已产出的内嵌媒体。
   initialReplyRun?.filterCopiedInlineMedia({
@@ -424,6 +427,7 @@ export async function* runAgentLoopTextTurnRun(
           if (event.type === 'message_end' && event.message.role === 'assistant') {
             const assistant = event.message as AssistantMessage;
             state.phaseLastAssistant = assistant;
+            lastFailedAssistant = assistant.stopReason === 'error' && assistant.errorMessage ? assistant : undefined;
             state.lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
             if (!state.lastAssistantHadToolCalls) state.phaseAssistant = assistant;
             const answerText = assistant.content
@@ -599,11 +603,16 @@ export async function* runAgentLoopTextTurnRun(
   });
 
   const usage = tokenUsageToLegacy(completionUsage.usage);
+  // #1250 b40: a turn whose last model request failed did not produce an answer.
+  const failedAssistant = lastFailedAssistant;
+  const failedAccount = failedAssistant ? host.getTurnExecution().binding.account : undefined;
   const endEvent: TurnEvent = {
     type: 'turn_end',
     output,
     usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
     ...(fallback ? { fallback } : {}),
+    ...(failedAssistant ? { modelFailure: Object.freeze({ kind: chatFailureKindOf(failedAssistant.errorMessage!),
+      message: failedAssistant.errorMessage!, service: failedAccount?.label?.trim() || failedAccount?.id }) } : {}),
   };
   emitTurnEvent(endEvent);
   yield endEvent;

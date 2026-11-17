@@ -1,6 +1,7 @@
 import {
   createFallbackCompletionPort, MODEL_FALLBACK_NOTICE, modelAvailability,
-  type ModelAvailabilityRegistry, type ModelFallbackCandidate, type ModelFallbackEndpoint, type ModelFallbackEvent,
+  type FallbackCompletionOptions, type ModelAvailabilityRegistry, type ModelFallbackCandidate, type ModelFallbackEndpoint,
+  type ModelFallbackEvent,
 } from '@zhin.js/ai';
 import {
   createProfileReference, providerPurposeSelections,
@@ -14,10 +15,15 @@ const logger = getLogger('ai.model-runtime');
 
 export type FallbackPurpose = Exclude<LanguagePurpose, 'perception'> | `agent:${string}`;
 
+/** A model failure that did not switch to a fallback, and why (#1250 fallback-skips-network-and-5xx). */
+export type ModelFallbackSkip = Parameters<NonNullable<FallbackCompletionOptions['onFallbackSkipped']>>[0];
+
 /** Collects fallback events of one operation and replays them to late observers (the trace starts later). */
 export class ModelFallbackLog {
   readonly #events: ModelFallbackEvent[] = [];
   readonly #listeners = new Set<(event: ModelFallbackEvent) => void>();
+  readonly #skips: ModelFallbackSkip[] = [];
+  readonly #skipListeners = new Set<(event: ModelFallbackSkip) => void>();
 
   record = (event: ModelFallbackEvent): void => {
     this.#events.push(event);
@@ -28,7 +34,28 @@ export class ModelFallbackLog {
     }
   };
 
+  /** A failure that was not switched: logged as `fallback_skipped` with the reason (#1250). */
+  recordSkipped = (event: ModelFallbackSkip): void => {
+    this.#skips.push(event);
+    logger.warn(formatCompact({ op: 'fallback_skipped', purpose: event.purpose,
+      model: `${event.from.accountId}/${event.from.model}`, kind: event.kind, reason: event.reason }));
+    for (const listener of this.#skipListeners) {
+      try { listener(event); } catch { /* Observers never change the answer. */ }
+    }
+  };
+
   events(): readonly ModelFallbackEvent[] { return Object.freeze([...this.#events]); }
+
+  skips(): readonly ModelFallbackSkip[] { return Object.freeze([...this.#skips]); }
+
+  /** Like {@link observe}, for failures that were not switched. */
+  observeSkipped(listener: (event: ModelFallbackSkip) => void): () => void {
+    for (const event of this.#skips) {
+      try { listener(event); } catch { /* Observers never change the answer. */ }
+    }
+    this.#skipListeners.add(listener);
+    return () => { this.#skipListeners.delete(listener); };
+  }
 
   /** Replays earlier events, then reports new ones until the returned function is called. */
   observe(listener: (event: ModelFallbackEvent) => void): () => void {
@@ -65,6 +92,8 @@ export async function resolvePurposeExecution(input: Readonly<{
   primary: ExecutionBinding;
   registry?: ModelAvailabilityRegistry;
   onFallback?: (event: ModelFallbackEvent) => void;
+  /** A failure that was not switched, and why (#1250 fallback-skips-network-and-5xx). */
+  onFallbackSkipped?: (event: ModelFallbackSkip) => void;
 }>): Promise<ModelExecutionBundle> {
   const { scope, purpose, primary } = input;
   const registry = input.registry ?? modelAvailability;
@@ -114,9 +143,16 @@ export async function resolvePurposeExecution(input: Readonly<{
     // Every candidate is skipped or unusable: try the primary anyway (its quota may be back early).
   }
   chosen ??= await bundle(scope, primary, purpose);
-  if (!rest.length) return chosen;
+  if (!rest.length) {
+    if (!input.onFallbackSkipped) return chosen;
+    return Object.freeze({ ...chosen, completion: createFallbackCompletionPort({
+      purpose, registry, fallbacks: [], onFallbackSkipped: input.onFallbackSkipped,
+      emptyFallbacksReason: candidates.length ? 'exhausted' : 'no_fallbacks',
+      primary: { endpoint: endpoint(chosen.binding), model: chosen.model, completion: chosen.completion },
+    }) });
+  }
   return Object.freeze({ ...chosen, completion: createFallbackCompletionPort({
-    purpose, registry, fallbacks: rest, onFallback: input.onFallback,
+    purpose, registry, fallbacks: rest, onFallback: input.onFallback, onFallbackSkipped: input.onFallbackSkipped,
     primary: { endpoint: endpoint(chosen.binding), model: chosen.model, completion: chosen.completion },
     onCandidateError: (target, error) => logger.warn(`fallback ${target.profileId} for ${purpose} is unusable: ${error instanceof Error ? error.message : String(error)}`),
     onCandidateUnfit: (target, reason) => logger.info(`fallback ${target.profileId} for ${purpose} skipped for this request: ${reason}`),
@@ -172,6 +208,14 @@ export function traceModelSelection(models: Pick<ModelExecutionScope, 'chat' | '
     ...(key ? { source_key: key } : {}),
     ...(label ? { agent: label } : {}),
   });
+}
+
+/** Trace shape of one failure that did not switch (`TurnTraceModelFallbackSkip`). */
+export function traceModelFallbackSkip(event: ModelFallbackSkip): Readonly<{
+  purpose: string; profile_id: string; account_id: string; model: string; kind: string; reason: string;
+}> {
+  return Object.freeze({ purpose: event.purpose, profile_id: event.from.profileId, account_id: event.from.accountId,
+    model: event.from.model, kind: event.kind, reason: event.reason });
 }
 
 /** Trace shape of one fallback switch (`TurnTraceModelFallback`). */

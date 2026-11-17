@@ -4,6 +4,8 @@ import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 import type { ReplyFallback, TurnEvent } from '../event/turn-event.js';
 import { formatReplyFallback, inlineToolName } from '../core/tool-calls-user-format.js';
+import { chatFailureKindOf } from '../outbound/chat-failure.js';
+import { isTransientModelFailure, type ScheduleModelFailure } from './model-failure.js';
 import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from '../config/zhin-agent-defaults.js';
@@ -40,7 +42,14 @@ export interface ScheduleExecutionResult {
    */
   status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'degraded';
   degraded?: ScheduleRunDegradation;
+  /**
+   * #1250 b40 schedule-failed-run-marked-ok: the run failed because a model request failed. `transient`:
+   * the model service was temporarily unavailable (network, 5xx, timeout), so a later retry may succeed.
+   */
+  modelFailure?: ScheduleModelFailure;
 }
+
+
 
 export interface ScheduleExecutionOptions {
   preview?: boolean;
@@ -133,6 +142,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       tools: [], skills: [], resolvedBy: 'affinity', missingTools: [], missingSkills: [], warnings: [],
     };
     let fallback: ReplyFallback | undefined;
+    let modelError: Readonly<{ kind: string; message: string; service?: string }> | undefined;
     let toolResults = 0;
     const guard = new BudgetGuard(resolveBudget(this.deps.config, job));
     let streamed = '';
@@ -179,6 +189,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
             };
           }
           if (event.type === 'turn_end' && event.fallback) fallback = event.fallback;
+          if (event.type === 'turn_end' && event.modelFailure) modelError = event.modelFailure;
           if (event.type === 'tool_result') toolResults += 1;
           if (event.type === 'tool_call') budget.onToolCall(event.toolName);
           if (event.type === 'tool_denied') {
@@ -213,11 +224,23 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
         : outcome.status === 'cancelled' ? outcome.reason
           : `budget exceeded: ${outcome.budget}`
       : undefined;
+    // #1250 b40: a turn that ended on a failed model request (its reply is the failure text) failed.
+    const thrownKind = outcome?.status === 'failed' ? chatFailureKindOf(outcome.error.message) : undefined;
+    const modelFailure: ScheduleModelFailure | undefined = options.signal?.aborted ? undefined
+      : outcome?.status === 'completed' && modelError
+        ? Object.freeze({ kind: modelError.kind, transient: isTransientModelFailure(modelError.kind),
+          ...(modelError.service ? { service: modelError.service } : {}) })
+        : thrownKind && thrownKind !== 'unknown'
+          ? Object.freeze({ kind: thrownKind, transient: isTransientModelFailure(thrownKind) })
+          : undefined;
+    const modelFailureError = modelFailure
+      ? `模型调用失败（${modelFailure.kind}）：${modelError?.message ?? outcomeError ?? ''}；排查：zhin trace ${executionId}`
+      : undefined;
     const failureError = acceptedPartial
       ? undefined
-      : guarded.error?.message ?? outcomeError
+      : modelFailureError ?? guarded.error?.message ?? outcomeError
         ?? (validation.valid ? undefined : 'schedule output is empty after validation');
-    const succeeded = Boolean(acceptedPartial || (!guarded.error && outcome?.status === 'completed' && validation.valid));
+    const succeeded = Boolean(acceptedPartial || (!guarded.error && !modelFailure && outcome?.status === 'completed' && validation.valid));
     // #1250 b33: a finished run that used the fallback text, ran without any tool result and with an empty
     // reply, or had a tool denied did not do what was asked: it is recorded as degraded, not ok.
     const degraded = succeeded
@@ -263,6 +286,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       status: options.signal?.aborted ? 'cancelled' : acceptedPartial ? 'budget_partial'
         : audit.success ? degraded ? 'degraded' : 'succeeded' : 'failed',
       ...(degraded ? { degraded } : {}),
+      ...(modelFailure ? { modelFailure } : {}),
     };
   }
 

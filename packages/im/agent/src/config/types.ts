@@ -29,6 +29,11 @@ export interface AgentMcpServerBindingConfig {
 }
 
 export interface AgentBindingConfig {
+  /**
+   * 该 Agent 能用哪些 MCP 服务器的工具：填 `ai.mcpServers` 中的 `name`，或 `{ name, permit }`（Agent 层
+   * permit 只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具
+   * （例：`ai.agents.zhin.mcpServers: [github]`）。
+   */
   mcpServers?: readonly (string | AgentMcpServerBindingConfig)[];
   /**
    * @deprecated Never took effect; accepted with a warning and removed by
