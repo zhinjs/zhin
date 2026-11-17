@@ -59,6 +59,8 @@ speech:
 
 `stt.enabled: false` can disable STT independently. Inbound voice first passes through the shared media materialization and real MIME/size validation pipeline. With the `transcribe` strategy, Agent Host then adds the transcript as derived text for the current Turn. Download, validation, and transcription failures produce explicit media terminal states; they never pretend that the model successfully understood the audio.
 
+The sender may decide the voice address, so the Speech Host downloads audio (inbound voice addresses, a hand-written `[audio:URL]`, `voice_stt`'s `audio_url`) under the same rules as other inbound media: public HTTPS addresses only. The one exception is a voice segment the adapter built from the platform's own payload (the segment's `media` / `url` / `src` / `file`, or `metadata.audio_url`, such as a QQ voice CDN link): it may also be public plain HTTP, every other rule still applies, and a redirect from HTTPS down to HTTP is always refused. A hand-written `[audio:URL]` in the message text, `voice_stt`'s `audio_url`, and voice segments on an Endpoint that declares `runtime.sandbox` (such as the Sandbox, whose clients build segments themselves) or whose capability profile cannot be resolved all count as user-supplied: HTTPS only. a host name that resolves to a private, loopback, link-local or cloud metadata address is refused, and the connection goes to the address that was checked (no DNS rebinding); every redirect hop is checked again; at most 25 MB per voice message and 30 seconds per download. A refused address gets no request at all and the turn carries on: the model sees `[语音地址不可用，未转写（speech_url_blocked）]` and `voice_stt` returns an `{ error }` with the same reason; logs record `op: speech_url_blocked` with the host name, never the full address. There is no setting to allow internal hosts: to transcribe audio stored on an internal network, publish it at a public HTTPS address first.
+
 Audio format extension is inferred from MIME type (wav / mp3 / ogg / webm / amr / silk / m4a / flac); unrecognizable formats are treated as wav.
 
 ## TTS (Text-to-Speech)
@@ -101,7 +103,7 @@ After the Speech Host is assembled, two tools are registered with the Agent (`so
 
 | Tool | Parameters | Returns |
 |------|-----------|---------|
-| `voice_stt` | `audio_url` or `file_path` (local absolute path, choose one) | `{ text }`; returns `{ error }` on failure |
+| `voice_stt` | `audio_url` (public HTTPS only, same rules as above) or `file_path` (local absolute path, choose one) | `{ text }`; returns `{ error }` on failure |
 | `voice_tts` | `text` (required), `voice` (overrides default), `provider` (`edge` / `openai` / `azure` / `custom`) | The model sees `{ format, size, sent: true, note }`; `{ error }` (with the reason) on failure |
 
 `voice_tts` can temporarily switch providers per call, making it convenient to use multiple voices within a single deployment.

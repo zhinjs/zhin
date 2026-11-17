@@ -67,7 +67,7 @@ import {
   CapabilityIngress,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
-import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
+import { AgentTurnIngressRoute, type InboundAudioUrlTranscriber } from '@zhin.js/agent/runtime';
 import { AgentHostPublicationCoordinator } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -126,7 +126,7 @@ export interface InstallAgentHostOptions {
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
   readonly extraTools?: readonly HostAgentTool[];
   /** Optional inbound STT (Speech Host). */
-  readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
+  readonly transcribeUrl?: InboundAudioUrlTranscriber;
   /** Owner-scoped STT boundary for canonical turn media. */
   readonly audioTranscriber?: AudioTranscriptionPort;
   /** Optional host approval override; IM turns otherwise use createRuntimeApprovalPort. */

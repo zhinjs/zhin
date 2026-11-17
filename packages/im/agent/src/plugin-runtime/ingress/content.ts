@@ -1,6 +1,9 @@
 import { renderAgentOutput, type TurnOutcome } from '../../index.js';
 import type { Segment } from '@zhin.js/im-contract';
 import type { Message } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('agent');
 
 type OutputElementLike = {
   readonly type: string;
@@ -47,45 +50,101 @@ export function completedOutput(
   throw new Error(`${outcome.error.code}: ${outcome.error.message}`);
 }
 
+/**
+ * The transcriber refused the voice address (#1250 第 45 批): not a public HTTPS URL, a redirect to
+ * one that is not, or a name resolving to a private address. Nothing was downloaded.
+ */
+export interface InboundAudioUrlRefusal {
+  readonly status: 'refused';
+  readonly code: 'speech_url_blocked';
+}
+
+/** A transcript, `null` when nothing usable came back, or a refused address. */
+export type InboundAudioUrlTranscription = string | null | InboundAudioUrlRefusal;
+
+/**
+ * Where an inbound voice address came from (#1250 第 45 批):
+ * - `platform`: a voice segment or `metadata.audio_url` the platform adapter produced from the
+ *   platform's own payload (a QQ voice CDN link may be plain http);
+ * - `user`: text the sender typed (`[audio:URL]`), or a segment on an Endpoint whose clients send
+ *   structured segments themselves (`runtime.sandbox`, or capabilities that cannot be resolved).
+ */
+export type InboundAudioUrlOrigin = 'platform' | 'user';
+
+/**
+ * Inbound voice message transcription (Speech Host `transcribeUrl`). Must not fetch private targets;
+ * may accept `http:` only for `origin: 'platform'` (default `user`: HTTPS only).
+ */
+export type InboundAudioUrlTranscriber = (
+  audioUrl: string,
+  source?: Readonly<{ origin: InboundAudioUrlOrigin }>,
+) => Promise<InboundAudioUrlTranscription>;
+
+/** Model-facing note in place of a refused voice address; the address itself is not shown. */
+export const SPEECH_URL_BLOCKED_NOTE = '[语音地址不可用，未转写（speech_url_blocked）]';
+
 export async function preprocessInboundTurn(
   message: Message,
   content: string,
-  transcribeUrl?: (audioUrl: string) => Promise<string | null>,
-): Promise<{ readonly text: string; readonly sttApplied: boolean }> {
-  const audioUrl = resolveInboundAudioUrl(message);
-  if (!audioUrl || !transcribeUrl) {
+  transcribeUrl?: InboundAudioUrlTranscriber,
+  options: Readonly<{
+    /**
+     * The Endpoint's adapter builds segments from the platform payload, so a segment field cannot be
+     * user text. False (the default) treats every address as user-typed: HTTPS only.
+     */
+    platformSegments?: boolean;
+  }> = {},
+): Promise<{ readonly text: string; readonly sttApplied: boolean; readonly sttRefusal?: InboundAudioUrlRefusal['code'] }> {
+  const audio = resolveInboundAudioUrl(message, options.platformSegments === true);
+  if (!audio || !transcribeUrl) {
     return { text: stripAudioPlaceholders(content), sttApplied: false };
   }
-  const transcript = await transcribeUrl(audioUrl);
+  let transcript: InboundAudioUrlTranscription;
+  try {
+    transcript = await transcribeUrl(audio.url, { origin: audio.origin });
+  } catch (error) {
+    // A transcriber failure never ends the turn: the text goes on without a transcript.
+    logger.warn(formatCompact({ op: 'agent_inbound_stt_failed', error: error instanceof Error ? error.name : 'unknown' }));
+    transcript = null;
+  }
+  const rest = stripAudioPlaceholders(content).trim();
+  if (transcript && typeof transcript === 'object') {
+    logger.info(formatCompact({ op: 'agent_inbound_stt_refused', reason: transcript.code }));
+    const text = rest ? `${rest}\n${SPEECH_URL_BLOCKED_NOTE}` : SPEECH_URL_BLOCKED_NOTE;
+    return { text, sttApplied: false, sttRefusal: transcript.code };
+  }
   if (!transcript) {
     return { text: stripAudioPlaceholders(content) || content, sttApplied: false };
   }
-  const rest = stripAudioPlaceholders(content).trim();
   const text = rest ? `${rest}\n${transcript}` : transcript;
   return { text, sttApplied: true };
 }
 
+/** The voice address of `message` and where it came from; see {@link InboundAudioUrlOrigin}. */
 function resolveInboundAudioUrl(
   message: Message,
-): string | undefined {
+  platformSegments: boolean,
+): { readonly url: string; readonly origin: InboundAudioUrlOrigin } | undefined {
+  const fromAdapter: InboundAudioUrlOrigin = platformSegments ? 'platform' : 'user';
   if (message.segments) {
     for (const seg of message.segments) {
       if (seg.type === 'audio' || seg.type === 'record') {
         const media = seg.data?.media as { kind?: string; value?: string } | undefined;
         if (media?.kind === 'url' && typeof media.value === 'string' && media.value.trim()) {
-          return media.value.trim();
+          return { url: media.value.trim(), origin: fromAdapter };
         }
         const d = seg.data as Record<string, unknown> | undefined;
         const url = d?.url ?? d?.src ?? d?.file;
-        if (typeof url === 'string' && url.trim()) return url.trim();
+        if (typeof url === 'string' && url.trim()) return { url: url.trim(), origin: fromAdapter };
       }
     }
   }
   const fromMeta = message.metadata?.audio_url;
-  if (typeof fromMeta === 'string' && fromMeta.trim()) return fromMeta.trim();
+  if (typeof fromMeta === 'string' && fromMeta.trim()) return { url: fromMeta.trim(), origin: fromAdapter };
+  // Text the sender typed is never a platform address.
   const match = message.content.match(/\[audio:([^\[\]]+)\]/u);
   const fromContent = match?.[1]?.trim();
-  return fromContent || undefined;
+  return fromContent ? { url: fromContent, origin: 'user' } : undefined;
 }
 
 function stripAudioPlaceholders(content: string): string {

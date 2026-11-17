@@ -59,6 +59,8 @@ speech:
 
 `stt.enabled: false` 可单独关闭 STT。入站语音先走统一媒体物化与真实 MIME/大小校验；策略为 `transcribe` 时，Agent Host 再转写并作为派生文本加入当前 Turn。下载、校验或转写失败都会产生明确媒体终态，不会伪装成模型已识别成功。
 
+语音地址可能由发消息的人决定，所以 Speech Host 下载语音（入站语音的地址、手写的 `[audio:URL]`、`voice_stt` 的 `audio_url`）和其他入站媒体用同一套规则：只下载公网 HTTPS 地址；唯一的例外是适配器根据平台数据产出的语音段（段里的 `media` / `url` / `src` / `file`、`metadata.audio_url`，例如 QQ 的语音 CDN 链接），这类地址也可以是公网 HTTP，其余规则不变，且从 HTTPS 重定向到 HTTP 一律拒绝。消息正文里手写的 `[audio:URL]`、`voice_stt` 的 `audio_url`，以及声明了 `runtime.sandbox` 的端点（如 Sandbox，客户端自己拼语音段）或读不到能力画像的端点上的语音段，都算用户提供的地址，只认 HTTPS。主机名解析到私网、回环、链路本地或云元数据地址的一律拒绝，连接时只连已校验过的那个地址（防 DNS 重绑定）；重定向逐跳重新校验；单个语音最大 25 MB、整次下载 30 秒。被拒的地址不会发出任何请求，这一轮照常继续，模型看到「[语音地址不可用，未转写（speech_url_blocked）]」，`voice_stt` 返回同样原因的 `{ error }`；日志记 `op: speech_url_blocked` 和主机名，不记完整地址。没有把内网主机加入白名单的配置：需要转写内网存放的语音时，请先放到公网 HTTPS 地址。
+
 音频格式按 MIME 推断扩展名（wav / mp3 / ogg / webm / amr / silk / m4a / flac），无法识别时按 wav 处理。
 
 ## TTS（文字转语音）
@@ -101,7 +103,7 @@ Speech Host 装配后向 Agent 注册两个工具（`source: speech`）：
 
 | 工具 | 参数 | 返回 |
 |------|------|------|
-| `voice_stt` | `audio_url` 或 `file_path`（本地绝对路径，二选一） | `{ text }`；失败返回 `{ error }` |
+| `voice_stt` | `audio_url`（仅公网 HTTPS，规则同上）或 `file_path`（本地绝对路径，二选一） | `{ text }`；失败返回 `{ error }` |
 | `voice_tts` | `text`（必填）、`voice`（覆盖默认）、`provider`（`edge` / `openai` / `azure` / `custom`） | 模型看到 `{ format, size, sent: true, note }`；失败返回 `{ error }`（含原因） |
 
 `voice_tts` 可按调用临时切换 provider，便于一次部署同时挂多种音色。
