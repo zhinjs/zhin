@@ -1,7 +1,7 @@
 ---
-"@zhin.js/kernel": patch
-"@zhin.js/core": patch
-"@zhin.js/agent": patch
+"@zhin.js/kernel": minor
+"@zhin.js/core": minor
+"@zhin.js/agent": minor
 "@zhin.js/adapter-lark": patch
 "@zhin.js/adapter-wecom": patch
 "@zhin.js/adapter-wechat-mp": patch
