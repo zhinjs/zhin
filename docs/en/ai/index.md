@@ -206,7 +206,7 @@ How it works:
    - **Otherwise**: unprompted interjections are limited by `cooldownMs` and `maxPerHour`; the judge runs at most once per `judgeIntervalMs`, and a burst that arrives inside that window is judged when it ends (or superseded by a newer message) instead of being dropped.
 3. Above the threshold, the main Agent handles the message as usual. Its context says nobody called it, and it can still stay quiet.
 
-Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
+Each judgment logs an `ambient_engagement` line (decision, confidence, reason, and the judging model `judge`: `language:<service>/<model>` for a chat model, `decision:<model>` for a decision model; `fallbackFrom` after a switch to a fallback; on `judge_failed`, `judge` and the error class `error`, never the error text). Each judge call also writes an `[ai.usage] judge` line (`scene: ambient`, see [Agent usage logs](./agent.md)). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
 
 ##### Switching interjection per group
 

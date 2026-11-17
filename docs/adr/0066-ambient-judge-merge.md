@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0066：插话判断合并——「旁听」用途与「旁听参与判断」决策合成一项，语言模型和决策模型共用一条备用链
 
-状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。实施进度：P0–P3 都还没开始。
+状态：已接受（所有者授权按推荐处理，2026-11-17）。依据：zhinjs/zhin#1250 评论 6945954844，所有者原话：「这两块要不就合并为一个功能？感觉说的是同一个事」。所有者已授权「需要拍板的按推荐处理」，本文 D1–D8 均按推荐定稿。核对基线：`origin/feat/friendly-volta-ejc3wl`（`c99701eb821fe8a373342cac5a3099b9a7dfe29e`）；Console 前端核对基线：zhinjs/console `origin/main`（`97801958b90f117f9ca017acca298e77abef7d17`）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施。实施进度：P0–P3 都还没开始。
 
 关联：[ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md)（Provider 图、用途、多决策模型；增补「用途备用模型」的切换条件与跳过表，含第 40 批修订）、[ADR 0037](./0037-controlled-landing-phase1-group-ops.md)（冷场计数）、[ADR 0061](./0061-inbound-message-outcomes.md)（`ambient_silent` / `not_addressed` 结局）、[ADR 0062](./0062-one-path-per-task.md) §23（插话按群开关；数据库为事实来源）、[ADR 0057](./0057-config-storage.md)（声明放 yml，运行时状态放数据库）。
 
@@ -204,7 +204,7 @@ sidebar: false
 
 ## 分阶段实施
 
-发布级别按 `.changeset/version-policy.json`：默认 patch；新增公开导出、公开类型新增字段或行为变更需要所有者批准后升 minor，批准记录写进 `approvedNonPatchReleases`。下表的「需要 minor」都需要所有者批准；本 ADR 的接受不等于批准这些 minor。
+发布级别按 `.changeset/version-policy.json`：默认 patch；新增公开导出、公开类型新增字段或行为变更需要所有者批准后升 minor，批准记录写进 `approvedNonPatchReleases`。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施，下表各阶段的「需要 minor」随之获批，对应阶段发版时再登记进 `approvedNonPatchReleases`。
 
 ### P0：判断器统一接口和备用链（不改变配置，不改变行为）
 
@@ -212,8 +212,9 @@ sidebar: false
 |---|---|
 | 要改的文件 | `packages/im/agent/src/plugin-runtime/ingress/ambient-engagement.ts`（`EngagementJudgment.source` 结构化；新增 `EngagementJudgeChain`：按跳过表选型、按 D2 的表切换、共用 15 秒预算；新增 `createEngagementJudgeMember()` 按 Profile 的模型类型构造 `LlmEngagementJudge` / `DecisionEngagementJudge`；`FallbackEngagementJudge` 标为废弃并改为链的薄包装）；`ingress-ambient-stage.ts`（用链取代 `resolvePurposeExecution` 的嵌套备用，语言成员只用单个 Profile）；`packages/im/ai/src/llm/model-fallback.ts`（判断器链复用 `ModelAvailabilityRegistry` 的跳过与跨操作计数，`ModelFallbackEvent` 允许 `purpose: 'ambient'` 与新原因 `invalid_response`）；决策 Driver 的错误补齐 `classifyProviderError` 可识别的类别（`packages/im/ai/src/providers/` 中的决策 Driver） |
 | 行为 | 链的成员仍由现有配置决定：决策「启用」时链里只有决策模型（与现在相同，失败仍是 `judge_failed`）；其他情况是语言用途的主项与 `ambientFallbacks`（与现在的切换结果相同，只是改由判断器链这一层负责）。「回答无效换下一个」此时只作用于已有的语言备用链 |
+| 与 #1250 第 47 批字段的关系 | 第 47 批已在判断结果、`EngagementJudgeCall` 和 `EngagementJudgeFailure` 上加了 `ref: EngagementJudgeRef`（`{ kind; profile?; model; fallbackFrom?: { profile?; model } }`，即 D2 第 8 条结构化 `source` 的形状），字符串 `source` / `fallbackFrom` 是由它和服务显示名派生的显示文本。P0 把 `source` 换成这个对象时直接复用 `ref` 的内容；字符串形式保留到废弃期结束，供旧读取方使用。审计 payload 的 `judgeKind` / `judgeProfile` / `judgeModel` / `judgeFallbackFromProfile` / `judgeFallbackFromModel` 键名不变，P0 起改从结构化 `source` 填写；按链成员分组统计用 `judgeProfile`，不用显示名。P2 的对照模型写在 `compare` 前缀下，后缀相同（`compare` 为 D3 第 5 条的结论，另有 `compareJudge`、`compareJudgeProfile`、`compareJudgeMs`、`compareJudgeUsage` 等），其他键不得以 `compare` 开头。`[ai.usage] judge` 每次判断一行，P0 的链里每个成员各算一次调用 |
 | 测试 | 新增 `packages/im/zhin/tests/instance/agent/turn/ambient-judge-chain.test.ts`（D2 表中每一类失败的换 / 不换、跳过表写入与跨操作阈值、预算用完即停、取消不换、全部在跳过期记 `all_unavailable`、决策 → 语言混排）；`ambient-engagement.test.ts`、`ambient-profile-model.test.ts` 补 `source` 结构与原有备用链结果不变；`packages/im/ai/tests` 补决策 Driver 错误分类 |
-| 发布 | `@zhin.js/agent` minor（新增公开导出 `EngagementJudgeChain`、`createEngagementJudgeMember`，`EngagementJudgment.source` 类型变化）；`@zhin.js/ai` minor（`ModelFallbackReason` 新增 `invalid_response`、`ModelFallbackEvent.purpose` 新增取值，均为公开类型）。都需要所有者批准 |
+| 发布 | `@zhin.js/agent` minor（新增公开导出 `EngagementJudgeChain`、`createEngagementJudgeMember`，`EngagementJudgment.source` 类型变化）；`@zhin.js/ai` minor（`ModelFallbackReason` 新增 `invalid_response`、`ModelFallbackEvent.purpose` 新增取值，均为公开类型）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施 |
 
 ### P1：配置合并和迁移（行为变更）
 
@@ -221,7 +222,7 @@ sidebar: false
 |---|---|
 | 要改的文件 | `packages/im/ai/src/provider/types.ts`（`AmbientJudgePolicy`、`PurposePolicy.ambient`；`DecisionPurpose` 去掉 `ambient`，废弃期内旧值只在迁移读路径出现）；`graph.ts`（规范化与校验 D1 第 6、7 条，带路径的错误）；`plan.ts`（导入对象写法、`null`、废弃期内转换 `purposes.decisions.ambient` 并返回警告、导出新形状）；`selection.ts`（`ambient` 用途从新字段取链与继承）；新增 `packages/im/agent/src/plugin-runtime/inference/ambient-judge-migration.ts`（D5 的迁移表、迁移记录、CAS 写回、失败时的内存转换、回退）并在图加载路径调用（`management.ts` / `host.ts`）；`packages/im/agent/src/decision/config.ts`（`DECISION_TASKS` 去掉 `ambient`）；`ingress-ambient-stage.ts`、`ambient-engagement.ts`（链、门槛、模式改读 `purposes.ambient`；`DecisionEngagementJudge` 去掉内部门槛；`AmbientEngagement` 不再读 `config.minConfidence` / `mode`）；`packages/im/ai/src/types.ts`（`AmbientEngagementConfig.minConfidence` / `mode` 标 `@deprecated`）；`packages/im/agent/src/model-runtime/validation.ts`（yml 废弃键的警告）；`packages/im/runtime/src/host-config-schema.json`（两键描述改为「已废弃」）；`packages/im/zhin/src/instance/feature-self-service.ts` 与自我变更策略（可写字段名单去掉两键）；`basic/cli/src/commands/ai.ts`（`zhin ai purposes revert ambient-judge`） |
 | 测试 | `packages/im/ai/tests` 的图与 plan 测试：对象 / 字符串写法、`null`、未知键、链内重复、`compare` 在链内、image Profile、删除被引用的 Profile 报路径、无 `profile` 时写 `fallbacks` 报错、废弃期内 `decisions.ambient` 的转换与警告、期满报错；迁移测试：D5 表的每一行（含 `active` 时语言模型成为第一个备用、继承聊天时不加、门槛取较大值、`shadow` 变对照、`off` 不迁移 Profile）、CAS 冲突、校验失败时内存转换且不写库、迁移记录与 `noticedAt`、回退成功与「已改过则拒绝」；`ambient-engagement.test.ts`：门槛只判一次、`mode: shadow` 来自新字段；CLI 回退命令测试 |
-| 发布 | `@zhin.js/ai` minor（公开类型 `PurposePolicy.ambient`、`AmbientJudgePolicy`，`DecisionPurpose` 变窄）；`@zhin.js/agent` minor（行为变更：决策启用时原旁听模型接手；新增导出迁移函数）；`@zhin.js/cli` minor（新增子命令）；`@zhin.js/runtime` patch（schema 描述）；`zhin.js` patch（随依赖）。changeset 写明行为变化、废弃期和「降级前先回退」。都需要所有者批准 |
+| 发布 | `@zhin.js/ai` minor（公开类型 `PurposePolicy.ambient`、`AmbientJudgePolicy`，`DecisionPurpose` 变窄）；`@zhin.js/agent` minor（行为变更：决策启用时原旁听模型接手；新增导出迁移函数）；`@zhin.js/cli` minor（新增子命令）；`@zhin.js/runtime` patch（schema 描述）；`zhin.js` patch（随依赖）。changeset 写明行为变化、废弃期和「降级前先回退」。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施 |
 
 ### P2：对照模型和一致率
 
@@ -229,7 +230,7 @@ sidebar: false
 |---|---|
 | 要改的文件 | `ambient-engagement.ts`（`CompareEngagementJudge` 取代 `ShadowEngagementJudge`：同一输入、两边都等、套同一门槛后比较、对照失败不影响主判断）；`ingress-ambient-stage.ts`（按 `purposes.ambient.compare` 装配；`ambient_decision` 审计 payload 加 `compare`）；`ports.ts`（`AgentAssistantStatusPort.recordAmbientCompare` 取代 `recordAmbientShadow`，旧方法废弃期内保留）；`packages/im/zhin/src/instance/console/assistant-status.ts`（`AmbientStatus.compare` 统计，`decisionShadow` 废弃期内填同样数据） |
 | 测试 | `ambient-engagement.test.ts`：对照模型不影响结果、失败记 `compare_failed`、一致率按门槛后比较、备用接手时按成员分开计数、`mode: shadow` 时对照照常运行；`packages/im/zhin/tests/instance/console/assistant-status.test.ts`：24 小时窗口、四类计数、`decisionShadow` 兼容；审计 payload 不含理由原文 |
-| 发布 | `@zhin.js/agent` minor（端口新增方法、公开类型变化）；`zhin.js` minor（`AmbientStatus` 新增 `compare` 字段，`ambient` RPC 返回值变化）。都需要所有者批准 |
+| 发布 | `@zhin.js/agent` minor（端口新增方法、公开类型变化）；`zhin.js` minor（`AmbientStatus` 新增 `compare` 字段，`ambient` RPC 返回值变化）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施 |
 
 ### P3：Console、doctor 和文档
 
@@ -237,7 +238,7 @@ sidebar: false
 |---|---|
 | 要改的文件 | `packages/im/agent/src/plugin-runtime/inference/management.ts`、`packages/im/agent/src/model-runtime/purpose-effect.ts`（`purposeEffects` 新增 `ambient`、`decisions.<task>` 键，`PurposeIgnoredReason` 新增 `ambient-not-configured` / `no-conversations` / `mode-off`）；`inference/host.ts`（`ambientModels` 返回实际判断器链）；`basic/cli/src/commands/doctor.ts`（迁移结果提示一次、迁移失败报错、yml 废弃键警告与 `--fix` 删除、`minConfidence < 0.5` 提示）；文档见 D6（`docs/ai/index.md`、`docs/ai/structured-decisions.md`、`docs/ai/provider-upgrade.md`、新增 `docs/migrations/ambient-judge.md`，以及对应英文版） |
 | 测试 | 管理视图测试：`purposeEffects.ambient` 的生效 / 两种忽略原因 / 继承聊天、`decisions.*` 的 `mode-off`；`ambientModels` 在决策启用时返回决策模型；`basic/cli` doctor 测试：提示只出现一次、`--verbose` 可再看、`--fix` 删除两键且保留其他键、迁移失败为 ✗；文档测试（如有链接检查）通过 |
-| 发布 | `@zhin.js/agent` minor（`InferencePurposeEffect` / `PurposeIgnoredReason` 公开类型扩展）；`@zhin.js/cli` patch（doctor 新检查，无新导出）。minor 需要所有者批准 |
+| 发布 | `@zhin.js/agent` minor（`InferencePurposeEffect` / `PurposeIgnoredReason` 公开类型扩展）；`@zhin.js/cli` patch（doctor 新检查，无新导出）。所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施 |
 
 依赖：P0 → P1 → P2；P3 依赖 P1，可与 P2 并行（`ambient` 状态里的 `compare` 依赖 P2）。P1 是主要的行为变更；P0 与 P1 最好在同一个版本里发布，避免中间版本出现「链已存在但配置还不能混排」的状态。
 

@@ -13,7 +13,7 @@ import type { ApprovalJudgmentPort } from '../../session/index.js';
 import type { AgentTraceRecorder } from '../agent-trace-runtime.js';
 import type { SemanticMemoryRuntime } from '../native-semantic-memory-tools.js';
 import type { ZhinAgent } from '../../zhin-agent/index.js';
-import type { AmbientDecision } from './ambient-engagement.js';
+import type { AmbientDecision, EngagementJudgeCall } from './ambient-engagement.js';
 import type { AnnouncementDispatcher } from './announcement-dispatch.js';
 import type { MemberLifecycle } from './member-lifecycle.js';
 
@@ -75,6 +75,8 @@ export interface AgentAssistantStatusPort {
   recordAmbient(group: string, decision: AmbientDecision): void;
   recordAmbientShadow(decisionEngage: boolean | undefined, judgeEngage: boolean | undefined): void;
   recordDecision(observation: DecisionObservation): void;
+  /** One ambient judge model call (language or decision), for the Console daily totals (#1250). */
+  recordAmbientJudgeCall?(call: EngagementJudgeCall): void;
 }
 
 export function observeAgentTurnTrace(
