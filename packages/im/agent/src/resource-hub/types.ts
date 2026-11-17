@@ -162,8 +162,15 @@ export interface McpServerEntry {
   args?: string[];
   env?: Record<string, string>;
   headers?: Record<string, string>;
-  /** ADR 0065: who may use each tool of this server; absent means the D3 defaults. */
-  permit?: import('../plugin-runtime/mcp-tool-permit.js').McpToolPermit;
+  /**
+   * ADR 0065: who may use each tool of this server (parsed `ai.mcpServers[].permit`, same shape as
+   * `McpToolPermit`); absent means the D3 defaults. Each tier is `everyone`, `deny` or a permit list.
+   */
+  permit?: {
+    readonly readOnly?: 'everyone' | 'deny' | readonly string[];
+    readonly default?: 'everyone' | 'deny' | readonly string[];
+    readonly tools?: Readonly<Record<string, 'everyone' | 'deny' | readonly string[]>>;
+  };
 }
 
 export interface McpResource {
