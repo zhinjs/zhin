@@ -12,7 +12,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 export type ModelRuntimeConfig = Omit<AgentStartupConfig, 'agents' | 'multimodal'> & {
   readonly multimodal?: Omit<NonNullable<AgentStartupConfig['multimodal']>, 'perception'> & { readonly perception?: PerceptionSettingsInput };
   readonly agents?: Readonly<Record<string, Readonly<{
-    mcpServers?: readonly string[]; nickname?: string;
+    mcpServers?: readonly (string | import('../config/types.js').AgentMcpServerBindingConfig)[]; nickname?: string;
     permission?: Readonly<{ task?: Readonly<Record<string, 'allow' | 'deny'>> }>;
   }>>>;
 };

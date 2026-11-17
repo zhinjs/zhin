@@ -7,7 +7,7 @@
 
 import type { AgentTool } from '@zhin.js/ai';
 import type { McpServerEntry, McpResource, McpPrompt } from '../resource-hub/types.js';
-import { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo } from './bridge.js';
+import { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo, type McpToolDefinition } from './bridge.js';
 import {
   classifyMcpFailure, McpConfigurationError, McpConnectionError, McpSdkMissingError, type McpConnectionFailure,
 } from './failure.js';
@@ -58,6 +58,8 @@ function cleanMcpEnvironment(userEnv?: Record<string, string>): Record<string, s
 export interface McpClientConnectionState {
   connected: boolean;
   tools: AgentTool[];
+  /** Upstream `tools/list` entries as reported (raw names, annotations), for the generation projection. */
+  toolDefinitions?: McpToolDefinition[];
   resources: McpResource[];
   prompts: McpPrompt[];
   error?: string;
@@ -84,6 +86,8 @@ export class McpClientConnection {
 
   get isConnected(): boolean { return this.state.connected; }
   get tools(): AgentTool[] { return this.state.tools; }
+  /** Upstream tool list with the server's own (unprefixed) names and annotations (ADR 0065 D1). */
+  get toolDefinitions(): readonly McpToolDefinition[] { return this.state.toolDefinitions ?? []; }
   get resources(): McpResource[] { return this.state.resources; }
   get prompts(): McpPrompt[] { return this.state.prompts; }
   get failure(): McpConnectionFailure | undefined { return this.state.failure; }
@@ -205,6 +209,7 @@ export class McpClientConnection {
   private async discoverCapabilities(): Promise<void> {
     try {
       const toolsResult = await this.client.listTools();
+      this.state.toolDefinitions = (toolsResult.tools || []).filter(isToolDefinition);
       this.state.tools = (toolsResult.tools || []).map((t: any) =>
         mcpToolToAgentTool(t, this.name, (name, args) => this.callTool(name, args)),
       );
@@ -220,4 +225,9 @@ export class McpClientConnection {
       this.state.prompts = (promptsResult.prompts || []).map(mcpPromptToInfo);
     } catch { /* server may not support prompts */ }
   }
+}
+
+function isToolDefinition(value: unknown): value is McpToolDefinition {
+  return !!value && typeof value === 'object' && typeof (value as { name?: unknown }).name === 'string'
+    && !!(value as { name: string }).name.trim();
 }

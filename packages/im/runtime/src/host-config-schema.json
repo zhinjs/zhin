@@ -2204,8 +2204,93 @@
                   "null"
                 ],
                 "items": {
-                  "type": "string"
-                }
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "permit": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "readOnly": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              ],
+                              "description": "上游标注 readOnlyHint=true（且不是 destructiveHint=true）、没被 tools 命中的工具。everyone / deny / permit DSL 字符串或数组（AND）。省略时不额外限制。"
+                            },
+                            "default": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              ],
+                              "description": "其余工具（未标注、标注为写、标注矛盾）。省略时不额外限制。"
+                            },
+                            "tools": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  }
+                                ],
+                                "description": "该工具名或模式的权限档位。"
+                              },
+                              "description": "按上游原始工具名覆盖（区分大小写，只支持 * 通配；精确名优先，其次字面字符最多的模式，并列时都要满足）。非 ASCII 工具名只能被精确名命中。",
+                              "x-keyPlaceholder": "create_*"
+                            }
+                          },
+                          "description": "Agent 层权限（ADR 0065）：与服务器级结果取 AND，只能收窄。"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "description": "绑定的 MCP 服务器：服务器名，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。同一服务器只能出现一次。"
               },
               "nickname": {
                 "type": "string",
@@ -2724,6 +2809,72 @@
                     "secret": true
                   }
                 }
+              },
+              "permit": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "readOnly": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    ],
+                    "description": "上游标注 readOnlyHint=true（且不是 destructiveHint=true）、没被 tools 命中的工具。everyone / deny / permit DSL 字符串或数组（AND）。缺省 everyone。"
+                  },
+                  "default": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    ],
+                    "description": "其余工具（未标注、标注为写、标注矛盾）。缺省 owner@global。"
+                  },
+                  "tools": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      ],
+                      "description": "该工具名或模式的权限档位。"
+                    },
+                    "description": "按上游原始工具名覆盖（区分大小写，只支持 * 通配；精确名优先，其次字面字符最多的模式，并列时都要满足）。非 ASCII 工具名只能被精确名命中。",
+                    "x-keyPlaceholder": "create_*"
+                  }
+                },
+                "description": "谁能用这个服务器的哪些工具（ADR 0065）。不写等同于 { readOnly: everyone, default: owner@global, tools: {} }。"
               }
             }
           },

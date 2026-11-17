@@ -21,6 +21,23 @@ describe('startup model-authority cutover', () => {
     expect(validateAgentMcpBindings({ agents: { zhin: { mcpServers: [''] } } })).toContain('ai.agents.zhin: empty mcpServers entry');
     expect(validateAgentMcpBindings({ agents: { zhin: { mcpServers: [' trailing '] } } })).toContain('ai.agents.zhin: MCP server names must not contain surrounding whitespace');
   });
+  it('accepts { name, permit } binding entries and rejects bad permits (ADR 0065)', () => {
+    expect(validateModelRuntimeConfig({
+      mcpServers: [{ name: 'github', permit: { tools: { 'create_*': 'deny' } } }],
+      agents: { helper: { mcpServers: ['other', { name: 'github', permit: { default: 'deny', tools: { get_me: 'everyone' } } }] } },
+    }, 'host')).toEqual([]);
+    expect(validateAgentMcpBindings({ agents: { helper: { mcpServers: [{ name: 'github' }] } }, mcpServerNames: ['github'] })).toEqual([]);
+    expect(validateAgentMcpBindings({ agents: { helper: { mcpServers: [{ name: 'gone' }] } }, mcpServerNames: [] }))
+      .toContain('ai.agents.helper: unknown MCP server "gone"');
+    expect(validateAgentMcpBindings({ agents: { helper: { mcpServers: ['github', { name: 'github' }] } } }))
+      .toContain('ai.agents.helper: MCP server "github" is listed more than once');
+    expect(validateAgentMcpBindings({ agents: { helper: { mcpServers: [{ name: 'github', permit: { default: [] } }] } } }).join('\n'))
+      .toContain('ai.agents.helper.mcpServers[0].permit.default must not be an empty array');
+    expect(validateModelRuntimeConfig({ mcpServers: [{ name: 'github', permit: { default: ['everyone'] } }] }, 'host').join('\n'))
+      .toContain('ai.mcpServers[0].permit.default[0]: "everyone" must stand alone');
+    expect(validateModelRuntimeConfig({ mcpServers: [{ name: 'github', permit: { readOnly: 'scene_admin' } }] }, 'host').join('\n'))
+      .toMatch(/removed.*platform:admin/u);
+  });
 });
 
 

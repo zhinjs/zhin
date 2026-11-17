@@ -4,6 +4,8 @@ import { type AgentTool } from '@zhin.js/ai';
 import { collectRuntimeTools } from '../src/tool/runtime.js';
 import { DEFAULT_CONFIG } from '../src/config/index.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
+import { PermissionHost } from '@zhin.js/permission';
+import { createDefaultToolSources, defaultToolSystem, type CollectToolsContext } from '../src/tool/tool-system.js';
 
 const mockTool: AgentTool = {
   name: 'fs__read',
@@ -196,9 +198,34 @@ describe('collectRuntimeTools MCP merge', () => {
       sessionId: 's1',
       userId: 'u1',
       userProfiles: { buildProfileSummary: async () => '' } as any,
-      mcpTools: [mockTool],
+      // ADR 0065: a declared read-only MCP tool is open to everyone on the legacy path too.
+      mcpTools: [{ ...mockTool, mcpOrigin: { server: 'fs', tool: 'read', hints: { readOnly: true } } } as AgentTool],
     });
     expect(tools.some(t => t.name === 'fs__read')).toBe(true);
+  });
+
+  it('tiers MCP tools like production on the legacy path (ADR 0065 D4.5)', async () => {
+    const write = { ...mockTool, name: 'fs__write', mcpOrigin: { server: 'fs', tool: 'write' } } as AgentTool;
+    const read = { ...mockTool, mcpOrigin: { server: 'fs', tool: 'read', hints: { readOnly: true } } } as AgentTool;
+    const collect = async (message: ReturnType<typeof mockCommMessage>, extra: Partial<CollectToolsContext> = {}) => {
+      const context: CollectToolsContext = {
+        message, content: 'hello', sessionId: 's1', userId: 'u1',
+        config: DEFAULT_CONFIG as Required<typeof DEFAULT_CONFIG>, skillRegistry: null, externalTools: [],
+        externalRegistered: new Map(), userProfiles: { buildProfileSummary: async () => '' } as any,
+        mcpTools: [read, write], ...extra,
+      };
+      return (await defaultToolSystem.collectTools(context, createDefaultToolSources(context))).map(tool => tool.name);
+    };
+    const owner = mockCommMessage({ adapter: 'test', senderId: 'u1', chatRole: 'owner' });
+    const member = mockCommMessage({ adapter: 'test', senderId: 'u2' });
+    // No PermissionHost: owner-only tools fail closed even for the owner.
+    expect(await collect(owner)).toEqual(['fs__read']);
+    const permissionHost = new PermissionHost();
+    expect(await collect(owner, { permissionHost })).toEqual(['fs__read', 'fs__write']);
+    expect(await collect(member, { permissionHost })).toEqual(['fs__read']);
+    expect(await collect(owner, { permissionHost, mcpPermits: { fs: { server: { tools: { write: 'deny' } } } } })).toEqual(['fs__read']);
+    expect(await collect(member, { permissionHost, mcpPermits: { fs: { server: { default: 'everyone' }, agent: { tools: { read: 'deny' } } } } }))
+      .toEqual(['fs__write']);
   });
 
   it('skips MCP tools that conflict with reserved names', async () => {

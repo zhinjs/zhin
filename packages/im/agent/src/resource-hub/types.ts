@@ -162,6 +162,8 @@ export interface McpServerEntry {
   args?: string[];
   env?: Record<string, string>;
   headers?: Record<string, string>;
+  /** ADR 0065: who may use each tool of this server; absent means the D3 defaults. */
+  permit?: import('../plugin-runtime/mcp-tool-permit.js').McpToolPermit;
 }
 
 export interface McpResource {

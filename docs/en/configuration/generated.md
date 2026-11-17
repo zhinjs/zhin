@@ -272,7 +272,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | no | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | no | — | — |
 | `ai.agents` | object \| null | no | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
+| `ai.agents.<key>.mcpServers` | array \| null | no | — | 绑定的 MCP 服务器：服务器名，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。同一服务器只能出现一次。 |
 | `ai.agents.<key>.nickname` | string | no | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |

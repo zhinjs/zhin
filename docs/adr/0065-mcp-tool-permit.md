@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0065：MCP 工具按聊天角色授权——上游标注只读的工具对所有人开放，其余默认只给全局 owner
 
-状态：已接受（所有者 2026-11-17 批准）。依据：zhinjs/zhin#1250 评论 6934895336、6935017999，所有者原话：「让上游加权限验证，这样我们才能给 master 开全量，给普通用户开只读」。所有者 2026-11-17 批准了本文的 D1–D7 和默认值。核对基线：`origin/feat/friendly-volta-ejc3wl`（`4353901993dcc1a87e66c2120a079b6cae27d05c`）。实施进度：四个阶段都还没开始。
+状态：已接受（所有者 2026-11-17 批准）。依据：zhinjs/zhin#1250 评论 6934895336、6935017999，所有者原话：「让上游加权限验证，这样我们才能给 master 开全量，给普通用户开只读」。所有者 2026-11-17 批准了本文的 D1–D7 和默认值。核对基线：`origin/feat/friendly-volta-ejc3wl`（`4353901993dcc1a87e66c2120a079b6cae27d05c`）。实施进度：P0、P1 已实施（同一版本发布）；P2、P3 还没开始。
 
 关联：[ADR 0056](./0056-chat-roles.md)（聊天角色、`<角色>@<层级>` 写法、`PermissionHost`、执行时复检）、[ADR 0036](./0036-controlled-landing-phase0.md)（危险工具硬闸）、[ADR 0049](./0049-console-rbac.md)（Console 权限映射：新增的接口要登记权限）、[ADR 0061](./0061-inbound-message-outcomes.md)（每个结局都要有原因：被隐藏的工具要进 trace）。
 
@@ -80,7 +80,7 @@ ai:
           get_me: trusted
           search_*: everyone
           create_*: deny
-          merge_pull_request: [owner@global, private]
+          merge_pull_request: [owner@global, private(*)]
   agents:
     helper:
       mcpServers:
@@ -99,7 +99,7 @@ ai:
 | `everyone` | 所有人 | 等价于插件工具不写 `permissions`（空列表） |
 | `deny` | 谁都不能用 | 工具不展开：不进工具池、不能执行 |
 | 一个 DSL 字符串，如 `trusted`、`admin`、`owner@global`、`role(owner@global,admin@adapter)`、`private(*)`、`platform:admin` | 与插件工具 `permissions` 里的一项相同 | `PermissionHost.checkAll([x])` |
-| DSL 字符串数组，如 `[owner@global, private]` | 各项都满足（AND），与插件工具 `permissions` 相同 | `PermissionHost.checkAll(list)` |
+| DSL 字符串数组，如 `[owner@global, private(*)]` | 各项都满足（AND），与插件工具 `permissions` 相同 | `PermissionHost.checkAll(list)` |
 
 规则：
 

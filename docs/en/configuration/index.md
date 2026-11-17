@@ -398,12 +398,15 @@ ai:
       mcpServers: [icqq]             # References names in ai.mcpServers
     researcher:
       nickname: 'Researcher'         # Task role name; IM identity comes from the Endpoint
+      mcpServers:
+        - name: icqq                 # Object form: one more permit layer that can only narrow
+          permit: { default: deny }
 ```
 
 | Field | Description |
 | --- | --- |
 | `nickname` | Task role display name; the Endpoint supplies the current account profile |
-| `mcpServers` | MCP Server names visible to this Agent |
+| `mcpServers` | MCP Servers visible to this Agent: a server name, or `{ name, permit }`. The object form's `permit` is ANDed with the server layer, can only narrow, and omitted keys add no restriction; a server may appear only once |
 
 Model role bindings belong to runtime purpose configuration. IM messages always enter `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` removes them.
 
@@ -424,7 +427,34 @@ ai:
       env: { FOO: bar }
 ```
 
-Once connected successfully, these Servers' tools enter the Agent tool pool (assigned by `agents.<name>.mcpServers`).
+Once connected successfully, these Servers' tools enter the Agent tool pool (assigned by `agents.<name>.mcpServers`) and are filtered by the turn sender's chat role.
+
+#### permit: who may use which tools {#ai-mcpservers-permit}
+
+```yaml
+ai:
+  mcpServers:
+    - name: github
+      transport: stdio
+      command: npx
+      args: ['-y', '@modelcontextprotocol/server-github']
+      permit:
+        readOnly: everyone          # tools annotated read-only and not matched by tools; default everyone
+        default: owner@global       # every other tool; default owner@global
+        tools:                      # overrides by upstream tool name; default {}
+          get_me: trusted
+          search_*: everyone
+          create_*: deny
+          merge_pull_request: [owner@global, private(*)]
+```
+
+| Key | Description |
+| --- | --- |
+| `readOnly` | Tier of tools annotated `readOnlyHint: true` upstream (and not `destructiveHint: true`) that no `tools` rule matched; default `everyone` |
+| `default` | Tier of every other tool (not annotated, annotated as writing, contradictory); default `owner@global` |
+| `tools` | Overrides by the raw upstream tool name (no server prefix, case-sensitive). An exact name wins; otherwise the `*` pattern with the most literal characters, and tied patterns must all hold; non-ASCII tool names are matched only by their exact name |
+
+A tier is `everyone`, `deny` (nobody; the tool is not expanded), one permit string (the same as one item of a plugin tool's `permissions`, e.g. `trusted`, `owner@global`, `platform:admin`), or a list of strings (all must hold). `everyone` / `deny` cannot go into a list; an empty list, an unknown key or an invalid permit (including the removed `master`) fails startup. Upstream annotations only pick the tier and never relax approval. Upgrade impact and common shapes: [Upgrading: MCP tools authorized by chat role](../migrations/mcp-tool-permit.md).
 
 ### Other ai Sub-sections
 

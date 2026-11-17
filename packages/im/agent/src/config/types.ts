@@ -1,5 +1,6 @@
 import type { VenueDefinition } from '@zhin.js/core';
-import type { AgentStartupConfig } from './agent-startup.js';
+import type { AgentStartupConfig, McpToolPermitConfig } from './agent-startup.js';
+import type { McpBindingPermits } from '../plugin-runtime/mcp-tool-permit.js';
 
 export type VenueConfig = VenueDefinition;
 export type AIConfig = AgentStartupConfig;
@@ -21,8 +22,14 @@ export interface RouteMatchConfig {
   contentContains?: string;
 }
 
+/** `ai.agents.<name>.mcpServers[]` object form: a server plus an Agent-level permit that can only narrow (ADR 0065 D2.4). */
+export interface AgentMcpServerBindingConfig {
+  readonly name: string;
+  readonly permit?: McpToolPermitConfig;
+}
+
 export interface AgentBindingConfig {
-  mcpServers?: readonly string[];
+  mcpServers?: readonly (string | AgentMcpServerBindingConfig)[];
   /**
    * @deprecated Never took effect; accepted with a warning and removed by
    * `zhin config check --fix`. Dropped from the effective config.
@@ -42,6 +49,11 @@ export interface AgentBindingConfig {
 export interface ResolvedAgentBinding {
   name: string;
   mcpServers: readonly string[];
+  /**
+   * ADR 0065: per-server permits of this binding (server layer from `ai.mcpServers[].permit`,
+   * Agent layer from the object entries). A server missing here uses the D3 defaults.
+   */
+  mcpPermits?: McpBindingPermits;
   /** 任务/协作角色显示名；IM 当前账号昵称由 Endpoint 资料提供，此值仅作最终兜底。 */
   nickname?: string;
 }

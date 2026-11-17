@@ -292,6 +292,8 @@ function createRuntimeScheduleTurnPort(
       return runtime.execute(rootPluginId(), request, {
         binding,
         mcpServers: binding.mcpServers,
+        // ADR 0065 D6: filtered by the schedule principal (the creator's current role, demoted one step).
+        ...(binding.mcpPermits ? { mcpPermits: binding.mcpPermits } : {}),
         ...(binding.name === 'zhin' ? {} : { agent: binding.name }),
       }, observeAgentTurnTrace(trace, request, input.onTurnEvent));
     },

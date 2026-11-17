@@ -21,9 +21,13 @@ import {
 } from '../turn/turn-ingress.js';
 import {
   CapabilityIngress,
+  resolvePermissionHost,
   type AgentCapabilities,
   type ToolCapability,
 } from './capability-ingress.js';
+import { assertMcpToolStillPermitted, filterMcpToolsForTurn, withheldMcpToolCatalog } from './mcp-tool-access.js';
+import { resolveMcpToolPermit, type McpBindingPermits } from './mcp-tool-permit.js';
+import type { PermissionHost } from '@zhin.js/permission';
 import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime.js';
 import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -254,6 +258,11 @@ export interface AgentCapabilitySelection {
   readonly binding: ResolvedAgentBinding;
   /** Binding-local MCP names. Empty means no MCP capability is exposed. */
   readonly mcpServers: readonly string[];
+  /**
+   * ADR 0065: per-server tool permits for this turn; defaults to `binding.mcpPermits`. A server
+   * without an entry uses the D3 defaults (read-only tools for everyone, the rest owner@global).
+   */
+  readonly mcpPermits?: McpBindingPermits;
   /** Optional owner-visible specialist selected by the ingress router. */
   readonly agent?: string;
 }
@@ -353,11 +362,23 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           port: readLeasedRootResource(this.requireSnapshots(), lease, agentOperationResourcesToken), isActive: () => active }),
       });
       const referenceCapability = createConversationReferenceCapability(owner, request);
+      // ADR 0065 D4: MCP tools the sender's chat role may not use never enter the pool, so they are
+      // absent from the model's list, discover / load_tool and alwaysLoaded. This runs before trust.
+      const permissionHost = resolvePermissionHost(lease.value);
+      const mcpAccess = await filterMcpToolsForTurn(
+        await expandMcpTools(discovered, selection.mcpServers, {
+          permits: selection.mcpPermits ?? selection.binding.mcpPermits,
+          turn: request,
+          host: permissionHost,
+        }),
+        request,
+        permissionHost,
+      );
       // #726: the initiator's trust level caps the turn (group members: no shell, writes or outbound).
       const allTools = [
         ...discovered.tools,
         ...(referenceCapability ? [referenceCapability] : []),
-        ...await expandMcpTools(discovered, selection.mcpServers),
+        ...mcpAccess.visible,
       ];
       const trust = applyTurnTrust(request, allTools);
       const capabilities = Object.freeze({
@@ -393,7 +414,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           logContext.selectedModel = `${target.provider}/${target.model}`;
         }
       });
-      const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
+      const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage, mcpAccess.withheld);
       const catalog = Object.freeze({
         ...capabilities,
         tools: Object.freeze(capabilities.tools.map(({ execute: _execute, ...tool }) => Object.freeze(tool))),
@@ -506,20 +527,42 @@ function once(callback: () => void): () => void {
   };
 }
 
+export interface ExpandMcpToolsOptions {
+  /** ADR 0065 per-server permits; a server without an entry uses the D3 defaults. */
+  readonly permits?: McpBindingPermits;
+  /** The turn whose sender is re-checked before every call (ADR 0065 D4.3). */
+  readonly turn?: import('../turn/turn-ingress.js').TurnAccessContext;
+  /** Root PermissionHost; without it a tool that needs a role fails closed. */
+  readonly host?: PermissionHost;
+}
+
+/**
+ * Expands the selected MCP connections into Tool capabilities. Each tool carries the permit list its
+ * tier resolves to (ADR 0065 D2.5) and its upstream hints; a `deny` tier is not expanded at all.
+ * Filtering by the turn's sender is {@link filterMcpToolsForTurn}; `execute` re-checks the sender's
+ * current role before calling the server.
+ */
 export async function expandMcpTools(
   capabilities: AgentCapabilities,
   allowedServers: readonly string[],
+  options: ExpandMcpToolsOptions = {},
 ): Promise<ToolCapability[]> {
   const expanded: ToolCapability[] = [];
   const occupied = new Set(capabilities.tools.map((tool) => tool.name));
   for (const connection of capabilities.mcp) {
     if (!allowedServers.includes(connection.name)) continue;
+    const permits = options.permits && Object.hasOwn(options.permits, connection.name)
+      ? options.permits[connection.name]
+      : undefined;
     for (const tool of await connection.listTools()) {
       const name = `${connection.qualifiedName}__${tool.name}`;
       if (occupied.has(name)) {
         throw new Error(`Duplicate Agent Tool capability: ${name}`);
       }
       occupied.add(name);
+      const decision = resolveMcpToolPermit(permits, { name: tool.name, ...(tool.hints ? { hints: tool.hints } : {}) });
+      if (decision.status === 'denied') continue;
+      const permissions = decision.permissions;
       expanded.push(Object.freeze({
         owner: connection.owner,
         mcpServer: connection.qualifiedName,
@@ -530,9 +573,13 @@ export async function expandMcpTools(
           ? undefined
           : requireToolInputSchema(tool.inputSchema, `MCP Tool ${name} inputSchema`),
         requiresApproval: 'on-risk' as const,
+        ...(permissions.length ? { permissions } : {}),
+        ...(tool.hints ? { mcpHints: tool.hints } : {}),
         source: connection.source,
-        execute: <TInput = unknown, TResult = unknown>(input: TInput, invocation: ToolInvocationContext) =>
-          connection.callTool<TResult>(tool.name, input, invocation),
+        execute: async <TInput = unknown, TResult = unknown>(input: TInput, invocation: ToolInvocationContext) => {
+          await assertMcpToolStillPermitted({ qualifiedName: name, permissions }, options.turn, options.host);
+          return connection.callTool<TResult>(tool.name, input, invocation);
+        },
       }));
     }
   }
@@ -545,6 +592,7 @@ function createIngressTurn(
   capabilities: AgentCapabilities,
   trace?: TurnTraceCollector,
   usage?: AgentUsageCollector,
+  withheldMcp: readonly ToolCapability[] = [],
 ) {
   const store = resolveJournalStore(snapshot);
   // ADR 0044: sandbox behaviour is a declared Endpoint capability, never a platform-name check.
@@ -567,6 +615,7 @@ function createIngressTurn(
     capabilities: {
       tools: capabilities.tools.map((tool) => tool.name),
       skills: capabilities.skills.map((skill) => skill.name),
+      ...withheldMcpToolCatalog(withheldMcp),
     },
     ports: {
       ...request.ports,

@@ -490,6 +490,20 @@ Adapters read and upload local paths (`MediaRef kind: 'path'`), and OneBot / Nap
 
 Legitimate local files still work: screenshots and charts that tools write into the workspace (for example `data/media/`) can be referenced by `path`; the Agent reads them inline or spools them as a trusted reference. A plugin tool that puts model arguments into a message gets the same protection by wrapping it with `untrustedContent()`.
 
+## MCP tools by chat role (ADR 0065) {#mcp-tool-permit}
+
+Tools from `ai.mcpServers` go through the same chat-role check (`PermissionHost`) as plugin tools. Each tool gets a tier from the server's `permit` (see the [configuration reference](../configuration/index.md#ai-mcpservers-permit)); without one:
+
+- tools annotated `readOnlyHint: true` upstream (and not also `destructiveHint: true`) are open to everyone;
+- every other tool (not annotated, annotated as writing, contradictory) goes to the global owner `owner@global`, the same tier as dangerous tools.
+
+The check runs twice:
+
+1. **When the tool pool is built**, before trust levels apply, against the turn sender's `principal.chatRole` / `chatRoleLevels`. Hidden tools are not in the model's tool list, `discover` / `load_tool` cannot find them, and `deferredTools.alwaysLoadedTools` does not keep them loaded; the system prompt does not mention them. An `owner` held at conversation level counts at that level and does not satisfy `owner@global`.
+2. **Before every call**, against the sender's current role in the role store. A call replayed from session history, a role revoked mid-turn, or a sub-agent reusing its parent's tools is denied and recorded as `tool_denied` with policy `mcp-permit` and a plain-language reason.
+
+Upstream annotations only pick the tier and **never relax approval**: MCP tools stay `on-risk` and still go through approval, the file policy, the network allowlist and the hard gate; they are never treated as `readOnly` tools for danmaku turns or for scheduled-task replay. Scheduled tasks run as their creator's current role demoted one step, so a task created by the global owner cannot use owner-only MCP write tools by default; widen a specific tool to `trusted` in `permit.tools` when a task needs it. Upgrade impact: [Upgrading: MCP tools authorized by chat role](../migrations/mcp-tool-permit.md).
+
 ## Built-in tools
 
 | Category | Tools |
