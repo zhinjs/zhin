@@ -88,6 +88,8 @@ export function pendingAmbientTriggerKeys(view: AmbientJudgeView | undefined, pr
   return Object.keys(present).filter(key => {
     const value = normalizedTrigger(key, present[key]);
     return value !== undefined && !(Object.hasOwn(seen, key) && seen[key] === value)
+      // Already what the judge runs with: converting it would change nothing.
+      && policy[key] !== value
       && !(Object.hasOwn(original, key) && original[key] === value && policy[key] === after[key]);
   });
 }

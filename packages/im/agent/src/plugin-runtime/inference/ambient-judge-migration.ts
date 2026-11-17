@@ -283,6 +283,8 @@ export function pendingAmbientTriggerWrites(record: AmbientJudgeMigrationRecord,
   const original = record.triggerValues ?? {};
   const after = record.after ?? {};
   return (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key]
+    // Already what the judge runs with: converting it would change nothing.
+    && values[key] !== stored[key]
     && !(values[key] === original[key] && stored[key] === after[key]));
 }
 
@@ -295,7 +297,12 @@ export type AmbientJudgeRevertResult =
   | Readonly<{ status: 'reverted'; graphRevision: number; yml?: AmbientTriggerValues; lost?: readonly string[] }>
   /** `dryRun`: the revert would succeed with these yml values and losses; nothing was written. */
   | Readonly<{ status: 'ready'; yml?: AmbientTriggerValues; lost?: readonly string[] }>
-  | Readonly<{ status: 'refused'; reason: 'no-migration' | 'already-reverted' | 'changed' | 'conflict' | 'not-committed' }>
+  | Readonly<{ status: 'refused'; reason: 'no-migration' | 'already-reverted' | 'conflict' | 'not-committed' }>
+  /**
+   * `restore`: only yml values converted since were removed from the file (T3); writing them back
+   * there (`ai.trigger.ambient.<key>: value`) unblocks the revert.
+   */
+  | Readonly<{ status: 'refused'; reason: 'changed'; restore?: Readonly<Record<string, unknown>> }>
   /** The restored form does not validate (e.g. a Profile it names was removed since); `path` names it. */
   | Readonly<{ status: 'refused'; reason: 'invalid-graph'; path?: string }>
   /**
@@ -328,8 +335,16 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
   const seen = record.triggerSeen ?? record.triggerValues ?? {};
   const converted = (['minConfidence', 'mode'] as const).filter(key => stored[key] !== after[key]);
   const rest = (policy: AmbientJudgePolicy) => { const { minConfidence: _m, mode: _o, ...others } = policy; return plain(others); };
-  if (!graph.purposes.ambient || !isDeepStrictEqual(rest(stored), rest(after)) || converted.some(key => stored[key] === undefined || seen[key] !== stored[key])) {
+  if (!graph.purposes.ambient || !isDeepStrictEqual(rest(stored), rest(after)) || converted.some(key => stored[key] === undefined)) {
     return Object.freeze({ status: 'refused', reason: 'changed' });
+  }
+  // A converted value must still be in the yml (as acted on, or as the file says now): once
+  // `zhin doctor --fix` removed it, the older version would lose it (T3). Say how to unblock.
+  const file = input.trigger ? legacyAmbientTriggerValues(input.trigger) : {};
+  const missing = converted.filter(key => seen[key] !== stored[key] && file[key] !== stored[key]);
+  if (missing.length) {
+    return Object.freeze({ status: 'refused', reason: 'changed',
+      restore: Object.freeze(Object.fromEntries(missing.map(key => [`ai.trigger.ambient.${key}`, stored[key]]))) });
   }
   // A write to the yml keys not converted yet would be overwritten by the migration's values (S1).
   if (input.trigger) {

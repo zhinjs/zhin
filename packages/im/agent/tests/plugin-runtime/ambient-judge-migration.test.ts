@@ -390,10 +390,27 @@ describe('the revert never overwrites a yml write the instance has not converted
     expect(effectiveAmbientJudgePolicy(store.graph.purposes, { minConfidence: 0.9 }).policy.minConfidence).toBe(0.9);
   });
 
-  it('a Console edit of the threshold (not from the yml) still refuses the revert', async () => {
+  it('a threshold that is not in the yml (a Console edit) refuses the revert until the yml holds it too', async () => {
     const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
     await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.6 } });
     store.graph = normalizeProviderGraph({ ...store.graph, revision: store.graph.revision + 1, purposes: { ...store.graph.purposes, ambient: { profile: 'small', minConfidence: 0.95 } } });
+    // An older version reads the threshold from the yml only: the refusal says which value it must hold.
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toEqual({ status: 'refused', reason: 'changed', restore: { 'ai.trigger.ambient.minConfidence': 0.95 } });
+    // Any other change (here the profile) is refused without a hint.
+    store.graph = normalizeProviderGraph({ ...store.graph, revision: store.graph.revision + 1, purposes: { ...store.graph.purposes, ambient: { profile: 'chat', minConfidence: 0.6 } } });
     await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toEqual({ status: 'refused', reason: 'changed' });
   });
+});
+
+it('case H: a converted yml value removed by --fix blocks the revert with how to unblock it (review T3)', async () => {
+  const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+  await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+  await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } });
+  // doctor --fix removed the converted key; the next load forgot it.
+  await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+  await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true, trigger: {} }))
+    .resolves.toEqual({ status: 'refused', reason: 'changed', restore: { 'ai.trigger.ambient.mode': 'shadow' } });
+  // Written back to the file: not a pending write (it is what runs) and the revert goes through.
+  await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true, trigger: { mode: 'shadow' } })).resolves.toEqual({ status: 'ready', yml: { mode: 'shadow' } });
+  await expect(revertAmbientJudgeMigration({ store, rootId: 'root', trigger: { mode: 'shadow' } })).resolves.toMatchObject({ status: 'reverted' });
 });
