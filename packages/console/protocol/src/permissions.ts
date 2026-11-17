@@ -617,6 +617,13 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/conversations/workspaces/commands', P.ENDPOINT_VIEW),
   httpRule('GET', '/interactions/pending', P.ENDPOINT_VIEW),
   httpRule('POST', '/message/send', P.ENDPOINT_OPERATE),
+  // ADR 0064 D12 / D13 (I1): Sandbox hosted uploads. `/sandbox/media/<endpoint>` uploads and
+  // `…/<id>` deletes (revokes) with the same permission as the `/sandbox` socket; the Console
+  // download `GET …/<endpoint>/<id>` needs view. The handlers also check the endpoint scope, the
+  // conversation the file belongs to and, for delete, its uploader.
+  httpRule('POST', '/sandbox/media', P.ENDPOINT_OPERATE, true),
+  httpRule('DELETE', '/sandbox/media', P.ENDPOINT_OPERATE, true),
+  httpRule('GET', '/sandbox/media', P.ENDPOINT_VIEW, true),
   httpRule('GET', '/data-migrations', P.OPS_DATABASE_READ),
   httpRule('POST', '/data-migrations/commands', P.OPS_DATABASE_WRITE),
   httpRule('GET', '/agent/sessions', P.AGENT_VIEW, true),

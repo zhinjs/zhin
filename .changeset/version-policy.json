@@ -84,7 +84,7 @@
     {
       "package": "@zhin.js/adapter-sandbox",
       "type": "minor",
-      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：Sandbox 会话页按 D13 两步迁移——Console 中只服务 Sandbox 的样式搬进插件由页面注入，页面改用 @zhin.js/console-ui 组件（新增 peerDependency @zhin.js/console-ui）、definePage({ fullWidth: true }) 与外壳页头（usePageChrome）。；所有者已批准（ADR 0064，2026-11-16）：P1——页面对出站段目录的每种段都有专用渲染器（新增 file / link / qrcode / tts，音乐卡片可播放，HTML 无宽度时按 540 排版缩放）；画像声明 `messaging.streaming`、`mention.all`、`quote`；P1b 端点 control 端口实现并声明撤回、编辑与表情回应；按钮点击的 action 段保留按钮 id（#1250 sandbox-action-button-id-dropped），点击的处理失败与无回复在卡片旁提示（sandbox-submitted-without-feedback）。npm 上 1.3.0 未被占用。"
+      "reason": "ADR 0063 P2（所有者 2026-11-15 批准按 P1a→P4 实施）：Sandbox 会话页按 D13 两步迁移——Console 中只服务 Sandbox 的样式搬进插件由页面注入，页面改用 @zhin.js/console-ui 组件（新增 peerDependency @zhin.js/console-ui）、definePage({ fullWidth: true }) 与外壳页头（usePageChrome）。；所有者已批准（ADR 0064，2026-11-16）：P1——页面对出站段目录的每种段都有专用渲染器（新增 file / link / qrcode / tts，音乐卡片可播放，HTML 无宽度时按 540 排版缩放）；画像声明 `messaging.streaming`、`mention.all`、`quote`；P1b 端点 control 端口实现并声明撤回、编辑与表情回应；按钮点击的 action 段保留按钮 id（#1250 sandbox-action-button-id-dropped），点击的处理失败与无回复在卡片旁提示（sandbox-submitted-without-feedback）。npm 上 1.3.0 未被占用。；所有者已批准（ADR 0064 增补，2026-11-17）：I1——本地文件托管与上传：新增端点配置 `media`（`ttlHours`、`publicDownload`、`maxBytes`、`uploaderQuotaBytes`、`quotaBytes`）与路由 `POST /api/sandbox/media/<endpoint>`（上传，`endpoint.operate`）、`GET` / `DELETE /api/sandbox/media/<endpoint>/<id>`、`POST /api/sandbox/media/<endpoint>/secret`、`GET /pub/sandbox-media/<dir>/<id>`（默认关闭）；文件存于 `.zhin/sandbox/media/`，签名地址 HMAC + 有效期并绑定会话与上传者；页面支持拖放、粘贴、选择文件上传。与 P1 合并为 1.3.0，npm 上 1.3.0 未被占用。"
     },
     {
       "package": "@zhin.js/adapter",

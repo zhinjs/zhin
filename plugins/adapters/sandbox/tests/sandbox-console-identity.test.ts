@@ -27,6 +27,9 @@ function fakeHttp() {
   let accept: ((connection: unknown) => void) | undefined;
   const http = {
     ws: () => ({ onConnection: (listener: (connection: unknown) => void) => { accept = listener; return () => { accept = undefined; }; }, close: () => undefined }),
+    // ADR 0064 I1: the endpoint also mounts its hosted-media routes.
+    route: () => () => undefined,
+    address: undefined,
   };
   const connect = async (principal: Principal) => {
     const frames: Frame[] = [];

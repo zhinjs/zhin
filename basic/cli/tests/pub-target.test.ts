@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolvePublishTarget } from '../src/commands/pub.js';
+import { resolvePublishAccess, resolvePublishTarget } from '../src/commands/pub.js';
 
 let root: string;
 const write = (dir: string, manifest: Record<string, unknown>, extra: Record<string, string> = {}) => {
@@ -42,5 +42,21 @@ describe('zhin pub target', () => {
     expect(target.kind).toBe('none');
     expect(target.kind === 'none' && target.message).toContain('zhin 字段');
     expect(resolvePublishTarget(root, 'nope').kind).toBe('none');
+  });
+});
+
+describe('zhin pub access', () => {
+  it('keeps a private package restricted unless --access says otherwise', () => {
+    const restricted = { publishConfig: { access: 'restricted' } };
+    expect(resolvePublishAccess(undefined, restricted)).toBe('restricted');
+    expect(resolvePublishAccess('public', restricted)).toBe('public');
+    expect(resolvePublishAccess('restricted', {})).toBe('restricted');
+  });
+
+  it('defaults to public and rejects unknown values', () => {
+    expect(resolvePublishAccess(undefined, {})).toBe('public');
+    expect(resolvePublishAccess(undefined, { publishConfig: { access: 'public' } })).toBe('public');
+    expect(() => resolvePublishAccess('private', {})).toThrow(/public 或 restricted/u);
+    expect(() => resolvePublishAccess(undefined, { publishConfig: { access: 'team' } })).toThrow(/team/u);
   });
 });

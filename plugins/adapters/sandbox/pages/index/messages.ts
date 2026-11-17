@@ -276,7 +276,18 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "执行完成": "Execution completed",
   "运行中": "Running",
   "已完成": "Completed",
-  "这条消息没有回复：": "No reply to this message: "
+  "这条消息没有回复：": "No reply to this message: ",
+  "正在载入文件…": "Loading file…",
+  "文件已删除或已过期": "The file was deleted or has expired",
+  "上传文件": "Upload file",
+  "上传文件（图片、语音、任意文件；也可拖放或粘贴）": "Upload a file (image, voice or any file; you can also drop or paste it)",
+  "上传语音": "Upload voice",
+  "上传语音（本地音频文件）": "Upload voice (a local audio file)",
+  "上传": "Uploads",
+  "上传失败：{0}": "Upload failed: {0}",
+  "正在上传…": "Uploading…",
+  "关闭": "Close",
+  "拖放、粘贴或用附件按钮上传本地文件，发送时带 Sandbox 托管的签名地址": "Drop, paste or attach local files; they are sent as signed Sandbox-hosted links"
 };
 
 export function sandboxText(locale: SandboxLocale, message: string, values: readonly unknown[] = []): string {

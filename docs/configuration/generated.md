@@ -955,6 +955,63 @@ outline: [2, 3]
 | `icqq.profile.interests` | array \| null | 否 | — | — |
 | `icqq.profile.bio` | string \| null | 否 | — | — |
 
+### ipad-wechat
+
+[`plugins/adapters/ipad-wechat/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/ipad-wechat/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `ipad-wechat.dataDir` | string | 否 | `"data/ipad-wechat"` | SDK 状态根目录；每个账号使用 &lt;dataDir&gt;/accounts/&lt;实例&gt;，同一目录不能交给两个进程 |
+| `ipad-wechat.loginTimeoutMs` | integer | 否 | `600000` | 首次扫码/恢复登录的超时 |
+| `ipad-wechat.qrPollIntervalMs` | integer | 否 | `1000` | 扫码状态轮询间隔 |
+| `ipad-wechat.heartbeatIntervalSeconds` | integer | 否 | — | 业务心跳间隔；不填使用 SDK 默认值 |
+| `ipad-wechat.reconnect` | boolean | 否 | `true` | 长链断开后由 SDK 自动重连 |
+| `ipad-wechat.ignoreSelfMessages` | boolean | 否 | `true` | 忽略本账号在其他设备发出的消息 |
+| `ipad-wechat.downloadImages` | boolean | 否 | `true` | 收到图片时先下载到本地再分发 |
+| `ipad-wechat.verification` | object | 否 | — | 设备验证页（滑块/人脸）。仅在微信要求验证新设备时使用；不配置则登录在需要验证时失败并提示 |
+| `ipad-wechat.verification.key` | string | 是 | — | 页面 TLS 私钥 PEM 文件路径 |
+| `ipad-wechat.verification.cert` | string | 是 | — | 页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin） |
+| `ipad-wechat.verification.host` | string | 否 | `"127.0.0.1"` | 监听地址；手机访问时用 0.0.0.0 |
+| `ipad-wechat.verification.port` | integer | 否 | `8443` | — |
+| `ipad-wechat.verification.publicOrigin` | string | 否 | — | 手机可访问的 https 源，如 https://192.168.1.10:8443 |
+| `ipad-wechat.verification.timeoutMs` | integer | 否 | `600000` | 等待完成验证的时长 |
+| `ipad-wechat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `ipad-wechat.endpoints[].id` | string | 是 | — | 账号名（Endpoint id） |
+| `ipad-wechat.endpoints[].dataDir` | string | 否 | — | SDK 状态根目录；每个账号使用 &lt;dataDir&gt;/accounts/&lt;实例&gt;，同一目录不能交给两个进程 |
+| `ipad-wechat.endpoints[].loginTimeoutMs` | integer | 否 | — | 首次扫码/恢复登录的超时 |
+| `ipad-wechat.endpoints[].qrPollIntervalMs` | integer | 否 | — | 扫码状态轮询间隔 |
+| `ipad-wechat.endpoints[].heartbeatIntervalSeconds` | integer | 否 | — | 业务心跳间隔；不填使用 SDK 默认值 |
+| `ipad-wechat.endpoints[].reconnect` | boolean | 否 | — | 长链断开后由 SDK 自动重连 |
+| `ipad-wechat.endpoints[].ignoreSelfMessages` | boolean | 否 | — | 忽略本账号在其他设备发出的消息 |
+| `ipad-wechat.endpoints[].downloadImages` | boolean | 否 | — | 收到图片时先下载到本地再分发 |
+| `ipad-wechat.endpoints[].verification` | object | 否 | — | 设备验证页（滑块/人脸）。仅在微信要求验证新设备时使用；不配置则登录在需要验证时失败并提示 |
+| `ipad-wechat.endpoints[].verification.key` | string | 是 | — | 页面 TLS 私钥 PEM 文件路径 |
+| `ipad-wechat.endpoints[].verification.cert` | string | 是 | — | 页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin） |
+| `ipad-wechat.endpoints[].verification.host` | string | 否 | `"127.0.0.1"` | 监听地址；手机访问时用 0.0.0.0 |
+| `ipad-wechat.endpoints[].verification.port` | integer | 否 | `8443` | — |
+| `ipad-wechat.endpoints[].verification.publicOrigin` | string | 否 | — | 手机可访问的 https 源，如 https://192.168.1.10:8443 |
+| `ipad-wechat.endpoints[].verification.timeoutMs` | integer | 否 | `600000` | 等待完成验证的时长 |
+| `ipad-wechat.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `ipad-wechat.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `ipad-wechat.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `ipad-wechat.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `ipad-wechat.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `ipad-wechat.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `ipad-wechat.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `ipad-wechat.profile` | object | 否 | — | 账号资料兜底 |
+| `ipad-wechat.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `ipad-wechat.profile.age` | integer \| null | 否 | — | — |
+| `ipad-wechat.profile.birthday` | string \| null | 否 | — | — |
+| `ipad-wechat.profile.signature` | string \| null | 否 | — | — |
+| `ipad-wechat.profile.avatar` | string \| null | 否 | — | — |
+| `ipad-wechat.profile.interests` | array \| null | 否 | — | — |
+| `ipad-wechat.profile.bio` | string \| null | 否 | — | — |
+
 ### juejin
 
 [`plugins/adapters/juejin/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/juejin/schema.json)
@@ -1398,6 +1455,16 @@ outline: [2, 3]
 | `sandbox.endpoints[].profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.interests` | array \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.endpoints[].media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.endpoints[].media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.endpoints[].media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.endpoints[].media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.endpoints[].media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.endpoints[].media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.endpoints[].media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.endpoints[].media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.endpoints[].media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 | `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `sandbox.nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `sandbox.profile` | object | 否 | — | 账号资料兜底 |
@@ -1408,6 +1475,16 @@ outline: [2, 3]
 | `sandbox.profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.profile.interests` | array \| null | 否 | — | — |
 | `sandbox.profile.bio` | string \| null | 否 | — | — |
+| `sandbox.media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 
 ### satori
 

@@ -4,7 +4,10 @@ import {
     sandboxInboundFaceSegment,
     sandboxInboundMediaSegment,
     sandboxInboundMentionSegment,
+    type SandboxInboundSegment,
+    type SandboxMediaKind,
 } from '../../src/inbound-syntax.js'
+import { filesOfTransfer } from './sandboxMedia.js'
 
 export interface MessageSegment {
     type: 'text' | 'mention' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'record' | 'file'
@@ -17,6 +20,8 @@ export interface RichTextEditorProps {
     onSend?: (text: string, segments: MessageSegment[]) => void
     onChange?: (text: string, segments: MessageSegment[]) => void
     onAtTrigger?: (show: boolean, searchQuery: string, position?: { top: number; left: number }) => void
+    /** Files pasted or dropped into the composer (ADR 0064 D13: uploaded, then inserted as hosted links). */
+    onFiles?: (files: File[]) => void
     minHeight?: string
     maxHeight?: string
 }
@@ -30,13 +35,15 @@ export interface RichTextEditorRef {
     insertImage: (url: string) => void
     insertVideo: (url: string) => void
     insertAudio: (url: string) => void
+    /** An uploaded file's segment (`sandboxUploadedSegment`); `previewUrl` is a local blob for the thumbnail. */
+    insertUploaded: (segment: SandboxInboundSegment, previewUrl?: string) => void
     insertAt: (name: string, id?: string) => void
     replaceAtTrigger: (name: string, id?: string) => void
     getContent: () => { text: string; segments: MessageSegment[] }
 }
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-    ({ locale = 'zh-CN', placeholder = sandboxText(locale, "输入消息..."), onSend, onChange, onAtTrigger, minHeight = '44px', maxHeight = '200px' }, ref) => {
+    ({ locale = 'zh-CN', placeholder = sandboxText(locale, "输入消息..."), onSend, onChange, onAtTrigger, onFiles, minHeight = '44px', maxHeight = '200px' }, ref) => {
         const editorRef = useRef<HTMLDivElement>(null)
         const atTriggerTextRef = useRef<Text | null>(null)
 
@@ -65,7 +72,18 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
                     const el = node as HTMLElement
 
-                    if (el.classList.contains('editor-face')) {
+                    if (el.classList.contains('editor-uploaded')) {
+                        // Built by the same function as typed and button-inserted media (D13.3).
+                        const kind = (el.dataset.kind ?? 'file') as SandboxMediaKind
+                        const url = el.dataset.url ?? ''
+                        const size = Number(el.dataset.size)
+                        text += `[${kind}:${url}]`
+                        segments.push(sandboxInboundMediaSegment(kind, url, {
+                            ...(el.dataset.mime ? { mime_type: el.dataset.mime } : {}),
+                            ...(Number.isSafeInteger(size) ? { size } : {}),
+                            ...(el.dataset.name ? { file_name: el.dataset.name } : {}),
+                        }) as MessageSegment)
+                    } else if (el.classList.contains('editor-face')) {
                         const faceId = el.dataset.id
                         text += `[face:${faceId}]`
                         segments.push(sandboxInboundFaceSegment(faceId ?? '') as MessageSegment)
@@ -152,6 +170,32 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             span.contentEditable = 'false'
             span.textContent = sandboxText(locale, "🎵 音频")
             insertNodeAtCursor(span)
+            handleChange()
+        }
+
+        // 插入已上传的文件（托管地址）
+        const insertUploaded = (segment: SandboxInboundSegment, previewUrl?: string) => {
+            if (!editorRef.current) return
+            const kind = segment.type as SandboxMediaKind
+            const media = (segment.data.media ?? {}) as { value?: unknown; mime_type?: unknown; size?: unknown; file_name?: unknown }
+            if (typeof media.value !== 'string' || !media.value) return
+            const name = typeof media.file_name === 'string' ? media.file_name : typeof segment.data.name === 'string' ? segment.data.name : ''
+            const node = kind === 'image' && previewUrl ? document.createElement('img') : document.createElement('span')
+            node.className = `editor-uploaded editor-uploaded-${kind}`
+            node.dataset.kind = kind
+            node.dataset.url = media.value
+            if (typeof media.mime_type === 'string') node.dataset.mime = media.mime_type
+            if (typeof media.size === 'number') node.dataset.size = String(media.size)
+            if (name) node.dataset.name = name
+            node.contentEditable = 'false'
+            if (node instanceof HTMLImageElement) {
+                node.src = previewUrl!
+                node.alt = name || sandboxText(locale, "图片")
+            } else {
+                const label = kind === 'audio' ? sandboxText(locale, "🎵 音频") : kind === 'video' ? sandboxText(locale, "📹 视频") : kind === 'image' ? sandboxText(locale, "图片") : sandboxText(locale, "文件")
+                node.textContent = name ? `${label} ${name}` : label
+            }
+            insertNodeAtCursor(node)
             handleChange()
         }
 
@@ -409,6 +453,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             e.preventDefault()
             const clipboardData = e.clipboardData
 
+            // 文件（图片、语音、任意文件）交给页面上传，再插入托管地址（ADR 0064 D13.4）
+            const pastedFiles = onFiles ? filesOfTransfer(clipboardData) : []
+            if (pastedFiles.length) {
+                onFiles!(pastedFiles)
+                return
+            }
+
             // 优先处理图片粘贴
             const items = Array.from(clipboardData.items)
             const imageItem = items.find((item) => item.type.startsWith('image/'))
@@ -434,6 +485,19 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             }
         }
 
+        // 拖放文件
+        const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+            if (!onFiles || !Array.from(e.dataTransfer.types ?? []).includes('Files')) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'copy'
+        }
+        const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+            const dropped = onFiles ? filesOfTransfer(e.dataTransfer) : []
+            if (!dropped.length) return
+            e.preventDefault()
+            onFiles!(dropped)
+        }
+
         // 处理键盘事件
         const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -454,6 +518,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             insertImage,
             insertVideo,
             insertAudio,
+            insertUploaded,
             insertAt,
             replaceAtTrigger,
             getContent
@@ -470,6 +535,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                 onInput={handleChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
                 data-placeholder={placeholder}
                 className="rich-text-editor"
                 style={{ width: '100%', minHeight, maxHeight }}
