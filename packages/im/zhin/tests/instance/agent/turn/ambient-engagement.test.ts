@@ -259,7 +259,7 @@ describe('DecisionEngagementJudge', () => {
     const observe = vi.fn();
     const judge = new DecisionEngagementJudge({ provider: service, policy: { mode: 'active', timeoutMs: 1500 }, observe });
     await expect(judge.judge(input())).resolves.toEqual({ engage: true, confidence: 0.86, reason: 'decision: engage', source: 'decision:jev-1.14',
-      usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 }, durationMs: expect.any(Number) });
+      ref: { kind: 'decision', model: 'jev-1.14' }, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 }, durationMs: expect.any(Number) });
     const [request, options] = service.evaluate.mock.calls[0]!;
     expect(request.state).toEqual({ bot: '小知', botIsInConversation: true, minutesSinceBotSpoke: 2, recentMessages: ['小林 (1): 有人知道怎么配代理吗'] });
     expect(Object.keys(request.questions)).toEqual(['engagement']);

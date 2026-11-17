@@ -15,7 +15,9 @@ import {
   LlmEngagementJudge,
   type AmbientDecision,
   type EngagementJudge,
+  isOpaqueJudgeProviderId,
   type EngagementJudgeCall,
+  type EngagementJudgeRef,
   type EngagementJudgeUsage,
   type EngagementJudgment,
 } from './ambient-engagement.js';
@@ -53,13 +55,20 @@ export function logAmbientDecisionObservation(observation: DecisionObservation):
   }));
 }
 
-/** `language:<service display name>/<model>` for a language model on `accountId` (#1250). */
+/**
+ * `language:<service display name>/<model>` for a language model on `accountId` (#1250). A display
+ * string for logs: an opaque graph id (`services:<uuid>` …) is never shown, the driver name or the
+ * model alone (`language:<model>`) stands in for it. Statistics group by {@link EngagementJudgeRef}.
+ */
 export function ambientLanguageSource(graph: ProviderGraph, accountId: string, model: string): string {
   const account = graph.accounts[accountId];
   const service = account ? graph.services[account.serviceId] : undefined;
-  const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
-  const label = service ? text(service.label) ?? text(service.driver?.id) ?? service.id : accountId;
-  return `language:${label}/${model}`;
+  const text = (value: unknown) => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    return trimmed && !isOpaqueJudgeProviderId(trimmed) ? trimmed : undefined;
+  };
+  const label = service ? text(service.label) ?? text(service.driver?.id) ?? text(service.id) : undefined;
+  return `language:${label ? `${label}/` : ''}${model}`;
 }
 
 function usageField(usage: EngagementJudgeUsage | undefined, field: keyof EngagementJudgeUsage): number | string {
@@ -70,6 +79,10 @@ function usageField(usage: EngagementJudgeUsage | undefined, field: keyof Engage
  * One `[ai.usage] judge` line per ambient judge call (#1250): the judge is not an Agent turn, so the
  * turn summary never covers it. Same token columns as `turn`; a decision model that reports no usage
  * writes only the call count and time. Never chat text, the judge's reason or a raw error.
+ *
+ * Unit: one line per judgment. `calls: 1` counts judgments, not model requests: when the request
+ * phase switched to a fallback, the line names the fallback and `ms` is both requests together
+ * (tokens are those the answering request reported).
  */
 export function logAmbientJudgeUsage(call: EngagementJudgeCall, conv: string): void {
   try {
@@ -123,6 +136,7 @@ export function createAmbientEngagementJudge(input: Readonly<{
         const base = policy?.mode === 'active' ? undefined : await (async () => {
           const selected = await scope.resolve({ kind: 'language', purpose: 'ambient' });
           const primarySource = ambientLanguageSource(scope.graph, selected.account.id, selected.model.id);
+          const primaryRef: EngagementJudgeRef = Object.freeze({ kind: 'language', profile: selected.profile.id, model: selected.model.id });
           // #1250 chat-purpose-no-fallback: an ambient purpose with fallbacks switches to them too.
           if (providerPurposeSelections({ graph: scope.graph, context: scope.context, purpose: 'ambient' }).length > 1) {
             // The fallback observers of #1322: switches (selection or request time) and failures that did not switch.
@@ -135,10 +149,12 @@ export function createAmbientEngagementJudge(input: Readonly<{
               identify: () => {
                 const events = fallbacks.events();
                 const first = events[0], last = events.at(-1);
-                if (!first || !last) return { source: primarySource };
+                if (!first || !last) return { source: primarySource, ref: primaryRef };
                 return {
                   source: ambientLanguageSource(scope.graph, last.to.accountId, last.to.model),
                   fallbackFrom: ambientLanguageSource(scope.graph, first.from.accountId, first.from.model),
+                  ref: Object.freeze({ kind: 'language', profile: last.to.profileId, model: last.to.model,
+                    fallbackFrom: Object.freeze({ profile: first.from.profileId, model: first.from.model }) }),
                 };
               },
             });
@@ -146,7 +162,7 @@ export function createAmbientEngagementJudge(input: Readonly<{
           return new LlmEngagementJudge(
             createInvocationCompletion({ binding: selected, client: scope.client, purpose: 'ambient' }),
             invocationModel(selected),
-            { onCall, identify: () => ({ source: primarySource }) },
+            { onCall, identify: () => ({ source: primarySource, ref: primaryRef }) },
           );
         })();
         if (!provider || !policy || policy.mode === 'off') {
@@ -160,6 +176,7 @@ export function createAmbientEngagementJudge(input: Readonly<{
           policy,
           onCall,
           ...(configuredDecisionModel ? { model: configuredDecisionModel } : {}),
+          ...(policy.profile ? { profile: policy.profile } : {}),
           observe: observation => {
             logAmbientDecisionObservation(observation);
             assistantStatus?.recordDecision(observation);
@@ -327,6 +344,7 @@ export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDeci
         ...(decision.failure?.source ? { judge: decision.failure.source } : {}),
         ...(decision.failure?.fallbackFrom ? { judgeFallbackFrom: decision.failure.fallbackFrom } : {}),
         ...(decision.failure ? { judgeError: decision.failure.category } : {}),
+        ...(decision.failure?.ref ? judgeRefAuditFields(decision.failure.ref) : {}),
       }
     : { decision: decision.kind, confidence: decision.judgment.confidence, ...judgeAuditFields(decision.judgment) };
   audit({ kind: 'ambient_decision', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload });
@@ -334,16 +352,36 @@ export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDeci
 }
 
 /**
- * The judge facts of an `ambient_decision` payload (#1250): model (`judge`), the configured model a
- * fallback replaced (`judgeFallbackFrom`), call time and reported tokens. Flat keys, so ADR 0066's
- * compare statistics can read the same fields from both the deciding and the compared judge.
+ * The judge facts of an `ambient_decision` payload (#1250): model (`judge`, a display string), the
+ * configured model a fallback replaced (`judgeFallbackFrom`), the same as stable ids (`judgeKind`,
+ * `judgeProfile`, `judgeModel`, `judgeFallbackFromProfile`, `judgeFallbackFromModel`), call time and
+ * reported tokens. Never the judge's reason (it can quote the chat).
+ *
+ * Key namespace: every key of the deciding judge starts with `judge`. ADR 0066 P0 keeps these keys
+ * and fills them from the structured `source` (`judgeProfile` = `source.profile`, and so on); the
+ * `judge` / `judgeFallbackFrom` strings stay for old readers. The compared judge of ADR 0066 P2 is
+ * written under the `compare` prefix with the same suffixes (`compare` = its verdict per D3,
+ * `compareJudge`, `compareJudgeProfile`, `compareJudgeMs`, `compareJudgeUsage`, …), so per-member
+ * statistics read one shape for both sides. Do not add other keys starting with `compare`.
  */
 export function judgeAuditFields(judgment: EngagementJudgment): Record<string, unknown> {
   return {
     ...(judgment.source ? { judge: judgment.source } : {}),
     ...(judgment.fallbackFrom ? { judgeFallbackFrom: judgment.fallbackFrom } : {}),
+    ...(judgment.ref ? judgeRefAuditFields(judgment.ref) : {}),
     ...(judgment.durationMs !== undefined ? { judgeMs: judgment.durationMs } : {}),
     ...(judgment.usage ? { judgeUsage: { ...judgment.usage } } : {}),
+  };
+}
+
+/** {@link EngagementJudgeRef} as flat `judge*` audit keys (see {@link judgeAuditFields}). */
+function judgeRefAuditFields(ref: EngagementJudgeRef): Record<string, unknown> {
+  return {
+    judgeKind: ref.kind,
+    ...(ref.profile ? { judgeProfile: ref.profile } : {}),
+    judgeModel: ref.model,
+    ...(ref.fallbackFrom?.profile ? { judgeFallbackFromProfile: ref.fallbackFrom.profile } : {}),
+    ...(ref.fallbackFrom ? { judgeFallbackFromModel: ref.fallbackFrom.model } : {}),
   };
 }
 

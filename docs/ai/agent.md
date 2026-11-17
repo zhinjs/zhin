@@ -30,8 +30,9 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 [INFO] [ai.usage] judge | scene: ambient | conv: qq:123456 | status: completed | kind: language | model: 备用站/gpt-mini | fallback_from: 主站/gpt-4o-mini | calls: 1 | input: 820 | output: 24 | cache_read: 0 | cache_write: ? | ms: 640
 ```
 
-- `model` 是实际作答（或最后失败）的模型，写成「服务显示名/模型」；切到备用模型时多一个 `fallback_from`，是原来配置的模型。`kind` 为 `language`（聊天模型）或 `decision`（决策模型）。
+- `model` 是实际作答（或最后失败）的模型，写成「服务显示名/模型」（服务没有可读名称时退回驱动名，再不行只写模型，不显示 `services:<uuid>` 这类内部 id）；切到备用模型时多一个 `fallback_from`，是原来配置的模型。`kind` 为 `language`（聊天模型）或 `decision`（决策模型）。
 - 失败时 `status: failed`，`error` 只写错误类别（如 `timeout`、`auth`、`rate_limit`、`invalid_response`），不写服务返回的原文。
+- 一次判断写一行：`calls` 是判断次数，不是模型请求次数。请求阶段切到备用模型时，这一行写备用模型，`ms` 是两次请求的合计，token 是作答那次请求回传的用量。
 - 决策模型没有回传用量时只写 `calls` 和 `ms`。Console「群聊插话」状态的 `judgeDaily` 按天汇总这些调用的次数与 token（进程内存，重启后从当天重新计）。
 
 需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。

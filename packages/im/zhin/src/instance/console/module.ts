@@ -15,9 +15,11 @@ export {
 export { SystemLogStore, resolveSystemLogConfig } from './system-log.js';
 
 export {
+  AMBIENT_JUDGE_DAYS,
   AMBIENT_STATUS_PERMISSION,
   AssistantStatus,
   SKILLS_STATUS_PERMISSION,
+  type AmbientJudgeDay,
   type AmbientStatus,
   type SkillsStatus,
 } from './assistant-status.js';

@@ -3,6 +3,7 @@ import {
   assistantText,
   classifyProviderError,
   createContext,
+  finishFailureKind,
   createUserMessage,
   parseLenientJsonObject,
   type AmbientEngagementConfig,
@@ -27,6 +28,25 @@ export interface EngagementJudgeUsage {
   readonly totalTokens?: number;
 }
 
+/** A model by its stable Profile id (when known) and model id; never a display name. */
+export interface EngagementJudgeModelRef {
+  /** Provider-graph Profile id; absent when the judge was not built from a Profile. */
+  readonly profile?: string;
+  readonly model: string;
+}
+
+/**
+ * The judging model as data (#1250), the shape ADR 0066 P0 gives `EngagementJudgment.source`:
+ * `{ kind, profile, model, fallbackFrom? }`. Display names change and can repeat, so statistics
+ * group by this, not by the `source` string. ADR 0066 P0 moves this object into `source` itself;
+ * until then `source` stays the display string derived from it (old readers keep working).
+ */
+export interface EngagementJudgeRef extends EngagementJudgeModelRef {
+  readonly kind: 'language' | 'decision';
+  /** The configured model a fallback replaced. */
+  readonly fallbackFrom?: EngagementJudgeModelRef;
+}
+
 /**
  * One model call made to judge engagement, successful or not (#1250). Metadata only: never the
  * chat lines, the judge's reason or a provider's raw error text. Reported once per call to
@@ -38,9 +58,15 @@ export interface EngagementJudgeCall {
   readonly source: string;
   /** The configured model the call fell back from, in the same form; absent without a fallback. */
   readonly fallbackFrom?: string;
+  /** The same model as data (stable Profile id); `source` / `fallbackFrom` are display strings. */
+  readonly ref?: EngagementJudgeRef;
   readonly status: 'completed' | 'failed';
-  /** Failure class (`timeout`, `rate_limit`, `invalid_response`, …) when `status` is `failed`. */
+  /** Failure class (`timeout`, `aborted`, `rate_limit`, `safety_block`, `invalid_response`, …) when `status` is `failed`. */
   readonly errorCategory?: string;
+  /**
+   * Wall time of this judge call. One call is one judgment, not one model request: when the
+   * request phase switched to a fallback it covers both requests.
+   */
   readonly durationMs: number;
   /** Absent when the provider reported no usage. */
   readonly usage?: EngagementJudgeUsage;
@@ -55,6 +81,8 @@ export interface EngagementJudgment {
   readonly source?: string;
   /** Set when a fallback answered: the configured model it replaced (same form as `source`). */
   readonly fallbackFrom?: string;
+  /** The judging model as data (stable Profile id), see {@link EngagementJudgeRef}. */
+  readonly ref?: EngagementJudgeRef;
   /** Tokens of the call that produced this judgment, when reported. */
   readonly usage?: EngagementJudgeUsage;
   /** Wall time of that call. */
@@ -66,6 +94,7 @@ export interface EngagementJudgeFailure {
   readonly category: string;
   readonly source?: string;
   readonly fallbackFrom?: string;
+  readonly ref?: EngagementJudgeRef;
 }
 
 /** A judge call that failed; `call` says which model and the failure class. */
@@ -80,7 +109,8 @@ export class EngagementJudgeError extends Error {
 export function engagementJudgeFailure(error: unknown): EngagementJudgeFailure {
   if (error instanceof EngagementJudgeError) {
     return { category: error.call.errorCategory ?? 'unknown', source: error.call.source,
-      ...(error.call.fallbackFrom ? { fallbackFrom: error.call.fallbackFrom } : {}) };
+      ...(error.call.fallbackFrom ? { fallbackFrom: error.call.fallbackFrom } : {}),
+      ...(error.call.ref ? { ref: error.call.ref } : {}) };
   }
   return { category: classifyProviderError(error).kind };
 }
@@ -136,7 +166,7 @@ export interface LlmEngagementJudgeOptions {
    * The model that answered (or last failed) and, after a fallback, the configured one it replaced,
    * read once the call has ended. Default: `language:<model.provider>/<model.id>`.
    */
-  readonly identify?: () => Readonly<{ source: string; fallbackFrom?: string }>;
+  readonly identify?: () => Readonly<{ source: string; fallbackFrom?: string; ref?: EngagementJudgeRef }>;
   /** Called once per judge call, successful or not; observer failures are ignored. */
   readonly onCall?: (call: EngagementJudgeCall) => void;
   readonly now?: () => number;
@@ -171,23 +201,24 @@ export class LlmEngagementJudge implements EngagementJudge {
       usage = reportedUsage(response?.usage);
       if (response.errorMessage) {
         // Only the class is kept: a provider's error text can quote the request.
-        errorCategory = classifyProviderError(new Error(response.errorMessage)).kind;
         failure = new Error(response.errorMessage);
+        errorCategory = input.signal.aborted
+          ? abortCategory(input.signal)
+          : finishFailureKind(response.errorMessage) ?? classifyProviderError(failure).kind;
       } else {
         try { judgment = parseJudgment(assistantText(response)); }
         catch (error) { errorCategory = 'invalid_response'; failure = error; }
       }
     } catch (error) {
       failure = error;
-      errorCategory = input.signal.aborted
-        ? (isTimeoutReason(input.signal.reason) ? 'timeout' : 'aborted')
-        : classifyProviderError(error).kind;
+      errorCategory = input.signal.aborted ? abortCategory(input.signal) : classifyProviderError(error).kind;
     }
     const identity = this.#identify();
     const call: EngagementJudgeCall = Object.freeze({
       kind: 'language',
       source: identity.source,
       ...(identity.fallbackFrom ? { fallbackFrom: identity.fallbackFrom } : {}),
+      ...(identity.ref ? { ref: identity.ref } : {}),
       status: judgment ? 'completed' : 'failed',
       ...(judgment ? {} : { errorCategory: errorCategory ?? 'unknown' }),
       durationMs: Math.max(0, Math.round(now() - started)),
@@ -199,22 +230,39 @@ export class LlmEngagementJudge implements EngagementJudge {
       ...judgment,
       source: call.source,
       ...(call.fallbackFrom ? { fallbackFrom: call.fallbackFrom } : {}),
+      ...(call.ref ? { ref: call.ref } : {}),
       ...(usage ? { usage } : {}),
       durationMs: call.durationMs,
     });
   }
 
-  #identify(): Readonly<{ source: string; fallbackFrom?: string }> {
+  #identify(): Readonly<{ source: string; fallbackFrom?: string; ref?: EngagementJudgeRef }> {
     try {
       const identity = this.#options.identify?.();
       if (identity?.source) return identity;
     } catch { /* Fall back to the selected model. */ }
-    return { source: `language:${this.model.provider}/${this.model.id}` };
+    const provider = readableProviderName(this.model.provider);
+    return { source: `language:${provider ? `${provider}/` : ''}${this.model.id}`, ref: { kind: 'language', model: this.model.id } };
   }
+}
+
+/** Ids minted by the provider graph (`services:<uuid>` …) carry no meaning for a reader (as the gateway's `isOpaqueProviderId`). */
+export function isOpaqueJudgeProviderId(value: string): boolean {
+  return /^(services|accounts|profiles):/u.test(value);
+}
+
+function readableProviderName(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && !isOpaqueJudgeProviderId(text) ? text : undefined;
 }
 
 function isTimeoutReason(reason: unknown): boolean {
   return reason instanceof Error ? reason.name === 'TimeoutError' : false;
+}
+
+/** `timeout` when the caller's signal timed out, `aborted` when it was cancelled. */
+function abortCategory(signal: AbortSignal): 'timeout' | 'aborted' {
+  return isTimeoutReason(signal.reason) ? 'timeout' : 'aborted';
 }
 
 /** Usage fields the provider reported (cache fields count as reported unless marked otherwise, as in `ai.usage`). */
@@ -293,6 +341,8 @@ export interface DecisionEngagementJudgeOptions {
   readonly onCall?: (call: EngagementJudgeCall) => void;
   /** The configured decision model, named in `source` when a failed call reported none. */
   readonly model?: string;
+  /** The decision Profile id (`policy.profile`), for {@link EngagementJudgeRef}. */
+  readonly profile?: string;
 }
 
 /**
@@ -350,10 +400,18 @@ export class DecisionEngagementJudge implements EngagementJudge {
       }
     } catch (error) {
       reason = signal.aborted && !input.signal.aborted ? 'timeout' : 'provider_error';
-      if (reason === 'provider_error') {
-        const kind = input.signal.aborted ? 'aborted' : classifyProviderError(error).kind;
+      if (reason === 'provider_error' && !input.signal.aborted) {
+        const kind = classifyProviderError(error).kind;
         providerErrorKind = kind === 'unknown' ? undefined : kind;
       }
+    }
+    // The caller's signal ended the call (its own timeout or a cancel): a failed call of that class,
+    // reported once, whatever the provider managed to return.
+    const outerAbort = input.signal.aborted ? abortCategory(input.signal) : undefined;
+    if (outerAbort) {
+      judgment = undefined;
+      reason = outerAbort === 'timeout' ? 'timeout' : 'provider_error';
+      providerErrorKind = outerAbort;
     }
     const usage = evidence?.usage;
     const failed = judgment === undefined;
@@ -379,17 +437,20 @@ export class DecisionEngagementJudge implements EngagementJudge {
     const call: EngagementJudgeCall = Object.freeze({
       kind: 'decision',
       source: `decision:${reportedModel ?? 'unknown'}`,
+      ref: Object.freeze({ kind: 'decision' as const, ...(this.#options.profile ? { profile: this.#options.profile } : {}), model: reportedModel ?? 'unknown' }),
       status: failed ? 'failed' : 'completed',
       ...(failed ? { errorCategory: providerErrorKind ?? reason ?? 'provider_error' } : {}),
       durationMs: Math.max(0, Math.round(observation.durationMs)),
       ...(callUsage ? { usage: callUsage } : {}),
     });
     try { this.#options.onCall?.(call); } catch { /* Diagnostics never change the judgment. */ }
-    input.signal.throwIfAborted();
+    if (outerAbort) {
+      throw new EngagementJudgeError(call, { cause: input.signal.reason, message: `Ambient decision failed: ${outerAbort}` });
+    }
     if (!judgment) {
       throw new EngagementJudgeError(call, { message: `Ambient decision failed: ${reason ?? 'provider_error'}` });
     }
-    return Object.freeze({ ...judgment, ...(callUsage ? { usage: callUsage } : {}), durationMs: call.durationMs });
+    return Object.freeze({ ...judgment, ref: call.ref, ...(callUsage ? { usage: callUsage } : {}), durationMs: call.durationMs });
   }
 }
 

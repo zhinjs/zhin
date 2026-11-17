@@ -25,7 +25,7 @@ it.each(['codex', 'api-key'] as const)('uses the selected %s Profile parameters 
     const binding = await scope.resolve({ kind: 'language', purpose: 'ambient' });
     const judge = new LlmEngagementJudge(createInvocationCompletion({ binding, client: scope.client, purpose: 'ambient' }), invocationModel(binding));
     await expect(judge.judge({ botName: 'bot', recent: ['hello bot'], signal: new AbortController().signal })).resolves.toEqual({ engage: true, confidence: 0.9, reason: 'synthetic',
-      source: `language:${binding.account.id}/selected`, usage: { inputTokens: 3, outputTokens: 2, cacheReadTokens: 0, totalTokens: 5 }, durationMs: expect.any(Number) });
+      source: `language:${binding.account.id}/selected`, ref: { kind: 'language', model: 'selected' }, usage: { inputTokens: 3, outputTokens: 2, cacheReadTokens: 0, totalTokens: 5 }, durationMs: expect.any(Number) });
     expect(requests).toHaveLength(1); const body = await requests[0].json();
     expect(body.model).toBe('selected');
     if (kind === 'codex') {

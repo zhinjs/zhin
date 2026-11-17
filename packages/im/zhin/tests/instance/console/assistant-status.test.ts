@@ -91,6 +91,27 @@ it('sums ambient judge calls and tokens per day in the instance time zone, keepi
   expect(kept.at(-1)).toMatchObject({ day: '2026-11-26', calls: 1, unreportedCalls: 1, inputTokens: 0 });
 });
 
+it('drops ambient judge days older than 7 days, on write and on read, after a long quiet spell (#1250)', () => {
+  const time = clock(Date.UTC(2026, 10, 17, 4, 0)); // 12:00 in Asia/Shanghai
+  const status = new AssistantStatus({ now: time.now, timeZone: 'Asia/Shanghai' });
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 100 });
+  time.advance(24 * HOUR);
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 100 });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-17', '2026-11-18']);
+
+  // Read only: six days later the first day is still inside the window, seven days later it is not.
+  time.advance(5 * 24 * HOUR);
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-17', '2026-11-18']);
+  time.advance(24 * HOUR);
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-18']);
+
+  // Thirty-plus days of silence: no stale day is shown, and the next write keeps only today.
+  time.advance(31 * 24 * HOUR);
+  expect(status.ambient().judgeDaily).toEqual([]);
+  status.recordAmbientJudgeCall({ kind: 'decision', source: 'decision:jev', status: 'completed', durationMs: 20 });
+  expect(status.ambient().judgeDaily).toEqual([expect.objectContaining({ day: '2026-12-25', calls: 1, byKind: { language: 0, decision: 1 } })]);
+});
+
 it('aggregates structured decision calls per task for 技能助手', () => {
   const time = clock();
   const status = new AssistantStatus({ now: time.now });

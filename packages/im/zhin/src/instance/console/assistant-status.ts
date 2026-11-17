@@ -51,6 +51,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 const WINDOW_LIMIT = 2000;
 /** Days of ambient judge totals kept in memory (today included). */
 export const AMBIENT_JUDGE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type AmbientOutcome = 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
 export type AmbientSkipReason = 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
@@ -75,6 +76,10 @@ export interface AmbientRecentItem {
 export interface AmbientJudgeDay {
   /** `YYYY-MM-DD`. */
   readonly day: string;
+  /**
+   * Judge calls (one per judgment and judging model), not model requests: a judgment whose request
+   * phase switched to a fallback is one call, and its time covers both requests.
+   */
   readonly calls: number;
   readonly failed: number;
   /** Calls answered (or last attempted) by a fallback model. */
@@ -306,13 +311,15 @@ export class AssistantStatus {
 
   /** One ambient judge model call (#1250); metadata only, never chat text or error text. */
   recordAmbientJudgeCall(call: EngagementJudgeCall): void {
-    const day = dayKeyOf(this.#now(), this.#timeZone);
+    const now = this.#now();
+    const day = dayKeyOf(now, this.#timeZone);
+    this.#pruneJudgeDays(now);
     let entry = this.#judgeDays.get(day);
     if (!entry) {
       entry = { day, calls: 0, failed: 0, fallbacks: 0, byKind: { language: 0, decision: 0 }, averageMs: 0, totalMs: 0, language: 0, decision: 0,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, unreportedCalls: 0 };
       this.#judgeDays.set(day, entry);
-      // Days arrive in order; drop the oldest beyond the kept window.
+      // Also at most AMBIENT_JUDGE_DAYS entries, oldest dropped first (a clock moved back keeps the cap).
       for (const key of [...this.#judgeDays.keys()].sort().slice(0, Math.max(0, this.#judgeDays.size - AMBIENT_JUDGE_DAYS))) this.#judgeDays.delete(key);
     }
     entry.calls += 1;
@@ -331,6 +338,17 @@ export class AssistantStatus {
     }
   }
 
+  /** The first kept day: today and the 6 days before it, in the status time zone. */
+  #judgeCutoff(now: number): string {
+    return dayKeyOf(now - (AMBIENT_JUDGE_DAYS - 1) * DAY_MS, this.#timeZone);
+  }
+
+  /** Drops days older than the kept window, so a long quiet spell never shows weeks-old totals. */
+  #pruneJudgeDays(now: number): void {
+    const cutoff = this.#judgeCutoff(now);
+    for (const key of [...this.#judgeDays.keys()]) if (key < cutoff) this.#judgeDays.delete(key);
+  }
+
   recordDecision(observation: DecisionObservation): void {
     push(this.#decisions, {
       at: this.#now(),
@@ -346,7 +364,9 @@ export class AssistantStatus {
   }
 
   ambient(judges: readonly string[] = []): AmbientStatus {
-    const since = this.#now() - WINDOW_MS;
+    const now = this.#now();
+    const since = now - WINDOW_MS;
+    const judgeCutoff = this.#judgeCutoff(now);
     const config = this.#readAmbientConfig();
     const conversations = config?.conversations ?? [];
     const enabled = conversations.length > 0;
@@ -366,7 +386,7 @@ export class AssistantStatus {
       }),
       recent: Object.freeze(window.slice(-RECENT_LIMIT).reverse().map((item) => Object.freeze({ ...item }))),
       updatedAt: window.at(-1)?.at ?? null,
-      judgeDaily: Object.freeze([...this.#judgeDays.values()].sort((a, b) => a.day.localeCompare(b.day))
+      judgeDaily: Object.freeze([...this.#judgeDays.values()].filter(day => day.day >= judgeCutoff).sort((a, b) => a.day.localeCompare(b.day))
         .map(({ totalMs, language, decision, byKind: _byKind, averageMs: _averageMs, ...day }) => Object.freeze({
           ...day,
           byKind: Object.freeze({ language, decision }),
