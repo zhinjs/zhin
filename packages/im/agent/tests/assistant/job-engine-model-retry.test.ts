@@ -213,6 +213,24 @@ describe('TimerScheduler model failures (#1250 b40)', () => {
     } finally { restarted.unload(); await restarted.stop(); }
   });
 
+  it('drops a pending retry when the job is removed, run by hand, fired on schedule or unloaded', async () => {
+    for (const cancel of ['remove', 'manual', 'fire', 'unload'] as const) {
+      const { engine, execute, fire } = await scheduler([failed('turn-1'), succeeded('turn-2')]);
+      try {
+        await fire();
+        expect(engine.pendingModelRetries()).toEqual(['weather']);
+        if (cancel === 'remove') await engine.removeJob('weather');
+        else if (cancel === 'manual') await engine.runJobNow('weather');
+        else if (cancel === 'fire') await fire();
+        else engine.unload();
+        expect(engine.pendingModelRetries()).toEqual([]);
+        const runs = execute.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(30 * MINUTE);
+        expect(execute.mock.calls.length).toBe(runs);
+      } finally { engine.unload(); await engine.stop(); }
+    }
+  });
+
   it('words timeouts and unnamed services, in both languages', () => {
     const failure = { kind: 'timeout', transient: true } as const;
     expect(scheduleModelFailureNotice('zh-CN', { label: '早报', failure, turnId: 't', retries: 0, retryInMs: 10 * MINUTE }))
