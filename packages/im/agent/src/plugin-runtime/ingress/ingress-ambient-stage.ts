@@ -1,10 +1,10 @@
 import { readOperationSession } from '@zhin.js/core';
 import type { ModelAvailabilityRegistry } from '@zhin.js/ai';
-import { providerPurposeSelections, type InferenceOperationScope } from '@zhin.js/ai/provider';
+import { providerPurposeSelections, type InferenceOperationScope, type ProviderGraph } from '@zhin.js/ai/provider';
 import { reportInboundOutcome, resolveAmbientSwitch, type ImRuntime, type Message, type MessageOutcomeCandidate } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
-import { createInvocationCompletion, invocationModel, resolvePurposeExecution } from '../../model-runtime/index.js';
+import { createInvocationCompletion, invocationModel, ModelFallbackLog, resolvePurposeExecution } from '../../model-runtime/index.js';
 import {
   resolveAgentDecisionRuntime,
   type DecisionObservation,
@@ -15,6 +15,9 @@ import {
   LlmEngagementJudge,
   type AmbientDecision,
   type EngagementJudge,
+  type EngagementJudgeCall,
+  type EngagementJudgeUsage,
+  type EngagementJudgment,
 } from './ambient-engagement.js';
 import { DECISION_PARENT_KEY } from '../../decision-events.js';
 import type { ColdFieldMonitor } from './cold-field.js';
@@ -29,6 +32,8 @@ import type {
 import { hasIgnoredTriggerPrefix } from './unified-mailbox-spine.js';
 
 const logger = getLogger('agent');
+/** The same channel as the per-turn `[ai.usage] turn` line; the ambient judge is not a turn (#1250). */
+const usageLogger = getLogger('ai.usage');
 
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
 export const AMBIENT_CONTEXT_CONSUMER = 'zhin.ambient-engagement';
@@ -48,6 +53,49 @@ export function logAmbientDecisionObservation(observation: DecisionObservation):
   }));
 }
 
+/** `language:<service display name>/<model>` for a language model on `accountId` (#1250). */
+export function ambientLanguageSource(graph: ProviderGraph, accountId: string, model: string): string {
+  const account = graph.accounts[accountId];
+  const service = account ? graph.services[account.serviceId] : undefined;
+  const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  const label = service ? text(service.label) ?? text(service.driver?.id) ?? service.id : accountId;
+  return `language:${label}/${model}`;
+}
+
+function usageField(usage: EngagementJudgeUsage | undefined, field: keyof EngagementJudgeUsage): number | string {
+  return usage?.[field] ?? '?';
+}
+
+/**
+ * One `[ai.usage] judge` line per ambient judge call (#1250): the judge is not an Agent turn, so the
+ * turn summary never covers it. Same token columns as `turn`; a decision model that reports no usage
+ * writes only the call count and time. Never chat text, the judge's reason or a raw error.
+ */
+export function logAmbientJudgeUsage(call: EngagementJudgeCall, conv: string): void {
+  try {
+    if (!usageLogger.isLevelEnabled('info')) return;
+    const tokens = call.usage || call.kind === 'language' ? {
+      input: usageField(call.usage, 'inputTokens'),
+      output: usageField(call.usage, 'outputTokens'),
+      cache_read: usageField(call.usage, 'cacheReadTokens'),
+      cache_write: usageField(call.usage, 'cacheWriteTokens'),
+    } : {};
+    usageLogger.info(formatCompact({
+      op: 'judge',
+      scene: 'ambient',
+      conv,
+      status: call.status,
+      kind: call.kind,
+      model: call.source.replace(/^(?:language|decision):/u, ''),
+      ...(call.fallbackFrom ? { fallback_from: call.fallbackFrom.replace(/^(?:language|decision):/u, '') } : {}),
+      ...(call.errorCategory ? { error: call.errorCategory } : {}),
+      calls: 1,
+      ...tokens,
+      ms: call.durationMs,
+    }));
+  } catch { /* A log transport failure never changes the judgment. */ }
+}
+
 /** Every judgment uses one graph and its exact retained generation. */
 export function createAmbientEngagementJudge(input: Readonly<{
   lease: SnapshotLease;
@@ -61,6 +109,10 @@ export function createAmbientEngagementJudge(input: Readonly<{
   modelAvailability?: ModelAvailabilityRegistry;
 }>): EngagementJudge {
   const { lease, key, assistantStatus, withInference, modelAvailability } = input;
+  const onCall = (call: EngagementJudgeCall): void => {
+    logAmbientJudgeUsage(call, key);
+    try { assistantStatus?.recordAmbientJudgeCall?.(call); } catch { /* Diagnostics never change the judgment. */ }
+  };
   return {
     judge: judgeInput => withInference(
       { lease, sessionKey: key, signal: AbortSignal.any([judgeInput.signal, lease.stopSignal]) },
@@ -70,25 +122,44 @@ export function createAmbientEngagementJudge(input: Readonly<{
         const provider = runtime?.forTask('ambient');
         const base = policy?.mode === 'active' ? undefined : await (async () => {
           const selected = await scope.resolve({ kind: 'language', purpose: 'ambient' });
+          const primarySource = ambientLanguageSource(scope.graph, selected.account.id, selected.model.id);
           // #1250 chat-purpose-no-fallback: an ambient purpose with fallbacks switches to them too.
           if (providerPurposeSelections({ graph: scope.graph, context: scope.context, purpose: 'ambient' }).length > 1) {
+            // The fallback observers of #1322: switches (selection or request time) and failures that did not switch.
+            const fallbacks = new ModelFallbackLog();
             const execution = await resolvePurposeExecution({ scope, purpose: 'ambient', primary: selected,
-              ...(modelAvailability ? { registry: modelAvailability } : {}) });
-            return new LlmEngagementJudge(execution.completion, execution.model);
+              ...(modelAvailability ? { registry: modelAvailability } : {}),
+              onFallback: fallbacks.record, onFallbackSkipped: fallbacks.recordSkipped });
+            return new LlmEngagementJudge(execution.completion, execution.model, {
+              onCall,
+              identify: () => {
+                const events = fallbacks.events();
+                const first = events[0], last = events.at(-1);
+                if (!first || !last) return { source: primarySource };
+                return {
+                  source: ambientLanguageSource(scope.graph, last.to.accountId, last.to.model),
+                  fallbackFrom: ambientLanguageSource(scope.graph, first.from.accountId, first.from.model),
+                };
+              },
+            });
           }
           return new LlmEngagementJudge(
             createInvocationCompletion({ binding: selected, client: scope.client, purpose: 'ambient' }),
             invocationModel(selected),
+            { onCall, identify: () => ({ source: primarySource }) },
           );
         })();
         if (!provider || !policy || policy.mode === 'off') {
           if (!base) throw new Error('No engagement judgment is available');
           return base.judge(judgeInput);
         }
+        const configuredDecisionModel = policy.profile ? scope.graph.profiles[policy.profile]?.model : undefined;
         const judge = createAmbientDecisionJudge({
           ...(base ? { base } : {}),
           provider,
           policy,
+          onCall,
+          ...(configuredDecisionModel ? { model: configuredDecisionModel } : {}),
           observe: observation => {
             logAmbientDecisionObservation(observation);
             assistantStatus?.recordDecision(observation);
@@ -202,19 +273,33 @@ export async function considerAmbientEngagement(input: Readonly<{
   if (decision.kind === 'engage') coldField.reset(key);
   else coldField.noteNotEngaged({ platform, conversationId: message.conversation.id });
   if (decision.kind !== 'skipped' || decision.reason !== 'superseded') {
-    logger.info(formatCompact({
-      op: 'ambient_engagement',
-      conv: key,
-      decision: decision.kind,
-      ...(decision.kind === 'skipped' ? { reason: decision.reason } : {
-        confidence: decision.judgment.confidence,
-        reason: decision.judgment.reason,
-        ...(decision.judgment.source ? { judge: decision.judgment.source } : {}),
-      }),
-    }));
+    logger.info(formatCompact(ambientEngagementLogFields(key, decision)));
   }
   if (decision.kind !== 'engage') reportInboundOutcome(message, ambientSilentOutcome(decision));
   return decision.kind === 'engage' ? { content: text } : null;
+}
+
+/**
+ * Fields of the `ambient_engagement` log line: the judging model (`judge`), the configured model a
+ * fallback replaced, and for `judge_failed` the failure class (`error`); never the provider's error text.
+ */
+export function ambientEngagementLogFields(conv: string, decision: AmbientDecision): Parameters<typeof formatCompact>[0] {
+  return {
+    op: 'ambient_engagement',
+    conv,
+    decision: decision.kind,
+    ...(decision.kind === 'skipped' ? {
+      reason: decision.reason,
+      ...(decision.failure?.source ? { judge: decision.failure.source } : {}),
+      ...(decision.failure?.fallbackFrom ? { fallbackFrom: decision.failure.fallbackFrom } : {}),
+      ...(decision.failure ? { error: decision.failure.category } : {}),
+    } : {
+      confidence: decision.judgment.confidence,
+      reason: decision.judgment.reason,
+      ...(decision.judgment.source ? { judge: decision.judgment.source } : {}),
+      ...(decision.judgment.fallbackFrom ? { fallbackFrom: decision.judgment.fallbackFrom } : {}),
+    }),
+  };
 }
 
 /**
@@ -229,22 +314,46 @@ export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDeci
       kind: 'ambient_decision',
       outcome: 'allow',
       reasonCode: 'ambient_engaged',
-      payload: { confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) },
+      payload: { confidence: decision.judgment.confidence, ...judgeAuditFields(decision.judgment) },
     });
     return;
   }
-  // 判定理由可能转述群聊内容，不进审计；只记判定种类与置信度。
+  // 判定理由可能转述群聊内容，不进审计；只记判定种类、置信度、判断模型与用量。
   const detail = decision.kind === 'skipped' ? decision.reason : decision.kind;
   const payload = decision.kind === 'skipped'
-    ? { decision: decision.kind, reason: decision.reason }
-    : { decision: decision.kind, confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) };
+    ? {
+        decision: decision.kind,
+        reason: decision.reason,
+        ...(decision.failure?.source ? { judge: decision.failure.source } : {}),
+        ...(decision.failure?.fallbackFrom ? { judgeFallbackFrom: decision.failure.fallbackFrom } : {}),
+        ...(decision.failure ? { judgeError: decision.failure.category } : {}),
+      }
+    : { decision: decision.kind, confidence: decision.judgment.confidence, ...judgeAuditFields(decision.judgment) };
   audit({ kind: 'ambient_decision', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload });
   audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload: { source: 'ambient', [DECISION_PARENT_KEY]: 'ambient_decision' } });
 }
 
+/**
+ * The judge facts of an `ambient_decision` payload (#1250): model (`judge`), the configured model a
+ * fallback replaced (`judgeFallbackFrom`), call time and reported tokens. Flat keys, so ADR 0066's
+ * compare statistics can read the same fields from both the deciding and the compared judge.
+ */
+export function judgeAuditFields(judgment: EngagementJudgment): Record<string, unknown> {
+  return {
+    ...(judgment.source ? { judge: judgment.source } : {}),
+    ...(judgment.fallbackFrom ? { judgeFallbackFrom: judgment.fallbackFrom } : {}),
+    ...(judgment.durationMs !== undefined ? { judgeMs: judgment.durationMs } : {}),
+    ...(judgment.usage ? { judgeUsage: { ...judgment.usage } } : {}),
+  };
+}
+
 /** ADR 0061 §1.3 `ambient_silent`: the judge's (or throttle's) reason, never the message text. */
 export function ambientSilentOutcome(decision: Exclude<AmbientDecision, { kind: 'engage' }>): MessageOutcomeCandidate {
-  if (decision.kind === 'skipped') return { outcome: 'ambient_silent', reason: decision.reason, stage: 'ambient' };
+  if (decision.kind === 'skipped') {
+    const failure = decision.failure;
+    return { outcome: 'ambient_silent', reason: decision.reason, stage: 'ambient',
+      ...(failure ? { detail: `${failure.source ? `judge ${failure.source}` : 'judge'} failed: ${failure.category}${failure.fallbackFrom ? `, fallback from ${failure.fallbackFrom}` : ''}` } : {}) };
+  }
   return { outcome: 'ambient_silent', reason: 'ambient_not_engaged', stage: 'ambient',
     ...(decision.kind === 'shadow' ? { facets: ['ambient_shadow'] } : {}),
     ...(decision.judgment.source ? { detail: `confidence ${decision.judgment.confidence}, source ${decision.judgment.source}` } : {}) };

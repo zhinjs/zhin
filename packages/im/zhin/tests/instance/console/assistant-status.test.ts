@@ -61,6 +61,36 @@ it('keeps a rolling 24h window and at most 20 recent items', () => {
   expect(snapshot.recent[0]!.group).toBe('qq:29');
 });
 
+it('sums ambient judge calls and tokens per day in the instance time zone, keeping 7 days (#1250)', () => {
+  // 2026-11-17 15:30 UTC = 23:30 in Asia/Shanghai.
+  const time = clock(Date.UTC(2026, 10, 17, 15, 30));
+  const status = new AssistantStatus({ now: time.now, timeZone: 'Asia/Shanghai' });
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 300,
+    usage: { inputTokens: 120, outputTokens: 8, cacheReadTokens: 100, totalTokens: 128 } });
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:备用站/chat-b', fallbackFrom: 'language:主站/chat-a', status: 'failed',
+    errorCategory: 'auth', durationMs: 100 });
+  status.recordAmbientJudgeCall({ kind: 'decision', source: 'decision:jev', status: 'completed', durationMs: 50, usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } });
+  time.advance(HOUR); // next local day
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 200, usage: { inputTokens: 10, outputTokens: 1 } });
+
+  const snapshot = status.ambient();
+  expect(snapshot.judgeTimeZone).toBe('Asia/Shanghai');
+  expect(snapshot.judgeDaily).toEqual([
+    { day: '2026-11-17', calls: 3, failed: 1, fallbacks: 1, byKind: { language: 2, decision: 1 }, averageMs: 150,
+      inputTokens: 160, outputTokens: 10, cacheReadTokens: 100, cacheWriteTokens: 0, unreportedCalls: 1 },
+    { day: '2026-11-18', calls: 1, failed: 0, fallbacks: 0, byKind: { language: 1, decision: 0 }, averageMs: 200,
+      inputTokens: 10, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, unreportedCalls: 0 },
+  ]);
+  for (let day = 0; day < 8; day += 1) {
+    time.advance(24 * HOUR);
+    status.recordAmbientJudgeCall({ kind: 'decision', source: 'decision:jev', status: 'completed', durationMs: 10 });
+  }
+  const kept = status.ambient().judgeDaily;
+  expect(kept).toHaveLength(7);
+  expect(kept[0]!.day).toBe('2026-11-20');
+  expect(kept.at(-1)).toMatchObject({ day: '2026-11-26', calls: 1, unreportedCalls: 1, inputTokens: 0 });
+});
+
 it('aggregates structured decision calls per task for 技能助手', () => {
   const time = clock();
   const status = new AssistantStatus({ now: time.now });

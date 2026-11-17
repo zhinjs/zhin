@@ -24,6 +24,16 @@ At the default INFO level, every executed Agent turn ends with one `[ai.usage] t
 - Summaries include child traces recorded so far; `partial` flags unsuccessful turns, incomplete child completion or bounded records being dropped; displayed usage is the recorded part, not a complete total. This is not account-wide billing: independent decisions, embeddings and image generation outside this trace are excluded, and failed requests without usage cannot be estimated.
 - `ms` is trace turn duration. Use `trace` to correlate logs and `turn` with `zhin trace <turn>` to inspect an existing archive. Logs work without archiving; enabling logs does not add persistence.
 
+The group-chat interjection (ambient) judge is not an Agent turn: it is not in the `turn` summary and has no `zhin trace` archive. Each judge call, by a chat model or a decision model, successful or not, writes one `[ai.usage] judge` line with `scene: ambient`:
+
+```text
+[INFO] [ai.usage] judge | scene: ambient | conv: qq:123456 | status: completed | kind: language | model: Spare/gpt-mini | fallback_from: Main/gpt-4o-mini | calls: 1 | input: 820 | output: 24 | cache_read: 0 | cache_write: ? | ms: 640
+```
+
+- `model` is the model that answered (or last failed), as `service display name/model`; after a switch to a fallback, `fallback_from` names the configured model. `kind` is `language` (chat model) or `decision` (decision model).
+- A failed call has `status: failed` and `error` with the error class only (`timeout`, `auth`, `rate_limit`, `invalid_response`, …), never the provider's text.
+- A decision model that reports no usage writes only `calls` and `ms`. The Console ambient status (`judgeDaily`) sums these calls and tokens per day (in memory; a restart starts the current day again).
+
 Set Root `log_level` to `debug` for `[ai.usage] call` records with each observed response's model, stop reason, usage and known duration. `[ai.usage] context` prints the existing first-request budget as `unit: estimated_tokens`, not actual per-call billing. Restore `info` for summaries only. `warn`, `error` and `silent` suppress these INFO/DEBUG records. Other modules retain their existing DEBUG behavior.
 
 ```yaml

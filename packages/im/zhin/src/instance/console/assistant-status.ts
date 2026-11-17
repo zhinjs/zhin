@@ -1,7 +1,8 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
-import type { AmbientDecision } from '@zhin.js/agent/runtime';
+import type { AmbientDecision, EngagementJudgeCall } from '@zhin.js/agent/runtime';
+import { dayKeyOf, defaultUsageTimeZone } from '@zhin.js/gateway/usage';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 import { CONTROL_WRITE_PERMISSION, controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
 import {
@@ -48,6 +49,8 @@ export const SKILLS_STATUS_PERMISSION = 'skills:read';
 const RECENT_LIMIT = 20;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const WINDOW_LIMIT = 2000;
+/** Days of ambient judge totals kept in memory (today included). */
+export const AMBIENT_JUDGE_DAYS = 7;
 
 export type AmbientOutcome = 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
 export type AmbientSkipReason = 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
@@ -64,6 +67,28 @@ export interface AmbientRecentItem {
   readonly judge?: 'decision' | 'chat-model';
 }
 
+/**
+ * Ambient judge model calls of one day (instance time zone), language and decision models together
+ * (#1250). Counted per call, so a shadow comparison counts both of its calls. In memory: a restart
+ * starts today's totals again.
+ */
+export interface AmbientJudgeDay {
+  /** `YYYY-MM-DD`. */
+  readonly day: string;
+  readonly calls: number;
+  readonly failed: number;
+  /** Calls answered (or last attempted) by a fallback model. */
+  readonly fallbacks: number;
+  readonly byKind: Readonly<{ language: number; decision: number }>;
+  readonly averageMs: number;
+  /** Sums of reported tokens; calls whose provider reported none are counted in `unreportedCalls`. */
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly unreportedCalls: number;
+}
+
 export interface AmbientStatus {
   readonly enabled: boolean;
   /** `off` when no group is configured; `shadow` judges without replying. */
@@ -78,6 +103,10 @@ export interface AmbientStatus {
   /** Newest first, at most 20. */
   readonly recent: readonly AmbientRecentItem[];
   readonly updatedAt: number | null;
+  /** Judge calls and tokens per day, oldest first, at most {@link AMBIENT_JUDGE_DAYS} days with calls. */
+  readonly judgeDaily: readonly AmbientJudgeDay[];
+  /** The time zone `judgeDaily` days are cut in. */
+  readonly judgeTimeZone: string;
 }
 
 export type SkillsTask = DecisionObservation['task'];
@@ -122,13 +151,19 @@ type AmbientConfigReader = () => AmbientEngagementConfig | undefined;
 
 export interface AssistantStatusOptions {
   readonly now?: () => number;
+  /** IANA zone the ambient judge days are cut in; default the instance zone (`TZ`, else the system zone). */
+  readonly timeZone?: string;
 }
+
+type MutableJudgeDay = { -readonly [K in keyof AmbientJudgeDay]: AmbientJudgeDay[K] } & { totalMs: number; language: number; decision: number };
 
 export class AssistantStatus {
   readonly #now: () => number;
   readonly #ambient: AmbientRecentItem[] = [];
   readonly #shadow: Array<{ at: number; agreed: boolean }> = [];
   readonly #decisions: Array<SkillsRecentItem & Readonly<{ inputTokens: number; outputTokens: number }>> = [];
+  readonly #judgeDays = new Map<string, MutableJudgeDay>();
+  readonly #timeZone: string;
   #readAmbientConfig: AmbientConfigReader = () => undefined;
   #readDecisionEvents: DecisionEventsSource = () => undefined;
   #readControlPlane: ControlPlaneSource = () => undefined;
@@ -156,6 +191,7 @@ export class AssistantStatus {
 
   constructor(options: AssistantStatusOptions = {}) {
     this.#now = options.now ?? Date.now;
+    this.#timeZone = options.timeZone ?? defaultUsageTimeZone();
     this.consoleRpc = this.forOperation();
   }
 
@@ -268,6 +304,33 @@ export class AssistantStatus {
     push(this.#shadow, { at: this.#now(), agreed: decisionEngage === judgeEngage });
   }
 
+  /** One ambient judge model call (#1250); metadata only, never chat text or error text. */
+  recordAmbientJudgeCall(call: EngagementJudgeCall): void {
+    const day = dayKeyOf(this.#now(), this.#timeZone);
+    let entry = this.#judgeDays.get(day);
+    if (!entry) {
+      entry = { day, calls: 0, failed: 0, fallbacks: 0, byKind: { language: 0, decision: 0 }, averageMs: 0, totalMs: 0, language: 0, decision: 0,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, unreportedCalls: 0 };
+      this.#judgeDays.set(day, entry);
+      // Days arrive in order; drop the oldest beyond the kept window.
+      for (const key of [...this.#judgeDays.keys()].sort().slice(0, Math.max(0, this.#judgeDays.size - AMBIENT_JUDGE_DAYS))) this.#judgeDays.delete(key);
+    }
+    entry.calls += 1;
+    if (call.status === 'failed') entry.failed += 1;
+    if (call.fallbackFrom) entry.fallbacks += 1;
+    if (call.kind === 'decision') entry.decision += 1;
+    else entry.language += 1;
+    entry.totalMs += finite(call.durationMs);
+    if (call.usage) {
+      entry.inputTokens += finite(call.usage.inputTokens);
+      entry.outputTokens += finite(call.usage.outputTokens);
+      entry.cacheReadTokens += finite(call.usage.cacheReadTokens);
+      entry.cacheWriteTokens += finite(call.usage.cacheWriteTokens);
+    } else {
+      entry.unreportedCalls += 1;
+    }
+  }
+
   recordDecision(observation: DecisionObservation): void {
     push(this.#decisions, {
       at: this.#now(),
@@ -303,6 +366,13 @@ export class AssistantStatus {
       }),
       recent: Object.freeze(window.slice(-RECENT_LIMIT).reverse().map((item) => Object.freeze({ ...item }))),
       updatedAt: window.at(-1)?.at ?? null,
+      judgeDaily: Object.freeze([...this.#judgeDays.values()].sort((a, b) => a.day.localeCompare(b.day))
+        .map(({ totalMs, language, decision, byKind: _byKind, averageMs: _averageMs, ...day }) => Object.freeze({
+          ...day,
+          byKind: Object.freeze({ language, decision }),
+          averageMs: day.calls ? Math.round(totalMs / day.calls) : 0,
+        }))),
+      judgeTimeZone: this.#timeZone,
     });
   }
 
