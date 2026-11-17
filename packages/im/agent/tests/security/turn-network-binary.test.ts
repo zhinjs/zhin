@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { ToolInvocationPolicy } from '@zhin.js/tool';
-import { NodeNetworkTransport, TurnNetworkClient, type NetworkTransport } from '../../src/security/turn-network-client.js';
+import type { NetworkTransport } from '../../src/security/turn-network-client.js';
 
 const mocked = vi.hoisted(() => ({ lookup: vi.fn(), request: vi.fn() }));
 vi.mock('node:dns/promises', () => ({ lookup: mocked.lookup }));
@@ -8,6 +8,15 @@ vi.mock('node:https', () => ({ request: mocked.request }));
 
 const policy: ToolInvocationPolicy = { permissions: ['owner'], unattended: false,
   network: { enabled: true, httpsOnly: true, allowedDomains: ['images.example.test'] } };
+
+// The pinned transport lives in `@zhin.js/kernel`, which the Vitest setup file has already loaded with
+// the real `node:dns/promises` / `node:https`; reload the module graph so it binds the mocks.
+let NodeNetworkTransport: typeof import('../../src/security/turn-network-client.js').NodeNetworkTransport;
+let TurnNetworkClient: typeof import('../../src/security/turn-network-client.js').TurnNetworkClient;
+beforeAll(async () => {
+  vi.resetModules();
+  ({ NodeNetworkTransport, TurnNetworkClient } = await import('../../src/security/turn-network-client.js'));
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

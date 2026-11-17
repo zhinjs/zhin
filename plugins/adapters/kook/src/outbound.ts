@@ -1,13 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import type { Sendable } from 'kook-client';
 import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
+import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import { createEndpointOperation, type EndpointRecallRequest, type EndpointSendRequest } from 'zhin.js/adapter';
 import { formatOutboundKmarkdown } from './protocol.js';
 import type { KookClientTransport } from './ws.js';
 import { outboundMessages as t } from './i18n.js';
 
-/** Native cards preserve mixed text/images; SDK's ordinary segments stop at first media. */
-export async function sendKookOutbound(client: KookClientTransport, { conversation, payload, locale, signal }: EndpointSendRequest): Promise<string> {
+export interface KookOutboundOptions {
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
+}
+
+/**
+ * Native cards preserve mixed text/images; SDK's ordinary segments stop at first media.
+ * A card image URL is downloaded here and re-uploaded, only through core `fetchOutboundMedia`; a refused
+ * URL becomes a notice section and the rest of the card is still sent (#1250 第 46 批).
+ */
+export async function sendKookOutbound(
+  client: KookClientTransport,
+  { conversation, payload, locale, signal }: EndpointSendRequest,
+  { fetchMedia = fetchOutboundMedia }: KookOutboundOptions = {},
+): Promise<string> {
   const operation = createEndpointOperation({ signal });
   try {
     const items = Array.isArray(payload) ? payload : payload && typeof payload === 'object' ? [payload] : [payload];
@@ -56,9 +70,14 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
           if (media.kind === 'base64') bytes = Buffer.from(media.value.replace(/^data:[^,]*,/, ''), 'base64');
           else if (media.kind === 'path') bytes = await operation.prepare(() => readFile(media.value));
           else {
-            const response = await operation.prepare(() => fetch(media.value, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) }));
-            if (!response.ok) throw new EndpointDeliveryError('media_download_failed', 'KOOK media download failed', 'rejected');
-            bytes = Buffer.from(await operation.prepare(() => response.arrayBuffer()));
+            try {
+              bytes = (await operation.prepare(() => fetchMedia(media.value, { ...(signal ? { signal } : {}), source: 'kook' }))).bytes;
+            } catch (error) {
+              signal?.throwIfAborted();
+              if (!isOutboundMediaRefused(error)) throw new EndpointDeliveryError('media_download_failed', 'KOOK media download failed', 'rejected');
+              modules.push({ type: 'section', mode: 'left', text: { type: 'plain-text', content: outboundMediaNotice('image', locale) } });
+              continue;
+            }
           }
           url = await operation.prepare(() => client.uploadMedia!(bytes));
         }

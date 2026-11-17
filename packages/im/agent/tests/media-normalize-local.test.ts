@@ -75,18 +75,19 @@ describe('normalizeMediaRefsToPayloads local files', () => {
   });
 
   it('rejects non-HTTPS and private media URLs before issuing a request', async () => {
-    const originalFetch = globalThis.fetch;
     const called: string[] = [];
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      called.push(String(input));
-      return new Response(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    }) as typeof fetch;
-    try {
-      await expect(fetchUrlAsBase64('http://example.com/image.png', 1024, 'image')).resolves.toBeNull();
-      await expect(fetchUrlAsBase64('https://127.0.0.1/image.png', 1024, 'image')).resolves.toBeNull();
-      expect(called).toEqual([]);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const transport = {
+      request: async () => { throw new Error('text request not expected'); },
+      requestBytes: async (url: URL) => {
+        called.push(url.href);
+        return { status: 200, statusText: 'OK', headers: {}, body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) };
+      },
+    };
+    await expect(fetchUrlAsBase64('http://example.com/image.png', 1024, 'image', undefined, [], transport)).resolves.toBeNull();
+    await expect(fetchUrlAsBase64('https://127.0.0.1/image.png', 1024, 'image', undefined, [], transport)).resolves.toBeNull();
+    expect(called).toEqual([]);
+    await expect(fetchUrlAsBase64('https://example.com/image.png', 1024, 'image', undefined, [], transport)).resolves.toMatchObject({ kind: 'image' });
+    expect(called).toEqual(['https://example.com/image.png']);
   });
+
 });

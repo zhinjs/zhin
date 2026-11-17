@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { isMediaRef } from '@zhin.js/im-contract';
+import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { MessageSegment, SendContent } from "zhin.js";
 import type { IcqqEndpointConfig } from "./protocol.js";
 
@@ -106,4 +107,53 @@ export function prepareIcqqOutboundMedia(
       for (const filePath of createdFiles) fs.rmSync(filePath, { force: true });
     },
   };
+}
+
+const REMOTE_MEDIA_TYPES = new Set(["image", "record", "audio", "video", "file"]);
+
+/**
+ * `@icqqjs/icqq` downloads an http(s) media `file` on this host before uploading it. A URL MediaRef is
+ * therefore downloaded here first, through core `fetchOutboundMedia` (public HTTPS only, pinned DNS,
+ * every redirect checked, size and time bounded), and handed to the SDK as base64; a refused URL
+ * becomes a notice text segment and the rest of the message is still sent (#1250 第 46 批).
+ */
+export async function fetchIcqqRemoteMedia(
+  content: SendContent,
+  { fetchMedia = fetchOutboundMedia, signal }: { readonly fetchMedia?: OutboundMediaFetcher; readonly signal?: AbortSignal } = {},
+): Promise<SendContent> {
+  if (!Array.isArray(content)) {
+    const [single] = await fetchIcqqRemoteMediaList([content as MessageSegment | string], fetchMedia, signal);
+    return single as SendContent;
+  }
+  return await fetchIcqqRemoteMediaList(content as Array<MessageSegment | string>, fetchMedia, signal) as SendContent;
+}
+
+async function fetchIcqqRemoteMediaList(
+  segments: Array<MessageSegment | string>,
+  fetchMedia: OutboundMediaFetcher,
+  signal: AbortSignal | undefined,
+): Promise<Array<MessageSegment | string>> {
+  const out: Array<MessageSegment | string> = [];
+  for (const seg of segments) {
+    if (typeof seg === "string" || !seg || typeof seg !== "object") { out.push(seg); continue; }
+    const { type, data } = seg as MessageSegment;
+    const d = (data ?? {}) as Record<string, unknown>;
+    const media = d.media;
+    if (!REMOTE_MEDIA_TYPES.has(type) || !isMediaRef(media) || !/^https?:\/\//iu.test(media.value) || media.kind === "base64") {
+      out.push(seg);
+      continue;
+    }
+    try {
+      const fetched = await fetchMedia(media.value, { ...(signal ? { signal } : {}), source: "icqq" });
+      const mime = media.mime_type ?? fetched.mimeType;
+      out.push({
+        type,
+        data: { ...d, media: { ...media, kind: "base64", value: fetched.bytes.toString("base64"), ...(mime ? { mime_type: mime } : {}) } },
+      } as MessageSegment);
+    } catch (error) {
+      if (!isOutboundMediaRefused(error)) throw error;
+      out.push({ type: "text", data: { text: outboundMediaNotice(type) } } as MessageSegment);
+    }
+  }
+  return out;
 }

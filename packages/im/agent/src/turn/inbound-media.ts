@@ -22,6 +22,7 @@ import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-
 import { transcribeAudioPayload } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
 import { MediaPerceptionFailedError, renderPerceptionCaption, type MediaPerceptionPort } from '../media/perception.js';
+import type { NetworkTransport } from '../security/turn-network-client.js';
 import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
@@ -65,6 +66,8 @@ export interface ResolveTurnMediaOptions {
    * A `path` source is read only when its real path lies inside one; absent = no local path is read.
    */
   readonly inboundMediaRoots?: readonly string[];
+  /** Replaces the pinned Node transport that downloads inbound media URLs (tests, embedding hosts). */
+  readonly mediaTransport?: NetworkTransport;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
@@ -94,9 +97,10 @@ async function materializeInboundMedia(
   maxBytes: number,
   signal: AbortSignal,
   inboundMediaRoots: readonly string[] | undefined,
+  transport?: NetworkTransport,
 ): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string }>> {
   if (media.kind !== 'path') {
-    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal);
+    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport);
     return payload ? { payload } : {};
   }
   const decision = await authorizeInboundMediaPath(media.value, inboundMediaRoots);
@@ -188,7 +192,7 @@ export async function resolveTurnMediaInjection(
       media = resolution.content;
     }
     signal.throwIfAborted();
-    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots);
+    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport);
     signal.throwIfAborted();
     if (refused) {
       // The reason and kind only: the path itself names host layout and stays out of logs and prompt.

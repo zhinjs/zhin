@@ -188,20 +188,20 @@ describe('image menu with a public URL: embedded in the markdown', () => {
   });
 
   it('endpoint probes the URL image and sends one embedded message', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, body: null, arrayBuffer: async () => pngHeader(800, 600).buffer }));
-    vi.stubGlobal('fetch', fetchMock);
+    // The probe downloads on this host only through the outbound media fetcher (#1250 第 46 批).
+    const fetchMock = vi.fn(async (url: string, _options?: unknown) => ({ bytes: Buffer.from(pngHeader(800, 600)), url }));
     const { QqWebsocketEndpoint } = await import('../src/endpoint.js');
     const { resolveQqConfig } = await import('../src/protocol.js');
     const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
     const sent: unknown[] = [];
-    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any}), () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any, fetchMedia: fetchMock}), () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any);
     try {
       await endpoint.start();
       await endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'root/qq' }, kind: 'group', id: 'g1' } as any, payload: urlMenuPayload });
       expect(sent).toHaveLength(1);
       expect(JSON.stringify(sent[0])).toContain('![图片 #800px #600px](https://cdn.example/menu.png)');
-      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example/menu.png', expect.objectContaining({ headers: { Range: 'bytes=0-65535' } }));
-    } finally { await endpoint.stop(); vi.unstubAllGlobals(); }
+      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example/menu.png', expect.objectContaining({ headers: { Range: 'bytes=0-65535' }, maxBytes: 65536 }));
+    } finally { await endpoint.stop(); }
   });
 });
 

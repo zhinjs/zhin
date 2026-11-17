@@ -1,10 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addTransport, removeTransport } from '@zhin.js/logger';
-import { fetchPublicMediaBytes, type PublicMediaFetchOptions } from '@zhin.js/agent/security';
-import { prepareSpeechHost, SPEECH_AUDIO_MAX_BYTES } from '../../src/instance/speech-host-installer.js';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { PublicMediaFetchOptions } from '@zhin.js/agent/security';
+import { SPEECH_AUDIO_MAX_BYTES } from '../../src/instance/speech-host-installer.js';
 
 const lookup = vi.hoisted(() => vi.fn());
 vi.mock('node:dns/promises', async (importOriginal) => ({ ...(await importOriginal<object>()), lookup }));
+
+// The pinned transport lives in `@zhin.js/kernel` (#1250 第 46 批), which the Vitest setup file has
+// already loaded with the real resolver; reload the module graph so it binds the mocked resolver.
+let fetchPublicMediaBytes: typeof import('@zhin.js/agent/security').fetchPublicMediaBytes;
+let prepareSpeechHost: typeof import('../../src/instance/speech-host-installer.js').prepareSpeechHost;
+// The logger is reloaded with them, so log capture must use the same fresh instance.
+let addTransport: typeof import('@zhin.js/logger').addTransport;
+let removeTransport: typeof import('@zhin.js/logger').removeTransport;
+beforeAll(async () => {
+  vi.resetModules();
+  ({ addTransport, removeTransport } = await import('@zhin.js/logger'));
+  ({ fetchPublicMediaBytes } = await import('@zhin.js/agent/security'));
+  ({ prepareSpeechHost } = await import('../../src/instance/speech-host-installer.js'));
+});
 
 type BinaryResponse = { status: number; statusText: string; headers: Record<string, string>; body: Uint8Array };
 
