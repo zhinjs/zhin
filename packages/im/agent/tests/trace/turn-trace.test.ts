@@ -142,6 +142,14 @@ describe('TurnTraceCollector', () => {
     expect(snapshot.tool_calls[0]?.status).toBe('cancelled');
   });
 
+  it('records a turn that ended on a failed model request as failed, with the failure kind (#1250 b40)', () => {
+    const trace = collector();
+    trace.record({ type: 'turn_end', output: [{ type: 'text', content: '连接模型服务失败，请检查网络后再试。' }],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      modelFailure: { kind: 'network', message: '连接模型服务失败，请检查网络后再试', service: 'relay' } });
+    expect(trace.snapshot().termination).toEqual({ status: 'failed', code: 'model_error:network', reason: '连接模型服务失败，请检查网络后再试' });
+  });
+
   it('finalizes a turn that never emitted a terminal event', () => {
     const trace = collector();
     trace.finalize();

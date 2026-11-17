@@ -28,7 +28,7 @@ import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime
 import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { turnModelPortToken } from '../model-runtime/turn-resource.js';
-import { traceModelFallback, traceModelSelection, turnUsageTarget } from '../model-runtime/purpose-fallback.js';
+import { traceModelFallback, traceModelFallbackSkip, traceModelSelection, turnUsageTarget } from '../model-runtime/purpose-fallback.js';
 import { specialistModelKey } from './inference/targets.js';
 import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
@@ -384,6 +384,8 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       if (trace && models) trace.note({ kind: 'model_selection', selection: traceModelSelection(models, specialist) });
       // #1250 chat-purpose-no-fallback: 「本轮由备用模型回答」 in the turn trace.
       // Usage rows record the Profile that actually answered.
+      // #1250 fallback-skips-network-and-5xx: a model failure that did not switch, and why.
+      if (trace) models?.observeModelFallbackSkipped?.(event => trace.note({ kind: 'model_fallback_skipped', skip: traceModelFallbackSkip(event) }));
       models?.observeModelFallback?.(event => {
         if (trace) trace.note({ kind: 'model_fallback', fallback: traceModelFallback(event) });
         const target = models && turnUsageTarget(models, event);
