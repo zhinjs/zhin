@@ -3,6 +3,7 @@
 "@zhin.js/agent": minor
 "@zhin.js/runtime": patch
 "zhin.js": patch
+"@zhin.js/a2a": patch
 ---
 
 MCP 工具按聊天角色授权（ADR 0065 P0 + P1）。**行为变更：已经绑给聊天 Agent 的 MCP 服务器，升级后立刻收紧**——不写 `permit` 时，只有上游标注 `readOnlyHint: true` 的工具对所有人开放，其余工具（未标注、标注为写、`readOnlyHint` 与 `destructiveHint` 矛盾）只给全局主人 `owner@global`。迁移说明见 `docs/migrations/mcp-tool-permit.md`。
@@ -15,4 +16,6 @@ MCP 工具按聊天角色授权（ADR 0065 P0 + P1）。**行为变更：已经�
 - 修复：配置的 MCP 服务器投影给 Agent 的工具名带了一层多余的服务器前缀，调用上游时发送的也是带前缀的名字；现在使用上游报告的原始名。
 - 修复：合并的群聊回合（ADR 0038）此前只收窄 `roles`，聊天角色仍取第一个发言者的，permit（含 MCP 工具档位）因此把 trusted / admin 成员的工具借给了同一合并窗口里的普通成员；现在聊天角色取所有成员共同持有的最低角色，层级取最窄的。
 - 修复：`ai.agents.<name>.mcpServers`（含 Agent 层 `permit`）加入自我变更禁改名单，Agent 不能用 `self_change` 删掉收窄或给绑定加服务器。
+- 修复：跨进程 A2A Mailbox 的远端信件一律按 `user` 运行、不带聊天角色。此前对端声明的 `authority.trust`（如 `trusted`）会变成本地角色，签名正确的远端信件因此能用开放给 `trusted` 的 MCP 工具和插件工具。
+- 修复：读取上游 `annotations` 时只认工具自身的字段，继承来的 `readOnlyHint` 不算标注。
 - `@zhin.js/runtime`：配置 schema 增加上述两处字段，`ai.agents.<name>.mcpServers` 标为安全敏感。

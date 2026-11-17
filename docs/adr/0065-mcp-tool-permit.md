@@ -39,7 +39,7 @@ sidebar: false
 3. **插件工具的字段名是 `permissions`（字符串数组）**；`permit` 是命令、中间件、按钮用的字段名。两者用同一套 DSL。
 4. **DSL 里没有 `everyone` 和 `deny`**：插件工具不写 `permissions` 就是所有人可用，DSL 也没有「永不满足」的写法。本 ADR 的 `everyone` / `deny` 是 MCP permit 配置里的保留字，不加进 DSL（D2）。
 5. **定时任务不是按创建者的原始角色运行的**：到期时先按创建者**当前**的角色重算（`currentScheduleCreator`，`packages/im/agent/src/assistant/job-creator.ts:75-89`），再统一降一档（`demoteScheduleCreator`，`packages/im/agent/src/schedule-domain/security-harness.ts:26-33`；`owner` → `trusted`，`trusted` / `admin` → `user`），回合主体只有 `roles`、没有 `chatRoleLevels`（`assistant-runtime.ts:257-266`；层级由 `turn-ingress.ts:510-516` 一律补成 `global`）。所以 D6「与现有 schedule 信任档位一致」的结果是：**全局 owner 创建的定时任务也拿不到默认「仅主人」的 MCP 工具**，只能用对 `trusted` 或所有人开放的工具。见 D6。
-6. **协议入口的主体没有聊天角色**：A2A 是 `roles: ['user']`（`packages/host/a2a/src/agent-executor.ts:184`），zhin 自己的 MCP Server 入口是 `authenticated` / `localhost`（`packages/host/mcp/src/runtime.ts:225`）。新默认值下，这些入口也只能用只读 MCP 工具（见「迁移」）。
+6. **协议入口的主体没有聊天角色**：A2A 是 `roles: ['user']`（`packages/host/a2a/src/agent-executor.ts:184`），zhin 自己的 MCP Server 入口是 `authenticated` / `localhost`（`packages/host/mcp/src/runtime.ts:225`）。跨进程 A2A Mailbox 的远端信件（`packages/host/a2a/src/mailbox-remote-transport.ts`）同样一律是 `user`、不带聊天角色：对端在信件里声明的 `authority.trust`（如 `trusted`）不映射成本地角色，签名只证明信件来自哪个对端（所有者 2026-11-17 决定；此前按声明的信任级别生成 `roles`，会被推导成 `trusted@global`）。新默认值下，这些入口也只能用只读 MCP 工具，开放给 `trusted` 的 MCP 工具和插件工具也用不了（见「迁移」）。
 
 ## 决策
 

@@ -24,7 +24,7 @@ description: ADR 0065 升级说明——已绑定的 MCP 服务器升级后收�
 下面这些入口的回合主体不是全局主人，同样只能用只读工具：
 
 - **定时任务**：到期时按创建者当前的角色重算，再降一档运行（`owner` → `trusted`，`trusted` / `admin` → `user`）。所以**全局主人创建的任务默认也用不了「仅主人」的 MCP 工具**；任务的执行计划点名了这样的工具时，该工具会缺失，任务记为 `degraded`。
-- **A2A** 与 zhin 自己的 **MCP Server** 入口（主体角色是 `user` / `authenticated`）。
+- **A2A**（含跨进程 Mailbox 的远端信件，无论对端声明什么信任级别）与 zhin 自己的 **MCP Server** 入口（主体角色是 `user` / `authenticated`）。
 
 ## 查看收紧了哪些工具
 

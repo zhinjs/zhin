@@ -24,7 +24,7 @@ From this release, MCP tools from `ai.mcpServers` go through the same chat-role 
 The turn principal of these entry points is not the global owner either, so they also get read-only tools only:
 
 - **Scheduled tasks**: on each run the creator's current role is recomputed and then demoted one step (`owner` → `trusted`, `trusted` / `admin` → `user`). So **a task created by the global owner cannot use owner-only MCP tools by default**; when the task's execution plan names such a tool it is missing and the run is recorded as `degraded`.
-- **A2A** and zhin's own **MCP Server** entry (principal role `user` / `authenticated`).
+- **A2A** (including remote Mailbox mail, whatever trust the peer declares) and zhin's own **MCP Server** entry (principal role `user` / `authenticated`).
 
 ## Seeing which tools were tightened
 
