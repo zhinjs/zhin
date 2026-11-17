@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "dataDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "data/ipad-wechat",
+      "description": "SDK 状态根目录；每个账号使用 <dataDir>/accounts/<实例>，同一目录不能交给两个进程"
+    },
+    "loginTimeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 600000,
+      "description": "首次扫码/恢复登录的超时"
+    },
+    "qrPollIntervalMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 30000,
+      "default": 1000,
+      "description": "扫码状态轮询间隔"
+    },
+    "heartbeatIntervalSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "业务心跳间隔；不填使用 SDK 默认值"
+    },
+    "reconnect": {
+      "type": "boolean",
+      "default": true,
+      "description": "长链断开后由 SDK 自动重连"
+    },
+    "ignoreSelfMessages": {
+      "type": "boolean",
+      "default": true,
+      "description": "忽略本账号在其他设备发出的消息"
+    },
+    "downloadImages": {
+      "type": "boolean",
+      "default": true,
+      "description": "收到图片时先下载到本地再分发"
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "cert"
+      ],
+      "description": "设备验证页（滑块/人脸）。仅在微信要求验证新设备时使用；不配置则登录在需要验证时失败并提示",
+      "x-i18n": {
+        "en": {
+          "description": "Device verification page (slider / face), used only when WeChat asks to verify the device."
+        }
+      },
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "页面 TLS 私钥 PEM 文件路径"
+        },
+        "cert": {
+          "type": "string",
+          "minLength": 1,
+          "description": "页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin）"
+        },
+        "host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "监听地址；手机访问时用 0.0.0.0"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8443
+        },
+        "publicOrigin": {
+          "type": "string",
+          "description": "手机可访问的 https 源，如 https://192.168.1.10:8443"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 600000,
+          "description": "等待完成验证的时长"
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "description": "账号名（Endpoint id）"
+          },
+          "dataDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "SDK 状态根目录；每个账号使用 <dataDir>/accounts/<实例>，同一目录不能交给两个进程"
+          },
+          "loginTimeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "首次扫码/恢复登录的超时"
+          },
+          "qrPollIntervalMs": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 30000,
+            "description": "扫码状态轮询间隔"
+          },
+          "heartbeatIntervalSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "业务心跳间隔；不填使用 SDK 默认值"
+          },
+          "reconnect": {
+            "type": "boolean",
+            "description": "长链断开后由 SDK 自动重连"
+          },
+          "ignoreSelfMessages": {
+            "type": "boolean",
+            "description": "忽略本账号在其他设备发出的消息"
+          },
+          "downloadImages": {
+            "type": "boolean",
+            "description": "收到图片时先下载到本地再分发"
+          },
+          "verification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "cert"
+            ],
+            "description": "设备验证页（滑块/人脸）。仅在微信要求验证新设备时使用；不配置则登录在需要验证时失败并提示",
+            "x-i18n": {
+              "en": {
+                "description": "Device verification page (slider / face), used only when WeChat asks to verify the device."
+              }
+            },
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "description": "页面 TLS 私钥 PEM 文件路径"
+              },
+              "cert": {
+                "type": "string",
+                "minLength": 1,
+                "description": "页面 TLS 证书 PEM 文件路径（SAN 须匹配 publicOrigin）"
+              },
+              "host": {
+                "type": "string",
+                "default": "127.0.0.1",
+                "description": "监听地址；手机访问时用 0.0.0.0"
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 8443
+              },
+              "publicOrigin": {
+                "type": "string",
+                "description": "手机可访问的 https 源，如 https://192.168.1.10:8443"
+              },
+              "timeoutMs": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 600000,
+                "description": "等待完成验证的时长"
+              }
+            }
+          },
+          "commandPrefix": {
+            "type": "string",
+            "description": "本 endpoint 的命令前缀",
+            "x-i18n": {
+              "en": {
+                "description": "Command prefix for this endpoint."
+              }
+            }
+          },
+          "nickname": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "账号昵称兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account nickname"
+              }
+            }
+          },
+          "profile": {
+            "$ref": "#/$defs/selfProfileFallback",
+            "description": "账号资料兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account profile"
+              }
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults."
+        }
+      }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
+        }
+      }
+    },
+    "nickname": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "账号昵称兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account nickname"
+        }
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/selfProfileFallback",
+      "description": "账号资料兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account profile"
+        }
+      }
+    }
+  },
+  "required": [
+    "endpoints"
+  ],
+  "$defs": {
+    "selfProfileFallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "male",
+            "female",
+            "other",
+            "unknown",
+            null
+          ]
+        },
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "birthday": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+        },
+        "signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avatar": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(https?://[^\\s/?#]+(?:[/?#].*)?|)$"
+        },
+        "interests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "bio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}
