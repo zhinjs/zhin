@@ -53,17 +53,38 @@ export interface SandboxInboundSyntaxIssue {
 
 const TOKEN = /\[(?:@([^\[\]\n]{1,64})|face:(\d{1,6})|(image|video|audio|file):([^\[\]\n]{1,4096}))\]/gu;
 
-const DATA_URL = /^data:([a-z]+)\/[a-z0-9.+-]+(?:;[a-z0-9=.+-]+)*;base64,[a-z0-9+/=\s]+$/iu;
+const DATA_URL = /^data:(([a-z]+)\/[a-z0-9.+-]+)(?:;[a-z0-9=.+-]+)*;base64,([a-z0-9+/=\s]+)$/iu;
+
+/**
+ * Inline media types a `data:` link may declare: the ones the Console renders inline
+ * (`resolveMediaSrc` in `@zhin.js/client`). Script-capable or unrendered types (`image/svg+xml`,
+ * `text/html`, …) stay text, so a declared `mime_type` is never one a consumer could execute.
+ */
+const INLINE_DATA_MIME: Readonly<Record<Exclude<SandboxMediaKind, 'file'>, ReadonlySet<string>>> = Object.freeze({
+  image: new Set(['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp']),
+  video: new Set(['video/mp4', 'video/ogg', 'video/webm']),
+  audio: new Set(['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm']),
+});
+
+/** A `data:` link of an allowed inline type for `kind`, in canonical form; null otherwise. */
+function inlineDataUrl(kind: SandboxMediaKind, value: string): { mime: string; value: string } | null {
+  if (kind === 'file') return null;
+  const data = DATA_URL.exec(value);
+  if (!data) return null;
+  const mime = data[1]!.toLowerCase();
+  if (data[2]!.toLowerCase() !== kind || !INLINE_DATA_MIME[kind].has(mime)) return null;
+  return { mime, value: `data:${mime};base64,${data[3]!.replace(/\s+/gu, '')}` };
+}
 
 /**
  * Accepted media links: absolute `http(s)` URLs, and for image / video / audio a base64 `data:` URL
- * of the same media type (what the composer's paste and URL dialog already insert).
+ * of the same media type and an inline-renderable subtype (what the composer's paste and URL dialog
+ * already insert).
  */
 export function isSandboxInboundMediaUrl(kind: SandboxMediaKind, value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  const data = DATA_URL.exec(trimmed);
-  if (data) return kind !== 'file' && data[1]!.toLowerCase() === kind;
+  if (DATA_URL.test(trimmed)) return inlineDataUrl(kind, trimmed) !== null;
   try {
     const url = new URL(trimmed);
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
@@ -88,11 +109,8 @@ function fileNameOf(value: string): string | undefined {
  */
 export function sandboxInboundMediaSegment(kind: SandboxMediaKind, url: string): SandboxInboundSegment {
   const value = url.trim();
-  const data = kind === 'file' ? null : DATA_URL.exec(value);
-  if (data) {
-    const mime = value.slice('data:'.length, value.search(/[;,]/u)).toLowerCase();
-    return { type: kind, data: { media: { kind: 'base64', value, mime_type: mime } } };
-  }
+  const data = inlineDataUrl(kind, value);
+  if (data) return { type: kind, data: { media: { kind: 'base64', value: data.value, mime_type: data.mime } } };
   if (kind === 'file') {
     const name = fileNameOf(value);
     return { type: 'file', data: { media: { kind: 'url', value }, ...(name ? { name } : {}) } };

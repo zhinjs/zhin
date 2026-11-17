@@ -76,6 +76,20 @@ describe('Sandbox typed inbound syntax (#1250 sandbox-typed-media-syntax-sent-as
     }
   });
 
+  it('accepts only inline-renderable data: types and stores them in canonical form', () => {
+    // Script-capable or unrendered types never become media with a declared MIME a consumer might trust.
+    for (const token of ['[image:data:image/svg+xml;base64,PHN2Zz4=]', '[image:data:image/x-icon;base64,AAAA]',
+      '[video:data:video/quicktime;base64,AAAA]', '[audio:data:audio/x-unknown;base64,AAAA]']) {
+      const parsed = parseSandboxInboundText(token);
+      expect(parsed.expanded, token).toBe(false);
+      expect(parsed.issues, token).toEqual([expect.objectContaining({ token, reason: 'invalid_url' })]);
+    }
+    // Mixed case and whitespace in the payload are normalized, so the Console preview renders it too.
+    expect(parseSandboxInboundText('[image:DATA:IMAGE/PNG;BASE64,iVBO Rw0K]').segments).toEqual([
+      { type: 'image', data: { media: { kind: 'base64', value: 'data:image/png;base64,iVBORw0K', mime_type: 'image/png' } } },
+    ]);
+  });
+
   it('expands only text segments and leaves picked segments untouched', () => {
     const picked = sandboxInboundMediaSegment('image', LOGO);
     const result = expandSandboxInboundSyntax([picked, { type: 'text', data: { text: ' and [image:https://e.com/b.png]' } }]);
