@@ -13,4 +13,6 @@ MCP 工具按聊天角色授权（ADR 0065 P0 + P1）。**行为变更：已经�
 - 定时任务按创建者当前的角色降一档运行，所以全局主人创建的任务默认也用不了「仅主人」的 MCP 工具；需要时在 `permit.tools` 里把该工具放宽到 `trusted`。A2A、zhin 自己的 MCP Server 入口同样只能用只读工具。
 - 恢复旧行为写 `permit: { default: everyone }`（不推荐：普通成员发起的写操作在 `execApprovalMode: auto` 下经自动审核即可执行）。
 - 修复：配置的 MCP 服务器投影给 Agent 的工具名带了一层多余的服务器前缀，调用上游时发送的也是带前缀的名字；现在使用上游报告的原始名。
-- `@zhin.js/runtime`：配置 schema 增加上述两处字段。
+- 修复：合并的群聊回合（ADR 0038）此前只收窄 `roles`，聊天角色仍取第一个发言者的，permit（含 MCP 工具档位）因此把 trusted / admin 成员的工具借给了同一合并窗口里的普通成员；现在聊天角色取所有成员共同持有的最低角色，层级取最窄的。
+- 修复：`ai.agents.<name>.mcpServers`（含 Agent 层 `permit`）加入自我变更禁改名单，Agent 不能用 `self_change` 删掉收窄或给绑定加服务器。
+- `@zhin.js/runtime`：配置 schema 增加上述两处字段，`ai.agents.<name>.mcpServers` 标为安全敏感。
