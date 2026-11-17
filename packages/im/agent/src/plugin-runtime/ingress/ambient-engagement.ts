@@ -118,6 +118,17 @@ export interface EngagementJudgment {
    * (ADR 0066 D4). Absent: the defaults (0.7, `active`).
    */
   readonly gate?: AmbientJudgeGate;
+  /** What the compared model (`purposes.ambient.compare`, ADR 0066 D3) would have done; never decides. */
+  readonly compare?: EngagementCompareResult;
+}
+
+/** The compared model's side of one judgment (ADR 0066 D3). */
+export interface EngagementCompareResult {
+  /** After the same threshold as the deciding judge: would it speak (`engage`), stay quiet, or did it fail. */
+  readonly verdict: 'engage' | 'quiet' | 'failed';
+  readonly judgment?: EngagementJudgment;
+  /** `failed` only: model and failure class (`compare_failed`). */
+  readonly failure?: EngagementJudgeFailure;
 }
 
 /** `purposes.ambient.minConfidence` / `mode` as {@link AmbientEngagement} applies them (ADR 0066 D4). */
@@ -826,6 +837,7 @@ function validEngagementAnswer(value: EngagementEvidence | undefined): ChoiceAns
 }
 
 /**
+ * @deprecated ADR 0066 D3: use {@link CompareEngagementJudge} (compares after the threshold).
  * Shadow comparison: `primary` decides; `shadow` runs on the same input and is reported only.
  * Both are awaited so no shadow request outlives the turn that started it.
  */
@@ -843,6 +855,70 @@ export class ShadowEngagementJudge implements EngagementJudge {
     } catch { /* diagnostics never change the judgment */ }
     if (primary.status === 'rejected') throw primary.reason;
     return primary.value;
+  }
+}
+
+/**
+ * One compared judgment (ADR 0066 D3), as reported to the Console statistics: both sides after the
+ * same threshold, and which chain member gave the deciding judgment (0 = the configured judge, n =
+ * the n-th fallback), because a fallback changes what is compared.
+ */
+export interface EngagementCompareReport {
+  /** Would the deciding judge speak; undefined when it failed. */
+  readonly primarySpeaks?: boolean;
+  /** Would the compared model speak; undefined when it failed (`compare_failed`). */
+  readonly comparedSpeaks?: boolean;
+  readonly primary?: EngagementJudgeRef;
+  readonly compared?: EngagementJudgeRef;
+  /** Chain position of the deciding judge; undefined when unknown or failed. */
+  readonly member?: number;
+  readonly comparedFailure?: string;
+}
+
+export interface CompareEngagementJudgeOptions {
+  /** The one threshold (`purposes.ambient.minConfidence`) both sides are held to. */
+  readonly minConfidence: number;
+  /** Profile ids of the deciding chain, to place the answering member. */
+  readonly chain?: readonly string[];
+  readonly report?: (report: EngagementCompareReport) => void;
+}
+
+/**
+ * The compared model of `purposes.ambient.compare` (ADR 0066 D3), replacing the inverted
+ * "shadow decision": `primary` (the judge chain) decides; `compared` judges the same input at the
+ * same time and is recorded only. Both are awaited, so the compared request never outlives the
+ * judgment and shares its budget; its failure is only `compare_failed` and never touches the
+ * deciding result (a single model, no fallback, no skip-table write).
+ */
+export class CompareEngagementJudge implements EngagementJudge {
+  constructor(
+    private readonly primary: EngagementJudge,
+    private readonly compared: EngagementJudge,
+    private readonly options: CompareEngagementJudgeOptions,
+  ) {}
+
+  async judge(input: EngagementJudgeInput): Promise<EngagementJudgment> {
+    const [primary, compared] = await Promise.allSettled([this.primary.judge(input), this.compared.judge(input)]);
+    const speaks = (judgment: EngagementJudgment) => ambientJudgeWouldSpeak(judgment, this.options.minConfidence);
+    const failure = compared.status === 'rejected' ? engagementJudgeFailure(compared.reason) : undefined;
+    const result: EngagementCompareResult = compared.status === 'fulfilled'
+      ? Object.freeze({ verdict: speaks(compared.value) ? 'engage' : 'quiet', judgment: compared.value })
+      : Object.freeze({ verdict: 'failed', ...(failure ? { failure } : {}) });
+    const primarySource = primary.status === 'fulfilled' ? primary.value.source ?? primary.value.ref : undefined;
+    const member = primarySource?.profile && this.options.chain ? this.options.chain.indexOf(primarySource.profile) : -1;
+    try {
+      this.options.report?.(Object.freeze({
+        ...(primary.status === 'fulfilled' ? { primarySpeaks: speaks(primary.value) } : {}),
+        ...(compared.status === 'fulfilled' ? { comparedSpeaks: speaks(compared.value) } : {}),
+        ...(primarySource ? { primary: primarySource } : {}),
+        ...(compared.status === 'fulfilled' && (compared.value.source ?? compared.value.ref) ? { compared: (compared.value.source ?? compared.value.ref)! }
+          : failure?.ref ? { compared: failure.ref } : {}),
+        ...(member >= 0 ? { member } : {}),
+        ...(failure ? { comparedFailure: failure.category } : {}),
+      }));
+    } catch { /* Diagnostics never change the judgment. */ }
+    if (primary.status === 'rejected') throw primary.reason;
+    return Object.freeze({ ...primary.value, compare: result });
   }
 }
 

@@ -158,3 +158,33 @@ it('serves plugin.root.ambient / plugin.root.skills to tokens holding the matchi
   expect(await call('plugin.root.skills', unrestrictedConsoleAccess)).toMatchObject({ status: 200, body: { data: { tasks: [] } } });
   expect(await call('plugin.root.status', unrestrictedConsoleAccess)).toMatchObject({ status: 404 });
 });
+
+it('counts agreement with the compared model over 24 hours, by deciding member, and keeps decisionShadow (ADR 0066 D3)', () => {
+  const time = clock();
+  const status = new AssistantStatus({ now: time.now });
+  const chat = { kind: 'language' as const, profile: 'chat', model: 'chat' };
+  const spare = { kind: 'language' as const, profile: 'spare', model: 'spare' };
+  const jev = { kind: 'decision' as const, profile: 'jev', model: 'jev' };
+  // Older than the window: dropped.
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: true, primary: chat, compared: jev, member: 0 });
+  time.advance(25 * HOUR);
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: true, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: false, comparedSpeaks: false, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: true, comparedSpeaks: false, primary: chat, compared: jev, member: 0 });
+  status.recordAmbientCompare({ primarySpeaks: false, comparedSpeaks: true, primary: spare, compared: jev, member: 1 });
+  status.recordAmbientCompare({ primarySpeaks: true, primary: spare, member: 1, comparedFailure: 'timeout' });
+  // The deciding side failed: nothing to compare.
+  status.recordAmbientCompare({ comparedSpeaks: true, compared: jev });
+  const ambient = status.ambient();
+  expect(ambient.compare).toEqual({
+    windowMs: 24 * HOUR, agreed: 2, primaryOnly: 1, comparedOnly: 1, failed: 1,
+    byMember: [
+      { member: 0, profile: 'chat', agreed: 2, primaryOnly: 1, comparedOnly: 0, failed: 0 },
+      { member: 1, profile: 'spare', agreed: 0, primaryOnly: 0, comparedOnly: 1, failed: 1 },
+    ],
+    comparedProfiles: ['jev'],
+  });
+  expect(ambient.decisionShadow).toEqual({ agreed: 2, disagreed: 2 });
+  time.advance(24 * HOUR + 1);
+  expect(status.ambient().compare).toMatchObject({ agreed: 0, primaryOnly: 0, comparedOnly: 0, failed: 0, byMember: [] });
+});

@@ -11,13 +11,14 @@ import {
   AmbientEngagement,
   createEngagementJudgeMember,
   EngagementJudgeChain,
-  ShadowEngagementJudge,
+  CompareEngagementJudge,
   type AmbientDecision,
   type AmbientJudgeGate,
   type EngagementJudge,
   type EngagementJudgeCall,
   type EngagementJudgeMember,
   type EngagementJudgeRef,
+  type EngagementCompareResult,
   type EngagementJudgeUsage,
   type EngagementJudgment,
 } from './ambient-engagement.js';
@@ -152,17 +153,23 @@ export function createAmbientEngagementJudge(input: Readonly<{
         const chain = new EngagementJudgeChain({ members, ...(modelAvailability ? { registry: modelAvailability } : {}),
           onFallback: (event, ends) => logAmbientJudgeFallback(key, event, ends) });
         const compared = policy.compare ? member(policy.compare, 'shadow') : undefined;
+        // ADR 0066 D3: the compared model judges the same input, after the same threshold, and never decides.
         const judge: EngagementJudge = !compared ? chain
-          : new ShadowEngagementJudge(chain, { judge: async compareInput => (await compared.create({})).judge(compareInput) }, (other, primary) => {
-            assistantStatus?.recordAmbientShadow(other?.engage, primary?.engage);
-            logger.info(formatCompact({
-              op: 'ambient_decision_shadow',
-              conv: key,
-              decision: other ? (other.engage ? 'engage' : 'declined') : 'failed',
-              confidence: other?.confidence,
-              judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
-              judgeConfidence: primary?.confidence,
-            }));
+          : new CompareEngagementJudge(chain, { judge: async compareInput => (await compared.create({})).judge(compareInput) }, {
+            minConfidence: gate.minConfidence,
+            chain: members.map(entry => entry.endpoint.profileId),
+            report: report => {
+              try { assistantStatus?.recordAmbientCompare?.(report); } catch { /* Diagnostics never change the judgment. */ }
+              logger.info(formatCompact({
+                op: 'ambient_compare',
+                conv: key,
+                judge: report.primarySpeaks === undefined ? 'failed' : report.primarySpeaks ? 'engage' : 'quiet',
+                ...(report.member !== undefined ? { member: report.member } : {}),
+                compare: report.comparedSpeaks === undefined ? 'failed' : report.comparedSpeaks ? 'engage' : 'quiet',
+                ...(report.compared?.profile ? { compareProfile: report.compared.profile } : {}),
+                ...(report.comparedFailure ? { error: report.comparedFailure } : {}),
+              }));
+            },
           });
         return Object.freeze({ ...await judge.judge(judgeInput), gate });
       },
@@ -345,7 +352,26 @@ export function judgeAuditFields(judgment: EngagementJudgment): Record<string, u
     ...((judgment.source ?? judgment.ref) ? judgeRefAuditFields((judgment.source ?? judgment.ref)!) : {}),
     ...(judgment.durationMs !== undefined ? { judgeMs: judgment.durationMs } : {}),
     ...(judgment.usage ? { judgeUsage: { ...judgment.usage } } : {}),
+    ...(judgment.compare ? compareAuditFields(judgment.compare) : {}),
   };
+}
+
+/**
+ * The compared model's keys (ADR 0066 D3): `compare` is its verdict after the threshold
+ * (`engage` / `quiet` / `failed`), the rest are the `judge*` keys under the `compare` prefix.
+ * Never its reason.
+ */
+function compareAuditFields(compare: EngagementCompareResult): Record<string, unknown> {
+  const judged = compare.judgment;
+  const ref = judged ? judged.source ?? judged.ref : compare.failure?.ref;
+  const prefixed = Object.fromEntries(Object.entries({
+    ...(judged?.sourceLabel ? { judge: judged.sourceLabel } : compare.failure?.source ? { judge: compare.failure.source } : {}),
+    ...(ref ? judgeRefAuditFields(ref) : {}),
+    ...(judged?.durationMs !== undefined ? { judgeMs: judged.durationMs } : {}),
+    ...(judged?.usage ? { judgeUsage: { ...judged.usage } } : {}),
+    ...(compare.failure ? { judgeError: compare.failure.category } : {}),
+  }).map(([field, value]) => [`compare${field[0]!.toUpperCase()}${field.slice(1)}`, value]));
+  return { compare: compare.verdict, ...prefixed };
 }
 
 /** {@link EngagementJudgeRef} as flat `judge*` audit keys (see {@link judgeAuditFields}). */

@@ -19,6 +19,8 @@ export {
   AMBIENT_STATUS_PERMISSION,
   AssistantStatus,
   SKILLS_STATUS_PERMISSION,
+  type AmbientCompareCounts,
+  type AmbientCompareStatus,
   type AmbientJudgeDay,
   type AmbientStatus,
   type SkillsStatus,

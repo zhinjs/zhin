@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import {
   AmbientEngagement,
+  CompareEngagementJudge,
   createAmbientDecisionJudge,
   DecisionEngagementJudge,
   FallbackEngagementJudge,
@@ -406,5 +407,58 @@ describe('AmbientEngagement spoke tracking is bounded (review of #1281)', () => 
     expect(engagement.trackedSpokeGroups).toBe(1);
     for (let index = 0; index < 5_000; index += 1) engagement.noteSpoke(`qq:burst-${index}`);
     expect(engagement.trackedSpokeGroups).toBeLessThanOrEqual(4096);
+  });
+});
+
+describe('CompareEngagementJudge (ADR 0066 D3)', () => {
+  const input = () => ({ botName: '小知', recent: ['a'], signal: new AbortController().signal });
+  const judgment = (engage: boolean, confidence: number, profile: string, kind: 'language' | 'decision' = 'language'): EngagementJudgment =>
+    ({ engage, confidence, reason: 'private reason', source: { kind, profile, model: profile }, sourceLabel: `${kind}:${profile}` });
+
+  it('never changes the deciding judgment and records what the compared model would have done', async () => {
+    const report = vi.fn();
+    const primary = judgment(true, 0.9, 'chat');
+    const judge = new CompareEngagementJudge({ judge: async () => primary }, { judge: async () => judgment(false, 0.95, 'jev', 'decision') }, { minConfidence: 0.7, chain: ['chat'], report });
+    const result = await judge.judge(input());
+    expect(result).toMatchObject({ engage: true, confidence: 0.9, source: { profile: 'chat' }, compare: { verdict: 'quiet', judgment: { source: { profile: 'jev' } } } });
+    expect(report).toHaveBeenCalledWith({ primarySpeaks: true, comparedSpeaks: false, primary: primary.source, compared: { kind: 'decision', profile: 'jev', model: 'jev' }, member: 0 });
+  });
+
+  it('compares after the same threshold, not the raw engage', async () => {
+    const report = vi.fn();
+    // Both "engage", but the compared model is below the threshold: it would not have spoken.
+    await new CompareEngagementJudge({ judge: async () => judgment(true, 0.9, 'chat') }, { judge: async () => judgment(true, 0.6, 'jev') }, { minConfidence: 0.7, report }).judge(input());
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ primarySpeaks: true, comparedSpeaks: false }));
+    await new CompareEngagementJudge({ judge: async () => judgment(true, 0.6, 'chat') }, { judge: async () => judgment(true, 0.65, 'jev') }, { minConfidence: 0.7, report }).judge(input());
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ primarySpeaks: false, comparedSpeaks: false }));
+  });
+
+  it('records compare_failed without affecting the deciding judgment, and fails only with the deciding side', async () => {
+    const report = vi.fn();
+    const failing = { judge: async () => { throw Object.assign(new Error('down'), { status: 503 }); } };
+    const result = await new CompareEngagementJudge({ judge: async () => judgment(true, 0.9, 'chat') }, failing, { minConfidence: 0.7, report }).judge(input());
+    expect(result.compare).toEqual({ verdict: 'failed', failure: { category: 'server' } });
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ primarySpeaks: true, comparedFailure: 'server' }));
+    expect(report.mock.lastCall![0]).not.toHaveProperty('comparedSpeaks');
+    await expect(new CompareEngagementJudge(failing, { judge: async () => judgment(true, 0.9, 'jev') }, { minConfidence: 0.7, report }).judge(input())).rejects.toThrow('down');
+  });
+
+  it('places the deciding judgment on the chain, so a fallback is counted apart', async () => {
+    const report = vi.fn();
+    await new CompareEngagementJudge({ judge: async () => judgment(true, 0.9, 'spare') }, { judge: async () => judgment(true, 0.9, 'jev') },
+      { minConfidence: 0.7, chain: ['chat', 'spare'], report }).judge(input());
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ member: 1 }));
+  });
+
+  it('keeps the compared request inside the judgment: both share its signal and are awaited', async () => {
+    const order: string[] = [];
+    const signals: AbortSignal[] = [];
+    const slow = { judge: async (value: { signal: AbortSignal }) => { signals.push(value.signal); await new Promise(resolve => setTimeout(resolve, 20)); order.push('compared'); return judgment(false, 0.9, 'jev'); } };
+    const fast = { judge: async (value: { signal: AbortSignal }) => { signals.push(value.signal); order.push('primary'); return judgment(true, 0.9, 'chat'); } };
+    const judgeInput = input();
+    await new CompareEngagementJudge(fast, slow, { minConfidence: 0.7 }).judge(judgeInput);
+    order.push('returned');
+    expect(order).toEqual(['primary', 'compared', 'returned']);
+    expect(signals.every(signal => signal === judgeInput.signal)).toBe(true);
   });
 });
