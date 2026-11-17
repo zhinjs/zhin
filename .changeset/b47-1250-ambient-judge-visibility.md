@@ -1,6 +1,6 @@
 ---
-"@zhin.js/agent": patch
-"zhin.js": patch
+"@zhin.js/agent": minor
+"zhin.js": minor
 ---
 
 群聊插话判断看得出用的是哪个模型、有没有切到备用、用了多少 token（#1250 第 47 批 `ambient-llm-judge-invisible`）。
