@@ -39,6 +39,8 @@ export function mcpToolHintsFromAnnotations(annotations: unknown): McpToolHints 
   const source = annotations as Record<string, unknown>;
   const hints: Record<string, boolean> = {};
   for (const key of HINT_KEYS) {
+    // Own properties only: an inherited `readOnlyHint` (a polluted prototype) is not an annotation.
+    if (!Object.hasOwn(source, ANNOTATION_KEYS[key])) continue;
     const value = source[ANNOTATION_KEYS[key]];
     if (typeof value === 'boolean') hints[key] = value;
   }
@@ -51,7 +53,7 @@ export function normalizeMcpToolHints(value: unknown): McpToolHints | undefined 
   const source = value as Record<string, unknown>;
   const hints: Record<string, boolean> = {};
   for (const key of HINT_KEYS) {
-    if (typeof source[key] === 'boolean') hints[key] = source[key] as boolean;
+    if (Object.hasOwn(source, key) && typeof source[key] === 'boolean') hints[key] = source[key] as boolean;
   }
   return Object.keys(hints).length ? Object.freeze(hints) as McpToolHints : undefined;
 }

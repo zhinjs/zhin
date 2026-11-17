@@ -100,6 +100,15 @@ describe('MCP Feature', () => {
     expect(normalizeMcpToolHints({ readOnly: 'true' })).toBeUndefined();
   });
 
+  it('ignores inherited annotation properties: only the tool\'s own fields count', () => {
+    expect(mcpToolHintsFromAnnotations(Object.create({ readOnlyHint: true }))).toBeUndefined();
+    expect(mcpToolHintsFromAnnotations(Object.assign(Object.create({ readOnlyHint: true }), { openWorldHint: true })))
+      .toEqual({ openWorld: true });
+    expect(normalizeMcpToolHints(Object.create({ readOnly: true }))).toBeUndefined();
+    // An own `__proto__` key from JSON is a plain field, not a prototype.
+    expect(mcpToolHintsFromAnnotations(JSON.parse('{"__proto__":{"readOnlyHint":true}}'))).toBeUndefined();
+  });
+
   it('passes client tool hints through listTools and drops non-boolean values', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({
