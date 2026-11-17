@@ -47,6 +47,7 @@ import {
 } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
+import type { OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import { collectOutboundImageSizes, formatOutboundMessages } from './outbound.js';
 import { QqActiveMessageGate, QqPassiveReplyLedger } from './passive-reply.js';
@@ -87,6 +88,8 @@ export interface QqEndpointOptions {
   readonly config: ResolvedQqWebsocketConfig;
   /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
   readonly notifier?: AdapterOutageNotifier;
+  /** Downloads image headers on this host for markdown sizes; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements Endpoint {
@@ -218,7 +221,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
     const operation = createEndpointOperation({ signal });
-    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal })) });
+    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal, ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) })) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
@@ -392,6 +395,8 @@ export interface QqHttpEndpointOptions {
   readonly config: ResolvedQqHttpConfig;
   /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
   readonly notifier?: AdapterOutageNotifier;
+  /** Downloads image headers on this host for markdown sizes; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 /** Webhook / middleware inbound via httpHostToken POST (qq-official-bot Middleware receiver). */
@@ -515,7 +520,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
     const operation = createEndpointOperation({ signal });
-    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal })) });
+    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal, ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) })) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();

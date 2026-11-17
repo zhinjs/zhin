@@ -34,7 +34,7 @@ import {
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent } from '@zhin.js/adapter-onebot-events';
-import { buildSystem, toCanonicalSegments, type LoginAssist, type LoginAssistEndpointIdentity, type LoginFlowSnapshot, type PendingLoginTask } from '@zhin.js/core';
+import { buildSystem, toCanonicalSegments, type LoginAssist, type LoginAssistEndpointIdentity, type LoginFlowSnapshot, type PendingLoginTask, type OutboundMediaFetcher } from '@zhin.js/core';
 import { EndpointDeliveryError, type EndpointSendPart, type EndpointSendResult, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -67,6 +67,7 @@ import {
   normalizeIcqqGuildInboundMessage,
 } from './icqq-guild.js';
 import {
+  fetchIcqqRemoteMedia,
   prepareIcqqOutboundMedia,
   resolveIcqqOutboundMediaMode,
 } from './outbound-media.js';
@@ -95,6 +96,8 @@ export interface IcqqEndpointOptions {
   readonly locale?: import('zhin.js/i18n').Locale;
   /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
   readonly notifier?: AdapterOutageNotifier;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 const BOUND_EVENTS = [
@@ -652,8 +655,11 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
     const operation = createEndpointOperation({ signal });
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
-    const prepared = await operation.prepare(() => isIcqqSegmentPayload(payload)
-      ? prepareIcqqOutboundMedia(normalizeIcqqImageMedia(payload), mediaMode)
+    const prepared = await operation.prepare(async () => isIcqqSegmentPayload(payload)
+      ? prepareIcqqOutboundMedia(normalizeIcqqImageMedia(await fetchIcqqRemoteMedia(payload, {
+        ...(signal ? { signal } : {}),
+        ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}),
+      })), mediaMode)
       : { content: payload, dispose() {} });
     // Cancellation ends our wait, not the SDK's use of temporary media. The actual native
     // promises own that resource until they settle, including a late rejection after cancellation.

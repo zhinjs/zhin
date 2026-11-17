@@ -1,7 +1,8 @@
 /**
  * 微信 iLink 出站媒体物化：canonical MediaRef（`data.media`，MediaRef-only）→ 本地文件，
  * 再由 sendWeixinMediaFile 走 CDN 上传。
- * - kind=url    → 下载落盘后上传；
+ * - kind=url    → 经 core `fetchOutboundMedia` 下载落盘后上传；地址被拒（内网 / 非 HTTPS / 重定向到内网 / 过大）
+ *                  时该段换成说明文字，消息照常发出（#1250 第 46 批）；
  * - kind=base64 → 解码落盘后上传；
  * - kind=path   → 本地文件直接上传；
  * - kind=file   → 微信无不透明平台引用投递面，warn 丢弃。
@@ -12,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isMediaRef, type MediaRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import { downloadRemoteImageToTemp } from './upload.js';
 import { getExtensionFromMime } from './mime.js';
 import type { WeixinWireSegment } from './protocol.js';
@@ -72,7 +74,8 @@ function writeOutboundBuffer({ buffer, outboundDir, seg, media }: OutboundBuffer
 async function materializeSegment(
   seg: WeixinWireSegment,
   outboundDir: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  fetchMedia: OutboundMediaFetcher,
 ): Promise<WeixinWireSegment | null> {
   signal?.throwIfAborted();
   if (!MEDIA_TYPES.has(seg.type)) return seg;
@@ -85,10 +88,11 @@ async function materializeSegment(
   switch (media.kind) {
     case 'url': {
       try {
-        const downloaded = await downloadRemoteImageToTemp(media.value, outboundDir, signal);
+        const downloaded = await downloadRemoteImageToTemp(media.value, outboundDir, signal, fetchMedia);
         return withLocalPath(seg, media, downloaded);
       } catch (err) {
         signal?.throwIfAborted();
+        if (isOutboundMediaRefused(err)) return { type: 'text', data: { text: outboundMediaNotice(seg.type) } };
         logger.warn(formatCompact({
           op: 'weixin_ilink_outbound_media_dropped',
           type: seg.type,
@@ -141,9 +145,10 @@ export async function materializeOutboundMedia(
   content: OutboundWireContent,
   outboundDir: string,
   signal?: AbortSignal,
+  fetchMedia: OutboundMediaFetcher = fetchOutboundMedia,
 ): Promise<OutboundWireContent> {
   const segments = asSegments(content);
-  const out = (await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir, signal))))
+  const out = (await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir, signal, fetchMedia))))
     .filter((seg): seg is WeixinWireSegment => seg !== null);
   if (typeof content === 'string') {
     return out[0]?.type === 'text' ? String((out[0].data as { text?: string })?.text ?? content) : content;

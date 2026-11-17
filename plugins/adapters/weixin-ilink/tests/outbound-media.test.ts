@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { materializeOutboundMedia } from "../src/outbound-media.js";
+import { OutboundMediaFetchError } from "@zhin.js/core";
 
 describe("materializeOutboundMedia", () => {
   const dir = path.join(os.tmpdir(), "weixin-outbound-test");
@@ -50,13 +51,13 @@ describe("materializeOutboundMedia", () => {
   });
 
   it("kind=url 远程媒体下载落盘后改写为 kind=path", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(
-      new Uint8Array([1, 2, 3]),
-      { status: 200, headers: { "content-type": "image/png" } },
-    )));
+    // Downloads go through the injected outbound media fetcher (#1250 第 46 批).
+    const fetchMedia = vi.fn(async (url: string) => ({ bytes: Buffer.from([1, 2, 3]), mimeType: "image/png", url }));
     const out = await materializeOutboundMedia(
       [{ type: "image", data: { media: { kind: "url", value: "https://example.com/a.png" } } }],
       dir,
+      undefined,
+      fetchMedia,
     );
     const seg = out[0] as { data: { media: { kind: string; value: string } } };
     expect(seg.data.media.kind).toBe("path");
@@ -64,7 +65,7 @@ describe("materializeOutboundMedia", () => {
   });
 
   it("缺 media / kind=file / 本地文件不存在 / 下载失败一律丢弃", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    const fetchMedia = vi.fn(async () => { throw new OutboundMediaFetchError("outbound_media_http_status", { host: "example.com", status: 500 }); });
     const out = await materializeOutboundMedia(
       [
         { type: "text", data: { text: "hi" } },
@@ -74,6 +75,8 @@ describe("materializeOutboundMedia", () => {
         { type: "image", data: { media: { kind: "url", value: "https://example.com/dead.png" } } },
       ],
       dir,
+      undefined,
+      fetchMedia,
     );
     expect(out).toEqual([{ type: "text", data: { text: "hi" } }]);
   });

@@ -7,12 +7,14 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import type { OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
   emailInboundConversation,
   formatInboundContent,
   formatInboundSegments,
   formatOutboundMail,
+  materializeRemoteMailAttachments,
   parseEmailMessage,
   senderDisplayName,
   type EmailMessage,
@@ -33,6 +35,8 @@ export interface EmailEndpointOptions {
   readonly config: ResolvedEmailConfig;
   readonly createSmtp?: (config: ResolvedEmailConfig['smtp']) => EmailSmtpTransport | Promise<EmailSmtpTransport>;
   readonly createImap?: (config: ResolvedEmailConfig['imap']) => EmailImapTransport;
+  /** Downloads attachment URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 /**
@@ -186,10 +190,10 @@ export class EmailClient extends EventEmitter {
 
   protected async sendPayload({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const target = conversation.id;
-    const mailOptions = formatOutboundMail(payload, {
+    const mailOptions = await createEndpointOperation({ signal }).prepare(() => materializeRemoteMailAttachments(formatOutboundMail(payload, {
       from: this.#options.config.smtp.auth.user,
       to: target,
-    });
+    }), { ...(signal ? { signal } : {}), ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) }));
     try {
       const info = await createEndpointOperation({ signal }).run(() => this.sendMail(mailOptions));
       const messageId = requireSmtpAcceptance(info, target);

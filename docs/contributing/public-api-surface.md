@@ -75,6 +75,7 @@
 | API | 稳定性 | 作者 import | 一句话 |
 |-----|--------|-------------|--------|
 | `EndpointInboundMediaPort`（`roots()`）/ `EndpointHooks.inboundMedia` / `EndpointRuntime.inboundMedia` | `experimental` | `zhin.js/adapter` | 端点声明自己下载入站媒体的目录；Agent 只读这些目录内（解析符号链接后）且通过文件策略敏感检查的入站本机路径（#1250）。只声明 Endpoint 自己写入的目录 |
+| `fetchOutboundMedia()` / `createOutboundMediaFetcher()` / `OutboundMediaFetchError`（`refused`）/ `isOutboundMediaRefused()` / `outboundMediaNotice()` | `experimental` | `@zhin.js/core` | 适配器在本机下载出站媒体 URL 的唯一入口：只连公网 HTTPS、按校验过的地址连接、逐跳校验重定向、限大小与超时（含 DNS 与排队），本机最多 8 个并发（`maxConcurrent`），`probe` 用于尺寸探测；被拒时把该媒体换成 `outboundMediaNotice()` 的说明文字，消息照常发出（#1250 第 46 批）。平台服务端自己下载的 URL 不经过它 |
 
 ### Removed Legacy Hooks
 
@@ -126,7 +127,7 @@
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | `endpointInboundMediaOf()` / `endpointInboundMediaRoots()` / `AdapterIndex.inboundMediaRoots()` / `ImRuntime.inboundMediaRoots()` / `TurnInput.inboundMediaRoots` | `internal` | `@zhin.js/adapter` · `@zhin.js/core/runtime` · `@zhin.js/agent` | 入站媒体目录的读取链：Runtime ingress 取产出端点声明的目录写进回合输入，插件作者只需实现 `inboundMedia.roots()` |
-| `fetchPublicMediaBytes()` / `InboundAudioUrlTranscriber`（`transcribeUrl` 的返回含 `{ status: 'refused', code: 'speech_url_blocked' }`） | `internal` | `@zhin.js/agent/security` · `@zhin.js/agent/runtime` | 下载用户给的媒体地址：只连公网 HTTPS（`allowHttp` 时也接受公网 HTTP，只用于平台产出的语音地址，`InboundAudioUrlOrigin` 区分来源）、按解析出的地址连接、逐跳校验重定向、限大小与超时；Speech Host 的语音下载与 `voice_stt` 共用（#1250 第 45 批） |
+| `fetchPublicMediaBytes()` / `InboundAudioUrlTranscriber`（`transcribeUrl` 的返回含 `{ status: 'refused', code: 'speech_url_blocked' }`） | `internal` | `@zhin.js/kernel` · `@zhin.js/agent/security` · `@zhin.js/agent/runtime` | 下载用户给的媒体地址：只连公网 HTTPS（`allowHttp` 时也接受公网 HTTP，只用于平台产出的语音地址，`InboundAudioUrlOrigin` 区分来源）、按解析出的地址连接、逐跳校验重定向（调用方请求头只发给首个地址的同源）、限大小与超时（DNS 解析也受时限约束）；Speech Host 的语音下载、`voice_stt`、入站识图 `fetchUrlAsBase64` 与 core `fetchOutboundMedia`（出站从不打开 `allowHttp`）共用（#1250 第 45 / 46 批；实现在 kernel，agent 转导出） |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
 | Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent（`agent/host-installer.ts`）、configuration、feature、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `packages/im/zhin/src/instance/`；装配细节随时可变 |

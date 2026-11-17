@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@zhin.js/im-contract';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import type { OutboundMediaAuthority } from '../../src/media/media-normalize.js';
+import type { NetworkTransport } from '../../src/security/turn-network-client.js';
 
 // Smallest valid PNG, so the magic-byte sniffing of the structured path accepts it.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -20,6 +21,9 @@ describe('publishOutboundElements with Turn media authority', () => {
   let workspace: string;
   let outside: string;
   let fetchSpy: ReturnType<typeof vi.spyOn>;
+  /** Pinned media transport injected through the authority: counts real download attempts. */
+  let requestBytes: ReturnType<typeof vi.fn>;
+  let mediaTransport: NetworkTransport;
 
   beforeEach(async () => {
     workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-media-ws-'));
@@ -27,7 +31,10 @@ describe('publishOutboundElements with Turn media authority', () => {
     await fs.writeFile(path.join(workspace, 'chart.png'), PNG);
     await fs.writeFile(path.join(outside, 'secret.png'), PNG);
     await fs.writeFile(path.join(outside, 'secret.txt'), 'token=abc');
+    // Model-referenced URLs never go through the global fetch; the spy proves it.
     fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(PNG, { status: 200 }));
+    requestBytes = vi.fn(async () => ({ status: 200, statusText: 'OK', headers: {}, body: PNG }));
+    mediaTransport = { request: vi.fn(), requestBytes };
   });
 
   afterEach(async () => {
@@ -38,6 +45,7 @@ describe('publishOutboundElements with Turn media authority', () => {
 
   const authority = (network?: OutboundMediaAuthority['network']): OutboundMediaAuthority => ({
     filesystem: { workspaceRoot: workspace },
+    mediaTransport,
     ...(network ? { network } : {}),
   });
 
@@ -63,6 +71,7 @@ describe('publishOutboundElements with Turn media authority', () => {
       [imageSegment({ kind: 'url', value: 'https://example.com/a.png?leak=1' })], 'sandbox', undefined, authority(),
     );
     expect(unavailable(segments)).toBe(true);
+    expect(requestBytes).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -72,12 +81,13 @@ describe('publishOutboundElements with Turn media authority', () => {
       [imageSegment({ kind: 'url', value: 'https://evil.example.org/a.png' })], 'sandbox', undefined, authority(network),
     );
     expect(unavailable(denied)).toBe(true);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(requestBytes).not.toHaveBeenCalled();
     const allowed = await publishOutboundElements(
       [imageSegment({ kind: 'url', value: 'https://cdn.example.com/a.png' })], 'sandbox', undefined, authority(network),
     );
     expect(allowed[0]?.type).toBe('image');
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(requestBytes).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('holds legacy media elements to the same authority (no arbitrary file attachment)', async () => {

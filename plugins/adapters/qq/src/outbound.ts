@@ -22,6 +22,7 @@
  * 其他未识别段保持既有 data.text fallback；正常发送另受声明的 supported 白名单约束。
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { OutboundMediaFetcher } from '@zhin.js/core';
 import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
 import type { QqWireSegment } from './protocol.js';
 import { probeImageSize, type QqImageSize } from './image-size.js';
@@ -459,7 +460,12 @@ export function formatOutboundMessages(payload: unknown, options: FormatOutbound
  */
 export async function collectOutboundImageSizes(
   payload: unknown,
-  { probe, signal }: { readonly probe?: (url: string) => Promise<QqImageSize | undefined>; readonly signal?: AbortSignal } = {},
+  { probe, signal, fetchMedia }: {
+    readonly probe?: (url: string) => Promise<QqImageSize | undefined>;
+    readonly signal?: AbortSignal;
+    /** Downloads on this host for the default probe; defaults to core `fetchOutboundMedia`. */
+    readonly fetchMedia?: OutboundMediaFetcher;
+  } = {},
 ): Promise<Map<string, QqImageSize>> {
   const sizes = new Map<string, QqImageSize>();
   const segments = toSegmentList(payload).filter((item): item is QqWireSegment => typeof item !== 'string');
@@ -471,7 +477,7 @@ export async function collectOutboundImageSizes(
   }
   await Promise.all([...urls].map(async (url) => {
     signal?.throwIfAborted();
-    const size = await (probe ? probe(url) : probeImageSize(url, { signal }));
+    const size = await (probe ? probe(url) : probeImageSize(url, { ...(signal ? { signal } : {}), ...(fetchMedia ? { fetchMedia } : {}) }));
     if (size) sizes.set(url, size);
   }));
   return sizes;
