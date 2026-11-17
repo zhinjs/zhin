@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
+import { resolveMediaBinary } from '../src/media-upload.js';
 import { resolveWeChatMpConfig } from '../src/protocol.js';
 
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -50,6 +51,22 @@ describe('wechat-mp outbound media URL (#1250 第 46 批)', () => {
     expect(network.connected).toEqual([{ host: 'cdn.example', address: '93.184.216.34' }]);
     expect(calls.some(call => call.url.includes('/media/upload'))).toBe(true);
     expect(sentBodies(calls)).toContain('MID_7');
+    network.expectNoPrivateConnection();
+  });
+});
+
+describe('MediaResolveOptions.download (deprecated, #1250 第 46 批)', () => {
+  it('is ignored: a caller-supplied downloader cannot bypass the SSRF-checked fetch', async () => {
+    const network = fakeOutboundMediaNetwork();
+    cleanups.push(() => network.restore());
+    const download = vi.fn(async () => Buffer.from('internal secret'));
+    await expect(resolveMediaBinary(
+      { kind: 'url', value: 'https://169.254.169.254/latest/meta-data/' },
+      { download, fetchMedia: network.fetchMedia },
+    )).rejects.toMatchObject({ code: 'outbound_media_url_blocked', refused: true });
+    await expect(resolveMediaBinary({ kind: 'url', value: PUBLIC_MEDIA_URL }, { download, fetchMedia: network.fetchMedia }))
+      .resolves.toMatchObject({ data: expect.any(Buffer) });
+    expect(download).not.toHaveBeenCalled();
     network.expectNoPrivateConnection();
   });
 });

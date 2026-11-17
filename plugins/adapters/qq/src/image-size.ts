@@ -156,8 +156,9 @@ export async function probeImageSize(
   const headers = { Range: `bytes=0-${PROBE_BYTES - 1}` };
   try {
     if (!fetchImpl) {
-      // A server that ignores Range and sends more than the probe window is a failed probe (caller degrades).
-      const { bytes } = await fetchMedia(url, { headers, maxBytes: PROBE_BYTES, timeoutMs, ...(signal ? { signal } : {}), source: 'qq' });
+      // A server that ignores Range and sends more than the probe window is a failed probe (caller
+      // degrades), not a refusal: `probe` keeps it out of the warn log (#1250 第 46 批 L7).
+      const { bytes } = await fetchMedia(url, { headers, maxBytes: PROBE_BYTES, timeoutMs, probe: true, ...(signal ? { signal } : {}), source: 'qq' });
       return imageSizeFromBytes(new Uint8Array(bytes));
     }
     const response = await fetchImpl(url, {

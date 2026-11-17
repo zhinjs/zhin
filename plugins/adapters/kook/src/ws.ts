@@ -137,7 +137,7 @@ export class RuntimeKookClient extends Client {
   async uploadMedia(data: Buffer | string): Promise<string> {
     let bytes: Buffer;
     if (Buffer.isBuffer(data)) bytes = data;
-    else if (/^https?:\/\//.test(data)) {
+    else if (/^https?:\/\//i.test(data)) {
       // Downloaded on this host, so only through the pinned public-HTTPS fetch (#1250 第 46 批).
       try {
         bytes = (await fetchOutboundMedia(data, { source: 'kook' })).bytes;

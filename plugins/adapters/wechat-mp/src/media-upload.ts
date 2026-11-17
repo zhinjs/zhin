@@ -39,6 +39,12 @@ const MIME_EXT: Record<string, string> = {
 export interface MediaResolveOptions {
   /** Downloads an outbound media URL on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
   readonly fetchMedia?: OutboundMediaFetcher;
+  /**
+   * @deprecated Ignored since #1250 第 46 批: a caller-supplied downloader could fetch private or
+   * loopback addresses, so URLs are always downloaded through `fetchMedia` (SSRF-checked). Kept so
+   * existing callers still type-check; use `fetchMedia` instead.
+   */
+  readonly download?: (url: string, signal?: AbortSignal) => Promise<Buffer>;
   readonly signal?: AbortSignal;
 }
 export async function resolveMediaBinary(

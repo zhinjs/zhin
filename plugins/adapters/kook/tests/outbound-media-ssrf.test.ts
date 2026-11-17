@@ -47,6 +47,9 @@ describe('KOOK card image URL (#1250 第 46 批)', () => {
     ['metadata address', 'https://169.254.169.254/latest/meta-data/'],
     ['plain http', 'http://cdn.example/a.png'],
     ['loopback', 'https://127.0.0.1/a.png'],
+    // Upper-case schemes are URLs too, not local paths (#1250 第 46 批 L7).
+    ['upper-case metadata address', 'HTTPS://169.254.169.254/latest/meta-data/'],
+    ['upper-case plain http', 'Http://cdn.example/a.png'],
   ])('RuntimeKookClient.uploadMedia refuses a %s source URL without downloading it', async (_label, url) => {
     network = fakeOutboundMediaNetwork();
     const client = new RuntimeKookClient({ token: 'fixture', mode: 'websocket' });
