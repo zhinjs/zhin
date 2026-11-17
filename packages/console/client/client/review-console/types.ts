@@ -56,10 +56,6 @@ export interface CommentReviewSpec<E extends ReviewEndpointBase<D>, D extends Re
   readonly adapter: string;
   /** 界面里的平台名（中文 / 英文），如 `B 站` / `Bilibili`。 */
   readonly platform: { readonly zh: string; readonly en: string };
-  /**
-   * @deprecated ADR 0063 P2 删除了页头首字母方块：此字段被忽略，使用时控制台告警一次，后续 minor 删除。
-   */
-  readonly mark?: string;
   /** 资源名词，如 视频 / video。 */
   readonly resource: { readonly zh: string; readonly en: string };
   /** 适配器自己的文案翻译表：中文原文 → English。 */

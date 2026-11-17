@@ -202,7 +202,6 @@ const CONSOLE_CONTRACT_STUB = [
   '  const bp = Object.assign(buildBlueprintFromSpec({',
   '    pluginId: reviewSpec.adapter,',
   '    title: { zh: zhTitle, "zh-CN": zhTitle, en: enTitle },',
-  '    mark: reviewSpec.mark,',
   '    statusMethod: "status",',
   '    pollMs: reviewSpec.pollMs ?? 10000,',
   '    ...(reviewSpec.dictionary ? { dictionary: reviewSpec.dictionary } : {}),',

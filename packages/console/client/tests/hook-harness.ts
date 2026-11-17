@@ -72,7 +72,7 @@ export function createHookEnv() {
     /** No providers are mounted by the harness: a context reads its default value. */
     useContext(context: { _currentValue?: unknown }) { return context._currentValue; },
     useRef(initial: unknown) { const at = cursor++; return slots[at] ?? (slots[at] = { current: initial }); },
-    useId() { const at = cursor++; return slots[at] ?? (slots[at] = `zk-id-${at}`); },
+    useId() { const at = cursor++; return slots[at] ?? (slots[at] = `id-${at}`); },
     useMemo(fn: () => unknown, deps: unknown[]) {
       const at = cursor++;
       const old = slots[at] as { deps: unknown[]; value: unknown } | undefined;

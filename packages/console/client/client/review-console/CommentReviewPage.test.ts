@@ -14,7 +14,7 @@ const endpoint = (extra: Record<string, unknown> = {}) => ({
 
 let extrasContext: { act(method: string): Promise<void>; pending: string | undefined; noun: string } | undefined;
 const spec = {
-  adapter: 'demo', platform: { zh: '示例站', en: 'Demo' }, mark: 'D', resource: { zh: '视频', en: 'videos' },
+  adapter: 'demo', platform: { zh: '示例站', en: 'Demo' }, resource: { zh: '视频', en: 'videos' },
   account: (e: { login: { mid?: string; uname?: string } }) => ({ id: e.login.mid, name: e.login.uname }),
   draftResource: (d: Draft) => d.video,
   isLoginPending: (e: { qr: { state: string } }) => e.qr.state === 'waiting',

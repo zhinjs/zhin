@@ -1864,9 +1864,9 @@ function useMediaQuery(media: string): boolean {
 }
 
 /** ADR 0063 决策 5: a dangerous choice is an outline button with destructive text, never a solid red one. */
-function interactionVariant(primary: boolean, danger: boolean): 'default' | 'destructive-outline' | 'outline' {
+function interactionVariant(primary: boolean, danger: boolean): 'soft' | 'destructive-outline' | 'outline' {
     if (danger) return 'destructive-outline'
-    return primary ? 'default' : 'outline'
+    return primary ? 'soft' : 'outline'
 }
 
 function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {
