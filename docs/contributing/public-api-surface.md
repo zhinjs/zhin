@@ -70,6 +70,12 @@
 |-----|--------|--------|--------|
 | `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Skill/SubAgent/Hook 支持资源；Tool 与 MCP 分别由对应 Feature 投影 |
 
+### 适配器 Endpoint 端口
+
+| API | 稳定性 | 作者 import | 一句话 |
+|-----|--------|-------------|--------|
+| `EndpointInboundMediaPort`（`roots()`）/ `EndpointHooks.inboundMedia` / `EndpointRuntime.inboundMedia` | `experimental` | `zhin.js/adapter` | 端点声明自己下载入站媒体的目录；Agent 只读这些目录内（解析符号链接后）且通过文件策略敏感检查的入站本机路径（#1250）。只声明 Endpoint 自己写入的目录 |
+
 ### Removed Legacy Hooks
 
 | API | 稳定性 | 来源包 | 一句话 |
@@ -119,6 +125,7 @@
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `InboundRuntime` 持有的 generation-owned 消息分发器 |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
+| `endpointInboundMediaOf()` / `endpointInboundMediaRoots()` / `AdapterIndex.inboundMediaRoots()` / `ImRuntime.inboundMediaRoots()` / `TurnInput.inboundMediaRoots` | `internal` | `@zhin.js/adapter` · `@zhin.js/core/runtime` · `@zhin.js/agent` | 入站媒体目录的读取链：Runtime ingress 取产出端点声明的目录写进回合输入，插件作者只需实现 `inboundMedia.roots()` |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
 | Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent（`agent/host-installer.ts`）、configuration、feature、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `packages/im/zhin/src/instance/`；装配细节随时可变 |
