@@ -8,6 +8,7 @@
  * collapsed — lies inside one of them. Even there, the FilePolicy secret checks (`.zhin/`, `.env*`,
  * keys, databases) still apply. Nothing here throws: a refusal is a reason code.
  */
+import { constants as fsConstants } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,7 @@ import { checkSensitiveFileAccess, isBlockedDevicePath } from '../security/file-
 export type InboundMediaPathRefusal = 'inbound_path_not_owned' | 'inbound_path_sensitive';
 
 export type InboundMediaPathDecision =
-  | Readonly<{ allowed: true; path: string }>
+  | Readonly<{ allowed: true; path: string; root: string }>
   | Readonly<{ allowed: false; reason: InboundMediaPathRefusal }>;
 
 const NOT_OWNED: InboundMediaPathDecision = Object.freeze({ allowed: false, reason: 'inbound_path_not_owned' });
@@ -59,17 +60,64 @@ export async function authorizeInboundMediaPath(
   const lexical = path.resolve(local);
   const real = await realpathOrUndefined(lexical);
   if (!real) return NOT_OWNED;
-  let owned = false;
+  let owner: string | undefined;
   for (const root of roots) {
     const realRoot = await realpathOrUndefined(path.resolve(root));
     if (realRoot && isInside(realRoot, real)) {
-      owned = true;
+      owner = realRoot;
       break;
     }
   }
-  if (!owned) return NOT_OWNED;
-  for (const candidate of new Set([lexical, real])) {
-    if (isBlockedDevicePath(candidate) || !checkSensitiveFileAccess(candidate).allowed) return SENSITIVE;
+  if (!owner) return NOT_OWNED;
+  if (isSensitive(lexical) || isSensitive(real)) return SENSITIVE;
+  return Object.freeze({ allowed: true, path: real, root: owner });
+}
+
+function isSensitive(candidate: string): boolean {
+  return isBlockedDevicePath(candidate) || !checkSensitiveFileAccess(candidate).allowed;
+}
+
+/** Where an open descriptor really is: `/proc/self/fd` on Linux, otherwise the path re-resolved. */
+async function openedLocation(handle: fs.FileHandle, opened: string): Promise<string | undefined> {
+  if (process.platform === 'linux') {
+    try { return await fs.readlink(`/proc/self/fd/${handle.fd}`); } catch { /* no procfs: fall back */ }
   }
-  return Object.freeze({ allowed: true, path: real });
+  return realpathOrUndefined(opened);
+}
+
+/**
+ * Read an authorized inbound file once, through one descriptor (#1250 review: TOCTOU). The file is
+ * opened without following a final symbolic link, and the descriptor itself — not the path, which
+ * may have been swapped since {@link authorizeInboundMediaPath} — must be a regular file inside the
+ * declared root (and the same inode the re-resolved path names). Returns `undefined` when any check
+ * fails, the file is larger than `maxBytes`, or it cannot be read.
+ */
+export async function readInboundMediaFile(
+  decision: Readonly<{ path: string; root: string }>,
+  maxBytes: number,
+): Promise<Buffer | undefined> {
+  const noFollow = fsConstants.O_NOFOLLOW ?? 0;
+  let handle: fs.FileHandle | undefined;
+  try {
+    handle = await fs.open(decision.path, fsConstants.O_RDONLY | noFollow);
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > maxBytes) return undefined;
+    const location = await openedLocation(handle, decision.path);
+    if (!location || !isInside(decision.root, location) || isSensitive(location)) return undefined;
+    const named = await fs.stat(location).catch(() => undefined);
+    if (!named || named.dev !== stat.dev || named.ino !== stat.ino) return undefined;
+    const buffer = Buffer.alloc(Math.min(stat.size, maxBytes) + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
+      if (bytesRead === 0) break;
+      length += bytesRead;
+    }
+    if (length > maxBytes) return undefined;
+    return buffer.subarray(0, length);
+  } catch {
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }

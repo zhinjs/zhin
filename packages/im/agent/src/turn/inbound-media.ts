@@ -10,13 +10,14 @@
  * `ai.multimodal.perception` 时，图片 / 视频 / PDF 由感知模型描述后以
  * untrusted 文本注入（`[图片描述]` 等），失败或超出单回合上限时保持原占位。
  */
+import * as path from 'node:path';
 import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  inspectMediaBytes,
   normalizeMediaRefsToPayloads,
-  readLocalFileAsBase64,
 } from '../media/media-normalize.js';
-import { authorizeInboundMediaPath } from '../media/inbound-media-path.js';
+import { authorizeInboundMediaPath, readInboundMediaFile } from '../media/inbound-media-path.js';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
@@ -101,9 +102,17 @@ async function materializeInboundMedia(
   const decision = await authorizeInboundMediaPath(media.value, inboundMediaRoots);
   if (!decision.allowed) return { refused: decision.reason };
   if (typeof media.size === 'number' && media.size > maxBytes) return {};
-  const wantKind = type === 'file' ? undefined : type;
-  const local = await readLocalFileAsBase64(decision.path, maxBytes, wantKind);
-  return local ? { payload: { ...local, ...(media.file_name ? { fileName: media.file_name } : {}) } } : {};
+  const bytes = await readInboundMediaFile(decision, maxBytes);
+  const detected = bytes ? inspectMediaBytes(bytes, type === 'file' ? undefined : type) : null;
+  if (!bytes || !detected) return {};
+  return {
+    payload: {
+      kind: detected.kind,
+      base64: bytes.toString('base64'),
+      mimeType: detected.mimeType,
+      fileName: media.file_name ?? path.basename(decision.path),
+    },
+  };
 }
 
 function toBase64Block(
