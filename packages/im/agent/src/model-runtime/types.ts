@@ -70,6 +70,8 @@ export interface ModelExecutionScope {
   readonly modelFallbacks?: () => readonly ModelFallbackEvent[];
   /** Replays earlier switches, then reports new ones; the returned function stops it. */
   readonly observeModelFallback?: (listener: (event: ModelFallbackEvent) => void) => () => void;
+  /** Like `observeModelFallback`, for model failures that did not switch and why (#1250). */
+  readonly observeModelFallbackSkipped?: (listener: (event: import('./purpose-fallback.js').ModelFallbackSkip) => void) => () => void;
   retainDelegation(): ModelDelegationAuthority;
   release(): Promise<void>;
 }

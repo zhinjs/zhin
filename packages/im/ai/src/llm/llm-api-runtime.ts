@@ -49,6 +49,12 @@ export interface StreamOptions {
   onTextDelta?: (text: string) => void;
   /** A completion owner may prohibit regeneration after publishing partial output. */
   retryAllowed?: () => boolean;
+  /**
+   * Set by a resilience wrapper on the options it passes down: whether it will re-ask the same
+   * model after this attempt fails with `error`. A layer below it (purpose fallbacks) uses it to
+   * act only once the same-model retries are used up (#1250 fallback-skips-network-and-5xx).
+   */
+  willRetry?: (error: unknown) => boolean;
   /** Override the AI SDK's built-in retry count (SDK default 2). The resilient port sets 0. */
   maxRetries?: number;
 }

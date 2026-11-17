@@ -109,7 +109,10 @@ export interface TurnTraceModelFallback {
   readonly to_profile_id: string;
   readonly to_account_id: string;
   readonly to_model: string;
-  /** `quota_exhausted`, `billing`, `auth` (rejected credential), `timeout` (repeated) or `context_overflow` (a fallback in use no longer fits). */
+  /**
+   * `quota_exhausted`, `billing`, `auth` (rejected credential), `timeout` (repeated), `network` / `server`
+   * (same-model retries used up) or `context_overflow` (a fallback in use no longer fits).
+   */
   readonly reason: string;
   /** `selection`: the primary was already being skipped; `request`: a request failed and was re-issued. */
   readonly phase: 'selection' | 'request';
@@ -208,6 +211,14 @@ export interface TurnTrace {
   /** Purpose fallbacks used by this (sub-)turn, in order (#1250). Absent when none. */
   readonly model_fallbacks?: readonly TurnTraceModelFallback[];
   /**
+   * Model failures that did not switch to a fallback, and why (#1250 fallback-skips-network-and-5xx):
+   * `no_fallbacks`, `not_switching` (the failure class does not switch), `exhausted` (every fallback
+   * was tried or passed over), `streamed` or `retry_forbidden`. Absent when none.
+   */
+  readonly model_fallback_skips?: readonly Readonly<{
+    purpose: string; profile_id: string; account_id: string; model: string; kind: string; reason: string;
+  }>[];
+  /**
    * The final reply claims a lookup ("查了 / 根据最新 / I checked") but the turn made
    * no tool call: likely made up (#1250 tool-capability-unverified). Flag only.
    */
@@ -237,6 +248,8 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>
   /** The turn was answered (from here on) by a purpose fallback model (#1250). */
   | Readonly<{ kind: 'model_fallback'; fallback: TurnTraceModelFallback }>
+  /** A model failure that did not switch to a fallback, and why (#1250 fallback-skips-network-and-5xx). */
+  | Readonly<{ kind: 'model_fallback_skipped'; skip: NonNullable<TurnTrace['model_fallback_skips']>[number] }>
   /**
    * Final reply of a turn that does not record `turn_end` (a sub-agent actor turn):
    * checked for a lookup claim without any tool call, like `turn_end` output.
@@ -310,6 +323,7 @@ export class TurnTraceCollector {
   #contextBudget: ContextBudgetReport | undefined;
   #modelSelection: TurnTraceModelSelection | undefined;
   readonly #modelFallbacks: TurnTraceModelFallback[] = [];
+  readonly #modelFallbackSkips: NonNullable<TurnTrace['model_fallback_skips']>[number][] = [];
   #claimWithoutToolCall: string | undefined;
   #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
   #trigger: TurnTraceTrigger | undefined;
@@ -455,6 +469,10 @@ export class TurnTraceCollector {
       this.#modelFallbacks.push(Object.freeze({ ...fallback }));
       this.#addTimeline('model_fallback', `${fallback.notice}: ${fallback.purpose} ${fallback.from_account_id}/${fallback.from_model}`
         + ` → ${fallback.to_account_id}/${fallback.to_model} (${fallback.reason})`);
+    } else if (note.kind === 'model_fallback_skipped') {
+      const skip = note.skip;
+      this.#modelFallbackSkips.push(Object.freeze({ ...skip }));
+      this.#addTimeline('fallback_skipped', `${skip.purpose} ${skip.account_id}/${skip.model}: ${skip.kind} (${skip.reason})`);
     } else if (note.kind === 'copied_inline_media_dropped') {
       this.#addTimeline('copied_inline_media_dropped', `${note.path}: ${note.count} × ${note.kinds.join(', ')}`);
     } else if (note.kind === 'unexecuted_tool_notice') {
@@ -576,7 +594,10 @@ export class TurnTraceCollector {
       }
       case 'turn_end': {
         this.#checkLookupClaim(renderAgentOutput(event.output));
-        this.#finish({ status: 'completed' });
+        // #1250 b40: a turn that ended on a failed model request did not answer, whatever text it showed.
+        this.#finish(event.modelFailure
+          ? { status: 'failed', code: `model_error:${event.modelFailure.kind}`, reason: summarizeText(event.modelFailure.message) }
+          : { status: 'completed' });
         return;
       }
       case 'error':
@@ -647,6 +668,7 @@ export class TurnTraceCollector {
       ...(subagentUsage ? { subagent_usage: subagentUsage } : {}),
       ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
       ...(this.#modelFallbacks.length ? { model_fallbacks: Object.freeze([...this.#modelFallbacks]) } : {}),
+      ...(this.#modelFallbackSkips.length ? { model_fallback_skips: Object.freeze([...this.#modelFallbackSkips]) } : {}),
       ...(this.#claimWithoutToolCall ? { claim_without_tool_call: Object.freeze({ phrase: this.#claimWithoutToolCall }) } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),

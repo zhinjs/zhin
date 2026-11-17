@@ -96,9 +96,17 @@ describe('purpose model fallback (#1250 chat-purpose-no-fallback)', () => {
     expect(fallback.calls).toHaveLength(2);
   });
 
-  it.each([['server', serverError], ['rate limit', rateLimited], ['plain', new Error('weird')]])('never switches on a %s error', async (_name, error) => {
+  it.each([['rate limit', rateLimited], ['plain', new Error('weird')]])('never switches on a %s error', async (_name, error) => {
     const { completion, fallback, events, registry, primaryModel } = setup([error]);
     await expect(completion.complete(primaryModel, context)).rejects.toBe(error);
+    expect(fallback.calls).toHaveLength(0);
+    expect(events).toEqual([]);
+    expect(registry.list()).toEqual([]);
+  });
+
+  it('does not switch on a server error the same model will be asked again (#1250 b40)', async () => {
+    const { completion, fallback, events, registry, primaryModel } = setup([serverError]);
+    await expect(completion.complete(primaryModel, context, { willRetry: () => true })).rejects.toBe(serverError);
     expect(fallback.calls).toHaveLength(0);
     expect(events).toEqual([]);
     expect(registry.list()).toEqual([]);
@@ -538,5 +546,145 @@ describe('review follow-ups (#1250 / #1270)', () => {
       }
       expect(target.calls).toHaveLength(0);
     });
+  });
+});
+
+describe('network errors and 5xx switch after the same-model retries (#1250 b40 fallback-skips-network-and-5xx)', () => {
+  const networkError = () => Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNRESET' } });
+  const badGateway = () => Object.assign(new Error('bad gateway'), { statusCode: 502 });
+  type Skip = Parameters<NonNullable<Parameters<typeof createFallbackCompletionPort>[0]['onFallbackSkipped']>>[0];
+
+  /** Ports that fail `failures` times (one per call), then answer. */
+  function flaky(name: string, failures: number, error: () => Error) {
+    let calls = 0;
+    const completion: LlmCompletionPort = {
+      complete: async () => { calls++; if (calls <= failures) throw error(); return reply(`${name} answer`, name); },
+      completeSimple: async () => reply(`${name} answer`, name),
+    };
+    return { completion, calls: () => calls };
+  }
+
+  function build(input: Readonly<{
+    primaryFailures: number;
+    fallback1Failures?: number;
+    fallback2Failures?: number;
+    error: () => Error;
+    registry?: ModelAvailabilityRegistry;
+    fallbacks?: 0 | 2;
+  }>) {
+    const registry = input.registry ?? new ModelAvailabilityRegistry({ now: () => 1_000 });
+    const primary = flaky('relay', input.primaryFailures, input.error);
+    // Fallbacks run under their own resilience policy (`maxRetries: 1` = two attempts each).
+    const fallback1 = flaky('backup1', input.fallback1Failures ?? 0, input.error);
+    const fallback2 = flaky('backup2', input.fallback2Failures ?? 0, input.error);
+    const events: ModelFallbackEvent[] = [];
+    const skips: Skip[] = [];
+    const primaryModel = model('relay-model', 'relay-account');
+    const transport = createFallbackCompletionPort({
+      purpose: 'chat', registry, onFallback: event => events.push(event), onFallbackSkipped: event => skips.push(event),
+      primary: { endpoint: { profileId: 'relay', accountId: 'relay-account', model: 'relay-model' }, model: primaryModel, completion: primary.completion },
+      fallbacks: input.fallbacks === 0 ? [] : [
+        { endpoint: { profileId: 'backup1', accountId: 'backup1-account', model: 'backup1-model' },
+          resolve: async () => ({ model: { ...model('backup1-model', 'backup1-account'), executionPolicy: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 } },
+            completion: fallback1.completion }) },
+        { endpoint: { profileId: 'backup2', accountId: 'backup2-account', model: 'backup2-model' },
+          resolve: async () => ({ model: { ...model('backup2-model', 'backup2-account'), executionPolicy: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 } },
+            completion: fallback2.completion }) },
+      ],
+    });
+    const retries: string[] = [];
+    const giveUps: string[] = [];
+    // The turn's same-model resilience sits above the fallback port, as in production.
+    const completion = createResilientCompletionPort(transport, { config: { maxRetries: 2 }, sleep: async () => undefined,
+      onEvent: event => { if (event.type === 'retry') retries.push(event.kind); if (event.type === 'give_up') giveUps.push(event.kind); } });
+    return { completion, primary, fallback1, fallback2, events, skips, registry, primaryModel, retries, giveUps };
+  }
+
+  it.each([['network', networkError, 'network'], ['502', badGateway, 'server']] as const)(
+    'retries the selected model, then answers from fallback 1 on a %s error', async (_name, error, kind) => {
+      const run = build({ primaryFailures: 3, error });
+      const answer = await run.completion.complete(run.primaryModel, context);
+      expect(answer.provider).toBe('backup1');
+      // Two same-model retries first (the 9:00 log: two provider_retry), then the switch instead of give_up.
+      expect(run.primary.calls()).toBe(3);
+      expect(run.retries).toEqual([kind, kind]);
+      expect(run.giveUps).toEqual([]);
+      expect(run.events).toEqual([expect.objectContaining({ reason: kind, phase: 'request',
+        from: expect.objectContaining({ profileId: 'relay' }), to: expect.objectContaining({ profileId: 'backup1' }) })]);
+      expect(run.skips).toEqual([]);
+      // One operation is not enough to skip the model for everyone.
+      expect(run.registry.list()).toEqual([]);
+    });
+
+  it.each([['network', networkError, 'network'], ['502', badGateway, 'server']] as const)(
+    'moves on to fallback 2 when fallback 1 also fails with a %s error', async (_name, error, kind) => {
+      const run = build({ primaryFailures: 3, fallback1Failures: 2, error });
+      const answer = await run.completion.complete(run.primaryModel, context);
+      expect(answer.provider).toBe('backup2');
+      expect(run.fallback1.calls()).toBe(2);
+      expect(run.events.map(event => [event.from.profileId, event.to.profileId, event.reason]))
+        .toEqual([['relay', 'backup1', kind], ['backup1', 'backup2', kind]]);
+    });
+
+  it('records fallback_skipped `exhausted` when every fallback failed', async () => {
+    const run = build({ primaryFailures: 3, fallback1Failures: 2, fallback2Failures: 2, error: networkError });
+    await expect(run.completion.complete(run.primaryModel, context)).rejects.toThrow();
+    expect(run.events.map(event => event.to.profileId)).toEqual(['backup1', 'backup2']);
+    expect(run.skips).toEqual([expect.objectContaining({ purpose: 'chat', kind: 'network', reason: 'exhausted',
+      from: expect.objectContaining({ profileId: 'backup2' }) })]);
+  });
+
+  it('records fallback_skipped `no_fallbacks` when the purpose has none', async () => {
+    const run = build({ primaryFailures: 3, error: networkError, fallbacks: 0 });
+    await expect(run.completion.complete(run.primaryModel, context)).rejects.toBeInstanceOf(ProviderRequestError);
+    expect(run.retries).toEqual(['network', 'network']);
+    expect(run.giveUps).toEqual(['network']);
+    expect(run.skips).toEqual([expect.objectContaining({ kind: 'network', reason: 'no_fallbacks' })]);
+  });
+
+  it('records fallback_skipped `not_switching` for a failure class that does not switch', async () => {
+    const run = build({ primaryFailures: 1, error: () => Object.assign(new Error('bad'), { statusCode: 400 }) });
+    await expect(run.completion.complete(run.primaryModel, context)).rejects.toThrow('bad');
+    expect(run.events).toEqual([]);
+    expect(run.skips).toEqual([expect.objectContaining({ kind: 'bad_request', reason: 'not_switching',
+      from: expect.objectContaining({ profileId: 'relay' }) })]);
+  });
+
+  it('keeps the switch inside the operation; a later operation starts on the primary again', async () => {
+    const registry = new ModelAvailabilityRegistry({ now: () => 1_000 });
+    const first = build({ primaryFailures: 3, error: networkError, registry });
+    expect((await first.completion.complete(first.primaryModel, context)).provider).toBe('backup1');
+    // Same operation, next request: stays on the fallback.
+    expect((await first.completion.complete(first.primaryModel, context)).provider).toBe('backup1');
+    expect(first.primary.calls()).toBe(3);
+    // Another operation (the relay is back): answered by the primary, nothing marked.
+    const second = build({ primaryFailures: 0, error: networkError, registry });
+    expect((await second.completion.complete(second.primaryModel, context)).provider).toBe('relay');
+    expect(registry.unavailable('relay-account', 'relay-model')).toBeUndefined();
+  });
+
+  it(`skips the model globally only after ${TIMEOUT_GLOBAL_OPERATIONS} operations gave up on it within the window`, async () => {
+    let now = 1_000;
+    const registry = new ModelAvailabilityRegistry({ now: () => now });
+    const first = build({ primaryFailures: 3, error: badGateway, registry });
+    await first.completion.complete(first.primaryModel, context);
+    expect(registry.unavailable('relay-account', 'relay-model')).toBeUndefined();
+    // Outside the window: still counted as a first operation.
+    now += TIMEOUT_GLOBAL_WINDOW_MS + 1;
+    const second = build({ primaryFailures: 3, error: badGateway, registry });
+    await second.completion.complete(second.primaryModel, context);
+    expect(registry.unavailable('relay-account', 'relay-model')).toBeUndefined();
+    now += 1_000;
+    const third = build({ primaryFailures: 3, error: badGateway, registry });
+    expect((await third.completion.complete(third.primaryModel, context)).provider).toBe('backup1');
+    expect(registry.unavailable('relay-account', 'relay-model')).toMatchObject({ reason: 'server', until: now + TIMEOUT_FALLBACK_COOLDOWN_MS });
+    expect(third.events.at(-1)).toMatchObject({ reason: 'server', fromUntil: now + TIMEOUT_FALLBACK_COOLDOWN_MS });
+    // Timeouts are counted on their own: these operations do not count toward a timeout skip.
+    expect(registry.noteOperationTimeouts({ accountId: 'relay-account', model: 'relay-model', operation: {} })).toBe(false);
+  });
+
+  it('uses the short cooldown for network / 5xx skips', () => {
+    expect(modelFallbackResetAt({ kind: 'network' }, 0)).toBe(TIMEOUT_FALLBACK_COOLDOWN_MS);
+    expect(modelFallbackResetAt({ kind: 'server' }, 0)).toBe(TIMEOUT_FALLBACK_COOLDOWN_MS);
   });
 });

@@ -181,6 +181,12 @@ export interface TurnEndEvent {
    * `empty_reply`: the model returned no visible text.
    */
   fallback?: ReplyFallback;
+  /**
+   * #1250 b40 schedule-failed-run-marked-ok: the turn ended on a failed model request; its visible
+   * reply (if any) is the failure text, not model output. `kind` is the failure class (`network`,
+   * `server`, `timeout`, ... or `unknown`); `service` the display name of the selected model's account.
+   */
+  modelFailure?: Readonly<{ kind: string; message: string; service?: string }>;
   /** Control-only ingress links its own principal/journal to the affected turn. */
   control?: Readonly<{
     intent: 'steer' | 'follow_up' | 'observe';

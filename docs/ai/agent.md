@@ -84,7 +84,7 @@ sequenceDiagram
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
-- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：只在额度用完、余额不足或鉴权失败时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
+- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：在额度用完、余额不足、鉴权失败、连续超时，或网络错误 / 5xx 的同模型重试用完时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
 一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
@@ -623,6 +623,7 @@ assistant:
 - **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 保持默认的 `external_content`（不设为 `off`），无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
 - **预演**：`schedule_preview` 的结果列出到点时会被拒的工具（`unattended_approval.denied`）和要交给审核 Agent 的工具（`unattended_approval.reviewed`）。只是提示，实际以每次调用的判断为准。
 - **任务状态**：一次运行用了兜底文案、没有任何工具结果且回复为空，或有工具被拒时，记为 `degraded`（未完成），`last_error` 写明原因和 `zhin trace <回合 id>`；`zhin watch` 显示 `last:degraded` 和原因，`zhin schedule list` 显示「上次」一行。开启 `notifyOnFailure` 时会发「[任务未完成]」提醒；如果送达的回复本身就是兜底说明，不再重复提醒。
+- **模型调用失败**（#1250 第 40 批）：回合因模型请求失败而结束（日志 `llm_error`，回复只是失败文案）时，这次运行记为失败：`last_status: error`，`last_error` 写明错误类型、原因和 `zhin trace <回合 id>`，回合 trace 的结束状态为 `failed`（`model_error:<类型>`），失败文案不会当成任务结果发出去。模型服务暂时不可用（网络错误、5xx、超时、无响应）时自动重试：约 5 分钟后第 1 次、再约 10 分钟后第 2 次，由调度器定时触发、不占执行队列；只在这次运行没有已生效或结果不明的工具操作时重试（失败的运行本来就不发回复，重试不会重复发送）；暂停、删除任务或下一次到点运行会取消待定的重试，重试状态只在内存中。`zhin schedule list` / Console 的「下次运行」显示重试时间，`retry_count` 为已安排的重试次数。全部重试失败（或这类错误不重试，如密钥被拒）后，向任务的接收人发一条说明，例如「『工作日天气早报』这次没生成：模型服务（中转站）暂时连不上，已自动重试 2 次，不再重试。排查：zhin trace <回合 id>」；开启 `notifyOnFailure` 时，每次失败都发，未重试完时写「N 分钟后会自动重试」。提醒按任务语言发中文或英文。普通聊天的失败提示不变。
 - **兜底文案**：模型没有给出回复时，说明按实际原因区分（没有可用工具 / 哪个工具被拒 / 模型空回复）。定时任务的说明带任务名、任务 id 和 `zhin trace <回合 id>`，不会建议发 `/reset`。
 
 `SOUL.md` 用第一人称描述性格、价值观和表达方式，不再使用昵称占位符。当前账号的昵称、
@@ -737,7 +738,7 @@ ai:
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
 ```
 
-旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足或鉴权失败时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
+旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足、鉴权失败、连续超时，或网络错误 / 5xx 的同模型重试用完时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 
