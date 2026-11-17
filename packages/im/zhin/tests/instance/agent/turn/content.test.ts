@@ -6,6 +6,7 @@ import {
   isClearCommand,
   preprocessInboundTurn,
   resolveStableSenderId,
+  SPEECH_URL_BLOCKED_NOTE,
   stringMetadata,
 } from '@zhin.js/agent/runtime';
 
@@ -40,6 +41,33 @@ describe('Agent turn content boundary', () => {
       transcribe,
     )).resolves.toEqual({ text: 'context\nvoice transcript', sttApplied: true });
     expect(transcribe).toHaveBeenCalledWith('https://media.example/voice.mp3');
+  });
+
+  it('keeps the turn going with a note when the voice address is refused (#1250 第 45 批)', async () => {
+    const transcribe = vi.fn(async () => ({ status: 'refused' as const, code: 'speech_url_blocked' as const }));
+    const message = {
+      metadata: {},
+      content: 'hi [audio:http://169.254.169.254/latest/meta-data/]',
+    } as unknown as Message;
+
+    const result = await preprocessInboundTurn(message, message.content, transcribe);
+    expect(result).toEqual({
+      text: `hi\n${SPEECH_URL_BLOCKED_NOTE}`,
+      sttApplied: false,
+      sttRefusal: 'speech_url_blocked',
+    });
+    expect(result.text).not.toContain('169.254.169.254');
+    expect(transcribe).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/');
+
+    const voiceOnly = { metadata: {}, content: '[audio:https://10.0.0.1/a.ogg]' } as unknown as Message;
+    await expect(preprocessInboundTurn(voiceOnly, voiceOnly.content, transcribe))
+      .resolves.toMatchObject({ text: SPEECH_URL_BLOCKED_NOTE, sttApplied: false });
+  });
+
+  it('does not end the turn when the transcriber throws', async () => {
+    const message = { metadata: {}, content: 'hello [audio:https://media.example/a.ogg]' } as unknown as Message;
+    await expect(preprocessInboundTurn(message, message.content, async () => { throw new Error('boom'); }))
+      .resolves.toEqual({ text: 'hello', sttApplied: false });
   });
 
   it('maps completed output and rejects terminal non-completed outcomes', () => {

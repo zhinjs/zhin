@@ -914,7 +914,7 @@ interface ConfiguredAgentHost {
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
-    readonly transcribeUrl?: (url: string) => Promise<string | null>;
+    readonly transcribeUrl?: import('@zhin.js/agent/runtime').InboundAudioUrlTranscriber;
     readonly assistantStatus?: AssistantStatus;
     readonly selfChanges?: HostSelfChanges;
     readonly selfChangeApply?: HostSelfChangeApply;
