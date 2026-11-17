@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { principalAllows, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import { hostChatRole, type CapabilityId, type ChatRoleReader } from 'zhin.js';
+import { hostChatRole, isMediaRef, toCanonicalSegments, type CapabilityId, type ChatRoleReader, type MessageElement } from 'zhin.js';
 import { EndpointDeliveryError, type MessageRef, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
@@ -133,7 +133,7 @@ const messages = createMessages({
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
   receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
-  mediaRejected: { 'zh-CN': '消息里的 Sandbox 文件不属于这个会话、已过期或签名无效，没有发送。', en: 'A Sandbox file in this message belongs to another conversation, has expired or has an invalid signature; the message was not sent.' },
+  mediaRejected: { 'zh-CN': '消息里的文件不属于这个会话、已过期、签名无效，或指向本机路径，没有发送。', en: 'A file in this message belongs to another conversation, has expired, has an invalid signature or names a path on the host; the message was not sent.' },
 });
 
 /** How often expired uploads are swept (also once at start). */
@@ -153,6 +153,30 @@ function segmentStrings(segment: unknown, depth = 0): string[] {
     if (typeof value === 'string') return [value];
     return segmentStrings(value, depth + 1);
   });
+}
+
+const INBOUND_MEDIA_TYPES: ReadonlySet<string> = new Set(['image', 'audio', 'video', 'file', 'record', 'voice']);
+
+/**
+ * Whether a segment tree names a file on this host (`media.kind: 'path'`, or a legacy `path` /
+ * `file_path` / `/…` field that Core's ingress mapper turns into one). A browser never has a reason
+ * to send a host path, and the Agent's inbound media reads such a ref straight from disk without
+ * the file policy — it would read `.zhin/sandbox/media/*` (any conversation's uploads, and the
+ * signing key) or any other file. Nested deeper than any real segment counts as a path (fail closed).
+ */
+function carriesLocalMediaPath(value: unknown, depth = 0): boolean {
+  if (depth > 16) return true;
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(item => carriesLocalMediaPath(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  if (record.kind === 'path' && typeof record.value === 'string') return true;
+  if (typeof record.type === 'string' && INBOUND_MEDIA_TYPES.has(record.type.toLowerCase()) && record.data && typeof record.data === 'object') {
+    const type = ['record', 'voice'].includes(record.type.toLowerCase()) ? 'audio' : record.type.toLowerCase();
+    const [canonical] = toCanonicalSegments([{ type, data: record.data } as MessageElement]);
+    const media = (canonical?.data as Record<string, unknown> | undefined)?.media;
+    if (isMediaRef(media) && media.kind === 'path') return true;
+  }
+  return Object.values(record).some(item => carriesLocalMediaPath(item, depth + 1));
 }
 
 export interface SandboxEndpointOptions {
@@ -666,6 +690,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   /** Why a hosted file in an inbound message is refused, or undefined when every one is admitted. */
   #hostedMediaRefusal(content: readonly unknown[], scene: { readonly type: string; readonly id: string },
     principal: WsConnection['principal']): string | undefined {
+    if (carriesLocalMediaPath(content)) return 'local_path';
     const uploader = sandboxMediaActor(principal);
     for (const value of segmentStrings(content)) {
       if (!isSandboxMediaPath(value)) continue;

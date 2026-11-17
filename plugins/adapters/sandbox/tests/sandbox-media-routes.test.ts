@@ -223,4 +223,30 @@ describe('Sandbox media routes (ADR 0064 D12 / D13, I1)', () => {
     const input = receive.mock.calls[0]![0] as { message: { segments?: unknown; id: string }; segments?: unknown };
     expect(JSON.stringify(input)).toContain(data.url);
   });
+
+  it('refuses inbound media that names a host file, canonical or legacy, at any depth', async () => {
+    const { upload, connect, receive, endpoint } = await fixture();
+    const { data } = await (await upload('alice-token', PNG)).json() as { data: { id: string } };
+    // The Agent's inbound media reads a `path` ref from disk without the file policy: this would
+    // hand another conversation's upload (or `.zhin/sandbox/media/secret`) to the model.
+    const hosted = join('.zhin', 'sandbox', 'media', endpoint.endpoint.mediaStore.dirKey, data.id);
+    const bob = await connect('bob-token');
+    const cases: Array<[string, unknown]> = [
+      ['m-path', { type: 'image', data: { media: { kind: 'path', value: hosted } } }],
+      ['m-secret', { type: 'file', data: { media: { kind: 'path', value: '.zhin/sandbox/media/secret' }, name: 'secret' } }],
+      ['m-legacy-path', { type: 'image', data: { path: hosted } }],
+      ['m-legacy-file', { type: 'file', data: { file: '/etc/passwd' } }],
+      ['m-legacy-relative', { type: 'record', data: { file: './.zhin/sandbox/media/secret' } }],
+      ['m-nested', { type: 'forward', data: { forward_id: 'f', messages: [[{ type: 'image', data: { file_path: hosted } }]] } }],
+    ];
+    for (const [messageId, segment] of cases) {
+      bob.client.send(JSON.stringify({ type: 'group', id: 'room-1', messageId, content: [segment], timestamp: Date.now() }));
+      await vi.waitFor(() => expect(bob.frames.some(frame => frame.code === 'sandbox_media_rejected' && frame.messageId === messageId), messageId).toBe(true));
+    }
+    expect(receive).not.toHaveBeenCalled();
+    // A remote URL and a platform token are not host paths.
+    bob.client.send(JSON.stringify({ type: 'group', id: 'room-1', messageId: 'm-remote',
+      content: [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } }], timestamp: Date.now() }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+  });
 });
