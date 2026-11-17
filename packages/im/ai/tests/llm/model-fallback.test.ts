@@ -688,3 +688,68 @@ describe('network errors and 5xx switch after the same-model retries (#1250 b40 
     expect(modelFallbackResetAt({ kind: 'server' }, 0)).toBe(TIMEOUT_FALLBACK_COOLDOWN_MS);
   });
 });
+
+describe('the network / 5xx switch follows what the same-model retries actually do (#1250 b40 review)', () => {
+  const networkError = () => Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNRESET' } });
+  type Skip = Parameters<NonNullable<Parameters<typeof createFallbackCompletionPort>[0]['onFallbackSkipped']>>[0];
+
+  function build(primary: LlmCompletionPort) {
+    const registry = new ModelAvailabilityRegistry({ now: () => 1_000 });
+    const backup = port('backup');
+    const events: ModelFallbackEvent[] = [];
+    const skips: Skip[] = [];
+    const primaryModel = model('relay-model', 'relay-account');
+    const transport = createFallbackCompletionPort({
+      purpose: 'chat', registry, onFallback: event => events.push(event), onFallbackSkipped: event => skips.push(event),
+      primary: { endpoint: { profileId: 'relay', accountId: 'relay-account', model: 'relay-model' }, model: primaryModel, completion: primary },
+      fallbacks: [{ endpoint: { profileId: 'backup', accountId: 'backup-account', model: 'backup-model' },
+        resolve: async () => ({ model: model('backup-model', 'backup-account'), completion: backup.completion }) }],
+    });
+    const retries: string[] = [];
+    const completion = createResilientCompletionPort(transport, { config: { maxRetries: 2 }, sleep: async () => undefined,
+      onEvent: event => { if (event.type === 'retry') retries.push(event.kind); } });
+    return { completion, backup, events, skips, registry, primaryModel, retries };
+  }
+
+  it('switches on the first 503 whose Retry-After is longer than the same-model retries wait', async () => {
+    let calls = 0;
+    const longWait = () => Object.assign(new Error('busy'), { statusCode: 503, responseHeaders: { 'retry-after': '600' } });
+    const run = build({ complete: async () => { calls++; throw longWait(); }, completeSimple: async () => { throw longWait(); } });
+    expect((await run.completion.complete(run.primaryModel, context)).provider).toBe('backup');
+    expect(calls).toBe(1);
+    expect(run.retries).toEqual([]);
+    expect(run.events.map(event => event.reason)).toEqual(['server']);
+  });
+
+  it('does not switch or report a skip when the caller cancelled the request', async () => {
+    const controller = new AbortController();
+    const run = build({
+      complete: async () => { controller.abort(); throw networkError(); },
+      completeSimple: async () => { throw networkError(); },
+    });
+    await expect(run.completion.complete(run.primaryModel, context, { signal: controller.signal })).rejects.toThrow();
+    expect(run.backup.calls).toHaveLength(0);
+    expect(run.events).toEqual([]);
+    expect(run.skips).toEqual([]);
+    expect(run.retries).toEqual([]);
+  });
+
+  it('does not switch once text of the last attempt reached the user', async () => {
+    const run = build({
+      complete: async (_m, _c, options) => { options?.onTextDelta?.('partial'); throw networkError(); },
+      completeSimple: async () => { throw networkError(); },
+    });
+    await expect(run.completion.complete(run.primaryModel, context, { onTextDelta: () => undefined })).rejects.toThrow();
+    expect(run.backup.calls).toHaveLength(0);
+    expect(run.retries).toEqual(['network', 'network']);
+    expect(run.skips).toEqual([expect.objectContaining({ kind: 'network', reason: 'streamed' })]);
+  });
+
+  it('does not switch when the caller forbids another attempt, and reports why', async () => {
+    const run = build({ complete: async () => { throw networkError(); }, completeSimple: async () => { throw networkError(); } });
+    await expect(run.completion.complete(run.primaryModel, context, { retryAllowed: () => false })).rejects.toThrow();
+    expect(run.backup.calls).toHaveLength(0);
+    expect(run.retries).toEqual([]);
+    expect(run.skips).toEqual([expect.objectContaining({ kind: 'network', reason: 'retry_forbidden' })]);
+  });
+});
