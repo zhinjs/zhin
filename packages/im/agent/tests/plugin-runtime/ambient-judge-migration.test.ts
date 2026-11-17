@@ -2,7 +2,10 @@
  * ADR 0066 D5: the one-time migration of the interjection judge — every row of the table, the
  * record (`before`, `noticedAt`), CAS conflicts, failure without a write, and the revert command.
  */
-import { normalizeProviderGraph, type CommitProviderGraphInput, type JsonObject, type ProviderGraph, type ProviderMutationResult } from '@zhin.js/ai/provider';
+import { effectiveAmbientJudgePolicy, normalizeProviderGraph, type CommitProviderGraphInput, type JsonObject, type ProviderGraph, type ProviderMutationResult } from '@zhin.js/ai/provider';
+import { ModelAvailabilityRegistry } from '@zhin.js/ai';
+import { ambientJudgeStatusView } from '../../src/plugin-runtime/inference/host.js';
+import { AmbientEngagement } from '../../src/plugin-runtime/ingress/ambient-engagement.js';
 import {
   migrateAmbientJudge,
   needsAmbientJudgeMigration,
@@ -29,12 +32,25 @@ function graph(purposes: Record<string, unknown>, revision = 1, owner = HOST): P
 
 class MemoryStore implements AmbientJudgeMigrationStore {
   record?: JsonObject;
+  recordRevision = 0;
   conflicts = 0;
   commits: CommitProviderGraphInput[] = [];
+  /** Runs once, between reading the record and writing it (a concurrent operation). */
+  beforeRecordWrite?: () => Promise<unknown> | void;
   constructor(public graph: ProviderGraph) {}
   async readGraph() { return this.graph; }
   async readMigrationRecord() { return this.record ? structuredClone(this.record) : undefined; }
-  async writeMigrationRecord(input: { record: JsonObject }) { this.record = structuredClone(input.record); }
+  async readMigrationRecordEntry() { return this.record ? { revision: this.recordRevision, record: structuredClone(this.record) } : undefined; }
+  async writeMigrationRecord(input: { record: JsonObject; expectedRevision?: number; requireStatus?: string }): Promise<'written' | 'conflict'> {
+    const concurrent = this.beforeRecordWrite;
+    this.beforeRecordWrite = undefined;
+    await concurrent?.();
+    if (input.expectedRevision !== undefined && input.expectedRevision !== this.recordRevision) return 'conflict';
+    if (input.requireStatus !== undefined && this.record?.status !== input.requireStatus) return 'conflict';
+    this.record = structuredClone(input.record);
+    this.recordRevision += 1;
+    return 'written';
+  }
   async commitMigration(input: CommitProviderGraphInput & { migration: { id: string; record: JsonObject } }): Promise<ProviderMutationResult> {
     if (this.conflicts > 0) {
       this.conflicts -= 1;
@@ -46,6 +62,7 @@ class MemoryStore implements AmbientJudgeMigrationStore {
     this.commits.push(input);
     this.graph = input.graph;
     this.record = structuredClone(input.migration.record);
+    this.recordRevision += 1;
     return { status: 'committed', replayed: false, receipt: { rootId: 'root', mutationId: input.mutationId, fingerprint: input.fingerprint, graphRevision: input.graph.revision, result: input.result } };
   }
 }
@@ -153,4 +170,79 @@ describe('revertAmbientJudgeMigration (zhin ai purposes revert ambient-judge, ac
     await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toEqual({ status: 'refused', reason: 'changed' });
     expect(store.graph.purposes.ambient).toEqual({ profile: 'jev', minConfidence: 0.9 });
   });
+});
+
+describe('the yml keys stay faithful on every path (review of ADR 0066)', () => {
+  it('a purposes.ambient seeded before the migration keeps its values and takes the yml mode / threshold it lacks (M1)', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat' }, ambient: { profile: 'small', minConfidence: 0.9 } }));
+    expect(needsAmbientJudgeMigration(store.graph, { mode: 'shadow', minConfidence: 0.5 }, undefined)).toBe(true);
+    const result = await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow', minConfidence: 0.5 } });
+    expect(result.status).toBe('migrated');
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', minConfidence: 0.9, mode: 'shadow' });
+    expect(await readAmbientJudgeMigration(store, 'root')).toMatchObject({ triggerKeys: ['ai.trigger.ambient.minConfidence', 'ai.trigger.ambient.mode'],
+      triggerValues: { minConfidence: 0.5, mode: 'shadow' }, rows: [{ field: 'mode', value: 'shadow', from: 'ai.trigger.ambient.mode' }] });
+  });
+
+  it('converts a later write of the retired keys (an older Console) into purposes.ambient, so it is not silently lost (H2)', async () => {
+    const log = logger();
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small' });
+    // The old Console writes ai.trigger.ambient.mode: shadow; the next load converts it.
+    const converted = await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' }, logger: log });
+    expect(converted).toMatchObject({ status: 'converted', keys: ['ai.trigger.ambient.mode'] });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('ambient_trigger_write_converted'));
+    // Seen: the same value again is not a new write; a Console edit of purposes.ambient afterwards wins.
+    store.graph = normalizeProviderGraph({ ...store.graph, revision: store.graph.revision + 1, purposes: { ...store.graph.purposes, ambient: { profile: 'small', mode: 'active' } } });
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } })).resolves.toEqual({ status: 'none' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'active' });
+    // Removing the key (doctor --fix) changes nothing but the record.
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST })).resolves.toEqual({ status: 'none' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'active' });
+    expect(await readAmbientJudgeMigration(store, 'root')).toMatchObject({ triggerSeen: {} });
+  });
+
+  it('notice and revert at the same time: the revert wins and is not overwritten (L1)', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+    store.beforeRecordWrite = () => revertAmbientJudgeMigration({ store, rootId: 'root' });
+    const noticed = await noticeAmbientJudgeMigration({ store, rootId: 'root', now: () => 7 });
+    expect(await readAmbientJudgeMigration(store, 'root')).toMatchObject({ status: 'reverted' });
+    expect((await readAmbientJudgeMigration(store, 'root'))?.noticedAt).toBeUndefined();
+    expect(noticed?.noticedAt).toBeUndefined();
+  });
+
+  it('refuses a revert whose old form no longer validates, naming the path (L6)', async () => {
+    // An off decision Profile is not migrated (the judge no longer references it) and is removed afterwards.
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' }, decisions: { ambient: { profile: 'jev', mode: 'off' } } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+    store.graph = normalizeProviderGraph({ ...store.graph, revision: store.graph.revision + 1,
+      profiles: Object.fromEntries(Object.entries(store.graph.profiles).filter(([id]) => id !== 'jev')) });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toEqual({ status: 'refused', reason: 'invalid-graph', path: 'purposes.decisions.ambient.profile' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small' });
+  });
+
+  it('reverts a yml-only migration to nothing stored, so the yml shadow applies again (M2)', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } });
+    expect(store.graph.purposes.ambient).toEqual({ mode: 'shadow' });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toMatchObject({ status: 'reverted' });
+    expect(store.graph.purposes).toEqual({ defaults: { chat: 'chat' } });
+    // Reverted: the yml keys apply directly again and nothing is migrated automatically.
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } })).resolves.toEqual({ status: 'none' });
+    expect(await readAmbientJudgeMigration(store, 'root')).toMatchObject({ status: 'reverted', triggerValues: { mode: 'shadow' } });
+  });
+});
+
+it('after converting an old-key write of shadow, the status shows shadow and the bot does not speak (H2)', async () => {
+  const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+  await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+  await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } });
+  expect(ambientJudgeStatusView(store.graph, { mode: 'shadow' }, new ModelAvailabilityRegistry())).toMatchObject({ mode: 'shadow' });
+  // The judge reads the policy in effect (as the ingress stage does) and carries it as its gate.
+  const { policy } = effectiveAmbientJudgePolicy(store.graph.purposes, { mode: 'shadow' });
+  const engagement = new AmbientEngagement({ config: { conversations: ['*'] }, sleep: async () => undefined,
+    judge: { judge: async () => ({ engage: true, confidence: 0.95, reason: 'x', gate: { minConfidence: policy.minConfidence ?? 0.7, mode: policy.mode ?? 'active' } }) } });
+  await expect(engagement.consider({ key: 'qq:1', botName: 'bot', readRecent: async () => ['a'] })).resolves.toMatchObject({ kind: 'shadow' });
 });

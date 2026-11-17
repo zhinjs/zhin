@@ -216,6 +216,8 @@ describe('ADR 0066 D2: TypeSafe errors are classified by classifyProviderError',
     expect(JSON.stringify(quota)).not.toContain('private-prompt');
     const limited = await failure(async () => Response.json({ message: 'slow down private-prompt' }, { status: 429, headers: { 'Retry-After': '7' } }));
     expect(classifyProviderError(limited)).toMatchObject({ kind: 'rate_limit', status: 429, retryAfterMs: 7_000 });
+    // Only Retry-After is kept from the response headers (L3).
+    expect([...(limited as { responseHeaders: Headers }).responseHeaders.keys()]).toEqual(['retry-after']);
     expect(classifyProviderError(await failure(async () => Response.json({}, { status: 401 })))).toMatchObject({ kind: 'auth', credential: true });
     expect(classifyProviderError(await failure(async () => Response.json({}, { status: 503 })))).toMatchObject({ kind: 'server' });
   });

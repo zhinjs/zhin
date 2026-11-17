@@ -401,10 +401,9 @@ export class HostInference {
   async ambientModels(
     input: Readonly<{ lease: SnapshotLease; signal: AbortSignal }>
   ): Promise<AmbientJudgeStatusView> {
-    const graph = await this.repository.readGraph({ rootId: this.rootId });
-    input.signal.throwIfAborted();
-    if (!graph) return Object.freeze({ chain: Object.freeze([]), mode: 'active', minConfidence: DEFAULT_AMBIENT_MIN_CONFIDENCE });
-    return ambientJudgeStatusView(graph, this.options.ambientTrigger?.() as LegacyAmbientTrigger | undefined, modelAvailability);
+    // The graph of the Console request's own operation (its held generation), as the judge reads it.
+    return this.withInferenceScope({ ...input, sessionKey: 'console:ambient-status' },
+      async scope => ambientJudgeStatusView(scope.graph, this.options.ambientTrigger?.() as LegacyAmbientTrigger | undefined, modelAvailability));
   }
 
   createInference(lease: SnapshotLease, beforeSubmit?: () => void) {
@@ -486,6 +485,7 @@ export class HostInference {
     const management = new InferenceManagementService({
       agentTargets: () => readAgentPurposeTargets(lease.value),
       ambientDeployment: () => this.#ambientDeployment(lease.value),
+      ...(this.options.ambientTrigger ? { ambientTrigger: this.options.ambientTrigger as () => LegacyAmbientTrigger | undefined } : {}),
       rootId: this.rootId,
       hostOwnerId: this.hostOwnerId,
       directory: join(this.options.projectRoot, '.zhin', 'inference'),

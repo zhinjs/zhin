@@ -26,6 +26,7 @@ import {
   type AmbientJudgePolicy,
   type AmbientJudgePolicySource,
   type ProviderPlanWarning,
+  type LegacyAmbientTrigger,
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { MODEL_FALLBACK_NOTICE, modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent, type ModelUnavailability } from '@zhin.js/ai';
@@ -130,6 +131,8 @@ export interface InferenceManagementOptions {
   readonly agentTargets?: () => AgentPurposeTargets;
   /** Whether interjection runs at all in the held generation, for `purposeEffects.ambient` (ADR 0066 D7). */
   readonly ambientDeployment?: () => AmbientDeploymentView | undefined;
+  /** The current `ai.trigger.ambient` (its retired keys apply while no migration stored them, ADR 0066 M1). */
+  readonly ambientTrigger?: () => LegacyAmbientTrigger | undefined;
 }
 
 /** Whether interjection can run (ADR 0066 D7): the `ai.trigger.ambient` section and what turns it on. */
@@ -146,8 +149,9 @@ export interface AmbientDeploymentView {
  * `purposeEffects.ambient` and `purposeEffects['decisions.<task>']` (ADR 0066 D7): the interjection
  * judge chain that is really used (or why it is not used at all), and decision purposes that are off.
  */
-export function ambientPurposeEffects(graph: ProviderGraph, deployment: AmbientDeploymentView | undefined): Readonly<Record<string, InferencePurposeEffect>> {
-  const { policy } = effectiveAmbientJudgePolicy(graph.purposes);
+export function ambientPurposeEffects(graph: ProviderGraph, deployment: AmbientDeploymentView | undefined,
+  trigger?: LegacyAmbientTrigger): Readonly<Record<string, InferencePurposeEffect>> {
+  const { policy } = effectiveAmbientJudgePolicy(graph.purposes, trigger);
   const chain = ambientJudgeChain(graph.purposes);
   const member = (profile: string) => { const kind = engagementKind(graph, profile); return Object.freeze({ profile, ...(kind ? { kind } : {}) }); };
   const reason: PurposeIgnoredReason | undefined = !deployment ? undefined : !deployment.configured ? 'ambient-not-configured'
@@ -336,6 +340,9 @@ export class InferenceManagementService {
       }
     );
   }
+  #ambientTrigger(): LegacyAmbientTrigger | undefined {
+    try { return this.options.ambientTrigger?.(); } catch { return undefined; }
+  }
   #ambientDeployment(): AmbientDeploymentView | undefined {
     try { return this.options.ambientDeployment?.(); } catch { return undefined; }
   }
@@ -406,7 +413,7 @@ export class InferenceManagementService {
       ...(principal.hostAdministrator ? { purposes: graph.purposes, modelAvailability: this.#availability() } : {}),
       ...(principal.hostAdministrator ? { purposeEffects: Object.freeze({
         ...(graph.purposes.agents && this.options.agentTargets ? inferencePurposeEffects(graph.purposes.agents, this.options.agentTargets()) : {}),
-        ...ambientPurposeEffects(graph, this.#ambientDeployment()),
+        ...ambientPurposeEffects(graph, this.#ambientDeployment(), this.#ambientTrigger()),
       }) } : {}),
       ...(principal.environmentReferences ? { environmentReferences: principal.environmentReferences } : {}),
     };
@@ -437,9 +444,18 @@ export class InferenceManagementService {
     this.#principal(principal);
     const input = record(value),
       graph = await this.graph();
+    // ADR 0066: while no migration stored them the yml keys still apply, and `decisions.ambient: off`
+    // restores the language judge the migration recorded.
+    const migration = await readAmbientJudgeMigration(this.options.repository, this.options.rootId).catch(() => undefined);
+    const trigger = migration?.status === 'migrated' ? undefined : this.#ambientTrigger();
+    const before = migration?.before;
+    const language = before ? { ...(before.defaults.ambient !== undefined ? { profile: before.defaults.ambient } : {}),
+      ...(before.defaults.ambientFallbacks ? { fallbacks: before.defaults.ambientFallbacks } : {}) } : undefined;
     const reviewed = await reviewProviderPlan({
       input: input.plan,
       graph,
+      ...(trigger ? { ambientTrigger: trigger } : {}),
+      ...(language ? { legacyAmbientLanguage: language } : {}),
       ownerId: principal.ownerId,
       hostOwnerId: this.options.hostOwnerId,
       bindings: input.bindings as ReviewProviderPlanOptions['bindings'],
@@ -537,7 +553,8 @@ export class InferenceManagementService {
     this.#principal(principal);
     if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
     const graph = await this.graph();
-    const { policy, source } = effectiveAmbientJudgePolicy(graph.purposes);
+    // M1: the yml threshold / mode while they still apply, so doctor and Console show what runs.
+    const { policy, source } = effectiveAmbientJudgePolicy(graph.purposes, this.#ambientTrigger());
     const chain = ambientJudgeChain(graph.purposes);
     const record = await readAmbientJudgeMigration(this.options.repository, this.options.rootId).catch(() => undefined);
     const { before: _before, ...migration } = record ?? {};
@@ -980,7 +997,7 @@ export class InferenceManagementService {
       ...(value.perception ? { perception: value.perception } : {}),
     });
     // ADR 0066: the interjection judge exports as `purposes.ambient` only (a legacy stored form converted).
-    const ambientJudge = effectiveAmbientJudgePolicy(graph.purposes).policy;
+    const ambientJudge = effectiveAmbientJudgePolicy(graph.purposes, this.#ambientTrigger()).policy;
     const decisions = graph.purposes.decisions
       ? Object.fromEntries(Object.entries(graph.purposes.decisions).filter(([task]) => task !== 'ambient')) : undefined;
     const purposes = {

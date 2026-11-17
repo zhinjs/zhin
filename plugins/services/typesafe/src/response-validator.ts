@@ -13,7 +13,7 @@ export interface TypeSafeDecisionErrorDetail {
 }
 
 export class TypeSafeDecisionError extends Error {
-  /** Response headers of a failed request (`Retry-After`), for `classifyProviderError`. */
+  /** Only the `Retry-After` header of a failed request, for `classifyProviderError`. */
   readonly responseHeaders?: Headers;
   /** JSON of the response body's `error.code` / `error.type` only, for `classifyProviderError`. */
   readonly responseBody?: string;
@@ -21,7 +21,9 @@ export class TypeSafeDecisionError extends Error {
     detail: TypeSafeDecisionErrorDetail = {}) {
     super(`TypeSafe decision ${code}${status === undefined ? '' : ` (HTTP ${status})`}${detail.network ? ' (network)' : ''}`);
     this.name = 'TypeSafeDecisionError';
-    if (detail.headers) this.responseHeaders = detail.headers;
+    // Only `Retry-After` is kept: other response headers can name accounts or request ids.
+    const retryAfter = detail.headers?.get('retry-after');
+    if (retryAfter) this.responseHeaders = new Headers({ 'retry-after': retryAfter });
     const codes = errorCodes(detail.body);
     if (codes) this.responseBody = JSON.stringify({ error: codes });
   }

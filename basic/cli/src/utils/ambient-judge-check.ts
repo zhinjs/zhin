@@ -26,38 +26,16 @@ export const RETIRED_AMBIENT_TRIGGER_KEYS = Object.freeze(['minConfidence', 'mod
  */
 export const RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED = false;
 
-function retiredKeysOf(document: unknown): readonly string[] {
+function retiredValuesOf(document: unknown): Readonly<Record<string, unknown>> {
   const ambient = (document as { ai?: { trigger?: { ambient?: Record<string, unknown> } } } | undefined)?.ai?.trigger?.ambient;
-  if (!ambient || typeof ambient !== 'object') return [];
-  return RETIRED_AMBIENT_TRIGGER_KEYS.filter(key => Object.hasOwn(ambient, key));
+  if (!ambient || typeof ambient !== 'object') return {};
+  return Object.fromEntries(RETIRED_AMBIENT_TRIGGER_KEYS.filter(key => Object.hasOwn(ambient, key)).map(key => [key, ambient[key]]));
 }
 
-/** The retired keys in `configPath`; with `fix`, removes them (other keys untouched). */
-export async function checkRetiredAmbientTriggerKeys(input: Readonly<{ configPath: string; label: string; fix?: boolean; expired?: boolean }>): Promise<AmbientJudgeCheckResult> {
-  const config = createConfigDocument(input.configPath);
-  let snapshot = await config.read();
-  let keys = retiredKeysOf(snapshot.document);
-  if (keys.length && input.fix) {
-    const prepared = await config.prepare(snapshot, keys.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })));
-    await prepared.commit();
-    snapshot = await config.read();
-    const remaining = retiredKeysOf(snapshot.document);
-    if (!remaining.length) {
-      return { name: '插话判断（旧配置项）', status: 'ok', message: `已从 ${input.label} 删除 ${keys.map(key => `ai.trigger.ambient.${key}`).join('、')}（已迁移到插话判断 purposes.ambient）` };
-    }
-    keys = remaining;
-  }
-  if (!keys.length) return { name: '插话判断（旧配置项）', status: 'ok', message: `${input.label} 中没有已废弃的 ai.trigger.ambient.minConfidence / mode` };
-  return {
-    name: '插话判断（旧配置项）',
-    status: (input.expired ?? RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED) ? 'error' : 'warn',
-    message: `${input.label} 中的 ${keys.map(key => `ai.trigger.ambient.${key}`).join('、')} 已废弃且不再生效：门槛和「只观察」改在 Console「插话判断」（purposes.ambient）设置；升级时已迁移一次`,
-    fix: 'zhin doctor --fix 删除这两项',
-  };
-}
-
-interface AmbientJudgeView {
-  readonly policy?: Readonly<{ minConfidence?: number }>;
+/** The interjection judge of the running instance (`GET {base}/agent/inference/ambient-judge`). */
+export interface AmbientJudgeView {
+  readonly policy?: Readonly<{ minConfidence?: number; mode?: string }>;
+  readonly source?: string;
   readonly chain?: readonly Readonly<{ profile: string; kind?: string }>[];
   readonly migration?: Readonly<{
     status: 'migrated' | 'failed' | 'reverted';
@@ -65,10 +43,73 @@ interface AmbientJudgeView {
     rows?: readonly Readonly<{ field: string; value: unknown; from: string }>[];
     notes?: readonly Readonly<{ code: string; value?: unknown }>[];
     triggerKeys?: readonly string[];
+    triggerValues?: Readonly<Record<string, unknown>>;
+    triggerSeen?: Readonly<Record<string, unknown>>;
     noticedAt?: number;
     revertedAt?: number;
     failure?: Readonly<{ reason: string; path?: string }>;
   }>;
+}
+
+/** Reads the running instance's judge view over the local socket; undefined when it is not reachable. */
+export async function readAmbientJudgeView(client: HostHttpConfig | undefined): Promise<AmbientJudgeView | undefined> {
+  if (!client) return undefined;
+  const viewed = await hostGet<AmbientJudgeView>(client, '/ambient-judge').catch(() => undefined);
+  return viewed?.ok && viewed.data ? viewed.data : undefined;
+}
+
+const NAME = '插话判断（旧配置项）';
+
+/**
+ * The retired keys in `configPath` (H1). They stop applying by themselves only once the running
+ * instance's migration stored them (`migrated`, the key read by it and its value unchanged since):
+ * only then are they reported as no longer applied and removed by `fix`. In every other state —
+ * no instance reachable, not migrated yet, migration failed, reverted, or a value written after the
+ * migration that the next load converts — they still apply: a warning, and `--fix` is refused.
+ */
+export async function checkRetiredAmbientTriggerKeys(input: Readonly<{
+  configPath: string; label: string; fix?: boolean; expired?: boolean; view?: AmbientJudgeView;
+}>): Promise<AmbientJudgeCheckResult> {
+  const config = createConfigDocument(input.configPath);
+  const snapshot = await config.read();
+  const present = retiredValuesOf(snapshot.document);
+  const keys = Object.keys(present);
+  if (!keys.length) return { name: NAME, status: 'ok', message: `${input.label} 中没有已废弃的 ai.trigger.ambient.minConfidence / mode` };
+  const names = (list: readonly string[]) => list.map(key => `ai.trigger.ambient.${key}`).join('、');
+  const migration = input.view?.migration;
+  const why = !input.view ? '无法连接运行中的实例，不能确认它们是否已迁移（请先 zhin start）'
+    : !migration ? '实例还没有迁移它们，它们仍然生效'
+      : migration.status === 'failed' ? '插话判断迁移失败，实例仍按它们运行'
+        : migration.status === 'reverted' ? '插话判断迁移已回退，它们仍然生效' : undefined;
+  if (why) {
+    return { name: NAME, status: 'warn',
+      message: `${input.label} 中的 ${names(keys)} 已废弃，但现在仍然生效：${why}。${input.fix ? '没有删除。' : ''}`,
+      fix: '迁移完成后（zhin doctor 显示迁移记录）再运行 zhin doctor --fix；或在 Console「插话判断」设置后再删除' };
+  }
+  // Migrated: a key the migration read, whose value is the one already acted on, no longer applies by itself.
+  const read = new Set((migration!.triggerKeys ?? []).map(key => key.replace(/^ai\.trigger\.ambient\./u, '')));
+  const seen = migration!.triggerSeen ?? migration!.triggerValues ?? {};
+  const settled = keys.filter(key => read.has(key) && JSON.stringify(seen[key]) === JSON.stringify(present[key]));
+  const pending = keys.filter(key => !settled.includes(key));
+  let removed: string[] = [];
+  if (input.fix && settled.length) {
+    const prepared = await config.prepare(snapshot, settled.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })));
+    await prepared.commit();
+    const after = retiredValuesOf((await config.read()).document);
+    removed = settled.filter(key => !Object.hasOwn(after, key));
+  }
+  const left = settled.filter(key => !removed.includes(key));
+  const parts: string[] = [];
+  if (removed.length) parts.push(`已从 ${input.label} 删除 ${names(removed)}（迁移时已读入插话判断 purposes.ambient）`);
+  if (left.length) parts.push(`${input.label} 中的 ${names(left)} 已迁移到插话判断（purposes.ambient），不再单独生效`);
+  if (pending.length) parts.push(`${names(pending)} 是迁移之后写入的，实例下次加载时会转到插话判断；${input.fix ? '没有删除，' : ''}请等它生效后再删除`);
+  if (!left.length && !pending.length) return { name: NAME, status: 'ok', message: parts.join('；') };
+  return {
+    name: NAME,
+    status: left.length && (input.expired ?? RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED) ? 'error' : 'warn',
+    message: `${parts.join('；')}；门槛和「只观察」请在 Console「插话判断」设置`,
+    fix: left.length ? 'zhin doctor --fix 删除已迁移的项' : '重启实例后再运行 zhin doctor',
+  };
 }
 
 const NOTES: Readonly<Record<string, (value: unknown) => string>> = Object.freeze({
@@ -95,12 +136,12 @@ function time(at: number): string {
  * Migration result of the running instance (D5.4): shown once (then marked `noticedAt`), again with
  * `verbose`; a failed migration is an error. Nothing when the instance is not reachable.
  */
-export async function checkAmbientJudgeMigration(input: Readonly<{ client: HostHttpConfig | undefined; verbose?: boolean }>): Promise<AmbientJudgeCheckResult[]> {
+export async function checkAmbientJudgeMigration(input: Readonly<{ client: HostHttpConfig | undefined; view?: AmbientJudgeView; verbose?: boolean }>): Promise<AmbientJudgeCheckResult[]> {
   if (!input.client) return [];
-  const viewed = await hostGet<AmbientJudgeView>(input.client, '/ambient-judge').catch(() => undefined);
-  if (!viewed?.ok || !viewed.data) return [];
+  const view = input.view ?? await readAmbientJudgeView(input.client);
+  if (!view) return [];
   const results: AmbientJudgeCheckResult[] = [];
-  const migration = viewed.data.migration;
+  const migration = view.migration;
   if (migration?.status === 'failed') {
     results.push({
       name: '插话判断迁移',
@@ -127,7 +168,7 @@ export async function checkAmbientJudgeMigration(input: Readonly<{ client: HostH
   } else if (migration?.status === 'reverted' && input.verbose) {
     results.push({ name: '插话判断迁移', status: 'info', message: `插话判断迁移已于 ${time(migration.revertedAt ?? migration.at)} 回退，当前按旧配置换算运行` });
   }
-  const threshold = viewed.data.policy?.minConfidence;
+  const threshold = view.policy?.minConfidence;
   if (threshold !== undefined && threshold < 0.5) {
     results.push({
       name: '插话判断门槛',

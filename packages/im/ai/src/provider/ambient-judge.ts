@@ -74,6 +74,12 @@ export function legacyAmbientTriggerKeys(trigger: LegacyAmbientTrigger | undefin
   return (['minConfidence', 'mode'] as const).filter(key => Object.hasOwn(trigger, key) && trigger[key] !== undefined);
 }
 
+/** The usable values of the retired yml keys (invalid values are ignored, as at run time). */
+export function legacyAmbientTriggerValues(trigger: LegacyAmbientTrigger | undefined): Readonly<{ minConfidence?: number; mode?: 'active' | 'shadow' }> {
+  const minConfidence = triggerConfidence(trigger), mode = triggerMode(trigger);
+  return Object.freeze({ ...(minConfidence !== undefined ? { minConfidence } : {}), ...(mode ? { mode } : {}) });
+}
+
 function triggerConfidence(trigger: LegacyAmbientTrigger | undefined): number | undefined {
   const value = trigger?.minConfidence;
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : undefined;
@@ -177,7 +183,8 @@ export function ambientJudgeChain(purposes: PurposePolicy): Readonly<{ ids: read
   const { policy } = effectiveAmbientJudgePolicy(purposes);
   if (policy.profile) return Object.freeze({ ids: Object.freeze([policy.profile, ...(policy.fallbacks ?? [])]) });
   const chat = purposes.defaults.chat;
-  return Object.freeze({ ids: Object.freeze(chat ? [chat, ...(purposes.defaults.chatFallbacks ?? [])] : []), inheritedFrom: 'chat' });
+  return chat ? Object.freeze({ ids: Object.freeze([chat, ...(purposes.defaults.chatFallbacks ?? [])]), inheritedFrom: 'chat' as const })
+    : Object.freeze({ ids: Object.freeze([]) });
 }
 
 /** Engage only when the judge chose to engage with at least `minConfidence` (D4): one rule for both model kinds. */

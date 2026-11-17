@@ -130,3 +130,12 @@ it('separates credentials for independent provider instances', async () => {
     expect(env).toContain('TYPESAFE_SECOND_API_KEY=second-private-key');
   } finally { await fs.remove(directory); }
 });
+
+it('knows five decision purposes and flags the deprecated purposes.decisions.ambient (ADR 0066)', () => {
+  const plan = { ...chatPlan(), purposes: { chat: { profile: 'chat' }, decisions: { tools: { mode: 'off' }, ambient: { mode: 'off' } } } };
+  const issues = diagnoseDecisionConfig({ config: aiConfig(), packageJson: manifest(), plan });
+  expect(issues.some(issue => issue.includes('purposes.decisions.ambient 已废弃'))).toBe(true);
+  expect(issues.some(issue => issue.includes('未知配置字段'))).toBe(false);
+  const unknown = diagnoseDecisionConfig({ config: aiConfig(), packageJson: manifest(), plan: { ...plan, purposes: { decisions: { nope: { mode: 'off' } } } } });
+  expect(unknown.some(issue => issue.includes('未知配置字段'))).toBe(true);
+});

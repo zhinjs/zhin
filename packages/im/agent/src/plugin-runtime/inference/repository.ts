@@ -240,6 +240,11 @@ export class DatabaseInferenceRepository implements ProviderRepository {
 
   /** A migration record of this root (ADR 0066), or undefined when that migration never ran. */
   async readMigrationRecord(input: Readonly<{ rootId: string; id: string }>): Promise<JsonObject | undefined> {
+    return (await this.readMigrationRecordEntry(input))?.record;
+  }
+
+  /** A migration record with its revision, for a compare-and-set {@link writeMigrationRecord}. */
+  async readMigrationRecordEntry(input: Readonly<{ rootId: string; id: string }>): Promise<Readonly<{ revision: number; record: JsonObject }> | undefined> {
     let stored: StoredRow | undefined;
     try {
       stored = await read(this.#model(MIGRATION_RECORD), key([input.rootId, 'migration', input.id]));
@@ -249,21 +254,32 @@ export class DatabaseInferenceRepository implements ProviderRepository {
     if (!stored) return undefined;
     const value = object(stored.value);
     if (value.id !== input.id) throw new InferenceStoreError('integrity');
-    return structuredClone(value) as JsonObject;
+    return { revision: stored.revision, record: structuredClone(value) as JsonObject };
   }
 
-  /** Writes (or replaces) a migration record outside a graph commit (a failure, `noticedAt`). */
-  async writeMigrationRecord(input: Readonly<{ rootId: string; id: string; record: JsonObject }>): Promise<void> {
+  /**
+   * Writes a migration record outside a graph commit (a failure, `noticedAt`). With
+   * `expectedRevision` (0: no record yet) and / or `requireStatus` it is a compare-and-set:
+   * `conflict` when the record moved on, or an update touched no row.
+   */
+  async writeMigrationRecord(input: Readonly<{ rootId: string; id: string; record: JsonObject; expectedRevision?: number; requireStatus?: string }>): Promise<'written' | 'conflict'> {
     this.#model(MIGRATION_RECORD);
     const id = key([input.rootId, 'migration', input.id]);
     const value = { ...structuredClone(input.record), id: input.id };
     try {
-      await this.options.database.transaction!(async (transaction) => {
+      return await this.options.database.transaction!(async (transaction) => {
         const current = await read(transaction.model(MIGRATION_RECORD), id);
-        if (current) await transaction.model(MIGRATION_RECORD).update({ revision: current.revision + 1, value }).where({ id, revision: current.revision });
-        else await transaction.model(MIGRATION_RECORD).insert({ id, revision: 1, value });
+        if (input.expectedRevision !== undefined && (current?.revision ?? 0) !== input.expectedRevision) return 'conflict' as const;
+        if (input.requireStatus !== undefined && (!current || object(current.value).status !== input.requireStatus)) return 'conflict' as const;
+        if (!current) {
+          await transaction.model(MIGRATION_RECORD).insert({ id, revision: 1, value });
+          return 'written' as const;
+        }
+        const changed = await transaction.model(MIGRATION_RECORD).update({ revision: current.revision + 1, value }).where({ id, revision: current.revision });
+        return changed === 1 ? 'written' as const : 'conflict' as const;
       });
     } catch (error) {
+      if (uniqueConflict(error)) return 'conflict';
       throw error instanceof InferenceStoreError ? error : new InferenceStoreError('unavailable');
     }
   }
@@ -383,8 +399,10 @@ export class DatabaseInferenceRepository implements ProviderRepository {
           const recordId = key([input.rootId, 'migration', migration.id]);
           const value = { ...structuredClone(migration.record), id: migration.id };
           const previous = await read(transaction.model(MIGRATION_RECORD), recordId);
-          if (previous) await transaction.model(MIGRATION_RECORD).update({ revision: previous.revision + 1, value }).where({ id: recordId, revision: previous.revision });
-          else await transaction.model(MIGRATION_RECORD).insert({ id: recordId, revision: 1, value });
+          if (previous) {
+            if (await transaction.model(MIGRATION_RECORD).update({ revision: previous.revision + 1, value }).where({ id: recordId, revision: previous.revision }) !== 1)
+              throw new CasConflict('revision');
+          } else await transaction.model(MIGRATION_RECORD).insert({ id: recordId, revision: 1, value });
         }
         return { status: 'committed', receipt, replayed: false };
       });

@@ -52,7 +52,7 @@ import {
   createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
 } from '@zhin.js/runtime';
 import { findProjectLiteralSecrets, moveLiteralSecretsToEnv } from '@zhin.js/gateway/config';
-import { checkAmbientJudgeMigration, checkRetiredAmbientTriggerKeys } from '../utils/ambient-judge-check.js';
+import { checkAmbientJudgeMigration, checkRetiredAmbientTriggerKeys, readAmbientJudgeView } from '../utils/ambient-judge-check.js';
 import { localInstanceClient } from './ai.js';
 
 const execAsync = promisify(exec);
@@ -850,14 +850,18 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 10e. 插话判断（ADR 0066）：yml 里废弃的 minConfidence / mode（--fix 删除），以及运行中实例的迁移结果（只提示一次）
+    // 只有运行中实例的迁移记录确认已迁移时，yml 旧键才算不再生效、才允许 --fix 删除（实例未运行、未迁移、迁移失败或已回退时它们仍然生效）
+    const ambientClient = await localInstanceClient(cwd).catch(() => undefined);
+    const ambientView = await readAmbientJudgeView(ambientClient);
     if (existingConfig && !configParseFailed) {
       try {
-        results.push(await checkRetiredAmbientTriggerKeys({ configPath: path.join(cwd, existingConfig), label: existingConfig, fix: options.fix === true }));
+        results.push(await checkRetiredAmbientTriggerKeys({ configPath: path.join(cwd, existingConfig), label: existingConfig, fix: options.fix === true,
+          ...(ambientView ? { view: ambientView } : {}) }));
       } catch (error) {
         results.push({ name: '插话判断（旧配置项）', status: 'warn', message: `无法检查：${error instanceof Error ? error.message.split('\n')[0] : String(error)}` });
       }
     }
-    results.push(...await checkAmbientJudgeMigration({ client: await localInstanceClient(cwd).catch(() => undefined), verbose: options.verbose === true }));
+    results.push(...await checkAmbientJudgeMigration({ client: ambientClient, ...(ambientView ? { view: ambientView } : {}), verbose: options.verbose === true }));
 
     // 10d. 管理网关与 Console 初始化状态（ADR 0054）
     if (!gateway) {

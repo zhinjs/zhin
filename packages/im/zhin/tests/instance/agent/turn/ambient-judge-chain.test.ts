@@ -10,6 +10,7 @@ import {
   DecisionEngagementJudge,
   EngagementJudgeChain,
   EngagementJudgeError,
+  LlmEngagementJudge,
   engagementJudgeFailure,
   engagementJudgeFailureAction,
   type EngagementJudge,
@@ -250,5 +251,37 @@ describe('AmbientEngagement budget (ADR 0066 D2)', () => {
       await expect(engagement.consider({ key: 'qq:1', botName: '小知', readRecent: async () => ['a'] })).resolves.toMatchObject({ kind: 'engage' });
       expect(timeout.mock.calls.filter(([ms]) => ms === 15_000)).toHaveLength(1);
     } finally { timeout.mockRestore(); }
+  });
+});
+
+describe('calls and concurrency (review of ADR 0066)', () => {
+  const reply = (text: string) => ({ role: 'assistant', content: [{ type: 'text', text }], usage: { input: 1, output: 1, totalTokens: 2 } });
+  const languageMember = (id: string, completeSimple: (...args: never[]) => Promise<unknown>, onCall: (call: EngagementJudgeCall) => void): EngagementJudgeMember => ({
+    kind: 'language', label: `language:${id}`, endpoint: { profileId: id, accountId: `account-${id}`, model: id },
+    create: () => new LlmEngagementJudge({ completeSimple } as never, { id, provider: 'p', api: 'x' } as never, { onCall }),
+  });
+
+  it('reports exactly one call per member asked, never more', async () => {
+    const onCall = vi.fn();
+    const ok = languageMember('chat', async () => reply('{"engage":true,"confidence":0.9,"reason":"x"}'), onCall);
+    await new EngagementJudgeChain({ members: [ok], registry: new ModelAvailabilityRegistry() }).judge(input());
+    expect(onCall).toHaveBeenCalledTimes(1);
+    onCall.mockClear();
+    const broken = languageMember('broken', async () => reply('not json'), onCall);
+    await new EngagementJudgeChain({ members: [broken, ok], registry: new ModelAvailabilityRegistry() }).judge(input());
+    expect(onCall.mock.calls.map(([call]) => [call.source, call.status])).toEqual([['language:p/broken', 'failed'], ['language:p/chat', 'completed']]);
+  });
+
+  it('keeps concurrent judgments apart: each switches on its own failure, and one failure is not two operations', async () => {
+    const now = 1_000_000;
+    const registry = new ModelAvailabilityRegistry({ now: () => now });
+    const primary = member('primary', ({ recent }) => recent[0] === 'fail' ? failing('timeout')() : yes('primary'));
+    const spare = member('spare', () => yes('spare'));
+    const chain = new EngagementJudgeChain({ members: [primary.member, spare.member], registry });
+    const [failed, plain] = await Promise.all([chain.judge({ ...input(), recent: ['fail'] }), chain.judge(input())]);
+    expect(failed.source).toMatchObject({ model: 'spare' });
+    expect(plain.source).toMatchObject({ model: 'primary' });
+    // One judgment timing out the primary is not the two distinct operations a global skip needs.
+    expect(registry.unavailable('account-primary', 'primary')).toBeUndefined();
   });
 });

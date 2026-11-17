@@ -558,26 +558,40 @@ export class EngagementJudgeChain implements EngagementJudge {
 }
 
 /**
- * @deprecated ADR 0066: replaced by {@link EngagementJudgeChain}. A thin wrapper over it: judges
- * are tried in order, one that just failed (for any reason) is passed over for `backoffMs`, and
- * when all are being passed over all are tried again.
+ * @deprecated ADR 0066: replaced by {@link EngagementJudgeChain} (shared skip table, ADR 0066 D2
+ * switching table). Kept with its own behaviour for existing callers: judges are tried in order; one
+ * that just failed (for any reason but the caller's cancel) is passed over for `backoffMs`, a success
+ * clears that, and when every judge is being passed over all are tried again.
  */
 export class FallbackEngagementJudge implements EngagementJudge {
-  readonly #chain: EngagementJudgeChain;
+  readonly #failedAt = new Map<EngagementJudge, number>();
 
-  constructor(judges: readonly EngagementJudge[], now: () => number = Date.now, backoffMs = 60_000) {
+  constructor(
+    private readonly judges: readonly EngagementJudge[],
+    private readonly now: () => number = Date.now,
+    private readonly backoffMs = 60_000,
+  ) {
     if (judges.length === 0) throw new Error('FallbackEngagementJudge needs at least one judge');
-    const members = judges.map((judge, index): EngagementJudgeMember => ({
-      kind: 'language', label: `judge:${index}`,
-      endpoint: Object.freeze({ profileId: `judge:${index}`, accountId: `fallback-judge:${index}`, model: `judge:${index}` }),
-      create: () => judge,
-    }));
-    this.#chain = new EngagementJudgeChain({ members, registry: new ModelAvailabilityRegistry({ now }), whenAllUnavailable: 'try-all',
-      failureAction: () => ({ action: 'switch', reason: 'network', skip: 'global', skipMs: backoffMs }) });
   }
 
-  judge(input: EngagementJudgeInput): Promise<EngagementJudgment> {
-    return this.#chain.judge(input);
+  async judge(input: EngagementJudgeInput): Promise<EngagementJudgment> {
+    const now = this.now();
+    const fresh = this.judges.filter(judge => now - (this.#failedAt.get(judge) ?? -Infinity) >= this.backoffMs);
+    let lastError: unknown;
+    for (const judge of fresh.length > 0 ? fresh : this.judges) {
+      input.signal.throwIfAborted();
+      try {
+        const judgment = await judge.judge(input);
+        this.#failedAt.delete(judge);
+        return judgment;
+      } catch (error) {
+        // A cancelled judgment says nothing about the judge.
+        if (input.signal.aborted) throw error;
+        this.#failedAt.set(judge, this.now());
+        lastError = error;
+      }
+    }
+    throw lastError;
   }
 }
 
@@ -603,8 +617,9 @@ export interface DecisionEngagementJudgeOptions {
   /** Recorded as the observation mode: `shadow` for a compared model (ADR 0066 D3). Default `active`. */
   readonly mode?: 'active' | 'shadow';
   /**
-   * @deprecated ADR 0066: use `timeoutMs` / `mode`. Its `minConfidence` no longer gates inside this
-   * judge — the one threshold is `purposes.ambient.minConfidence`, applied by {@link AmbientEngagement} (D4).
+   * @deprecated ADR 0066: use `timeoutMs` / `mode`; the one threshold is `purposes.ambient.minConfidence`,
+   * applied by {@link AmbientEngagement} (D4). A `minConfidence` given here still gates inside this
+   * judge as before (for callers without that outer gate); the interjection judge chain never sets it.
    */
   readonly policy?: Pick<DecisionPurposePolicy, 'mode' | 'timeoutMs' | 'minConfidence'>;
   /** Metadata only: never the chat lines or the judgment reason. */
@@ -632,7 +647,9 @@ export class DecisionEngagementJudge implements EngagementJudge {
 
   constructor(options: DecisionEngagementJudgeOptions) {
     const timeoutMs = options.timeoutMs ?? options.policy?.timeoutMs ?? DEFAULT_DECISION_TIMEOUT_MS;
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
+    const minConfidence = options.policy?.minConfidence;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647
+      || (minConfidence !== undefined && !(Number.isFinite(minConfidence) && minConfidence >= 0 && minConfidence <= 1))) {
       throw new Error('Invalid ambient decision policy');
     }
     this.#options = options;
@@ -664,8 +681,17 @@ export class DecisionEngagementJudge implements EngagementJudge {
       if (!answer) {
         reason = 'invalid_response';
       } else {
-        // ADR 0066 D4: the confidence is the probability of the chosen option; the one threshold is applied by the caller.
-        judgment = { engage: answer.choice === 'engage', confidence: answer.probabilities[answer.choice], reason: `decision: ${answer.choice}` };
+        // ADR 0066 D4: the confidence is the probability of the chosen option; the one threshold is
+        // applied by the caller. Only the deprecated `policy.minConfidence` (callers without the
+        // outer gate) still gates here, exactly as before (M4).
+        const confidence = answer.probabilities[answer.choice];
+        const minimum = this.#options.policy?.minConfidence;
+        if (answer.choice === 'engage' && minimum !== undefined && confidence < minimum) {
+          reason = 'low_confidence';
+          judgment = { engage: false, confidence: answer.probabilities.stay_quiet, reason: 'decision below policy.minConfidence (deprecated)' };
+        } else {
+          judgment = { engage: answer.choice === 'engage', confidence, reason: `decision: ${answer.choice}` };
+        }
       }
     } catch (error) {
       reason = signal.aborted && !input.signal.aborted ? 'timeout' : 'provider_error';
@@ -984,6 +1010,8 @@ const MAX_SPOKE_ENTRIES = 4096;
  */
 export class AmbientEngagement {
   readonly #config: Required<Omit<AmbientEngagementConfig, 'judge' | 'conversations' | 'minConfidence' | 'mode'>> & { conversations: readonly string[] };
+  /** Deprecated `ai.trigger.ambient.minConfidence` / `mode`: used only for a judgment without a `gate` (M4). */
+  readonly #legacyGate: AmbientJudgeGate;
   readonly #lastJudged = new Map<string, number>();
   readonly #judge?: EngagementJudge;
   readonly #now: () => number;
@@ -1003,6 +1031,8 @@ export class AmbientEngagement {
       conversationWindowMs: nonNegative(config.conversationWindowMs, 180_000),
       judgeIntervalMs: nonNegative(config.judgeIntervalMs, 30_000),
     };
+    this.#legacyGate = Object.freeze({ minConfidence: Math.min(1, Math.max(0, typeof config.minConfidence === 'number' && Number.isFinite(config.minConfidence)
+      ? config.minConfidence : DEFAULT_AMBIENT_MIN_CONFIDENCE)), mode: config.mode === 'shadow' ? 'shadow' : 'active' });
     this.#judge = options.judge;
     this.#now = options.now ?? Date.now;
     this.#sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
@@ -1090,11 +1120,12 @@ export class AmbientEngagement {
     } catch (error) {
       return { kind: 'skipped', reason: 'judge_failed', failure: engagementJudgeFailure(error) };
     }
-    // ADR 0066 D4: one threshold, applied once, the same for language and decision judges;
-    // `ai.trigger.ambient.minConfidence` / `mode` are no longer read here.
-    const gate = judgment.gate;
-    if (!ambientJudgeWouldSpeak(judgment, gate ? Math.min(1, Math.max(0, gate.minConfidence)) : DEFAULT_AMBIENT_MIN_CONFIDENCE)) return { kind: 'declined', judgment };
-    if (gate?.mode === 'shadow') return { kind: 'shadow', judgment };
+    // ADR 0066 D4: one threshold, applied once, the same for language and decision judges. The
+    // judge that read `purposes.ambient` sets it; a judge that did not (a custom one) keeps the
+    // deprecated `ai.trigger.ambient.minConfidence` / `mode` (M4), so it never speaks more than before.
+    const gate = judgment.gate ?? this.#legacyGate;
+    if (!ambientJudgeWouldSpeak(judgment, Math.min(1, Math.max(0, gate.minConfidence)))) return { kind: 'declined', judgment };
+    if (gate.mode === 'shadow') return { kind: 'shadow', judgment };
     // Re-check: another burst in this group may have engaged while the judge was running.
     if (this.#latest.get(input.key) !== ticket) return { kind: 'skipped', reason: 'superseded' };
     (inConversation ? conversationReplies : interjections).push(this.#now());

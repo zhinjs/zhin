@@ -139,8 +139,12 @@ export function createAmbientEngagementJudge(input: Readonly<{
     try { assistantStatus?.recordDecision(observation); } catch { /* Diagnostics never change the judgment. */ }
   };
   return {
-    judge: judgeInput => withInference(
-      { lease, sessionKey: key, signal: AbortSignal.any([judgeInput.signal, lease.stopSignal]) },
+    judge: outerInput => {
+      // The judgment's budget and the generation's stop end the whole chain (and the compared model) together.
+      const signal = AbortSignal.any([outerInput.signal, lease.stopSignal]);
+      const judgeInput = { ...outerInput, signal };
+      return withInference(
+      { lease, sessionKey: key, signal },
       async scope => {
         // ADR 0066: one policy, `purposes.ambient` (the legacy stored fields convert in memory until migrated).
         const { policy } = effectiveAmbientJudgePolicy(scope.graph.purposes, input.trigger);
@@ -173,7 +177,8 @@ export function createAmbientEngagementJudge(input: Readonly<{
           });
         return Object.freeze({ ...await judge.judge(judgeInput), gate });
       },
-    ),
+    );
+    },
   };
 }
 

@@ -7,7 +7,11 @@
  * values, and does not import any IM layer (ADR 0054): it calls the running instance's routes.
  */
 import { Command } from 'commander';
+import { join } from 'node:path';
+import { createConfigDocument } from '@zhin.js/runtime';
+import { findConfigFile } from '@zhin.js/gateway/project';
 import { hostGet, hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
+import type { AmbientJudgeView } from '../utils/ambient-judge-check.js';
 
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
@@ -193,24 +197,62 @@ const REVERT_REFUSALS: Readonly<Record<string, string>> = Object.freeze({
   changed: '插话判断（purposes.ambient）在迁移后被修改过，不能自动回退；需要时可按迁移记录手动恢复',
   conflict: '模型配置正在被其他操作修改，请稍后重试',
   'not-committed': '没有写入成功，请重试',
+  'invalid-graph': '迁移前的旧写法现在已不成立（例如它引用的模型配置已被删除）',
 });
 
 /**
  * `zhin ai purposes revert ambient-judge`: restores the purposes the ADR 0066 migration replaced,
- * only while `purposes.ambient` is unchanged since. Run it before downgrading to a version without
- * `purposes.ambient` (it cannot read the migrated graph).
+ * only while `purposes.ambient` is unchanged since. The yml keys the migration read
+ * (`ai.trigger.ambient.minConfidence` / `mode`) and that were removed since (`zhin doctor --fix`)
+ * are written back first, under the configuration write lock; if that is impossible nothing is
+ * reverted (M2). Run it before downgrading to a version without `purposes.ambient`.
  */
-export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpConfig; output?: AiOutput }>): Promise<boolean> {
+export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpConfig; configPath?: string; output?: AiOutput }>): Promise<boolean> {
   const output = input.output ?? processOutput;
-  const reverted = await hostPost<{ status: 'reverted'; graphRevision: number } | { status: 'refused'; reason: string }>(
+  const viewed = await hostGet<AmbientJudgeView>(input.client, '/ambient-judge');
+  if (!viewed.ok || !viewed.data) { fail(output, viewed); return false; }
+  const migration = viewed.data.migration;
+  const values = migration?.status === 'migrated' ? migration.triggerValues ?? {} : {};
+  let restored: string[] = [];
+  if (Object.keys(values).length) {
+    const manual = Object.entries(values).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
+    try {
+      if (!input.configPath) throw new Error('未找到配置文件');
+      const config = createConfigDocument(input.configPath);
+      const snapshot = await config.read();
+      const ambient = (snapshot.document as { ai?: { trigger?: { ambient?: Record<string, unknown> } } }).ai?.trigger?.ambient;
+      const missing = Object.keys(values).filter(key => !ambient || !Object.hasOwn(ambient, key));
+      if (missing.length) {
+        const prepared = await config.prepare(snapshot, missing.map(key => ({ op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value: values[key] })));
+        await prepared.commit();
+        restored = missing;
+      }
+    } catch (error) {
+      output.error(`未回退：迁移时读入的 ${manual} 已不在配置文件里，且无法写回（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
+      output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工加回 ${manual}，再重新运行本命令。`);
+      process.exitCode = 1;
+      return false;
+    }
+  }
+  const reverted = await hostPost<{ status: 'reverted'; graphRevision: number } | { status: 'refused'; reason: string; path?: string }>(
     input.client, '/cli/purposes/revert-ambient-judge', {});
-  if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
-  if (reverted.data.status !== 'reverted') {
-    output.error(`未回退：${REVERT_REFUSALS[reverted.data.reason] ?? reverted.data.reason}`);
+  if (!reverted.ok || !reverted.data || reverted.data.status !== 'reverted') {
+    // Nothing was reverted: take back what was written to the file above.
+    if (restored.length && input.configPath) {
+      try {
+        const config = createConfigDocument(input.configPath);
+        const snapshot = await config.read();
+        await (await config.prepare(snapshot, restored.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })))).commit();
+      } catch { /* The keys stay; they no longer apply after the migration. */ }
+    }
+    if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
+    const refusal = reverted.data as { reason: string; path?: string };
+    output.error(`未回退：${REVERT_REFUSALS[refusal.reason] ?? refusal.reason}${refusal.path ? `（位置 ${refusal.path}）` : ''}`);
     process.exitCode = 1;
     return false;
   }
   output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${reverted.data.graphRevision}）。现在可以降级到旧版本。`);
+  if (restored.length) output.log(`已把 ${restored.map(key => `ai.trigger.ambient.${key}`).join('、')} 写回配置文件。`);
   output.log('不降级时，当前版本会按旧写法换算运行，行为不变；在 Console「插话判断」保存一次即改回新写法。');
   return true;
 }
@@ -280,8 +322,10 @@ purposesCommand.command('revert')
       process.exitCode = 1;
       return;
     }
-    const client = await requireLocal(options.cwd ?? process.cwd());
-    if (client) await runRevertAmbientJudge({ client });
+    const root = options.cwd ?? process.cwd();
+    const client = await requireLocal(root);
+    const configFile = findConfigFile(root);
+    if (client) await runRevertAmbientJudge({ client, ...(configFile ? { configPath: join(root, configFile) } : {}) });
   });
 
 export const aiCommand = new Command('ai').description('模型服务管理（本机）').addCommand(accountCommand).addCommand(purposesCommand);

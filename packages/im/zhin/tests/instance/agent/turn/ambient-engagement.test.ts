@@ -195,8 +195,19 @@ describe('AmbientEngagement', () => {
     }
   });
 
-  it('no longer reads ai.trigger.ambient.minConfidence / mode (ADR 0066 D4)', async () => {
-    const h = harness(yes, { mode: 'shadow', minConfidence: 0.99 });
+  it('without a gate keeps the deprecated ai.trigger.ambient.minConfidence / mode, so a custom judge never speaks more (M4)', async () => {
+    const strict = harness(yes, { minConfidence: 0.95 });
+    const declined = strict.consider();
+    await strict.release();
+    await expect(declined).resolves.toMatchObject({ kind: 'declined' });
+    const watching = harness(yes, { mode: 'shadow' });
+    const shadow = watching.consider();
+    await watching.release();
+    await expect(shadow).resolves.toMatchObject({ kind: 'shadow' });
+  });
+
+  it('a judgment that carries purposes.ambient as its gate is held to that gate only', async () => {
+    const h = harness({ ...yes, gate: { minConfidence: 0.5, mode: 'active' } }, { mode: 'shadow', minConfidence: 0.99 });
     const decision = h.consider();
     await h.release();
     await expect(decision).resolves.toMatchObject({ kind: 'engage' });
@@ -241,6 +252,27 @@ describe('FallbackEngagementJudge', () => {
     now = 61_000;
     await judge.judge(input);
     expect(limited.judge).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the backoff of a judge that answers again, and records none for a cancelled judgment (L2)', async () => {
+    let now = 0;
+    let failing = true;
+    const flaky = { judge: vi.fn(async () => { if (failing) throw new Error('down'); return yes; }) };
+    const spare = { judge: vi.fn(async () => yes) };
+    const judge = new FallbackEngagementJudge([flaky, spare], () => now, 60_000);
+    await judge.judge(input);
+    now = 61_000; failing = false;
+    await judge.judge(input);
+    expect(flaky.judge).toHaveBeenCalledTimes(2);
+    now = 62_000;
+    await judge.judge(input);
+    expect(flaky.judge).toHaveBeenCalledTimes(3);
+    const controller = new AbortController();
+    const hanging = { judge: vi.fn(async () => { controller.abort(); throw new Error('cancelled'); }) };
+    const other = new FallbackEngagementJudge([hanging, spare], () => now, 60_000);
+    await expect(other.judge({ ...input, signal: controller.signal })).rejects.toThrow('cancelled');
+    await other.judge(input);
+    expect(hanging.judge).toHaveBeenCalledTimes(2);
   });
 
   it('fails only when every judge fails', async () => {
@@ -299,11 +331,18 @@ describe('DecisionEngagementJudge', () => {
     await expect(judge.judge(input())).resolves.toMatchObject({ engage: false, confidence: 0.9 });
   });
 
-  it('sets no threshold of its own: the confidence is the probability of the chosen option (ADR 0066 D4)', async () => {
+  it('sets no threshold of its own in the judge chain: the confidence is the probability of the chosen option (ADR 0066 D4)', async () => {
     const observe = vi.fn();
-    const judge = new DecisionEngagementJudge({ provider: provider(answer('engage', 0.6)), policy: { mode: 'active', minConfidence: 0.8 }, observe });
+    const judge = new DecisionEngagementJudge({ provider: provider(answer('engage', 0.6)), timeoutMs: 1000, observe });
     await expect(judge.judge(input())).resolves.toMatchObject({ engage: true, confidence: 0.6 });
     expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'selected' }));
+  });
+
+  it('keeps gating with the deprecated policy.minConfidence for callers without the outer gate (M4)', async () => {
+    const observe = vi.fn();
+    const judge = new DecisionEngagementJudge({ provider: provider(answer('engage', 0.6)), policy: { mode: 'active', minConfidence: 0.8 }, observe });
+    await expect(judge.judge(input())).resolves.toMatchObject({ engage: false });
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'abstained', reason: 'low_confidence' }));
   });
 
   it('preserves invalid answers, provider errors and timeouts as failed judgments', async () => {
@@ -330,6 +369,7 @@ describe('DecisionEngagementJudge', () => {
   it('rejects an invalid policy', () => {
     expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', timeoutMs: 0 } })).toThrow('Invalid ambient decision policy');
     expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), timeoutMs: 2_147_483_648 })).toThrow('Invalid ambient decision policy');
+    expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', minConfidence: 2 } })).toThrow('Invalid ambient decision policy');
   });
 });
 

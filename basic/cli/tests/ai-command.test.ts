@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { accountRows, describeProbe, runAccountAdd, runAccountList, runAccountTest, runRenameEnv, runRevertAmbientJudge, aiCommand } from '../src/commands/ai.js';
 import type { HostHttpConfig } from '../src/utils/host-http.js';
 
@@ -130,16 +133,53 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
   });
 
   it('asks the instance over the local socket and reports the restored revision', async () => {
-    const { config, requests } = client(() => ({ status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 7 } } }));
+    const { config, requests } = client(path => path.endsWith('/ambient-judge')
+      ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1 } } } }
+      : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 7 } } });
     const out = output();
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(true);
-    expect(requests).toEqual([{ path: '/api/agent/inference/cli/purposes/revert-ambient-judge', body: {} }]);
+    expect(requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge', '/api/agent/inference/cli/purposes/revert-ambient-judge']);
     expect(out.lines.join('\n')).toContain('修订号 7');
     expect(process.exitCode).toBeUndefined();
   });
 
+  it('writes back the yml keys the migration read and doctor --fix removed, then reverts (M2)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
+    try {
+      const file = join(dir, 'zhin.config.yml');
+      await writeFile(file, 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n');
+      const { config } = client(path => path.endsWith('/ambient-judge')
+        ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'shadow' } } } } }
+        : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 3 } } });
+      const out = output();
+      expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
+      expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+      expect(out.lines.join('\n')).toContain('写回配置文件');
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
+  it('refuses without reverting when the yml keys cannot be written back, and takes back a write when the revert is refused', async () => {
+    const view = { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'shadow' } } } } };
+    const unwritable = client(() => view);
+    const out = output();
+    expect(await runRevertAmbientJudge({ client: unwritable.config, output: out.sink })).toBe(false);
+    expect(unwritable.requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge']);
+    expect(out.errors.join('\n')).toContain('手工加回 ai.trigger.ambient.mode: "shadow"');
+    process.exitCode = undefined;
+    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
+    try {
+      const file = join(dir, 'zhin.config.yml');
+      const original = 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n';
+      await writeFile(file, original);
+      const refused = client(path => path.endsWith('/ambient-judge') ? view : { status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } });
+      expect(await runRevertAmbientJudge({ client: refused.config, configPath: file, output: output().sink })).toBe(false);
+      expect(await readFile(file, 'utf8')).not.toContain('mode');
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
   it('explains a refusal (changed since the migration) and exits 1', async () => {
-    const { config } = client(() => ({ status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } }));
+    const { config } = client(path => path.endsWith('/ambient-judge') ? { status: 200, body: { success: true, data: {} } }
+      : { status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } });
     const out = output();
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(false);
     expect(out.errors.join('\n')).toContain('被修改过');

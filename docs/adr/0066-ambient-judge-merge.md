@@ -57,8 +57,9 @@ sidebar: false
        timeoutMs: 3000                 # 决策模型成员的单次超时，默认 3000；语言模型成员不用它（D2）
    ```
 
-   - 字符串写法 `ambient: deepseek-flash` 仍然有效，等同于 `{ profile: deepseek-flash }`，与现在的含义相同。
-   - 写入这一项总是整项替换（与 0047 增补第 8 条一致）；`null` 清除整项，回到「继承部署聊天、其余取默认值」。
+   - 字符串写法 `ambient: deepseek-flash` 仍然有效，含义与现在相同：它是旧的「旁听」语言模型写法，只替换语言判断（主项；决策模型作主项时替换第一个备用），保留已有的 `mode`、`compare`、`minConfidence`、`timeoutMs`（实施时补充，见「实施记录」第 13 条）。
+   - 对象写法总是整项替换（与 0047 增补第 8 条一致）；`null` 清除整项，回到「继承部署聊天、其余取默认值」。
+   - 废弃期内的旧写法 `purposes.decisions.ambient` 按旧语义撤销：`mode: off` 或 `null` 去掉决策主项，恢复原来的语言主项（迁移记录里的，或跟随聊天），并去掉作为对照的决策模型（原「仅评估」）；`active` / `shadow` 按迁移表合并。
    - 只允许上面 6 个键，其他键报错，错误带 `path`（如 `purposes.ambient.fallbacks[1]`）。
 4. **存储形状**：`PurposePolicy` 新增顶层字段 `ambient?: AmbientJudgePolicy`：
 
@@ -270,12 +271,16 @@ Console 前端在 zhinjs/console（ADR 0052）。本仓库提供 P1–P3 的数�
 2. **D2 表未列出的失败类别**：`length`、`empty_response`、`non_json_response`、`malformed_tool_call` 按「回答无效」处理（换、不写跳过表）；`bad_request` 与 `aborted` 不换；决策模型没有类别的失败（`provider_error`）按网络错误处理。成员无法构造（Profile 不可用）或上下文装不下时跳过，不计失败。
 3. **决策 Driver 的错误分类**：仓库里的决策 Driver 只有 `plugins/services/typesafe`（不在 `packages/im/ai/src/providers/`）。`@zhin.js/ai` 的 `ProviderErrorKind` 新增 `invalid_response`，驱动以 `code: 'invalid-response'` 报告；TypeSafe 驱动保留 HTTP 状态、`Retry-After` 和响应体的错误码（不含正文）。
 4. **门槛与模式的传递**：链读 `purposes.ambient` 后，在判断结果上带 `gate`（`minConfidence`、`mode`），`AmbientEngagement` 只按它判一次；没有 `gate` 时取默认 0.7 / `active`，不再读 `ai.trigger.ambient.minConfidence` / `mode`。
-5. **只有 yml 旧键的部署也迁移**：存储里没有旧字段、也没有 `purposes.ambient`，但 yml 里有 `minConfidence` / `mode` 时同样触发迁移（否则升级后 `mode: shadow` 会失效，开始真的插话，见验收 5）；迁移成功后不再因 yml 触发。
+5. **yml 旧键在所有路径上都不丢**：只有 yml 旧键的部署也迁移（否则升级后 `mode: shadow` 会失效，见验收 5）。`purposes.ambient` 已存在但还没迁移过时（例如空库首次启动从 `ai.plan.yml` seed，或迁移失败 / 回退后又写入），迁移只把它缺少的 `minConfidence` / `mode` 从 yml 补上；seed 本身和 Console / 导入的写入在旧键仍生效时也做同样的合并。管理视图、`purposeEffects`、导出与插话状态都按「仍然生效的 yml 旧键」计算，显示的门槛和模式与实际运行一致。
 6. **迁移记录的存放**：模型配置库新增表 `agent_inference_migrations`，迁移写图与记录在同一个事务里；`noticedAt` 单独更新。`zhin doctor` 通过本机网关读写（实例未运行时不显示迁移记录）。
-7. **回退的范围**：`zhin ai purposes revert ambient-judge` 只把插话判断恢复为迁移前的旧字段，其他用途保持当前值（迁移后改过的聊天等用途不被回滚）；未改过其他用途时结果与 `before` 相同（验收 7）。回退后记录为 `reverted`，不再自动迁移，当前版本仍按旧写法在内存里换算（行为不变）。
+7. **回退的范围**：`zhin ai purposes revert ambient-judge` 只把插话判断恢复为迁移前的存储形状（旧字段，或迁移前已有的 `purposes.ambient`），其他用途保持当前值；未改过其他用途时结果与 `before` 相同（验收 7）。迁移时读入、之后被 `zhin doctor --fix` 删掉的 yml 旧键由 CLI 经配置写锁写回；写不回时不回退并给出手工步骤，回退被拒时撤销刚写回的键。旧形状已不成立（例如引用的 Profile 已删除）时拒绝并给出路径。回退后记录为 `reverted`，不再自动迁移，当前版本按旧写法在内存里换算（行为不变）。
 8. **废弃期开关**：`purposes.decisions.ambient` 导入与 doctor 的报错级别由常量控制（`AMBIENT_JUDGE_LEGACY_IMPORT`、`RETIRED_AMBIENT_TRIGGER_KEYS_EXPIRED`），到期时在后续 minor 中切换。导入 `purposes.decisions.ambient: null` 不改插话判断，只给警告。
-9. **D5.7 的范围**：自我变更不能写这两个键（含在父对象里一并写入），仍可删除；聊天 `config set` 不能读写这两个键。Console 的 `config:patch` 未拦截，以免旧版 Console 的「只观察」开关直接报错；Console 前端改写 `purposes.ambient.mode` 后这条路径自然不再写它们。
+9. **D5.7 与旧键写入的转换**：迁移完成后，任何入口写到 yml 的这两个键（旧版 Console 的 `config:patch`、导入的配置、手工编辑）都不会静默失效：实例在下一次加载时发现它们与迁移记录里已处理过的值（`triggerSeen`）不同，就把新值写进 `purposes.ambient`，并记一行 info 日志 `ambient_trigger_write_converted`；同样的值不重复转换，之后在 Console 改的 `purposes.ambient` 不会被旧值覆盖，删掉这两个键不改变插话判断。自我变更不能写这两个键（含在父对象里一并写入），仍可删除；聊天 `config set` 按 D5.7 拒绝读写它们（明确报错，不是静默失效）。`zhin doctor` 只在实例的迁移记录为 `migrated`、键已被迁移读入且值未再改动时，才提示「不再生效」并允许 `--fix` 删除；实例未运行、未迁移、迁移失败或已回退时它们仍然生效，只给警告并拒绝 `--fix`。
 10. **`no-conversations` 的判断**：只有能列出功能开关、且确认没有任何开关把插话打开时才报 `no-conversations`；无法确定时按生效显示，不误报。
 11. **插话状态的 `judges`**：保留字符串数组（改为实际判断器链的显示名），另加结构化的 `judgeChain`（成员、类型、角色、是否在跳过期）与 `minConfidence`，避免旧 Console 读取出错。`HostInference.purposeEffects()`（Console 待办来源）仍只含 `agents.*`；`ambient` 与 `decisions.*` 只在管理视图的 `purposeEffects` 中。
 12. **对照模型的审计键**：只写 `compare`（结论）和 `compareJudge*`（与 `judge*` 同后缀），不写对照模型的置信度，遵守「其他键不得以 `compare` 开头」。
+13. **旧写法的撤销语义**（见 D1.3）：字符串写法只替换语言判断并保留模式、对照和门槛；`purposes.decisions.ambient` 的 `off` / `null` 撤销决策主项与决策对照，恢复迁移记录里的语言主项。
+14. **没有 `gate` 的判断**：自定义判断器给出的结果不带 `gate` 时，`AmbientEngagement` 回退读已废弃的 `ai.trigger.ambient.minConfidence` / `mode`，不会比以前多插话；直接构造 `DecisionEngagementJudge({ policy: { minConfidence } })` 的旧调用方仍在判断器内按它把关。判断器链不设这两项，所以门槛只判一次。
+15. **不兼容的类型变化**（已批准的 minor）：`EngagementJudgment.source` 由字符串改为对象（改读 `sourceLabel` 或 `source.kind` / `source.profile`），无法在不破坏类型的前提下同时保留字符串；`DecisionPurpose`、`InferencePurpose` 的 `decision:ambient`、`DecisionTask` / `DECISION_TASKS` 去掉 `ambient`；`PurposeIgnoredReason`、`ProviderErrorKind`、`ModelFallbackReason` 新增成员（穷举这些联合类型的代码要补分支）。迁移路径写在 changeset 里。
+16. **迁移记录的并发**：`noticedAt` 用带期望 revision、且要求状态仍为 `migrated` 的 CAS 写入，与回退并发时回退优先；失败记录也只在记录没变时写入。
 

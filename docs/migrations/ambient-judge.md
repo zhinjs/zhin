@@ -36,14 +36,14 @@ description: ADR 0066 升级说明——「旁听」用途和「旁听参与判�
 zhin ai purposes revert ambient-judge
 ```
 
-它只在 `purposes.ambient` 自迁移后没有被修改过时，把插话判断恢复为迁移前的旧写法（其他用途保持现状）；改过则拒绝并说明。回退后当前版本仍按旧写法换算运行，行为不变，也不会自动再迁移；在 Console「插话判断」保存一次即改回新写法。迁移记录始终保留迁移前的配置，需要时可以人工恢复。
+它只在 `purposes.ambient` 自迁移后没有被修改过时，把插话判断恢复为迁移前的旧写法（其他用途保持现状）；改过则拒绝并说明。迁移时读入、之后被 `zhin doctor --fix` 删掉的 `ai.trigger.ambient.minConfidence` / `mode` 会先写回配置文件；写不回时不回退，并提示手工加回哪几项。回退后当前版本仍按旧写法换算运行，行为不变，也不会自动再迁移；在 Console「插话判断」保存一次即改回新写法。迁移记录始终保留迁移前的配置，需要时可以人工恢复。
 
 ## 废弃期
 
 本 minor 和下一个 minor 内：
 
-- 导入（`ai.plan.yml`、Console、脚本）里的 `purposes.decisions.ambient` 仍被接受，按上表与同一份导入里的 `purposes.ambient` 合并转换，导入结果带警告。之后报 `invalid-plan`（路径 `purposes.decisions.ambient`）。导出只写新形状。
-- `zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode`：迁移时读入一次，之后不再生效；每个 generation 启动时警告一次，`zhin doctor` 警告，`zhin doctor --fix` 删除它们（其他键和注释保留）。废弃期结束后 `zhin doctor` 改为报错，启动仍只警告。
+- 导入（`ai.plan.yml`、Console、脚本）里的 `purposes.decisions.ambient` 仍被接受，按上表与同一份导入里的 `purposes.ambient` 合并转换，导入结果带警告；`mode: off` 或 `null` 按旧语义撤销决策模型（恢复原来的旁听语言模型，并去掉原「仅评估」的对照模型）。字符串写法 `purposes.ambient: <profile>` 只替换语言模型，保留「只观察」、对照模型和门槛。之后报 `invalid-plan`（路径 `purposes.decisions.ambient`）。导出只写新形状。
+- `zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode`：迁移时读入一次，之后不再单独生效。迁移之后再写这两个键（例如旧版 Console 的「只观察」开关），实例下次加载时会把新值转到插话判断，并记一行 `ambient_trigger_write_converted`，不会静默失效。`zhin doctor` 只有在运行中实例的迁移记录确认已迁移时，才提示它们不再生效并允许 `--fix` 删除（其他键和注释保留）；实例没运行、还没迁移、迁移失败或已回退时它们仍然生效，只给警告，`--fix` 不删。废弃期结束后对已迁移的键报错，启动仍只警告。
 - 自我变更和聊天里的 `config set` 不能再写这两个键。
 
 存储里的旧字段一直会被自动迁移，不随废弃期结束失效。

@@ -5,33 +5,56 @@ import { join } from 'node:path';
 import { checkAmbientJudgeMigration, checkRetiredAmbientTriggerKeys } from '../src/utils/ambient-judge-check.js';
 import type { HostHttpConfig } from '../src/utils/host-http.js';
 
-describe('retired ai.trigger.ambient keys', () => {
-  it('warns, and --fix removes exactly minConfidence and mode keeping every other key and comment', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ambient-doctor-'));
-    try {
-      const file = join(dir, 'zhin.config.yml');
-      await writeFile(file, [
-        'ai:',
-        '  trigger:',
-        '    # 开启插话的群',
-        '    ambient:',
-        '      conversations: ["qq:1"]',
-        '      minConfidence: 0.8',
-        '      mode: shadow',
-        '      quietMs: 4000',
-        '',
-      ].join('\n'));
-      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml' }))
-        .resolves.toMatchObject({ status: 'warn', fix: 'zhin doctor --fix 删除这两项' });
-      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', expired: true })).resolves.toMatchObject({ status: 'error' });
-      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true })).resolves.toMatchObject({ status: 'ok' });
+const YML = ['ai:', '  trigger:', '    # 开启插话的群', '    ambient:', '      conversations: ["qq:1"]', '      minConfidence: 0.8', '      mode: shadow', '      quietMs: 4000', ''].join('\n');
+const migratedView = { migration: { status: 'migrated' as const, at: 1, triggerKeys: ['ai.trigger.ambient.minConfidence', 'ai.trigger.ambient.mode'],
+  triggerValues: { minConfidence: 0.8, mode: 'shadow' }, triggerSeen: { minConfidence: 0.8, mode: 'shadow' } } };
+
+async function withYml(run: (file: string) => Promise<void>, text = YML) {
+  const dir = await mkdtemp(join(tmpdir(), 'ambient-doctor-'));
+  try { const file = join(dir, 'zhin.config.yml'); await writeFile(file, text); await run(file); }
+  finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+describe('retired ai.trigger.ambient keys (H1)', () => {
+  it.each([
+    ['the instance is not running', undefined, '无法连接运行中的实例'],
+    ['nothing was migrated yet', {}, '实例还没有迁移它们'],
+    ['the migration failed', { migration: { status: 'failed', at: 1, failure: { reason: 'conflict' } } }, '插话判断迁移失败'],
+    ['the migration was reverted', { migration: { status: 'reverted', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'shadow' } } }, '迁移已回退'],
+  ] as const)('refuses --fix while %s: the keys still apply', async (_state, view, reason) => {
+    await withYml(async file => {
+      const result = await checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, ...(view ? { view: view as never } : {}) });
+      expect(result).toMatchObject({ status: 'warn', message: expect.stringContaining(reason) });
+      expect(result.message).toContain('仍然生效');
+      expect(result.message).toContain('没有删除');
+      expect(await readFile(file, 'utf8')).toBe(YML);
+    });
+  });
+
+  it('once migrated: warns that they no longer apply, and --fix removes exactly them keeping every other key and comment', async () => {
+    await withYml(async file => {
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', view: migratedView }))
+        .resolves.toMatchObject({ status: 'warn', message: expect.stringContaining('不再单独生效'), fix: 'zhin doctor --fix 删除已迁移的项' });
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', expired: true, view: migratedView })).resolves.toMatchObject({ status: 'error' });
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view: migratedView })).resolves.toMatchObject({ status: 'ok' });
       const text = await readFile(file, 'utf8');
       expect(text).not.toMatch(/minConfidence|mode:/u);
       expect(text).toContain('conversations');
       expect(text).toContain('quietMs: 4000');
       expect(text).toContain('# 开启插话的群');
-      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml' })).resolves.toMatchObject({ status: 'ok' });
-    } finally { await rm(dir, { recursive: true, force: true }); }
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', view: migratedView })).resolves.toMatchObject({ status: 'ok' });
+    });
+  });
+
+  it('keeps a key written after the migration (the next load converts it) and removes only the settled one', async () => {
+    const view = { migration: { ...migratedView.migration, triggerKeys: ['ai.trigger.ambient.minConfidence'], triggerValues: { minConfidence: 0.8 }, triggerSeen: { minConfidence: 0.8 } } };
+    await withYml(async file => {
+      const result = await checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view });
+      expect(result).toMatchObject({ status: 'warn', message: expect.stringContaining('ai.trigger.ambient.mode 是迁移之后写入的') });
+      const text = await readFile(file, 'utf8');
+      expect(text).toContain('mode: shadow');
+      expect(text).not.toContain('minConfidence');
+    });
   });
 });
 
@@ -51,7 +74,7 @@ function instance(view: Record<string, unknown>) {
 }
 
 describe('the migration result of the running instance', () => {
-  const migrated = { policy: { profile: 'jev', minConfidence: 0.8 }, migration: { status: 'migrated', at: Date.UTC(2026, 10, 17),
+  const migrated = { policy: { profile: 'jev', minConfidence: 0.8 }, migration: { status: 'migrated' as const, at: Date.UTC(2026, 10, 17),
     rows: [{ field: 'profile', value: 'jev', from: 'purposes.decisions.ambient.profile' }, { field: 'fallbacks', value: ['small'], from: 'purposes.ambient (language)' }],
     notes: [{ code: 'language-judge-became-fallback', value: 'small' }], triggerKeys: ['ai.trigger.ambient.minConfidence'] } };
 

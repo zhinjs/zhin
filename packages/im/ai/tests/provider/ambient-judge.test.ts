@@ -32,7 +32,9 @@ function pathOf(run: () => unknown): string | undefined {
   return undefined;
 }
 
-function reviewer(source = graph({ defaults: { chat: 'chat' } }), options: { legacyAmbientDecisions?: 'convert' | 'reject' } = {}) {
+function reviewer(source = graph({ defaults: { chat: 'chat' } }), options: {
+  legacyAmbientDecisions?: 'convert' | 'reject'; ambientTrigger?: Record<string, unknown>; legacyAmbientLanguage?: { profile?: string; fallbacks?: string[] };
+} = {}) {
   return (purposes: unknown) => reviewProviderPlan({ input: { version: 1, purposes }, graph: source, ownerId: HOST, hostOwnerId: HOST,
     bindings: { profiles: { chat: 'chat', spare: 'spare', small: 'small', jev: 'jev', image: 'image' } }, createId: kind => `${kind}:new`,
     resolveService: () => { throw new Error('no services'); }, ...options });
@@ -187,5 +189,49 @@ describe('importing purposes.ambient (D1.3, D5.6)', () => {
     const empty = createEmptyProviderGraph('root');
     await expect(reviewProviderPlan({ input: { version: 1, purposes: { ambient: 'x' } }, graph: empty, ownerId: 'user:1', hostOwnerId: HOST,
       createId: () => 'id', resolveService: () => { throw new Error('none'); } })).rejects.toThrow();
+  });
+});
+
+describe('legacy write semantics during the deprecation window (M3) and the yml keys in force (M1)', () => {
+  const migratedActive = () => graph({ defaults: { chat: 'chat' }, ambient: { profile: 'jev', fallbacks: ['small', 'spare'], minConfidence: 0.8, mode: 'shadow' } });
+
+  it('decisions.ambient: off takes the decision judge out and brings the recorded language judge back', async () => {
+    const restored = await reviewer(migratedActive(), { legacyAmbientLanguage: { profile: 'small', fallbacks: ['spare'] } })({ decisions: { ambient: { mode: 'off' } } });
+    expect(restored.graph.purposes.ambient).toEqual({ profile: 'small', fallbacks: ['spare'], minConfidence: 0.8, mode: 'shadow' });
+    // Without a record the language members of the chain come back in order.
+    expect((await reviewer(migratedActive())({ decisions: { ambient: { mode: 'off' } } })).graph.purposes.ambient)
+      .toEqual({ profile: 'small', fallbacks: ['spare'], minConfidence: 0.8, mode: 'shadow' });
+    // A language judge that followed chat: back to following chat.
+    expect((await reviewer(graph({ defaults: { chat: 'chat' }, ambient: { profile: 'jev', minConfidence: 0.7 } }), { legacyAmbientLanguage: {} })({ decisions: { ambient: { mode: 'off' } } })).graph.purposes.ambient)
+      .toEqual({ minConfidence: 0.7 });
+  });
+
+  it('decisions.ambient: null undoes the decision judge and the compared decision model (the old shadow)', async () => {
+    const shadow = graph({ defaults: { chat: 'chat' }, ambient: { profile: 'small', compare: 'jev', mode: 'shadow' } });
+    expect((await reviewer(shadow)({ decisions: { ambient: null } })).graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    // "Shadow" switched to "off": the compared model goes.
+    expect((await reviewer(shadow)({ decisions: { ambient: { profile: 'jev', mode: 'off' } } })).graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    // A compared language model is not the old shadow decision and stays.
+    const languageCompare = graph({ defaults: { chat: 'chat' }, ambient: { profile: 'small', compare: 'spare' } });
+    expect((await reviewer(languageCompare)({ decisions: { ambient: null } })).graph.purposes.ambient).toEqual({ profile: 'small', compare: 'spare' });
+  });
+
+  it('the string form replaces only the language judge and keeps mode, compare and the threshold', async () => {
+    const value = graph({ defaults: { chat: 'chat' }, ambient: { profile: 'small', fallbacks: ['spare'], compare: 'jev', minConfidence: 0.8, mode: 'shadow', timeoutMs: 900 } });
+    expect((await reviewer(value)({ ambient: 'chat' })).graph.purposes.ambient).toEqual({ profile: 'chat', compare: 'jev', minConfidence: 0.8, mode: 'shadow', timeoutMs: 900 });
+    // Behind a decision judge, it is the first fallback that changes.
+    expect((await reviewer(migratedActive())({ ambient: 'chat' })).graph.purposes.ambient).toEqual({ profile: 'jev', fallbacks: ['chat'], minConfidence: 0.8, mode: 'shadow' });
+  });
+
+  it('a write while the yml keys still apply keeps the shadow mode and threshold they set (M1)', async () => {
+    const empty = graph({ defaults: { chat: 'chat' } });
+    const written = await reviewer(empty, { ambientTrigger: { mode: 'shadow', minConfidence: 0.85 } })({ ambient: { profile: 'small' } });
+    expect(written.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow', minConfidence: 0.85 });
+    // Values written explicitly win, and the string form keeps them too.
+    expect((await reviewer(empty, { ambientTrigger: { mode: 'shadow' } })({ ambient: { profile: 'small', mode: 'active' } })).graph.purposes.ambient).toEqual({ profile: 'small', mode: 'active' });
+    expect((await reviewer(empty, { ambientTrigger: { mode: 'shadow' } })({ ambient: 'small' })).graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    // Once stored, the yml keys no longer apply and are not merged.
+    expect((await reviewer(graph({ defaults: { chat: 'chat' }, ambient: { minConfidence: 0.6 } }), { ambientTrigger: { mode: 'shadow' } })({ ambient: { profile: 'small' } })).graph.purposes.ambient)
+      .toEqual({ profile: 'small' });
   });
 });
