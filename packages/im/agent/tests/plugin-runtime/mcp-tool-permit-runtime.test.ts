@@ -23,6 +23,7 @@ import {
 import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { McpPermitDeniedError } from '../../src/tool/mcp-permit-denial.js';
 import { demoteScheduleCreator } from '../../src/schedule-domain/security-harness.js';
+import { narrowMergedAccess } from '../../src/turn/merged-principal.js';
 import { parseMcpToolPermit, type McpBindingPermits } from '../../src/plugin-runtime/mcp-tool-permit.js';
 import type { TurnOutcome, TurnPrincipal } from '../../src/turn/turn-ingress.js';
 import type { TurnToolOutcome } from '../../src/tool/turn-tool-runtime.js';
@@ -306,6 +307,26 @@ describe('per-turn MCP tool filtering (ADR 0065 D4)', () => {
       expect(fixture.observed[0]!.pool).toEqual([]);
       await fixture.execute(MEMBER, { github: { server: server({ readOnly: 'owner@global' }) } });
       expect(fixture.observed[1]!.pool).toEqual([]);
+    } finally { await fixture.stop(); }
+  });
+});
+
+describe('merged group turns (ADR 0038 §2)', () => {
+  const TRUSTED: TurnPrincipal = {
+    subjectId: 'helper', roles: ['trusted'], chatRole: 'trusted', chatRoleLevels: { trusted: 'global' },
+  };
+
+  it('does not lend a trusted carrier\'s MCP tools to a plain member in the same merge', async () => {
+    const fixture = await createRuntime();
+    const relaxed = { github: { server: server({ tools: { create_issue: 'trusted' } }) } };
+    try {
+      const carrier = imRequest(TRUSTED);
+      const merged = narrowMergedAccess(carrier, [carrier, imRequest(MEMBER)]);
+      await fixture.execute(merged.principal, relaxed, { policy: merged.policy });
+      expect(fixture.observed[0]!.pool).toEqual(['github__list_issues']);
+      // Alone, the trusted member does see it.
+      await fixture.execute(TRUSTED, relaxed);
+      expect(fixture.observed[1]!.pool).toContain('github__create_issue');
     } finally { await fixture.stop(); }
   });
 });
