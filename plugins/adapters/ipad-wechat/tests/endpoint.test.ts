@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { endpointSpec, parseAdapterDefinition } from 'zhin.js/adapter';
@@ -95,6 +95,10 @@ describe('IpadWechatEndpoint', () => {
       const payload = receive.mock.calls[0]![0] as { segments: Array<{ data: { media: { value: string } } }> };
       expect(payload.segments[0]!.data.media.value).toMatch(/media[/\\]inbound[/\\][0-9a-f]{32}\.jpg$/u);
       expect(existsSync(payload.segments[0]!.data.media.value)).toBe(true);
+      // #1250: the Agent reads an inbound path only inside the directory the Endpoint declared.
+      const roots = h.index.inboundMediaRoots(h.canonicalId);
+      expect(roots).toEqual([join(directory, 'media', 'inbound')]);
+      expect(payload.segments[0]!.data.media.value.startsWith(roots[0]! + sep)).toBe(true);
     } finally { await h.stop(); }
   });
 

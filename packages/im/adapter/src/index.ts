@@ -21,6 +21,7 @@ export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';
 export * from './endpoint-control.js';
 export * from './endpoint-content.js';
+export * from './endpoint-inbound-media.js';
 export * from './endpoint-stream.js';
 export * from './endpoint-profile.js';
 /** @public ADR 0058 login declaration and Endpoint login control port. */

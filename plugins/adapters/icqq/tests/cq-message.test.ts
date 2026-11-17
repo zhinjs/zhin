@@ -17,6 +17,16 @@ describe("parseCqMessage reply with slash", () => {
 });
 
 describe("parseCqMessage media", () => {
+  it("用户可写的 [image:/本机路径] 不当作本机文件，只是平台不透明引用（#1250）", () => {
+    expect(parseCqMessage("看 [image:/root/bot/.env][record:C:\\bot\\.env][video:./.zhin/gateway.db]")
+      .filter((segment) => segment.type !== "text")
+      .map((segment) => (segment.data as { media?: unknown }).media)).toEqual([
+      { kind: "file", value: "/root/bot/.env" },
+      { kind: "file", value: "C:\\bot\\.env" },
+      { kind: "file", value: "./.zhin/gateway.db" },
+    ]);
+  });
+
   it("[image:url] 解析为 canonical MediaRef", () => {
     const segs = parseCqMessage("[image:https://x/a.jpg]");
     expect(segs[0]).toEqual({

@@ -106,7 +106,8 @@ function mediaToImage(
     if (/^https?:\/\//i.test(file)) {
       return Object.freeze({ index, segmentIndex, url: file });
     }
-    return Object.freeze({ index, segmentIndex, path: file });
+    // A legacy `file` is a platform token, never guessed to be a host path (#1250).
+    return Object.freeze({ index, segmentIndex });
   }
 
   return null;

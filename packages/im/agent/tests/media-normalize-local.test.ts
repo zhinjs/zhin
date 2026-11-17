@@ -13,6 +13,8 @@ describe('normalizeMediaRefsToPayloads local files', () => {
     const payloads = await normalizeMediaRefsToPayloads(
       [{ type: 'image', media: { kind: 'path', value: filePath } }],
       1024 * 1024,
+      undefined,
+      { filesystem: { workspaceRoot: dir }, fileRole: 'owner' },
     );
 
     expect(payloads).toHaveLength(1);
@@ -21,6 +23,20 @@ describe('normalizeMediaRefsToPayloads local files', () => {
     expect(payloads[0]?.base64.length).toBeGreaterThan(0);
 
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('does not read a local path without a filesystem authority (#1250)', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-media-'));
+    const filePath = path.join(dir, 'test.png');
+    await fs.writeFile(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    try {
+      await expect(normalizeMediaRefsToPayloads(
+        [{ type: 'image', media: { kind: 'path', value: filePath } }],
+        1024 * 1024,
+      )).resolves.toEqual([]);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('skips platform-opaque file refs', async () => {
@@ -51,6 +67,8 @@ describe('normalizeMediaRefsToPayloads local files', () => {
     await expect(normalizeMediaRefsToPayloads(
       [{ type: 'image', media: { kind: 'path', value: filePath, mime_type: 'image/png' } }],
       1024 * 1024,
+      undefined,
+      { filesystem: { workspaceRoot: dir }, fileRole: 'owner' },
     )).resolves.toEqual([]);
 
     await fs.rm(dir, { recursive: true, force: true });

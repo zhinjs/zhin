@@ -366,6 +366,8 @@ describe('weixin-ilink plugin runtime adapter', () => {
     await endpoint.start();
     expect(fs.existsSync(oldFile)).toBe(false);
     expect(fs.existsSync(newFile)).toBe(true);
+    // #1250: decrypted inbound media lives only in the declared directory the Agent may read.
+    expect(endpoint.index.inboundMediaRoots(endpoint.canonicalId)).toEqual([mediaDir]);
     await endpoint.stop();
   });
 });

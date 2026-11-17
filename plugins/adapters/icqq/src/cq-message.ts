@@ -6,7 +6,9 @@ const MAX_CQ_PARSE_LEN = 256_000;
 
 /**
  * CQ 媒体参数 / 入站元素媒体值 → canonical MediaRef：
- * `base64://` → base64；http(s) → url；本机路径 → path；其余视为平台不透明引用（file）。
+ * `base64://` → base64；http(s) → url；其余（含本机路径形状的值）一律视为平台不透明引用（file）。
+ * 这里的值来自平台或用户可写的 `raw_message` 文本（如频道消息里的 `[image:/root/.env]`），
+ * 绝不当作本机路径读盘（#1250）。
  */
 export function icqqMediaRefFromString(value: string): MediaRef {
   if (value.startsWith("base64://")) {
@@ -14,9 +16,6 @@ export function icqqMediaRefFromString(value: string): MediaRef {
   }
   if (value.startsWith("http://") || value.startsWith("https://")) {
     return { kind: "url", value };
-  }
-  if (value.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(value)) {
-    return { kind: "path", value };
   }
   return { kind: "file", value };
 }

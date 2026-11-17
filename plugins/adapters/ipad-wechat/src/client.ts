@@ -121,6 +121,11 @@ export class IpadWechatClient extends EventEmitter {
     });
   }
 
+  /** #1250: downloaded inbound images live only under `<dataDir>/media/inbound`; the Agent reads nothing else. */
+  protected readonly endpointInboundMedia: import('zhin.js/adapter').EndpointInboundMediaPort = Object.freeze({
+    roots: () => [path.join(this.#options.config.dataDir, 'media', 'inbound')],
+  });
+
   protected configName(): string { return this.#options.config.id; }
   get transportState(): EndpointTransportState { return this.#state; }
   /** Logged-in wxid, once known. */

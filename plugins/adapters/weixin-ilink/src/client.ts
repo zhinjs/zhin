@@ -127,6 +127,11 @@ export class WeixinIlinkClient extends EventEmitter {
     typing: ({ conversation, active, signal }) => this.sendTyping(conversation.id, active === false ? 2 : 1, { signal }).then(() => undefined),
   });
 
+  /** #1250: inbound media is decrypted only into this Endpoint's `media/inbound` directory. */
+  protected readonly endpointInboundMedia: import('zhin.js/adapter').EndpointInboundMediaPort = Object.freeze({
+    roots: () => [this.#state.mediaDirectory('inbound')],
+  });
+
   protected configName(): string { return this.#options.config.id; }
   get transportState(): import('zhin.js/adapter').EndpointTransportState | undefined { return undefined; }
   protected executionSignal?: AbortSignal;

@@ -506,6 +506,20 @@ export function isMediaDataPath(filePath: string, workspaceDir?: string): boolea
  * 该函数只做「阻止明确敏感文件」的检查，不做正向白名单。
  */
 export function checkFileAccess(filePath: string, workspaceDir?: string): FileAccessCheckResult {
+  return checkFileAccessWith(filePath, workspaceDir, true);
+}
+
+/**
+ * The sensitive prefix / directory / file-name checks of {@link checkFileAccess} without its
+ * workspace `data/` rule — for files whose location some other authority already owns (an
+ * Endpoint's declared inbound media directory, #1250), where the remaining question is only
+ * whether the file is a secret (`.zhin/`, `.env*`, keys, databases).
+ */
+export function checkSensitiveFileAccess(filePath: string): FileAccessCheckResult {
+  return checkFileAccessWith(filePath, undefined, false);
+}
+
+function checkFileAccessWith(filePath: string, workspaceDir: string | undefined, workspaceData: boolean): FileAccessCheckResult {
   // 解析为绝对路径
   const resolved = path.resolve(expandHome(filePath));
   const basename = path.basename(resolved);
@@ -547,7 +561,8 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   //     其他位置的 data 目录如 src/data/fixtures 不受影响）
   const workspaceDataRoot = path.resolve(workspaceDir || process.cwd(), 'data');
   if (
-    (resolved === workspaceDataRoot || resolved.startsWith(workspaceDataRoot + path.sep))
+    workspaceData
+    && (resolved === workspaceDataRoot || resolved.startsWith(workspaceDataRoot + path.sep))
     && !underMemoryData
     && !underMediaData
   ) {

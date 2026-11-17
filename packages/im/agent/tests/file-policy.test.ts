@@ -1,6 +1,7 @@
+import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
-  checkFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape,
+  checkFileAccess, checkSensitiveFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape,
   isBlockedDevicePath, isMemoryDataPath, classifyBashCommand, isFileStale,
   MAX_READ_FILE_SIZE, MAX_EDIT_FILE_SIZE,
 } from '../src/security/file-policy.js';
@@ -443,5 +444,16 @@ describe('file-policy', () => {
     it('MAX_EDIT_FILE_SIZE 为 1 GiB', () => {
       expect(MAX_EDIT_FILE_SIZE).toBe(1024 * 1024 * 1024);
     });
+  });
+});
+
+describe('checkSensitiveFileAccess (#1250 inbound media)', () => {
+  it('keeps the secret checks but not the workspace data/ rule', () => {
+    const media = path.join(process.cwd(), 'data', 'weixin-ilink', 'wx', 'media', 'inbound', 'a.png');
+    expect(checkFileAccess(media).allowed).toBe(false);
+    expect(checkSensitiveFileAccess(media).allowed).toBe(true);
+    for (const secret of ['/srv/bot/.zhin/gateway.db', '/srv/bot/media/.env.local', '/srv/bot/media/key.pem', '/home/u/.ssh/a.png', '/etc/shadow']) {
+      expect(checkSensitiveFileAccess(secret).allowed).toBe(false);
+    }
   });
 });

@@ -14,7 +14,8 @@ import type { ImageAssetPublisher } from './image-assets.js';
  * Turn authority for media that model output references by local path or URL.
  * With it, a path must pass the same check as `read_file` and a URL needs the
  * Turn's network authority (domain allowlist applied to every redirect hop).
- * Omitted only by trusted host callers that already own the media.
+ * Omitted, no local path is read (#1250: fail closed, as {@link NO_MEDIA_AUTHORITY});
+ * URLs keep the default fetch rules (HTTPS only, private addresses refused).
  */
 export interface OutboundMediaAuthority {
   readonly imageAssets?: ImageAssetPublisher;
@@ -35,20 +36,22 @@ export interface OutboundMediaAuthority {
  */
 export const NO_MEDIA_AUTHORITY: OutboundMediaAuthority = Object.freeze({});
 
-/** Canonical path the Turn may read, or null when the Turn has no authority over it. */
+/**
+ * Canonical path the Turn may read, or null when the Turn has no authority over it.
+ * No authority is no filesystem authority: the path is refused (#1250).
+ */
 export async function authorizeOutboundMediaPath(
   rawPath: string,
   authority: OutboundMediaAuthority | undefined,
 ): Promise<string | null> {
-  if (!authority) return rawPath;
-  const filesystem = authority.filesystem;
+  const filesystem = authority?.filesystem;
   if (!filesystem?.workspaceRoot) return null;
   const decision = await authorizeTurnFileInput(
     'read_file', { file_path: rawPath }, filesystem.workspaceRoot, filesystem.workingDirectory,
   );
   if (!decision.allowed) return null;
   const canonical = String(decision.input.file_path);
-  const permission = checkFilePermission(authority.fileRole ?? 'user', 'read', canonical);
+  const permission = checkFilePermission(authority?.fileRole ?? 'user', 'read', canonical);
   if (!permission.allowed || permission.needsConfirmation || permission.needsOwnerConfirmation) return null;
   return canonical;
 }
@@ -231,7 +234,8 @@ async function readBoundedResponse(response: Response, maxBytes: number): Promis
 
 /**
  * canonical 媒体引用（SegmentMediaRef 形状）→ MediaBinaryPayload[]。
- * base64 直取；path 读本地文件；url 按需 fetch；kind=file（平台不透明引用）跳过。
+ * base64 直取；path 仅在 `authority.filesystem` 认可时读本地文件（不传 authority 不读，#1250）；
+ * url 按需 fetch；kind=file（平台不透明引用）跳过。入站 path 由 `inbound-media` 按端点声明的目录单独判定。
  */
 export async function normalizeMediaRefsToPayloads(
   refs: readonly { type: string; media: MediaRef }[],

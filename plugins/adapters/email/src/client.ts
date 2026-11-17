@@ -3,7 +3,7 @@ import { createEndpointOperation, createEndpointLifecycle, type EndpointLifecycl
 /**
  * EmailClient — lifecycle, SMTP outbound, IMAP inbound polling.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -55,6 +55,14 @@ export class EmailClient extends EventEmitter {
   get transportState(): EndpointTransportState { return this.#lifecycle.state; }
   #open = false;
   #started = false;
+
+  /** #1250: saved attachments live only under `attachments.downloadPath` (none while disabled). */
+  protected readonly endpointInboundMedia: import('zhin.js/adapter').EndpointInboundMediaPort = Object.freeze({
+    roots: () => {
+      const attachments = this.#options.config.attachments;
+      return attachments?.enabled && attachments.downloadPath ? [attachments.downloadPath] : [];
+    },
+  });
 
   protected configName(): string { return this.#options.config.id; }
   protected executionSignal?: AbortSignal;
@@ -245,15 +253,22 @@ export class EmailClient extends EventEmitter {
     const config = this.#options.config.attachments;
     if (!config?.enabled || email.attachments.length === 0) return [];
     await mkdir(config.downloadPath, { recursive: true });
-    const downloadRoot = path.resolve(config.downloadPath);
+    // Each email gets its own fresh directory (#1250 review): two emails that carry the same
+    // attachment name never overwrite each other, so a Turn reads the file its own email brought.
+    let messageRoot: string | undefined;
     const saved: SavedEmailAttachment[] = [];
     for (const attachment of email.attachments) {
       this.executionSignal?.throwIfAborted();
-      // 防路径穿越：发件人可构造 ../../ 等文件名，basename + resolve 后必须落在 downloadPath 内
+      // 防路径穿越：发件人可构造 ../../ 等文件名，basename + resolve 后必须落在本封邮件的目录内
       const rawName = attachment.filename || `attachment_${Date.now()}`;
       const filename = path.basename(rawName) || `attachment_${Date.now()}`;
-      const filepath = path.resolve(downloadRoot, filename);
-      if (filepath !== downloadRoot && !filepath.startsWith(downloadRoot + path.sep)) {
+      if (filename === '.' || filename === '..') {
+        this.#logger.warn(formatCompact({ op: 'email_attachment_skipped', filename: rawName, reason: 'path' }));
+        continue;
+      }
+      messageRoot ??= await mkdtemp(path.join(path.resolve(config.downloadPath), 'mail-'));
+      const filepath = path.resolve(messageRoot, filename);
+      if (filepath === messageRoot || !filepath.startsWith(messageRoot + path.sep)) {
         this.#logger.warn(formatCompact({ op: 'email_attachment_skipped', filename: rawName, reason: 'path' }));
         continue;
       }
@@ -266,7 +281,8 @@ export class EmailClient extends EventEmitter {
         continue;
       }
       try {
-        await writeFile(filepath, attachment.content, { signal: this.executionSignal });
+        // `wx`: never overwrite (or write through) anything already there, e.g. a duplicate name.
+        await writeFile(filepath, attachment.content, { flag: 'wx', signal: this.executionSignal });
         saved.push({ filename, path: filepath, contentType: attachment.contentType, size: attachment.size });
       } catch (error) {
         this.executionSignal?.throwIfAborted();

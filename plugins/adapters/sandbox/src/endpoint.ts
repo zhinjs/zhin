@@ -175,6 +175,9 @@ function carriesLocalMediaPath(value: unknown, depth = 0): boolean {
     const [canonical] = toCanonicalSegments([{ type, data: record.data } as MessageElement]);
     const media = (canonical?.data as Record<string, unknown> | undefined)?.media;
     if (isMediaRef(media) && media.kind === 'path') return true;
+    // Core no longer guesses a path from `data.file` (#1250); the Sandbox issues no such tokens,
+    // so a path-shaped one (`/etc/passwd`, `./.zhin/…`, `~/…`, `C:\…`) is still refused here.
+    if (isMediaRef(media) && media.kind === 'file' && /^(?:[/\\.~]|[a-z]:)/iu.test(media.value)) return true;
   }
   return Object.values(record).some(item => carriesLocalMediaPath(item, depth + 1));
 }

@@ -40,6 +40,8 @@ import adapterFeature, {
   endpointControlOf,
   createRecallEndpointControl,
   endpointContentOf,
+  endpointInboundMediaOf,
+  endpointInboundMediaRoots,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
   type AdapterContext,
@@ -59,7 +61,7 @@ class TestEndpoint extends NativeClient implements Endpoint {
     const transportState = () => this.transportState;
     this[endpointSpec] = createEndpointSpecification(this, {
       start: hooks.start ?? (() => undefined), open: hooks.open ?? (() => undefined), close: hooks.close ?? (() => undefined), stop: hooks.stop ?? (() => undefined),
-      send: hooks.send, name: hooks.name, control: hooks.control, management: hooks.management, content: hooks.content,
+      send: hooks.send, name: hooks.name, control: hooks.control, management: hooks.management, content: hooks.content, inboundMedia: hooks.inboundMedia,
       get transportState() { return transportState(); },
     });
   }
@@ -191,6 +193,36 @@ describe('Adapter Feature', () => {
     })).resolves.toEqual(expect.objectContaining({ status: 'resolved' }));
     expect(endpointContentOf({ getMessage: async () => undefined })).toBeUndefined();
     await index.stop();
+  });
+
+  it('exposes inbound media roots only from an active Endpoint that declares them (#1250)', async () => {
+    const root = rootPluginId();
+    const declare = (localName: string, inboundMedia?: EndpointHooks['inboundMedia']) => createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName,
+      source: `/adapters/${localName}/index.ts`,
+      definition: defineFixtureAdapter({
+        capabilities: ['inbound'],
+        createEndpoint: () => new TestEndpoint({ ...(inboundMedia ? { inboundMedia } : {}) }),
+      }),
+    });
+    const owning = declare('owning', { roots: () => ['/var/lib/zhin/media/inbound', '  ', 3 as never] });
+    const silent = declare('silent');
+    const throwing = declare('throwing', { roots: () => { throw new Error('boom'); } });
+    const index = await createAdapterIndex([owning, silent, throwing], snapshot([owning, silent, throwing]));
+    expect(index.inboundMediaRoots(owning.id)).toEqual([]);
+    await index.activate(new AbortController().signal);
+    expect(index.inboundMediaRoots(owning.id)).toEqual(['/var/lib/zhin/media/inbound']);
+    expect(index.inboundMediaRoots(silent.id)).toEqual([]);
+    expect(index.inboundMediaRoots(throwing.id)).toEqual([]);
+    expect(endpointInboundMediaOf({ inboundMedia: { roots: ['/x'] } })).toBeUndefined();
+    // A throwing `inboundMedia` getter declares nothing instead of failing the Turn (#1250 review).
+    const throwingGetter = Object.defineProperty({}, 'inboundMedia', { get() { throw new Error('boom'); } });
+    expect(endpointInboundMediaOf(throwingGetter)).toBeUndefined();
+    expect(endpointInboundMediaRoots(throwingGetter)).toEqual([]);
+    await index.stop();
+    expect(index.inboundMediaRoots(owning.id)).toEqual([]);
   });
 
   it('requires declared operations to exist on an explicit control port', async () => {

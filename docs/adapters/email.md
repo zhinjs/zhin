@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=faefda23f1c9c9b5 -->
+<!-- sync-adapter-docs:sha256=b4766edfa80e458c -->
 
 # @zhin.js/adapter-email
 
@@ -86,7 +86,7 @@ email:
 
 `attachments.enabled: true` 时，入站邮件附件会落盘并把保存信息写入消息 metadata（`attachments: [{ filename, path, contentType, size }]`）：
 
-- `downloadPath`：保存目录，默认 `./downloads/email`
+- `downloadPath`：保存目录，默认 `./downloads/email`；每封邮件的附件存进其中独立的 `mail-*` 子目录，同名附件互不覆盖
 - `maxFileSize`：单附件上限（字节），默认 10MB，超限跳过
 - `allowedTypes`：允许的 MIME 类型白名单，不在列表内跳过
 

@@ -105,7 +105,7 @@ describe('publishOutboundElements', () => {
     try {
       const segs = await publishOutboundElements([
         { type: 'file', name: 'report.png', url: filePath },
-      ], 'sandbox');
+      ], 'sandbox', undefined, { filesystem: { workspaceRoot: directory }, fileRole: 'owner' });
       expect(segs[0]).toMatchObject({
         type: 'file',
         data: { name: 'report.png', media: { kind: 'base64' } },

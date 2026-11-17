@@ -65,6 +65,12 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 |-----|-----------|----------------|-----------|
 | `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | Generation-scoped Skill/SubAgent/MCP/Hook support resources; Tools enter `ToolIndex` only through `context.addTool()` |
 
+### Adapter Endpoint ports
+
+| API | Stability | Author import | One-liner |
+|-----|-----------|---------------|-----------|
+| `EndpointInboundMediaPort` (`roots()`) / `EndpointHooks.inboundMedia` / `EndpointRuntime.inboundMedia` | `experimental` | `zhin.js/adapter` | An Endpoint declares the directories it downloads inbound media into; the Agent reads an inbound local path only inside them (symbolic links resolved) and only when it passes the file policy's secret checks (#1250). Declare only directories the Endpoint itself writes |
+
 ### Removed Legacy Hooks
 
 | API | Stability | Source Package | One-liner |
@@ -114,6 +120,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
+| `endpointInboundMediaOf()` / `endpointInboundMediaRoots()` / `AdapterIndex.inboundMediaRoots()` / `ImRuntime.inboundMediaRoots()` / `TurnInput.inboundMediaRoots` | `internal` | `@zhin.js/adapter` · `@zhin.js/core/runtime` · `@zhin.js/agent` | The read chain for inbound media directories: the Runtime ingress puts the producing Endpoint's declared directories into the Turn input; plugin authors only implement `inboundMedia.roots()` |
 | Root Host installers (`*-host-installer.ts`) | `internal` | `@zhin.js/core/runtime` · `zhin.js/instance` | The database / outbound / component / locale installers belong to `@zhin.js/core/runtime`; the agent (`agent/host-installer.ts`), configuration, feature, schedule, restart, protocol (MCP / A2A), speech, and html-renderer installers and Console assembly live in `packages/im/zhin/src/instance/`; assembly details may change at any time |
 | `@zhin.js/harness` (Mailbox / Authority / BudgetLedger / GuardKernel / Journal) | `internal` | `@zhin.js/harness` | ADR 0048 multi-Agent collaboration microkernel, assembled by `@zhin.js/agent`; plugin authors use it through `collaboration` in `agent.json` and the collaboration tools, never as a direct dependency |
 

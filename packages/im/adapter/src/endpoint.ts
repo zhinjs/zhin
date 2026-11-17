@@ -18,6 +18,7 @@ import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointLoginControl } from './login-capability.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
+import type { EndpointInboundMediaPort } from './endpoint-inbound-media.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 import { configuredSelfProfile, EndpointProfileState, type EndpointProfile } from './endpoint-profile.js';
 
@@ -97,6 +98,8 @@ export abstract class EndpointRuntime<TClient = unknown> {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  /** #1250: directories this Endpoint downloads inbound media into (absent: none). */
+  readonly inboundMedia?: EndpointInboundMediaPort;
   readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
   /** ADR 0058: optional login control hooks (relogin / refresh challenge). */

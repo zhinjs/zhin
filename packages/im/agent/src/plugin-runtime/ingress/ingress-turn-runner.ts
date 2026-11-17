@@ -416,6 +416,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               service.getAgentConfig()?.mailbox?.groupMode,
               intentResolver,
             ),
+            inboundMediaRoots: () => im.inboundMediaRoots(lease, message.conversation),
             resolveReference: (reference, limits, referenceSignal) =>
               im.resolveConversationReference(lease, reference, {
                 signal: referenceSignal,

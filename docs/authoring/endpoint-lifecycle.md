@@ -168,7 +168,24 @@ interface EndpointContentPort {
 - 结果必须是 `resolved | not_found | unsupported | forbidden | expired | failed` 之一。平台不支持时返回 `unsupported`，不要返回空内容或猜测的内容。
 - `resolve()` 必须响应 `signal`，并遵守深度、条数和字符预算；整个异步调用期间，Core 持有当前版本的快照租约。
 - 消息和转发中的作者只写成中性的 `actor` 数据，**不能**映射成模型的 role。
-- 媒体可以返回稳定 URL、经过校验的 base64 / 路径，或明确失败；不要把带 token 的下载 URL 暴露给 Agent。
+- 媒体可以返回稳定 URL、经过校验的 base64 / 路径，或明确失败；不要把带 token 的下载 URL 暴露给 Agent。返回的路径同样受下面「入站媒体目录」约束。
+
+## 入站媒体目录
+
+入站消息是远端输入，里面的本机路径可能来自平台字段、被解析的文本或转发节点。Agent 只读一种本机路径：产出这条消息的 Endpoint 声明过的入站媒体目录里、解析符号链接后的真实路径仍在目录内的文件，并且还要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。其他路径一律不读，模型只看到「这条消息里有个文件无法读取」的占位（`inbound_path_not_owned` / `inbound_path_sensitive`），整轮照常进行。
+
+适配器把自己下载的文件写进一个专用目录，在 specification 里声明它，并显式产出 `media: { kind: 'path' }`：
+
+```ts
+createEndpointSpecification(this, {
+  // ...
+  inboundMedia: { roots: () => [this.#state.mediaDirectory('inbound')] },
+});
+```
+
+- `roots()` 在每个回合构建时读取，可以跟随配置（例如附件下载目录、关闭附件时返回空数组）。
+- 只声明 Endpoint 自己写入的目录，不要声明项目根目录、`data/` 或家目录。
+- 平台字段里的 `data.file` 不再被猜成本机路径（以 `/`、`./`、`~/` 开头的值是平台不透明引用 `kind: 'file'`）；确实是本地文件时显式写 `data.path` 或 `media.kind: 'path'`。
 
 ## 深入
 

@@ -12,6 +12,7 @@ export class EmailEndpoint extends EmailClient implements Endpoint {
       open: () => this.openInput(), close: () => this.closeInput(), stop: () => this.disconnectTransport(),
       send: (request: import('zhin.js/adapter').EndpointSendRequest) => this.sendPayload(request),
       name: this.configName(),
+      inboundMedia: this.endpointInboundMedia,
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);
