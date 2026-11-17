@@ -46,6 +46,22 @@ describe('retired ai.trigger.ambient keys (H1)', () => {
     });
   });
 
+  it('compares normalized values: minConfidence 1.2 read as 1 is settled and removed (N3)', async () => {
+    const view = { migration: { status: 'migrated' as const, at: 1, triggerKeys: ['ai.trigger.ambient.minConfidence'], triggerValues: { minConfidence: 1 }, triggerSeen: { minConfidence: 1 } } };
+    await withYml(async file => {
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view })).resolves.toMatchObject({ status: 'ok' });
+      expect(await readFile(file, 'utf8')).not.toContain('minConfidence');
+    }, 'ai:\n  trigger:\n    ambient:\n      minConfidence: 1.2\n');
+  });
+
+  it('treats a key added after the migration and already converted as settled (its value is in triggerSeen), not by triggerKeys (N3)', async () => {
+    const view = { migration: { status: 'migrated' as const, at: 1, triggerKeys: [], triggerSeen: { mode: 'shadow' } } };
+    await withYml(async file => {
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view })).resolves.toMatchObject({ status: 'ok' });
+      expect(await readFile(file, 'utf8')).not.toContain('mode');
+    }, 'ai:\n  trigger:\n    ambient:\n      mode: shadow\n');
+  });
+
   it('keeps a key written after the migration (the next load converts it) and removes only the settled one', async () => {
     const view = { migration: { ...migratedView.migration, triggerKeys: ['ai.trigger.ambient.minConfidence'], triggerValues: { minConfidence: 0.8 }, triggerSeen: { minConfidence: 0.8 } } };
     await withYml(async file => {

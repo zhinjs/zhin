@@ -61,6 +61,17 @@ export async function readAmbientJudgeView(client: HostHttpConfig | undefined): 
 const NAME = '插话判断（旧配置项）';
 
 /**
+ * A retired key's value as the instance uses it (same rules as `legacyAmbientTriggerValues`):
+ * `minConfidence` a finite number clamped to 0..1, `mode` `active` / `shadow`; anything else is
+ * ignored at run time (undefined).
+ */
+export function normalizedTrigger(key: string, value: unknown): unknown {
+  if (key === 'minConfidence') return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : undefined;
+  if (key === 'mode') return value === 'active' || value === 'shadow' ? value : undefined;
+  return value;
+}
+
+/**
  * The retired keys in `configPath` (H1). They stop applying by themselves only once the running
  * instance's migration stored them (`migrated`, the key read by it and its value unchanged since):
  * only then are they reported as no longer applied and removed by `fix`. In every other state —
@@ -86,10 +97,15 @@ export async function checkRetiredAmbientTriggerKeys(input: Readonly<{
       message: `${input.label} 中的 ${names(keys)} 已废弃，但现在仍然生效：${why}。${input.fix ? '没有删除。' : ''}`,
       fix: '迁移完成后（zhin doctor 显示迁移记录）再运行 zhin doctor --fix；或在 Console「插话判断」设置后再删除' };
   }
-  // Migrated: a key the migration read, whose value is the one already acted on, no longer applies by itself.
-  const read = new Set((migration!.triggerKeys ?? []).map(key => key.replace(/^ai\.trigger\.ambient\./u, '')));
+  // Migrated: a value the instance has already acted on (its `triggerSeen`, or the value the
+  // migration read and folded in), or one it ignores, no longer applies by itself. Both sides are
+  // normalized as the instance does (N3); a value written since is converted on the next load.
   const seen = migration!.triggerSeen ?? migration!.triggerValues ?? {};
-  const settled = keys.filter(key => read.has(key) && JSON.stringify(seen[key]) === JSON.stringify(present[key]));
+  const original = migration!.triggerValues ?? {};
+  const settled = keys.filter(key => {
+    const value = normalizedTrigger(key, present[key]);
+    return value === undefined || (Object.hasOwn(seen, key) && seen[key] === value) || (Object.hasOwn(original, key) && original[key] === value);
+  });
   const pending = keys.filter(key => !settled.includes(key));
   let removed: string[] = [];
   if (input.fix && settled.length) {

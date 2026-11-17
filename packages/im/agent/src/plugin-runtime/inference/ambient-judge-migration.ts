@@ -64,6 +64,11 @@ export interface AmbientJudgeMigrationRecord {
   readonly triggerValues?: AmbientTriggerValues;
   /** The yml values last acted on; a change to them is a write converted into `purposes.ambient`. */
   readonly triggerSeen?: AmbientTriggerValues;
+  /**
+   * Set by `zhin ai purposes revert ambient-judge` while it writes the yml keys back and reverts
+   * (N1): no yml change is converted meanwhile. Ignored after {@link AMBIENT_JUDGE_REVERT_PENDING_MS}.
+   */
+  readonly revertPending?: Readonly<{ at: number }>;
   /** First `zhin doctor` that showed the result (shown once; `--verbose` shows it again). */
   readonly noticedAt?: number;
   readonly revertedAt?: number;
@@ -94,6 +99,8 @@ export type AmbientJudgeMigrationResult =
   | Readonly<{ status: 'failed'; record: AmbientJudgeMigrationRecord }>;
 
 const MAX_ATTEMPTS = 3;
+/** A revert that never cleared its pending mark (a crashed CLI) stops pausing conversions after this long. */
+export const AMBIENT_JUDGE_REVERT_PENDING_MS = 10 * 60_000;
 
 function asRecord(value: JsonObject | undefined): AmbientJudgeMigrationRecord | undefined {
   return value && value.id === AMBIENT_JUDGE_MIGRATION_ID ? value as unknown as AmbientJudgeMigrationRecord : undefined;
@@ -233,9 +240,14 @@ async function convertTriggerWrites(input: Readonly<{
   const record = previous.record;
   const stored = graph.purposes.ambient;
   if (record?.status !== 'migrated' || !stored) return Object.freeze({ status: 'none' });
+  // A revert is writing the yml keys back right now: nothing it writes is a new value (N1).
+  if (record.revertPending && input.now() - record.revertPending.at < AMBIENT_JUDGE_REVERT_PENDING_MS) return Object.freeze({ status: 'none' });
   const seen = record.triggerSeen ?? record.triggerValues ?? {};
   if (isDeepStrictEqual(plain(seen), plain(values))) return Object.freeze({ status: 'none' });
-  const changed = (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key]);
+  // Both sides are normalized values (`legacyAmbientTriggerValues`). A value equal to the one the
+  // migration read is no new information: the D5 table already folded it into `after` (N1).
+  const original = record.triggerValues ?? {};
+  const changed = (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key] && values[key] !== original[key]);
   const next: AmbientJudgeMigrationRecord = Object.freeze({ ...record, triggerSeen: values });
   if (!changed.length) {
     await store.writeMigrationRecord({ rootId, id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(next), expectedRevision: previous.revision, requireStatus: 'migrated' }).catch(() => 'conflict');
@@ -260,7 +272,12 @@ async function convertTriggerWrites(input: Readonly<{
 }
 
 export type AmbientJudgeRevertResult =
-  | Readonly<{ status: 'reverted'; graphRevision: number }>
+  /**
+   * `yml`: threshold / mode of a `purposes.ambient` seeded before the migration, which an older
+   * version reads from `ai.trigger.ambient` (the CLI writes them); `lost`: what the legacy form
+   * cannot express (an older version would run differently), with the reason.
+   */
+  | Readonly<{ status: 'reverted'; graphRevision: number; yml?: AmbientTriggerValues; lost?: readonly string[] }>
   | Readonly<{ status: 'refused'; reason: 'no-migration' | 'already-reverted' | 'changed' | 'conflict' | 'not-committed' }>
   /** The restored form does not validate (e.g. a Profile it names was removed since); `path` names it. */
   | Readonly<{ status: 'refused'; reason: 'invalid-graph'; path?: string }>;
@@ -280,15 +297,18 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
   if (!graph || !isDeepStrictEqual(plain(graph.purposes.ambient ?? null), plain(record.after ?? null))) {
     return Object.freeze({ status: 'refused', reason: 'changed' });
   }
-  // Every other purpose stays as it is now; only the judge goes back to its stored form before the
-  // migration (a `purposes.ambient` seeded before it is restored as well).
+  // Every other purpose stays as it is now; only the judge goes back to its legacy stored form. A
+  // `purposes.ambient` that existed before the migration (seeded) is converted back by the D5 table
+  // too (N2), so an older version can read the graph; what it cannot express is reported.
   const before = record.before;
   const { ambient: _ambient, ...current } = withoutLegacyAmbientJudge(graph.purposes);
+  const reversed = before.ambient ? reverseAmbientJudge(before.ambient, graph) : undefined;
+  const language = reversed ? reversed.language : { profile: before.defaults.ambient, fallbacks: before.defaults.ambientFallbacks };
+  const decision = reversed ? reversed.decision : before.decisions?.ambient;
   const purposes = { ...current,
-    ...(before.ambient ? { ambient: before.ambient } : {}),
-    defaults: { ...current.defaults, ...(before.defaults.ambient !== undefined ? { ambient: before.defaults.ambient } : {}),
-      ...(before.defaults.ambientFallbacks !== undefined ? { ambientFallbacks: before.defaults.ambientFallbacks } : {}) },
-    ...(before.decisions?.ambient !== undefined ? { decisions: { ...current.decisions, ambient: before.decisions.ambient } } : {}) };
+    defaults: { ...current.defaults, ...(language.profile !== undefined ? { ambient: language.profile } : {}),
+      ...(language.profile !== undefined && language.fallbacks?.length ? { ambientFallbacks: language.fallbacks } : {}) },
+    ...(decision !== undefined ? { decisions: { ...current.decisions, ambient: decision } } : {}) };
   let next: ProviderGraph;
   try {
     next = normalizeProviderGraph(plain({ ...graph, revision: graph.revision + 1, purposes }));
@@ -296,12 +316,82 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
     const path = error instanceof ProviderError ? error.path : undefined;
     return Object.freeze({ status: 'refused', reason: 'invalid-graph', ...(path ? { path } : {}) });
   }
-  const reverted: AmbientJudgeMigrationRecord = Object.freeze({ ...record, status: 'reverted', revertedAt: (input.now ?? Date.now)() });
+  const { revertPending: _pending, ...settled } = record;
+  const reverted: AmbientJudgeMigrationRecord = Object.freeze({ ...settled, status: 'reverted', revertedAt: (input.now ?? Date.now)() });
   const result = await store.commitMigration({ rootId, expectedRevision: graph.revision, mutationId: `${AMBIENT_JUDGE_MIGRATION_ID}:revert:${graph.revision}`,
     fingerprint: providerPlanFingerprint({ revert: AMBIENT_JUDGE_MIGRATION_ID, purposes }), graph: next, result: { revert: AMBIENT_JUDGE_MIGRATION_ID },
     migration: { id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(reverted) } });
-  if (result.status === 'committed') return Object.freeze({ status: 'reverted', graphRevision: next.revision });
+  if (result.status === 'committed') {
+    return Object.freeze({ status: 'reverted', graphRevision: next.revision,
+      ...(reversed && Object.keys(reversed.yml).length ? { yml: reversed.yml } : {}),
+      ...(reversed?.lost.length ? { lost: Object.freeze([...reversed.lost]) } : {}) });
+  }
   return Object.freeze({ status: 'refused', reason: result.status === 'conflict' ? 'conflict' : 'not-committed' });
+}
+
+/**
+ * `purposes.ambient` in the legacy stored form, by the D5 table read backwards (N2): a decision
+ * main judge becomes an active `decisions.ambient` (its language fallbacks the language purpose), a
+ * decision compared model a shadow `decisions.ambient`; the threshold and mode go to the yml keys an
+ * older version reads. `lost` names what the legacy form cannot express.
+ */
+export function reverseAmbientJudge(policy: AmbientJudgePolicy, graph: ProviderGraph): Readonly<{
+  language: Readonly<{ profile?: string; fallbacks?: readonly string[] }>;
+  decision?: Readonly<{ profile: string; mode: 'active' | 'shadow'; timeoutMs?: number; minConfidence?: number }>;
+  yml: AmbientTriggerValues;
+  lost: readonly string[];
+}> {
+  const decisionOnly = (id: string | undefined): boolean => {
+    if (id === undefined) return false;
+    const profile = Object.hasOwn(graph.profiles, id) ? graph.profiles[id] : undefined;
+    const account = profile ? graph.accounts[profile.accountId] : undefined;
+    const kinds = profile && account ? graph.services[account.serviceId]?.models[profile.model]?.kinds ?? [] : [];
+    return kinds.includes('decision') && !kinds.includes('language');
+  };
+  const lost: string[] = [];
+  const fallbacks = policy.fallbacks ?? [];
+  const languages = fallbacks.filter(id => !decisionOnly(id));
+  fallbacks.filter(decisionOnly).forEach(id => lost.push(`purposes.ambient.fallbacks 中的决策模型 ${id}（旧版本的备用链只能是语言模型）`));
+  const timeout = policy.timeoutMs !== undefined ? { timeoutMs: policy.timeoutMs } : {};
+  let language: { profile?: string; fallbacks?: readonly string[] } = {};
+  let decision: { profile: string; mode: 'active' | 'shadow'; timeoutMs?: number; minConfidence?: number } | undefined;
+  if (decisionOnly(policy.profile)) {
+    decision = { profile: policy.profile!, mode: 'active', ...timeout, ...(policy.minConfidence !== undefined ? { minConfidence: policy.minConfidence } : {}) };
+    if (languages.length) {
+      language = { profile: languages[0], ...(languages.length > 1 ? { fallbacks: languages.slice(1) } : {}) };
+      lost.push(`决策模型 ${policy.profile} 失败时换到语言模型 ${languages[0]}（旧版本此时不插话）`);
+    }
+    if (policy.compare !== undefined) lost.push(`对照模型 ${policy.compare}（旧版本不能同时启用决策模型和对照）`);
+  } else {
+    language = { ...(policy.profile !== undefined ? { profile: policy.profile } : {}), ...(policy.profile !== undefined && languages.length ? { fallbacks: languages } : {}) };
+    if (policy.profile === undefined && languages.length) lost.push('purposes.ambient.fallbacks（没有主项时旧版本跟随聊天的备用链）');
+    if (decisionOnly(policy.compare)) decision = { profile: policy.compare!, mode: 'shadow', ...timeout };
+    else if (policy.compare !== undefined) lost.push(`对照模型 ${policy.compare}（旧版本只能用决策模型陪跑）`);
+  }
+  const yml: AmbientTriggerValues = Object.freeze({ ...(policy.minConfidence !== undefined ? { minConfidence: policy.minConfidence } : {}),
+    ...(policy.mode ? { mode: policy.mode } : {}) });
+  return Object.freeze({ language: Object.freeze(language), ...(decision ? { decision: Object.freeze(decision) } : {}), yml, lost: Object.freeze(lost) });
+}
+
+/** Pauses yml conversions while the revert command writes the yml keys back (N1). */
+export async function beginAmbientJudgeRevert(input: Readonly<{ store: AmbientJudgeMigrationStore; rootId: string; now?: () => number }>): Promise<'pending' | 'no-migration' | 'conflict'> {
+  const entry = await input.store.readMigrationRecordEntry({ rootId: input.rootId, id: AMBIENT_JUDGE_MIGRATION_ID });
+  const record = asRecord(entry?.record);
+  if (!entry || record?.status !== 'migrated') return 'no-migration';
+  const written = await input.store.writeMigrationRecord({ rootId: input.rootId, id: AMBIENT_JUDGE_MIGRATION_ID,
+    record: plain({ ...record, revertPending: { at: (input.now ?? Date.now)() } }), expectedRevision: entry.revision, requireStatus: 'migrated' });
+  return written === 'written' ? 'pending' : 'conflict';
+}
+
+/** Clears the pending mark of {@link beginAmbientJudgeRevert}, whether the revert succeeded or not. */
+export async function endAmbientJudgeRevert(input: Readonly<{ store: AmbientJudgeMigrationStore; rootId: string }>): Promise<void> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const entry = await input.store.readMigrationRecordEntry({ rootId: input.rootId, id: AMBIENT_JUDGE_MIGRATION_ID });
+    const record = asRecord(entry?.record);
+    if (!entry || !record?.revertPending) return;
+    const { revertPending: _pending, ...cleared } = record;
+    if (await input.store.writeMigrationRecord({ rootId: input.rootId, id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(cleared), expectedRevision: entry.revision }) === 'written') return;
+  }
 }
 
 /**

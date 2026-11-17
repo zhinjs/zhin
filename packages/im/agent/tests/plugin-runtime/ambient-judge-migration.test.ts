@@ -7,6 +7,10 @@ import { ModelAvailabilityRegistry } from '@zhin.js/ai';
 import { ambientJudgeStatusView } from '../../src/plugin-runtime/inference/host.js';
 import { AmbientEngagement } from '../../src/plugin-runtime/ingress/ambient-engagement.js';
 import {
+  AMBIENT_JUDGE_REVERT_PENDING_MS,
+  beginAmbientJudgeRevert,
+  endAmbientJudgeRevert,
+  reverseAmbientJudge,
   migrateAmbientJudge,
   needsAmbientJudgeMigration,
   noticeAmbientJudgeMigration,
@@ -245,4 +249,72 @@ it('after converting an old-key write of shadow, the status shows shadow and the
   const engagement = new AmbientEngagement({ config: { conversations: ['*'] }, sleep: async () => undefined,
     judge: { judge: async () => ({ engage: true, confidence: 0.95, reason: 'x', gate: { minConfidence: policy.minConfidence ?? 0.7, mode: policy.mode ?? 'active' } }) } });
   await expect(engagement.consider({ key: 'qq:1', botName: 'bot', readRecent: async () => ['a'] })).resolves.toMatchObject({ kind: 'shadow' });
+});
+
+describe('writing the original yml values back is no new write (review N1, N2)', () => {
+  it('case A: active decision 0.8 over yml 0.6 + shadow; after --fix the yml gets 0.6 back: the judge keeps 0.8 and the revert still works', async () => {
+    const legacy = { defaults: { chat: 'chat', ambient: 'small' }, decisions: { ambient: { profile: 'jev', mode: 'active', minConfidence: 0.8 } } };
+    const store = new MemoryStore(graph(legacy));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.6, mode: 'shadow' } });
+    const migrated = store.graph.purposes.ambient;
+    expect(migrated).toEqual({ profile: 'jev', fallbacks: ['small'], minConfidence: 0.8, mode: 'shadow' });
+    // doctor --fix removed both keys; the next load only updates the record.
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+    // Someone (or the revert command) writes the original values back.
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.6, mode: 'shadow' } })).resolves.toEqual({ status: 'none' });
+    expect(store.graph.purposes.ambient).toEqual(migrated);
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toMatchObject({ status: 'reverted' });
+    expect(store.graph.purposes).toEqual(legacy);
+  });
+
+  it('case B: a seeded shadow over yml active; after --fix the yml gets active back: the bot stays in shadow', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat' }, ambient: { mode: 'shadow' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+    expect(store.graph.purposes.ambient).toEqual({ mode: 'shadow' });
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST });
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } })).resolves.toEqual({ status: 'none' });
+    expect(store.graph.purposes.ambient).toEqual({ mode: 'shadow' });
+    // A really new value is still converted, normalized like at run time.
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active', minConfidence: 1.4 } }))
+      .resolves.toMatchObject({ status: 'converted', keys: ['ai.trigger.ambient.minConfidence'] });
+    expect(store.graph.purposes.ambient).toEqual({ mode: 'shadow', minConfidence: 1 });
+  });
+
+  it('does not convert while a revert is pending, so a reload during the revert cannot block it; the mark expires', async () => {
+    let now = 1_000;
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, now: () => now });
+    await expect(beginAmbientJudgeRevert({ store, rootId: 'root', now: () => now })).resolves.toBe('pending');
+    // A reload in the middle of the revert sees a new yml value: no conversion.
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' }, now: () => now })).resolves.toEqual({ status: 'none' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small' });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', now: () => now })).resolves.toMatchObject({ status: 'reverted' });
+    expect(await readAmbientJudgeMigration(store, 'root')).not.toHaveProperty('revertPending');
+    await endAmbientJudgeRevert({ store, rootId: 'root' });
+
+    // A revert that never cleared its mark stops pausing conversions after the timeout.
+    const stale = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store: stale, rootId: 'root', hostOwnerId: HOST, now: () => now });
+    await beginAmbientJudgeRevert({ store: stale, rootId: 'root', now: () => now });
+    now += AMBIENT_JUDGE_REVERT_PENDING_MS + 1;
+    await expect(migrateAmbientJudge({ store: stale, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' }, now: () => now })).resolves.toMatchObject({ status: 'converted' });
+    // endAmbientJudgeRevert clears it after a refused revert too.
+    await endAmbientJudgeRevert({ store: stale, rootId: 'root' });
+    expect(await readAmbientJudgeMigration(stale, 'root')).not.toHaveProperty('revertPending');
+  });
+
+  it('reverts a purposes.ambient seeded before the migration into the legacy fields an older version reads (N2)', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat' }, ambient: { profile: 'jev', fallbacks: ['small', 'spare'], minConfidence: 0.8, mode: 'shadow', timeoutMs: 900 } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+    const result = await revertAmbientJudgeMigration({ store, rootId: 'root' });
+    expect(result).toMatchObject({ status: 'reverted', yml: { minConfidence: 0.8, mode: 'shadow' } });
+    expect(store.graph.purposes).toEqual({ defaults: { chat: 'chat', ambient: 'small', ambientFallbacks: ['spare'] },
+      decisions: { ambient: { profile: 'jev', mode: 'active', timeoutMs: 900, minConfidence: 0.8 } } });
+    expect(store.graph.purposes.ambient).toBeUndefined();
+    expect(result.status === 'reverted' && result.lost).toEqual([expect.stringContaining('决策模型 jev 失败时换到语言模型 small')]);
+
+    // A language judge with a compared decision model becomes the old shadow; a compared language model cannot be expressed.
+    expect(reverseAmbientJudge({ profile: 'small', compare: 'jev' }, store.graph)).toMatchObject({ language: { profile: 'small' }, decision: { profile: 'jev', mode: 'shadow' }, lost: [] });
+    expect(reverseAmbientJudge({ profile: 'small', compare: 'spare' }, store.graph).lost).toEqual([expect.stringContaining('对照模型 spare')]);
+  });
 });

@@ -654,6 +654,10 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   register('GET', '/ambient-judge', async ({ lease, principal }) => lease.management.ambientJudge(principal));
   register('POST', '/ambient-judge/migration/noticed', async ({ lease, principal }) => lease.management.noticeAmbientJudgeMigration(principal));
   // `zhin ai purposes revert ambient-judge`: local CLI only (the management service checks it), audited.
+  register('POST', '/cli/purposes/revert-ambient-judge/pending', async ({ lease, principal, request }) => {
+    const body = object(await readJsonBody(request));
+    return lease.management.ambientJudgeRevertPending(principal, body.pending === true);
+  });
   register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, consolePrincipal }) => {
     const reverted = await lease.management.revertAmbientJudge(principal);
     record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',

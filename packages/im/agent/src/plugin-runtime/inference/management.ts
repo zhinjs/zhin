@@ -37,6 +37,8 @@ import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js
 import { DatabaseInferenceRepository } from './repository.js';
 import { purposeKeyEffects, type PurposeIgnoredReason } from '../../model-runtime/purpose-effect.js';
 import {
+  beginAmbientJudgeRevert,
+  endAmbientJudgeRevert,
   noticeAmbientJudgeMigration,
   readAmbientJudgeMigration,
   revertAmbientJudgeMigration,
@@ -568,6 +570,17 @@ export class InferenceManagementService {
     if (!principal.hostAdministrator) throw new InferenceManagementError('forbidden');
     const record = await noticeAmbientJudgeMigration({ store: this.options.repository, rootId: this.options.rootId });
     return Object.freeze({ ...(record?.noticedAt !== undefined ? { noticedAt: record.noticedAt } : {}) });
+  }
+  /** Start / end of `zhin ai purposes revert ambient-judge`: no yml conversion meanwhile (local CLI only). */
+  async ambientJudgeRevertPending(principal: InferenceManagementPrincipal, pending: boolean): Promise<Readonly<{ status: string }>> {
+    this.#principal(principal);
+    if (!principal.hostAdministrator || principal.environmentReferences !== 'local-cli')
+      throw new InferenceManagementError('forbidden', 'environment-local-only');
+    if (!pending) {
+      await endAmbientJudgeRevert({ store: this.options.repository, rootId: this.options.rootId });
+      return Object.freeze({ status: 'cleared' });
+    }
+    return Object.freeze({ status: await beginAmbientJudgeRevert({ store: this.options.repository, rootId: this.options.rootId }) });
   }
   /** `zhin ai purposes revert ambient-judge` (ADR 0066 D5.5): local CLI of the Host administrator only. */
   async revertAmbientJudge(principal: InferenceManagementPrincipal): Promise<AmbientJudgeRevertResult> {

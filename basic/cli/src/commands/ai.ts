@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { hostGet, hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
-import type { AmbientJudgeView } from '../utils/ambient-judge-check.js';
+import { normalizedTrigger, type AmbientJudgeView } from '../utils/ambient-judge-check.js';
 
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
@@ -207,54 +207,93 @@ const REVERT_REFUSALS: Readonly<Record<string, string>> = Object.freeze({
  * are written back first, under the configuration write lock; if that is impossible nothing is
  * reverted (M2). Run it before downgrading to a version without `purposes.ambient`.
  */
+type AmbientYml = Record<string, unknown>;
+
+function readAmbientYml(document: unknown): AmbientYml | undefined {
+  return (document as { ai?: { trigger?: { ambient?: AmbientYml } } }).ai?.trigger?.ambient;
+}
+
+/** Writes the yml keys that are absent; returns the keys written and the ones present with another value. */
+async function writeAmbientYml(configPath: string, values: Readonly<Record<string, unknown>>): Promise<Readonly<{ written: string[]; differing: string[] }>> {
+  const config = createConfigDocument(configPath);
+  const snapshot = await config.read();
+  const ambient = readAmbientYml(snapshot.document);
+  const missing = Object.keys(values).filter(key => !ambient || !Object.hasOwn(ambient, key));
+  const differing = Object.keys(values).filter(key => ambient && Object.hasOwn(ambient, key) && normalizedTrigger(key, ambient[key]) !== values[key]);
+  if (missing.length) {
+    await (await config.prepare(snapshot, missing.map(key => ({ op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value: values[key] })))).commit();
+  }
+  return { written: missing, differing };
+}
+
+async function removeAmbientYml(configPath: string, keys: readonly string[]): Promise<void> {
+  const config = createConfigDocument(configPath);
+  const snapshot = await config.read();
+  await (await config.prepare(snapshot, keys.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })))).commit();
+}
+
 export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpConfig; configPath?: string; output?: AiOutput }>): Promise<boolean> {
   const output = input.output ?? processOutput;
   const viewed = await hostGet<AmbientJudgeView>(input.client, '/ambient-judge');
   if (!viewed.ok || !viewed.data) { fail(output, viewed); return false; }
   const migration = viewed.data.migration;
   const values = migration?.status === 'migrated' ? migration.triggerValues ?? {} : {};
-  let restored: string[] = [];
-  if (Object.keys(values).length) {
-    const manual = Object.entries(values).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
-    try {
-      if (!input.configPath) throw new Error('未找到配置文件');
-      const config = createConfigDocument(input.configPath);
-      const snapshot = await config.read();
-      const ambient = (snapshot.document as { ai?: { trigger?: { ambient?: Record<string, unknown> } } }).ai?.trigger?.ambient;
-      const missing = Object.keys(values).filter(key => !ambient || !Object.hasOwn(ambient, key));
-      if (missing.length) {
-        const prepared = await config.prepare(snapshot, missing.map(key => ({ op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value: values[key] })));
-        await prepared.commit();
-        restored = missing;
+  // No yml change is converted while this runs (N1); cleared at the end whatever happens.
+  const pending = migration?.status === 'migrated';
+  if (pending) await hostPost(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: true });
+  try {
+    let restored: string[] = [];
+    if (Object.keys(values).length) {
+      const manual = Object.entries(values).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
+      try {
+        if (!input.configPath) throw new Error('未找到配置文件');
+        restored = (await writeAmbientYml(input.configPath, values)).written;
+      } catch (error) {
+        output.error(`未回退：迁移时读入的 ${manual} 已不在配置文件里，且无法写回（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
+        output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工加回 ${manual}，再重新运行本命令。`);
+        process.exitCode = 1;
+        return false;
       }
-    } catch (error) {
-      output.error(`未回退：迁移时读入的 ${manual} 已不在配置文件里，且无法写回（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
-      output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工加回 ${manual}，再重新运行本命令。`);
+    }
+    const reverted = await hostPost<{ status: 'reverted'; graphRevision: number; yml?: Record<string, unknown>; lost?: string[] } | { status: 'refused'; reason: string; path?: string }>(
+      input.client, '/cli/purposes/revert-ambient-judge', {});
+    if (!reverted.ok || !reverted.data || reverted.data.status !== 'reverted') {
+      // Nothing was reverted: take back what was written to the file above.
+      if (restored.length && input.configPath) await removeAmbientYml(input.configPath, restored).catch(() => undefined);
+      if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
+      const refusal = reverted.data as { reason: string; path?: string };
+      output.error(`未回退：${REVERT_REFUSALS[refusal.reason] ?? refusal.reason}${refusal.path ? `（位置 ${refusal.path}）` : ''}`);
       process.exitCode = 1;
       return false;
     }
-  }
-  const reverted = await hostPost<{ status: 'reverted'; graphRevision: number } | { status: 'refused'; reason: string; path?: string }>(
-    input.client, '/cli/purposes/revert-ambient-judge', {});
-  if (!reverted.ok || !reverted.data || reverted.data.status !== 'reverted') {
-    // Nothing was reverted: take back what was written to the file above.
-    if (restored.length && input.configPath) {
+    const done = reverted.data;
+    // A purposes.ambient seeded before the migration: its threshold / mode go to the yml keys an older version reads (N2).
+    const lost = [...(done.lost ?? [])];
+    if (done.yml && Object.keys(done.yml).length) {
       try {
-        const config = createConfigDocument(input.configPath);
-        const snapshot = await config.read();
-        await (await config.prepare(snapshot, restored.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })))).commit();
-      } catch { /* The keys stay; they no longer apply after the migration. */ }
+        if (!input.configPath) throw new Error('未找到配置文件');
+        const { written, differing } = await writeAmbientYml(input.configPath, done.yml);
+        restored = [...restored, ...written];
+        for (const key of differing) lost.push(`ai.trigger.ambient.${key} 应为 ${JSON.stringify(done.yml[key])}（配置文件里是另一个值）`);
+      } catch {
+        for (const [key, value] of Object.entries(done.yml)) lost.push(`ai.trigger.ambient.${key}: ${JSON.stringify(value)}（无法写入配置文件）`);
+      }
     }
-    if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
-    const refusal = reverted.data as { reason: string; path?: string };
-    output.error(`未回退：${REVERT_REFUSALS[refusal.reason] ?? refusal.reason}${refusal.path ? `（位置 ${refusal.path}）` : ''}`);
-    process.exitCode = 1;
-    return false;
+    output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${done.graphRevision}）。`);
+    if (restored.length) output.log(`已把 ${restored.map(key => `ai.trigger.ambient.${key}`).join('、')} 写回配置文件。`);
+    if (lost.length) {
+      output.error('以下设置旧版本无法读取，降级后它们会失效或行为不同：');
+      for (const line of lost) output.error(`  · ${line}`);
+      output.error('降级前请手工处理：在 zhin.config.yml 的 ai.trigger.ambient 下补上上面列出的值，或在 Console 改成旧版本能表达的配置后再回退；处理完之前不要降级。');
+      process.exitCode = 1;
+      return true;
+    }
+    output.log('现在可以降级到旧版本。');
+    output.log('不降级时，当前版本会按旧写法换算运行，行为不变；在 Console「插话判断」保存一次即改回新写法。');
+    return true;
+  } finally {
+    if (pending) await hostPost(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: false }).catch(() => undefined);
   }
-  output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${reverted.data.graphRevision}）。现在可以降级到旧版本。`);
-  if (restored.length) output.log(`已把 ${restored.map(key => `ai.trigger.ambient.${key}`).join('、')} 写回配置文件。`);
-  output.log('不降级时，当前版本会按旧写法换算运行，行为不变；在 Console「插话判断」保存一次即改回新写法。');
-  return true;
 }
 
 async function requireLocal(root: string): Promise<HostHttpConfig | undefined> {

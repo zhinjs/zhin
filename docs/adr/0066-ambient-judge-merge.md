@@ -283,4 +283,7 @@ Console 前端在 zhinjs/console（ADR 0052）。本仓库提供 P1–P3 的数�
 14. **没有 `gate` 的判断**：自定义判断器给出的结果不带 `gate` 时，`AmbientEngagement` 回退读已废弃的 `ai.trigger.ambient.minConfidence` / `mode`，不会比以前多插话；直接构造 `DecisionEngagementJudge({ policy: { minConfidence } })` 的旧调用方仍在判断器内按它把关。判断器链不设这两项，所以门槛只判一次。
 15. **不兼容的类型变化**（已批准的 minor）：`EngagementJudgment.source` 由字符串改为对象（改读 `sourceLabel` 或 `source.kind` / `source.profile`），无法在不破坏类型的前提下同时保留字符串；`DecisionPurpose`、`InferencePurpose` 的 `decision:ambient`、`DecisionTask` / `DECISION_TASKS` 去掉 `ambient`；`PurposeIgnoredReason`、`ProviderErrorKind`、`ModelFallbackReason` 新增成员（穷举这些联合类型的代码要补分支）。迁移路径写在 changeset 里。
 16. **迁移记录的并发**：`noticedAt` 用带期望 revision、且要求状态仍为 `migrated` 的 CAS 写入，与回退并发时回退优先；失败记录也只在记录没变时写入。
+17. **写回原值不算新写入**：yml 里出现的值与迁移时读入的值（`triggerValues`，已按 D5 表折算进 `after`）相同，或与已处理过的值（`triggerSeen`）相同，都不转换；两边都按运行时规则规范化后比较（`minConfidence` 截到 0..1，`mode` 只认 `active` / `shadow`）。回退命令开始时在迁移记录上做 CAS 写入 `revertPending`，期间暂停转换，结束时无论成败都清除；标记 10 分钟后失效，避免 CLI 中断后一直卡住。
+18. **seed 过的 `purposes.ambient` 也能回退给旧版本**：迁移前已存在的 `purposes.ambient` 按 D5 表反向换成旧字段（决策主项 → 启用的 `decisions.ambient`，其语言备用 → 语言用途；决策对照 → 「仅评估」的 `decisions.ambient`），门槛和模式由 CLI 写入 yml 的 `ai.trigger.ambient`。旧写法表达不了的部分（备用链里的决策模型、语言对照模型、决策启用时还设了对照、决策失败时换语言模型）列在回退结果里；有这类内容时 CLI 明确说旧版本无法读取、给出手工步骤，不提示「可以降级」。
+19. **doctor 的「已处理」判断**：按 `triggerSeen`（及迁移读入的 `triggerValues`）的键和规范化后的值判断，而不是只看 `triggerKeys`；迁移后新写入、已被转换过的键也算已处理。
 

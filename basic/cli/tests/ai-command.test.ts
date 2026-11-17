@@ -138,7 +138,14 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
       : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 7 } } });
     const out = output();
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(true);
-    expect(requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge', '/api/agent/inference/cli/purposes/revert-ambient-judge']);
+    // The pending mark brackets the revert (N1): set first, cleared last.
+    expect(requests.map(request => [request.path, request.body])).toEqual([
+      ['/api/agent/inference/ambient-judge', {}],
+      ['/api/agent/inference/cli/purposes/revert-ambient-judge/pending', { pending: true }],
+      ['/api/agent/inference/cli/purposes/revert-ambient-judge', {}],
+      ['/api/agent/inference/cli/purposes/revert-ambient-judge/pending', { pending: false }],
+    ]);
+    expect(out.lines.join('\n')).toContain('现在可以降级');
     expect(out.lines.join('\n')).toContain('修订号 7');
     expect(process.exitCode).toBeUndefined();
   });
@@ -163,7 +170,9 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
     const unwritable = client(() => view);
     const out = output();
     expect(await runRevertAmbientJudge({ client: unwritable.config, output: out.sink })).toBe(false);
-    expect(unwritable.requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge']);
+    // No revert was asked; the pending mark was set and cleared.
+    expect(unwritable.requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge',
+      '/api/agent/inference/cli/purposes/revert-ambient-judge/pending', '/api/agent/inference/cli/purposes/revert-ambient-judge/pending']);
     expect(out.errors.join('\n')).toContain('手工加回 ai.trigger.ambient.mode: "shadow"');
     process.exitCode = undefined;
     const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
@@ -174,6 +183,8 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
       const refused = client(path => path.endsWith('/ambient-judge') ? view : { status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } });
       expect(await runRevertAmbientJudge({ client: refused.config, configPath: file, output: output().sink })).toBe(false);
       expect(await readFile(file, 'utf8')).not.toContain('mode');
+      // The pending mark is cleared after a refused revert too.
+      expect(refused.requests.at(-1)).toEqual({ path: '/api/agent/inference/cli/purposes/revert-ambient-judge/pending', body: { pending: false } });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 
@@ -184,5 +195,23 @@ describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(false);
     expect(out.errors.join('\n')).toContain('被修改过');
     expect(process.exitCode).toBe(1);
+  });
+
+  it('writes the seeded threshold / mode to the yml and, when something cannot be expressed, does not say a downgrade is safe (N2)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
+    try {
+      const file = join(dir, 'zhin.config.yml');
+      await writeFile(file, 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n');
+      const { config } = client(path => path.endsWith('/ambient-judge')
+        ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1 } } } }
+        : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 4, yml: { mode: 'shadow' }, lost: ['对照模型 spare（旧版本只能用决策模型陪跑）'] } } });
+      const out = output();
+      expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
+      expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+      expect(out.errors.join('\n')).toContain('旧版本无法读取');
+      expect(out.errors.join('\n')).toContain('对照模型 spare');
+      expect(out.lines.join('\n')).not.toContain('可以降级');
+      expect(process.exitCode).toBe(1);
+    } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });
