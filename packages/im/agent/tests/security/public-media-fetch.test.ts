@@ -58,6 +58,30 @@ describe('fetchPublicMediaBytes (#1250 第 45 批 speech-url-ssrf)', () => {
     expect(requestBytes).not.toHaveBeenCalled();
   });
 
+  it.each([
+    // NAT64 (well-known and local-use), 6to4, Teredo, IPv4-compatible, site-local, discard: all reach
+    // an IPv4 or internal target and sit outside global unicast.
+    'https://[64:ff9b::a9fe:a9fe]/a.ogg',
+    'https://[64:ff9b:1::a00:1]/a.ogg',
+    'https://[2002:a9fe:a9fe::]/a.ogg',
+    'https://[2001:0:4136:e378:8000:63bf:f5ff:fffe]/a.ogg',
+    'https://[::7f00:1]/a.ogg',
+    'https://[fec0::1]/a.ogg',
+    'https://[100::1]/a.ogg',
+    'https://168.63.129.16/a.ogg',
+  ])('refuses the IPv4-embedding or host-internal literal %s without connecting', async (url) => {
+    const { transport, requestBytes } = fakeTransport({});
+    await expect(fetchPublicMediaBytes(url, { maxBytes: 1024, transport }))
+      .resolves.toMatchObject({ ok: false, code: 'blocked' });
+    expect(requestBytes).not.toHaveBeenCalled();
+  });
+
+  it('refuses a name whose only address is a NAT64 address of the metadata endpoint', async () => {
+    lookup.mockResolvedValue([{ address: '64:ff9b::a9fe:a9fe', family: 6 }]);
+    await expect(fetchPublicMediaBytes('https://voice.example/a.ogg', { maxBytes: 1024, transport: new NodeNetworkTransport() }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: 'voice.example' });
+  });
+
   it('refuses a public-looking name that resolves to a private address, on the address the connection would use', async () => {
     lookup.mockResolvedValue([{ address: '10.0.0.7', family: 4 }]);
     const transport = new NodeNetworkTransport();

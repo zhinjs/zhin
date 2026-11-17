@@ -4,7 +4,7 @@
  * Moved from `@zhin.js/agent` (`security/network-policy.ts`, which re-exports them) so that the IM
  * core and adapters can apply the same rules without importing the Agent layer (#1250 第 46 批).
  */
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
 export function isBlockedSsrfHostname(hostname: string): boolean {
@@ -37,11 +37,28 @@ export function isBlockedSsrfHostname(hostname: string): boolean {
   );
 }
 
+/** Host-internal endpoints inside otherwise public IPv4 space (Azure WireServer). */
+const HOST_INTERNAL_IPV4: ReadonlySet<string> = new Set(['168.63.129.16']);
+
+/**
+ * IPv6 is an allow-list: only global unicast (2000::/3) is public, minus the ranges inside it that
+ * embed or tunnel to an IPv4 address or are not routable. Everything outside 2000::/3 — NAT64
+ * `64:ff9b::/96` and `64:ff9b:1::/48`, IPv4-compatible `::/96`, site-local `fec0::/10`, discard
+ * `100::/64`, ULA, link-local, multicast — is refused (#1250 第 45 批).
+ */
+const GLOBAL_IPV6 = new BlockList();
+GLOBAL_IPV6.addSubnet('2000::', 3, 'ipv6');
+const SPECIAL_GLOBAL_IPV6 = new BlockList();
+for (const [base, bits] of [
+  // Teredo, benchmarking, ORCHID, documentation, 6to4, documentation (RFC 9637).
+  ['2001::', 32], ['2001:2::', 48], ['2001:10::', 28], ['2001:db8::', 32], ['2002::', 16], ['3fff::', 20],
+] as const) SPECIAL_GLOBAL_IPV6.addSubnet(base, bits, 'ipv6');
+
 export function isBlockedIpAddress(address: string): boolean {
   const normalized = address.toLowerCase().replace(/^\[|\]$/g, '');
   if (isIP(normalized) === 4) {
     const octets = normalized.split('.').map(Number);
-    const [a, b] = octets;
+    const [a, b, c] = octets;
     return a === 0
       || a === 10
       || a === 127
@@ -49,9 +66,13 @@ export function isBlockedIpAddress(address: string): boolean {
       || (a === 169 && b === 254)
       || (a === 172 && b! >= 16 && b! <= 31)
       || (a === 192 && b === 0)
+      || (a === 192 && b === 88 && c === 99)
       || (a === 192 && b === 168)
       || (a === 198 && (b === 18 || b === 19))
-      || a! >= 224;
+      || (a === 198 && b === 51 && c === 100)
+      || (a === 203 && b === 0 && c === 113)
+      || a! >= 224
+      || HOST_INTERNAL_IPV4.has(normalized);
   }
   if (isIP(normalized) === 6) {
     if (normalized === '::' || normalized === '::1') return true;
@@ -69,9 +90,7 @@ export function isBlockedIpAddress(address: string): boolean {
       const low = Number.parseInt(mappedHex[2]!, 16);
       return isBlockedIpAddress([high >>> 8, high & 255, low >>> 8, low & 255].join('.'));
     }
-    return /^(?:fc|fd)/i.test(canonical)
-      || /^fe[89ab]/i.test(canonical)
-      || /^ff/i.test(canonical);
+    return !GLOBAL_IPV6.check(canonical, 'ipv6') || SPECIAL_GLOBAL_IPV6.check(canonical, 'ipv6');
   }
   return true;
 }
