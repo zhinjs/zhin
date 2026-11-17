@@ -10,14 +10,16 @@
  *   address between the check and the connection;
  * - redirects are followed by hand and every hop is checked again; a redirect from https to http is
  *   always refused, http to http only with `allowHttp`;
- * - the body is capped at `maxBytes` and the whole download at `timeoutMs`.
+ * - the body is capped at `maxBytes` and the whole download (DNS included) at `timeoutMs`;
+ * - caller `headers` go only to the origin of the first URL: a redirect to another scheme, host or
+ *   port drops them, so an `Authorization` meant for one server never reaches the next.
  *
  * There is no allow-list for private hosts. `allowedDomains` only narrows the public hosts further.
  *
  * Moved from `@zhin.js/agent` (which re-exports it) so the IM core can offer it to adapters.
  */
 import { checkUrlNetworkAccess, NetworkAccessDeniedError } from './ssrf.js';
-import { NodeNetworkTransport, type NetworkTransport } from './pinned-transport.js';
+import { NodeNetworkTransport, raceAbort, type NetworkTransport } from './pinned-transport.js';
 
 export const PUBLIC_MEDIA_FETCH_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_REDIRECTS = 5;
@@ -37,7 +39,10 @@ export interface PublicMediaFetchOptions {
   readonly signal?: AbortSignal;
   /** When non-empty, every hop must also match one of these domains (or a subdomain). */
   readonly allowedDomains?: readonly string[];
-  /** Extra request headers (e.g. `Range`); sent to every hop. */
+  /**
+   * Extra request headers (e.g. `Range`). Sent only to hops with the same origin (scheme + host +
+   * port) as `url`; a cross-origin redirect drops them.
+   */
   readonly headers?: Readonly<Record<string, string>>;
   /** Replaces the pinned Node transport (tests). */
   readonly transport?: NetworkTransport;
@@ -79,6 +84,7 @@ export async function fetchPublicMediaBytes(
   if (!transport.requestBytes) return withHost('failed', url);
   let current = url.trim();
   let previousProtocol: string | undefined;
+  let firstOrigin: string | undefined;
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
     const allowedDomains = [...(options.allowedDomains ?? [])];
     if (!checkUrlNetworkAccess(current, { httpsOnly: options.allowHttp !== true, allowedDomains }).allowed) {
@@ -88,10 +94,13 @@ export async function fetchPublicMediaBytes(
     // Never downgrade: once a hop was https, an http hop would expose the download in clear text.
     if (previousProtocol === 'https:' && parsed.protocol !== 'https:') return withHost('blocked', current);
     previousProtocol = parsed.protocol;
+    firstOrigin ??= parsed.origin;
+    const headers = parsed.origin === firstOrigin ? (options.headers ?? {}) : {};
     let response: Awaited<ReturnType<NonNullable<NetworkTransport['requestBytes']>>>;
     try {
       signal.throwIfAborted();
-      response = await transport.requestBytes(parsed, options.headers ?? {}, signal, options.maxBytes);
+      // Bound the hop by the deadline even if a transport ignores the signal (a slow resolver, L1).
+      response = await raceAbort(transport.requestBytes(parsed, headers, signal, options.maxBytes), signal);
     } catch (error) {
       if (error instanceof NetworkAccessDeniedError) return withHost('blocked', current);
       if (error instanceof Error && /exceeds \d+ bytes/u.test(error.message)) return withHost('too_large', current);

@@ -12,7 +12,9 @@
  *   that was checked (DNS pinning — no rebinding between check and connect);
  * - redirects are followed by hand and every hop is checked again;
  * - the body is capped (`maxBytes`, default {@link DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES}) and the
- *   whole download is bounded by `timeoutMs` (default 30 s).
+ *   whole download — waiting for a slot and DNS included — is bounded by `timeoutMs` (default 30 s);
+ * - at most {@link OUTBOUND_MEDIA_MAX_CONCURRENT} downloads run at once on this host; the rest wait
+ *   in order, and a waiting request still honours its signal and deadline.
  *
  * A refused URL throws {@link OutboundMediaFetchError} with `refused === true`; the adapter replaces
  * that media with {@link outboundMediaNotice} and still sends the rest of the message. The refusal is
@@ -33,6 +35,53 @@ import type { Locale } from '@zhin.js/plugin-runtime';
 import { DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES } from './outbound-media-trust.js';
 
 export const OUTBOUND_MEDIA_FETCH_TIMEOUT_MS = 30_000;
+/** Downloads that may run at once on this host, across every adapter (#1250 第 46 批 L1). */
+export const OUTBOUND_MEDIA_MAX_CONCURRENT = 8;
+
+/** FIFO slots; a waiter whose signal aborts leaves the queue and rejects with the signal's reason. */
+class DownloadSlots {
+  #active = 0;
+  readonly #waiting: Array<{ readonly grant: () => void }> = [];
+
+  constructor(readonly limit: number) {}
+
+  async acquire(signal: AbortSignal): Promise<() => void> {
+    signal.throwIfAborted();
+    if (this.#active < this.limit) {
+      this.#active += 1;
+      return this.#releaser();
+    }
+    await new Promise<void>((resolve, reject) => {
+      const waiter = {
+        grant: () => {
+          signal.removeEventListener('abort', onAbort);
+          this.#active += 1;
+          resolve();
+        },
+      };
+      const onAbort = () => {
+        const index = this.#waiting.indexOf(waiter);
+        if (index >= 0) this.#waiting.splice(index, 1);
+        reject(signal.reason ?? new Error('The operation was aborted'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      this.#waiting.push(waiter);
+    });
+    return this.#releaser();
+  }
+
+  #releaser(): () => void {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.#active -= 1;
+      this.#waiting.shift()?.grant();
+    };
+  }
+}
+
+const sharedSlots = new DownloadSlots(OUTBOUND_MEDIA_MAX_CONCURRENT);
 
 /**
  * - `outbound_media_url_blocked`: not a public HTTPS target (scheme, host, resolved address or a redirect hop);
@@ -59,17 +108,27 @@ export class OutboundMediaFetchError extends Error {
   readonly host?: string;
   readonly status?: number;
 
-  constructor(code: OutboundMediaFetchCode, details: { readonly host?: string; readonly status?: number } = {}) {
+  readonly #refused: boolean;
+
+  constructor(
+    code: OutboundMediaFetchCode,
+    details: { readonly host?: string; readonly status?: number; readonly refused?: boolean } = {},
+  ) {
     super(`${code}${details.host ? ` (${details.host})` : ''}${details.status !== undefined ? ` HTTP ${details.status}` : ''}`);
     this.name = 'OutboundMediaFetchError';
     this.code = code;
     if (details.host) this.host = details.host;
     if (details.status !== undefined) this.status = details.status;
+    this.#refused = details.refused
+      ?? (code === 'outbound_media_url_blocked' || code === 'outbound_media_too_large');
   }
 
-  /** Refused by policy (address or size): replace the media with a notice and send the rest. */
+  /**
+   * Refused by policy (address or size): replace the media with a notice and send the rest. An
+   * oversize body in a `probe` download is not a refusal (the server ignored `Range`).
+   */
   get refused(): boolean {
-    return this.code === 'outbound_media_url_blocked' || this.code === 'outbound_media_too_large';
+    return this.#refused;
   }
 }
 
@@ -87,6 +146,13 @@ export interface OutboundMediaFetchOptions {
   readonly headers?: Readonly<Record<string, string>>;
   /** Short label for logs, e.g. the adapter name. Never a user value. */
   readonly source?: string;
+  /**
+   * A best-effort read of the first `maxBytes` (e.g. an image-size probe with `Range`). A body over
+   * `maxBytes` — a server that ignored `Range` and sent the whole file — is then an ordinary failure:
+   * `outbound_media_too_large` with `refused === false`, logged at debug instead of warn. Address
+   * refusals are unchanged.
+   */
+  readonly probe?: boolean;
 }
 
 export interface OutboundMediaFetched {
@@ -107,6 +173,11 @@ export interface OutboundMediaFetcherOptions {
   readonly lookup?: NetworkAddressLookup;
   /** Replaces the pinned request of the pinned transport (tests); it receives the checked address. */
   readonly connect?: PinnedAddressConnect;
+  /**
+   * Downloads this fetcher may run at once. Omitted: the host-wide limit
+   * ({@link OUTBOUND_MEDIA_MAX_CONCURRENT}, shared with every other fetcher that omits it).
+   */
+  readonly maxConcurrent?: number;
 }
 
 const logger = getLogger('im.outbound');
@@ -118,33 +189,64 @@ export function createOutboundMediaFetcher(options: OutboundMediaFetcherOptions 
       ...(options.connect ? { connect: options.connect } : {}),
     })
     : undefined);
+  const slots = options.maxConcurrent !== undefined
+    ? new DownloadSlots(Math.max(1, Math.floor(options.maxConcurrent)))
+    : sharedSlots;
   return async (url, fetchOptions = {}) => {
     fetchOptions.signal?.throwIfAborted();
-    const result = await fetchPublicMediaBytes(url, {
-      maxBytes: fetchOptions.maxBytes ?? DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES,
-      timeoutMs: fetchOptions.timeoutMs ?? OUTBOUND_MEDIA_FETCH_TIMEOUT_MS,
-      ...(fetchOptions.signal ? { signal: fetchOptions.signal } : {}),
-      ...(fetchOptions.headers ? { headers: fetchOptions.headers } : {}),
-      ...(transport ? { transport } : {}),
-    });
+    const timeoutMs = fetchOptions.timeoutMs ?? OUTBOUND_MEDIA_FETCH_TIMEOUT_MS;
+    // One deadline for the wait in the queue and the download itself.
+    const deadline = AbortSignal.timeout(timeoutMs);
+    const signal = fetchOptions.signal ? AbortSignal.any([fetchOptions.signal, deadline]) : deadline;
+    let release: () => void;
+    try {
+      release = await slots.acquire(signal);
+    } catch (error) {
+      fetchOptions.signal?.throwIfAborted();
+      if (deadline.aborted) throw new OutboundMediaFetchError('outbound_media_fetch_failed', hostDetails(url));
+      throw error;
+    }
+    let result: Awaited<ReturnType<typeof fetchPublicMediaBytes>>;
+    try {
+      result = await fetchPublicMediaBytes(url, {
+        maxBytes: fetchOptions.maxBytes ?? DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES,
+        timeoutMs,
+        signal,
+        ...(fetchOptions.headers ? { headers: fetchOptions.headers } : {}),
+        ...(transport ? { transport } : {}),
+      });
+    } finally {
+      release();
+    }
     if (result.ok) {
       return Object.freeze({ bytes: result.bytes, ...(result.mimeType ? { mimeType: result.mimeType } : {}), url: result.url });
     }
     // A caller cancellation stays a cancellation, not a media failure.
     fetchOptions.signal?.throwIfAborted();
+    const probeOversize = fetchOptions.probe === true && result.code === 'too_large';
     const error = new OutboundMediaFetchError(CODES[result.code], {
       ...(result.host ? { host: result.host } : {}),
       ...(result.status !== undefined ? { status: result.status } : {}),
+      ...(probeOversize ? { refused: false } : {}),
     });
-    if (error.refused) {
-      logger.warn(formatCompact({
-        op: error.code,
-        ...(fetchOptions.source ? { source: fetchOptions.source } : {}),
-        ...(error.host ? { host: error.host } : {}),
-      }));
-    }
+    const line = formatCompact({
+      op: error.code,
+      ...(fetchOptions.source ? { source: fetchOptions.source } : {}),
+      ...(error.host ? { host: error.host } : {}),
+    });
+    if (error.refused) logger.warn(line);
+    else if (probeOversize) logger.debug(line);
     throw error;
   };
+}
+
+function hostDetails(url: string): { readonly host?: string } {
+  try {
+    const host = new URL(url).hostname;
+    return host ? { host } : {};
+  } catch {
+    return {};
+  }
 }
 
 /** The default fetcher: pinned Node transport. Adapters use it unless a test injects another. */

@@ -162,3 +162,83 @@ describe('fetchOutboundMedia (#1250 第 46 批 outbound-media-ssrf)', () => {
     expect(outboundMediaNotice('sticker')).toBe('[附件未发送：媒体地址不被允许]');
   });
 });
+
+describe('fetchOutboundMedia — deadline, concurrency and probes (#1250 第 46 批 L1 / L7)', () => {
+  it('fails within the deadline when the resolver hangs', async () => {
+    const lookup = vi.fn(() => new Promise<never>(() => undefined));
+    const connect = vi.fn();
+    const fetchMedia = createOutboundMediaFetcher({ lookup, connect, maxConcurrent: 1 });
+    const started = Date.now();
+    const error = await refusal(fetchMedia('https://slow-dns.example/a.png', { timeoutMs: 200 }));
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(error.code).toBe('outbound_media_fetch_failed');
+    expect(error.refused).toBe(false);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('runs at most maxConcurrent downloads at once and starts the next as one finishes', async () => {
+    let active = 0;
+    let peak = 0;
+    const gates: Array<() => void> = [];
+    const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    const connect = vi.fn(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise<void>(resolve => gates.push(resolve));
+      active -= 1;
+      return { status: 200, statusText: 'OK', headers: {}, body: PNG };
+    });
+    const fetchMedia = createOutboundMediaFetcher({ lookup, connect, maxConcurrent: 2 });
+    const downloads = Array.from({ length: 5 }, (_, index) => fetchMedia(`https://cdn.example/${index}.png`));
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+    gates.shift()!();
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(3));
+    while (connect.mock.calls.length < 5 || gates.length > 0) {
+      await vi.waitFor(() => expect(gates.length).toBeGreaterThan(0));
+      gates.shift()!();
+    }
+    await expect(Promise.all(downloads)).resolves.toHaveLength(5);
+    expect(peak).toBe(2);
+  });
+
+  it('a queued request honours its signal and deadline and never connects', async () => {
+    const release: Array<() => void> = [];
+    const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    const connect = vi.fn(async () => {
+      await new Promise<void>(resolve => release.push(resolve));
+      return { status: 200, statusText: 'OK', headers: {}, body: PNG };
+    });
+    const fetchMedia = createOutboundMediaFetcher({ lookup, connect, maxConcurrent: 1 });
+    const first = fetchMedia('https://cdn.example/first.png');
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    const controller = new AbortController();
+    const cancelled = fetchMedia('https://cdn.example/cancelled.png', { signal: controller.signal });
+    const timedOut = fetchMedia('https://cdn.example/late.png', { timeoutMs: 100 });
+    controller.abort(new Error('stop'));
+    await expect(cancelled).rejects.toThrow('stop');
+    const late = await refusal(timedOut);
+    expect(late.code).toBe('outbound_media_fetch_failed');
+    expect(late.host).toBe('cdn.example');
+    release.shift()!();
+    await expect(first).resolves.toMatchObject({ url: 'https://cdn.example/first.png' });
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('a probe whose server ignored Range is not a refusal and is logged at debug, not warn', async () => {
+    const warn = vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const debug = vi.spyOn(getLogger('im.outbound'), 'debug').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34' }, {
+      'https://cdn.example/whole.png': { status: 200, body: new Uint8Array(64) },
+    });
+    const probe = await refusal(net.fetchMedia('https://cdn.example/whole.png', { maxBytes: 16, probe: true, source: 'qq' }));
+    expect(probe.code).toBe('outbound_media_too_large');
+    expect(probe.refused).toBe(false);
+    expect(isOutboundMediaRefused(probe)).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+    expect(String(debug.mock.calls[0]?.[0])).toContain('outbound_media_too_large');
+    // Address refusals stay refusals (and warnings) even for a probe.
+    const blocked = await refusal(net.fetchMedia('https://169.254.169.254/a.png', { probe: true }));
+    expect(blocked.refused).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});

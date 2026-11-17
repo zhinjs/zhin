@@ -88,9 +88,11 @@ export class NodeNetworkTransport implements NetworkTransport {
     maxBytes: number,
   ): Promise<Omit<NetworkBinaryResponse, 'url'>> {
     const host = bareUrlHost(url);
+    signal.throwIfAborted();
+    // A resolver that answers slowly on purpose must not outlive the caller's deadline (#1250 第 46 批 L1).
     const addresses = isIP(host)
       ? [{ address: host, family: isIP(host) }]
-      : await this.#lookup(host);
+      : await raceAbort(this.#lookup(host), signal);
     if (addresses.length === 0) throw new Error(`DNS returned no address for ${url.hostname}`);
     for (const entry of addresses) {
       if (isBlockedSsrfHostname(entry.address)) {
@@ -107,48 +109,122 @@ export function bareUrlHost(url: URL): string {
   return url.hostname.replace(/^\[|\]$/g, '');
 }
 
-async function requestPinnedAddress(
-  url: URL,
-  address: string,
-  headers: Readonly<Record<string, string>>,
-  signal: AbortSignal,
-  maxBytes: number,
-): Promise<Omit<NetworkBinaryResponse, 'url'>> {
-  const send = (url.protocol === 'https:' ? (await import('node:https')).request : (await import('node:http')).request) as typeof http.request;
-  return new Promise((resolve, reject) => {
-    const request = send({
-      protocol: url.protocol,
-      hostname: address,
-      port: url.port || undefined,
-      path: `${url.pathname}${url.search}`,
-      method: 'GET',
-      headers: { ...headers, Host: url.host, 'Accept-Encoding': 'identity' },
-      signal,
-      ...(url.protocol === 'https:' && !isIP(bareUrlHost(url)) ? { servername: bareUrlHost(url) } : {}),
-    }, (response) => {
-      const chunks: Buffer[] = [];
-      let size = 0;
-      response.on('data', (chunk: Buffer | string) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        size += buffer.length;
-        if (size > maxBytes) {
-          response.destroy(new Error(`Network response exceeds ${maxBytes} bytes`));
-          return;
-        }
-        chunks.push(buffer);
-      });
-      response.once('error', reject);
-      response.once('end', () => resolve(Object.freeze({
-        status: response.statusCode ?? 0,
-        statusText: response.statusMessage ?? '',
-        headers: Object.freeze(normalizeHeaders(response.headers)),
-        body: Buffer.concat(chunks),
-      })));
-    });
-    request.once('error', reject);
-    request.end();
+/** SNI carries a host name without the trailing root dot (RFC 6066 §3); `media.example.` → `media.example`. */
+function sniHostName(url: URL): string | undefined {
+  const host = bareUrlHost(url);
+  if (isIP(host)) return undefined;
+  const name = host.replace(/\.+$/u, '');
+  return name || undefined;
+}
+
+/** Settle with `promise`, or reject as soon as `signal` aborts (the work itself may keep running). */
+export function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    promise.catch(() => undefined);
+    return Promise.reject(abortReason(signal));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
   });
 }
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new Error('The operation was aborted');
+}
+
+/**
+ * TLS settings for the pinned request. Internal (not exported from the package root): tests pass the
+ * certificate of a local server as `ca`; production always uses the default trust store.
+ */
+export interface PinnedAddressTlsOptions {
+  readonly ca?: string | Buffer;
+}
+
+/**
+ * The pinned Node request: connects to `address` (already checked), sends `Host` and SNI for the URL's
+ * host name so TLS still verifies the certificate against that name. Internal; exported from this
+ * module for the kernel / agent integration tests only.
+ */
+export function createPinnedAddressConnect(tls: PinnedAddressTlsOptions = {}): PinnedAddressConnect {
+  return async (url, address, headers, signal, maxBytes) => {
+    signal.throwIfAborted();
+    const send = (url.protocol === 'https:' ? (await import('node:https')).request : (await import('node:http')).request) as typeof http.request;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+        // Stop reading and drop the connection; the promise is already settled.
+        try {
+          request.destroy();
+        } catch {
+          // already destroyed
+        }
+      };
+      const onAbort = () => fail(abortReason(signal));
+      const servername = url.protocol === 'https:' ? sniHostName(url) : undefined;
+      const request = send({
+        protocol: url.protocol,
+        hostname: address,
+        port: url.port || undefined,
+        path: `${url.pathname}${url.search}`,
+        method: 'GET',
+        headers: { ...headers, Host: url.host, 'Accept-Encoding': 'identity' },
+        signal,
+        ...(servername ? { servername } : {}),
+        ...(tls.ca !== undefined ? { ca: tls.ca } : {}),
+      }, (response) => {
+        const declared = Number(response.headers['content-length']);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          fail(new Error(`Network response exceeds ${maxBytes} bytes`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        response.on('data', (chunk: Buffer | string) => {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          size += buffer.length;
+          if (size > maxBytes) {
+            fail(new Error(`Network response exceeds ${maxBytes} bytes`));
+            return;
+          }
+          chunks.push(buffer);
+        });
+        response.once('error', fail);
+        response.once('aborted', () => fail(new Error('Network response ended before the declared length')));
+        response.once('end', () => {
+          if (settled) return;
+          // A body shorter than its Content-Length is a truncated download, not media.
+          if (response.complete === false || (Number.isFinite(declared) && size !== declared)) {
+            fail(new Error('Network response ended before the declared length'));
+            return;
+          }
+          settled = true;
+          signal.removeEventListener('abort', onAbort);
+          resolve(Object.freeze({
+            status: response.statusCode ?? 0,
+            statusText: response.statusMessage ?? '',
+            headers: Object.freeze(normalizeHeaders(response.headers)),
+            body: Buffer.concat(chunks),
+          }));
+        });
+      });
+      signal.addEventListener('abort', onAbort, { once: true });
+      request.once('error', fail);
+      request.end();
+    });
+  };
+}
+
+/** The production pinned request (default trust store). Internal; see {@link createPinnedAddressConnect}. */
+export const requestPinnedAddress: PinnedAddressConnect = createPinnedAddressConnect();
 
 function normalizeHeaders(headers: http.IncomingHttpHeaders): Record<string, string> {
   return Object.fromEntries(Object.entries(headers).flatMap(([name, value]) => {
