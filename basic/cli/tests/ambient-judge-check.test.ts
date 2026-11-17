@@ -62,6 +62,22 @@ describe('retired ai.trigger.ambient keys (H1)', () => {
     }, 'ai:\n  trigger:\n    ambient:\n      mode: shadow\n');
   });
 
+  it('case C: the original shadow written back after the old Console switched to active is a pending write, not settled (R1)', async () => {
+    const view = { policy: { mode: 'active' }, migration: { status: 'migrated' as const, at: 1, triggerKeys: ['ai.trigger.ambient.mode'],
+      triggerValues: { mode: 'shadow' }, triggerSeen: { mode: 'active' }, after: { profile: 'small', mode: 'shadow' } } };
+    await withYml(async file => {
+      const result = await checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view });
+      expect(result).toMatchObject({ status: 'warn', message: expect.stringContaining('迁移之后写入') });
+      expect(await readFile(file, 'utf8')).toContain('mode: shadow');
+    }, 'ai:\n  trigger:\n    ambient:\n      mode: shadow\n');
+    // While the stored judge still holds the migration's value, the original value is settled.
+    const unchanged = { ...view, policy: { mode: 'shadow' } };
+    await withYml(async file => {
+      await expect(checkRetiredAmbientTriggerKeys({ configPath: file, label: 'zhin.config.yml', fix: true, view: { ...unchanged, migration: { ...unchanged.migration, triggerSeen: {} } } }))
+        .resolves.toMatchObject({ status: 'ok' });
+    }, 'ai:\n  trigger:\n    ambient:\n      mode: shadow\n');
+  });
+
   it('keeps a key written after the migration (the next load converts it) and removes only the settled one', async () => {
     const view = { migration: { ...migratedView.migration, triggerKeys: ['ai.trigger.ambient.minConfidence'], triggerValues: { minConfidence: 0.8 }, triggerSeen: { minConfidence: 0.8 } } };
     await withYml(async file => {

@@ -583,11 +583,11 @@ export class InferenceManagementService {
     return Object.freeze({ status: await beginAmbientJudgeRevert({ store: this.options.repository, rootId: this.options.rootId }) });
   }
   /** `zhin ai purposes revert ambient-judge` (ADR 0066 D5.5): local CLI of the Host administrator only. */
-  async revertAmbientJudge(principal: InferenceManagementPrincipal): Promise<AmbientJudgeRevertResult> {
+  async revertAmbientJudge(principal: InferenceManagementPrincipal, options: Readonly<{ dryRun?: boolean }> = {}): Promise<AmbientJudgeRevertResult> {
     this.#principal(principal);
     if (!principal.hostAdministrator || principal.environmentReferences !== 'local-cli')
       throw new InferenceManagementError('forbidden', 'environment-local-only');
-    return revertAmbientJudgeMigration({ store: this.options.repository, rootId: this.options.rootId });
+    return revertAmbientJudgeMigration({ store: this.options.repository, rootId: this.options.rootId, ...(options.dryRun ? { dryRun: true } : {}) });
   }
   /**
    * `zhin ai account add` (#1250 host-account-add-path): a Host API-key account reading `env://NAME`,

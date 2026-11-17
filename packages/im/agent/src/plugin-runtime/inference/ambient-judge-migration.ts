@@ -245,9 +245,13 @@ async function convertTriggerWrites(input: Readonly<{
   const seen = record.triggerSeen ?? record.triggerValues ?? {};
   if (isDeepStrictEqual(plain(seen), plain(values))) return Object.freeze({ status: 'none' });
   // Both sides are normalized values (`legacyAmbientTriggerValues`). A value equal to the one the
-  // migration read is no new information: the D5 table already folded it into `after` (N1).
+  // migration read is no new information while the stored judge still holds what the migration
+  // folded it into (N1); once that key was changed since (an older Console switched it, R1), the
+  // original value is a real write back and is converted like any other.
   const original = record.triggerValues ?? {};
-  const changed = (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key] && values[key] !== original[key]);
+  const after = record.after ?? {};
+  const changed = (['minConfidence', 'mode'] as const).filter(key => values[key] !== undefined && values[key] !== seen[key]
+    && !(values[key] === original[key] && stored[key] === after[key]));
   const next: AmbientJudgeMigrationRecord = Object.freeze({ ...record, triggerSeen: values });
   if (!changed.length) {
     await store.writeMigrationRecord({ rootId, id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(next), expectedRevision: previous.revision, requireStatus: 'migrated' }).catch(() => 'conflict');
@@ -278,6 +282,8 @@ export type AmbientJudgeRevertResult =
    * cannot express (an older version would run differently), with the reason.
    */
   | Readonly<{ status: 'reverted'; graphRevision: number; yml?: AmbientTriggerValues; lost?: readonly string[] }>
+  /** `dryRun`: the revert would succeed with these yml values and losses; nothing was written. */
+  | Readonly<{ status: 'ready'; yml?: AmbientTriggerValues; lost?: readonly string[] }>
   | Readonly<{ status: 'refused'; reason: 'no-migration' | 'already-reverted' | 'changed' | 'conflict' | 'not-committed' }>
   /** The restored form does not validate (e.g. a Profile it names was removed since); `path` names it. */
   | Readonly<{ status: 'refused'; reason: 'invalid-graph'; path?: string }>;
@@ -288,7 +294,9 @@ export type AmbientJudgeRevertResult =
  * are written back by the CLI (it owns the configuration file). Run it before a downgrade: an older
  * version cannot read a graph with `purposes.ambient`.
  */
-export async function revertAmbientJudgeMigration(input: Readonly<{ store: AmbientJudgeMigrationStore; rootId: string; now?: () => number }>): Promise<AmbientJudgeRevertResult> {
+export async function revertAmbientJudgeMigration(input: Readonly<{ store: AmbientJudgeMigrationStore; rootId: string; now?: () => number;
+  /** Compute only (R2): the yml values and what cannot be expressed, without committing anything. */
+  dryRun?: boolean }>): Promise<AmbientJudgeRevertResult> {
   const { store, rootId } = input;
   const record = await readAmbientJudgeMigration(store, rootId);
   if (!record || !record.before || record.status === 'failed') return Object.freeze({ status: 'refused', reason: 'no-migration' });
@@ -316,16 +324,18 @@ export async function revertAmbientJudgeMigration(input: Readonly<{ store: Ambie
     const path = error instanceof ProviderError ? error.path : undefined;
     return Object.freeze({ status: 'refused', reason: 'invalid-graph', ...(path ? { path } : {}) });
   }
+  // The yml values an older version must read so it runs as this version does now (R2): the yml
+  // values the migration read, overridden by the seeded judge's own threshold / mode (which won
+  // over them in the migration).
+  const yml: AmbientTriggerValues = Object.freeze({ ...(record.triggerValues ?? {}), ...(reversed?.yml ?? {}) });
+  const facts = { ...(Object.keys(yml).length ? { yml } : {}), ...(reversed?.lost.length ? { lost: Object.freeze([...reversed.lost]) } : {}) };
+  if (input.dryRun) return Object.freeze({ status: 'ready', ...facts });
   const { revertPending: _pending, ...settled } = record;
   const reverted: AmbientJudgeMigrationRecord = Object.freeze({ ...settled, status: 'reverted', revertedAt: (input.now ?? Date.now)() });
   const result = await store.commitMigration({ rootId, expectedRevision: graph.revision, mutationId: `${AMBIENT_JUDGE_MIGRATION_ID}:revert:${graph.revision}`,
     fingerprint: providerPlanFingerprint({ revert: AMBIENT_JUDGE_MIGRATION_ID, purposes }), graph: next, result: { revert: AMBIENT_JUDGE_MIGRATION_ID },
     migration: { id: AMBIENT_JUDGE_MIGRATION_ID, record: plain(reverted) } });
-  if (result.status === 'committed') {
-    return Object.freeze({ status: 'reverted', graphRevision: next.revision,
-      ...(reversed && Object.keys(reversed.yml).length ? { yml: reversed.yml } : {}),
-      ...(reversed?.lost.length ? { lost: Object.freeze([...reversed.lost]) } : {}) });
-  }
+  if (result.status === 'committed') return Object.freeze({ status: 'reverted', graphRevision: next.revision, ...facts });
   return Object.freeze({ status: 'refused', reason: result.status === 'conflict' ? 'conflict' : 'not-committed' });
 }
 

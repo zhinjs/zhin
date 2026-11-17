@@ -213,78 +213,108 @@ function readAmbientYml(document: unknown): AmbientYml | undefined {
   return (document as { ai?: { trigger?: { ambient?: AmbientYml } } }).ai?.trigger?.ambient;
 }
 
-/** Writes the yml keys that are absent; returns the keys written and the ones present with another value. */
-async function writeAmbientYml(configPath: string, values: Readonly<Record<string, unknown>>): Promise<Readonly<{ written: string[]; differing: string[] }>> {
+/**
+ * Sets the yml keys to `values` (R2: the values this version runs with win over different ones in
+ * the file). Returns what was there before each key it touched, to undo the write.
+ */
+async function writeAmbientYml(configPath: string, values: Readonly<Record<string, unknown>>): Promise<Readonly<{
+  previous: ReadonlyMap<string, unknown>; overwritten: readonly string[];
+}>> {
   const config = createConfigDocument(configPath);
   const snapshot = await config.read();
   const ambient = readAmbientYml(snapshot.document);
-  const missing = Object.keys(values).filter(key => !ambient || !Object.hasOwn(ambient, key));
-  const differing = Object.keys(values).filter(key => ambient && Object.hasOwn(ambient, key) && normalizedTrigger(key, ambient[key]) !== values[key]);
-  if (missing.length) {
-    await (await config.prepare(snapshot, missing.map(key => ({ op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value: values[key] })))).commit();
+  const previous = new Map<string, unknown>();
+  const overwritten: string[] = [];
+  for (const [key, value] of Object.entries(values)) {
+    const present = ambient !== undefined && Object.hasOwn(ambient, key);
+    if (present && normalizedTrigger(key, ambient[key]) === value) continue;
+    previous.set(key, present ? ambient[key] : undefined);
+    if (present) overwritten.push(key);
   }
-  return { written: missing, differing };
+  if (previous.size) {
+    await (await config.prepare(snapshot, [...previous.keys()].map(key => ({ op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value: values[key] })))).commit();
+  }
+  return { previous, overwritten };
 }
 
-async function removeAmbientYml(configPath: string, keys: readonly string[]): Promise<void> {
+/** Puts the touched yml keys back as they were (removed when they were absent). */
+async function undoAmbientYml(configPath: string, previous: ReadonlyMap<string, unknown>): Promise<void> {
+  if (!previous.size) return;
   const config = createConfigDocument(configPath);
   const snapshot = await config.read();
-  await (await config.prepare(snapshot, keys.map(key => ({ op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] })))).commit();
+  await (await config.prepare(snapshot, [...previous].map(([key, value]) => value === undefined
+    ? { op: 'remove' as const, path: ['ai', 'trigger', 'ambient', key] }
+    : { op: 'set' as const, path: ['ai', 'trigger', 'ambient', key], value }))).commit();
 }
 
+type RevertResponse = { status: 'reverted'; graphRevision: number; yml?: Record<string, unknown>; lost?: string[] }
+  | { status: 'ready'; yml?: Record<string, unknown>; lost?: string[] }
+  | { status: 'refused'; reason: string; path?: string };
+
+/**
+ * `zhin ai purposes revert ambient-judge` (D5.5, R2). Order: mark the revert pending (no yml
+ * conversion meanwhile) → dry run (what the yml must say, what an older version cannot express) →
+ * write those yml values, the ones this version runs with winning over different ones in the file
+ * (nothing is reverted when that fails) → commit the revert (the yml write is undone when it is
+ * refused) → clear the mark. Run it before downgrading to a version without `purposes.ambient`.
+ */
 export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpConfig; configPath?: string; output?: AiOutput }>): Promise<boolean> {
   const output = input.output ?? processOutput;
+  const refuse = (reason: string, path?: string): false => {
+    output.error(`未回退：${REVERT_REFUSALS[reason] ?? reason}${path ? `（位置 ${path}）` : ''}`);
+    process.exitCode = 1;
+    return false;
+  };
   const viewed = await hostGet<AmbientJudgeView>(input.client, '/ambient-judge');
   if (!viewed.ok || !viewed.data) { fail(output, viewed); return false; }
-  const migration = viewed.data.migration;
-  const values = migration?.status === 'migrated' ? migration.triggerValues ?? {} : {};
-  // No yml change is converted while this runs (N1); cleared at the end whatever happens.
-  const pending = migration?.status === 'migrated';
-  if (pending) await hostPost(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: true });
+  const migrated = viewed.data.migration?.status === 'migrated';
+  if (migrated) {
+    const marked = await hostPost<{ status: string }>(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: true });
+    if (!marked.ok || marked.data?.status !== 'pending') {
+      if (!marked.ok) fail(output, marked);
+      else refuse(marked.data?.status === 'no-migration' ? 'no-migration' : 'conflict');
+      // Not ours to clear: nothing was marked by this run.
+      return false;
+    }
+  }
   try {
-    let restored: string[] = [];
-    if (Object.keys(values).length) {
-      const manual = Object.entries(values).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
+    const dry = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', { dryRun: true });
+    if (!dry.ok || !dry.data) { fail(output, dry); return false; }
+    if (dry.data.status === 'refused') return refuse(dry.data.reason, dry.data.path);
+    const yml = dry.data.yml ?? {};
+    const lost = [...(dry.data.lost ?? [])];
+    let written: Awaited<ReturnType<typeof writeAmbientYml>> = { previous: new Map(), overwritten: [] };
+    if (Object.keys(yml).length) {
+      const manual = Object.entries(yml).map(([key, value]) => `ai.trigger.ambient.${key}: ${JSON.stringify(value)}`).join('、');
       try {
         if (!input.configPath) throw new Error('未找到配置文件');
-        restored = (await writeAmbientYml(input.configPath, values)).written;
+        written = await writeAmbientYml(input.configPath, yml);
       } catch (error) {
-        output.error(`未回退：迁移时读入的 ${manual} 已不在配置文件里，且无法写回（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
-        output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工加回 ${manual}，再重新运行本命令。`);
+        output.error(`未回退：配置文件需要 ${manual}，但无法写入（${error instanceof Error ? error.message.split('\n')[0] : String(error)}）。`);
+        output.error(`请先在 zhin.config.yml 的 ai.trigger.ambient 下手工写上 ${manual}，再重新运行本命令。`);
         process.exitCode = 1;
         return false;
       }
     }
-    const reverted = await hostPost<{ status: 'reverted'; graphRevision: number; yml?: Record<string, unknown>; lost?: string[] } | { status: 'refused'; reason: string; path?: string }>(
-      input.client, '/cli/purposes/revert-ambient-judge', {});
+    const reverted = await hostPost<RevertResponse>(input.client, '/cli/purposes/revert-ambient-judge', {});
     if (!reverted.ok || !reverted.data || reverted.data.status !== 'reverted') {
-      // Nothing was reverted: take back what was written to the file above.
-      if (restored.length && input.configPath) await removeAmbientYml(input.configPath, restored).catch(() => undefined);
+      // Nothing was reverted: the file goes back to what it said.
+      if (input.configPath) await undoAmbientYml(input.configPath, written.previous).catch(() => undefined);
       if (!reverted.ok || !reverted.data) { fail(output, reverted); return false; }
-      const refusal = reverted.data as { reason: string; path?: string };
-      output.error(`未回退：${REVERT_REFUSALS[refusal.reason] ?? refusal.reason}${refusal.path ? `（位置 ${refusal.path}）` : ''}`);
-      process.exitCode = 1;
-      return false;
+      const refusal = reverted.data as { reason?: string; path?: string };
+      return refuse(refusal.reason ?? 'not-committed', refusal.path);
     }
-    const done = reverted.data;
-    // A purposes.ambient seeded before the migration: its threshold / mode go to the yml keys an older version reads (N2).
-    const lost = [...(done.lost ?? [])];
-    if (done.yml && Object.keys(done.yml).length) {
-      try {
-        if (!input.configPath) throw new Error('未找到配置文件');
-        const { written, differing } = await writeAmbientYml(input.configPath, done.yml);
-        restored = [...restored, ...written];
-        for (const key of differing) lost.push(`ai.trigger.ambient.${key} 应为 ${JSON.stringify(done.yml[key])}（配置文件里是另一个值）`);
-      } catch {
-        for (const [key, value] of Object.entries(done.yml)) lost.push(`ai.trigger.ambient.${key}: ${JSON.stringify(value)}（无法写入配置文件）`);
-      }
+    output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${reverted.data.graphRevision}）。`);
+    if (written.previous.size) {
+      output.log(`已在配置文件写入 ${[...written.previous.keys()].map(key => `ai.trigger.ambient.${key}: ${JSON.stringify(yml[key])}`).join('、')}；当前版本已按这些值运行。`);
     }
-    output.log(`已回退插话判断迁移：模型配置恢复为迁移前的旧写法（修订号 ${done.graphRevision}）。`);
-    if (restored.length) output.log(`已把 ${restored.map(key => `ai.trigger.ambient.${key}`).join('、')} 写回配置文件。`);
+    if (written.overwritten.length) {
+      output.log(`其中覆盖了配置文件里原有的不同值：${written.overwritten.map(key => `ai.trigger.ambient.${key}（原为 ${JSON.stringify(written.previous.get(key))}）`).join('、')}。`);
+    }
     if (lost.length) {
       output.error('以下设置旧版本无法读取，降级后它们会失效或行为不同：');
       for (const line of lost) output.error(`  · ${line}`);
-      output.error('降级前请手工处理：在 zhin.config.yml 的 ai.trigger.ambient 下补上上面列出的值，或在 Console 改成旧版本能表达的配置后再回退；处理完之前不要降级。');
+      output.error('降级前请手工处理：在 Console 改成旧版本能表达的配置后再回退；处理完之前不要降级。');
       process.exitCode = 1;
       return true;
     }
@@ -292,7 +322,7 @@ export async function runRevertAmbientJudge(input: Readonly<{ client: HostHttpCo
     output.log('不降级时，当前版本会按旧写法换算运行，行为不变；在 Console「插话判断」保存一次即改回新写法。');
     return true;
   } finally {
-    if (pending) await hostPost(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: false }).catch(() => undefined);
+    if (migrated) await hostPost(input.client, '/cli/purposes/revert-ambient-judge/pending', { pending: false }).catch(() => undefined);
   }
 }
 

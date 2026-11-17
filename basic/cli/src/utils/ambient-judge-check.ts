@@ -45,6 +45,8 @@ export interface AmbientJudgeView {
     triggerKeys?: readonly string[];
     triggerValues?: Readonly<Record<string, unknown>>;
     triggerSeen?: Readonly<Record<string, unknown>>;
+    /** The `purposes.ambient` the migration wrote. */
+    after?: Readonly<Record<string, unknown>>;
     noticedAt?: number;
     revertedAt?: number;
     failure?: Readonly<{ reason: string; path?: string }>;
@@ -100,11 +102,16 @@ export async function checkRetiredAmbientTriggerKeys(input: Readonly<{
   // Migrated: a value the instance has already acted on (its `triggerSeen`, or the value the
   // migration read and folded in), or one it ignores, no longer applies by itself. Both sides are
   // normalized as the instance does (N3); a value written since is converted on the next load.
+  // The migration's own value counts only while the stored judge still holds what the migration
+  // wrote for that key (R1: switched since, a write of the original value is a real change).
   const seen = migration!.triggerSeen ?? migration!.triggerValues ?? {};
   const original = migration!.triggerValues ?? {};
+  const after = migration!.after ?? {};
+  const policy = (input.view?.policy ?? {}) as Readonly<Record<string, unknown>>;
   const settled = keys.filter(key => {
     const value = normalizedTrigger(key, present[key]);
-    return value === undefined || (Object.hasOwn(seen, key) && seen[key] === value) || (Object.hasOwn(original, key) && original[key] === value);
+    return value === undefined || (Object.hasOwn(seen, key) && seen[key] === value)
+      || (Object.hasOwn(original, key) && original[key] === value && policy[key] === after[key]);
   });
   const pending = keys.filter(key => !settled.includes(key));
   let removed: string[] = [];

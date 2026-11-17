@@ -415,7 +415,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
     }
   );
   /** Environment-reference operations are audited (ids and variable names only, never values). */
-  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test']);
+  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test', '/cli/purposes/revert-ambient-judge', '/cli/purposes/revert-ambient-judge/pending']);
   const record = (
     principal: ConsolePrincipal | undefined,
     path: string,
@@ -654,14 +654,23 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   register('GET', '/ambient-judge', async ({ lease, principal }) => lease.management.ambientJudge(principal));
   register('POST', '/ambient-judge/migration/noticed', async ({ lease, principal }) => lease.management.noticeAmbientJudgeMigration(principal));
   // `zhin ai purposes revert ambient-judge`: local CLI only (the management service checks it), audited.
-  register('POST', '/cli/purposes/revert-ambient-judge/pending', async ({ lease, principal, request }) => {
+  register('POST', '/cli/purposes/revert-ambient-judge/pending', async ({ lease, principal, request, consolePrincipal }) => {
     const body = object(await readJsonBody(request));
-    return lease.management.ambientJudgeRevertPending(principal, body.pending === true);
+    const pending = body.pending === true;
+    const marked = await lease.management.ambientJudgeRevertPending(principal, pending);
+    record(consolePrincipal, '/cli/purposes/revert-ambient-judge/pending', marked.status === 'pending' || marked.status === 'cleared' ? 'ok' : 'error',
+      { pending, status: marked.status });
+    return marked;
   });
-  register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, consolePrincipal }) => {
-    const reverted = await lease.management.revertAmbientJudge(principal);
-    record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',
-      reverted.status === 'reverted' ? { graphRevision: reverted.graphRevision } : { reason: reverted.reason });
+  register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request).catch(() => ({})));
+    const dryRun = body.dryRun === true;
+    const reverted = await lease.management.revertAmbientJudge(principal, { dryRun });
+    // A dry run writes nothing and is not audited as a change.
+    if (!dryRun) {
+      record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',
+        reverted.status === 'reverted' ? { graphRevision: reverted.graphRevision } : { reason: reverted.status === 'refused' ? reverted.reason : reverted.status });
+    }
     return reverted;
   });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {

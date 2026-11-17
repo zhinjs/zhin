@@ -318,3 +318,45 @@ describe('writing the original yml values back is no new write (review N1, N2)',
     expect(reverseAmbientJudge({ profile: 'small', compare: 'spare' }, store.graph).lost).toEqual([expect.stringContaining('对照模型 spare')]);
   });
 });
+
+describe('switching back to the original value is a real write once the key was changed (review R1)', () => {
+  it('case C: yml shadow → old Console active → shadow again ends in shadow', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'active' });
+    await expect(migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow' } })).resolves.toMatchObject({ status: 'converted' });
+    expect(store.graph.purposes.ambient).toEqual({ profile: 'small', mode: 'shadow' });
+  });
+
+  it('the threshold too: 0.8 → 0.5 → 0.8 ends at 0.8; the original value is still skipped while unchanged (cases A / B)', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.8 } });
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.5 } });
+    expect(store.graph.purposes.ambient).toMatchObject({ minConfidence: 0.5 });
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { minConfidence: 0.8 } });
+    expect(store.graph.purposes.ambient).toMatchObject({ minConfidence: 0.8 });
+  });
+});
+
+describe('revert dry run (review R2)', () => {
+  it('case D: a seeded shadow over yml active — the dry run names the shadow for the yml and writes nothing', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat' }, ambient: { profile: 'small', mode: 'shadow' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'active' } });
+    const before = store.graph;
+    const commits = store.commits.length;
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true })).resolves.toEqual({ status: 'ready', yml: { mode: 'shadow' } });
+    expect(store.graph).toBe(before);
+    expect(store.commits).toHaveLength(commits);
+    // The yml the CLI writes (mode: shadow) plus the reverted graph run in shadow, as now.
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root' })).resolves.toMatchObject({ status: 'reverted', yml: { mode: 'shadow' } });
+    expect(effectiveAmbientJudgePolicy(store.graph.purposes, { mode: 'shadow' }).policy).toMatchObject({ profile: 'small', mode: 'shadow' });
+  });
+
+  it('a legacy migration hands the yml values it read back for the yml', async () => {
+    const store = new MemoryStore(graph({ defaults: { chat: 'chat', ambient: 'small' } }));
+    await migrateAmbientJudge({ store, rootId: 'root', hostOwnerId: HOST, trigger: { mode: 'shadow', minConfidence: 0.6 } });
+    await expect(revertAmbientJudgeMigration({ store, rootId: 'root', dryRun: true })).resolves.toEqual({ status: 'ready', yml: { minConfidence: 0.6, mode: 'shadow' } });
+  });
+});

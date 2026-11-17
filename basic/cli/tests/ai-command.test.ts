@@ -126,92 +126,108 @@ describe('zhin ai account list (#1250 ai-account-cli-no-list)', () => {
   });
 });
 
-describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5)', () => {
+describe('zhin ai purposes revert ambient-judge (ADR 0066 D5.5, R2)', () => {
+  type Answer = { status: number; body: unknown };
+  const ok = (data: unknown): Answer => ({ status: 200, body: { success: true, data } });
+  /** A fake instance: the judge view, the pending mark and the dry / real revert answers. */
+  function instance(options: { view?: unknown; pending?: string; dry?: unknown; revert?: unknown }) {
+    return client((path, body) => {
+      if (path.endsWith('/ambient-judge')) return ok(options.view ?? { migration: { status: 'migrated', at: 1 } });
+      if (path.endsWith('/pending')) return ok({ status: body.pending ? options.pending ?? 'pending' : 'cleared' });
+      if (body.dryRun) return ok(options.dry ?? { status: 'ready' });
+      return ok(options.revert ?? { status: 'reverted', graphRevision: 7 });
+    });
+  }
+  async function withYml(text: string, run: (file: string) => Promise<void>) {
+    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
+    try { const file = join(dir, 'zhin.config.yml'); await writeFile(file, text); await run(file); }
+    finally { await rm(dir, { recursive: true, force: true }); }
+  }
+  const pathsOf = (requests: Array<{ path: string; body: Record<string, unknown> }>) => requests.map(request => [request.path.replace('/api/agent/inference', ''), request.body]);
+
   it('is registered under purposes', () => {
     const purposes = aiCommand.commands.find(command => command.name() === 'purposes')!;
     expect(purposes.commands.map(command => command.name())).toEqual(['revert']);
   });
 
-  it('asks the instance over the local socket and reports the restored revision', async () => {
-    const { config, requests } = client(path => path.endsWith('/ambient-judge')
-      ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1 } } } }
-      : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 7 } } });
+  it('marks pending, dry-runs, reverts, then clears the mark', async () => {
+    const { config, requests } = instance({});
     const out = output();
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(true);
-    // The pending mark brackets the revert (N1): set first, cleared last.
-    expect(requests.map(request => [request.path, request.body])).toEqual([
-      ['/api/agent/inference/ambient-judge', {}],
-      ['/api/agent/inference/cli/purposes/revert-ambient-judge/pending', { pending: true }],
-      ['/api/agent/inference/cli/purposes/revert-ambient-judge', {}],
-      ['/api/agent/inference/cli/purposes/revert-ambient-judge/pending', { pending: false }],
+    expect(pathsOf(requests)).toEqual([
+      ['/ambient-judge', {}],
+      ['/cli/purposes/revert-ambient-judge/pending', { pending: true }],
+      ['/cli/purposes/revert-ambient-judge', { dryRun: true }],
+      ['/cli/purposes/revert-ambient-judge', {}],
+      ['/cli/purposes/revert-ambient-judge/pending', { pending: false }],
     ]);
-    expect(out.lines.join('\n')).toContain('现在可以降级');
     expect(out.lines.join('\n')).toContain('修订号 7');
+    expect(out.lines.join('\n')).toContain('现在可以降级');
     expect(process.exitCode).toBeUndefined();
   });
 
-  it('writes back the yml keys the migration read and doctor --fix removed, then reverts (M2)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
-    try {
-      const file = join(dir, 'zhin.config.yml');
-      await writeFile(file, 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n');
-      const { config } = client(path => path.endsWith('/ambient-judge')
-        ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'shadow' } } } } }
-        : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 3 } } });
-      const out = output();
-      expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
-      expect(await readFile(file, 'utf8')).toContain('mode: shadow');
-      expect(out.lines.join('\n')).toContain('写回配置文件');
-    } finally { await rm(dir, { recursive: true, force: true }); }
-  });
-
-  it('refuses without reverting when the yml keys cannot be written back, and takes back a write when the revert is refused', async () => {
-    const view = { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1, triggerKeys: ['ai.trigger.ambient.mode'], triggerValues: { mode: 'shadow' } } } } };
-    const unwritable = client(() => view);
-    const out = output();
-    expect(await runRevertAmbientJudge({ client: unwritable.config, output: out.sink })).toBe(false);
-    // No revert was asked; the pending mark was set and cleared.
-    expect(unwritable.requests.map(request => request.path)).toEqual(['/api/agent/inference/ambient-judge',
-      '/api/agent/inference/cli/purposes/revert-ambient-judge/pending', '/api/agent/inference/cli/purposes/revert-ambient-judge/pending']);
-    expect(out.errors.join('\n')).toContain('手工加回 ai.trigger.ambient.mode: "shadow"');
-    process.exitCode = undefined;
-    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
-    try {
-      const file = join(dir, 'zhin.config.yml');
-      const original = 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n';
-      await writeFile(file, original);
-      const refused = client(path => path.endsWith('/ambient-judge') ? view : { status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } });
-      expect(await runRevertAmbientJudge({ client: refused.config, configPath: file, output: output().sink })).toBe(false);
-      expect(await readFile(file, 'utf8')).not.toContain('mode');
-      // The pending mark is cleared after a refused revert too.
-      expect(refused.requests.at(-1)).toEqual({ path: '/api/agent/inference/cli/purposes/revert-ambient-judge/pending', body: { pending: false } });
-    } finally { await rm(dir, { recursive: true, force: true }); }
-  });
-
-  it('explains a refusal (changed since the migration) and exits 1', async () => {
-    const { config } = client(path => path.endsWith('/ambient-judge') ? { status: 200, body: { success: true, data: {} } }
-      : { status: 200, body: { success: true, data: { status: 'refused', reason: 'changed' } } });
+  it('aborts when the pending mark cannot be set, without reverting or clearing someone else\'s mark', async () => {
+    const { config, requests } = instance({ pending: 'conflict' });
     const out = output();
     expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(false);
-    expect(out.errors.join('\n')).toContain('被修改过');
+    expect(pathsOf(requests)).toEqual([['/ambient-judge', {}], ['/cli/purposes/revert-ambient-judge/pending', { pending: true }]]);
     expect(process.exitCode).toBe(1);
   });
 
-  it('writes the seeded threshold / mode to the yml and, when something cannot be expressed, does not say a downgrade is safe (N2)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ambient-revert-'));
-    try {
-      const file = join(dir, 'zhin.config.yml');
-      await writeFile(file, 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n');
-      const { config } = client(path => path.endsWith('/ambient-judge')
-        ? { status: 200, body: { success: true, data: { migration: { status: 'migrated', at: 1 } } } }
-        : { status: 200, body: { success: true, data: { status: 'reverted', graphRevision: 4, yml: { mode: 'shadow' }, lost: ['对照模型 spare（旧版本只能用决策模型陪跑）'] } } });
+  it('case D: a seeded shadow over yml active — writes the shadow the instance runs with before the revert, listing what it overwrote', async () => {
+    await withYml('ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n      mode: active\n', async file => {
+      const { config, requests } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } } });
       const out = output();
       expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(true);
       expect(await readFile(file, 'utf8')).toContain('mode: shadow');
-      expect(out.errors.join('\n')).toContain('旧版本无法读取');
-      expect(out.errors.join('\n')).toContain('对照模型 spare');
-      expect(out.lines.join('\n')).not.toContain('可以降级');
+      expect(out.lines.join('\n')).toContain('当前版本已按这些值运行');
+      expect(out.lines.join('\n')).toContain('ai.trigger.ambient.mode（原为 "active"）');
+      // The yml was written between the dry run and the real revert.
+      expect(pathsOf(requests).map(([path, body]) => `${path}${(body as { dryRun?: boolean }).dryRun ? ' dry' : ''}`))
+        .toEqual(['/ambient-judge', '/cli/purposes/revert-ambient-judge/pending', '/cli/purposes/revert-ambient-judge dry', '/cli/purposes/revert-ambient-judge', '/cli/purposes/revert-ambient-judge/pending']);
+    });
+  });
+
+  it('does not revert when the yml cannot be written, and clears the mark', async () => {
+    const { config, requests } = instance({ dry: { status: 'ready', yml: { mode: 'shadow' } } });
+    const out = output();
+    expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(false);
+    expect(pathsOf(requests).filter(([path, body]) => path === '/cli/purposes/revert-ambient-judge' && !(body as { dryRun?: boolean }).dryRun)).toEqual([]);
+    expect(pathsOf(requests).at(-1)).toEqual(['/cli/purposes/revert-ambient-judge/pending', { pending: false }]);
+    expect(out.errors.join('\n')).toContain('手工写上 ai.trigger.ambient.mode: "shadow"');
+  });
+
+  it('undoes its yml write when the revert commit is refused, and clears the mark', async () => {
+    const original = 'ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n      mode: active\n';
+    await withYml(original, async file => {
+      const { config, requests } = instance({ dry: { status: 'ready', yml: { mode: 'shadow', minConfidence: 0.8 } }, revert: { status: 'refused', reason: 'conflict' } });
+      const out = output();
+      expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+      const text = await readFile(file, 'utf8');
+      expect(text).toContain('mode: active');
+      expect(text).not.toContain('minConfidence');
+      expect(out.errors.join('\n')).toContain('模型配置正在被其他操作修改');
+      expect(pathsOf(requests).at(-1)).toEqual(['/cli/purposes/revert-ambient-judge/pending', { pending: false }]);
+    });
+  });
+
+  it('explains a refused dry run (changed since the migration) and writes nothing', async () => {
+    await withYml('ai:\n  trigger:\n    ambient:\n      conversations: ["*"]\n', async file => {
+      const { config } = instance({ dry: { status: 'refused', reason: 'changed' } });
+      const out = output();
+      expect(await runRevertAmbientJudge({ client: config, configPath: file, output: out.sink })).toBe(false);
+      expect(out.errors.join('\n')).toContain('被修改过');
+      expect(await readFile(file, 'utf8')).not.toContain('mode');
       expect(process.exitCode).toBe(1);
-    } finally { await rm(dir, { recursive: true, force: true }); }
+    });
+  });
+
+  it('does not say a downgrade is safe when the old form cannot express everything (N2)', async () => {
+    const { config } = instance({ dry: { status: 'ready', lost: ['对照模型 spare（旧版本只能用决策模型陪跑）'] } });
+    const out = output();
+    expect(await runRevertAmbientJudge({ client: config, output: out.sink })).toBe(true);
+    expect(out.errors.join('\n')).toContain('旧版本无法读取');
+    expect(out.lines.join('\n')).not.toContain('可以降级');
+    expect(process.exitCode).toBe(1);
   });
 });
