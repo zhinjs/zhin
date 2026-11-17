@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **See also**: `AGENTS.md` for the universal agent entry point; `.github/copilot-instructions.md` for detailed API patterns and plugin examples.
 
+## Communication
+
+- 与仓库所有者沟通一律用中文（回复、汇报、提问、PR 与 issue 评论）。代码、标识符和提交前缀照常用英文。
+
 ## Project Overview
 
 Zhin.js is a TypeScript chatbot framework — AI-driven, plugin-based, hot-reload, multi-platform. ESM-only (`"type": "module"`), targets Node.js >=22.19.0.
