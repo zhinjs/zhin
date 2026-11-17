@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import * as inboundSyntax from '../src/inbound-syntax.js';
 import { sandboxText, sandboxEnglish } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
@@ -54,7 +55,7 @@ it('uses ready.locale without remounting or replacing stored conversations and d
   const original=playground.createDefaultPlaygroundState();
   const state={...original,sessions:original.sessions.map((item,index)=>index===0?{...item,name:'用户保留的会话'}:item)};
   const bindings={
-    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax,
     getSandboxApiBase:()=>'http://localhost',
     captureSandboxRequestContext:()=>({apiBase:'http://localhost',headers:{}}),
     loadPlaygroundState:()=>state,

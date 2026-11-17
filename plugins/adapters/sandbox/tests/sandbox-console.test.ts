@@ -164,9 +164,12 @@ async function createProject(): Promise<string> {
     await mkdir(dirname(dest), { recursive: true });
     await writeFile(dest, await readFile(join(pagesDir, name), 'utf8'));
   }
-  const runConfigSource = join(dirname(fileURLToPath(import.meta.url)), '../src/run-config.ts');
+  // Browser-safe src modules the page imports (shipped in the package's `files`).
   await mkdir(join(root, 'src'), { recursive: true });
-  await writeFile(join(root, 'src/run-config.ts'), await readFile(runConfigSource, 'utf8'));
+  for (const name of ['run-config.ts', 'inbound-syntax.ts']) {
+    const source = join(dirname(fileURLToPath(import.meta.url)), '../src', name);
+    await writeFile(join(root, 'src', name), await readFile(source, 'utf8'));
+  }
   return realpath(root);
 }
 

@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0064：Sandbox 全能力渲染与「按平台预览」——降级只在声明里发生，并且说得出原因
 
-状态：已接受（Accepted，2026-11-16）。所有者 2026-11-16 的决定：「按推荐的来，先做 P0 和 P1」——文末「决定」表中的 D1–D11 全部按推荐执行，实施顺序先 P0、P1。实施进度：P0（F1、F2）已实施，其余阶段未开始。以下为提议时的说明，保留作记录：提议（Proposed，2026-11-16）。依据：zhinjs/zhin#1250 评论 6909604726 的 `sandbox-capability-parity`；同一评论中的 `select-over-10-options-no-buttons` 与本 ADR 的 §3 合并处理。核对基线：`origin/sync/feat-main-1116`。
+状态：已接受（Accepted，2026-11-16）。所有者 2026-11-16 的决定：「按推荐的来，先做 P0 和 P1」——文末「决定」表中的 D1–D11 全部按推荐执行，实施顺序先 P0、P1。实施进度：P0（F1、F2）已实施，其余阶段未开始。2026-11-17 增补「入站能力对齐」（D12–D17、阶段 I0–I4，见文末），所有者授权按推荐处理，已接受；其中 I0 已实施。以下为提议时的说明，保留作记录：提议（Proposed，2026-11-16）。依据：zhinjs/zhin#1250 评论 6909604726 的 `sandbox-capability-parity`；同一评论中的 `select-over-10-options-no-buttons` 与本 ADR 的 §3 合并处理。核对基线：`origin/sync/feat-main-1116`。
 
 关联：[ADR 0044](./0044-adapter-capability-profile.md)（适配器能力画像；核心只认能力、不认平台名；`check:no-platform-branches`）、[ADR 0061](./0061-inbound-message-outcomes.md)（每条入站消息都有结局与原因——本 ADR 是它在出站侧的对应：每次降级都有原因）、[ADR 0063](./0063-console-plugin-ui-unification.md)（Sandbox 页面用 `@zhin.js/console-ui`，新增控件遵守其设计规则）、[ADR 0049](./0049-console-rbac.md)（Console 权限映射）。
 
@@ -283,3 +283,126 @@ messaging: {
 - **F1**：`outbound-segments.ts` 的 `resolveOutboundHtmlPolicy`、`resolveOutboundMediaPolicy`、`resolveOutboundInteractivePolicy`、`resolveOutboundMarkdownPolicy`、`resolveOutboundSupportedSegments` 增加可选参数 `conversation`（`{ kind, threadId? }`），`resolveAiOutboundSegments` 的第三个参数除会话类型外也接受会话本身。解析顺序与画像其他字段相同（`default` → 会话类型段 → 有 `threadId` 时的 `thread` 段，见 `resolveStaticCapabilities`）；`segments` 是画像里的整体字段，类型段写了就整段替换，没写的类型沿用 `default`（即 `definition.segments`）。不传会话时行为与之前完全一致。`projectOutboundPayload`、指令菜单翻页（`command-feedback.ts`）与 Agent 的回复段解析（`ingress-outbound.ts`）都传入当前会话。
 - **受影响的适配器**：官方适配器里只有 QQ 官方在类型段（`channel`）声明了 `segments`。修正后频道会话的 `supported` 不再含 `card` / `share`：模型在频道里看不到图文卡片段，手写的图文卡片在投影阶段以 `unsupported_operation` 拒绝（不再交给端点）；私聊、群聊不变。其他 23 个官方适配器只在 `default` 声明，行为不变。
 - **F2**：GitHub 适配器声明 `markdown: 'native'`。`formatOutboundBody` 之前没有 `markdown` 分支（`markdown` 段一直先被 core 转成纯文本，所以没有暴露），现在把 `markdown` 段的源文本作为独立的块原样写进评论正文，与相邻的行内文本用空行分隔。HTML 与媒体策略不变（`html` 仍按 `image` → 仅 URL 媒体 → 文本）。
+
+## 增补：入站能力对齐（2026-11-17）
+
+状态：已接受（所有者授权按推荐处理，2026-11-17）。来源：zhinjs/zhin#1250 评论 6935124915 的 `sandbox-inbound-capability-parity` 与 `sandbox-typed-media-syntax-sent-as-text`。本增补新增 D12–D17 与阶段 I0–I4，全部按「推荐」一列执行；I0 已在 #1250 第 42 批实施，I1–I4 未开始。核对基线：`origin/feat/friendly-volta-ejc3wl`（2e46abe2d）。
+
+前面各节管的是**机器人发出去**的消息在 Sandbox 里怎么显示。本增补管另一侧：**用户发进来**的消息，Sandbox 应当能模拟各平台的入站能力（本地媒体、引用、平台事件），让插件和 Agent 在 Sandbox 里收到的东西和在真实平台上一样。原则和 §0 相同：Sandbox 的运行时代码不出现平台名分支；产出的入站段、`replyTo` 和事件都走真实适配器使用的那条 core 路径，不另写一套。
+
+### 1. 现状（逐项核实）
+
+| # | 能力 | 现状 | 位置 |
+|---|---|---|---|
+| N1 | 手打的媒体写法 | **I0 已修**。修之前：编辑器只把按钮插入的节点变成 `image` / `video` / `audio` 段，手打的 `[image:URL]` 原样成为 `text` 段；端点只展开 `[@名称]`；页面预览另用一个正则（`SandboxChat.tsx` 的 `parseTextToSegments`）把它显示成图片，所以「看起来能用、发出去是文字」。「快捷操作与语法」还把 `**文本**`、```` ``` ```` 列为写法，这两项发送时也不解析成段（只是气泡按 Markdown 显示） | `pages/index/RichTextEditor.tsx` `parseEditorContent`、`src/protocol.ts` `expandTypedMentions` |
+| N2 | 本地图片、文件、语音 | 只能插入 URL（图片 / 视频 / 音频三个按钮，没有文件）；没有拖放，没有「选择文件」；粘贴图片被读成 `data:` URL 放进 `media.kind: 'url'`（I0 改为 `kind: 'base64'`）。整条消息走 `/sandbox` WebSocket 帧，网关桥的单帧上限是 16 MiB（`packages/host/http/src/bridge/protocol.ts` `maxWsMessageBytes`），而且 base64 会把体积放大约三分之一 | `RichTextEditor.tsx` `handlePaste`、`SandboxChat.tsx` `commitMediaUrl` |
+| N3 | URL 被挡 | Agent 的入站媒体（`turn/inbound-media.ts` → `media/media-normalize.ts` `normalizeMediaRefsToPayloads` → `fetchUrlAsBase64`）对每一跳都用 `checkUrlNetworkAccess(url, { httpsOnly: true, allowedDomains })`，并用 `hostnameResolvesToBlockedAddress` 拒绝解析到私有地址的名字。实测：`data:image/png;base64,…` 被拒（「仅支持 HTTP/HTTPS」），`http://127.0.0.1:8086/…` 被拒（「仅允许 HTTPS」）。所以「Sandbox 起一个本机地址给插件下载」这条路，不改 core 时 Agent 也看不到图；插件自带的域名白名单同理 | `packages/im/agent/src/security/network-policy.ts` |
+| N4 | 引用 / `replyTo` | 页面没有「引用」操作，只能显示出站的 `reply` 段（`segments/basic.tsx` `renderReply`，只有 `#id`）。**入站链路其实已经齐了**：`promoteInboundMessagePayload`（`packages/im/adapter/src/inbound-promotion.ts`）从入站 `reply` 段提升 `replyTo`；被引用消息由 `ImRuntime.resolveConversationReference`（`im-runtime.ts`）解析，先查会话事件存储（`conversation-runtime.ts` `resolveLocal`，已撤回的不返回），找不到再问端点的 `EndpointContentPort.resolve`。Sandbox 端点没有实现 content port（官方适配器里只有 Telegram 实现）。入站消息的 id 是页面生成、帧里带上的 `messageId`（端点已采用为入站 id） | `src/endpoint.ts`、`packages/im/agent/src/session/turn-quote.ts` |
+| N5 | 平台事件 | 端点只上报 `message`（原始帧另作为 `platform('message')`）和连接事件，没有 notice / request 入口。core 已能把 `poke`、`emoji_reaction`、`recall`、成员变动等 notice 映射成会话事件（`conversation-runtime.ts`，如 `conversation.poked`、`message.reaction_changed`），但 Sandbox 发不出这些事件。合并转发：canonical `forward` 段存在（`{ forward_id, title?, messages: Segment[][] }`，`segment-contract/json-schema.ts`），页面能显示出站转发，入站没有构造入口；另外 Agent 的引用摘要读的是 `data.entries`（带发送者），与 canonical 的 `messages` 不是同一形状 | `src/endpoint.ts` `#emitPlatformEvent`、`turn-quote.ts` `summarizeSegments` |
+
+### 2. 决策
+
+#### D12 本地文件由 Sandbox 托管：存在哪里、地址怎么签发、多大、多久、谁能读
+
+1. **存储位置**：项目的 `.zhin/sandbox/media/<端点键的 SHA-256 前 16 位>/` 下，每个对象两份文件：`<id>`（字节）和 `<id>.json`（`kind`、`mime`、`size`、`name`、`sha256`、`createdAt`、`expiresAt`、上传者 principal id、会话）。`id` 是 128 位随机数的 base64url（`^[A-Za-z0-9_-]{22}$`）。**磁盘上的文件名只用 `id`**，上传者给的文件名只进元数据；读取只按 `id` 查元数据，不接受任何路径。`.zhin/` 已在 Agent 的检索范围之外（`plugin-runtime/file-search-scope.ts`），I1 同时用测试确认 `read_file` 的文件策略也拒绝这个目录。不放内存：重启后，页面历史里的图片还能显示、引用还能解析（在有效期内）。
+2. **大小**：单个文件按类型设上限，默认图片 10 MiB、语音 / 音频 20 MiB、视频 50 MiB、其他文件 50 MiB；每个端点总配额默认 500 MiB，超过时先删最早到期的对象，仍不够则拒绝上传（`quota_exceeded`）。都可在端点配置 `media`（`schema.json`）里调小或调大，上限值本身也有硬顶（单文件 200 MiB、配额 5 GiB），避免配置错误把磁盘写满。比 Agent 多模态上限（`maxFileBytes`）大的文件照样能上传——插件可能要处理大文件——Agent 一侧按它现有的结局（`media_validation_failed`）如实报告。
+3. **有效期**：默认 24 小时（`media.ttlHours`，1–168）。端点启动时和之后每小时清扫一次过期对象；过期后下载返回 404，content port 返回 `expired`。
+4. **地址签发**：插件拿到的是 `<origin>/pub/sandbox-media/<id>?exp=<到期秒>&sig=<签名>`，`sig = base64url(HMAC-SHA256(secret, 端点键 \0 id \0 exp))`。`secret` 为 32 字节随机数，存 `.zhin/sandbox/media/secret`（权限 0600），重启不变；`exp` 等于对象的 `expiresAt`，所以链接和文件同时失效。`origin` 取 `HttpHost.address`（插件进程能连到的监听地址）。签名只证明「这是 Sandbox 签发的这个对象」，不代替下面的访问控制。
+5. **访问控制**，两条入口：
+   - **Console 页面**显示自己的上传：`GET /api/sandbox/media/<id>`，在 `CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`（前缀规则），并要求 principal 的授权范围覆盖该端点（`bindingScopeCovers`）。
+   - **插件与本机进程**：`GET /pub/sandbox-media/<id>?exp&sig`，必须签名正确、未过期，并且**默认只接受回环来源**（`RouteContext.remoteAddress` 为 `127.0.0.1` / `::1`，或进程内调用）。签名错、过期、非回环一律返回 404，不区分原因，不泄露对象是否存在。只有在端点配置 `media.publicDownload: true` 时才接受非回环来源；文档写明这等于生成**限时外链**，只在远程部署、需要外部服务取文件时打开。
+6. **不变成任意文件读取**：路由只认 `id`；响应的 `Content-Type` 取上传时按魔数校验过的类型，统一带 `X-Content-Type-Options: nosniff`；图片、音视频 `inline`，其余 `attachment`。不接受 `image/svg+xml`、`text/html` 等浏览器会执行的类型作为图片（按 `file` 存，强制 `attachment`）。
+
+#### D13 上传入口与入站段格式：与真实平台对齐
+
+1. **页面入口**：输入区支持拖放、粘贴（图片和文件）、「附件」按钮选择本地文件；语音可以选本地音频文件，浏览器支持 `MediaRecorder` 时再提供「录音」按钮（不支持时不显示）。控件全部用 `@zhin.js/console-ui`（ADR 0063：文件选择用 console-ui 的 `Button` 触发隐藏的文件输入，上传进度、失败提示用已有的通知样式），并通过 `pnpm check:plugin-ui-audit`。
+2. **上传通道**：`POST /api/sandbox/media?endpoint=<id>`，请求体是原始字节（不用 multipart），带 `Content-Type`、`Content-Length`（必填）和 URL 编码的 `X-Zhin-File-Name`；在 `CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.operate`（与 `/sandbox` WebSocket 相同），只读连接拒绝。服务端边接收边计数，超过上限立即中断（413），写完按魔数判断类型：魔数是图片 / 音频 / 视频的按对应类型，其余一律 `file`；声明的 `Content-Type` 与魔数不符时以魔数为准。Sandbox 自带一张魔数表，与 `media-normalize.ts` 的 `sniffMedia` 对齐，测试用同一组样本比对两者。不走 WebSocket 帧：避免 base64 膨胀和 16 MiB 单帧上限，上传失败也不影响会话连接。
+3. **入站段**：按多数平台（OneBot / QQ / Milky 等）的做法，入站媒体带一个可下载的 URL：
+   ```ts
+   { type: 'image', data: { media: { kind: 'url', value: '<D12 的签名地址>', mime_type, size, file_name } } }
+   ```
+   语音用 `audio`（core 已把 `record` / `voice` 归一为 `audio`），能读出时长时带 `duration`；视频用 `video`；其他用 `file`，并带 `data.name`。这些段由 I0 的 `sandboxInboundMediaSegment` 构造（加可选元数据参数），所以上传、按钮插入、手打写法三者产出同一种段。
+4. **粘贴图片改走上传**：I1 起粘贴的图片先上传，再插入托管地址，不再把 base64 塞进消息和历史；手打的 `data:` 写法仍然接受（I0 的行为不变）。
+
+#### D14 Sandbox 托管地址是「本机可信来源」，边界写死
+
+问题见 N3：Agent 只取 https、拒绝私有地址，插件自己的域名白名单也会挡住本机地址。推荐（即决定）：**按「谁签发」放行，不按域名或 IP 放行**。
+
+1. core 新增「本机媒体来源」端口，形状参照已有的 `ImageAssetPublisher.ownsUrl`（`packages/im/agent/src/media/image-assets.ts`：「只有这个发布者命名空间里的 URL 可以绕过模型 URL 抓取」）：
+   ```ts
+   interface LocalMediaSource {
+     ownsUrl(url: string): boolean;
+     read(url: string, options: { maxBytes: number; signal?: AbortSignal }): Promise<LocalMediaBytes | null>;
+   }
+   ```
+   以作用域 token（`localMediaSourcesToken`，可有多个来源）提供；Sandbox 端点在 `setup` 里注册自己的来源，随 generation 卸载。
+2. `normalizeMediaRefsToPayloads` 在走网络之前先问已注册的来源：`ownsUrl` 为真时**只**调用 `read`，绝不再发网络请求，也不受 `httpsOnly` / `allowedDomains` 影响；`ownsUrl` 为真但 `read` 返回空（签名错、过期、超过 `maxBytes`、类型不符）就是失败，**不回退到网络**，防止有人造一个「看起来像本机」的地址诱发请求。
+3. 边界：
+   - `ownsUrl` 只做筛选：origin 与 Host 当前监听地址完全相同、路径以 `/pub/sandbox-media/` 开头、`id` 合法。真正的授权在 `read` 里：校验 HMAC 与有效期，然后只按 `id` 读 Sandbox 媒体存储里的对象。
+   - `127.0.0.1` 上的其他路径、其他端口、`localhost` 等别名都**不**受信任，仍按原网络策略拒绝。
+   - `read` 的结果按调用方的 `maxBytes` 截断即失败，按魔数再校验一次类型。
+   - 没有网络请求，也就没有重定向可跟随。
+   - Sandbox 没加载时，没有任何地址受信任。
+   - 模型在回复里引用同一个地址也能读到（相当于引用用户发来的图），但只限这个对象，读不到本机其他任何资源。
+4. 插件侧：core 新增 `readMediaRef(ref, { maxBytes, signal, network? })`（先问本机来源，再按调用方给的网络策略取）和 `isLocalMediaUrl(url)`（插件自己做域名白名单时用它放行），由 `zhin.js` 再导出。插件直接 `fetch(url)` 也能下载（签名地址 + 回环来源，见 D12），README 写明两种用法。
+
+#### D15 引用、`replyTo` 与平台查询的模拟
+
+1. **操作**：页面每条消息（用户的和机器人的）在消息操作里加「引用」（console-ui 的图标按钮 + 提示）。点击后输入区上方出现引用条（被引用者、摘要、取消），发送时在 `content` **最前面**加 canonical `reply` 段 `{ type: 'reply', data: { message_id } }`，与 OneBot / QQ 把回复段放在最前的习惯一致。
+2. **`replyTo` 不手写**：由 `promoteInboundMessagePayload` 从 `reply` 段提升，与其他适配器同一条路径，所以命令、Handler、Agent 看到的 `message.replyTo.id` 与真实平台一致。
+3. **id**：用户消息用帧里的 `messageId`（端点已采用为入站 id）；机器人消息用出站回执里的 id（页面收到的出站帧带 `messageId`）。I3 用测试确认两者与会话事件存储里记录的 id 相同。
+4. **查询模拟**：插件或 Agent 查询被引用消息时，走既有的 `resolveConversationReference`：先查会话事件存储（Sandbox 的入站、出站消息都在里面），找不到再问端点。Sandbox 端点实现 `EndpointContentPort.resolve`：Sandbox 没有独立于会话事件的消息库，所以消息引用一律返回 `not_found`（`code: 'message_not_found'`，模拟平台上「消息已过期 / 已撤回」），不返回 `unsupported`；测试守住这一点，避免引用在 Sandbox 里被当成「平台不支持」。
+5. **显示**：`reply` 段的渲染从「↩ 引用消息 #id」改为被引用者 + 摘要（在页面本地消息列表里查，查不到时显示 id）。
+6. 画像：Sandbox 已声明 `quote: true` 与 `actions.quoteReply`（出站），本项不改画像。
+
+#### D16 平台事件的入口
+
+1. **页面**：消息操作和会话工具栏的「更多」菜单（console-ui `DropdownMenu`）提供：戳一戳（机器人或某成员）、对某条消息加 / 取消表情回应、撤回自己发的消息、合并转发（勾选若干条消息，生成一条 `forward` 入站消息）、群聊里的成员进群 / 退群；加好友 / 加群请求放在最后（需要走 `request.approve` / `request.reject` 的既有 RPC）。
+2. **线协议**：`/sandbox` WebSocket 新增 control 帧 `{ op: 'event', conversation, event: { name, … } }`，与 `subscribe` 一样不进聊天流；端点校验后经 `this[endpointSpec].events.emit('notice.<会话类型>.<名字>', …)` 上报，名字取 core `conversation-runtime.ts` 已识别的那一组（`poke`、`emoji_reaction`、`recall`、`increase` / `decrease` 等，I4 开工前核对完整列表并在测试里逐个枚举），这样 core 的会话事件、Agent 的场景事件和真实平台走同一条映射。
+3. **身份**：事件的操作者固定是当前发送者，模拟身份规则与消息相同（ADR 0060 §5.4 的 `~sim:` 前缀）；不能以机器人自己的身份发事件；只读连接一律拒绝。
+4. **合并转发的形状**：页面按 canonical `forward` 段构造（`forward_id` 随机、`messages` 为段的二维数组）。Agent 引用摘要读的 `data.entries`（带发送者）与 canonical 不一致（N5），I4 先在 core 统一：推荐给 canonical `forward` 增加可选的 `entries: { actor?, segments }[]`，`messages` 保留，摘要两者都读。这会改 canonical schema 与类型，是 `@zhin.js/core` 的 minor，单独请所有者批准；不批准时 I4 的合并转发只填 `messages`，摘要里不显示发送者。
+
+#### D17 「快捷操作与语法」只列真的会解析的写法（I0 已实施）
+
+写法表与解析器是同一份数据（`plugins/adapters/sandbox/src/inbound-syntax.ts` 的 `SANDBOX_INBOUND_SYNTAX`）：页面的提示列表直接渲染这张表，页面发送、预览、端点收帧都用它的解析器，编辑器按钮插入的段也由同一组函数构造。以后新增写法（例如 `[reply:ID]`）必须同时加进表和解析器，守卫测试（`tests/sandbox-typed-syntax.test.ts`）在两者不一致时失败。
+
+### 3. 安全考虑
+
+| 风险 | 措施 |
+|---|---|
+| 上传撑满磁盘 | 单文件按类型限额、端点总配额、配置值的硬顶、到期清扫（D12） |
+| 上传可执行内容 | 按魔数判定类型、`nosniff`；SVG / HTML 不作为图片，强制 `attachment`（D12.6） |
+| 托管地址变成任意文件读取 | 路由与 `read` 只接受随机 `id`，磁盘文件名只用 `id`，从不拼接用户给的路径（D12.1） |
+| 托管地址变成公开外链 | 签名 + 到期 + 默认只接受回环来源；Console 入口要 `endpoint.view` 且范围覆盖该端点；`publicDownload` 默认关闭并在文档里写明含义（D12.5） |
+| 借「本机可信」做 SSRF | 按签发者放行，不按域名 / IP；`ownsUrl` 命中后不回退到网络；其他本机路径、端口、别名不受信任（D14.3） |
+| 上传冒用他人或机器人身份 | 上传与事件都在 `endpoint.operate` 下，元数据记录上传者 principal；事件操作者固定为当前发送者（D13.2、D16.3） |
+| 审计 | 每次上传写一条实例日志（principal、端点、类型、大小、`id`，不含内容） |
+
+### 4. 分阶段计划
+
+| 阶段 | 内容 | 要改的文件 | 测试 | 发布级别 |
+|---|---|---|---|---|
+| I0 手打写法（**已实施**，第 42 批） | D17；粘贴图片改 `base64` 引用；只含媒体的消息纯文本不再回退成原始帧 | `plugins/adapters/sandbox/src/inbound-syntax.ts`（新）、`src/protocol.ts`、`pages/index/{SandboxChat.tsx,RichTextEditor.tsx,messages.ts}`、`README.md` | `tests/sandbox-typed-syntax.test.ts`（新：手打生成图片段、按钮与手打一致、不合法 URL 保留为文本并提示、写法表与解析器一致的守卫、端点展开）；`sandbox-typed-mention.test.ts` 不变通过 | `@zhin.js/adapter-sandbox` patch；无新增公开导出 |
+| I1 本地文件托管与上传 | D12、D13：媒体存储、签名、两条下载路由、上传路由、页面拖放 / 粘贴 / 选择文件 / 录音、端点配置 `media` | `plugins/adapters/sandbox/src/media-store.ts`（新）、`src/media-routes.ts`（新）、`src/endpoint.ts`、`src/inbound-syntax.ts`、`schema.json`、`pages/index/{RichTextEditor.tsx,SandboxChat.tsx,messages.ts}`；`packages/console/protocol/src/permissions.ts`（登记 `POST /sandbox/media` 为 `endpoint.operate`、`GET /sandbox/media` 前缀为 `endpoint.view`） | 存储：`id` 与路径无关、配额与清扫、魔数判定、SVG 强制附件；路由：签名错 / 过期 / 非回环一律 404、`publicDownload`、Console 入口的范围检查；上传：超限 413、只读连接拒绝；页面：上传后插入的段与 `sandboxInboundMediaSegment` 一致；`tests/contracts` 的权限映射覆盖新路由；`pnpm check:plugin-ui-audit` | `@zhin.js/adapter-sandbox` **minor**（新配置项 `media`、新路由；若 ADR 0064 P1 的 minor 尚未发布则并入同一版本）；`@zhin.js/console-protocol` patch（只在已有常量里加条目，不新增导出） |
+| I2 本机可信来源 | D14：`LocalMediaSource` 端口与 token、`normalizeMediaRefsToPayloads` 先问本机来源、`readMediaRef` / `isLocalMediaUrl`；Sandbox 注册来源 | `packages/im/core/src/`（新增端口与两个函数，从包入口导出）、`packages/im/zhin/src/`（再导出）、`packages/im/agent/src/media/media-normalize.ts`、`plugins/adapters/sandbox/src/endpoint.ts` | core：`ownsUrl` 命中但 `read` 失败时不发网络请求（mock `fetch` 断言零调用）、同主机其他路径 / 端口 / `localhost` 别名仍被拒、来源随 generation 卸载；agent：上传的图片进入识图（`inbound-media.ts` 产出图片块，结局不再是 `rejected` / `media_validation_failed`）；sandbox 端到端：上传 → 发送 → Agent 收到 base64 图片块 | `@zhin.js/core` **minor**（新增公开导出）、`zhin.js` **minor**（再导出）、`@zhin.js/agent` patch、`@zhin.js/adapter-sandbox` 随 I1 |
+| I3 引用 | D15：消息「引用」操作与引用条、`reply` 段放最前、`replyTo` 经提升、端点 content port、`reply` 段显示摘要 | `plugins/adapters/sandbox/src/endpoint.ts`、`pages/index/{SandboxChat.tsx,segments/basic.tsx,messages.ts}` | 引用用户消息与机器人消息时 `message.replyTo.id` 等于会话事件里的 id；`resolveConversationReference` 先命中本地存储；本地没有时端点返回 `not_found` 而不是 `unsupported`；Agent 的引用摘要包含被引用内容 | `@zhin.js/adapter-sandbox` patch；无新增公开导出 |
+| I4 平台事件与合并转发 | D16：control 帧 `op: 'event'`、notice / request 上报、页面「更多」菜单、合并转发 | `plugins/adapters/sandbox/src/{protocol.ts,endpoint.ts}`、`pages/index/`；若批准 D16.4，`packages/im/core/src/built/segment-contract/{json-schema.ts,validate.ts,types.ts}` 与 `packages/im/agent/src/session/turn-quote.ts` | 每种事件经 core 映射成对应的会话事件（逐个枚举）；只读连接与冒充机器人被拒；合并转发通过 canonical 校验，Agent 摘要正确 | `@zhin.js/adapter-sandbox` patch；D16.4 批准时 `@zhin.js/core` **minor**（canonical `forward` 新增可选字段）、`@zhin.js/agent` patch |
+
+依赖：I1 与 I2 一起发布（只有 I1 时插件能下载，但 Agent 看不到上传的图）；I3、I4 不依赖 I1 / I2，可并行。
+
+需要所有者批准、写进 `.changeset/version-policy.json` 的 minor：I1 的 `@zhin.js/adapter-sandbox`、I2 的 `@zhin.js/core` 与 `zhin.js`、I4（仅当采用 D16.4）的 `@zhin.js/core`。
+
+### 5. zhinjs/console 仓库
+
+不需要改动。Sandbox 页面、上传与下载路由、权限映射、网关都在本仓库；Console 只是加载插件页面，上传请求走 `/api`、带 Console 自己的凭据。唯一前提是网关把 `/pub/sandbox-media/*` 转发给实例并带上对端地址（`remoteAddress`）——I1 用端到端测试确认；如果不满足，要改的是本仓库的 `packages/host/gateway`，不是 Console。
+
+### 6. 备选方案及否决理由（入站）
+
+| 方案 | 否决理由 |
+|---|---|
+| 上传走 `/sandbox` WebSocket 帧（base64） | 体积放大约三分之一，受 16 MiB 单帧限制，大文件会拖住会话连接 |
+| 入站媒体用平台引用（`media.kind: 'file'`，Telegram 的 `file_id` 式）+ 端点 content port 返回字节 | 不用改 core（Agent 已能解析平台引用），但插件拿不到可下载的地址，而所有者要的是「给插件一个可下载的地址」；多数平台的入站媒体也是 URL |
+| 把 `127.0.0.1` / `localhost` 加进域名白名单 | 等于对本机所有服务开放 SSRF；D14 只信任签发者，不信任地址 |
+| 媒体只存内存 | 重启后历史里的图片和引用全部失效 |
+| 永久公开链接 | 违背「不得变成公开外链」；签名 + 到期 + 回环默认已覆盖本机插件的需要 |
+| 页面里按平台名写不同的入站格式 | 违反 ADR 0044 与 §0.3；入站段只按 canonical 段与多数平台的共同做法构造 |

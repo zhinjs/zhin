@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import * as inboundSyntax from '../src/inbound-syntax.js';
 import { sandboxText } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
@@ -76,7 +77,7 @@ function fixture(options: {
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
-    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),

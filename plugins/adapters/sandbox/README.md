@@ -160,6 +160,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 - 帧内容不是 JSON 时，整段文本按一条纯文本消息处理。
 - 消息的发送者固定为 endpoint 的 `owner`。
 - **@ 提及**：文本里的 `[@名称]` 解析为 `mention` 段。名称等于 endpoint 的 `id`（如 `sandbox-bot`）或配置的 `nickname`（不区分大小写）时视为 @ 机器人：群聊里 `[@sandbox-bot] /help` 会被识别为对机器人说话，且命令文本去掉这段提及（`/help`）；其他名称保留为 `@名称`。从输入框 @ 选择器插入的 `mention` 段若带的是机器人名称，也会改写成机器人 `id`。
+- **表情与媒体**：文本里的 `[face:ID]`、`[image:URL]`、`[video:URL]`、`[audio:URL]`、`[file:URL]` 解析为 `face` / `image` / `video` / `audio` / `file` 段，和 Sandbox 页面上用按钮插入的段完全相同（共用 `src/inbound-syntax.ts` 的写法表，页面「快捷操作与语法」也只列这张表里的写法）。`URL` 须是 `http(s)` 链接；图片、视频、音频也可以是同类型的 base64 `data:` URL（作为 `base64` 媒体引用）。链接不合法的写法保留为文本，页面会提示「已按文本发送」。这些写法不出现在消息的纯文本里；只含图片的消息纯文本为空。
 - **按钮回传**：`content` 中的 `{ "type": "action", "data": { "id": "...", "payload": "..." } }` 段会作为交互动作交给命令或 Agent；只填 `id` 或 `payload` 时，另一个取相同的值。消息里没有文本时，`payload` 作为消息文本。
 
 `agentRun` 字段：
