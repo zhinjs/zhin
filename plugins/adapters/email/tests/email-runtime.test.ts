@@ -446,8 +446,10 @@ describe('email plugin runtime adapter', () => {
       const first = pathOf(0);
       const second = pathOf(1);
       expect(first).not.toBe(second);
-      await expect(readFile(first, 'utf8')).resolves.toBe('png');
-      await expect(readFile(second, 'utf8')).resolves.toBe('PNG');
+      // The two emails are admitted concurrently, so their delivery order is not fixed: check that
+      // each attachment kept its own bytes, whichever email was delivered first.
+      const contents = await Promise.all([readFile(first, 'utf8'), readFile(second, 'utf8')]);
+      expect(contents.sort()).toEqual(['PNG', 'png']);
       // #1250: the Agent reads an inbound path only inside the Endpoint's declared directory.
       const roots = endpoint.index.inboundMediaRoots(endpoint.canonicalId);
       expect(roots).toEqual([dir]);
