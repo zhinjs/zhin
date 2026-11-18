@@ -1,8 +1,8 @@
 ---
-"@zhin.js/kernel": patch
-"@zhin.js/adapter": patch
-"@zhin.js/core": patch
-"@zhin.js/agent": patch
+"@zhin.js/kernel": minor
+"@zhin.js/adapter": minor
+"@zhin.js/core": minor
+"@zhin.js/agent": minor
 "zhin.js": patch
 "@zhin.js/adapter-satori": patch
 "@zhin.js/adapter-onebot11": patch
