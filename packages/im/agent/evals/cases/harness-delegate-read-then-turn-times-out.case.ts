@@ -7,7 +7,7 @@ export default defineEvalCase({
   id: 'harness-delegate-read-then-turn-times-out',
   description: 'A waited result whose turn then times out is not lost: the conclusion still goes out.',
   source: '#1250 delegate-result-double-reply',
-  tags: ['collaboration', 'resilience'],
+  tags: ['collaboration'],
   inbound: { text: '查一下 Node 24 什么时候停止维护', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agents: [{ name: 'researcher', description: 'Looks things up; read-only.', tools: [] }],
   script: [
