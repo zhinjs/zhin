@@ -163,6 +163,11 @@ export interface TurnInput {
    * inside one of them (and passes the FilePolicy secret checks); absent = no local path is read.
    */
   readonly inboundMediaRoots?: readonly string[];
+  /**
+   * #1250 第 48 批: protocol-server origins the producing Endpoint declared, set by the trusted ingress.
+   * A media URL on one of them keeps its port; any other URL must use the scheme's default port.
+   */
+  readonly inboundMediaOrigins?: readonly string[];
   readonly references?: readonly TurnReference[];
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly contextState?: TurnContextState;

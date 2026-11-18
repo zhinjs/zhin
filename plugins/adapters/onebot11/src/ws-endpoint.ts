@@ -87,6 +87,8 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
     const readTransportState = () => this.#lifecycle.state;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
+      // Media URLs the protocol server hands out may use its own port (#1250 第 48 批).
+      inboundMedia: Object.freeze({ origins: () => [options.config.url] }),
       start: () => this.#start(), open: () => { this.#open = true; },
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),

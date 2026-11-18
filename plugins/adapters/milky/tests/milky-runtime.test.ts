@@ -1066,3 +1066,18 @@ describe('milky sse lifecycle', () => {
     await expect(startPromise).resolves.toBeUndefined();
   });
 });
+
+describe('milky inbound media origins (#1250 第 48 批)', () => {
+  it('declares the configured Milky server', async () => {
+    const h = await createEndpointHarness(() => new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      config: baseConfig,
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => { const socket = createMockWs(); queueMicrotask(() => socket.emitOpen()); return socket; },
+    }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    try {
+      await h.start();
+      expect(h.index.inboundMediaOrigins(h.canonicalId)).toEqual(['http://127.0.0.1:8080']);
+    } finally { await h.stop(); }
+  });
+});

@@ -8,6 +8,8 @@
  * fetch it on their own servers. A URL downloaded *here* is therefore always treated as untrusted:
  *
  * - HTTPS only; private, loopback, link-local and metadata hosts are refused by name;
+ * - port 443 only (written as `:443` or not) unless `allowedPorts` lists more for the first URL's own
+ *   origin; every redirect hop is checked too, and a hop to another origin gets 443 only: any other port is refused as `outbound_media_url_blocked` with `reason: 'port'` (#1250 第 48 批);
  * - the name is resolved once, every address must be public, and the connection goes to the address
  *   that was checked (DNS pinning — no rebinding between check and connect);
  * - redirects are followed by hand and every hop is checked again;
@@ -84,7 +86,8 @@ class DownloadSlots {
 const sharedSlots = new DownloadSlots(OUTBOUND_MEDIA_MAX_CONCURRENT);
 
 /**
- * - `outbound_media_url_blocked`: not a public HTTPS target (scheme, host, resolved address or a redirect hop);
+ * - `outbound_media_url_blocked`: not a public HTTPS target on an allowed port (scheme, host, port, resolved
+ *   address or a redirect hop);
  * - `outbound_media_too_large`: the body exceeds `maxBytes`;
  * - `outbound_media_http_status`: the final response is not 2xx;
  * - `outbound_media_fetch_failed`: timeout, connection / TLS error, too many redirects.
@@ -107,18 +110,21 @@ export class OutboundMediaFetchError extends Error {
   /** Host of the refused or failed hop; never the full URL. */
   readonly host?: string;
   readonly status?: number;
+  /** Why an address was refused, when more specific than the code: `port` (not 443 / `allowedPorts`). */
+  readonly reason?: 'port';
 
   readonly #refused: boolean;
 
   constructor(
     code: OutboundMediaFetchCode,
-    details: { readonly host?: string; readonly status?: number; readonly refused?: boolean } = {},
+    details: { readonly host?: string; readonly status?: number; readonly refused?: boolean; readonly reason?: 'port' } = {},
   ) {
-    super(`${code}${details.host ? ` (${details.host})` : ''}${details.status !== undefined ? ` HTTP ${details.status}` : ''}`);
+    super(`${code}${details.host ? ` (${details.host})` : ''}${details.reason ? ` reason=${details.reason}` : ''}${details.status !== undefined ? ` HTTP ${details.status}` : ''}`);
     this.name = 'OutboundMediaFetchError';
     this.code = code;
     if (details.host) this.host = details.host;
     if (details.status !== undefined) this.status = details.status;
+    if (details.reason) this.reason = details.reason;
     this.#refused = details.refused
       ?? (code === 'outbound_media_url_blocked' || code === 'outbound_media_too_large');
   }
@@ -146,6 +152,12 @@ export interface OutboundMediaFetchOptions {
   readonly headers?: Readonly<Record<string, string>>;
   /** Short label for logs, e.g. the adapter name. Never a user value. */
   readonly source?: string;
+  /**
+   * Ports accepted besides 443 (default none), for the first URL's origin only (same scheme, host and
+   * port): a redirect to another origin is held to 443. Only for a platform whose own media host is
+   * known to use another port; never from user or model input.
+   */
+  readonly allowedPorts?: readonly number[];
   /**
    * A best-effort read of the first `maxBytes` (e.g. an image-size probe with `Range`). A body over
    * `maxBytes` — a server that ignored `Range` and sent the whole file — is then an ordinary failure:
@@ -213,6 +225,7 @@ export function createOutboundMediaFetcher(options: OutboundMediaFetcherOptions 
         timeoutMs,
         signal,
         ...(fetchOptions.headers ? { headers: fetchOptions.headers } : {}),
+        ...(fetchOptions.allowedPorts?.length ? { allowedPorts: fetchOptions.allowedPorts } : {}),
         ...(transport ? { transport } : {}),
       });
     } finally {
@@ -227,12 +240,14 @@ export function createOutboundMediaFetcher(options: OutboundMediaFetcherOptions 
     const error = new OutboundMediaFetchError(CODES[result.code], {
       ...(result.host ? { host: result.host } : {}),
       ...(result.status !== undefined ? { status: result.status } : {}),
+      ...(result.reason ? { reason: result.reason } : {}),
       ...(probeOversize ? { refused: false } : {}),
     });
     const line = formatCompact({
       op: error.code,
       ...(fetchOptions.source ? { source: fetchOptions.source } : {}),
       ...(error.host ? { host: error.host } : {}),
+      ...(error.reason ? { reason: error.reason } : {}),
     });
     if (error.refused) logger.warn(line);
     else if (probeOversize) logger.debug(line);

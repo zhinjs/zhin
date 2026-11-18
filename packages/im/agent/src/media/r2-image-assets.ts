@@ -25,6 +25,11 @@ export class R2ImageAssetPublisher implements ImageAssetPublisher {
     if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
       throw new Error('imageStorage.publicBaseUrl must be an HTTPS URL without credentials, query or fragment');
     }
+    // Published URLs are downloaded through the port-checked media fetch (443 only, #1250 第 48 批):
+    // refuse a port here, at startup, rather than have every published image refused later.
+    if (base.port !== '') {
+      throw new Error(`imageStorage.publicBaseUrl must use the default HTTPS port 443, not :${base.port}`);
+    }
     this.#publicBase = `${base.href.replace(/\/+$/u, '')}/${config.prefix}`;
     this.#store = new S3PublicStore({
       endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,

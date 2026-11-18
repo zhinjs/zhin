@@ -77,6 +77,8 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
     const readTransportState = () => this.#transportState;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
+      // Media URLs the protocol server hands out may use its own port (#1250 第 48 批).
+      inboundMedia: Object.freeze({ origins: () => [options.config.url] }),
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
