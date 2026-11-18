@@ -429,9 +429,8 @@ export function useAdapterAccounts(): AdapterAccounts {
 export function AdapterAccountEditor() {
   const scope = React.useContext(AdapterAccountsContext);
   if (!scope || !scope.model.editor) return null;
-  // `zk-account-editor-host` is kept only as a marker for Consoles that scroll to the editor by it;
-  // it carries no styles any more (use `data-adapter-account-editor`).
-  return <div className="zk-account-editor-host" data-adapter-account-editor="">{renderAccountEditor(scope.model)}</div>;
+  // Hosts find the editor (to scroll to it) by `data-adapter-account-editor`.
+  return <div data-adapter-account-editor="">{renderAccountEditor(scope.model)}</div>;
 }
 
 type EditorState = { instanceId: string; id: string; originalId: string; values: Record<string, string>; originalValues: Readonly<Record<string, string>>; generation: number; revision: number | null };
@@ -1099,7 +1098,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     <Button asChild variant="outline" size="sm"><a href={docsUrl} target="_blank" rel="noreferrer">{t(locale, '文档')}</a></Button>
   ) : null;
   const addButton = canAdd ? (
-    <Button type="button" variant={addOpen ? 'outline' : 'default'} size="sm" disabled={addDisabled} aria-expanded={addOpen} aria-controls="adapter-add-account" onClick={toggleAdd}>
+    <Button type="button" variant={addOpen ? 'outline' : 'soft'} size="sm" disabled={addDisabled} aria-expanded={addOpen} aria-controls="adapter-add-account" onClick={toggleAdd}>
       {addOpen ? t(locale, '取消') : t(locale, '添加')}
     </Button>
   ) : null;
@@ -1188,8 +1187,8 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                       </> : null}
                       <ContentStack direction="row" gap="tight">
                         {needsValue
-                          ? <Button type="button" variant="default" size="sm" aria-busy={submitBusy || undefined} disabled={submitBusy || expired || !currentLoginVal.trim()} onClick={() => submitLogin(task, currentLoginVal)}>{t(locale, '提交')}</Button>
-                          : <Button type="button" variant="default" size="sm" aria-busy={submitBusy || undefined} disabled={submitBusy || expired} onClick={() => submitLogin(task, 'ok')}>{task.type === 'qrcode' ? t(locale, '已扫码，继续') : t(locale, '完成')}</Button>}
+                          ? <Button type="button" variant="soft" size="sm" aria-busy={submitBusy || undefined} disabled={submitBusy || expired || !currentLoginVal.trim()} onClick={() => submitLogin(task, currentLoginVal)}>{t(locale, '提交')}</Button>
+                          : <Button type="button" variant="soft" size="sm" aria-busy={submitBusy || undefined} disabled={submitBusy || expired} onClick={() => submitLogin(task, 'ok')}>{task.type === 'qrcode' ? t(locale, '已扫码，继续') : t(locale, '完成')}</Button>}
                         <Button type="button" variant="ghost" size="sm" aria-busy={isBusy(`login-cancel:${task.id}`) || undefined} disabled={isBusy(`login-cancel:${task.id}`)} onClick={() => cancelLogin(task)}>{t(locale, '取消')}</Button>
                       </ContentStack>
                     </ContentStack>
@@ -1223,7 +1222,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       <Section title={t(locale, 'QQ 官方机器人双轨接入工作台')} actions={<ToneBadge tone="neutral">QR + AppID</ToneBadge>} role="region" aria-label={t(locale, 'QQ 官方机器人双轨接入工作台')}>
         <ContentStack direction="row" gap="tight">
           {startAction && (
-            <Button type="button" variant="default" size="sm" disabled={addDisabled} onClick={() => void runAction(startAction)}>
+            <Button type="button" variant="soft" size="sm" disabled={addDisabled} onClick={() => void runAction(startAction)}>
               {t(locale, '用手机 QQ 扫码一键创建/绑定官方机器人')}
             </Button>
           )}
@@ -1253,7 +1252,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
             />
             {selectedKind && (
               <ContentStack direction="row" gap="tight">
-                <Button type="button" variant="default" size="sm" disabled={addDisabled} onClick={() => void runAction(kindAction)}>{t(locale, '确认创建并写入配置')}</Button>
+                <Button type="button" variant="soft" size="sm" disabled={addDisabled} onClick={() => void runAction(kindAction)}>{t(locale, '确认创建并写入配置')}</Button>
               </ContentStack>
             )}
           </ContentStack>
@@ -1345,7 +1344,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {showAccounts && runtime.needsMigration && (
         <NoticeBlock
           tone="warning"
-          actions={canMigrateNow ? <Button type="button" variant="default" size="sm" disabled={mutating || !!migration || runtimeBlocked} onClick={() => void migrateNow()}>{t(locale, '立即迁移')}</Button> : undefined}
+          actions={canMigrateNow ? <Button type="button" variant="soft" size="sm" disabled={mutating || !!migration || runtimeBlocked} onClick={() => void migrateNow()}>{t(locale, '立即迁移')}</Button> : undefined}
         >
           <ContentStack gap="tight">
             <strong>{t(locale, '首次修改前需迁移以下账号，保留身份和历史。')}</strong>
@@ -1497,7 +1496,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                 )}
                 {formError && <NoticeBlock tone="danger">{formError}</NoticeBlock>}
                 <ContentStack direction="row" gap="tight">
-                  <Button type="button" variant="default" size="sm" aria-busy={isBusy('mutate:add:') || undefined} disabled={addDisabled} onClick={addEndpoint}>{t(locale, '添加')}</Button>
+                  <Button type="button" variant="soft" size="sm" aria-busy={isBusy('mutate:add:') || undefined} disabled={addDisabled} onClick={addEndpoint}>{t(locale, '添加')}</Button>
                   <Button type="button" variant="outline" size="sm" aria-busy={isBusy('mutate:add-start:') || undefined} disabled={addDisabled} onClick={addAndStartEndpoint}>{t(locale, '保存并立即启动')}</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={toggleAdd}>{t(locale, '取消')}</Button>
                 </ContentStack>
@@ -1551,7 +1550,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
                   <ContentStack direction="row" gap="tight">
                     <ActionButton
                       label={label}
-                      fallbackVariant="default"
+                      fallbackVariant="soft"
                       locale={locale}
                       busy={actionBusy}
                       disabled={actionDisabled}
@@ -1751,7 +1750,7 @@ function renderAccountEditor(m: AdapterConsoleModel) {
                   ? (
                     <ActionButton
                       label={t(locale, '保存')}
-                      fallbackVariant="default"
+                      fallbackVariant="soft"
                       locale={locale}
                       confirm={t(locale, '替换账号「{0}」？旧账号将关闭，历史保留；新账号不继承会话和设置，保存后需手动启动。', editor.originalId)}
                       confirmLabel={t(locale, '替换账号')}
@@ -1760,7 +1759,7 @@ function renderAccountEditor(m: AdapterConsoleModel) {
                       onRun={saveEdit}
                     />
                   )
-                  : <Button type="button" variant="default" size="sm" aria-busy={saveBusy || undefined} disabled={runtimeBlocked || !!migration || (mutating && !saveBusy) || stale} onClick={saveEdit}>{t(locale, '保存')}</Button>}
+                  : <Button type="button" variant="soft" size="sm" aria-busy={saveBusy || undefined} disabled={runtimeBlocked || !!migration || (mutating && !saveBusy) || stale} onClick={saveEdit}>{t(locale, '保存')}</Button>}
                 <Button type="button" variant="ghost" size="sm" onClick={closeEdit}>{t(locale, '取消')}</Button>
               </ContentStack>
             </ContentStack>

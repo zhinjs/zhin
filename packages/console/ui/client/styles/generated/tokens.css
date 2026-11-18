@@ -47,6 +47,8 @@
     --secondary-foreground: var(--foreground);
     --muted: var(--secondary);
     --muted-foreground: var(--palette-hue) var(--surface-chroma) 39%;
+    /* Inactive tab labels sit on the tab list fill (background + 6% foreground); 39% only reached 4.45:1 there. */
+    --tab-inactive: var(--palette-hue) var(--surface-chroma) 34%;
     --accent: var(--palette-hue) var(--surface-chroma) 93.2%;
     --accent-foreground: var(--foreground);
     --selected: var(--primary-action);
@@ -189,6 +191,7 @@
     --secondary: var(--palette-hue) var(--surface-chroma) 12.2%;
     --secondary-foreground: var(--foreground);
     --muted-foreground: var(--palette-hue) var(--surface-chroma) 64%;
+    --tab-inactive: var(--muted-foreground);
     --accent: var(--palette-hue) var(--surface-chroma) 15.5%;
     --accent-foreground: var(--foreground);
     --border: var(--palette-hue) var(--surface-chroma) 16%;
@@ -228,17 +231,12 @@
 @layer base {
   :root, .dark {
     --console-text-label: 0.8125rem;
-    --console-text-caption: var(--console-text-label);
-    --console-text-code: var(--console-text-label);
-    --console-text-body-sm: var(--console-text-label);
     --console-leading-label: 1.45;
     --console-text-body: 0.875rem;
     --console-leading-body: 1.6;
     --console-text-section: 1rem;
-    --console-text-section-sm: var(--console-text-section);
     --console-leading-section: 1.4;
     --console-text-title: 1.375rem;
-    --console-text-title-compact: var(--console-text-title);
     --console-leading-title: 1.25;
     --console-text-display: 1.75rem;
     --console-leading-display: 1.15;
@@ -255,28 +253,16 @@
     --console-space-8: 4rem;
     --console-radius-0: 0rem;
     --console-radius-1: 0.375rem;
-    --console-radius-sm: var(--console-radius-1);
     --console-radius-2: 0.625rem;
-    --console-radius-md: var(--console-radius-2);
     --console-radius-3: 0.875rem;
-    --console-radius-lg: var(--console-radius-3);
     --console-radius-4: 1.125rem;
-    --console-radius-xl: var(--console-radius-4);
-    --console-radius-2xl: var(--console-radius-4);
     --console-radius-full: 9999px;
     --console-border-hairline: 1px;
-    --console-border-width: var(--console-border-hairline);
     --console-border-focus: 2px;
-    --console-focus-width: var(--console-border-focus);
     --console-elevation-0: none;
-    --console-shadow-xs: var(--console-elevation-0);
-    --console-shadow-button: var(--console-elevation-0);
     --console-elevation-1: 0 1px 2px hsl(var(--console-shadow-color) / 0.06), 0 2px 6px -2px hsl(var(--console-shadow-color) / 0.08);
     --console-elevation-2: 0 6px 16px -4px hsl(var(--console-shadow-color) / 0.12), 0 2px 4px -2px hsl(var(--console-shadow-color) / 0.06);
-    --console-shadow-md: var(--console-elevation-2);
     --console-elevation-3: 0 24px 48px -12px hsl(var(--console-shadow-color) / 0.2), 0 4px 12px -4px hsl(var(--console-shadow-color) / 0.08);
-    --console-shadow-lg: var(--console-elevation-3);
-    --console-shadow-xl: var(--console-elevation-3);
     --console-bp-sm: 40rem;
     --console-bp-md: 48rem;
     --console-bp-lg: 64rem;
@@ -299,9 +285,7 @@
     --console-border-default: hsl(var(--border));
     --console-border-strong: hsl(var(--border-strong));
     --console-motion-fast: 120ms;
-    --console-duration-fast: var(--console-motion-fast);
     --console-motion-base: 200ms;
-    --console-duration-page: var(--console-motion-base);
     --console-motion-slow: 280ms;
     --console-brand: 160 78% 69.8%;
     --console-brand-foreground: 160 80% 10%;
@@ -324,7 +308,6 @@
     --console-chart-7: 192 80% 38%;
     --console-chart-8: 8 66% 46%;
     --console-chart-other: 220 6% 58%;
-    --console-shadow-ring: 0 0 0 1px hsl(var(--console-shadow-color) / 0.045);
   }
   .dark {
     --console-elevation-0: none;
@@ -368,36 +351,24 @@
 @layer base {
   :root, .dark {
     --console-page-padding-inline: var(--console-space-3);
-    --console-space-page-x: var(--console-page-padding-inline);
     --console-page-padding-block: var(--console-space-4);
-    --console-space-page-y: var(--console-page-padding-block);
     --console-section-gap: var(--console-space-4);
-    --console-space-section: var(--console-section-gap);
     --console-stack-gap: var(--console-space-2);
-    --console-space-stack: var(--console-stack-gap);
     --console-inline-gap: var(--console-space-2);
     --console-heading-gap: var(--console-space-1);
     --console-card-padding: var(--console-space-3);
-    --console-space-card: var(--console-card-padding);
-    --console-space-card-sm: var(--console-card-padding);
     --console-card-padding-wide: var(--console-space-3);
     --console-card-radius: var(--console-radius-2);
     --console-card-edge-radius: var(--console-radius-0);
     --console-card-border: var(--console-border-hairline);
     --console-card-elevation: var(--console-elevation-0);
-    --console-shadow-sm: var(--console-card-elevation);
-    --console-shadow-panel: var(--console-card-elevation);
     --console-card-hover-elevation: var(--console-elevation-0);
-    --console-shadow-hover: var(--console-card-hover-elevation);
     --console-grid-gap: var(--console-space-2);
     --console-list-row-padding: var(--console-space-3);
     --console-list-row-padding-inline: var(--console-space-3);
     --console-control-height: 2.75rem;
-    --console-control-height-lg: var(--console-control-height);
     --console-control-height-compact: 2.75rem;
-    --console-control-height-sm: var(--console-control-height-compact);
     --console-control-radius: var(--console-radius-2);
-    --radius: var(--console-control-radius);
     --console-check-radius: var(--console-radius-1);
     --console-segment-radius: var(--console-radius-1);
     --console-control-padding-inline: var(--console-space-3);
@@ -424,36 +395,24 @@
   @media (min-width: 40rem) {
     :root, .dark {
       --console-page-padding-inline: var(--console-space-4);
-      --console-space-page-x: var(--console-page-padding-inline);
       --console-page-padding-block: var(--console-space-5);
-      --console-space-page-y: var(--console-page-padding-block);
       --console-section-gap: var(--console-space-5);
-      --console-space-section: var(--console-section-gap);
       --console-stack-gap: var(--console-space-3);
-      --console-space-stack: var(--console-stack-gap);
       --console-inline-gap: var(--console-space-2);
       --console-heading-gap: var(--console-space-1);
       --console-card-padding: var(--console-space-4);
-      --console-space-card: var(--console-card-padding);
-      --console-space-card-sm: var(--console-card-padding);
       --console-card-padding-wide: var(--console-space-4);
       --console-card-radius: var(--console-radius-3);
       --console-card-edge-radius: var(--console-radius-3);
       --console-card-border: var(--console-border-hairline);
       --console-card-elevation: var(--console-elevation-0);
-      --console-shadow-sm: var(--console-card-elevation);
-      --console-shadow-panel: var(--console-card-elevation);
       --console-card-hover-elevation: var(--console-elevation-0);
-      --console-shadow-hover: var(--console-card-hover-elevation);
       --console-grid-gap: var(--console-space-3);
       --console-list-row-padding: var(--console-space-2);
       --console-list-row-padding-inline: var(--console-space-3);
       --console-control-height: 2.25rem;
-      --console-control-height-lg: var(--console-control-height);
       --console-control-height-compact: 2.25rem;
-      --console-control-height-sm: var(--console-control-height-compact);
       --console-control-radius: var(--console-radius-2);
-      --radius: var(--console-control-radius);
       --console-check-radius: var(--console-radius-1);
       --console-segment-radius: var(--console-radius-1);
       --console-control-padding-inline: var(--console-space-3);
@@ -479,36 +438,24 @@
   @media (min-width: 64rem) {
     :root, .dark {
       --console-page-padding-inline: clamp(var(--console-space-4), 2.5vw, var(--console-space-6));
-      --console-space-page-x: var(--console-page-padding-inline);
       --console-page-padding-block: var(--console-space-6);
-      --console-space-page-y: var(--console-page-padding-block);
       --console-section-gap: var(--console-space-6);
-      --console-space-section: var(--console-section-gap);
       --console-stack-gap: var(--console-space-3);
-      --console-space-stack: var(--console-stack-gap);
       --console-inline-gap: var(--console-space-2);
       --console-heading-gap: var(--console-space-1);
       --console-card-padding: var(--console-space-4);
-      --console-space-card: var(--console-card-padding);
-      --console-space-card-sm: var(--console-card-padding);
       --console-card-padding-wide: var(--console-space-5);
       --console-card-radius: var(--console-radius-3);
       --console-card-edge-radius: var(--console-radius-3);
       --console-card-border: var(--console-border-hairline);
       --console-card-elevation: var(--console-elevation-0);
-      --console-shadow-sm: var(--console-card-elevation);
-      --console-shadow-panel: var(--console-card-elevation);
       --console-card-hover-elevation: var(--console-elevation-1);
-      --console-shadow-hover: var(--console-card-hover-elevation);
       --console-grid-gap: var(--console-space-4);
       --console-list-row-padding: var(--console-space-2);
       --console-list-row-padding-inline: var(--console-space-3);
       --console-control-height: 2.25rem;
-      --console-control-height-lg: var(--console-control-height);
       --console-control-height-compact: 2rem;
-      --console-control-height-sm: var(--console-control-height-compact);
       --console-control-radius: var(--console-radius-2);
-      --radius: var(--console-control-radius);
       --console-check-radius: var(--console-radius-1);
       --console-segment-radius: var(--console-radius-1);
       --console-control-padding-inline: var(--console-space-3);
@@ -538,30 +485,21 @@
   @container console (width < 40rem) {
     :where(.console-cq) > :where(*) {
       --console-stack-gap: var(--console-space-2);
-      --console-space-stack: var(--console-stack-gap);
       --console-inline-gap: var(--console-space-2);
       --console-heading-gap: var(--console-space-1);
       --console-card-padding: var(--console-space-3);
-      --console-space-card: var(--console-card-padding);
-      --console-space-card-sm: var(--console-card-padding);
       --console-card-padding-wide: var(--console-space-3);
       --console-card-radius: var(--console-radius-2);
       --console-card-edge-radius: var(--console-radius-0);
       --console-card-border: var(--console-border-hairline);
       --console-card-elevation: var(--console-elevation-0);
-      --console-shadow-sm: var(--console-card-elevation);
-      --console-shadow-panel: var(--console-card-elevation);
       --console-card-hover-elevation: var(--console-elevation-0);
-      --console-shadow-hover: var(--console-card-hover-elevation);
       --console-grid-gap: var(--console-space-2);
       --console-list-row-padding: var(--console-space-3);
       --console-list-row-padding-inline: var(--console-space-3);
       --console-control-height: 2.75rem;
-      --console-control-height-lg: var(--console-control-height);
       --console-control-height-compact: 2.75rem;
-      --console-control-height-sm: var(--console-control-height-compact);
       --console-control-radius: var(--console-radius-2);
-      --radius: var(--console-control-radius);
       --console-check-radius: var(--console-radius-1);
       --console-segment-radius: var(--console-radius-1);
       --console-control-padding-inline: var(--console-space-3);
@@ -576,30 +514,21 @@
   @container console (40rem <= width < 64rem) {
     :where(.console-cq) > :where(*) {
       --console-stack-gap: var(--console-space-3);
-      --console-space-stack: var(--console-stack-gap);
       --console-inline-gap: var(--console-space-2);
       --console-heading-gap: var(--console-space-1);
       --console-card-padding: var(--console-space-4);
-      --console-space-card: var(--console-card-padding);
-      --console-space-card-sm: var(--console-card-padding);
       --console-card-padding-wide: var(--console-space-4);
       --console-card-radius: var(--console-radius-3);
       --console-card-edge-radius: var(--console-radius-3);
       --console-card-border: var(--console-border-hairline);
       --console-card-elevation: var(--console-elevation-0);
-      --console-shadow-sm: var(--console-card-elevation);
-      --console-shadow-panel: var(--console-card-elevation);
       --console-card-hover-elevation: var(--console-elevation-0);
-      --console-shadow-hover: var(--console-card-hover-elevation);
       --console-grid-gap: var(--console-space-3);
       --console-list-row-padding: var(--console-space-2);
       --console-list-row-padding-inline: var(--console-space-3);
       --console-control-height: 2.25rem;
-      --console-control-height-lg: var(--console-control-height);
       --console-control-height-compact: 2.25rem;
-      --console-control-height-sm: var(--console-control-height-compact);
       --console-control-radius: var(--console-radius-2);
-      --radius: var(--console-control-radius);
       --console-check-radius: var(--console-radius-1);
       --console-segment-radius: var(--console-radius-1);
       --console-control-padding-inline: var(--console-space-3);
@@ -614,30 +543,21 @@
   @container console (width >= 64rem) {
     :where(.console-cq) > :where(*) {
       --console-stack-gap: var(--console-space-3);
-      --console-space-stack: var(--console-stack-gap);
       --console-inline-gap: var(--console-space-2);
       --console-heading-gap: var(--console-space-1);
       --console-card-padding: var(--console-space-4);
-      --console-space-card: var(--console-card-padding);
-      --console-space-card-sm: var(--console-card-padding);
       --console-card-padding-wide: var(--console-space-5);
       --console-card-radius: var(--console-radius-3);
       --console-card-edge-radius: var(--console-radius-3);
       --console-card-border: var(--console-border-hairline);
       --console-card-elevation: var(--console-elevation-0);
-      --console-shadow-sm: var(--console-card-elevation);
-      --console-shadow-panel: var(--console-card-elevation);
       --console-card-hover-elevation: var(--console-elevation-1);
-      --console-shadow-hover: var(--console-card-hover-elevation);
       --console-grid-gap: var(--console-space-4);
       --console-list-row-padding: var(--console-space-2);
       --console-list-row-padding-inline: var(--console-space-3);
       --console-control-height: 2.25rem;
-      --console-control-height-lg: var(--console-control-height);
       --console-control-height-compact: 2rem;
-      --console-control-height-sm: var(--console-control-height-compact);
       --console-control-radius: var(--console-radius-2);
-      --radius: var(--console-control-radius);
       --console-check-radius: var(--console-radius-1);
       --console-segment-radius: var(--console-radius-1);
       --console-control-padding-inline: var(--console-space-3);

@@ -5,9 +5,9 @@ import { sandboxText } from '../messages.js';
 import { recordItems, type SandboxSegmentRenderer } from './context.js';
 
 /** ADR 0063 决策 5: a dangerous choice is an outline button with destructive text, never a solid red one. */
-export function interactionVariant(primary: boolean, danger: boolean): 'default' | 'destructive-outline' | 'outline' {
+export function interactionVariant(primary: boolean, danger: boolean): 'soft' | 'destructive-outline' | 'outline' {
   if (danger) return 'destructive-outline';
-  return primary ? 'default' : 'outline';
+  return primary ? 'soft' : 'outline';
 }
 
 type KeyboardButton = { id?: string; label: string; payload: string; disabled?: boolean; style?: string };

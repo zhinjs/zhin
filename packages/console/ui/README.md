@@ -2,7 +2,7 @@
 
 Zhin Console 与插件页面共用的组件库（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md)）：基于 Radix 的 React 组件、页面外壳、刷新控件，以及一份设计令牌。样式随包发布、已经编译好，使用方不需要 Tailwind。
 
-> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）；空状态插画、ghost 控件、日期选择、图标、代码标识、焦点环与字体见 D28–D33（#125 第三阶段）。`@zhin.js/client/ui` 已弃用，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
+> 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）；空状态插画、ghost 控件、日期选择、图标、代码标识、焦点环与字体见 D28–D33（#125 第三阶段）。P4 删除了旧令牌别名与 `Button` 的 `default` 变体（见下文「令牌」）；`@zhin.js/client/ui` 已删除，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
 
 只给浏览器用：本包与 `radix-ui`、`class-variance-authority`、`clsx`、`tailwind-merge`、`lucide-react` 不在 `zhin.js` 的依赖树里。React 是 peerDependency。
 
@@ -44,7 +44,7 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 | 变体 | 外观与用途 |
 | --- | --- |
 | `primary` | 品牌色实心底 + 深色字（`brand` / `brand-foreground`），浅色主题下另有一圈 `brand-text` 描边。**每个视图最多一个**：登录、保存、发送、筛选这类「下一步」；`PageAction` 的 `tone: 'primary'` 和非危险的 `ConfirmDialog` 确认按钮也用它 |
-| `soft` | 配色的浅色调（原来的 `default`）。`default` 是它的弃用别名，外观相同、仍是默认变体，保留到 P4 |
+| `soft` | 配色的浅色调，默认变体（原来的 `default`；`default` 别名已在 P4 删除） |
 | `outline`、`secondary`、`ghost`、`link` | 不变；`link` 改用 `brand-text` |
 | `destructive` | **幽灵样式**：红字、无底。页面上的危险操作入口 |
 | `destructive-outline` | 描边 + 红字（ADR 0063 决策 5） |
@@ -99,7 +99,28 @@ import { DateTimeField, EmptyState, InlineCode, SelectField } from '@zhin.js/con
 
 动效（D26）：`--console-motion-fast` 120ms、`--console-motion-base` 200ms、`--console-motion-slow` 280ms，缓动统一 `--console-ease-out`；Tailwind 的 `transition-*` 默认也用它们。`styles.css` 在根上设置 `font-variant-numeric: tabular-nums`，数字等宽。
 
-旧名（`--console-duration-fast`、`--console-duration-page`、`--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-*`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card(-sm)`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`）在 P4 之前作为别名保留。
+旧名在 1.1 弃用、在 ADR 0063 P4（1.2.0）删除，样式里读到它们时 stylelint 规则 `console/no-deprecated-tokens` 会给出新名：
+
+| 已删除 | 改用 |
+| --- | --- |
+| `--console-radius-sm` / `-md` / `-lg` / `-xl` / `-2xl` | `--console-radius-1` / `-2` / `-3` / `-4` / `-4`（组件里优先用语义令牌，如 `--console-control-radius`、`--console-card-radius`） |
+| `--console-shadow-xs` / `-button` | `--console-elevation-0` |
+| `--console-shadow-sm` / `-panel` | `--console-card-elevation` |
+| `--console-shadow-md` | `--console-elevation-2` |
+| `--console-shadow-lg` / `-xl` | `--console-elevation-3` |
+| `--console-shadow-hover` | `--console-card-hover-elevation` |
+| `--console-shadow-ring` | 无对应令牌：用 `--console-border-hairline` 描边或语义阴影 |
+| `--console-space-page-x` / `-page-y` | `--console-page-padding-inline` / `-block` |
+| `--console-space-section` / `-stack` | `--console-section-gap` / `--console-stack-gap` |
+| `--console-space-card` / `-card-sm` | `--console-card-padding` |
+| `--console-control-height-sm` / `-lg` | `--console-control-height-compact` / `--console-control-height` |
+| `--console-border-width` / `--console-focus-width` | `--console-border-hairline` / `--console-border-focus` |
+| `--console-duration-fast` / `-page` | `--console-motion-fast` / `--console-motion-base` |
+| `--console-text-caption` / `-code` / `-body-sm` | `--console-text-label` |
+| `--console-text-section-sm` / `-title-compact` | `--console-text-section` / `--console-text-title` |
+| `--radius` | `--console-control-radius` |
+
+`Button` 的 `variant="default"`（1.1 改名为 `soft` 后保留的弃用别名）同样在 P4 删除，改写 `variant="soft"`，或不写 `variant`（默认就是 `soft`）。
 
 Tailwind 主题（`theme.css`）：`p-*` / `m-*` / `gap-*` / `space-*` 只有 `0`、`px`、`1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 对应 `p-6`）；尺寸类（`w` / `h` / `size` / `inset` / `min-*` / `max-*` / `translate` / `basis`）保留 Tailwind 的数字键，另有 `control`、`control-compact`、`touch`、`touch-min`、`badge`；`text-*` 只有五个字号，`font-*` 只有三个字重，`rounded-*` 为 `0`–`4`、`full` 和语义键（`control`、`card`、`badge`、`popover`、`dialog` 等），`shadow-*` 为 `e1`–`e3` 和语义键，断点 `sm` / `md` / `lg` / `xl`，颜色只有主题色。
 

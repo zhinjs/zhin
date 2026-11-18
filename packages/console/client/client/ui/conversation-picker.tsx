@@ -276,9 +276,3 @@ export function ConversationLabel({ value, showAccount }: ConversationLabelProps
     </span>
   );
 }
-
-/**
- * @deprecated Since ADR 0063 P2 the picker is built from `@zhin.js/console-ui` and needs no styles;
- * this is an empty string, kept for one minor and removed with the `zk-` kit (P4).
- */
-export const conversationPickerStyles = '';

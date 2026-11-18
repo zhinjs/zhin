@@ -3,14 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { AdapterConsolePage } from '../../packages/console/client/client/adapter-console/AdapterConsolePage.js';
 import type { AdapterConsoleStatus, AdapterConsoleLoginTask } from '../../packages/console/client/client/adapter-console/types.js';
 import Sandbox from '../../plugins/adapters/sandbox/pages/index/SandboxChat.js';
-import { DeclarativePageView } from '../../packages/console/client/client/ui/declarative-page.js';
+import { DeclarativePageView } from '../../packages/console/client/client/declarative/index.js';
 import bilibiliBlueprint from '../../plugins/adapters/bilibili/pages/index/index.js';
 import type { BilibiliEndpoint as ReviewEndpoint } from '../../plugins/adapters/bilibili/pages/index/spec.js';
 import { createDefaultPlaygroundState } from '../../plugins/adapters/sandbox/pages/index/playgroundState.js';
-import { UiKitPreview } from './UiKitPreview.js';
 
 /** In-memory transport fixture. This gallery never forwards requests to a Host or a platform. */
-const adapterKey = location.pathname.slice(1) || 'ui';
+const adapterKey = location.pathname.slice(1) || 'icqq';
 const names: Record<string, string> = { icqq: 'ICQQ', telegram: 'Telegram', discord: 'Discord' };
 const ids = adapterKey === 'icqq' ? ['1000123456', '1000654321'] : ['community-bot', 'support-bot'];
 const now = Date.now();
@@ -151,9 +150,7 @@ document.getElementById('theme')?.addEventListener('click', event => {
 const root = document.getElementById('root');
 if (!root) throw new Error('Preview mount point is missing');
 createRoot(root).render(
-  adapterKey === 'ui' ? (
-    <UiKitPreview />
-  ) : adapterKey === 'sandbox' ? (
+  adapterKey === 'sandbox' ? (
     <div className="preview-sandbox"><Sandbox /></div>
   ) : adapterKey === 'bilibili' ? (
     <DeclarativePageView spec={bilibiliBlueprint} />

@@ -12,8 +12,9 @@
  *   shellFiles         regex sources of files allowed to use @media (global shell only)
  *   semanticOnly       components read tier-2 tokens only (default true)
  *   allowTierOneIn     regex sources of files that may read tier-1 spacing / radius / elevation
- *   deprecatedTokens   severity of `console/no-deprecated-tokens` ('error' default; 'warning'
- *                      while a codebase moves off the old names, until P4)
+ *   deprecatedTokens   severity of `console/no-deprecated-tokens`, which reports the token names
+ *                      removed in ADR 0063 P4 with their successor ('error' default; 'warning'
+ *                      while a codebase that declares those names itself moves off them)
  *   motionTokens       severity of `console/motion-tokens` ('error' default; 'warning' while a
  *                      codebase moves its transitions onto the motion tokens; false turns it off)
  */

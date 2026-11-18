@@ -10,11 +10,6 @@
       "types": "./dist/index.d.ts",
       "development": "./client/index.ts",
       "import": "./dist/index.js"
-    },
-    "./ui": {
-      "types": "./dist/ui/index.d.ts",
-      "development": "./client/ui/index.ts",
-      "import": "./dist/ui/index.js"
     }
   },
   "scripts": {
@@ -53,10 +48,6 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
-      },
-      "./ui": {
-        "types": "./dist/ui/index.d.ts",
-        "import": "./dist/ui/index.js"
       }
     }
   },

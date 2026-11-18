@@ -56,13 +56,14 @@ describe('stylelint config', () => {
     expect(await lint('.a { padding: var(--console-card-padding) 0; margin: 0 auto; gap: var(--console-stack-gap); border: var(--console-card-border) solid hsl(var(--border)); box-shadow: none; font-weight: var(--console-weight-strong); margin-inline: calc(-1 * var(--console-page-padding-inline)); }')).toEqual([]);
   });
 
-  it('reports literals, tier-1 tokens in components, unknown and deprecated tokens', async () => {
+  it('reports literals, tier-1 tokens in components, unknown and removed tokens', async () => {
     expect(await lint('.a { padding: 5px; font-weight: 700; box-shadow: 0 1px 2px hsl(0 0% 0% / .1); border-radius: 0.5rem; }'))
       .toEqual(['console/scale-values', 'console/scale-values', 'console/scale-values', 'console/scale-values']);
     expect(await lint('.a { padding: var(--console-space-3); }')).toEqual(['console/scale-values']);
     expect(await lint('.a { padding: var(--console-space-3); }', '/x/tokens.css', { allowTierOneIn: ['tokens\\.css$'] })).toEqual([]);
     expect(await lint('.a { color: var(--console-nope); }')).toEqual(['console/no-unknown-tokens']);
     expect(await lint('.a { border-radius: var(--console-radius-md); }')).toEqual(['console/no-deprecated-tokens']);
+    expect(await lint('.a { box-shadow: var(--console-shadow-ring); }')).toEqual(['console/no-deprecated-tokens']);
   });
 
   it('motion: no millisecond / second literals and no easing literals (zhinjs/console#125)', async () => {

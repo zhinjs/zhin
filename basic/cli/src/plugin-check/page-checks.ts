@@ -340,7 +340,9 @@ function loadTypeScript(pluginDirectory: string): TypeScriptApi | undefined {
 const SELECT_TAG = new Set(['select']);
 const HEADER_TAG = new Set(['h1']);
 const NATIVE_CONTROL_TAGS = new Set(['button', 'input', 'textarea', 'table', 'dialog']);
+/** Removed in ADR 0063 P4 (`@zhin.js/client` 1.4.0); its PageHeader / PluginPage still count as a custom header. */
 const LEGACY_UI_MODULE = '@zhin.js/client/ui';
+const LEGACY_UI_REMOVED = '（该子路径已在 @zhin.js/client 1.4.0 删除）';
 const LEGACY_HEADER_EXPORTS = new Set(['PageHeader', 'PluginPage']);
 const STYLE_CONTAINER_NAME = /(?:^|[a-z_])(?:style|styles|sx|css)$/iu;
 
@@ -409,7 +411,7 @@ function checkScript(ts: TypeScriptApi, file: string, text: string, scan: Source
       if (rule !== undefined) scan.push(rule, nodeLine(node), `<${tagName.text}>`);
     } else if (ts.isPropertyAccessExpression(tagName) && ts.isIdentifier(tagName.expression)
       && namespaces.has(tagName.expression.text) && LEGACY_HEADER_EXPORTS.has(tagName.name.text)) {
-      scan.push(2, nodeLine(node), `<${tagName.getText(source)}>（${LEGACY_UI_MODULE}）`);
+      scan.push(2, nodeLine(node), `<${tagName.getText(source)}>（${LEGACY_UI_MODULE}）${LEGACY_UI_REMOVED}`);
     }
   };
 
@@ -442,7 +444,7 @@ function checkScript(ts: TypeScriptApi, file: string, text: string, scan: Source
           for (const element of clause.namedBindings.elements) {
             const imported = (element.propertyName ?? element.name).text;
             if (!element.isTypeOnly && LEGACY_HEADER_EXPORTS.has(imported)) {
-              scan.push(2, nodeLine(element), `import { ${imported} } from '${LEGACY_UI_MODULE}'`);
+              scan.push(2, nodeLine(element), `import { ${imported} } from '${LEGACY_UI_MODULE}'${LEGACY_UI_REMOVED}`);
             }
           }
         }
@@ -453,7 +455,7 @@ function checkScript(ts: TypeScriptApi, file: string, text: string, scan: Source
       for (const element of node.exportClause.elements) {
         const exported = (element.propertyName ?? element.name).text;
         if (!element.isTypeOnly && LEGACY_HEADER_EXPORTS.has(exported)) {
-          scan.push(2, nodeLine(element), `export { ${exported} } from '${LEGACY_UI_MODULE}'`);
+          scan.push(2, nodeLine(element), `export { ${exported} } from '${LEGACY_UI_MODULE}'${LEGACY_UI_REMOVED}`);
         }
       }
     } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
