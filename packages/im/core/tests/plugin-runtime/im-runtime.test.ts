@@ -5007,6 +5007,39 @@ describe('IM Runtime inbound origin routing', () => {
       } finally { await close(f); }
     });
 
+    it('keeps a routed prompt open on an invalid answer: the mention Room routing adds never ends it (#1250)', async () => {
+      const { f, ids, seen } = await roomFixture((ids) => (i) =>
+        i.pending(ids[1]) ? { endpointId: ids[1], reason: 'pending' } : { endpointId: ids[0], reason: 'coordinator' });
+      try {
+        const [a, b] = ids;
+        const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
+        const source = {
+          conversation: { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+          generation: f.store.current.generation,
+          sender: { id: 'alice' },
+          $reply: reply,
+        };
+        const answer = f.im.createInteraction(source as never)!.ask({ type: 'select', title: '选一个', timeout: 5000,
+          options: [{ label: '甲', value: 'a' }, { label: '乙', value: 'b' }] });
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
+        // A typo routed to B is marked mentioned for addressing, but it is no real @: the prompt is sent again.
+        await Promise.all([dedupInput(f, a, 'rt-esc-1', 'group', 'alice', '随便'), dedupInput(f, b, 'rt-esc-1', 'group', 'alice', '随便')]
+          .map((copy) => receive(f.im, copy)));
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(2));
+        expect(JSON.stringify(reply.mock.calls[1]![0])).toContain('选一个');
+        // A second typo gets the throttled reminder, still no exit.
+        await Promise.all([dedupInput(f, a, 'rt-esc-2', 'group', 'alice', '还是随便'), dedupInput(f, b, 'rt-esc-2', 'group', 'alice', '还是随便')]
+          .map((copy) => receive(f.im, copy)));
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(3));
+        expect(String(reply.mock.calls[2]![0])).toContain('正在等你选择');
+        expect(f.im.messageOutcomes.list().some(row => row.outcome === 'interaction_cancelled')).toBe(false);
+        await Promise.all([dedupInput(f, a, 'rt-esc-3', 'group', 'alice', '2'), dedupInput(f, b, 'rt-esc-3', 'group', 'alice', '2')]
+          .map((copy) => receive(f.im, copy)));
+        await expect(answer).resolves.toBe('b');
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
     it('probes inboundClaimPending and runs inboundClaim once on that Endpoint', async () => {
       const claimedBy: string[] = [];
       const { f, ids, seen } = await roomFixture((ids) => (i) =>
@@ -5579,6 +5612,216 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
       fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
       await expect(receive(fixture.im, fixtureInput(fixture, 'hello there'))).resolves.toMatchObject({ matched: true, command: 'ai' });
       expect(latest(fixture)).toMatchObject({ outcome: 'ambient_silent', reason: 'cooldown', stage: 'ambient' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+});
+
+describe('pending prompts end on commands and media, not on a mention alone (#1250 interaction-prompt-swallows-messages)', () => {
+  const texts = (sent: unknown[]) => sent.map(request => JSON.stringify((request as { payload?: unknown }).payload));
+  const exitNotices = (sent: unknown[]) => texts(sent).filter(text => text.includes('已退出上一个选择')).length;
+  const select = { type: 'select', title: '选一个', options: [{ label: '甲', value: 'a' }, { label: '乙', value: 'b' }] } as const;
+
+  async function selectFixture(sent: unknown[], picked: unknown[], ended: string[] = [], timeout?: number) {
+    const fixture: Awaited<ReturnType<typeof createFixture>> = await createFixture([], sent, undefined, undefined, undefined, {
+      commandResult: async input => {
+        if (!input.content.includes('open')) return `ran ${input.content}`;
+        try {
+          const value = await fixture.im.createInteraction(input)!.ask({ ...select, ...(timeout ? { timeout } : {}) });
+          picked.push(value);
+          return `picked ${String(value)}`;
+        } catch (error) {
+          ended.push(error instanceof Error ? error.name : String(error));
+          throw error;
+        }
+      },
+      inboundMiddleware: (_input, next) => next(), outboundMiddleware: (_input, next) => next(),
+    });
+    return fixture;
+  }
+  const outcomesOf = (fixture: Awaited<ReturnType<typeof createFixture>>) => fixture.im.messageOutcomes.list().map(row => `${row.outcome}:${row.reason ?? ''}`);
+
+  it.each(['取消', 'cancel', '退出'])('a select prompt accepts %s and ends the command as interaction_cancelled', async word => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    const ended: string[] = [];
+    const fixture = await selectFixture(sent, picked, ended);
+    try {
+      const command = receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(texts(sent)[0]).toContain('回复「取消」退出');
+      await receive(fixture.im, fixtureInput(fixture, word));
+      await expect(command).resolves.toMatchObject({ matched: true });
+      expect(picked).toEqual([]);
+      expect(ended).toEqual(['UserInteractionCancelledError']);
+      expect(texts(sent).at(-1)).toContain('已取消。');
+      const outcomes = outcomesOf(fixture);
+      expect(outcomes).toContain('interaction_cancelled:cancelled');
+      expect(outcomes).toContain('interaction_answered:prompt');
+      expect(outcomes.some(row => row.startsWith('internal_error'))).toBe(false);
+      // The command stage names the plugin that asked, like middleware and handler stages do.
+      const endedRow = fixture.im.messageOutcomes.list().find(row => row.outcome === 'interaction_cancelled');
+      expect(endedRow).toMatchObject({ stage: 'command' });
+      // The fixture's command (which asks) belongs to the root plugin.
+      expect(endedRow?.owner).toBe(String(rootPluginId()));
+      // The ended prompt is no command execution in the diagnostics timeline.
+      const record = fixture.im.messageDiagnostics.list().find(row => row.outcome?.outcome === 'interaction_cancelled');
+      expect(record).toMatchObject({ route: 'interaction' });
+      expect(record?.dispatchStatus).toBeUndefined();
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('ends the prompt on a command, an image and a mention, handles each message normally and says so only once', async () => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    const ended: string[] = [];
+    const fixture = await selectFixture(sent, picked, ended);
+    try {
+      const base = fixtureInput(fixture, '');
+      const group = { ...base.conversation, kind: 'group' as const, id: 'prompt-group' };
+      // Wrapped: an async function returning the pending receive would wait for it.
+      const ask = async () => {
+        const command = receive(fixture.im, { ...base, conversation: group, content: '/gh issue list open' });
+        await vi.waitFor(() => expect(texts(sent).filter(text => text.includes('选一个')).length).toBeGreaterThan(prompts));
+        prompts += 1;
+        return { command };
+      };
+      let prompts = 0;
+
+      // A command: the prompt ends, "left" is said once, the command itself runs.
+      let { command: first } = await ask();
+      await receive(fixture.im, { ...base, conversation: group, content: '/gh issue list closed' });
+      await expect(first).resolves.toMatchObject({ matched: true });
+      expect(texts(sent).some(text => text.includes('ran /gh issue list closed'))).toBe(true);
+      expect(exitNotices(sent)).toBe(1);
+
+      // An image: the prompt ends; the notice is throttled (once per minute per sender).
+      ({ command: first } = await ask());
+      await receive(fixture.im, { ...base, conversation: group, content: '', segments: [{ type: 'image', data: { url: 'https://example.com/cat.png' } }] });
+      await expect(first).resolves.toMatchObject({ matched: true });
+
+      // A real mention is no exit of its own (every reply carries one on some platforms), but a
+      // mentioned message whose text routes to a command ends the prompt and runs the command.
+      ({ command: first } = await ask());
+      await receive(fixture.im, { ...base, conversation: group, content: '@bot /gh issue list mine', mentioned: true,
+        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' /gh issue list mine' } }] });
+      await expect(first).resolves.toMatchObject({ matched: true });
+      expect(texts(sent).some(text => /ran (?:@bot )?\/gh issue list mine/u.test(text))).toBe(true);
+
+      expect(exitNotices(sent)).toBe(1);
+      expect(picked).toEqual([]);
+      expect(ended).toEqual(['UserInteractionCancelledError', 'UserInteractionCancelledError', 'UserInteractionCancelledError']);
+      const outcomes = outcomesOf(fixture);
+      expect(outcomes.filter(row => row === 'interaction_cancelled:interrupted')).toHaveLength(3);
+      expect(outcomes.some(row => row.startsWith('interaction_consumed') || row.startsWith('internal_error'))).toBe(false);
+      expect(outcomes).toContain('command_replied:executed');
+
+      // "@bot 乙" still answers: the mention is not part of the answer.
+      ({ command: first } = await ask());
+      await receive(fixture.im, { ...base, conversation: group, content: '@bot 乙', mentioned: true,
+        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' 乙' } }] });
+      await expect(first).resolves.toMatchObject({ matched: true });
+      expect(picked).toEqual(['b']);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('takes a real mention with an invalid answer as an invalid answer: the prompt again, no exit, no cancel', async () => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    const ended: string[] = [];
+    const fixture = await selectFixture(sent, picked, ended);
+    try {
+      const base = fixtureInput(fixture, '');
+      const group = { ...base.conversation, kind: 'group' as const, id: 'mention-group' };
+      const mention = (text: string) => ({ ...base, conversation: group, content: `@bot ${text}`, mentioned: true,
+        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ` ${text}` } }] });
+      const command = receive(fixture.im, { ...base, conversation: group, content: '/gh issue list open' });
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      await receive(fixture.im, mention('3'));
+      await vi.waitFor(() => expect(sent).toHaveLength(2));
+      expect(texts(sent)[1]).toContain('选一个'); // the prompt again
+      expect(exitNotices(sent)).toBe(0);
+      expect(ended).toEqual([]);
+      const outcomes = outcomesOf(fixture);
+      expect(outcomes.some(row => row.startsWith('interaction_cancelled'))).toBe(false);
+      expect(outcomes).toContain('interaction_consumed:prompt_captured');
+      await receive(fixture.im, mention('乙'));
+      await expect(command).resolves.toMatchObject({ matched: true });
+      expect(picked).toEqual(['b']);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('reminds on invalid plain text at most twice, 20 s apart, instead of waiting silently', async () => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    let now = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fixture = await selectFixture(sent, picked);
+    try {
+      const command = receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      const say = async (content: string, count: number) => {
+        await receive(fixture.im, fixtureInput(fixture, content));
+        await vi.waitFor(() => expect(sent).toHaveLength(count));
+      };
+      await say('随便聊聊', 2); // the prompt is sent again once
+      await say('还在吗', 3); // first reminder
+      await say('喂', 3); // within 20 s: no reminder
+      now += 20_000;
+      await say('喂喂', 4); // second reminder
+      now += 20_000;
+      await say('喂喂喂', 4); // limit reached
+      const reminders = texts(sent).filter(text => text.includes('正在等你选择，回复序号，或回复「取消」退出'));
+      expect(reminders).toHaveLength(2);
+      await receive(fixture.im, fixtureInput(fixture, '1'));
+      await command;
+      expect(picked).toEqual(['a']);
+    } finally { clock.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('records a timeout as interaction_timeout at INFO, never as internal_error (#1250 interaction-timeout-reported-as-internal-error)', async () => {
+    const sent: unknown[] = [];
+    const ended: string[] = [];
+    const fixture = await selectFixture(sent, [], ended, 30);
+    const lines: string[] = [];
+    const transport = { write: (line: string) => { lines.push(line); } };
+    addTransport(transport);
+    const inboundLogger = getLogger('im.inbound');
+    const previousLevel = getLevel(inboundLogger);
+    setLevel('info', inboundLogger, true);
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).resolves.toMatchObject({ matched: true });
+      expect(ended).toEqual(['UserInteractionTimeoutError']);
+      expect(texts(sent).some(text => text.includes('输入超时'))).toBe(true);
+      expect(fixture.im.messageOutcomes.list({ limit: 1 })[0]).toMatchObject({ outcome: 'interaction_timeout', reason: 'timeout', stage: 'command', reply: 'yes' });
+      expect(lines.some(line => line.includes('inbound_internal_error'))).toBe(false);
+      const outcomeLine = lines.find(line => line.includes('inbound_outcome') && line.includes('interaction_timeout'));
+      expect(outcomeLine).toBeDefined();
+      expect(outcomeLine).not.toMatch(/\b(?:ERROR|WARN)\b/u);
+    } finally {
+      setLevel(previousLevel, inboundLogger, true);
+      removeTransport(transport);
+      await fixture.adapters.stop(); await fixture.store.close();
+    }
+  });
+
+  it('leaves another group member’s messages alone while a prompt waits', async () => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    const fixture = await selectFixture(sent, picked);
+    try {
+      const base = fixtureInput(fixture, '');
+      const group = { ...base.conversation, kind: 'group' as const, id: 'shared-group' };
+      const command = receive(fixture.im, { ...base, conversation: group, content: '/gh issue list open' });
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      await receive(fixture.im, { ...base, conversation: group, sender: { id: 'bob' }, content: '/gh issue list closed' });
+      await receive(fixture.im, { ...base, conversation: group, sender: { id: 'bob' }, content: '取消' });
+      await receive(fixture.im, { ...base, conversation: group, sender: { id: 'bob' }, content: '@bot 你好', mentioned: true });
+      expect(exitNotices(sent)).toBe(0);
+      expect(picked).toEqual([]);
+      await receive(fixture.im, { ...base, conversation: group, content: '2' });
+      await command;
+      expect(picked).toEqual(['b']);
+      expect(texts(sent).some(text => text.includes('ran /gh issue list closed'))).toBe(true);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 });
