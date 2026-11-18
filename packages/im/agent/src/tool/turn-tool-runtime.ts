@@ -19,6 +19,10 @@ import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
+import { TurnCancelledError, TurnSupersededError } from '../turn/prompt-controller.js';
+import { TriggerCancelledError, TriggerTimeoutError } from '../turn/trigger-cancelled-error.js';
+import { PromptAccessDeniedError } from '../turn/prompt-access.js';
+import { ControlBlockedOutboundError } from '../plugin-runtime/host/runtime-factory.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 import { MCP_PERMIT_POLICY, McpPermitDeniedError, formatMcpPermitDenial } from './mcp-permit-denial.js';
 import {
@@ -48,7 +52,7 @@ import {
   type ToolHardGateControlSource,
   type ToolHardGateLocation,
 } from '../security/tool-hard-gate.js';
-import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
+import { ToolApprovalQueueClosedError, type ToolApprovalOrigin, type ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import type { OpsCooldownView } from '../security/ops-cooldown.js';
 import { ON_BEHALF_OF_ARG, resolveOnBehalfOf } from '../turn/merged-principal.js';
 import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.js';
@@ -342,10 +346,10 @@ export class TurnToolRuntime {
       // ADR 0067 D2.1: `schedule_add` / `schedule_preview` read this turn's provenance while they run.
       const invocation = { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) };
       const output = await runWithTurnProvenance(this.provenance, async () => tool.execute(effectiveInput, invocation));
-      this.#observeOutput(tool, effectiveInput, output);
-      const durationMs = Date.now() - startedAt;
       // #1250: a tool that returned `{ error }` (or an MCP `isError` result) failed, even though it did not throw.
       const errorResult = toolErrorResultMessage(output);
+      this.#observeOutput(tool, effectiveInput, output, errorResult !== undefined);
+      const durationMs = Date.now() - startedAt;
       if (errorResult !== undefined) {
         const redacted = logToolErrorResult(name, errorResult);
         await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: redacted, durationMs }, causedBy);
@@ -367,6 +371,8 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, error.policy, error.message, causedBy);
       }
       const message = error instanceof Error ? error.message : String(error);
+      // #1250 F8: the error text goes to the model as this call's result, so it is a source like any output.
+      this.#observeFailure(tool, error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
       return Object.freeze({ status: 'failed', error: message, retryable: false, sideEffect: tool.readOnly !== true });
     }
@@ -433,14 +439,28 @@ export class TurnToolRuntime {
   }
 
   /** Records where the result came from, and which parts are another session's memory. */
-  #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown): void {
+  #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown, reportedError = false): void {
     const source = classifyToolOutput(tool, this.#guard);
     if (source !== 'none') {
-      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(source === 'trusted' ? { trusted: true } : {}) });
+      // #1250 F8: a reported failure (`{ error }`, MCP `isError`) may quote upstream text, as a thrown error does.
+      const trusted = source === 'trusted' && !reportedError;
+      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(trusted ? { trusted: true } : {}) });
     }
     if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
       this.#leakInspector.protectOtherSessionMemory(collectText(output));
     }
+  }
+
+  /**
+   * #1250 F8 (ADR 0067 D1): a thrown error's text reaches the model like a result, and often quotes the
+   * other side (an HTTP reason phrase, a JSON-RPC error message, an upstream API's text). A tool whose output
+   * counts therefore records the failure as external content, even one whose results count as trusted
+   * first-party output. Errors the harness wrote itself (cancellation, local policy refusals) are not sources.
+   */
+  #observeFailure(tool: ToolCapability, error: unknown): void {
+    if (isHarnessGeneratedError(error)) return;
+    if (classifyToolOutput(tool, this.#guard) === 'none') return;
+    this.provenance.record({ kind: 'tool_result', toolName: tool.name });
   }
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
@@ -470,6 +490,19 @@ export class TurnToolRuntime {
       throw new TurnJournalCommitError(error);
     }
   }
+}
+
+/** Errors whose text the harness wrote itself: cancellation, timeouts and local refusals (#1250 F8). */
+function isHarnessGeneratedError(error: unknown): boolean {
+  if (error instanceof DOMException) return error.name === 'AbortError' || error.name === 'TimeoutError';
+  return error instanceof TurnCancelledError
+    || error instanceof TurnSupersededError
+    || error instanceof TriggerCancelledError
+    || error instanceof TriggerTimeoutError
+    || error instanceof PromptAccessDeniedError
+    || error instanceof ToolApprovalQueueClosedError
+    || error instanceof ControlBlockedOutboundError
+    || error instanceof UnconfirmedMessageAliasError;
 }
 
 /** IM turns record where the dangerous call came from so the IM approval channel can deliver and guard it. */
