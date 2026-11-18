@@ -22,15 +22,17 @@ import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 import { MCP_PERMIT_POLICY, McpPermitDeniedError, formatMcpPermitDenial } from './mcp-permit-denial.js';
 import {
-  DEFAULT_HIGH_RISK_CONFIRM,
   PROVENANCE_NO_CHANNEL_REASON,
   PROVENANCE_POLICY,
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
   classifyHighRiskAction,
   classifyToolOutput,
+  defaultHighRiskConfirmLevel,
   formatProvenanceReason,
+  highRiskConfirmLevel,
   resolveInjectionGuard,
+  runWithTurnProvenance,
   stricterConfirmLevel,
   type InjectionGuardConfig,
   type InjectionGuardSettings,
@@ -108,6 +110,9 @@ export class TurnToolRuntime {
     this.#tools = new Map(tools.map((tool) => [tool.name, tool]));
     this.#guard = resolveInjectionGuard(options.injectionGuard);
     this.provenance = options.provenance ?? new TurnProvenance();
+    // ADR 0067 D2.1: a due run (or preview) of a task created after recorded content starts tainted.
+    const scheduled = turn.execution.kind === 'schedule' ? turn.execution.provenance : undefined;
+    if (scheduled) this.provenance.record({ kind: 'scheduled_prompt', sources: [...scheduled.sources] });
     this.#messageAliases = options.messageAliases;
     this.#decisionAudit = options.decisionAudit;
     this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
@@ -214,7 +219,7 @@ export class TurnToolRuntime {
     }
     // ADR 0067 D2: each category asks at its own level; only `any_content` counts trusted first-party output.
     const provenanceGate = highRisk !== undefined
-      && this.provenance.requiresConfirmation(this.#guard.confirmHighRisk[highRisk]);
+      && this.provenance.requiresConfirmation(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk));
     const denial: ApprovalDenialContext = { toolName: name, ...(highRisk ? { action: highRisk } : {}) };
     // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
     let authorizationRequired = decision.status === 'approval_required';
@@ -268,7 +273,8 @@ export class TurnToolRuntime {
       // `injectionGuard.confirmHighRisk: off` skipped the intent confirmation above (fail closed, as before b33).
       // ADR 0067 D2: a category set below its default still uses the default level here.
       if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.requiresConfirmation(
-        stricterConfirmLevel(this.#guard.confirmHighRisk[highRisk], DEFAULT_HIGH_RISK_CONFIRM[highRisk]))) {
+        stricterConfirmLevel(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
+          defaultHighRiskConfirmLevel(name, highRisk)))) {
         this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY,
           `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
@@ -333,7 +339,9 @@ export class TurnToolRuntime {
       const effects = this.turn.ports.operationEvidence?.started({
         turnId: this.turn.identity.turnId, toolUseId, toolName: tool.name, readOnly: tool.readOnly === true,
       });
-      const output = await tool.execute(effectiveInput, { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) });
+      // ADR 0067 D2.1: `schedule_add` / `schedule_preview` read this turn's provenance while they run.
+      const invocation = { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) };
+      const output = await runWithTurnProvenance(this.provenance, async () => tool.execute(effectiveInput, invocation));
       this.#observeOutput(tool, effectiveInput, output);
       const durationMs = Date.now() - startedAt;
       // #1250: a tool that returned `{ error }` (or an MCP `isError` result) failed, even though it did not throw.

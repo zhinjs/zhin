@@ -74,6 +74,22 @@ export interface ScheduleJob {
   /** 覆盖全局无人值守执行预算。 */
   budget?: ScheduleBudgetConfig;
   eventPayload?: unknown;
+  /**
+   * ADR 0067 D2.1: set when the model created this job in a turn that had already read tool output,
+   * web pages, background messages or other recorded content (trusted first-party output included).
+   * Every due run (and the preview) then starts as if it had read external content, so its writes,
+   * messages to other conversations, configuration changes and shell commands are confirmed or, being
+   * unattended, denied. Absent on jobs created by a person (Console, RPC, profile) and on jobs stored
+   * before this field existed.
+   */
+  provenance?: ScheduleJobProvenance;
+}
+
+/** ADR 0067 D2.1: what the creating turn had read when the job was created. */
+export interface ScheduleJobProvenance {
+  readonly tainted: true;
+  /** Source keys of the creating turn (`tool:web_fetch`, `conversation_context`, ...), at most ten. */
+  readonly sources: readonly string[];
 }
 
 /** 预演后固化的调度路径 */

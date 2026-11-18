@@ -9,7 +9,8 @@ export default defineAgentTool({
     'List personal expense entries for today, this week, or this month with their sequence numbers (#id).',
   requiresApproval: 'never',
   readOnly: true,
-  tags: ['ledger', 'finance'],
+  // ADR 0067 D1.2: categories and notes are text earlier turns wrote, not trusted output.
+  tags: ['ledger', 'finance', 'external_content'],
   keywords: ['账单', '账目列表', '消费明细', 'ledger list', 'expenses'],
   inputSchema: z.object({
     period: z.enum(['today', 'week', 'month']).default('today').describe('Time period: today, week, or month'),

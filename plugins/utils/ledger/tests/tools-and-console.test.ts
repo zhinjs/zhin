@@ -51,6 +51,9 @@ describe('ledger AI tools, Console RPC, and declarative page', () => {
     expect(ledgerAddTool.requiresApproval).toBe('always');
     expect(ledgerSummaryTool.readOnly).toBe(true);
     expect(ledgerListTool.readOnly).toBe(true);
+    // ADR 0067 D1.2: categories and notes were written by earlier turns, so they are external content.
+    expect(ledgerSummaryTool.tags).toContain('external_content');
+    expect(ledgerListTool.tags).toContain('external_content');
     expect(ledgerDeleteTool.requiresApproval).toBe('always');
 
     const added1 = await ledgerAddTool.execute(

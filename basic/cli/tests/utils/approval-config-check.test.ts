@@ -1,6 +1,7 @@
 import {
   CONFIRM_HIGH_RISK_OFF_FIX,
   CONFIRM_HIGH_RISK_OFF_MESSAGE,
+  SCHEDULE_RELAXATION_NOTE,
   diagnoseApprovalChannelConfig,
 } from '../../src/utils/approval-config-check.js';
 
@@ -38,6 +39,24 @@ describe('doctor approval channel check (#1250)', () => {
     expect(diagnoseApprovalChannelConfig({ ai: { agent: { injectionGuard: { confirmHighRisk: 'external_content' } } } }))
       .toMatchObject({ status: 'ok', message: expect.stringContaining('ADR 0067') });
     expect(diagnoseApprovalChannelConfig({ ai: { agent: {} } })?.message).not.toContain('ADR 0067');
+  });
+
+  it('explains what the default schedule relaxation covers (ADR 0067 D2.1)', () => {
+    const message = diagnoseApprovalChannelConfig({ ai: { agent: {} } })?.message;
+    expect(message).toContain(SCHEDULE_RELAXATION_NOTE);
+    expect(message).toContain('到点运行');
+    expect(message).toContain('schedule_preview');
+    expect(diagnoseApprovalChannelConfig({ ai: { agent: { injectionGuard: { confirmHighRisk: 'external_content' } } } })?.message)
+      .not.toContain(SCHEDULE_RELAXATION_NOTE);
+  });
+
+  it('warns about levels and categories the agent cannot read', () => {
+    for (const confirmHighRisk of ['Always', { fileWrite: 'Always' }, { file_write: 'off' }, { schedule: true }, 42]) {
+      const result = diagnoseApprovalChannelConfig({ ai: { agent: { injectionGuard: { confirmHighRisk } } } });
+      expect(result, JSON.stringify(confirmHighRisk)).toMatchObject({ status: 'warn', message: expect.stringContaining('无法识别') });
+    }
+    expect(diagnoseApprovalChannelConfig({ ai: { agent: { injectionGuard: { confirmHighRisk: { shell: 'always' } } } } }))
+      .toMatchObject({ status: 'ok' });
   });
 
   it('stays silent without AI', () => {

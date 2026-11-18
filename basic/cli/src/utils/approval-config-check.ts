@@ -40,6 +40,27 @@ function confirmLevels(raw: unknown): Readonly<Record<string, ConfirmLevel>> {
   }));
 }
 
+const STRING_FORMS = new Set<string>(['external_content', 'always', 'off']);
+
+/** Values the agent cannot read and treats as `any_content` (e.g. `Always`, `fileWrite: yes`, `file_write:`). */
+function unrecognisedConfirmValues(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (typeof raw === 'string') return STRING_FORMS.has(raw) ? [] : [`confirmHighRisk: ${JSON.stringify(raw)}`];
+  const tiers = record(raw);
+  if (!tiers) return [`confirmHighRisk: ${JSON.stringify(raw)}`];
+  const known = new Set(CATEGORIES.map(([key]) => key));
+  return Object.entries(tiers).flatMap(([key, value]) => {
+    if (!known.has(key)) return [`confirmHighRisk.${key}（未知类别，被忽略）`];
+    if (value === undefined || (typeof value === 'string' && LEVELS.has(value))) return [];
+    return [`confirmHighRisk.${key}: ${JSON.stringify(value)}`];
+  });
+}
+
+/** ADR 0067 D2.1: what the schedule relaxation does and does not cover. */
+export const SCHEDULE_RELAXATION_NOTE = '定时任务类别为 untrusted_content：只读过第一方只读查询（如天气）后创建定时任务不再确认；'
+  + '但这样创建的任务每次到点运行（以及 schedule_preview 预演）都按读过外部内容处理，其中写文件、向其他会话发消息、修改配置、执行命令会被拒绝；'
+  + 'schedule_preview 会立刻执行提示词，不享受这一放宽（至少按 any_content 确认）';
+
 /** ADR 0067 D5: what turning every category off gives up, and a narrower setting that keeps it. */
 export const CONFIRM_HIGH_RISK_OFF_MESSAGE = 'ai.agent.injectionGuard.confirmHighRisk 已全部关闭：读过网页、MCP 工具结果、文件内容或群聊背景之后，'
   + '被注入的指令可以直接执行命令、写文件、向其他会话发消息、修改配置、创建定时任务，不再经过任何人确认';
@@ -68,9 +89,19 @@ export function diagnoseApprovalChannelConfig(config: Record<string, unknown> | 
   if (allOff) {
     return { status: 'warn', message: CONFIRM_HIGH_RISK_OFF_MESSAGE, fix: CONFIRM_HIGH_RISK_OFF_FIX };
   }
+  const unrecognised = unrecognisedConfirmValues(raw);
+  if (unrecognised.length) {
+    return {
+      status: 'warn',
+      message: `无法识别的高危确认配置：${unrecognised.join('、')}；无法识别的级别按 any_content 处理（不会放宽，但也不是你想要的设置）`,
+      fix: '级别只能是 off / untrusted_content / any_content / always（小写），类别只能是 shell / fileWrite / outbound / config / schedule；'
+        + '字符串形式只能是 external_content / always / off',
+    };
+  }
   const notes = [
     `execApprovalMode: ${String(mode)}；读取外部内容后的高危动作在实时 IM 会话中请发起人确认，定时任务等无人值守回合中会被拒绝`,
     ...(off.length ? [`已关闭确认的类别：${off.map(([, label]) => label).join('、')}`] : []),
+    ...(levels.schedule === 'untrusted_content' ? [SCHEDULE_RELAXATION_NOTE] : []),
     ...(raw === 'external_content'
       ? ['confirmHighRisk 显式写为 external_content，保持原来的严格度：只读过第一方只读查询（如天气）后建定时任务也要确认；'
         + '想用新默认值（这种情况不再确认），删掉这一行或改为按类别配置（ADR 0067）']

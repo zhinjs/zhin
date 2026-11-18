@@ -44,6 +44,7 @@ import {
 import { observeAgentTurnTrace } from '../ingress/ports.js';
 import { createRuntimeProactiveOutbound } from './runtime-factory.js';
 import type { ApprovalPort } from '../../session/approval-port.js';
+import type { SchedulePreviewOptions } from '../../task-executor.js';
 
 const logger = getLogger('agent');
 
@@ -158,7 +159,7 @@ export function createAssistantScheduleRuntime(
       getStatus: () => [],
     },
     engine: timerScheduler,
-    previewTask: (prompt: string, context: ScheduleInvocationContext, options?: { activityFeedback?: boolean }) =>
+    previewTask: (prompt: string, context: ScheduleInvocationContext, options?: SchedulePreviewOptions) =>
       executor.preview(prompt, context, options),
   };
 
@@ -281,6 +282,7 @@ function createRuntimeScheduleTurnPort(
           kind: 'schedule',
           executionPlan: input.executionPlan,
           createdBy: input.createdBy,
+          ...(input.provenance ? { provenance: input.provenance } : {}),
           security: {
             execPreset: input.security.execPreset,
             allowedDomains: [...input.security.allowedDomains],

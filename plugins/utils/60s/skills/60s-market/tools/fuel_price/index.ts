@@ -7,7 +7,8 @@ export default defineAgentTool<{ province?: string }>({
   inputSchema: z.object({ province: z.string().optional() }),
   keywords: ["油价", "汽油", "柴油", "fuel"],
   readOnly: true,
-  tags: ["生活", "油价", "价格"],
+  // ADR 0067 D1.2: price descriptions and the trend line are upstream free text, not trusted output.
+  tags: ["生活", "油价", "价格", "external_content"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/fuel-price.js')).default;
     return handler(context.use(sixtySClientToken), input, context.locale);

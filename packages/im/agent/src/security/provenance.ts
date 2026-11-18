@@ -19,6 +19,7 @@
  * plugin's read-only lookup is recorded as trusted output, which only `any_content` categories
  * count. MCP tools, web pages, files and stored memory are external content even when read-only.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { InitiatorTrustLevel } from './trust-level.js';
 import { isFileWriteToolName, isOutboundToolName } from './trust-level.js';
 
@@ -113,7 +114,8 @@ export function resolveHighRiskConfirm(raw: unknown): HighRiskConfirmPolicy {
   }
   const tiers = raw as Record<string, unknown>;
   return Object.freeze(Object.fromEntries(HIGH_RISK_ACTION_KINDS.map((kind) => {
-    const value = tiers[HIGH_RISK_CONFIG_KEYS[kind]];
+    // Idempotent: a resolved policy (`file_write`) reads back as itself; the config key wins when both exist.
+    const value = tiers[HIGH_RISK_CONFIG_KEYS[kind]] ?? tiers[kind];
     if (value === undefined) return [kind, DEFAULT_HIGH_RISK_CONFIRM[kind]];
     return [kind, typeof value === 'string' && LEVELS.has(value) ? value : 'any_content'];
   })) as Record<HighRiskActionKind, HighRiskConfirmLevel>);
@@ -172,6 +174,30 @@ const READ_VERB = /^(?:get|read|list|show|view|query|search|find|check)_/;
 const CONFIG_NAME = /(?:^|_)(?:config|configs|configuration|setting|settings|plugin_install|install_plugin|uninstall_plugin)(?:_|$)/;
 const SCHEDULE_NAME = /(?:^|_)(?:schedule|schedules|cron|crons|reminder|reminders|remind|timer|timers|alarm|alarms)(?:_|$)/;
 
+/**
+ * ADR 0067 D2.1: `schedule_preview` runs its prompt right away, so it never gets the schedule
+ * relaxation: it asks at `any_content` at least (an explicit `off` for schedules still switches it off).
+ */
+const SCHEDULE_PREVIEW_TOOL = 'schedule_preview';
+
+/** ADR 0067 D2: the level a call of `toolName` in category `kind` asks at under `policy`. */
+export function highRiskConfirmLevel(
+  toolName: string,
+  kind: HighRiskActionKind,
+  policy: HighRiskConfirmPolicy,
+): HighRiskConfirmLevel {
+  const level = policy[kind];
+  if (kind === 'schedule' && toolName === SCHEDULE_PREVIEW_TOOL && level !== 'off') {
+    return stricterConfirmLevel(level, 'any_content');
+  }
+  return level;
+}
+
+/** ADR 0067 D2: the default level of a call (the floor unattended turns never go below). */
+export function defaultHighRiskConfirmLevel(toolName: string, kind: HighRiskActionKind): HighRiskConfirmLevel {
+  return kind === 'schedule' && toolName === SCHEDULE_PREVIEW_TOOL ? 'any_content' : DEFAULT_HIGH_RISK_CONFIRM[kind];
+}
+
 /** The high-risk category of a tool call, or undefined for ordinary tools. */
 export function classifyHighRiskAction(tool: Pick<ToolView, 'name' | 'tags'>): HighRiskActionKind | undefined {
   const tags = tool.tags ?? [];
@@ -217,7 +243,17 @@ export type ProvenanceSource =
   | Readonly<{ kind: 'tool_result'; toolName: string; trusted?: boolean }>
   | Readonly<{ kind: 'conversation_context' }>
   /** A perception-model description of user media (`ai.multimodal.perception`). */
-  | Readonly<{ kind: 'media_perception' }>;
+  | Readonly<{ kind: 'media_perception' }>
+  /**
+   * ADR 0067 D2.1: the prompt of a scheduled task the model created after reading recorded content;
+   * restored at the start of every due run and preview. Never trusted. `sources`: the creating turn's.
+   */
+  | Readonly<{ kind: 'scheduled_prompt'; sources?: readonly string[] }>;
+
+/** ADR 0067 D2.1: what a scheduled task keeps of the turn that created it (see `ScheduleJob.provenance`). */
+export type ScheduledPromptProvenance = Readonly<{ tainted: true; sources: readonly string[] }>;
+
+const MAX_PERSISTED_SOURCES = 10;
 
 const MAX_CHAIN_SOURCES = 5;
 
@@ -277,6 +313,18 @@ export class TurnProvenance {
     return Object.freeze([...this.#sources]);
   }
 
+  /**
+   * ADR 0067 D2.1: what a scheduled task created now keeps: any recorded source (trusted output
+   * included) marks it, because its prompt may carry what that content said. Undefined on a clean turn.
+   */
+  snapshotForSchedule(): ScheduledPromptProvenance | undefined {
+    if (!this.tainted) return undefined;
+    const keys = this.#sources.flatMap(source => source.kind === 'scheduled_prompt'
+      ? (source.sources?.length ? source.sources : ['scheduled_prompt'])
+      : [sourceKey(source) + (source.kind === 'tool_result' && source.trusted ? ':trusted' : '')]);
+    return Object.freeze({ tainted: true, sources: Object.freeze([...new Set(keys)].slice(0, MAX_PERSISTED_SOURCES)) });
+  }
+
   /** Human-readable chain for approval cards, e.g. `主人的消息 → 工具 web_fetch 的结果 → 本次调用 bash`. */
   describeChain(initiator: InitiatorTrustLevel, toolName: string): string {
     const shown = this.#sources.slice(0, MAX_CHAIN_SOURCES).map(describeSource);
@@ -312,7 +360,58 @@ function describeSource(source: ProvenanceSource): string {
     case 'tool_result': return `工具 ${source.toolName} 的结果${source.trusted ? '（第一方只读）' : ''}`;
     case 'conversation_context': return '群聊背景消息';
     case 'media_perception': return '图片/媒体的自动描述';
+    case 'scheduled_prompt': {
+      const shown = (source.sources ?? []).slice(0, MAX_CHAIN_SOURCES).map(describePersistedSource);
+      return `定时任务的提示词（创建时已读过${shown.length ? `：${shown.join('、')}` : '外部内容'}）`;
+    }
   }
+}
+
+/** Renders a key written by {@link TurnProvenance.snapshotForSchedule}. */
+function describePersistedSource(key: string): string {
+  if (key.startsWith('tool:')) {
+    const trusted = key.endsWith(':trusted');
+    const name = key.slice('tool:'.length, trusted ? -':trusted'.length : undefined);
+    return `工具 ${name} 的结果${trusted ? '（第一方只读）' : ''}`;
+  }
+  if (key === 'conversation_context') return '群聊背景消息';
+  if (key === 'media_perception') return '图片/媒体的自动描述';
+  if (key === 'scheduled_prompt') return '另一个定时任务的提示词';
+  return key;
+}
+
+/**
+ * ADR 0067 D2.1: parses a stored `ScheduleJob.provenance`. Absent stays absent (jobs from before the
+ * field, or created by a person); anything present but malformed fails closed as tainted.
+ */
+export function parseScheduledPromptProvenance(raw: unknown): ScheduledPromptProvenance | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const sources = typeof raw === 'object' && Array.isArray((raw as { sources?: unknown }).sources)
+    ? ((raw as { sources: unknown[] }).sources).filter((item): item is string => typeof item === 'string')
+      .slice(0, MAX_PERSISTED_SOURCES)
+    : [];
+  return Object.freeze({ tainted: true, sources: Object.freeze(sources) });
+}
+
+/** The provenance of the turn whose tool call is executing (ADR 0067 D2.1). */
+const activeTurnProvenance = new AsyncLocalStorage<{ current?: TurnProvenance }>();
+
+/**
+ * Runs `execute` (one tool call) so that the tool can read the calling turn's provenance with
+ * {@link currentTurnProvenance}. The binding ends with the call: timers the tool started see none.
+ */
+export async function runWithTurnProvenance<T>(provenance: TurnProvenance, execute: () => Promise<T>): Promise<T> {
+  const holder: { current?: TurnProvenance } = { current: provenance };
+  try {
+    return await activeTurnProvenance.run(holder, execute);
+  } finally {
+    holder.current = undefined;
+  }
+}
+
+/** The provenance of the tool call in progress; undefined outside a turn's tool call (Console, RPC). */
+export function currentTurnProvenance(): TurnProvenance | undefined {
+  return activeTurnProvenance.getStore()?.current;
 }
 
 function sourceKey(source: ProvenanceSource): string {

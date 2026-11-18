@@ -9,7 +9,8 @@ export default defineAgentTool({
     'View personal spending summary or category statistics for today, this week, or this month.',
   requiresApproval: 'never',
   readOnly: true,
-  tags: ['ledger', 'finance'],
+  // ADR 0067 D1.2: category names are text earlier turns wrote, not trusted output.
+  tags: ['ledger', 'finance', 'external_content'],
   keywords: ['消费汇总', '分类统计', '账单统计', 'ledger summary', 'spending'],
   inputSchema: z.object({
     period: z.enum(['today', 'week', 'month']).default('month').describe('Time period: today, week, or month'),

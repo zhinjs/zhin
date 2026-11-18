@@ -5,6 +5,10 @@ import { DEFAULT_API_BASE, SixtySClient, sixtySClientToken } from '../src/client
 import plugin from '../plugin.ts';
 import weatherTool from '../skills/60s-life/tools/weather/index.ts';
 import newsTool from '../skills/60s-news/tools/60s_news/index.ts';
+import moyuTool from '../skills/60s-life/tools/moyu/index.ts';
+import fuelPriceTool from '../skills/60s-market/tools/fuel_price/index.ts';
+import goldPriceTool from '../skills/60s-market/tools/gold_price/index.ts';
+import exchangeRateTool from '../skills/60s-market/tools/exchange_rate/index.ts';
 import weatherCommand from '../commands/weather/[city]/index.ts';
 import newsCommand from '../commands/60s/index.ts';
 
@@ -19,6 +23,18 @@ describe('@zhin.js/plugin-60s', () => {
     expect(typeof newsTool.execute).toBe('function');
     expect(weatherTool.description).toContain('天气');
     expect(weatherTool.keywords).toContain('weather');
+  });
+
+  it('marks tools that splice upstream free text as external content (ADR 0067 D1.2)', () => {
+    for (const tool of [moyuTool, fuelPriceTool, goldPriceTool]) {
+      expect(tool.readOnly).toBe(true);
+      expect(tool.tags).toContain('external_content');
+    }
+    // Weather and exchange rates return short structured values and stay trusted output.
+    for (const tool of [weatherTool, exchangeRateTool]) {
+      expect(tool.readOnly).toBe(true);
+      expect(tool.tags).not.toContain('external_content');
+    }
   });
 
   it('exposes chat commands', () => {
