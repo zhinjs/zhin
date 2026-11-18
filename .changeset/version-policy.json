@@ -49,7 +49,7 @@
     {
       "package": "@zhin.js/console-protocol",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增类型 `ConsoleConversationOutcome` / `ConsoleConversationOutcomeList`（`GET {base}/conversations/outcomes`，`CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`）、`ConsoleAttentionPersonLink` 与 `ConsoleAttentionItem.links`，`ConsoleMessageDiagnostic` 新增可选 `outcome`。与第 28 批合并为 1.6.0，npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-18 按惯例升 minor）：第 52 批——`CONSOLE_RPC_PERMISSIONS` 登记 `cron:set-agent`（`ops.schedule.write`），`CONSOLE_HTTP_PERMISSIONS` 登记 `POST /assistant/jobs/set-agent`。1.6.1 已发布，本次为 1.7.0，npm 上 1.7.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 28 批——新增公开导出 `CONSOLE_MCP_TEST_PATH` 与类型 `ConsoleMcpConnectTestResult`（`POST {base}/introspection/mcp/test`，MCP 服务立即连接测试），`CONSOLE_HTTP_PERMISSIONS` 登记该路由为 `agent.configure`。npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250）：第 31 批——新增类型 `ConsoleConversationOutcome` / `ConsoleConversationOutcomeList`（`GET {base}/conversations/outcomes`，`CONSOLE_HTTP_PERMISSIONS` 登记为 `endpoint.view`）、`ConsoleAttentionPersonLink` 与 `ConsoleAttentionItem.links`，`ConsoleMessageDiagnostic` 新增可选 `outcome`。与第 28 批合并为 1.6.0，npm 上 1.6.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-18 按惯例升 minor）：第 52 批——`CONSOLE_RPC_PERMISSIONS` 登记 `cron:set-agent`（`ops.schedule.write`）（`POST /assistant/jobs/set-agent` 由已有的 `POST /assistant/jobs` 前缀规则覆盖，同为 `ops.schedule.write`）。1.6.1 已发布，本次为 1.7.0，npm 上 1.7.0 未被占用。"
     },
     {
       "package": "@zhin.js/host-http",
