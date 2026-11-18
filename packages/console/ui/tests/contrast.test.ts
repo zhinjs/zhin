@@ -10,6 +10,9 @@ import { fileURLToPath } from 'node:url';
 import * as tokens from '../tokens/tokens.mjs';
 // @ts-expect-error — plain ESM modules without declarations
 import { contrast, deltaE2000, lightness, over, parseColor } from '../tokens/color.mjs';
+import { createElement as h } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Tabs, TabsList, TabsTrigger } from '../client/components/ui/tabs.js';
 
 type Rgb = [number, number, number];
 type Theme = 'light' | 'dark';
@@ -84,9 +87,27 @@ describe('color roles do not follow the palette', () => {
   });
 });
 
+describe('inactive tabs use --tab-inactive', () => {
+  it('TabsList writes text-tab-inactive (not muted-foreground); the theme maps it to --tab-inactive', () => {
+    const markup = renderToStaticMarkup(h(Tabs, { defaultValue: 'a' }, h(TabsList, null, h(TabsTrigger, { value: 'a' }, 'A'), h(TabsTrigger, { value: 'b' }, 'B'))));
+    const list = markup.match(/<div[^>]*role="tablist"[^>]*>/u)?.[0] ?? '';
+    expect(list).toContain('text-tab-inactive');
+    expect(list).not.toContain('text-muted-foreground');
+    const theme = readFileSync(join(packageRoot, 'client/styles/generated/theme.css'), 'utf8');
+    expect(theme).toContain('--color-tab-inactive: hsl(var(--tab-inactive));');
+  });
+});
+
 describe.each(CASES)('%s palette, %s theme', (palette, theme) => {
   const color = environment(palette, theme);
   const surfaces = { card: color('--card'), background: color('--background'), popover: color('--popover') };
+
+  it('inactive tab labels ≥ 4.5:1 on the tab list fill (background or card + 6% foreground)', () => {
+    for (const [name, surface] of [['background', surfaces.background], ['card', surfaces.card]] as const) {
+      const fill = over(color('--foreground'), 0.06, surface);
+      expect(contrast(color('--tab-inactive'), fill), name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 
   it('primary button: brand-foreground on brand ≥ 4.5:1; background lightness apart from every other button', () => {
     const brand = color('--console-brand');

@@ -128,6 +128,7 @@ const THEME_COLORS = [
   ['secondary', ['DEFAULT', 'foreground']],
   ['destructive', ['DEFAULT', 'foreground']],
   ['muted', ['DEFAULT', 'foreground']],
+  'tab-inactive',
   ['accent', ['DEFAULT', 'foreground']],
   ['success', ['DEFAULT', 'foreground']],
   ['warning', ['DEFAULT', 'foreground']],
