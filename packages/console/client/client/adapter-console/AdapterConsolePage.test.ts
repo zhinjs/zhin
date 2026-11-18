@@ -773,6 +773,21 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     f.h.unmount();
   });
 
+  it('leaves no empty navigation or account section behind when the host owns the accounts', async () => {
+    // Each empty element would still take a section gap in the host page (zhinjs/console#155).
+    const f = fixture(status(), [], '', { hosted: true }); await f.h.settle();
+    expect(f.h.nodes().some(node => node.type === 'nav')).toBe(false);
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(false);
+    f.h.unmount();
+  });
+
+  it('keeps the navigation and account section when the page lists the accounts itself', async () => {
+    const f = fixture(status(), [], '', { embedded: true }); await f.h.settle();
+    expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(true);
+    f.h.unmount();
+  });
+
   it('reports commit_unknown through the headless controller and blocks further changes', async () => {
     const f = fixture(status(), [], '', { hosted: true }); await f.h.settle(); f.setMode('unknown');
     await (f.hosted.accounts!.rows[0]!.start as () => Promise<void>)(); await f.h.settle();
