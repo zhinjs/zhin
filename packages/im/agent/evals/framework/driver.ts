@@ -718,6 +718,10 @@ function toCapability(tool: EvalTool, executed: EvalToolInvocation[], rawOutputs
     ...(tool.parameters ? { inputSchema: tool.parameters } : {}),
     requiresApproval: tool.requiresApproval ?? 'never',
     ...(tool.risk ? { risk: tool.risk } : {}),
+    ...(tool.readOnly ? { readOnly: true } : {}),
+    ...(tool.tags ? { tags: Object.freeze([...tool.tags]) } : {}),
+    ...(tool.firstParty ? { firstParty: true } : {}),
+    ...(tool.mcpServer ? { mcpServer: tool.mcpServer } : {}),
     source: `eval:${tool.name}`,
     execute: (async (input: unknown) => {
       const args = (input ?? {}) as Record<string, unknown>;

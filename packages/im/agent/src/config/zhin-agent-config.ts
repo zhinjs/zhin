@@ -1,5 +1,5 @@
 import type { ToolBudgetSettings } from '../core/turn-progress.js';
-import type { InjectionGuardSettings } from '../security/provenance.js';
+import type { InjectionGuardConfig } from '../security/provenance.js';
 import type { UsageQuotaSettings } from '../security/usage-quota.js';
 import type { ToolHardGateConfig } from '../security/tool-hard-gate.js';
 /**
@@ -138,8 +138,8 @@ export interface ZhinAgentConfig {
   modelHarness?: ModelHarnessConfig;
   /** Provider retry / backoff / timeout / fallback; unset keys use DEFAULT_PROVIDER_RESILIENCE. */
   providerResilience?: ProviderResilienceConfig;
-  /** Provenance confirmation for high-risk actions and the outbound leak check (#727). */
-  injectionGuard?: Partial<InjectionGuardSettings>;
+  /** Provenance confirmation for high-risk actions (#727, ADR 0067 per-category levels) and the outbound leak check. */
+  injectionGuard?: InjectionGuardConfig;
   /** Dangerous-tool hard gate (ADR 0036): extra dangerous tools, funds switch, approval timeout. Always on. */
   toolHardGate?: ToolHardGateConfig;
   /** Emoji-reaction pacing per session: `cooldownMs` between applied reactions (default 600000), `probability` 0..1 (default 0.35; 0 disables). */

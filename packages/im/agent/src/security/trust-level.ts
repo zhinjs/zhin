@@ -75,6 +75,11 @@ export function isBuiltinSideEffectToolName(name: string): boolean {
     || HOST_WRITE_TOOLS.has(candidate) || isOutboundToolName(candidate));
 }
 
+/** ADR 0067: built-in file-writing tool names (any spelling variant, see {@link toolNameSpellings}). */
+export function isFileWriteToolName(name: string): boolean {
+  return toolNameSpellings(name).some(candidate => FILE_WRITE_TOOLS.has(candidate));
+}
+
 /**
  * #1250 b33 review: the name of a tool, its last qualified segment, and both in canonical snake_case
  * (NFKC, camelCase split, lower case, every other separator as `_`), so `sendMessage`, `Send-Message`,

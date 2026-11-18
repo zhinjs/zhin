@@ -1387,14 +1387,83 @@
               "x-descriptionZh": "注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。",
               "properties": {
                 "confirmHighRisk": {
-                  "type": "string",
-                  "enum": [
-                    "external_content",
-                    "off"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "external_content",
+                        "always",
+                        "off"
+                      ],
+                      "description": "Applies to every category. external_content: the pre-ADR-0067 meaning (any_content everywhere, trusted first-party read-only output included); always: every call asks; off: disabled.",
+                      "x-descriptionZh": "作用于所有类别。external_content：原来的含义（所有类别 any_content，第一方只读工具的结果也算）；always：每次都确认；off：关闭。"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "description": "Per-category levels; unset categories use the defaults (schedule: untrusted_content, others: any_content).",
+                      "x-descriptionZh": "按类别设置级别；没写的类别用默认值（定时任务 untrusted_content，其余 any_content）。",
+                      "properties": {
+                        "shell": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "untrusted_content",
+                            "any_content",
+                            "always"
+                          ],
+                          "description": "Running commands. Default any_content.",
+                          "x-descriptionZh": "执行命令。默认 any_content。"
+                        },
+                        "fileWrite": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "untrusted_content",
+                            "any_content",
+                            "always"
+                          ],
+                          "description": "Writing files. Default any_content.",
+                          "x-descriptionZh": "写文件。默认 any_content。"
+                        },
+                        "outbound": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "untrusted_content",
+                            "any_content",
+                            "always"
+                          ],
+                          "description": "Messaging other conversations. Default any_content.",
+                          "x-descriptionZh": "向其他会话发消息。默认 any_content。"
+                        },
+                        "config": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "untrusted_content",
+                            "any_content",
+                            "always"
+                          ],
+                          "description": "Changing configuration. Default any_content.",
+                          "x-descriptionZh": "修改配置。默认 any_content。"
+                        },
+                        "schedule": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "untrusted_content",
+                            "any_content",
+                            "always"
+                          ],
+                          "description": "Scheduled tasks and reminders. Default untrusted_content.",
+                          "x-descriptionZh": "定时任务与提醒。默认 untrusted_content。"
+                        }
+                      }
+                    }
                   ],
-                  "default": "external_content",
-                  "description": "external_content: high-risk actions after external content always ask for approval (denied in unattended turns). off: disabled.",
-                  "x-descriptionZh": "external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。"
+                  "description": "High-risk action confirmation after lower-trust content (ADR 0067). Levels: off; untrusted_content (after external content; trusted first-party read-only output does not count); any_content (after any content); always (every call). Confirmation is denied in unattended turns. Unset: schedule untrusted_content, shell / fileWrite / outbound / config any_content.",
+                  "x-descriptionZh": "读取外部内容后的高危动作确认（ADR 0067）。级别：off；untrusted_content（读过外部内容后确认，第一方只读工具的结果不算）；any_content（读过任何内容后确认）；always（每次确认）。无人值守回合需要确认时直接拒绝。不写时：定时任务 untrusted_content，执行命令 / 写文件 / 外发 / 改配置 any_content。"
                 },
                 "outboundCheck": {
                   "type": "string",

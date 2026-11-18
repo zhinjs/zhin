@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0067：读取外部内容后的高危动作确认——按动作分级，第一方只读工具的结果算受信输出
 
-状态：已接受（所有者 2026-11-18 在维护会话中选定方案「分级 + 第一方只读工具标可信」，要求先写 ADR 再实施）。依据：zhinjs/zhin#1250 评论 6971359609 第 6 项 `high-risk-confirm-default-too-broad`。核对基线：`origin/feat/friendly-volta-ejc3wl` 合入 `origin/main` 之后的 `45cb531d0`。
+状态：已接受（所有者 2026-11-18 在维护会话中选定方案「分级 + 第一方只读工具标可信」，要求先写 ADR 再实施）。依据：zhinjs/zhin#1250 评论 6971359609 第 6 项 `high-risk-confirm-default-too-broad`。核对基线：`origin/feat/friendly-volta-ejc3wl` 合入 `origin/main` 之后的 `45cb531d0`。实施进度：已全部实施（与本文同一分支）。
 
 关联：[ADR 0036](./0036-controlled-landing-phase0.md)（危险工具硬闸，与本文无关、不变）、[ADR 0044](./0044-adapter-capability-profile.md)（`@zhin.js/` 作用域的官方包视为可信，本文沿用同一判定）、[ADR 0065](./0065-mcp-tool-permit.md)（MCP 上游 `readOnlyHint` 只定权限档位、不放宽审批，本文同样不让它放宽确认）。
 

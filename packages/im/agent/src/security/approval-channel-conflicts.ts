@@ -4,11 +4,20 @@
  * IM private chat can only be answered by the bot owner or a zhin `admin` initiator. Reported once at
  * startup so `ask` / `confirmHighRisk` do not fail silently.
  */
+import { HIGH_RISK_ACTION_KINDS, resolveHighRiskConfirm, type ConfirmHighRiskSetting, type HighRiskActionKind } from './provenance.js';
+
+const CATEGORY_LABELS: Readonly<Record<HighRiskActionKind, string>> = Object.freeze({
+  shell: '执行命令',
+  file_write: '写文件',
+  outbound: '向其他会话发消息',
+  config: '修改配置',
+  schedule: '定时任务',
+});
 export interface ApprovalChannelConflictInput {
   /** `ai.agent.execApprovalMode` (default `auto`). */
   readonly execApprovalMode?: 'ask' | 'auto' | 'bypass';
-  /** `ai.agent.injectionGuard.confirmHighRisk` (default `external_content`). */
-  readonly confirmHighRisk?: 'external_content' | 'off';
+  /** `ai.agent.injectionGuard.confirmHighRisk` (unset: the ADR 0067 per-category defaults). */
+  readonly confirmHighRisk?: ConfirmHighRiskSetting;
   /** Enabled sources of unattended Agent turns that can call tools, as user-facing labels. */
   readonly unattendedChannels: readonly string[];
 }
@@ -24,10 +33,13 @@ export function describeApprovalChannelConflicts(input: ApprovalChannelConflictI
       + '如需无人值守执行，改用 auto（由审核 Agent 判断），或在 Console 中操作。',
     );
   }
-  if ((input.confirmHighRisk ?? 'external_content') !== 'off' && unattended) {
+  const policy = resolveHighRiskConfirm(input.confirmHighRisk);
+  const confirmed = HIGH_RISK_ACTION_KINDS.filter(kind => policy[kind] !== 'off');
+  if (confirmed.length > 0 && unattended) {
     conflicts.push(
-      'ai.agent.injectionGuard.confirmHighRisk 为 external_content：'
-      + `${unattended}触发的回合是无人值守的，没有审批渠道；这些回合读取外部内容后的高危动作（定时任务、执行命令、向其他会话发消息、修改配置）会被拒绝。`
+      'ai.agent.injectionGuard.confirmHighRisk 未关闭：'
+      + `${unattended}触发的回合是无人值守的，没有审批渠道；这些回合读取外部内容后的高危动作`
+      + `（${confirmed.map(kind => CATEGORY_LABELS[kind]).join('、')}）会被拒绝。`
       + '实时 IM 会话中会在当前会话请发起人确认。',
     );
   }

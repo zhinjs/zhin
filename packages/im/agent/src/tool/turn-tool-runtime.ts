@@ -22,14 +22,17 @@ import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 import { MCP_PERMIT_POLICY, McpPermitDeniedError, formatMcpPermitDenial } from './mcp-permit-denial.js';
 import {
+  DEFAULT_HIGH_RISK_CONFIRM,
   PROVENANCE_NO_CHANNEL_REASON,
   PROVENANCE_POLICY,
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
   classifyHighRiskAction,
+  classifyToolOutput,
   formatProvenanceReason,
-  isExternalContentSource,
   resolveInjectionGuard,
+  stricterConfirmLevel,
+  type InjectionGuardConfig,
   type InjectionGuardSettings,
 } from '../security/provenance.js';
 import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
@@ -66,8 +69,8 @@ export type TurnToolOutcome =
   }>;
 
 export interface TurnToolRuntimeOptions {
-  /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
-  readonly injectionGuard?: Partial<InjectionGuardSettings>;
+  /** `ai.agent.injectionGuard`; unset keys use the ADR 0067 defaults. */
+  readonly injectionGuard?: InjectionGuardConfig;
   /** Shared with the engine so sources outside tool calls (background events) also count. */
   readonly provenance?: TurnProvenance;
   /** Masks leaks in the text arguments of outbound tools and learns other-session memory reads. */
@@ -209,9 +212,9 @@ export class TurnToolRuntime {
     if (hardGate.status === 'denied') {
       return this.#deny(name, toolUseId, TOOL_HARD_GATE_POLICY, hardGate.reason, causedBy);
     }
+    // ADR 0067 D2: each category asks at its own level; only `any_content` counts trusted first-party output.
     const provenanceGate = highRisk !== undefined
-      && this.#guard.confirmHighRisk === 'external_content'
-      && this.provenance.tainted;
+      && this.provenance.requiresConfirmation(this.#guard.confirmHighRisk[highRisk]);
     const denial: ApprovalDenialContext = { toolName: name, ...(highRisk ? { action: highRisk } : {}) };
     // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
     let authorizationRequired = decision.status === 'approval_required';
@@ -245,7 +248,7 @@ export class TurnToolRuntime {
         ...(!authorizationRequired || (decision.status === 'approval_required' && decision.adminMayApprove)
           ? { adminMayApprove: true }
           : { requiresOwner: true }),
-        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
+        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain, this.provenance.tainted), effectiveInput,
           humanOnly, tool.description),
         signal: this.turn.signal,
       });
@@ -263,7 +266,9 @@ export class TurnToolRuntime {
       // #1250 b33 review: the automatic reviewer is a model and the very target of prompt injection. In an
       // unattended turn it never approves a high-risk action after external content, even when
       // `injectionGuard.confirmHighRisk: off` skipped the intent confirmation above (fail closed, as before b33).
-      if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.tainted) {
+      // ADR 0067 D2: a category set below its default still uses the default level here.
+      if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.requiresConfirmation(
+        stricterConfirmLevel(this.#guard.confirmHighRisk[highRisk], DEFAULT_HIGH_RISK_CONFIRM[highRisk]))) {
         this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY,
           `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
@@ -421,8 +426,9 @@ export class TurnToolRuntime {
 
   /** Records where the result came from, and which parts are another session's memory. */
   #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown): void {
-    if (isExternalContentSource(tool, this.#guard)) {
-      this.provenance.record({ kind: 'tool_result', toolName: tool.name });
+    const source = classifyToolOutput(tool, this.#guard);
+    if (source !== 'none') {
+      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(source === 'trusted' ? { trusted: true } : {}) });
     }
     if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
       this.#leakInspector.protectOtherSessionMemory(collectText(output));
