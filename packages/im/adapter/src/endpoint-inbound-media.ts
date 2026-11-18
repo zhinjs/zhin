@@ -15,7 +15,7 @@ export interface EndpointInboundMediaPort {
   roots?(): readonly string[];
   /**
    * #1250 第 48 批: the protocol server this Endpoint is configured to talk to (`https://host:5140`,
-   * `ws://host:3001`, …), when it hands out media URLs on its own port. A media download from a
+   * `wss://host:3001`, …), when it hands out media URLs on its own port. A media download from a
    * platform message then keeps that exact origin's port; every other non-default port is still
    * refused, and the private-host and scheme checks still apply. Declare only the server address from
    * the Endpoint's own configuration, never an address taken from a message.
