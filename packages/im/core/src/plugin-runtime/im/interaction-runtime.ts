@@ -113,7 +113,7 @@ export interface InteractionClaimResolution {
   readonly owner?: string;
   /**
    * ADR 0061 decision 11 (revised, #1250): the message was not taken. It ended the sender's
-   * prompt (a command, media, a mention) and goes on through normal inbound processing.
+   * prompt (a command or media) and goes on through normal inbound processing.
    */
   readonly escaped?: true;
   /** With `escaped`: whether to tell the sender once that the prompt ended (throttled). */
@@ -124,13 +124,6 @@ export interface InteractionClaimResolution {
 export interface InteractionClaimOptions {
   /** Whether the message routes to a command (CommandIndex match); such a message ends the prompt. */
   readonly matchesCommand?: () => boolean;
-  /**
-   * The mention of the bot as the adapter reported it (`IncomingMessage.mentioned`, which already
-   * covers promoted mention segments). Room routing marks a routed message as mentioned so that it
-   * is handled as addressed; that synthesized mention never ends a prompt, so a typo in a routed
-   * room still gets the prompt again. Absent, `message.mentioned` is used.
-   */
-  readonly mentioned?: boolean;
 }
 
 /** Segment types that make a message "media" for prompt escape (images, files, voice, video). */
@@ -271,7 +264,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   /**
    * {@link resolveClaim} plus whether the text was answer-like (ADR 0061 `interaction_answered` /
    * `interaction_consumed`). A message from the asked sender that carries media, or that is not an
-   * answer and mentions the bot or routes to a command, ends the prompt instead (`escaped`).
+   * answer and routes to a command, ends the prompt instead (`escaped`). A mention of the bot alone
+   * never does: on many platforms every reply to the bot carries one.
    */
   resolveClaimDetailed(message: Message, snapshot?: RuntimeSnapshot, options?: InteractionClaimOptions): false | InteractionClaimResolution {
     const effectiveSnapshot = snapshot ?? (message instanceof RuntimeMessage ? message[interactionOperationScope]()?.snapshot : undefined);
@@ -325,7 +319,13 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     return taken(text, false);
   }
 
-  /** Media always escapes; a mention or a command escapes unless the text is a valid answer. */
+  /**
+   * Media always escapes; a command escapes unless the text is a valid answer. A mention of the bot
+   * is no exit of its own (ADR 0061 decision 11, revised): platforms that deliver group messages
+   * only when the bot is mentioned, or mark a reply to the bot as a mention, put one on every
+   * answer, so "@bot 3" to a two-option prompt is an invalid answer and gets the prompt again. The
+   * command probe already ignores leading mentions, so "@bot /status" still escapes.
+   */
   #escapes(
     message: Message,
     raw: string,
@@ -334,8 +334,6 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   ): boolean {
     if (message.segments?.some(segment => ESCAPE_MEDIA_SEGMENTS.has(segment.type))) return true;
     if (classify(raw, false)) return false;
-    const mentioned = options && 'mentioned' in options ? options.mentioned === true : message.mentioned === true;
-    if (mentioned) return true;
     if (!options?.matchesCommand) return false;
     try { return options.matchesCommand(); } catch { return false; }
   }

@@ -119,7 +119,8 @@ describe('cancel words on choice prompts', () => {
 describe('escaping a pending prompt', () => {
   it.each([
     ['media', message('alice', '', { segments: [{ type: 'image', data: { url: 'https://example.com/a.png' } }] }), undefined],
-    ['a mention', message('alice', '@bot 在吗', { mentioned: true }), undefined],
+    // A mention alone no longer ends a prompt (it is on every reply on some platforms); a mentioned command does.
+    ['a mentioned command', message('alice', '@bot /status', { mentioned: true }), () => true],
     ['a command', message('alice', '/status'), () => true],
   ])('ends the sender’s prompt on %s and lets the message through', async (_kind, incoming, matchesCommand) => {
     const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
@@ -134,17 +135,24 @@ describe('escaping a pending prompt', () => {
     expect(reply).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a mention the adapter did not report (Room routing marks routed messages as mentioned)', async () => {
+  it('treats a real mention with an invalid answer as an invalid answer: the prompt again, no exit', async () => {
+    // Platforms that deliver group messages only when the bot is mentioned, or that mark a reply to
+    // the bot as a mention, carry `mentioned: true` on every answer (ADR 0061 decision 11, revised).
     const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
     const { interactions, answer } = start(i => i.create(message('alice', 'pick', {}, reply)).ask(select));
+    const settled = answer.catch(error => error as Error);
     await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
-    const routed = interactions.resolveClaimDetailed(message('alice', '随便', { mentioned: true }), undefined, { mentioned: false });
-    expect(routed).toEqual({ answerLike: false });
-    await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(2)); // invalid answer: the prompt again, no exit
-    // A real mention still ends it.
-    const real = interactions.resolveClaimDetailed(message('alice', '还是随便', { mentioned: true }), undefined, { mentioned: true });
-    expect(real).toMatchObject({ escaped: true });
-    await expect(answer).rejects.toMatchObject({ name: 'UserInteractionCancelledError', reason: 'interrupted' });
+    const matchesCommand = vi.fn(() => false);
+    const invalid = interactions.resolveClaimDetailed(message('alice', '@bot 3', { mentioned: true,
+      segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' 3' } }] }), undefined, { matchesCommand });
+    expect(invalid).toEqual({ answerLike: false });
+    expect(matchesCommand).toHaveBeenCalled();
+    await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(2)); // invalid answer: the prompt again
+    expect(String(reply.mock.calls[1]![0])).not.toContain('已取消');
+    // A mention whose text (mention removed) routes to a command still ends the prompt.
+    const command = interactions.resolveClaimDetailed(message('alice', '@bot /status', { mentioned: true }), undefined, { matchesCommand: () => true });
+    expect(command).toMatchObject({ escaped: true });
+    await expect(settled).resolves.toMatchObject({ name: 'UserInteractionCancelledError', reason: 'interrupted' });
   });
 
   it('never lets a later message displace an answer already taken while the prompt is still being sent', async () => {
@@ -153,14 +161,14 @@ describe('escaping a pending prompt', () => {
     const { interactions, answer } = start(i => i.create(message('alice', 'pick', {}, reply)).ask(select));
     await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
     expect(interactions.resolveClaim(message('alice', '2'))).toBe(true);
-    // Media and a mention would end a waiting prompt; with the answer buffered they pass through untouched.
-    expect(interactions.resolveClaimDetailed(message('alice', '@bot hi', { mentioned: true }))).toBe(false);
+    // Media and a command would end a waiting prompt; with the answer buffered they pass through untouched.
+    expect(interactions.resolveClaimDetailed(message('alice', '/status'), undefined, { matchesCommand: () => true })).toBe(false);
     expect(interactions.resolveClaimDetailed(message('alice', '', { segments: [{ type: 'image', data: { url: 'https://example.com/a.png' } }] }))).toBe(false);
     deliver();
     await expect(answer).resolves.toBe('b');
   });
 
-  it('takes a valid answer that mentions the bot or matches a command as the answer', async () => {
+  it('takes a valid answer that matches a command as the answer', async () => {
     const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
     const { interactions, answer } = start(i => i.create(message('alice', 'pick', {}, reply)).ask(select));
     await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
@@ -175,7 +183,7 @@ describe('escaping a pending prompt', () => {
       const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
       const answer = interactions.create(message('alice', 'pick', {}, reply)).ask(select).catch(() => undefined);
       await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
-      const resolution = interactions.resolveClaimDetailed(message('alice', '@bot hi', { mentioned: true }));
+      const resolution = interactions.resolveClaimDetailed(message('alice', '/status'), undefined, { matchesCommand: () => true });
       notices.push(resolution !== false && resolution.notify === true);
       await answer;
     }
@@ -189,7 +197,8 @@ describe('escaping a pending prompt', () => {
       .ask({ ...select, answeredBy: 'anyone', signal: abort.signal }));
     try {
       await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
-      expect(interactions.resolveClaimDetailed(message('bob', '@bot hi', { mentioned: true }))).toBe(false);
+      // What would end a sender's own prompt (media, a command) passes through and leaves this one waiting.
+      expect(interactions.resolveClaimDetailed(message('bob', '', { segments: [{ type: 'image', data: { url: 'https://example.com/a.png' } }] }))).toBe(false);
       expect(interactions.resolveClaimDetailed(message('carol', '/status'), undefined, { matchesCommand: () => true })).toBe(false);
       expect(interactions.resolveClaim(message('bob', '1'))).toBe(true);
       await expect(answer).resolves.toBe('a');
@@ -214,6 +223,10 @@ describe('interaction ends are expected outcomes', () => {
     tagInteractionOwner(error, 'root/other');
     expect(interactionEndOf(error)).toEqual({ outcome: 'interaction_timeout', reason: 'timeout', owner: 'root/asker' });
     expect(interactionEndCandidate(interactionEndOf(error)!, 'command', 'root/asker')).toMatchObject({ stage: 'command', owner: 'root/asker' });
+    // Any other error is left exactly as thrown: no owner property is added to it.
+    const foreign = new Error('delivery failed');
+    tagInteractionOwner(foreign, 'root/asker');
+    expect(Object.getOwnPropertySymbols(foreign)).toEqual([]);
   });
 
   it('words a superseded prompt as replaced, not as left by the sender', () => {

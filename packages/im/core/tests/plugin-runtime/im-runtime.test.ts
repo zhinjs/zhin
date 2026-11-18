@@ -5616,7 +5616,7 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
   });
 });
 
-describe('pending prompts end on commands, media and mentions (#1250 interaction-prompt-swallows-messages)', () => {
+describe('pending prompts end on commands and media, not on a mention alone (#1250 interaction-prompt-swallows-messages)', () => {
   const texts = (sent: unknown[]) => sent.map(request => JSON.stringify((request as { payload?: unknown }).payload));
   const exitNotices = (sent: unknown[]) => texts(sent).filter(text => text.includes('已退出上一个选择')).length;
   const select = { type: 'select', title: '选一个', options: [{ label: '甲', value: 'a' }, { label: '乙', value: 'b' }] } as const;
@@ -5661,8 +5661,8 @@ describe('pending prompts end on commands, media and mentions (#1250 interaction
       // The command stage names the plugin that asked, like middleware and handler stages do.
       const endedRow = fixture.im.messageOutcomes.list().find(row => row.outcome === 'interaction_cancelled');
       expect(endedRow).toMatchObject({ stage: 'command' });
-      expect(typeof endedRow?.owner).toBe('string');
-      expect(endedRow?.owner).toBeTruthy();
+      // The fixture's command (which asks) belongs to the root plugin.
+      expect(endedRow?.owner).toBe(String(rootPluginId()));
       // The ended prompt is no command execution in the diagnostics timeline.
       const record = fixture.im.messageDiagnostics.list().find(row => row.outcome?.outcome === 'interaction_cancelled');
       expect(record).toMatchObject({ route: 'interaction' });
@@ -5699,11 +5699,13 @@ describe('pending prompts end on commands, media and mentions (#1250 interaction
       await receive(fixture.im, { ...base, conversation: group, content: '', segments: [{ type: 'image', data: { url: 'https://example.com/cat.png' } }] });
       await expect(first).resolves.toMatchObject({ matched: true });
 
-      // A mention that is not an answer: the prompt ends.
+      // A real mention is no exit of its own (every reply carries one on some platforms), but a
+      // mentioned message whose text routes to a command ends the prompt and runs the command.
       ({ command: first } = await ask());
-      await receive(fixture.im, { ...base, conversation: group, content: '@bot 这张图是什么', mentioned: true,
-        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' 这张图是什么' } }] });
+      await receive(fixture.im, { ...base, conversation: group, content: '@bot /gh issue list mine', mentioned: true,
+        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' /gh issue list mine' } }] });
       await expect(first).resolves.toMatchObject({ matched: true });
+      expect(texts(sent).some(text => /ran (?:@bot )?\/gh issue list mine/u.test(text))).toBe(true);
 
       expect(exitNotices(sent)).toBe(1);
       expect(picked).toEqual([]);
@@ -5718,6 +5720,32 @@ describe('pending prompts end on commands, media and mentions (#1250 interaction
       await receive(fixture.im, { ...base, conversation: group, content: '@bot 乙', mentioned: true,
         segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ' 乙' } }] });
       await expect(first).resolves.toMatchObject({ matched: true });
+      expect(picked).toEqual(['b']);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('takes a real mention with an invalid answer as an invalid answer: the prompt again, no exit, no cancel', async () => {
+    const sent: unknown[] = [];
+    const picked: unknown[] = [];
+    const ended: string[] = [];
+    const fixture = await selectFixture(sent, picked, ended);
+    try {
+      const base = fixtureInput(fixture, '');
+      const group = { ...base.conversation, kind: 'group' as const, id: 'mention-group' };
+      const mention = (text: string) => ({ ...base, conversation: group, content: `@bot ${text}`, mentioned: true,
+        segments: [{ type: 'mention', data: { id: 'bot' } }, { type: 'text', data: { text: ` ${text}` } }] });
+      const command = receive(fixture.im, { ...base, conversation: group, content: '/gh issue list open' });
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      await receive(fixture.im, mention('3'));
+      await vi.waitFor(() => expect(sent).toHaveLength(2));
+      expect(texts(sent)[1]).toContain('选一个'); // the prompt again
+      expect(exitNotices(sent)).toBe(0);
+      expect(ended).toEqual([]);
+      const outcomes = outcomesOf(fixture);
+      expect(outcomes.some(row => row.startsWith('interaction_cancelled'))).toBe(false);
+      expect(outcomes).toContain('interaction_consumed:prompt_captured');
+      await receive(fixture.im, mention('乙'));
+      await expect(command).resolves.toMatchObject({ matched: true });
       expect(picked).toEqual(['b']);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });

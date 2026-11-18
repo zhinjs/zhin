@@ -23,11 +23,15 @@ const INTERACTION_OWNER = Symbol.for('zhin.im.interactionOwner');
 
 /**
  * Records which plugin asked on an interaction error before `ask()` rethrows it, so a command's
- * ended prompt names its owner like a middleware's or handler's does. A registered symbol, so a
- * second copy of the module still reads it; an owner already recorded is kept.
+ * ended prompt names its owner like a middleware's or handler's does. Only errors
+ * {@link interactionEndOf} recognises are tagged. A registered symbol, so a second copy of the
+ * module still reads it; an owner already recorded is kept.
  */
 export function tagInteractionOwner(error: unknown, owner: string | undefined): void {
-  if (!owner || !(error instanceof Error) || Object.prototype.hasOwnProperty.call(error, INTERACTION_OWNER)) return;
+  // Only an interaction end is tagged: any other error (a delivery failure, a caller's own error
+  // passed through `signal`) is left exactly as it was thrown.
+  if (!owner || !(error instanceof Error) || !interactionEndKind(error)
+    || Object.prototype.hasOwnProperty.call(error, INTERACTION_OWNER)) return;
   try {
     Object.defineProperty(error, INTERACTION_OWNER, { value: owner, enumerable: false, configurable: true });
   } catch { /* A frozen error just stays without an owner. */ }

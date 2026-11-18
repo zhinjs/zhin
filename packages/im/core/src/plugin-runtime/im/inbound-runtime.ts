@@ -483,7 +483,7 @@ export class InboundRuntime {
         }
         ledger.enter('interaction');
         const claimed = await this.context.inboundClaim?.(message) === true;
-        const claim = claimed ? undefined : await this.#resolveClaim(message, lease.value, input.mentioned);
+        const claim = claimed ? undefined : await this.#resolveClaim(message, lease.value);
         if (claimed) {
           ledger.report({ outcome: 'interaction_answered', reason: 'prompt', stage: 'interaction' });
           this.context.diagnostics?.route('interaction');
@@ -627,18 +627,16 @@ export class InboundRuntime {
 
   /**
    * Claim resolution with the answer classification, when the coordinator offers it. ADR 0061
-   * decision 11 (revised, #1250): a command, media or a mention from the asked sender ends the
-   * prompt instead; the sender is told once (throttled) and the message is processed normally.
+   * decision 11 (revised, #1250): a command or media from the asked sender ends the prompt
+   * instead (a mention alone does not); the sender is told once (throttled) and the message is processed normally.
    */
-  async #resolveClaim(message: Message, snapshot: RuntimeSnapshot, adapterMentioned: boolean | undefined): Promise<{ answerLike: boolean; owner?: string } | undefined> {
+  async #resolveClaim(message: Message, snapshot: RuntimeSnapshot): Promise<{ answerLike: boolean; owner?: string } | undefined> {
     const interactions = this.context.interactions;
     if (typeof interactions.resolveClaimDetailed !== 'function') {
       return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
     }
     const resolution = interactions.resolveClaimDetailed(message, undefined, {
       matchesCommand: () => this.#dispatcher.routesToCommand(message, snapshot),
-      // Only the adapter's own mention ends a prompt; the one Room routing synthesizes does not.
-      mentioned: adapterMentioned === true,
     });
     if (!resolution) return undefined;
     if (!resolution.escaped) return resolution;
