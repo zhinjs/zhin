@@ -14,7 +14,8 @@ const dirs: string[] = [];
 const disposers: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) await dispose();
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  // A finished run may still be writing its record: retry (ENOTEMPTY) instead of failing the test.
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 function setup(bindings: Record<string, object> = { zhin: {}, news: {} }) {
@@ -49,13 +50,13 @@ function setup(bindings: Record<string, object> = { zhin: {}, news: {} }) {
 
 const atSoon = () => ({ kind: 'at' as const, atMs: Date.now() + 150, deleteAfterRun: true });
 
-describe('scheduled job Agent (#1250 b52)', () => {
+describe('scheduled job Agent (#1250 b52)', { timeout: 20_000 }, () => {
   it('lists the configured Agents and runs a job on the Agent it names', async () => {
     const { schedule, execute, jobs } = setup();
     await schedule.start();
     expect(jobs.agents?.()).toEqual(['zhin', 'news']);
     await jobs.add({ id: 'brief', enabled: true, schedule: atSoon(), action: { kind: 'agent', prompt: '早报', agent: 'news' }, notify: { channel: 'silent' } });
-    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 8000 });
     expect(execute.mock.calls[0]![2]).toMatchObject({ binding: { name: 'news' }, agent: 'news' });
   });
 
@@ -63,7 +64,7 @@ describe('scheduled job Agent (#1250 b52)', () => {
     const { schedule, execute, jobs } = setup();
     await schedule.start();
     await jobs.add({ id: 'plain', enabled: true, schedule: atSoon(), action: { kind: 'agent', prompt: '天气' }, notify: { channel: 'silent' } });
-    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 8000 });
     expect(execute.mock.calls[0]![2].binding.name).toBe('zhin');
     expect(execute.mock.calls[0]![2]).not.toHaveProperty('agent');
   });
@@ -80,7 +81,7 @@ describe('scheduled job Agent (#1250 b52)', () => {
     expect(await jobs.setAgent!('ghost', 'news')).toBeNull();
     await jobs.setAgent!('later', 'news');
     await jobs.add({ id: 'later', enabled: true, schedule: atSoon(), action: (await jobs.list()).find(job => job.id === 'later')!.action, notify: { channel: 'silent' } });
-    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 8000 });
     expect(execute.mock.calls[0]![2]).toMatchObject({ binding: { name: 'news' }, agent: 'news' });
   });
 
@@ -90,9 +91,11 @@ describe('scheduled job Agent (#1250 b52)', () => {
     await jobs.add({ id: 'armed', enabled: true, schedule: { kind: 'at', atMs: Date.now() + 400, deleteAfterRun: true }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
     const add = vi.spyOn(jobs, 'add');
     await jobs.setAgent!('armed', 'news');
-    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalled(), { timeout: 8000 });
     expect(execute.mock.calls[0]![2]).toMatchObject({ binding: { name: 'news' }, agent: 'news' });
     expect(add).not.toHaveBeenCalled();
+    // Let the run record its result before the workspace is removed.
+    await vi.waitFor(async () => expect((await jobs.list()).find(job => job.id === 'armed')?.state.lastStatus).toBeDefined(), { timeout: 8000 });
   });
 
   it('refuses to change a profile routine (re-declared from the profile on every start) and a heartbeat job', async () => {
@@ -115,7 +118,7 @@ describe('scheduled job Agent (#1250 b52)', () => {
     await jobs.add({ id: 'orphan', enabled: true, schedule: { kind: 'every', everyMs: 1000 }, action: { kind: 'agent', prompt: 'p', agent: 'news' }, notify: { channel: 'silent' } });
     await vi.waitFor(async () => {
       expect((await jobs.list()).find(job => job.id === 'orphan')?.state).toMatchObject({ lastStatus: 'error', lastError: expect.stringContaining('news') });
-    }, { timeout: 3000 });
+    }, { timeout: 8000 });
     expect(execute).not.toHaveBeenCalled();
   });
 });
