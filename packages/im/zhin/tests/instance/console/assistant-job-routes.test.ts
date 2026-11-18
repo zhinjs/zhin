@@ -313,7 +313,7 @@ describe('job Agent (#1250 b52)', () => {
       { id: 'assistant-profile-morning-brief', source: 'profile', action: { kind: 'agent', prompt: 'p' } },
       { id: 'other', action: { kind: 'agent', prompt: 'p' } },
     ] } };
-    let response = await post({ id: 'assistant-profile-morning-brief', agent: 'news' });
+    const response = await post({ id: 'assistant-profile-morning-brief', agent: 'news' });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ success: false, code: 'schedule_agent_profile', error: expect.stringContaining('Profile 文件') });
     // Anything else is still an internal error.
