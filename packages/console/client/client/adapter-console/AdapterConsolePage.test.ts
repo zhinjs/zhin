@@ -781,14 +781,14 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     f.h.unmount();
   });
 
-  it('leaves out the read-only configured-account fallback too when the host owns the accounts', async () => {
+  it('keeps the read-only configured accounts, and the link to them, when the host owns accounts but there is no runtime', async () => {
+    // Without a runtime the headless accounts are `unmanaged` with no rows: the host has nothing to list.
     const s = status(); delete s.runtime;
-    const f = fixture(s); await f.h.settle();
+    const f = fixture(s, [], '', { hosted: true }); await f.h.settle();
+    expect(f.hosted.accounts).toMatchObject({ state: 'unmanaged', rows: [] });
     expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(true);
-    f.h.mount(() => f.h.exports.renderAdapterConsoleView!(f.h.exports.useAdapterConsoleModel!({ adapterKey: 'icqq', isCurrent: () => true }), { embedded: true, hostAccounts: true }));
-    await f.h.settle();
-    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(false);
-    expect(f.h.nodes().some(node => node.type === 'nav')).toBe(false);
+    expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
+    expect(f.h.nodes().some(node => node.type === 'a' && node.props?.href === '#adapter-accounts')).toBe(true);
     f.h.unmount();
   });
 

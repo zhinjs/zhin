@@ -1111,6 +1111,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
   // The host draws the account list, editor and account status from `useAdapterAccounts()`.
   const showAccounts = !hostAccounts;
   const showEditor = !!editor && showAccounts;
+  // The read-only configured list (no runtime). The host cannot render it (its rows come from the
+  // runtime), so it shows whether or not the host owns the accounts.
+  const showConfiguredFallback = !runtime && !!status;
+  // The 账号 link points at whichever account section this page draws.
+  const accountsLinked = showAccounts || showConfiguredFallback;
   const fieldDisabled = mutating || !!migration;
 
   const embeddedToolbar = embedded
@@ -1594,10 +1599,10 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     >
       {embeddedToolbar}
 
-      {status && (showAccounts || visibleLogins.length > 0 || sidebarActions.length > 0) && (
+      {status && (accountsLinked || visibleLogins.length > 0 || sidebarActions.length > 0) && (
         <nav aria-label={t(locale, '页面导航')}>
           <ContentStack direction="row" gap="tight">
-            {showAccounts && (
+            {accountsLinked && (
               <Button asChild variant="ghost" size="sm">
                 <a className="console-touch" href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>
                   {t(locale, '账号')} <ToneBadge tone="neutral">{runtime?.endpoints.length ?? status.configured.length}</ToneBadge>
@@ -1673,8 +1678,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {qqWorkbench}
       {accountsSection}
 
-      {/* Same `showAccounts` guard as the runtime account section and its navigation link. */}
-      {!runtime && status && showAccounts && (
+      {/*
+        * Without a runtime the headless accounts are `unmanaged` (no rows), so a host cannot list
+        * these: the read-only fallback stays even with `hostAccounts`, and the navigation links to it.
+        */}
+      {showConfiguredFallback && (
         <Section id="adapter-accounts" title={t(locale, '已配置的账号')} description={t(locale, '当前环境只能查看账号配置。')}>
           {!status.configured.length
             ? <p className="console-form-field-hint">{runningIds.length > 0 ? t(locale, '此适配器没有提供账号清单；运行中的连接见上方。') : t(locale, '配置里还没有账号。')}</p>
