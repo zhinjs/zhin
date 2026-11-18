@@ -108,6 +108,10 @@ export interface ConsoleScheduleEngine {
   pauseJob(id: string): Promise<boolean>;
   resumeJob(id: string): Promise<boolean>;
   listJobs(): Promise<Record<string, unknown>[]>;
+  /** Agents a job may run on (`action.agent`, #1250 b52); absent on older Agent packages. */
+  listAgents?(): readonly string[];
+  /** Sets or clears (`undefined`) a job's Agent (#1250 b52); `null` = no such job. */
+  setJobAgent?(id: string, agent: string | undefined): Promise<Record<string, unknown> | null>;
 }
 
 /** `data` next to `error` carries a machine-readable code (e.g. `{ code: 'unsupported' }`). */

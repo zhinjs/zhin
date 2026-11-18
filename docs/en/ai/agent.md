@@ -651,11 +651,17 @@ routines:
     cron: "0 0 8 * * *"
     tz: Asia/Shanghai
     prompt: Write today's morning brief.
+    agent: news              # optional: which ai.agents Agent runs it; zhin when omitted
 ```
 
 - Built-in routines are `heartbeat` (interval), `morningBrief` (08:00 by default), `bedtimeCheck` (22:00 by default) and `weatherReport`; custom keys work too.
 - For mainland-China working days use `workday` (it accounts for adjusted working days), not solar `1-5`.
 - Users can also ask the AI in chat to manage jobs with `schedule_add` / `schedule_list` / `schedule_preview`; external systems can inject events via `POST /api/assistant/events` and list jobs with `GET /api/assistant/jobs`. From the command line: [CLI · schedule](../cli/index.md#schedule-persistent-scheduled-tasks).
+- **Choosing the Agent**: jobs run on `zhin` by default. To have a job (say, the morning brief) run on another Agent configured under `ai.agents`, create it with `zhin schedule add --agent <name>`, or change it with `zhin schedule set-agent <id> <name>` / `--clear`; in chat, `schedule_add` takes an optional `agent` argument too. The name must be a configured Agent; otherwise the call fails and lists the available Agents. In chat you can only name an Agent **you can use in the current conversation**: the same set `@name` routing offers you (Agent packages filtered by their `platforms` / `scopes` / `permissions`), plus the default `zhin`. An Agent you cannot see is refused exactly like a missing one, so the argument cannot hand a job to it. An Agent configured only under `ai.agents`, without an Agent package, cannot be reached with `@name` in chat, so only the CLI or the Console can assign it.
+  - Chat visibility is **checked only when the job is created**. If your access to that Agent is revoked later (its package's `platforms` / `scopes` / `permissions`, or your roles, change), existing jobs keep running on that Agent; to take one back, change or remove it with `zhin schedule set-agent` / the Console.
+  - `set-agent` changes a job that keeps delivering to its target, so, as when creating it, it requires `endpoint.operate` on the account of the job's delivery target, else 403.
+  - Profile routines (`routines` of `assistant.profile.yml`) are re-declared from the profile on every start, so `set-agent` and the Console refuse them (code `schedule_agent_profile`); set the routine's `agent` field instead. Heartbeat jobs always run on the default Agent.
+  - When a job's Agent is later removed from `ai.agents`, the job stays but each run fails with a recorded error; `zhin schedule list` flags it with "⚠ Agent 不存在" (Agent missing), the Console's `schedule:list` marks it `agentMissing: true`, and `set-agent` to an existing Agent (or `--clear`) recovers it.
 
 ## Per-model tuning
 

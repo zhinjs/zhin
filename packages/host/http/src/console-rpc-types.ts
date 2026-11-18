@@ -28,7 +28,7 @@ export const RUNTIME_CONSOLE_RPC_TYPES: ReadonlySet<string> = new Set<string>([
   // Endpoints
   ...Object.values(ENDPOINT_RPC),
   // Schedules
-  'schedule:list', 'cron:list', 'cron:validate', 'cron:add', 'cron:remove', 'cron:pause', 'cron:resume',
+  'schedule:list', 'cron:list', 'cron:validate', 'cron:add', 'cron:set-agent', 'cron:remove', 'cron:pause', 'cron:resume',
   // Requests / notices / inbox
   'request.list', 'request.approve', 'request.reject', 'request.consumed', 'notice.consumed',
   'inbox.requests', 'inbox.notices', 'inbox.messages', 'inbox.recent',

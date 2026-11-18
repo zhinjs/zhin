@@ -78,7 +78,8 @@ export function registerAgentConsoleRoutes(
         const jobs = withScheduleTargets(await runtime.jobs.list(), endpoints);
         return jsonResponse(200, {
           success: true,
-          data: { jobs, eventsActive: runtime.events.isEnabled() },
+          // `agents` (#1250 b52): the Agents a job may run on (`action.agent`).
+          data: { jobs, eventsActive: runtime.events.isEnabled(), ...(runtime.jobs.agents ? { agents: [...runtime.jobs.agents()] } : {}) },
         });
       } catch (error) {
         return internalErrorResponse(500, 'assistant_jobs_failed', error);

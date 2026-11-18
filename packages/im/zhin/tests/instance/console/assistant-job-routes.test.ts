@@ -196,8 +196,8 @@ describe('schedule delivery target permission (#1250)', () => {
     cleanups.push(() => http.close());
     registerAssistantJobRoutes({ http, base: '/api', endpoints: known });
     const { port } = await http.listen();
-    return async (token: string, body: unknown) => {
-      const response = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs`, {
+    return async (token: string, body: unknown, path = '') => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs${path}`, {
         method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body),
       });
       return { status: response.status, body: await response.json() as { code?: string } };
@@ -221,5 +221,117 @@ describe('schedule delivery target permission (#1250)', () => {
     expect((await post('scheduler', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 } })).status).toBe(201);
     expect(jobs.add).toHaveBeenCalledTimes(3);
   });
+
+  it('set-agent needs endpoint.operate on the stored job\'s delivery account, like add (#1250 b52)', async () => {
+    const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+    const setAgent = vi.fn(async (id: string, agent: string | undefined) => ({ id, action: { kind: 'agent', prompt: 'p', ...(agent ? { agent } : {}) } }));
+    state.assistant = { jobs: { ...jobs, agents: () => ['zhin', 'news'], setAgent, list: async () => [
+      { id: 'im', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+      { id: 'quiet', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+      // A non-IM `target` (Home Assistant entity) is not a delivery account.
+      { id: 'ha', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'ha', service: 'notify.x', target: 'sandbox:other' } },
+    ] } };
+    const post = await startAs();
+    expect(await post('scheduler', { id: 'im', agent: 'news' }, '/set-agent')).toMatchObject({
+      status: 403, body: { code: 'schedule_target_forbidden', error: expect.stringContaining('sandbox / sandbox-bot') } });
+    expect(setAgent).not.toHaveBeenCalled();
+    expect((await post('scoped', { id: 'im', agent: 'news' }, '/set-agent')).status).toBe(200);
+    expect((await post('owner', { id: 'im', agent: null }, '/set-agent')).status).toBe(200);
+    // No IM target: ops.schedule.write alone is enough.
+    expect((await post('scheduler', { id: 'quiet', agent: 'news' }, '/set-agent')).status).toBe(200);
+    expect((await post('scheduler', { id: 'ha', agent: 'news' }, '/set-agent')).status).toBe(200);
+    expect(setAgent).toHaveBeenCalledTimes(4);
+  });
 });
 
+
+describe('job Agent (#1250 b52)', () => {
+  const agentJobs = {
+    ...jobs,
+    list: vi.fn(async () => [
+      { id: 'known', action: { kind: 'agent', prompt: 'p' } },
+      { id: 'beat', action: { kind: 'heartbeat', prompt: 'p' } },
+    ]),
+    agents: vi.fn(() => ['zhin', 'news']),
+    setAgent: vi.fn(async (id: string, agent: string | undefined) => (id === 'known'
+      ? { id, action: { kind: 'agent', prompt: 'p', ...(agent ? { agent } : {}) } } : null)),
+  };
+  beforeEach(() => { state.assistant = { jobs: agentJobs }; });
+
+  it('POST /assistant/jobs stores a configured Agent and leaves it out when absent', async () => {
+    const post = await start();
+    expect((await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: ' news ' })).status).toBe(201);
+    expect(agentJobs.add.mock.calls[0]![0]).toMatchObject({ action: { kind: 'agent', prompt: 'x', agent: 'news' } });
+    expect((await post('', { prompt: 'y', schedule: { kind: 'every', everyMs: 60_000 } })).status).toBe(201);
+    expect(agentJobs.add.mock.calls[1]![0].action).toEqual({ kind: 'agent', prompt: 'y' });
+  });
+
+  it('POST /assistant/jobs rejects an unknown Agent and lists the available ones', async () => {
+    const post = await start();
+    const response = await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 'ghost' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ success: false, code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news' });
+    expect((await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 3 })).status).toBe(400);
+    expect(agentJobs.add).not.toHaveBeenCalled();
+  });
+
+  it('an Agent package without `agents()` accepts only the default Agent', async () => {
+    state.assistant = { jobs };
+    const post = await start();
+    expect((await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 'news' })).status).toBe(400);
+    expect((await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 'zhin' })).status).toBe(201);
+    expect((await post('/set-agent', { id: 'known', agent: 'zhin' })).status).toBe(404);
+  });
+
+  it('POST /assistant/jobs/set-agent sets, clears and validates the Agent', async () => {
+    const post = await start();
+    let response = await post('/set-agent', { id: 'known', agent: 'news' });
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.job.action.agent).toBe('news');
+    expect(agentJobs.setAgent).toHaveBeenLastCalledWith('known', 'news');
+    expect((await post('/set-agent', { id: 'known', agent: null })).status).toBe(200);
+    expect(agentJobs.setAgent).toHaveBeenLastCalledWith('known', undefined);
+    response = await post('/set-agent', { id: 'known', agent: 'ghost' });
+    expect(await response.json()).toMatchObject({ code: 'schedule_agent_not_found', error: expect.stringContaining('可用的 Agent：zhin、news') });
+    expect((await post('/set-agent', { id: 'known' })).status).toBe(400);
+    expect((await post('/set-agent', { agent: 'news' })).status).toBe(400);
+    expect(await (await post('/set-agent', { id: 'beat', agent: 'news' })).json()).toMatchObject({ code: 'schedule_agent_heartbeat', error: expect.stringContaining('心跳任务') });
+    expect(await (await post('/set-agent', { id: 'ghost', agent: 'news' })).json()).toMatchObject({ code: 'not_found' });
+    // A job missing from the list is answered without asking the scheduler.
+    expect(agentJobs.setAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps the scheduler\'s refusal of a profile routine to 400, not 500', async () => {
+    const refusal = (code: string, message: string) => Object.assign(new Error(message), { code });
+    const setAgent = vi.fn(async (id: string) => {
+      if (id === 'assistant-profile-morning-brief') throw refusal('schedule_agent_profile', '任务来自 Assistant Profile，请在 Profile 文件中该 routine 的 agent 字段修改');
+      throw new Error('disk full');
+    });
+    const post = async (body: unknown) => (await start())('/set-agent', body);
+    // The scheduler is the one that knows a job is a profile routine (`source: profile`).
+    state.assistant = { jobs: { ...jobs, agents: () => ['zhin', 'news'], setAgent, list: async () => [
+      { id: 'assistant-profile-morning-brief', source: 'profile', action: { kind: 'agent', prompt: 'p' } },
+      { id: 'other', action: { kind: 'agent', prompt: 'p' } },
+    ] } };
+    const response = await post({ id: 'assistant-profile-morning-brief', agent: 'news' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ success: false, code: 'schedule_agent_profile', error: expect.stringContaining('Profile 文件') });
+    // Anything else is still an internal error.
+    expect((await post({ id: 'other', agent: 'news' })).status).toBe(500);
+  });
+
+  it('a signed-in caller is refused when the job list is unavailable (its target cannot be checked)', async () => {
+    state.assistant = { jobs: { ...jobs, agents: () => ['zhin', 'news'], setAgent: agentJobs.setAgent } };
+    const post = await start();
+    const response = await post('/set-agent', { id: 'known', agent: 'news' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: 'unavailable' });
+    expect(agentJobs.setAgent).not.toHaveBeenCalled();
+  });
+
+  it('set-agent needs ops.schedule.write like the other job writes', async () => {
+    const post = await start();
+    expect((await post('/set-agent', { id: 'known', agent: 'news' }, 'demo')).status).toBe(403);
+    expect(agentJobs.setAgent).not.toHaveBeenCalled();
+  });
+});

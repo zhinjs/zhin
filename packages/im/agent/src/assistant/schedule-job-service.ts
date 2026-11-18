@@ -30,6 +30,8 @@ export interface ScheduleAddInput {
   activityFeedback?: boolean;
   budget?: ScheduleJob['budget'];
   enabled?: boolean;
+  /** Agent the job runs on (`ai.agents` binding name); absent: the default `zhin` (#1250 b52). */
+  agent?: string;
   /** ADR 0067 D2.1: set by `schedule_add` from the creating turn; never parsed from tool or RPC input. */
   provenance?: ScheduleJobProvenance;
 }
@@ -50,7 +52,7 @@ export async function addScheduleJob(
     locale: input.locale,
     enabled: input.enabled ?? true,
     schedule: input.schedule,
-    action: { kind: 'agent', prompt: actionPrompt },
+    action: { kind: 'agent', prompt: actionPrompt, ...(input.agent ? { agent: input.agent } : {}) },
     notify: input.notify,
     source: input.source ?? 'manual',
     createdBy: input.createdBy,

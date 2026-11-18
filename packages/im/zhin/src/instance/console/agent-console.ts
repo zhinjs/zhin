@@ -188,6 +188,10 @@ type AssistantRuntime = {
     resume(id: string): Promise<boolean>;
     unschedulable?(): readonly { jobId: string; label?: string; reason: string; since: number }[];
     defaultImNotify?(): unknown;
+    /** #1250 b52: Agents a job may run on; absent on older Agent packages. */
+    agents?(): readonly string[];
+    /** #1250 b52: sets or clears a job's Agent; `null` = no such job. */
+    setAgent?(id: string, agent: string | undefined): Promise<Record<string, unknown> | null>;
   };
 };
 

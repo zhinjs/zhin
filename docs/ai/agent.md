@@ -734,11 +734,17 @@ routines:
     cron: "0 0 8 * * *"
     tz: Asia/Shanghai
     prompt: 生成今日早报。
+    agent: news              # 可选：由 ai.agents 中的哪个 Agent 执行，省略时为 zhin
 ```
 
 - 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
+- **指定执行的 Agent**：任务默认由 `zhin` 执行。要让某个任务（如早报）走 `ai.agents` 里配置的另一个 Agent，用 `zhin schedule add --agent <名称>` 创建，或 `zhin schedule set-agent <id> <名称>` / `--clear` 修改；聊天里 `schedule_add` 也接受可选的 `agent` 参数。名称必须是已配置的 Agent，否则报错并列出可用的 Agent。聊天里只能指定**你在当前会话里能用的** Agent：与 `@名称` 点名 Agent 时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），再加上默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝，不会借此把任务交给它。只在 `ai.agents` 里配置、没有对应 Agent 包的 Agent 聊天里无法 @ 到，因此也只能用 CLI 或 Console 指定。
+  - 聊天里的可见性**只在创建任务时检查**。之后即使撤销了你对该 Agent 的权限（改了 Agent 包的 `platforms` / `scopes` / `permissions` 或你的角色），已有任务仍由原 Agent 执行；要收回，用 `zhin schedule set-agent` / Console 修改或删除该任务。
+  - `set-agent` 修改的是投递到原目标的任务，因此和创建时一样，要求对任务投递目标账号有 `endpoint.operate`，否则返回 403。
+  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。心跳任务始终由默认 Agent 执行。
+  - 任务指定的 Agent 之后从 `ai.agents` 删除时，任务保留，但每次运行都会失败并记录错误；`zhin schedule list` 在该任务的 Agent 后标出「⚠ Agent 不存在」，Console 的 `schedule:list` 给它带上 `agentMissing: true`，用 `set-agent` 改成现有 Agent 或 `--clear` 即可恢复。
 
 ## 按模型调整参数
 
