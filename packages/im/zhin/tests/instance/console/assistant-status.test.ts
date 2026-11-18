@@ -112,6 +112,27 @@ it('drops ambient judge days older than 7 days, on write and on read, after a lo
   expect(status.ambient().judgeDaily).toEqual([expect.objectContaining({ day: '2026-12-25', calls: 1, byKind: { language: 0, decision: 1 } })]);
 });
 
+it('reports judgeToday by the instance clock in the judge time zone, with or without calls (#1250)', () => {
+  // 2026-11-17 23:30 UTC = 2026-11-18 07:30 in Asia/Shanghai: the instance's today is already the next day.
+  const time = clock(Date.UTC(2026, 10, 17, 23, 30));
+  const status = new AssistantStatus({ now: time.now, timeZone: 'Asia/Shanghai' });
+  // No calls at all: judgeToday is still reported, and judgeDaily is empty.
+  expect(status.ambient()).toMatchObject({ judgeTimeZone: 'Asia/Shanghai', judgeToday: '2026-11-18', judgeDaily: [] });
+  expect(new AssistantStatus({ now: time.now, timeZone: 'UTC' }).ambient().judgeToday).toBe('2026-11-17');
+
+  // Across local midnight (23:59:59.999 → 00:00 Asia/Shanghai), judgeToday follows the same cut as judgeDaily.
+  time.advance(16 * HOUR + 30 * 60 * 1000 - 1); // 2026-11-18 23:59:59.999 Asia/Shanghai
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  expect(status.ambient().judgeToday).toBe('2026-11-18');
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-18']);
+  time.advance(1);
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  const snapshot = status.ambient();
+  expect(snapshot.judgeToday).toBe('2026-11-19');
+  expect(snapshot.judgeDaily.map(day => day.day)).toEqual(['2026-11-18', '2026-11-19']);
+  expect(snapshot.judgeDaily.at(-1)!.day).toBe(snapshot.judgeToday);
+});
+
 it('aggregates structured decision calls per task for 技能助手', () => {
   const time = clock();
   const status = new AssistantStatus({ now: time.now });

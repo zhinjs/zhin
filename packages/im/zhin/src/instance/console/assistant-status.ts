@@ -171,6 +171,13 @@ export interface AmbientStatus {
   readonly judgeDaily: readonly AmbientJudgeDay[];
   /** The time zone `judgeDaily` days are cut in. */
   readonly judgeTimeZone: string;
+  /**
+   * Today (`YYYY-MM-DD`) by the instance clock in {@link judgeTimeZone}, cut with the same `dayKeyOf` as
+   * `judgeDaily` (#1250). The Console derives its 7-day window from this rather than the browser clock:
+   * the kept cutoff is `judgeToday` minus {@link AMBIENT_JUDGE_DAYS} − 1 (6) days, and days in
+   * `[cutoff, judgeToday]` missing from `judgeDaily` had no calls. Optional for older instances.
+   */
+  readonly judgeToday?: string;
 }
 
 export type SkillsTask = DecisionObservation['task'];
@@ -491,6 +498,7 @@ export class AssistantStatus {
           averageMs: day.calls ? Math.round(totalMs / day.calls) : 0,
         }))),
       judgeTimeZone: this.#timeZone,
+      judgeToday: dayKeyOf(now, this.#timeZone),
     });
   }
 
