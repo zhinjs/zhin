@@ -63,7 +63,11 @@ export function listSchedule(ctx: ConsoleScheduleListCtx, d: Record<string, unkn
           ? { nextExecution: (job as { nextExecution?: number }).nextExecution } : {}),
         };
       });
-    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent, capabilities: { persistent: !!ctx.resolveScheduleEngine?.() && ctx.fullScope } } })).catch((error) => ({ error: errorMessage(error) }));
+    // `agents` (#1250 b52): the Agents a persistent job may run on, for the task form's choice.
+    const agents = ctx.resolveScheduleEngine?.()?.listAgents?.();
+    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent,
+      ...(agents ? { agents: [...agents] } : {}),
+      capabilities: { persistent: !!ctx.resolveScheduleEngine?.() && ctx.fullScope } } })).catch((error) => ({ error: errorMessage(error) }));
   } catch (error) {
     return { error: errorMessage(error) };
   }
@@ -82,6 +86,9 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       label: job.label ?? job.id,
       cronExpression: (job.schedule as { cron?: string } | undefined)?.cron ?? '',
       prompt: (job.action as { prompt?: string } | undefined)?.prompt ?? '',
+      // #1250 b52: the Agent the job runs on; absent = the default Agent.
+      ...((job.action as { agent?: unknown } | undefined)?.agent
+        ? { agent: (job.action as { agent?: string }).agent } : {}),
       enabled: job.enabled !== false,
       source: job.source ?? 'manual',
       // Persistent jobs are created by a person or on their behalf by the Agent.
@@ -132,6 +139,8 @@ export async function addCron(
     return { error: `Cron 表达式无效: ${errorMessage(error)}` };
   }
   const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
+  const agent = scheduleAgentField(d.agent, engine);
+  if ('error' in agent) return { error: agent.error };
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
   // A delivery target sends to that account on every run: `endpoint.operate` there, like
@@ -149,7 +158,7 @@ export async function addCron(
     ...(label ? { label } : {}),
     enabled: true,
     schedule: { kind: 'solar', cron: cronExpression },
-    action: { kind: 'agent', prompt },
+    action: { kind: 'agent', prompt, ...(agent.agent ? { agent: agent.agent } : {}) },
     notify: target
       ? { channel: 'im', target }
       : { channel: 'silent' },
@@ -158,6 +167,49 @@ export async function addCron(
   try {
     const created = await engine.addJob(job);
     return { data: { job: created, success: true } };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+const DEFAULT_AGENT = 'zhin';
+
+/**
+ * `agent` of a job (#1250 b52): absent / `null` / empty = the default Agent; otherwise one of the
+ * engine's configured Agents, else an error naming them. An engine without `listAgents` (older
+ * Agent package) only accepts the default.
+ */
+function scheduleAgentField(value: unknown, engine: ConsoleScheduleEngine): { agent?: string } | { error: string } {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'string') return { error: 'agent 必须是 Agent 名称' };
+  const name = value.trim();
+  if (!name) return {};
+  const available = engine.listAgents?.() ?? [DEFAULT_AGENT];
+  if (available.includes(name)) return { agent: name };
+  return { error: `Agent 不存在：${name}。可用的 Agent：${(available.length ? available : [DEFAULT_AGENT]).join('、')}` };
+}
+
+/** `cron:set-agent` (#1250 b52): `{ id, agent }`, `agent: null` = back to the default Agent. */
+export async function setCronAgent(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): Promise<ExtendedRpcResult> {
+  const engine = ctx.resolveScheduleEngine?.();
+  if (!engine) return { error: CRON_NOT_WIRED };
+  if (!engine.setJobAgent) return { error: '运行中的 Agent 包不支持修改任务的 Agent', data: { code: 'unsupported' } };
+  const id = String(d.id ?? '').trim();
+  if (!id) return { error: 'id is required' };
+  if (!('agent' in d)) return { error: 'agent is required (null clears it)' };
+  const agent = scheduleAgentField(d.agent, engine);
+  if ('error' in agent) return { error: agent.error };
+  try {
+    const existing = (await engine.listJobs()).find(job => job.id === id);
+    if (!existing) return { error: `任务不存在: ${id}` };
+    if ((existing.action as { kind?: unknown } | undefined)?.kind !== 'agent') {
+      return { error: `心跳任务不能指定 Agent: ${id}` };
+    }
+    const job = await engine.setJobAgent(id, agent.agent);
+    return job ? { data: { job, success: true } } : { error: `任务不存在: ${id}` };
   } catch (error) {
     return { error: errorMessage(error) };
   }

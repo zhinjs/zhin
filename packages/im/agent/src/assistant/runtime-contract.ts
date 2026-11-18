@@ -30,5 +30,15 @@ export interface AssistantRuntimeHandle {
      * else the profile's `defaults.notify` (#1250).
      */
     defaultImNotify?(): Extract<JobNotify, { channel: 'im' }> | undefined;
+    /**
+     * Agents a job may run on (`action.agent`, #1250 b52): the configured bindings (`zhin` and
+     * `ai.agents`). Callers reject any other name.
+     */
+    agents?(): readonly string[];
+    /**
+     * Sets or clears (`undefined`) a job's Agent (#1250 b52); `null` = no such job. Throws for a
+     * heartbeat job. Callers validate the name against {@link agents} first.
+     */
+    setAgent?(id: string, agent: string | undefined): Promise<ScheduleJob | null>;
   };
 }

@@ -17,6 +17,8 @@ import type { TimerScheduler } from './assistant/timer-scheduler.js';
 import type { TaskExecutionResult } from './task-executor.js';
 import type { ScheduleAuditRecord } from './schedule-domain/audit-logger.js';
 import { isEmptyExecutionPlan } from './plugin-runtime/schedule-capability-plan.js';
+import { checkScheduleAgent, usableScheduleAgents } from './assistant/schedule-agent.js';
+import { getAgentTurnConfiguration } from './turn/agent-turn-context.js';
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
@@ -32,6 +34,11 @@ export interface ScheduleManager {
     }>;
   };
   engine: TimerScheduler | null;
+  /**
+   * Agents a job may run on (`zhin` and `ai.agents` bindings), #1250 b52. Absent: `schedule_add`
+   * accepts no `agent`.
+   */
+  agents?: () => readonly string[];
   previewTask?: (
     prompt: string,
     context: ScheduleInvocationContext,
@@ -85,6 +92,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
               id: job.id,
               schedule: job.schedule,
               prompt: job.action.kind === 'agent' ? job.action.prompt : undefined,
+              ...(job.action.kind === 'agent' && job.action.agent ? { agent: job.action.agent } : {}),
               label: job.label,
               enabled: job.enabled,
               notify: job.notify,
@@ -113,12 +121,18 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         refined_prompt: { type: 'string', description: '预演 refine 后的 prompt' },
         tools: { type: 'string', description: '逗号分隔的工具名' },
         skills: { type: 'string', description: '逗号分隔的技能名' },
+        agent: { type: 'string', description: '可选：到点由哪个 Agent 执行（Agent 名称）；省略时用默认 Agent。只能指定当前用户可用的 Agent' },
       }, ['prompt']),
       async (input, context) => {
         if (!manager?.engine) return { error: '持久化调度引擎不可用' };
         const parsed = parseScheduleAddFromToolArgs(input, context);
         if ('error' in parsed) return { error: parsed.error };
-        const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId() });
+        // #1250 b52: only an Agent the caller may use in this conversation (the same set `@name`
+        // routing offers them); without a runtime turn, only the default.
+        const usable = usableScheduleAgents(manager.agents?.() ?? [], getAgentTurnConfiguration()?.availableAgents);
+        const agent = checkScheduleAgent(input.agent, usable);
+        if ('error' in agent) return { error: agent.error };
+        const job = await addScheduleJob(manager.engine, { ...parsed, ...agent, id: generateScheduleJobId() });
         // #1250 b33: a plan without tools or skills is accepted (it falls back to prompt-based selection
         // when the job runs), but the caller is told, so it can preview and pass the tools explicitly.
         const warning = isEmptyExecutionPlan(job.executionPlan)

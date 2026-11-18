@@ -323,8 +323,51 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '99 99 * * * *' }, ctx)).toMatchObject({ data: { valid: false } });
     });
 
+    it('cron:add stores a configured Agent, rejects an unknown one and lists the Agents (#1250 b52)', async () => {
+      const engine = { listJobs: vi.fn().mockResolvedValue([]), addJob: vi.fn(async (job: unknown) => job), removeJob: vi.fn(),
+        pauseJob: vi.fn(), resumeJob: vi.fn(), listAgents: () => ['zhin', 'news'] };
+      const ctx = makeCtx({ scheduleHost: { list: () => [] }, resolveScheduleEngine: () => engine });
+      const add = (agent?: unknown) => dispatchExtendedConsoleRpc('cron:add',
+        { cronExpression: '0 0 9 * * *', prompt: 'p', ...(agent === undefined ? {} : { agent }) }, ctx);
+      expect(await add('ghost')).toEqual({ error: 'Agent 不存在：ghost。可用的 Agent：zhin、news' });
+      expect(await add(7)).toMatchObject({ error: expect.stringContaining('Agent 名称') });
+      expect(engine.addJob).not.toHaveBeenCalled();
+      await add('news');
+      expect(engine.addJob.mock.calls[0]![0]).toMatchObject({ action: { kind: 'agent', prompt: 'p', agent: 'news' } });
+      await add();
+      expect((engine.addJob.mock.calls[1]![0] as { action: unknown }).action).toEqual({ kind: 'agent', prompt: 'p' });
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, ctx)).toMatchObject({ data: { agents: ['zhin', 'news'] } });
+      // An engine of an older Agent package only accepts the default.
+      const older = { ...engine, listAgents: undefined };
+      expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '0 0 9 * * *', prompt: 'p', agent: 'news' },
+        makeCtx({ resolveScheduleEngine: () => older }))).toMatchObject({ error: expect.stringContaining('可用的 Agent：zhin') });
+    });
+
+    it('lists each persistent job\'s Agent and changes it with cron:set-agent (#1250 b52)', async () => {
+      const rows = [{ id: 'p1', schedule: { cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: 'x', agent: 'news' } },
+        { id: 'hb', schedule: { cron: '0 0 9 * * *' }, action: { kind: 'heartbeat', prompt: 'x' } }];
+      const engine = { listJobs: vi.fn().mockResolvedValue(rows), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn(),
+        listAgents: () => ['zhin', 'news'], setJobAgent: vi.fn(async (id: string, agent?: string) => ({ id, agent })) };
+      const ctx = makeCtx({ scheduleHost: { list: () => [] }, resolveScheduleEngine: () => engine });
+      const listed = await dispatchExtendedConsoleRpc('schedule:list', {}, ctx) as { data: { persistent: Record<string, unknown>[] } };
+      expect(listed.data.persistent[0]).toMatchObject({ id: 'p1', agent: 'news' });
+      expect(listed.data.persistent[1]).not.toHaveProperty('agent');
+      const set = (data: Record<string, unknown>) => dispatchExtendedConsoleRpc('cron:set-agent', data, ctx);
+      expect(await set({ id: 'p1', agent: 'zhin' })).toMatchObject({ data: { success: true } });
+      expect(engine.setJobAgent).toHaveBeenLastCalledWith('p1', 'zhin');
+      expect(await set({ id: 'p1', agent: null })).toMatchObject({ data: { success: true } });
+      expect(engine.setJobAgent).toHaveBeenLastCalledWith('p1', undefined);
+      expect(await set({ id: 'p1', agent: 'ghost' })).toMatchObject({ error: expect.stringContaining('可用的 Agent：zhin、news') });
+      expect(await set({ id: 'p1' })).toMatchObject({ error: expect.stringContaining('agent is required') });
+      expect(await set({ id: 'ghost', agent: 'news' })).toEqual({ error: '任务不存在: ghost' });
+      expect(await set({ id: 'hb', agent: 'news' })).toMatchObject({ error: expect.stringContaining('心跳任务') });
+      expect(engine.setJobAgent).toHaveBeenCalledTimes(2);
+      expect(await dispatchExtendedConsoleRpc('cron:set-agent', { id: 'p1', agent: 'news' },
+        makeCtx({ resolveScheduleEngine: () => ({ ...engine, setJobAgent: undefined }) }))).toMatchObject({ data: { code: 'unsupported' } });
+    });
+
     it('cron write ops report 未接线 without a schedule engine', async () => {
-      for (const type of ['cron:add', 'cron:remove', 'cron:pause', 'cron:resume']) {
+      for (const type of ['cron:add', 'cron:set-agent', 'cron:remove', 'cron:pause', 'cron:resume']) {
         const full = await dispatchExtendedConsoleRpc(type, {}, makeCtx());
         expect(full).toHaveProperty('error');
         expect((full as { error: string }).error).toContain('未接线');

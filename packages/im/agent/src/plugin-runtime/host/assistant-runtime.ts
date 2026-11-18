@@ -158,6 +158,7 @@ export function createAssistantScheduleRuntime(
       getStatus: () => [],
     },
     engine: timerScheduler,
+    agents: () => service.getBindingRegistry().listAgentNames(),
     previewTask: (prompt: string, context: ScheduleInvocationContext, options?: { activityFeedback?: boolean }) =>
       executor.preview(prompt, context, options),
   };
@@ -184,6 +185,8 @@ export function createAssistantScheduleRuntime(
         pause: (id) => timerScheduler.pauseJob(id),
         resume: (id) => timerScheduler.resumeJob(id),
         unschedulable: () => timerScheduler.listUnschedulable(),
+        agents: () => Object.freeze(service.getBindingRegistry().listAgentNames()),
+        setAgent: (id, agent) => timerScheduler.setJobAgent(id, agent),
         defaultImNotify: () => {
           const fallback = defaultNotify?.channel === 'im' ? defaultNotify
             : profileDefaultNotify?.channel === 'im' ? profileDefaultNotify : undefined;

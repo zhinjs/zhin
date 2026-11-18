@@ -20,7 +20,8 @@ export interface ScheduleJobRecordCli {
   label?: string;
   enabled: boolean;
   schedule: JobScheduleCli;
-  action: { kind: 'agent' | 'heartbeat'; prompt: string };
+  /** `agent` (#1250 b52): the Agent the job runs on; absent = the default `zhin`. */
+  action: { kind: 'agent' | 'heartbeat'; prompt: string; agent?: string };
   notify: JobNotifyCli;
   createdAt: number;
   updatedAt: number;
@@ -105,4 +106,10 @@ export function contentLines(prompt: string, label = '    内容:   '): string[]
     lines.push(`${indent}…（共 ${all.length} 行，完整内容用 zhin schedule list --json 查看）`);
   }
   return lines;
+}
+
+/** `Agent:` of `zhin schedule list` (#1250 b52): the job's Agent, or the default. */
+export function agentSummary(job: Pick<ScheduleJobRecordCli, 'action'>): string {
+  if (job.action?.kind === 'agent' && job.action.agent) return job.action.agent;
+  return 'zhin（默认）';
 }

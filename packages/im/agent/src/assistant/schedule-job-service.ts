@@ -29,6 +29,8 @@ export interface ScheduleAddInput {
   activityFeedback?: boolean;
   budget?: ScheduleJob['budget'];
   enabled?: boolean;
+  /** Agent the job runs on (`ai.agents` binding name); absent: the default `zhin` (#1250 b52). */
+  agent?: string;
 }
 
 export type ScheduleInvocationContext = Pick<
@@ -47,7 +49,7 @@ export async function addScheduleJob(
     locale: input.locale,
     enabled: input.enabled ?? true,
     schedule: input.schedule,
-    action: { kind: 'agent', prompt: actionPrompt },
+    action: { kind: 'agent', prompt: actionPrompt, ...(input.agent ? { agent: input.agent } : {}) },
     notify: input.notify,
     source: input.source ?? 'manual',
     createdBy: input.createdBy,

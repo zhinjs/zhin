@@ -16,6 +16,7 @@ import {
   targetSummary,
   nextRunSummary,
   contentLines,
+  agentSummary,
   normalizeCronExpression,
 } from '../utils/assistant-jobs.js';
 import {
@@ -122,6 +123,7 @@ const listCommand = new Command('list')
       output.line(`  ${j.id}${label}  [${status}]`);
       output.line(`    计划:   ${scheduleSummary(j.schedule)}`);
       output.line(`    投递:   ${notifySummary(j.notify)}`);
+      output.line(`    Agent:  ${agentSummary(j)}`);
       const target = targetSummary(j);
       if (target) output.line(`    目标:   ${target}`);
       const next = nextRunSummary(j);
@@ -142,6 +144,7 @@ const addCommand = new Command('add')
   .option('--target <target>', 'im 投递目标 <adapter>:<endpoint>:<kind>:<id>，kind 为 private | group | channel；省略时沿用 assistant / profile 的 defaults.notify')
   .option('--at <iso8601>', '单次执行时间，ISO8601')
   .option('--every <interval>', '固定间隔，如 30m, 1h, 1d')
+  .option('--agent <name>', '到点由哪个 Agent 执行（ai.agents 中的名称）；省略时用默认 Agent zhin。不存在时实例拒绝添加并列出可用的 Agent')
   .action(async (cronExpression: string | undefined, opts: {
     prompt?: string;
     label?: string;
@@ -150,12 +153,18 @@ const addCommand = new Command('add')
     target?: string;
     at?: string;
     every?: string;
+    agent?: string;
   }) => {
     const now = Date.now();
 
     const prompt = opts.prompt?.trim();
     if (!prompt) {
       logger.error('请通过 --prompt 提供提示词');
+      process.exit(1);
+    }
+    const agent = opts.agent?.trim();
+    if (opts.agent !== undefined && !agent) {
+      logger.error('--agent 需要 Agent 名称');
       process.exit(1);
     }
 
@@ -199,9 +208,24 @@ const addCommand = new Command('add')
     const data = await requireOk(await hostPost<{ job?: { id?: string } }>(
       await requireHost(),
       '/assistant/jobs',
-      { label: opts.label, schedule, prompt, notify },
+      { label: opts.label, schedule, prompt, notify, ...(agent ? { agent } : {}) },
     ));
     output.line(`已添加调度任务: ${data?.job?.id ?? ''}`);
+  });
+
+const setAgentCommand = new Command('set-agent')
+  .description('修改任务由哪个 Agent 执行；--clear 恢复默认 Agent（zhin）。不存在的 Agent 会被拒绝并列出可用的 Agent')
+  .argument('<id>', '任务 ID')
+  .argument('[agent]', 'Agent 名称（ai.agents 中的名称）')
+  .option('--clear', '清除任务的 Agent，恢复默认 Agent')
+  .action(async (id: string, agentName: string | undefined, opts: { clear?: boolean }) => {
+    const agent = agentName?.trim();
+    if (opts.clear ? agent : !agent) {
+      logger.error(opts.clear ? '--clear 与 Agent 名称只能二选一' : '请提供 Agent 名称，或用 --clear 恢复默认 Agent');
+      process.exit(1);
+    }
+    await requireOk(await hostPost(await requireHost(), '/assistant/jobs/set-agent', { id, agent: opts.clear ? null : agent }));
+    output.line(opts.clear ? `已恢复默认 Agent: ${id}` : `已将任务 ${id} 的 Agent 设为: ${agent}`);
   });
 
 const removeCommand = new Command('remove')
@@ -234,6 +258,7 @@ export const scheduleCommand = new Command('schedule')
   .description('持久化调度任务（操作运行中的实例）')
   .addCommand(listCommand)
   .addCommand(addCommand)
+  .addCommand(setAgentCommand)
   .addCommand(removeCommand)
   .addCommand(pauseCommand)
   .addCommand(resumeCommand);

@@ -8,6 +8,12 @@ export interface AgentTurnConfiguration {
   readonly models?: ModelExecutionScope;
   readonly activeBinding?: ResolvedAgentBinding;
   readonly bootstrapContext?: string;
+  /**
+   * Names of the specialist Agents this turn's principal may use (`capabilities.agents`, filtered by
+   * their platforms / scopes / permissions like `@name` routing). Absent outside a runtime turn:
+   * callers that pick an Agent for the principal (e.g. `schedule_add`) then allow the default only.
+   */
+  readonly availableAgents?: readonly string[];
 }
 
 const agentTurnStorage = new AsyncLocalStorage<AgentTurnConfiguration>();

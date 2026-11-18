@@ -583,6 +583,9 @@ zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"
+zhin schedule add "0 0 8 * * *" --prompt "Compile today's briefing" --agent news
+zhin schedule set-agent <id> <agent>     # change the Agent a job runs on
+zhin schedule set-agent <id> --clear     # back to the default Agent (zhin)
 zhin schedule remove <id>
 zhin schedule pause <id>
 zhin schedule resume <id>
@@ -595,9 +598,12 @@ zhin schedule resume <id>
 | `--kind` | `solar` (default, Gregorian) / `lunar` / `workday` / `freeDay` |
 | `--notify-channel` | `im` / `silent` (default; `im` when `--target` is given) / `log` |
 | `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why. An explicit target also needs `endpoint.operate` on that account (as `zhin send` / `/message/send` does; the Console `cron:add` RPC too), otherwise 403 `schedule_target_forbidden` |
+| `--agent` | The Agent that runs the job, by its `ai.agents` name (e.g. `ai.agents.news`); without it the job runs on the default Agent `zhin`, as before. An unknown name is refused (400 `schedule_agent_not_found`) with the list of available Agents |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
 
-`zhin schedule list` shows each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list). Multi-line content is indented line by line and cut after 2 lines; `--json` prints the full job data.
+To move an existing job to another Agent, run `zhin schedule set-agent <id> <agent>`; `--clear` restores the default Agent. No need to stop the bot and edit the database. The name is checked against `ai.agents` the same way; heartbeat jobs always run on the default Agent and cannot be changed. The change applies from the next run. Both commands need `ops.schedule.write` (through `POST /api/assistant/jobs` and `POST /api/assistant/jobs/set-agent`; in the Console, the `agent` field of `cron:add` and `cron:set-agent`).
+
+`zhin schedule list` shows the Agent of each job ("zhin（默认）" when none is set), each job's resolved delivery target (account name + conversation) and the next run of enabled jobs; a target whose account no longer exists, or a missing target, is flagged "⚠ 无效" (invalid), and an enabled job without a next run is flagged "⚠ 无（不会触发）" (it also appears under the Console's attention list). Multi-line content is indented line by line and cut after 2 lines; `--json` prints the full job data.
 
 ### agent: Agent Diagnostics
 

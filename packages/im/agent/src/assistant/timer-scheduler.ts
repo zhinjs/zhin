@@ -611,6 +611,22 @@ export class TimerScheduler {
     return true;
   }
 
+  /**
+   * Sets the Agent an `agent` job runs on, or clears it (`undefined`: back to the default `zhin`),
+   * #1250 b52. The next run reads the stored job, so no re-registration is needed. `null`: no such
+   * job. Throws for a heartbeat job, which always runs on the default Agent.
+   */
+  async setJobAgent(id: string, agent: string | undefined): Promise<ScheduleJob | null> {
+    const job = await this.store.getJob(id);
+    if (!job) return null;
+    if (job.action.kind !== 'agent') throw new Error(`心跳任务不能指定 Agent: ${id}`);
+    const { agent: _previous, ...action } = job.action;
+    job.action = agent ? { ...action, agent } : action;
+    job.updatedAt = Date.now();
+    await this.store.upsertJob(job);
+    return job;
+  }
+
   async stop(): Promise<void> {
     await this.queue.dispose();
   }

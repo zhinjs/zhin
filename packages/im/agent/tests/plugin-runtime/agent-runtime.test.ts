@@ -646,6 +646,33 @@ describe('Agent CapabilityIngress', () => {
     await store.close();
   });
 
+  it('exposes the Agents visible to the turn\'s principal to its tools (#1250 b52 schedule_add agent)', async () => {
+    for (const [access, expected] of [[{}, ['planner']], [{ platforms: ['github'] }, []]] as const) {
+      const fixture = await createFixture(access);
+      const seen: (readonly string[] | undefined)[] = [];
+      const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () {
+        seen.push(getAgentTurnConfiguration()?.availableAgents);
+        yield { type: 'turn_end', output: [{ type: 'text', content: 'done' }], usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+      }));
+      const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+      runtime.attach(store);
+      await runtime.execute(fixture.child, {
+        identity: { traceId: 'trace-agents', turnId: 'turn-agents' },
+        origin: { kind: 'http', sessionId: 'http-agents' },
+        intent: { kind: 'new' },
+        principal: { subjectId: 'user-1', roles: ['owner'] },
+        input: { text: 'hello' },
+        session: { key: 'http:http-agents' },
+        policy: { permissions: ['owner'], unattended: false },
+        signal: new AbortController().signal,
+        ports: {},
+      }, selection([]));
+      expect(seen).toEqual([expected]);
+      await fixture.mcp.stop();
+      await store.close();
+    }
+  });
+
   it.each([
     { kind: 'http', sessionId: 'http-t' },
     { kind: 'schedule', jobId: 'schedule-t' },
