@@ -224,6 +224,8 @@ export async function normalizeMediaRefsToPayloads(
   signal?: AbortSignal,
   authority?: OutboundMediaAuthority,
   transport: NetworkTransport | undefined = authority?.mediaTransport,
+  /** #1250 第 48 批: the producing Endpoint's protocol-server origins, whose port a URL may keep. */
+  trustedOrigins: readonly string[] = [],
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
@@ -253,7 +255,7 @@ export async function normalizeMediaRefsToPayloads(
 
     const network = authorizeOutboundMediaUrl(media.value, authority);
     if (!network) continue;
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport);
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport, trustedOrigins);
     if (fetched) out.push({ ...fetched, ...fileName });
   }
 

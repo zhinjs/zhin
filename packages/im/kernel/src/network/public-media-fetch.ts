@@ -52,8 +52,9 @@ export interface PublicMediaFetchOptions {
   /**
    * Origins (`scheme://host:port`, as `URL.origin` writes them) whose hops keep their port: the
    * protocol server an adapter itself is configured to talk to, which may serve media on its own
-   * port. Only an exact origin match skips the port rule — the scheme, private-host and DNS checks
-   * still apply. Never from user or model input.
+   * port. Only an exact origin match skips the port rule, and only when the first URL is on that
+   * origin (a redirect from elsewhere into it is held to the default port) — the scheme, private-host
+   * and DNS checks still apply. Never from user or model input.
    */
   readonly trustedOrigins?: readonly string[];
   /** When non-empty, every hop must also match one of these domains (or a subdomain). */
@@ -122,9 +123,12 @@ export async function fetchPublicMediaBytes(
     firstOrigin ??= parsed.origin;
     // `allowedPorts` vouches for the first URL's origin only: a hop to another scheme, host or port gets
     // the default port alone, so a redirect cannot carry an allowed port to a host nobody vouched for.
-    // A declared `trustedOrigins` entry vouches for exactly that origin, on whichever hop reaches it.
-    const extraPorts = parsed.origin === firstOrigin ? options.allowedPorts : undefined;
-    if (!isDefaultOrAllowedPort(parsed, extraPorts) && !options.trustedOrigins?.includes(parsed.origin)) {
+    // A declared `trustedOrigins` entry vouches for exactly that origin, and only when the URL itself
+    // starts there: a public URL cannot redirect into the protocol server's own port.
+    const firstHop = parsed.origin === firstOrigin;
+    const extraPorts = firstHop ? options.allowedPorts : undefined;
+    const trusted = firstHop && options.trustedOrigins?.includes(parsed.origin) === true;
+    if (!isDefaultOrAllowedPort(parsed, extraPorts) && !trusted) {
       return withHost('blocked', current, undefined, 'port');
     }
     // Never downgrade: once a hop was https, an http hop would expose the download in clear text.

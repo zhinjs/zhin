@@ -168,6 +168,22 @@ describe('fetchPublicMediaBytes — port rule (#1250 第 48 批)', () => {
     expect(net.requestBytes).toHaveBeenCalledTimes(2);
   });
 
+  it('trusts an origin only when the URL starts there: a public URL cannot redirect into it', async () => {
+    const net = fakeTransport({
+      'https://cdn.example/start': { status: 302, headers: { location: 'https://satori.example:5140/v1/admin' } },
+      'https://satori.example:5140/v1/proxy/a': { status: 302, headers: { location: '/v1/proxy/b' } },
+      'https://satori.example:5140/v1/proxy/b': { status: 200 },
+    });
+    const trustedOrigins = ['https://satori.example:5140'];
+    expect(await fetchPublicMediaBytes('https://cdn.example/start', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: false, code: 'blocked', reason: 'port' });
+    expect(await fetchPublicMediaBytes('https://satori.example:5140/v1/proxy/a', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: true });
+    expect(net.requestBytes.mock.calls.map(([url]) => (url as URL).href)).toEqual([
+      'https://cdn.example/start', 'https://satori.example:5140/v1/proxy/a', 'https://satori.example:5140/v1/proxy/b',
+    ]);
+  });
+
   it('does not let a trusted origin redirect to another port, nor reach a private host', async () => {
     const net = fakeTransport({
       'https://satori.example:5140/start': { status: 302, headers: { location: 'https://satori.example:6379/next' } },

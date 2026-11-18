@@ -14,7 +14,6 @@ import * as path from 'node:path';
 import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
-  fetchUrlAsBase64,
   inspectMediaBytes,
   normalizeMediaRefsToPayloads,
 } from '../media/media-normalize.js';
@@ -106,13 +105,8 @@ async function materializeInboundMedia(
   transport?: NetworkTransport,
   inboundMediaOrigins: readonly string[] = [],
 ): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string }>> {
-  if (media.kind === 'url' && inboundMediaOrigins.length) {
-    if (typeof media.size === 'number' && media.size > maxBytes) return {};
-    const payload = await fetchUrlAsBase64(media.value, maxBytes, type === 'file' ? undefined : type, signal, [], transport, inboundMediaOrigins);
-    return payload ? { payload: { ...payload, ...(media.file_name ? { fileName: media.file_name } : {}) } } : {};
-  }
   if (media.kind !== 'path') {
-    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport);
+    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport, inboundMediaOrigins);
     return payload ? { payload } : {};
   }
   const decision = await authorizeInboundMediaPath(media.value, inboundMediaRoots);

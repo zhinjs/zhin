@@ -200,7 +200,8 @@ createEndpointSpecification(this, {
 
 - `http(s)://` and `ws(s)://` are accepted (a `ws(s)://` address counts as `http(s)://` on the same host and port); the path is ignored.
 - Declare only the protocol server from the Endpoint's configuration, never an address taken from a message; a reverse connection (the protocol server connects in) has no configured address and declares none.
-- Private and loopback hosts are still refused, and so is a redirect to another port; `origins()` lifts the port rule only.
+- `origins()` lifts the port rule only, and only for a media URL that points at that origin directly: a redirect into it from elsewhere, or from it to another port, is held to the default port.
+- Private and loopback hosts are still refused: a protocol server on the same machine or private network as the instance hands out addresses that stay unusable, whatever the port. Image downloads are HTTPS only; platform voice links may use http.
 
 ## Going deeper
 
