@@ -42,6 +42,8 @@
     --secondary-foreground: var(--foreground);
     --muted: var(--secondary);
     --muted-foreground: var(--palette-hue) var(--surface-chroma) 39%;
+    /* Inactive tab labels sit on the tab list fill (background + 6% foreground); 39% only reached 4.45:1 there. */
+    --tab-inactive: var(--palette-hue) var(--surface-chroma) 34%;
     --accent: var(--palette-hue) var(--surface-chroma) 93.2%;
     --accent-foreground: var(--foreground);
     --selected: var(--primary-action);
@@ -184,6 +186,7 @@
     --secondary: var(--palette-hue) var(--surface-chroma) 12.2%;
     --secondary-foreground: var(--foreground);
     --muted-foreground: var(--palette-hue) var(--surface-chroma) 64%;
+    --tab-inactive: var(--muted-foreground);
     --accent: var(--palette-hue) var(--surface-chroma) 15.5%;
     --accent-foreground: var(--foreground);
     --border: var(--palette-hue) var(--surface-chroma) 16%;

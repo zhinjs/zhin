@@ -289,11 +289,12 @@ export const composite = {
 };
 
 /**
- * Deprecated names kept as aliases until P4 (D16 配套规则, D21). Each maps to a token name
- * (without `--console-`). They are redeclared wherever their target is, so they follow the same
- * viewport / container values.
+ * Old token names, deprecated aliases in 1.1 and removed in ADR 0063 P4. Nothing declares them any
+ * more; each maps to its successor (without `--console-`; `null`: no successor, use a hairline
+ * border or a semantic elevation). Only the `console/no-deprecated-tokens` stylelint rule reads this
+ * table, to point old stylesheets at the new names.
  */
-export const aliases = {
+export const removedAliases = {
   // Radii.
   'radius-sm': 'radius-1',
   'radius-md': 'radius-2',
@@ -330,16 +331,8 @@ export const aliases = {
   'text-body-sm': 'text-label',
   'text-section-sm': 'text-section',
   'text-title-compact': 'text-title',
-};
-
-/** Unprefixed deprecated aliases (shadcn-style `--radius`). */
-export const bareAliases = {
-  '--radius': 'control-radius',
-};
-
-/** Deprecated tokens without a successor, kept with their P1a value until P4. */
-export const deprecated = {
-  'shadow-ring': '0 0 0 1px hsl(var(--console-shadow-color) / 0.045)',
+  // Removed without a successor.
+  'shadow-ring': null,
 };
 
 /**

@@ -73,11 +73,11 @@ describe('page UI rules 1–6', () => {
     expect(rulesOf('export default () => <div style={{ padding: 12, fontWeight: 600 }} />;')).toEqual([4, 4]);
     expect(rulesOf("const cardStyle = { borderRadius: '8px', nested: { marginTop: 4 } };", 'pages/x/style.ts')).toEqual([4, 4]);
     expect(rulesOf('const css = `.card { gap: 8px; box-shadow: 0 1px 2px #0003; }`;', 'pages/x/styles.ts')).toEqual([4, 4]);
-    expect(rulesOf('.card { font-size: 13px; padding: var(--console-space-card); margin: 0 auto; }', 'pages/x/a.css')).toEqual([4]);
+    expect(rulesOf('.card { font-size: 13px; padding: var(--console-card-padding); margin: 0 auto; }', 'pages/x/a.css')).toEqual([4]);
     // Zero, keywords and Console tokens are fine; other variables are not tokens.
     expect(isRawStyleValue('0')).toBe(false);
-    expect(isRawStyleValue('var(--console-radius-md)')).toBe(false);
-    expect(isRawStyleValue('calc(var(--console-space-card) * 2)')).toBe(false);
+    expect(isRawStyleValue('var(--console-control-radius)')).toBe(false);
+    expect(isRawStyleValue('calc(var(--console-card-padding) * 2)')).toBe(false);
     expect(isRawStyleValue('none')).toBe(false);
     expect(isRawStyleValue('var(--sb-radius-md)')).toBe(true);
     expect(isRawStyleValue('bold')).toBe(true);
@@ -89,7 +89,7 @@ describe('page UI rules 1–6', () => {
     for (const token of ['p-[13px]', 'rounded-[10px]', 'text-[15px]', 'md:gap-2.5', 'p-5', '-mt-10', 'shadow', 'shadow-lg', 'hover:shadow-md']) {
       expect(classNameRule(token), token).toBe(5);
     }
-    for (const token of ['p-4', 'gap-3', 'px-0', 'm-auto', 'mx-px', '-mt-2', 'shadow-e1', 'shadow-none', 'p-(--console-space-card)', 'p-[var(--console-space-card)]', 'h-11', 'w-[120px]']) {
+    for (const token of ['p-4', 'gap-3', 'px-0', 'm-auto', 'mx-px', '-mt-2', 'shadow-e1', 'shadow-none', 'p-(--console-card-padding)', 'p-[var(--console-card-padding)]', 'h-11', 'w-[120px]']) {
       expect(classNameRule(token), token).toBeUndefined();
     }
     expect(rulesOf('export default () => <div className="flex gap-5 p-4" />;')).toEqual([5]);

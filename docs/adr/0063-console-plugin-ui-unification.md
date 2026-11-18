@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0063：Console 与插件页面 UI 统一——一套组件库、一个页面外壳
 
-状态：已接受（Accepted，2026-11-15）。所有者已明确要求按 P1a→P4 实施；实施进度：P1（P1a 组件包与共享模块、P1b 三层令牌与组件规则）与 P2（三个渲染器迁到 `@zhin.js/console-ui`、Sandbox 两步迁移、`zhin plugin check` 第 1–6 条与 Playwright 审计门禁，全部官方插件进入门禁名单）已实施，P3、P4 未开始；以下为提议时的说明，保留作记录：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定，「本仓库的官方插件完整遵守全部规则」也是所有者给出的决定（2026-11-14：「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」，见 D19）；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
+状态：已接受（Accepted，2026-11-15）。所有者已明确要求按 P1a→P4 实施；实施进度：P1（P1a 组件包与共享模块、P1b 三层令牌与组件规则）与 P2（三个渲染器迁到 `@zhin.js/console-ui`、Sandbox 两步迁移、`zhin plugin check` 第 1–6 条与 Playwright 审计门禁，全部官方插件进入门禁名单）已实施；P3（插件页面挂成插件详情页签、顶栏「功能」只列 Console 页面、旧顶层路径重定向，zhinjs/console#115）已实施；P4（删除弃用满一个 minor 的接口，所有者 2026-11-17 同意开始）已实施，见「分阶段计划」中的「P4 实施记录」；以下为提议时的说明，保留作记录：提议（Proposed，2026-11-14）。所有者的长期指示是「需要拍板的按推荐处理」，所以文末「决定」表中的 D1–D10 与 D12–D14 **默认按推荐执行**，D11（`zk-` 在 minor 中删除）是所有者已经给出的决定；2026-11-14 依据 zhinjs/console#111 增补的 D15–D22（设计规则，见「增补：设计规则（console#111）」）同样默认按推荐执行，其中「对 Console 强制、对插件页面推荐、插件只有一组很小的硬性底线」的分寸是所有者给出的决定，「本仓库的官方插件完整遵守全部规则」也是所有者给出的决定（2026-11-14：「官方插件肯定要遵守规则的，我们都不遵守，还怎么推荐给开发者呢」，见 D19）；所有者在本 ADR 的 PR 上没有提出异议，就视为接受，届时只需把状态改为「已接受（Accepted）」。被否决的替代选项保留在同一张表里作为记录。
 
 关联：
 - [ADR 0062](./0062-one-path-per-task.md) 第 24 项 / Q24（插件页面只放插件自己的领域视图，挂成插件详情下的页签）。本 ADR 是它的补充：第 24 项定了「挂在哪」，本 ADR 定「长成什么样」。
@@ -441,6 +441,22 @@ sidebar: false
 | `Button`、`Badge`、`Select`、`Modal`、`Card`、`Tabs`、`Input` 等 `zk-` 组件 | `@zhin.js/console-ui` 中的同名或对应组件（逐个列出属性差异） |
 | `PluginPage`、`PageHeader` | 无对应组件：由页面外壳负责，手写页面改用 `usePageChrome` |
 | `pluginUiStyles` | 无：样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供 |
+
+### P4 实施记录
+
+所有者 2026-11-17 同意开始 P4。删除前逐项核对了弃用期：每一项都已在一个发布到 npm 的 minor 中标为弃用（CHANGELOG 与类型注释），P4 在下一个 minor 中删除。
+
+| 删除的接口 | 标为弃用 | 删除 |
+| --- | --- | --- |
+| `@zhin.js/client/ui` 子路径（再导出层）及其 `zk-` 组件（`ui/components.tsx`）与样式（`ui/styles.ts`、`pluginUiStyles`） | `@zhin.js/client` 1.3.0（P2，2026-11-16） | `@zhin.js/client` 1.4.0 |
+| `adapterConsoleStyles`、`conversationPickerStyles`（弃用期内为空字符串） | `@zhin.js/client` 1.3.0 | `@zhin.js/client` 1.4.0 |
+| `zk-` 类名（含适配器页账号编辑器的 `zk-account-editor-host`，改用 `data-adapter-account-editor`）、`--zk-*` 变量（含 `@zhin.js/pagemanager` 独立页外壳里的 `.zk-root` 覆盖） | `--zk-*`：`@zhin.js/client` 1.2.2 标注；`zk-` 类名：`@zhin.js/client` 1.3.0 | `@zhin.js/client` 1.4.0 |
+| 蓝图与评论审批 spec 的 `mark` 字段（及渲染器的告警） | `@zhin.js/client` 1.3.0 的 changeset 同时宣布；`@zhin.js/console-contract` 的类型注释随同一批发布于 1.3.1 | `@zhin.js/console-contract` 1.4.0、`@zhin.js/client` 1.4.0 |
+| `@zhin.js/console-ui` 的旧令牌别名（`--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-*`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card(-sm)`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-duration-fast/-page`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`）和无后继的 `--console-shadow-ring` | `@zhin.js/console-ui` 1.1.0（P1b；`duration-*` 随 console#125） | `@zhin.js/console-ui` 1.2.0 |
+| `Button` 的 `variant="default"`（改名 `soft`） | `@zhin.js/console-ui` 1.1.0 | `@zhin.js/console-ui` 1.2.0 |
+| 插件页面旧顶层路径的重定向（P3，如 `/rss` → `/plugins/rss/index`） | zhinjs/console#115（2026-11-16，在 `@zhin.js/client` 1.3.0 这一轮发布之前上线） | zhinjs/console 分支 `console/adr0063-p4`，随本仓库 P4 这一轮发布合并。适配器页面的旧路径（`/icqq` → `/scope/icqq`）保留：那条隐藏路由同时是适配器页面在命令面板里的唯一入口并承载权限，要删除需先改命令面板登记适配器页面的方式 |
+
+stylelint 规则 `console/no-deprecated-tokens` 保留，改为报出 P4 删除的旧令牌名并给出新名（`tokens/tokens.mjs` 的 `removedAliases` 只供这条规则读取，不再声明这些变量）；`zhin plugin check` 第 2 条仍识别从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage`，提示中注明子路径已删除。仓库内的使用点（渲染器的 `Button variant="default"`、Sandbox 插件、`scripts/adapter-preview` 的 `zk-` 组件调试台、测试与文档）一并迁移或删除。迁移说明见 `docs/authoring/console-pages.md`「从 @zhin.js/client/ui 升级」与「ADR 0063 P4 删除的其他接口」。
 
 P2、P3、P4 各自的页面收敛项和检查见 D21 的表格。P1 和 P2 可以在同一个 release 中发布，但必须分开 PR：P1a 只改 Console 的引入方式，外观不变，便于用视觉回归确认没有退化（P1b 有意改变外观，见 D21）。P3 依赖 ADR 0062 第 24 项的插件详情页签，可以和第 24 项的实施 PR 合并。
 

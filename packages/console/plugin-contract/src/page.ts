@@ -732,7 +732,7 @@ export interface DeclarativeSectionSpec<
     index: number,
     ctx: DeclarativePageContext<TData>,
   ) => DeclarativeRenderable;
-  /** Key-value description list extractor (`<dl className="zk-dl">`). */
+  /** Key-value description list extractor (rendered as a `KeyValueList`). */
   readonly entries?:
     | readonly {
         readonly label: DeclarativeI18nText;
@@ -762,11 +762,6 @@ export interface DeclarativePageSpec<TData = Record<string, unknown>> {
   readonly pluginId?: string;
   readonly title: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
-  /**
-   * @deprecated ADR 0063 P2: the renderer no longer draws a letter tile in the page header; this
-   * field is ignored (the Console warns once when it is set) and will be removed in a later minor.
-   */
-  readonly mark?: DeclarativeRenderable;
   /** Status RPC method name; defaults to `'status'`. */
   readonly statusMethod?: string;
   /** Optional polling interval in ms; defaults to 10_000. Pass `0` to disable polling. */
@@ -907,11 +902,6 @@ export interface CommentReviewBlueprintSpec<
 > {
   readonly adapter: string;
   readonly platform: { readonly zh: string; readonly en: string };
-  /**
-   * @deprecated ADR 0063 P2: ignored (no letter tile in the page header any more); not copied into
-   * the blueprint. Will be removed in a later minor.
-   */
-  readonly mark?: string;
   readonly resource: { readonly zh: string; readonly en: string };
   readonly dictionary?: Readonly<Record<string, string>>;
   readonly openLabel?: string;

@@ -13,7 +13,6 @@ import {
 import { useLocale, type PluginUiText } from '../ui/locale.js';
 import { resolvePluginId } from '../ui/plugin-id.js';
 import { usePluginRpc } from '../ui/rpc.js';
-import { BLUEPRINT_MARK_DEPRECATION, warnDeprecatedOnce } from '../renderer/deprecation.js';
 import { ActionButton, EmptyBlock, ErrorBlock, LoadingBlock, NoticeBlock, RendererPage, ToneBadge } from '../renderer/kit.js';
 import { reviewMessages } from './messages.js';
 import type { CommentReviewSpec, ReviewContext, ReviewDraftBase, ReviewEndpointBase, ReviewStatus } from './types.js';
@@ -148,7 +147,7 @@ export function DraftCard({ draft, endpoint, session }: { draft: ReviewDraftBase
           )}
           <ContentStack direction="row" gap="tight" justify="between" align="center">
             <ContentStack direction="row" gap="tight" align="center">
-              <Button type="button" variant="default" size="sm" aria-busy={sending || undefined} disabled={!canSend || busy !== '' || invalid} onClick={() => act('send')}>
+              <Button type="button" variant="soft" size="sm" aria-busy={sending || undefined} disabled={!canSend || busy !== '' || invalid} onClick={() => act('send')}>
                 {sending ? t('发送中…') : t('发送')}
               </Button>
               {editing
@@ -237,7 +236,7 @@ function DeclarativeLoginExtras({
         {qr.state === 'expired' && <ToneBadge tone="warning">{t('二维码已过期')}</ToneBadge>}
         {qr.state === 'failed' && qr.error && <ToneBadge tone="danger">{qr.error}</ToneBadge>}
         {login.state !== 'ok' && !configCookie && (
-          <Button type="button" variant="default" size="sm" aria-busy={pending === 'login' || undefined} disabled={pending !== undefined} onClick={() => act('login')}>
+          <Button type="button" variant="soft" size="sm" aria-busy={pending === 'login' || undefined} disabled={pending !== undefined} onClick={() => act('login')}>
             {t(retry ? '重新扫码' : '扫码登录 B 站')}
           </Button>
         )}
@@ -386,7 +385,6 @@ export function CommentReviewSession({ spec }: { spec: AnySpec }) {
   });
   const pending = resource.data?.endpoints.some(endpoint => spec.isLoginPending?.(endpoint)) ?? false;
   useEffect(() => { setFast(pending); }, [pending]);
-  if (spec.mark !== undefined && spec.mark !== null) warnDeprecatedOnce('blueprint-mark', BLUEPRINT_MARK_DEPRECATION);
 
   useEffect(() => {
     if (!notice || notice.tone === 'danger') return;

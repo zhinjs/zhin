@@ -43,7 +43,7 @@ export function baseTierVariables() {
   for (const [name, value] of Object.entries(tokens.breakpoints)) out[`bp-${name}`] = value;
   for (const [name, value] of Object.entries(tokens.contentWidth)) out[`content-${name}`] = value;
   out['touch-target'] = tokens.touchTarget;
-  Object.assign(out, tokens.misc, tokens.motion, tokens.color.light, tokens.deprecated);
+  Object.assign(out, tokens.misc, tokens.motion, tokens.color.light);
   return out;
 }
 
@@ -118,7 +118,8 @@ export function buildScale() {
     css: {
       baseTokens: Object.keys(baseTierVariables()).map((name) => `${PREFIX}${name}`),
       semanticTokens: [...semanticNames, ...Object.keys(tokens.composite)].map((name) => `${PREFIX}${name}`),
-      aliasTokens: [...Object.keys(tokens.aliases).map((name) => `${PREFIX}${name}`), ...Object.keys(tokens.bareAliases)],
+      /** Token names removed in ADR 0063 P4 → successor (`null`: none). */
+      removedTokens: Object.fromEntries(Object.entries(tokens.removedAliases).map(([name, successor]) => [`${PREFIX}${name}`, successor === null ? null : `${PREFIX}${successor}`])),
       customMedia: customMedia(),
       mediaParams: allowedMediaParams(),
       containerParams: [...new Set([...Object.values(containerRanges()), ...Object.values(tokens.breakpoints).flatMap((value) => [`(min-width: ${value})`, `(width >= ${value})`, `(width < ${value})`])])],

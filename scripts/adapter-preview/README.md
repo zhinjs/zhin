@@ -9,7 +9,7 @@ pnpm preview:ui
 # or: pnpm exec vite --config scripts/adapter-preview/vite.config.mts
 ```
 
-Open `http://localhost:4174` (defaults to `/ui` — the live `@zhin.js/client/ui` component & style workbench with viewport simulator, size/tone switchers, and box-model outline debugger). The top navigation bar also includes ICQQ login verification (`/icqq`), Telegram/Discord account management (`/telegram`, `/discord`), Sandbox conversations (`/sandbox`), and Bilibili comment review (`/bilibili`). Use the theme button to inspect light/dark variants, and the viewport controls to test narrow screens and sticky table columns.
+Open `http://localhost:4174` (defaults to `/icqq`, ICQQ login verification). The top navigation bar also includes Telegram/Discord account management (`/telegram`, `/discord`), Sandbox conversations (`/sandbox`), and Bilibili comment review (`/bilibili`). The component gallery of `@zhin.js/console-ui` lives in that package (`packages/console/ui/visual`). Use the theme button to inspect light/dark variants, and the viewport controls to test narrow screens and sticky table columns.
 
 Account mutations, login completion, draft editing, and Sandbox messages only change this page's synthetic data. Reloading resets it. The displayed QR image is deliberately nonfunctional.
 

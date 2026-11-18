@@ -33,20 +33,12 @@ const HEADER = (what) => `/*
 
 const decl = (name, value, indent = '    ') => `${indent}${name}: ${value};`;
 
-/** Aliases (deprecated names) whose target is `name` (without prefix). */
-function aliasesOf(name) {
-  const out = Object.entries(tokens.aliases).filter(([, target]) => target === name).map(([alias]) => `${PREFIX}${alias}`);
-  out.push(...Object.entries(tokens.bareAliases).filter(([, target]) => target === name).map(([alias]) => alias));
-  return out;
-}
-
 function semanticDeclarations(size, filter, indent) {
   const lines = [];
   for (const [name, spec] of Object.entries(tokens.semantic)) {
     if (!filter(spec)) continue;
     const value = resolveSemanticValue(spec[size]);
     lines.push(decl(`${PREFIX}${name}`, value, indent));
-    for (const alias of aliasesOf(name)) lines.push(decl(alias, `var(${PREFIX}${name})`, indent));
   }
   return lines;
 }
@@ -57,7 +49,6 @@ export function tokensCss() {
   const baseLines = [];
   for (const [name, value] of Object.entries(base)) {
     baseLines.push(decl(`${PREFIX}${name}`, value));
-    for (const alias of aliasesOf(name)) baseLines.push(decl(alias, `var(${PREFIX}${name})`));
   }
   const darkLines = [
     ...Object.entries(tokens.elevation.dark).map(([name, value]) => decl(`${PREFIX}elevation-${name.slice(2)}`, value)),
@@ -137,6 +128,7 @@ const THEME_COLORS = [
   ['secondary', ['DEFAULT', 'foreground']],
   ['destructive', ['DEFAULT', 'foreground']],
   ['muted', ['DEFAULT', 'foreground']],
+  'tab-inactive',
   ['accent', ['DEFAULT', 'foreground']],
   ['success', ['DEFAULT', 'foreground']],
   ['warning', ['DEFAULT', 'foreground']],

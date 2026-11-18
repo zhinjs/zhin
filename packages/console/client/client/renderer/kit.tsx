@@ -38,7 +38,7 @@ export type RendererTone = 'neutral' | 'primary' | 'success' | 'warning' | 'dang
 /** Button variants of the declarative contract, plus the console-ui names. */
 export type RendererButtonVariant =
   | 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning'
-  | 'default' | 'outline' | 'destructive' | 'destructive-outline';
+  | 'soft' | 'outline' | 'destructive' | 'destructive-outline';
 
 type UiBadgeVariant = NonNullable<BadgeProps['variant']>;
 type UiButtonVariant = NonNullable<ButtonProps['variant']>;
@@ -71,7 +71,7 @@ export function isDangerVariant(variant: string | undefined): boolean {
 export function buttonVariantFor(variant: string | undefined, fallback: UiButtonVariant = 'outline'): UiButtonVariant {
   switch (variant) {
     case 'primary':
-    case 'default': return 'default';
+    case 'soft': return 'soft';
     case 'secondary':
     case 'outline':
     case 'success':
@@ -428,7 +428,7 @@ export function SegmentedChoices({ value, options, onValueChange, 'aria-label': 
           key={option.value}
           type="button"
           size="sm"
-          variant={option.value === value ? 'default' : 'outline'}
+          variant={option.value === value ? 'soft' : 'outline'}
           aria-pressed={option.value === value}
           disabled={option.disabled}
           onClick={() => onValueChange(option.value)}

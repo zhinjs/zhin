@@ -8,7 +8,7 @@ import * as tokens from '../tokens/tokens.mjs';
 // @ts-expect-error — plain ESM modules without declarations
 import { buildScale, resolveSemanticValue } from '../tokens/scale.mjs';
 // @ts-expect-error — plain ESM modules without declarations
-import { generate, themeCss } from '../tokens/generate.mjs';
+import { generate, themeCss, tokensCss } from '../tokens/generate.mjs';
 import {
   Badge, Card, Grid, PageHeader, PageShell, StatGrid, StatusBadge, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
   isAttentionStatus,
@@ -80,10 +80,11 @@ describe('token source (ADR 0063 D16, D17)', () => {
     expect(buildScale().tailwind.spacingKeys).toEqual(['0', 'px', '1', '2', '3', '4', '6', '8', '12', '16']);
   });
 
-  it('motion: three durations and one easing curve; the old duration names are aliases (zhinjs/console#125)', () => {
+  it('motion: three durations and one easing curve; the old duration names were removed in P4 (zhinjs/console#125)', () => {
     expect(tokens.motion).toEqual({ 'motion-fast': '120ms', 'motion-base': '200ms', 'motion-slow': '280ms' });
     expect(tokens.misc['ease-out']).toBe('cubic-bezier(0.25, 1, 0.5, 1)');
-    expect(tokens.aliases).toMatchObject({ 'duration-fast': 'motion-fast', 'duration-page': 'motion-base' });
+    expect(tokens.removedAliases).toMatchObject({ 'duration-fast': 'motion-fast', 'duration-page': 'motion-base' });
+    expect(tokensCss()).not.toMatch(/--console-duration-/u);
     const theme = themeCss();
     expect(theme).toContain('--default-transition-duration: var(--console-motion-fast);');
     expect(theme).toContain('--default-transition-timing-function: var(--console-ease-out);');

@@ -31,8 +31,7 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
 | `createAdapterConsolePage` / `AdapterConsolePage` | 平台适配器 Console 页的共享页面（连接、endpoint 增删、登录待办、适配器动作） |
 | `DeclarativePageView` / `createDeclarativePage` / `DataTable` | 声明式页面渲染器（基于 `@zhin.js/console-ui`，只渲染内容区块，页头交给页面外壳） |
-| `usePluginRpc` / `usePluginData` / `useRpcResource` / `useLocale` / `resolvePluginId` | 插件页的数据、语言与插件 ID 工具（原 `@zhin.js/client/ui`，见下文“插件页：组件与页面外壳”） |
-| `@zhin.js/client/ui` | **已弃用**（ADR 0063 P2）：弃用期内原样再导出，首次使用告警一次，后续 minor 删除 |
+| `usePluginRpc` / `usePluginData` / `useRpcResource` / `useLocale` / `resolvePluginId` | 插件页的数据、语言与插件 ID 工具（见下文“插件页：组件与页面外壳”） |
 | `resolveAdapterConsolePluginId` | 从 `/console/api/pages` 解析当前适配器页所属的 PluginId |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
@@ -146,7 +145,7 @@ export default function Page() {
 `DeclarativePageView`、`AdapterConsolePage`、`CommentReviewPage` 三个渲染器都改用 `@zhin.js/console-ui`，不再注入任何 `zk-` 样式：
 
 - **只渲染内容区块**：标题、说明、无表单的动作、状态徽标和 `RefreshControl`（更新于 hh:mm:ss、手动 / 5s / 15s / 30s 自动、刷新）通过 `usePageChrome` 交给外壳；外层没有 `PageChromeProvider`（旧版 Console）时，渲染器在内容区顶部自己画 `PageHeader`。`AdapterConsolePage embedded` 仍由宿主负责页头，不上报。
-- **首字母方块删除**：蓝图的 `mark` 字段被忽略，使用时控制台告警一次（后续 minor 删除）。
+- **没有首字母方块**：蓝图与评论审批 spec 的 `mark` 字段已在 ADR 0063 P4（1.4.0）删除。
 - **危险操作**：`variant: 'danger'` 一律渲染为 `destructive-outline` 描边按钮，点击后弹出确认对话框；蓝图没写 `confirm` 时自动用「确认<动作名>？」；实心红色只出现在对话框的确认按钮上；`confirmText`（输入对象名后才能确认）照常可用。
 - **没有原生 `<select>`**：选择字段、自动刷新间隔、适配器页的布尔字段和平台动作选项都用 Radix 下拉。
 - **展示规则（D15）**：统计卡片用 `auto-fit` 弹性网格（手机上两列），表格在窄容器里变成卡片，正常状态的徽标弱化、只有异常着色，JSON 与自动卡片里的原始 ID 默认收在「查看 JSON」/「技术详情」里。
@@ -154,7 +153,7 @@ export default function Page() {
 
 ### 从 `@zhin.js/client/ui` 升级
 
-`@zhin.js/client/ui` 弃用：弃用期（至少一个 minor）内它原样再导出下面的名字和旧的 `zk-` 组件，首次导入时在浏览器控制台告警一次；`zk-` 类名同样弃用。之后的 minor（ADR 0063 P4）删除该子路径、`zk-` 组件与样式。
+`@zhin.js/client/ui` 在 1.3.0 弃用（ADR 0063 P2），在 1.4.0 删除（ADR 0063 P4）：子路径、`zk-` 组件与样式、`zk-` 类名、`--zk-*` 变量、`adapterConsoleStyles` / `conversationPickerStyles` 一起删除。还在用它的页面按下表迁移（完整说明见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)）：
 
 | 原导出（`@zhin.js/client/ui`） | 去向 |
 | --- | --- |
@@ -162,7 +161,7 @@ export default function Page() {
 | `useLocale`、`detectLocale`、`translate`、`formatClock` 及其类型 | `@zhin.js/client` 根入口 |
 | `resolvePluginId`、`resolveSyncPluginId`、`resolveAdapterConsolePluginId` | `@zhin.js/client` 根入口 |
 | `DeclarativePageView`、`createDeclarativePage`、`DataTable` 及声明式类型 | `@zhin.js/client` 根入口（`DataTable` 改为基于 `@zhin.js/console-ui` 的表格；列的 `fixed` 与 `responsiveStack` 不再起作用：窄容器里自动变卡片） |
-| `Button` | `@zhin.js/console-ui` 的 `Button`：`primary` → `variant="default"`，`secondary` → `outline`，`danger` → `destructive-outline`（外加确认对话框）；没有 `busy` / `icon` 属性，把图标放进 children，忙碌时设 `disabled` 与 `aria-busy` |
+| `Button` | `@zhin.js/console-ui` 的 `Button`：`primary` → `variant="soft"`（主操作）或 `variant="primary"`（每个视图唯一的实心按钮），`secondary` → `outline`，`danger` → `destructive-outline`（外加确认对话框）；没有 `busy` / `icon` 属性，把图标放进 children，忙碌时设 `disabled` 与 `aria-busy` |
 | `Badge` | `Badge`：`tone` → `variant`（`danger` → `destructive`，`neutral` → `outline`，正常状态用 `secondary`） |
 | `Select` | `SelectField`（`options` / `value` / `onValueChange`，Radix 下拉）；长列表用 `SearchableSelectField` |
 | `Modal` / `Drawer` | `Dialog` / `Sheet` |
@@ -172,7 +171,7 @@ export default function Page() {
 | `Notice` / `ErrorState` / `EmptyState` / `LoadingState` | `Alert`、`ErrorAlert`、`EmptyState`、`LoadingBlock` |
 | `StatCard` / `StatGrid` / `ProgressBar` / `Sparkline` / `Timeline` / `DescriptionList` / `JsonView` | `StatCard` / `StatGrid`、`ProgressMeter`、`Sparkline`、`Timeline`、`KeyValueList`、`JsonBlock`（放进 `Disclosure`） |
 | `PluginPage`、`PageHeader` | 无对应组件：页头由页面外壳负责，手写页面用 `usePageChrome({ actions, refresh })` |
-| `pluginUiStyles`、`adapterConsoleStyles`、`conversationPickerStyles` | 无：样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供（`adapterConsoleStyles` / `conversationPickerStyles` 弃用期内是空字符串） |
+| `pluginUiStyles`、`adapterConsoleStyles`、`conversationPickerStyles` | 无：删掉导入和注入它们的 `<style>`，样式由 Console 加载的 `@zhin.js/console-ui/styles.css` 提供 |
 
 ### 布局审计的挂载模块
 

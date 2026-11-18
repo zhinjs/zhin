@@ -88,9 +88,9 @@ describe('Button', () => {
     expect(renderToStaticMarkup(h(Button, { variant: 'primary' }, '保存'))).toContain('bg-brand');
   });
 
-  it('soft is the former default; default stays as its alias and is still the default variant', () => {
-    expect(classes('default')).toEqual(classes('soft'));
+  it('soft is the default variant; the `default` alias was removed in ADR 0063 P4', () => {
     expect(classes(undefined)).toEqual(classes('soft'));
+    expect(classes('default' as never).has('bg-primary-action')).toBe(false);
     expect(classes('soft').has('bg-primary-action')).toBe(true);
   });
 
@@ -295,10 +295,10 @@ describe('styles', () => {
     expect([...missing]).toEqual([]);
   });
 
-  it('keeps the colors and the deprecated aliases until P4', () => {
+  it('keeps the colors; the deprecated aliases are gone (ADR 0063 P4)', () => {
     expect(tokens).toMatch(/\.dark \{[\s\S]*--background: var\(--palette-hue\) var\(--surface-chroma\) 5%;/u);
-    for (const alias of ['--console-radius-md', '--console-shadow-sm', '--console-space-card', '--console-space-page-x', '--console-control-height-sm', '--radius']) {
-      expect(defined.has(alias), alias).toBe(true);
+    for (const alias of ['--console-radius-md', '--console-shadow-sm', '--console-shadow-ring', '--console-space-card', '--console-space-page-x', '--console-control-height-sm', '--console-duration-fast', '--radius']) {
+      expect(defined.has(alias), alias).toBe(false);
     }
     expect(tokens).toContain('--console-content-max: var(--console-content-data);');
   });
