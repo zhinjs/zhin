@@ -370,7 +370,11 @@ export class TurnToolRuntime {
       if (error instanceof NetworkAccessDeniedError || error instanceof McpPermitDeniedError) {
         return this.#deny(name, toolUseId, error.policy, error.message, causedBy);
       }
-      const message = error instanceof Error ? error.message : String(error);
+      // Any code can construct a DOMException named AbortError / TimeoutError with arbitrary text, so the
+      // model sees a fixed message for those instead of a text that is exempt from provenance (#1250 F8).
+      const message = isAbortOrTimeoutDomException(error)
+        ? (error.name === 'TimeoutError' ? 'Tool call timed out.' : 'Tool call was aborted.')
+        : error instanceof Error ? error.message : String(error);
       // #1250 F8: the error text goes to the model as this call's result, so it is a source like any output.
       this.#observeFailure(tool, error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
@@ -493,8 +497,12 @@ export class TurnToolRuntime {
 }
 
 /** Errors whose text the harness wrote itself: cancellation, timeouts and local refusals (#1250 F8). */
+function isAbortOrTimeoutDomException(error: unknown): error is DOMException {
+  return error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError');
+}
+
 function isHarnessGeneratedError(error: unknown): boolean {
-  if (error instanceof DOMException) return error.name === 'AbortError' || error.name === 'TimeoutError';
+  if (error instanceof DOMException) return isAbortOrTimeoutDomException(error);
   return error instanceof TurnCancelledError
     || error instanceof TurnSupersededError
     || error instanceof TriggerCancelledError

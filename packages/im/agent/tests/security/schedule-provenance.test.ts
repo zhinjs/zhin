@@ -263,6 +263,17 @@ describe('#1250 F8: a thrown error is a source when its text reaches the model',
     }
   });
 
+  it('hides the text of an abort / timeout DOMException, which any code can construct', async () => {
+    for (const [index, name] of ['AbortError', 'TimeoutError'].entries()) {
+      const tool = capability('lookup', async () => { throw new DOMException(INJECTION, name); }, { readOnly: true });
+      const runtime = new TurnToolRuntime(liveTurn(undefined), [tool]);
+      const outcome = await runtime.execute('lookup', {}, `d${index}`);
+      expect(outcome.status).toBe('failed');
+      expect(outcome.status === 'failed' ? outcome.error : '').not.toContain(INJECTION);
+      expect(runtime.provenance.tainted).toBe(false);
+    }
+  });
+
   it('does not record a call cancelled with the turn', async () => {
     const controller = new AbortController();
     const tool = capability('lookup', async () => {
