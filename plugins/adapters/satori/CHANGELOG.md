@@ -1,5 +1,24 @@
 # @zhin.js/adapter-satori
 
+## 1.1.35
+
+### Patch Changes
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/page@1.2.2
+
 ## 1.1.34
 
 ### Patch Changes

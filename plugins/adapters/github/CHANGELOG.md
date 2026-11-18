@@ -1,5 +1,33 @@
 # @zhin.js/adapter-github
 
+## 1.1.34
+
+### Patch Changes
+
+- 9ce43fe: 出站段策略按会话类型生效，GitHub 评论保留 Markdown 格式（ADR 0064 P0）。
+
+  - F1：适配器画像里按会话类型（`private` / `group` / `channel`，有 `threadId` 时再加 `thread`）声明的 `messaging.segments` 现在会生效：类型段写了 `segments` 就整段替换 `default` 的那份。之前出站投影只读 `default`。`resolveOutboundHtmlPolicy`、`resolveOutboundMediaPolicy`、`resolveOutboundInteractivePolicy`、`resolveOutboundMarkdownPolicy`、`resolveOutboundSupportedSegments` 新增可选参数 `conversation`；`resolveAiOutboundSegments` 的第三个参数也可以直接传会话。不传会话时行为不变。`projectOutboundPayload`、指令菜单翻页和 Agent 的回复段解析都按当前会话解析。
+  - 受影响的官方适配器只有 QQ 官方：频道会话不再接受图文卡片（`card` / `share`），模型在频道里也看不到这两种段；手写的图文卡片在发送前就以 `unsupported_operation` 拒绝。私聊、群聊和其他适配器不变。
+  - F2：GitHub 适配器声明 `markdown: 'native'`。`markdown` 段在 Issue / PR 评论里原样发送并保留格式，不再先被转成纯文本；它作为单独的块写进评论，和相邻文字之间空一行。
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/page@1.2.2
+  - @zhin.js/agent-feature@1.1.21
+  - @zhin.js/skill@1.1.21
+  - @zhin.js/tool@1.1.24
+
 ## 1.1.33
 
 ### Patch Changes

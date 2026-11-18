@@ -1,5 +1,48 @@
 # @zhin.js/adapter-discord
 
+## 1.1.35
+
+### Patch Changes
+
+- 4ff83f3: 命名空间下的参数指令、超过 10 项的选择、猜谜与地牢远征的入口（#1250 第 37 批）。
+
+  - `command-namespace-param-commands-swallowed`：路由顺序原先是「所有静态路由先于所有带参数段的路由」，于是只要有一条更短的静态路由（例如另一个插件或根项目里的 `60s`）能匹配开头，`60s fanyi 你好`、`60s douyin`、`60s fuel 四川` 就会被它吃掉，无参数的指令又会忽略多出来的词，日志照样是 `command_replied | executed`。现在按字面路径长度优先：字面词更多的路由先匹配，字面长度相同时静态路由仍先于参数路由。`<命名空间>` 与 `<命名空间> --help`（以及任意指令组的 `<组> --help`）列出该组下发送者能用的全部指令；某条指令的 `--help` 也列出它下面（至少多一个字面词）的子指令，参数指令不会把自己列进去。插件的 `commandNamespace` 与它自己的指令同名（命名空间 `60s` + 指令 `60s` → `60s 60s`）时，实例启动时记一条 `command_namespace_collision` 警告。
+  - `select-over-10-options-no-buttons`：core 不再只给 ≤10 项的 `select` 生成按钮，所有选项都交给端点；选择提示改为「回复序号或选项名称。」，不再声称「可以点击按钮」。适配器能力画像新增可选的 `segments.interactiveLimits.maxButtons`（`@zhin.js/adapter` 新增类型 `AdapterInteractiveLimits`）：原生按钮的端点超过上限时，前 N 项保留按钮，其余选项改成紧挨按钮的序号列表（回复序号或名称照常生效；整块键盘一起登记序号，列出的序号接在按钮之后，回复「1」仍是第一个按钮）；纯文本端点照旧降级为序号列表。QQ 官方、Discord、Slack 声明 25，Telegram 声明 100；Sandbox 不设上限，按钮较多时在气泡内滚动。`@zhin.js/core` 新增导出 `resolveOutboundMaxButtons()` / `applyOutboundButtonLimit()`。该字段与 Sandbox 全能力 ADR 草案 P3 的 `interactive` 对象形式（`{ buttons: { maxTotal } }`）对应：`maxButtons` 将折进 `maxTotal`，字符串形式的 `interactive` 继续作为简写有效；本批不新增 `select` 段。
+  - 猜谜（字谜 / 猜成语）：直接回复「提示」「跳过」「结束」（以及 hint / skip / end）按对应操作处理，卡片上写明可以这样回复。提示给出真实信息：成语给第 1 个字，字谜给包含答案的 4 个候选字；提示扣 3 分（分数不会低于 0）、不再清零连击，每局最多 3 次（分数为 0 时提示也不是无限免费）。「结束」（按钮或 `猜谜 quit`）公布当前题的答案并结算本局（已答题数、得分、最佳连击）。题库去掉重复的标点（「……活下去。。」）。
+  - `dungeon-entry-unhelpful`：`dungeon` / `地牢远征` / `地牢` 不带参数且当前频道没有队伍时显示帮助与开局方式（`dungeon start`）；指令新增别名「地牢」。群里的卡片是整个频道共用的，所以所有人看到同一套按钮、同样的序号（大厅：加入队伍 / 准备 / 开始远征 / 解散队伍），非队长点「开始」或「解散」会收到明确的拒绝；大厅里提示其他人回复「加入队伍」入队。结束远征先要求队长确认：确认请求记录在新的会话版本上，只有这张确认卡（或队长在它仍是最新状态时回复「确认结束」/ 序号）能结束远征，队伍之后有任何动作或选择「继续远征」都会让它失效；结束后给出结算（到达层数、清理房间数、队伍金币）。「你是不是想用」在指令名都不相近时也和插件显示名比对（带指令前缀时 `地牢探险` → 显示名为「地牢远征」的插件）；没有前缀（私聊、@机器人）时只按前一半逐字相同放宽的匹配要求这一半至少 4 个字，`天气不错`、`天气` 这类聊天不会被显示名「天气预报」截走。
+  - `60s-gold-currency-mixed`：金价按接口返回的单位写货币符号（美元用 `$`、人民币用 `¥`，其他币种不加符号）。
+
+- 2534b1d: 适配器不再替模型或用户在本机请求内网地址（#1250 第 46 批 `outbound-media-ssrf`）。
+
+  - 出站媒体在本机下载时统一走 `@zhin.js/core` 新增的 `fetchOutboundMedia()`：只下载公网 HTTPS；主机名解析出的地址只要有一个是私网、回环、链路本地或云元数据地址就拒绝；连接只连已校验的地址（防 DNS 重绑定，也不经环境代理重新解析）；重定向逐跳重新校验；默认最大 25 MB、30 秒。原先 Agent 回复里的任意 `http(s)` 媒体地址都会被直接 `fetch`，内网响应（例如 `http://169.254.169.254/…`）会作为图片或文件发进聊天。
+  - 涉及：飞书 / 企业微信 / 公众号的素材上传，iPad 微信图片（https 地址也不再交给 SDK 在本机下载），KOOK 卡片图片与 `uploadMedia`，Slack 文件，Discord 附件（不再让 discord.js 下载 URL），邮件附件（不再让 nodemailer 下载 URL），微信 iLink 媒体，ICQQ 媒体（不再让 SDK 下载 URL），QQ Markdown 图片尺寸探测。平台服务端自己下载 URL 的发送方式不变。
+  - 地址被拒时这条消息照常发出，该媒体换成说明文字（如「[图片未发送：媒体地址不被允许]」）；日志记 `op: outbound_media_url_blocked`（超过大小为 `outbound_media_too_large`）和主机名，不记完整地址。iPad 微信、ICQQ 的 https 媒体现在先在本机经上述校验下载，再以字节交给 SDK。
+  - 行为变化：不只是 Agent 回复，插件或指令主动发送的媒体，只要地址是内网、回环、链路本地、云元数据地址或 `http:`，且由适配器在本机下载，现在同样换成说明文字，不再下载发送；需要发送这类内容时请先读成字节（base64）再发。
+  - 下载有总时限（默认 30 秒，含 DNS 解析与排队；故意慢回的 DNS 不会拖过时限），本机同时最多 8 个出站媒体下载，其余排队，排队中同样受取消与时限控制；调用方传入的请求头（如 `Authorization`）只发给首个地址的同源（协议 + 主机 + 端口），跨源重定向时丢弃；TLS SNI 去掉主机名末尾的点。
+  - 飞书 / 企业微信 / 公众号 `resolveMediaBinary()` 的 `MediaResolveOptions.download` 保留但标为 `@deprecated` 且不再生效：URL 一律经 `fetchMedia`（默认 `fetchOutboundMedia`）下载，调用方不能借它绕过 SSRF 校验；请改用 `fetchMedia`。
+  - QQ 图片尺寸探测遇到忽略 `Range`、返回整图的服务器时按探测失败处理（降级为不带尺寸），不算地址被拒，日志降为 debug；KOOK `uploadMedia` 识别大写的 `HTTP(S)://` 地址。
+  - 入站识图、模型引用媒体的下载（`fetchUrlAsBase64`）改用同一套固定 IP 下载：此前预检 DNS 后由全局 `fetch` 连接，连接时会重新解析（DNS 重绑定，或在 `NODE_USE_ENV_PROXY=1` 时交给代理解析）。
+  - SSRF 地址规则、固定 IP 传输和 `fetchPublicMediaBytes()` 移到 `@zhin.js/kernel`（`@zhin.js/agent` 原导出保持不变）；`fetchPublicMediaBytes()` 新增可选 `allowedDomains`、`headers`，`NodeNetworkTransport` 可注入 `lookup` / `connect`。
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/page@1.2.2
+  - @zhin.js/agent-feature@1.1.21
+  - @zhin.js/permission@1.2.4
+  - @zhin.js/skill@1.1.21
+  - @zhin.js/tool@1.1.24
+
 ## 1.1.34
 
 ### Patch Changes

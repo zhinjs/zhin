@@ -1,5 +1,48 @@
 # @zhin.js/runtime
 
+## 1.6.1
+
+### Patch Changes
+
+- 49a1136: MCP 工具按聊天角色授权（ADR 0065 P0 + P1）。**行为变更：已经绑给聊天 Agent 的 MCP 服务器，升级后立刻收紧**——不写 `permit` 时，只有上游标注 `readOnlyHint: true` 的工具对所有人开放，其余工具（未标注、标注为写、`readOnlyHint` 与 `destructiveHint` 矛盾）只给全局主人 `owner@global`。迁移说明见 `docs/migrations/mcp-tool-permit.md`。
+
+  - 接入 MCP 服务器时保留上游 `annotations`，转成 `McpToolDescriptor.hints` / `ToolCapability.mcpHints`（只接受布尔值）。标注只决定权限档位，不放宽审批：MCP 工具仍是 `on-risk`，照常走审批、文件策略、网络白名单和硬闸。
+  - 配置：`ai.mcpServers[].permit`（`readOnly` / `default` / `tools`，值为 `everyone`、`deny`、一个 permit DSL 字符串或 DSL 数组），`ai.agents.<name>.mcpServers[]` 可写 `{ name, permit }`，与服务器级结果取 AND，只能收窄。`tools` 按上游原始工具名匹配：精确名优先，其次字面字符最多的 `*` 模式，并列时都要满足；非 ASCII 工具名只能被精确名命中。`everyone` / `deny` 放进数组、空数组、未知键、重复的模式、同一 Agent 里重复的服务器、DSL 写错（含已移除的 `master` 等）都会让启动报错。
+  - 每轮组装工具池时按本轮发送者的聊天角色过滤：没有权限的 MCP 工具不进工具池，`discover`、`load_tool` 和 `alwaysLoaded` 里都没有。执行前按角色存储里的当前角色再判一次；会话历史里重放的旧调用、回合中被撤销的角色、子 Agent 沿用的父回合能力都会被拒绝，记 `tool_denied`，`policy: 'mcp-permit'`。
+  - 定时任务按创建者当前的角色降一档运行，所以全局主人创建的任务默认也用不了「仅主人」的 MCP 工具；需要时在 `permit.tools` 里把该工具放宽到 `trusted`。A2A、zhin 自己的 MCP Server 入口同样只能用只读工具。
+  - 恢复旧行为写 `permit: { default: everyone }`（不推荐：普通成员发起的写操作在 `execApprovalMode: auto` 下经自动审核即可执行）。
+  - 修复：配置的 MCP 服务器投影给 Agent 的工具名带了一层多余的服务器前缀，调用上游时发送的也是带前缀的名字；现在使用上游报告的原始名。
+  - 修复：合并的群聊回合（ADR 0038）此前只收窄 `roles`，聊天角色仍取第一个发言者的，permit（含 MCP 工具档位）因此把 trusted / admin 成员的工具借给了同一合并窗口里的普通成员；现在聊天角色取所有成员共同持有的最低角色，层级取最窄的。
+  - 修复：`ai.agents.<name>.mcpServers`（含 Agent 层 `permit`）加入自我变更禁改名单，Agent 不能用 `self_change` 删掉收窄或给绑定加服务器。
+  - 修复：跨进程 A2A Mailbox 的远端信件一律按 `user` 运行、不带聊天角色。此前对端声明的 `authority.trust`（如 `trusted`）会变成本地角色，签名正确的远端信件因此能用开放给 `trusted` 的 MCP 工具和插件工具。
+  - 修复：读取上游 `annotations` 时只认工具自身的字段，继承来的 `readOnlyHint` 不算标注。
+  - `@zhin.js/runtime`：配置 schema 增加上述两处字段，`ai.agents.<name>.mcpServers` 标为安全敏感。
+
+- 5cfb5d7: 「旁听」用途和决策「旁听参与判断」合成一项「插话判断」`purposes.ambient`，旧配置自动迁移（ADR 0066 P1，行为变更）。
+
+  - 新的配置形状 `purposes.ambient: { profile, fallbacks, compare, minConfidence, mode, timeoutMs }`：主判断与备用链可以混排语言模型和决策模型（判断器按 Profile 的模型类型分派），`compare` 是只记录的对照模型，`minConfidence`（默认 0.7）是唯一的门槛，`mode: shadow` 是唯一的「只记录不插话」，`timeoutMs` 是决策模型成员的单次超时。字符串写法 `ambient: <profile>` 仍然有效；写入总是整项替换，`null` 清除。没写 `profile` 时继承部署聊天的主项和备用链（此时不能单独写 `fallbacks`）。只允许这 6 个键，Profile 必须存在、属于 Host、不能是图像模型，链内不能重复、不能包含 `profile`，`compare` 不能在链内；错误带路径（如 `purposes.ambient.fallbacks[1]`）。
+  - **行为变化**：旧配置在 Host 加载模型配置时自动迁移一次（一个 CAS 事务，同时写迁移记录，`before` 保存迁移前完整的 `purposes`）。原来决策「启用」并单独配置了旁听语言模型的部署，该语言模型成为第一个备用：决策模型超时、网络错误、5xx、回答无效或配额用完时由它接手插话（以前直接不插话）。门槛取原来两道门槛中较大的值，插话不会因此变多。决策「仅评估」迁移为对照模型，主判断与插话行为不变；决策「关闭」的 Profile 不迁移。`zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode` 在迁移时读入一次，之后不再生效（每个 generation 启动时警告一次）。迁移失败时不写数据库，本次按同一张表在内存里转换后运行，记 `ambient_judge_migration_failed`，下次加载重试。
+  - **降级前必须先回退**：新增 `zhin ai purposes revert ambient-judge`（只能经本机网关执行），在 `purposes.ambient` 自迁移后没被修改时恢复迁移前的旧写法；旧版本读不了含 `purposes.ambient` 的模型配置。回退后当前版本仍按旧写法换算运行，不会自动再迁移。
+  - `DecisionEngagementJudge` 不再设内部门槛（`DecisionEngagementJudgeOptions` 新增 `timeoutMs` / `mode`，`policy` 废弃），`AmbientEngagement` 只按 `purposes.ambient` 的门槛判一次，语言模型与决策模型都是 `engage && confidence ≥ minConfidence` 才插话。`DecisionPurpose` / `DECISION_TASKS` 去掉 `ambient`（决策用途剩五类）。
+  - 废弃期（本 minor 和下一个 minor）：导入 `purposes.decisions.ambient` 时按迁移表合并进 `purposes.ambient`，导入结果带警告（`warnings`，路径 `purposes.decisions.ambient`）；导出只写新形状。自我变更和聊天里的 `config set` 不能再写 `ai.trigger.ambient.minConfidence` / `mode`。
+  - 新增 `GET {base}/agent/inference/ambient-judge`（生效的插话判断与迁移记录，Host 管理员）、`POST …/ambient-judge/migration/noticed`、`POST …/cli/purposes/revert-ambient-judge`（本机 CLI）。
+  - `@zhin.js/runtime`：配置 schema 中两键的描述改为「已废弃」。
+
+- a8377d4: 已连接却没有任何 Agent 绑定的 MCP 服务器会被明确提示（zhinjs/zhin#1250 第 41 批 `mcp-connected-but-unbound`）：
+
+  - 原因：每一轮的 MCP 工具只取当前 Agent 在 `ai.agents.<name>.mcpServers` 里点名的服务器，`ai.mcpServers` 只负责连接。项目配了 `ai.mcpServers` 的 GitHub MCP、`zhin status` 显示「已连接，49 个工具」，但 `ai.agents.zhin: {}` 没写 `mcpServers`，Agent 一个 GitHub 工具都拿不到，只能默默改走网页搜索；文档和配置说明却写成「连接成功后进入工具池」。
+  - 文档与配置说明：中英文 `ai/index`、`configuration/index`、`ai/agent` 写清「`ai.mcpServers` 只负责连接，在 `ai.agents.<name>.mcpServers` 里绑定才能用」，并给出连接 + 绑定的完整示例；`ai.mcpServers` 与 `ai.agents.<key>.mcpServers` 的配置说明（Host 配置 Schema 与 `AgentStartupConfig` / `AgentBindingConfig` 注释）同步改写，`docs/configuration/generated.md` 由 `pnpm docs:config` 重新生成。
+  - `GET /introspection/mcp` 的每一行新增 `boundAgents`（`ConsoleMcpServerRow.boundAgents`，绑定该服务器的 Agent；运行中的 Agent 优先，没有时读配置文件；绑定项写成服务器名或 `{ name, … }` 对象都算绑定，ADR 0065 的对象写法落地后不会误报未绑定）。
+  - Console「需要你处理」新增 `mcp.unbound`（已登记到 `CONSOLE_ATTENTION_KINDS` 与 `CONSOLE_ATTENTION_KIND_PERMISSIONS`，权限 `status.view`）：已连接但没有任何 Agent 绑定的服务器列为「MCP 服务 github 已连接但没有 Agent 能用」，说明在 `ai.agents.<name>.mcpServers` 里绑定（例如 `ai.agents.zhin.mcpServers: [github]`）；实例运行时 `zhin doctor` 经同一个列表列出它。
+  - `zhin status` 的 MCP 行对这种服务器标 `!` 并注明「已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定」，已绑定的服务器列出绑定它的 Agent。
+  - Agent 就绪日志的 `mcp:` 段只列这个 Agent 真正绑定的服务器，没绑定的另起一段写成 `未绑定: github(待连接)`（如 `ready | zhin | mcp: - | 未绑定: github(待连接) | …`），不再像是已经绑给了它；调试日志相应写成 `mcp configured:`。
+  - MCP 工具本身的权限过滤不变。
+
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [1dc5324]
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+
 ## 1.6.0
 
 ### Minor Changes

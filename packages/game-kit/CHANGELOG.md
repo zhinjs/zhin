@@ -1,5 +1,21 @@
 # @zhin.js/game-shared
 
+## 1.1.33
+
+### Patch Changes
+
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/core@1.12.0
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/middleware@1.1.21
+
 ## 1.1.32
 
 ### Patch Changes

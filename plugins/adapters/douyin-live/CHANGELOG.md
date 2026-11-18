@@ -1,5 +1,19 @@
 # @zhin.js/adapter-douyin-live
 
+## 0.1.13
+
+### Patch Changes
+
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+
 ## 0.1.12
 
 ### Patch Changes

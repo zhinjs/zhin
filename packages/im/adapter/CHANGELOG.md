@@ -1,5 +1,44 @@
 # @zhin.js/adapter
 
+## 1.4.0
+
+### Minor Changes
+
+- 661cc7c: ADR 0064 P1：Sandbox 全能力渲染与回归守卫（含 P1b 非段能力）。
+
+  - `@zhin.js/core`：新增出站段目录 `OUTBOUND_SEGMENT_CATALOG`（类型名、所属 `messaging.segments.*` 能力、最小合法示例、归一后的类型），canonical 校验的 Core 扩展类型与 IM 投递过滤 `segmentsForImDelivery` 改为从目录派生，三处名单不再漂移；`card` 因此成为 IM 可见段（AI 出站段中的 `card` 不再被过滤）。`html: 'direct'` 的端点收到的 HTML 段没有 `width` 时，Core 盖章设计宽度 540（与 `image` 端点渲染图片的宽度一致，D5）。
+  - `@zhin.js/adapter`：能力画像 `messaging` 新增 `streaming: { mode, formats? } | false`（`mode` 与端点 `EndpointStreaming.mode` 同名：native / draft / card / edit，`none` 表示不流式；`formats` 为 text / markdown），可按会话类型声明，运行期只能收窄。装配期比较画像与端点 spec 的流式声明，不一致时记 `profile_streaming_mismatch` 警告（D11：先告警，P4 后改为装配失败）。新增导出 `profileStreamingMismatch()` 与类型 `ProfileStreamingMode`。
+  - `@zhin.js/client`：Markdown 解析器补齐行内图片 `![alt](src)`、嵌套行内格式（链接里的粗体、强调里的链接、`***粗斜体***`、徽章 `[![]()]()`）与嵌套列表；行内扫描改为不回溯的单遍扫描，未闭合的定界符保持线性。图片只接受 http(s) / blob 与栅格图片 base64 data URL（与媒体段同一白名单，拒绝 SVG 与脚本类型），不安全的链接与图片地址原样显示为文字，仍不注入任何原始 HTML。`MarkdownInline` 新增 `image` 与可选 `children`（`value` 始终是纯文本，忽略 `children` 的调用方仍可读），列表项新增可选 `children`；新增导出 `safeMarkdownImageSrc` 与类型 `MarkdownListItem`。IM 可见段补 `card`。
+  - `@zhin.js/adapter-sandbox`：页面的段渲染拆到 `pages/index/segments/`，导出覆盖整个出站段目录的 `SANDBOX_SEGMENT_RENDERERS`；新增文件卡片（名称、大小、下载链接；base64 以 `application/octet-stream` 下载，不渲染）、链接卡片、本地生成的二维码（与 Core 同一库，SVG，不联网）、TTS（浏览器朗读）；音乐卡片的 `audio` 可直接播放；HTML 卡片没有宽度时按 540 设计宽度排版再等比缩放；合并转发里的段用同一套渲染器显示。兜底渲染只用于历史数据与第三方命名空间段，开发构建中每种类型告警一次。画像声明 `messaging.streaming`（native，text / markdown）、`mention: { user, all }`、`quote`。P1b：端点 control 端口以 `recall` / `edit` / `reaction` 帧实现撤回（含他人消息）、编辑与表情回应（可取消），画像与 `actions` 同步声明，页面就地应用并持久化表情回应；没有在线页面时与发送一样返回未执行。新增依赖 `qrcode`（Core 已依赖，不增加安装体积）。朗读一条 TTS 消息时不会再被另一条消息的清理停掉；畸形的 card / keyboard 数据（`null` 条目、非数组的 rows）跳过该条目，不再让整个页面渲染失败。有设计宽度的 HTML 卡片（如 1080px 的指令菜单）按消息栏可用宽度缩放：iframe 改为绝对定位，不再参与外层宽度计算，所在气泡占满消息栏，页面不再被撑宽（#1250 `command-menu-unreadable-in-sandbox`）。
+  - `@zhin.js/adapter-lark` / `-qq` / `-slack` / `-telegram`：画像声明 `messaging.streaming`，与端点已有的流式实现一致（飞书 card、QQ 单聊 native、Slack native、Telegram 私聊 draft），避免新的装配期不一致告警。
+  - Sandbox 交互与真实平台一致（#1250 评论 6910730259）：
+    - `sandbox-action-button-id-dropped`：点击按钮发出的 action 段原先用 payload 顶替了按钮自己的 `id`，按按钮 id 识别按钮的插件（如 `activity:<id>:<n>`）在 Sandbox 里失效。现在与平台回调一致，`id` 是按钮 id、`payload` 是 payload（按钮没有 id 时才退回 payload）。
+    - `sandbox-submitted-without-feedback`：「已提交本次选择」只表示已送达。网关处理入站失败（`sandbox_gateway_receive_failed`）时端点把错误推回页面，显示在被点击的卡片旁；页面按消息结局（`/api/conversations/outcomes`）跟踪这次点击，`internal_error` 等失败显示为错误，一段时间内机器人既没有回复也没有结局时提示「没有收到机器人的处理结果」。同一张卡片上的多个按钮点一次后不再全部置灰（只有审批提示仍是单选），已点过的按钮带勾号。
+
+- 4ff83f3: 命名空间下的参数指令、超过 10 项的选择、猜谜与地牢远征的入口（#1250 第 37 批）。
+
+  - `command-namespace-param-commands-swallowed`：路由顺序原先是「所有静态路由先于所有带参数段的路由」，于是只要有一条更短的静态路由（例如另一个插件或根项目里的 `60s`）能匹配开头，`60s fanyi 你好`、`60s douyin`、`60s fuel 四川` 就会被它吃掉，无参数的指令又会忽略多出来的词，日志照样是 `command_replied | executed`。现在按字面路径长度优先：字面词更多的路由先匹配，字面长度相同时静态路由仍先于参数路由。`<命名空间>` 与 `<命名空间> --help`（以及任意指令组的 `<组> --help`）列出该组下发送者能用的全部指令；某条指令的 `--help` 也列出它下面（至少多一个字面词）的子指令，参数指令不会把自己列进去。插件的 `commandNamespace` 与它自己的指令同名（命名空间 `60s` + 指令 `60s` → `60s 60s`）时，实例启动时记一条 `command_namespace_collision` 警告。
+  - `select-over-10-options-no-buttons`：core 不再只给 ≤10 项的 `select` 生成按钮，所有选项都交给端点；选择提示改为「回复序号或选项名称。」，不再声称「可以点击按钮」。适配器能力画像新增可选的 `segments.interactiveLimits.maxButtons`（`@zhin.js/adapter` 新增类型 `AdapterInteractiveLimits`）：原生按钮的端点超过上限时，前 N 项保留按钮，其余选项改成紧挨按钮的序号列表（回复序号或名称照常生效；整块键盘一起登记序号，列出的序号接在按钮之后，回复「1」仍是第一个按钮）；纯文本端点照旧降级为序号列表。QQ 官方、Discord、Slack 声明 25，Telegram 声明 100；Sandbox 不设上限，按钮较多时在气泡内滚动。`@zhin.js/core` 新增导出 `resolveOutboundMaxButtons()` / `applyOutboundButtonLimit()`。该字段与 Sandbox 全能力 ADR 草案 P3 的 `interactive` 对象形式（`{ buttons: { maxTotal } }`）对应：`maxButtons` 将折进 `maxTotal`，字符串形式的 `interactive` 继续作为简写有效；本批不新增 `select` 段。
+  - 猜谜（字谜 / 猜成语）：直接回复「提示」「跳过」「结束」（以及 hint / skip / end）按对应操作处理，卡片上写明可以这样回复。提示给出真实信息：成语给第 1 个字，字谜给包含答案的 4 个候选字；提示扣 3 分（分数不会低于 0）、不再清零连击，每局最多 3 次（分数为 0 时提示也不是无限免费）。「结束」（按钮或 `猜谜 quit`）公布当前题的答案并结算本局（已答题数、得分、最佳连击）。题库去掉重复的标点（「……活下去。。」）。
+  - `dungeon-entry-unhelpful`：`dungeon` / `地牢远征` / `地牢` 不带参数且当前频道没有队伍时显示帮助与开局方式（`dungeon start`）；指令新增别名「地牢」。群里的卡片是整个频道共用的，所以所有人看到同一套按钮、同样的序号（大厅：加入队伍 / 准备 / 开始远征 / 解散队伍），非队长点「开始」或「解散」会收到明确的拒绝；大厅里提示其他人回复「加入队伍」入队。结束远征先要求队长确认：确认请求记录在新的会话版本上，只有这张确认卡（或队长在它仍是最新状态时回复「确认结束」/ 序号）能结束远征，队伍之后有任何动作或选择「继续远征」都会让它失效；结束后给出结算（到达层数、清理房间数、队伍金币）。「你是不是想用」在指令名都不相近时也和插件显示名比对（带指令前缀时 `地牢探险` → 显示名为「地牢远征」的插件）；没有前缀（私聊、@机器人）时只按前一半逐字相同放宽的匹配要求这一半至少 4 个字，`天气不错`、`天气` 这类聊天不会被显示名「天气预报」截走。
+  - `60s-gold-currency-mixed`：金价按接口返回的单位写货币符号（美元用 `$`、人民币用 `¥`，其他币种不加符号）。
+
+- 4bd5b64: 入站消息里的本机路径不再绕过文件策略被 Agent 读盘（#1250 第 44 批）。
+
+  - Agent 只读一种入站本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）：产出这条消息的端点在 specification 里声明了入站媒体目录（新增可选钩子 `inboundMedia: { roots() }`，`@zhin.js/adapter` 导出 `EndpointInboundMediaPort`、`endpointInboundMediaOf`、`endpointInboundMediaRoots`，`AdapterIndex.inboundMediaRoots`，`ImRuntime.inboundMediaRoots`），且解析符号链接和 `..` 后的真实路径落在目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。可信入口把目录写进 `TurnInput.inboundMediaRoots`。
+  - 其他路径一律不读：记录 `op=inbound_media_rejected`（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，回合照常进行。
+  - weixin-ilink 声明 `<dataDir>/<端点>/media/inbound`，email 在开启附件时声明 `attachments.downloadPath`，它们原有的入站媒体照常可读。其他适配器入站不产出本机路径。
+  - core 的旧字段兼容不再把 `data.file` 以 `/`、`./`、`~/` 开头的值猜成本机路径，统一视为平台不透明引用（`kind: 'file'`）；`data.path`、`data.file_path` 和 `media.kind: 'path'` 不变。可信插件代码若用 `data.file` 写本地文件，请改用 `data.path`。icqq 的 CQ 文本解析（如频道消息里用户写的 `[image:/root/.env]`）同样不再产出本机路径。Sandbox 端点继续拒绝形如本机路径的 `data.file`（`sandbox_media_rejected`），它本身不会签发这种标识。
+  - `normalizeMediaRefsToPayloads()`、`publishOutboundElements()`、`authorizeOutboundMediaPath()` 不传 authority 时改为不读任何本地路径（与 `NO_MEDIA_AUTHORITY` 相同，URL 抓取规则不变）；仓内调用点都已显式传入。第三方插件直接调用它们读工作区文件时，需要显式传 `{ filesystem: { workspaceRoot }, fileRole }`。
+  - 行为变化：NapCat / OneBot 实现给出的 `data.path`（实现端本机路径）不再被读取，没有 URL 的语音、文件在 Agent 里显示为无法读取的占位。
+
+### Patch Changes
+
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [1dc5324]
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+
 ## 1.3.3
 
 ### Patch Changes

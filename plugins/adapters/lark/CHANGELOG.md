@@ -1,5 +1,50 @@
 # @zhin.js/adapter-lark
 
+## 1.1.34
+
+### Patch Changes
+
+- 661cc7c: ADR 0064 P1：Sandbox 全能力渲染与回归守卫（含 P1b 非段能力）。
+
+  - `@zhin.js/core`：新增出站段目录 `OUTBOUND_SEGMENT_CATALOG`（类型名、所属 `messaging.segments.*` 能力、最小合法示例、归一后的类型），canonical 校验的 Core 扩展类型与 IM 投递过滤 `segmentsForImDelivery` 改为从目录派生，三处名单不再漂移；`card` 因此成为 IM 可见段（AI 出站段中的 `card` 不再被过滤）。`html: 'direct'` 的端点收到的 HTML 段没有 `width` 时，Core 盖章设计宽度 540（与 `image` 端点渲染图片的宽度一致，D5）。
+  - `@zhin.js/adapter`：能力画像 `messaging` 新增 `streaming: { mode, formats? } | false`（`mode` 与端点 `EndpointStreaming.mode` 同名：native / draft / card / edit，`none` 表示不流式；`formats` 为 text / markdown），可按会话类型声明，运行期只能收窄。装配期比较画像与端点 spec 的流式声明，不一致时记 `profile_streaming_mismatch` 警告（D11：先告警，P4 后改为装配失败）。新增导出 `profileStreamingMismatch()` 与类型 `ProfileStreamingMode`。
+  - `@zhin.js/client`：Markdown 解析器补齐行内图片 `![alt](src)`、嵌套行内格式（链接里的粗体、强调里的链接、`***粗斜体***`、徽章 `[![]()]()`）与嵌套列表；行内扫描改为不回溯的单遍扫描，未闭合的定界符保持线性。图片只接受 http(s) / blob 与栅格图片 base64 data URL（与媒体段同一白名单，拒绝 SVG 与脚本类型），不安全的链接与图片地址原样显示为文字，仍不注入任何原始 HTML。`MarkdownInline` 新增 `image` 与可选 `children`（`value` 始终是纯文本，忽略 `children` 的调用方仍可读），列表项新增可选 `children`；新增导出 `safeMarkdownImageSrc` 与类型 `MarkdownListItem`。IM 可见段补 `card`。
+  - `@zhin.js/adapter-sandbox`：页面的段渲染拆到 `pages/index/segments/`，导出覆盖整个出站段目录的 `SANDBOX_SEGMENT_RENDERERS`；新增文件卡片（名称、大小、下载链接；base64 以 `application/octet-stream` 下载，不渲染）、链接卡片、本地生成的二维码（与 Core 同一库，SVG，不联网）、TTS（浏览器朗读）；音乐卡片的 `audio` 可直接播放；HTML 卡片没有宽度时按 540 设计宽度排版再等比缩放；合并转发里的段用同一套渲染器显示。兜底渲染只用于历史数据与第三方命名空间段，开发构建中每种类型告警一次。画像声明 `messaging.streaming`（native，text / markdown）、`mention: { user, all }`、`quote`。P1b：端点 control 端口以 `recall` / `edit` / `reaction` 帧实现撤回（含他人消息）、编辑与表情回应（可取消），画像与 `actions` 同步声明，页面就地应用并持久化表情回应；没有在线页面时与发送一样返回未执行。新增依赖 `qrcode`（Core 已依赖，不增加安装体积）。朗读一条 TTS 消息时不会再被另一条消息的清理停掉；畸形的 card / keyboard 数据（`null` 条目、非数组的 rows）跳过该条目，不再让整个页面渲染失败。有设计宽度的 HTML 卡片（如 1080px 的指令菜单）按消息栏可用宽度缩放：iframe 改为绝对定位，不再参与外层宽度计算，所在气泡占满消息栏，页面不再被撑宽（#1250 `command-menu-unreadable-in-sandbox`）。
+  - `@zhin.js/adapter-lark` / `-qq` / `-slack` / `-telegram`：画像声明 `messaging.streaming`，与端点已有的流式实现一致（飞书 card、QQ 单聊 native、Slack native、Telegram 私聊 draft），避免新的装配期不一致告警。
+  - Sandbox 交互与真实平台一致（#1250 评论 6910730259）：
+    - `sandbox-action-button-id-dropped`：点击按钮发出的 action 段原先用 payload 顶替了按钮自己的 `id`，按按钮 id 识别按钮的插件（如 `activity:<id>:<n>`）在 Sandbox 里失效。现在与平台回调一致，`id` 是按钮 id、`payload` 是 payload（按钮没有 id 时才退回 payload）。
+    - `sandbox-submitted-without-feedback`：「已提交本次选择」只表示已送达。网关处理入站失败（`sandbox_gateway_receive_failed`）时端点把错误推回页面，显示在被点击的卡片旁；页面按消息结局（`/api/conversations/outcomes`）跟踪这次点击，`internal_error` 等失败显示为错误，一段时间内机器人既没有回复也没有结局时提示「没有收到机器人的处理结果」。同一张卡片上的多个按钮点一次后不再全部置灰（只有审批提示仍是单选），已点过的按钮带勾号。
+
+- 2534b1d: 适配器不再替模型或用户在本机请求内网地址（#1250 第 46 批 `outbound-media-ssrf`）。
+
+  - 出站媒体在本机下载时统一走 `@zhin.js/core` 新增的 `fetchOutboundMedia()`：只下载公网 HTTPS；主机名解析出的地址只要有一个是私网、回环、链路本地或云元数据地址就拒绝；连接只连已校验的地址（防 DNS 重绑定，也不经环境代理重新解析）；重定向逐跳重新校验；默认最大 25 MB、30 秒。原先 Agent 回复里的任意 `http(s)` 媒体地址都会被直接 `fetch`，内网响应（例如 `http://169.254.169.254/…`）会作为图片或文件发进聊天。
+  - 涉及：飞书 / 企业微信 / 公众号的素材上传，iPad 微信图片（https 地址也不再交给 SDK 在本机下载），KOOK 卡片图片与 `uploadMedia`，Slack 文件，Discord 附件（不再让 discord.js 下载 URL），邮件附件（不再让 nodemailer 下载 URL），微信 iLink 媒体，ICQQ 媒体（不再让 SDK 下载 URL），QQ Markdown 图片尺寸探测。平台服务端自己下载 URL 的发送方式不变。
+  - 地址被拒时这条消息照常发出，该媒体换成说明文字（如「[图片未发送：媒体地址不被允许]」）；日志记 `op: outbound_media_url_blocked`（超过大小为 `outbound_media_too_large`）和主机名，不记完整地址。iPad 微信、ICQQ 的 https 媒体现在先在本机经上述校验下载，再以字节交给 SDK。
+  - 行为变化：不只是 Agent 回复，插件或指令主动发送的媒体，只要地址是内网、回环、链路本地、云元数据地址或 `http:`，且由适配器在本机下载，现在同样换成说明文字，不再下载发送；需要发送这类内容时请先读成字节（base64）再发。
+  - 下载有总时限（默认 30 秒，含 DNS 解析与排队；故意慢回的 DNS 不会拖过时限），本机同时最多 8 个出站媒体下载，其余排队，排队中同样受取消与时限控制；调用方传入的请求头（如 `Authorization`）只发给首个地址的同源（协议 + 主机 + 端口），跨源重定向时丢弃；TLS SNI 去掉主机名末尾的点。
+  - 飞书 / 企业微信 / 公众号 `resolveMediaBinary()` 的 `MediaResolveOptions.download` 保留但标为 `@deprecated` 且不再生效：URL 一律经 `fetchMedia`（默认 `fetchOutboundMedia`）下载，调用方不能借它绕过 SSRF 校验；请改用 `fetchMedia`。
+  - QQ 图片尺寸探测遇到忽略 `Range`、返回整图的服务器时按探测失败处理（降级为不带尺寸），不算地址被拒，日志降为 debug；KOOK `uploadMedia` 识别大写的 `HTTP(S)://` 地址。
+  - 入站识图、模型引用媒体的下载（`fetchUrlAsBase64`）改用同一套固定 IP 下载：此前预检 DNS 后由全局 `fetch` 连接，连接时会重新解析（DNS 重绑定，或在 `NODE_USE_ENV_PROXY=1` 时交给代理解析）。
+  - SSRF 地址规则、固定 IP 传输和 `fetchPublicMediaBytes()` 移到 `@zhin.js/kernel`（`@zhin.js/agent` 原导出保持不变）；`fetchPublicMediaBytes()` 新增可选 `allowedDomains`、`headers`，`NodeNetworkTransport` 可注入 `lookup` / `connect`。
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/page@1.2.2
+  - @zhin.js/agent-feature@1.1.21
+  - @zhin.js/skill@1.1.21
+  - @zhin.js/tool@1.1.24
+
 ## 1.1.33
 
 ### Patch Changes
