@@ -154,7 +154,7 @@ describe('pinned request over real TLS', () => {
       connect: (url, _address, headers, signal, maxBytes) => pinnedConnect(url, '127.0.0.1', headers, signal, maxBytes),
     });
     const started = Date.now();
-    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/a.png`, { maxBytes: 4096, timeoutMs: 400, transport }))
+    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/a.png`, { maxBytes: 4096, allowedPorts: [server.port], timeoutMs: 400, transport }))
       .resolves.toMatchObject({ ok: false, code: 'failed' });
     expect(Date.now() - started).toBeLessThan(2_000);
   });
@@ -203,6 +203,7 @@ describe('pinned request — Content-Length', () => {
 });
 
 describe('fetchPublicMediaBytes over real HTTPS — redirect hops and headers', () => {
+  // The local test server listens on a random port; `allowedPorts` admits it on every hop (#1250 第 48 批).
   const DNS: Record<string, string> = {
     'media.test': '93.184.216.34',
     'next.example': '93.184.216.35',
@@ -240,7 +241,7 @@ describe('fetchPublicMediaBytes over real HTTPS — redirect hops and headers', 
   it('follows a redirect to another public host, checking and pinning each hop', async () => {
     const server = await redirectingServer();
     const net = transport();
-    const result = await fetchPublicMediaBytes(`https://media.test:${server.port}/to-next`, { maxBytes: 1024, transport: net.transport });
+    const result = await fetchPublicMediaBytes(`https://media.test:${server.port}/to-next`, { maxBytes: 1024, allowedPorts: [server.port], transport: net.transport });
     expect(result).toMatchObject({ ok: true, mimeType: 'image/png', url: `https://next.example:${server.port}/b.png` });
     expect(net.connected).toEqual([
       { host: 'media.test', address: '93.184.216.34' },
@@ -255,7 +256,7 @@ describe('fetchPublicMediaBytes over real HTTPS — redirect hops and headers', 
   ])('refuses a redirect to %s without connecting to it', async (_label, path, host) => {
     const server = await redirectingServer();
     const net = transport();
-    const result = await fetchPublicMediaBytes(`https://media.test:${server.port}${path}`, { maxBytes: 1024, transport: net.transport });
+    const result = await fetchPublicMediaBytes(`https://media.test:${server.port}${path}`, { maxBytes: 1024, allowedPorts: [server.port], transport: net.transport });
     expect(result).toMatchObject({ ok: false, code: 'blocked', host });
     expect(net.connected).toEqual([{ host: 'media.test', address: '93.184.216.34' }]);
     expect(server.seen).toHaveLength(1);
@@ -264,7 +265,7 @@ describe('fetchPublicMediaBytes over real HTTPS — redirect hops and headers', 
   it('drops caller headers on a cross-origin redirect (L2) and keeps them on the same origin', async () => {
     const server = await redirectingServer();
     const headers = { Authorization: 'Bearer secret', Range: 'bytes=0-63' };
-    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/to-next`, { maxBytes: 1024, headers, transport: transport().transport }))
+    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/to-next`, { maxBytes: 1024, allowedPorts: [server.port], headers, transport: transport().transport }))
       .resolves.toMatchObject({ ok: true });
     expect(server.seen[0]?.headers.authorization).toBe('Bearer secret');
     expect(server.seen[1]?.host).toBe(`next.example:${server.port}`);
@@ -272,7 +273,7 @@ describe('fetchPublicMediaBytes over real HTTPS — redirect hops and headers', 
     expect(server.seen[1]?.headers.range).toBeUndefined();
 
     server.seen.length = 0;
-    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/same-origin`, { maxBytes: 1024, headers, transport: transport().transport }))
+    await expect(fetchPublicMediaBytes(`https://media.test:${server.port}/same-origin`, { maxBytes: 1024, allowedPorts: [server.port], headers, transport: transport().transport }))
       .resolves.toMatchObject({ ok: true });
     expect(server.seen.map(seen => seen.headers.authorization)).toEqual(['Bearer secret', 'Bearer secret']);
   });

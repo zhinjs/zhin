@@ -105,7 +105,7 @@ export async function fetchSpeechAudio(
     ok: false as const,
     code: result.code === 'blocked' ? 'speech_url_blocked' as const : 'speech_url_fetch_failed' as const,
     ...(result.host ? { host: result.host } : {}),
-    detail: result.status !== undefined ? `${result.code}:${result.status}` : result.code,
+    detail: result.status !== undefined ? `${result.code}:${result.status}` : result.reason ? `${result.code}:${result.reason}` : result.code,
   });
 }
 
