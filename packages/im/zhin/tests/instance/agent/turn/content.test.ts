@@ -43,6 +43,19 @@ describe('Agent turn content boundary', () => {
     expect(transcribe).toHaveBeenCalledWith('https://media.example/voice.mp3', { origin: 'user' });
   });
 
+  it('passes the Endpoint\'s protocol-server origins only for a platform voice address (#1250 第 48 批)', async () => {
+    const transcribe = vi.fn(async () => 'voice transcript');
+    const platformOrigins = vi.fn(() => ['http://satori.example:5140']);
+    const segment = { segments: [{ type: 'audio', data: { media: { kind: 'url', value: 'http://satori.example:5140/v.amr' } } }], metadata: {}, content: '' } as unknown as Message;
+    await preprocessInboundTurn(segment, '', transcribe, { platformSegments: true, platformOrigins });
+    expect(transcribe).toHaveBeenCalledWith('http://satori.example:5140/v.amr', { origin: 'platform', trustedOrigins: ['http://satori.example:5140'] });
+
+    transcribe.mockClear(); platformOrigins.mockClear();
+    await preprocessInboundTurn(segment, '', transcribe, { platformSegments: false, platformOrigins });
+    expect(transcribe).toHaveBeenCalledWith('http://satori.example:5140/v.amr', { origin: 'user' });
+    expect(platformOrigins).not.toHaveBeenCalled();
+  });
+
   it('keeps the turn going with a note when the voice address is refused (#1250 第 45 批)', async () => {
     const transcribe = vi.fn(async () => ({ status: 'refused' as const, code: 'speech_url_blocked' as const }));
     const message = {
