@@ -73,7 +73,7 @@ describe('group-suite checkin aliases', () => {
   it('declares the compatibility aliases on the shipped commands', () => {
     expect(checkin.alias).toEqual(['checkin do', '签到']);
     expect(mypoints.alias).toEqual(['checkin streak', '积分', '我的积分']);
-    expect(rank.alias).toEqual(['checkin rank', '排行', '积分排行']);
+    expect(rank.alias).toEqual(['checkin rank', '积分排行']);
   });
 
   it('builds the full command index without overlapping routes', () => {
@@ -92,10 +92,15 @@ describe('group-suite checkin aliases', () => {
     // #1250 group-suite-zh-alias-partial: every word the replies use is a command too.
     ['积分', 'mypoints'],
     ['我的积分', 'mypoints'],
-    ['排行', 'rank'],
     ['积分排行', 'rank'],
   ])('routes %s to %s', async (input, expected) => {
     await expect(groupSuiteIndex().dispatch({ input })).resolves.toMatchObject({ status: 'executed', value: expected });
+  });
+
+  it('leaves 排行 to game-hub (#1250 group-suite-rank-alias-collides-game-hub)', () => {
+    // game-hub owns `排行 [query]`; a group-suite alias on the same word was skipped as a route conflict.
+    expect(rank.alias).not.toContain('排行');
+    expect(groupSuiteIndex().has('排行')).toBe(false);
   });
 
   it('keeps aliases under the instance commandNamespace', async () => {
@@ -110,6 +115,6 @@ describe('group-suite checkin aliases', () => {
     const byName = new Map(groupSuiteIndex().list().map((command) => [command.name, command]));
     expect(byName.get('checkin')?.alias).toEqual(['checkin do', '签到']);
     expect(byName.get('mypoints')?.alias).toEqual(['checkin streak', '积分', '我的积分']);
-    expect(byName.get('rank')?.alias).toEqual(['checkin rank', '排行', '积分排行']);
+    expect(byName.get('rank')?.alias).toEqual(['checkin rank', '积分排行']);
   });
 });
