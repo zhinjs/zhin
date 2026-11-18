@@ -76,4 +76,10 @@ describe('attention.list (Console attention inbox)', () => {
     expect(attentionItemId('speech.unavailable', { configPath: 'speech.tts.edgeTtsCommand' }))
       .toBe('speech.unavailable:configPath=speech.tts.edgeTtsCommand');
   });
+
+  it('registers mcp.unbound (#1250 第 41 批) as a status.view kind', () => {
+    expect(CONSOLE_ATTENTION_KINDS).toContain('mcp.unbound');
+    expect(CONSOLE_ATTENTION_KIND_PERMISSIONS['mcp.unbound']).toBe('status.view');
+    expect(Object.keys(CONSOLE_ATTENTION_KIND_PERMISSIONS).sort()).toEqual([...CONSOLE_ATTENTION_KINDS].sort());
+  });
 });

@@ -1,0 +1,208 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+const lookup = vi.hoisted(() => vi.fn());
+vi.mock('node:dns/promises', () => ({ lookup }));
+
+import type { NetworkTransport } from '../../src/security/turn-network-client.js';
+
+// The pinned transport lives in `@zhin.js/kernel`, which the Vitest setup file has already loaded with
+// the real resolver; reload the module graph so it binds the mocked `node:dns/promises`.
+let fetchPublicMediaBytes: typeof import('../../src/security/public-media-fetch.js').fetchPublicMediaBytes;
+let NodeNetworkTransport: typeof import('../../src/security/turn-network-client.js').NodeNetworkTransport;
+beforeAll(async () => {
+  vi.resetModules();
+  ({ fetchPublicMediaBytes } = await import('../../src/security/public-media-fetch.js'));
+  ({ NodeNetworkTransport } = await import('../../src/security/turn-network-client.js'));
+});
+
+type BinaryResponse = Awaited<ReturnType<NonNullable<NetworkTransport['requestBytes']>>>;
+
+function fakeTransport(responses: Record<string, BinaryResponse>) {
+  const requestBytes = vi.fn(async (url: URL) => {
+    const response = responses[url.href];
+    if (!response) throw new Error(`unexpected request to ${url.host}`);
+    return response;
+  });
+  const transport: NetworkTransport = { request: vi.fn(), requestBytes };
+  return { transport, requestBytes };
+}
+
+const ok = (body: Uint8Array, contentType = 'audio/ogg'): BinaryResponse =>
+  ({ status: 200, statusText: 'OK', headers: { 'content-type': contentType }, body });
+const redirect = (location: string): BinaryResponse =>
+  ({ status: 302, statusText: 'Found', headers: { location }, body: new Uint8Array() });
+
+afterEach(() => { lookup.mockReset(); });
+
+describe('fetchPublicMediaBytes (#1250 第 45 批 speech-url-ssrf)', () => {
+  it('refuses plain http without connecting', async () => {
+    const { transport, requestBytes } = fakeTransport({});
+    await expect(fetchPublicMediaBytes('http://media.example/a.ogg', { maxBytes: 1024, transport }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: 'media.example' });
+    expect(requestBytes).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'https://127.0.0.1/a.ogg',
+    'https://10.1.2.3/a.ogg',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/a.ogg',
+    'https://localhost/a.ogg',
+    'https://metadata.google.internal/a.ogg',
+    'file:///etc/passwd',
+    'not a url',
+  ])('refuses %s without connecting', async (url) => {
+    const { transport, requestBytes } = fakeTransport({});
+    await expect(fetchPublicMediaBytes(url, { maxBytes: 1024, transport }))
+      .resolves.toMatchObject({ ok: false, code: 'blocked' });
+    expect(requestBytes).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    // NAT64 (well-known and local-use), 6to4, Teredo, IPv4-compatible, site-local, discard: all reach
+    // an IPv4 or internal target and sit outside global unicast.
+    'https://[64:ff9b::a9fe:a9fe]/a.ogg',
+    'https://[64:ff9b:1::a00:1]/a.ogg',
+    'https://[2002:a9fe:a9fe::]/a.ogg',
+    'https://[2001:0:4136:e378:8000:63bf:f5ff:fffe]/a.ogg',
+    'https://[::7f00:1]/a.ogg',
+    'https://[fec0::1]/a.ogg',
+    'https://[100::1]/a.ogg',
+    'https://168.63.129.16/a.ogg',
+  ])('refuses the IPv4-embedding or host-internal literal %s without connecting', async (url) => {
+    const { transport, requestBytes } = fakeTransport({});
+    await expect(fetchPublicMediaBytes(url, { maxBytes: 1024, transport }))
+      .resolves.toMatchObject({ ok: false, code: 'blocked' });
+    expect(requestBytes).not.toHaveBeenCalled();
+  });
+
+  it('refuses a name whose only address is a NAT64 address of the metadata endpoint', async () => {
+    lookup.mockResolvedValue([{ address: '64:ff9b::a9fe:a9fe', family: 6 }]);
+    await expect(fetchPublicMediaBytes('https://voice.example/a.ogg', { maxBytes: 1024, transport: new NodeNetworkTransport() }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: 'voice.example' });
+  });
+
+  it('refuses a public-looking name that resolves to a private address, on the address the connection would use', async () => {
+    lookup.mockResolvedValue([{ address: '10.0.0.7', family: 4 }]);
+    const transport = new NodeNetworkTransport();
+    const connect = vi.spyOn(transport, 'requestBytes');
+    await expect(fetchPublicMediaBytes('https://voice.example/a.ogg', { maxBytes: 1024, transport }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: 'voice.example' });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith('voice.example', { all: true, verbatim: true });
+  });
+
+  it('refuses a name with any private address among public ones (rebinding answer set)', async () => {
+    lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }, { address: '127.0.0.1', family: 4 }]);
+    await expect(fetchPublicMediaBytes('https://voice.example/a.ogg', { maxBytes: 1024, transport: new NodeNetworkTransport() }))
+      .resolves.toMatchObject({ ok: false, code: 'blocked' });
+  });
+
+  it('checks every redirect hop: a redirect to an internal address is refused', async () => {
+    const { transport, requestBytes } = fakeTransport({
+      'https://cdn.example/a.ogg': redirect('https://169.254.169.254/latest/meta-data/'),
+    });
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: '169.254.169.254' });
+    expect(requestBytes).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a redirect to plain http and to a name resolving privately', async () => {
+    const http = fakeTransport({ 'https://cdn.example/a.ogg': redirect('http://cdn.example/a.ogg') });
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport: http.transport }))
+      .resolves.toMatchObject({ ok: false, code: 'blocked' });
+
+    lookup.mockImplementation(async (host: string) => [{ address: host === 'inner.example' ? '192.168.1.5' : '93.184.216.34', family: 4 }]);
+    const node = new NodeNetworkTransport();
+    vi.spyOn(node, 'requestBytes').mockImplementationOnce(async () => redirect('https://inner.example/a.ogg'));
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport: node }))
+      .resolves.toEqual({ ok: false, code: 'blocked', host: 'inner.example' });
+  });
+
+  it('downloads a public https address, following a public redirect', async () => {
+    const { transport } = fakeTransport({
+      'https://cdn.example/a.ogg': redirect('/b.ogg'),
+      'https://cdn.example/b.ogg': ok(Uint8Array.from([1, 2, 3]), 'audio/ogg; codecs=opus'),
+    });
+    const result = await fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport });
+    expect(result).toMatchObject({ ok: true, mimeType: 'audio/ogg', url: 'https://cdn.example/b.ogg' });
+    expect(result.ok && [...result.bytes]).toEqual([1, 2, 3]);
+  });
+
+  it('reports size, status and redirect-limit failures without the URL', async () => {
+    const big = fakeTransport({ 'https://cdn.example/a.ogg': ok(new Uint8Array(2048)) });
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport: big.transport }))
+      .resolves.toEqual({ ok: false, code: 'too_large', host: 'cdn.example' });
+
+    const tooLarge: NetworkTransport = {
+      request: vi.fn(),
+      requestBytes: vi.fn(async () => { throw new Error('Network response exceeds 1024 bytes'); }),
+    };
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport: tooLarge }))
+      .resolves.toMatchObject({ ok: false, code: 'too_large' });
+
+    const missing = fakeTransport({ 'https://cdn.example/a.ogg': { status: 404, statusText: 'Not Found', headers: {}, body: new Uint8Array() } });
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, transport: missing.transport }))
+      .resolves.toEqual({ ok: false, code: 'http_status', host: 'cdn.example', status: 404 });
+
+    const loop = fakeTransport({ 'https://cdn.example/a.ogg': redirect('https://cdn.example/a.ogg') });
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, maxRedirects: 2, transport: loop.transport }))
+      .resolves.toMatchObject({ ok: false, code: 'failed', status: 302 });
+    expect(loop.requestBytes).toHaveBeenCalledTimes(3);
+  });
+
+  describe('allowHttp (platform-produced voice links)', () => {
+    it('downloads a public http address only when allowed; the default stays HTTPS only', async () => {
+      const { transport, requestBytes } = fakeTransport({ 'http://multimedia.example/v.amr': ok(Uint8Array.from([7]), 'audio/amr') });
+      await expect(fetchPublicMediaBytes('http://multimedia.example/v.amr', { maxBytes: 1024, transport }))
+        .resolves.toMatchObject({ ok: false, code: 'blocked' });
+      expect(requestBytes).not.toHaveBeenCalled();
+      await expect(fetchPublicMediaBytes('http://multimedia.example/v.amr', { maxBytes: 1024, transport, allowHttp: true }))
+        .resolves.toMatchObject({ ok: true, mimeType: 'audio/amr' });
+    });
+
+    it.each(['http://127.0.0.1/v.amr', 'http://10.0.0.2/v.amr', 'http://169.254.169.254/latest/meta-data/', 'http://[64:ff9b::a00:1]/'])(
+      'still refuses the internal http address %s without connecting', async (url) => {
+        const { transport, requestBytes } = fakeTransport({});
+        await expect(fetchPublicMediaBytes(url, { maxBytes: 1024, transport, allowHttp: true }))
+          .resolves.toMatchObject({ ok: false, code: 'blocked' });
+        expect(requestBytes).not.toHaveBeenCalled();
+      });
+
+    it('refuses an http name resolving privately, on the pinned connection', async () => {
+      lookup.mockResolvedValue([{ address: '172.16.5.5', family: 4 }]);
+      await expect(fetchPublicMediaBytes('http://voice.example/v.amr', { maxBytes: 1024, transport: new NodeNetworkTransport(), allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: 'voice.example' });
+    });
+
+    it('never downgrades https to http on redirect; http to http is allowed and re-checked', async () => {
+      const down = fakeTransport({ 'https://cdn.example/v.amr': redirect('http://cdn.example/v.amr') });
+      await expect(fetchPublicMediaBytes('https://cdn.example/v.amr', { maxBytes: 1024, transport: down.transport, allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: 'cdn.example' });
+      expect(down.requestBytes).toHaveBeenCalledTimes(1);
+
+      const plain = fakeTransport({
+        'http://cdn.example/v.amr': redirect('http://cdn2.example/v.amr'),
+        'http://cdn2.example/v.amr': ok(Uint8Array.from([1])),
+      });
+      await expect(fetchPublicMediaBytes('http://cdn.example/v.amr', { maxBytes: 1024, transport: plain.transport, allowHttp: true }))
+        .resolves.toMatchObject({ ok: true, url: 'http://cdn2.example/v.amr' });
+
+      const inward = fakeTransport({ 'http://cdn.example/v.amr': redirect('http://192.168.0.1/admin') });
+      await expect(fetchPublicMediaBytes('http://cdn.example/v.amr', { maxBytes: 1024, transport: inward.transport, allowHttp: true }))
+        .resolves.toEqual({ ok: false, code: 'blocked', host: '192.168.0.1' });
+      expect(inward.requestBytes).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('gives up when the time budget runs out', async () => {
+    const hang: NetworkTransport = {
+      request: vi.fn(),
+      requestBytes: vi.fn((_url: URL, _headers: unknown, signal: AbortSignal) => new Promise<BinaryResponse>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      })),
+    };
+    await expect(fetchPublicMediaBytes('https://cdn.example/a.ogg', { maxBytes: 1024, timeoutMs: 20, transport: hang }))
+      .resolves.toMatchObject({ ok: false, code: 'failed' });
+  });
+});

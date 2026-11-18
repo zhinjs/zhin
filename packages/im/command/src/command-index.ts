@@ -4,7 +4,9 @@ import {
   type MessageSegment,
 } from 'segment-matcher';
 import {
+  disabledFeatureOwners,
   htmlRendererToken,
+  resolveFeatureTargetKey,
   resolveLocale,
   type CapabilityId,
   type CapabilitySlot,
@@ -13,7 +15,7 @@ import {
   type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
-import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   describeDeniedPermit,
   permissionHostToken,
@@ -23,7 +25,7 @@ import { commandAdapterMatches, toCommandPermissionSubject } from './permission-
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
 import { commandDescription, commandMessages } from './messages.js';
 import { userFacingErrorText, userFacingRefusalReason } from './user-facing-error.js';
-import { rankCommandSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate } from './command-suggestion.js';
+import { rankCommandSuggestions, rankDisplayNameSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate, type DisplayNameCandidate } from './command-suggestion.js';
 export type { CommandSuggestionConfig } from './command-suggestion.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
 export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
@@ -177,6 +179,8 @@ interface CommandMenuResult {
 interface CommandRecord extends CommandDescriptor {
   readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
   readonly segments: readonly string[];
+  /** The owner's `commandNamespace` words (empty without one). */
+  readonly namespace: readonly string[];
   readonly preferredSegments: Readonly<Partial<Record<Locale, readonly string[]>>>;
   readonly parameter?: CommandParameterDefinition;
   readonly pattern?: RegExp;
@@ -229,7 +233,9 @@ const DEFAULT_MENU_KEYWORDS = new Set(['菜单', '帮助', 'help', 'menu']);
 
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
+  readonly #slots: readonly Readonly<CapabilitySlot<CommandDefinition>>[];
   readonly #commands: readonly CommandRecord[];
+  readonly #endpointGated = new Map<string, CommandIndex>();
   readonly #routes: readonly CommandRoute[];
   readonly #shortcuts: ReadonlyMap<string, ShortcutEntry>;
   readonly #menu?: CommandMenuConfig;
@@ -241,6 +247,7 @@ export class CommandIndex {
     menu?: CommandMenuConfig,
   ) {
     this.#menu = menu;
+    this.#slots = slots;
     const commands: CommandRecord[] = [];
     const routes: CommandRoute[] = [];
     const occupancy = new Map<string, CommandRouteClaimant>();
@@ -395,6 +402,7 @@ export class CommandIndex {
         ...(slot.definition.match ? { match: String(slot.definition.match), pattern: slot.definition.match } : {}),
         slot,
         segments: Object.freeze(primarySegments),
+        namespace,
         // A preferred alias that was skipped (taken by another command) is not displayed.
         preferredSegments: Object.freeze(Object.fromEntries(Object.entries(slot.definition.preferredAliasI18n ?? {})
           .filter(([, entry]) => routedAliases.has(splitCommand(entry).join(' ')))
@@ -500,7 +508,11 @@ export class CommandIndex {
       words: route.segments.filter(segment => !segment.startsWith('$')),
       arity: route.record.parameters.length + Object.keys(route.record.options).length,
     }));
-    const ranked = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
+    const byName = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
+    // #1250: nothing resembles a command name — compare with the plugins' display names, which
+    // is what menus and help call a game (`地牢探险` → the plugin shown as `地牢远征`).
+    const ranked = byName.length > 0 ? byName
+      : rankDisplayNameSuggestions(text, this.#displayNameCandidates(operationSnapshot), { ...config, limit: Number.MAX_SAFE_INTEGER }, { explicitPrefix });
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const names: string[] = [];
     for (const record of ranked) {
@@ -510,6 +522,21 @@ export class CommandIndex {
       names.push(`${commandPrefix}${commandSuggestionName(record, locale)}`);
     }
     return names;
+  }
+
+  /** Each plugin's display names, pointing at its entry command (the shortest route it owns). */
+  #displayNameCandidates(snapshot: RuntimeSnapshot): DisplayNameCandidate<CommandRecord>[] {
+    const entry = new Map<PluginId, CommandRecord>();
+    for (const record of this.#commands) {
+      const current = entry.get(record.slot.owner);
+      if (!current || record.segments.length < current.segments.length) entry.set(record.slot.owner, record);
+    }
+    return [...entry].flatMap(([owner, record]) => {
+      const metadata = snapshot.tree.get(owner)?.metadata;
+      const names = [metadata?.displayName, ...Object.values(metadata?.displayNameI18n ?? {})]
+        .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+      return names.length > 0 ? [{ value: record, names }] : [];
+    });
   }
 
   /** Localized "no such command, did you mean …" reply, or `undefined` when nothing is similar. */
@@ -545,8 +572,23 @@ export class CommandIndex {
     }
   }
 
-  async dispatch({ input, source, interactionFactory, commandPrefix, snapshot: operationSnapshot = this.snapshot,
-    locale: localeOverride, operation: operationFactory }: CommandDispatchRequest): Promise<CommandDispatchResult> {
+  async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
+    const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
+    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(source) : undefined;
+    if (sourceSnapshot) {
+      // ADR 0050: a Plugin switched off for this message's endpoint has no commands there, also when a
+      // middleware/handler dispatches through the raw projection (Core's dispatcher passes a gated index).
+      const gated = this.#gatedForEndpoint(source, sourceSnapshot);
+      if (gated !== this) {
+        return gated.dispatch({ ...request, snapshot: sourceSnapshot,
+          operation: request.operation ?? readOperationInputResources(source, sourceSnapshot) });
+      }
+    }
+    const operationSnapshot = request.snapshot ?? sourceSnapshot ?? this.snapshot;
+    // A source that carries its own operation (a framework Message) also brings that operation's
+    // resources; an explicit snapshot or factory from the caller is used exactly as given.
+    const operationFactory = request.operation
+      ?? (sourceSnapshot ? readOperationInputResources(source, sourceSnapshot) : undefined);
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
@@ -569,7 +611,10 @@ export class CommandIndex {
     const match = routed ? withPattern(routed, input) : this.#matchPattern(input);
     if (!match) {
       const candidate = this.#invalidRoute(input);
-      if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
+      if (!candidate) {
+        const group = await this.#groupHelp(input, { prefix, source, snapshot: operationSnapshot, locale });
+        return group ?? Object.freeze({ matched: false, status: 'unmatched' });
+      }
       if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
       const candidateDenial = await this.#permitDenial(candidate, source, operationSnapshot);
       if (candidateDenial !== undefined) return this.#denied(candidate, candidateDenial, locale);
@@ -586,7 +631,9 @@ export class CommandIndex {
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
     const help = commandHelp(commandDisplayName(match.command, locale), definition, prefix, locale);
     if (match.helpRequested) {
-      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: help });
+      const subcommands = await this.#subcommandLines(staticPrefix(match.command.segments), { prefix, source, snapshot: operationSnapshot, locale });
+      const value = subcommands.length > 0 ? [help, '', commandMessages(locale, 'subcommandTitle'), ...subcommands].join('\n') : help;
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
     }
     const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource), locale);
     if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
@@ -615,6 +662,81 @@ export class CommandIndex {
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
     }
+  }
+
+  /**
+   * `<namespace>` / `<group> --help` (#1250): text that names a command group but no command lists
+   * the commands under it the sender may run. Without `--help` only a configured `commandNamespace`
+   * answers, so a chat word that happens to start a command path still reaches the Agent.
+   */
+  async #groupHelp(input: CommandMatchInput, context: GroupHelpContext): Promise<CommandDispatchResult | undefined> {
+    const text = exactMessageText(input);
+    if (text === undefined) return undefined;
+    const tokens = splitCommand(text);
+    const words = tokens.filter(token => token !== '--help' && token !== '-h');
+    if (words.length === 0) return undefined;
+    const helpFlag = words.length < tokens.length;
+    if (words.length + 1 < tokens.length) return undefined;
+    const isNamespace = this.#commands.some(record => record.namespace.length === words.length
+      && record.namespace.every((word, index) => word === words[index]));
+    if (!helpFlag && !isNamespace) return undefined;
+    const lines = await this.#subcommandLines(words, context);
+    if (lines.length === 0) return undefined;
+    const group = words.join(' ');
+    const owner = this.#commands.find(record => startsWithWords(record.segments, words))?.slot.owner ?? context.snapshot.root;
+    return Object.freeze({ matched: true, status: 'executed', command: group, owner,
+      value: [commandMessages(context.locale, 'groupTitle', { group: `${context.prefix}${group}` }), ...lines,
+        '', commandMessages(context.locale, 'helpHint', { command: `${context.prefix}${group} <…>` })].join('\n') });
+  }
+
+  /**
+   * Commands strictly under `words` that the sender may run, as menu lines. "Under" means at least
+   * one more literal word: `fanyi <text>` is not a subcommand of `fanyi`, so a parameter command's
+   * own `--help` does not list itself, and a bare `dungeon` does not list `dungeon [action]`.
+   */
+  async #subcommandLines(words: readonly string[], { prefix, source, snapshot, locale }: GroupHelpContext): Promise<readonly string[]> {
+    const lines: string[] = [];
+    for (const record of this.#commands) {
+      if (staticSegmentCount(record.segments) <= words.length || !startsWithWords(record.segments, words)) continue;
+      if (!(await this.#listable(record, source, snapshot))) continue;
+      if (source === undefined && (record.permit?.length ?? 0) > 0) continue;
+      const description = commandDescription(record.slot.definition, locale);
+      lines.push(`  ${prefix}${commandDisplayName(record, locale)}${description ? `  - ${description}` : ''}`);
+    }
+    return lines;
+  }
+
+  /**
+   * Issue #1250: this index was projected against a projection-time view of its generation, not the
+   * committed snapshot a message's operation runs on. Without an explicit `snapshot`, a source that
+   * carries an operation (a Message such as `context.input`) supplies that snapshot, so an index from
+   * `context.project()` in a middleware or handler dispatches as that message's real author. The
+   * operation's snapshot must hold this very index; one kept across a reload is refused.
+   */
+  #sourceSnapshot(source: unknown): RuntimeSnapshot | undefined {
+    const bound = readOperationInputSnapshot(source);
+    if (!bound) return undefined;
+    if (bound !== this.snapshot && ![...bound.projections.values()].includes(this)) {
+      throw new Error(`This CommandIndex (generation ${this.snapshot.generation}) is not the command projection of the message's generation `
+        + `${bound.generation}: resolve it with context.project(commandFeatureId) inside the current middleware/handler `
+        + 'instead of keeping it across a reload. See docs/authoring/commands.md#dispatch-from-middleware.');
+    }
+    return bound;
+  }
+
+  /** This index without the commands of owners disabled for `source`'s endpoint in `snapshot` (ADR 0050 §6). */
+  #gatedForEndpoint(source: unknown, snapshot: RuntimeSnapshot): CommandIndex {
+    let key: string | undefined;
+    try { key = resolveFeatureTargetKey(snapshot, source as Parameters<typeof resolveFeatureTargetKey>[1]); } catch { return this; }
+    const disabled = disabledFeatureOwners(snapshot, snapshot.tree.keys(), key);
+    if (disabled.size === 0 || !this.#slots.some(slot => disabled.has(slot.owner))) return this;
+    const cacheKey = [...disabled].sort().join('\0');
+    let gated = this.#endpointGated.get(cacheKey);
+    if (!gated) {
+      gated = new CommandIndex(this.#slots.filter(slot => !disabled.has(slot.owner)), snapshot, this.#menu);
+      this.#endpointGated.set(cacheKey, gated);
+    }
+    return gated;
   }
 
   #denied(record: CommandRecord, permit: string | null, locale: Locale): CommandDispatchResult {
@@ -885,6 +1007,23 @@ export class CommandIndex {
       page, pages, locale, commandTotal: menu.commandTotal, pluginTotal: menu.pluginTotal, appearance: menu.appearance,
     }) };
   }
+}
+
+interface GroupHelpContext {
+  readonly prefix: string;
+  readonly source: unknown;
+  readonly snapshot: RuntimeSnapshot;
+  readonly locale: Locale;
+}
+
+function startsWithWords(segments: readonly string[], words: readonly string[]): boolean {
+  return words.every((word, index) => segments[index] === word);
+}
+
+/** The literal words before a route's parameter segment. */
+function staticPrefix(segments: readonly string[]): readonly string[] {
+  const at = segments.findIndex(segment => segment.startsWith('$'));
+  return at === -1 ? segments : segments.slice(0, at);
 }
 
 function commandDisplaySegments(record: CommandRecord, locale: Locale): readonly string[] {
@@ -1296,9 +1435,14 @@ function compareRecords(left: CommandRecord, right: CommandRecord): number {
   return left.name.localeCompare(right.name);
 }
 
+/**
+ * Route precedence: the longer literal path first (#1250 command-namespace-param-commands-swallowed:
+ * `60s fanyi <text>` must beat a bare `60s` command that would otherwise take `fanyi 你好` as
+ * ignored trailing words), then a static route before a dynamic one of the same literal length.
+ */
 function compareRoutes(left: CommandRoute, right: CommandRoute): number {
-  return dynamicWeight(left) - dynamicWeight(right)
-    || staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
+  return staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
+    || dynamicWeight(left) - dynamicWeight(right)
     || right.segments.length - left.segments.length
     || right.record.name.length - left.record.name.length
     || left.record.name.localeCompare(right.record.name);
@@ -1391,6 +1535,7 @@ function withPattern(match: CommandMatch, input: CommandMatchInput): CommandMatc
 function toDescriptor({
   slot: _slot,
   segments: _segments,
+  namespace: _namespace,
   parameter: _parameter,
   pattern: _pattern,
   ...descriptor

@@ -221,11 +221,16 @@ it('limits Host chat writes to HOST_CONFIG_PATCH_PATHS through the real message 
     }
     expect(patch).not.toHaveBeenCalled();
     expect(await f.document.readSource()).toEqual(before);
+    // ADR 0066 D5.7: the retired `mode` is out of chat scope; other ambient leaves stay writable.
     await f.receive('!!config set ai.trigger.ambient.mode -- shadow');
+    expect(lastReply(f.client)).not.toContain('Configuration saved.');
+    expect(patch).not.toHaveBeenCalled();
+    expect(await f.document.readSource()).toEqual(before);
+    await f.receive('!!config set ai.trigger.ambient.quietMs -- 5000');
     expect(lastReply(f.client)).toContain('Configuration saved.');
-    expect((await f.document.readSource()).document).toMatchObject({ ai: { trigger: { ambient: { mode: 'shadow' } } } });
-    await f.receive('!!config get ai.trigger.ambient.mode');
-    expect(lastReply(f.client)).toContain('"shadow"');
+    expect((await f.document.readSource()).document).toMatchObject({ ai: { trigger: { ambient: { quietMs: 5000 } } } });
+    await f.receive('!!config get ai.trigger.ambient.quietMs');
+    expect(lastReply(f.client)).toContain('5000');
   } finally { await f.close(); }
 });
 
@@ -409,7 +414,8 @@ it('lists only manageable leaves and types and registers exactly fields/get/set/
     expect(listed).toContain('bot.count: integer');
     expect(listed).not.toMatch(/token|master|endpoints|DO_NOT_DISCLOSE|Before/);
     await f.receive('!!config fields');
-    expect(lastReply(f.client)).toContain('ai.trigger.ambient.mode: string');
+    expect(lastReply(f.client)).toContain('ai.trigger.ambient.quietMs:');
+    expect(lastReply(f.client)).not.toContain('ai.trigger.ambient.mode');
     expect(lastReply(f.client)).not.toMatch(/^locale|^http|DO_NOT_DISCLOSE/mu);
     await f.receive('!!config fields locale');
     expect(lastReply(f.client)).toBe('This configuration is outside the chat-manageable scope. Use the local CLI.');

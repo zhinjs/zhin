@@ -16,7 +16,7 @@ import { ReminderService } from '../src/service.js';
 import { reminderServiceToken } from '../src/runtime.js';
 import type { ReminderConfig } from '../src/config.js';
 
-async function fixture(options: { afterSend?: (count: number) => void; locale?: 'zh-CN' | 'en'; prefix?: string } = {}) {
+async function fixture(options: { afterSend?: (count: number) => void; locale?: 'zh-CN' | 'en'; prefix?: string; interactive?: 'native' | 'text' } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'zhin-create-reminder-'));
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'state.sqlite') }); await database.start();
   const root = rootPluginId(); const owner = childPluginId(root, 'personal'); const sent: EndpointSendRequest[] = []; let uncertainIn = 0;
@@ -41,7 +41,7 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
   class MemoryAdapter extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }
   const slots = ['first', 'second'].map(localName => createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName,
     source: `/adapters/${localName}/index.ts`, definition: defineAdapter({ capabilities: ['inbound', 'outbound'],
-      segments: { interactive: 'text', markdown: 'text', outboundMedia: ['url'] }, createAdapter: () => new MemoryAdapter() }) }));
+      segments: { interactive: options.interactive ?? 'text', markdown: options.interactive === 'native' ? 'native' : 'text', outboundMedia: ['url'] }, createAdapter: () => new MemoryAdapter() }) }));
   const command = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'remind/create',
     source: '/commands/remind/create/index.ts', definition: create });
   const requesters: string[] = [];
@@ -102,6 +102,57 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('When should I remind you?'));
       await f.receive('cancel'); await incomplete;
       expect(rendered(f.sent)).toContain('Cancelled. No reminder was created.');
+    } finally { await f.close(); }
+  });
+
+  it('puts the preview and native 确认 / 取消 buttons in one message, and a click answers it (#1250)', async () => {
+    const f = await fixture({ interactive: 'native' }); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const pending = f.receive('/remind create 10分钟后 喝水');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      expect(f.sent).toHaveLength(1);
+      const segments = f.sent[0]!.payload as Array<{ type: string; data: Record<string, unknown> }>;
+      const markdown = segments.find(segment => segment.type === 'markdown')!.data.content as string;
+      expect(markdown).toContain('正文（原样显示）');
+      expect(markdown).toContain('喝水');
+      expect(markdown).toContain('UTC');
+      const keyboard = segments.find(segment => segment.type === 'keyboard')!.data as { rows: Array<Array<{ label: string; payload: string }>> };
+      const buttons = keyboard.rows.flat();
+      expect(buttons.map(button => button.label)).toEqual(['确认', '取消']);
+      // Another participant's click is never the starter's answer.
+      await f.receive('', { sender: { id: 'bob' }, segments: [{ type: 'action', data: { id: 'interaction-1', payload: buttons[0]!.payload } }] });
+      expect(f.added).not.toHaveBeenCalled();
+      await f.receive('', { segments: [{ type: 'action', data: { id: 'interaction-1', payload: buttons[0]!.payload } }] }); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+      expect(await f.service.list({ senderId: 'alice', target: f.conversation })).toMatchObject([{ text: '喝水' }]);
+    } finally { await f.close(); }
+  });
+
+  it('cancels from the 取消 button without writing', async () => {
+    const f = await fixture({ interactive: 'native' });
+    try {
+      const pending = f.receive('/remind create 10分钟后 喝水');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const segments = f.sent[0]!.payload as Array<{ type: string; data: Record<string, unknown> }>;
+      const buttons = (segments.find(segment => segment.type === 'keyboard')!.data as { rows: Array<Array<{ payload: string }>> }).rows.flat();
+      await f.receive('', { segments: [{ type: 'action', data: { id: 'interaction-2', payload: buttons[1]!.payload } }] }); await pending;
+      expect(f.added).not.toHaveBeenCalled();
+      expect(rendered(f.sent)).toContain('已取消，未创建提醒。');
+    } finally { await f.close(); }
+  });
+
+  it('keeps underscores, Markdown and backticks in the account, scene and text literal on Markdown endpoints', async () => {
+    const f = await fixture({ interactive: 'native' }); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const text = '**不是粗体** `code` ```` fence';
+      const pending = f.receive(`/remind create 10分钟后 ${text}`, { conversation: { ...f.conversation, threadId: 'topic_a_b' } });
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const segments = f.sent[0]!.payload as Array<{ type: string; data: Record<string, unknown> }>;
+      const markdown = segments.find(segment => segment.type === 'markdown')!.data.content as string;
+      expect(markdown).toContain(`\`\`\`\`\`\n${text}\n\`\`\`\`\``);
+      expect(markdown).toContain('`channel room; 父容器 channel parent; 话题 topic_a_b`');
+      await f.receive('取消', { conversation: { ...f.conversation, threadId: 'topic_a_b' } }); await pending;
+      expect(f.added).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });
 
@@ -194,8 +245,11 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       const text = '**正文** [链接](https://example.org/a_b)\n```literal```\n<h1>不是HTML</h1> # 不应伪装为标题';
       const pending = f.receive(`/remind create "明天 上午九点" ${text}`);
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      // One message (preview + confirmation); on this text-only endpoint the Markdown prompt and its
+      // buttons degrade to text, and the reminder text survives verbatim (fenced, never interpreted).
+      expect(f.sent).toHaveLength(1);
       const content = f.sent[0]!.payload as Array<{ type: string; data: { text?: string } }>;
-      expect(content).toHaveLength(1); expect(content[0]!.type).toBe('text');
+      expect(content.every(segment => segment.type === 'text')).toBe(true);
       expect(f.requesters[0]).toBe(f.owner);
       expect(content.map(segment => segment.data.text ?? '').join('')).toContain(text);
       expect(rendered(f.sent)).toContain('2027-01-16 09:00:00');
@@ -306,7 +360,7 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
   it('does not create or retry when the confirmation question has unknown delivery', async () => {
     const f = await fixture();
     try {
-      f.failPrompt(2); await f.receive('/remind create 10分钟后 正文');
+      f.failPrompt(); await f.receive('/remind create 10分钟后 正文');
       await f.receive('确认');
       expect(f.added).not.toHaveBeenCalled();
       expect(f.sent.filter(item => JSON.stringify(item.payload).includes('确认创建这条提醒'))).toHaveLength(1);
@@ -314,32 +368,42 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
-  it('reports an elapsed total deadline during preview delivery without asking or writing', async () => {
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
-    const f = await fixture({ afterSend: count => { if (count === 1) clock.mockReturnValue(1_800_000_181_000); } });
+  // The preview is the confirmation prompt itself (#1250), so a deadline that elapses while it is
+  // delivered leaves nothing to answer: a late confirmation is not taken, nothing is written and
+  // exactly one timeout notice follows.
+  it('reports an elapsed total deadline during prompt delivery once and never writes on a late confirmation', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] }); vi.setSystemTime(1_800_000_000_000);
+    const f = await fixture({ afterSend: count => { if (count === 1) vi.setSystemTime(1_800_000_181_000); } });
     try {
-      await f.receive('/remind create 10分钟后 正文');
+      const pending = f.receive('/remind create 10分钟后 正文');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建这条提醒'));
+      await f.receive('确认');
       expect(f.added).not.toHaveBeenCalled();
-      expect(rendered(f.sent)).not.toContain('确认创建这条提醒');
+      await vi.advanceTimersByTimeAsync(61_000); await pending;
+      expect(f.added).not.toHaveBeenCalled();
       expect(f.sent.filter(item => JSON.stringify(item.payload).includes('提醒输入超时，未创建提醒'))).toHaveLength(1);
-    } finally { await f.close(); }
+      expect(await f.service.list({ senderId: 'alice', target: f.conversation })).toEqual([]);
+    } finally { vi.useRealTimers(); await f.close(); }
   });
 
-  it('sends one timeout without asking or writing when retained preview delivery crosses HMR and the total deadline', async () => {
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+  // An expired prompt is not retained across HMR: Core retires its operation, which can no longer
+  // send, so the flow ends without writing, re-prompting or a late notice from the retired author.
+  it('never writes or re-prompts when retained prompt delivery crosses HMR and the total deadline', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] }); vi.setSystemTime(1_800_000_000_000);
     const f: Awaited<ReturnType<typeof fixture>> = await fixture({ afterSend: count => {
       if (count !== 1) return;
       f.store.commit(0, { snapshot: f.store.current, dispose() {} });
-      clock.mockReturnValue(1_800_000_181_000);
+      vi.setSystemTime(1_800_000_181_000);
     } });
     try {
-      await f.receive('/remind create 10分钟后 old-preview');
-      expect(f.sent).toHaveLength(2);
-      expect(rendered(f.sent)).toContain('old-preview');
-      expect(f.sent.filter(item => JSON.stringify(item.payload).includes('提醒输入超时，未创建提醒'))).toHaveLength(1);
-      expect(rendered(f.sent)).not.toContain('确认创建这条提醒');
+      const pending = f.receive('/remind create 10分钟后 old-preview');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('old-preview'));
+      await f.receive('确认');
+      await vi.advanceTimersByTimeAsync(61_000); await pending;
+      expect(f.sent).toHaveLength(1);
       expect(f.added).not.toHaveBeenCalled();
-    } finally { await f.close(); }
+      expect(await f.service.list({ senderId: 'alice', target: f.conversation })).toEqual([]);
+    } finally { vi.useRealTimers(); await f.close(); }
   });
 
   it('keeps help and non-IM execution read-only', async () => {

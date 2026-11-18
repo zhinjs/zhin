@@ -258,6 +258,7 @@ async function* runInteractiveTurn(
       providerInput,
       transcriber: host.audioTranscriber,
       perception: host.mediaPerception,
+      ...(context.turn.input.inboundMediaRoots ? { inboundMediaRoots: context.turn.input.inboundMediaRoots } : {}),
     },
   );
   for (const [index, outcome] of media.outcomes.entries()) {

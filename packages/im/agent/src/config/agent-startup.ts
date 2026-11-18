@@ -115,8 +115,10 @@ export interface AgentStartupConfig {
     enabled?: boolean;
   };
   /**
-   * External MCP servers for the Agent MCP client (global, all bots).
-   * Listed servers are exposed to ZhinAgent tool pool when connected.
+   * 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在
+   * `ai.agents.<name>.mcpServers` 里写上服务器的 `name`，对应的 Agent 才能调用它的工具
+   * （例：`ai.agents.zhin.mcpServers: [github]`）。没有任何 Agent 绑定的服务器，
+   * `zhin status`、`zhin doctor` 与 Console「需要你处理」会提示。
    */
   mcpServers?: Array<{
     name: string;
@@ -126,6 +128,11 @@ export interface AgentStartupConfig {
     args?: string[];
     env?: Record<string, string>;
     headers?: Record<string, string>;
+    /**
+     * ADR 0065: who may use each tool. Omitted keys default to `readOnly: everyone`,
+     * `default: owner@global`, `tools: {}`.
+     */
+    permit?: McpToolPermitConfig;
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
@@ -305,4 +312,14 @@ export interface AgentStartupConfig {
     /** 状态感知（#996）：禁言/入群申请/成员进出/公告/戳 Bot 等高优先社交事件可独立唤醒回合 */
     sceneEvents?: SceneEventWakeConfig;
   };
+}
+
+/** One tier in config: `everyone`, `deny`, a permit DSL string, or a non-empty list of them (AND). */
+export type McpPermitConfigValue = string | readonly string[];
+
+/** `ai.mcpServers[].permit` / `ai.agents.<name>.mcpServers[].permit` as written in config (ADR 0065 D2). */
+export interface McpToolPermitConfig {
+  readonly readOnly?: McpPermitConfigValue;
+  readonly default?: McpPermitConfigValue;
+  readonly tools?: Readonly<Record<string, McpPermitConfigValue>>;
 }

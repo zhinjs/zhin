@@ -317,7 +317,7 @@
           "$ref": "#/$defs/aiPlanLanguagePurpose"
         },
         "ambient": {
-          "$ref": "#/$defs/aiPlanLanguagePurpose"
+          "$ref": "#/$defs/aiPlanAmbientJudge"
         },
         "image": {
           "anyOf": [
@@ -684,7 +684,9 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "deprecated": true,
+              "description": "已废弃（ADR 0066）：改写 purposes.ambient；废弃期内按迁移表合并转换并给出警告"
             }
           }
         },
@@ -806,6 +808,64 @@
           }
         }
       }
+    },
+    "aiPlanAmbientJudge": {
+      "description": "插话判断（ADR 0066）：群里没人叫机器人时决定要不要插话。字符串等同于 { profile }；null 清除整项。",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "minLength": 1,
+              "description": "主判断：语言或决策 Profile；省略时跟随部署聊天的主项和备用链"
+            },
+            "fallbacks": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "备用链，语言与决策 Profile 可以混排；只能与 profile 一起写"
+            },
+            "compare": {
+              "type": "string",
+              "minLength": 1,
+              "description": "对照模型：同一输入判一次，只记录、不作决定"
+            },
+            "minConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "唯一的门槛，默认 0.7"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "active",
+                "shadow"
+              ],
+              "description": "shadow：只记录、不插话；默认 active"
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647,
+              "description": "决策模型成员的单次超时，默认 3000"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   }
 }

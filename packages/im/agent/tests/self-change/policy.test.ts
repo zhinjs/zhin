@@ -11,6 +11,7 @@ import {
   assertConfigPatchAllowed,
   canTransitionSelfChange,
   findForbiddenConfigKey,
+  findRetiredConfigKey,
   isSelfChangeTerminal,
   normalizeChangeConfigPatch,
   normalizeChangeTarget,
@@ -155,6 +156,28 @@ describe('config patch', () => {
     expect(new Set(SELF_CHANGE_SECURITY_CONFIG_KEYS).size).toBe(SELF_CHANGE_SECURITY_CONFIG_KEYS.length);
   });
 
+  it('protects every Agent binding\'s MCP servers and Agent-level permit (ADR 0065 D2.4)', () => {
+    const reject = (path: readonly string[]) => {
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'set', path, value: [] }] }))
+        .toThrow(SelfChangeConfigKeyError);
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'remove', path }] }))
+        .toThrow(SelfChangeConfigKeyError);
+    };
+    // Dropping the Agent-level narrowing, or binding another server, widens what the Agent can use.
+    reject(['ai', 'agents', 'helper', 'mcpServers']);
+    reject(['ai', 'agents', 'helper', 'mcpServers', '0', 'permit']);
+    reject(['ai', 'agents', 'zhin', 'mcpServers', '1']);
+    // Overwriting or removing the binding (or every binding) replaces its mcpServers too.
+    reject(['ai', 'agents', 'helper']);
+    reject(['ai', 'agents']);
+    expect(findForbiddenConfigKey(['ai', 'agents', 'helper', 'mcpServers', '0'])).toEqual(['ai', 'agents', '*', 'mcpServers']);
+    // Other binding fields stay changeable.
+    expect(findForbiddenConfigKey(['ai', 'agents', 'helper', 'nickname'])).toBeNull();
+    expect(normalizeChangeConfigPatch({
+      expectedRevision: 'r1', patches: [{ op: 'set', path: ['ai', 'agents', 'helper', 'nickname'], value: 'Helper' }],
+    }).patches).toHaveLength(1);
+  });
+
   it('finds the forbidden key a path touches and re-checks normalized patches', () => {
     expect(findForbiddenConfigKey(['ai', 'agent', 'execSecurity', 'mode'])).toEqual(['ai', 'agent', 'execSecurity']);
     expect(findForbiddenConfigKey(['ai', 'agent', 'maxIterations'])).toBeNull();
@@ -210,15 +233,20 @@ function isSchemaNode(value: unknown): value is SchemaNode {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** 只沿 `properties` 走（宿主配置的固定字段）；返回所有标了 `x-zhin-config.security` 的点分路径。 */
+/**
+ * 沿 `properties`（宿主配置的固定字段）和对象形式的 `additionalProperties`（记作 `*` 段）走；
+ * 返回所有标了 `x-zhin-config.security` 的点分路径。
+ */
 function collectSecurityTaggedKeys(node: SchemaNode, path: readonly string[], found: string[]): string[] {
   const metadata = node['x-zhin-config'];
   if (isSchemaNode(metadata) && metadata.security === true) found.push(path.join('.'));
   const properties = node.properties;
-  if (!isSchemaNode(properties)) return found;
-  for (const [key, child] of Object.entries(properties)) {
-    if (isSchemaNode(child)) collectSecurityTaggedKeys(child, [...path, key], found);
+  if (isSchemaNode(properties)) {
+    for (const [key, child] of Object.entries(properties)) {
+      if (isSchemaNode(child)) collectSecurityTaggedKeys(child, [...path, key], found);
+    }
   }
+  if (isSchemaNode(node.additionalProperties)) collectSecurityTaggedKeys(node.additionalProperties, [...path, '*'], found);
   return found;
 }
 
@@ -243,5 +271,23 @@ describe('decision outcome', () => {
   // The change record ends `failed` (stopped for manual verification); the decision event stays `defer`.
   it.each(['change_config_unconfirmed', 'change_config_superseded'] as const)('maps %s to defer, not error or deny', code => {
     expect(selfChangeOutcome(code)).toBe('defer');
+  });
+});
+
+describe('retired interjection keys (ADR 0066 D5.7)', () => {
+  const patch = (patches: unknown[]) => ({ expectedRevision: 'r1', patches });
+
+  it('refuses writing ai.trigger.ambient.minConfidence / mode, directly or inside a parent object', () => {
+    for (const operation of [
+      { op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' },
+      { op: 'set', path: ['ai', 'trigger', 'ambient', 'minConfidence'], value: 0.5 },
+      { op: 'set', path: ['ai', 'trigger', 'ambient'], value: { conversations: ['*'], mode: 'shadow' } },
+    ]) expect(() => normalizeChangeConfigPatch(patch([operation]))).toThrow(SelfChangeConfigKeyError);
+  });
+
+  it('still allows removing them and writing the other ambient keys', () => {
+    expect(() => normalizeChangeConfigPatch(patch([{ op: 'remove', path: ['ai', 'trigger', 'ambient', 'mode'] }]))).not.toThrow();
+    expect(() => normalizeChangeConfigPatch(patch([{ op: 'set', path: ['ai', 'trigger', 'ambient'], value: { conversations: ['*'], quietMs: 1 } }]))).not.toThrow();
+    expect(findRetiredConfigKey(['ai', 'trigger', 'ambient', 'quietMs'], 1)).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import type { ModelRuntimeConfig, ModelRuntimeServiceOptions } from './model-run
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
 import { resolvePerceptionSettings, type PerceptionSettings } from './config/perception-config.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
+import { mcpServerPermitsFromConfig } from './plugin-runtime/mcp-tool-permit.js';
 import {
   PluginAILoopHookRegistry,
   type PluginAfterToolCallHandler,
@@ -48,7 +49,7 @@ export class AIService {
     if (errors.length) throw new Error(errors.join('\n'));
     this.sourceConfig = config;
     this.imageAssets = config.imageStorage ? new R2ImageAssetPublisher(config.imageStorage) : undefined;
-    this.bindingRegistry = new AgentBindingRegistry({ zhin: {}, ...config.agents });
+    this.bindingRegistry = new AgentBindingRegistry({ zhin: {}, ...config.agents }, [], mcpServerPermitsFromConfig(config.mcpServers));
     this.contextConfig = config.context || {};
     this.triggerConfig = config.trigger || {};
     this.accessConfig = config.access || {};
@@ -96,7 +97,8 @@ export class AIService {
 
   /** 运行时合并 agents/<name>/agent.json 发现结果 */
   setDiscoveredAgents(fileMetas: import('./discovery/agents.js').AgentMeta[]): void {
-    this.bindingRegistry = new AgentBindingRegistry({ zhin: {}, ...this.sourceConfig.agents }, fileMetas);
+    this.bindingRegistry = new AgentBindingRegistry({ zhin: {}, ...this.sourceConfig.agents }, fileMetas,
+      mcpServerPermitsFromConfig(this.sourceConfig.mcpServers));
   }
 
   isReady(): boolean {

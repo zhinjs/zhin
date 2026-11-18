@@ -415,7 +415,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
     }
   );
   /** Environment-reference operations are audited (ids and variable names only, never values). */
-  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test']);
+  const audited = new Set(['/cli/account/add', '/cli/account/rename-env', '/account/test', '/cli/purposes/revert-ambient-judge', '/cli/purposes/revert-ambient-judge/pending']);
   const record = (
     principal: ConsolePrincipal | undefined,
     path: string,
@@ -649,6 +649,32 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
     record(consolePrincipal, '/cli/account/rename-env', renamed.result.status === 'committed' ? 'ok' : 'error',
       { from: String(body.from), to: String(body.to), credential: renamed.credential, status: renamed.result.status }, renamed.accountId);
     return renamed;
+  });
+  // ADR 0066: the interjection judge in effect and its migration record (doctor, Console).
+  register('GET', '/ambient-judge', async ({ lease, principal }) => lease.management.ambientJudge(principal));
+  register('POST', '/ambient-judge/migration/noticed', async ({ lease, principal }) => lease.management.noticeAmbientJudgeMigration(principal));
+  // `zhin ai purposes revert ambient-judge`: local CLI only (the management service checks it), audited.
+  register('POST', '/cli/purposes/revert-ambient-judge/pending', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request));
+    const pending = body.pending === true;
+    const marked = await lease.management.ambientJudgeRevertPending(principal, pending);
+    record(consolePrincipal, '/cli/purposes/revert-ambient-judge/pending', marked.status === 'pending' || marked.status === 'cleared' ? 'ok' : 'error',
+      { pending, status: marked.status });
+    return marked;
+  });
+  register('POST', '/cli/purposes/revert-ambient-judge', async ({ lease, principal, request, consolePrincipal }) => {
+    const body = object(await readJsonBody(request).catch(() => ({})));
+    const dryRun = body.dryRun === true;
+    // The yml's retired keys as the CLI read them (numbers / strings only).
+    const raw = body.trigger && typeof body.trigger === 'object' && !Array.isArray(body.trigger) ? body.trigger as Record<string, unknown> : undefined;
+    const trigger = raw ? { ...(raw.minConfidence !== undefined ? { minConfidence: raw.minConfidence } : {}), ...(raw.mode !== undefined ? { mode: raw.mode } : {}) } : undefined;
+    const reverted = await lease.management.revertAmbientJudge(principal, { dryRun, ...(trigger ? { trigger } : {}) });
+    // A dry run writes nothing and is not audited as a change.
+    if (!dryRun) {
+      record(consolePrincipal, '/cli/purposes/revert-ambient-judge', reverted.status === 'reverted' ? 'ok' : 'error',
+        reverted.status === 'reverted' ? { graphRevision: reverted.graphRevision } : { reason: reverted.status === 'refused' ? reverted.reason : reverted.status });
+    }
+    return reverted;
   });
   register('POST', '/disconnect', async ({ lease, principal, request }) => {
     const body = object(await readJsonBody(request)),

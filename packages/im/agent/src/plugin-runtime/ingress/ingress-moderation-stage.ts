@@ -306,7 +306,7 @@ export function createSceneEventIngress(input: Readonly<{
       return runtime.execute(
         rootPluginId(),
         request,
-        { binding, mcpServers: binding.mcpServers },
+        { binding, mcpServers: binding.mcpServers, ...(binding.mcpPermits ? { mcpPermits: binding.mcpPermits } : {}) },
         observeAgentTurnTrace(agent.traceRuntime, request),
       );
     },

@@ -254,6 +254,9 @@ function protectedStoreInUnquoted(text: string): string | undefined {
   if (store) return 'gateway.db';
   const keys = /zhin\/keys/iu.exec(text);
   if (keys) return '.zhin/keys';
+  // Sandbox hosted uploads and their link-signing key (ADR 0064 D12, revised 2026-11-17).
+  const sandboxMedia = /zhin\/sandbox(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);
+  if (sandboxMedia) return '.zhin/sandbox';
   // The gateway's tables by name (an `sqlite3 … "select … from console_users"` on any copy).
   const table = /(?<![A-Za-z0-9_])(console_users|console_roles|console_role_bindings|console_sessions|console_api_tokens|console_audit_log|zhin_gateway_store)(?![A-Za-z0-9_])/iu.exec(text);
   if (table) return table[1];
@@ -271,7 +274,8 @@ function protectedStoreInUnquoted(text: string): string | undefined {
 }
 
 /** Names a glob might reach: the store, its WAL / SHM files, the keys and `.zhin` itself. */
-const PROTECTED_STORE_NAMES = ['.zhin', 'gateway.db', 'gateway.db-wal', 'gateway.db-shm', 'keys', '.zhin/gateway.db', './.zhin/gateway.db', '.zhin/keys'];
+const PROTECTED_STORE_NAMES = ['.zhin', 'gateway.db', 'gateway.db-wal', 'gateway.db-shm', 'keys', '.zhin/gateway.db', './.zhin/gateway.db', '.zhin/keys',
+  '.zhin/sandbox', '.zhin/sandbox/media/secret'];
 
 /**
  * Whether the bracket expression starting at `pattern[open] === '['` admits `char` (case-insensitive);
@@ -423,6 +427,9 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
  */
 const SENSITIVE_DIR_NAMES: ReadonlySet<string> = new Set([
   '.zhin',
+  // Sandbox hosted uploads and the HMAC key that signs their links (ADR 0064 D12): named on its
+  // own so the rule survives any future narrowing of the `.zhin` entry.
+  '.zhin/sandbox',
   '.ssh',
   '.gnupg',
   '.gpg',
@@ -499,6 +506,20 @@ export function isMediaDataPath(filePath: string, workspaceDir?: string): boolea
  * 该函数只做「阻止明确敏感文件」的检查，不做正向白名单。
  */
 export function checkFileAccess(filePath: string, workspaceDir?: string): FileAccessCheckResult {
+  return checkFileAccessWith(filePath, workspaceDir, true);
+}
+
+/**
+ * The sensitive prefix / directory / file-name checks of {@link checkFileAccess} without its
+ * workspace `data/` rule — for files whose location some other authority already owns (an
+ * Endpoint's declared inbound media directory, #1250), where the remaining question is only
+ * whether the file is a secret (`.zhin/`, `.env*`, keys, databases).
+ */
+export function checkSensitiveFileAccess(filePath: string): FileAccessCheckResult {
+  return checkFileAccessWith(filePath, undefined, false);
+}
+
+function checkFileAccessWith(filePath: string, workspaceDir: string | undefined, workspaceData: boolean): FileAccessCheckResult {
   // 解析为绝对路径
   const resolved = path.resolve(expandHome(filePath));
   const basename = path.basename(resolved);
@@ -516,7 +537,9 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   }
 
   // 2. 检查敏感目录
-  const parts = normalizePathSeparators(resolved).split('/');
+  // Compared case-insensitively and without trailing dots / spaces: on macOS and Windows
+  // `.ZHIN/sandbox/media/secret` (or `.zhin./…` on Windows) opens the same file as `.zhin/…`.
+  const parts = normalizePathSeparators(resolved).split('/').map(part => part.toLowerCase().replace(/(?<=[^.])[. ]+$/u, ''));
   for (let i = 0; i < parts.length; i++) {
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
@@ -538,7 +561,8 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   //     其他位置的 data 目录如 src/data/fixtures 不受影响）
   const workspaceDataRoot = path.resolve(workspaceDir || process.cwd(), 'data');
   if (
-    (resolved === workspaceDataRoot || resolved.startsWith(workspaceDataRoot + path.sep))
+    workspaceData
+    && (resolved === workspaceDataRoot || resolved.startsWith(workspaceDataRoot + path.sep))
     && !underMemoryData
     && !underMediaData
   ) {

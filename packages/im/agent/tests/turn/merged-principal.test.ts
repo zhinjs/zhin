@@ -6,7 +6,7 @@ import {
   withMergeMembers,
 } from '../../src/turn/merged-principal.js';
 import type { AgentCapabilities } from '../../src/plugin-runtime/capability-ingress.js';
-import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
+import { turnPermissionSubject, type TurnAccessContext, type TurnPrincipal } from '../../src/turn/turn-ingress.js';
 
 function access(subjectId: string, roles: readonly string[], unattended = false): TurnAccessContext {
   return Object.freeze({
@@ -62,6 +62,34 @@ describe('narrowMergedAccess (ADR 0038 §2)', () => {
   it('is unattended when any member is', () => {
     const carrier = access('alice', ['user']);
     expect(narrowMergedAccess(carrier, [carrier, access('bob', ['user'], true)]).policy.unattended).toBe(true);
+  });
+
+  it('narrows the chain role permits read to the lowest member and its narrowest level', () => {
+    const withRole = (subjectId: string, roles: readonly string[], role: Pick<TurnPrincipal, 'chatRole' | 'chatRoleLevels'>) => {
+      const base = access(subjectId, roles);
+      return Object.freeze({ ...base, principal: Object.freeze({ ...base.principal, ...role }) }) as TurnAccessContext;
+    };
+    const sender = (merged: TurnAccessContext) => {
+      const { chatRole, chatRoleLevels } = turnPermissionSubject(merged).sender ?? {};
+      return { chatRole, chatRoleLevels };
+    };
+    const admin = withRole('alice', ['admin', 'trusted'], { chatRole: 'admin', chatRoleLevels: { admin: 'global', trusted: 'global' } });
+    // A plain member: no chat role at all, so the merged turn has none either.
+    expect(sender(narrowMergedAccess(admin, [admin, access('bob', ['user'])]))).toEqual({ chatRole: undefined, chatRoleLevels: undefined });
+    // A conversation-level owner merged with a global trusted member: trusted, at conversation level.
+    const roomOwner = withRole('carol', ['admin', 'trusted'], {
+      chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation', trusted: 'conversation' },
+    });
+    const trusted = withRole('dave', ['trusted'], { chatRole: 'trusted', chatRoleLevels: { trusted: 'global' } });
+    expect(sender(narrowMergedAccess(roomOwner, [roomOwner, trusted]))).toEqual({
+      chatRole: 'trusted', chatRoleLevels: { trusted: 'conversation' },
+    });
+    // A missing or unknown level counts as the narrowest one.
+    const noLevels = withRole('erin', ['admin', 'trusted'], { chatRole: 'admin' });
+    const odd = withRole('frank', ['admin', 'trusted'], { chatRole: 'admin', chatRoleLevels: { admin: 'planet' as never, trusted: 'global' } });
+    expect(sender(narrowMergedAccess(admin, [admin, noLevels, odd]))).toEqual({
+      chatRole: 'admin', chatRoleLevels: { trusted: 'conversation', admin: 'conversation' },
+    });
   });
 
   it('returns the carrier unchanged for a single-member turn', () => {

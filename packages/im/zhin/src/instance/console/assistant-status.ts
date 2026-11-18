@@ -1,7 +1,8 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
-import type { AmbientDecision } from '@zhin.js/agent/runtime';
+import type { AmbientDecision, EngagementCompareReport, EngagementJudgeCall } from '@zhin.js/agent/runtime';
+import { dayKeyOf, defaultUsageTimeZone } from '@zhin.js/gateway/usage';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 import { CONTROL_WRITE_PERMISSION, controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
 import {
@@ -48,6 +49,9 @@ export const SKILLS_STATUS_PERMISSION = 'skills:read';
 const RECENT_LIMIT = 20;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const WINDOW_LIMIT = 2000;
+/** Days of ambient judge totals kept in memory (today included). */
+export const AMBIENT_JUDGE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type AmbientOutcome = 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
 export type AmbientSkipReason = 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
@@ -64,20 +68,109 @@ export interface AmbientRecentItem {
   readonly judge?: 'decision' | 'chat-model';
 }
 
+/**
+ * Ambient judge model calls of one day (instance time zone), language and decision models together
+ * (#1250). Counted per call, so a shadow comparison counts both of its calls. In memory: a restart
+ * starts today's totals again.
+ */
+export interface AmbientJudgeDay {
+  /** `YYYY-MM-DD`. */
+  readonly day: string;
+  /**
+   * Judge calls (one per judgment and judging model), not model requests: a judgment whose request
+   * phase switched to a fallback is one call, and its time covers both requests.
+   */
+  readonly calls: number;
+  readonly failed: number;
+  /** Calls answered (or last attempted) by a fallback model. */
+  readonly fallbacks: number;
+  readonly byKind: Readonly<{ language: number; decision: number }>;
+  readonly averageMs: number;
+  /** Sums of reported tokens; calls whose provider reported none are counted in `unreportedCalls`. */
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly unreportedCalls: number;
+}
+
+/**
+ * Agreement with the compared model (ADR 0066 D3), after the same threshold: would each side
+ * have spoken. Only judgments where both sides answered count as agreed / disagreed.
+ */
+export interface AmbientCompareCounts {
+  readonly agreed: number;
+  /** The deciding judge would speak, the compared model would not. */
+  readonly primaryOnly: number;
+  /** The compared model would speak, the deciding judge would not. */
+  readonly comparedOnly: number;
+  /** The compared model failed (`compare_failed`). */
+  readonly failed: number;
+}
+export interface AmbientCompareStatus extends AmbientCompareCounts {
+  /** The window, ms (24 hours). */
+  readonly windowMs: number;
+  /** The same counts by the chain member that decided: 0 = the configured judge, n = the n-th fallback. */
+  readonly byMember: readonly (AmbientCompareCounts & Readonly<{ member: number; profile?: string }>)[];
+  /** Compared models seen in the window (Profile ids). */
+  readonly comparedProfiles: readonly string[];
+}
+
+interface AmbientCompareEntry {
+  readonly at: number;
+  readonly primarySpeaks: boolean;
+  /** Undefined: the compared model failed. */
+  readonly comparedSpeaks?: boolean;
+  readonly member: number;
+  readonly profile?: string;
+  readonly compared?: string;
+}
+
+/** One interjection judge member (structural copy of the Agent host's view; the Agent package is optional). */
+export interface AmbientJudgeMember {
+  readonly profile: string;
+  readonly label: string;
+  readonly kind?: 'language' | 'decision';
+  readonly role: 'primary' | 'fallback' | 'compare';
+  readonly skippedUntil?: number;
+  readonly skipReason?: string;
+}
+/** The interjection judge in effect, as the Agent host reports it (ADR 0066 D7). */
+export interface AmbientJudgeView {
+  readonly chain: readonly AmbientJudgeMember[];
+  readonly inheritedFrom?: 'chat';
+  readonly compare?: AmbientJudgeMember;
+  readonly mode: 'active' | 'shadow';
+  readonly minConfidence: number;
+}
+
 export interface AmbientStatus {
   readonly enabled: boolean;
-  /** `off` when no group is configured; `shadow` judges without replying. */
+  /** `off` when no group is configured; `shadow` judges without replying (`purposes.ambient.mode`, ADR 0066 D4). */
   readonly mode: 'off' | 'shadow' | 'active';
   /** Configured groups: a count, or `all` for `*`. */
   readonly groups: number | 'all';
-  /** Selected ambient language model (`service/model`), or an empty list when unconfigured. */
+  /** The judge chain actually used (`service/model`, primary first), or an empty list when unconfigured. */
   readonly judges: readonly string[];
+  /** The same chain as data (ADR 0066 D7): kind, role and skip period of each member, then the compared model. */
+  readonly judgeChain: readonly AmbientJudgeMember[];
+  /** The one threshold of `purposes.ambient` (ADR 0066 D4), when known. */
+  readonly minConfidence?: number;
   readonly last24h: Readonly<Record<AmbientOutcome, number>>;
-  /** Structured-decision shadow comparison over 24h: same / different call than the chat-model judge. */
+  /**
+   * @deprecated ADR 0066 D3: read `compare`. Kept for the deprecation window with the same data
+   * (`agreed`, and both kinds of disagreement summed) plus legacy shadow records.
+   */
   readonly decisionShadow: Readonly<{ agreed: number; disagreed: number }>;
+  /** The compared model of `purposes.ambient.compare` over the last 24 hours (ADR 0066 D3). */
+  readonly compare: AmbientCompareStatus;
   /** Newest first, at most 20. */
   readonly recent: readonly AmbientRecentItem[];
   readonly updatedAt: number | null;
+  /** Judge calls and tokens per day, oldest first, at most {@link AMBIENT_JUDGE_DAYS} days with calls. */
+  readonly judgeDaily: readonly AmbientJudgeDay[];
+  /** The time zone `judgeDaily` days are cut in. */
+  readonly judgeTimeZone: string;
 }
 
 export type SkillsTask = DecisionObservation['task'];
@@ -122,13 +215,20 @@ type AmbientConfigReader = () => AmbientEngagementConfig | undefined;
 
 export interface AssistantStatusOptions {
   readonly now?: () => number;
+  /** IANA zone the ambient judge days are cut in; default the instance zone (`TZ`, else the system zone). */
+  readonly timeZone?: string;
 }
+
+type MutableJudgeDay = { -readonly [K in keyof AmbientJudgeDay]: AmbientJudgeDay[K] } & { totalMs: number; language: number; decision: number };
 
 export class AssistantStatus {
   readonly #now: () => number;
   readonly #ambient: AmbientRecentItem[] = [];
   readonly #shadow: Array<{ at: number; agreed: boolean }> = [];
+  readonly #compare: AmbientCompareEntry[] = [];
   readonly #decisions: Array<SkillsRecentItem & Readonly<{ inputTokens: number; outputTokens: number }>> = [];
+  readonly #judgeDays = new Map<string, MutableJudgeDay>();
+  readonly #timeZone: string;
   #readAmbientConfig: AmbientConfigReader = () => undefined;
   #readDecisionEvents: DecisionEventsSource = () => undefined;
   #readControlPlane: ControlPlaneSource = () => undefined;
@@ -156,11 +256,12 @@ export class AssistantStatus {
 
   constructor(options: AssistantStatusOptions = {}) {
     this.#now = options.now ?? Date.now;
+    this.#timeZone = options.timeZone ?? defaultUsageTimeZone();
     this.consoleRpc = this.forOperation();
   }
 
   /** Request-owned metadata reader; no model runtime is cached by this process status store. */
-  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<readonly string[]> }> = {}): PluginConsoleRpc {
+  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<AmbientJudgeView | readonly string[]> }> = {}): PluginConsoleRpc {
     return definePluginConsoleRpc({
       // Control switches, session ops, announcement / group-rule drafts are day-to-day operator work;
       // approving them stays `ops:approve` (manage). `control:write` would otherwise infer `manage`.
@@ -257,7 +358,7 @@ export class AssistantStatus {
           group,
           outcome: decision.kind === 'engage' ? 'spoke' : decision.kind === 'shadow' ? 'watched' : 'stayed_quiet',
           confidence: Math.round(clamp01(decision.judgment.confidence) * 100) / 100,
-          judge: decision.judgment.source?.startsWith('decision:') ? 'decision' : 'chat-model',
+          judge: (decision.judgment.source ?? decision.judgment.ref)?.kind === 'decision' ? 'decision' : 'chat-model',
         };
     push(this.#ambient, entry);
   }
@@ -266,6 +367,55 @@ export class AssistantStatus {
   recordAmbientShadow(decisionEngage: boolean | undefined, judgeEngage: boolean | undefined): void {
     if (decisionEngage === undefined || judgeEngage === undefined) return;
     push(this.#shadow, { at: this.#now(), agreed: decisionEngage === judgeEngage });
+  }
+
+  /** One judgment compared with `purposes.ambient.compare` (ADR 0066 D3); metadata only. */
+  recordAmbientCompare(report: EngagementCompareReport): void {
+    // A judgment whose deciding side failed compares nothing.
+    if (report.primarySpeaks === undefined) return;
+    push(this.#compare, Object.freeze({ at: this.#now(), primarySpeaks: report.primarySpeaks, ...(report.comparedSpeaks !== undefined ? { comparedSpeaks: report.comparedSpeaks } : {}),
+      member: report.member ?? 0, ...(report.primary?.profile ? { profile: report.primary.profile } : {}),
+      ...(report.compared?.profile ? { compared: report.compared.profile } : {}) }));
+  }
+
+  /** One ambient judge model call (#1250); metadata only, never chat text or error text. */
+  recordAmbientJudgeCall(call: EngagementJudgeCall): void {
+    const now = this.#now();
+    const day = dayKeyOf(now, this.#timeZone);
+    this.#pruneJudgeDays(now);
+    let entry = this.#judgeDays.get(day);
+    if (!entry) {
+      entry = { day, calls: 0, failed: 0, fallbacks: 0, byKind: { language: 0, decision: 0 }, averageMs: 0, totalMs: 0, language: 0, decision: 0,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, unreportedCalls: 0 };
+      this.#judgeDays.set(day, entry);
+      // Also at most AMBIENT_JUDGE_DAYS entries, oldest dropped first (a clock moved back keeps the cap).
+      for (const key of [...this.#judgeDays.keys()].sort().slice(0, Math.max(0, this.#judgeDays.size - AMBIENT_JUDGE_DAYS))) this.#judgeDays.delete(key);
+    }
+    entry.calls += 1;
+    if (call.status === 'failed') entry.failed += 1;
+    if (call.fallbackFrom) entry.fallbacks += 1;
+    if (call.kind === 'decision') entry.decision += 1;
+    else entry.language += 1;
+    entry.totalMs += finite(call.durationMs);
+    if (call.usage) {
+      entry.inputTokens += finite(call.usage.inputTokens);
+      entry.outputTokens += finite(call.usage.outputTokens);
+      entry.cacheReadTokens += finite(call.usage.cacheReadTokens);
+      entry.cacheWriteTokens += finite(call.usage.cacheWriteTokens);
+    } else {
+      entry.unreportedCalls += 1;
+    }
+  }
+
+  /** The first kept day: today and the 6 days before it, in the status time zone. */
+  #judgeCutoff(now: number): string {
+    return dayKeyOf(now - (AMBIENT_JUDGE_DAYS - 1) * DAY_MS, this.#timeZone);
+  }
+
+  /** Drops days older than the kept window, so a long quiet spell never shows weeks-old totals. */
+  #pruneJudgeDays(now: number): void {
+    const cutoff = this.#judgeCutoff(now);
+    for (const key of [...this.#judgeDays.keys()]) if (key < cutoff) this.#judgeDays.delete(key);
   }
 
   recordDecision(observation: DecisionObservation): void {
@@ -282,8 +432,17 @@ export class AssistantStatus {
     });
   }
 
-  ambient(judges: readonly string[] = []): AmbientStatus {
-    const since = this.#now() - WINDOW_MS;
+  /** The current `ai.trigger.ambient` section (undefined when the configuration has none). */
+  ambientTriggerConfig(): AmbientEngagementConfig | undefined {
+    return this.#readAmbientConfig();
+  }
+
+  ambient(judge: AmbientJudgeView | readonly string[] = []): AmbientStatus {
+    const view = Array.isArray(judge) ? undefined : judge as AmbientJudgeView;
+    const judges = view ? view.chain.map(member => member.label) : judge as readonly string[];
+    const now = this.#now();
+    const since = now - WINDOW_MS;
+    const judgeCutoff = this.#judgeCutoff(now);
     const config = this.#readAmbientConfig();
     const conversations = config?.conversations ?? [];
     const enabled = conversations.length > 0;
@@ -291,18 +450,47 @@ export class AssistantStatus {
     const last24h: Record<AmbientOutcome, number> = { spoke: 0, watched: 0, stayed_quiet: 0, skipped: 0 };
     for (const entry of window) last24h[entry.outcome] += 1;
     const shadow = this.#shadow.filter((entry) => entry.at >= since);
+    const compared = this.#compare.filter((entry) => entry.at >= since);
+    const counts = (rows: readonly AmbientCompareEntry[]): AmbientCompareCounts => Object.freeze({
+      agreed: rows.filter(row => row.comparedSpeaks !== undefined && row.comparedSpeaks === row.primarySpeaks).length,
+      primaryOnly: rows.filter(row => row.comparedSpeaks === false && row.primarySpeaks).length,
+      comparedOnly: rows.filter(row => row.comparedSpeaks === true && !row.primarySpeaks).length,
+      failed: rows.filter(row => row.comparedSpeaks === undefined).length,
+    });
+    const total = counts(compared);
+    const members = [...new Set(compared.map(row => row.member))].sort((a, b) => a - b);
     return Object.freeze({
       enabled,
-      mode: !enabled ? 'off' : config?.mode === 'shadow' ? 'shadow' : 'active',
+      // ADR 0066 D4: `purposes.ambient.mode`; the retired yml key only without the Agent host's view.
+      mode: !enabled ? 'off' : (view ? view.mode : config?.mode) === 'shadow' ? 'shadow' : 'active',
       groups: conversations.includes('*') ? 'all' : conversations.length,
-      judges: Object.freeze(judges.map((judge) => judge.trim()).filter(Boolean)),
+      judges: Object.freeze(judges.map((entry) => entry.trim()).filter(Boolean)),
+      judgeChain: Object.freeze(view ? [...view.chain, ...(view.compare ? [view.compare] : [])].map(member => Object.freeze({ ...member })) : []),
+      ...(view ? { minConfidence: view.minConfidence } : {}),
       last24h: Object.freeze(last24h),
       decisionShadow: Object.freeze({
-        agreed: shadow.filter((entry) => entry.agreed).length,
-        disagreed: shadow.filter((entry) => !entry.agreed).length,
+        agreed: shadow.filter((entry) => entry.agreed).length + total.agreed,
+        disagreed: shadow.filter((entry) => !entry.agreed).length + total.primaryOnly + total.comparedOnly,
+      }),
+      compare: Object.freeze({
+        windowMs: WINDOW_MS,
+        ...total,
+        byMember: Object.freeze(members.map(member => {
+          const rows = compared.filter(row => row.member === member);
+          const profile = [...rows].reverse().find(row => row.profile)?.profile;
+          return Object.freeze({ member, ...(profile ? { profile } : {}), ...counts(rows) });
+        })),
+        comparedProfiles: Object.freeze([...new Set(compared.flatMap(row => row.compared ? [row.compared] : []))]),
       }),
       recent: Object.freeze(window.slice(-RECENT_LIMIT).reverse().map((item) => Object.freeze({ ...item }))),
       updatedAt: window.at(-1)?.at ?? null,
+      judgeDaily: Object.freeze([...this.#judgeDays.values()].filter(day => day.day >= judgeCutoff).sort((a, b) => a.day.localeCompare(b.day))
+        .map(({ totalMs, language, decision, byKind: _byKind, averageMs: _averageMs, ...day }) => Object.freeze({
+          ...day,
+          byKind: Object.freeze({ language, decision }),
+          averageMs: day.calls ? Math.round(totalMs / day.calls) : 0,
+        }))),
+      judgeTimeZone: this.#timeZone,
     });
   }
 

@@ -21,7 +21,53 @@ export function parseDungeonSessionToken(
   return { sessionId: match[1], revision: Number(match[2]) };
 }
 
+/**
+ * Buttons for the current state. A group card is shared by the whole channel, so every viewer gets
+ * the same buttons in the same order (#1250): the lobby always offers 加入 / 准备 / 开始 / 解散,
+ * and a number means the same action for everyone. Who may do what is checked when the action
+ * arrives (a non-leader's 开始 or 解散 is refused with a reason).
+ */
 export function choicesForState(state: Readonly<DungeonState>, locale?: Locale): ChoiceOption[] {
+  return allChoicesForState(state, locale);
+}
+
+/** The leader's end-confirmation choices (#1250); numbered 1 / 2 like the confirmation card. */
+export function abortConfirmChoices(locale?: Locale): ChoiceOption[] {
+  return [
+    { id: 'abort_confirm', label: messages(locale, 'confirmEndYes'), style: 'danger' },
+    { id: 'status', label: messages(locale, 'confirmEndNo'), style: 'secondary' },
+  ];
+}
+
+/** Whether `state` carries a leader's end request made at the session's current revision. */
+export function hasPendingAbort(session: Pick<DungeonSessionRow, 'revision'>, state: Readonly<DungeonState>): boolean {
+  return state.pendingAbortRevision !== undefined && state.pendingAbortRevision === session.revision;
+}
+
+/** Party size limit (engine `joinParty`). */
+const MAX_PARTY = 4;
+
+/** Leader's confirmation before the expedition ends (#1250). */
+export function buildDungeonAbortConfirm(session: DungeonSessionRow, state: Readonly<DungeonState>, channelType?: string): SendContent {
+  const locale = resolveLocale(session.locale);
+  return buildChoiceKeyboard({
+    gamePrefix: DUNGEON_PREFIX,
+    sessionId: dungeonSessionToken(session),
+    narrative: [messages(locale, 'confirmEnd'), summaryLine(state, locale)].join('\n'),
+    choices: abortConfirmChoices(locale),
+    buttonsPerRow: 2,
+    locale,
+    interactionProfile: 'gameplay',
+    channelType,
+  });
+}
+
+function summaryLine(state: Readonly<DungeonState>, locale?: Locale): string {
+  const gold = state.players.reduce((sum, player) => sum + player.gold, 0);
+  return messages(locale, 'summary', { floor: state.floor, rooms: state.roomsCleared, gold });
+}
+
+function allChoicesForState(state: Readonly<DungeonState>, locale?: Locale): ChoiceOption[] {
   if (state.phase === 'completed') {
     return [{
       id: 'restart',
@@ -87,8 +133,10 @@ export function buildDungeonView(
         : state.result === 'aborted'
           ? messages(locale, 'text23')
           : messages(locale, 'text24'),
+      summaryLine(state, locale),
     );
   }
+  if (state.phase === 'lobby' && state.players.length < MAX_PARTY) lines.push('', messages(locale, 'joinHint'));
 
   const choices = choicesForState(state, locale);
   return buildChoiceKeyboard({
@@ -114,6 +162,11 @@ function phaseLabel(state: Readonly<DungeonState>, locale?: Locale): string {
 }
 
 const messages = createMessages({
+  confirmEnd: { 'zh-CN': "确定要结束本次远征吗？", en: "End this expedition?" },
+  confirmEndYes: { 'zh-CN': "确认结束", en: "End it" },
+  confirmEndNo: { 'zh-CN': "继续远征", en: "Keep going" },
+  summary: { 'zh-CN': "本局结算：到达第 {floor} 层 · 清理 {rooms} 个房间 · 队伍金币 {gold}", en: "Round summary: reached floor {floor} · {rooms} rooms cleared · party gold {gold}" },
+  joinHint: { 'zh-CN': "其他人回复「加入队伍」入队；全员准备后由队长开始远征。", en: "Others reply 加入队伍 (Join party) to join; the leader starts once everyone is ready." },
   text1: { 'zh-CN': "再来一局", en: "Play again" },
   text2: { 'zh-CN': "加入队伍", en: "Join party" },
   text3: { 'zh-CN': "准备/取消", en: "Ready / Not ready" },

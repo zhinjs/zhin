@@ -43,25 +43,28 @@ describe('omitInlineBinaryForModel (#1250 batch 29)', () => {
     const plain = 'a'.repeat(4 * 1_048_576);
     expect(omitInlineBinaryForModel(plain)).toBe('[已省略 base64 数据（4194304 字符），未提供给模型]');
 
-    // Two guards, each measured as the best of three runs of one input:
-    // - growth: a super-linear scan grows ~16× when the input grows 4×;
+    // Two guards, each measured as the best of five runs of one input:
+    // - growth: a super-linear scan grows ~16× when the input grows 4×. Both inputs
+    //   are at least 1 MiB so each run takes tens of milliseconds; with a 256 KiB
+    //   baseline of a few milliseconds, timer and GC noise alone pushed a linear scan
+    //   past 8× under coverage on CI;
     // - a ceiling for the regex this replaced, which backtracked over every
     //   2047-character run and took ~2.7 s for 1 MiB. The ceiling leaves room for
     //   coverage instrumentation on slow CI runners (the old 500 ms budget for
     //   both inputs together did not).
     const fastest = (input: string) => {
       let best = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < 3; i += 1) {
+      for (let i = 0; i < 5; i += 1) {
         const started = performance.now();
         omitInlineBinaryForModel(input);
         best = Math.min(best, performance.now() - started);
       }
       return best;
     };
-    const small = fastest(adversarial(262_144));
-    const large = fastest(adversarial(1_048_576));
+    const small = fastest(adversarial(1_048_576));
+    const large = fastest(adversarial(4 * 1_048_576));
     expect(large / Math.max(small, 0.5)).toBeLessThan(8);
-    expect(large).toBeLessThan(1500);
+    expect(small).toBeLessThan(1500);
   });
 
   it('recognises only its own placeholders', () => {

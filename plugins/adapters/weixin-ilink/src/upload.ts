@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { fetchOutboundMedia, isOutboundMediaRefused, OutboundMediaFetchError, type OutboundMediaFetcher } from '@zhin.js/core';
+
 import { getUploadUrl, type WeixinApiOptions } from './ilink-api.js';
 
 import { aesEcbPaddedSize } from "./aes-ecb.js";
@@ -26,25 +28,44 @@ export type UploadedFileInfo = {
 /**
  * Download a remote media URL (image, video, file) to a local temp file in destDir.
  * Returns the local file path; extension is inferred from Content-Type / URL.
+ *
+ * The URL is downloaded on this host, so only through core `fetchOutboundMedia` (public HTTPS only,
+ * pinned DNS, every redirect checked, size and time bounded; #1250 第 46 批). A refused URL rethrows the
+ * `OutboundMediaFetchError` (`refused`) so the caller can send a notice instead; logs carry the host only.
  */
-export async function downloadRemoteImageToTemp(url: string, destDir: string, signal?: AbortSignal): Promise<string> {
-  logger.debug(`downloadRemoteImageToTemp: fetching url=${url}`);
+export async function downloadRemoteImageToTemp(
+  url: string,
+  destDir: string,
+  signal?: AbortSignal,
+  fetchMedia: OutboundMediaFetcher = fetchOutboundMedia,
+): Promise<string> {
+  const host = hostOf(url);
+  logger.debug(`downloadRemoteImageToTemp: fetching host=${host}`);
   signal?.throwIfAborted();
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    const msg = `remote media download failed: ${res.status} ${res.statusText} url=${url}`;
+  let fetched: Awaited<ReturnType<OutboundMediaFetcher>>;
+  try {
+    fetched = await fetchMedia(url, { ...(signal ? { signal } : {}), source: 'weixin-ilink' });
+  } catch (error) {
+    if (isOutboundMediaRefused(error)) throw error;
+    signal?.throwIfAborted();
+    const reason = error instanceof OutboundMediaFetchError ? `${error.code}${error.status !== undefined ? ` ${error.status}` : ''}` : 'error';
+    const msg = `remote media download failed: ${reason} host=${host}`;
     logger.error(`downloadRemoteImageToTemp: ${msg}`);
-    throw new Error(msg);
+    throw new Error(msg, { cause: error });
   }
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = fetched.bytes;
   logger.debug(`downloadRemoteImageToTemp: downloaded ${buf.length} bytes`);
   await fs.mkdir(destDir, { recursive: true });
-  const ext = getExtensionFromContentTypeOrUrl(res.headers.get("content-type"), url);
+  const ext = getExtensionFromContentTypeOrUrl(fetched.mimeType ?? null, fetched.url);
   const name = tempFileName("weixin-remote", ext);
   const filePath = path.join(destDir, name);
   await fs.writeFile(filePath, buf, { signal });
   logger.debug(`downloadRemoteImageToTemp: saved to ${filePath} ext=${ext}`);
   return filePath;
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname || "invalid"; } catch { return "invalid"; }
 }
 
 /**

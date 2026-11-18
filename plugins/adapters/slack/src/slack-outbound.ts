@@ -3,6 +3,7 @@
  */
 import { createEndpointOperation, type EndpointOperation } from 'zhin.js/adapter';
 import type { Logger } from '@zhin.js/logger';
+import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { WebClient } from '@slack/web-api';
 import { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';
 import { formatOutboundWire, keyboardToBlockKitBlocks, type SlackBlock } from './protocol.js';
@@ -27,6 +28,8 @@ export interface SlackContentRequest extends SlackSendOptions {
   readonly content: unknown;
   readonly logger: Logger;
   readonly signal?: AbortSignal;
+  /** Downloads file URLs on this host before `files.uploadV2`; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 export interface SlackEditRequest {
   readonly channel: string;
@@ -36,22 +39,29 @@ export interface SlackEditRequest {
 }
 export async function sendSlackContent(
   client: SlackChatClient,
-  { content, logger, signal, ...opts }: SlackContentRequest,
+  { content, logger, signal, fetchMedia = fetchOutboundMedia, ...opts }: SlackContentRequest,
 ): Promise<SlackOutboundResult> {
   const operation = createEndpointOperation({ signal });
   const wire = formatOutboundWire(content);
   const threadTs = opts.threadTs ?? wire.replyTo;
   const blocks = [...wire.blocks];
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
+  const notices: string[] = [];
 
   for (const pf of wire.files) {
     try {
-      await uploadFile(client, { channel: opts.channel, file: pf, threadTs, operation });
+      await uploadFile(client, { channel: opts.channel, file: pf, threadTs, operation, fetchMedia });
     } catch (e) {
+      // #1250 第 46 批：URL 被本机抓取策略拒绝 → 说明文字，消息照常发出。
+      if (isOutboundMediaRefused(e)) {
+        notices.push(outboundMediaNotice('file'));
+        continue;
+      }
       logger.error('Failed to upload file:', e);
       throw e;
     }
   }
+  for (const notice of notices) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: notice } } as SlackBlock);
 
   return postSlackMessage(client, {
     channel: opts.channel,
@@ -59,7 +69,7 @@ export async function sendSlackContent(
     operation,
     blocks,
     attachments: wire.attachments,
-    fallbackText: textDelivery.fallbackText,
+    fallbackText: [textDelivery.fallbackText, ...notices].filter(Boolean).join('\n'),
   });
 }
 
@@ -153,11 +163,12 @@ function requireMessageTimestamp(result: { ts?: string } | null | undefined): st
 
 async function uploadFile(
   client: SlackChatClient,
-  { channel, file, threadTs, operation }: {
+  { channel, file, threadTs, operation, fetchMedia }: {
     readonly channel: string;
     readonly file: { buffer?: Buffer; url?: string; path?: string; name?: string };
     readonly threadTs?: string;
     readonly operation: EndpointOperation;
+    readonly fetchMedia: OutboundMediaFetcher;
   },
 ): Promise<void> {
   const upload = client.filesUploadV2;
@@ -169,9 +180,8 @@ async function uploadFile(
     buffer = await operation.prepare(() => readFile(path));
   }
   if (!buffer && url) {
-    const res = await operation.prepare(() => fetch(url, { signal: operation.signal }));
-    if (!res.ok) throw new Error(`fetch ${file.url}: ${res.status}`);
-    buffer = Buffer.from(await operation.prepare(() => res.arrayBuffer()));
+    // Downloaded on this host, so only through the pinned public-HTTPS fetch (#1250 第 46 批).
+    buffer = (await operation.prepare(() => fetchMedia(url, { signal: operation.signal, source: 'slack' }))).bytes;
   }
   if (!buffer) throw new Error('Slack file contains no uploadable content');
 

@@ -7,6 +7,9 @@ import {
   signMailboxEnvelope,
   verifyMailboxEnvelope,
 } from '../src/index.js';
+import { PermissionHost } from '@zhin.js/permission';
+import { canAccessDescriptor } from '@zhin.js/agent/runtime';
+import type { TurnRequest } from '@zhin.js/agent/turn';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 
@@ -219,6 +222,54 @@ describe('A2AMailboxTransport & signed envelope verification (ADR 0048 §3.6)', 
       consumed: { modelCalls: 1, tokens: 150 },
     });
     expect(execute).toHaveBeenCalledOnce();
+  });
+});
+
+describe('inbound remote Mail runs as user (ADR 0065 §3.6)', () => {
+  it('gives a signed Mail that declares trusted no chat role, so trusted MCP and plugin tools stay closed', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const requests: TurnRequest[] = [];
+    installRuntimeA2aMailbox({
+      http,
+      config: { enabled: true, secret: 'mesh-secret' },
+      fallbackToken: 'mesh-token',
+      agentHost: {
+        protocol: {
+          listBindings: () => [],
+          execute: async (_binding: string, request: TurnRequest) => {
+            requests.push(request);
+            return { status: 'completed' as const, output: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+          },
+        },
+        introspection: { listMcpServers: () => [] },
+        console: {} as never,
+      } as never,
+    });
+    const { port } = await http.listen();
+    const sender = new A2AMailboxTransport({
+      secret: 'mesh-secret',
+      token: 'mesh-token',
+      peers: [{ actor: 'coder', url: `http://127.0.0.1:${port}/a2a/mailbox` }],
+    });
+    const declared = sampleMail();
+    const mail = sampleMail({
+      authority: { ...declared.authority, principal: { kind: 'human', id: 'alice', trust: 'trusted' }, trust: 'trusted' },
+    });
+    expect((await sender.send(mail, sampleBudget)).status).toBe('completed');
+    const request = requests[0]!;
+    expect(request.principal.roles).toEqual(['user']);
+    expect(request.principal.chatRole).toBeUndefined();
+    expect(request.principal.chatRoleLevels).toBeUndefined();
+    expect(request.policy.permissions).toEqual(['user']);
+    const host = new PermissionHost();
+    // An MCP tool relaxed to `trusted` (ADR 0065 permit) and a plugin tool with `permissions: ['trusted']`
+    // go through the same gate: the remote Mail passes neither, at pool time or before the call.
+    for (const permissions of [['trusted'], ['trusted@global'], ['owner@global']]) {
+      expect(await canAccessDescriptor({ permissions }, request, host)).toBe(false);
+      expect(await canAccessDescriptor({ permissions }, request, host, true)).toBe(false);
+    }
+    expect(await canAccessDescriptor({}, request, host)).toBe(true);
   });
 });
 

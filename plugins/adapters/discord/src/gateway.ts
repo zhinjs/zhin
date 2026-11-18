@@ -20,6 +20,7 @@ import {
   type Message as DiscordMessage,
 } from 'discord.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import {
   activityTypeCode,
   resolveChannelKind,
@@ -123,8 +124,23 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
   };
 }
 
-export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise<MessageCreateOptions> {
+export interface DiscordMessageCreateOptions {
+  readonly signal?: AbortSignal;
+  /** Downloads attachment URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
+}
+
+/**
+ * discord.js would download an attachment URL on this host, so a URL attachment is downloaded here
+ * through core `fetchOutboundMedia` (public HTTPS only, pinned DNS, every redirect checked) and sent as
+ * bytes; a refused URL becomes a notice line in the message text (#1250 第 46 批).
+ */
+export async function toMessageCreateOptions(
+  body: DiscordOutboundBody,
+  { signal, fetchMedia = fetchOutboundMedia }: DiscordMessageCreateOptions = {},
+): Promise<MessageCreateOptions> {
   const options: MessageCreateOptions = {};
+  const notices: string[] = [];
   if (body.reply) options.reply = { ...body.reply };
   if (body.content) options.content = body.content;
   if (body.embeds?.length) {
@@ -157,7 +173,13 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
           name: file.name || path.basename(file.file),
         }));
       } else if (file.url) {
-        files.push(new AttachmentBuilder(file.url, { name: file.name || 'attachment' }));
+        try {
+          const { bytes } = await fetchMedia(file.url, { ...(signal ? { signal } : {}), source: 'discord' });
+          files.push(new AttachmentBuilder(bytes, { name: file.name || 'attachment' }));
+        } catch (error) {
+          if (!isOutboundMediaRefused(error)) throw error;
+          notices.push(outboundMediaNotice('file'));
+        }
       } else {
         logger.warn(formatCompact({
           op: 'discord_outbound_media_dropped',
@@ -168,6 +190,7 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
     }
     if (files.length) options.files = files;
   }
+  if (notices.length) options.content = [options.content, ...notices].filter(Boolean).join('\n');
   if (body.components?.length) {
     options.components = body.components.map((row) =>
       new ActionRowBuilder<ButtonBuilder>().addComponents(

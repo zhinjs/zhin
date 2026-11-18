@@ -122,6 +122,8 @@ export interface ZhinAgentPrivate
   /** Optional host-level fallback, for transports without an interactive approval surface. */
   approvalPort?: ApprovalPort;
   hostProtectedPaths?: import('../security/host-config-paths.js').HostProtectedPaths;
+  /** Optional PermissionHost for the legacy `process` path; without it permit-gated tools fail closed. */
+  permissionHost?: import('@zhin.js/permission').PermissionHost | null;
   readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
   /** deferred 工具族的跨 turn 状态（目录/快照/统计）。 */

@@ -16,6 +16,7 @@ import {
   type EndpointOperationOptions,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import type { OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop, sendTyping, type WeixinApiOptions } from './ilink-api.js';
 import { IlinkClientMetadata } from './ilink-meta.js';
@@ -76,6 +77,8 @@ export interface WeixinIlinkEndpointOptions {
   ) => Promise<WeixinIlinkCredentials>;
   /** Test / internal: override network side effects. */
   readonly notifyStart?: WeixinIlinkNotifyStart;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
   readonly notifyStop?: WeixinIlinkNotifyStop;
   readonly getUpdates?: WeixinIlinkGetUpdates;
   readonly sendText?: WeixinIlinkSendText;
@@ -125,6 +128,11 @@ export class WeixinIlinkClient extends EventEmitter {
   protected readonly endpointManagement: EndpointManagement = createWeixinIlinkEndpointManagement(() => this);
   protected readonly endpointControl: EndpointControl = Object.freeze<EndpointControl>({
     typing: ({ conversation, active, signal }) => this.sendTyping(conversation.id, active === false ? 2 : 1, { signal }).then(() => undefined),
+  });
+
+  /** #1250: inbound media is decrypted only into this Endpoint's `media/inbound` directory. */
+  protected readonly endpointInboundMedia: import('zhin.js/adapter').EndpointInboundMediaPort = Object.freeze({
+    roots: () => [this.#state.mediaDirectory('inbound')],
   });
 
   protected configName(): string { return this.#options.config.id; }
@@ -377,7 +385,7 @@ export class WeixinIlinkClient extends EventEmitter {
     const outboundDir = this.#state.mediaDirectory('outbound');
     const wire = formatOutboundSegments(payload);
     const operation = createEndpointOperation({ signal });
-    const materialized = await operation.prepare(() => materializeOutboundMedia(wire, outboundDir, signal));
+    const materialized = await operation.prepare(() => materializeOutboundMedia(wire, outboundDir, signal, this.#options.fetchMedia));
     const segments = Array.isArray(materialized) ? materialized : [materialized];
     let lastId = '';
     let pendingText = '';

@@ -307,6 +307,15 @@ export class ImRuntime implements OutboundMessageService {
     );
   }
 
+  /**
+   * #1250: directories the conversation's Endpoint declared for the inbound media it downloads.
+   * An inbound `path` media source is read only inside one of them; none when the lease expired.
+   */
+  inboundMediaRoots(lease: SnapshotLease, conversation: ConversationRef): readonly string[] {
+    if (!this.#snapshots?.owns(lease) || !lease.active) return Object.freeze([]);
+    return requireAdapters(lease.value).inboundMediaRoots(conversation.endpoint.id as CapabilityId);
+  }
+
   async readConversationContext(
     conversation: ConversationRef,
     consumer: string,

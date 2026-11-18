@@ -283,9 +283,15 @@ export interface AmbientEngagementConfig {
    * (default 180000): replies there skip the interjection cooldown and hourly cap; the judge still decides.
    */
   conversationWindowMs?: number;
-  /** Judge confidence required to engage, 0..1 (default 0.7). */
+  /**
+   * @deprecated ADR 0066: set `purposes.ambient.minConfidence` (Console「插话判断」). Read once by the
+   * migration while `purposes.ambient` is not stored; ignored afterwards (startup warns, `zhin doctor --fix` removes it).
+   */
   minConfidence?: number;
-  /** `shadow` logs the judgment without replying (default `active`). */
+  /**
+   * @deprecated ADR 0066: set `purposes.ambient.mode`. Read once by the migration while
+   * `purposes.ambient` is not stored; ignored afterwards (startup warns, `zhin doctor --fix` removes it).
+   */
   mode?: 'active' | 'shadow';
 }
 

@@ -13,7 +13,7 @@
  */
 
 import type { AgentCapabilities } from '../plugin-runtime/capability-ingress.js';
-import type { TurnAccessContext, TurnMergedMember } from './turn-ingress.js';
+import { turnPermissionSubject, type TurnAccessContext, type TurnMergedMember, type TurnPrincipal } from './turn-ingress.js';
 
 /**
  * The carrier's access narrowed to what all members share. Origin and subject
@@ -28,9 +28,11 @@ export function narrowMergedAccess(
   if (others.length === 0) return carrier;
   const roles = intersect(carrier.principal.roles, others.map((member) => member.principal.roles));
   const permissions = intersect(carrier.policy.permissions, others.map((member) => member.policy.permissions));
+  // Permits (`trusted`, `admin@adapter`, ...) read the chain role, not `roles`: keep only what every member holds.
+  const { chatRole: _carrierRole, chatRoleLevels: _carrierLevels, ...identity } = carrier.principal;
   return Object.freeze({
     ...carrier,
-    principal: Object.freeze({ ...carrier.principal, roles: Object.freeze(roles),
+    principal: Object.freeze({ ...identity, roles: Object.freeze(roles), ...mergedChatRole([carrier, ...others]),
       // Platform standing is per sender; a merged turn keeps none unless every member shares it.
       platform: others.every((member) => JSON.stringify(member.principal.platform) === JSON.stringify(carrier.principal.platform))
         ? carrier.principal.platform : undefined }),
@@ -64,6 +66,40 @@ export function intersectCapabilities(
     skills: keep(carrier.skills, (skill) => skill.qualifiedName, (member) => member.skills),
     agents: keep(carrier.agents, (agent) => agent.qualifiedName, (member) => member.agents),
   });
+}
+
+type ChatRoleName = NonNullable<TurnPrincipal['chatRole']>;
+type ChatRoleLevel = NonNullable<NonNullable<TurnPrincipal['chatRoleLevels']>[ChatRoleName]>;
+const CHAT_ROLE_RANK: Readonly<Record<ChatRoleName, number>> = Object.freeze({ trusted: 1, admin: 2, owner: 3 });
+const CHAT_ROLES: readonly ChatRoleName[] = Object.freeze(['trusted', 'admin', 'owner']);
+/** Broadest first; a level missing for a held role counts as `conversation` (as the permit check does). */
+const CHAT_ROLE_LEVELS: readonly ChatRoleLevel[] = Object.freeze(['global', 'adapter', 'endpoint', 'conversation']);
+
+/**
+ * The chain role every member holds (the lowest one) and, per role, the narrowest level any member
+ * holds it at. A member without a chat role leaves the merged turn without one.
+ */
+function mergedChatRole(members: readonly TurnAccessContext[]): Pick<TurnPrincipal, 'chatRole' | 'chatRoleLevels'> {
+  const facts = members.map((member) => turnPermissionSubject(member).sender);
+  let lowest: ChatRoleName | undefined;
+  for (const sender of facts) {
+    const held = sender?.chatRole as ChatRoleName | undefined;
+    if (!held || !Object.hasOwn(CHAT_ROLE_RANK, held)) return {};
+    if (!lowest || CHAT_ROLE_RANK[held] < CHAT_ROLE_RANK[lowest]) lowest = held;
+  }
+  if (!lowest) return {};
+  const levels: Partial<Record<ChatRoleName, ChatRoleLevel>> = {};
+  for (const role of CHAT_ROLES.filter((candidate) => CHAT_ROLE_RANK[candidate] <= CHAT_ROLE_RANK[lowest!])) {
+    let narrowest = 0;
+    for (const sender of facts) {
+      const level = (sender?.chatRoleLevels as Partial<Record<ChatRoleName, ChatRoleLevel>> | undefined)?.[role] ?? 'conversation';
+      const index = CHAT_ROLE_LEVELS.indexOf(level);
+      // An unknown level fails closed to the narrowest one.
+      narrowest = Math.max(narrowest, index < 0 ? CHAT_ROLE_LEVELS.length - 1 : index);
+    }
+    levels[role] = CHAT_ROLE_LEVELS[narrowest]!;
+  }
+  return { chatRole: lowest, chatRoleLevels: Object.freeze(levels) };
 }
 
 /** A display name that two senders share names neither of them. */

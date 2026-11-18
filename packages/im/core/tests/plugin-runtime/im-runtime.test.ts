@@ -173,6 +173,20 @@ describe('IM Runtime', () => {
     } finally { lease.release(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('reports the conversation Endpoint\'s declared inbound media roots only under an active lease (#1250)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false,
+      endpointInboundMedia: { roots: () => ['/srv/bot/media/inbound'] },
+    });
+    const conversation = fixtureInput(fixture, '').conversation;
+    const lease = fixture.store.acquire();
+    try {
+      expect(fixture.im.inboundMediaRoots(lease, conversation)).toEqual(['/srv/bot/media/inbound']);
+      expect(fixture.im.inboundMediaRoots(lease, { ...conversation, endpoint: { ...conversation.endpoint, id: 'missing' as never } })).toEqual([]);
+    } finally { lease.release(); }
+    expect(fixture.im.inboundMediaRoots(lease, conversation)).toEqual([]);
+    await fixture.adapters.stop(); await fixture.store.close();
+  });
+
   it('keeps the Root menu presenter and content author across native page callbacks', async () => {
     const events: string[] = [];
     const sent: unknown[] = [];
@@ -843,7 +857,8 @@ describe('IM Runtime', () => {
     try {
       await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
       expect(rendered).toHaveBeenCalledTimes(1);
-      expect(sent).toEqual([expect.objectContaining({ payload: [{ type: 'html', data: { html: '<b>ready</b>' } }] })]);
+      // ADR 0064 D5: a direct HTML endpoint receives the card's design width.
+      expect(sent).toEqual([expect.objectContaining({ payload: [{ type: 'html', data: { html: '<b>ready</b>', width: 540 } }] })]);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
@@ -3388,6 +3403,7 @@ async function createFixture(
     adapterOperations?: readonly AdapterOperation[];
     endpointSend?: (request: unknown) => EndpointSendResult | Promise<EndpointSendResult>;
     endpointContent?: import('@zhin.js/adapter').EndpointContentPort;
+    endpointInboundMedia?: import('@zhin.js/adapter').EndpointInboundMediaPort;
     endpointControl?: EndpointControl;
     endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
@@ -3414,7 +3430,7 @@ async function createFixture(
           events.push('endpoint:send'); sent.push(request);
           return options?.endpointSend?.(request) ?? 'sent-1';
         }, {
-          control: options?.endpointControl, management: options?.endpointManagement, content: options?.endpointContent,
+          control: options?.endpointControl, management: options?.endpointManagement, content: options?.endpointContent, inboundMedia: options?.endpointInboundMedia,
           start() { events.push('endpoint:start'); }, open() { events.push('endpoint:open'); },
           close() { events.push('endpoint:close'); }, stop() { events.push('endpoint:stop'); },
         }); }

@@ -135,6 +135,7 @@ export {
   estimateRequestTokens,
   fallbackTranscriptFit,
   modelAvailability,
+  classifyFallbackFailure,
   modelFallbackFailure,
   modelFallbackResetAt,
   nextPacificMidnight,

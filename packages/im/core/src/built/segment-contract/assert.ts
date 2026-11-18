@@ -1,6 +1,7 @@
 import type { Segment } from './types.js';
 import { isStrictCanonicalSegment } from './validate.js';
 import { isActionSegment, isKeyboardSegment } from '../interactive-segments/types.js';
+import { OUTBOUND_SEGMENT_TYPES } from './catalog.js';
 
 const STRICT_CANONICAL_TYPES = new Set([
   'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
@@ -10,8 +11,10 @@ const STRICT_CANONICAL_TYPES = new Set([
 // These are Core-owned wire extensions rather than canonical data types. Keep
 // their gradual contracts isolated here; third-party extensions must be
 // namespaced so a future canonical type cannot silently collide with them.
+// ADR 0064 §1: derived from the outbound segment catalog, plus the inbound-only `action`.
 const CORE_EXTENSION_TYPES = new Set([
-  'action', 'card', 'html', 'keyboard', 'link', 'markdown', 'qrcode', 'record', 'tts', 'voice',
+  'action',
+  ...OUTBOUND_SEGMENT_TYPES.filter((type) => !STRICT_CANONICAL_TYPES.has(type)),
 ]);
 
 const extensionTypePattern = /^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/u;

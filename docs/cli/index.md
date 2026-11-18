@@ -86,10 +86,10 @@ zhin logs --name icqq --grep reconnect -f
 
 ```bash
 zhin runtime start [...]    # 前台运行网关，等同于 zhin start --foreground
-zhin runtime inspect
+zhin runtime inspect [--json]
 zhin runtime codegen [dir] [--write] [--json]
-zhin runtime build
-zhin runtime publish [--execute|--resume] [--tag latest]
+zhin runtime build [--json]
+zhin runtime publish [--execute|--resume] [--tag latest] [--json]
 zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
@@ -98,9 +98,9 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | 子命令 | 作用 |
 | --- | --- |
 | `start` | 前台运行网关与实例（`zhin start --foreground` 的别名），详见 [zhin start](./runtime.md) |
-| `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
+| `inspect` | 输出插件实例表：实例、包、来源（workspace / node_modules）、启用状态、features 数；`disable_plugins` 里的实例也列出并标「已停用」。`--json` 输出完整结构（各实例的 features 与子插件、构建顺序、已停用实例） |
 | `codegen` | 扫描约定目录，输出插件能力的静态类型声明与 `capabilityGraph` 摘要；`--write` 写入目标目录的 `plugin.capabilities.d.ts`，`--json` 输出扫描结果。`dir` 默认当前目录 |
-| `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
+| `build` / `publish` | 作用于整个 workspace，按依赖顺序处理（单个插件用 `zhin build` / `zhin pub`）。两者都先打印计划：会处理哪些包、版本，跳过了哪些包及原因（没有 `build` 脚本 / `private: true`）；计划为空时明确说明。`publish` 默认 dry-run（打印计划并运行 `pnpm publish --dry-run`），加 `--execute` 才把全部非 private 包发到 npm（需要 npm 登录；先用临时 dist-tag 发布，全部成功后改到 `--tag`），进度写入 `.zhin/publish-journal.json`，中断后用 `--resume` 继续。`--json` 只输出计划（含 `empty` 字段），不执行任何命令。dry-run 计划为空时退出码为 0，`--execute` / `--resume` 计划为空时退出码为 1 |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
 脚手架生成的项目里已有这些惯例脚本：
@@ -420,7 +420,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-搜索插件市场，或查看单个插件的详情。详情含作者（`author`，缺省时取 `maintainers`）；插件已安装到当前项目时，还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
+搜索插件市场，或查看单个插件的详情。`zhin search` 只列出 Zhin 生态的包（官方 `@zhin.js/*`、`zhin.js-*` 命名，或带 `zhin.js` / `zhin` / `zhinjs` / `zhin-plugin` / `zhin-package` 关键词、带 `package.json#zhin` 的包），通用的 `plugin` 关键词不算。`zhin info` 先查本项目的 workspace 包与已安装的包（本地读取，不查询 npm），都没有时再查 npm registry。详情含作者（`author`，缺省时取 `maintainers`）；本地包还列出它的命令、Agent 工具和配置项（从约定目录与 `schema.json` 静态读取，不运行插件代码）。
 
 ### use-cases：按用途找到配置入口 {#use-cases}
 
@@ -503,13 +503,15 @@ npm 插件请用 `zhin install` / `zhin search` / `zhin info`（[ADR 0062](../ad
 **查看插件是否真正生效**：安装完成不等于已经加载、平台已上线或功能已验证。用下面的命令查看状态并执行验证：
 
 ```bash
-zhin packages status <instanceKey>
+zhin packages status <instanceKey>                       # 经本项目网关读取运行中的实例
 zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
-zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
-zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+zhin packages verification-plan <instanceKey>            # --json 输出原始结构
+zhin packages apply <instanceKey> --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>
 ```
+
+省略 `--live` 时，这四个命令经本项目网关的本地套接字（`.zhin/gateway.sock`）转给它监管的实例，由实例按当前 generation 回答，不需要 Console token；`--live <host-url>` 改为连接指定的 Host。网关未运行或实例没有应答时，`status` / `verification-plan` 只检查本地文件并说明原因，`apply` / `verify` 直接拒绝。
 
 `status` 返回的状态：
 
@@ -519,6 +521,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 | `declared` | 实例已声明 |
 | `missing-config` | 必填配置或环境变量缺失，或配置值不符合 schema |
 | `pending-restart` | 当前运行的版本还没有应用 |
+| `unknown` | 没有拿到运行中实例的状态（网关未运行、实例没有应答或尚未上报 generation），无法判断是否已生效；`statusReason` 说明原因 |
 | `enabled` | 已生效，配置与包版本一致 |
 | `degraded` | 声明与实际安装不一致，或依赖检查失败 |
 
@@ -527,7 +530,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 ::: details 实时请求、验证流程与并发规则
 - **Token**：实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可以用 `--token-env <变量名>` 指定。`verification-plan`、`apply`、`verify` 需要完整权限。不要把 token 写在 URL 或命令参数里。
 - **HTTPS**：携带 token 的远程请求必须使用 HTTPS；HTTP 只允许 `localhost`、`127.0.0.0/8` 和 `::1`。
-- **离线模式**：离线 `status` 只提供文件与包解析证据；离线验证计划没有当前版本或可执行的检查，也不会启动 Runtime。
+- **离线模式**：离线 `status` 只提供文件与包解析证据，已声明且启用的插件报 `unknown`（不是 `pending-restart`）；离线验证计划没有当前版本或可执行的检查，也不会启动 Runtime。
 - **验证步骤**：先看 `verification-plan` 的作用范围与副作用，再把返回的 `generation`、`projectRevision`、`checkRevision` 传给 `verify`。配置、版本或检查定义变化后，旧计划会被拒绝。未提供检查的插件返回 `not-configured`；本地检查通过不代表平台投递已验证。`apply` 只是申请应用，之后用实时 `status` 确认是否真正生效。
 - **Schema**：已加载的配置 schema 只适用于同一包版本，更新后改读磁盘上的 `schema.json`。如果新版本只在 TypeScript 中声明配置、没有可读的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境变量引用，完整校验要由真正的 Runtime 预检完成。
 - **生产依赖**：自动启用的插件必须安装为生产依赖；`--save-dev` 必须同时指定 `--no-enable`，这个组合会在安装前检查。

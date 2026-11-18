@@ -223,6 +223,22 @@ describe('collectSegmentMedia（入站媒体提取）', () => {
 });
 
 describe('toCanonicalSegments（入站媒体兼容边界）', () => {
+  it('never guesses a local path from `data.file` (#1250); only explicit path fields are paths', () => {
+    expect(toCanonicalSegments([
+      { type: 'image', data: { file: '/root/project/.env' } },
+      { type: 'file', data: { file: './.zhin/gateway.db' } },
+      { type: 'record', data: { file: '~/.ssh/id_rsa' } },
+      { type: 'image', data: { file: 'file:///etc/passwd' } },
+      { type: 'video', data: { file_path: '/tmp/b.mp4' } },
+    ]).map(segment => segment.data.media)).toEqual([
+      { kind: 'file', value: '/root/project/.env' },
+      { kind: 'file', value: './.zhin/gateway.db' },
+      { kind: 'file', value: '~/.ssh/id_rsa' },
+      { kind: 'url', value: 'file:///etc/passwd' },
+      { kind: 'path', value: '/tmp/b.mp4' },
+    ]);
+  });
+
   it('normalizes legacy media shapes once before consumers inspect them', () => {
     expect(toCanonicalSegments([
       { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },

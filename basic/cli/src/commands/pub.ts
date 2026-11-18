@@ -168,6 +168,11 @@ export async function runPrePublishCheck(pluginDir: string): Promise<boolean> {
 
 export const pubCommand = new Command('pub')
   .description('发布插件到 npm（在 zhin new --standalone 生成的插件目录内可直接运行：npx @zhin.js/cli pub）')
+  .addHelpText(
+    'after',
+    '\n另见: zhin runtime publish 一次性发布整个 workspace 中所有非 private 的包（默认 dry-run 打印计划，--execute 以事务方式发布，可 --resume）；\n'
+      + '      本命令只发布一个插件包（含发布前检查与构建）。',
+  )
   .argument(
     '[plugin-name]',
     '在插件包目录内可省略（发布当前目录）；也可以是插件目录路径（如 . 或 ../my-plugin）；在 Bot 项目根是相对 plugins/ 的路径（如 my-plugin 或 adapters/icqq）',

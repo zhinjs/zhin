@@ -35,10 +35,11 @@ import type {
 } from '../schedule-domain/execution-history.js';
 import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
-import type { ScheduleJob, JobSchedule } from './types.js';
+import type { ScheduleJob, ScheduleJobState, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
+import { SCHEDULE_MODEL_RETRY_DELAYS_MS, scheduleModelFailureNotice } from './schedule-model-failure.js';
 
 const logger = getLogger('timer-scheduler');
 const messages = createMessages({
@@ -47,6 +48,29 @@ const messages = createMessages({
 });
 
 export type ScheduleDispose = () => void;
+
+/** `lastError` note of a run whose automatic retry after a transient model failure is pending (#1250 b40). */
+function pendingModelRetryNote(retryInMs: number, attempt: number): string {
+  return `；${Math.round(retryInMs / 60_000)} 分钟后自动重试（第 ${attempt}/${SCHEDULE_MODEL_RETRY_DELAYS_MS.length} 次）`;
+}
+const PENDING_MODEL_RETRY_NOTE = /；\d+ 分钟后自动重试（第 \d+\/\d+ 次）$/;
+
+/**
+ * The stored state once a pending automatic retry will no longer run (the job was paused, or the
+ * process restarted and the in-memory retry was lost): `lastError` must not keep promising it, and
+ * `retryCount` counts only the retries that were made.
+ */
+function withoutPendingModelRetry<T extends ScheduleJobState | undefined>(state: T): T {
+  const lastError = state?.lastError;
+  if (!state || !lastError || !PENDING_MODEL_RETRY_NOTE.test(lastError)) return state;
+  const made = Math.max(0, (state.retryCount ?? 1) - 1);
+  return {
+    ...state,
+    lastError: lastError.replace(PENDING_MODEL_RETRY_NOTE,
+      made > 0 ? `；已自动重试 ${made} 次，其余自动重试已取消` : '；自动重试已取消'),
+    retryCount: made > 0 ? made : undefined,
+  } as T;
+}
 
 export function jobPrompt(job: ScheduleJob): string {
   if (job.action.kind === 'heartbeat' || job.action.kind === 'agent') {
@@ -179,6 +203,8 @@ export class TimerScheduler {
   private readonly queue: ScheduleExecutionQueue;
   readonly #history?: ScheduleHistoryObserver;
   readonly #observations?: ScheduleObservationOwner;
+  /** Pending automatic retries after a transient model failure (#1250 b40), by job id; in memory only. */
+  readonly #modelRetries = new Map<string, () => void>();
 
   constructor(options: TimerSchedulerOptions) {
     this.store = options.store;
@@ -205,6 +231,14 @@ export class TimerScheduler {
     const jobs = await this.store.listJobs();
     for (const job of jobs) {
       if (isRuntimeSchedulable(job)) this.registerOne(job);
+      // #1250 b40: automatic retries live in memory only; one promised before a restart will not run.
+      if (!this.#modelRetries.has(job.id)) {
+        const state = withoutPendingModelRetry(job.state);
+        if (state && state !== job.state) {
+          await this.store.updateJobState(job.id, { lastError: state.lastError, retryCount: state.retryCount });
+          job.state = state;
+        }
+      }
       // Self-heal: jobs written before the next run was persisted (or by a profile sync that reset
       // `state`) have no `nextRunAtMs`; recompute it for every job on start.
       await this.#syncNextRun(job, { repair: true });
@@ -301,8 +335,26 @@ export class TimerScheduler {
     await this.runJob(jobId, options.source ?? 'manual');
   }
 
-  private async runJob(jobId: string, source: 'scheduled' | 'manual' | 'event' = 'scheduled'): Promise<void> {
+  /** Jobs with an automatic retry pending after a transient model failure (#1250 b40). */
+  pendingModelRetries(): readonly string[] {
+    return Object.freeze([...this.#modelRetries.keys()]);
+  }
+
+  #cancelModelRetry(jobId: string): void {
+    const dispose = this.#modelRetries.get(jobId);
+    if (!dispose) return;
+    this.#modelRetries.delete(jobId);
+    try { dispose(); } catch { /* ignore */ }
+  }
+
+  /**
+   * @param retried automatic retries already made for this fire after transient model failures
+   *   (#1250 b40); 0 for a regular fire.
+   */
+  private async runJob(jobId: string, source: 'scheduled' | 'manual' | 'event' = 'scheduled', retried = 0): Promise<void> {
     const job = await this.store.getJob(jobId);
+    // A new fire (or a manual run) replaces a pending retry of the previous one.
+    this.#cancelModelRetry(jobId);
     if (!job || !job.enabled) return;
     if (job.action.kind !== 'agent' && job.action.kind !== 'heartbeat') return;
     if (await this.isIdleHeartbeat(job)) {
@@ -316,23 +368,70 @@ export class TimerScheduler {
     });
 
     const lastExecutedAt = Date.now();
+    // #1250 b40: a run that failed because the model service was temporarily unavailable is retried
+    // later (about 5, then 10 minutes) through this scheduler's clock, never by blocking. Only when
+    // nothing it did can be repeated twice (no committed or unknown tool effect; a failed run sends
+    // no reply) and the job is still scheduled.
+    const modelFailure = result.success ? undefined : result.modelFailure;
+    const registered = job.enabled && this.disposes.has(jobId);
+    const retryInMs = modelFailure?.transient && source === 'scheduled' && registered
+      && (result.replay?.disposition ?? 'safe') === 'safe'
+      ? SCHEDULE_MODEL_RETRY_DELAYS_MS[retried] : undefined;
+    const retryAt = retryInMs === undefined ? undefined : lastExecutedAt + retryInMs;
     // The next run is recorded with the outcome, in the same write (#1250).
     // Paused or removed while it ran: no longer registered, so no next run.
-    const nextRunAtMs = this.#trackNextRun({ ...job, enabled: job.enabled && this.disposes.has(jobId), state: { ...job.state, lastExecutedAt } });
+    const regularNext = this.#trackNextRun({ ...job, enabled: registered, state: { ...job.state, lastExecutedAt } });
+    const nextRunAtMs = retryAt !== undefined && (regularNext === undefined || retryAt < regularNext) ? retryAt : regularNext;
+    const lastError = !result.success || result.status === 'degraded'
+      ? retryInMs !== undefined
+        ? `${result.error ?? 'unknown error'}${pendingModelRetryNote(retryInMs, retried + 1)}`
+        : modelFailure && retried > 0 ? `${result.error ?? 'unknown error'}；已自动重试 ${retried} 次，不再重试` : result.error
+      : undefined;
+    if (retryInMs !== undefined) {
+      logger.warn(formatCompact({ op: 'schedule_model_retry', job: jobId, kind: modelFailure!.kind,
+        attempt: retried + 1, in_ms: retryInMs }));
+      try {
+        const dispose = this.#scheduler.register(`${jobId}#model-retry`, 'at', async () => {
+          this.#modelRetries.delete(jobId);
+          await this.runJob(jobId, 'scheduled', retried + 1);
+        }, { atMs: retryAt! });
+        this.#modelRetries.set(jobId, dispose);
+      } catch (error) {
+        logger.warn(`model retry not scheduled for ${jobId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
     await this.store.updateJobState(jobId, {
       lastExecutedAt,
       // #1250 b33: a run that finished without doing what was asked is `degraded`, with its cause.
       lastStatus: !result.success ? 'error' : result.status === 'degraded' ? 'degraded' : 'ok',
-      lastError: !result.success || result.status === 'degraded' ? result.error : undefined,
+      lastError,
       nextRunAtMs,
+      retryCount: retryInMs !== undefined ? retried + 1 : !result.success && retried > 0 ? retried : undefined,
     });
 
     const degraded = result.success && result.status === 'degraded' ? result.degraded : undefined;
     // A degraded run whose delivered reply already is the fallback explanation is not announced twice.
     const alreadyExplained = degraded?.fallback === true && result.delivery?.status === 'delivered';
-    if ((!result.success || (degraded && !alreadyExplained)) && (job.notifyOnFailure ?? this.notifyOnFailure)) {
-      const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
-      if (notify.channel !== 'silent' && notify.channel !== 'log') {
+    const notifyFailures = job.notifyOnFailure ?? this.notifyOnFailure;
+    const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
+    const deliverable = notify.channel !== 'silent' && notify.channel !== 'log';
+    if (modelFailure) {
+      // #1250 b40 empty-reply-fallback-misleading: the recipient used to get the raw failure line
+      // ("check your network") as the job's reply. They are told which job did not run and what
+      // happens next: once retries are over (or none will be made), and on every failure when the
+      // job asks to be told about failures.
+      if (deliverable && (retryInMs === undefined || notifyFailures)) {
+        const content = scheduleModelFailureNotice(job.locale, {
+          label: job.label || jobId, failure: modelFailure, turnId: result.audit.executionId,
+          ...(retryInMs !== undefined ? { retryInMs } : {}), retries: retried,
+        });
+        await this.router.deliver({
+          notify, content, jobId, label: job.label, locale: resolveLocale(job.locale),
+        }).catch(() => {});
+      }
+    } else if ((!result.success || (degraded && !alreadyExplained)) && notifyFailures) {
+      if (deliverable) {
         const msg = messages(job.locale, degraded ? 'degraded' : 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
         await this.router.deliver({
           notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale),
@@ -372,7 +471,10 @@ export class TimerScheduler {
         name: label,
         maxRetries: this.queueCfg.maxRetries,
         timeoutMs: this.queueCfg.defaultTimeoutMs,
-        canRetry: error => error instanceof ScheduleAttemptFailure && error.replay.disposition === 'safe',
+        // A failed model request was already retried by the provider layer; a transient one is retried
+        // minutes later by `runJob` (#1250 b40), not again right away.
+        canRetry: error => error instanceof ScheduleAttemptFailure && error.replay.disposition === 'safe'
+          && !error.result?.modelFailure,
         onRetryDecision: decision => {
           if (!attempt) return;
           const replay = lastResult?.replay ?? attempt.evidence.snapshot();
@@ -472,6 +574,7 @@ export class TimerScheduler {
     const ok = await this.store.removeJob(id);
     if (!ok) return false;
     this.#unschedulable.delete(id);
+    this.#cancelModelRetry(id);
     const dispose = this.disposes.get(id);
     if (dispose) {
       dispose();
@@ -484,7 +587,8 @@ export class TimerScheduler {
     const job = await this.store.getJob(id);
     if (!job) return false;
     job.enabled = false;
-    job.state = { ...job.state, nextRunAtMs: undefined };
+    // A pending automatic retry is dropped below (#1250 b40): the stored error no longer promises it.
+    job.state = { ...withoutPendingModelRetry(job.state), nextRunAtMs: undefined };
     await this.store.upsertJob(job);
     const dispose = this.disposes.get(id);
     if (dispose) {
@@ -492,6 +596,7 @@ export class TimerScheduler {
       this.disposes.delete(id);
     }
     this.#unschedulable.delete(id);
+    this.#cancelModelRetry(id);
     return true;
   }
 
@@ -515,6 +620,7 @@ export class TimerScheduler {
       try { dispose(); } catch (e) { logger.warn(`Schedule dispose failed for ${id}:`, e); }
     }
     this.disposes.clear();
+    for (const id of [...this.#modelRetries.keys()]) this.#cancelModelRetry(id);
     this.#unschedulable.clear();
     this.#scheduler.dispose();
   }

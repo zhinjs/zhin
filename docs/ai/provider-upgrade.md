@@ -106,6 +106,12 @@ zhin migrate inference --apply session-preview.json --maintenance --backup-confi
 
 SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--state-snapshot` 显式源快照，标明 `targetValidation: deferred-until-apply`，不连远端。所有数据库在 apply 第一笔 Session CAS 前都会重新核对全部目标、静态 owner、完整 Account 身份和原源版本；任一项失败不写其他选中 Session。此模式不切换启动文件、不读取模型凭据、不加载 Driver、不删旧 catalog。它只保存 Profile 身份，参数与 native model 仍在下一回合跟随该 Profile。
 
+### 已废弃的插话配置项（ADR 0066）
+
+- `zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode`：门槛和「只观察」改在插话判断 `purposes.ambient` 设置。升级后第一次加载时读入一次，之后不再生效；启动时每个 generation 警告一次，`zhin doctor` 警告并可用 `zhin doctor --fix` 删除。废弃期结束后 `zhin doctor` 改为报错（启动只警告）。
+- 模型配置的旧写法 `purposes.ambient`（语言用途，存为 `defaults.ambient` / `ambientFallbacks`）与 `purposes.decisions.ambient`（决策用途）：加载时自动迁移到新的 `purposes.ambient`；导入 `purposes.decisions.ambient` 在废弃期内按迁移表转换并给出警告，期满后报 `invalid-plan`。
+- **降级前先运行 `zhin ai purposes revert ambient-judge`**：旧版本读不了含 `purposes.ambient` 的模型配置。详见[插话判断迁移](../migrations/ambient-judge.md)。
+
 ## 作者接口
 
 - 删除 `SdkProviderAdapter`、`createSdkProviderAdapter`、`sdkEntryFromProvider` 和 `@zhin.js/ai/model-catalog`。Driver 是声明／协议实现；Host 统一拥有配置、凭据和调用生命周期。

@@ -10,15 +10,19 @@
  * `ai.multimodal.perception` 时，图片 / 视频 / PDF 由感知模型描述后以
  * untrusted 文本注入（`[图片描述]` 等），失败或超出单回合上限时保持原占位。
  */
+import * as path from 'node:path';
 import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  inspectMediaBytes,
   normalizeMediaRefsToPayloads,
 } from '../media/media-normalize.js';
+import { authorizeInboundMediaPath, readInboundMediaFile } from '../media/inbound-media-path.js';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
 import { MediaPerceptionFailedError, renderPerceptionCaption, type MediaPerceptionPort } from '../media/perception.js';
+import type { NetworkTransport } from '../security/turn-network-client.js';
 import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
@@ -57,6 +61,13 @@ export interface ResolveTurnMediaOptions {
   readonly transcriber?: AudioTranscriptionPort;
   /** `ai.multimodal.perception`: describes media the turn's model cannot take. Absent = placeholders. */
   readonly perception?: MediaPerceptionPort;
+  /**
+   * #1250: inbound media directories the producing Endpoint declared (`TurnInput.inboundMediaRoots`).
+   * A `path` source is read only when its real path lies inside one; absent = no local path is read.
+   */
+  readonly inboundMediaRoots?: readonly string[];
+  /** Replaces the pinned Node transport that downloads inbound media URLs (tests, embedding hosts). */
+  readonly mediaTransport?: NetworkTransport;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
@@ -68,6 +79,44 @@ const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
 function failureText(type: string, code: string, ref: MediaBlockRef): string {
   const label = ref.file_name ? `; ${ref.file_name}` : '';
   return `[Media ${code}: ${type}${label}]`;
+}
+
+/** A local file in the message that is not read: the model learns it exists, not where it is. */
+function unreadableLocalFileText(type: string, code: string, ref: MediaBlockRef): string {
+  const label = ref.file_name ? `; ${ref.file_name}` : '';
+  return `[Media rejected:${code}: ${type}${label}; this message carries a local file that cannot be read]`;
+}
+
+/**
+ * Bytes for one media ref. A local path is never read through the generic normalizer: it needs the
+ * producing Endpoint's declared directory (#1250); URLs, inline data and opaque refs are unchanged.
+ */
+async function materializeInboundMedia(
+  type: TurnMedia['kind'],
+  media: MediaBlockRef,
+  maxBytes: number,
+  signal: AbortSignal,
+  inboundMediaRoots: readonly string[] | undefined,
+  transport?: NetworkTransport,
+): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string }>> {
+  if (media.kind !== 'path') {
+    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport);
+    return payload ? { payload } : {};
+  }
+  const decision = await authorizeInboundMediaPath(media.value, inboundMediaRoots);
+  if (!decision.allowed) return { refused: decision.reason };
+  if (typeof media.size === 'number' && media.size > maxBytes) return {};
+  const bytes = await readInboundMediaFile(decision, maxBytes);
+  const detected = bytes ? inspectMediaBytes(bytes, type === 'file' ? undefined : type) : null;
+  if (!bytes || !detected) return {};
+  return {
+    payload: {
+      kind: detected.kind,
+      base64: bytes.toString('base64'),
+      mimeType: detected.mimeType,
+      fileName: media.file_name ?? path.basename(decision.path),
+    },
+  };
 }
 
 function toBase64Block(
@@ -99,6 +148,7 @@ export async function resolveTurnMediaInjection(
     providerInput,
     transcriber,
     perception,
+    inboundMediaRoots,
   } = options;
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
@@ -142,12 +192,15 @@ export async function resolveTurnMediaInjection(
       media = resolution.content;
     }
     signal.throwIfAborted();
-    const payload = (await normalizeMediaRefsToPayloads(
-      [{ type, media: media as never }],
-      config.maxFileBytes,
-      signal,
-    ))[0];
+    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport);
     signal.throwIfAborted();
+    if (refused) {
+      // The reason and kind only: the path itself names host layout and stays out of logs and prompt.
+      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: refused }));
+      textAppends.push(unreadableLocalFileText(type, refused, media));
+      outcomes.push({ kind: type, status: 'rejected', code: refused });
+      continue;
+    }
     if (!payload) {
       const code = media.kind === 'file' ? 'unmaterialized_platform_reference' : 'media_validation_failed';
       logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: code }));

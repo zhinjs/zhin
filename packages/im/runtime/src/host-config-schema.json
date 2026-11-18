@@ -2204,7 +2204,95 @@
                   "null"
                 ],
                 "items": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "permit": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "readOnly": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              ],
+                              "description": "上游标注 readOnlyHint=true（且不是 destructiveHint=true）、没被 tools 命中的工具。everyone / deny / permit DSL 字符串或数组（AND）。省略时不额外限制。"
+                            },
+                            "default": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              ],
+                              "description": "其余工具（未标注、标注为写、标注矛盾）。省略时不额外限制。"
+                            },
+                            "tools": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  }
+                                ],
+                                "description": "该工具名或模式的权限档位。"
+                              },
+                              "description": "按上游原始工具名覆盖（区分大小写，只支持 * 通配；精确名优先，其次字面字符最多的模式，并列时都要满足）。非 ASCII 工具名只能被精确名命中。",
+                              "x-keyPlaceholder": "create_*"
+                            }
+                          },
+                          "description": "Agent 层权限（ADR 0065）：与服务器级结果取 AND，只能收窄。"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "description": "该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。同一服务器只能出现一次。",
+                "x-zhin-config": {
+                  "security": true
                 }
               },
               "nickname": {
@@ -2724,10 +2812,76 @@
                     "secret": true
                   }
                 }
+              },
+              "permit": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "readOnly": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    ],
+                    "description": "上游标注 readOnlyHint=true（且不是 destructiveHint=true）、没被 tools 命中的工具。everyone / deny / permit DSL 字符串或数组（AND）。缺省 everyone。"
+                  },
+                  "default": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    ],
+                    "description": "其余工具（未标注、标注为写、标注矛盾）。缺省 owner@global。"
+                  },
+                  "tools": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      ],
+                      "description": "该工具名或模式的权限档位。"
+                    },
+                    "description": "按上游原始工具名覆盖（区分大小写，只支持 * 通配；精确名优先，其次字面字符最多的模式，并列时都要满足）。非 ASCII 工具名只能被精确名命中。",
+                    "x-keyPlaceholder": "create_*"
+                  }
+                },
+                "description": "谁能用这个服务器的哪些工具（ADR 0065）。不写等同于 { readOnly: everyone, default: owner@global, tools: {} }。"
               }
             }
           },
-          "description": "External MCP servers for the Agent MCP client (global, all bots).\nListed servers are exposed to ZhinAgent tool pool when connected.",
+          "description": "要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在 ai.agents.<name>.mcpServers 里写上服务器的 name，对应的 Agent 才能调用它的工具（例：ai.agents.zhin.mcpServers: [github]）。没有任何 Agent 绑定的服务器，zhin status、zhin doctor 与 Console「需要你处理」会提示。",
           "x-zhin-config": {
             "security": true
           }
@@ -2896,7 +3050,8 @@
                     "number",
                     "string"
                   ],
-                  "description": "判断模型置信度门槛 0..1（默认 0.7）"
+                  "deprecated": true,
+                  "description": "已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除"
                 },
                 "mode": {
                   "type": "string",
@@ -2904,7 +3059,8 @@
                     "active",
                     "shadow"
                   ],
-                  "description": "shadow 只记录判断结果、不回复（默认 active）"
+                  "deprecated": true,
+                  "description": "已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除"
                 }
               }
             },

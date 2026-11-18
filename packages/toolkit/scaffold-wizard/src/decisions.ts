@@ -101,9 +101,15 @@ export function diagnoseDecisionConfig(input: Readonly<{ config: Readonly<Record
   const ai = record(config.ai);
   if (Object.hasOwn(ai, 'decisions')) return [locale === 'en' ? 'Legacy ai.decisions requires explicit migration.' : '旧 ai.decisions 需要显式迁移。'];
   const plan = record(input.plan), decisions = record(record(plan.purposes).decisions), issues: string[] = [];
-  const taskNames = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'];
+  // ADR 0066: five decision purposes; `ambient` became the interjection judge `purposes.ambient`.
+  const taskNames = ['skills', 'tools', 'memory', 'agents', 'approval'];
   const message = (value: string, args: readonly unknown[] = []) => wizardText(locale, value, args).replaceAll('ai.decisions', 'ai.plan.yml:purposes.decisions');
-  if (Object.keys(decisions).some(key => !taskNames.includes(key))) issues.push(message('ai.decisions 含有未知配置字段。'));
+  if (Object.keys(decisions).some(key => !taskNames.includes(key) && key !== 'ambient')) issues.push(message('ai.decisions 含有未知配置字段。'));
+  if (Object.hasOwn(decisions, 'ambient')) {
+    issues.push(locale === 'en'
+      ? 'ai.plan.yml:purposes.decisions.ambient is deprecated (ADR 0066): write the interjection judge as purposes.ambient (still converted during the deprecation window).'
+      : 'ai.plan.yml:purposes.decisions.ambient 已废弃（ADR 0066）：请改写插话判断 purposes.ambient（废弃期内仍会自动转换）。');
+  }
   for (const name of taskNames) {
     if (!Object.hasOwn(decisions, name)) continue;
     const task = record(decisions[name]);

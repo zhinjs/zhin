@@ -1,6 +1,7 @@
 import type { AgentDecisionConfig, DecisionTask, DecisionTaskPolicy } from './types.js';
 
-export const DECISION_TASKS = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'] as const satisfies readonly DecisionTask[];
+/** The five decision purposes (ADR 0066 D1.8: `ambient` is the interjection judge `purposes.ambient` now). */
+export const DECISION_TASKS = ['skills', 'tools', 'memory', 'agents', 'approval'] as const satisfies readonly DecisionTask[];
 
 /** Validate before installing any optional remote decision service. */
 export function normalizeAgentDecisionConfig(input: unknown): AgentDecisionConfig | undefined {

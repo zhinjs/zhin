@@ -4,6 +4,8 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { readFileSync } from 'node:fs';
 import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { expandSandboxInboundSyntax, stripSandboxInboundSyntax } from './inbound-syntax.js';
+import { resolveSandboxMediaConfig, type ResolvedSandboxMediaConfig, type SandboxMediaConfig } from './media-config.js';
 import {
   normalizeSandboxAgentRunConfig,
   type SandboxAgentRunConfig,
@@ -77,6 +79,8 @@ export type ResolvedSandboxBot = {
   readonly streamingIntervalMs: number;
   /** Configured `nickname`; `[@nickname]` also mentions this bot. */
   readonly nickname?: string;
+  /** Hosted uploads (ADR 0064 D12, I1). */
+  readonly media: ResolvedSandboxMediaConfig;
 };
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
@@ -85,6 +89,8 @@ export interface SandboxEndpointConfig extends EndpointProfileConfiguration {
   readonly owner?: string;
   readonly streaming?: boolean;
   readonly streamingIntervalMs?: number;
+  /** Hosted uploads: size limits, quotas, link lifetime, public download (ADR 0064 D12). */
+  readonly media?: SandboxMediaConfig;
 }
 
 export function resolveSandboxEndpoint(
@@ -105,6 +111,7 @@ export function resolveSandboxEndpoint(
     streaming: config.streaming !== false,
     streamingIntervalMs,
     ...(optionalEndpointField(config.nickname) ? { nickname: optionalEndpointField(config.nickname)! } : {}),
+    media: resolveSandboxMediaConfig(config.media),
   };
 }
 
@@ -227,8 +234,6 @@ export interface SandboxSelfMention {
   readonly names?: readonly string[];
 }
 
-const TYPED_MENTION = /\[@([^\[\]\n]{1,64})\]/gu;
-
 function expandTypedMentions(
   content: MessageElement[],
   text: string,
@@ -240,45 +245,28 @@ function expandTypedMentions(
     const trimmed = name.trim();
     return self && selfKeys.has(trimmed.toLowerCase()) ? { target: self.id, self: true } : { target: trimmed, self: false };
   };
-  let expanded = false;
-  const next: MessageElement[] = [];
-  for (const segment of content) {
-    // A picked mention (`mention` segment) may carry the bot's name instead of its id.
+  // Typed `[@name]`, `[face:ID]`, `[image:URL]` … become the segments the composer buttons insert
+  // (shared table: `inbound-syntax.ts`); a token with an unaccepted link stays text.
+  const typed = expandSandboxInboundSyntax(content);
+  let expanded = typed.expanded;
+  const next: MessageElement[] = typed.segments.map((segment) => {
+    // A picked or typed mention may carry the bot's name instead of its id.
     if ((segment.type === 'mention' || segment.type === 'at') && self && typeof segment.data?.target === 'string'
       && segment.data.target !== self.id && selfKeys.has(segment.data.target.trim().toLowerCase())) {
       expanded = true;
-      next.push({ ...segment, data: { ...segment.data, target: self.id } });
-      continue;
+      return { ...segment, data: { ...segment.data, target: self.id } };
     }
-    const value = segment.type === 'text' ? segment.data?.text : undefined;
-    if (typeof value !== 'string' || !value.includes('[@')) {
-      next.push(segment);
-      continue;
-    }
-    let last = 0;
-    for (const match of value.matchAll(TYPED_MENTION)) {
-      const name = match[1]!;
-      if (!name.trim()) continue;
-      expanded = true;
-      if (match.index > last) next.push({ type: 'text', data: { text: value.slice(last, match.index) } });
-      const { target } = resolve(name);
-      next.push({ type: 'mention', data: { target, name: name.trim() } });
-      last = match.index + match[0].length;
-    }
-    if (last === 0) next.push(segment);
-    else if (last < value.length) next.push({ type: 'text', data: { text: value.slice(last) } });
-  }
+    return segment;
+  });
   if (!expanded) return { content, text };
   // Plain-text view: drop mentions of the bot (like other platforms strip the at-self prefix),
-  // keep `@name` for anyone else so commands and the Agent still see who was addressed.
-  let removedSelf = false;
-  const plain = text.replace(TYPED_MENTION, (whole, name: string) => {
-    if (!name.trim()) return whole;
+  // keep `@name` for anyone else so commands and the Agent still see who was addressed; media and
+  // faces contribute no text, exactly like a picked image.
+  const plain = stripSandboxInboundSyntax(text, (name) => {
     const resolved = resolve(name);
-    if (resolved.self) { removedSelf = true; return ''; }
-    return `@${resolved.target}`;
+    return resolved.self ? '' : `@${resolved.target}`;
   });
-  return { content: next, text: removedSelf ? plain.replace(/[ \t]{2,}/gu, ' ').trim() : plain };
+  return { content: next, text: plain.removed ? plain.text.replace(/[ \t]{2,}/gu, ' ').trim() : plain.text };
 }
 
 /** Control frames never fall through into chat or platform message hooks. */
@@ -336,7 +324,8 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string, sel
   if (!text.trim()) {
     text = (typeof payload.text === 'string' && payload.text.trim())
       ? payload.text
-      : action?.payload ?? raw;
+      // Media-only content (a picked or typed image) has no text; never fall back to the raw frame.
+      : action?.payload ?? (wireContent.some((segment) => segment.type !== 'text') ? '' : raw);
   }
   const typed = expandTypedMentions(wireContent, text, self);
   const content = typed.content;

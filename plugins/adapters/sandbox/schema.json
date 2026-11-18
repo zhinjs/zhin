@@ -61,6 +61,15 @@
                 "description": "Fallback account profile"
               }
             }
+          },
+          "media": {
+            "$ref": "#/$defs/media",
+            "description": "Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载",
+            "x-i18n": {
+              "en": {
+                "description": "Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download"
+              }
+            }
           }
         },
         "required": [
@@ -101,6 +110,15 @@
       "x-i18n": {
         "en": {
           "description": "Fallback account profile"
+        }
+      }
+    },
+    "media": {
+      "$ref": "#/$defs/media",
+      "description": "Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载",
+      "x-i18n": {
+        "en": {
+          "description": "Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download"
         }
       }
     }
@@ -167,6 +185,118 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ttlHours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168,
+          "default": 24,
+          "description": "签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销",
+          "x-i18n": {
+            "en": {
+              "description": "Lifetime of signed links and files in hours (1–168); delete a file to revoke it earlier"
+            }
+          }
+        },
+        "publicDownload": {
+          "type": "boolean",
+          "default": false,
+          "description": "开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭",
+          "x-i18n": {
+            "en": {
+              "description": "Open signed downloads under /pub/sandbox-media (time-limited external links; a valid signature is still required). Off by default"
+            }
+          }
+        },
+        "maxBytes": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置",
+          "x-i18n": {
+            "en": {
+              "description": "Per-type byte limit of one file; hard ceiling 64 MiB (the gateway's request body limit); larger needs the gateway raised too"
+            }
+          },
+          "properties": {
+            "image": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864,
+              "default": 10485760,
+              "description": "图片",
+              "x-i18n": {
+                "en": {
+                  "description": "Images"
+                }
+              }
+            },
+            "audio": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864,
+              "default": 20971520,
+              "description": "语音 / 音频",
+              "x-i18n": {
+                "en": {
+                  "description": "Voice / audio"
+                }
+              }
+            },
+            "video": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864,
+              "default": 33554432,
+              "description": "视频",
+              "x-i18n": {
+                "en": {
+                  "description": "Video"
+                }
+              }
+            },
+            "file": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864,
+              "default": 33554432,
+              "description": "其他文件",
+              "x-i18n": {
+                "en": {
+                  "description": "Other files"
+                }
+              }
+            }
+          }
+        },
+        "uploaderQuotaBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5368709120,
+          "default": 209715200,
+          "description": "每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件",
+          "x-i18n": {
+            "en": {
+              "description": "Bytes one uploader may hold on this endpoint; over it uploads are refused, nobody else's files are evicted"
+            }
+          }
+        },
+        "quotaBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5368709120,
+          "default": 524288000,
+          "description": "本端点的总配额；超出时拒绝上传",
+          "x-i18n": {
+            "en": {
+              "description": "Total quota of this endpoint; over it uploads are refused"
+            }
+          }
         }
       }
     }

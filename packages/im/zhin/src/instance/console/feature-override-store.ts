@@ -280,6 +280,8 @@ export class FeatureOverrideStore {
     this.reader = Object.freeze({
       get version() { return store.#version; },
       get: (plugin: string, key: string) => store.get(plugin, key),
+      /** Every live override (ADR 0066 D7: whether any switch turns interjection on). */
+      list: () => store.list(),
     });
   }
 

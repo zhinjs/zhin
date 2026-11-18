@@ -16,4 +16,19 @@ describe('NapCat EndpointContentPort', () => {
     expect(forward).toMatchObject({ status: 'resolved', value: [{ actor: { id: '8', displayName: 'Bob' } }] });
     expect(JSON.stringify(forward)).not.toContain('"role"');
   });
+  it('quoted and forwarded media whose platform `file` looks like a local path stay opaque refs (#1250)', async () => {
+    const local = [{ type: 'image', data: { file: '/root/bot/.env' } }, { type: 'file', data: { file: './.zhin/gateway.db' } }];
+    const call = vi.fn(async ({ action }: { action: string }) => action === 'get_msg'
+      ? { time: 10, sender: { user_id: 7 }, message: local }
+      : { messages: [{ time: 11, sender: { user_id: 8 }, content: local }] });
+    const port = createNapCatContentPort(call);
+    const conversation = { endpoint: { id: 'main', adapter: 'napcat' }, kind: 'group' as const, id: 'g1' };
+    const context = { signal: new AbortController().signal, maxDepth: 2, maxEntries: 50, maxChars: 12_000 };
+    const quoted = await port.resolve({ kind: 'message', message: { conversation, id: 'm1' } }, context);
+    const forward = await port.resolve({ kind: 'forward', conversation, forwardId: 'f1' }, context);
+    for (const resolved of [quoted, forward]) {
+      expect(JSON.stringify(resolved)).not.toContain('"kind":"path"');
+      expect(JSON.stringify(resolved)).toContain('"kind":"file"');
+    }
+  });
 });

@@ -15,6 +15,7 @@ export class WeixinIlinkEndpoint extends WeixinIlinkClient implements Endpoint {
       name: this.configName(),
       management: this.endpointManagement,
       control: this.endpointControl,
+      inboundMedia: this.endpointInboundMedia,
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);

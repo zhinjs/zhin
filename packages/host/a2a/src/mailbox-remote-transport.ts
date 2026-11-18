@@ -441,6 +441,9 @@ function mailPromptText(mail: Mail): string {
   }
 }
 
+/** Host role of every inbound remote Mail turn (ADR 0065 §3.6). */
+const REMOTE_MAIL_ROLE = 'user';
+
 function createAgentHostInboundHandler(agentHost: AgentHostPort): A2AMailboxInboundHandler {
   return async (mail, grantedBudget) => {
     const bindingName = mail.to.includes('#') ? mail.to.slice(0, mail.to.indexOf('#')) : mail.to;
@@ -456,9 +459,11 @@ function createAgentHostInboundHandler(agentHost: AgentHostPort): A2AMailboxInbo
         scope: 'private',
         sceneId: mail.engagementId,
       },
+      // ADR 0065 §3.6: a remote Mail is a `user`, whatever trust the peer declares. The peer's
+      // signature proves who sent it, not a chat role here; no chat role, no `trusted` permits.
       principal: {
         subjectId: mail.authority.principal.id,
-        roles: [mail.authority.trust],
+        roles: [REMOTE_MAIL_ROLE],
       },
       session: {
         key: `a2a:engagement:${mail.engagementId}:${mail.to}`,
@@ -476,7 +481,7 @@ function createAgentHostInboundHandler(agentHost: AgentHostPort): A2AMailboxInbo
         },
       },
       policy: {
-        permissions: [mail.authority.trust],
+        permissions: [REMOTE_MAIL_ROLE],
         unattended: true,
         network: {
           enabled: mail.authority.egress.network,

@@ -1,7 +1,10 @@
 /**
  * QQ markdown 图片语法 `![alt #宽px #高px](url)` 需要图片尺寸：对公网 URL 图片只读取文件头
  * （≤64 KiB）解析 PNG / JPEG / GIF / WebP 尺寸。探测失败返回 undefined，由调用方降级。
+ * 探测在本机发请求，只走 core `fetchOutboundMedia`（仅公网 HTTPS、固定已校验 IP、逐跳校验重定向；#1250 第 46 批）。
  */
+import { fetchOutboundMedia, type OutboundMediaFetcher } from '@zhin.js/core';
+
 export interface QqImageSize {
   readonly width: number;
   readonly height: number;
@@ -136,20 +139,30 @@ export function isSafePublicImageUrl(rawUrl: string): boolean {
   return true;
 }
 
-/** 读取公网图片文件头得到尺寸；网络错误、超时或格式不识别时返回 undefined。 */
+/** 读取公网图片文件头得到尺寸；网络错误、超时、地址被拒或格式不识别时返回 undefined。 */
 export interface ImageProbeOptions {
+  /** Response-level test seam; when absent the probe goes through `fetchMedia`. */
   readonly fetch?: ImageProbeFetch;
+  /** Downloads on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
 }
 export async function probeImageSize(
   url: string,
-  { fetch: fetchImpl = fetch as unknown as ImageProbeFetch, timeoutMs = PROBE_TIMEOUT_MS, signal }: ImageProbeOptions = {},
+  { fetch: fetchImpl, fetchMedia = fetchOutboundMedia, timeoutMs = PROBE_TIMEOUT_MS, signal }: ImageProbeOptions = {},
 ): Promise<QqImageSize | undefined> {
   if (!isSafePublicImageUrl(url)) return undefined;
+  const headers = { Range: `bytes=0-${PROBE_BYTES - 1}` };
   try {
+    if (!fetchImpl) {
+      // A server that ignores Range and sends more than the probe window is a failed probe (caller
+      // degrades), not a refusal: `probe` keeps it out of the warn log (#1250 第 46 批 L7).
+      const { bytes } = await fetchMedia(url, { headers, maxBytes: PROBE_BYTES, timeoutMs, probe: true, ...(signal ? { signal } : {}), source: 'qq' });
+      return imageSizeFromBytes(new Uint8Array(bytes));
+    }
     const response = await fetchImpl(url, {
-      headers: { Range: `bytes=0-${PROBE_BYTES - 1}` },
+      headers,
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return undefined;

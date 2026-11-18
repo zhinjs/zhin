@@ -276,6 +276,52 @@ describe('GatewayHttpServer routing', () => {
     expect(forwarded!.request.headers.get('x-hub-signature')).toBe('sha256=1');
   });
 
+  // ADR 0064 I1: the Sandbox's hosted media reaches the instance through the gateway unchanged.
+  it('forwards Sandbox media: the signed public link as-is, uploads and downloads with the principal', async () => {
+    const transport = new FakeTransport();
+    transport.handler = async (request) => new URL(request.url).pathname.startsWith('/pub/')
+      ? new Response('bytes', { status: 200, headers: { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="x.svg"' } })
+      : jsonResponse(201, { success: true });
+    const { server, origin } = await startServer(transport);
+    withUsers(server);
+
+    const link = `/pub/sandbox-media/0123456789abcdef/${'A'.repeat(22)}?exp=1900000000&sig=${'B'.repeat(43)}`;
+    const download = await fetch(`${origin}${link}`);
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-disposition')).toBe('attachment; filename="x.svg"');
+    expect(download.headers.get('x-content-type-options')).toBe('nosniff');
+    const [pub] = transport.requests;
+    expect(`${new URL(pub!.request.url).pathname}${new URL(pub!.request.url).search}`).toBe(link);
+    expect(pub!.context.principal).toBeUndefined();
+    expect(pub!.context.remoteAddress).toMatch(/127\.0\.0\.1/u);
+
+    // Upload: authorized at the gateway (endpoint.operate), forwarded with the raw body and its headers.
+    const refused = await fetch(`${origin}/api/sandbox/media/bot?type=group&id=room-1`, {
+      method: 'POST', headers: { authorization: 'Bearer viewer-token', 'content-type': 'image/png' }, body: 'PNGDATA',
+    });
+    expect(refused.status).toBe(403);
+    expect(transport.requests).toHaveLength(1);
+    const uploaded = await fetch(`${origin}/api/sandbox/media/bot?type=group&id=room-1`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer owner-token', 'content-type': 'image/png', 'x-zhin-file-name': encodeURIComponent('图.png') },
+      body: 'PNGDATA',
+    });
+    expect(uploaded.status).toBe(201);
+    const upload = transport.requests[1]!;
+    expect(upload.request.method).toBe('POST');
+    expect(upload.body).toBe('PNGDATA');
+    expect(upload.request.headers.get('content-length')).toBe('7');
+    expect(upload.request.headers.get('content-type')).toBe('image/png');
+    expect(upload.request.headers.get('x-zhin-file-name')).toBe(encodeURIComponent('图.png'));
+    expect(new URL(upload.request.url).search).toBe('?type=group&id=room-1');
+    expect(upload.context.principal).toMatchObject({ kind: 'user', userId: 'owner-token' });
+
+    // Console download: endpoint.view is enough.
+    const viewed = await fetch(`${origin}/api/sandbox/media/bot/${'A'.repeat(22)}?type=group&id=room-1`, { headers: { authorization: 'Bearer viewer-token' } });
+    expect(viewed.status).toBe(201);
+    expect(transport.requests[2]!.context.principal).toMatchObject({ userId: 'viewer-token' });
+  });
+
   it('rejects forwarded bodies over the limit', async () => {
     const transport = new FakeTransport();
     const { origin } = await startServer(transport, { maxBody: 8 });

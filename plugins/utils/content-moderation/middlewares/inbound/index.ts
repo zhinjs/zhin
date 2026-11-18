@@ -15,6 +15,7 @@ import {
   type ModerationConfig,
 } from '../../src/index.js';
 import { moderationEngineToken } from '../../src/runtime.js';
+import { confineInboundImagePaths } from '../../src/inbound-media-path.js';
 
 /**
  * Inbound content moderation.
@@ -51,11 +52,16 @@ export default defineMiddleware<Message, ModerationConfig>({
     // 词库 readFileSync，不能留在每条消息的热路径）；这里只做判定。
     const engine = context.use(moderationEngineToken);
 
-    const extracted = extractFromTextAndSegments(message.content, message.segments);
-    if (!extracted.text && extracted.images.length === 0) {
+    const raw = extractFromTextAndSegments(message.content, message.segments);
+    if (!raw.text && raw.images.length === 0) {
       await next();
       return;
     }
+    // #1250: an inbound host path is read only inside the producing Endpoint's declared directory.
+    const extracted = Object.freeze({
+      ...raw,
+      images: await confineInboundImagePaths(raw.images, inboundMediaRoots(context)),
+    });
 
     const scanInput = {
       text: extracted.text,
@@ -110,6 +116,16 @@ export default defineMiddleware<Message, ModerationConfig>({
     }
   },
 });
+
+/** Directories the message's Endpoint declared for the inbound media it downloads; none when unknown. */
+function inboundMediaRoots(context: MiddlewareContext<Message, ModerationConfig, string | undefined>): readonly string[] {
+  try {
+    const adapters = context.project<AdapterIndex>(adapterFeatureId);
+    return adapters.inboundMediaRoots(context.input.conversation.endpoint.id as CapabilityId);
+  } catch {
+    return [];
+  }
+}
 
 async function enqueueGroupModeration(
   context: MiddlewareContext<Message, ModerationConfig, string | undefined>,

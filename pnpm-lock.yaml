@@ -1106,6 +1106,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../http
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../im/permission
       rimraf:
         specifier: ^6.1.4
         version: 6.1.4
@@ -3218,7 +3221,13 @@ importers:
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.8)
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
     devDependencies:
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18

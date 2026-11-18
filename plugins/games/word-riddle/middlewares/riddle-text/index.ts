@@ -51,11 +51,15 @@ export default defineMiddleware<Message>({
     }
 
     if (session.status === 'active') {
-      const map = buildChoiceFallbackMap(RIDDLE_PREFIX, session.id, [
-        { id: 'hint', label: '提示' },
-        { id: 'skip', label: '跳过' },
-        { id: 'quit', label: '结束' },
-      ]);
+      // Numbers, the button labels (提示 / 跳过 / 结束, b34 label matching) and their English words.
+      const map = {
+        ...buildChoiceFallbackMap(RIDDLE_PREFIX, session.id, [
+          { id: 'hint', label: 'hint' }, { id: 'skip', label: 'skip' }, { id: 'quit', label: 'end' },
+        ]),
+        ...buildChoiceFallbackMap(RIDDLE_PREFIX, session.id, [
+          { id: 'hint', label: '提示' }, { id: 'skip', label: '跳过' }, { id: 'quit', label: '结束' },
+        ]),
+      };
       const payload = resolveGameTextPayload(raw, map);
       const parsed = payload ? parseChoicePayload(payload, RIDDLE_PREFIX) : null;
       if (parsed?.sessionId === session.id) {

@@ -5,6 +5,7 @@ import { createHttpHost } from '@zhin.js/host-http/node';
 import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';
+import { sandboxOperations } from './sandbox-operations.js';
 
 const kill = vi.fn();
 // A Docker CLI that never reports back (ignored SIGTERM, or a child holding stdio open).
@@ -26,7 +27,7 @@ it('still sends ready with a timed-out shell isolation status when the Docker pr
   const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
     http, defaults: resolveSandboxEndpoint({ id: 'hung-probe-bot', owner: 'hung-owner' }),
-  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEndpointEventGateway({ receive: async () => undefined }) });
+  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEndpointEventGateway({ receive: async () => undefined }) });
   await endpoint.start();
   endpoint.open();
   const { port } = await http.listen();

@@ -69,7 +69,7 @@ it('projects ambient selection from the held operation graph without loading Dri
   const lease = snapshots.acquire();
   const input = { lease, signal: new AbortController().signal };
   try {
-    expect(await host.ambientModels(input)).toEqual([]);
+    expect(await host.ambientModels(input)).toEqual({ chain: [], mode: 'active', minConfidence: 0.7 });
     await host.repository.commit({
       rootId,
       expectedRevision: 0,
@@ -78,7 +78,8 @@ it('projects ambient selection from the held operation graph without loading Dri
       graph,
       result: null,
     });
-    expect(await host.ambientModels(input)).toEqual(['Language service/chat']);
+    expect(await host.ambientModels(input)).toEqual({ chain: [{ profile: 'chat', label: 'Language service/chat', kind: 'language', role: 'primary' }],
+      inheritedFrom: 'chat', mode: 'active', minConfidence: 0.7 });
     await host.repository.commit({
       rootId,
       expectedRevision: 1,
@@ -91,7 +92,9 @@ it('projects ambient selection from the held operation graph without loading Dri
       },
       result: null,
     });
-    expect(await host.ambientModels(input)).toEqual(['Language service/ambient']);
+    // A legacy stored ambient purpose is shown converted (ADR 0066: the judge chain actually used).
+    expect(await host.ambientModels(input)).toEqual({ chain: [{ profile: 'ambient', label: 'Language service/ambient', kind: 'language', role: 'primary' }],
+      mode: 'active', minConfidence: 0.7 });
     expect(credentialReads).not.toHaveBeenCalled();
     expect(resolveSource).not.toHaveBeenCalled();
   } finally {

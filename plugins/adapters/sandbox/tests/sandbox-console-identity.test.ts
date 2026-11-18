@@ -7,6 +7,7 @@ import type { EndpointEvent } from 'zhin.js/adapter';
 import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint, sandboxConsoleUser } from '../src/endpoint.js';
 import { parseSandboxWsFrame, resolveSandboxEndpoint, sandboxSimulatedSenderId } from '../src/protocol.js';
+import { sandboxOperations } from './sandbox-operations.js';
 
 // The ready frame is gated on a host `docker info` probe; keep this suite independent of the runner's Docker.
 vi.mock('node:child_process', async importOriginal => ({
@@ -26,6 +27,9 @@ function fakeHttp() {
   let accept: ((connection: unknown) => void) | undefined;
   const http = {
     ws: () => ({ onConnection: (listener: (connection: unknown) => void) => { accept = listener; return () => { accept = undefined; }; }, close: () => undefined }),
+    // ADR 0064 I1: the endpoint also mounts its hosted-media routes.
+    route: () => () => undefined,
+    address: undefined,
   };
   const connect = async (principal: Principal) => {
     const frames: Frame[] = [];
@@ -74,7 +78,7 @@ async function fixture() {
   const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
     http: http as never, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'dev-user' }), chatRoles: roles(),
-  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEndpointEventGateway({ receive: events }) });
+  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEndpointEventGateway({ receive: events }) });
   await endpoint.start();
   endpoint.open();
   const sent = async (client: Awaited<ReturnType<typeof connect>>, payload: Record<string, unknown>) => {

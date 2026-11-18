@@ -24,6 +24,17 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 - 汇总包含当前 trace 中已记录的子回合；`partial` 表示回合未正常完成、子回合结果不完整或记录达到上限；此时显示的只是已记录用量，不能当作全部消耗。它不是整个账号的账单：独立决策、嵌入、图像生成等没有进入该 trace 的调用不在此汇总，Provider 未回传的失败请求用量也无法推算。
 - `ms` 是 trace 记录的回合耗时；`trace` 用于串联日志，`turn` 可以交给 `zhin trace <turn>` 查看已有归档。日志无需归档开关；只开日志不会新增落盘存储。
 
+群聊插话的判断不是 Agent 回合，不进 `turn` 汇总，也没有 `zhin trace` 归档；每次判断调用另记一条 `[ai.usage] judge`（`scene: ambient`），聊天模型和决策模型都记，失败也记：
+
+```text
+[INFO] [ai.usage] judge | scene: ambient | conv: qq:123456 | status: completed | kind: language | model: 备用站/gpt-mini | fallback_from: 主站/gpt-4o-mini | calls: 1 | input: 820 | output: 24 | cache_read: 0 | cache_write: ? | ms: 640
+```
+
+- `model` 是实际作答（或最后失败）的模型，写成「服务显示名/模型」（服务没有可读名称时退回驱动名，再不行只写模型，不显示 `services:<uuid>` 这类内部 id）；切到备用模型时多一个 `fallback_from`，是原来配置的模型。`kind` 为 `language`（聊天模型）或 `decision`（决策模型）。
+- 失败时 `status: failed`，`error` 只写错误类别（如 `timeout`、`auth`、`rate_limit`、`invalid_response`），不写服务返回的原文。
+- 一次判断写一行：`calls` 是判断次数，不是模型请求次数。请求阶段切到备用模型时，这一行写备用模型，`ms` 是两次请求的合计，token 是作答那次请求回传的用量。
+- 决策模型没有回传用量时只写 `calls` 和 `ms`。Console「群聊插话」状态的 `judgeDaily` 按天汇总这些调用的次数与 token（进程内存，重启后从当天重新计）。
+
 需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
 
 ```yaml
@@ -84,10 +95,10 @@ sequenceDiagram
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
-- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：只在额度用完、余额不足或鉴权失败时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
+- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理。唯一例外是用途上显式配置的备用模型（`fallbacks`）：在额度用完、余额不足、鉴权失败、连续超时，或网络错误 / 5xx 的同模型重试用完时按顺序换用，已执行的工具不会重放，详见[备用模型](./model-policy.md#备用模型fallbacks)。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
-一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
+一个回合可用的工具 = 插件注册的工具 + 当前 Agent 在 `ai.agents.<name>.mcpServers` 里绑定的 MCP 服务器的工具（只在 `ai.mcpServers` 连接而没有绑定的不算） + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
 ### 显示进度
 
@@ -317,6 +328,20 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 **白名单配置**：需要放开某个群成员或私聊用户时，把他的用户 ID 加入 `trigger.trusted`，他发起的回合会按 `trusted_member` 处理。没有额外的开关。
 
+### MCP 工具按聊天角色授权（ADR 0065） {#mcp-tool-permit}
+
+`ai.mcpServers` 接入的工具与插件工具走同一个聊天角色判定（`PermissionHost`）。每个工具按服务器的 `permit`（见[配置参考](../configuration/index.md#ai-mcpservers-permit)）定出一个档位，不写时：
+
+- 上游标注 `readOnlyHint: true`（且没有同时标 `destructiveHint: true`）的工具所有人可用；
+- 其余工具（未标注、标注为写、标注矛盾）只给全局主人 `owner@global`，与危险工具同一档。
+
+判定分两次：
+
+1. **组装工具池时**：在信任分级之前，按本轮发送者的 `principal.chatRole` / `chatRoleLevels` 过滤。看不到的工具不在模型的工具列表里，`discover` / `load_tool` 搜不到，写进 `deferredTools.alwaysLoadedTools` 也不会常驻；系统提示不提它们。会话层的 `owner` 按会话层算，不满足 `owner@global`。
+2. **每次执行前**：按角色存储里的当前角色再判一次。会话历史里重放的旧调用、回合中被撤销的角色、子 Agent 沿用的父回合工具都会被拒绝，记 `tool_denied`，策略 `mcp-permit`，原因写「这个 MCP 工具只对主人开放」。
+
+上游标注只决定档位，**不放宽审批**：MCP 工具仍是 `on-risk`，照常走审批、文件策略、网络白名单和硬闸，也不会被当作 `readOnly` 工具进入弹幕回合或让定时任务的重放判定视为安全。定时任务按创建者当前的角色降一档运行，全局主人建的任务默认也拿不到「仅主人」的 MCP 写工具，需要时在 `permit.tools` 里把该工具放宽到 `trusted`。升级影响见[升级：MCP 工具按聊天角色授权](../migrations/mcp-tool-permit.md)。
+
 ## 注入防护与用量配额
 
 信任分级管“谁发起”，这一节管“回合里读到了什么”和“发出去的是什么”。
@@ -399,6 +424,14 @@ ai:
 - 被拒的段替换为可见提示（如「[图片未发送：媒体来源不被允许]」），并记录 `op=outbound_media_refused` 警告（含来源、段类型、`kind`、原因，不含路径本身），不会原样发出，也不会静默丢弃。
 
 合法的本地文件仍可发送：工具生成的截图、图表放在工作区（如 `data/media/`）里，模型以 `path` 引用即可；Agent 会读成内联数据或落盘为可信引用。插件工具把模型参数拼进消息时，用 `untrustedContent()` 包装即可得到同样的保护。
+
+插件直接调用 `normalizeMediaRefsToPayloads()` / `publishOutboundElements()` 时，不传 authority 就不读任何本地路径（与 `NO_MEDIA_AUTHORITY` 相同）；要读工作区文件，显式传 `{ filesystem: { workspaceRoot }, fileRole }`。
+
+### 入站媒体
+
+入站消息里的本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）只在两个条件同时满足时才读：产出这条消息的端点声明了自己的入站媒体目录（`inboundMedia.roots()`，见[端点生命周期](../authoring/endpoint-lifecycle.md#入站媒体目录)），且解析符号链接、`..` 之后的真实路径落在该目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。其他路径一律不读，记录 `op=inbound_media_rejected` 警告（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，整轮照常进行。平台字段 `data.file` 不再被猜成本机路径。引用消息、合并转发只把内容交给模型，不会读其中的本地文件。
+
+`ZhinAgent` 的旧回合入口（`process()`、`processTurn()`、`processStream()`、`prompt()`，即 `processTextTurn()` 链）拿不到产出端点声明的目录，入站本机路径一律不读（同样只给占位）；仓内只有测试和 Agent eval 使用它们。IM 消息的正式回合走 Plugin Runtime 入站链（`zhin start`），由入口把端点目录写进 `TurnInput.inboundMediaRoots`。
 
 ### 用量配额
 
@@ -623,6 +656,7 @@ assistant:
 - **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 保持默认的 `external_content`（不设为 `off`），无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
 - **预演**：`schedule_preview` 的结果列出到点时会被拒的工具（`unattended_approval.denied`）和要交给审核 Agent 的工具（`unattended_approval.reviewed`）。只是提示，实际以每次调用的判断为准。
 - **任务状态**：一次运行用了兜底文案、没有任何工具结果且回复为空，或有工具被拒时，记为 `degraded`（未完成），`last_error` 写明原因和 `zhin trace <回合 id>`；`zhin watch` 显示 `last:degraded` 和原因，`zhin schedule list` 显示「上次」一行。开启 `notifyOnFailure` 时会发「[任务未完成]」提醒；如果送达的回复本身就是兜底说明，不再重复提醒。
+- **模型调用失败**（#1250 第 40 批）：回合因模型请求失败而结束（日志 `llm_error`，回复只是失败文案）时，这次运行记为失败：`last_status: error`，`last_error` 写明错误类型、原因和 `zhin trace <回合 id>`，回合 trace 的结束状态为 `failed`（`model_error:<类型>`），失败文案不会当成任务结果发出去。模型服务暂时不可用（网络错误、5xx、超时、无响应）时自动重试：约 5 分钟后第 1 次、再约 10 分钟后第 2 次，由调度器定时触发、不占执行队列；只在这次运行没有已生效或结果不明的工具操作时重试（失败的运行本来就不发回复，重试不会重复发送）；暂停、删除任务或下一次到点运行会取消待定的重试，重试状态只在内存中。`zhin schedule list` / Console 的「下次运行」显示重试时间，`retry_count` 为已安排的重试次数。全部重试失败（或这类错误不重试，如密钥被拒）后，向任务的接收人发一条说明，例如「『工作日天气早报』这次没生成：模型服务（中转站）暂时连不上，已自动重试 2 次，不再重试。排查：zhin trace <回合 id>」；开启 `notifyOnFailure` 时，每次失败都发，未重试完时写「N 分钟后会自动重试」。提醒按任务语言发中文或英文。普通聊天的失败提示不变。
 - **兜底文案**：模型没有给出回复时，说明按实际原因区分（没有可用工具 / 哪个工具被拒 / 模型空回复）。定时任务的说明带任务名、任务 id 和 `zhin trace <回合 id>`，不会建议发 `/reset`。
 
 `SOUL.md` 用第一人称描述性格、价值观和表达方式，不再使用昵称占位符。当前账号的昵称、
@@ -737,7 +771,7 @@ ai:
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
 ```
 
-旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足或鉴权失败时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
+旧 `ai.agent.providerResilience.fallback` 已退役。`providerResilience` 只在同一模型上重试；换模型只走用途上明确配置的备用链（`fallbacks`，聊天、摘要、旁听、Agent 角色、Adapter / 场景覆盖与感知都可配置），且只在额度用完、余额不足、鉴权失败、连续超时，或网络错误 / 5xx 的同模型重试用完时切换，见[备用模型](./model-policy.md#备用模型fallbacks)。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 

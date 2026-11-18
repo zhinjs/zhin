@@ -15,6 +15,7 @@ import {
   mcpFeatureId,
   type McpDescriptor,
   type McpToolDescriptor,
+  type McpToolHints,
 } from '@zhin.js/mcp-feature';
 import {
   type SkillIndex,
@@ -48,6 +49,11 @@ import { resolveSkillTools } from './skill-tool-resolution.js';
 export interface ToolCapability extends ToolDescriptor {
   /** MCP connection identity for catalog grouping; ownership still governs execution. */
   readonly mcpServer?: string;
+  /**
+   * Upstream MCP annotations (ADR 0065 D1). They only decide the permission tier; they never set
+   * `readOnly` and never relax approval.
+   */
+  readonly mcpHints?: McpToolHints;
   execute<TInput = unknown, TResult = unknown>(
     input: TInput,
     invocation: ToolInvocationContext,
@@ -380,7 +386,7 @@ function isSelectedAgentTool(
     && belongsToSelectedAgent(placement.agent, selectedAgent);
 }
 
-async function canAccessDescriptor(
+export async function canAccessDescriptor(
   descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'> & {
     readonly requiresCapabilities?: readonly string[];
   },
@@ -445,7 +451,7 @@ async function currentPermissionSubject(
 }
 
 /** Execution-time re-check of {@link canAccessDescriptor}; throws when the gate no longer holds. */
-async function assertStillAllowed(
+export async function assertStillAllowed(
   descriptor: Parameters<typeof canAccessDescriptor>[0] & { readonly qualifiedName?: string; readonly name?: string },
   turn: TurnAccessContext | undefined,
   host: PermissionHost | undefined,
@@ -457,7 +463,7 @@ async function assertStillAllowed(
 }
 
 /** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */
-function resolvePermissionHost(snapshot: RuntimeSnapshot): PermissionHost | undefined {
+export function resolvePermissionHost(snapshot: RuntimeSnapshot): PermissionHost | undefined {
   try {
     const resources = snapshot.resources.get(snapshot.root);
     const host = resources?.get(permissionHostToken.id);

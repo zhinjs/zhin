@@ -286,6 +286,23 @@ describe('bridge HTTP', () => {
     await context.host.close();
   });
 
+  // ADR 0064 I1: the Sandbox upload route requires Content-Length; the bridge must keep it.
+  it('keeps Content-Length, Content-Type and custom headers of a raw upload', async () => {
+    const context = await started();
+    let seen: Record<string, string | null> = {};
+    context.host.route('POST', '/api/sandbox/media/bot', async (request) => {
+      seen = { length: request.headers.get('content-length'), type: request.headers.get('content-type'), name: request.headers.get('x-zhin-file-name') };
+      return jsonResponse(201, { size: (await request.arrayBuffer()).byteLength });
+    });
+    await opened(context);
+    const response = await context.transport.fetch(new Request('http://gateway/api/sandbox/media/bot?type=group&id=r', {
+      method: 'POST', body: new Uint8Array(1234), headers: { 'content-type': 'image/png', 'content-length': '1234', 'x-zhin-file-name': 'a.png' },
+    }), { principal: { kind: 'bootstrap', open: true } });
+    expect(await response.json()).toEqual({ size: 1234 });
+    expect(seen).toEqual({ length: '1234', type: 'image/png', name: 'a.png' });
+    await context.host.close();
+  });
+
   it('streams a large request body in bounded chunks with credit-based backpressure', async () => {
     const context = await started();
     const total = 2 * 1024 * 1024 + 123;

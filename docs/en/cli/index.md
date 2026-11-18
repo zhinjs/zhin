@@ -86,10 +86,10 @@ For `zhin update`, see [Update dependencies](#update-update-dependencies) below.
 
 ```bash
 zhin runtime start [...]    # gateway in the foreground; same as zhin start --foreground
-zhin runtime inspect
+zhin runtime inspect [--json]
 zhin runtime codegen [dir] [--write] [--json]
-zhin runtime build
-zhin runtime publish [--execute|--resume] [--tag latest]
+zhin runtime build [--json]
+zhin runtime publish [--execute|--resume] [--tag latest] [--json]
 zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
@@ -98,9 +98,9 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | Subcommand | Purpose |
 | --- | --- |
 | `start` | Run gateway and instance in the foreground (alias of `zhin start --foreground`); see [zhin start](./runtime.md) |
-| `inspect` | Print the project structure as JSON (plugin list, build plan) |
+| `inspect` | Print a table of plugin instances: instance, package, source (workspace / node_modules), enabled state and feature count; instances in `disable_plugins` are listed too and marked disabled. `--json` prints the full structure (each instance's features and child plugins, build order, disabled instances) |
 | `codegen` | Scan the convention directories and print static type declarations for the plugin's capabilities plus a `capabilityGraph` summary; `--write` writes `plugin.capabilities.d.ts` into the target directory and `--json` prints the scan result. `dir` defaults to the current directory |
-| `build` / `publish` | Build and publish according to the project structure. `publish` only prints the plan by default; `--execute` runs it, and `--resume` continues after an interruption |
+| `build` / `publish` | Work on the whole workspace in dependency order (for a single plugin use `zhin build` / `zhin pub`). Both print the plan first: which packages and versions, and which packages are skipped and why (no `build` script / `private: true`); an empty plan is stated explicitly. `publish` is a dry run by default (prints the plan and runs `pnpm publish --dry-run`); `--execute` publishes every non-private package to npm (needs an npm login; published under a temporary dist-tag first, moved to `--tag` once all succeed), records progress in `.zhin/publish-journal.json`, and `--resume` continues after an interruption. `--json` prints only the plan (with an `empty` field) and runs nothing. An empty dry-run plan exits 0; an empty plan under `--execute` / `--resume` exits 1 |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |
 
 Scaffolded projects already have these conventional scripts:
@@ -420,7 +420,7 @@ zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--offi
 zhin info <package>
 ```
 
-Search the plugin marketplace or show one plugin's details. Details include the author (`author`, or `maintainers` when absent); when the plugin is installed in the current project they also list its commands, Agent tools and config fields (read statically from the convention directories and `schema.json`; no plugin code runs).
+Search the plugin marketplace or show one plugin's details. `zhin search` lists only Zhin ecosystem packages (official `@zhin.js/*`, `zhin.js-*` names, or packages with a `zhin.js` / `zhin` / `zhinjs` / `zhin-plugin` / `zhin-package` keyword or a `package.json#zhin` manifest); the generic `plugin` keyword does not count. `zhin info` checks this project's workspace packages and installed packages first (read locally, npm is not queried), then the npm registry. Details include the author (`author`, or `maintainers` when absent); local packages also list their commands, Agent tools and config fields (read statically from the convention directories and `schema.json`; no plugin code runs).
 
 ### use-cases: Find a Setup Path by Purpose
 
@@ -516,13 +516,15 @@ For npm plugins use `zhin install` / `zhin search` / `zhin info` ([ADR 0062](../
 **Check whether a plugin is really live**: installing doesn't mean it's loaded, its platform is online, or its features are verified. Use these to inspect status and run verification:
 
 ```bash
-zhin packages status <instanceKey>
+zhin packages status <instanceKey>                       # reads the running instance through this project's gateway
 zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
-zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
-zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+zhin packages verification-plan <instanceKey>            # --json for the raw structure
+zhin packages apply <instanceKey> --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>
 ```
+
+Without `--live`, these four commands go through this project's gateway over its local socket (`.zhin/gateway.sock`) to the instance it supervises, which answers from its current generation; no Console token is needed. `--live <host-url>` connects to that Host instead. When the gateway isn't running or the instance doesn't answer, `status` / `verification-plan` check only the local files and say why, and `apply` / `verify` refuse.
 
 States returned by `status`:
 
@@ -532,6 +534,7 @@ States returned by `status`:
 | `declared` | An instance is declared |
 | `missing-config` | Required config or environment variables are missing, or values don't match the schema |
 | `pending-restart` | The running version hasn't applied it yet |
+| `unknown` | No running-instance state was available (gateway not running, instance not answering or not yet reporting a generation), so whether it's live can't be told; `statusReason` says why |
 | `enabled` | Live, with config and package version consistent |
 | `degraded` | Declaration and actual installation disagree, or a dependency check failed |
 
@@ -540,7 +543,7 @@ States returned by `status`:
 ::: details Live requests, verification flow and concurrency rules
 - **Token**: live requests read the Console token from `ZHIN_CONSOLE_TOKEN`, or the variable named by `--token-env <name>`. `verification-plan`, `apply` and `verify` need full permissions. Never put tokens in URLs or command arguments.
 - **HTTPS**: remote requests carrying a token must use HTTPS; plain HTTP is allowed only for `localhost`, `127.0.0.0/8` and `::1`.
-- **Offline mode**: offline `status` provides only file and package-resolution evidence; an offline verification plan has no current version or runnable checks, and never starts the Runtime.
+- **Offline mode**: offline `status` provides only file and package-resolution evidence, and a declared, enabled plugin reports `unknown` (not `pending-restart`); an offline verification plan has no current version or runnable checks, and never starts the Runtime.
 - **Verification steps**: review the scope and side effects in `verification-plan` first, then pass the returned `generation`, `projectRevision` and `checkRevision` to `verify`. Changes to config, version or check definitions reject old plans. Plugins without checks return `not-configured`; passing local checks doesn't mean platform delivery is verified. `apply` only requests application — confirm with a live `status` afterwards.
 - **Schema**: a loaded config schema applies only to the same package version; after an update the on-disk `schema.json` is read. If the new version declares config only in TypeScript with no readable schema, `validation.schemaAvailable` is `false` and only environment references are checked; full validation needs a real Runtime pre-check.
 - **Production dependencies**: auto-enabled plugins must be production dependencies; `--save-dev` must be combined with `--no-enable`, and this is checked before installing.

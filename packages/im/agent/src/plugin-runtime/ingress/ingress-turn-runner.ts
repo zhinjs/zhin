@@ -416,6 +416,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               service.getAgentConfig()?.mailbox?.groupMode,
               intentResolver,
             ),
+            inboundMediaRoots: () => im.inboundMediaRoots(lease, message.conversation),
             resolveReference: (reference, limits, referenceSignal) =>
               im.resolveConversationReference(lease, reference, {
                 signal: referenceSignal,
@@ -468,6 +469,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               {
                 binding,
                 mcpServers: liveDanmaku ? [] : binding.mcpServers,
+                ...(binding.mcpPermits ? { mcpPermits: binding.mcpPermits } : {}),
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
               countToolCalls(observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission, {

@@ -30,6 +30,41 @@ export function describeCommandConflictLog(conflict: CommandRouteConflict, gener
   };
 }
 
+/**
+ * #1250 command-namespace-param-commands-swallowed: a plugin whose `commandNamespace` ends with
+ * the first word of one of its own commands (namespace `60s` + command `60s` → `60s 60s`). Users
+ * typing the bare word get the namespace's command list, not that command; warn once so the owner
+ * can pick another namespace.
+ */
+export function describeNamespaceCollisions(snapshot: RuntimeSnapshot): readonly LogFields[] {
+  const index = snapshot.projections.get(commandFeatureId);
+  if (!isCommandIndex(index)) return [];
+  const found: LogFields[] = [];
+  const seen = new Set<string>();
+  for (const command of index.list()) {
+    const namespace = (snapshot.config.get(command.owner) as { commandNamespace?: unknown } | undefined)?.commandNamespace;
+    if (typeof namespace !== 'string' || !namespace.trim()) continue;
+    const words = namespace.trim().split(/\s+/u);
+    const last = words.at(-1)!;
+    const local = command.name.split(/\s+/u).slice(words.length);
+    if (local[0] !== last) continue;
+    const plugin = snapshot.tree.get(command.owner)?.instanceKey ?? String(command.owner);
+    const key = `${plugin}\0${command.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push({
+      op: 'command_namespace_collision',
+      generation: snapshot.generation,
+      plugin,
+      namespace: words.join(' '),
+      command: command.name,
+      hint: `"${words.join(' ')}" is both ${plugin}'s commandNamespace and one of its commands: users must type "${command.name}"; `
+        + `"${words.join(' ')}" alone lists the namespace's commands. Choose another commandNamespace to avoid the repetition.`,
+    });
+  }
+  return found;
+}
+
 function conflictKey(conflict: CommandRouteConflict): string {
   return [conflict.route, side(conflict.skipped), side(conflict.kept)].join('\0');
 }
@@ -48,6 +83,11 @@ export class CommandConflictLog {
       const key = conflictKey(conflict);
       current.add(key);
       if (!this.#logged.has(key)) this.warn(describeCommandConflictLog(conflict, snapshot.generation));
+    }
+    for (const collision of describeNamespaceCollisions(snapshot)) {
+      const key = `namespace\0${String(collision.plugin)}\0${String(collision.command)}`;
+      current.add(key);
+      if (!this.#logged.has(key)) this.warn(collision);
     }
     // A resolved conflict that comes back later is logged again.
     this.#logged = current;

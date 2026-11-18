@@ -157,6 +157,12 @@ export interface TurnInput {
   readonly commandMenu?: string;
   readonly text: string;
   readonly media?: readonly TurnMedia[];
+  /**
+   * #1250: directories the Endpoint that produced this message declared for the inbound media it
+   * downloads, set by the trusted ingress. A `path` media source is read only when its real path lies
+   * inside one of them (and passes the FilePolicy secret checks); absent = no local path is read.
+   */
+  readonly inboundMediaRoots?: readonly string[];
   readonly references?: readonly TurnReference[];
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly contextState?: TurnContextState;
@@ -249,6 +255,11 @@ export type TurnExecutionProfile =
 export interface FrozenCapabilityCatalog {
   readonly tools: readonly string[];
   readonly skills: readonly string[];
+  /**
+   * ADR 0065: MCP tools withheld from this turn because of the sender's chat role, with the permits
+   * each needs. A call to one (a replay from history) is denied with policy `mcp-permit`.
+   */
+  readonly withheldMcpTools?: Readonly<Record<string, readonly string[]>>;
 }
 
 export type DeliveryOutcome =

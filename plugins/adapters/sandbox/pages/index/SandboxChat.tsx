@@ -1,18 +1,16 @@
 import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  CodeBlock,
   MarkdownContent,
-  resolveMediaSrc,
-  pickMediaRawUrl,
   type MessageSegment,
 } from '@zhin.js/client';
+import { renderSandboxSegments, type SandboxSegmentRenderContext } from './segments/index.js';
 import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport.js';
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
 import { ensureSandboxChatIdentity, readServerSpeaker, wantsAsMe, type SandboxServerSpeaker, type SandboxSpeakerMode } from './chatIdentity.js';
-import { isJsxNode, segmentFallbackText, segmentPreviewText } from './segmentFallback.js';
+import { segmentPreviewText } from './segmentFallback.js';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
   Wifi, WifiOff, Smile, Image, X, Check, Search,
@@ -20,7 +18,7 @@ import {
   Sparkles, Activity, Wrench, Coins, CircleAlert, Gauge,
   SlidersHorizontal, FolderOpen, ShieldCheck, Network,
   Square, RotateCcw, FileDiff, Terminal, FlaskConical, ChevronDown,
-  FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign,
+  FileDown, ListChecks, MoreHorizontal, Keyboard, AtSign, Paperclip, Mic, Upload,
 } from 'lucide-react';
 import {
   Alert, AlertDescription, AlertTitle, Badge, Button, ConfirmDialog, DropdownMenu, DropdownMenuCheckboxItem,
@@ -28,12 +26,11 @@ import {
   SelectField, Switch, Tabs, TabsList, TabsTrigger, cn, usePageChrome,
 } from '@zhin.js/console-ui';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor.js';
-import HtmlMessage from './HtmlMessage.js';
 import { sandboxStyles } from './styles.js';
 import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
-import { quietOutcomeNotice, readMessageOutcome } from './conversationRecovery.js';
+import { actionOutcomeFeedback, quietOutcomeNotice, readMessageOutcome } from './conversationRecovery.js';
 import {
   agentSessionsPath,
   buildAgentRunReport,
@@ -56,11 +53,18 @@ import {
   loadPlaygroundState,
   savePlaygroundState,
   mergePlaygroundMessage,
+  reactPlaygroundMessage,
+  recallPlaygroundMessage,
+  markPlaygroundActionSubmitted,
+  sandboxActionSegment,
+  setPlaygroundActionFeedback,
   retirePlaygroundInteractions,
   type PlaygroundMessage,
   type PlaygroundSession,
 } from './playgroundState.js';
 import type { SandboxAgentRunConfig } from '../../src/run-config.js';
+import { SANDBOX_INBOUND_SYNTAX, expandSandboxInboundSyntax, parseSandboxInboundText } from '../../src/inbound-syntax.js';
+import { createSandboxHostedMediaResolver, uploadSandboxMedia } from './sandboxMedia.js';
 
 type Message = PlaygroundMessage
 type Channel = PlaygroundSession
@@ -98,6 +102,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [directoryStatus, setDirectoryStatus] = useState<DirectoryStatus>({ mode: 'loading', error: null })
     const [workspaceScope, setWorkspaceScope] = useState<SandboxWorkspaceScope | null>(null)
     const [transportNotice, setTransportNotice] = useState<string | null>(null)
+    // #1250 (`sandbox-typed-media-syntax-sent-as-text`): a typed media token whose link was not accepted.
+    const [syntaxNotice, setSyntaxNotice] = useState<string | null>(null)
     // #1250 (`unaddressed-message-no-record`): why the last message got no reply, from its settled outcome.
     const [outcomeNotice, setOutcomeNotice] = useState<{ messageId: string; sessionKey: string; text: string } | null>(null)
     const [shellIsolation, setShellIsolation] = useState<{ available: boolean; provider: string; message: string } | null>(null)
@@ -109,6 +115,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     /** 输入区：插入图片 / 视频 / 音频 URL */
     const [mediaPanel, setMediaPanel] = useState<null | 'image' | 'video' | 'audio'>(null)
     const [mediaUrl, setMediaUrl] = useState('')
+    // ADR 0064 D13 (I1): files being uploaded (or that failed) before they become hosted links.
+    const [uploads, setUploads] = useState<Array<{ key: string; name: string; state: 'uploading' | 'failed'; message?: string }>>([])
+    const [dragActive, setDragActive] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const voiceInputRef = useRef<HTMLInputElement>(null)
+    const previewUrlsRef = useRef<string[]>([])
     const [atPopoverPosition, setAtPopoverPosition] = useState<{ top: number; left: number } | null>(null)
     const [atSearchQuery, setAtSearchQuery] = useState('')
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
@@ -295,6 +307,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         simulated?: boolean; displaySenderId?: string; asMeUnavailable?: string;
         revision?: number; streaming?: boolean;
         conversation?: { type: Channel['type']; id: string };
+        emoji?: string; reactionId?: string; op?: string;
     }) => {
         const locale = data.type === 'ready' && data.locale === 'en' ? 'en' : data.type === 'ready' ? 'zh-CN' : localeRef.current
         if (data.type === 'ready') {
@@ -336,7 +349,24 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             const notice = Array.isArray(data.content)
                 ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
                 : String(data.content ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
+            // A failed click is reported on its card (#1250 sandbox-submitted-without-feedback).
+            const source = data.messageId ? actionSourcesRef.current.get(data.messageId) : undefined
+            if (source) {
+                setMessages((prev) => setPlaygroundActionFeedback(prev, source.scene, source.cardId, { tone: 'error', text: notice }))
+                return
+            }
             setTransportNotice(notice)
+            return
+        }
+        // ADR 0064 P1b: Endpoint control operations on an earlier message of a scene.
+        if ((data.type === 'recall' || data.type === 'reaction') && data.messageId) {
+            const scene = data.conversation ?? activeChannelRef.current
+            const messageId = data.messageId
+            if (data.type === 'recall') setMessages((prev) => recallPlaygroundMessage(prev, scene, messageId))
+            else if (data.reactionId && (data.op === 'add' || data.op === 'remove')) {
+                const change = { messageId, reactionId: data.reactionId, op: data.op, ...(data.emoji ? { emoji: data.emoji } : {}) } as const
+                setMessages((prev) => reactPlaygroundMessage(prev, scene, change))
+            }
             return
         }
         if (data.type === 'edit' && data.messageId) {
@@ -391,26 +421,60 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }))
     }
 
-    const sendInteractiveAction = (payload: string, messageId?: string) => {
+    /** Inputs sent by a button click → the card they came from (failure frames name the input). */
+    const actionSourcesRef = useRef(new Map<string, { cardId: string; scene: Pick<Channel, 'id' | 'type'> }>())
+
+    const sendInteractiveAction = (payload: string, messageId?: string, buttonId?: string) => {
         if (!connectionRef.current.canExecute) return false
         const scene = activeChannelRef.current
-        const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
+        // #1250 sandbox-action-button-id-dropped: the button's own id and its payload, like a platform callback.
+        const segments: MessageSegment[] = [sandboxActionSegment(payload, buttonId)]
         const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
         const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
+        const actionId = createSandboxMessageId()
+        const clickedAt = Date.now()
         if (!submitSandboxFrame(wsRef.current, {
-            type: scene.type, id: scene.id, messageId: createSandboxMessageId(), content: segments,
+            type: scene.type, id: scene.id, messageId: actionId, content: segments,
             senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
-            agentRun: scene.runConfig, timestamp: Date.now(),
+            agentRun: scene.runConfig, timestamp: clickedAt,
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
             return false
         }
         if (messageId) {
-            setMessages((current) => current.map((message) => message.id === messageId
-                && message.channelType === scene.type && message.channelId === scene.id && message.type === 'received'
-                ? { ...message, interactionResolved: true } : message))
+            actionSourcesRef.current.set(actionId, { cardId: messageId, scene: { id: scene.id, type: scene.type } })
+            setMessages((current) => markPlaygroundActionSubmitted(current, scene, messageId, payload))
+            watchActionOutcome(actionId, messageId, scene, clickedAt)
         }
         return true
+    }
+
+    /**
+     * #1250 sandbox-submitted-without-feedback: 「已提交」 only means delivered. The click's outcome is
+     * read a few times; a failure is shown next to the card, and so is the absence of any answer.
+     */
+    const watchActionOutcome = (actionId: string, cardId: string, scene: Channel, clickedAt: number) => {
+        const connectionId = connectionRef.current.connectionId
+        if (!connectionId) return
+        const key = buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+        const requestContext = socketRequestContextRef.current ?? captureSandboxRequestContext()
+        const delays = [3_000, 8_000, 20_000]
+        const noAnswer = () => setMessages((current) => setPlaygroundActionFeedback(current, scene, cardId,
+            { tone: 'quiet', text: sandboxText(localeRef.current, "没有收到机器人的处理结果") }, clickedAt))
+        const attempt = (index: number) => {
+            window.setTimeout(() => {
+                if (connectionRef.current.connectionId !== connectionId) return
+                void readMessageOutcome(connectionId, key, actionId, localeRef.current, undefined, requestContext).then((outcome) => {
+                    if (outcome === undefined && index + 1 < delays.length) { attempt(index + 1); return }
+                    const feedback = actionOutcomeFeedback(outcome, localeRef.current)
+                    if (feedback) {
+                        setMessages((current) => setPlaygroundActionFeedback(current, scene, cardId, feedback,
+                            feedback.tone === 'quiet' ? clickedAt : undefined))
+                    } else if (outcome == null) noAnswer()
+                }).catch(() => { if (index + 1 < delays.length) attempt(index + 1); else noAnswer() })
+            }, delays[index])
+        }
+        attempt(0)
     }
 
     useEffect(() => {
@@ -586,28 +650,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
     }, [sessionKey, loadTrace])
 
+    // Same table and parser as the send path and the endpoint (src/inbound-syntax.ts).
     const parseTextToSegments = (text: string): MessageSegment[] => {
-        const segments: MessageSegment[] = []
-        const regex = /\[@([^\[\]]+)\]|\[face:(\d+)\]|\[image:([^\[\]]+)\]|\[video:([^\[\]]+)\]|\[audio:([^\[\]]+)\]/g
-        let lastIndex = 0
-        let match: RegExpExecArray | null
-        while ((match = regex.exec(text)) !== null) {
-            if (match.index > lastIndex) {
-                const t = text.substring(lastIndex, match.index)
-                if (t) segments.push({ type: 'text', data: { text: t } })
-            }
-            if (match[1]) segments.push({ type: 'mention', data: { target: match[1], name: match[1] } })
-            else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
-            else if (match[3]) segments.push({ type: 'image', data: { media: { kind: 'url', value: match[3] } } })
-            else if (match[4]) segments.push({ type: 'video', data: { media: { kind: 'url', value: match[4] } } })
-            else if (match[5]) segments.push({ type: 'audio', data: { media: { kind: 'url', value: match[5] } } })
-            lastIndex = regex.lastIndex
-        }
-        if (lastIndex < text.length) {
-            const r = text.substring(lastIndex)
-            if (r) segments.push({ type: 'text', data: { text: r } })
-        }
-        return segments.length > 0 ? segments : [{ type: 'text', data: { text } }]
+        const { segments } = parseSandboxInboundText(text)
+        return segments.length > 0 ? segments as MessageSegment[] : [{ type: 'text', data: { text } }]
     }
 
     const hasRenderableSegments = (segments: MessageSegment[]) => {
@@ -619,6 +665,18 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         })
     }
 
+    // Hosted links of the active conversation, shown through the Console download (D12.5).
+    const hostedMedia = useMemo(() => createSandboxHostedMediaResolver({
+        endpointId, scene: { type: activeChannel.type, id: activeChannel.id },
+        context: socketRequestContextRef.current ?? captureSandboxRequestContext(),
+    }), [endpointId, activeChannel.type, activeChannel.id, connected])
+    useEffect(() => () => hostedMedia.dispose(), [hostedMedia])
+    useEffect(() => () => {
+        for (const url of previewUrlsRef.current.splice(0)) {
+            try { URL.revokeObjectURL(url) } catch { /* already revoked */ }
+        }
+    }, [])
+
     const renderMessageSegments = (
         segments: (MessageSegment | string)[],
         isSent: boolean,
@@ -626,276 +684,22 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         interactionResolved = false,
         onInteractionSubmitted?: () => void,
         allowInteraction = true,
-    ) => {
-        return segments.map((segment, index) => {
-            if (typeof segment === 'string') {
-                return <MarkdownContent key={index} text={segment} className={isSent ? 'zhin-markdown--inverse' : undefined} />
-            }
-            // Unrendered JSX (or a segment without data) is read as text with `[button]` labels, never as raw JSON.
-            if (isJsxNode(segment) || !segment.data || typeof segment.data !== 'object') {
-                const fallback = segmentFallbackText(segment)
-                return fallback
-                    ? <MarkdownContent key={index} text={fallback} className={isSent ? 'zhin-markdown--inverse' : undefined} />
-                    : <span key={index} className="sandbox-segment-note">[{String(segment.type)}]</span>
-            }
-            const d = segment.data as Record<string, unknown>
-            switch (segment.type) {
-                case 'text':
-                case 'markdown':
-                case 'md':
-                    return <MarkdownContent key={index} text={typeof d.text === 'string' ? d.text : typeof d.content === 'string' ? d.content : segmentFallbackText(segment) ?? ''} className={isSent ? 'zhin-markdown--inverse' : undefined} />
-                case 'html':
-                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')}
-                        width={typeof d.width === 'number' ? d.width : undefined} />
-                case 'code':
-                    return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
-                case 'mention':
-                case 'at':
-                    return <span key={index} className="sandbox-chip is-mention">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
-                case 'face':
-                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="sandbox-inline-face" title={String(d.name ?? d.id ?? '')} />
-                case 'dice':
-                    return <span key={index} className="sandbox-chip">🎲 {d.result != null ? sandboxText(locale, "点数 {0}", [String(d.result)]) : sandboxText(locale, "骰子")}</span>
-                case 'rps':
-                    return <span key={index} className="sandbox-chip">✊ {d.result != null ? sandboxText(locale, "结果 {0}", [String(d.result)]) : sandboxText(locale, "猜拳")}</span>
-                case 'image': {
-                    const raw = pickMediaRawUrl(d)
-                    const src = resolveMediaSrc(raw, 'image')
-                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[图片]")}</span>
-                    return (
-                        // resolveMediaSrc allowlists non-executable URL schemes and image data MIME types.
-                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
-                        <a key={index} href={src} target="_blank" rel="noreferrer" className="sandbox-media-link">
-                            {/* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */}
-                            <img src={src} alt="" className="sandbox-media-image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        </a>
-                    )
-                }
-                case 'video': {
-                    const raw = pickMediaRawUrl(d)
-                    const src = resolveMediaSrc(raw, 'video')
-                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[视频无地址]")}</span>
-                    return (
-                        // resolveMediaSrc allowlists non-executable URL schemes and video data MIME types.
-                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
-                        <video
-                            key={index}
-                            src={src}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            className="sandbox-media-video"
-                        />
-                    )
-                }
-                case 'audio':
-                case 'record': {
-                    const raw = pickMediaRawUrl(d)
-                    const src = resolveMediaSrc(raw, 'audio')
-                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[音频无地址]")}</span>
-                    return (
-                        // resolveMediaSrc allowlists non-executable URL schemes and audio data MIME types.
-                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
-                        <audio
-                            key={index}
-                            src={src}
-                            controls
-                            preload="metadata"
-                            className="sandbox-media-audio"
-                        />
-                    )
-                }
-                case 'reply':
-                    return (
-                        <div key={index} className="sandbox-reply-quote">
-                            {sandboxText(locale, "↩ 引用消息 #")}{String(d.message_id ?? d.id ?? '')}
-                        </div>
-                    )
-                case 'forward': {
-                    const messages = d.messages as Array<Array<{ type?: string; data?: Record<string, unknown> }>> | undefined
-                    const title = String(d.title ?? sandboxText(locale, "聊天记录"))
-                    return (
-                        <div key={index} className="sandbox-forward">
-                            <div className="sandbox-forward-title">📨 {title}</div>
-                            {Array.isArray(messages) && messages.length > 0 ? (
-                                <div className="sandbox-forward-list">
-                                    {messages.slice(0, 3).map((batch, bi) => (
-                                        <div key={bi}>
-                                            {batch.map((s, si) => (
-                                                <span key={si}>
-                                                    {s.type === 'text' ? String(s.data?.text ?? '') : `[${s.type ?? 'seg'}]`}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ))}
-                                    {messages.length > 3 && <div className="sandbox-forward-more">{sandboxText(locale, "…共")}{messages.length} {sandboxText(locale, "条")}</div>}
-                                </div>
-                            ) : (
-                                <div className="sandbox-forward-empty">{sandboxText(locale, "[合并转发]")}</div>
-                            )}
-                        </div>
-                    )
-                }
-                case 'card': {
-                    const title = typeof d.title === 'string' ? d.title : ''
-                    const subtitle = typeof d.subtitle === 'string' ? d.subtitle : ''
-                    const description = typeof d.description === 'string'
-                        ? d.description
-                        : typeof d.content === 'string'
-                            ? d.content
-                            : typeof d.summary === 'string'
-                                ? d.summary
-                                : ''
-                    const rawImage = typeof d.image === 'string'
-                        ? d.image
-                        : typeof d.thumbnail === 'string'
-                            ? d.thumbnail
-                            : typeof d.imageUrl === 'string'
-                                ? d.imageUrl
-                                : pickMediaRawUrl(d)
-                    const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined
-                    const fields = Array.isArray(d.fields)
-                        ? (d.fields as Array<Record<string, unknown>>)
-                        : []
-                    const buttons = Array.isArray(d.buttons)
-                        ? (d.buttons as Array<Record<string, unknown>>)
-                        : Array.isArray(d.actions)
-                            ? (d.actions as Array<Record<string, unknown>>)
-                            : []
-                    const resolved = Boolean(messageId && interactionResolved)
-                    return (
-                        <div key={index} className="sandbox-rich-card">
-                            {imageSrc && (
-                                /* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */
-                                <img src={imageSrc} alt={title} className="sandbox-rich-card-image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                            )}
-                            <div className="sandbox-rich-card-body">
-                                {title && <div className="sandbox-rich-card-title">{title}</div>}
-                                {subtitle && <div className="sandbox-rich-card-subtitle">{subtitle}</div>}
-                                {description && <div className="sandbox-rich-card-desc"><MarkdownContent text={description} /></div>}
-                                {fields.length > 0 && (
-                                    <dl className="sandbox-rich-card-fields">
-                                        {fields.map((field, fi) => (
-                                            <div key={fi} className="sandbox-rich-card-field">
-                                                <dt>{String(field.label ?? field.name ?? field.key ?? '')}</dt>
-                                                <dd>{String(field.value ?? '')}</dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                )}
-                                {buttons.length > 0 && (
-                                    <div className="agent-playground-approval-actions sandbox-rich-card-actions">
-                                        <div>
-                                            {buttons.map((btn, bi) => {
-                                                const label = String(btn.label ?? btn.text ?? btn.title ?? btn.id ?? `Action ${bi + 1}`)
-                                                const payload = String(btn.payload ?? btn.value ?? btn.url ?? btn.id ?? label)
-                                                return (
-                                                    <Button
-                                                        key={`${payload}-${bi}`}
-                                                        type="button"
-                                                        size="sm"
-                                                        variant={interactionVariant(btn.style === 'primary', btn.style === 'danger')}
-                                                        disabled={Boolean(btn.disabled) || isSent || resolved || !canExecute || !allowInteraction}
-                                                        onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
-                                                    >
-                                                        {label}
-                                                    </Button>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                                {!title && !subtitle && !description && fields.length === 0 && buttons.length === 0 && (
-                                    <CodeBlock code={JSON.stringify(d, null, 2)} language="json" />
-                                )}
-                            </div>
-                        </div>
-                    )
-                }
-                case 'share': {
-                    const url = typeof d.url === 'string' ? d.url : ''
-                    const title = String(d.title ?? (url || 'Share'))
-                    const description = typeof d.description === 'string'
-                        ? d.description
-                        : typeof d.content === 'string'
-                            ? d.content
-                            : typeof d.artist === 'string'
-                                ? d.artist
-                                : ''
-                    const rawImage = typeof d.image === 'string' ? d.image : pickMediaRawUrl(d)
-                    const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined
-                    return (
-                        <div key={index} className="sandbox-share-card">
-                            {imageSrc && (
-                                /* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */
-                                <img src={imageSrc} alt={title} className="sandbox-share-card-thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                            )}
-                            <div className="sandbox-share-card-main">
-                                <div className="sandbox-share-card-title">
-                                    <span>{title} <ExternalLink size={12} /></span>
-                                </div>
-                                {description && <div className="sandbox-share-card-desc">{description}</div>}
-                                {url && <div className="sandbox-share-card-url">{url}</div>}
-                            </div>
-                        </div>
-                    )
-                }
-                case 'button': {
-                    const label = String(d.label ?? d.text ?? d.id ?? 'Button')
-                    const payload = String(d.payload ?? d.id ?? label)
-                    const resolved = Boolean(messageId && interactionResolved)
-                    return (
-                        <div key={index} className="agent-playground-approval-actions">
-                            <div>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={interactionVariant(d.style === 'primary', d.style === 'danger')}
-                                    disabled={Boolean(d.disabled) || isSent || resolved || !canExecute || !allowInteraction}
-                                    onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
-                                >
-                                    {label}
-                                </Button>
-                            </div>
-                        </div>
-                    )
-                }
-                case 'keyboard': {
-                    const rows = (d.rows as Array<Array<{ label: string; payload: string; disabled?: boolean; style?: string }>>) ?? []
-                    const resolved = Boolean(messageId && interactionResolved)
-                    return (
-                        <div key={index} className="agent-playground-approval-actions">
-                            {rows.map((row, ri) => (
-                                <div key={ri}>
-                                    {row.map((btn) => (
-                                        <Button
-                                            key={btn.payload}
-                                            type="button"
-                                            size="sm"
-                                            variant={interactionVariant(
-                                                btn.style === 'primary' || /^允许/u.test(btn.label),
-                                                btn.style === 'danger' || /拒绝|取消/u.test(btn.label),
-                                            )}
-                                            disabled={btn.disabled || isSent || resolved || !canExecute || !allowInteraction}
-                                            onClick={() => { if (sendInteractiveAction(btn.payload, messageId)) onInteractionSubmitted?.() }}
-                                        >
-                                            {btn.label}
-                                        </Button>
-                                    ))}
-                                </div>
-                            ))}
-                            {resolved && <small><Check size={12} />{sandboxText(locale, "已提交本次选择")}</small>}
-                        </div>
-                    )
-                }
-                default: {
-                    const fallback = segmentFallbackText(segment)
-                    return fallback
-                        ? <MarkdownContent key={index} text={fallback} className={isSent ? 'zhin-markdown--inverse' : undefined} />
-                        : <span key={index} className="sandbox-segment-note">[{segment.type}]</span>
-                }
-            }
-        })
+        submittedPayloads?: readonly string[],
+    ): React.ReactNode[] => {
+        // ADR 0064 §2: one best-effect renderer per outbound segment type (pages/index/segments/).
+        const context: SandboxSegmentRenderContext = {
+            locale, isSent, messageId, interactionResolved,
+            canInteract: !isSent && canExecute && allowInteraction,
+            submittedPayloads,
+            sendAction: (payload, buttonId) => {
+                const sent = sendInteractiveAction(payload, messageId, buttonId)
+                if (sent) onInteractionSubmitted?.()
+                return sent
+            },
+            renderNested: (nested) => renderSandboxSegments(nested, { ...context, canInteract: false, messageId: undefined }),
+            resolveHostedMedia: hostedMedia.resolve,
+        }
+        return renderSandboxSegments(segments, context)
     }
 
     /** Reads the sent message's outcome a few times while it settles; a reply-less one gets a notice. */
@@ -918,7 +722,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         attempt(0)
     }
 
-    const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
+    const handleSendMessage = (_text: string, editorSegments: MessageSegment[]) => {
+        // Typed `[image:URL]` etc. become the segments the buttons insert; rejected links stay text.
+        const typed = expandSandboxInboundSyntax(editorSegments)
+        const segments = typed.segments as MessageSegment[]
         if (!connectionRef.current.canExecute || directoryModeRef.current === 'loading' || !hasRenderableSegments(segments)) return
         const scene = activeChannelRef.current
         const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
@@ -939,6 +746,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         void directoryControllerRef.current?.save(scene, true)
         setPendingRefreshEpoch((epoch) => epoch + 1)
         setOutcomeNotice(null)
+        setSyntaxNotice(typed.issues.length > 0
+            ? sandboxText(localeRef.current, "{0} 不是可用的链接（只支持 http(s) 链接，图片、视频、音频也可用对应类型的 data URL），已按文本发送。", [typed.issues.map((issue) => issue.token).join(' ')])
+            : null)
         watchQuietOutcome(newMessage.id, scene)
         setMessages((prev) => mergePlaygroundMessage(prev, newMessage))
         setInputText(''); setPreviewSegments([]); setComposerMode('write')
@@ -986,6 +796,37 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     }
     const getChannelIcon = (type: string) => { switch (type) { case 'private': return <User size={16} />; case 'group': return <Users size={16} />; case 'channel': return <Hash size={16} />; default: return <MessageSquare size={16} /> } }
     const insertFace = (faceId: number) => { editorRef.current?.insertFace(faceId); setShowFacePicker(false) }
+    /** Uploads picked / pasted / dropped files, then inserts each one's hosted link (D13.3). */
+    const uploadFiles = (files: readonly File[]) => {
+        setDragActive(false)
+        if (!files.length) return
+        const scene = { type: activeChannel.type, id: activeChannel.id }
+        const context = socketRequestContextRef.current ?? captureSandboxRequestContext()
+        const endpoint = endpointIdRef.current
+        for (const file of files) {
+            const key = createSandboxMessageId()
+            const name = file.name || sandboxText(locale, "未命名文件")
+            setUploads((current) => [...current, { key, name, state: 'uploading' }])
+            void uploadSandboxMedia(file, { endpointId: endpoint, scene, context }).then((result) => {
+                if (!result.ok) {
+                    setUploads((current) => current.map((entry) => entry.key === key ? { ...entry, state: 'failed', message: result.message } : entry))
+                    return
+                }
+                let preview: string | undefined
+                if (result.reply.kind === 'image' && typeof URL.createObjectURL === 'function') {
+                    preview = URL.createObjectURL(file)
+                    previewUrlsRef.current.push(preview)
+                }
+                editorRef.current?.insertUploaded(result.segment, preview)
+                setUploads((current) => current.filter((entry) => entry.key !== key))
+            })
+        }
+    }
+    const pickFiles = (input: HTMLInputElement | null) => {
+        if (!input) return
+        input.value = ''
+        input.click()
+    }
     const commitMediaUrl = () => {
         const u = mediaUrl.trim()
         if (!u || !mediaPanel) return
@@ -1394,6 +1235,13 @@ ${sandboxStyles}`}</style>
                     action: <Button type="button" size="sm" variant="outline" onClick={() => setOutcomeNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
                 })}
 
+                {syntaxNotice && notice('syntax', {
+                    title: sandboxText(locale, "有写法没有生效"),
+                    message: syntaxNotice,
+                    role: 'status',
+                    action: <Button type="button" size="sm" variant="outline" onClick={() => setSyntaxNotice(null)}>{sandboxText(locale, "知道了")}</Button>,
+                })}
+
                 {transportNotice && notice('transport', {
                     title: sandboxText(locale, "运行暂不可用"),
                     message: transportNotice,
@@ -1530,7 +1378,17 @@ ${sandboxStyles}`}</style>
                                                 {msg.recalled && <span>{sandboxText(locale, '已撤回')}</span>}
                                                 <time>{new Date(msg.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</time>
                                             </div>
-                                            <div className="agent-playground-message-content">{renderMessageSegments(msg.content, msg.type === 'sent', msg.id, msg.interactionResolved === true, undefined, msg.interactionReadOnly !== true)}</div>
+                                            <div className="agent-playground-message-content">{renderMessageSegments(msg.content, msg.type === 'sent', msg.id, msg.interactionResolved === true, undefined, msg.interactionReadOnly !== true, msg.submittedActions)}</div>
+                                            {msg.actionFeedback && (
+                                                <p className={cn("sandbox-action-feedback", `is-${msg.actionFeedback.tone}`)} role={msg.actionFeedback.tone === 'error' ? 'alert' : 'status'}>
+                                                    <CircleAlert size={14} aria-hidden="true" />{msg.actionFeedback.text}
+                                                </p>
+                                            )}
+                                            {msg.reactions && msg.reactions.length > 0 && (
+                                                <div className="sandbox-reactions" aria-label={sandboxText(locale, "表情回应")}>
+                                                    {msg.reactions.map((reaction) => <span key={reaction.id} className="sandbox-reaction">{reaction.emoji}</span>)}
+                                                </div>
+                                            )}
                                         </div>
                                     </article>
                                     {currentTaskMessage?.id === msg.id && inlineRunCard}
@@ -1564,6 +1422,20 @@ ${sandboxStyles}`}</style>
                             onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} aria-label={sandboxText(locale, "插入音频 URL")} title={sandboxText(locale, "插入音频 URL")}>
                             <Music />
                         </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={!canExecute}
+                            onClick={() => { setShowFacePicker(false); setMediaPanel(null); pickFiles(fileInputRef.current) }}
+                            aria-label={sandboxText(locale, "上传文件")} title={sandboxText(locale, "上传文件（图片、语音、任意文件；也可拖放或粘贴）")}>
+                            <Paperclip />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={!canExecute}
+                            onClick={() => { setShowFacePicker(false); setMediaPanel(null); pickFiles(voiceInputRef.current) }}
+                            aria-label={sandboxText(locale, "上传语音")} title={sandboxText(locale, "上传语音（本地音频文件）")}>
+                            <Mic />
+                        </Button>
+                        <Input ref={fileInputRef} type="file" multiple hidden className="sandbox-file-input" tabIndex={-1} aria-hidden="true" data-testid="sandbox-file-input"
+                            onChange={(event) => uploadFiles(Array.from(event.currentTarget.files ?? []))} />
+                        <Input ref={voiceInputRef} type="file" accept="audio/*" hidden className="sandbox-file-input" tabIndex={-1} aria-hidden="true" data-testid="sandbox-voice-input"
+                            onChange={(event) => uploadFiles(Array.from(event.currentTarget.files ?? []))} />
                         <Button type="button" variant="ghost" size="icon"
                             onClick={() => { editorRef.current?.insertAt(endpointId, endpointId); setShowFacePicker(false); setMediaPanel(null) }}
                             title={sandboxText(locale, "@ 机器人（插入 [@{0}]）", [endpointId])} aria-label={sandboxText(locale, "@ 机器人")}>
@@ -1654,14 +1526,36 @@ ${sandboxStyles}`}</style>
                         </div>
                     )}
 
+                    {uploads.length > 0 && (
+                        <ul className="sandbox-upload-list" aria-label={sandboxText(locale, "上传")}>
+                            {uploads.map((entry) => (
+                                <li key={entry.key} className={cn("sandbox-upload-item", entry.state === 'failed' && "is-failed")}
+                                    role={entry.state === 'failed' ? 'alert' : 'status'}>
+                                    {entry.state === 'failed' ? <CircleAlert size={14} aria-hidden="true" /> : <Upload size={14} aria-hidden="true" />}
+                                    <span className="sandbox-upload-name">{entry.name}</span>
+                                    <span className="sandbox-upload-state">{entry.state === 'failed'
+                                        ? sandboxText(locale, "上传失败：{0}", [entry.message ?? ''])
+                                        : sandboxText(locale, "正在上传…")}</span>
+                                    {entry.state === 'failed' && (
+                                        <Button type="button" variant="ghost" size="icon" aria-label={sandboxText(locale, "关闭")}
+                                            onClick={() => setUploads((current) => current.filter((item) => item.key !== entry.key))}><X /></Button>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
                     {/* Editor + send */}
                     <div className="sandbox-editor-row">
-                        <div className="sandbox-editor-wrap">
+                        <div className={cn("sandbox-editor-wrap", dragActive && "is-drag-active")}
+                            onDragEnter={(event) => { if (canExecute && Array.from(event.dataTransfer.types ?? []).includes('Files')) setDragActive(true) }}
+                            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false) }}>
                             <div hidden={composerMode !== 'write'}>
                                 <RichTextEditor
                                     locale={locale}
                                     ref={editorRef} placeholder={sandboxText(locale, "向 {0} 发送消息，支持 Markdown...", [activeChannel.name])}
                                     onSend={handleSendMessage} onChange={handleEditorChange} onAtTrigger={handleAtTrigger}
+                                    onFiles={canExecute ? uploadFiles : undefined}
                                     minHeight="44px" maxHeight="200px"
                                 />
                             </div>
@@ -1703,11 +1597,15 @@ ${sandboxStyles}`}</style>
                         <ul>
                             <li><span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}</li>
                             <li><span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}</li>
-                            <li><span className="sandbox-hint-key">```ts</span> {sandboxText(locale, "代码块")}</li>
-                            <li><span className="sandbox-hint-key">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}</li>
-                            <li><span className="sandbox-hint-key">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}</li>
-                            <li><span className="sandbox-hint-key">[@{endpointId}]</span> {sandboxText(locale, "@机器人（群聊里唤起机器人，也可点 @ 按钮插入）")}</li>
-                            <li><span className="sandbox-hint-key">[image:URL]</span> <span className="sandbox-hint-key">[video:URL]</span> <span className="sandbox-hint-key">[audio:URL]</span> {sandboxText(locale, "媒体")}</li>
+                            <li><Paperclip size={11} /> {sandboxText(locale, "拖放、粘贴或用附件按钮上传本地文件，发送时带 Sandbox 托管的签名地址")}</li>
+                            {/* Only forms the send path really parses: rendered from the parser's own table. */}
+                            {SANDBOX_INBOUND_SYNTAX.map((entry) => (
+                                <li key={entry.kind} data-syntax={entry.kind}>
+                                    <span className="sandbox-hint-key">{sandboxText(locale, entry.syntax)}</span>
+                                    {entry.kind === 'mention' && <> <span className="sandbox-hint-key">[@{endpointId}]</span></>}
+                                    {' '}{sandboxText(locale, entry.label)}
+                                </li>
+                            ))}
                             {commandHints && <li><Terminal size={11} /> {commandHints.prefix
                                 ? sandboxText(locale, "命令以 {0} 开头", [commandHints.prefix])
                                 : sandboxText(locale, "命令无需前缀")}</li>}
@@ -1861,12 +1759,6 @@ function useMediaQuery(media: string): boolean {
         return () => query.removeEventListener('change', update)
     }, [media])
     return matches
-}
-
-/** ADR 0063 决策 5: a dangerous choice is an outline button with destructive text, never a solid red one. */
-function interactionVariant(primary: boolean, danger: boolean): 'soft' | 'destructive-outline' | 'outline' {
-    if (danger) return 'destructive-outline'
-    return primary ? 'soft' : 'outline'
 }
 
 function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {

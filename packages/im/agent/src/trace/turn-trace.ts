@@ -65,8 +65,14 @@ export interface TurnTraceToolCall {
   /** Milliseconds since the turn started. */
   readonly started_at_ms: number;
   readonly duration_ms?: number;
-  /** Size of the tool output in characters (output itself is never stored). */
+  /**
+   * Size in characters of the tool result the model received (output itself is never stored):
+   * after media splitting and inline-binary elision (#1250 第 39 批). Until the agent loop reports
+   * it, the size of the tool's own output.
+   */
   readonly result_size?: number;
+  /** Size of the tool's own output, when the model received a different size (e.g. audio stripped). */
+  readonly raw_result_size?: number;
   readonly error?: string;
   /** Policy that denied the call, for `denied`. */
   readonly policy?: string;
@@ -103,7 +109,10 @@ export interface TurnTraceModelFallback {
   readonly to_profile_id: string;
   readonly to_account_id: string;
   readonly to_model: string;
-  /** `quota_exhausted`, `billing`, `auth` (rejected credential), `timeout` (repeated) or `context_overflow` (a fallback in use no longer fits). */
+  /**
+   * `quota_exhausted`, `billing`, `auth` (rejected credential), `timeout` (repeated), `network` / `server`
+   * (same-model retries used up) or `context_overflow` (a fallback in use no longer fits).
+   */
   readonly reason: string;
   /** `selection`: the primary was already being skipped; `request`: a request failed and was re-issued. */
   readonly phase: 'selection' | 'request';
@@ -202,6 +211,14 @@ export interface TurnTrace {
   /** Purpose fallbacks used by this (sub-)turn, in order (#1250). Absent when none. */
   readonly model_fallbacks?: readonly TurnTraceModelFallback[];
   /**
+   * Model failures that did not switch to a fallback, and why (#1250 fallback-skips-network-and-5xx):
+   * `no_fallbacks`, `not_switching` (the failure class does not switch), `exhausted` (every fallback
+   * was tried or passed over), `streamed` or `retry_forbidden`. Absent when none.
+   */
+  readonly model_fallback_skips?: readonly Readonly<{
+    purpose: string; profile_id: string; account_id: string; model: string; kind: string; reason: string;
+  }>[];
+  /**
    * The final reply claims a lookup ("查了 / 根据最新 / I checked") but the turn made
    * no tool call: likely made up (#1250 tool-capability-unverified). Flag only.
    */
@@ -231,6 +248,8 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'model_selection'; selection: TurnTraceModelSelection }>
   /** The turn was answered (from here on) by a purpose fallback model (#1250). */
   | Readonly<{ kind: 'model_fallback'; fallback: TurnTraceModelFallback }>
+  /** A model failure that did not switch to a fallback, and why (#1250 fallback-skips-network-and-5xx). */
+  | Readonly<{ kind: 'model_fallback_skipped'; skip: NonNullable<TurnTrace['model_fallback_skips']>[number] }>
   /**
    * Final reply of a turn that does not record `turn_end` (a sub-agent actor turn):
    * checked for a lookup claim without any tool call, like `turn_end` output.
@@ -251,7 +270,12 @@ export type TurnTraceNote =
   /** #1250 b33: the visible reply is the framework's fallback text, and why. */
   | Readonly<{ kind: 'reply_fallback'; cause: string; tools?: readonly string[] }>
   /** A model request attempt hit its first-response or whole-request deadline (#1250). */
-  | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>;
+  | Readonly<{ kind: 'model_timeout'; phase: 'first_response' | 'request'; timeout_ms: number; attempt: number; provider: string; model: string }>
+  /**
+   * #1250 第 39 批：the tool result as the model received it, in characters (after media splitting
+   * and inline-binary elision); replaces `result_size`, which keeps the raw size in `raw_result_size`.
+   */
+  | Readonly<{ kind: 'tool_model_result'; tool_use_id: string; size: number }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -274,6 +298,7 @@ interface MutableToolCall {
   started_at_ms: number;
   duration_ms?: number;
   result_size?: number;
+  raw_result_size?: number;
   error?: string;
   policy?: string;
 }
@@ -298,11 +323,14 @@ export class TurnTraceCollector {
   #contextBudget: ContextBudgetReport | undefined;
   #modelSelection: TurnTraceModelSelection | undefined;
   readonly #modelFallbacks: TurnTraceModelFallback[] = [];
+  readonly #modelFallbackSkips: NonNullable<TurnTrace['model_fallback_skips']>[number][] = [];
   #claimWithoutToolCall: string | undefined;
   #unexecutedNotice: TurnTrace['unexecuted_tool_notice'];
   #trigger: TurnTraceTrigger | undefined;
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
+  /** Timeline index of each tool's `tool_result` entry, so the model-visible size can replace it. */
+  readonly #toolResultTimeline = new Map<string, number>();
   readonly #requestTimeline = new Map<string, number>();
   #dropped = 0;
 
@@ -441,6 +469,10 @@ export class TurnTraceCollector {
       this.#modelFallbacks.push(Object.freeze({ ...fallback }));
       this.#addTimeline('model_fallback', `${fallback.notice}: ${fallback.purpose} ${fallback.from_account_id}/${fallback.from_model}`
         + ` → ${fallback.to_account_id}/${fallback.to_model} (${fallback.reason})`);
+    } else if (note.kind === 'model_fallback_skipped') {
+      const skip = note.skip;
+      this.#modelFallbackSkips.push(Object.freeze({ ...skip }));
+      this.#addTimeline('fallback_skipped', `${skip.purpose} ${skip.account_id}/${skip.model}: ${skip.kind} (${skip.reason})`);
     } else if (note.kind === 'copied_inline_media_dropped') {
       this.#addTimeline('copied_inline_media_dropped', `${note.path}: ${note.count} × ${note.kinds.join(', ')}`);
     } else if (note.kind === 'unexecuted_tool_notice') {
@@ -467,6 +499,18 @@ export class TurnTraceCollector {
       this.#addTimeline('unattended_review', `${note.tool} (${note.policy}): ${note.outcome}`);
     } else if (note.kind === 'reply_fallback') {
       this.#addTimeline('reply_fallback', `${note.cause}${note.tools?.length ? `: ${note.tools.join(', ')}` : ''}`);
+    } else if (note.kind === 'tool_model_result') {
+      const tool = this.#toolCalls.get(note.tool_use_id);
+      if (!tool || tool.status !== 'ok') return;
+      const raw = tool.raw_result_size ?? tool.result_size;
+      tool.result_size = note.size;
+      if (raw !== undefined && raw !== note.size) tool.raw_result_size = raw;
+      else delete tool.raw_result_size;
+      const index = this.#toolResultTimeline.get(note.tool_use_id);
+      const entry = index === undefined ? undefined : this.#timeline[index];
+      if (entry?.kind === 'tool_result') {
+        this.#timeline[index!] = Object.freeze({ ...entry, detail: toolResultDetail(tool) });
+      }
     } else if (note.kind === 'model_timeout') {
       this.#addTimeline('model_timeout', `${note.provider}/${note.model} ${note.phase === 'first_response' ? 'no response' : 'request'} after ${note.timeout_ms}ms (attempt ${note.attempt})`);
     } else {
@@ -515,7 +559,10 @@ export class TurnTraceCollector {
         tool.status = 'ok';
         tool.duration_ms = Math.round(event.durationMs);
         tool.result_size = outputSize(event.output);
-        this.#addTimeline('tool_result', `${event.toolName} ok ${tool.duration_ms}ms ${tool.result_size} chars`);
+        delete tool.raw_result_size;
+        const entries = this.#timeline.length;
+        this.#addTimeline('tool_result', toolResultDetail(tool));
+        if (this.#timeline.length > entries) this.#toolResultTimeline.set(event.toolUseId, entries);
         return;
       }
       case 'tool_failed': {
@@ -547,7 +594,10 @@ export class TurnTraceCollector {
       }
       case 'turn_end': {
         this.#checkLookupClaim(renderAgentOutput(event.output));
-        this.#finish({ status: 'completed' });
+        // #1250 b40: a turn that ended on a failed model request did not answer, whatever text it showed.
+        this.#finish(event.modelFailure
+          ? { status: 'failed', code: `model_error:${event.modelFailure.kind}`, reason: summarizeText(event.modelFailure.message) }
+          : { status: 'completed' });
         return;
       }
       case 'error':
@@ -618,6 +668,7 @@ export class TurnTraceCollector {
       ...(subagentUsage ? { subagent_usage: subagentUsage } : {}),
       ...(this.#modelSelection ? { model_selection: this.#modelSelection } : {}),
       ...(this.#modelFallbacks.length ? { model_fallbacks: Object.freeze([...this.#modelFallbacks]) } : {}),
+      ...(this.#modelFallbackSkips.length ? { model_fallback_skips: Object.freeze([...this.#modelFallbackSkips]) } : {}),
       ...(this.#claimWithoutToolCall ? { claim_without_tool_call: Object.freeze({ phrase: this.#claimWithoutToolCall }) } : {}),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),
@@ -731,6 +782,11 @@ function summarizeText(value: unknown, max = TEXT_SUMMARY_LENGTH): string {
   return clip(scrubSecrets(text.replace(/\s+/g, ' ').trim()), max);
 }
 
+
+function toolResultDetail(tool: MutableToolCall): string {
+  const raw = tool.raw_result_size === undefined ? '' : ` (raw ${tool.raw_result_size} chars)`;
+  return `${tool.tool_name} ok ${tool.duration_ms}ms ${tool.result_size} chars${raw}`;
+}
 
 function outputSize(output: unknown): number {
   if (output == null) return 0;

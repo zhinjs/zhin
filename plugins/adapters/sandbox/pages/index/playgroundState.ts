@@ -40,6 +40,22 @@ export interface PlaygroundMessage {
   readonly recalledMessageId?: string;
   readonly revision?: number;
   readonly streaming?: boolean;
+  /** ADR 0064 P1b: reactions the Bot put on this message (Endpoint `control.addReaction`). */
+  readonly reactions?: readonly PlaygroundReaction[];
+  /** Payloads clicked on this message's buttons in this page session (not persisted). */
+  readonly submittedActions?: readonly string[];
+  /** What became of the last click: a processing failure or no answer at all (not persisted). */
+  readonly actionFeedback?: PlaygroundActionFeedback;
+}
+
+export interface PlaygroundActionFeedback {
+  readonly tone: 'error' | 'quiet';
+  readonly text: string;
+}
+
+export interface PlaygroundReaction {
+  readonly id: string;
+  readonly emoji: string;
 }
 
 export interface PlaygroundState {
@@ -184,7 +200,46 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
     ...(typeof item.recalledMessageId === 'string' ? { recalledMessageId: item.recalledMessageId } : {}),
     ...(Number.isSafeInteger(item.revision) && Number(item.revision) > 0 ? { revision: Number(item.revision) } : {}),
     ...(typeof item.streaming === 'boolean' ? { streaming: item.streaming } : {}),
+    ...(parseReactions(item.reactions)),
   };
+}
+
+const MAX_REACTIONS = 32;
+
+function parseReactions(value: unknown): { reactions?: readonly PlaygroundReaction[] } {
+  if (!Array.isArray(value)) return {};
+  const reactions = value.flatMap((item): PlaygroundReaction[] => item && typeof item === 'object'
+    && typeof item.id === 'string' && item.id && typeof item.emoji === 'string' && item.emoji
+    ? [{ id: item.id.slice(0, 256), emoji: item.emoji.slice(0, 64) }] : []).slice(0, MAX_REACTIONS);
+  return reactions.length > 0 ? { reactions } : {};
+}
+
+type SceneRef = Pick<PlaygroundSession, 'id' | 'type'>;
+
+function inScene(message: PlaygroundMessage, scene: SceneRef, messageId: string): boolean {
+  return message.id === messageId && message.channelType === scene.type && message.channelId === scene.id;
+}
+
+/** ADR 0064 P1b: the Bot recalled a message in this scene (its own or, as an admin, someone else's). */
+export function recallPlaygroundMessage(messages: readonly PlaygroundMessage[], scene: SceneRef, messageId: string): PlaygroundMessage[] {
+  return messages.map((message) => inScene(message, scene, messageId) ? { ...message, recalled: true, streaming: false } : message);
+}
+
+/** ADR 0064 P1b: a reaction was added to or removed from a message in this scene. */
+export function reactPlaygroundMessage(
+  messages: readonly PlaygroundMessage[],
+  scene: SceneRef,
+  change: Readonly<{ messageId: string; reactionId: string; emoji?: string; op: 'add' | 'remove' }>,
+): PlaygroundMessage[] {
+  return messages.map((message) => {
+    if (!inScene(message, scene, change.messageId)) return message;
+    const current = (message.reactions ?? []).filter((reaction) => reaction.id !== change.reactionId);
+    const reactions = change.op === 'add' && change.emoji
+      ? [...current, { id: change.reactionId, emoji: change.emoji }].slice(-MAX_REACTIONS)
+      : current;
+    const { reactions: _previous, ...rest } = message;
+    return reactions.length > 0 ? { ...rest, reactions } : rest;
+  });
 }
 
 export function hasPlaygroundKeyboard(content: readonly MessageSegment[]): boolean {
@@ -250,4 +305,39 @@ export function mergePlaygroundMessage(
     historyEvent: incoming.historyEvent,
     ...(incoming.revision === undefined ? {} : { timestamp: message.timestamp }),
   } : message);
+}
+
+/**
+ * The action segment of a button click. Like a platform callback it carries the button's own id
+ * and its payload separately (#1250 `sandbox-action-button-id-dropped`); a button without an id
+ * falls back to its payload.
+ */
+export function sandboxActionSegment(payload: string, buttonId?: string): MessageSegment {
+  return { type: 'action', data: { id: buttonId || payload, payload } };
+}
+
+/** A click on `cardId`: remembered as submitted, and any earlier feedback is cleared. */
+export function markPlaygroundActionSubmitted(
+  messages: readonly PlaygroundMessage[], scene: SceneRef, cardId: string, payload: string,
+): PlaygroundMessage[] {
+  return messages.map((message) => {
+    if (!inScene(message, scene, cardId) || message.type !== 'received') return message;
+    const { actionFeedback: _cleared, ...rest } = message;
+    return { ...rest, interactionResolved: true,
+      submittedActions: [...new Set([...(message.submittedActions ?? []), payload])] };
+  });
+}
+
+/**
+ * Shows `feedback` next to `cardId`. With `unlessRepliedSince`, a quiet notice is dropped when the
+ * Bot has posted anything in the scene since the click (the click did get an answer).
+ */
+export function setPlaygroundActionFeedback(
+  messages: readonly PlaygroundMessage[], scene: SceneRef, cardId: string, feedback: PlaygroundActionFeedback,
+  unlessRepliedSince?: number,
+): PlaygroundMessage[] {
+  if (unlessRepliedSince !== undefined && messages.some((message) => message.type === 'received'
+    && message.channelType === scene.type && message.channelId === scene.id && message.id !== cardId
+    && message.timestamp >= unlessRepliedSince)) return [...messages];
+  return messages.map((message) => inScene(message, scene, cardId) ? { ...message, actionFeedback: feedback } : message);
 }

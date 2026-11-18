@@ -35,6 +35,7 @@ import {
   type SelfStandingRequest,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import type { OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
   connectDiscordGatewayClient,
@@ -76,6 +77,8 @@ export interface DiscordEndpointOptions {
   readonly config: ResolvedDiscordGatewayConfig;
   readonly restApiAgent?: ReturnType<typeof createDiscordRestApiAgent>;
   readonly fetch?: typeof globalThis.fetch;
+  /** Downloads attachment URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 export class DiscordGatewayEndpoint extends Client implements Endpoint {
@@ -321,7 +324,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
         throw new Error(`Channel ${channelId} is not a text channel`);
       }
       stage = 'render';
-      const options = await operation.prepare(() => toMessageCreateOptions(body));
+      const options = await operation.prepare(() => toMessageCreateOptions(body, { ...(signal ? { signal } : {}), ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) }));
       stage = 'send';
       const result = await operation.run(async () => channel.send(options));
       return result.id;

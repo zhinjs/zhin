@@ -111,7 +111,18 @@ export interface MessagingCapabilities {
   readonly forward?: Readonly<{ maxNodes?: number }> | false;
   /** Max messages the Bot may send for one turn. */
   readonly maxMessagesPerTurn?: number;
+  /**
+   * ADR 0064 §5: progressive (streamed) replies. `mode` mirrors the Endpoint's
+   * `EndpointStreaming.mode` (`none` = no streaming); `formats` lists the segment formats a stream
+   * carries. The Endpoint spec still performs the streaming; this makes it answerable statically.
+   */
+  readonly streaming?: Readonly<{ mode: ProfileStreamingMode; formats?: readonly ('text' | 'markdown')[] }> | false;
 }
+
+/** ADR 0064 §5: how a platform streams a reply (`none` = it does not). */
+export type ProfileStreamingMode = 'native' | 'draft' | 'card' | 'edit' | 'none';
+const PROFILE_STREAMING_MODES: readonly ProfileStreamingMode[] = Object.freeze(['native', 'draft', 'card', 'edit', 'none']);
+const PROFILE_STREAMING_FORMATS: readonly string[] = Object.freeze(['text', 'markdown']);
 
 /** 会话场景 */
 export interface SceneCapabilities {
@@ -348,6 +359,10 @@ const SECTION_NODE: Node = obj({
     edit: FLAG,
     forward: obj({ maxNodes: MAX }, { toggle: true }),
     maxMessagesPerTurn: MAX,
+    streaming: obj({
+      mode: { t: 'enum', values: PROFILE_STREAMING_MODES, off: 'none' },
+      formats: { t: 'set', nonEmpty: true },
+    }, { toggle: true, required: ['mode'] }),
   }),
   scene: obj({
     groupInfo: FLAG,
@@ -432,6 +447,9 @@ function validateNode(node: Node, value: unknown, path: string): unknown {
       if (node.nonEmpty && items.length === 0) fail(path, 'must not be empty');
       if (path.endsWith('.scopes') && items.some((item) => !SCOPE_NAME.test(item))) {
         fail(path, 'must contain conversation kind names such as private, group, channel, thread');
+      }
+      if (path.endsWith('streaming.formats') && items.some((item) => !PROFILE_STREAMING_FORMATS.includes(item))) {
+        fail(path, `must contain ${PROFILE_STREAMING_FORMATS.join(' | ')}`);
       }
       if (path.endsWith('events.emit') && items.some((item) => !EVENT_NAME.test(item))) {
         fail(path, 'must contain dotted standard event names such as member.joined');
@@ -1010,6 +1028,34 @@ export function operationsImpliedByProfile(
     if (section.feedback?.mode === 'typing') implied.add('typing');
   }
   return Object.freeze([...implied]);
+}
+
+/**
+ * ADR 0064 §5 / D11: compare the profile's `messaging.streaming` with the live Endpoint's streaming
+ * spec (`EndpointStreaming.mode`, `undefined` when the Endpoint has none, e.g. configured off).
+ * Returns why they disagree, or `undefined` when they agree. A disagreement is a warning for now
+ * (D11: it becomes an assembly failure once every official adapter declares streaming).
+ */
+export function profileStreamingMismatch(
+  profile: AdapterCapabilityProfile,
+  endpointMode: string | undefined,
+): string | undefined {
+  const sections = [profile.default, profile.private, profile.group, profile.channel, profile.thread,
+    ...Object.values(profile.kinds ?? {})];
+  const declarations = sections.map((section) => section?.messaging?.streaming).filter((value) => value !== undefined);
+  const modes = new Set<ProfileStreamingMode>(declarations.flatMap((value) => value && value.mode !== 'none' ? [value.mode] : []));
+  if (declarations.length === 0) {
+    return endpointMode ? `the Endpoint streams (mode ${endpointMode}) but the profile does not declare messaging.streaming` : undefined;
+  }
+  if (!endpointMode) {
+    return modes.size > 0
+      ? `the profile declares messaging.streaming (${[...modes].join(', ')}) but the Endpoint has no streaming (configured off?)`
+      : undefined;
+  }
+  if (modes.size === 0) return `the Endpoint streams (mode ${endpointMode}) but the profile declares messaging.streaming off`;
+  return modes.has(endpointMode as ProfileStreamingMode)
+    ? undefined
+    : `the profile declares messaging.streaming (${[...modes].join(', ')}) but the Endpoint streams in mode ${endpointMode}`;
 }
 
 /** Every action a profile declares in any section. */

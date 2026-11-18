@@ -1,6 +1,6 @@
 /**
  * UNI-Channel segments policy SSOT：全部 IM adapter 的 defineAdapter segments
- * 声明（outboundMedia / interactive / markdown / supported）逐平台断言，
+ * 声明（outboundMedia / interactive / interactiveLimits / markdown / supported）逐平台断言，
  * 防止声明被意外改弱或删回。
  * 门禁脚本（scripts/check-*-segment-adapters.mjs）只查存在性，本测试查精确值。
  */
@@ -29,9 +29,9 @@ import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapte
 
 const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   dingtalk: { outboundMedia: ['url'], interactive: 'native', markdown: 'native' },
-  discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
+  discord: { outboundMedia: ['url', 'upload'], interactive: 'native', interactiveLimits: { maxButtons: 25 }, markdown: 'native' },
   email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native', html: 'direct' },
-  github: { outboundMedia: ['url'], interactive: 'text' },
+  github: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
   icqq: {
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
     outboundMedia: ['base64', 'url', 'path'],
@@ -66,6 +66,7 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard', 'card', 'share'],
     outboundMedia: ['url', 'upload'],
     interactive: 'native',
+    interactiveLimits: { maxButtons: 25 },
     markdown: 'native',
     model: {
       share: {
@@ -77,8 +78,8 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   },
   sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native', html: 'direct', markdown: 'native' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
-  slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native', markdown: 'native' },
-  telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
+  slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native', interactiveLimits: { maxButtons: 25 }, markdown: 'native' },
+  telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', interactiveLimits: { maxButtons: 100 }, markdown: 'native' },
   'wechat-mp': { outboundMedia: ['upload'], interactive: 'text' },
   wecom: { outboundMedia: ['upload'], interactive: 'text' },
   'weixin-ilink': { outboundMedia: ['upload'], interactive: 'text' },
@@ -113,6 +114,12 @@ describe('UNI-Channel segments policy（全平台声明 SSOT）', () => {
       expect(ADAPTERS[name]?.segments).toEqual(expected);
     });
   }
+
+  it('QQ 频道单独声明的 segments 保留原生按钮上限（#1250，ADR 0064 F1 按会话类型整段覆盖）', () => {
+    const channel = defineQqAdapter.profile?.channel?.messaging?.segments;
+    expect(channel?.interactive).toBe('native');
+    expect(channel?.interactiveLimits).toEqual({ maxButtons: 25 });
+  });
 
   it('覆盖全部 adapter（EXPECTED 与 ADAPTERS 键集一致）', () => {
     expect(Object.keys(ADAPTERS).sort()).toEqual(Object.keys(EXPECTED).sort());

@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0063）
+## 现存 ADR 列表（0034–0066）
 
 ### 服务插件与平台适配器契约
 
@@ -15,6 +15,7 @@ sidebar: false
 | [ADR 0034](./0034-activity-feedback-service-plugin.md) | Activity Feedback 服务插件 | Accepted / Implemented | `plugins/services/activity-feedback/`、`@zhin.js/core` |
 | [ADR 0035](./0035-comment-reply-adapter-contract.md) | 评论型平台适配器契约（Bilibili 先行） | Accepted（Experimental 实现） | `plugins/adapters/bilibili/`、`plugins/adapters/github/` |
 | [ADR 0044](./0044-adapter-capability-profile.md) | 适配器能力画像——规范在 zhin，能力由适配器注入，功能按能力组合 | Implemented | `@zhin.js/im-contract`、`@zhin.js/adapter`、`@zhin.js/core` |
+| [ADR 0064](./0064-sandbox-capability-parity.md) | Sandbox 全能力渲染与「按平台预览」——Sandbox 是能力上界，降级只在 core 投影里发生并产出逐段报告，预览读真实适配器画像（按会话类型解析）；新增 `select` 语义段，`interactive` 声明扩展为对象，流式进入画像（D1–D11 按推荐）；2026-11-17 增补入站能力对齐（D12–D17：本地文件由 Sandbox 托管并签发限时地址、托管地址按签发者视为本机可信来源、引用经 `reply` 段提升 `replyTo`、平台事件经 control 帧上报） | Accepted（P0、I0 已实施） | `@zhin.js/core`（`plugin-runtime/im/outbound-segments.ts`、`outbound-renderer.ts`、`built/segment-contract/`、`built/user-interaction.ts`）、`@zhin.js/adapter`（`capability-profile.ts`）、`plugins/adapters/sandbox`、`plugins/adapters/github`、`plugins/adapters/qq` |
 
 ### 受控落地、群运营与自我演进
 
@@ -26,6 +27,7 @@ sidebar: false
 | [ADR 0039](./0039-group-ops-rules.md) | 动态群管规则——批准一次的违规阶梯 | Implemented | `@zhin.js/agent`（`group-ops/` 违规阶梯与硬闸审批） |
 | [ADR 0040](./0040-controlled-self-change.md) | 受控自我进化——变更草稿、审批生效与重启回报 | Implemented | `@zhin.js/agent/src/self-change/`、`basic/cli` |
 | [ADR 0061](./0061-inbound-message-outcomes.md) | 每条入站消息都有结局与原因——消灭静默失败：有限结局集合与人话模板、`im_message_outcomes` 一行摘要（链接决策审计与 turn trace）、`why` / Console 结局时间线 / `zhin why`、`finally` 提交与 `check:silent-catch`；IM 回合审批与 Console 共用 `ToolApprovalQueue` | Accepted | `@zhin.js/core`（`plugin-runtime/im/`）、`@zhin.js/agent`（`plugin-runtime/ingress/`、`media/`、`assistant/timer-scheduler.ts`）、`@zhin.js/im-contract`、`@zhin.js/console-protocol`、`basic/cli`、`scripts/check-silent-catch.mjs` |
+| [ADR 0065](./0065-mcp-tool-permit.md) | MCP 工具按聊天角色授权——接入时保留上游 `annotations`，`ai.mcpServers[].permit`（`readOnly` / `default` / `tools`，复用 `PermissionHost` 与插件工具 `permissions` 的 DSL，另有保留字 `everyone` / `deny`）；默认上游标注只读的对所有人开放、其余只给 `owner@global`，标注不放宽审批；`ai.agents.<name>.mcpServers` 的覆盖与服务器级取 AND、只能收窄；每轮按发送者过滤并在执行前复核；`zhin status` / Console / trace 显示；定时任务沿用降档后的创建者主体（D1–D7 所有者 2026-11-17 批准） | Accepted（未实施） | `@zhin.js/mcp-feature`（`definition.ts`）、`@zhin.js/agent`（`plugin-runtime/agent-runtime.ts` `expandMcpTools`、`capability-ingress.ts`、`mcp-client/`、`host/config.ts`、`assistant/job-creator.ts`）、`@zhin.js/runtime`（`host-config-schema.json`）、`@zhin.js/console-protocol`、`basic/cli`（`zhin status`）、Console 前端（`zhinjs/console`） |
 
 ### 提示词缓存与上下文 Token 预算
 
@@ -43,6 +45,7 @@ sidebar: false
 | [ADR 0046](./0046-personal-session-model-policy.md) | Personal Session model policy | Partially Superseded（Personal Session 有效；Model Catalog/Policy 被 ADR 0047 取代） | `@zhin.js/agent/personal-session`（有效）；模型目录与策略已迁至 `@zhin.js/ai/provider` |
 | [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) | AI Provider 订阅接入与多决策模型 | Implemented（Accepted，S0–S4 已合入 main） | `@zhin.js/ai/src/provider/`、`@zhin.js/ai/src/providers/`、`@zhin.js/agent/src/decision/` |
 | [ADR 0048](./0048-agent-harness.md) | Agent Harness——从流程到协作 | Implemented（Accepted，H0–H5 已全部完成） | `@zhin.js/harness`、`@zhin.js/core`（`venue/`）、`@zhin.js/agent`、`@zhin.js/a2a` |
+| [ADR 0066](./0066-ambient-judge-merge.md) | 插话判断合并——「旁听」用途与「旁听参与判断」决策合成一项 `purposes.ambient`（语言 / 决策模型可选，两类混排一条备用链，切换条件同 ADR 0047 增补；「仅评估」改为对照模型并显示一致率；门槛 `minConfidence` 与「只观察」`mode: shadow` 各只留一个，`ai.trigger.ambient` 只管群与节流；旧配置自动迁移、`zhin doctor` 提示一次、可回退） | Accepted（所有者授权按推荐处理，2026-11-17；所有者已在 2026-11-17 的维护会话中批准 P0–P3 全部实施）；本仓库 P0–P3 已实施，zhinjs/console 前端部分待做 | `@zhin.js/ai`（`provider/`）、`@zhin.js/agent`（`plugin-runtime/ingress/ambient-engagement.ts`、`plugin-runtime/inference/`）、`zhin.js/instance`（`console/assistant-status.ts`）、`basic/cli`（`zhin doctor`、`zhin ai purposes revert`）、Console 前端（`zhinjs/console`） |
 
 ### Console：访问控制、三级功能配置与运维
 

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -155,15 +155,21 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'packages/page/index.ts'));
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
-  const pageFiles = (await readdir(join(pagesDir, 'index'))).map((name) => `index/${name}`);
+  // Recursive: renderers live in pages/index/segments/ (ADR 0064 §2).
+  const pageFiles = (await readdir(join(pagesDir, 'index'), { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(pagesDir, join(entry.parentPath, entry.name)));
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);
     await mkdir(dirname(dest), { recursive: true });
     await writeFile(dest, await readFile(join(pagesDir, name), 'utf8'));
   }
-  const runConfigSource = join(dirname(fileURLToPath(import.meta.url)), '../src/run-config.ts');
+  // Browser-safe src modules the page imports (shipped in the package's `files`).
   await mkdir(join(root, 'src'), { recursive: true });
-  await writeFile(join(root, 'src/run-config.ts'), await readFile(runConfigSource, 'utf8'));
+  for (const name of ['run-config.ts', 'inbound-syntax.ts', 'media-url.ts']) {
+    const source = join(dirname(fileURLToPath(import.meta.url)), '../src', name);
+    await writeFile(join(root, 'src', name), await readFile(source, 'utf8'));
+  }
   return realpath(root);
 }
 

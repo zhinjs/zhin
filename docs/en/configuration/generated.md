@@ -272,7 +272,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | no | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | no | — | — |
 | `ai.agents` | object \| null | no | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
+| `ai.agents.<key>.mcpServers` | array \| null | no | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。同一服务器只能出现一次。 |
 | `ai.agents.<key>.nickname` | string | no | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
@@ -332,7 +332,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.githubMcp` | object | no | — | PAT for adapter-github auto-registered server-github MCP (overrides env when set). |
 | `ai.githubMcp.token` | string | no | — | — |
 | `ai.githubMcp.enabled` | boolean \| string | no | — | 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 |
-| `ai.mcpServers` | array \| null | no | — | External MCP servers for the Agent MCP client (global, all bots). Listed servers are exposed to ZhinAgent tool pool when connected. |
+| `ai.mcpServers` | array \| null | no | — | 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在 ai.agents.&lt;name&gt;.mcpServers 里写上服务器的 name，对应的 Agent 才能调用它的工具（例：ai.agents.zhin.mcpServers: [github]）。没有任何 Agent 绑定的服务器，zhin status、zhin doctor 与 Console「需要你处理」会提示。 |
 | `ai.access` | object \| null | no | — | AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） |
 | `ai.access.mode` | string | no | — | open \| closed \| whitelist，默认 open |
 | `ai.access.users` | array&lt;string&gt; | no | — | 允许触发 AI 的 sender.id |
@@ -355,8 +355,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.ambient.maxPerHour` | number \| string | no | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
 | `ai.trigger.ambient.conversationWindowMs` | number \| string | no | — | 机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000） |
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | no | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢 |
-| `ai.trigger.ambient.minConfidence` | number \| string | no | — | 判断模型置信度门槛 0..1（默认 0.7） |
-| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.ambient.minConfidence` | number \| string | no | — | 已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
+| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | 已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
 | `ai.trigger.sceneEvents` | object | no | — | Scene awareness: high-priority social events (bot muted/unmuted, join request, member joined/left, notice updated, bot poked) wake one turn on their own without waiting for the next human message; low-priority events (reactions, card/title changes) never wake alone and only appear in the next turn's [Scene events] summary. When the bot cannot speak, only the session profile is updated and the model is not called. |
 | `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | no | — | Groups/channels that social events may wake, as platform:sceneId; * for every group. Defaults to ai.trigger.ambient.conversations (no wake when neither is set) |
 | `ai.trigger.sceneEvents.coalesceMs` | number \| string | no | — | Coalesce window per scene in ms, clamped to 3000–5000 (default 4000) |
@@ -514,7 +514,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `purposes` | object | no | — | — |
 | `purposes.chat` | string \| object \| null | no | — | — |
 | `purposes.summary` | string \| object \| null | no | — | — |
-| `purposes.ambient` | string \| object \| null | no | — | — |
+| `purposes.ambient` | string \| object \| null | no | — | 插话判断（ADR 0066）：群里没人叫机器人时决定要不要插话。字符串等同于 { profile }；null 清除整项。 |
 | `purposes.image` | string \| object \| null | no | — | — |
 | `purposes.perception` | object \| null | no | — | — |
 | `purposes.decisions` | object | no | — | — |
@@ -523,7 +523,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `purposes.decisions.memory` | object \| null | no | — | — |
 | `purposes.decisions.agents` | object \| null | no | — | — |
 | `purposes.decisions.approval` | object \| null | no | — | — |
-| `purposes.decisions.ambient` | object \| null | no | — | — |
+| `purposes.decisions.ambient` | object \| null | no | — | 已废弃（ADR 0066）：改写 purposes.ambient；废弃期内按迁移表合并转换并给出警告 |
 | `purposes.agents` | object | no | — | — |
 | `purposes.adapters` | object | no | — | — |
 | `purposes.endpoints` | object | no | — | — |
@@ -1455,6 +1455,16 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `sandbox.endpoints[].profile.avatar` | string \| null | no | — | — |
 | `sandbox.endpoints[].profile.interests` | array \| null | no | — | — |
 | `sandbox.endpoints[].profile.bio` | string \| null | no | — | — |
+| `sandbox.endpoints[].media` | object | no | — | Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download |
+| `sandbox.endpoints[].media.ttlHours` | integer | no | `24` | Lifetime of signed links and files in hours (1–168); delete a file to revoke it earlier |
+| `sandbox.endpoints[].media.publicDownload` | boolean | no | `false` | Open signed downloads under /pub/sandbox-media (time-limited external links; a valid signature is still required). Off by default |
+| `sandbox.endpoints[].media.maxBytes` | object | no | — | Per-type byte limit of one file; hard ceiling 64 MiB (the gateway's request body limit); larger needs the gateway raised too |
+| `sandbox.endpoints[].media.maxBytes.image` | integer | no | `10485760` | Images |
+| `sandbox.endpoints[].media.maxBytes.audio` | integer | no | `20971520` | Voice / audio |
+| `sandbox.endpoints[].media.maxBytes.video` | integer | no | `33554432` | Video |
+| `sandbox.endpoints[].media.maxBytes.file` | integer | no | `33554432` | Other files |
+| `sandbox.endpoints[].media.uploaderQuotaBytes` | integer | no | `209715200` | Bytes one uploader may hold on this endpoint; over it uploads are refused, nobody else's files are evicted |
+| `sandbox.endpoints[].media.quotaBytes` | integer | no | `524288000` | Total quota of this endpoint; over it uploads are refused |
 | `sandbox.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `sandbox.nickname` | string \| null | no | — | Fallback account nickname |
 | `sandbox.profile` | object | no | — | Fallback account profile |
@@ -1465,6 +1475,16 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `sandbox.profile.avatar` | string \| null | no | — | — |
 | `sandbox.profile.interests` | array \| null | no | — | — |
 | `sandbox.profile.bio` | string \| null | no | — | — |
+| `sandbox.media` | object | no | — | Sandbox-hosted local uploads (images, voice, files): size limits, quotas, link lifetime, public download |
+| `sandbox.media.ttlHours` | integer | no | `24` | Lifetime of signed links and files in hours (1–168); delete a file to revoke it earlier |
+| `sandbox.media.publicDownload` | boolean | no | `false` | Open signed downloads under /pub/sandbox-media (time-limited external links; a valid signature is still required). Off by default |
+| `sandbox.media.maxBytes` | object | no | — | Per-type byte limit of one file; hard ceiling 64 MiB (the gateway's request body limit); larger needs the gateway raised too |
+| `sandbox.media.maxBytes.image` | integer | no | `10485760` | Images |
+| `sandbox.media.maxBytes.audio` | integer | no | `20971520` | Voice / audio |
+| `sandbox.media.maxBytes.video` | integer | no | `33554432` | Video |
+| `sandbox.media.maxBytes.file` | integer | no | `33554432` | Other files |
+| `sandbox.media.uploaderQuotaBytes` | integer | no | `209715200` | Bytes one uploader may hold on this endpoint; over it uploads are refused, nobody else's files are evicted |
+| `sandbox.media.quotaBytes` | integer | no | `524288000` | Total quota of this endpoint; over it uploads are refused |
 
 ### satori
 

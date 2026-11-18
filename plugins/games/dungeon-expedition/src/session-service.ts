@@ -84,6 +84,27 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
       )) ?? null;
   }
 
+  /**
+   * Records (or withdraws) the leader's request to end the expedition (#1250). The request is
+   * stored at the new revision this mutation creates, so it binds to exactly that state.
+   */
+  async setPendingAbort(
+    sessionId: string,
+    expectedRevision: number,
+    actorId: string,
+    pending: boolean,
+  ): Promise<DungeonSessionRow> {
+    const result = await this.mutateSession(sessionId, {
+      actionId: `${sessionId}:${expectedRevision}:${actorId}:${pending ? 'abort_request' : 'abort_cancel'}`,
+      expectedRevision,
+      apply: (session) => {
+        const { pendingAbortRevision: _previous, ...state } = decodeDungeonState(session.state_json);
+        return { state_json: JSON.stringify(pending ? { ...state, pendingAbortRevision: session.revision + 1 } : state) };
+      },
+    });
+    return result.session;
+  }
+
   async performAction(
     options: PerformDungeonActionOptions,
   ): Promise<SessionMutationResult<DungeonSessionRow>> {
@@ -113,8 +134,10 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
           random,
           session.locale ?? undefined,
         );
+        // Any applied action moves past a pending end confirmation (#1250).
+        const { pendingAbortRevision: _pending, ...settled } = next;
         return {
-          state_json: JSON.stringify(next),
+          state_json: JSON.stringify(settled),
           phase: next.phase,
           turn: activePlayer(next)?.id ?? '',
           rng_state: random.state,

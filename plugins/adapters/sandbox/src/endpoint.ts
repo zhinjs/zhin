@@ -1,6 +1,7 @@
 import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
 import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest,
-  type EndpointStreaming, type EndpointStreamRequest, type EndpointMessageStream, type EndpointStreamAcknowledgement } from 'zhin.js/adapter';
+  type EndpointStreaming, type EndpointStreamRequest, type EndpointMessageStream, type EndpointStreamAcknowledgement,
+  type EndpointControl } from 'zhin.js/adapter';
 /**
  * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
  */
@@ -8,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { principalAllows, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import { hostChatRole, type CapabilityId, type ChatRoleReader } from 'zhin.js';
-import { EndpointDeliveryError, type PlatformStandingLevel } from '@zhin.js/im-contract';
+import { hostChatRole, isMediaRef, toCanonicalSegments, type CapabilityId, type ChatRoleReader, type MessageElement } from 'zhin.js';
+import { EndpointDeliveryError, type MessageRef, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
   sandboxSocketOf,
@@ -23,6 +24,10 @@ import {
   type SandboxConversation,
 } from './protocol.js';
 import { SandboxClient } from './client.js';
+import { join } from 'node:path';
+import { SandboxMediaStore } from './media-store.js';
+import { mountSandboxMediaRoutes, sandboxMediaActor } from './media-routes.js';
+import { SANDBOX_MEDIA_PUBLIC_PREFIX, isSandboxMediaPath } from './media-url.js';
 
 /**
  * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
@@ -127,7 +132,55 @@ const messages = createMessages({
   protocol: { 'zh-CN': '与 Node Host 控制台沙盒协议一致（{path}）', en: 'Using the Node Host Console sandbox protocol ({path})' },
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
+  receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
+  mediaRejected: { 'zh-CN': '消息里的文件不属于这个会话、已过期、签名无效，或指向本机路径，没有发送。', en: 'A file in this message belongs to another conversation, has expired, has an invalid signature or names a path on the host; the message was not sent.' },
 });
+
+/** How often expired uploads are swept (also once at start). */
+const MEDIA_SWEEP_INTERVAL_MS = 3_600_000;
+
+/**
+ * Every address-like string a segment carries, nested segments (forward records) included, but not
+ * its text: a hosted link typed as plain words is not a media reference.
+ */
+function segmentStrings(segment: unknown, depth = 0): string[] {
+  // Fail closed: content nested deeper than any real segment counts as an unverifiable hosted link.
+  if (depth > 16) return [SANDBOX_MEDIA_PUBLIC_PREFIX];
+  if (!segment || typeof segment !== 'object') return [];
+  if (Array.isArray(segment)) return segment.flatMap(item => segmentStrings(item, depth + 1));
+  return Object.entries(segment as Record<string, unknown>).flatMap(([key, value]) => {
+    if (key === 'text') return [];
+    if (typeof value === 'string') return [value];
+    return segmentStrings(value, depth + 1);
+  });
+}
+
+const INBOUND_MEDIA_TYPES: ReadonlySet<string> = new Set(['image', 'audio', 'video', 'file', 'record', 'voice']);
+
+/**
+ * Whether a segment tree names a file on this host (`media.kind: 'path'`, or a legacy `path` /
+ * `file_path` / `/…` field that Core's ingress mapper turns into one). A browser never has a reason
+ * to send a host path, and the Agent's inbound media reads such a ref straight from disk without
+ * the file policy — it would read `.zhin/sandbox/media/*` (any conversation's uploads, and the
+ * signing key) or any other file. Nested deeper than any real segment counts as a path (fail closed).
+ */
+function carriesLocalMediaPath(value: unknown, depth = 0): boolean {
+  if (depth > 16) return true;
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(item => carriesLocalMediaPath(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  if (record.kind === 'path' && typeof record.value === 'string') return true;
+  if (typeof record.type === 'string' && INBOUND_MEDIA_TYPES.has(record.type.toLowerCase()) && record.data && typeof record.data === 'object') {
+    const type = ['record', 'voice'].includes(record.type.toLowerCase()) ? 'audio' : record.type.toLowerCase();
+    const [canonical] = toCanonicalSegments([{ type, data: record.data } as MessageElement]);
+    const media = (canonical?.data as Record<string, unknown> | undefined)?.media;
+    if (isMediaRef(media) && media.kind === 'path') return true;
+    // Core no longer guesses a path from `data.file` (#1250); the Sandbox issues no such tokens,
+    // so a path-shaped one (`/etc/passwd`, `./.zhin/…`, `~/…`, `C:\…`) is still refused here.
+    if (isMediaRef(media) && media.kind === 'file' && /^(?:[/\\.~]|[a-z]:)/iu.test(media.value)) return true;
+  }
+  return Object.values(record).some(item => carriesLocalMediaPath(item, depth + 1));
+}
 
 export interface SandboxEndpointOptions {
   /** Project language captured from this endpoint generation's resources. */
@@ -137,6 +190,8 @@ export interface SandboxEndpointOptions {
   readonly defaults: ResolvedSandboxBot;
   /** Chat roles (`chatRolesToken`, ADR 0060 §6): the sender's zhin role shown on the page. */
   readonly chatRoles?: ChatRoleReader;
+  /** Hosted upload root; default `<cwd>/.zhin/sandbox/media` (ADR 0064 D12.1). */
+  readonly mediaRoot?: string;
 }
 
 /**
@@ -188,6 +243,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
   #wsPathRelease?: () => void;
+  readonly #media: SandboxMediaStore;
+  #mediaRoutesRelease?: () => void;
+  #mediaSweep?: ReturnType<typeof setInterval>;
   #open = false;
   #started = false;
 
@@ -196,12 +254,16 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#logger = getAdapterLogger('sandbox', options.defaults.id);
     this.#options = options;
     this.#locale = resolveLocale(options.locale);
+    // Lazy on disk: nothing is created until the first upload.
+    this.#media = new SandboxMediaStore({ root: options.mediaRoot ?? join(process.cwd(), '.zhin', 'sandbox', 'media'),
+      endpointId: options.defaults.id, config: options.defaults.media });
     const readTransportState = () => this.#transportState;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.defaults.id,
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
+      control: this.#control(),
       ...(options.defaults.streaming ? { streaming: Object.freeze<EndpointStreaming>({ mode: 'native',
         minIntervalMs: options.defaults.streamingIntervalMs, supports: request => this.#supportsStream(request),
         open: request => this.#openStream(request) }) } : {}),
@@ -228,6 +290,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.id, this.#options.defaults.owner);
     }
+    this.#mediaRoutesRelease = mountSandboxMediaRoutes({ http: this.#options.http, store: this.#media, logger: this.#logger });
+    this.#sweepMedia();
+    this.#mediaSweep = setInterval(() => this.#sweepMedia(), MEDIA_SWEEP_INTERVAL_MS);
+    this.#mediaSweep.unref?.();
     this.#logger.info(`ws mounted ${claim.path}`);
   }
 
@@ -249,6 +315,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#wsHandleRelease = undefined;
     this.#wsPathRelease?.();
     this.#wsPathRelease = undefined;
+    this.#mediaRoutesRelease?.();
+    this.#mediaRoutesRelease = undefined;
+    if (this.#mediaSweep) clearInterval(this.#mediaSweep);
+    this.#mediaSweep = undefined;
     for (const connection of this.connectionRecords.values()) {
       connection.release();
       if (!connection.placeholder) {
@@ -293,6 +363,48 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       );
     }
     return messageId;
+  }
+
+  /**
+   * ADR 0064 P1b (D9): the Sandbox shows every non-segment capability too. Each operation is one
+   * wire frame on the message's scene (`recall` / `edit` / `reaction`); the page applies it to the
+   * message with that id. No live page = not performed, exactly like a send.
+   */
+  #control(): EndpointControl {
+    const deliver = (message: MessageRef, frame: Record<string, unknown>): void => {
+      if (!this.#open) throw new EndpointDeliveryError('endpoint_inactive', 'Sandbox Endpoint is not open', 'not_sent');
+      const scene = { type: message.conversation.kind, id: message.conversation.id };
+      const wire = JSON.stringify({ ...frame, id: scene.id, conversation: scene, endpoint: this.#options.defaults.id,
+        bot: this.#options.defaults.id, messageId: message.id, timestamp: Date.now() });
+      if (this.#broadcast(this.#subscribers(scene), wire) === 0) {
+        throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'Sandbox Endpoint has no live connection', 'not_sent');
+      }
+    };
+    return Object.freeze<EndpointControl>({
+      recall: async ({ message, signal }) => {
+        signal?.throwIfAborted();
+        deliver(message, { type: 'recall' });
+      },
+      edit: async ({ message, content, signal }) => {
+        signal?.throwIfAborted();
+        const wire = JSON.parse(formatSandboxOutbound(content, { messageId: message.id })) as { content?: unknown };
+        deliver(message, { type: 'edit', content: wire.content ?? [] });
+        return message.id;
+      },
+      addReaction: async ({ message, emoji, signal }) => {
+        signal?.throwIfAborted();
+        if (typeof emoji !== 'string' || !emoji) {
+          throw new EndpointDeliveryError('invalid_payload', 'Sandbox reaction needs an emoji', 'not_sent');
+        }
+        const reactionId = randomUUID();
+        deliver(message, { type: 'reaction', op: 'add', emoji, reactionId });
+        return reactionId;
+      },
+      removeReaction: async ({ message, reactionId, signal }) => {
+        signal?.throwIfAborted();
+        deliver(message, { type: 'reaction', op: 'remove', reactionId });
+      },
+    });
   }
 
   #supportsStream(request: Pick<EndpointStreamRequest, 'conversation' | 'source'>): boolean {
@@ -409,8 +521,22 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             return;
           }
           const parsed = frame.message;
-          void this.#emitPlatformEvent('message', raw);
           const sceneId = parsed.id || owner;
+          // ADR 0064 D12 (revised): a hosted file may only be sent in the conversation it was uploaded
+          // in, by its uploader, with a genuine unexpired link. Anything else is refused and audited.
+          const mediaRefusal = this.#hostedMediaRefusal(parsed.content, { type: parsed.type, id: sceneId }, connection.principal);
+          if (mediaRefusal) {
+            this.#logger.warn(formatCompact({ op: 'sandbox_media_inbound_rejected', target, connectionId,
+              actor: sandboxMediaActor(connection.principal), conversation: `${parsed.type}:${sceneId}`, reason: mediaRefusal }));
+            socket.send(JSON.stringify({
+              type: 'error', code: 'sandbox_media_rejected', endpoint: target, connectionId,
+              id: sceneId, conversation: { type: parsed.type, id: sceneId }, ...(parsed.messageId ? { messageId: parsed.messageId } : {}),
+              content: [{ type: 'text', data: { text: messages(this.#locale, 'mediaRejected') } }],
+              timestamp: Date.now(),
+            }));
+            return;
+          }
+          void this.#emitPlatformEvent('message', raw);
           const conversation = { ...sandboxInboundConversation(String(this.#options.id), {
             type: parsed.type,
             id: sceneId,
@@ -470,11 +596,22 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
               ...(parsed.agentRun ? { sandboxAgentRun: parsed.agentRun } : {}),
             }),
           }).catch((err) => {
+            const error = err instanceof Error ? err.message : String(err);
             this.#logger.warn(formatCompact({
               op: 'sandbox_gateway_receive_failed',
               target,
-              error: err instanceof Error ? err.message : String(err),
+              error,
             }));
+            // #1250 sandbox-submitted-without-feedback: the page shows the failure next to the
+            // input (a clicked button's card) instead of a silent 「已提交」.
+            try {
+              socket.send(JSON.stringify({
+                type: 'error', code: 'sandbox_gateway_receive_failed', endpoint: target, connectionId,
+                id: scene.id, conversation: scene, messageId,
+                content: [{ type: 'text', data: { text: messages(this.#locale, 'receiveFailed', { error: error.slice(0, 200) }) } }],
+                timestamp: Date.now(),
+              }));
+            } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
           });
         }).catch((error: unknown) => {
           this.#logger.debug(formatCompact({ op: 'sandbox_receive_failed', error: error instanceof Error ? error.message : String(error) }));
@@ -551,6 +688,35 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (identity) return { identity };
     // Tell 「no identity yet」 apart from 「the person holds global grants」.
     return { unavailable: !user.canManageGlobal && speaker(true) ? 'needs-global-iam' : 'no-identity' };
+  }
+
+  /** Why a hosted file in an inbound message is refused, or undefined when every one is admitted. */
+  #hostedMediaRefusal(content: readonly unknown[], scene: { readonly type: string; readonly id: string },
+    principal: WsConnection['principal']): string | undefined {
+    if (carriesLocalMediaPath(content)) return 'local_path';
+    const uploader = sandboxMediaActor(principal);
+    for (const value of segmentStrings(content)) {
+      if (!isSandboxMediaPath(value)) continue;
+      const decision = this.#media.authorize(value, {
+        conversation: { endpoint: this.#options.defaults.id, type: scene.type as 'private', id: scene.id }, uploader,
+      });
+      if (!decision.ok) return decision.reason;
+    }
+    return undefined;
+  }
+
+  #sweepMedia(): void {
+    try {
+      const removed = this.#media.sweep();
+      if (removed) this.#logger.debug(formatCompact({ op: 'sandbox_media_swept', removed }));
+    } catch (error) {
+      this.#logger.warn(formatCompact({ op: 'sandbox_media_sweep_failed', error: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
+  /** @internal Tests and the I2 local source read the store directly, never over HTTP. */
+  get mediaStore(): SandboxMediaStore {
+    return this.#media;
   }
 
   #ensurePlaceholder(name: string, owner: string): void {

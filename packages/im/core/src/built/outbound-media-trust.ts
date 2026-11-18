@@ -10,7 +10,10 @@
  * exists (CLAUDE.md Guardrail #1).
  *
  * Untrusted media may only be:
- * - `url` with an `http:` / `https:` URL, or a base64 `data:` URL within the inline limit;
+ * - `url` with an `http:` / `https:` URL, or a base64 `data:` URL within the inline limit. Many
+ *   platforms download such a URL on their own servers, so it is admitted here; an adapter that
+ *   downloads it on this host must use `fetchOutboundMedia` (`outbound-media-fetch.ts`: public HTTPS
+ *   only, pinned DNS, every redirect checked), never its own `fetch` (#1250 第 46 批);
  * - `base64` within the inline limit;
  * - `file` that is a bare platform token (no scheme, no path separator, not `~` / `.`-relative);
  * - `path` (or a `file:` URL) that `trust.authorizePath` admits — the sender's own file policy,

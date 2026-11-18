@@ -635,6 +635,22 @@ it('honors an explicit zero progress-update limit during a continuous task', asy
   } finally { vi.useRealTimers(); }
 });
 
+it('reports a turn that ended on a failed model request on turn_end, with its kind and account (#1250 b40)', async () => {
+  const llm = wireMockLlmApi({ models: ['m'], responder: () => {
+    throw Object.assign(new Error('模型服务暂时不可用，请稍后再试'), { name: 'ProviderRequestError' });
+  } });
+  const { result, events } = await run({ llm, tools: [], turn: {
+    origin: { kind: 'schedule', jobId: 'weather' }, principal: { subjectId: 'schedule', roles: [] },
+    session: { key: 'schedule:weather' }, policy: { permissions: [], unattended: true } } });
+  // The visible reply is the failure text, and turn_end says it was a failure.
+  expect(result.reply).toBe('模型服务暂时不可用，请稍后再试。');
+  const end = events.find(event => event.type === 'turn_end') as { modelFailure?: unknown } | undefined;
+  expect(end?.modelFailure).toEqual({ kind: 'server', message: '模型服务暂时不可用，请稍后再试', service: llm.provider.name });
+
+  const ok = await run({ llm: scripted(() => ({ reply: 'done' })), tools: [] });
+  expect((ok.events.find(event => event.type === 'turn_end') as { modelFailure?: unknown }).modelFailure).toBeUndefined();
+});
+
 it('does not treat failed deferred re-completion as a successful tool tail eligible for segment continuation', async () => {
   let calls = 0;
   const llm = wireMockLlmApi({ models: ['m'], responder: context => {

@@ -1,5 +1,6 @@
-import { defineMcp, mcpFeatureId, type McpDefinition } from '@zhin.js/mcp-feature';
+import { defineMcp, mcpFeatureId, mcpToolHintsFromAnnotations, type McpDefinition } from '@zhin.js/mcp-feature';
 import { McpClientConnection } from '../mcp-client/index.js';
+import type { McpToolDefinition } from '../mcp-client/bridge.js';
 import { classifyMcpFailure, McpConnectionError } from '../mcp-client/failure.js';
 import type { McpServerEntry } from '../resource-hub/types.js';
 import type { HostMcpStatusBoard } from './host-mcp-status.js';
@@ -45,11 +46,17 @@ export function projectHostMcp(entry: McpServerEntry, status?: HostMcpStatusBoar
             status?.release(entry.name, connection);
             return connection.disconnect();
           },
-          listTools: () => connection.tools.map((tool) => Object.freeze({
-            name: tool.name,
-            description: tool.description,
-            inputSchema: tool.parameters,
-          })),
+          // Upstream names, not the `<server>__<tool>` bridge names: the orchestrator adds its own
+          // prefix and `callTool` must reach the server under the name it reported (ADR 0065 D7).
+          listTools: () => connection.toolDefinitions.map((tool) => {
+            const hints = mcpToolHintsFromAnnotations(tool.annotations);
+            return Object.freeze({
+              name: tool.name,
+              ...(tool.description !== undefined ? { description: tool.description } : {}),
+              inputSchema: toolInputSchema(tool),
+              ...(hints ? { hints } : {}),
+            });
+          }),
           callTool: (name, input) => connection.callTool(name, input as Record<string, unknown>),
         };
         async function startConnection(signal: AbortSignal): Promise<void> {
@@ -76,4 +83,13 @@ export function projectHostMcp(entry: McpServerEntry, status?: HostMcpStatusBoar
       },
     }),
   });
+}
+
+/** Same model-facing parameter shape the bridge builds (`type: object`, properties, required). */
+function toolInputSchema(tool: McpToolDefinition): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: tool.inputSchema?.properties ?? {},
+    ...(tool.inputSchema?.required ? { required: tool.inputSchema.required } : {}),
+  };
 }

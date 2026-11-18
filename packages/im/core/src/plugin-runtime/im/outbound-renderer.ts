@@ -24,6 +24,8 @@ import { requireAdapters } from './endpoint-runtime.js';
 import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
 import {
   applyOutboundInteractivePolicy,
+  applyOutboundButtonLimit,
+  resolveOutboundMaxButtons,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
   resolveOutboundHtmlPolicy,
@@ -122,26 +124,29 @@ export async function projectOutboundPayload(
   const values = Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered;
   const contains = (type: string) => (Array.isArray(values) ? values : [values])
     .some(value => value && typeof value === 'object' && value.type === type);
-  const markdown = options.presentation?.markdown === 'text' ? 'text' : resolveOutboundMarkdownPolicy(adapter, snapshot);
+  const markdown = options.presentation?.markdown === 'text' ? 'text' : resolveOutboundMarkdownPolicy(adapter, snapshot, conversation);
   if (markdown === 'text' && contains('markdown')) reasons.add('markdown_text_policy');
   const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id) as HtmlRendererHost | undefined;
   let payload = await normalizeOutboundPayload(applyOutboundMarkdownPolicy(values, markdown), host, {
-    mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
-    htmlPolicy: options.presentation?.html === 'text' ? 'text' : resolveOutboundHtmlPolicy(adapter, snapshot),
+    mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot, conversation),
+    htmlPolicy: options.presentation?.html === 'text' ? 'text' : resolveOutboundHtmlPolicy(adapter, snapshot, conversation),
     onFallback: reason => reasons.add(reason),
     signal: options.signal,
   });
   options.signal?.throwIfAborted();
-  const interactive = options.presentation?.interactive === 'text' ? 'text' : resolveOutboundInteractivePolicy(adapter, snapshot);
+  const interactive = options.presentation?.interactive === 'text' ? 'text' : resolveOutboundInteractivePolicy(adapter, snapshot, conversation);
   if (interactive === 'text' && Array.isArray(payload) && payload.some(item => item?.type === 'keyboard')) {
     reasons.add('interactive_text_policy');
   }
-  if (!options.deferInteractive) payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
+  if (!options.deferInteractive) {
+    payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
+    if (interactive === 'native') payload = applyOutboundButtonLimit(payload, resolveOutboundMaxButtons(adapter, snapshot, conversation), options.rememberFallback);
+  }
   if (Array.isArray(payload)) {
     payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));
     assertCanonicalSegments(payload);
   }
-  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
+  const supported = resolveOutboundSupportedSegments(adapter, snapshot, conversation);
   const supportedPayload = options.deferInteractive ? applyOutboundInteractivePolicy(payload, interactive) : payload;
   if (supported && Array.isArray(supportedPayload)) {
     const unsupported = supportedPayload.find(segment => segment && typeof segment === 'object'

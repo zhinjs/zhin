@@ -256,8 +256,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const chatPeopleRef: { current?: import('./chat-people.js').ChatPeople } = {};
   // #1270: latest failure per account / Endpoint / MCP server, kept across restarts (instance-owned file).
   const runtimeFailures = RuntimeFailureJournal.open(options.root, { warn: message => getLogger('runtime').warn(message) });
+  const assistantStatusRef: { current?: AssistantStatus } = {};
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
     failureJournal: runtimeFailures,
+    ambientTrigger: () => assistantStatusRef.current?.ambientTriggerConfig(),
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
     chatLinks: () => {
       const people = chatPeopleRef.current;
@@ -350,6 +352,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleEventHub = createConsoleEventHub();
   // 群聊插话 / 技能助手 Console status (#970): process-owned, survives HMR generations.
   const assistantStatus = new AssistantStatus();
+  assistantStatusRef.current = assistantStatus;
   // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
   const selfChanges = new HostSelfChanges();
   const consoleConfigurationStore = new ConsoleConfigurationStore({
@@ -514,7 +517,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           extraTools: speechHandle?.tools,
           audioTranscriber: speechHandle,
           transcribeUrl: speechHandle
-            ? (url) => speechHandle.transcribeUrl(url)
+            ? (url, source) => speechHandle.transcribeUrl(url, source)
             : undefined,
         })(context);
       }
@@ -895,7 +898,7 @@ interface ConfiguredAgentHost {
    */
   personalPrincipalSeeds(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot | undefined): readonly import('./chat-personal-principals.js').PersonalPrincipalSeed[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
-  ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
+  ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<import('./console/module.js').AmbientJudgeView>;
   /** Drops journaled account / model failures that are no longer current (#1270). */
   pruneFailureJournal(): Promise<void>;
   /** Host model accounts that need an operator (#1270). */
@@ -914,7 +917,7 @@ interface ConfiguredAgentHost {
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
-    readonly transcribeUrl?: (url: string) => Promise<string | null>;
+    readonly transcribeUrl?: import('@zhin.js/agent/runtime').InboundAudioUrlTranscriber;
     readonly assistantStatus?: AssistantStatus;
     readonly selfChanges?: HostSelfChanges;
     readonly selfChangeApply?: HostSelfChangeApply;
@@ -930,6 +933,8 @@ async function loadConfiguredAgentHost(options: Readonly<{
   chatLinks?: () => ChatConsoleLinks | undefined;
   /** #1270: preparation and model call failures are written through it. */
   failureJournal?: import('@zhin.js/agent/runtime').InferenceFailureJournal;
+  /** ADR 0066 D7: the current `ai.trigger.ambient` (late-bound: the status store is created later). */
+  ambientTrigger?: () => Readonly<{ conversations?: readonly string[] }> | undefined;
 }>): Promise<ConfiguredAgentHost | undefined> {
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
@@ -983,6 +988,8 @@ async function loadConfiguredAgentHost(options: Readonly<{
   };
   const consoleUserOf = (principalId: string | undefined) => principalId ? /^user:(.+)$/u.exec(principalId)?.[1] : undefined;
   const inference = new agentHost.HostInference({ projectRoot, database: options.database, resolveSource: options.resolveSource,
+    // ADR 0066 D7: whether interjection runs at all, for `purposeEffects.ambient` and the judge status.
+    ...(options.ambientTrigger ? { ambientTrigger: options.ambientTrigger } : {}),
     ...(options.failureJournal ? { failureJournal: options.failureJournal } : {}),
     personalOwners: () => (options.chatLinks?.()?.linkedUsers() ?? []).flatMap(user => linkedOwners(user)),
     snapshots: () => {
@@ -1021,7 +1028,8 @@ async function loadConfiguredAgentHost(options: Readonly<{
     ambientModels: input => inference.ambientModels(input),
     accountAttention: () => inference.accountAttention(),
     pruneFailureJournal: () => inference.pruneFailureJournal(),
-    purposeEffects: lease => inference.purposeEffects(lease),
+    // Only `agents.<key>` effects (the ambient / decision effects of ADR 0066 are in the management view).
+    purposeEffects: lease => inference.purposeEffects(lease) as Promise<Readonly<Record<string, import('./console/module.js').PurposeEffectRow>>>,
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),

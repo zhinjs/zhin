@@ -5,7 +5,9 @@ import type { OutboundMediaTrust } from '@zhin.js/core';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
-import { checkUrlNetworkAccess, hostnameResolvesToBlockedAddress } from '../security/network-policy.js';
+import { checkUrlNetworkAccess } from '../security/network-policy.js';
+import { fetchPublicMediaBytes } from '../security/public-media-fetch.js';
+import type { NetworkTransport } from '../security/turn-network-client.js';
 import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
 import { checkFilePermission, type FileRole } from '../security/file-role-policy.js';
 import type { ImageAssetPublisher } from './image-assets.js';
@@ -14,7 +16,8 @@ import type { ImageAssetPublisher } from './image-assets.js';
  * Turn authority for media that model output references by local path or URL.
  * With it, a path must pass the same check as `read_file` and a URL needs the
  * Turn's network authority (domain allowlist applied to every redirect hop).
- * Omitted only by trusted host callers that already own the media.
+ * Omitted, no local path is read (#1250: fail closed, as {@link NO_MEDIA_AUTHORITY});
+ * URLs keep the default fetch rules (HTTPS only, private addresses refused).
  */
 export interface OutboundMediaAuthority {
   readonly imageAssets?: ImageAssetPublisher;
@@ -26,6 +29,8 @@ export interface OutboundMediaAuthority {
    * because a reply attachment has no approval step. Absent: `user` (fail closed).
    */
   readonly fileRole?: FileRole;
+  /** Replaces the pinned Node transport that downloads model-referenced URLs (tests, embedding hosts). */
+  readonly mediaTransport?: NetworkTransport;
 }
 
 /**
@@ -35,20 +40,22 @@ export interface OutboundMediaAuthority {
  */
 export const NO_MEDIA_AUTHORITY: OutboundMediaAuthority = Object.freeze({});
 
-/** Canonical path the Turn may read, or null when the Turn has no authority over it. */
+/**
+ * Canonical path the Turn may read, or null when the Turn has no authority over it.
+ * No authority is no filesystem authority: the path is refused (#1250).
+ */
 export async function authorizeOutboundMediaPath(
   rawPath: string,
   authority: OutboundMediaAuthority | undefined,
 ): Promise<string | null> {
-  if (!authority) return rawPath;
-  const filesystem = authority.filesystem;
+  const filesystem = authority?.filesystem;
   if (!filesystem?.workspaceRoot) return null;
   const decision = await authorizeTurnFileInput(
     'read_file', { file_path: rawPath }, filesystem.workspaceRoot, filesystem.workingDirectory,
   );
   if (!decision.allowed) return null;
   const canonical = String(decision.input.file_path);
-  const permission = checkFilePermission(authority.fileRole ?? 'user', 'read', canonical);
+  const permission = checkFilePermission(authority?.fileRole ?? 'user', 'read', canonical);
   if (!permission.allowed || permission.needsConfirmation || permission.needsOwnerConfirmation) return null;
   return canonical;
 }
@@ -171,73 +178,49 @@ export async function readLocalFileAsBase64(
   }
 }
 
+/**
+ * Download a media URL someone outside the host controls (inbound image / video / file, a model-referenced
+ * URL) and sniff its real type. Uses the pinned download shared with speech and outbound adapters
+ * (`fetchPublicMediaBytes`, #1250 第 46 批): HTTPS only, private hosts refused, the name resolved once
+ * and the connection made to the checked address (no DNS rebinding between check and connect), every
+ * redirect hop checked again (including `allowedDomains`), body capped at `maxBytes`, 30 s overall.
+ * Any refusal or failure yields `null`.
+ */
 export async function fetchUrlAsBase64(
   url: string,
   maxBytes: number,
   expectedKind?: MediaKind,
   signal?: AbortSignal,
   allowedDomains: readonly string[] = [],
+  transport?: NetworkTransport,
 ): Promise<MediaBinaryPayload | null> {
   try {
-    let current = url;
-    let res: Response | undefined;
-    for (let redirects = 0; redirects <= 5; redirects += 1) {
-      if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [...allowedDomains] }).allowed) return null;
-      // No Turn network client here: at least refuse names that resolve to private addresses.
-      if (await hostnameResolvesToBlockedAddress(new URL(current).hostname)) return null;
-      res = await fetch(current, {
-        redirect: 'manual',
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
-      });
-      if (![301, 302, 303, 307, 308].includes(res.status)) break;
-      const location = res.headers.get('location');
-      if (!location || redirects === 5) return null;
-      current = new URL(location, current).toString();
-    }
-    if (!res?.ok) return null;
-    const declaredLength = Number(res.headers.get('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
-    const buf = await readBoundedResponse(res, maxBytes);
-    if (!buf) return null;
-    const detected = inspectMediaBytes(buf, expectedKind);
+    const result = await fetchPublicMediaBytes(url, {
+      maxBytes,
+      ...(signal ? { signal } : {}),
+      ...(allowedDomains.length ? { allowedDomains } : {}),
+      ...(transport ? { transport } : {}),
+    });
+    if (!result.ok) return null;
+    const detected = inspectMediaBytes(result.bytes, expectedKind);
     if (!detected) return null;
-    return { kind: detected.kind, base64: buf.toString('base64'), mimeType: detected.mimeType };
+    return { kind: detected.kind, base64: result.bytes.toString('base64'), mimeType: detected.mimeType };
   } catch {
     return null;
   }
 }
 
-async function readBoundedResponse(response: Response, maxBytes: number): Promise<Buffer | null> {
-  if (!response.body) return Buffer.alloc(0);
-  const reader = response.body.getReader();
-  const chunks: Buffer[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel('media_byte_limit_exceeded');
-        return null;
-      }
-      chunks.push(Buffer.from(value));
-    }
-    return Buffer.concat(chunks, total);
-  } finally {
-    reader.releaseLock();
-  }
-}
-
 /**
  * canonical 媒体引用（SegmentMediaRef 形状）→ MediaBinaryPayload[]。
- * base64 直取；path 读本地文件；url 按需 fetch；kind=file（平台不透明引用）跳过。
+ * base64 直取；path 仅在 `authority.filesystem` 认可时读本地文件（不传 authority 不读，#1250）；
+ * url 按需 fetch；kind=file（平台不透明引用）跳过。入站 path 由 `inbound-media` 按端点声明的目录单独判定。
  */
 export async function normalizeMediaRefsToPayloads(
   refs: readonly { type: string; media: MediaRef }[],
   maxBytes: number,
   signal?: AbortSignal,
   authority?: OutboundMediaAuthority,
+  transport: NetworkTransport | undefined = authority?.mediaTransport,
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
@@ -267,7 +250,7 @@ export async function normalizeMediaRefsToPayloads(
 
     const network = authorizeOutboundMediaUrl(media.value, authority);
     if (!network) continue;
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains);
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport);
     if (fetched) out.push({ ...fetched, ...fileName });
   }
 

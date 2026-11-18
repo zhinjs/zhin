@@ -216,7 +216,9 @@ function actionsFor(request: UserInteractionRequest, locale: Locale): UserIntera
       { label: request.cancelLabel ?? t(locale, 'cancel'), value: 'no', style: 'danger' },
     ];
   }
-  if (request.type === 'select' && request.options.length <= 10) {
+  // Every option becomes a button; the endpoint's capability profile decides how many it shows
+  // natively (`segments.interactiveLimits.maxButtons`) and text-only endpoints number them (#1250).
+  if (request.type === 'select') {
     return request.options.map((option, index) => ({ label: option.label, value: String(index + 1), style: 'secondary' }));
   }
   return undefined;

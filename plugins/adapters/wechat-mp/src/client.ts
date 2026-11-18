@@ -12,6 +12,7 @@ import {
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import { isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
   extractOutboundText,
@@ -51,6 +52,8 @@ export interface WeChatMpEndpointOptions {
   readonly http: HttpHost;
   readonly config: ResolvedWeChatMpConfig;
   readonly fetch?: WeChatMpFetch;
+  /** Downloads outbound media URLs on this host; defaults to core `fetchOutboundMedia` (tests inject one). */
+  readonly fetchMedia?: OutboundMediaFetcher;
 }
 
 function defaultFetch(
@@ -297,6 +300,8 @@ export class WeChatMpClient extends WeChatMpApiClient {
         return { type: seg.type, data: { mediaId } };
       } catch (error) {
         if (request.signal?.aborted) throw error;
+        // #1250 第 46 批：URL 被本机抓取策略拒绝（已由 core 记录主机名）→ 说明文字，消息照常发出。
+        if (isOutboundMediaRefused(error)) return { type: 'text', data: { text: outboundMediaNotice(seg.type) } };
         this.#logger.warn(formatCompact({
           op: 'wechat_mp_media_upload_failed',
           endpoint: this.#options.config.id,
@@ -313,7 +318,7 @@ export class WeChatMpClient extends WeChatMpApiClient {
   async #uploadMedia(
     { type, media, signal }: WeChatMediaRequest,
   ): Promise<string> {
-    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal }));
+    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal, ...(this.#options.fetchMedia ? { fetchMedia: this.#options.fetchMedia } : {}) }));
     const form = buildMediaUploadForm(binary);
     return this.uploadMedia({ type, body: form, signal });
   }

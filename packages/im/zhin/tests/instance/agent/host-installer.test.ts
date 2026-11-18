@@ -7,7 +7,7 @@ import {
   definePlugin,
   createPluginEventChannel,
 } from '@zhin.js/plugin-runtime';
-import { RootRuntime } from '@zhin.js/runtime';
+import { RootRuntime, createConfigDocument } from '@zhin.js/runtime';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -563,6 +563,50 @@ describe('installAgentHost', () => {
       expect(seeded).toBeDefined();
       expect(seeded?.revision).toBe(1);
       expect(Object.values(seeded?.services ?? {}).map(s => s.driver.id)).toEqual(['openai']);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it('converts an old-key write of ai.trigger.ambient.mode into purposes.ambient on the next generation (ADR 0066 review N4)', async () => {
+    const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-ambient-trigger-')));
+    try {
+      await writeFile(join(project, 'ai.plan.yml'), [
+        'version: 1',
+        'services:', '  openai:', '    driver: openai', '    models:', '      gpt-4o:', '        id: gpt-4o', '        kinds: [language]', '        protocol: openai-chat', '        input: [text]',
+        'accounts:', '  openai:', '    service: openai', '    auth:', '      method: api-key', '      source: env://AI_API_KEY',
+        'profiles:', '  judge:', '    account: openai', '    model: gpt-4o',
+        'purposes:', '  chat:', '    profile: judge', '  ambient: judge', '',
+      ].join('\n'), 'utf8');
+      const configFile = join(project, 'zhin.config.yml');
+      await writeFile(configFile, 'ai:\n  enabled: true\n  sessions:\n    useDatabase: false\n  trigger:\n    ambient:\n      conversations: ["*"]\n      minConfidence: 0.75\n', 'utf8');
+      const document = createConfigDocument(configFile);
+      const inference = inferenceFor(project);
+      // One Root generation: the installer composes with the configuration file's `ai`, then activates.
+      const generation = async () => {
+        const ai = ((await document.read()).document as { ai?: unknown }).ai;
+        const activations: Array<{ activateNext(signal: AbortSignal): Promise<void> }> = [];
+        const base = context(new Scope(rootPluginId())) as unknown as Record<string, unknown>;
+        await installAgentHost({ runtime: {} as never, im: {} as never, projectRoot: project, inference })({
+          ...base, handoff: { add: (handler: { activateNext(signal: AbortSignal): Promise<void> }) => activations.push(handler) },
+          config: { get: (key: string) => (key === 'ai' ? ai : undefined) },
+          admission: { onActivate: () => () => undefined },
+        } as never);
+        for (const handler of activations) await handler.activateNext?.(new AbortController().signal);
+        return inference.repository.readGraph({ rootId: inference.rootId });
+      };
+      // Seeded ambient judge + yml threshold: the first generation migrates and keeps 0.75.
+      const first = await generation();
+      const judge = Object.values(first?.profiles ?? {})[0]!.id;
+      expect(first?.purposes.ambient).toEqual({ profile: judge, minConfidence: 0.75 });
+      // An older Console writes `ai.trigger.ambient.mode: shadow` through the configuration document (config:patch).
+      const snapshot = await document.read();
+      await (await document.prepare(snapshot, [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' }])).commit();
+      const second = await generation();
+      expect(second?.purposes.ambient).toEqual({ profile: judge, minConfidence: 0.75, mode: 'shadow' });
+      // The same file again on the next generation changes nothing.
+      const third = await generation();
+      expect(third?.revision).toBe(second?.revision);
     } finally {
       await rm(project, { recursive: true, force: true });
     }

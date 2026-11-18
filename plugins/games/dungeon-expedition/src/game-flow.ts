@@ -16,7 +16,9 @@ import {
   stateFromSession,
 } from './session-service.js';
 import {
+  buildDungeonAbortConfirm,
   buildDungeonView,
+  hasPendingAbort,
   parseDungeonSessionToken,
 } from './view.js';
 
@@ -64,6 +66,36 @@ export async function handleDungeonChoice(
       return messages(locale, 'text3');
     }
     locale = resolveLocale(session.locale);
+    const state = stateFromSession(session);
+    if (choiceId === 'status') {
+      // 「继续远征」 on a pending end confirmation withdraws it, so a later 「确认结束」 cannot end.
+      if (state.ownerId === message.sender.id && token.revision === session.revision && hasPendingAbort(session, state)) {
+        try {
+          const updated = await service.setPendingAbort(session.id, session.revision, message.sender.id, false);
+          return buildDungeonView(updated, stateFromSession(updated), message.target.kind);
+        } catch (error) {
+          if (!(error instanceof SessionRevisionConflictError)) throw error;
+        }
+      }
+      return buildDungeonView(session, state, message.target.kind);
+    }
+    // #1250: ending asks the leader to confirm first. The request is recorded at a new session
+    // revision and the confirmation card carries that revision, so only that card (or the
+    // leader's text reply while it is the latest state) can end the expedition.
+    if (choiceId === 'abort' && session.status === 'active') {
+      if (state.ownerId !== message.sender.id) return messages(locale, 'leaderOnlyEnd');
+      try {
+        const requested = await service.setPendingAbort(session.id, token.revision, message.sender.id, true);
+        return buildDungeonAbortConfirm(requested, stateFromSession(requested), message.target.kind);
+      } catch (error) {
+        if (!(error instanceof SessionRevisionConflictError)) throw error;
+        return staleView(service, session.id, locale, message);
+      }
+    }
+    if (choiceId === 'abort_confirm' && session.status === 'active') {
+      if (state.ownerId !== message.sender.id) return messages(locale, 'leaderOnlyEnd');
+      if (token.revision !== session.revision || !hasPendingAbort(session, state)) return messages(locale, 'confirmExpired');
+    }
     if (choiceId === 'restart') {
       if (session.status === 'active') return messages(locale, 'text4');
       if (session.owner_id !== message.sender.id) return messages(locale, 'text5');
@@ -88,21 +120,18 @@ export async function handleDungeonChoice(
     } catch (error) {
       if (error instanceof DungeonRuleError) return error.message;
       if (error instanceof GameSessionConflictError) return error.format(locale);
-      if (error instanceof SessionRevisionConflictError) {
-        const latest = await service.getById(session.id);
-        if (!latest) return messages(locale, 'text7');
-        const view = buildDungeonView(
-          latest,
-          stateFromSession(latest),
-          message.target.kind,
-        );
-        return Array.isArray(view)
-          ? [messages(locale, 'text8'), ...view]
-          : [messages(locale, 'text8'), view];
-      }
+      if (error instanceof SessionRevisionConflictError) return staleView(service, session.id, locale, message);
       throw error;
     }
   } });
+}
+
+/** The latest view after a stale button, prefixed with the "state changed" notice. */
+async function staleView(service: SessionService, sessionId: string, locale: ReturnType<typeof resolveLocale>, message: GamePlayer): Promise<GameReply> {
+  const latest = await service.getById(sessionId);
+  if (!latest) return messages(locale, 'text7');
+  const view = buildDungeonView(latest, stateFromSession(latest), message.target.kind);
+  return Array.isArray(view) ? [messages(locale, 'text8'), ...view] : [messages(locale, 'text8'), view];
 }
 
 export function commandActionId(
@@ -129,11 +158,13 @@ function actionFromChoice(
   if (choiceId === 'attack') return { type: 'attack' };
   if (choiceId === 'defend') return { type: 'defend' };
   if (choiceId === 'potion') return { type: 'potion' };
-  if (choiceId === 'abort') return { type: 'abort' };
+  if (choiceId === 'abort_confirm') return { type: 'abort' };
   return null;
 }
 
 const messages = createMessages({
+  confirmExpired: { 'zh-CN': "这次结束确认已失效（之后队伍有了新动作或已选择继续）。要结束请重新点「结束」。", en: "That end confirmation has lapsed (the party has acted or chose to keep going). Choose End again to end the expedition." },
+  leaderOnlyEnd: { 'zh-CN': "只有队长可以结束整支远征。", en: "Only the leader may end the expedition." },
   text1: { 'zh-CN': "当前频道没有进行中的地牢远征。", en: "There is no active dungeon expedition in this channel." },
   text2: { 'zh-CN': "无效的地牢操作。", en: "Invalid dungeon action." },
   text3: { 'zh-CN': "远征不存在，或不属于当前频道。", en: "The expedition does not exist or belongs to another channel." },

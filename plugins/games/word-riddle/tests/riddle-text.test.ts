@@ -5,6 +5,7 @@ import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
+const rawReplies: unknown[] = [];
 let nextCalls = 0;
 let services: SessionService;
 
@@ -14,6 +15,7 @@ sender: { id: senderId, name: senderId },
 content,
 $reply: async (reply: unknown) => {
       replies.push(String(reply));
+      rawReplies.push(reply);
       return 'mid-1';
     } };
 }
@@ -47,6 +49,13 @@ describe('word-riddle riddle-text middleware (text fallback)', () => {
     expect(nextCalls).toBe(0);
     expect(replies.length).toBe(1);
     expect(replies[0]!.length).toBeGreaterThan(0);
+  });
+
+  it('typing the button label 提示 asks for a hint instead of answering (#1250)', async () => {
+    await middleware.handle(makeCtx(makeInput('提示')), next);
+    expect(nextCalls).toBe(0);
+    expect(JSON.stringify(rawReplies[0])).toMatch(/💡 提示：答案是这几个字之一/);
+    expect(JSON.stringify(rawReplies[0])).not.toMatch(/不算失误/);
   });
 
   it('中文谜底文本按作答处理并回复', async () => {

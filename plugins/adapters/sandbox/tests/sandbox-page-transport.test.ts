@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import * as inboundSyntax from '../src/inbound-syntax.js';
 import { sandboxText } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
 import * as transport from '../pages/index/sandboxTransport.js';
+import * as sandboxMedia from '../pages/index/sandboxMedia.js';
 import * as chatIdentity from '../pages/index/chatIdentity.js';
 import * as directories from '../pages/index/workspaceDirectory.js';
 import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
@@ -19,7 +21,7 @@ const renderBoundary = declaration.body!.statements.find(node => ts.isVariableSt
 const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(ast)).replace('export default ', '');
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
-  handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,
+  handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,uploadFiles,hostedMedia,uploads,
   senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,commandHints,atSuggestions,
   directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
@@ -76,7 +78,7 @@ function fixture(options: {
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
-    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax, ...sandboxMedia,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),
@@ -707,5 +709,48 @@ describe('Sandbox @bot shortcut and segment fallback (#1250)', () => {
     let deep: unknown = 'leaf';
     for (let i = 0; i < 100; i += 1) deep = jsx('span', { children: deep });
     expect(segmentFallbackText(deep)).toBeUndefined();
+  });
+});
+
+describe('Sandbox page upload flow (ADR 0064 D13, I1)', () => {
+  it('uploads a picked file to the endpoint and conversation, then inserts the hosted link segment', async () => {
+    const f = fixture();
+    const view = f.ready();
+    const insertUploaded = vi.fn();
+    view.editorRef.current = { insertUploaded };
+    const url = `http://127.0.0.1:8086/pub/sandbox-media/0123456789abcdef/${'A'.repeat(22)}?exp=1900000000&sig=${'B'.repeat(43)}`;
+    const reply = { id: 'A'.repeat(22), kind: 'file', mime: 'application/pdf', size: 9, name: 'notes.pdf', expiresAt: 1_900_000_000_000, url };
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 201, json: async () => ({ success: true, data: reply }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 1, 2, 3, 4])], 'notes.pdf', { type: 'application/pdf' });
+    view.uploadFiles([file]);
+    await vi.waitFor(() => expect(insertUploaded).toHaveBeenCalledTimes(1));
+    const [target, init] = fetchMock.mock.calls[0]!;
+    const request = new URL(target);
+    expect(request.pathname).toBe('/api/sandbox/media/stable-bot');
+    expect(Object.fromEntries(request.searchParams)).toEqual({ type: view.activeChannel.type, id: view.activeChannel.id });
+    expect(init).toMatchObject({ method: 'POST', body: file, headers: { 'content-type': 'application/pdf', 'x-zhin-file-name': 'notes.pdf' } });
+    expect(insertUploaded.mock.calls[0]![0]).toEqual(inboundSyntax.sandboxInboundMediaSegment('file', url, { mime_type: 'application/pdf', size: 9, file_name: 'notes.pdf' }));
+    expect(insertUploaded.mock.calls[0]![0]).toMatchObject({ type: 'file', data: { media: { kind: 'url', value: url }, name: 'notes.pdf' } });
+    f.close();
+  });
+
+  it('reports a refused upload next to the composer and inserts nothing', async () => {
+    const f = fixture();
+    const view = f.ready();
+    const insertUploaded = vi.fn();
+    view.editorRef.current = { insertUploaded };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 507, json: async () => ({ success: false, code: 'uploader_quota_exceeded', error: 'quota used up' }) })));
+    view.uploadFiles([new File([new Uint8Array([1])], 'big.bin')]);
+    await vi.waitFor(() => expect(f.render().uploads).toEqual([expect.objectContaining({ name: 'big.bin', state: 'failed', message: 'quota used up' })]));
+    expect(insertUploaded).not.toHaveBeenCalled();
+    f.close();
+  });
+
+  it('wires drop, paste and the attachment buttons through console-ui controls', () => {
+    expect(source).toContain('onFiles={canExecute ? uploadFiles : undefined}');
+    expect(source).toMatch(/<Input ref=\{fileInputRef\} type="file"/u);
+    expect(source).toMatch(/<Input ref=\{voiceInputRef\} type="file" accept="audio\/\*"/u);
+    expect(source).toContain('resolveHostedMedia: hostedMedia.resolve');
   });
 });

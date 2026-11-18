@@ -8,10 +8,11 @@ import { WeixinIlinkStateStore } from '../src/credentials.js';
 import { WeixinContextTokenStore } from '../src/context-store.js';
 import { resolveWeixinIlinkConfig } from '../src/protocol.js';
 import { idleIlinkTransport } from './transport-fixture.js';
+import type { OutboundMediaFetched, OutboundMediaFetcher, OutboundMediaFetchOptions } from '@zhin.js/core';
 
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); vi.unstubAllGlobals(); });
-async function fixture() {
+async function fixture(fetchMedia?: OutboundMediaFetcher) {
   const directory = await mkdtemp(path.join(tmpdir(), 'ilink-cancellation-'));
   cleanups.push(() => rm(directory, { recursive: true, force: true }));
   const state = new WeixinIlinkStateStore('synthetic', directory), tokens = new WeixinContextTokenStore(state);
@@ -19,6 +20,7 @@ async function fixture() {
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'weixin-ilink'),
     config: resolveWeixinIlinkConfig({ id: 'synthetic', dataDir: directory }), state, contextTokens: tokens,
     resolveCredentials: async () => ({ botToken: 'synthetic-token' }),
+    ...(fetchMedia ? { fetchMedia } : {}),
   }), { name: 'weixin-ilink', capabilities: ['inbound', 'outbound'], operations: ['typing'] });
   cleanups.push(() => bot.stop());
   await bot.start(); bot.open(); tokens.set('peer', 'synthetic-context');
@@ -48,20 +50,23 @@ it('propagates a single send cancellation to the API and never continues to its 
   expect(fetch).toHaveBeenCalledOnce();
 });
 it('cancels remote-media preparation without publishing a message or falling through to later text', async () => {
-  const network = deferred<Response>();
-  const fetch = vi.fn<typeof globalThis.fetch>(() => network.promise); vi.stubGlobal('fetch', fetch);
-  const { bot, conversation } = await fixture(), caller = new AbortController();
+  // Remote media is downloaded through the outbound media fetcher (#1250 第 46 批), never the global fetch.
+  const network = deferred<OutboundMediaFetched>();
+  const fetchMedia = vi.fn((_url: string, _options?: OutboundMediaFetchOptions) => network.promise);
+  const fetch = vi.fn<typeof globalThis.fetch>(); vi.stubGlobal('fetch', fetch);
+  const { bot, conversation } = await fixture(fetchMedia), caller = new AbortController();
   const send = bot.send({ conversation, signal: caller.signal, payload: [
     { type: 'image', data: { media: { kind: 'url', value: 'https://synthetic.invalid/media.png' } } },
     { type: 'text', data: { text: 'must not publish' } },
   ] });
   const rejected = expect(send).rejects.toMatchObject({ disposition: 'not_sent' });
-  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(fetchMedia).toHaveBeenCalledOnce());
   caller.abort(); await rejected;
-  expect(fetch.mock.calls[0]![1]!.signal!.aborted).toBe(true);
-  network.resolve(new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } }));
+  expect(fetchMedia.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+  network.resolve({ bytes: Buffer.from([1, 2, 3]), mimeType: 'image/png', url: 'https://synthetic.invalid/media.png' });
   await new Promise(resolve => setImmediate(resolve));
-  expect(fetch).toHaveBeenCalledOnce();
+  expect(fetchMedia).toHaveBeenCalledOnce();
+  expect(fetch).not.toHaveBeenCalled();
 });
 it('ends a typing waiter while its configuration lookup finishes, without sending late typing', async () => {
   const config = deferred<Response>();

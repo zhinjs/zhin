@@ -272,7 +272,7 @@ outline: [2, 3]
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | 否 | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | 否 | — | — |
 | `ai.agents` | object \| null | 否 | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
-| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | — |
+| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | 该 Agent 能用哪些 MCP 服务器的工具：填 ai.mcpServers 中的 name，或 { name, permit }（Agent 层权限只能收窄，ADR 0065）。不在这里列出的服务器即使已连接，这个 Agent 也用不了它的工具（例：ai.agents.zhin.mcpServers: [github]）。同一服务器只能出现一次。 |
 | `ai.agents.<key>.nickname` | string | 否 | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
@@ -332,7 +332,7 @@ outline: [2, 3]
 | `ai.githubMcp` | object | 否 | — | PAT for adapter-github auto-registered server-github MCP (overrides env when set). |
 | `ai.githubMcp.token` | string | 否 | — | — |
 | `ai.githubMcp.enabled` | boolean \| string | 否 | — | 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 |
-| `ai.mcpServers` | array \| null | 否 | — | External MCP servers for the Agent MCP client (global, all bots). Listed servers are exposed to ZhinAgent tool pool when connected. |
+| `ai.mcpServers` | array \| null | 否 | — | 要连接的外部 MCP 服务器（只负责连接）。连接成功不等于能用：还要在 ai.agents.&lt;name&gt;.mcpServers 里写上服务器的 name，对应的 Agent 才能调用它的工具（例：ai.agents.zhin.mcpServers: [github]）。没有任何 Agent 绑定的服务器，zhin status、zhin doctor 与 Console「需要你处理」会提示。 |
 | `ai.access` | object \| null | 否 | — | AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） |
 | `ai.access.mode` | string | 否 | — | open \| closed \| whitelist，默认 open |
 | `ai.access.users` | array&lt;string&gt; | 否 | — | 允许触发 AI 的 sender.id |
@@ -355,8 +355,8 @@ outline: [2, 3]
 | `ai.trigger.ambient.maxPerHour` | number \| string | 否 | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
 | `ai.trigger.ambient.conversationWindowMs` | number \| string | 否 | — | 机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000） |
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | 否 | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢 |
-| `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 判断模型置信度门槛 0..1（默认 0.7） |
-| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 已废弃（ADR 0066）：门槛改在插话判断 purposes.ambient.minConfidence（Console「插话判断」）设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
+| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | 已废弃（ADR 0066）：「只记录不插话」改在插话判断 purposes.ambient.mode 设置。升级后迁移时读入一次，之后不再生效；zhin doctor --fix 可删除 |
 | `ai.trigger.sceneEvents` | object | 否 | — | 状态感知：禁言/解禁、入群申请、成员进出、公告变更、戳 Bot 等高优先社交事件独立唤醒一次回合（不必等下一条人话）；表情回应、名片/头衔变更等低优先事件不单独唤醒，只在下一轮 [Scene events] 摘要里出现。Bot 不能发言时只更新会话画像，不调用模型。 |
 | `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | 否 | — | 允许被社交事件唤醒的群/频道，格式 platform:sceneId；* 表示所有群。缺省沿用 ai.trigger.ambient.conversations（都没配则不唤醒） |
 | `ai.trigger.sceneEvents.coalesceMs` | number \| string | 否 | — | 同一场景的合并窗口（毫秒，限定 3000～5000，默认 4000） |
@@ -514,7 +514,7 @@ outline: [2, 3]
 | `purposes` | object | 否 | — | — |
 | `purposes.chat` | string \| object \| null | 否 | — | — |
 | `purposes.summary` | string \| object \| null | 否 | — | — |
-| `purposes.ambient` | string \| object \| null | 否 | — | — |
+| `purposes.ambient` | string \| object \| null | 否 | — | 插话判断（ADR 0066）：群里没人叫机器人时决定要不要插话。字符串等同于 { profile }；null 清除整项。 |
 | `purposes.image` | string \| object \| null | 否 | — | — |
 | `purposes.perception` | object \| null | 否 | — | — |
 | `purposes.decisions` | object | 否 | — | — |
@@ -523,7 +523,7 @@ outline: [2, 3]
 | `purposes.decisions.memory` | object \| null | 否 | — | — |
 | `purposes.decisions.agents` | object \| null | 否 | — | — |
 | `purposes.decisions.approval` | object \| null | 否 | — | — |
-| `purposes.decisions.ambient` | object \| null | 否 | — | — |
+| `purposes.decisions.ambient` | object \| null | 否 | — | 已废弃（ADR 0066）：改写 purposes.ambient；废弃期内按迁移表合并转换并给出警告 |
 | `purposes.agents` | object | 否 | — | — |
 | `purposes.adapters` | object | 否 | — | — |
 | `purposes.endpoints` | object | 否 | — | — |
@@ -1455,6 +1455,16 @@ outline: [2, 3]
 | `sandbox.endpoints[].profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.interests` | array \| null | 否 | — | — |
 | `sandbox.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.endpoints[].media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.endpoints[].media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.endpoints[].media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.endpoints[].media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.endpoints[].media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.endpoints[].media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.endpoints[].media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.endpoints[].media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.endpoints[].media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 | `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `sandbox.nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `sandbox.profile` | object | 否 | — | 账号资料兜底 |
@@ -1465,6 +1475,16 @@ outline: [2, 3]
 | `sandbox.profile.avatar` | string \| null | 否 | — | — |
 | `sandbox.profile.interests` | array \| null | 否 | — | — |
 | `sandbox.profile.bio` | string \| null | 否 | — | — |
+| `sandbox.media` | object | 否 | — | Sandbox 托管的本地上传（图片、语音、文件）：大小上限、配额、链接有效期、公开下载 |
+| `sandbox.media.ttlHours` | integer | 否 | `24` | 签名链接与文件的有效期（小时，1–168）；到期前可删除文件来撤销 |
+| `sandbox.media.publicDownload` | boolean | 否 | `false` | 开放 /pub/sandbox-media 签名下载（等于生成限时外链，仍需有效签名）。默认关闭 |
+| `sandbox.media.maxBytes` | object | 否 | — | 单个文件按类型的字节上限；硬顶 64 MiB（网关请求体上限），更大需同时调整网关配置 |
+| `sandbox.media.maxBytes.image` | integer | 否 | `10485760` | 图片 |
+| `sandbox.media.maxBytes.audio` | integer | 否 | `20971520` | 语音 / 音频 |
+| `sandbox.media.maxBytes.video` | integer | 否 | `33554432` | 视频 |
+| `sandbox.media.maxBytes.file` | integer | 否 | `33554432` | 其他文件 |
+| `sandbox.media.uploaderQuotaBytes` | integer | 否 | `209715200` | 每个上传者在本端点可占用的字节数；超出时拒绝上传，不淘汰他人文件 |
+| `sandbox.media.quotaBytes` | integer | 否 | `524288000` | 本端点的总配额；超出时拒绝上传 |
 
 ### satori
 

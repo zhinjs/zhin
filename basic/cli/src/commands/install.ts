@@ -127,7 +127,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     );
     logger.success(`✓ 依赖安装完成：${result.state.packageName}@${result.state.version ?? 'unknown'}`);
     if (ignoredBuilds) output.line(`! ${ignoredBuildsHint([...new Set(ignoredBuilds)])}`);
-    output.line(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+    output.line(`插件状态: ${result.state.status}${result.state.status === 'unknown' ? '（安装时不读取运行中的实例，是否已生效未知）' : ''}；功能验证: ${result.state.verification}`);
     if (!result.state.plugin) output.line('该包是普通依赖，不会挂载到 Plugin Runtime。');
     if (result.needsConfiguration) for (const line of configurationHints([result.needsConfiguration])) output.line(line);
     if (result.state.status === 'missing-config') output.line('运行 zhin setup 补齐配置和环境变量，再应用。');

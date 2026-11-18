@@ -107,3 +107,19 @@ export function quietOutcomeNotice(outcome: ConversationOutcome | null | undefin
   const code = `${outcome.outcome}${outcome.reason ? ` · ${outcome.reason}` : ''}`;
   return locale === 'en' ? `${outcome.text} (${code})` : `${outcome.text}（${code}）`;
 }
+
+const FAILED_OUTCOMES: ReadonlySet<string> = new Set(['internal_error', 'delivery_failed', 'unrecorded', 'model_error', 'model_timeout']);
+
+/**
+ * #1250 `sandbox-submitted-without-feedback`: what to show next to a clicked card once the click's
+ * outcome settled. A failure is an error; an outcome without a reply is a quiet notice; a reply
+ * needs no notice. `undefined` (not settled yet) is decided by the caller after its last attempt.
+ */
+export function actionOutcomeFeedback(outcome: ConversationOutcome | null | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'):
+  { readonly tone: 'error' | 'quiet'; readonly text: string } | null {
+  if (!outcome) return null;
+  const code = `${outcome.outcome}${outcome.reason ? ` · ${outcome.reason}` : ''}`;
+  const text = locale === 'en' ? `${outcome.text} (${code})` : `${outcome.text}（${code}）`;
+  if (FAILED_OUTCOMES.has(outcome.outcome)) return { tone: 'error', text };
+  return outcome.reply === 'no' ? { tone: 'quiet', text } : null;
+}

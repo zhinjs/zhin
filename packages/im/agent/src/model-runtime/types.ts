@@ -12,7 +12,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 export type ModelRuntimeConfig = Omit<AgentStartupConfig, 'agents' | 'multimodal'> & {
   readonly multimodal?: Omit<NonNullable<AgentStartupConfig['multimodal']>, 'perception'> & { readonly perception?: PerceptionSettingsInput };
   readonly agents?: Readonly<Record<string, Readonly<{
-    mcpServers?: readonly string[]; nickname?: string;
+    mcpServers?: readonly (string | import('../config/types.js').AgentMcpServerBindingConfig)[]; nickname?: string;
     permission?: Readonly<{ task?: Readonly<Record<string, 'allow' | 'deny'>> }>;
   }>>>;
 };
@@ -70,6 +70,8 @@ export interface ModelExecutionScope {
   readonly modelFallbacks?: () => readonly ModelFallbackEvent[];
   /** Replays earlier switches, then reports new ones; the returned function stops it. */
   readonly observeModelFallback?: (listener: (event: ModelFallbackEvent) => void) => () => void;
+  /** Like `observeModelFallback`, for model failures that did not switch and why (#1250). */
+  readonly observeModelFallbackSkipped?: (listener: (event: import('./purpose-fallback.js').ModelFallbackSkip) => void) => () => void;
   retainDelegation(): ModelDelegationAuthority;
   release(): Promise<void>;
 }

@@ -74,7 +74,7 @@ email:
 
 `attachments.enabled: true` 时，入站邮件附件会落盘并把保存信息写入消息 metadata（`attachments: [{ filename, path, contentType, size }]`）：
 
-- `downloadPath`：保存目录，默认 `./downloads/email`
+- `downloadPath`：保存目录，默认 `./downloads/email`；每封邮件的附件存进其中独立的 `mail-*` 子目录，同名附件互不覆盖
 - `maxFileSize`：单附件上限（字节），默认 10MB，超限跳过
 - `allowedTypes`：允许的 MIME 类型白名单，不在列表内跳过
 

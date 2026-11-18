@@ -40,7 +40,8 @@ type Step = (context: Context, options?: StreamOptions) => Answer | Promise<Answ
 function session() {
   const persisted: AgentMessage[] = [];
   const calls: string[] = [];
-  const turn = async (steps: Step[], stream: CoreReplyStream | undefined, turnId: string, replyPhases?: ReplyPhaseLifecycle) => {
+  const turn = async (steps: Step[], stream: CoreReplyStream | undefined, turnId: string, replyPhases?: ReplyPhaseLifecycle,
+    onExecute?: (toolUseId: string, output: unknown) => void) => {
     const llm = wireMockLlmApi({ models: ['m'] });
     vi.spyOn(llm.runtime, 'complete').mockImplementation(async (_model, context, opts) => {
       calls.push(JSON.stringify(context.messages));
@@ -48,7 +49,11 @@ function session() {
       if (!step) throw new Error('Unexpected extra completion');
       return step(context, opts);
     });
-    const executeTool = vi.fn(async () => ({ status: 'completed' as const, output: { audio: AUDIO, format: 'mp3', size: 19_000 }, durationMs: 1 }) as never);
+    const executeTool = vi.fn(async (_tool: unknown, _args: unknown, toolUseId: string) => {
+      const output = { audio: AUDIO, format: 'mp3', size: 19_000 };
+      onExecute?.(toolUseId, output);
+      return { status: 'completed' as const, output, durationMs: 1 } as never;
+    });
     const host = {
       contextRepository: {
         loadContext: async () => ({ messages: [...persisted] }),
@@ -166,6 +171,34 @@ describe('#1250 batch 29 review: streamed replies never keep voice base64', () =
     ], second.stream, 'voice-2');
     expect(s.calls.at(-1)).toContain('已发送');
     expect(s.calls.at(-1)).not.toContain(AUDIO.slice(0, 64));
+  });
+});
+
+describe('#1250 batch 39: trace tool_result size is what the model received', () => {
+  it('records the size after the audio was split off, and the raw tool output size separately', async () => {
+    const trace = new TurnTraceCollector({ turnId: 'voice-size', sessionKey: 'session' });
+    const unregister = registerTurnTrace(trace);
+    const s = session();
+    try {
+      await s.turn([
+        () => assistantToolCallReply([{ id: 'tts', name: 'voice_tts', arguments: { text: '你好' } }]),
+        () => assistantTextReply(structured([{ type: 'text', data: { text: '好的' } }])),
+      ], undefined, 'voice-size', undefined, (toolUseId, output) => {
+        // What TurnToolRuntime appends to the turn journal: the tool's own output.
+        trace.record({ type: 'tool_call', toolName: 'voice_tts', args: { text: '你好' }, toolUseId });
+        trace.record({ type: 'tool_result', toolName: 'voice_tts', output, durationMs: 1, toolUseId });
+      });
+    } finally { unregister(); }
+    const raw = JSON.stringify({ audio: AUDIO, format: 'mp3', size: 19_000 }).length;
+    const tool = trace.snapshot().tool_calls.find(call => call.tool_name === 'voice_tts');
+    // The model got the metadata the tool result became (see s.calls[1]), not the base64.
+    const seen = JSON.parse(s.calls[1]!) as { role: string; content: { type: string; text?: string }[] }[];
+    const modelText = seen.filter(message => message.role === 'toolResult').flatMap(message => message.content).map(part => part.text ?? '').join('');
+    expect(modelText).toContain('语音已发送给用户');
+    expect(tool).toMatchObject({ status: 'ok', result_size: modelText.length, raw_result_size: raw });
+    expect(tool!.result_size!).toBeLessThan(1000);
+    const entry = trace.snapshot().timeline.find(item => item.kind === 'tool_result');
+    expect(entry?.detail).toBe(`voice_tts ok 1ms ${modelText.length} chars (raw ${raw} chars)`);
   });
 });
 

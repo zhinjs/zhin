@@ -2,7 +2,7 @@ import type { EndpointChildLease, EndpointControl, EndpointManagement } from '@z
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
-import { operationInputBinding, operationInputSignal, operationInputResources, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationInputSignal, operationInputResources, operationInputSnapshot, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
@@ -409,6 +409,21 @@ export interface RuntimeMessageOperation {
   readonly outcomes?: InboundOutcomeSink;
 }
 
+/**
+ * Actionable text for a rejected author binding (issue #1250): the message's operation only binds
+ * authors from its own generation snapshot; a service built for or captured from another
+ * generation cannot act for this message's sender.
+ */
+function messageAuthorBindingMismatch(requested: number, actual: number): string {
+  const where = requested === actual
+    ? `a snapshot of generation ${requested} that is not this message's operation snapshot`
+    : `generation ${requested}, but this message belongs to generation ${actual}`;
+  return `Message author binding belongs to another generation operation (${where}). `
+    + 'Resolve services with context.project() inside the current middleware/handler/command and pass the message itself '
+    + '(e.g. CommandIndex.dispatch({ input, source: context.input })) without a snapshot of your own; '
+    + 'never keep a projection or message from an earlier generation. See docs/authoring/commands.md#dispatch-from-middleware.';
+}
+
 /** Canonical runtime message with optional plugin-owned extensions. */
 export type Message<T extends object = {}> = MessageBase & T;
 
@@ -508,7 +523,7 @@ export class RuntimeMessage implements MessageBase {
   [operationInputBinding](owner: PluginId, snapshot: RuntimeSnapshot): RuntimeMessage {
     this.#operation.assertActive?.();
     if (snapshot.generation !== this.generation || (this.#operation.snapshot && snapshot !== this.#operation.snapshot)) {
-      throw new Error('Message author binding belongs to another generation operation');
+      throw new Error(messageAuthorBindingMismatch(snapshot.generation, this.generation));
     }
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Message author: ${owner}`);
     if (this.#operation.requester === owner && this.#operation.snapshot === snapshot) return this;
@@ -523,6 +538,12 @@ export class RuntimeMessage implements MessageBase {
           : {}),
       },
     });
+  }
+
+  /** @internal The exact snapshot this message's operation runs on (see `readOperationInputSnapshot`). */
+  [operationInputSnapshot](): RuntimeSnapshot | undefined {
+    this.#operation.assertActive?.();
+    return this.#operation.snapshot;
   }
 
   /** @internal Metadata fields cannot replace this actual leased operation factory. */

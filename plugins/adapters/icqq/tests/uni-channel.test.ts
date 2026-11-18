@@ -11,6 +11,9 @@ import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
 import { createIcqqTestPorts } from './_icqq-mock.js';
 
+/** Deterministic stand-in for the pinned outbound media download: the bytes are the URL text. */
+const fakeMediaDownload = async (url: string) => ({ bytes: Buffer.from(url), url });
+
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveIcqqConfig({
@@ -34,6 +37,8 @@ async function createEndpoint(
     gateway,
     config,
     ...createIcqqTestPorts(),
+    // Media URLs are downloaded on this host through the outbound media fetcher (#1250 第 46 批).
+    fetchMedia: fakeMediaDownload,
   }, gateway, undefined);
 }
 
@@ -302,7 +307,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
     expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledWith(
       100,
       [
-        { type: 'image', file: 'https://x/a.jpg' },
+        { type: 'image', file: `base64://${Buffer.from('https://x/a.jpg').toString('base64')}` },
         { type: 'image', file: 'base64://QUJD' },
       ],
     );

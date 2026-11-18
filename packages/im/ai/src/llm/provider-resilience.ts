@@ -38,6 +38,12 @@ export type ProviderErrorKind =
    * home page because the service address lacks its API path (`/v1`). Never retried (#1250).
    */
   | "non_json_response"
+  /**
+   * The service answered, but not in the shape the caller asked for (a decision model's choice
+   * missing or out of range; ADR 0066). Drivers report it with `code: 'invalid-response'`.
+   * Never retried on the same model.
+   */
+  | "invalid_response"
   | "aborted"
   | "unknown";
 
@@ -159,6 +165,7 @@ const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   auth: "模型服务鉴权失败，请检查 API 密钥配置",
   bad_request: "模型服务拒绝了请求",
   non_json_response: "服务返回的不是 JSON（可能少了 /v1），请检查服务地址",
+  invalid_response: "模型服务返回的结果格式不对，请稍后再试",
   aborted: "请求已取消",
   unknown: "模型调用失败",
 };
@@ -496,6 +503,9 @@ export function classifyProviderError(
   }
 
   if (name === "AbortError") return { kind: "aborted", retryable: false };
+  // ADR 0066: a decision driver reports an answer it could not use (`invalid-response`).
+  if (rec.code === "invalid-response" || rec.code === "invalid_response")
+    return { kind: "invalid_response", retryable: false, ...(status !== undefined ? { status } : {}) };
   if (name === "TimeoutError") return { kind: "timeout", retryable: true };
   if (isContextOverflowError(inner)) {
     return { kind: "context_overflow", retryable: false, status };
@@ -775,10 +785,22 @@ export function createResilientCompletionPort(
     let attempts = 0,
       retries = 0,
       emptyRetries = 0;
+    /** Whether a failure of this attempt with `error` is retried on the same model (mirrors the catch below). */
+    const willRetry = (error: unknown): boolean => {
+      if (signal?.aborted || streamOptions?.retryAllowed?.() === false) return false;
+      const info = classifyProviderError(error);
+      if (!info.retryable || info.kind === "no_response") return false;
+      const budgetLeft = error instanceof EmptyResponseError
+        ? emptyRetries < config.emptyReplyRetries
+        : retries < config.maxRetries;
+      const retryAfterTooLong = info.retryAfterMs !== undefined && info.retryAfterMs > config.maxRetryAfterMs;
+      return budgetLeft && !retryAfterTooLong;
+    };
+    const attemptOptions: StreamOptions = { ...streamOptions, willRetry };
     while (true) {
       attempts++;
       try {
-        const reply = await attempt(call, model, context, streamOptions, attempts);
+        const reply = await attempt(call, model, context, attemptOptions, attempts);
         if (
           reply.stopReason === "error" &&
           finishFailureKind(reply.errorMessage) === "safety_block"
