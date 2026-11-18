@@ -1604,7 +1604,11 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
           <ContentStack direction="row" gap="tight">
             {accountsLinked && (
               <Button asChild variant="ghost" size="sm">
-                <a className="console-touch" href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>
+                <a className="console-touch" href="#adapter-accounts" onClick={(e) => {
+                  // The add form and editor only exist with a runtime; without one the link points at the
+                  // read-only fallback, so let it jump instead of closing a form that is no longer drawn.
+                  if (runtime && (addOpen || editor)) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); }
+                }}>
                   {t(locale, '账号')} <ToneBadge tone="neutral">{runtime?.endpoints.length ?? status.configured.length}</ToneBadge>
                 </a>
               </Button>
