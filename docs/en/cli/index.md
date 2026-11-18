@@ -426,7 +426,7 @@ zhin doctor             # 3. check that "Zhin 包单实例" (single Zhin package
 - Before the package manager runs, the Zhin entries it can sync are taken out so the update actually moves those packages; afterwards they are written back from the installed tree — the version the installed `zhin.js` depends on exactly (one release's aligned set), else the project's installed copy — keeping each value's style (`1.2.3`, `^1.2.3`, `~1.2.3`) and the key order, followed by one `pnpm install` so the lockfile matches.
 - Supported keys: plain package names (`"@zhin.js/core": "1.12.0"`) and one-level `>` selectors (`"zhin.js>@zhin.js/core": "1.12.0"`).
 - Entries for non-Zhin packages and local wiring (`link:`, `file:`, `workspace:`, `$references`) are left alone.
-- Forms that cannot be synced automatically (a version selector on the key such as `@zhin.js/core@<2`, a parent with a version selector, several `>` levels, complex ranges such as `>=1 <2`, nested objects) stay as they are, and the update prints "请手动修改 package.json:<line> …" naming the file, line and key to edit.
+- Forms that cannot be synced automatically (a version selector on the key such as `@zhin.js/core@<2`, a parent with a version selector, several `>` levels, complex ranges such as `>=1 <2`, nested objects) stay as they are, and the update prints `请手动修改 package.json:<line> …` naming the file, line and key to edit.
 - The override edits are part of the transaction snapshot: any failure rolls them back together with `package.json` and the lockfile. `--dry-run` lists them in their own "pnpm overrides" group, with each pin's old → new version and the entries to edit by hand.
 
 Updating only other dependencies (e.g. `zhin update @types/node`) leaves the Zhin pins alone.
