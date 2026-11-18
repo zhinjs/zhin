@@ -341,6 +341,13 @@ export default defineCommand({
 });
 ```
 
+等待回答期间的行为（ADR 0061 决定 11 修订，#1250）：
+
+- **取消**：`select`、多选、`number`、`list` 都认「取消」「退出」「cancel」「exit」「quit」（中英文通用），提示里会写「回复『取消』退出」。选项本身叫「取消」时按选项处理。`confirm` 里这些词照旧回答 `false`；`text` 把任何文字都当回答，不认取消词。
+- **发别的就退出**：被问的人在等待期间发了能匹配到指令的消息、带图片 / 文件 / 语音 / 视频的消息，或 @ 了机器人（且内容不是有效回答），这次提问就结束，机器人先回一次「已退出上一个选择」（同一人每分钟最多一次），再把这条新消息按正常流程处理。群里其他人的消息不受影响。
+- **答错了**：第一次无效回答会重发提问；之后每次提问最多再提醒 2 次「正在等你选择，回复序号，或回复『取消』退出」，两次至少间隔 20 秒，不再静默等待。
+- **结束方式**：取消、被打断或被新提问顶替时 `ask()` 抛出 `name` 为 `UserInteractionCancelledError` 的错误（`reason` 为 `cancelled` / `interrupted`；顶替为 `UserInteractionSupersededError`），超时抛出 `UserInteractionTimeoutError`（设了 `default` 时改为返回默认值）。不需要清理时不必捕获：框架已经告诉用户（取消回「已取消」，超时回「输入超时」，被打断回「已退出上一个选择」），入站结局记为 `interaction_cancelled` / `interaction_timeout`（INFO 日志，不算故障，不记 `internal_error`）。需要收尾时按 `error.name` 判断。
+
 ### 知道是谁、在哪里发的
 
 ```ts

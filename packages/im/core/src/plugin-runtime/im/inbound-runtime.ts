@@ -54,6 +54,7 @@ import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-
 import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
 import { defaultCommandPrefixResolver, MessageDispatcher, normalizeCommandInputText } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
+import { interactionMessages } from '../../built/interaction-messages.js';
 import {
   formatConversationLog,
   previewMessageContent,
@@ -482,7 +483,7 @@ export class InboundRuntime {
         }
         ledger.enter('interaction');
         const claimed = await this.context.inboundClaim?.(message) === true;
-        const claim = claimed ? undefined : this.#resolveClaim(message);
+        const claim = claimed ? undefined : await this.#resolveClaim(message, lease.value);
         if (claimed) {
           ledger.report({ outcome: 'interaction_answered', reason: 'prompt', stage: 'interaction' });
           this.context.diagnostics?.route('interaction');
@@ -624,11 +625,32 @@ export class InboundRuntime {
     }
   }
 
-  /** Claim resolution with the answer classification, when the coordinator offers it. */
-  #resolveClaim(message: Message): { answerLike: boolean; owner?: string } | undefined {
+  /**
+   * Claim resolution with the answer classification, when the coordinator offers it. ADR 0061
+   * decision 11 (revised, #1250): a command, media or a mention from the asked sender ends the
+   * prompt instead; the sender is told once (throttled) and the message is processed normally.
+   */
+  async #resolveClaim(message: Message, snapshot: RuntimeSnapshot): Promise<{ answerLike: boolean; owner?: string } | undefined> {
     const interactions = this.context.interactions;
-    if (typeof interactions.resolveClaimDetailed === 'function') return interactions.resolveClaimDetailed(message) || undefined;
-    return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
+    if (typeof interactions.resolveClaimDetailed !== 'function') {
+      return interactions.resolveClaim(message) ? { answerLike: true } : undefined;
+    }
+    const resolution = interactions.resolveClaimDetailed(message, undefined, {
+      matchesCommand: () => this.#dispatcher.routesToCommand(message, snapshot),
+    });
+    if (!resolution) return undefined;
+    if (!resolution.escaped) return resolution;
+    logger.info(formatCompact({ op: 'interaction_interrupted', conv: formatConversationLog(message.conversation),
+      owner: resolution.owner, notified: resolution.notify === true }));
+    if (resolution.notify) {
+      try {
+        await message.$replyFrom(snapshot.root, interactionMessages(message.locale, 'exited'));
+      } catch (error) {
+        // The notice is a courtesy: the new message is processed whether or not it was delivered.
+        logger.warn(formatCompact({ op: 'interaction_exit_notice_failed', error: logSafeError(error) }));
+      }
+    }
+    return undefined;
   }
 
   /** True for the first `not_addressed` of `conv` in the minute of `at` (see {@link InboundRuntime.#quietLogged}). */

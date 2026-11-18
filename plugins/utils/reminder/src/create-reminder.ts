@@ -109,7 +109,7 @@ export async function createPersonalReminder(
     if (error instanceof ReminderInputError) return t(locale, 'notCreated', { error: error.message });
     if (creating) return checkExisting;
     if (context.signal.aborted
-      || error instanceof Error && ['UserInteractionTimeoutError', 'UserInteractionSupersededError', 'AbortError'].includes(error.name)) return undefined;
+      || error instanceof Error && ['UserInteractionTimeoutError', 'UserInteractionSupersededError', 'UserInteractionCancelledError', 'AbortError'].includes(error.name)) return undefined;
     if (error instanceof Error && /(?:retired|inactive generation|scope has ended)/iu.test(error.message)) return undefined;
     // Core reports ask timeouts itself; this deadline can instead expire during preview delivery.
     if (error instanceof ReminderCreationDeadline) return timeoutText;

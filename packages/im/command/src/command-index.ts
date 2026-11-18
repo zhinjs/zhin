@@ -491,6 +491,29 @@ export class CommandIndex {
   }
 
   /**
+   * @internal Whether `input` (prefix already removed) routes to a command: the menu keyword, a
+   * shortcut, a route (also one with invalid arguments, which answers with its usage) or a `match`
+   * pattern. Nothing runs and no permission is checked (#1250: a pending prompt ends when its
+   * sender sends a command meanwhile).
+   */
+  routes(input: CommandMatchInput, locale: Locale = 'zh-CN'): boolean {
+    const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
+    if (this.#menu && text !== undefined) {
+      const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
+      const first = (text.split(/\s/u)[0] ?? '').replace(/^\//u, '').toLowerCase();
+      if (text === keyword || text.startsWith(`${keyword} `)
+        || (this.#menu.keyword === undefined && DEFAULT_MENU_KEYWORDS.has(first))) return true;
+    }
+    try {
+      return this.#matchShortcut(input) !== undefined || this.#match(input, false) !== undefined
+        || this.#matchPattern(input) !== undefined || this.#invalidRoute(input) !== undefined;
+    } catch (error) {
+      if (error instanceof CommandParameterValueError) return false;
+      throw error;
+    }
+  }
+
+  /**
    * Near-miss names for text that did not route (issue #1250): display names (with
    * `commandPrefix`) of commands the sender may run whose name or alias resembles the
    * start of `text`. Root config `commandSuggestion` tunes or disables it (`false`).

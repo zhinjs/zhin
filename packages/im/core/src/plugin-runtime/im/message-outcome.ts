@@ -14,6 +14,8 @@ export const MESSAGE_OUTCOMES = Object.freeze([
   // §1.2 not executed, explained in chat
   'invalid_input', 'permission_denied', 'rate_limited', 'approval_denied', 'approval_timeout', 'approval_unavailable',
   'tool_failed_reported', 'model_timeout', 'model_error', 'budget_exhausted',
+  // §1.2 (#1250): a prompt the sender left or did not answer ended the command normally
+  'interaction_timeout', 'interaction_cancelled',
   // §1.3 no reply by design
   'not_addressed', 'feature_disabled', 'ambient_silent', 'model_silent', 'merged', 'superseded', 'cleared',
   'interaction_consumed',
@@ -100,6 +102,7 @@ const TIER: Readonly<Record<MessageOutcome, number>> = Object.freeze({
   approval_denied: 6, approval_timeout: 6, approval_unavailable: 6,
   tool_failed_reported: 5,
   refused: 4, permission_denied: 4, rate_limited: 4, invalid_input: 4, filtered_by_policy: 4,
+  interaction_timeout: 4, interaction_cancelled: 4,
   replied: 3, command_replied: 3, handler_replied: 3, interaction_answered: 3, suggested: 3,
   not_addressed: 2, feature_disabled: 2, ambient_silent: 2, model_silent: 2, merged: 2, superseded: 2, cleared: 2,
   interaction_consumed: 2, media_rejected: 2, ignored_self: 2, ignored_bot: 2, dropped_duplicate: 2,
@@ -176,6 +179,8 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
   model_timeout: tpl('模型服务没有响应，这次没回上，请稍后再试。', 'The model did not respond; please try again later.', '模型超时（{reason}）。', 'Model timed out ({reason}).'),
   model_error: tpl('模型服务出错了，这次没回上，请稍后再试。', 'The model service failed; please try again later.', '模型失败（{reason}）。', 'Model failed ({reason}).'),
   budget_exhausted: tpl('这件事步骤太多，做到一半停下了。', 'Too many steps; stopped partway.', '超出预算 {reason}。', 'Budget {reason} exceeded.'),
+  interaction_timeout: tpl('等你回答超时了，这次没有继续。', 'The question timed out; nothing more was done.', '提问超时，提问方 {owner}（{stage}）。', 'Prompt timed out, asked by {owner} ({stage}).'),
+  interaction_cancelled: tpl('你退出了这次提问，没有继续。', 'You left the question; nothing more was done.', '提问结束（{reason}），提问方 {owner}（{stage}）。', 'Prompt ended ({reason}), asked by {owner} ({stage}).'),
   not_addressed: tpl('这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。', 'You did not mention me and it is not a command; here I only answer when mentioned.', '未点名、未匹配指令，本群不插话（{reason}）。', 'Not addressed, no command, no interjection here ({reason}).'),
   feature_disabled: tpl('这里没有开启相关功能。', 'That feature is not enabled here.', '功能在此处关闭（{reason}）。', 'Feature disabled here ({reason}).'),
   ambient_silent: tpl('我判断这句不需要我插话。', 'I decided not to chime in.', '旁听判定不插话（{reason}）。', 'Ambient judge declined ({reason}).'),

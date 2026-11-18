@@ -44,6 +44,7 @@ import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type { MessageDispatchOutcome } from './message-dispatcher.js';
 import { formatConversationLog } from './message-events.js';
 import { enterInboundOutcomeStage, inboundOutcomeReplied, reportInboundOutcome } from './inbound-outcome-ledger.js';
+import { interactionEndCandidate, interactionEndOf } from './interaction-end.js';
 import type { MessageOutcomeCandidate } from './message-outcome.js';
 export {
   arbitrateRoomInboundDeduplication,
@@ -364,6 +365,7 @@ export async function executeInboundTurnSpine(
   }
   if (!interactive) enterInboundOutcomeStage(message, 'command');
   let commandMiss: 'prefix_mismatch' | 'empty_input' | 'unmatched' | undefined;
+  let interactionEnded = false;
   const dispatched = interactive
     ? undefined
     : await envelope.dispatchCommand((stage, status) => {
@@ -373,8 +375,15 @@ export async function executeInboundTurnSpine(
       else if (status === 'commands_unavailable') {
         reportInboundOutcome(message, { outcome: 'feature_disabled', reason: 'commands_unavailable', stage: 'command' });
       }
+    }).catch((error: unknown): MessageDispatchOutcome => {
+      // #1250: a prompt that timed out or that the sender left ends the command normally.
+      const end = interactionEndOf(error);
+      if (!end) throw error;
+      interactionEnded = true;
+      reportInboundOutcome(message, interactionEndCandidate(end, 'command'));
+      return { dispatch: Object.freeze({ matched: true, status: 'executed', command: 'interaction' }) };
     });
-  if (dispatched) reportCommandOutcome(message, dispatched.dispatch);
+  if (dispatched && !interactionEnded) reportCommandOutcome(message, dispatched.dispatch);
   let result: MessageDispatchResult = interactive ?? dispatched!.dispatch;
   let stage: InboundSpineStage = interactive
     ? 'interactive'
@@ -543,6 +552,13 @@ export async function runInboundMiddlewareAndSpine(
         },
         // #1250: a UserFacingError thrown by a Middleware becomes its reply (normal outbound chain).
         refuse: (owner, error, downstream): InboundOutcome | undefined => {
+          const end = interactionEndOf(error);
+          if (end) {
+            // #1250: a middleware's prompt that timed out or was left ends it normally.
+            reportInboundOutcome(message, interactionEndCandidate(end, 'middleware', owner));
+            if (!downstream?.dispatch.matched) diagnostics?.route('middleware');
+            return { dispatch: downstream?.dispatch.matched ? downstream.dispatch : { matched: true, command: 'middleware', owner } };
+          }
           const text = userFacingErrorText(error, message.locale);
           if (text === undefined) return undefined;
           reportInboundOutcome(message, { outcome: 'refused', reason: 'user_facing_error', stage: 'middleware', owner });
@@ -609,6 +625,13 @@ export async function dispatchInboundHandlers({
     // the normal outbound chain; any other error still propagates (and is only logged).
     recover: async (error, owner) => {
       const payload = (args[0] as EndpointEvent | undefined)?.payload;
+      // #1250: a handler's prompt (`this.prompt`) that timed out or was left ends the handler normally.
+      const end = interactionEndOf(error);
+      if (end) {
+        const candidate = interactionEndCandidate(end, 'handlers', owner);
+        if (payload instanceof RuntimeMessage) reportInboundOutcome(payload, candidate);
+        return true;
+      }
       const locale = payload instanceof RuntimeMessage ? payload.locale : undefined;
       const text = userFacingErrorText(error, locale);
       if (text === undefined) return false;

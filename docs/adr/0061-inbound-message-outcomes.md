@@ -123,6 +123,10 @@ sidebar: false
 | `model_timeout` | `no_response` / `request_timeout` / `turn_timeout` | 发起人 | 模型服务没有响应，这次没回上，请稍后再试。 / The model did not respond; please try again later. | `{provider}/{model}` {phase} 超时 {ms} ms（第 {attempt} 次）。 / `{provider}/{model}` {phase} timed out after {ms} ms (attempt {attempt}). |
 | `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 沿用 `chatFailureLine` 现有话术（“刚卡了一下……” 等）。 / Existing `chatFailureLine` lines. | 沿用 `chatFailureLine` 的原因括注 + `{provider}/{model}`。 / Same cause as `chatFailureLine` + `{provider}/{model}`. |
 | `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{budget}`。 / Budget `{budget}` exceeded. |
+| `interaction_timeout` | `timeout`（指令 / Handler / 中间件的 `ask()` 超时，框架已回复「输入超时」；#1250）| 发起人 | 等你回答超时了，这次没有继续。 / The question timed out; nothing more was done. | 提问超时，提问方 `{owner}`（{stage}）。 / Prompt timed out, asked by `{owner}` ({stage}). |
+| `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done. | 提问结束（`{reason}`），提问方 `{owner}`（{stage}）。 / Prompt ended (`{reason}`), asked by `{owner}` ({stage}). |
+
+`interaction_timeout` / `interaction_cancelled` 是提问方（指令、Handler、中间件）的正常结局：超时、取消、被打断、被顶替不再作为异常冒泡成 `internal_error | command_threw`，日志为 INFO，不触发故障横幅，不计入失败统计；优先级与 `refused` 同档（见决定 11 修订）。
 
 `approval_*`、`tool_failed_reported` 要求回合末如实说明（§4 表“Agent 行为”一行）；若模型已在回复中说明，`reply: yes`，`why` 复用同一句。
 
@@ -139,7 +143,7 @@ sidebar: false
 | `cleared` | `clear_command` | 发起人 | 已清空上下文。 / Context cleared. | — |
 | `interaction_consumed` | `prompt_captured`（被等待中的提问当作回答，但发起人不是被问者或内容不像回答）| 发起人 | 刚才在等「{prompt}」的回答，这句被当成了回答。 / I was waiting for an answer to "{prompt}" and took this as it. | 提问方 `{owner}`，提问 `{promptId}`，被问者 `{target}`。 / Prompt `{promptId}` by `{owner}`, asked `{target}`. |
 
-`interaction_consumed` 是 `reminder-confirm-captures-chat` 的结局：P5 起提问方声明“谁的回答算数”（`answeredBy: 'target' | 'anyone'`，默认 `target`），不是被问者的消息不再被吞；同一提问的重复提示最多重发一次（决定 11）。在 P5 之前先记 `interaction_consumed`，至少能用 `why` 查到“被谁的提问吃掉了”。
+`interaction_consumed` 是 `reminder-confirm-captures-chat` 的结局：P5 起提问方声明“谁的回答算数”（`answeredBy: 'target' | 'anyone'`，默认 `target`），不是被问者的消息不再被吞；同一提问在第一次无效回答后重发一次，之后改为限频提醒，被问者发指令、媒体或 @ 机器人时提问结束、消息按正常流程处理（决定 11 及其修订）。在 P5 之前先记 `interaction_consumed`，至少能用 `why` 查到“被谁的提问吃掉了”。
 
 #### 1.4 被策略过滤（`reply: no`，点名消息为 `throttled`）
 
@@ -377,7 +381,7 @@ sidebar: false
 8. **`internal_error` 推送给 owner**：不推送，进 Console 关注项；P3 之后再评估每日摘要（§3.2）。
 9. **生产中的 `unrecorded`**：warn + 关注项计数。测试与 e2e 中：P1–P5 只告警（测试按允许清单放行尚未接入的阶段，e2e 只报告计数），P6 起直接失败（§4、§6）。
 10. **静默结局采样**：每会话每分钟 30 行后聚合（`im.outcomes.quietSampleLimit`）；点名消息与非静默结局永不采样（§2）。
-11. **交互态吞消息（`reminder-confirm-captures-chat`）**：P5 让提问方声明 `answeredBy: 'target' | 'anyone'`（默认 `target`），非被问者的消息不再被吞；同一提问的重复提示最多重发一次；在此之前先记 `interaction_consumed`（§1.3）。
+11. **交互态吞消息（`reminder-confirm-captures-chat`）**：P5 让提问方声明 `answeredBy: 'target' | 'anyone'`（默认 `target`），非被问者的消息不再被吞；同一提问的重复提示最多重发一次；在此之前先记 `interaction_consumed`（§1.3）。**2026-11-18 修订**：「之后静默等待」改为限频提醒，并允许被问者用取消词、指令、媒体或 @ 机器人退出，见下文「决定 11 修订」。
 12. **`why` 可被功能开关关掉**：可以（`im.outcomes.chatCommand`），但 Console / CLI 查询始终可用（§3.1）。
 
 另有一条与 ADR 0062 共同的决定：
@@ -388,6 +392,25 @@ sidebar: false
 
 14. **意图确认卡只读**：`turn_prompt` 卡带审批 `purpose`；`purpose: 'intent'`（来源可疑调用、发起人确认自己的意图，`scope: 'intent'`）的卡在 Console 只读、标注「需要发起人在会话里确认」，不能在 Console 批准 / 拒绝；只确认意图的结论永不满足授权。`purpose: 'approval'` 的卡仍由 Console 按仅本次结算（§5.1）。
 15. **读过外部内容后的 owner 确认**：owner 的非 humanOnly 请求免提问、不建卡的规则有例外——回合读过外部内容后，`ask` / `bypass` 下的高风险操作向 owner 发一次性确认（不记住、超时即拒、owner 不在场即拒），这次提问按第 14 条建 `purpose: 'intent'` 的 `turn_prompt` 卡（§5.1）。
+
+### 决定 11 修订（2026-11-18，#1250 第 49 批）
+
+来源：所有者在 zhinjs/zhin#1250 评论 6970987067 中报告的两个问题。所有者已在 2026-11-18 的维护会话中按推荐方案授权。
+
+**问题。** ① `interaction-prompt-swallows-messages`：指令用 `interaction.ask({ type: 'select' })` 发起选择后，`select` 不认「取消」（取消词只给 `confirm` 用）；第二次无效回答之后按原决定 11 静默等待（默认 3 分钟），这期间同一个人发的所有消息——指令、带图片的提问、`status`——都被当成回答吃掉（`interaction_consumed | prompt_captured`）。用户以为机器人没反应，被吃掉的消息也丢了。② `interaction-timeout-reported-as-internal-error`：提问超时后，Core 先回复「输入超时」再抛 `UserInteractionTimeoutError`；指令不捕获时被记成 `inbound_internal_error | stage: command`、结局 `internal_error | command_threw`，Sandbox 还显示「运行暂不可用」横幅。
+
+**修订后的规则。**
+
+1. **取消词。** `select`、`multiselect`、`number`、`list` 都认取消词「取消」「退出」「cancel」「exit」「quit」，中英文共用（`confirm` 也额外接受这几个词，仍回答 `false`）。有效回答优先：选项本身叫「取消」时按选项处理；`text` 把任何文字当回答，不认取消词。提示文案写明「回复『取消』退出」/ `reply "cancel" to exit`。取消后 `ask()` 以 `UserInteractionCancelledError`（`reason: 'cancelled'`）结束，框架回复「已取消。」，语义与 `confirm` 取消一致：这次操作不继续；它不是错误。
+2. **发别的就退出。** 等待期间，被问者（`answeredBy: 'target'` 时的那个人）发来的消息满足以下任一条件时，先结束当前提问，再把这条消息交回正常入站流程：
+   - 能匹配到指令（用 CommandIndex 实际匹配：菜单关键字、快捷方式、路由（含参数不对的路由）、`match` 正则；不跑指令、不查权限）；
+   - 带媒体（图片、文件、语音、视频段）；
+   - @ 了机器人。
+   带媒体的消息一律退出；匹配指令或 @ 机器人但内容本身是有效回答（如「@机器人 2」）时仍按回答处理。结束时回复一次「已退出上一个选择」，同一会话同一人每分钟最多一次。被打断的那次 `ask()` 以 `UserInteractionCancelledError`（`reason: 'interrupted'`）结束，按取消处理。`answeredBy: 'anyone'` 的提问不属于某个人，这类消息直接放行、提问保留；群里其他人的消息与原来一样不受影响。
+3. **限频提醒取代静默等待。** 第一次无效回答仍重发一次完整提问；之后的无效纯文本限频回复「正在等你选择，回复序号，或回复『取消』退出」（非选择类为「正在等你回答……」），每次提问最多 2 次，两次至少间隔 20 秒。
+4. **超时、取消、被打断都是正常结局。** 入站层新增结局 `interaction_timeout`（`timeout`）与 `interaction_cancelled`（`cancelled` / `interrupted` / `superseded`），见 §1.2。指令、Handler、中间件里的这几种结束按错误名识别，记 INFO（`interaction_ended`、`inbound_outcome`），不显示故障横幅，不计入失败统计，不再记 `internal_error`。Agent 工具审批的提问被取消或打断时按用户拒绝处理（`denied`）。
+
+**原因。** 静默等待让一个答错两次的提问在 3 分钟里独占发问者的全部输入，代价远大于“少回一句”；用户在等待中改发指令、图片或 @ 机器人，几乎都是换了话题，而不是在回答。限频提醒保留了原决定“不刷屏”的目的，同时让用户知道机器人在等什么、怎么退出。超时与取消是用户可预期的结束，把它们记成内部错误会让 Console 与 Sandbox 误报故障。
 
 ## 落盘位置（计划）
 

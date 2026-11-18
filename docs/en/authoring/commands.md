@@ -339,6 +339,13 @@ export default defineCommand({
 });
 ```
 
+While a prompt waits (ADR 0061 decision 11, revised, #1250):
+
+- **Cancel**: `select`, multiselect, `number` and `list` prompts accept `取消`, `退出`, `cancel`, `exit` and `quit` in every language, and the prompt says `reply "cancel" to exit`. An option that is itself labelled `取消` stays an option. In `confirm` these words still answer `false`; a `text` prompt takes any text as its answer and has no cancel word.
+- **Sending something else leaves**: when the asked person sends a message that matches a command, carries an image / file / voice / video, or mentions the bot (and is not a valid answer), the prompt ends. The bot first says "Left the previous question" once (at most once a minute per person), then handles the new message normally. Other members' messages in a group are not affected.
+- **Invalid answers**: the first invalid answer re-sends the question; after that the bot reminds at most twice per prompt ("Still waiting for your choice: reply with an option number, or reply "cancel" to exit"), at least 20 seconds apart, instead of waiting silently.
+- **How it ends**: on cancel, interruption or a newer prompt, `ask()` throws an error whose `name` is `UserInteractionCancelledError` (`reason`: `cancelled` / `interrupted`; a newer prompt throws `UserInteractionSupersededError`); a timeout throws `UserInteractionTimeoutError` (or returns `default` when one is set). Catch it only to clean up: the framework already told the user ("Cancelled", "Input timed out" or "Left the previous question"), and the inbound outcome is `interaction_cancelled` / `interaction_timeout` (INFO log, not a failure, never `internal_error`). Match on `error.name`.
+
 ### Know who sent it and where
 
 ```ts
