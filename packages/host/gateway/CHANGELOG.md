@@ -1,5 +1,39 @@
 # @zhin.js/gateway
 
+## 1.6.1
+
+### Patch Changes
+
+- 5cfb5d7: 「旁听」用途和决策「旁听参与判断」合成一项「插话判断」`purposes.ambient`，旧配置自动迁移（ADR 0066 P1，行为变更）。
+
+  - 新的配置形状 `purposes.ambient: { profile, fallbacks, compare, minConfidence, mode, timeoutMs }`：主判断与备用链可以混排语言模型和决策模型（判断器按 Profile 的模型类型分派），`compare` 是只记录的对照模型，`minConfidence`（默认 0.7）是唯一的门槛，`mode: shadow` 是唯一的「只记录不插话」，`timeoutMs` 是决策模型成员的单次超时。字符串写法 `ambient: <profile>` 仍然有效；写入总是整项替换，`null` 清除。没写 `profile` 时继承部署聊天的主项和备用链（此时不能单独写 `fallbacks`）。只允许这 6 个键，Profile 必须存在、属于 Host、不能是图像模型，链内不能重复、不能包含 `profile`，`compare` 不能在链内；错误带路径（如 `purposes.ambient.fallbacks[1]`）。
+  - **行为变化**：旧配置在 Host 加载模型配置时自动迁移一次（一个 CAS 事务，同时写迁移记录，`before` 保存迁移前完整的 `purposes`）。原来决策「启用」并单独配置了旁听语言模型的部署，该语言模型成为第一个备用：决策模型超时、网络错误、5xx、回答无效或配额用完时由它接手插话（以前直接不插话）。门槛取原来两道门槛中较大的值，插话不会因此变多。决策「仅评估」迁移为对照模型，主判断与插话行为不变；决策「关闭」的 Profile 不迁移。`zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode` 在迁移时读入一次，之后不再生效（每个 generation 启动时警告一次）。迁移失败时不写数据库，本次按同一张表在内存里转换后运行，记 `ambient_judge_migration_failed`，下次加载重试。
+  - **降级前必须先回退**：新增 `zhin ai purposes revert ambient-judge`（只能经本机网关执行），在 `purposes.ambient` 自迁移后没被修改时恢复迁移前的旧写法；旧版本读不了含 `purposes.ambient` 的模型配置。回退后当前版本仍按旧写法换算运行，不会自动再迁移。
+  - `DecisionEngagementJudge` 不再设内部门槛（`DecisionEngagementJudgeOptions` 新增 `timeoutMs` / `mode`，`policy` 废弃），`AmbientEngagement` 只按 `purposes.ambient` 的门槛判一次，语言模型与决策模型都是 `engage && confidence ≥ minConfidence` 才插话。`DecisionPurpose` / `DECISION_TASKS` 去掉 `ambient`（决策用途剩五类）。
+  - 废弃期（本 minor 和下一个 minor）：导入 `purposes.decisions.ambient` 时按迁移表合并进 `purposes.ambient`，导入结果带警告（`warnings`，路径 `purposes.decisions.ambient`）；导出只写新形状。自我变更和聊天里的 `config set` 不能再写 `ai.trigger.ambient.minConfidence` / `mode`。
+  - 新增 `GET {base}/agent/inference/ambient-judge`（生效的插话判断与迁移记录，Host 管理员）、`POST …/ambient-judge/migration/noticed`、`POST …/cli/purposes/revert-ambient-judge`（本机 CLI）。
+  - `@zhin.js/runtime`：配置 schema 中两键的描述改为「已废弃」。
+
+- 000bec6: `zhin packages status` 读取运行中实例的当前 generation，不再一律报「待重启」；trace 的 `tool_result` 记模型实际拿到的大小（#1250 第 39 批）。
+
+  - `plugin-status-always-pending-restart`：CLI 不带 `--live` 时只检查本地文件，没有运行中实例的 snapshot，`published` 永远是 `false`、`restartRequired` 永远是 `true`，于是整套服务刚重启完所有插件也显示 `pending-restart`。现在 `zhin packages status` / `verification-plan` / `apply` / `verify` 省略 `--live` 时经本项目网关的本地套接字转给受监管的实例（与 Console 相同的 `plugin:*` RPC），由持有当前 snapshot 的实例计算状态与 generation；`apply` / `verify` 的 `--live` 因此变为可选，没有连上实例时直接拒绝且不执行任何操作。
+  - 拿不到 snapshot 时（网关未运行、实例没有应答、实例尚未上报 generation），声明且启用的插件 `status` 为新的 `unknown`，`restartRequired: false`，并在新增的可选字段 `statusReason`（`PluginManagementState`，`@zhin.js/host-http`）说明原因（「没有连上运行中的实例……」「实例尚未上报 generation……」，CLI 离线时再附上网关未运行等具体原因），不再说 `pending-restart`。`install` / `declare` / 启用停用与 `apply` 判断「这次改动是否需要重启」时，对 `unknown` 仍按需要启动处理，行为不变。
+  - `verification-plan-empty-unexplained`（同一原因）：经网关读取时计划来自运行中的实例，输出标明「经本项目网关读取运行中的实例」，给出的 `zhin packages verify` 命令不再需要 `--live`；离线时额外说明没有连上实例的原因。
+  - `trace-tool-result-size-pre-strip`：trace 中工具调用的 `result_size` 与时间线 `tool_result` 改为模型实际收到的字符数（拆出媒体、省略内嵌二进制、追加提示之后），与工具原始输出大小不同时另记 `raw_result_size`（时间线写成 `… 240 chars (raw 11559 chars)`，`formatTurnTrace` 写成「240 字符（工具原始输出 11559 字符）」）。
+
+- Updated dependencies [49a1136]
+- Updated dependencies [5cfb5d7]
+- Updated dependencies [8c0d262]
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [000bec6]
+- Updated dependencies [a8377d4]
+- Updated dependencies [4760a96]
+  - @zhin.js/runtime@1.6.1
+  - @zhin.js/scaffold-wizard@1.4.2
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/console-protocol@1.6.1
+
 ## 1.6.0
 
 ### Minor Changes

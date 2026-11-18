@@ -1,5 +1,117 @@
 # @zhin.js/cli
 
+## 1.8.0
+
+### Minor Changes
+
+- 5cfb5d7: 「旁听」用途和决策「旁听参与判断」合成一项「插话判断」`purposes.ambient`，旧配置自动迁移（ADR 0066 P1，行为变更）。
+
+  - 新的配置形状 `purposes.ambient: { profile, fallbacks, compare, minConfidence, mode, timeoutMs }`：主判断与备用链可以混排语言模型和决策模型（判断器按 Profile 的模型类型分派），`compare` 是只记录的对照模型，`minConfidence`（默认 0.7）是唯一的门槛，`mode: shadow` 是唯一的「只记录不插话」，`timeoutMs` 是决策模型成员的单次超时。字符串写法 `ambient: <profile>` 仍然有效；写入总是整项替换，`null` 清除。没写 `profile` 时继承部署聊天的主项和备用链（此时不能单独写 `fallbacks`）。只允许这 6 个键，Profile 必须存在、属于 Host、不能是图像模型，链内不能重复、不能包含 `profile`，`compare` 不能在链内；错误带路径（如 `purposes.ambient.fallbacks[1]`）。
+  - **行为变化**：旧配置在 Host 加载模型配置时自动迁移一次（一个 CAS 事务，同时写迁移记录，`before` 保存迁移前完整的 `purposes`）。原来决策「启用」并单独配置了旁听语言模型的部署，该语言模型成为第一个备用：决策模型超时、网络错误、5xx、回答无效或配额用完时由它接手插话（以前直接不插话）。门槛取原来两道门槛中较大的值，插话不会因此变多。决策「仅评估」迁移为对照模型，主判断与插话行为不变；决策「关闭」的 Profile 不迁移。`zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode` 在迁移时读入一次，之后不再生效（每个 generation 启动时警告一次）。迁移失败时不写数据库，本次按同一张表在内存里转换后运行，记 `ambient_judge_migration_failed`，下次加载重试。
+  - **降级前必须先回退**：新增 `zhin ai purposes revert ambient-judge`（只能经本机网关执行），在 `purposes.ambient` 自迁移后没被修改时恢复迁移前的旧写法；旧版本读不了含 `purposes.ambient` 的模型配置。回退后当前版本仍按旧写法换算运行，不会自动再迁移。
+  - `DecisionEngagementJudge` 不再设内部门槛（`DecisionEngagementJudgeOptions` 新增 `timeoutMs` / `mode`，`policy` 废弃），`AmbientEngagement` 只按 `purposes.ambient` 的门槛判一次，语言模型与决策模型都是 `engage && confidence ≥ minConfidence` 才插话。`DecisionPurpose` / `DECISION_TASKS` 去掉 `ambient`（决策用途剩五类）。
+  - 废弃期（本 minor 和下一个 minor）：导入 `purposes.decisions.ambient` 时按迁移表合并进 `purposes.ambient`，导入结果带警告（`warnings`，路径 `purposes.decisions.ambient`）；导出只写新形状。自我变更和聊天里的 `config set` 不能再写 `ai.trigger.ambient.minConfidence` / `mode`。
+  - 新增 `GET {base}/agent/inference/ambient-judge`（生效的插话判断与迁移记录，Host 管理员）、`POST …/ambient-judge/migration/noticed`、`POST …/cli/purposes/revert-ambient-judge`（本机 CLI）。
+  - `@zhin.js/runtime`：配置 schema 中两键的描述改为「已废弃」。
+
+- 8c0d262: 插话判断（ADR 0066）审查修复：yml 的「只观察」和门槛在所有路径上都不丢，回退能完整还原。
+
+  **BREAKING（已批准的 minor）与迁移路径**
+
+  - `EngagementJudgment.source` 由字符串改为对象 `{ kind, profile, model, fallbackFrom? }`：读显示文字改用 `sourceLabel`，判断模型类型改用 `source.kind`，按模型分组改用 `source.profile` / `source.model`。无法在不破坏类型的前提下同时保留字符串；`ref`（与 `source` 同一对象）和字符串 `fallbackFrom` 保留到废弃期结束。`EngagementJudgeCall` / `EngagementJudgeFailure` 的字符串 `source` 不变。
+  - `DecisionPurpose`、`InferencePurpose` 的 `decision:ambient`、`DecisionTask` / `DECISION_TASKS` 去掉 `ambient`：改用 `PurposePolicy.ambient`（插话判断）。存储里的旧 `decisions.ambient` 仍会读取并自动迁移。
+  - 联合类型新增成员：`PurposeIgnoredReason`（`ambient-not-configured` / `no-conversations` / `mode-off`）、`ProviderErrorKind` 与 `ModelFallbackReason`（`invalid_response`）。对这些类型做穷举（`switch`、`Record<…>`）的代码需要补上分支。
+
+  **行为变更**
+
+  - 判断结果没有 `gate`（自定义判断器）时，`AmbientEngagement` 回退读已废弃的 `ai.trigger.ambient.minConfidence` / `mode`，不会比以前多插话；直接构造 `DecisionEngagementJudge({ policy: { minConfidence } })` 时仍在判断器内按它把关（判断器链不设，门槛只判一次）。
+  - 迁移完成后再写 `ai.trigger.ambient.mode` / `minConfidence`（旧版 Console、手工编辑、导入的配置）会在下次加载时转到 `purposes.ambient`，记 info 日志 `ambient_trigger_write_converted`，不再静默失效。
+  - 空库首次启动从 `ai.plan.yml` seed 的 `purposes.ambient`，以及旧键仍生效时（未迁移、迁移失败、已回退）写入的 `purposes.ambient`，都会补上 yml 里仍生效的 `mode` / `minConfidence`；管理视图、`purposeEffects`、导出和插话状态按实际生效的值显示。
+  - 废弃期内的旧写法：`purposes.decisions.ambient` 的 `off` / `null` 撤销决策模型与原「仅评估」的对照模型，恢复原来的旁听语言模型；字符串写法 `purposes.ambient: <profile>` 只替换语言模型，保留 `mode`、`compare`、`minConfidence`。
+  - `zhin doctor`：只有运行中实例的迁移记录为 `migrated`、键已被迁移读入且值未再改动时，才提示 `ai.trigger.ambient.minConfidence` / `mode` 不再生效并允许 `--fix` 删除；实例未运行、未迁移、迁移失败或已回退时只给警告，拒绝 `--fix`。启动日志 `ambient_trigger_keys_retired` 只在已迁移时出现。
+  - `zhin ai purposes revert ambient-judge`：先经配置写锁把迁移读入、之后被删掉的 yml 旧键写回，写不回则不回退并给出手工步骤，回退被拒时撤销写回；旧形状已不成立时拒绝并给出路径。
+  - 迁移记录的 `noticedAt` 用 CAS 写入，与回退并发时回退优先。`FallbackEngagementJudge`（已废弃）恢复原有退避：成功清除退避，取消不记退避。插话状态的判断器链读请求所在 generation 的模型配置。判断器链和对照模型使用合并了 generation 停止信号的 `signal`。
+  - `@zhin.js/service-typesafe`：失败请求只保留 `Retry-After` 响应头。`@zhin.js/scaffold-wizard`：决策用途检查改为五个，`purposes.decisions.ambient` 提示已废弃。
+  - 复审修复：yml 里写回迁移时读入的原值（或已处理过的值）不再被当成新写入，`purposes.ambient` 不变、回退仍可成功；回退命令执行期间在迁移记录上标记 `revertPending`（CAS 写入，10 分钟后失效），期间暂停转换，结束时无论成败都清除。迁移前 seed 过的 `purposes.ambient` 回退时按 D5 表反向换成旧字段，门槛和模式写入 yml；旧版本表达不了的部分逐条列出，此时 CLI 不再提示「可以降级」并以非零状态退出。`zhin doctor` 比较 yml 值时两边都按运行时规则规范化，并按 `triggerSeen` 判断是否已处理。新增路由 `POST {base}/agent/inference/cli/purposes/revert-ambient-judge/pending`（本机 CLI）。
+  - 第三次复审修复：旧 Console 先关「只观察」再打开时，写回的原值按新写入转换，最终仍是 shadow（只有存储的插话判断该键仍是迁移写下的值时，原值才不算新写入；`zhin doctor` 同样判断）。回退顺序改为：取得 `revertPending` 标记 → 干跑（`dryRun`，返回 yml 应有的值和旧版本表达不了的项）→ 写 yml（与现有值不同时以当前实际运行的值为准覆盖，并列出覆盖项；写不了就不回退）→ 提交回退（被拒时撤销 yml 写入）→ 清除标记；取不到标记时中止。回退相关路由写审计。
+  - 第四次复审修复：回退时如果配置文件里有实例还没转换的旧键写入，拒绝回退（`pending-trigger-writes`，列出键），提示先重新加载实例，避免用迁移原值覆盖新写入；CLI 写入前再按同一规则检查一次文件。已从 yml 转换的门槛 / 模式不阻止回退，回退后按当前值运行。回退请求没有回应时先重读迁移状态再决定保留还是撤销 yml，读不到时不动 yml 并给出手工步骤；提交返回的 yml 与干跑不一致时撤销；撤销失败时列出原值和恢复步骤。回退进行中 `zhin doctor --fix` 不删旧键。
+  - 第五次复审修复：回退已提交但返回的 yml 与干跑不一致时，按最终结果更新配置文件并报告已回退（写不进去时列出手工修改的值）；提交无回应时两次查询都仍是已迁移才撤销 yml；因配置文件里缺少已生效的门槛 / 模式而拒绝回退时，提示把哪一项改回什么值后就可以回退。
+
+### Patch Changes
+
+- 3cf5a4f: ADR 0063 P4：删除弃用期已满（至少一个 minor）的接口。按 ADR 0063 D11（所有者决定），删除走 minor，不等 major。
+
+  `@zhin.js/client`（1.3.0 弃用）：
+
+  - 删除 `@zhin.js/client/ui` 子路径（`exports["./ui"]`）及其 `zk-` 组件（`PluginPage`、`PageHeader`、`Button`、`Select`、`Modal`、`ConfirmButton` 等）和 `pluginUiStyles`。数据、语言、插件 ID 工具、声明式渲染器与会话选择工具从 `@zhin.js/client` 根入口导入（名字不变）；组件改用 `@zhin.js/console-ui`；页头交给页面外壳（`usePageChrome`）。
+  - 删除 `adapterConsoleStyles`、`conversationPickerStyles`（弃用期内为空字符串）：删掉导入和注入它们的 `<style>`。
+  - 删除 `zk-` 类名：适配器页账号编辑器不再带 `zk-account-editor-host`，宿主改用 `[data-adapter-account-editor]` 定位。
+  - 蓝图与评论审批 spec 不再读取 `mark`，也不再为它告警。
+
+  `@zhin.js/console-contract`（1.3.1 标注、随 client 1.3.0 这一轮宣布弃用）：删除 `DeclarativePageSpec.mark` 与 `CommentReviewBlueprintSpec.mark`，写了会报类型错误，删掉即可。
+
+  `@zhin.js/console-ui`（1.1.0 弃用）：
+
+  - 删除旧令牌别名 `--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-xs/sm/md/lg/xl/panel/hover/button`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card/-card-sm`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-duration-fast/-page`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`，以及无后继的 `--console-shadow-ring`。对照：`radius-sm/md/lg/xl/2xl` → `radius-1/2/3/4/4`；`shadow-xs/button` → `elevation-0`，`shadow-sm/panel` → `card-elevation`，`shadow-md` → `elevation-2`，`shadow-lg/xl` → `elevation-3`，`shadow-hover` → `card-hover-elevation`；`space-page-x/-y` → `page-padding-inline/-block`，`space-section` → `section-gap`，`space-stack` → `stack-gap`，`space-card(-sm)` → `card-padding`；`control-height-sm/-lg` → `control-height-compact` / `control-height`；`border-width` / `focus-width` → `border-hairline` / `border-focus`；`duration-fast/-page` → `motion-fast` / `motion-base`；`text-caption/-code/-body-sm` → `text-label`，`text-section-sm` → `text-section`，`text-title-compact` → `text-title`；`--radius` → `--console-control-radius`（均带 `--console-` 前缀）。`scale.json` 的 `css.aliasTokens` 改为 `css.removedTokens`（旧名 → 新名）。
+  - stylelint 规则 `console/no-deprecated-tokens` 改为报出这些已删除的名字并给出新名；`createConsoleStylelintConfig({ deprecatedTokens })` 不变。
+  - 删除 `Button` 的 `variant="default"`（1.1.0 起是 `soft` 的弃用别名）：改写 `variant="soft"`，或不写 `variant`（默认就是 `soft`）。
+
+  `@zhin.js/pagemanager`：独立页外壳的样式不再覆盖 `.zk-root` / `--zk-*`，构建时注入的 `defineCommentReviewPage` 不再把 `mark` 写进蓝图。`@zhin.js/cli`：`zhin plugin check` 第 2 条在从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage` 的提示中注明该子路径已在 `@zhin.js/client` 1.4.0 删除。`@zhin.js/adapter-sandbox`：按钮由已删除的 `variant="default"` 改为 `soft`，外观不变。
+
+  第三方插件：已经构建好的插件把自己用的 `@zhin.js/client` 打进了包里，子路径和 `zk-` 的删除不会让它们失效，升级依赖重新构建时按 docs/authoring/console-pages.md「从 @zhin.js/client/ui 升级」与「ADR 0063 P4 删除的其他接口」迁移。`@zhin.js/console-ui` 由 Console 作为共享单例提供，Console 升级到 1.2 后，还在用 `variant="default"` 的按钮会退回基础样式，读旧令牌名的样式取不到组件库的值，请改成新名。
+
+- c86e2f6: Console 只显示真正生效的插话判断，`zhin doctor` 检查插话判断迁移与废弃配置项（ADR 0066 P3）。
+
+  - 管理视图（`GET {base}/agent/inference`）的 `purposeEffects` 新增 `ambient`：实际使用的判断器链（成员与模型类型，跟随聊天时标 `inheritedFrom: 'chat'`）、对照模型，以及插话根本不运行时的忽略原因 `ambient-not-configured`（配置里没有 `ai.trigger.ambient`）/ `no-conversations`（没有任何群开启、也没有功能开关打开）；新增 `decisions.<task>`，关闭的决策用途标 `mode-off`。`PurposeIgnoredReason` 新增这三个值（新增类型 `AgentPurposeIgnoredReason`、`AmbientDeploymentView`，导出 `ambientPurposeEffects()`）。
+  - Console 群聊插话状态的 `judges` 改为实际判断器链（决策模型判断时不再显示从未被调用的语言模型），新增结构化的 `judgeChain`（成员、类型、角色、是否在跳过期）和 `minConfidence`；`mode` 读 `purposes.ambient.mode`。`HostInference.ambientModels()` 返回 `AmbientJudgeStatusView`，新增导出 `ambientJudgeStatusView()`。
+  - `zhin doctor`：迁移结果只提示一次（`--verbose` 可再看），迁移失败报错并给出要修正的位置，`ai.trigger.ambient.minConfidence` / `mode` 给出警告并可用 `--fix` 删除（其他键和注释保留），`purposes.ambient.minConfidence < 0.5` 时提示它对决策模型不起作用。
+  - 文档：`docs/ai/index.md` 的「群聊旁听」改为「插话」，「判断模型」改写为「插话判断」（含切换表和置信度说明）；结构化决策改为五个用途；`provider-upgrade` 补废弃键；新增迁移说明 `docs/migrations/ambient-judge.md`（含英文版）。
+
+- c2cc4ba: `zhin runtime` 子命令写明计划与作用范围，`zhin search` / `zhin info` 不再推荐无关包与弃用命令（#1250 第 36 批）。
+
+  - `runtime-publish-silent-noop`：`zhin runtime publish`（dry-run）与 `zhin runtime build` 先打印计划：会处理哪些包、版本、目标 dist-tag（`--execute` 时还有临时 dist-tag），以及跳过了哪些 workspace 包和原因（`private: true` / 没有 `build` 脚本）。计划为空时明确说明（「没有可发布的包：N 个 workspace 包都是 private」）。新增 `--json`：只输出计划（含 `empty`、`packages`、`skipped`），不运行任何 pnpm 命令，不能与 `--execute` / `--resume` 同用。退出码：dry-run（含 `--json`）计划为空时为 0，这是正确的检查结果；`--execute` / `--resume` 计划为空时为 1（要求发布却没有任何包发出），且不再写入空的发布日志。
+  - `runtime-subcommands-undocumented`：`inspect`、`migrate`、`build`、`publish` 补充描述并写明作用范围（整个 workspace；单个插件用 `zhin build` / `zhin pub`），`--execute` / `--resume` 的帮助写清会发哪些包、需要 npm 登录、发布日志位置与恢复方式；`zhin build` / `zhin pub` 的帮助反过来指向 `zhin runtime build` / `publish`。
+  - `runtime-inspect-raw-json-only`：`zhin runtime inspect` 默认输出实例表（实例、包、来源、启用状态、features 数），`disable_plugins` 中的实例也列出并标「已停用」；`--json` 输出原来的完整结构，并增加 `disabled` 列表。
+  - `verification-plan-empty-unexplained`：`zhin packages verification-plan` 默认输出可读文本：离线时说明 generation 为空、不列检查是因为没有连接运行中的实例（加 `--live`）；在线且没有检查时说明插件没有声明业务检查（在 `definePlugin` 的 `setup` 中返回 `verification`），并非查询失败；有检查时列出作用范围、副作用和对应的 `zhin packages verify` 命令。`--json` 输出原始结构。
+  - `cli-search-generic-plugin-keyword`：生态关键词去掉通用的 `plugin`（新增 `zhin-package`），`@maptiler/weather` 这类无关包不再出现在 `zhin search` 结果里；带关键词搜索时额外查询 `@zhin.js` scope，官方包仍按包名识别。`--official` 只保留 `@zhin.js/*`。
+  - `cli-search-author-unknown`：`packageAuthorName`（`@zhin.js/plugin-runtime`）与 CLI 的 `packagePersonName` 同时识别 `username`，npm 搜索结果的作者不再显示「未知」。
+  - `cli-search-suggests-deprecated-commands`：`zhin search` / `zhin info` 的安装与详情提示改为 `zhin install <包>` / `zhin info <包>`；`zhin plugin install` 的纠错提示与 `search` / `info` 的命令描述不再提及弃用的 `zhin packages install|info|search`。
+  - `chat-roles-export-summary-omits-identities`：`zhin chat-roles export` 的成功行与导入口径一致，报告人、聊天身份、角色授予和 Console 链接四类数量。
+  - `cli-info-local-workspace-plugin`：`zhin info` 先查本项目 workspace 包（含项目根包）与已安装的包，本地读取 `package.json`、约定目录与 `schema.json`，以与 npm 包相同的格式显示命令、Agent 工具和配置项，并标明来源；都没有时再查 npm。npm 查询失败不再打印原始的 `Command failed: npm view …`：区分「npm 上没有这个包」与「无法查询 npm registry」，退出码 1，提示改为 `zhin search`。
+
+- 000bec6: `zhin packages status` 读取运行中实例的当前 generation，不再一律报「待重启」；trace 的 `tool_result` 记模型实际拿到的大小（#1250 第 39 批）。
+
+  - `plugin-status-always-pending-restart`：CLI 不带 `--live` 时只检查本地文件，没有运行中实例的 snapshot，`published` 永远是 `false`、`restartRequired` 永远是 `true`，于是整套服务刚重启完所有插件也显示 `pending-restart`。现在 `zhin packages status` / `verification-plan` / `apply` / `verify` 省略 `--live` 时经本项目网关的本地套接字转给受监管的实例（与 Console 相同的 `plugin:*` RPC），由持有当前 snapshot 的实例计算状态与 generation；`apply` / `verify` 的 `--live` 因此变为可选，没有连上实例时直接拒绝且不执行任何操作。
+  - 拿不到 snapshot 时（网关未运行、实例没有应答、实例尚未上报 generation），声明且启用的插件 `status` 为新的 `unknown`，`restartRequired: false`，并在新增的可选字段 `statusReason`（`PluginManagementState`，`@zhin.js/host-http`）说明原因（「没有连上运行中的实例……」「实例尚未上报 generation……」，CLI 离线时再附上网关未运行等具体原因），不再说 `pending-restart`。`install` / `declare` / 启用停用与 `apply` 判断「这次改动是否需要重启」时，对 `unknown` 仍按需要启动处理，行为不变。
+  - `verification-plan-empty-unexplained`（同一原因）：经网关读取时计划来自运行中的实例，输出标明「经本项目网关读取运行中的实例」，给出的 `zhin packages verify` 命令不再需要 `--live`；离线时额外说明没有连上实例的原因。
+  - `trace-tool-result-size-pre-strip`：trace 中工具调用的 `result_size` 与时间线 `tool_result` 改为模型实际收到的字符数（拆出媒体、省略内嵌二进制、追加提示之后），与工具原始输出大小不同时另记 `raw_result_size`（时间线写成 `… 240 chars (raw 11559 chars)`，`formatTurnTrace` 写成「240 字符（工具原始输出 11559 字符）」）。
+
+- a8377d4: 已连接却没有任何 Agent 绑定的 MCP 服务器会被明确提示（zhinjs/zhin#1250 第 41 批 `mcp-connected-but-unbound`）：
+
+  - 原因：每一轮的 MCP 工具只取当前 Agent 在 `ai.agents.<name>.mcpServers` 里点名的服务器，`ai.mcpServers` 只负责连接。项目配了 `ai.mcpServers` 的 GitHub MCP、`zhin status` 显示「已连接，49 个工具」，但 `ai.agents.zhin: {}` 没写 `mcpServers`，Agent 一个 GitHub 工具都拿不到，只能默默改走网页搜索；文档和配置说明却写成「连接成功后进入工具池」。
+  - 文档与配置说明：中英文 `ai/index`、`configuration/index`、`ai/agent` 写清「`ai.mcpServers` 只负责连接，在 `ai.agents.<name>.mcpServers` 里绑定才能用」，并给出连接 + 绑定的完整示例；`ai.mcpServers` 与 `ai.agents.<key>.mcpServers` 的配置说明（Host 配置 Schema 与 `AgentStartupConfig` / `AgentBindingConfig` 注释）同步改写，`docs/configuration/generated.md` 由 `pnpm docs:config` 重新生成。
+  - `GET /introspection/mcp` 的每一行新增 `boundAgents`（`ConsoleMcpServerRow.boundAgents`，绑定该服务器的 Agent；运行中的 Agent 优先，没有时读配置文件；绑定项写成服务器名或 `{ name, … }` 对象都算绑定，ADR 0065 的对象写法落地后不会误报未绑定）。
+  - Console「需要你处理」新增 `mcp.unbound`（已登记到 `CONSOLE_ATTENTION_KINDS` 与 `CONSOLE_ATTENTION_KIND_PERMISSIONS`，权限 `status.view`）：已连接但没有任何 Agent 绑定的服务器列为「MCP 服务 github 已连接但没有 Agent 能用」，说明在 `ai.agents.<name>.mcpServers` 里绑定（例如 `ai.agents.zhin.mcpServers: [github]`）；实例运行时 `zhin doctor` 经同一个列表列出它。
+  - `zhin status` 的 MCP 行对这种服务器标 `!` 并注明「已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定」，已绑定的服务器列出绑定它的 Agent。
+  - Agent 就绪日志的 `mcp:` 段只列这个 Agent 真正绑定的服务器，没绑定的另起一段写成 `未绑定: github(待连接)`（如 `ready | zhin | mcp: - | 未绑定: github(待连接) | …`），不再像是已经绑给了它；调试日志相应写成 `mcp configured:`。
+  - MCP 工具本身的权限过滤不变。
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [49a1136]
+- Updated dependencies [5cfb5d7]
+- Updated dependencies [8c0d262]
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [000bec6]
+- Updated dependencies [a8377d4]
+- Updated dependencies [4760a96]
+  - @zhin.js/pagemanager@1.2.2
+  - @zhin.js/runtime@1.6.1
+  - @zhin.js/gateway@1.6.1
+  - @zhin.js/scaffold-wizard@1.4.2
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/console-protocol@1.6.1
+
 ## 1.7.1
 
 ### Patch Changes

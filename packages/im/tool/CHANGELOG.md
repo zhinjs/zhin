@@ -1,5 +1,15 @@
 # @zhin.js/tool
 
+## 1.1.24
+
+### Patch Changes
+
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [1dc5324]
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/permission@1.2.4
+
 ## 1.1.23
 
 ### Patch Changes

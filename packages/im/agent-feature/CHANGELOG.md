@@ -1,5 +1,14 @@
 # @zhin.js/agent-feature
 
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [1dc5324]
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+
 ## 1.1.20
 
 ### Patch Changes

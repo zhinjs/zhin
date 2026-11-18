@@ -1,5 +1,138 @@
 # zhin.js
 
+## 1.7.0
+
+### Minor Changes
+
+- 3b88aa7: 插话判断的「仅评估」改为可选的对照模型，一致率按「过门槛后会不会开口」比较（ADR 0066 P2）。
+
+  - `purposes.ambient.compare` 选一个 Profile（语言或决策模型都可以）：主判断（经过备用链）照常决定；对照模型对同一份输入同时判一次，只记录、从不影响结果。两边都等结束再返回，共用同一个 15 秒预算；对照模型没有备用链，失败只记 `compare_failed`，不写全局跳过表。`mode: shadow` 时对照模型照常运行。开了对照模型，每次判断的模型调用翻倍（只发生在通过冷却、限次和判断间隔之后的判断上）。
+  - `@zhin.js/agent` 新增 `CompareEngagementJudge`（取代废弃的 `ShadowEngagementJudge`）与类型 `EngagementCompareResult` / `EngagementCompareReport` / `CompareEngagementJudgeOptions`，判断结果新增 `compare`；`AgentAssistantStatusPort` 新增可选 `recordAmbientCompare()`，`recordAmbientShadow()` 废弃期内保留。日志 `ambient_compare`；`ambient_decision` 审计 payload 新增 `compare`（`engage` / `quiet` / `failed`）以及 `compareJudge` / `compareJudgeKind` / `compareJudgeProfile` / `compareJudgeModel` / `compareJudgeMs` / `compareJudgeUsage` / `compareJudgeError`，不含理由原文。
+  - `zhin.js`：Console 群聊插话状态（`plugin.root.ambient` RPC）新增 `compare`：最近 24 小时一致次数、「主判断插话、对照不插」次数、「主判断不插、对照插话」次数、对照失败次数，并按给出结论的链成员（主项 / 第 N 个备用）分别列出；只有两边都给出结果才计入一致率。`decisionShadow` 废弃期内保留，填同样的数据（加上旧的陪跑记录），数值口径与旧版不同。新增导出类型 `AmbientCompareStatus` / `AmbientCompareCounts`。
+
+- 14d752e: 群聊插话判断看得出用的是哪个模型、有没有切到备用、用了多少 token（#1250 第 47 批 `ambient-llm-judge-invisible`）。
+
+  - 聊天模型做插话判断时，判断结果带 `source: 'language:<服务显示名>/<模型>'`（服务没有可读名称时退回驱动名或只写模型，不显示 `services:<uuid>` 这类内部 id）；另带 `ref: { kind, profile, model, fallbackFrom? }`，按 Profile id 标识模型，统计按它分组（ADR 0066 P0 结构化 `source` 的形状）；切到备用模型时 `source` 是实际作答的备用模型，并带 `fallbackFrom`（原来配置的模型）。备用信息来自用途备用层的切换观察器（`ModelFallbackLog`），切换同时记 `model_fallback` / `fallback_skipped` 日志。`ambient_engagement` 日志与 `ambient_decision` 决策审计照常带 `judge`，并新增 `fallbackFrom`；审计 payload 另带 `judgeFallbackFrom`、`judgeKind` / `judgeProfile` / `judgeModel` / `judgeFallbackFromProfile` / `judgeFallbackFromModel`、`judgeMs`、`judgeUsage`（只有模型、类别和用量，不含判断理由原文；对照判断留给 ADR 0066 P2 的 `compare` 前缀）。
+  - 每次插话判断调用（聊天模型和决策模型，成功或失败）写一行 `[ai.usage] judge`，`scene: ambient`，带模型、`fallback_from`、input / output / cache token 与耗时；决策模型没有回传用量时只写次数和耗时。`calls` 是判断次数，不是模型请求次数：请求阶段切到备用时，`ms` 是两次请求的合计。
+  - 判断失败（`judge_failed`）时，`ambient_engagement` 日志、`ambient_decision` 审计与 `ambient_silent` 结局写明是哪个模型、什么错误类别（如 `timeout`、`aborted`、`auth`、`safety_block`、`length`、`invalid_response`），不写原始错误全文；被调用方的超时或取消中止时，聊天模型和决策模型都只记一次，类别一致。
+  - Console 群聊插话状态（`plugin.root.ambient`）新增 `judgeDaily`：最近 7 天每天的判断调用次数、失败与备用次数、按模型类型的次数、平均耗时和 token 合计（进程内存，重启后当天重新计；写入和读取时都去掉 7 天以前的数据），以及 `judgeTimeZone`。
+
+### Patch Changes
+
+- 49a1136: MCP 工具按聊天角色授权（ADR 0065 P0 + P1）。**行为变更：已经绑给聊天 Agent 的 MCP 服务器，升级后立刻收紧**——不写 `permit` 时，只有上游标注 `readOnlyHint: true` 的工具对所有人开放，其余工具（未标注、标注为写、`readOnlyHint` 与 `destructiveHint` 矛盾）只给全局主人 `owner@global`。迁移说明见 `docs/migrations/mcp-tool-permit.md`。
+
+  - 接入 MCP 服务器时保留上游 `annotations`，转成 `McpToolDescriptor.hints` / `ToolCapability.mcpHints`（只接受布尔值）。标注只决定权限档位，不放宽审批：MCP 工具仍是 `on-risk`，照常走审批、文件策略、网络白名单和硬闸。
+  - 配置：`ai.mcpServers[].permit`（`readOnly` / `default` / `tools`，值为 `everyone`、`deny`、一个 permit DSL 字符串或 DSL 数组），`ai.agents.<name>.mcpServers[]` 可写 `{ name, permit }`，与服务器级结果取 AND，只能收窄。`tools` 按上游原始工具名匹配：精确名优先，其次字面字符最多的 `*` 模式，并列时都要满足；非 ASCII 工具名只能被精确名命中。`everyone` / `deny` 放进数组、空数组、未知键、重复的模式、同一 Agent 里重复的服务器、DSL 写错（含已移除的 `master` 等）都会让启动报错。
+  - 每轮组装工具池时按本轮发送者的聊天角色过滤：没有权限的 MCP 工具不进工具池，`discover`、`load_tool` 和 `alwaysLoaded` 里都没有。执行前按角色存储里的当前角色再判一次；会话历史里重放的旧调用、回合中被撤销的角色、子 Agent 沿用的父回合能力都会被拒绝，记 `tool_denied`，`policy: 'mcp-permit'`。
+  - 定时任务按创建者当前的角色降一档运行，所以全局主人创建的任务默认也用不了「仅主人」的 MCP 工具；需要时在 `permit.tools` 里把该工具放宽到 `trusted`。A2A、zhin 自己的 MCP Server 入口同样只能用只读工具。
+  - 恢复旧行为写 `permit: { default: everyone }`（不推荐：普通成员发起的写操作在 `execApprovalMode: auto` 下经自动审核即可执行）。
+  - 修复：配置的 MCP 服务器投影给 Agent 的工具名带了一层多余的服务器前缀，调用上游时发送的也是带前缀的名字；现在使用上游报告的原始名。
+  - 修复：合并的群聊回合（ADR 0038）此前只收窄 `roles`，聊天角色仍取第一个发言者的，permit（含 MCP 工具档位）因此把 trusted / admin 成员的工具借给了同一合并窗口里的普通成员；现在聊天角色取所有成员共同持有的最低角色，层级取最窄的。
+  - 修复：`ai.agents.<name>.mcpServers`（含 Agent 层 `permit`）加入自我变更禁改名单，Agent 不能用 `self_change` 删掉收窄或给绑定加服务器。
+  - 修复：跨进程 A2A Mailbox 的远端信件一律按 `user` 运行、不带聊天角色。此前对端声明的 `authority.trust`（如 `trusted`）会变成本地角色，签名正确的远端信件因此能用开放给 `trusted` 的 MCP 工具和插件工具。
+  - 修复：读取上游 `annotations` 时只认工具自身的字段，继承来的 `readOnlyHint` 不算标注。
+  - `@zhin.js/runtime`：配置 schema 增加上述两处字段，`ai.agents.<name>.mcpServers` 标为安全敏感。
+
+- f5bf768: 插话判断改由一条判断器链负责切换备用模型（ADR 0066 P0，配置与行为不变）。
+
+  - `@zhin.js/agent` 新增 `EngagementJudgeChain`：一次判断是一次操作，链成员（每个只是一个模型，语言模型或决策模型）按顺序尝试，共用整次判断的 15 秒预算；预算用完或调用方取消时立即停止。选型时跳过模型跳过表里的成员（不计失败），全部在跳过期时记 `judge_failed`（`all_unavailable`）。失败按 ADR 0066 D2 的表切换：配额用完、欠费、凭据被拒换下一个并写全局跳过表；超时、网络错误、5xx 只在本次判断内换，2 分钟内至少 2 次不同判断都这样放弃同一模型才全局跳过 5 分钟（超时与网络 / 5xx 分开计数）；回答无效换下一个但不写跳过表；单纯 403、限流、内容拦截、上下文超长不换。每次切换写 `ambient_judge_fallback` 日志并进入 `recentFallbacks`（`purpose: 'ambient'`）。新增 `createEngagementJudgeMember()`（按 Profile 的模型类型构造语言或决策判断器）、`engagementJudgeFailureAction()`、`engagementJudgeKindOf()`；`FallbackEngagementJudge` 标为废弃并改为链的薄包装。
+  - 判断结果的 `source` 改为结构化的 `{ kind, profile, model, fallbackFrom? }`（与第 47 批的 `ref` 相同，`ref` 保留到废弃期结束），显示字符串移到 `sourceLabel`；审计 payload 的 `judge*` 键名不变，改从结构化 `source` 填写。整条链失败时，`judge_failed` 的 `failure.attempts`、`ambient_silent` 结局的 `detail` 和审计的 `judgeAttempts` 列出每个成员的失败类别。语言模型成员不再套用途备用层（`resolvePurposeExecution`），只有判断器链这一层切换；链里每个成员各算一次调用（`[ai.usage] judge`）。
+  - `@zhin.js/ai`：`ProviderErrorKind` 新增 `invalid_response`（驱动以 `code: 'invalid-response'` 报告无法使用的回答），`ModelFallbackReason` 新增 `invalid_response`，`ModelFallbackEvent.purpose` 可为 `ambient`；新增导出 `classifyFallbackFailure()`。
+  - `@zhin.js/service-typesafe`：请求失败保留 HTTP 状态、`Retry-After` 与响应体的错误码（不含正文），连接失败标为网络错误，SDK 超时标为 `timeout`，`classifyProviderError` 可以据此分类。
+
+- 5cfb5d7: 「旁听」用途和决策「旁听参与判断」合成一项「插话判断」`purposes.ambient`，旧配置自动迁移（ADR 0066 P1，行为变更）。
+
+  - 新的配置形状 `purposes.ambient: { profile, fallbacks, compare, minConfidence, mode, timeoutMs }`：主判断与备用链可以混排语言模型和决策模型（判断器按 Profile 的模型类型分派），`compare` 是只记录的对照模型，`minConfidence`（默认 0.7）是唯一的门槛，`mode: shadow` 是唯一的「只记录不插话」，`timeoutMs` 是决策模型成员的单次超时。字符串写法 `ambient: <profile>` 仍然有效；写入总是整项替换，`null` 清除。没写 `profile` 时继承部署聊天的主项和备用链（此时不能单独写 `fallbacks`）。只允许这 6 个键，Profile 必须存在、属于 Host、不能是图像模型，链内不能重复、不能包含 `profile`，`compare` 不能在链内；错误带路径（如 `purposes.ambient.fallbacks[1]`）。
+  - **行为变化**：旧配置在 Host 加载模型配置时自动迁移一次（一个 CAS 事务，同时写迁移记录，`before` 保存迁移前完整的 `purposes`）。原来决策「启用」并单独配置了旁听语言模型的部署，该语言模型成为第一个备用：决策模型超时、网络错误、5xx、回答无效或配额用完时由它接手插话（以前直接不插话）。门槛取原来两道门槛中较大的值，插话不会因此变多。决策「仅评估」迁移为对照模型，主判断与插话行为不变；决策「关闭」的 Profile 不迁移。`zhin.config.yml` 的 `ai.trigger.ambient.minConfidence` / `mode` 在迁移时读入一次，之后不再生效（每个 generation 启动时警告一次）。迁移失败时不写数据库，本次按同一张表在内存里转换后运行，记 `ambient_judge_migration_failed`，下次加载重试。
+  - **降级前必须先回退**：新增 `zhin ai purposes revert ambient-judge`（只能经本机网关执行），在 `purposes.ambient` 自迁移后没被修改时恢复迁移前的旧写法；旧版本读不了含 `purposes.ambient` 的模型配置。回退后当前版本仍按旧写法换算运行，不会自动再迁移。
+  - `DecisionEngagementJudge` 不再设内部门槛（`DecisionEngagementJudgeOptions` 新增 `timeoutMs` / `mode`，`policy` 废弃），`AmbientEngagement` 只按 `purposes.ambient` 的门槛判一次，语言模型与决策模型都是 `engage && confidence ≥ minConfidence` 才插话。`DecisionPurpose` / `DECISION_TASKS` 去掉 `ambient`（决策用途剩五类）。
+  - 废弃期（本 minor 和下一个 minor）：导入 `purposes.decisions.ambient` 时按迁移表合并进 `purposes.ambient`，导入结果带警告（`warnings`，路径 `purposes.decisions.ambient`）；导出只写新形状。自我变更和聊天里的 `config set` 不能再写 `ai.trigger.ambient.minConfidence` / `mode`。
+  - 新增 `GET {base}/agent/inference/ambient-judge`（生效的插话判断与迁移记录，Host 管理员）、`POST …/ambient-judge/migration/noticed`、`POST …/cli/purposes/revert-ambient-judge`（本机 CLI）。
+  - `@zhin.js/runtime`：配置 schema 中两键的描述改为「已废弃」。
+
+- c86e2f6: Console 只显示真正生效的插话判断，`zhin doctor` 检查插话判断迁移与废弃配置项（ADR 0066 P3）。
+
+  - 管理视图（`GET {base}/agent/inference`）的 `purposeEffects` 新增 `ambient`：实际使用的判断器链（成员与模型类型，跟随聊天时标 `inheritedFrom: 'chat'`）、对照模型，以及插话根本不运行时的忽略原因 `ambient-not-configured`（配置里没有 `ai.trigger.ambient`）/ `no-conversations`（没有任何群开启、也没有功能开关打开）；新增 `decisions.<task>`，关闭的决策用途标 `mode-off`。`PurposeIgnoredReason` 新增这三个值（新增类型 `AgentPurposeIgnoredReason`、`AmbientDeploymentView`，导出 `ambientPurposeEffects()`）。
+  - Console 群聊插话状态的 `judges` 改为实际判断器链（决策模型判断时不再显示从未被调用的语言模型），新增结构化的 `judgeChain`（成员、类型、角色、是否在跳过期）和 `minConfidence`；`mode` 读 `purposes.ambient.mode`。`HostInference.ambientModels()` 返回 `AmbientJudgeStatusView`，新增导出 `ambientJudgeStatusView()`。
+  - `zhin doctor`：迁移结果只提示一次（`--verbose` 可再看），迁移失败报错并给出要修正的位置，`ai.trigger.ambient.minConfidence` / `mode` 给出警告并可用 `--fix` 删除（其他键和注释保留），`purposes.ambient.minConfidence < 0.5` 时提示它对决策模型不起作用。
+  - 文档：`docs/ai/index.md` 的「群聊旁听」改为「插话」，「判断模型」改写为「插话判断」（含切换表和置信度说明）；结构化决策改为五个用途；`provider-upgrade` 补废弃键；新增迁移说明 `docs/migrations/ambient-judge.md`（含英文版）。
+
+- 8c0d262: 插话判断（ADR 0066）审查修复：yml 的「只观察」和门槛在所有路径上都不丢，回退能完整还原。
+
+  **BREAKING（已批准的 minor）与迁移路径**
+
+  - `EngagementJudgment.source` 由字符串改为对象 `{ kind, profile, model, fallbackFrom? }`：读显示文字改用 `sourceLabel`，判断模型类型改用 `source.kind`，按模型分组改用 `source.profile` / `source.model`。无法在不破坏类型的前提下同时保留字符串；`ref`（与 `source` 同一对象）和字符串 `fallbackFrom` 保留到废弃期结束。`EngagementJudgeCall` / `EngagementJudgeFailure` 的字符串 `source` 不变。
+  - `DecisionPurpose`、`InferencePurpose` 的 `decision:ambient`、`DecisionTask` / `DECISION_TASKS` 去掉 `ambient`：改用 `PurposePolicy.ambient`（插话判断）。存储里的旧 `decisions.ambient` 仍会读取并自动迁移。
+  - 联合类型新增成员：`PurposeIgnoredReason`（`ambient-not-configured` / `no-conversations` / `mode-off`）、`ProviderErrorKind` 与 `ModelFallbackReason`（`invalid_response`）。对这些类型做穷举（`switch`、`Record<…>`）的代码需要补上分支。
+
+  **行为变更**
+
+  - 判断结果没有 `gate`（自定义判断器）时，`AmbientEngagement` 回退读已废弃的 `ai.trigger.ambient.minConfidence` / `mode`，不会比以前多插话；直接构造 `DecisionEngagementJudge({ policy: { minConfidence } })` 时仍在判断器内按它把关（判断器链不设，门槛只判一次）。
+  - 迁移完成后再写 `ai.trigger.ambient.mode` / `minConfidence`（旧版 Console、手工编辑、导入的配置）会在下次加载时转到 `purposes.ambient`，记 info 日志 `ambient_trigger_write_converted`，不再静默失效。
+  - 空库首次启动从 `ai.plan.yml` seed 的 `purposes.ambient`，以及旧键仍生效时（未迁移、迁移失败、已回退）写入的 `purposes.ambient`，都会补上 yml 里仍生效的 `mode` / `minConfidence`；管理视图、`purposeEffects`、导出和插话状态按实际生效的值显示。
+  - 废弃期内的旧写法：`purposes.decisions.ambient` 的 `off` / `null` 撤销决策模型与原「仅评估」的对照模型，恢复原来的旁听语言模型；字符串写法 `purposes.ambient: <profile>` 只替换语言模型，保留 `mode`、`compare`、`minConfidence`。
+  - `zhin doctor`：只有运行中实例的迁移记录为 `migrated`、键已被迁移读入且值未再改动时，才提示 `ai.trigger.ambient.minConfidence` / `mode` 不再生效并允许 `--fix` 删除；实例未运行、未迁移、迁移失败或已回退时只给警告，拒绝 `--fix`。启动日志 `ambient_trigger_keys_retired` 只在已迁移时出现。
+  - `zhin ai purposes revert ambient-judge`：先经配置写锁把迁移读入、之后被删掉的 yml 旧键写回，写不回则不回退并给出手工步骤，回退被拒时撤销写回；旧形状已不成立时拒绝并给出路径。
+  - 迁移记录的 `noticedAt` 用 CAS 写入，与回退并发时回退优先。`FallbackEngagementJudge`（已废弃）恢复原有退避：成功清除退避，取消不记退避。插话状态的判断器链读请求所在 generation 的模型配置。判断器链和对照模型使用合并了 generation 停止信号的 `signal`。
+  - `@zhin.js/service-typesafe`：失败请求只保留 `Retry-After` 响应头。`@zhin.js/scaffold-wizard`：决策用途检查改为五个，`purposes.decisions.ambient` 提示已废弃。
+  - 复审修复：yml 里写回迁移时读入的原值（或已处理过的值）不再被当成新写入，`purposes.ambient` 不变、回退仍可成功；回退命令执行期间在迁移记录上标记 `revertPending`（CAS 写入，10 分钟后失效），期间暂停转换，结束时无论成败都清除。迁移前 seed 过的 `purposes.ambient` 回退时按 D5 表反向换成旧字段，门槛和模式写入 yml；旧版本表达不了的部分逐条列出，此时 CLI 不再提示「可以降级」并以非零状态退出。`zhin doctor` 比较 yml 值时两边都按运行时规则规范化，并按 `triggerSeen` 判断是否已处理。新增路由 `POST {base}/agent/inference/cli/purposes/revert-ambient-judge/pending`（本机 CLI）。
+  - 第三次复审修复：旧 Console 先关「只观察」再打开时，写回的原值按新写入转换，最终仍是 shadow（只有存储的插话判断该键仍是迁移写下的值时，原值才不算新写入；`zhin doctor` 同样判断）。回退顺序改为：取得 `revertPending` 标记 → 干跑（`dryRun`，返回 yml 应有的值和旧版本表达不了的项）→ 写 yml（与现有值不同时以当前实际运行的值为准覆盖，并列出覆盖项；写不了就不回退）→ 提交回退（被拒时撤销 yml 写入）→ 清除标记；取不到标记时中止。回退相关路由写审计。
+  - 第四次复审修复：回退时如果配置文件里有实例还没转换的旧键写入，拒绝回退（`pending-trigger-writes`，列出键），提示先重新加载实例，避免用迁移原值覆盖新写入；CLI 写入前再按同一规则检查一次文件。已从 yml 转换的门槛 / 模式不阻止回退，回退后按当前值运行。回退请求没有回应时先重读迁移状态再决定保留还是撤销 yml，读不到时不动 yml 并给出手工步骤；提交返回的 yml 与干跑不一致时撤销；撤销失败时列出原值和恢复步骤。回退进行中 `zhin doctor --fix` 不删旧键。
+  - 第五次复审修复：回退已提交但返回的 yml 与干跑不一致时，按最终结果更新配置文件并报告已回退（写不进去时列出手工修改的值）；提交无回应时两次查询都仍是已迁移才撤销 yml；因配置文件里缺少已生效的门槛 / 模式而拒绝回退时，提示把哪一项改回什么值后就可以回退。
+
+- 4ff83f3: 命名空间下的参数指令、超过 10 项的选择、猜谜与地牢远征的入口（#1250 第 37 批）。
+
+  - `command-namespace-param-commands-swallowed`：路由顺序原先是「所有静态路由先于所有带参数段的路由」，于是只要有一条更短的静态路由（例如另一个插件或根项目里的 `60s`）能匹配开头，`60s fanyi 你好`、`60s douyin`、`60s fuel 四川` 就会被它吃掉，无参数的指令又会忽略多出来的词，日志照样是 `command_replied | executed`。现在按字面路径长度优先：字面词更多的路由先匹配，字面长度相同时静态路由仍先于参数路由。`<命名空间>` 与 `<命名空间> --help`（以及任意指令组的 `<组> --help`）列出该组下发送者能用的全部指令；某条指令的 `--help` 也列出它下面（至少多一个字面词）的子指令，参数指令不会把自己列进去。插件的 `commandNamespace` 与它自己的指令同名（命名空间 `60s` + 指令 `60s` → `60s 60s`）时，实例启动时记一条 `command_namespace_collision` 警告。
+  - `select-over-10-options-no-buttons`：core 不再只给 ≤10 项的 `select` 生成按钮，所有选项都交给端点；选择提示改为「回复序号或选项名称。」，不再声称「可以点击按钮」。适配器能力画像新增可选的 `segments.interactiveLimits.maxButtons`（`@zhin.js/adapter` 新增类型 `AdapterInteractiveLimits`）：原生按钮的端点超过上限时，前 N 项保留按钮，其余选项改成紧挨按钮的序号列表（回复序号或名称照常生效；整块键盘一起登记序号，列出的序号接在按钮之后，回复「1」仍是第一个按钮）；纯文本端点照旧降级为序号列表。QQ 官方、Discord、Slack 声明 25，Telegram 声明 100；Sandbox 不设上限，按钮较多时在气泡内滚动。`@zhin.js/core` 新增导出 `resolveOutboundMaxButtons()` / `applyOutboundButtonLimit()`。该字段与 Sandbox 全能力 ADR 草案 P3 的 `interactive` 对象形式（`{ buttons: { maxTotal } }`）对应：`maxButtons` 将折进 `maxTotal`，字符串形式的 `interactive` 继续作为简写有效；本批不新增 `select` 段。
+  - 猜谜（字谜 / 猜成语）：直接回复「提示」「跳过」「结束」（以及 hint / skip / end）按对应操作处理，卡片上写明可以这样回复。提示给出真实信息：成语给第 1 个字，字谜给包含答案的 4 个候选字；提示扣 3 分（分数不会低于 0）、不再清零连击，每局最多 3 次（分数为 0 时提示也不是无限免费）。「结束」（按钮或 `猜谜 quit`）公布当前题的答案并结算本局（已答题数、得分、最佳连击）。题库去掉重复的标点（「……活下去。。」）。
+  - `dungeon-entry-unhelpful`：`dungeon` / `地牢远征` / `地牢` 不带参数且当前频道没有队伍时显示帮助与开局方式（`dungeon start`）；指令新增别名「地牢」。群里的卡片是整个频道共用的，所以所有人看到同一套按钮、同样的序号（大厅：加入队伍 / 准备 / 开始远征 / 解散队伍），非队长点「开始」或「解散」会收到明确的拒绝；大厅里提示其他人回复「加入队伍」入队。结束远征先要求队长确认：确认请求记录在新的会话版本上，只有这张确认卡（或队长在它仍是最新状态时回复「确认结束」/ 序号）能结束远征，队伍之后有任何动作或选择「继续远征」都会让它失效；结束后给出结算（到达层数、清理房间数、队伍金币）。「你是不是想用」在指令名都不相近时也和插件显示名比对（带指令前缀时 `地牢探险` → 显示名为「地牢远征」的插件）；没有前缀（私聊、@机器人）时只按前一半逐字相同放宽的匹配要求这一半至少 4 个字，`天气不错`、`天气` 这类聊天不会被显示名「天气预报」截走。
+  - `60s-gold-currency-mixed`：金价按接口返回的单位写货币符号（美元用 `$`、人民币用 `¥`，其他币种不加符号）。
+
+- a8377d4: 已连接却没有任何 Agent 绑定的 MCP 服务器会被明确提示（zhinjs/zhin#1250 第 41 批 `mcp-connected-but-unbound`）：
+
+  - 原因：每一轮的 MCP 工具只取当前 Agent 在 `ai.agents.<name>.mcpServers` 里点名的服务器，`ai.mcpServers` 只负责连接。项目配了 `ai.mcpServers` 的 GitHub MCP、`zhin status` 显示「已连接，49 个工具」，但 `ai.agents.zhin: {}` 没写 `mcpServers`，Agent 一个 GitHub 工具都拿不到，只能默默改走网页搜索；文档和配置说明却写成「连接成功后进入工具池」。
+  - 文档与配置说明：中英文 `ai/index`、`configuration/index`、`ai/agent` 写清「`ai.mcpServers` 只负责连接，在 `ai.agents.<name>.mcpServers` 里绑定才能用」，并给出连接 + 绑定的完整示例；`ai.mcpServers` 与 `ai.agents.<key>.mcpServers` 的配置说明（Host 配置 Schema 与 `AgentStartupConfig` / `AgentBindingConfig` 注释）同步改写，`docs/configuration/generated.md` 由 `pnpm docs:config` 重新生成。
+  - `GET /introspection/mcp` 的每一行新增 `boundAgents`（`ConsoleMcpServerRow.boundAgents`，绑定该服务器的 Agent；运行中的 Agent 优先，没有时读配置文件；绑定项写成服务器名或 `{ name, … }` 对象都算绑定，ADR 0065 的对象写法落地后不会误报未绑定）。
+  - Console「需要你处理」新增 `mcp.unbound`（已登记到 `CONSOLE_ATTENTION_KINDS` 与 `CONSOLE_ATTENTION_KIND_PERMISSIONS`，权限 `status.view`）：已连接但没有任何 Agent 绑定的服务器列为「MCP 服务 github 已连接但没有 Agent 能用」，说明在 `ai.agents.<name>.mcpServers` 里绑定（例如 `ai.agents.zhin.mcpServers: [github]`）；实例运行时 `zhin doctor` 经同一个列表列出它。
+  - `zhin status` 的 MCP 行对这种服务器标 `!` 并注明「已连接但没有 Agent 能用，在 ai.agents.<name>.mcpServers 里绑定」，已绑定的服务器列出绑定它的 Agent。
+  - Agent 就绪日志的 `mcp:` 段只列这个 Agent 真正绑定的服务器，没绑定的另起一段写成 `未绑定: github(待连接)`（如 `ready | zhin | mcp: - | 未绑定: github(待连接) | …`），不再像是已经绑给了它；调试日志相应写成 `mcp configured:`。
+  - MCP 工具本身的权限过滤不变。
+
+- 14bf59c: 语音转写和内容审核不再替远端用户请求内网地址（#1250 第 45 批 `speech-url-ssrf`）。
+
+  - Speech Host 下载语音（入站语音段的地址、`metadata.audio_url`、Sandbox 手写的 `[audio:URL]`）和 `voice_stt` 的 `audio_url` 改走新增的 `fetchPublicMediaBytes()`（`@zhin.js/agent/security`）：只下载公网 HTTPS 地址；主机名解析出的地址只要有一个是私网、回环、链路本地或云元数据地址就拒绝，连接时只连已校验的地址（防 DNS 重绑定）；重定向逐跳重新校验；单个语音最大 25 MB、整次下载 30 秒。原先任意 `http(s)` 地址都会被直接 `fetch`。
+  - 被拒的地址不发出任何请求，这一轮照常继续：`transcribeUrl` 返回 `{ status: 'refused', code: 'speech_url_blocked' }`，模型看到「[语音地址不可用，未转写（speech_url_blocked）]」，`voice_stt` 返回同样原因的 `{ error }`。日志记 `op: speech_url_blocked`（下载失败为 `speech_url_fetch_failed`）和主机名，不记完整地址。转写器抛错时回合也不再中断。没有内网主机白名单配置。
+  - 内容审核 HTTP 源在 `forceUpload` 时下载聊天图片，改为只连公网地址（私网、回环、链路本地、元数据地址及解析到这些地址的域名、重定向的每一跳都拒绝），单张最大 20 MB、超时用该源的 `timeoutMs`；被拒时按该源的 `onError` 处理。
+  - 共用的私网地址判定（`isBlockedIpAddress`，`TurnNetworkClient`、`fetchPublicMediaBytes` 和入站媒体下载都用它）把 IPv6 改为白名单：只认全局单播 `2000::/3`，并排除 Teredo、6to4、文档和基准测试段；NAT64（`64:ff9b::/96`、`64:ff9b:1::/48`）、IPv4 兼容地址 `::/96`、站点本地 `fec0::/10`、丢弃段 `100::/64` 这类能映射到内网 IPv4 的地址此前会被放行，现在一律拒绝。IPv4 另外拒绝 Azure WireServer `168.63.129.16`、6to4 中继段和文档段。
+  - 内容审核、RSS、短链接、链接海报共用的 `public-fetch` 以前校验时解析一次域名，`fetch` 连接时再解析一次，DNS 重绑定可以在两次之间换成内网地址；现在连接直接连校验过的那个地址（TLS 的 SNI 与 `Host` 仍是原主机名，不经环境代理），压缩的响应在本机解压后再按上限计数；重定向到其他源时不再带上 `Authorization` / `Cookie` / `Proxy-Authorization`。
+  - 平台自带的语音地址允许 HTTP（所有者决定）：适配器根据平台数据产出的语音段（`media.value`、`data.url` / `src` / `file`、`metadata.audio_url`，例如 QQ 的语音 CDN 链接）也可以是公网 `http`，地址校验、只连已校验的 IP、逐跳重定向校验、大小和超时限制都不变，且从 https 重定向到 http 一律拒绝。消息里手写的 `[audio:URL]`、`voice_stt` 的 `audio_url`，以及声明 `runtime.sandbox` 的端点（Sandbox 的客户端自己拼语音段）或读不到能力画像的端点上的语音段，都按用户提供的地址处理，仍只认 https。`fetchPublicMediaBytes()` 新增选项 `allowHttp`（默认关闭），`InboundAudioUrlTranscriber` 新增可选第二个参数 `{ origin: 'platform' | 'user' }`（新增导出类型 `InboundAudioUrlOrigin`），`preprocessInboundTurn()` 新增可选第 4 个参数 `{ platformSegments }`。
+
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [5027ab1]
+- Updated dependencies [a8377d4]
+- Updated dependencies [4760a96]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/command@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/harness@1.1.1
+  - @zhin.js/console-protocol@1.6.1
+  - @zhin.js/kernel@1.4.0
+  - @zhin.js/component@1.2.1
+  - @zhin.js/middleware@1.1.21
+  - @zhin.js/permission@1.2.4
+  - @zhin.js/prompt-section@1.1.20
+  - @zhin.js/schedule-feature@1.1.20
+
 ## 1.6.0
 
 ### Minor Changes
