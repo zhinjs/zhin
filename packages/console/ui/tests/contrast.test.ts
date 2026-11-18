@@ -88,6 +88,13 @@ describe.each(CASES)('%s palette, %s theme', (palette, theme) => {
   const color = environment(palette, theme);
   const surfaces = { card: color('--card'), background: color('--background'), popover: color('--popover') };
 
+  it('inactive tab labels ≥ 4.5:1 on the tab list fill (background or card + 6% foreground)', () => {
+    for (const [name, surface] of [['background', surfaces.background], ['card', surfaces.card]] as const) {
+      const fill = over(color('--foreground'), 0.06, surface);
+      expect(contrast(color('--tab-inactive'), fill), name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it('primary button: brand-foreground on brand ≥ 4.5:1; background lightness apart from every other button', () => {
     const brand = color('--console-brand');
     expect(contrast(brand, color('--console-brand-foreground'))).toBeGreaterThanOrEqual(4.5);
