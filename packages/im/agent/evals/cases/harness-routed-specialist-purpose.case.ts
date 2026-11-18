@@ -18,7 +18,7 @@ export default defineEvalCase({
     { name: 'researcher', description: 'Looks things up.', tools: [] },
   ],
   script: [
-    { actor: 'planner', model: 'planner-model', toolCalls: [{ name: 'delegate', args: { agent: 'researcher', brief: 'Find weekend ideas.' } }] },
+    { actor: 'planner', model: 'planner-model', toolCalls: [{ name: 'delegate', args: { agent: 'researcher', brief: 'Find weekend ideas.', wait: false } }] },
     { actor: 'planner', model: 'planner-model', text: '我先让 researcher 找点想法，稍后给你。' },
     { actor: 'researcher', model: 'sandbox-chat', text: '爬山、看书、做饭' },
     { actor: 'planner', model: 'planner-model', text: '周末安排：周六爬山，周日看书，晚上做饭。' },

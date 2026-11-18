@@ -16,6 +16,8 @@ export interface MailTurn {
   /** The first mail of the batch, with the batch's intersected authority (Q2). */
   readonly mail: Mail;
   readonly batch: readonly Mail[];
+  /** Epoch ms when the host times the turn out (`ai.trigger.timeout`), when it has a timeout. */
+  readonly deadline?: number;
 }
 
 const storage = new AsyncLocalStorage<MailTurn>();
