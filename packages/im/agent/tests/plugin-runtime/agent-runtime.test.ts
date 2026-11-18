@@ -647,7 +647,14 @@ describe('Agent CapabilityIngress', () => {
   });
 
   it('exposes the Agents visible to the turn\'s principal to its tools (#1250 b52 schedule_add agent)', async () => {
-    for (const [access, expected] of [[{}, ['planner']], [{ platforms: ['github'] }, []]] as const) {
+    // `@name` routing's filters: platforms, scopes (this HTTP turn has no IM scene) and permissions (sender roles).
+    for (const [access, roles, expected] of [
+      [{}, ['owner'], ['planner']],
+      [{ platforms: ['github'] }, ['owner'], []],
+      [{ scopes: ['group'] }, ['owner'], []],
+      [{ permissions: ['role(admin)'] }, ['user'], []],
+      [{ permissions: ['role(admin)'] }, ['admin'], ['planner']],
+    ] as const) {
       const fixture = await createFixture(access);
       const seen: (readonly string[] | undefined)[] = [];
       const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () {
@@ -660,7 +667,7 @@ describe('Agent CapabilityIngress', () => {
         identity: { traceId: 'trace-agents', turnId: 'turn-agents' },
         origin: { kind: 'http', sessionId: 'http-agents' },
         intent: { kind: 'new' },
-        principal: { subjectId: 'user-1', roles: ['owner'] },
+        principal: { subjectId: 'user-1', roles: [...roles] },
         input: { text: 'hello' },
         session: { key: 'http:http-agents' },
         policy: { permissions: ['owner'], unattended: false },

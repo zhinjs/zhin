@@ -1031,5 +1031,22 @@ describe('schedule (running Host)', () => {
     const text = lines.join('\n');
     expect(text).toContain('    Agent:  news');
     expect(text).toContain('    Agent:  zhin（默认）');
+    // An older instance does not send `agents`: nothing is flagged.
+    expect(text).not.toContain('Agent 不存在');
+  });
+
+  it('list 用 GET 返回的 agents 核对，标出 Agent 已删除的任务 (#1250 b52)', async () => {
+    const job = (id: string, agent?: string) => ({ id, enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+      action: { kind: 'agent', prompt: 'p', ...(agent ? { agent } : {}) }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} });
+    stubHost(() => ({ status: 200, body: { success: true, data: { agents: ['zhin', 'news'], jobs: [job('gone', 'deleted'), job('ok', 'news'), job('plain')] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const agentLines = lines.join('\n').split('\n').filter(line => line.includes('Agent:'));
+    expect(agentLines).toEqual([
+      expect.stringMatching(/^ {4}Agent: {2}deleted {2}⚠ Agent 不存在/),
+      '    Agent:  news',
+      '    Agent:  zhin（默认）',
+    ]);
   });
 });

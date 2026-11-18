@@ -101,13 +101,15 @@ const listCommand = new Command('list')
   .option('--json', '以 JSON 输出（含完整的任务内容）')
   .action(async (opts: { json?: boolean }) => {
     const data = await requireOk(
-      await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
+      await hostGet<{ jobs?: ScheduleJobRecordCli[]; agents?: string[] }>(await requireHost(), '/assistant/jobs'),
     );
     if (isConsoleFeatureDisabled(data)) {
       logger.error(`${data.message}；无法列出调度任务`);
       process.exit(1);
     }
     const jobs = data?.jobs ?? [];
+    // The configured Agents (#1250 b52); absent from older instances, then nothing is flagged.
+    const agents = Array.isArray(data?.agents) ? data.agents : undefined;
     if (opts.json) {
       output.line(JSON.stringify(jobs, null, 2));
       return;
@@ -123,7 +125,7 @@ const listCommand = new Command('list')
       output.line(`  ${j.id}${label}  [${status}]`);
       output.line(`    计划:   ${scheduleSummary(j.schedule)}`);
       output.line(`    投递:   ${notifySummary(j.notify)}`);
-      output.line(`    Agent:  ${agentSummary(j)}`);
+      output.line(`    Agent:  ${agentSummary(j, agents)}`);
       const target = targetSummary(j);
       if (target) output.line(`    目标:   ${target}`);
       const next = nextRunSummary(j);

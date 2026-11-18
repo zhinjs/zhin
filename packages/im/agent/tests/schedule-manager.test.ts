@@ -178,6 +178,17 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
       const result = await tool(value, 'schedule_list').execute({}, context) as { persistent: Record<string, unknown>[] };
       expect(result.persistent[0]).toMatchObject({ id: 'a', agent: 'news' });
       expect(result.persistent[1]).not.toHaveProperty('agent');
+      expect(result.persistent[0]).not.toHaveProperty('agent_missing');
+    });
+
+    it('schedule_list flags a job whose Agent was removed from ai.agents', async () => {
+      const value = { ...manager(async () => [
+        { id: 'gone', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'deleted' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+        { id: 'ok', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'news' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+      ]), agents: () => ['zhin', 'news'] };
+      const result = await tool(value, 'schedule_list').execute({}, context) as { persistent: Record<string, unknown>[] };
+      expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: 'deleted', agent_missing: true });
+      expect(result.persistent[1]).not.toHaveProperty('agent_missing');
     });
   });
 });

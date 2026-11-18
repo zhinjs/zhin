@@ -108,8 +108,17 @@ export function contentLines(prompt: string, label = '    内容:   '): string[]
   return lines;
 }
 
-/** `Agent:` of `zhin schedule list` (#1250 b52): the job's Agent, or the default. */
-export function agentSummary(job: Pick<ScheduleJobRecordCli, 'action'>): string {
-  if (job.action?.kind === 'agent' && job.action.agent) return job.action.agent;
+/**
+ * `Agent:` of `zhin schedule list` (#1250 b52): the job's Agent, or the default. With the
+ * instance's configured Agents (`agents` of `GET /assistant/jobs`), an Agent no longer among them
+ * (removed from `ai.agents`) is flagged: the job's runs fail until `zhin schedule set-agent`.
+ */
+export function agentSummary(job: Pick<ScheduleJobRecordCli, 'action'>, agents?: readonly string[]): string {
+  if (job.action?.kind === 'agent' && job.action.agent) {
+    const name = job.action.agent;
+    return agents && !agents.includes(name)
+      ? `${name}  ⚠ Agent 不存在（运行会失败；用 zhin schedule set-agent 修改）`
+      : name;
+  }
   return 'zhin（默认）';
 }

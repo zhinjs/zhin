@@ -37,7 +37,9 @@ export type AssistantJobInputErrorCode =
   | 'schedule_target_invalid'
   | 'schedule_target_not_found'
   | 'schedule_target_forbidden'
-  | 'schedule_agent_not_found';
+  | 'schedule_agent_not_found'
+  | 'schedule_agent_heartbeat'
+  | 'schedule_agent_profile';
 
 const DEFAULT_AGENT = 'zhin';
 
@@ -241,24 +243,49 @@ export function registerAssistantJobRoutes(options: Readonly<{
   }
 
   // #1250 b52: `zhin schedule set-agent` — which Agent a job runs on; `agent: null` clears it.
-  http.route('POST', `${base}/assistant/jobs/set-agent`, guarded(async (jobs, body) => {
+  http.route('POST', `${base}/assistant/jobs/set-agent`, guarded(async (jobs, body, principal) => {
     const data = record(body);
     const id = typeof data.id === 'string' ? data.id.trim() : '';
     if (!id) return { status: 400, body: { success: false, code: 'invalid_argument', error: '缺少任务 ID（id）' } };
     if (!('agent' in data)) {
       return { status: 400, body: { success: false, code: 'invalid_argument', error: '缺少 Agent（agent）；清除时传 null' } };
     }
-    if (!jobs.setAgent) {
+    // A signed-in caller's delivery permission is checked against the stored job: without `list`
+    // there is nothing to check it against, so only a trusted in-process caller may go on.
+    if (!jobs.setAgent || (!jobs.list && principal)) {
       return { status: 404, body: { success: false, code: 'unavailable', error: '运行中的 Agent 包不支持修改任务的 Agent，请升级 @zhin.js/agent' } };
     }
     const agent = parseScheduleAgentField(data.agent, jobs.agents?.() ?? [DEFAULT_AGENT]);
     if ('error' in agent) return { status: 400, body: { success: false, error: agent.error, code: agent.code } };
     const existing = (await jobs.list?.())?.find(job => job.id === id);
+    if (jobs.list && !existing) {
+      return { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
+    }
     if (existing && record(existing.action).kind !== 'agent') {
       // A heartbeat job always runs on the default Agent.
       return { status: 400, body: { success: false, code: 'invalid_argument', error: `心跳任务不能指定 Agent: ${id}` } };
     }
-    const job = await jobs.setAgent(id, agent.agent);
+    // The job keeps delivering to its explicit target on every run, now on another Agent: the same
+    // `endpoint.operate` `POST /assistant/jobs` requires for that target.
+    const notify = record(existing?.notify);
+    const target = notify.channel === 'im' ? notify.target : undefined;
+    if (target && !mayDeliverTo(principal, target)) {
+      const scene = record(record(target).scene);
+      return { status: 403, body: { success: false, code: 'schedule_target_forbidden',
+        error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` } };
+    }
+    let job: Record<string, unknown> | null;
+    try {
+      job = await jobs.setAgent(id, agent.agent);
+    } catch (error) {
+      // Refusals of the scheduler (`schedule_agent_heartbeat`, `schedule_agent_profile`: a profile
+      // routine is re-declared on every start, so it is changed in the Assistant Profile) are 400s.
+      const code = (error as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && code.startsWith('schedule_agent_')) {
+        return { status: 400, body: { success: false, code, error: error instanceof Error ? error.message : String(error) } };
+      }
+      throw error;
+    }
     return job
       ? { status: 200, body: { success: true, data: { job } } }
       : { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };

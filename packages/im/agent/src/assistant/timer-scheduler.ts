@@ -37,6 +37,7 @@ import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { ScheduleJob, ScheduleJobState, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
+import { ScheduleJobAgentError, profileJobAgentMessage } from './schedule-agent.js';
 import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 import { SCHEDULE_MODEL_RETRY_DELAYS_MS, scheduleModelFailureNotice } from './schedule-model-failure.js';
@@ -614,12 +615,14 @@ export class TimerScheduler {
   /**
    * Sets the Agent an `agent` job runs on, or clears it (`undefined`: back to the default `zhin`),
    * #1250 b52. The next run reads the stored job, so no re-registration is needed. `null`: no such
-   * job. Throws for a heartbeat job, which always runs on the default Agent.
+   * job. Throws {@link ScheduleJobAgentError} for a heartbeat job (always the default Agent) and for
+   * a profile routine (re-declared from the Assistant Profile on every start: change it there).
    */
   async setJobAgent(id: string, agent: string | undefined): Promise<ScheduleJob | null> {
     const job = await this.store.getJob(id);
     if (!job) return null;
-    if (job.action.kind !== 'agent') throw new Error(`心跳任务不能指定 Agent: ${id}`);
+    if (job.action.kind !== 'agent') throw new ScheduleJobAgentError('schedule_agent_heartbeat', `心跳任务不能指定 Agent: ${id}`);
+    if (job.source === 'profile') throw new ScheduleJobAgentError('schedule_agent_profile', profileJobAgentMessage(id));
     const { agent: _previous, ...action } = job.action;
     job.action = agent ? { ...action, agent } : action;
     job.updatedAt = Date.now();

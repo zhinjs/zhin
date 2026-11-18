@@ -65,7 +65,7 @@ export function listSchedule(ctx: ConsoleScheduleListCtx, d: Record<string, unkn
       });
     // `agents` (#1250 b52): the Agents a persistent job may run on, for the task form's choice.
     const agents = ctx.resolveScheduleEngine?.()?.listAgents?.();
-    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent,
+    return listPersistentJobs(ctx, agents).then((persistent) => ({ data: { memory, persistent,
       ...(agents ? { agents: [...agents] } : {}),
       capabilities: { persistent: !!ctx.resolveScheduleEngine?.() && ctx.fullScope } } })).catch((error) => ({ error: errorMessage(error) }));
   } catch (error) {
@@ -76,7 +76,10 @@ export function listSchedule(ctx: ConsoleScheduleListCtx, d: Record<string, unkn
 type ConsoleScheduleListCtx = ConsoleRpcExtendedCtx;
 
 /** 持久化任务（Agent Host ScheduleJobEngine）→ 前端 PersistentCron 形状。 */
-async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<string, unknown>[]> {
+async function listPersistentJobs(
+  ctx: ConsoleRpcExtendedCtx,
+  agents?: readonly string[],
+): Promise<Record<string, unknown>[]> {
   const engine = ctx.resolveScheduleEngine?.();
   if (!engine) return [];
   try {
@@ -89,6 +92,8 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       // #1250 b52: the Agent the job runs on; absent = the default Agent.
       ...((job.action as { agent?: unknown } | undefined)?.agent
         ? { agent: (job.action as { agent?: string }).agent } : {}),
+      // The job names an Agent that is no longer configured: its runs fail until it is changed.
+      ...(agentMissing(job, agents) ? { agentMissing: true } : {}),
       enabled: job.enabled !== false,
       source: job.source ?? 'manual',
       // Persistent jobs are created by a person or on their behalf by the Agent.
@@ -107,6 +112,15 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
   }
 }
 
+/**
+ * Whether a job's `action.agent` is absent from the configured Agents (#1250 b52): deleted from
+ * `ai.agents` after the job was created. Unknown when the engine does not list its Agents.
+ */
+function agentMissing(job: Record<string, unknown>, agents: readonly string[] | undefined): boolean {
+  const agent = (job.action as { agent?: unknown } | undefined)?.agent;
+  return typeof agent === 'string' && !!agent && !!agents && !agents.includes(agent);
+}
+
 /** The account (`adapter` / `endpoint`) a schedule delivery target sends from, if it names one. */
 function deliveryAccount(target: unknown): { adapter: string; endpoint: string } | undefined {
   if (typeof target === 'string') {
@@ -121,6 +135,23 @@ function deliveryAccount(target: unknown): { adapter: string; endpoint: string }
   return typeof platform === 'string' && platform && typeof endpointKey === 'string' && endpointKey
     ? { adapter: platform, endpoint: endpointKey }
     : undefined;
+}
+
+/**
+ * A delivery target sends to that account on every run: `endpoint.operate` there, like
+ * `/message/send`, on top of `ops.schedule.write` (absent check = trusted in-process caller).
+ * Refusal: `data.code = 'schedule_target_forbidden'`, `data.status = 403`.
+ */
+function deliveryForbidden(target: unknown, ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult | undefined {
+  if (!target || !ctx.canOperateEndpoint) return undefined;
+  const account = deliveryAccount(target);
+  if (account && ctx.canOperateEndpoint(account.adapter, account.endpoint)) return undefined;
+  return {
+    error: account
+      ? `没有向该账号投递的权限：需要 ${account.adapter} / ${account.endpoint} 上的 endpoint.operate`
+      : '投递目标需要指明账号（scene.platform 与 scene.endpointKey）',
+    data: { code: 'schedule_target_forbidden', status: 403 },
+  };
 }
 
 export async function addCron(
@@ -143,16 +174,8 @@ export async function addCron(
   if ('error' in agent) return { error: agent.error };
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
-  // A delivery target sends to that account on every run: `endpoint.operate` there, like
-  // `/message/send`, on top of `ops.schedule.write` (absent check = trusted in-process caller).
-  if (target && ctx.canOperateEndpoint) {
-    const account = deliveryAccount(target);
-    if (!account || !ctx.canOperateEndpoint(account.adapter, account.endpoint)) {
-      return { error: account
-        ? `没有向该账号投递的权限：需要 ${account.adapter} / ${account.endpoint} 上的 endpoint.operate`
-        : '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' };
-    }
-  }
+  const forbidden = deliveryForbidden(target, ctx);
+  if (forbidden) return forbidden;
   const job = {
     id: `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     ...(label ? { label } : {}),
@@ -206,12 +229,19 @@ export async function setCronAgent(
     const existing = (await engine.listJobs()).find(job => job.id === id);
     if (!existing) return { error: `任务不存在: ${id}` };
     if ((existing.action as { kind?: unknown } | undefined)?.kind !== 'agent') {
-      return { error: `心跳任务不能指定 Agent: ${id}` };
+      return { error: `心跳任务不能指定 Agent: ${id}`, data: { code: 'schedule_agent_heartbeat' } };
     }
+    // The job keeps delivering to its target on every run, now on another Agent: the same
+    // `endpoint.operate` `cron:add` requires for that target.
+    const notify = existing.notify as { channel?: unknown; target?: unknown } | undefined;
+    const forbidden = deliveryForbidden(notify?.channel === 'im' ? notify.target : undefined, ctx);
+    if (forbidden) return forbidden;
     const job = await engine.setJobAgent(id, agent.agent);
     return job ? { data: { job, success: true } } : { error: `任务不存在: ${id}` };
   } catch (error) {
-    return { error: errorMessage(error) };
+    // A profile routine (`schedule_agent_profile`) is changed in the Assistant Profile instead.
+    const code = (error as { code?: unknown } | null)?.code;
+    return { error: errorMessage(error), ...(typeof code === 'string' && code.startsWith('schedule_agent_') ? { data: { code } } : {}) };
   }
 }
 

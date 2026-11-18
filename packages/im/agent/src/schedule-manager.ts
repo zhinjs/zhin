@@ -86,6 +86,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       schema(),
       async () => {
         const memory = manager.scheduleFeature.getStatus();
+        const agents = manager.agents?.();
         const persistent = manager.engine
           ? (await manager.engine.listJobs()).map((job) => ({
               type: 'persistent' as const,
@@ -93,6 +94,9 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
               schedule: job.schedule,
               prompt: job.action.kind === 'agent' ? job.action.prompt : undefined,
               ...(job.action.kind === 'agent' && job.action.agent ? { agent: job.action.agent } : {}),
+              // #1250 b52: the Agent was removed from `ai.agents`; the job's runs fail until changed.
+              ...(job.action.kind === 'agent' && job.action.agent && agents && !agents.includes(job.action.agent)
+                ? { agent_missing: true } : {}),
               label: job.label,
               enabled: job.enabled,
               notify: job.notify,

@@ -37,3 +37,24 @@ export function usableScheduleAgents(
   const names = bindings.includes(DEFAULT_ZHIN_AGENT_NAME) ? bindings : [DEFAULT_ZHIN_AGENT_NAME, ...bindings];
   return Object.freeze(names.filter(name => name === DEFAULT_ZHIN_AGENT_NAME || visible?.includes(name) === true));
 }
+
+/** Why a job's Agent cannot be changed in place (`code` of {@link ScheduleJobAgentError}). */
+export type ScheduleJobAgentErrorCode = 'schedule_agent_heartbeat' | 'schedule_agent_profile';
+
+/**
+ * Refusal of `setJobAgent` (#1250 b52): a heartbeat job always runs on the default Agent, and a
+ * profile routine is re-declared from the Assistant Profile on every start, so an in-place change
+ * would be silently reverted. Callers map `code` to a 400.
+ */
+export class ScheduleJobAgentError extends Error {
+  constructor(readonly code: ScheduleJobAgentErrorCode, message: string) {
+    super(message);
+    this.name = 'ScheduleJobAgentError';
+  }
+}
+
+/** Text of the profile-routine refusal; names where the Agent is declared instead. */
+export function profileJobAgentMessage(id: string): string {
+  return `任务 ${id} 来自 Assistant Profile（routines），每次启动都会按 Profile 重新声明，在这里修改会被还原。`
+    + '请在 Profile 文件（assistant.profile.file，默认 assistant.profile.yml）中该 routine 的 agent 字段修改';
+}

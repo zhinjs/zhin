@@ -8,6 +8,7 @@ import {
   syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
   validateAssistantProfile,
+  buildScheduleJobFromRoutine,
 } from '../../src/assistant/profile-loader.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import {
@@ -214,5 +215,30 @@ agents: |
       routines: { heartbeat: { everyMs: 0 } },
     });
     expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('routine 的 agent 写入 action.agent，省略或空白时为默认 Agent (#1250 b52)', () => {
+    const routine = { cron: '0 0 8 * * *', prompt: '早报' };
+    expect(buildScheduleJobFromRoutine(PROFILE_MORNING_BRIEF_JOB_ID, '早报', { ...routine, agent: ' news ' }).action)
+      .toEqual({ kind: 'agent', prompt: '早报', agent: 'news' });
+    expect(buildScheduleJobFromRoutine(PROFILE_MORNING_BRIEF_JOB_ID, '早报', routine).action).toEqual({ kind: 'agent', prompt: '早报' });
+    expect(buildScheduleJobFromRoutine(PROFILE_MORNING_BRIEF_JOB_ID, '早报', { ...routine, agent: '  ' }).action).toEqual({ kind: 'agent', prompt: '早报' });
+    expect(validateAssistantProfile({ version: 1, routines: { morningBrief: { ...routine, agent: 3 as never } } }))
+      .toContain('routines.morningBrief.agent must be an Agent name');
+    expect(validateAssistantProfile({ version: 1, routines: { morningBrief: { ...routine, agent: 'news' } } })).toEqual([]);
+  });
+
+  it('每次同步都按 Profile 重新声明 routine 的 agent (#1250 b52)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-agent-'));
+    try {
+      const store = new ScheduleJobStore({ dataDir: dir });
+      const profile = (agent?: string) => ({ version: 1, routines: { morningBrief: { cron: '0 0 8 * * *', prompt: '早报', ...(agent ? { agent } : {}) } } });
+      await syncProfileRoutinesToStore(store, profile('news'));
+      expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.action).toEqual({ kind: 'agent', prompt: '早报', agent: 'news' });
+      await syncProfileRoutinesToStore(store, profile());
+      expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.action).toEqual({ kind: 'agent', prompt: '早报' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

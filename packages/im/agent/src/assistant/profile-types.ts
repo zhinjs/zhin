@@ -23,6 +23,12 @@ export interface AssistantProfileRoutineCron {
   tz?: string;
   prompt: string;
   notify?: JobNotify;
+  /**
+   * 到点由哪个 Agent 执行（`ai.agents` 中的名称，#1250 b52）；省略时为默认 Agent `zhin`。
+   * Profile 例程的 Agent 只能在这里改：`zhin schedule set-agent` / Console 会拒绝 Profile 任务，
+   * 因为每次启动都会按 Profile 重新声明。
+   */
+  agent?: string;
 }
 
 export interface AssistantProfileRoutines {
