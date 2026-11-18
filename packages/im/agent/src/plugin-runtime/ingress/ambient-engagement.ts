@@ -767,9 +767,16 @@ export class DecisionEngagementJudge implements EngagementJudge {
 /**
  * `language:<service display name>/<model>` for a language model on `accountId` (#1250). A display
  * string for logs: an opaque graph id (`services:<uuid>` …) or a generic label ({@link isGenericServiceLabel})
- * is never shown, the driver name or the model alone (`language:<model>`) stands in for it. Statistics group by {@link EngagementJudgeRef}.
+ * is never shown, the Driver's display name (`driverLabel`, else its id) or the model alone (`language:<model>`)
+ * stands in for it. Statistics group by {@link EngagementJudgeRef}.
  */
-export function ambientLanguageSource(graph: InferenceOperationScope['graph'], accountId: string, model: string): string {
+export function ambientLanguageSource(
+  graph: InferenceOperationScope['graph'],
+  accountId: string,
+  model: string,
+  /** Display name of a Driver by id ("Anthropic" for `anthropic`), shown instead of the id when known. */
+  driverLabel?: (driverId: string) => string | undefined,
+): string {
   const account = graph.accounts[accountId];
   const service = account ? graph.services[account.serviceId] : undefined;
   const text = (value: unknown) => {
@@ -781,7 +788,9 @@ export function ambientLanguageSource(graph: InferenceOperationScope['graph'], a
     const readable = text(value);
     return readable && !isGenericServiceLabel(readable) ? readable : undefined;
   };
-  const label = service ? named(service.label) ?? text(service.driver?.id) ?? text(service.id) : undefined;
+  const driverId = text(service?.driver?.id);
+  const driverName = driverId ? named(driverLabel?.(driverId)) ?? driverId : undefined;
+  const label = service ? named(service.label) ?? driverName ?? text(service.id) : undefined;
   return `language:${label ? `${label}/` : ''}${model}`;
 }
 
@@ -804,6 +813,8 @@ export interface CreateEngagementJudgeMemberInput {
   readonly timeoutMs?: number;
   /** Decision members: recorded as the observation mode. Default `active`. */
   readonly mode?: 'active' | 'shadow';
+  /** Display name of a Driver by id, for the member's log label ({@link ambientLanguageSource}). */
+  readonly driverLabel?: (driverId: string) => string | undefined;
 
 }
 
@@ -825,7 +836,7 @@ export function createEngagementJudgeMember(input: CreateEngagementJudgeMemberIn
   const declaration: ExecutionBinding = Object.freeze({ graphRevision: graph.revision, profile, account, service, model });
   const endpoint: ModelFallbackEndpoint = Object.freeze({ profileId, accountId: account.id, model: model.id });
   if (kind === 'language') {
-    const label = ambientLanguageSource(graph, account.id, model.id);
+    const label = ambientLanguageSource(graph, account.id, model.id, input.driverLabel);
     return Object.freeze({
       kind, endpoint, label,
       fits: (judgeInput: EngagementJudgeInput) => !(model.contextWindow && model.contextWindow > 0)

@@ -17,6 +17,7 @@
 import type { ActorId, ActorTurnResult, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
+import type { DelegatedReads } from './delegation-waiters.js';
 
 /**
  * Host-owned model operations for actor turns (#1250): each actor turn opens
@@ -104,8 +105,15 @@ export type CreateCollaborationTools = (
     onVenueTell?: (venue: string, content: string) => Promise<void>;
     /** Called when a send of this actor is refused because the guard stopped the engagement (#1250). */
     onStopped?: () => void;
-    /** How long `delegate` waits for the result within the turn (default {@link DEFAULT_DELEGATE_WAIT_MS}). */
+    /**
+     * How long `delegate` calls of this turn wait for results in all (default {@link DEFAULT_DELEGATE_WAIT_MS}):
+     * concurrent waits share it, and every wait ends by the same time.
+     */
     delegateWaitMs?: number;
+    /** Epoch ms when the host times this turn out: waits end early enough for the model to answer. */
+    turnDeadline?: number;
+    /** Results this turn's waiting `delegate` calls read: consumed only once the turn succeeded (#1250). */
+    delegatedReads?: DelegatedReads;
   }>,
 ) => readonly ToolCapability[];
 
@@ -133,4 +141,6 @@ export type AgentActorTurnRunner = (
 export interface ActorTurnRunOptions {
   /** Framework-written lines placed before the rendered mail batch (never from another actor). */
   readonly preface?: string;
+  /** Results the actor turn's waiting `delegate` calls read; the host commits or revokes them (#1250). */
+  readonly delegatedReads?: DelegatedReads;
 }

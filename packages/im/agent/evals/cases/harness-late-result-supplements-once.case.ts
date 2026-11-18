@@ -20,16 +20,17 @@ export default defineEvalCase({
     { actor: 'researcher', text: 'Node.js 24 entered Active LTS in October 2025.' },
     { actor: 'researcher', text: 'Node.js 24 reaches end of life in April 2028.' },
     // First result: the same answer the human already has.
-    { text: '[[no_reply]]' },
+    { text: '`[[NO_REPLY]]`' },
     // Second result: new content.
     { text: 'Node 24 会在 2028 年 4 月停止维护。' },
   ],
   expect: {
     outboundContains: ['2025 年 10 月进入 LTS', '补充：Node 24 会在 2028 年 4 月停止维护。'],
-    outboundNotContains: ['[[no_reply]]', 'no_reply'],
+    outboundNotContains: ['[[no_reply]]', 'no_reply', 'NO_REPLY'],
     outboundMessages: 2,
     // The woken entry model saw what it had already said and the structured exit.
-    modelInputContains: ['[Already answered]', '«Node 24 在 2025 年 10 月进入 LTS', '[[no_reply]]'],
+    // The earlier reply is shown as data (external content), not as instructions.
+    modelInputContains: ['[Already answered]', '[external_content source="earlier_reply"', 'Node 24 在 2025 年 10 月进入 LTS', '[[no_reply]]'],
     modelSteps: 6,
   },
 });

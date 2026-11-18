@@ -155,6 +155,11 @@ it('names a service the CLI creates after its Driver, or by --label for account 
     expect(plain.payload).toMatchObject({ success: true, data: { createdService: true, result: { status: 'committed' } } });
     let graph = (await f.repository.readGraph({ rootId: '/root' }))!;
     expect(graph.services[plain.payload.data.serviceId]!.label).toBe('Anthropic');
+    // A second service of the same Driver is numbered, so the two can be told apart (and referenced).
+    const second = await f.call('/cli/account/add', { service: 'anthropic', env: 'OPENAI_API_KEY' }, 'local');
+    graph = (await f.repository.readGraph({ rootId: '/root' }))!;
+    expect(second.payload.data.serviceId).not.toBe(plain.payload.data.serviceId);
+    expect(graph.services[second.payload.data.serviceId]!.label).toBe('Anthropic 2');
     const labelled = await f.call('/cli/account/add', { service: 'anthropic', env: 'OPENAI_API_KEY', label: '主力' }, 'local');
     graph = (await f.repository.readGraph({ rootId: '/root' }))!;
     expect(graph.services[labelled.payload.data.serviceId]!.label).toBe('主力');

@@ -19,11 +19,23 @@ it('recognizes only the generic plan aliases as generic labels', () => {
   expect(isGenericServiceLabel(undefined)).toBe(false);
 });
 
-it('lists the generic services with the driver display name as the suggestion', () => {
+it('lists the generic services with the driver display name as the suggestion, never a name already taken', () => {
+  // services:2 is already named "Anthropic": the suggestion for services:1 is numbered.
   expect(genericServiceLabels(view)).toEqual([
-    { id: 'services:1', label: 'service', suggestion: 'Anthropic' },
+    { id: 'services:1', label: 'service', suggestion: 'Anthropic 2' },
     { id: 'services:3', label: 'Service', suggestion: 'custom' },
   ]);
+});
+
+it('never suggests the same name twice (#1250)', () => {
+  expect(genericServiceLabels({
+    services: {
+      'services:a': { id: 'services:a', label: 'service', driver: { id: 'anthropic' } },
+      'services:b': { id: 'services:b', label: 'service', driver: { id: 'anthropic' } },
+      'services:c': { id: 'services:c', label: 'anthropic 2', driver: { id: 'anthropic' } },
+    },
+    drivers: [{ id: 'anthropic', label: 'Anthropic' }],
+  }).map(entry => entry.suggestion)).toEqual(['Anthropic', 'Anthropic 3']);
 });
 
 it('reports one warning with the Console entry, reading the view over the local socket', async () => {

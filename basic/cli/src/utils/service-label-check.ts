@@ -35,16 +35,31 @@ export function isGenericServiceLabel(value: string | undefined): boolean {
   return typeof value === 'string' && /^(service|account)$/iu.test(value.trim());
 }
 
-/** Services whose label is generic, with the Driver display name to rename them to. */
+/**
+ * Services whose label is generic, with the Driver display name to rename them to. Suggestions never repeat a
+ * name another service already has, nor each other: the second becomes "Anthropic 2" (as `zhin ai account add`
+ * names a new service).
+ */
 export function genericServiceLabels(view: ServiceLabelView): Array<Readonly<{ id: string; label: string; suggestion: string }>> {
-  return Object.entries(view.services ?? {})
+  const services = Object.entries(view.services ?? {});
+  const taken = new Set(services
+    .map(([, service]) => service.label?.trim().toLowerCase())
+    .filter((label): label is string => !!label && !isGenericServiceLabel(label)));
+  const unique = (base: string): string => {
+    let candidate = base;
+    for (let index = 2; taken.has(candidate.toLowerCase()); index += 1) candidate = `${base} ${index}`;
+    taken.add(candidate.toLowerCase());
+    return candidate;
+  };
+  return services
     .filter(([, service]) => isGenericServiceLabel(service.label))
-    .map(([key, service]) => {
+    .map(([key, service]) => ({ key, service, id: service.id ?? key }))
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map(({ service, id }) => {
       const driverId = service.driver?.id ?? '';
       const driverLabel = view.drivers?.find(driver => driver.id === driverId)?.label?.trim();
-      return { id: service.id ?? key, label: service.label!.trim(), suggestion: driverLabel || driverId || '驱动名' };
-    })
-    .sort((left, right) => left.id.localeCompare(right.id));
+      return { id, label: service.label!.trim(), suggestion: unique(driverLabel || driverId || '驱动名') };
+    });
 }
 
 const NAME = '模型服务名称';

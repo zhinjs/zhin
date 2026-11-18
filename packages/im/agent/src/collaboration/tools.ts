@@ -15,13 +15,14 @@ import {
   only,
   type BoardEntryKind,
   type BudgetAmounts,
+  type Mail,
   type SendOutcome,
 } from '@zhin.js/harness';
 import { getLogger } from '@zhin.js/logger';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { renderAttachmentNote, takeActorAttachments, type AgentAttachment } from '../media/agent-attachments.js';
 import { renderExternalContent } from '../security/trust-level.js';
-import { awaitDelegatedResult } from './delegation-waiters.js';
+import { awaitDelegatedResult, beginDelegationSend } from './delegation-waiters.js';
 import {
   COLLABORATION_TOOL_NAMES,
   type CollaborationToolName,
@@ -85,6 +86,46 @@ export const COLLABORATION_TOOL_SOURCE = 'builtin:collaboration';
  * Longer work falls back to the asynchronous result mail.
  */
 export const DEFAULT_DELEGATE_WAIT_MS = 20_000;
+
+/**
+ * Time a turn keeps for its model to answer after waiting `delegate` calls (#1250): waits end this long
+ * before the host's turn timeout, so waiting never times the turn out.
+ */
+export const DELEGATE_ANSWER_RESERVE_MS = 15_000;
+
+/**
+ * The wait budget of one turn (#1250): `delegate` calls share {@link DEFAULT_DELEGATE_WAIT_MS} in all.
+ * Time counts while at least one wait runs, so concurrent waits (one model step sending several delegates)
+ * spend it once and all end together; no wait runs past `deadline - reserveMs`.
+ */
+export function createDelegateWaitBudget(input: Readonly<{ totalMs: number; deadline?: number; reserveMs?: number }>) {
+  let used = 0;
+  let active = 0;
+  let since = 0;
+  const reserve = input.reserveMs ?? DELEGATE_ANSWER_RESERVE_MS;
+  return Object.freeze({
+    /** Milliseconds a wait starting now may last. */
+    available(): number {
+      const now = Date.now();
+      const spent = used + (active > 0 ? now - since : 0);
+      const byBudget = input.totalMs - spent;
+      const byDeadline = input.deadline !== undefined ? input.deadline - reserve - now : Number.POSITIVE_INFINITY;
+      return Math.max(0, Math.floor(Math.min(byBudget, byDeadline)));
+    },
+    /** A wait starts; call the returned function when it ends. */
+    begin(): () => void {
+      if (active === 0) since = Date.now();
+      active += 1;
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        active -= 1;
+        if (active === 0) used += Date.now() - since;
+      };
+    },
+  });
+}
 
 /** The delegated result is not here yet: the model must not answer that part itself (#1250). */
 const DELEGATION_PENDING_NOTE = 'Do not answer the delegated part yourself meanwhile and do not guess its result; '
@@ -180,6 +221,11 @@ function refusal(action: string, outcome: Extract<SendOutcome, { ok: false }>): 
 export const createCollaborationTools: CreateCollaborationTools = (binding, options) => {
   const { harness, directory, actor, mail } = binding;
   let workerSeq = 0;
+  // One budget per turn: the tools are created for each turn.
+  const waitBudget = createDelegateWaitBudget({
+    totalMs: options.delegateWaitMs ?? DEFAULT_DELEGATE_WAIT_MS,
+    ...(options.turnDeadline !== undefined ? { deadline: options.turnDeadline } : {}),
+  });
   /** The model of this actor learns that collaboration stopped (#1250 batch 26: the host then need not say so). */
   const refuse = (action: string, outcome: Extract<SendOutcome, { ok: false }>): string => {
     if (outcome.escalated) options.onStopped?.();
@@ -305,21 +351,44 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         if (amounts === null) return 'delegate refused: budget fields must be positive integers.';
         const deliverable = text(args, 'deliverable');
         if (args.wait !== undefined && typeof args.wait !== 'boolean') return 'delegate refused: wait must be true or false.';
-        const waitMs = args.wait === false ? 0 : (options.delegateWaitMs ?? DEFAULT_DELEGATE_WAIT_MS);
+        const wantsWait = args.wait !== false;
         const floored = floor(amounts, 'delegate', toActor);
         const effectiveBudget = floored?.amounts ?? directory.get(agentOf(toActor))?.defaultBudget;
-        const outcome = await harness.send(actor, mail, {
-          kind: 'delegate',
-          to: toActor,
-          text: brief,
-          ...(deliverable ? { deliverable } : {}),
-          ...(effectiveBudget ? { budget: effectiveBudget } : {}),
-          ...(isSelf ? { narrowing: { contacts: only([]) } } : {}),
-        });
-        if (!outcome.ok) return refuse('delegate', outcome);
+        // A result admitted before the waiter registers (a fast sub-agent) is kept for this call only.
+        const sending = wantsWait ? beginDelegationSend(harness) : undefined;
+        let outcome: Awaited<ReturnType<typeof harness.send>>;
+        try {
+          outcome = await harness.send(actor, mail, {
+            kind: 'delegate',
+            to: toActor,
+            text: brief,
+            ...(deliverable ? { deliverable } : {}),
+            ...(effectiveBudget ? { budget: effectiveBudget } : {}),
+            ...(isSelf ? { narrowing: { contacts: only([]) } } : {}),
+          });
+        } catch (error) {
+          sending?.end();
+          throw error;
+        }
+        if (!outcome.ok) {
+          sending?.end();
+          return refuse('delegate', outcome);
+        }
         const raised = budgetNote(floored?.raised ?? []);
         // #1250 delegate-result-double-reply: a short task comes back within the turn; answer from it.
-        const back = waitMs > 0 ? await awaitDelegatedResult(harness, outcome.mail.id, waitMs, signal) : undefined;
+        // The turn's waits share one budget: delegates of one model step run concurrently and end together.
+        const waitMs = wantsWait ? waitBudget.available() : 0;
+        let back: Mail | undefined;
+        if (wantsWait) {
+          const endWait = waitBudget.begin();
+          const waiting = awaitDelegatedResult(harness, outcome.mail.id, waitMs, signal, options.delegatedReads);
+          sending?.end(outcome.mail.id);
+          try {
+            back = await waiting;
+          } finally {
+            endWait();
+          }
+        }
         if (back?.body.kind === 'result') {
           const content = back.body.content.trim() || '(empty reply)';
           return withAttachments(
@@ -328,7 +397,7 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
             takeActorAttachments(harness, outcome.mail.id),
           );
         }
-        const pending = waitMs > 0
+        const pending = wantsWait
           ? `${toActor} is still working after ${Math.round(waitMs / 1000)} s (mail ${outcome.mail.id})`
           : `delegated to ${toActor} (mail ${outcome.mail.id})`;
         return `${pending}; its result will arrive as a new message. ${DELEGATION_PENDING_NOTE}${raised}`;

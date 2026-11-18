@@ -314,6 +314,10 @@ describe('ambient judge visibility (#1250)', () => {
       profiles: {}, purposes: { defaults: {} } });
     expect(ambientLanguageSource(value, 'accounts:1', 'claude-haiku-5-5')).toBe('language:anthropic/claude-haiku-5-5');
     expect(ambientLanguageSource(value, 'accounts:2', 'claude-haiku-5-5')).toBe('language:Anthropic/claude-haiku-5-5');
+    // With the Driver's display name at hand it stands in for the generic label, not the Driver id.
+    const driverLabel = (id: string) => (id === 'anthropic' ? 'Anthropic' : undefined);
+    expect(ambientLanguageSource(value, 'accounts:1', 'claude-haiku-5-5', driverLabel)).toBe('language:Anthropic/claude-haiku-5-5');
+    expect(ambientLanguageSource(value, 'accounts:1', 'claude-haiku-5-5', () => undefined)).toBe('language:anthropic/claude-haiku-5-5');
   });
 });
 

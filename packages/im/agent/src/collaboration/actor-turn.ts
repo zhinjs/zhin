@@ -180,6 +180,7 @@ async function runActorTurn(
     return await runActorTurnWithModel(options, {
       actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models,
       ...(runOptions?.preface ? { preface: runOptions.preface } : {}),
+      ...(runOptions?.delegatedReads ? { delegatedReads: runOptions.delegatedReads } : {}),
     });
   } finally {
     // Idempotent: a turn that threw before settling still releases its trace slot.
@@ -202,6 +203,8 @@ interface ActorTurnRun {
   readonly models?: ModelExecutionScope;
   /** Framework-written lines before the mail batch ({@link ActorTurnRunOptions.preface}). */
   readonly preface?: string;
+  /** {@link ActorTurnRunOptions.delegatedReads}. */
+  readonly delegatedReads?: ActorTurnRunOptions['delegatedReads'];
 }
 
 /**
@@ -262,6 +265,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       owner: options.capabilities.owner,
       ...(options.onEscalate ? { onEscalate: options.onEscalate } : {}),
       ...(options.onVenueTell ? { onVenueTell: options.onVenueTell } : {}),
+      ...(run.delegatedReads ? { delegatedReads: run.delegatedReads } : {}),
     },
   );
   const collaborationNames = new Set(collaboration.map(tool => tool.name));

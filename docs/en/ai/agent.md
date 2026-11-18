@@ -190,7 +190,7 @@ The framework enforces boundaries while Agents decide how to collaborate (ADR 00
 |------|---------|
 | `agents` | List peer Agents you can contact and their descriptions |
 | `ask` | Ask a peer synchronously and wait for its reply within the current turn |
-| `delegate` | Delegate a task. By default waits up to 20 s within the turn: a result that arrives in time is in the tool result and the model answers once from it; with `wait: false` (long work) or on timeout it returns a `mailId` at once, the result is posted back later as a `result` mail that wakes the delegator, and the tool result tells the model not to answer the delegated part itself meanwhile |
+| `delegate` | Delegate a task. By default waits up to 20 s within the turn: a result that arrives in time is in the tool result and the model answers once from it; with `wait: false` (long work) or on timeout it returns a `mailId` at once, the result is posted back later as a `result` mail that wakes the delegator, and the tool result tells the model not to answer the delegated part itself meanwhile. Several delegates of one step are sent and waited for together; a turn's waits share 20 s in all and leave time to answer, so they never run into the turn timeout. A result read while waiting counts as used only once the turn's reply was delivered; when the turn fails or times out, it still wakes the delegator |
 | `tell` | Send a one-way notification without waiting for a reply |
 | `follow_up` | Follow up on a previously delegated or asked `mailId` within the same Engagement |
 | `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note \| todo \| artifact` filter) |

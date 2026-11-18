@@ -197,7 +197,10 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
   const binding = service.getBindingRegistry().requireZhinBinding();
   let toolCalls = 0;
 
-  return runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch }, () =>
+  const timeoutMs = resolveTriggerTimeoutMs(trigger);
+  // #1250: in-turn waits (a waiting `delegate`) stay inside the turn's timeout.
+  const deadline = Date.now() + timeoutMs;
+  return runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch, deadline }, () =>
     withTriggerTimeout(async (timeoutSignal) => {
       const signal = AbortSignal.any([
         timeoutSignal,
@@ -488,7 +491,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
         }),
       );
       return { outcome, capabilities, routed, toolCalls };
-    }, resolveTriggerTimeoutMs(trigger)),
+    }, timeoutMs),
   );
 }
 
