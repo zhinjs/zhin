@@ -11,8 +11,10 @@
  * #1250 update-overrides-not-synced: when the update touches Zhin packages (all dependencies, or a
  * requested `zhin.js` / `@zhin.js/*`), the pnpm overrides that pin Zhin packages move with them
  * (the gateway releases and re-pins them; see `./zhin-overrides.ts`). The preview
- * therefore computes Zhin targets from the declared ranges and shows how each override changes;
- * Zhin packages are listed first, other dependencies after them.
+ * therefore computes Zhin targets from the declared ranges, then how each override is written back,
+ * and shows the version that written-back value resolves to; a single `@zhin.js/x@ver` an override
+ * would pin back is reported as the conflict the gateway refuses. Only pnpm projects sync. Zhin
+ * packages are listed first, other dependencies after them.
  */
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
@@ -23,9 +25,11 @@ import {
   formatOverrideChanges,
   isZhinPackageName,
   manualOverrideHint,
+  overrideLocation,
   readZhinOverrides,
   syncedOverrideValue,
   type ZhinOverrideChange,
+  type ZhinOverrideEntry,
 } from './zhin-overrides.js';
 import { semver } from '../plugin-check/semver.js';
 import { readInstalledPackageVersion } from './installed-versions.js';
@@ -110,6 +114,31 @@ export function readPnpmOverrides(root: string): { readonly plain: ReadonlyMap<s
 }
 
 interface Manifest { name?: unknown; [field: string]: unknown }
+
+const LOCKFILES: readonly (readonly [string, string])[] = [
+  ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn'], ['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['package-lock.json', 'npm'],
+];
+
+/**
+ * The project installs with pnpm — the gateway's `detectPackageManager` rule: `packageManager`,
+ * then the first lockfile found, else pnpm (the scaffold default).
+ */
+export function detectsPnpm(root: string): boolean {
+  const declaredManager = readManifest(root)?.packageManager;
+  const name = typeof declaredManager === 'string' ? declaredManager.split('@')[0] : undefined;
+  if (name === 'pnpm' || name === 'npm' || name === 'yarn' || name === 'bun') return name === 'pnpm';
+  const found = LOCKFILES.find(([file]) => fs.existsSync(path.join(root, file)));
+  return found === undefined || found[1] === 'pnpm';
+}
+
+/** `zhin update name@x.y.z` that a synced override would pin back: the gateway refuses it. */
+function overrideConflictHint(entry: ZhinOverrideEntry, requested: string, pinned: string): string {
+  const where = `${entry.file}${entry.line ? `:${entry.line}` : ''}`;
+  const decider = entry.class.kind === 'sync' && entry.class.parent ? entry.class.parent : 'zhin.js';
+  return `${entry.class.name}@${requested} 无法单独升级：${overrideLocation(entry.file)} "${entry.key}" 会把它钉回 ${pinned}`
+    + `——这个包的版本由 ${decider} 的版本决定，zhin update 会失败并回滚；请改为升级 ${decider}，`
+    + `或先手动把 ${where} 的 "${entry.key}" 改成 ${JSON.stringify(syncedOverrideValue(entry, requested))}`;
+}
 
 function readManifest(dir: string): Manifest | undefined {
   try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as Manifest; } catch { return undefined; }
@@ -199,8 +228,9 @@ export async function previewUpdate(
   const rootDeclared = declared(readManifest(root) ?? {});
   const requested = packages.map(splitUpdateSpec);
   // The update releases and re-pins the Zhin overrides it can sync (#1250 update-overrides-not-synced).
+  // Only pnpm reads these overrides, so only a pnpm project syncs them (same rule as the gateway).
   const touchesZhin = requested.length === 0 || requested.some(item => isZhinPackageName(item.name));
-  const zhinOverrides = touchesZhin ? readZhinOverrides(root) : undefined;
+  const zhinOverrides = touchesZhin && detectsPnpm(root) ? readZhinOverrides(root) : undefined;
   const dirs = [root, ...(recursive ? listWorkspacePackageDirs(root) : [])];
   const lookup = options.publishedVersions ?? npmPublishedVersions;
   const cache = new Map<string, Promise<readonly string[] | undefined>>();
@@ -209,6 +239,11 @@ export async function previewUpdate(
     return cache.get(name)!;
   };
 
+  /**
+   * The members' changes. `final` (second pass): the value each synced Zhin override is written
+   * back with — that value, not the declared range, decides the installed version.
+   */
+  const evaluate = async (final?: ReadonlyMap<string, { readonly raw: string; readonly value: string }>): Promise<UpdatePreviewMember[]> => {
   const members: UpdatePreviewMember[] = [];
   for (const dir of dirs) {
     const manifest = readManifest(dir);
@@ -229,10 +264,17 @@ export async function previewUpdate(
       }
     }
     const overridden: string[] = [];
-    const considered: { name: string; range: string; exact?: string; override?: string }[] = [];
+    const considered: { name: string; range: string; exact?: string; override?: string; resolve?: string }[] = [];
     for (const item of work) {
       const raw = overrides.plain.get(item.name);
       const released = zhinOverrides !== undefined && raw !== undefined && classifyZhinOverride(item.name, raw).kind === 'sync';
+      const synced = released ? final?.get(item.name) : undefined;
+      // An exact request the override would pin elsewhere fails in the gateway: keep the request.
+      if (synced && synced.raw === raw && !(item.exact !== undefined && conflicts.has(item.name))) {
+        const exact = semver.valid(synced.value) ?? undefined;
+        considered.push({ name: item.name, range: raw, override: raw, resolve: synced.value, ...(exact ? { exact } : {}) });
+        continue;
+      }
       if (raw !== undefined && !released) {
         // `$name` refers to the root's own specifier of that package.
         const spec = raw.startsWith('$') ? rootDeclared.get(raw.slice(1)) ?? raw : raw;
@@ -247,7 +289,7 @@ export async function previewUpdate(
       const current = readInstalledPackageVersion(dir, item.name) ?? (isRoot ? undefined : readInstalledPackageVersion(root, item.name));
       const published = await versionsOf(item.name);
       if (!published) { unknown.push(item.name); return undefined; }
-      const target = item.exact ?? semver.maxSatisfying(published, item.range) ?? undefined;
+      const target = item.exact ?? semver.maxSatisfying(published, item.resolve ?? item.range) ?? undefined;
       if (!target || target === current) return undefined;
       if (item.exact && !published.includes(item.exact)) { unknown.push(`${item.name}@${item.exact}`); return undefined; }
       const stable = published.filter(version => !version.includes('-'));
@@ -255,7 +297,7 @@ export async function previewUpdate(
       return {
         name: item.name, range: item.range, current, target,
         ...(item.override !== undefined ? { override: item.override } : {}),
-        ...(!item.exact && latest && latest !== target && semver.gt(latest, target) ? { latestOutsideRange: latest } : {}),
+        ...(!item.exact && item.resolve === undefined && latest && latest !== target && semver.gt(latest, target) ? { latestOutsideRange: latest } : {}),
       };
     })).filter((change): change is UpdatePreviewChange => change !== undefined);
     changes.sort((a, b) => a.name.localeCompare(b.name));
@@ -266,6 +308,10 @@ export async function previewUpdate(
       changes, unknown, notDeclared, overridden: overridden.sort(),
     });
   }
+  return members;
+  };
+  const conflicts = new Map<string, string>();
+  let members = await evaluate();
   const rootMember = members.find(member => member.path === '.');
   const versionAtRoot = (name: string): string | undefined =>
     rootMember?.changes.find(change => change.name === name)?.target ?? readInstalledPackageVersion(root, name);
@@ -302,18 +348,30 @@ export async function previewUpdate(
   };
   const changes: ZhinOverrideChange[] = [];
   const manual: string[] = [];
+  const final = new Map<string, { readonly raw: string; readonly value: string }>();
   for (const entry of zhinOverrides?.entries ?? []) {
     if (entry.class.kind !== 'sync') { manual.push(manualOverrideHint(entry)); continue; }
     const { name, parent } = entry.class;
+    const from = String(entry.value);
     // Same rule as the gateway's re-pin, from the registry instead of the installed tree.
     const parentVersion = parent ? versionAtRoot(parent) : undefined;
     const version = parent
       ? (parentVersion ? exactIn(await dependenciesOf(parent, parentVersion), name) : undefined)
       : (name === 'zhin.js' ? undefined : await alignedVersion(name)) ?? versionAtRoot(name);
+    const exact = requested.find(item => item.name === name && item.version !== undefined);
+    if (exact?.version && name !== 'zhin.js' && version !== undefined && version !== exact.version) {
+      conflicts.set(name, version);
+      manual.push(overrideConflictHint(entry, exact.version, version));
+      continue;
+    }
     if (!version) { manual.push(manualOverrideHint(entry)); continue; }
     const to = syncedOverrideValue(entry, version);
-    if (to !== String(entry.value)) changes.push({ file: entry.file, key: entry.key, from: String(entry.value), to });
+    // pnpm-workspace.yaml comes second and wins on the same key, as in readPnpmOverrides.
+    if (!parent) final.set(entry.key, { raw: from, value: to });
+    if (to !== from) changes.push({ file: entry.file, key: entry.key, from, to });
   }
+  // The synced overrides decide the final versions: evaluate the members again with them.
+  if (final.size) members = await evaluate(final);
   const handled = new Set((zhinOverrides?.entries ?? []).map(entry => entry.key));
   return {
     recursive,
@@ -333,7 +391,10 @@ export function renderUpdatePreview(preview: UpdatePreview, gatewayRunning: bool
   let total = 0;
   const changeLine = (change: UpdatePreviewChange, width: number): string => {
     const outside = change.latestOutsideRange ? `；最新 ${change.latestOutsideRange} 超出范围，不会升级` : '';
-    const rule = change.override !== undefined ? `overrides：${change.override}` : change.range;
+    // A synced Zhin override decides with the value it is written back with.
+    const synced = change.override === undefined ? undefined
+      : preview.overrides.changes.find(item => item.key === change.name && item.from === change.override);
+    const rule = change.override !== undefined ? `overrides：${change.override}${synced ? ` → ${synced.to}` : ''}` : change.range;
     return `    ${change.name.padEnd(width)}  ${change.current ?? '未安装'} → ${change.target}（${rule}${outside}）`;
   };
   const renderOverrides = (): void => {

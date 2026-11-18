@@ -77,13 +77,35 @@ export interface ZhinOverridePlan {
   readonly order: Readonly<Record<ZhinOverrideFile, readonly string[]>>;
 }
 
-function lineOf(text: string, key: string, quoted: boolean): number | undefined {
-  const lines = text.split('\n');
-  const start = Math.max(0, lines.findIndex(line => /^\s*"?overrides"?\s*:/u.test(line)));
-  const needles = quoted ? [JSON.stringify(key)] : [`'${key}'`, `"${key}"`, key];
-  for (let index = start; index < lines.length; index += 1) {
-    const trimmed = lines[index]!.trimStart();
-    if (needles.some(needle => trimmed.startsWith(`${needle}:`) || trimmed.startsWith(`${needle} :`))) return index + 1;
+/**
+ * 1-based line of `key` directly inside `pnpm.overrides` of a package.json text: a top-level npm
+ * `overrides`, or an `overrides` nested anywhere else, is not it.
+ */
+function packageJsonOverrideLine(text: string, key: string): number | undefined {
+  const frames: { readonly object: boolean; readonly name: string; awaitsKey: boolean }[] = [];
+  let lastKey = '';
+  let line = 1;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    const top = frames.at(-1);
+    if (char === '\n') line += 1;
+    else if (char === '"') {
+      let end = index + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === '\\' ? 2 : 1;
+      if (top?.object && top.awaitsKey) {
+        let name: unknown;
+        try { name = JSON.parse(text.slice(index, end + 1)); } catch { return undefined; }
+        if (frames.length === 3 && frames[1]!.name === 'pnpm' && frames[2]!.name === 'overrides' && name === key) return line;
+        lastKey = String(name);
+        top.awaitsKey = false;
+      }
+      index = end;
+    } else if (char === '{' || char === '[') {
+      // A container that is the value of a key is named after that key.
+      frames.push({ object: char === '{', name: top?.object ? lastKey : '', awaitsKey: char === '{' });
+      lastKey = '';
+    } else if (char === '}' || char === ']') frames.pop();
+    else if (char === ',' && top?.object) top.awaitsKey = true;
   }
   return undefined;
 }
@@ -92,26 +114,41 @@ function readText(file: string): string | undefined {
   try { return readFileSync(file, 'utf8'); } catch { return undefined; }
 }
 
-function packageJsonOverrides(text: string | undefined): Record<string, unknown> | undefined {
+interface OverrideValues {
+  readonly values: Record<string, unknown>;
+  /** 1-based line of each key, when known. */
+  readonly lines: Record<string, number>;
+}
+
+function packageJsonOverrides(text: string | undefined): OverrideValues | undefined {
   if (text === undefined) return undefined;
   try {
     const overrides = (JSON.parse(text) as { pnpm?: { overrides?: unknown } }).pnpm?.overrides;
-    return overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides as Record<string, unknown> : undefined;
+    if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) return undefined;
+    const lines: Record<string, number> = {};
+    for (const key of Object.keys(overrides)) {
+      const line = packageJsonOverrideLine(text, key);
+      if (line) lines[key] = line;
+    }
+    return { values: overrides as Record<string, unknown>, lines };
   } catch { return undefined; }
 }
 
-function yamlOverrides(text: string | undefined): Record<string, unknown> | undefined {
+function yamlOverrides(text: string | undefined): OverrideValues | undefined {
   if (text === undefined) return undefined;
   const doc = parseDocument(text);
   if (doc.errors.length) return undefined;
   const node = doc.get('overrides', true);
   if (!isMap(node)) return undefined;
   const values: Record<string, unknown> = {};
+  const lines: Record<string, number> = {};
   for (const item of node.items) {
     const key = isScalar(item.key) ? String(item.key.value) : String(item.key);
     values[key] = isScalar(item.value) ? item.value.value : item.value === null ? null : (item.value as { toJSON?: () => unknown }).toJSON?.();
+    const offset = isScalar(item.key) ? item.key.range?.[0] : undefined;
+    if (offset !== undefined) lines[key] = text.slice(0, offset).split('\n').length;
   }
-  return values;
+  return { values, lines };
 }
 
 /** The Zhin entries of the project's pnpm overrides (both files), classified. */
@@ -122,11 +159,11 @@ export function readZhinOverrides(root: string): ZhinOverridePlan {
     const text = readText(join(root, file));
     const overrides = file === 'package.json' ? packageJsonOverrides(text) : yamlOverrides(text);
     if (!overrides) continue;
-    order[file] = Object.keys(overrides);
-    for (const [key, value] of Object.entries(overrides)) {
+    order[file] = Object.keys(overrides.values);
+    for (const [key, value] of Object.entries(overrides.values)) {
       const classified = classifyZhinOverride(key, value);
       if (classified.kind === 'ignore') continue;
-      const line = lineOf(text!, key, file === 'package.json');
+      const line = overrides.lines[key];
       entries.push({ file, key, value, ...(line ? { line } : {}), class: classified });
     }
   }

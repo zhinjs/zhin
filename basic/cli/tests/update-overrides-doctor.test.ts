@@ -184,7 +184,7 @@ describe.runIf(process.platform !== 'win32')('zhin update with pnpm.overrides �
     expect(fs.realpathSync(path.join(root, 'node_modules/zhin.js'))).toContain('zhin.js@1.7.0');
     expect(doctorSingleInstance(root)).toEqual({ ok: true, lines: [] });
     // Released before the package manager, pinned after it, installed once with the pins.
-    expect(calls.at(-1)).toBe('install');
+    expect(calls.at(-1)).toBe('install --no-frozen-lockfile');
     expect(output.text()).toContain('同步 overrides：package.json 的 pnpm.overrides "@zhin.js/core": 1.11.0 → 1.12.0');
   });
 

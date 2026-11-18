@@ -71,9 +71,11 @@ describe('previewUpdate', () => {
       overridden: ['left（link:../left）'],
       changes: [{ name: 'zhin.js', current: '1.4.0', target: '1.4.2', override: '$zhin.js' }],
     });
-    // #1250 update-overrides-not-synced: the Zhin version lock `~1.9.0` is released for the update,
-    // so the member's own `~1.8.0` decides (1.8.0 is the newest 1.8.x), and the lock is re-pinned.
+    // #1250 update-overrides-not-synced: the Zhin version lock `~1.9.0` is released for the update
+    // and written back as `~1.9.1` (zhin.js 1.4.2's core): that value, not the member's own `~1.8.0`,
+    // decides the core it ends up with.
     expect(preview.members[1]!.changes).toEqual([
+      { name: '@zhin.js/core', range: '~1.9.0', current: '1.8.0', target: '1.9.1', override: '~1.9.0' },
       { name: 'zhin.js', range: '^1.3.0', current: '1.4.0', target: '1.4.2', override: '$zhin.js', latestOutsideRange: '2.0.0' },
     ]);
     expect(preview.overrides).toEqual({
@@ -85,6 +87,7 @@ describe('previewUpdate', () => {
     });
     const lines = renderUpdatePreview(preview, false);
     expect(lines.some(line => line.includes('1.4.0 → 1.4.2（overrides：$zhin.js；'))).toBe(true);
+    expect(lines.some(line => line.includes('1.8.0 → 1.9.1（overrides：~1.9.0 → ~1.9.1）'))).toBe(true);
     expect(lines).toContain('  由 overrides 决定、无法预览：left（link:../left）');
     expect(lines).toContain('  pnpm-workspace.yaml 的 overrides "@zhin.js/core": ~1.9.0 → ~1.9.1');
     expect(lines.some(line => line.includes('带条件的 overrides 没有计入预览') && line.includes('foo>bar'))).toBe(true);
@@ -107,6 +110,50 @@ describe('previewUpdate', () => {
     ]);
     // A Zhin key that is not synced is no longer listed as an unapplied conditional override.
     expect(preview.conditionalOverrides).toEqual([]);
+  });
+
+  it('shows the version a synced override is written back with, even past the declared range', async () => {
+    // The root declares core ^1.8.0 but zhin.js 1.4.2 requires core 1.9.1 exactly: the lock follows.
+    published['@zhin.js/core'] = ['1.8.0', '1.9.1', '1.10.0'];
+    try {
+      write('package.json', { name: 'bot', dependencies: { 'zhin.js': '^1.4.0', '@zhin.js/core': '^1.8.0' }, pnpm: { overrides: { '@zhin.js/core': '1.8.0' } } });
+      write('node_modules/@zhin.js/core/package.json', { name: '@zhin.js/core', version: '1.8.0' });
+      const preview = await previewUpdate(root, [], {
+        publishedVersions: lookup,
+        packageDependencies: async (name, version) => (name === 'zhin.js' && version === '1.4.2' ? { '@zhin.js/core': '1.9.1' } : undefined),
+      });
+      expect(preview.overrides.changes).toEqual([{ file: 'package.json', key: '@zhin.js/core', from: '1.8.0', to: '1.9.1' }]);
+      // Not 1.10.0 (what ^1.8.0 alone would pick): the written-back 1.9.1 decides.
+      expect(preview.members[0]!.changes.find(change => change.name === '@zhin.js/core')).toEqual({ name: '@zhin.js/core', range: '1.8.0', current: '1.8.0', target: '1.9.1', override: '1.8.0' });
+      expect(preview.members[1]!.changes.find(change => change.name === '@zhin.js/core')).toMatchObject({ current: '1.8.0', target: '1.9.1' });
+    } finally {
+      published['@zhin.js/core'] = ['1.8.0', '1.9.1'];
+    }
+  });
+
+  it('says a single Zhin package pinned back by its override must be upgraded through zhin.js', async () => {
+    write('package.json', `${JSON.stringify({ name: 'bot', dependencies: { 'zhin.js': '^1.4.0', '@zhin.js/core': '^1.8.0' }, pnpm: { overrides: { '@zhin.js/core': '1.8.0' } } }, null, 2)}\n`);
+    write('node_modules/@zhin.js/core/package.json', { name: '@zhin.js/core', version: '1.8.0' });
+    const preview = await previewUpdate(root, ['@zhin.js/core@1.9.1'], {
+      publishedVersions: lookup,
+      packageDependencies: async (name, version) => (name === 'zhin.js' && version === '1.4.0' ? { '@zhin.js/core': '1.8.0' } : undefined),
+    });
+    expect(preview.overrides.changes).toEqual([]);
+    expect(preview.overrides.manual).toEqual([
+      '@zhin.js/core@1.9.1 无法单独升级：package.json 的 pnpm.overrides "@zhin.js/core" 会把它钉回 1.8.0——这个包的版本由 zhin.js 的版本决定，zhin update 会失败并回滚；请改为升级 zhin.js，或先手动把 package.json:9 的 "@zhin.js/core" 改成 "1.9.1"',
+    ]);
+  });
+
+  it('does not sync pnpm overrides in a project that installs with another manager', async () => {
+    write('package.json', { name: 'bot', packageManager: 'npm@10.9.0', dependencies: { 'zhin.js': '^1.4.0' }, pnpm: { overrides: { 'zhin.js': '1.4.0' } } });
+    const preview = await previewUpdate(root, [], { publishedVersions: lookup, packageDependencies: async () => { throw new Error('not asked'); } });
+    expect(preview.overrides).toEqual({ changes: [], manual: [] });
+    write('package.json', { name: 'bot', dependencies: { 'zhin.js': '^1.4.0' }, pnpm: { overrides: { 'zhin.js': '1.4.0' } } });
+    write('yarn.lock', '');
+    expect((await previewUpdate(root, [], { publishedVersions: lookup, packageDependencies: async () => undefined })).overrides).toEqual({ changes: [], manual: [] });
+    fs.rmSync(path.join(root, 'yarn.lock'));
+    expect((await previewUpdate(root, [], { publishedVersions: lookup, packageDependencies: async () => undefined })).overrides.changes)
+      .toEqual([{ file: 'package.json', key: 'zhin.js', from: '1.4.0', to: '1.4.2' }]);
   });
 
   it('treats any workspace packages entry as recursive, like the gateway', async () => {

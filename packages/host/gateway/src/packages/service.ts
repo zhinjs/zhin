@@ -402,11 +402,13 @@ export class GatewayPackageService {
     return this.#transaction('update', packages, options, async (ctx, authorized) => {
       const recursive = await isPnpmWorkspace(this.#root) ? ['-r'] : [];
       // #1250 update-overrides-not-synced: pnpm overrides that pin Zhin packages move with them.
-      const overrides = packages === 'all' || authorized.some(item => isZhinPackageName(item.name))
+      // Only pnpm reads `pnpm.overrides` / pnpm-workspace.yaml: other managers leave them alone.
+      const overrides = (packages === 'all' || authorized.some(item => isZhinPackageName(item.name)))
+        && await detectPackageManager(this.#root) === 'pnpm'
         ? readZhinOverrides(this.#root)
         : undefined;
       const syncing = overrides?.entries.some(entry => entry.class.kind === 'sync') === true;
-      if (overrides && syncing) await releaseZhinOverrides(this.#root, overrides);
+      const release = overrides && syncing ? await releaseZhinOverrides(this.#root, overrides) : undefined;
       if (packages === 'all') await ctx.run(['update', ...recursive]);
       else {
         const ranged = authorized.filter(item => item.version === undefined).map(item => item.name);
@@ -420,11 +422,22 @@ export class GatewayPackageService {
       }
       if (!overrides?.entries.length) return;
       const say = (line: string, stream: 'stdout' | 'stderr' = 'stdout') => this.#relay.output(stream, `${line}\n`);
-      const synced = await pinZhinOverrides(this.#root, overrides);
+      // `name@x.y.z` the user asked for: an override must not pin it back (#1250).
+      const requested = packages === 'all' ? [] : authorized.flatMap(item => item.version !== undefined && isZhinPackageName(item.name) ? [{ name: item.name, version: item.version }] : []);
+      const synced = await pinZhinOverrides(this.#root, overrides, { ...(release ? { release } : {}), requested });
       for (const line of formatOverrideChanges(synced.changes)) say(`同步 overrides：${line}`);
       for (const line of synced.manual) say(line, 'stderr');
+      if (!syncing || !synced.written) return;
       // The update ran without the released overrides: install once with them for the lockfile.
-      if (syncing && synced.written) await ctx.run(['install']);
+      // The lockfile changes on purpose, so a CI environment's frozen lockfile must not refuse it.
+      await ctx.run(['install', '--no-frozen-lockfile']);
+      // What the reinstall actually resolved: a request the overrides moved fails (and rolls back).
+      for (const item of requested) {
+        const installed = await this.#installedManifest(item.name);
+        if (installed?.version !== item.version) {
+          throw new GatewayError('conflict', `${item.name} 请求的是 ${item.version}，同步 overrides 并重装后实际安装的是 ${installed?.version ?? '（未安装）'}；已回滚。请检查 package.json 的 pnpm.overrides 与 pnpm-workspace.yaml 的 overrides 中关于 ${item.name} 的条目，或改为升级 zhin.js`);
+        }
+      }
     });
   }
 
