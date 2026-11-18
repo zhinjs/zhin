@@ -9,6 +9,8 @@ export default defineAgentTool({
   permissions: ['trusted'],
   requiresApproval: 'never',
   readOnly: true,
+  // ADR 0067 D1: returns text other people can write, so it is external content, not trusted output.
+  tags: ['external_content'],
   inputSchema: z.object({
     cursor: z.string().optional().describe('上一页返回的 next_cursor；首次不传'),
   }),

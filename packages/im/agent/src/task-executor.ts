@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { EndpointDeliveryError, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
 import type { NotificationRouter } from './assistant/notification-router.js';
-import type { ScheduleJob, ScheduleJobExecutionPlan } from './assistant/types.js';
+import type { ScheduleJob, ScheduleJobExecutionPlan, ScheduleJobProvenance } from './assistant/types.js';
 import { scheduleJobCreatorFromPrincipal } from './assistant/job-creator.js';
 import type { ScheduleInvocationContext } from './assistant/schedule-job-service.js';
 import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
@@ -55,6 +55,13 @@ export interface TaskExecutorDeps {
   dataDir?: string;
   history?: ScheduleHistoryObserver;
   observations?: ScheduleObservationOwner;
+}
+
+/** Options of {@link createTaskExecutor}'s `preview`. */
+export interface SchedulePreviewOptions {
+  activityFeedback?: boolean;
+  /** ADR 0067 D2.1: what the calling turn had read; the preview run starts tainted when set. */
+  provenance?: ScheduleJobProvenance;
 }
 
 export interface TaskExecutionOptions {
@@ -207,7 +214,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   async function preview(
     prompt: string,
     source: ScheduleInvocationContext,
-    options: { activityFeedback?: boolean } = {},
+    options: SchedulePreviewOptions = {},
   ): Promise<TaskExecutionResult> {
     const now = Date.now();
     const job: ScheduleJob = {
@@ -223,6 +230,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       source: 'manual',
       createdBy: scheduleJobCreatorFromPrincipal(source.principal, source.origin),
       activityFeedback: options.activityFeedback,
+      ...(options.provenance ? { provenance: options.provenance } : {}),
     };
     return execute(job, { previewSource: source });
   }

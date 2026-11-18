@@ -14,7 +14,8 @@ import {
 } from './assistant/schedule-job-service.js';
 import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
 import type { TimerScheduler } from './assistant/timer-scheduler.js';
-import type { TaskExecutionResult } from './task-executor.js';
+import type { SchedulePreviewOptions, TaskExecutionResult } from './task-executor.js';
+import { currentTurnProvenance } from './security/provenance.js';
 import type { ScheduleAuditRecord } from './schedule-domain/audit-logger.js';
 import { isEmptyExecutionPlan } from './plugin-runtime/schedule-capability-plan.js';
 
@@ -35,7 +36,7 @@ export interface ScheduleManager {
   previewTask?: (
     prompt: string,
     context: ScheduleInvocationContext,
-    options?: { activityFeedback?: boolean },
+    options?: SchedulePreviewOptions,
   ) => Promise<TaskExecutionResult>;
 }
 
@@ -118,7 +119,10 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         if (!manager?.engine) return { error: '持久化调度引擎不可用' };
         const parsed = parseScheduleAddFromToolArgs(input, context);
         if ('error' in parsed) return { error: parsed.error };
-        const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId() });
+        // ADR 0067 D2.1: a job created after the turn read anything keeps that, and every run starts tainted.
+        const provenance = currentTurnProvenance()?.snapshotForSchedule();
+        const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId(),
+          ...(provenance ? { provenance } : {}) });
         // #1250 b33: a plan without tools or skills is accepted (it falls back to prompt-based selection
         // when the job runs), but the caller is told, so it can preview and pass the tools explicitly.
         const warning = isEmptyExecutionPlan(job.executionPlan)
@@ -142,8 +146,11 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       }, ['prompt']),
       async (input, context) => {
         if (!manager?.previewTask) return { error: '预演服务不可用' };
+        // ADR 0067 D2.1: the preview runs the prompt now, with the calling turn's provenance.
+        const provenance = currentTurnProvenance()?.snapshotForSchedule();
         const result = await manager.previewTask(String(input.prompt), context, {
           activityFeedback: input.activity_feedback === true,
+          ...(provenance ? { provenance } : {}),
         });
         if (!result.success) return { error: result.error || '预演失败' };
         const unattended = describeUnattendedPreview(result.audit.unattendedApproval);

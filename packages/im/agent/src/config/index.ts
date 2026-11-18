@@ -82,3 +82,11 @@ export {
 } from './model-harness-runtime.js';
 
 export { validateModelRuntimeConfig, validateAgentMcpBindings } from '../model-runtime/validation.js';
+
+// ADR 0067：`injectionGuard.confirmHighRisk` 的配置形状
+export type {
+  ConfirmHighRiskSetting,
+  HighRiskConfirmLevel,
+  HighRiskConfirmTiers,
+  InjectionGuardConfig,
+} from '../security/provenance.js';

@@ -6,7 +6,7 @@ import type { ReplyFallback, TurnEvent } from '../event/turn-event.js';
 import { formatReplyFallback, inlineToolName } from '../core/tool-calls-user-format.js';
 import { chatFailureKindOf } from '../outbound/chat-failure.js';
 import { isTransientModelFailure, type ScheduleModelFailure } from './model-failure.js';
-import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
+import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan, ScheduleJobProvenance } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from '../config/zhin-agent-defaults.js';
 import { BudgetGuard, type ScheduleExecutionBudget } from './budget-guard.js';
@@ -71,6 +71,8 @@ export interface ScheduleTurnExecutionRequest {
   readonly preview: boolean;
   readonly createdBy?: ScheduleJobCreator;
   readonly executionPlan?: ScheduleJobExecutionPlan;
+  /** ADR 0067 D2.1: restored into the run's provenance (`scheduled_prompt`). */
+  readonly provenance?: ScheduleJobProvenance;
   readonly security: ReturnType<typeof createScheduleSecurityContext>;
   readonly signal: AbortSignal;
   readonly onTurnEvent: (event: TurnEvent) => void;
@@ -158,6 +160,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
         preview: options.preview === true,
         createdBy: job.createdBy,
         executionPlan: job.executionPlan,
+        ...(job.provenance ? { provenance: job.provenance } : {}),
         security,
         signal: budget.signal,
         operationEvidence: evidence,

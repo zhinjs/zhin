@@ -9,6 +9,8 @@ export default defineAgentTool({
   permissions: ['trusted'],
   requiresApproval: 'never',
   readOnly: true,
+  // ADR 0067 D1: returns text other people can write, so it is external content, not trusted output.
+  tags: ['external_content'],
   inputSchema: z.object({
     user_id: z.string().min(1).describe('目标成员的 member_openid（来自消息发送者或成员列表，不要猜测）'),
   }),

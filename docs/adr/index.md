@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0066）
+## 现存 ADR 列表（0034–0067）
 
 ### 服务插件与平台适配器契约
 
@@ -28,6 +28,7 @@ sidebar: false
 | [ADR 0040](./0040-controlled-self-change.md) | 受控自我进化——变更草稿、审批生效与重启回报 | Implemented | `@zhin.js/agent/src/self-change/`、`basic/cli` |
 | [ADR 0061](./0061-inbound-message-outcomes.md) | 每条入站消息都有结局与原因——消灭静默失败：有限结局集合与人话模板、`im_message_outcomes` 一行摘要（链接决策审计与 turn trace）、`why` / Console 结局时间线 / `zhin why`、`finally` 提交与 `check:silent-catch`；IM 回合审批与 Console 共用 `ToolApprovalQueue` | Accepted | `@zhin.js/core`（`plugin-runtime/im/`）、`@zhin.js/agent`（`plugin-runtime/ingress/`、`media/`、`assistant/timer-scheduler.ts`）、`@zhin.js/im-contract`、`@zhin.js/console-protocol`、`basic/cli`、`scripts/check-silent-catch.mjs` |
 | [ADR 0065](./0065-mcp-tool-permit.md) | MCP 工具按聊天角色授权——接入时保留上游 `annotations`，`ai.mcpServers[].permit`（`readOnly` / `default` / `tools`，复用 `PermissionHost` 与插件工具 `permissions` 的 DSL，另有保留字 `everyone` / `deny`）；默认上游标注只读的对所有人开放、其余只给 `owner@global`，标注不放宽审批；`ai.agents.<name>.mcpServers` 的覆盖与服务器级取 AND、只能收窄；每轮按发送者过滤并在执行前复核；`zhin status` / Console / trace 显示；定时任务沿用降档后的创建者主体（D1–D7 所有者 2026-11-17 批准） | Accepted（未实施） | `@zhin.js/mcp-feature`（`definition.ts`）、`@zhin.js/agent`（`plugin-runtime/agent-runtime.ts` `expandMcpTools`、`capability-ingress.ts`、`mcp-client/`、`host/config.ts`、`assistant/job-creator.ts`）、`@zhin.js/runtime`（`host-config-schema.json`）、`@zhin.js/console-protocol`、`basic/cli`（`zhin status`）、Console 前端（`zhinjs/console`） |
+| [ADR 0067](./0067-high-risk-confirm-tiers.md) | 读取外部内容后的高危动作确认分级——第一方插件声明 `readOnly: true` 的工具结果算受信输出（MCP 第三方、网页、文件、记忆仍算外部内容，即使声明只读）；高危动作分五类（执行命令、写文件、外发、改配置、定时任务），级别 `off` / `untrusted_content` / `any_content` / `always`，默认只有定时任务在只读过受信输出后不确认；`confirmHighRisk` 可按类别配置，字符串写法兼容且不放宽显式配置；IM 沿用按钮确认、无渠道给 Console 替代路径；`zhin doctor` 对 `off` 提示失去的保护（所有者 2026-11-18 选定） | Accepted（已实施） | `@zhin.js/agent`（`security/provenance.ts`、`tool/turn-tool-runtime.ts`、`plugin-runtime/capability-ingress.ts`）、`@zhin.js/runtime`（`host-config-schema.json`）、`@zhin.js/cli`（`zhin doctor`）、`@zhin.js/plugin-60s`、`@zhin.js/adapter-qq`、`@zhin.js/plugin-content-moderation` |
 
 ### 提示词缓存与上下文 Token 预算
 
