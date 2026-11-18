@@ -773,6 +773,49 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     f.h.unmount();
   });
 
+  it('leaves no empty navigation or account section behind when the host owns the accounts', async () => {
+    // Each empty element would still take a section gap in the host page (zhinjs/console#155).
+    const f = fixture(status(), [], '', { hosted: true }); await f.h.settle();
+    expect(f.h.nodes().some(node => node.type === 'nav')).toBe(false);
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(false);
+    f.h.unmount();
+  });
+
+  it('keeps the read-only configured accounts, and the link to them, when the host owns accounts but there is no runtime', async () => {
+    // Without a runtime the headless accounts are `unmanaged` with no rows: the host has nothing to list.
+    const s = status(); delete s.runtime;
+    const f = fixture(s, [], '', { hosted: true }); await f.h.settle();
+    expect(f.hosted.accounts).toMatchObject({ state: 'unmanaged', rows: [] });
+    const section = f.h.nodes().find(node => node.props?.id === 'adapter-accounts');
+    expect(allNodes(section).some(node => textOf(node).includes('10001'))).toBe(true);
+    const nav = f.h.nodes().find(node => node.type === 'nav');
+    expect(nav?.props?.['aria-label']).toBe('页面导航');
+    const link = allNodes(nav).find(node => node.type === 'a' && node.props?.href === '#adapter-accounts');
+    expect(link).toBeDefined();
+    f.h.unmount();
+  });
+
+  it('lets the 账号 link jump to the fallback when the runtime disappears while the add form is open', async () => {
+    const base = status();
+    const f = fixture(base); await f.h.settle();
+    await f.h.button('添加').onClick(); await f.h.settle();
+    expect(f.h.text()).toContain('添加账号');
+    f.replaceView({ ...base, runtime: undefined }); await f.h.button('刷新').onClick(); await f.h.settle();
+    const nav = f.h.nodes().find(node => node.type === 'nav');
+    const link = allNodes(nav).find(node => node.type === 'a' && node.props?.href === '#adapter-accounts');
+    const event = { preventDefault: vi.fn() };
+    (link!.props!.onClick as (e: typeof event) => void)(event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    f.h.unmount();
+  });
+
+  it('keeps the navigation and account section when the page lists the accounts itself', async () => {
+    const f = fixture(status(), [], '', { embedded: true }); await f.h.settle();
+    expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(true);
+    f.h.unmount();
+  });
+
   it('reports commit_unknown through the headless controller and blocks further changes', async () => {
     const f = fixture(status(), [], '', { hosted: true }); await f.h.settle(); f.setMode('unknown');
     await (f.hosted.accounts!.rows[0]!.start as () => Promise<void>)(); await f.h.settle();
