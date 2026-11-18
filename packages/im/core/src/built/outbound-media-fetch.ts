@@ -8,8 +8,8 @@
  * fetch it on their own servers. A URL downloaded *here* is therefore always treated as untrusted:
  *
  * - HTTPS only; private, loopback, link-local and metadata hosts are refused by name;
- * - port 443 only (written as `:443` or not) unless `allowedPorts` lists more, on every redirect hop
- *   too: any other port is refused as `outbound_media_url_blocked` with `reason: 'port'` (#1250 第 48 批);
+ * - port 443 only (written as `:443` or not) unless `allowedPorts` lists more for the first URL's own
+ *   origin; every redirect hop is checked too, and a hop to another origin gets 443 only: any other port is refused as `outbound_media_url_blocked` with `reason: 'port'` (#1250 第 48 批);
  * - the name is resolved once, every address must be public, and the connection goes to the address
  *   that was checked (DNS pinning — no rebinding between check and connect);
  * - redirects are followed by hand and every hop is checked again;
@@ -153,8 +153,9 @@ export interface OutboundMediaFetchOptions {
   /** Short label for logs, e.g. the adapter name. Never a user value. */
   readonly source?: string;
   /**
-   * Ports accepted besides 443, on every hop (default none). Only for a platform whose own media host
-   * is known to use another port; never from user or model input.
+   * Ports accepted besides 443 (default none), for the first URL's origin only (same scheme, host and
+   * port): a redirect to another origin is held to 443. Only for a platform whose own media host is
+   * known to use another port; never from user or model input.
    */
   readonly allowedPorts?: readonly number[];
   /**

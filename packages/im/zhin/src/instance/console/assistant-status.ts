@@ -51,7 +51,12 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 const WINDOW_LIMIT = 2000;
 /** Days of ambient judge totals kept in memory (today included). */
 export const AMBIENT_JUDGE_DAYS = 7;
-const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `YYYY-MM-DD` moved by whole calendar days (UTC date arithmetic, so no DST hour can shift it). */
+function shiftDayKey(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
 
 export type AmbientOutcome = 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
 export type AmbientSkipReason = 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
@@ -174,7 +179,8 @@ export interface AmbientStatus {
   /**
    * Today (`YYYY-MM-DD`) by the instance clock in {@link judgeTimeZone}, cut with the same `dayKeyOf` as
    * `judgeDaily` (#1250). The Console derives its 7-day window from this rather than the browser clock:
-   * the kept cutoff is `judgeToday` minus {@link AMBIENT_JUDGE_DAYS} − 1 (6) days, and days in
+   * the kept cutoff is `judgeToday` minus {@link AMBIENT_JUDGE_DAYS} − 1 (6) calendar days (also across
+   * DST changes; the same cutoff prunes `judgeDaily`), and days in
    * `[cutoff, judgeToday]` missing from `judgeDaily` had no calls. Optional for older instances.
    */
   readonly judgeToday?: string;
@@ -414,9 +420,13 @@ export class AssistantStatus {
     }
   }
 
-  /** The first kept day: today and the 6 days before it, in the status time zone. */
+  /**
+   * The first kept day: today (`judgeToday`) and the 6 calendar days before it, in the status time
+   * zone. Counted on the calendar date, not as `now − 6 × 24 h`: across a DST change a local day is 23
+   * or 25 hours long, and subtracting hours would land on D−5 or D−7.
+   */
   #judgeCutoff(now: number): string {
-    return dayKeyOf(now - (AMBIENT_JUDGE_DAYS - 1) * DAY_MS, this.#timeZone);
+    return shiftDayKey(dayKeyOf(now, this.#timeZone), -(AMBIENT_JUDGE_DAYS - 1));
   }
 
   /** Drops days older than the kept window, so a long quiet spell never shows weeks-old totals. */
@@ -449,7 +459,8 @@ export class AssistantStatus {
     const judges = view ? view.chain.map(member => member.label) : judge as readonly string[];
     const now = this.#now();
     const since = now - WINDOW_MS;
-    const judgeCutoff = this.#judgeCutoff(now);
+    const judgeToday = dayKeyOf(now, this.#timeZone);
+    const judgeCutoff = shiftDayKey(judgeToday, -(AMBIENT_JUDGE_DAYS - 1));
     const config = this.#readAmbientConfig();
     const conversations = config?.conversations ?? [];
     const enabled = conversations.length > 0;
@@ -498,7 +509,7 @@ export class AssistantStatus {
           averageMs: day.calls ? Math.round(totalMs / day.calls) : 0,
         }))),
       judgeTimeZone: this.#timeZone,
-      judgeToday: dayKeyOf(now, this.#timeZone),
+      judgeToday,
     });
   }
 

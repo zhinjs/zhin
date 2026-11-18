@@ -217,6 +217,18 @@ describe('fetchOutboundMedia — port rule (#1250 第 48 批)', () => {
     expect((await refusal(net.fetchMedia('https://cdn.example:8443/a.png'))).reason).toBe('port');
   });
 
+  it('applies allowedPorts to the first origin only: a redirect from :8443 to another host on :8443 is refused', async () => {
+    vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34', 'other.example': '93.184.216.35' }, {
+      'https://cdn.example:8443/a.png': { status: 302, headers: { location: 'https://other.example:8443/b.png' } },
+    });
+    const error = await refusal(net.fetchMedia('https://cdn.example:8443/a.png', { allowedPorts: [8443] }));
+    expect(error.code).toBe('outbound_media_url_blocked');
+    expect(error.reason).toBe('port');
+    expect(error.host).toBe('other.example');
+    expect(net.connect).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps other refusals without a port reason', async () => {
     vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
     const net = fakeNetwork({}, {});
