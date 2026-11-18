@@ -10,6 +10,7 @@ import {
   type AssistantMessage,
   type LlmTool,
   type AgentMessage,
+  isTieredParallelTool,
 } from "../../src/llm/index.js";
 
 describe("agentLoop tiered execution", () => {
@@ -134,5 +135,11 @@ describe("agentLoop tiered execution", () => {
     // （不断言墙钟时间——CI 共享 runner 的调度抖动不影响判定）
     expect(maxInFlight).toBe(2);
     expect(executeTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs collaboration delegates of one step in the parallel bucket (#1250)", () => {
+    // Each waits up to 20 s for its result: run one after another, three would take a minute.
+    expect(isTieredParallelTool("delegate")).toBe(true);
+    expect(isTieredParallelTool("ask")).toBe(false);
   });
 });

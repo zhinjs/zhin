@@ -22,9 +22,19 @@ export const interactionMessages = createMessages({
   cancel: { 'zh-CN': '取消', en: 'Cancel' },
   confirmation: { 'zh-CN': '请选择确认或取消。', en: 'Choose confirm or cancel.' },
   // Shown whether or not the endpoint renders buttons: replying always works, buttons speak for themselves (#1250).
-  selection: { 'zh-CN': '回复序号或选项名称。', en: 'Reply with an option number or name.' },
-  multiple: { 'zh-CN': '回复序号或选项名称，多项用“{separator}”分隔。', en: 'Reply with option numbers or names, separated by "{separator}".' },
-  list: { 'zh-CN': '多项用“{separator}”分隔。', en: 'Separate items with "{separator}".' },
+  // #1250 `interaction-prompt-swallows-messages`: every choice-like prompt says how to leave it.
+  selection: { 'zh-CN': '回复序号或选项名称，或回复「取消」退出。', en: 'Reply with an option number or name, or reply "cancel" to exit.' },
+  multiple: { 'zh-CN': '回复序号或选项名称，多项用“{separator}”分隔，或回复「取消」退出。', en: 'Reply with option numbers or names, separated by "{separator}", or reply "cancel" to exit.' },
+  list: { 'zh-CN': '多项用“{separator}”分隔，或回复「取消」退出。', en: 'Separate items with "{separator}", or reply "cancel" to exit.' },
+  numberInstruction: { 'zh-CN': '回复一个数字，或回复「取消」退出。', en: 'Reply with a number, or reply "cancel" to exit.' },
+  // ADR 0061 decision 11 (revised): throttled reminders replace waiting silently.
+  waitingSelect: { 'zh-CN': '正在等你选择，回复序号，或回复「取消」退出。', en: 'Still waiting for your choice: reply with an option number, or reply "cancel" to exit.' },
+  waitingAnswer: { 'zh-CN': '正在等你回答，按提示回复，或回复「取消」退出。', en: 'Still waiting for your answer: reply as asked, or reply "cancel" to exit.' },
+  // Shown only to a text prompt with rules (an unrestricted one takes any text): a command that
+  // meets the rules would be taken as the answer, so only the exits that always work are named.
+  waitingText: { 'zh-CN': '正在等你回答，按提示回复；回复「取消」或发送图片、文件即可退出。', en: 'Still waiting for your answer: reply as asked, or reply "cancel" or send an image or file to exit.' },
+  exited: { 'zh-CN': '已退出上一个选择。', en: 'Left the previous question.' },
+  cancelled: { 'zh-CN': '已取消。', en: 'Cancelled.' },
   ended: { 'zh-CN': '交互已结束', en: 'Interaction ended' },
   denied: { 'zh-CN': '你不能使用这个按钮：{reason}', en: 'You cannot use this button: {reason}' },
   expired: { 'zh-CN': '交互已过期或不可用，请重新发起。', en: 'This interaction has expired or is unavailable. Start a new one.' },

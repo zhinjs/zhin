@@ -21,6 +21,8 @@ import {
   type UserInteractionProgress,
   type UserInteractionView,
 } from '../../built/user-interaction.js';
+import { tagInteractionOwner } from './interaction-end.js';
+import { isInteractionCancelFirst, isInteractionCancelReply } from '../../built/interaction-cancel.js';
 import { randomUUID } from 'node:crypto';
 import {
   RuntimeMessage,
@@ -80,6 +82,8 @@ interface UserInteractionClaim {
   readonly classify?: (raw: string, action: boolean) => boolean;
   readonly owner?: string;
   readonly accept: (raw: string, action?: boolean) => boolean;
+  /** An answer was accepted and waits for the prompt's delivery; later messages never end the prompt. */
+  readonly hasBuffered: () => boolean;
   readonly reject: (error: Error) => void;
   readonly delivered: () => void;
   readonly answer: Promise<InteractionAnswer>;
@@ -107,7 +111,29 @@ export interface InteractionClaimResolution {
   /** The message parses as an answer to the prompt (otherwise it was consumed). */
   readonly answerLike: boolean;
   readonly owner?: string;
+  /**
+   * ADR 0061 decision 11 (revised, #1250): the message was not taken. It ended the sender's
+   * prompt (a command or media) and goes on through normal inbound processing.
+   */
+  readonly escaped?: true;
+  /** With `escaped`: whether to tell the sender once that the prompt ended (throttled). */
+  readonly notify?: boolean;
 }
+
+/** Options of {@link RuntimeInteractionCoordinator.resolveClaimDetailed}. */
+export interface InteractionClaimOptions {
+  /** Whether the message routes to a command (CommandIndex match); such a message ends the prompt. */
+  readonly matchesCommand?: () => boolean;
+}
+
+/** Segment types that make a message "media" for prompt escape (images, files, voice, video). */
+const ESCAPE_MEDIA_SEGMENTS: ReadonlySet<string> = new Set(['image', 'file', 'audio', 'voice', 'record', 'video']);
+/** Throttled reminders while a prompt waits after repeated invalid answers (decision 11, revised). */
+const REMINDER_LIMIT = 2;
+const REMINDER_INTERVAL_MS = 20_000;
+/** "Left the previous question" is said at most once per sender and conversation in this window. */
+const EXIT_NOTICE_INTERVAL_MS = 60_000;
+const EXIT_NOTICE_KEYS = 256;
 
 export interface UserInteractionSource {
   readonly locale?: Locale;
@@ -124,9 +150,23 @@ class UserInteractionTimeoutError extends Error {
   }
 }
 
+/**
+ * The sender left the prompt: replied a cancel word (`cancelled`) or sent a command, media or a
+ * mention meanwhile (`interrupted`). An expected end, never an internal error (ADR 0061
+ * `interaction_cancelled`); callers match it by `name`, like the other interaction errors.
+ */
+class UserInteractionCancelledError extends Error {
+  readonly reason: 'cancelled' | 'interrupted';
+  constructor(reason: 'cancelled' | 'interrupted') {
+    super(reason === 'cancelled' ? 'User interaction cancelled' : 'User interaction interrupted by a new message');
+    this.name = 'UserInteractionCancelledError';
+    this.reason = reason;
+  }
+}
+
 class UserInteractionSupersededError extends Error {
   constructor() {
-    super('User interaction superseded');
+    super('User interaction replaced by a newer prompt in this conversation');
     this.name = 'UserInteractionSupersededError';
   }
 }
@@ -145,6 +185,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #buttons = new JsxButtonRegistry();
   readonly #pendingFallbackIncarnations = new Map<string, PluginIncarnationRef>();
   readonly #markPrompt: ((message: MessageRef) => void) | undefined;
+  readonly #exitNotices = new Map<string, number>();
 
   /** `markPrompt` keeps a delivered prompt out of conversation context, like its answer. */
   constructor(
@@ -215,12 +256,18 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     return this.#buttons.prepare(request, snapshot);
   }
 
-  resolveClaim(message: Message, snapshot?: RuntimeSnapshot): boolean {
-    return this.resolveClaimDetailed(message, snapshot) !== false;
+  resolveClaim(message: Message, snapshot?: RuntimeSnapshot, options?: InteractionClaimOptions): boolean {
+    const resolution = this.resolveClaimDetailed(message, snapshot, options);
+    return resolution !== false && resolution.escaped !== true;
   }
 
-  /** {@link resolveClaim} plus whether the text was answer-like (ADR 0061 `interaction_answered` / `interaction_consumed`). */
-  resolveClaimDetailed(message: Message, snapshot?: RuntimeSnapshot): false | InteractionClaimResolution {
+  /**
+   * {@link resolveClaim} plus whether the text was answer-like (ADR 0061 `interaction_answered` /
+   * `interaction_consumed`). A message from the asked sender that carries media, or that is not an
+   * answer and routes to a command, ends the prompt instead (`escaped`). A mention of the bot alone
+   * never does: on many platforms every reply to the bot carries one.
+   */
+  resolveClaimDetailed(message: Message, snapshot?: RuntimeSnapshot, options?: InteractionClaimOptions): false | InteractionClaimResolution {
     const effectiveSnapshot = snapshot ?? (message instanceof RuntimeMessage ? message[interactionOperationScope]()?.snapshot : undefined);
     const own = this.#claims.get(this.#conversationKey(message));
     const claim = own?.isLiveFor(message.generation, effectiveSnapshot)
@@ -243,11 +290,25 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     // Another feature's callback is not a plain-text answer to this question.
     if (explicit && !explicit.startsWith(ASK_ACTION_PREFIX)) return false;
     if (!claim || !claimLive) return false;
+    const classify = (raw: string, action: boolean): boolean => {
+      try { return claim.classify?.(raw, action) ?? true; } catch { return false; }
+    };
     const taken = (raw: string, action: boolean): false | InteractionClaimResolution => {
-      let answerLike = true;
-      try { answerLike = claim.classify?.(raw, action) ?? true; } catch { answerLike = false; }
+      const answerLike = classify(raw, action);
       return claim.accept(raw, action) ? Object.freeze({ answerLike, ...(claim.owner ? { owner: claim.owner } : {}) }) : false;
     };
+    const askAction = payload?.startsWith(ASK_ACTION_PREFIX) === true && claim.actions.has(payload);
+    // "@bot 2" in a group answers the prompt: the mention itself is not part of the answer.
+    const plain = payload ?? message.content;
+    const text = message.mentioned === true && !classify(plain, false) ? textWithoutMentions(message) ?? plain : plain;
+    // An answer already taken (waiting for the prompt's delivery) is never displaced by a later message.
+    if (!askAction && !claim.hasBuffered() && this.#escapes(message, text, classify, options)) {
+      // An `anyone` prompt is not the sender's own: the message passes through and the prompt stays.
+      if (claim !== own) return false;
+      claim.reject(new UserInteractionCancelledError('interrupted'));
+      return Object.freeze({ answerLike: false, escaped: true, notify: this.#takeExitNotice(this.#conversationKey(message)),
+        ...(claim.owner ? { owner: claim.owner } : {}) });
+    }
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);
       if (answer !== undefined) return taken(answer, true);
@@ -255,7 +316,39 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       // the current question's input even if an old fallback once used its label.
       return explicit ? false : taken(message.content, false);
     }
-    return taken(payload ?? message.content, false);
+    return taken(text, false);
+  }
+
+  /**
+   * Media always escapes; a command escapes unless the text is a valid answer. A mention of the bot
+   * is no exit of its own (ADR 0061 decision 11, revised): platforms that deliver group messages
+   * only when the bot is mentioned, or mark a reply to the bot as a mention, put one on every
+   * answer, so "@bot 3" to a two-option prompt is an invalid answer and gets the prompt again. The
+   * command probe already ignores leading mentions, so "@bot /status" still escapes.
+   */
+  #escapes(
+    message: Message,
+    raw: string,
+    classify: (raw: string, action: boolean) => boolean,
+    options: InteractionClaimOptions | undefined,
+  ): boolean {
+    if (message.segments?.some(segment => ESCAPE_MEDIA_SEGMENTS.has(segment.type))) return true;
+    if (classify(raw, false)) return false;
+    if (!options?.matchesCommand) return false;
+    try { return options.matchesCommand(); } catch { return false; }
+  }
+
+  /** True when the sender was not told "left the previous question" in the last minute. */
+  #takeExitNotice(key: string): boolean {
+    const now = Date.now();
+    const last = this.#exitNotices.get(key);
+    if (last !== undefined && now - last < EXIT_NOTICE_INTERVAL_MS) return false;
+    if (this.#exitNotices.size >= EXIT_NOTICE_KEYS && last === undefined) {
+      for (const [entry, at] of this.#exitNotices) if (now - at >= EXIT_NOTICE_INTERVAL_MS) this.#exitNotices.delete(entry);
+      if (this.#exitNotices.size >= EXIT_NOTICE_KEYS) this.#exitNotices.clear();
+    }
+    this.#exitNotices.set(key, now);
+    return true;
   }
 
   /**
@@ -334,10 +427,17 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const deadline = Date.now() + timeout;
       const view = projectUserInteraction(request, progress, locale);
       let prompt = view;
-      // ADR 0061 decision 11: after an invalid answer the prompt is sent again at most once;
-      // later invalid answers keep waiting silently until the deadline.
+      // ADR 0061 decision 11 (revised, #1250): after an invalid answer the prompt is sent again
+      // once; later invalid answers get a short reminder, at most REMINDER_LIMIT times and
+      // REMINDER_INTERVAL_MS apart, instead of waiting silently until the deadline.
       let invalidAnswers = 0;
-      const classify = (raw: string, action: boolean) => parseUserInteractionAnswer(request, raw, locale, action).ok;
+      let reminders = 0;
+      let lastReminderAt = Number.NEGATIVE_INFINITY;
+      const reminderText = t(locale, request.type === 'select' || request.type === 'multiselect' ? 'waitingSelect'
+        : request.type === 'text' ? 'waitingText' : request.type === 'confirm' ? 'confirmation' : 'waitingAnswer');
+      // A cancel word is an answer too: it ends the prompt (`interaction_answered`, not consumed).
+      const classify = (raw: string, action: boolean) => parseUserInteractionAnswer(request, raw, locale, action).ok
+        || isInteractionCancelReply(request, raw, action);
       const answeredBy = request.answeredBy === 'anyone' ? ANYONE_SUBJECT : undefined;
       while (true) {
         const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions, classify,
@@ -353,12 +453,22 @@ export class RuntimeInteractionCoordinator<Admission = never> {
             assertLifetime();
             if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
             if (receipt.message) this.#markPrompt?.(receipt.message);
+          } else if (reminders < REMINDER_LIMIT && Date.now() - lastReminderAt >= REMINDER_INTERVAL_MS) {
+            reminders += 1;
+            lastReminderAt = Date.now();
+            // A lost reminder is not a failed prompt: the question itself was delivered already.
+            const receipt = await reply(reminderText);
+            assertLifetime();
+            if (receipt.status === 'sent' && receipt.message) this.#markPrompt?.(receipt.message);
           }
           claim.delivered();
           const raw = await claim.answer;
           claim.check();
+          // A list would read a lone `取消` as the item `['取消']`: the prompt said it cancels (#1250).
+          if (isInteractionCancelFirst(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
           const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
           if (result.ok) return result.value as UserInteractionValue<Request>;
+          if (isInteractionCancelReply(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
           invalidAnswers += 1;
           prompt = {
             ...view,
@@ -377,6 +487,12 @@ export class RuntimeInteractionCoordinator<Admission = never> {
           if (error instanceof UserInteractionTimeoutError) {
             await reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
           }
+          // An interrupted prompt is announced by the inbound runtime before the new message runs.
+          if (error instanceof UserInteractionCancelledError && error.reason === 'cancelled') await reply(t(locale, 'cancelled'));
+          // Timeout and cancellation are expected ends: the inbound runtime records them as
+          // `interaction_timeout` / `interaction_cancelled`, never as `internal_error` (#1250),
+          // naming the plugin that asked.
+          tagInteractionOwner(error, operation?.owner !== undefined ? String(operation.owner) : undefined);
           throw error;
         } finally {
           claim.dispose();
@@ -492,6 +608,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
         if (delivered) resolve(buffered);
         return true;
       },
+      hasBuffered: () => buffered !== undefined,
       delivered: () => { if (!failure) { delivered = true; if (buffered !== undefined) resolve(buffered); } },
       reject: fail,
       check: () => {
@@ -525,6 +642,18 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   #conversationKey(source: UserInteractionSource, subjectId = source.sender?.id ?? ''): string {
     return `${conversationRefKey(source.conversation)}:${subjectId}`;
   }
+}
+
+/** The text segments of a message without its mentions and quotes, when it has segments. */
+function textWithoutMentions(message: Message): string | undefined {
+  const segments = message.segments;
+  if (!segments?.length) return undefined;
+  const text = segments
+    .filter(segment => segment.type === 'text' && typeof (segment.data as { text?: unknown } | undefined)?.text === 'string')
+    .map(segment => (segment.data as { text: string }).text)
+    .join('')
+    .trim();
+  return text || undefined;
 }
 
 function abortError(signal: AbortSignal | undefined, fallback: string): Error {

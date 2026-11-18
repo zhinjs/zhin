@@ -16,7 +16,7 @@ export default defineEvalCase({
     { name: 'bob', description: 'Backend.', tools: [] },
   ],
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'alice', brief: 'Agree on the plan with bob.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'alice', brief: 'Agree on the plan with bob.', wait: false } }] },
     // The root keeps working on ordinary tools while alice and bob run into the pair round-trip limit.
     ...Array.from({ length: 12 }, (_, index) => ({ toolCalls: [{ name: 'lookup_notes', args: { page: index + 1 } }] })),
     { text: '已经交给 alice 和 bob 去商量了，资料也查过了。' },

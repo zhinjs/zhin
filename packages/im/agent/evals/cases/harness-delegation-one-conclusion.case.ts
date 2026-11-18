@@ -16,9 +16,9 @@ export default defineEvalCase({
   // Steps are consumed per actor, in order. draw: each delegated sub-turn spends its one call on a tool call
   // and stops; the follow-up answers in one call.
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'draw', brief: 'Draw a population table image.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'draw', brief: 'Draw a population table image.', wait: false } }] },
     { actor: 'draw', toolCalls: [{ name: 'render_table', args: { cities: ['北京', '上海', '广州'] } }] },
-    { toolCalls: [{ name: 'delegate', args: { agent: 'draw', brief: 'Draw the table again, smaller.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'draw', brief: 'Draw the table again, smaller.', wait: false } }] },
     { actor: 'draw', toolCalls: [{ name: 'render_table', args: { cities: ['北京', '上海', '广州'], size: 'small' } }] },
     { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Is the table image ready?' } }] },
     { actor: 'draw', text: '表格图片已经生成。' },

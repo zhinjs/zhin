@@ -34,7 +34,7 @@ import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { currentMailTurn } from '../collaboration/mail-turn-context.js';
-import { startTurnCollaboration } from '../collaboration/turn-collaboration.js';
+import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput } from '../collaboration/turn-collaboration.js';
 import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
@@ -404,6 +404,7 @@ async function* runInteractiveTurn(
     const told = renderAgentOutput(confirmedOutput);
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
+    if (told.trim()) collaboration?.replied(told);
     return facts;
   };
   const cancelReplyStreams = async () => { await Promise.all([...replyStreams.values()].map(stream => stream.cancel())); };
@@ -501,6 +502,7 @@ async function* runInteractiveTurn(
     return {
       project: async () => {
         let projectionError: Error | undefined;
+        const modelFailed = completion.terminal.type === 'turn_end' && completion.terminal.modelFailure !== undefined;
         try {
           // The perception pre-pass is billed to the same subject as the turn itself.
           if (!interactiveRun) host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
@@ -510,9 +512,11 @@ async function* runInteractiveTurn(
           let confirmedOutput: AgentOutputElement[] | undefined = phaseFacts.size
             ? [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput) : undefined;
           if (completion.terminal.type === 'turn_end' && reply) {
-            const outbound = completion.terminal.output.length > 0
+            const built = completion.terminal.output.length > 0
               ? completion.terminal.output
               : buildTextTurnOutbound(completion.result.reply, completion.result);
+            // #1250: the supplement marker `[[no_reply]]` is control output, never shown to the human.
+            const outbound = collaboration ? stripNoReplyOutput(built) : built;
             const progressive = completion.result.progressive;
             if (!progressive && !phaseFacts.size) await replyStream?.cancel();
             const progressiveDelivery = phaseFacts.size ? aggregateReplyPhases([...phaseFacts.values()])
@@ -537,8 +541,13 @@ async function* runInteractiveTurn(
               if (!progressive && !phaseFacts.size) throw error;
               projectionError = error;
             }
-            const told = confirmedOutput ? renderAgentOutput(confirmedOutput) : delivery.status === 'sent' ? completion.result.reply : '';
+            const told = confirmedOutput ? renderAgentOutput(confirmedOutput)
+              : delivery.status === 'sent' ? (collaboration ? stripNoReplyMarker(completion.result.reply) : completion.result.reply) : '';
             if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
+            // #1250 delegate-result-double-reply: later delegated results only supplement this answer.
+            // A failure line (the model request failed) is no answer: delegated results read in the turn
+            // still wake the entry agent.
+            if (told.trim() && !phaseFacts.size && !modelFailed) collaboration?.replied(told);
             if (progressive || phaseFacts.size) {
               const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
               deliveredMessageIds = messages.map(message => message?.id ?? null);
@@ -585,7 +594,7 @@ async function* runInteractiveTurn(
           if (projectionError) throw projectionError;
         } finally {
           // Delegated work keeps running; its results reach the human as follow-up replies.
-          await collaboration?.finish(completion.terminal.type === 'turn_end' && !projectionError ? 'completed' : 'failed');
+          await collaboration?.finish(completion.terminal.type === 'turn_end' && !projectionError && !modelFailed ? 'completed' : 'failed');
           replyLifetime.abort();
           await cancelReplyStreams();
           // Stop activity-feedback AFTER the reply is sent. Awaiting icqq

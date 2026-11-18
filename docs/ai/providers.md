@@ -171,6 +171,7 @@ Console 引用 Host 环境变量只有两条规则：
 # 列出 Host 模型账号：id、名称、服务、引用的环境变量名（不含值）与状态；--json 输出同样的字段
 zhin ai account list [--json]
 # 新增一个读取 OPENAI_API_KEY 的 Host 账号（服务可写已有服务的 id／名称，或内置服务类型）
+# 新建服务时名称默认用驱动名（如 OpenAI）；--name 同时作为账号和新建服务的名称
 zhin ai account add --service openai --env OPENAI_API_KEY --name 主账号 --test
 # 修改引用的变量名（账号身份不变）；新值与原凭据不同时需确认重新授权
 zhin ai account rename-env 主账号 OPENAI_API_KEY OPENAI_PROD_API_KEY [--reauthorize]

@@ -332,6 +332,14 @@ export function isOpaqueJudgeProviderId(value: string): boolean {
   return /^(services|accounts|profiles):/u.test(value);
 }
 
+/**
+ * A label that names nothing (#1250 account-add-service-label-generic): `zhin ai account add` used to
+ * store its plan alias `service` as the new service's label. Shown as the driver name instead.
+ */
+function isGenericServiceLabel(value: string): boolean {
+  return /^(service|account)$/iu.test(value.trim());
+}
+
 function readableProviderName(value: unknown): string | undefined {
   const text = typeof value === 'string' ? value.trim() : '';
   return text && !isOpaqueJudgeProviderId(text) ? text : undefined;
@@ -758,17 +766,31 @@ export class DecisionEngagementJudge implements EngagementJudge {
 
 /**
  * `language:<service display name>/<model>` for a language model on `accountId` (#1250). A display
- * string for logs: an opaque graph id (`services:<uuid>` …) is never shown, the driver name or the
- * model alone (`language:<model>`) stands in for it. Statistics group by {@link EngagementJudgeRef}.
+ * string for logs: an opaque graph id (`services:<uuid>` …) or a generic label ({@link isGenericServiceLabel})
+ * is never shown, the Driver's display name (`driverLabel`, else its id) or the model alone (`language:<model>`)
+ * stands in for it. Statistics group by {@link EngagementJudgeRef}.
  */
-export function ambientLanguageSource(graph: InferenceOperationScope['graph'], accountId: string, model: string): string {
+export function ambientLanguageSource(
+  graph: InferenceOperationScope['graph'],
+  accountId: string,
+  model: string,
+  /** Display name of a Driver by id ("Anthropic" for `anthropic`), shown instead of the id when known. */
+  driverLabel?: (driverId: string) => string | undefined,
+): string {
   const account = graph.accounts[accountId];
   const service = account ? graph.services[account.serviceId] : undefined;
   const text = (value: unknown) => {
     const trimmed = typeof value === 'string' ? value.trim() : '';
     return trimmed && !isOpaqueJudgeProviderId(trimmed) ? trimmed : undefined;
   };
-  const label = service ? text(service.label) ?? text(service.driver?.id) ?? text(service.id) : undefined;
+  // A generic label (the literal `service` of an older `zhin ai account add`) says less than the driver.
+  const named = (value: unknown) => {
+    const readable = text(value);
+    return readable && !isGenericServiceLabel(readable) ? readable : undefined;
+  };
+  const driverId = text(service?.driver?.id);
+  const driverName = driverId ? named(driverLabel?.(driverId)) ?? driverId : undefined;
+  const label = service ? named(service.label) ?? driverName ?? text(service.id) : undefined;
   return `language:${label ? `${label}/` : ''}${model}`;
 }
 
@@ -791,6 +813,8 @@ export interface CreateEngagementJudgeMemberInput {
   readonly timeoutMs?: number;
   /** Decision members: recorded as the observation mode. Default `active`. */
   readonly mode?: 'active' | 'shadow';
+  /** Display name of a Driver by id, for the member's log label ({@link ambientLanguageSource}). */
+  readonly driverLabel?: (driverId: string) => string | undefined;
 
 }
 
@@ -812,7 +836,7 @@ export function createEngagementJudgeMember(input: CreateEngagementJudgeMemberIn
   const declaration: ExecutionBinding = Object.freeze({ graphRevision: graph.revision, profile, account, service, model });
   const endpoint: ModelFallbackEndpoint = Object.freeze({ profileId, accountId: account.id, model: model.id });
   if (kind === 'language') {
-    const label = ambientLanguageSource(graph, account.id, model.id);
+    const label = ambientLanguageSource(graph, account.id, model.id, input.driverLabel);
     return Object.freeze({
       kind, endpoint, label,
       fits: (judgeInput: EngagementJudgeInput) => !(model.contextWindow && model.contextWindow > 0)

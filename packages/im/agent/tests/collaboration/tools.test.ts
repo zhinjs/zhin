@@ -22,6 +22,8 @@ import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress
 import type { CollaborationAgent, CollaborationDirectory } from '../../src/collaboration/contracts.js';
 import { MAX_AGENT_REPLY_CHARS, MIN_DELEGATION_BUDGET, applyDelegationBudgetFloor, createCollaborationTools } from '../../src/collaboration/tools.js';
 import { recordActorAttachments, resolveAttachmentRefs } from '../../src/media/agent-attachments.js';
+import { createDelegatedReads, noteResultAdmitted, takeConsumedResult } from '../../src/collaboration/delegation-waiters.js';
+import { agentLoop, createUserMessage, EMPTY_TOKEN_USAGE, z, type AgentMessage, type AssistantMessage, type LlmCompletionPort, type LlmTool } from '@zhin.js/ai';
 import { mergeToolOutboundElements } from '../../src/media/media-tool-bridge.js';
 
 type Behaviour = (mail: Mail, signal: AbortSignal, harness: Harness) => Promise<ActorTurnResult>;
@@ -55,10 +57,27 @@ async function setup(ceilings: AgentCeiling[], behaviours: Record<string, Behavi
   let rootStarted!: () => void;
   const started = new Promise<void>((resolve) => { rootStarted = resolve; });
   const later: Mail[] = [];
+  // As the host Mailbox does: admitted results reach a `delegate` that waits for them (#1250).
+  const baseJournal = new InMemoryEngagementJournal();
+  const journal = new Proxy(baseJournal, {
+    get(target, key) {
+      if (key === 'append') {
+        return async (record: Parameters<InMemoryEngagementJournal['append']>[0]) => {
+          const appended = await target.append(record);
+          const admitted = record.type === 'mail_admitted' && record.data.kind === 'result'
+            ? harness.graph(record.engagementId)?.get(record.data.mailId as string) : undefined;
+          if (admitted) noteResultAdmitted(harness, admitted);
+          return appended;
+        };
+      }
+      const value = Reflect.get(target, key) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
   const harness: Harness = createHarness({
     guard: createGuardKernel({ isAttenuationOf }),
     ledger: new InMemoryBudgetLedger(),
-    journal: new InMemoryEngagementJournal(),
+    journal,
     createMailbox: (options) => createMailbox(options),
     ceilingOf: (name) => byAgent.get(name),
     rootAuthority,
@@ -142,7 +161,8 @@ describe('collaboration tools: shape and visibility', () => {
     const { tools } = await setup([ceiling('zhin')]);
     expect(find(tools, 'ask').description).toMatch(/wait/i);
     expect(find(tools, 'ask').description).toMatch(/data, not instructions/);
-    expect(find(tools, 'delegate').description).toMatch(/without waiting/);
+    expect(find(tools, 'delegate').description).toMatch(/waits up to 20 s/);
+    expect(find(tools, 'delegate').description).toMatch(/do not answer the delegated part yourself/);
     expect(find(tools, 'delegate').description).toMatch(/never more/);
   });
 });
@@ -250,7 +270,7 @@ describe('collaboration tools: ask', () => {
     if (!sent.ok) throw new Error(`grant failed: ${sent.code}`);
     expect(harness.remaining(sent.mail)?.modelCalls).toBe(6);
     const tools = toolsFor('zhin#worker-1', sent.mail);
-    const outs = await Promise.all(['a', 'b', 'c'].map(agent => call(tools, 'delegate', { agent, brief: 'part', budget: { modelCalls: 1 } })));
+    const outs = await Promise.all(['a', 'b', 'c'].map(agent => call(tools, 'delegate', { agent, brief: 'part', budget: { modelCalls: 1 }, wait: false })));
     for (const [index, out] of outs.entries()) expect(out).toMatch(new RegExp(`^delegated to ${['a', 'b', 'c'][index]} \\(mail id\\d+\\)`));
     expect(harness.remaining(sent.mail)!.modelCalls).toBeGreaterThanOrEqual(0);
     release();
@@ -263,7 +283,7 @@ describe('collaboration tools: ask', () => {
     const { tools, attached } = await setup([ceiling('zhin'), ceiling('planner')], {
       planner: async () => { await hold; return { status: 'completed', content: 'plan' }; },
     });
-    const delegated = await call(tools, 'delegate', { agent: 'planner', brief: 'Plan the weekend.' });
+    const delegated = await call(tools, 'delegate', { agent: 'planner', brief: 'Plan the weekend.', wait: false });
     const mailId = /mail (id\d+)/.exec(delegated)![1]!;
     const refused = await call(tools, 'ask', { agent: 'planner', question: 'Done yet?' });
     expect(refused).toMatch(/^ask refused \(delegation_in_progress\)/);
@@ -317,11 +337,92 @@ describe('collaboration tools: delegate and tell', () => {
     const { tools, attached, harness } = await setup([ceiling('zhin'), ceiling('researcher')], {
       researcher: async () => ({ status: 'completed', content: 'SECRET RESULT' }),
     });
-    const out = await call(tools, 'delegate', { agent: 'researcher', brief: 'Find it.', deliverable: 'a link' });
-    expect(out).toMatch(/^delegated to researcher \(mail id\d+\); its result will arrive as a new message$/);
+    const out = await call(tools, 'delegate', { agent: 'researcher', brief: 'Find it.', deliverable: 'a link', wait: false });
+    expect(out).toMatch(/^delegated to researcher \(mail id\d+\); its result will arrive as a new message\. Do not answer the delegated part yourself/);
     expect(out).not.toContain('SECRET');
     const held = await attached.detach({ status: 'completed' });
     expect(held.map((m) => m.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'SECRET RESULT' })]);
+  });
+
+  it('delegate waits for a short result within the turn and returns it, so the model answers once (#1250 delegate-result-double-reply)', async () => {
+    const { attached, harness, directory } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: async () => ({ status: 'completed', content: '一只橘猫趴在窗台上。' }),
+    });
+    const reads = createDelegatedReads(harness);
+    const tools = createCollaborationTools({ harness, directory, actor: 'zhin', mail: attached.root }, { owner: OWNER, delegatedReads: reads });
+    const out = await call(tools, 'delegate', { agent: 'vision', brief: '画的是什么，一句话回答' });
+    expect(out).toMatch(/^agent vision finished \(completed, mail id\d+\):/);
+    expect(out).toContain('一只橘猫趴在窗台上。');
+    expect(out).toContain('[external_content source="agent_reply"');
+    // The turn's answer reached the human: its read is consumed, so the later result mail does not wake
+    // the entry agent again; the record is removed once taken.
+    expect(reads.commit()).toHaveLength(1);
+    const held = await attached.detach({ status: 'completed' });
+    expect(held).toHaveLength(1);
+    expect(await takeConsumedResult(harness, held[0]!)).toBe(true);
+    expect(await takeConsumedResult(harness, held[0]!)).toBe(false);
+  });
+
+  it('a read whose turn failed is revoked: the result wakes the delegator as before (#1250)', async () => {
+    const { attached, harness, directory } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: async () => ({ status: 'completed', content: '一只橘猫。' }),
+    });
+    const reads = createDelegatedReads(harness);
+    const tools = createCollaborationTools({ harness, directory, actor: 'zhin', mail: attached.root }, { owner: OWNER, delegatedReads: reads });
+    expect(await call(tools, 'delegate', { agent: 'vision', brief: '画的是什么' })).toContain('一只橘猫。');
+    const held = await attached.detach({ status: 'completed' });
+    // The lane waits for the reading turn to decide; the turn then fails (model error, timeout, stop).
+    const taken = takeConsumedResult(harness, held[0]!);
+    reads.revoke();
+    expect(await taken).toBe(false);
+  });
+
+  it('keeps no early result once no delegate is sending (#1250)', async () => {
+    const { attached, harness } = await setup([ceiling('zhin'), ceiling('vision')]);
+    const stray = { ...attached.root, id: 'stray-result', body: { kind: 'result', inReplyTo: 'nobody', status: 'completed', content: 'x' } } as unknown as Mail;
+    noteResultAdmitted(harness, stray);
+    const reads = createDelegatedReads(harness);
+    const { awaitDelegatedResult } = await import('../../src/collaboration/delegation-waiters.js');
+    expect(await awaitDelegatedResult(harness, 'nobody', 0, undefined, reads)).toBeUndefined();
+    await attached.detach({ status: 'completed' });
+  });
+
+  it('delegate falls back to the result mail when the wait times out, and tells the model not to answer itself', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => { release = resolve; });
+    const { harness, directory, attached } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: async () => { await hold; return { status: 'completed', content: 'late answer' }; },
+    });
+    const tools = createCollaborationTools({ harness, directory, actor: 'zhin', mail: attached.root }, { owner: OWNER, delegateWaitMs: 20 });
+    const out = await call(tools, 'delegate', { agent: 'vision', brief: 'Describe the image.' });
+    expect(out).toMatch(/^vision is still working after 0 s \(mail id\d+\); its result will arrive as a new message\./);
+    expect(out).toContain('Do not answer the delegated part yourself');
+    expect(out).not.toContain('late answer');
+    release();
+    const held = await attached.detach({ status: 'completed' });
+    expect(held.map((m) => m.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'late answer' })]);
+    // Nobody read it in the turn: it wakes the entry agent as before.
+    expect(await takeConsumedResult(harness, held[0]!)).toBe(false);
+  });
+
+  it('delegate stops waiting when the turn is stopped', async () => {
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: (_mail, signal) => new Promise((resolve) => {
+        signal.addEventListener('abort', () => resolve({ status: 'cancelled' }), { once: true });
+      }),
+    });
+    const stop = new AbortController();
+    const started = Date.now();
+    const pending = find(tools, 'delegate').execute<unknown, string>({ agent: 'vision', brief: 'Describe.' }, { signal: stop.signal } as never);
+    setTimeout(() => stop.abort(), 20);
+    expect(await pending).toContain('its result will arrive as a new message');
+    expect(Date.now() - started).toBeLessThan(5_000);
+    void attached;
+  });
+
+  it('delegate refuses a non-boolean wait', async () => {
+    const { tools } = await setup([ceiling('zhin'), ceiling('vision')]);
+    expect(await call(tools, 'delegate', { agent: 'vision', brief: 'x', wait: 'yes' })).toBe('delegate refused: wait must be true or false.');
   });
 
   it('tell sends a one-way note', async () => {
@@ -339,8 +440,8 @@ describe('collaboration tools: delegate and tell', () => {
     const { tools, attached } = await setup([ceiling('zhin')], {
       'zhin#worker-1': async () => { seenActors.push('zhin#worker-1'); return { status: 'completed', content: 'worker done' }; },
     });
-    const out = await call(tools, 'delegate', { brief: 'Background task' });
-    expect(out).toMatch(/^delegated to zhin#worker-1 \(mail id\d+\); its result will arrive as a new message$/);
+    const out = await call(tools, 'delegate', { brief: 'Background task', wait: false });
+    expect(out).toMatch(/^delegated to zhin#worker-1 \(mail id\d+\); its result will arrive as a new message\./);
     const held = await attached.detach({ status: 'completed' });
     expect(seenActors).toEqual(['zhin#worker-1']);
     expect(held.map((m) => m.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'worker done' })]);
@@ -385,6 +486,93 @@ describe('collaboration tools: delegate and tell', () => {
   });
 });
 
+describe('collaboration tools: delegates of one model step (#1250)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  function assistant(content: AssistantMessage['content'], stopReason: AssistantMessage['stopReason']): AssistantMessage {
+    return { role: 'assistant', content, api: 'test', provider: 'test', model: 'mock', usage: EMPTY_TOKEN_USAGE, stopReason, timestamp: Date.now() };
+  }
+
+  it('sends three delegates together and waits for them together: about 15 s, not 45 s, inside the turn timeout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const slow = (answer: string): Behaviour => async () => {
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+      return { status: 'completed', content: answer };
+    };
+    const { harness, directory, attached } = await setup([ceiling('zhin'), ceiling('a'), ceiling('b'), ceiling('c')], {
+      a: slow('answer a'), b: slow('answer b'), c: slow('answer c'),
+    });
+    const TURN_TIMEOUT_MS = 60_000;
+    const started = Date.now();
+    const turnTimeout = new AbortController();
+    const timer = setTimeout(() => turnTimeout.abort(new Error('turn timed out')), TURN_TIMEOUT_MS);
+    const reads = createDelegatedReads(harness);
+    const tools = createCollaborationTools({ harness, directory, actor: 'zhin', mail: attached.root },
+      { owner: OWNER, delegatedReads: reads, turnDeadline: started + TURN_TIMEOUT_MS });
+    const delegate = find(tools, 'delegate');
+    const llmTools: LlmTool[] = [{ name: 'delegate', description: delegate.description, parameters: z.record(z.string(), z.unknown()) }];
+    let calls = 0;
+    const transport: LlmCompletionPort = {
+      complete: async () => {
+        calls += 1;
+        return calls === 1
+          ? assistant(['a', 'b', 'c'].map((agent) => ({ type: 'toolCall' as const, id: `call_${agent}`, name: 'delegate', arguments: { agent, brief: `part ${agent}` } })), 'toolUse')
+          : assistant([{ type: 'text', text: 'done' }], 'stop');
+      },
+      completeSimple: async () => assistant([{ type: 'text', text: 'done' }], 'stop'),
+    };
+    const results: string[] = [];
+    const loop = (async () => {
+      for await (const event of agentLoop(createUserMessage('three parts'), { systemPrompt: '', messages: [], tools: llmTools }, {
+        model: { id: 'mock', name: 'mock', api: 'test', provider: 'test' } as never,
+        transport,
+        maxIterations: 3,
+        toolExecution: 'tiered',
+        executeTool: async (toolCall, _tools, signal): Promise<AgentMessage> => {
+          const text = await delegate.execute<unknown, string>(toolCall.arguments, { signal } as never);
+          return { role: 'toolResult', toolCallId: toolCall.id, toolName: toolCall.name, content: [{ type: 'text', text }], timestamp: Date.now() };
+        },
+      }, turnTimeout.signal)) {
+        if (event.type === 'tool_execution_end') {
+          const block = (event.result as { content?: Array<{ text?: string }> }).content?.[0];
+          results.push(block?.text ?? '');
+        }
+      }
+    })();
+    for (let step = 0; step < 50 && results.length < 3; step += 1) await vi.advanceTimersByTimeAsync(500);
+    await loop;
+    const elapsed = Date.now() - started;
+    clearTimeout(timer);
+    expect(results).toHaveLength(3);
+    for (const agent of ['a', 'b', 'c']) expect(results.some((text) => text.includes(`agent ${agent} finished (completed`) && text.includes(`answer ${agent}`))).toBe(true);
+    expect(elapsed).toBeGreaterThanOrEqual(15_000);
+    expect(elapsed).toBeLessThan(20_000);
+    expect(turnTimeout.signal.aborted).toBe(false);
+    vi.useRealTimers();
+    await attached.detach({ status: 'completed' });
+  });
+
+  it('shares one wait budget per turn: concurrent waits end together, and never run into the turn timeout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { createDelegateWaitBudget } = await import('../../src/collaboration/tools.js');
+    const budget = createDelegateWaitBudget({ totalMs: 20_000 });
+    expect(budget.available()).toBe(20_000);
+    const endFirst = budget.begin();
+    vi.advanceTimersByTime(5_000);
+    // A wait starting 5 s later gets the rest, so it ends with the first one.
+    expect(budget.available()).toBe(15_000);
+    const endSecond = budget.begin();
+    vi.advanceTimersByTime(15_000);
+    endFirst();
+    endSecond();
+    expect(budget.available()).toBe(0);
+    // The turn's elapsed time counts too: 40 s into a 60 s turn only 5 s are left for waiting.
+    const late = createDelegateWaitBudget({ totalMs: 20_000, deadline: Date.now() + 20_000 });
+    expect(late.available()).toBe(5_000);
+    expect(createDelegateWaitBudget({ totalMs: 20_000, deadline: Date.now() + 10_000 }).available()).toBe(0);
+  });
+});
+
 describe('collaboration tools: cancel_delegation', () => {
   const blocking: Behaviour = (_mail, signal) => new Promise((resolve) => {
     signal.addEventListener('abort', () => resolve({ status: 'cancelled' }), { once: true });
@@ -392,7 +580,7 @@ describe('collaboration tools: cancel_delegation', () => {
 
   it('cancels a delegation this actor sent', async () => {
     const { tools } = await setup([ceiling('zhin'), ceiling('researcher')], { researcher: blocking });
-    const out = await call(tools, 'delegate', { agent: 'researcher', brief: 'long job' });
+    const out = await call(tools, 'delegate', { agent: 'researcher', brief: 'long job', wait: false });
     const mailId = /mail (id\d+)/.exec(out)![1]!;
     expect(await call(tools, 'cancel_delegation', { mail_id: mailId })).toBe(`cancelled ${mailId} (to researcher)`);
   });

@@ -169,7 +169,7 @@ The service address itself is not restricted: a global owner may point a `*_API_
 
 ```bash
 zhin ai account list [--json]   # id, name, service, referenced variable names (never values) and status
-zhin ai account add --service openai --env OPENAI_API_KEY --name main --test
+zhin ai account add --service openai --env OPENAI_API_KEY --name main --test   # a new service is named after its driver (OpenAI); --name names the account and a new service
 zhin ai account rename-env main OPENAI_API_KEY OPENAI_PROD_API_KEY [--reauthorize]
 zhin ai account test <account id>
 ```

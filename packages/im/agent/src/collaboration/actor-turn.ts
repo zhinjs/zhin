@@ -56,7 +56,15 @@ import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachmen
 import type { OutboundMediaAuthority } from '../media/media-normalize.js';
 import type { FileRole } from '../security/file-role-policy.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
-import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, AgentActorTurnRunner, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
+import type {
+  ActorModelSelection,
+  ActorModelSource,
+  ActorTurnOutcome,
+  ActorTurnRunOptions,
+  AgentActorTurnRunner,
+  CollaborationDirectory,
+  CreateCollaborationTools,
+} from './contracts.js';
 
 export interface ActorTurnRunnerOptions {
   readonly host: ZhinAgentPrivate;
@@ -117,7 +125,8 @@ export function createActorTurnRunner(options: ActorTurnRunnerOptions): AgentAct
   // Captured while the root turn runs: background actor turns still get a trace after it ended.
   const tracing = options.tracing ?? captureSubTurnTracing(options.rootTurn.identity.turnId);
   const resolved = tracing ? { ...options, tracing } : options;
-  return (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => runActorTurn(resolved, actor, batch, signal);
+  return (actor: ActorId, batch: readonly Mail[], signal: AbortSignal, runOptions?: ActorTurnRunOptions) =>
+    runActorTurn(resolved, actor, batch, signal, runOptions);
 }
 
 async function runActorTurn(
@@ -125,6 +134,7 @@ async function runActorTurn(
   actor: ActorId,
   batch: readonly Mail[],
   signal: AbortSignal,
+  runOptions?: ActorTurnRunOptions,
 ): Promise<ActorTurnOutcome> {
   const { rootTurn } = options;
   const agent = options.directory.get(agentOf(actor));
@@ -167,7 +177,11 @@ async function runActorTurn(
     recordModelSelection(trace, models, modelKey);
   }
   try {
-    return await runActorTurnWithModel(options, { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models });
+    return await runActorTurnWithModel(options, {
+      actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models,
+      ...(runOptions?.preface ? { preface: runOptions.preface } : {}),
+      ...(runOptions?.delegatedReads ? { delegatedReads: runOptions.delegatedReads } : {}),
+    });
   } finally {
     // Idempotent: a turn that threw before settling still releases its trace slot.
     trace?.close({ status: 'failed', reason: 'actor turn ended without a result' });
@@ -187,6 +201,10 @@ interface ActorTurnRun {
   readonly sessionKey: string;
   readonly trace?: SubTurnTrace;
   readonly models?: ModelExecutionScope;
+  /** Framework-written lines before the mail batch ({@link ActorTurnRunOptions.preface}). */
+  readonly preface?: string;
+  /** {@link ActorTurnRunOptions.delegatedReads}. */
+  readonly delegatedReads?: ActorTurnRunOptions['delegatedReads'];
 }
 
 /**
@@ -247,6 +265,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       owner: options.capabilities.owner,
       ...(options.onEscalate ? { onEscalate: options.onEscalate } : {}),
       ...(options.onVenueTell ? { onVenueTell: options.onVenueTell } : {}),
+      ...(run.delegatedReads ? { delegatedReads: run.delegatedReads } : {}),
     },
   );
   const collaborationNames = new Set(collaboration.map(tool => tool.name));
@@ -255,7 +274,8 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
     ...collaboration,
   ]);
 
-  const text = renderMailBatch(batch);
+  const rendered = renderMailBatch(batch);
+  const text = run.preface ? `${run.preface}\n\n${rendered}` : rendered;
   const persona = actorPersona(agent.displayName || agent.name, agent.instructions, agent.name === options.directory.entry.name);
   // Budget is enforced per model request, not only by the iteration cap (invariant 2).
   const budgetStop = new AbortController();

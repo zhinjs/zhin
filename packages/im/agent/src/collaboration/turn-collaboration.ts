@@ -38,6 +38,8 @@ import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
 import { currentMailTurn } from './mail-turn-context.js';
 import { createCollaborationTools } from './tools.js';
+import { createDelegatedReads, takeConsumedResult } from './delegation-waiters.js';
+import { renderExternalContent } from '../security/trust-level.js';
 import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, CollaborationDirectory } from './contracts.js';
 import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
@@ -75,6 +77,11 @@ export interface TurnCollaboration {
   readonly root: Mail;
   /** Collaboration tools for the live root turn. */
   readonly tools: readonly ToolCapability[];
+  /**
+   * The root turn's reply reached the human (#1250 delegate-result-double-reply): delegated results that
+   * arrive afterwards are a possible supplement to it, never a second answer.
+   */
+  replied(text: string): void;
   /** Ends the root turn; delegated work keeps running and reports back later. */
   finish(status: ActorTurnResult['status']): Promise<void>;
 }
@@ -165,6 +172,11 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   // The root turn is the engagement's first entry turn; it is running now.
   const outcomes = createEngagementOutcomes();
   outcomes.entryStarted();
+  /** A failed result the entry model read in a waiting `delegate` and answered from was told (#1250). */
+  const noteFailuresRead = (committed: readonly Mail[]): void => {
+    const failed = committed.filter((mail) => FAILED_RESULT_STATUSES.has(resultStatus(mail) ?? ''));
+    if (failed.length) outcomes.failuresTold(failed);
+  };
   let rootFinished = false;
   const announceStop = async (): Promise<void> => {
     outcomes.stopAnnounced();
@@ -201,8 +213,26 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   mailTurn.mailbox.bindCollaboration(root.engagementId, {
     directory,
     ...(input.venueProjector ? { venueProjector: input.venueProjector } : {}),
-    runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
+    runTurn: AsyncResource.bind(async (actor: string, delivered: readonly Mail[], signal: AbortSignal) => {
       const entry = actor === entryName;
+      // #1250 delegate-result-double-reply: a result the delegating turn already read (a waited `delegate`)
+      // and answered from does not wake its actor again — the entry actor or a sub-agent that delegated.
+      const batch: Mail[] = [];
+      for (const mail of delivered) {
+        if (!await takeConsumedResult(harness, mail)) batch.push(mail);
+      }
+      if (batch.length === 0) {
+        logger.debug(`collaboration result already read by the delegating turn: ${describeResults(delivered)}`);
+        return Object.freeze({ status: 'completed' as const, content: 'result already read' });
+      }
+      // Results this actor turn's own waiting `delegate` calls read: consumed only if the turn succeeds.
+      const reads = createDelegatedReads(harness);
+      let readsDecided = false;
+      const commitReads = (): void => {
+        readsDecided = true;
+        const committed = reads.commit();
+        if (entry) noteFailuresRead(committed);
+      };
       const resultsOnly = entry && batch.length > 0 && batch.every((mail) => mail.body.kind === 'result');
       if (resultsOnly) {
         const plan = outcomes.plan(batch);
@@ -216,22 +246,53 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
           return Object.freeze({ status: 'completed' as const, content: `result withheld: ${plan.reason}` });
         }
       }
+      // #1250 delegate-result-double-reply: the human already has this request's answer. The result is a
+      // possible supplement: the entry model sees what it said and may decline to say more.
+      const earlier = resultsOnly ? outcomes.answered() : undefined;
       if (entry) outcomes.entryStarted();
+      const failures = resultsOnly && outcomes.failureOnly(batch);
       let result: ActorTurnOutcome;
       try {
-        result = await runner(actor, batch, signal);
-      } finally {
-        if (entry && outcomes.entryFinished()) await announceStop();
-      }
-      if (!entry) outcomes.recordSubTurn(batch, result.status);
-      // The entry actor continuing with delegated results speaks to the human directly.
-      if (resultsOnly) {
-        const failures = outcomes.failureOnly(batch);
-        await background.deliverResult(result, signal, () => {
+        try {
+          result = await runner(actor, batch, signal, {
+            delegatedReads: reads,
+            ...(earlier ? { preface: supplementPreface(earlier, { failure: failures }) } : {}),
+          });
+        } finally {
+          if (entry && outcomes.entryFinished()) await announceStop();
+        }
+        if (!entry) outcomes.recordSubTurn(batch, result.status);
+        // The entry actor continuing with delegated results speaks to the human directly.
+        if (!resultsOnly) {
+          if (result.status === 'completed') commitReads();
+          return result;
+        }
+        let toSend = result;
+        if (earlier) {
+          const plan = planSupplement(result, { failures, locale: turn.input.locale });
+          if (plan.kind === 'cancelled') {
+            // A stopped supplement told nobody anything: a failure stays untold (its next account may run).
+            logger.debug(`collaboration supplement cancelled: ${describeResults(batch)}`);
+            return result;
+          }
+          if (plan.kind === 'nothing') {
+            logger.info(`collaboration result kept out of the chat (already answered): ${describeResults(batch)}`);
+            // Nothing new to say: the human's answer stands for this request.
+            commitReads();
+            return result;
+          }
+          toSend = plan.outcome;
+        }
+        const delivering = toSend;
+        await background.deliverResult(delivering, signal, () => {
           if (failures) outcomes.failuresTold(batch);
+          if (delivering.reply) outcomes.replied(delivering.reply);
+          if (delivering.status === 'completed' || delivering.status === 'budget_exceeded') commitReads();
         });
+        return result;
+      } finally {
+        if (!readsDecided) reads.revoke();
       }
-      return result;
     }),
     onEscalate: AsyncResource.bind(async (notice: EscalationNotice) => {
       // #1250: the guard's reason is developer text (`Actors … above the limit of 3`): it goes to the
@@ -245,17 +306,31 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     // The delegation reservation lives as long as the engagement (the host bounds both).
     ...(delegation ? { onClosed: () => { void delegation.release().catch(() => undefined); } } : {}),
   });
+  // #1250: results the root turn's waiting `delegate` calls read count as answered only once its reply
+  // reached the human; a failed, timed-out, superseded or stopped root turn lets them wake the entry agent.
+  const rootReads = createDelegatedReads(harness);
+  const commitRootReads = (): void => { noteFailuresRead(rootReads.commit()); };
   const tools = createCollaborationTools(
     { harness, directory, actor: entryName, mail: root },
-    { owner: capabilities.owner, onEscalate, onVenueTell, onStopped: () => outcomes.entryInformed() },
+    {
+      owner: capabilities.owner, onEscalate, onVenueTell, onStopped: () => outcomes.entryInformed(),
+      delegatedReads: rootReads,
+      ...(mailTurn.deadline !== undefined ? { turnDeadline: mailTurn.deadline } : {}),
+    },
   );
   const collaboration: TurnCollaboration = {
     harness,
     directory,
     root,
     tools,
+    replied(text: string) {
+      outcomes.replied(text);
+      if (text.trim()) commitRootReads();
+    },
     // The Mailbox settles the turn; delegated work keeps running and reports back on the lane.
-    async finish() {
+    async finish(status) {
+      if (status === 'completed') commitRootReads();
+      else rootReads.revoke();
       if (rootFinished) return;
       rootFinished = true;
       if (outcomes.entryFinished()) await announceStop();
@@ -333,6 +408,8 @@ export function createEngagementOutcomes() {
   /** Delegations whose failure the human was told about. */
   const told = new Set<string>();
   let anyFailureTold = false;
+  /** What the human was already told for this request (the root reply and supplements). */
+  let answer = '';
   let entryTurns = 0;
   let frozen = false;
   let informed = false;
@@ -343,6 +420,15 @@ export function createEngagementOutcomes() {
   const stopPending = (): boolean => frozen && !informed && !stopTold && entryTurns === 0;
   return Object.freeze({
     failureOnly,
+    /** A reply of this request reached the human. */
+    replied(text: string): void {
+      const told = text.trim();
+      if (told) answer = answer ? `${answer}\n${told}` : told;
+    },
+    /** What the human was already told for this request; `undefined` before any reply. */
+    answered(): string | undefined {
+      return answer || undefined;
+    },
     plan(batch: readonly Mail[]): ResultBatchPlan {
       if (!failureOnly(batch)) return { kind: 'run' };
       const open = batch.filter((mail) => {
@@ -409,6 +495,126 @@ export function createEngagementOutcomes() {
       anyFailureTold = true;
     },
   });
+}
+
+/** Entry output that means "nothing to add" for a result arriving after the request was answered. */
+export const NO_REPLY_MARKER = '[[no_reply]]';
+
+/** {@link NO_REPLY_MARKER} as models write it: any case, inner spaces, wrapped in backticks. */
+const NO_REPLY_PATTERN = /`*\[\[\s*no_reply\s*\]\]`*/giu;
+
+/**
+ * True when `text` declines with {@link NO_REPLY_MARKER}: it is the marker, or starts with it (whitespace,
+ * backticks and case ignored). What follows a leading marker is the model explaining itself.
+ */
+export function isNoReply(text: string): boolean {
+  const bare = text.replace(/^[\s`]+|[\s`]+$/gu, '');
+  return /^\[\[\s*no_reply\s*\]\]/iu.test(bare);
+}
+
+/** `text` without any {@link NO_REPLY_MARKER}: the marker is control output, never shown to the human. */
+export function stripNoReplyMarker(text: string): string {
+  return text.replace(NO_REPLY_PATTERN, '').trim();
+}
+
+/**
+ * The root turn's output without {@link NO_REPLY_MARKER} (#1250): the marker only means something to a
+ * supplement turn; a root turn that writes it must not show it to the human. Text left empty is dropped.
+ */
+export function stripNoReplyOutput(output: readonly AgentOutputElement[]): AgentOutputElement[] {
+  const kept: AgentOutputElement[] = [];
+  for (const element of output) {
+    if (element.type === 'text') {
+      if (!/no_reply/iu.test(element.content)) { kept.push(element); continue; }
+      const content = stripNoReplyMarker(element.content);
+      if (content) kept.push({ ...element, content });
+      continue;
+    }
+    if (element.type === 'message') {
+      const segments = element.segments.flatMap((segment) => {
+        if (segment.type !== 'text' && segment.type !== 'markdown') return [segment];
+        const key = segment.type === 'text' ? 'text' : 'content';
+        const value = String((segment.data as Record<string, unknown>)[key] ?? '');
+        if (!/no_reply/iu.test(value)) return [segment];
+        const stripped = stripNoReplyMarker(value);
+        return stripped ? [{ ...segment, data: { ...segment.data, [key]: stripped } } as typeof segment] : [];
+      });
+      if (segments.length) kept.push({ ...element, segments });
+      continue;
+    }
+    kept.push(element);
+  }
+  return kept;
+}
+
+const SUPPLEMENT_ANSWER_MAX_CHARS = 1_200;
+
+/**
+ * Model-facing lines before a delegated result that arrived after the request was answered (#1250
+ * delegate-result-double-reply). The earlier reply is shown as data (it may quote anything the human or
+ * a tool wrote), never as instructions. A failure batch has no way out: the human hears about it once.
+ */
+export function supplementPreface(earlier: string, options: Readonly<{ failure?: boolean }> = {}): string {
+  const said = earlier.length > SUPPLEMENT_ANSWER_MAX_CHARS ? `${earlier.slice(0, SUPPLEMENT_ANSWER_MAX_CHARS)}…` : earlier;
+  return [
+    '[Already answered] For this request you already sent the human the reply quoted below.',
+    renderExternalContent('earlier_reply', said),
+    'The delegated result below arrived after that reply. Do not repeat or restate what you already said.',
+    ...(options.failure
+      ? ['- The delegated work did not finish. Tell the human so in one short sentence, in the human\'s language; do not retry it yourself.']
+      : [
+          `- When it adds nothing the human needs (the same answer), reply with exactly ${NO_REPLY_MARKER} and nothing else.`,
+          '- Only when it adds something new and important (a correction, or the result your reply promised), reply with just that addition, in the human\'s language. It is sent as a supplement to your earlier reply.',
+        ]),
+  ].join('\n');
+}
+
+const SUPPLEMENT_LEAD = /^\s*(?:补充|更正|update\b|addendum\b|correction\b)/iu;
+
+/**
+ * The entry turn's outcome after an answered request, as the supplement the human may see; `undefined`
+ * when there is nothing to send (the model declined with {@link NO_REPLY_MARKER}, said nothing, or was
+ * stopped). A failed entry turn keeps its outcome: the human hears that the follow-up could not be put
+ * together.
+ */
+export function asSupplement(result: ActorTurnOutcome, locale: string | undefined): ActorTurnOutcome | undefined {
+  if (result.status === 'cancelled') return undefined;
+  if (result.status === 'failed') return result;
+  const reply = result.reply ?? '';
+  if (!reply.trim() || isNoReply(reply)) return undefined;
+  const text = stripNoReplyMarker(reply);
+  if (!text) return undefined;
+  const lead = locale?.toLowerCase().startsWith('en') ? 'Update: ' : '补充：';
+  return Object.freeze({ ...result, reply: SUPPLEMENT_LEAD.test(text) ? text : `${lead}${text}` });
+}
+
+/** What a supplement turn (a result after the answer) sends: {@link planSupplement}. */
+export type SupplementPlan =
+  | Readonly<{ kind: 'cancelled' }>
+  | Readonly<{ kind: 'nothing' }>
+  | Readonly<{ kind: 'send'; outcome: ActorTurnOutcome }>;
+
+/**
+ * The supplement turn's outcome for the human (#1250): `cancelled` (stopped: nothing was said, and a failure
+ * stays untold), `nothing` (the model declined a result that adds nothing) or the message to `send`. A failure
+ * batch is told once even when the model declined or said nothing: a fixed line, never silence.
+ */
+export function planSupplement(
+  result: ActorTurnOutcome,
+  input: Readonly<{ failures: boolean; locale: string | undefined }>,
+): SupplementPlan {
+  if (result.status === 'cancelled') return { kind: 'cancelled' };
+  const supplement = asSupplement(result, input.locale);
+  if (supplement) return { kind: 'send', outcome: supplement };
+  if (!input.failures) return { kind: 'nothing' };
+  return { kind: 'send', outcome: Object.freeze({ ...result, status: 'completed' as const, reply: supplementFailureLine(input.locale) }) };
+}
+
+/** Fixed line when the entry model declined to tell a failure that arrived after the answer. */
+export function supplementFailureLine(locale: string | undefined): string {
+  return locale?.toLowerCase().startsWith('en')
+    ? 'Update: the background task did not finish.'
+    : '补充：后台任务没有完成。';
 }
 
 /** One line for further failures of a request whose first failure was already told. */

@@ -95,6 +95,28 @@ export class MessageDispatcher {
     return (await this.dispatchWithReply(message, snapshot, interactionFactory, observe)).dispatch;
   }
 
+  /**
+   * @internal ADR 0061 decision 11 (revised, #1250): whether this message routes to a command of
+   * this endpoint (the CommandIndex's own matching, prefix included). Nothing runs, no permission
+   * is checked; a pending prompt ends when the sender sends a command meanwhile.
+   */
+  routesToCommand(message: Message, snapshot: RuntimeSnapshot): boolean {
+    const prefix = message.commandPrefix ?? this.resolvePrefix(message, snapshot);
+    let input = normalizeCommandInputText(message);
+    if (prefix && !input.startsWith(prefix)) return false;
+    if (prefix) input = input.slice(prefix.length).trim();
+    if (!input) return false;
+    const commands = gatedCommandIndex(message, snapshot);
+    if (!commands || typeof commands.routes !== 'function') return false;
+    const structuredInput = message.segments ? stripCommandPrefix(message.segments, prefix) : undefined;
+    try {
+      return commands.routes(structuredInput ?? input, message.locale, message);
+    } catch (error) {
+      logger.debug(formatCompact({ op: 'command_route_probe_failed', error: error instanceof Error ? error.message : String(error) }));
+      return false;
+    }
+  }
+
   /** @internal The inbound runtime retains reply authorship without changing command facts. */
   async dispatchWithReply(
     message: Message,

@@ -130,7 +130,7 @@ describe('UserInteraction module', () => {
     const options = Array.from({ length: 20 }, (_, index) => ({ label: `晴天 ${index + 1}`, value: index + 1 }));
     const view = projectUserInteraction({ type: 'select', title: '选择歌曲', options });
     expect(view.actions).toHaveLength(20);
-    expect(view.tip).toBe('回复序号或选项名称。');
+    expect(view.tip).toBe('回复序号或选项名称，或回复「取消」退出。');
     expect(view.tip).not.toContain('按钮');
     const rendered = renderUserInteraction(view) as { type: string; data: { rows?: unknown[][] } }[];
     expect(rendered[1]?.type).toBe('keyboard');
