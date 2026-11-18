@@ -295,7 +295,7 @@ describe('job Agent (#1250 b52)', () => {
     expect(await response.json()).toMatchObject({ code: 'schedule_agent_not_found', error: expect.stringContaining('可用的 Agent：zhin、news') });
     expect((await post('/set-agent', { id: 'known' })).status).toBe(400);
     expect((await post('/set-agent', { agent: 'news' })).status).toBe(400);
-    expect(await (await post('/set-agent', { id: 'beat', agent: 'news' })).json()).toMatchObject({ code: 'invalid_argument', error: expect.stringContaining('心跳任务') });
+    expect(await (await post('/set-agent', { id: 'beat', agent: 'news' })).json()).toMatchObject({ code: 'schedule_agent_heartbeat', error: expect.stringContaining('心跳任务') });
     expect(await (await post('/set-agent', { id: 'ghost', agent: 'news' })).json()).toMatchObject({ code: 'not_found' });
     // A job missing from the list is answered without asking the scheduler.
     expect(agentJobs.setAgent).toHaveBeenCalledTimes(2);

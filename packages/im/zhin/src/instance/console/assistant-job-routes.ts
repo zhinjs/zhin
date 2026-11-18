@@ -263,7 +263,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     }
     if (existing && record(existing.action).kind !== 'agent') {
       // A heartbeat job always runs on the default Agent.
-      return { status: 400, body: { success: false, code: 'invalid_argument', error: `心跳任务不能指定 Agent: ${id}` } };
+      return { status: 400, body: { success: false, code: 'schedule_agent_heartbeat', error: `心跳任务不能指定 Agent: ${id}` } };
     }
     // The job keeps delivering to its explicit target on every run, now on another Agent: the same
     // `endpoint.operate` `POST /assistant/jobs` requires for that target.

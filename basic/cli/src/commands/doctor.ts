@@ -53,6 +53,7 @@ import {
 } from '@zhin.js/runtime';
 import { findProjectLiteralSecrets, moveLiteralSecretsToEnv } from '@zhin.js/gateway/config';
 import { checkAmbientJudgeMigration, checkRetiredAmbientTriggerKeys, readAmbientJudgeView } from '../utils/ambient-judge-check.js';
+import { checkGenericServiceLabels } from '../utils/service-label-check.js';
 import { localInstanceClient } from './ai.js';
 
 const execAsync = promisify(exec);
@@ -862,6 +863,8 @@ export const doctorCommand = new Command('doctor')
       }
     }
     results.push(...await checkAmbientJudgeMigration({ client: ambientClient, ...(ambientView ? { view: ambientView } : {}), verbose: options.verbose === true }));
+    // 10f. 模型服务名称（#1250）：旧版 zhin ai account add 把计划别名 `service` 存成了服务名称
+    results.push(...await checkGenericServiceLabels({ client: ambientClient }).catch(() => []));
 
     // 10d. 管理网关与 Console 初始化状态（ADR 0054）
     if (!gateway) {

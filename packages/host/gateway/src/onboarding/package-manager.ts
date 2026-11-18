@@ -28,14 +28,21 @@ export async function detectPackageManager(projectRoot: string): Promise<Package
 
 /**
  * Maps the workflow's pnpm invocation (`add|remove [-w] [-D] [--save-exact] <spec>`) and the gateway's
- * `update [-w] [<name>…]` / `install [--frozen-lockfile]` to another manager.
+ * `update [-w] [<name>…]` / `install [--frozen-lockfile | --no-frozen-lockfile]` to another manager.
  * Unknown flags are refused rather than forwarded.
  */
 export function translatePackageManagerArgs(manager: PackageManagerName, args: readonly string[]): readonly string[] {
   const [command, ...rest] = args;
   if (command === 'install') {
     const frozen = rest.includes('--frozen-lockfile');
-    if (rest.some(arg => arg !== '--frozen-lockfile')) throw new Error('Unsupported package-manager flag');
+    // `--no-frozen-lockfile`: the install is meant to change the lockfile, even where the manager
+    // freezes it by default (pnpm with `CI` set). npm / yarn / bun take no such flag: their child
+    // process runs without `CI` instead ({@link packageManagerEnv}).
+    const unfrozen = rest.includes('--no-frozen-lockfile');
+    if (rest.some(arg => arg !== '--frozen-lockfile' && arg !== '--no-frozen-lockfile') || (frozen && unfrozen) || rest.length > 1) {
+      throw new Error('Unsupported package-manager flag');
+    }
+    if (unfrozen) return manager === 'pnpm' ? ['install', '--no-frozen-lockfile'] : ['install'];
     if (!frozen) return ['install'];
     return manager === 'npm' ? ['ci'] : ['install', '--frozen-lockfile'];
   }
@@ -65,6 +72,19 @@ export function translatePackageManagerArgs(manager: PackageManagerName, args: r
     case 'yarn': return [command, ...(workspace ? ['-W'] : []), ...(dev ? ['-D'] : []), ...(exact ? ['--exact'] : []), ...specs];
     case 'bun': return [command, ...(dev ? ['-d'] : []), ...(exact ? ['--exact'] : []), ...specs];
   }
+}
+
+/**
+ * The environment of one package-manager run. An unfrozen install (`install --no-frozen-lockfile`)
+ * of a manager without that flag runs without `CI` (and with yarn's immutable installs off), so a
+ * CI environment does not refuse the lockfile change it exists to make.
+ */
+export function packageManagerEnv(manager: PackageManagerName, args: readonly string[], env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (manager === 'pnpm' || args[0] !== 'install' || !args.includes('--no-frozen-lockfile')) return env;
+  const next: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) if (key.toUpperCase() !== 'CI') next[key] = value;
+  if (manager === 'yarn') next.YARN_ENABLE_IMMUTABLE_INSTALLS = 'false';
+  return next;
 }
 
 /** How to spawn one command without `shell: true`. */
@@ -178,7 +198,7 @@ export function createStreamingPackageManager(
     const manager = options.manager ?? await detectPackageManager(projectRoot);
     const argv = translatePackageManagerArgs(manager, args);
     await new Promise<void>((resolvePromise, reject) => {
-      const env = options.env ?? process.env;
+      const env = packageManagerEnv(manager, args, options.env ?? process.env);
       const resolved = resolveCommand(manager, argv, { env, ...(options.platform ? { platform: options.platform } : {}) });
       const child = run(resolved.command, [...resolved.args], {
         cwd: projectRoot,

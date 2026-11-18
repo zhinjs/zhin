@@ -1,7 +1,8 @@
 import { readOperationSession } from '@zhin.js/core';
 import type { ModelAvailabilityRegistry, ModelFallbackEvent } from '@zhin.js/ai';
 import {
-  ambientJudgeChain, DEFAULT_AMBIENT_MIN_CONFIDENCE, effectiveAmbientJudgePolicy, type InferenceOperationScope, type LegacyAmbientTrigger,
+  ambientJudgeChain, DEFAULT_AMBIENT_MIN_CONFIDENCE, effectiveAmbientJudgePolicy, listSnapshotAiProviders, type InferenceOperationScope,
+  type LegacyAmbientTrigger,
 } from '@zhin.js/ai/provider';
 import { reportInboundOutcome, resolveAmbientSwitch, type ImRuntime, type Message, type MessageOutcomeCandidate } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -149,7 +150,15 @@ export function createAmbientEngagementJudge(input: Readonly<{
         // ADR 0066: one policy, `purposes.ambient` (the legacy stored fields convert in memory until migrated).
         const { policy } = effectiveAmbientJudgePolicy(scope.graph.purposes, input.trigger);
         const gate: AmbientJudgeGate = Object.freeze({ minConfidence: policy.minConfidence ?? DEFAULT_AMBIENT_MIN_CONFIDENCE, mode: policy.mode ?? 'active' });
-        const member = (profileId: string, mode: 'active' | 'shadow' = 'active') => createEngagementJudgeMember({ scope, profileId, onCall, observe, mode,
+        // Logs name a service by its Driver's display name ("Anthropic") when its label says nothing (#1250).
+        const driverLabel = (driverId: string): string | undefined => {
+          try {
+            return listSnapshotAiProviders(lease.value).find(({ definition }) => definition.id === driverId)?.definition.label;
+          } catch {
+            return undefined; // A label for logs only: without the snapshot the Driver id stands in.
+          }
+        };
+        const member = (profileId: string, mode: 'active' | 'shadow' = 'active') => createEngagementJudgeMember({ scope, profileId, onCall, observe, mode, driverLabel,
           ...(policy.timeoutMs !== undefined ? { timeoutMs: policy.timeoutMs } : {}) });
         const members = ambientJudgeChain(scope.graph.purposes).ids.map(id => member(id))
           .filter((entry): entry is EngagementJudgeMember => entry !== undefined);

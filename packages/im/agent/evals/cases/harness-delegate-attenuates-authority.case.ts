@@ -14,7 +14,7 @@ export default defineEvalCase({
   // `delegate` returns at once, so the entry agent acknowledges in its own turn; ops runs in the background and its
   // result mail starts a new entry-agent turn whose text goes to the user. ops has no model request until delegated.
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'ops', brief: 'Clear /tmp/cache.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'ops', brief: 'Clear /tmp/cache.', wait: false } }] },
     { text: '已经交给 ops 处理了。' },
     { actor: 'ops', toolCalls: [{ name: 'bash', args: { command: 'rm -rf /tmp/cache' }, notOffered: true }] },
     { actor: 'ops', text: 'No shell available for this request; nothing was run.' },

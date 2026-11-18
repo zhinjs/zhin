@@ -639,9 +639,11 @@ export {
   SCHEDULE_JOBS_FILENAME,
 } from './schedule-manager.js';
 export type { ScheduleManager, ScheduleToolRegistration } from './schedule-manager.js';
+export type { ScheduleJobAgentErrorCode } from './assistant/index.js';
 
 export {
   TimerScheduler,
+  ScheduleJobAgentError,
   createTimerMailDueHandler,
   ScheduleJobStore,
   AssistantEventIngress,

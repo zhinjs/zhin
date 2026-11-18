@@ -14,8 +14,8 @@ export default defineEvalCase({
     collaboration: { budget: { modelCalls: 1 } } }],
   script: [
     { toolCalls: [
-      { name: 'delegate', args: { agent: 'draw', brief: 'Bar chart of city populations.' } },
-      { name: 'delegate', args: { agent: 'draw', brief: 'Pie chart of city populations.' } },
+      { name: 'delegate', args: { agent: 'draw', brief: 'Bar chart of city populations.', wait: false } },
+      { name: 'delegate', args: { agent: 'draw', brief: 'Pie chart of city populations.', wait: false } },
     ] },
     { actor: 'draw', toolCalls: [{ name: 'render_chart', args: { kind: 'bar' } }] },
     { actor: 'draw', toolCalls: [{ name: 'render_chart', args: { kind: 'pie' } }] },
