@@ -187,6 +187,22 @@ createEndpointSpecification(this, {
 - 只声明 Endpoint 自己写入的目录，不要声明项目根目录、`data/` 或家目录。
 - 平台字段里的 `data.file` 不再被猜成本机路径（以 `/`、`./`、`~/` 开头的值是平台不透明引用 `kind: 'file'`）；确实是本地文件时显式写 `data.path` 或 `media.kind: 'path'`。
 
+### 协议端地址
+
+入站媒体地址和语音地址只连默认端口（https 443，平台语音链接允许 http 时为 80），其他端口一律拒绝，防止借实例扫描端口。协议端（Satori、OneBot、NapCat、Milky 等）给出的资源地址常常带它自己的端口（例如 `http://1.2.3.4:5140/v1/proxy/...`）。适配器在 specification 里声明自己配置的协议端地址，这一个地址（scheme、主机、端口完全相同）就可以保留端口：
+
+```ts
+createEndpointSpecification(this, {
+  // ...
+  inboundMedia: { origins: () => [options.config.baseUrl] },
+});
+```
+
+- 可以写 `http(s)://` 或 `ws(s)://`（按 `http(s)://` 同一主机、同一端口处理），路径会被忽略。
+- 只声明 Endpoint 配置里的协议端地址，不要声明从消息里拿到的地址；反向连接（协议端连进来）没有配置地址，就不声明。
+- `origins()` 只放开端口这一条，而且只对直接指向该地址的媒体 URL 生效：从别处重定向进来、或从它重定向到别的端口，都按默认端口处理。
+- 私网、回环地址仍然被拒：协议端和实例在同一台机器或同一内网时，它给出的地址照旧不可用，这与端口无关。识图下载只走 https；平台语音链接允许 http。
+
 ## 深入
 
 ### 状态机

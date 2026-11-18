@@ -181,7 +181,8 @@ export async function readLocalFileAsBase64(
 /**
  * Download a media URL someone outside the host controls (inbound image / video / file, a model-referenced
  * URL) and sniff its real type. Uses the pinned download shared with speech and outbound adapters
- * (`fetchPublicMediaBytes`, #1250 第 46 批): HTTPS only on port 443 (第 48 批), private hosts refused, the name resolved once
+ * (`fetchPublicMediaBytes`, #1250 第 46 批): HTTPS only on port 443 (第 48 批; `trustedOrigins` — the
+ * producing Endpoint's own protocol server — keep their port), private hosts refused, the name resolved once
  * and the connection made to the checked address (no DNS rebinding between check and connect), every
  * redirect hop checked again (including `allowedDomains`), body capped at `maxBytes`, 30 s overall.
  * Any refusal or failure yields `null`.
@@ -193,12 +194,14 @@ export async function fetchUrlAsBase64(
   signal?: AbortSignal,
   allowedDomains: readonly string[] = [],
   transport?: NetworkTransport,
+  trustedOrigins: readonly string[] = [],
 ): Promise<MediaBinaryPayload | null> {
   try {
     const result = await fetchPublicMediaBytes(url, {
       maxBytes,
       ...(signal ? { signal } : {}),
       ...(allowedDomains.length ? { allowedDomains } : {}),
+      ...(trustedOrigins.length ? { trustedOrigins } : {}),
       ...(transport ? { transport } : {}),
     });
     if (!result.ok) return null;
@@ -221,6 +224,8 @@ export async function normalizeMediaRefsToPayloads(
   signal?: AbortSignal,
   authority?: OutboundMediaAuthority,
   transport: NetworkTransport | undefined = authority?.mediaTransport,
+  /** #1250 第 48 批: the producing Endpoint's protocol-server origins, whose port a URL may keep. */
+  trustedOrigins: readonly string[] = [],
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
@@ -250,7 +255,7 @@ export async function normalizeMediaRefsToPayloads(
 
     const network = authorizeOutboundMediaUrl(media.value, authority);
     if (!network) continue;
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport);
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport, trustedOrigins);
     if (fetched) out.push({ ...fetched, ...fileName });
   }
 

@@ -749,3 +749,18 @@ describe('napcat reverse ws lifecycle', () => {
     expect(releaseRoute).toHaveBeenCalledOnce();
   });
 });
+
+describe('napcat inbound media origins (#1250 第 48 批)', () => {
+  it('declares the configured forward WebSocket server (as its http origin)', async () => {
+    const ws = createMockWs();
+    const h = await createEndpointHarness(() => new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      config: baseConfig,
+      createWebSocket: () => { queueMicrotask(() => ws.emitOpen()); return ws; },
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    try {
+      await h.start();
+      expect(h.index.inboundMediaOrigins(h.canonicalId)).toEqual(['http://127.0.0.1:3001']);
+    } finally { await h.stop(); }
+  });
+});

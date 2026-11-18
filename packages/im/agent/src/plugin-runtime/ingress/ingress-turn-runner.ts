@@ -417,6 +417,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
               intentResolver,
             ),
             inboundMediaRoots: () => im.inboundMediaRoots(lease, message.conversation),
+            inboundMediaOrigins: () => im.inboundMediaOrigins(lease, message.conversation),
             resolveReference: (reference, limits, referenceSignal) =>
               im.resolveConversationReference(lease, reference, {
                 signal: referenceSignal,

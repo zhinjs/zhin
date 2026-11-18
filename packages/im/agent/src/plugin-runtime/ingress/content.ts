@@ -77,8 +77,14 @@ export type InboundAudioUrlOrigin = 'platform' | 'user';
  */
 export type InboundAudioUrlTranscriber = (
   audioUrl: string,
-  source?: Readonly<{ origin: InboundAudioUrlOrigin }>,
+  source?: InboundAudioUrlSource,
 ) => Promise<InboundAudioUrlTranscription>;
+
+/**
+ * Where a voice address came from. `trustedOrigins` (only with `origin: 'platform'`, #1250 第 48 批):
+ * the producing Endpoint's own protocol server, whose port a download may keep.
+ */
+export type InboundAudioUrlSource = Readonly<{ origin: InboundAudioUrlOrigin; trustedOrigins?: readonly string[] }>;
 
 /** Model-facing note in place of a refused voice address; the address itself is not shown. */
 export const SPEECH_URL_BLOCKED_NOTE = '[语音地址不可用，未转写（speech_url_blocked）]';
@@ -93,6 +99,8 @@ export async function preprocessInboundTurn(
      * user text. False (the default) treats every address as user-typed: HTTPS only.
      */
     platformSegments?: boolean;
+    /** #1250 第 48 批: the Endpoint's declared protocol-server origins; read only for a platform voice address. */
+    platformOrigins?: () => readonly string[];
   }> = {},
 ): Promise<{ readonly text: string; readonly sttApplied: boolean; readonly sttRefusal?: InboundAudioUrlRefusal['code'] }> {
   const audio = resolveInboundAudioUrl(message, options.platformSegments === true);
@@ -101,7 +109,8 @@ export async function preprocessInboundTurn(
   }
   let transcript: InboundAudioUrlTranscription;
   try {
-    transcript = await transcribeUrl(audio.url, { origin: audio.origin });
+    const trustedOrigins = audio.origin === 'platform' ? options.platformOrigins?.() ?? [] : [];
+    transcript = await transcribeUrl(audio.url, { origin: audio.origin, ...(trustedOrigins.length ? { trustedOrigins } : {}) });
   } catch (error) {
     // A transcriber failure never ends the turn: the text goes on without a transcript.
     logger.warn(formatCompact({ op: 'agent_inbound_stt_failed', error: error instanceof Error ? error.name : 'unknown' }));
