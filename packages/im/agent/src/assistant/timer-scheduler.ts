@@ -206,6 +206,7 @@ export class TimerScheduler {
   readonly #observations?: ScheduleObservationOwner;
   /** Pending automatic retries after a transient model failure (#1250 b40), by job id; in memory only. */
   readonly #modelRetries = new Map<string, () => void>();
+  readonly #inFlight = new Set<Promise<void>>();
 
   constructor(options: TimerSchedulerOptions) {
     this.store = options.store;
@@ -352,7 +353,16 @@ export class TimerScheduler {
    * @param retried automatic retries already made for this fire after transient model failures
    *   (#1250 b40); 0 for a regular fire.
    */
-  private async runJob(jobId: string, source: 'scheduled' | 'manual' | 'event' = 'scheduled', retried = 0): Promise<void> {
+  private runJob(jobId: string, source: 'scheduled' | 'manual' | 'event' = 'scheduled', retried = 0): Promise<void> {
+    // Tracked so `stop()` can wait for the state, delivery and history writes that follow the run.
+    const run = this.#runJob(jobId, source, retried);
+    this.#inFlight.add(run);
+    const forget = () => { this.#inFlight.delete(run); };
+    run.then(forget, forget);
+    return run;
+  }
+
+  async #runJob(jobId: string, source: 'scheduled' | 'manual' | 'event', retried: number): Promise<void> {
     const job = await this.store.getJob(jobId);
     // A new fire (or a manual run) replaces a pending retry of the previous one.
     this.#cancelModelRetry(jobId);
@@ -632,6 +642,9 @@ export class TimerScheduler {
 
   async stop(): Promise<void> {
     await this.queue.dispose();
+    // A run keeps writing after its queue item settles (job state, delivery, history); wait for those
+    // so nothing writes into a store or directory the caller is about to close or remove.
+    await Promise.allSettled([...this.#inFlight]);
   }
 
   unload(): void {
