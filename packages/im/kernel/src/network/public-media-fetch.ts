@@ -6,9 +6,10 @@
  * - HTTPS only unless `allowHttp` (an address the platform itself produced, never a user-typed
  *   one); private, loopback, link-local and metadata hosts are refused by name either way;
  * - only the scheme's default port (https 443, and http 80 with `allowHttp`; written or not) unless
- *   `allowedPorts` lists more for the first URL's own origin — any other port is refused with
- *   `reason: 'port'`, on every hop (a redirect to another origin gets the default port only), so a
- *   URL cannot make the instance open TLS handshakes to arbitrary public ports (#1250 第 48 批);
+ *   `allowedPorts` lists more for the first URL's own origin, or the hop's origin is one of
+ *   `trustedOrigins` — any other port is refused with `reason: 'port'`, on every hop (a redirect to
+ *   another origin gets the default port only), so a URL cannot make the instance open TLS
+ *   handshakes to arbitrary public ports (#1250 第 48 批);
  * - the name is resolved once, every address must be public, and the request connects to the
  *   address that was checked (`NodeNetworkTransport`), so DNS rebinding cannot swap in a private
  *   address between the check and the connection;
@@ -48,6 +49,13 @@ export interface PublicMediaFetchOptions {
    * media host is known to use another port.
    */
   readonly allowedPorts?: readonly number[];
+  /**
+   * Origins (`scheme://host:port`, as `URL.origin` writes them) whose hops keep their port: the
+   * protocol server an adapter itself is configured to talk to, which may serve media on its own
+   * port. Only an exact origin match skips the port rule — the scheme, private-host and DNS checks
+   * still apply. Never from user or model input.
+   */
+  readonly trustedOrigins?: readonly string[];
   /** When non-empty, every hop must also match one of these domains (or a subdomain). */
   readonly allowedDomains?: readonly string[];
   /**
@@ -114,8 +122,11 @@ export async function fetchPublicMediaBytes(
     firstOrigin ??= parsed.origin;
     // `allowedPorts` vouches for the first URL's origin only: a hop to another scheme, host or port gets
     // the default port alone, so a redirect cannot carry an allowed port to a host nobody vouched for.
+    // A declared `trustedOrigins` entry vouches for exactly that origin, on whichever hop reaches it.
     const extraPorts = parsed.origin === firstOrigin ? options.allowedPorts : undefined;
-    if (!isDefaultOrAllowedPort(parsed, extraPorts)) return withHost('blocked', current, undefined, 'port');
+    if (!isDefaultOrAllowedPort(parsed, extraPorts) && !options.trustedOrigins?.includes(parsed.origin)) {
+      return withHost('blocked', current, undefined, 'port');
+    }
     // Never downgrade: once a hop was https, an http hop would expose the download in clear text.
     if (previousProtocol === 'https:' && parsed.protocol !== 'https:') return withHost('blocked', current);
     previousProtocol = parsed.protocol;

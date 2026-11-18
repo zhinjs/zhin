@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  fetchUrlAsBase64,
   inspectMediaBytes,
   normalizeMediaRefsToPayloads,
 } from '../media/media-normalize.js';
@@ -66,6 +67,11 @@ export interface ResolveTurnMediaOptions {
    * A `path` source is read only when its real path lies inside one; absent = no local path is read.
    */
   readonly inboundMediaRoots?: readonly string[];
+  /**
+   * #1250 第 48 批: protocol-server origins the producing Endpoint declared (`TurnInput.inboundMediaOrigins`).
+   * A media URL on one of them keeps its port; every other URL must use the default HTTPS port.
+   */
+  readonly inboundMediaOrigins?: readonly string[];
   /** Replaces the pinned Node transport that downloads inbound media URLs (tests, embedding hosts). */
   readonly mediaTransport?: NetworkTransport;
 }
@@ -98,7 +104,13 @@ async function materializeInboundMedia(
   signal: AbortSignal,
   inboundMediaRoots: readonly string[] | undefined,
   transport?: NetworkTransport,
+  inboundMediaOrigins: readonly string[] = [],
 ): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string }>> {
+  if (media.kind === 'url' && inboundMediaOrigins.length) {
+    if (typeof media.size === 'number' && media.size > maxBytes) return {};
+    const payload = await fetchUrlAsBase64(media.value, maxBytes, type === 'file' ? undefined : type, signal, [], transport, inboundMediaOrigins);
+    return payload ? { payload: { ...payload, ...(media.file_name ? { fileName: media.file_name } : {}) } } : {};
+  }
   if (media.kind !== 'path') {
     const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport);
     return payload ? { payload } : {};
@@ -149,6 +161,7 @@ export async function resolveTurnMediaInjection(
     transcriber,
     perception,
     inboundMediaRoots,
+    inboundMediaOrigins,
   } = options;
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
@@ -192,7 +205,7 @@ export async function resolveTurnMediaInjection(
       media = resolution.content;
     }
     signal.throwIfAborted();
-    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport);
+    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport, inboundMediaOrigins);
     signal.throwIfAborted();
     if (refused) {
       // The reason and kind only: the path itself names host layout and stays out of logs and prompt.

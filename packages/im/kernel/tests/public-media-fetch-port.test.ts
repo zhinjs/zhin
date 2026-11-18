@@ -148,6 +148,38 @@ describe('fetchPublicMediaBytes — port rule (#1250 第 48 批)', () => {
     ]);
   });
 
+  it('keeps the port of a trusted origin, and only that exact origin', async () => {
+    const net = fakeTransport({
+      'https://satori.example:5140/v1/proxy/a.png': { status: 200 },
+      'http://satori.example:5140/v1/proxy/a.amr': { status: 200 },
+    });
+    const trustedOrigins = ['https://satori.example:5140', 'http://satori.example:5140'];
+    expect(await fetchPublicMediaBytes('https://satori.example:5140/v1/proxy/a.png', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: true });
+    expect(await fetchPublicMediaBytes('http://satori.example:5140/v1/proxy/a.amr', { maxBytes: 1024, allowHttp: true, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: true });
+    // Another port on the same host, the same port on another host, and http without allowHttp stay refused.
+    expect(await fetchPublicMediaBytes('https://satori.example:22/a', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: false, code: 'blocked', reason: 'port' });
+    expect(await fetchPublicMediaBytes('https://other.example:5140/a', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: false, code: 'blocked', reason: 'port' });
+    expect(await fetchPublicMediaBytes('http://satori.example:5140/v1/proxy/a.amr', { maxBytes: 1024, trustedOrigins, transport: net.transport }))
+      .toMatchObject({ ok: false, code: 'blocked' });
+    expect(net.requestBytes).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a trusted origin redirect to another port, nor reach a private host', async () => {
+    const net = fakeTransport({
+      'https://satori.example:5140/start': { status: 302, headers: { location: 'https://satori.example:6379/next' } },
+    });
+    expect(await fetchPublicMediaBytes('https://satori.example:5140/start', { maxBytes: 1024, trustedOrigins: ['https://satori.example:5140'], transport: net.transport }))
+      .toMatchObject({ ok: false, code: 'blocked', reason: 'port' });
+    const local = fakeTransport({});
+    expect(await fetchPublicMediaBytes('https://10.0.0.1:5140/a', { maxBytes: 1024, trustedOrigins: ['https://10.0.0.1:5140'], transport: local.transport }))
+      .toMatchObject({ ok: false, code: 'blocked' });
+    expect(local.requestBytes).not.toHaveBeenCalled();
+  });
+
   it('never puts the full URL in the result', async () => {
     const net = fakeTransport({});
     const result = await fetchPublicMediaBytes('https://cdn.example:22/secret/path?token=hunter2', { maxBytes: 1024, transport: net.transport });
