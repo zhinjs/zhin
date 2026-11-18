@@ -138,16 +138,23 @@ export function sniffSandboxMedia(head: Uint8Array): { readonly kind: SandboxMed
     if (replacementRatio < 0.01) {
       // Markup a browser would execute: never inline, whatever the uploader declared.
       const start = decoded.replace(/^\uFEFF/u, '').trimStart().slice(0, 1024).toLowerCase();
-      if (/<svg[\s>]/u.test(start) && (start.startsWith('<svg') || start.startsWith('<?xml') || start.startsWith('<!doctype svg') || start.startsWith('<!--'))) {
+      if (/<svg[\s>]/iu.test(start) && (start.startsWith('<svg') || start.startsWith('<?xml') || start.startsWith('<!doctype svg') || start.startsWith('<!--'))) {
         return { kind: 'file', mime: 'image/svg+xml' };
       }
-      if (/^(?:<!doctype html|<html[\s>]|<head[\s>]|<body[\s>]|<script[\s>]|<iframe[\s>]|<!--)/u.test(start) || /<(?:script|iframe|html|body)[\s>]/u.test(start)) {
+      if (/^(?:<!doctype html|<html[\s>]|<head[\s>]|<body[\s>]|<script[\s>]|<iframe[\s>]|<!--)/iu.test(start) || /<(?:script|iframe|html|body)[\s>]/iu.test(start)) {
         return { kind: 'file', mime: 'text/html' };
       }
       return { kind: 'file', mime: 'text/plain' };
     }
   }
   return { kind: 'file', mime: 'application/octet-stream' };
+}
+
+/** Strips trailing `/` without a backtracking regex (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return value.slice(0, end);
 }
 
 function provisionalKind(declaredType: string | undefined): SandboxMediaKind {
@@ -344,7 +351,7 @@ export class SandboxMediaStore {
   signedUrl(meta: SandboxMediaMeta, origin: string): string {
     const exp = Math.floor(meta.expiresAt / 1000);
     const path = `${SANDBOX_MEDIA_PUBLIC_PREFIX}${this.dirKey}/${meta.id}?exp=${exp}&sig=${this.#sign(this.#secrets(true)!.current, meta.id, exp)}`;
-    return `${origin.replace(/\/+$/u, '')}${path}`;
+    return `${trimTrailingSlashes(origin)}${path}`;
   }
 
   /**
