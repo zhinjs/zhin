@@ -4,7 +4,7 @@ import { delimiter, extname, isAbsolute, join, resolve as resolvePath } from 'no
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
 import type { PublicMediaFetchOptions, PublicMediaFetchResult } from '@zhin.js/agent/security';
-import type { InboundAudioUrlOrigin, InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
+import type { InboundAudioUrlSource, InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
@@ -66,7 +66,7 @@ export interface SpeechHostHandle extends AudioTranscriptionPort {
    * ({@link fetchSpeechAudio}): HTTPS, or also plain HTTP when `origin` is `platform` (a voice link
    * the adapter produced); anything else is refused with `speech_url_blocked` (#1250 第 45 批).
    */
-  transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription>;
+  transcribeUrl(audioUrl: string, source?: InboundAudioUrlSource): Promise<InboundAudioUrlTranscription>;
 }
 
 /** Largest voice download (bytes); a longer recording is not transcribed. */
@@ -92,13 +92,14 @@ export type SpeechAudioDownload =
 export async function fetchSpeechAudio(
   url: string,
   fetcher: SpeechAudioFetcher | undefined,
-  options: Readonly<{ allowHttp?: boolean }> = {},
+  options: Readonly<{ allowHttp?: boolean; trustedOrigins?: readonly string[] }> = {},
 ): Promise<SpeechAudioDownload> {
   if (!fetcher) return Object.freeze({ ok: false as const, code: 'speech_url_blocked' as const, detail: 'no_checked_fetcher' });
   const result = await fetcher(url, {
     maxBytes: SPEECH_AUDIO_MAX_BYTES,
     timeoutMs: SPEECH_AUDIO_FETCH_TIMEOUT_MS,
     ...(options.allowHttp === true ? { allowHttp: true } : {}),
+    ...(options.trustedOrigins?.length ? { trustedOrigins: options.trustedOrigins } : {}),
   });
   if (result.ok) return Object.freeze({ ok: true as const, data: result.bytes, mimeType: result.mimeType || 'audio/wav' });
   return Object.freeze({
@@ -354,12 +355,17 @@ export async function prepareSpeechHost(
         signal?.throwIfAborted();
         return text.trim() || undefined;
       },
-      async transcribeUrl(audioUrl: string, source?: Readonly<{ origin: InboundAudioUrlOrigin }>): Promise<InboundAudioUrlTranscription> {
+      async transcribeUrl(audioUrl: string, source?: InboundAudioUrlSource): Promise<InboundAudioUrlTranscription> {
         const url = audioUrl.trim();
         if (!url) return null;
         try {
           // Plain http only for a voice link the platform adapter produced; user-typed addresses stay HTTPS.
-          const download = await fetchSpeechAudio(url, fetchAudio, { allowHttp: source?.origin === 'platform' });
+          const platform = source?.origin === 'platform';
+          // A platform voice link on the Endpoint's own protocol server keeps that server's port (#1250 第 48 批).
+          const download = await fetchSpeechAudio(url, fetchAudio, {
+            allowHttp: platform,
+            ...(platform && source?.trustedOrigins?.length ? { trustedOrigins: source.trustedOrigins } : {}),
+          });
           if (!download.ok) {
             logSpeechDownloadFailure('inbound', download);
             return download.code === 'speech_url_blocked'

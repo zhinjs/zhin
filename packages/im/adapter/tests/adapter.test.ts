@@ -41,6 +41,7 @@ import adapterFeature, {
   createRecallEndpointControl,
   endpointContentOf,
   endpointInboundMediaOf,
+  endpointInboundMediaOrigins,
   endpointInboundMediaRoots,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
@@ -221,8 +222,24 @@ describe('Adapter Feature', () => {
     const throwingGetter = Object.defineProperty({}, 'inboundMedia', { get() { throw new Error('boom'); } });
     expect(endpointInboundMediaOf(throwingGetter)).toBeUndefined();
     expect(endpointInboundMediaRoots(throwingGetter)).toEqual([]);
+    expect(index.inboundMediaOrigins(owning.id)).toEqual([]);
     await index.stop();
     expect(index.inboundMediaRoots(owning.id)).toEqual([]);
+  });
+
+  it('normalizes declared protocol-server origins (#1250 第 48 批)', () => {
+    const origins = (values: unknown) => endpointInboundMediaOrigins({ inboundMedia: { origins: () => values } });
+    expect(origins([
+      'ws://satori.example:5140/', 'http://satori.example:5140/v1', 'wss://napcat.example:3001',
+      'https://milky.example:443/', 'http://plain.example:80', '  ', 'ftp://x.example:21', 'not a url', 3,
+    ])).toEqual(['http://satori.example:5140', 'https://napcat.example:3001', 'https://milky.example', 'http://plain.example']);
+    expect(origins('http://x.example:1')).toEqual([]);
+    expect(endpointInboundMediaOrigins({ inboundMedia: { origins: () => { throw new Error('boom'); } } })).toEqual([]);
+    // A port that declares only origins is still a port, and declares no roots.
+    const onlyOrigins = { inboundMedia: { origins: () => ['https://a.example:8443'] } };
+    expect(endpointInboundMediaOf(onlyOrigins)).toBeDefined();
+    expect(endpointInboundMediaRoots(onlyOrigins)).toEqual([]);
+    expect(endpointInboundMediaOrigins({ inboundMedia: { roots: () => ['/x'] } })).toEqual([]);
   });
 
   it('requires declared operations to exist on an explicit control port', async () => {

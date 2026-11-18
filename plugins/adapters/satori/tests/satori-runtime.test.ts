@@ -882,3 +882,17 @@ describe('satori endpoint management', () => {
     ]);
   });
 });
+
+describe('satori inbound media origins (#1250 第 48 批)', () => {
+  it('declares the configured Satori server as the origin whose port media URLs may keep', async () => {
+    const h = await createEndpointHarness(() => new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    try {
+      await h.start();
+      expect(h.index.inboundMediaOrigins(h.canonicalId)).toEqual(['http://127.0.0.1:5140']);
+    } finally { await h.stop(); }
+  });
+});

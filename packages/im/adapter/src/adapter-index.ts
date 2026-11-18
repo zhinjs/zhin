@@ -50,7 +50,7 @@ import {
   type EndpointControl,
 } from './endpoint-control.js';
 import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
-import { endpointInboundMediaRoots } from './endpoint-inbound-media.js';
+import { endpointInboundMediaOrigins, endpointInboundMediaRoots } from './endpoint-inbound-media.js';
 import {
   EndpointDeliveryError,
   normalizePlatformStanding,
@@ -765,6 +765,13 @@ export class AdapterIndex {
     const record = this.#record(id);
     if (!record?.started || record.stopped || !record.endpoint) return Object.freeze([]);
     return endpointInboundMediaRoots(endpointRuntimeOf(record.endpoint));
+  }
+
+  /** #1250 第 48 批: protocol-server origins the active Endpoint declared; none for an unknown or stopped one. */
+  inboundMediaOrigins(id: CapabilityId): readonly string[] {
+    const record = this.#record(id);
+    if (!record?.started || record.stopped || !record.endpoint) return Object.freeze([]);
+    return endpointInboundMediaOrigins(endpointRuntimeOf(record.endpoint));
   }
 }
 

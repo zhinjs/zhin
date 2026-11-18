@@ -161,6 +161,23 @@ describe('platform voice links over plain http (#1250 第 45 批, owner decision
     expect(sttFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the port of the Endpoint\'s own protocol server for a platform link only (#1250 第 48 批)', async () => {
+    const SATORI_VOICE = 'http://satori.example:5140/v1/proxy/voice.amr';
+    const sttFetch = stubSttService('协议端语音');
+    const { transport, requestBytes } = transportFor({
+      [SATORI_VOICE]: { status: 200, statusText: 'OK', headers: { 'content-type': 'audio/amr' }, body: OGG },
+    });
+    const host = await prepareSpeechHost(STT, { fetchAudio: (url, options) => fetchPublicMediaBytes(url, { ...options, transport }) });
+    const trustedOrigins = ['http://satori.example:5140'];
+    // Without the declaration, or on a user-typed address, the port is refused before any connection.
+    await expect(host!.transcribeUrl(SATORI_VOICE, { origin: 'platform' })).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    await expect(host!.transcribeUrl(SATORI_VOICE, { origin: 'user', trustedOrigins })).resolves.toEqual({ status: 'refused', code: 'speech_url_blocked' });
+    expect(requestBytes).not.toHaveBeenCalled();
+    await expect(host!.transcribeUrl(SATORI_VOICE, { origin: 'platform', trustedOrigins })).resolves.toBe('协议端语音');
+    expect(requestBytes).toHaveBeenCalledTimes(1);
+    expect(sttFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses the same http address when the user typed it ([audio:URL]) or passed it to voice_stt', async () => {
     const sttFetch = stubSttService();
     const { transport, requestBytes } = transportFor({
