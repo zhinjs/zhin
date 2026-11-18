@@ -316,6 +316,15 @@ export class ImRuntime implements OutboundMessageService {
     return requireAdapters(lease.value).inboundMediaRoots(conversation.endpoint.id as CapabilityId);
   }
 
+  /**
+   * #1250 第 48 批: protocol-server origins the conversation's Endpoint declared. A media download from
+   * one of its messages keeps that exact origin's port; none when the lease expired.
+   */
+  inboundMediaOrigins(lease: SnapshotLease, conversation: ConversationRef): readonly string[] {
+    if (!this.#snapshots?.owns(lease) || !lease.active) return Object.freeze([]);
+    return requireAdapters(lease.value).inboundMediaOrigins(conversation.endpoint.id as CapabilityId);
+  }
+
   async readConversationContext(
     conversation: ConversationRef,
     consumer: string,

@@ -187,6 +187,22 @@ createEndpointSpecification(this, {
 - Declare only directories the Endpoint itself writes; never the project root, `data/` or a home directory.
 - A platform `data.file` is no longer guessed to be a local path (values starting with `/`, `./`, `~/` are opaque platform refs, `kind: 'file'`); write `data.path` or `media.kind: 'path'` for a real local file.
 
+### Protocol server origins
+
+Inbound media and voice addresses connect only to the default port (https 443, and 80 when a platform voice link may use http); any other port is refused, so a URL cannot make the instance probe ports. A protocol server (Satori, OneBot, NapCat, Milky, …) often hands out resource addresses on its own port (`http://1.2.3.4:5140/v1/proxy/...`). An adapter declares the protocol server it is configured to talk to on the specification, and that one origin (same scheme, host and port) keeps its port:
+
+```ts
+createEndpointSpecification(this, {
+  // ...
+  inboundMedia: { origins: () => [options.config.baseUrl] },
+});
+```
+
+- `http(s)://` and `ws(s)://` are accepted (a `ws(s)://` address counts as `http(s)://` on the same host and port); the path is ignored.
+- Declare only the protocol server from the Endpoint's configuration, never an address taken from a message; a reverse connection (the protocol server connects in) has no configured address and declares none.
+- `origins()` lifts the port rule only, and only for a media URL that points at that origin directly: a redirect into it from elsewhere, or from it to another port, is held to the default port.
+- Private and loopback hosts are still refused: a protocol server on the same machine or private network as the instance hands out addresses that stay unusable, whatever the port. Image downloads are HTTPS only; platform voice links may use http.
+
 ## Going deeper
 
 ### State machine

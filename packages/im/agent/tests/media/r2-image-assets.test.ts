@@ -15,6 +15,19 @@ function fixture(status = 200) {
   return { fetchImpl, publisher: new R2ImageAssetPublisher(config, fetchImpl) };
 }
 
+it.each(['https://images.example.test:8443', 'https://images.example.test:80/', 'https://images.example.test:080/img'])(
+  'refuses a publicBaseUrl on a non-default port at construction (%s)',
+  (publicBaseUrl) => {
+    expect(() => new R2ImageAssetPublisher({ ...config, publicBaseUrl }, vi.fn<typeof fetch>()))
+      .toThrow(/imageStorage\.publicBaseUrl must use the default HTTPS port 443/u);
+  },
+);
+
+it('accepts a publicBaseUrl with the default port written out', () => {
+  const publisher = new R2ImageAssetPublisher({ ...config, publicBaseUrl: 'https://images.example.test:443' }, vi.fn<typeof fetch>());
+  expect(publisher.ownsUrl('https://images.example.test/generated/00000000-0000-4000-8000-000000000000.png')).toBe(true);
+});
+
 it('signs one PUT and returns only the public URL and detected image metadata', async () => {
   const { fetchImpl, publisher } = fixture();
   const image = await publisher.publish(gif);

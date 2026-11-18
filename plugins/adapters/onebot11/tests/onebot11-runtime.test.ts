@@ -788,3 +788,18 @@ describe('onebot11 reverse ws lifecycle', () => {
     await harness.endpoint.stop();
   });
 });
+
+describe('onebot11 inbound media origins (#1250 第 48 批)', () => {
+  it('declares the configured forward WebSocket server (as its http origin)', async () => {
+    const ws = createMockWs();
+    const h = await createEndpointHarness(() => new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      config: baseConfig,
+      createWebSocket: () => { queueMicrotask(() => ws.emitOpen()); return ws; },
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    try {
+      await h.start();
+      expect(h.index.inboundMediaOrigins(h.canonicalId)).toEqual(['http://127.0.0.1:6700']);
+    } finally { await h.stop(); }
+  });
+});

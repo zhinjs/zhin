@@ -576,7 +576,7 @@ describe('personal Session IM ingress', () => {
     const route = new AgentTurnIngressRoute({
       withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":true,"confidence":0.9,"reason":"unanswered"}') }).withInferenceScope,
       projectRoot: '/host-a', runtime: { executeLeased } as never,
-      im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext, commitConversationContext, conversationEventReader: options.events } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext, commitConversationContext, conversationEventReader: options.events, inboundMediaOrigins: () => [] } as never,
       ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
       agent: {
         service: {

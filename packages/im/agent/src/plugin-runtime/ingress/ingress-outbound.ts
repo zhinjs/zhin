@@ -346,6 +346,8 @@ export async function admitIngressMailTurn(input: {
   readonly transcribeUrl: InboundAudioUrlTranscriber | undefined;
   /** The Endpoint's voice segments come from the platform payload (not `runtime.sandbox`); see `preprocessInboundTurn`. */
   readonly platformSegments?: boolean;
+  /** #1250 第 48 批: the Endpoint's declared protocol-server origins, for a platform voice address. */
+  readonly platformOrigins?: () => readonly string[];
   readonly matchedVenue: VenueDefinition | undefined;
   readonly venueRoute: VenueRouteResult | undefined;
   readonly mailbox: HostMailbox;
@@ -374,6 +376,7 @@ export async function admitIngressMailTurn(input: {
     matchedContent,
     transcribeUrl,
     platformSegments,
+    platformOrigins,
     matchedVenue,
     venueRoute,
     mailbox,
@@ -390,7 +393,10 @@ export async function admitIngressMailTurn(input: {
     audit,
     reply,
   } = input;
-  const preprocessed = await preprocessInboundTurn(message, matchedContent, transcribeUrl, { platformSegments: platformSegments === true });
+  const preprocessed = await preprocessInboundTurn(message, matchedContent, transcribeUrl, {
+    platformSegments: platformSegments === true,
+    ...(platformOrigins ? { platformOrigins } : {}),
+  });
   let inbound = preprocessed;
   const venueDescriptor = buildAdmittedVenueDescriptor(message, matchedVenue, venueRoute);
   const admitted = await mailbox.admit({

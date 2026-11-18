@@ -13,12 +13,13 @@ function message(segments: readonly unknown[]): Message {
   } as unknown as Message;
 }
 
-function request(segments: readonly unknown[], roots: () => readonly string[]) {
+function request(segments: readonly unknown[], roots: () => readonly string[], origins?: () => readonly string[]) {
   return createRuntimeTurnRequest({ message: message(segments), text: 'hi', roles: {} as never }, {
     traceId: 't', turnId: 'turn-1', signal: new AbortController().signal,
     projectRoot: '/project', workspaceRoot: '/project', sessionKey: 'session-1',
     intent: { kind: 'new' }, ports: {} as never,
     inboundMediaRoots: roots,
+    ...(origins ? { inboundMediaOrigins: origins } : {}),
     resolveReference: async () => ({ status: 'not_found', code: 'x' }),
   });
 }
@@ -41,5 +42,17 @@ describe('createRuntimeTurnRequest inbound media roots', () => {
     const turn = request([{ type: 'image', data: { file: '/root/project/.env' } }], roots);
     expect(turn.input.media?.[0]?.source).toEqual({ kind: 'platform_ref', value: '/root/project/.env' });
     expect(turn.input.inboundMediaRoots).toBeUndefined();
+  });
+
+  it('reads the declared protocol-server origins only for a message carrying a media URL (#1250 第 48 批)', () => {
+    const roots = vi.fn(() => [] as string[]);
+    const origins = vi.fn(() => ['http://satori.example:5140']);
+    const withUrl = request([{ type: 'image', data: { media: { kind: 'url', value: 'http://satori.example:5140/a.png' } } }], roots, origins);
+    expect(withUrl.input.inboundMediaOrigins).toEqual(['http://satori.example:5140']);
+
+    origins.mockClear();
+    const inline = request([{ type: 'image', data: { media: { kind: 'base64', value: 'iVBORw0KGgo=' } } }], roots, origins);
+    expect(origins).not.toHaveBeenCalled();
+    expect(inline.input.inboundMediaOrigins).toBeUndefined();
   });
 });

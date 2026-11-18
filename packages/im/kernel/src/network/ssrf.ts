@@ -113,6 +113,21 @@ export function hostnameMatchesList(hostname: string, domains: string[]): boolea
   });
 }
 
+/**
+ * Port rule of a download from a URL someone outside the host controls (#1250 第 48 批): only the
+ * scheme's default port (https 443, http 80 — the WHATWG parser drops an explicit default port, so
+ * `https://host:443/` counts as no port) unless the caller lists more in `allowedPorts`. Any other
+ * port — `https://host:22/`, `:8443`, `:0` — would let the instance open a TLS handshake to an
+ * arbitrary public host and port, i.e. probe ports for whoever chose the URL.
+ *
+ * `https://host:80/` is not a default port (80 is http's), so it is refused like any other.
+ */
+export function isDefaultOrAllowedPort(url: URL, allowedPorts: readonly number[] = []): boolean {
+  if (url.port === '') return true;
+  const port = Number(url.port);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 && allowedPorts.includes(port);
+}
+
 export interface UrlNetworkPolicyConfig {
   httpsOnly?: boolean;
   allowedDomains: string[];
