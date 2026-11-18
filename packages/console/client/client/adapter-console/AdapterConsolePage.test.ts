@@ -781,6 +781,17 @@ describe('per-row slot and headless accounts (zhinjs/zhin#1250)', () => {
     f.h.unmount();
   });
 
+  it('leaves out the read-only configured-account fallback too when the host owns the accounts', async () => {
+    const s = status(); delete s.runtime;
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(true);
+    f.h.mount(() => f.h.exports.renderAdapterConsoleView!(f.h.exports.useAdapterConsoleModel!({ adapterKey: 'icqq', isCurrent: () => true }), { embedded: true, hostAccounts: true }));
+    await f.h.settle();
+    expect(f.h.nodes().some(node => node.props?.id === 'adapter-accounts')).toBe(false);
+    expect(f.h.nodes().some(node => node.type === 'nav')).toBe(false);
+    f.h.unmount();
+  });
+
   it('keeps the navigation and account section when the page lists the accounts itself', async () => {
     const f = fixture(status(), [], '', { embedded: true }); await f.h.settle();
     expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');

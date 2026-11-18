@@ -1673,7 +1673,8 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
       {qqWorkbench}
       {accountsSection}
 
-      {!runtime && status && (
+      {/* Same `showAccounts` guard as the runtime account section and its navigation link. */}
+      {!runtime && status && showAccounts && (
         <Section id="adapter-accounts" title={t(locale, '已配置的账号')} description={t(locale, '当前环境只能查看账号配置。')}>
           {!status.configured.length
             ? <p className="console-form-field-hint">{runningIds.length > 0 ? t(locale, '此适配器没有提供账号清单；运行中的连接见上方。') : t(locale, '配置里还没有账号。')}</p>
