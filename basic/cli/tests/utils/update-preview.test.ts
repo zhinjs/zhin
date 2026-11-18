@@ -61,20 +61,52 @@ describe('previewUpdate', () => {
     write('package.json', { name: 'bot', dependencies: { 'zhin.js': '^1.3.0', left: '^1.0.0' }, pnpm: { overrides: { left: 'link:../left', 'zhin.js': '1.4.0' } } });
     // The workspace file wins on the same key; `$name` points at the root's own specifier.
     write('pnpm-workspace.yaml', "packages:\n  - '!**/test/**'\n  - plugins/*\noverrides:\n  zhin.js: '$zhin.js'\n  '@zhin.js/core': '~1.9.0'\n  'foo>bar': '1.0.0'\n");
-    const preview = await previewUpdate(root, [], { publishedVersions: lookup });
+    const preview = await previewUpdate(root, [], {
+      publishedVersions: lookup,
+      packageDependencies: async (name, version) => (name === 'zhin.js' && version === '1.4.2' ? { '@zhin.js/core': '1.9.1' } : undefined),
+    });
     expect(preview.conditionalOverrides).toEqual(['foo>bar: 1.0.0']);
+    // `$zhin.js` is the user's own wiring: it still decides the version.
     expect(preview.members[0]).toMatchObject({
       overridden: ['left（link:../left）'],
       changes: [{ name: 'zhin.js', current: '1.4.0', target: '1.4.2', override: '$zhin.js' }],
     });
+    // #1250 update-overrides-not-synced: the Zhin version lock `~1.9.0` is released for the update,
+    // so the member's own `~1.8.0` decides (1.8.0 is the newest 1.8.x), and the lock is re-pinned.
     expect(preview.members[1]!.changes).toEqual([
-      { name: '@zhin.js/core', range: '~1.9.0', current: '1.8.0', target: '1.9.1', override: '~1.9.0' },
       { name: 'zhin.js', range: '^1.3.0', current: '1.4.0', target: '1.4.2', override: '$zhin.js', latestOutsideRange: '2.0.0' },
     ]);
+    expect(preview.overrides).toEqual({
+      changes: [
+        { file: 'package.json', key: 'zhin.js', from: '1.4.0', to: '1.4.2' },
+        { file: 'pnpm-workspace.yaml', key: '@zhin.js/core', from: '~1.9.0', to: '~1.9.1' },
+      ],
+      manual: [],
+    });
     const lines = renderUpdatePreview(preview, false);
-    expect(lines.some(line => line.includes('1.8.0 → 1.9.1（overrides：~1.9.0）'))).toBe(true);
+    expect(lines.some(line => line.includes('1.4.0 → 1.4.2（overrides：$zhin.js；'))).toBe(true);
     expect(lines).toContain('  由 overrides 决定、无法预览：left（link:../left）');
+    expect(lines).toContain('  pnpm-workspace.yaml 的 overrides "@zhin.js/core": ~1.9.0 → ~1.9.1');
     expect(lines.some(line => line.includes('带条件的 overrides 没有计入预览') && line.includes('foo>bar'))).toBe(true);
+  });
+
+  it('leaves the Zhin overrides alone when the update names only other packages', async () => {
+    write('package.json', { name: 'bot', dependencies: { 'zhin.js': '^1.3.0', left: '^1.0.0' }, pnpm: { overrides: { 'zhin.js': '1.4.0' } } });
+    const preview = await previewUpdate(root, ['left'], { publishedVersions: lookup, packageDependencies: async () => { throw new Error('not asked'); } });
+    expect(preview.overrides).toEqual({ changes: [], manual: [] });
+    expect(preview.members[0]!.changes).toEqual([]);
+  });
+
+  it('lists the Zhin overrides it cannot sync with file and line', async () => {
+    write('package.json', `${JSON.stringify({ name: 'bot', dependencies: { 'zhin.js': '^1.3.0' }, pnpm: { overrides: { 'zhin.js': '>=1.3 <1.5', '@zhin.js/core@<1.9': '1.8.0', left: '1.0.0' } } }, null, 2)}\n`);
+    const preview = await previewUpdate(root, [], { publishedVersions: lookup, packageDependencies: async () => ({}) });
+    expect(preview.overrides.changes).toEqual([]);
+    expect(preview.overrides.manual).toEqual([
+      '请手动修改 package.json:8（package.json 的 pnpm.overrides）"zhin.js": ">=1.3 <1.5"——版本范围「>=1.3 <1.5」无法自动同步，只支持精确版本或 ^ / ~ 版本；改成与升级后的 zhin.js 相同的版本，再运行 pnpm install',
+      '请手动修改 package.json:9（package.json 的 pnpm.overrides）"@zhin.js/core@<1.9": "1.8.0"——键带版本选择器（@zhin.js/core@<1.9），升级后可能不再匹配；改成与升级后的 @zhin.js/core 相同的版本，再运行 pnpm install',
+    ]);
+    // A Zhin key that is not synced is no longer listed as an unapplied conditional override.
+    expect(preview.conditionalOverrides).toEqual([]);
   });
 
   it('treats any workspace packages entry as recursive, like the gateway', async () => {

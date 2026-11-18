@@ -35,6 +35,7 @@ import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { authorizePackages, gatewayPrincipalAllows, type GatewayPackageAction, type GatewayPrincipal } from './authorization.js';
 import { GatewayError } from './errors.js';
 import { ProjectFileSnapshot } from './snapshot.js';
+import { formatOverrideChanges, isZhinPackageName, pinZhinOverrides, readZhinOverrides, releaseZhinOverrides } from '../plugin-management/zhin-overrides.js';
 
 /** The part of `InstanceSupervisor` a transaction drives. */
 export interface PackageTransactionInstance {
@@ -400,15 +401,30 @@ export class GatewayPackageService {
   update(packages: readonly unknown[] | 'all', options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
     return this.#transaction('update', packages, options, async (ctx, authorized) => {
       const recursive = await isPnpmWorkspace(this.#root) ? ['-r'] : [];
-      if (packages === 'all') { await ctx.run(['update', ...recursive]); return; }
-      const ranged = authorized.filter(item => item.version === undefined).map(item => item.name);
-      for (const item of authorized) {
-        if (item.version === undefined) continue;
-        const declared = await ctx.workflow.inspect(item.name).then(state => state.declared, () => false);
-        if (declared) await ctx.workflow.update(item.name, item.version);
-        else await ctx.workflow.install(item.spec, undefined, undefined, { enable: false });
+      // #1250 update-overrides-not-synced: pnpm overrides that pin Zhin packages move with them.
+      const overrides = packages === 'all' || authorized.some(item => isZhinPackageName(item.name))
+        ? readZhinOverrides(this.#root)
+        : undefined;
+      const syncing = overrides?.entries.some(entry => entry.class.kind === 'sync') === true;
+      if (overrides && syncing) await releaseZhinOverrides(this.#root, overrides);
+      if (packages === 'all') await ctx.run(['update', ...recursive]);
+      else {
+        const ranged = authorized.filter(item => item.version === undefined).map(item => item.name);
+        for (const item of authorized) {
+          if (item.version === undefined) continue;
+          const declared = await ctx.workflow.inspect(item.name).then(state => state.declared, () => false);
+          if (declared) await ctx.workflow.update(item.name, item.version);
+          else await ctx.workflow.install(item.spec, undefined, undefined, { enable: false });
+        }
+        if (ranged.length) await ctx.run(['update', ...recursive, ...ranged]);
       }
-      if (ranged.length) await ctx.run(['update', ...recursive, ...ranged]);
+      if (!overrides?.entries.length) return;
+      const say = (line: string, stream: 'stdout' | 'stderr' = 'stdout') => this.#relay.output(stream, `${line}\n`);
+      const synced = await pinZhinOverrides(this.#root, overrides);
+      for (const line of formatOverrideChanges(synced.changes)) say(`同步 overrides：${line}`);
+      for (const line of synced.manual) say(line, 'stderr');
+      // The update ran without the released overrides: install once with them for the lockfile.
+      if (syncing && synced.written) await ctx.run(['install']);
     });
   }
 

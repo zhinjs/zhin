@@ -1,0 +1,193 @@
+/**
+ * #1250 update-overrides-not-synced: `zhin update` releases the pnpm overrides that pin Zhin
+ * packages before the package manager runs and pins them to the upgraded versions afterwards.
+ */
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import {
+  classifyZhinOverride,
+  installedOverrideTarget,
+  pinZhinOverrides,
+  readZhinOverrides,
+  releaseZhinOverrides,
+} from '../../src/plugin-management/zhin-overrides.js';
+import { GatewayPackageService, type GatewayPackageManager } from '../../src/packages/index.js';
+
+let root: string;
+beforeEach(async () => { root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-overrides-'))); });
+afterEach(async () => { await rm(root, { recursive: true, force: true }); });
+
+async function put(file: string, content: unknown): Promise<void> {
+  await mkdir(dirname(join(root, file)), { recursive: true });
+  await writeFile(join(root, file), typeof content === 'string' ? content : JSON.stringify(content));
+}
+
+/** A pnpm-store copy `name@version` with exact dependencies, linked as `node_modules/<name>` when `top`. */
+async function stored(name: string, version: string, dependencies: Record<string, string> = {}, top = false): Promise<string> {
+  const dir = join(root, 'node_modules/.pnpm', `${name.replace('/', '+')}@${version}`, 'node_modules', name);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name, version, dependencies }));
+  if (top) {
+    await mkdir(dirname(join(root, 'node_modules', name)), { recursive: true });
+    await symlink(dir, join(root, 'node_modules', name), 'dir');
+  }
+  return dir;
+}
+
+async function linkDependency(from: string, name: string, target: string): Promise<void> {
+  const at = join(from, '..', ...(from.includes('/node_modules/@') ? ['..'] : []), name);
+  await mkdir(dirname(at), { recursive: true });
+  await symlink(target, at, 'dir');
+}
+
+describe('classifyZhinOverride', () => {
+  it.each([
+    ['zhin.js', '1.6.0', { kind: 'sync', name: 'zhin.js', prefix: '' }],
+    ['@zhin.js/core', '^1.11.0', { kind: 'sync', name: '@zhin.js/core', prefix: '^' }],
+    ['@zhin.js/core', '~1.11.0', { kind: 'sync', name: '@zhin.js/core', prefix: '~' }],
+    ['zhin.js>@zhin.js/core', '1.11.0', { kind: 'sync', name: '@zhin.js/core', parent: 'zhin.js', prefix: '' }],
+    ['@zhin.js/plugin-foo>zhin.js', '=1.6.0', { kind: 'sync', name: 'zhin.js', parent: '@zhin.js/plugin-foo', prefix: '' }],
+  ])('syncs %s: %s', (key, value, expected) => {
+    expect(classifyZhinOverride(key, value)).toEqual(expected);
+  });
+
+  it.each([
+    ['@types/node', '22.0.0'],
+    ['zhin.js>@types/node', '22.0.0'],
+    ['zhin.js', 'link:../zhin'],
+    ['zhin.js', 'file:./zhin.tgz'],
+    ['zhin.js', '$zhin.js'],
+    ['@zhin.js/core', 'workspace:*'],
+    ['@zhin.js/core', 'npm:@other/core@1.0.0'],
+    ['@zhin.js/core', '-'],
+  ])('leaves %s: %s alone', (key, value) => {
+    expect(classifyZhinOverride(key, value)).toEqual({ kind: 'ignore' });
+  });
+
+  it.each([
+    ['@zhin.js/core@<1.12', '1.11.0', '键带版本选择器'],
+    ['zhin.js@1>@zhin.js/core', '1.11.0', '父包带版本选择器'],
+    ['a>zhin.js>@zhin.js/core', '1.11.0', '多级 > 选择器'],
+    ['@zhin.js/core', '>=1.11 <1.12', '版本范围'],
+    ['@zhin.js/core', { '@zhin.js/kernel': '1.3.0' }, '嵌套对象写法'],
+  ])('asks to edit %s by hand', (key, value, reason) => {
+    const classified = classifyZhinOverride(key, value);
+    expect(classified.kind).toBe('manual');
+    expect(classified.kind === 'manual' && classified.reason).toContain(reason);
+  });
+});
+
+describe('release and pin', () => {
+  beforeEach(async () => {
+    // zhin.js 1.7.0 is installed; its release requires core 1.12.0, core requires kernel 1.4.0.
+    const kernel = await stored('@zhin.js/kernel', '1.4.0');
+    const core = await stored('@zhin.js/core', '1.12.0', { '@zhin.js/kernel': '1.4.0' });
+    await linkDependency(core, '@zhin.js/kernel', kernel);
+    const zhin = await stored('zhin.js', '1.7.0', { '@zhin.js/core': '1.12.0' }, true);
+    await linkDependency(zhin, '@zhin.js/core', core);
+  });
+
+  it('removes only the syncable Zhin entries, then pins them in their original order and style', async () => {
+    const manifest = '{\n    "name": "bot",\n    "pnpm": {\n        "overrides": {\n            "left-pad": "1.3.0",\n            "zhin.js": "1.6.0",\n            "@zhin.js/kernel": "~1.3.0",\n            "zhin.js>@zhin.js/core": "^1.11.0",\n            "@zhin.js/core@<1": "1.0.0"\n        }\n    }\n}\n';
+    await put('package.json', manifest);
+    const plan = readZhinOverrides(root);
+    expect(plan.entries.map(entry => [entry.key, entry.line, entry.class.kind])).toEqual([
+      ['zhin.js', 6, 'sync'], ['@zhin.js/kernel', 7, 'sync'], ['zhin.js>@zhin.js/core', 8, 'sync'], ['@zhin.js/core@<1', 9, 'manual'],
+    ]);
+    await releaseZhinOverrides(root, plan);
+    expect(JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).pnpm.overrides).toEqual({ 'left-pad': '1.3.0', '@zhin.js/core@<1': '1.0.0' });
+    const result = await pinZhinOverrides(root, plan);
+    expect(result.changes).toEqual([
+      { file: 'package.json', key: 'zhin.js', from: '1.6.0', to: '1.7.0' },
+      { file: 'package.json', key: '@zhin.js/kernel', from: '~1.3.0', to: '~1.4.0' },
+      { file: 'package.json', key: 'zhin.js>@zhin.js/core', from: '^1.11.0', to: '^1.12.0' },
+    ]);
+    expect(result.manual).toHaveLength(1);
+    expect(result.manual[0]).toContain('请手动修改 package.json:9');
+    const text = await readFile(join(root, 'package.json'), 'utf8');
+    // Indentation and key order survive.
+    expect(text).toBe(manifest.replace('"1.6.0"', '"1.7.0"').replace('"~1.3.0"', '"~1.4.0"').replace('"^1.11.0"', '"^1.12.0"'));
+  });
+
+  it('edits pnpm-workspace.yaml in place, keeping comments and other settings', async () => {
+    await put('package.json', { name: 'bot' });
+    const yaml = "packages:\n  - plugins/*\n# version locks\noverrides:\n  '@types/node': 22.0.0\n  zhin.js: 1.6.0 # keep one copy\n  '@zhin.js/core': 1.11.0\nallowBuilds:\n  esbuild: true\n";
+    await put('pnpm-workspace.yaml', yaml);
+    const plan = readZhinOverrides(root);
+    expect(plan.entries.map(entry => [entry.file, entry.key, entry.line])).toEqual([
+      ['pnpm-workspace.yaml', 'zhin.js', 6], ['pnpm-workspace.yaml', '@zhin.js/core', 7],
+    ]);
+    await releaseZhinOverrides(root, plan);
+    expect(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8')).not.toContain('zhin.js:');
+    await pinZhinOverrides(root, plan);
+    const after = await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(after).toContain('# version locks');
+    expect(after).toContain("'@types/node': 22.0.0");
+    expect(after).toContain('allowBuilds:\n  esbuild: true');
+    expect(after.indexOf('@types/node')).toBeLessThan(after.indexOf('zhin.js: 1.7.0'));
+    expect(after.indexOf('zhin.js: 1.7.0')).toBeLessThan(after.indexOf('@zhin.js/core'));
+    expect(after).toMatch(/['"]@zhin\.js\/core['"]: 1\.12\.0/u);
+  });
+
+  it('keeps the old value and says so when no installed version is found', async () => {
+    await put('package.json', { name: 'bot', pnpm: { overrides: { '@zhin.js/agent': '1.0.0' } } });
+    const plan = readZhinOverrides(root);
+    expect(installedOverrideTarget(root, plan.entries[0]!)).toBeUndefined();
+    await releaseZhinOverrides(root, plan);
+    const result = await pinZhinOverrides(root, plan);
+    expect(result.changes).toEqual([]);
+    expect(result.manual[0]).toContain('"@zhin.js/agent": "1.0.0"——无法确定升级后的版本');
+    expect(JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).pnpm.overrides).toEqual({ '@zhin.js/agent': '1.0.0' });
+  });
+});
+
+describe('GatewayPackageService.update with Zhin overrides', () => {
+  const LOCK = 'lockfileVersion: 9.0\n';
+
+  function recordingManager(calls: string[], seen: unknown[]): GatewayPackageManager {
+    return async (args, projectRoot) => {
+      calls.push(args.join(' '));
+      seen.push(JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')).pnpm?.overrides);
+    };
+  }
+
+  beforeEach(async () => {
+    await put('package.json', { name: 'bot', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false }, dependencies: { 'zhin.js': '^1.6.0', '@types/node': '^22.0.0' }, pnpm: { overrides: { 'zhin.js': '1.6.0', '@types/node': '22.0.0' } } });
+    await put('plugin.js', 'export default {};');
+    await put('zhin.config.json', { configVersion: 2, plugins: {} });
+    await put('pnpm-lock.yaml', LOCK);
+    await stored('zhin.js', '1.7.0', {}, true);
+  });
+
+  it('runs the update without the Zhin locks, pins them again and installs once', async () => {
+    const calls: string[] = [];
+    const seen: unknown[] = [];
+    const service = new GatewayPackageService({ projectRoot: root, packageManager: recordingManager(calls, seen), hasOwner: () => true });
+    const chunks: string[] = [];
+    const result = await service.update('all', { principal: 'local', onEvent: event => { if (event.type === 'output') chunks.push(event.chunk); } });
+    expect(result).toMatchObject({ ok: true });
+    expect(calls).toEqual(['update', 'install']);
+    expect(seen).toEqual([{ '@types/node': '22.0.0' }, { 'zhin.js': '1.7.0', '@types/node': '22.0.0' }]);
+    expect(chunks.join('')).toContain('同步 overrides：package.json 的 pnpm.overrides "zhin.js": 1.6.0 → 1.7.0');
+  });
+
+  it('does not touch the Zhin locks when the update names only other packages', async () => {
+    const calls: string[] = [];
+    const seen: unknown[] = [];
+    const service = new GatewayPackageService({ projectRoot: root, packageManager: recordingManager(calls, seen), hasOwner: () => true });
+    expect(await service.update(['@types/node'], { principal: 'local' })).toMatchObject({ ok: true });
+    expect(calls).toEqual(['update @types/node']);
+    expect(seen).toEqual([{ 'zhin.js': '1.6.0', '@types/node': '22.0.0' }]);
+  });
+
+  it('restores the locks when the package manager fails', async () => {
+    const before = await readFile(join(root, 'package.json'), 'utf8');
+    const service = new GatewayPackageService({
+      projectRoot: root, hasOwner: () => true,
+      packageManager: async (args) => { if (args[0] === 'update') throw new Error('registry down'); },
+    });
+    expect(await service.update('all', { principal: 'local' })).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'package-manager' });
+    expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(before);
+  });
+});
