@@ -14,8 +14,8 @@ export default defineEvalCase({
     collaboration: { budget: { modelCalls: 1 } } }],
   script: [
     { toolCalls: [
-      { name: 'delegate', args: { agent: 'draw', brief: 'Bar chart of city populations.' } },
-      { name: 'delegate', args: { agent: 'draw', brief: 'Pie chart of city populations.' } },
+      { name: 'delegate', args: { agent: 'draw', brief: 'Bar chart of city populations.', wait: false } },
+      { name: 'delegate', args: { agent: 'draw', brief: 'Pie chart of city populations.', wait: false } },
     ] },
     // Bar chart: answered in its one call. Pie chart: spends its one call on a tool call and stops.
     { actor: 'draw', text: '柱状图已经画好。' },

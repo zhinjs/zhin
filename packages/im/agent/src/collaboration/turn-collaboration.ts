@@ -38,6 +38,7 @@ import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
 import { currentMailTurn } from './mail-turn-context.js';
 import { createCollaborationTools } from './tools.js';
+import { takeConsumedResult } from './delegation-waiters.js';
 import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, CollaborationDirectory } from './contracts.js';
 import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
@@ -75,6 +76,11 @@ export interface TurnCollaboration {
   readonly root: Mail;
   /** Collaboration tools for the live root turn. */
   readonly tools: readonly ToolCapability[];
+  /**
+   * The root turn's reply reached the human (#1250 delegate-result-double-reply): delegated results that
+   * arrive afterwards are a possible supplement to it, never a second answer.
+   */
+  replied(text: string): void;
   /** Ends the root turn; delegated work keeps running and reports back later. */
   finish(status: ActorTurnResult['status']): Promise<void>;
 }
@@ -201,8 +207,15 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   mailTurn.mailbox.bindCollaboration(root.engagementId, {
     directory,
     ...(input.venueProjector ? { venueProjector: input.venueProjector } : {}),
-    runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
+    runTurn: AsyncResource.bind(async (actor: string, delivered: readonly Mail[], signal: AbortSignal) => {
       const entry = actor === entryName;
+      // #1250 delegate-result-double-reply: a result the delegating turn already read (a waited `delegate`)
+      // does not wake the entry actor again.
+      const batch = entry ? delivered.filter((mail) => !takeConsumedResult(harness, mail)) : delivered;
+      if (batch.length === 0) {
+        logger.debug(`collaboration result already read by the delegating turn: ${describeResults(delivered)}`);
+        return Object.freeze({ status: 'completed' as const, content: 'result already read' });
+      }
       const resultsOnly = entry && batch.length > 0 && batch.every((mail) => mail.body.kind === 'result');
       if (resultsOnly) {
         const plan = outcomes.plan(batch);
@@ -216,10 +229,13 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
           return Object.freeze({ status: 'completed' as const, content: `result withheld: ${plan.reason}` });
         }
       }
+      // #1250 delegate-result-double-reply: the human already has this request's answer. The result is a
+      // possible supplement: the entry model sees what it said and may decline to say more.
+      const earlier = resultsOnly ? outcomes.answered() : undefined;
       if (entry) outcomes.entryStarted();
       let result: ActorTurnOutcome;
       try {
-        result = await runner(actor, batch, signal);
+        result = await runner(actor, batch, signal, earlier ? { preface: supplementPreface(earlier) } : undefined);
       } finally {
         if (entry && outcomes.entryFinished()) await announceStop();
       }
@@ -227,8 +243,20 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
       // The entry actor continuing with delegated results speaks to the human directly.
       if (resultsOnly) {
         const failures = outcomes.failureOnly(batch);
-        await background.deliverResult(result, signal, () => {
+        let delivered = result;
+        if (earlier) {
+          const supplement = asSupplement(result, turn.input.locale);
+          if (!supplement) {
+            logger.info(`collaboration result kept out of the chat (already answered): ${describeResults(batch)}`);
+            // Nothing new to say counts as told: the human's answer stands for this request.
+            if (failures) outcomes.failuresTold(batch);
+            return result;
+          }
+          delivered = supplement;
+        }
+        await background.deliverResult(delivered, signal, () => {
           if (failures) outcomes.failuresTold(batch);
+          if (delivered.reply) outcomes.replied(delivered.reply);
         });
       }
       return result;
@@ -254,6 +282,9 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     directory,
     root,
     tools,
+    replied(text: string) {
+      outcomes.replied(text);
+    },
     // The Mailbox settles the turn; delegated work keeps running and reports back on the lane.
     async finish() {
       if (rootFinished) return;
@@ -333,6 +364,8 @@ export function createEngagementOutcomes() {
   /** Delegations whose failure the human was told about. */
   const told = new Set<string>();
   let anyFailureTold = false;
+  /** What the human was already told for this request (the root reply and supplements). */
+  let answer = '';
   let entryTurns = 0;
   let frozen = false;
   let informed = false;
@@ -343,6 +376,15 @@ export function createEngagementOutcomes() {
   const stopPending = (): boolean => frozen && !informed && !stopTold && entryTurns === 0;
   return Object.freeze({
     failureOnly,
+    /** A reply of this request reached the human. */
+    replied(text: string): void {
+      const told = text.trim();
+      if (told) answer = answer ? `${answer}\n${told}` : told;
+    },
+    /** What the human was already told for this request; `undefined` before any reply. */
+    answered(): string | undefined {
+      return answer || undefined;
+    },
     plan(batch: readonly Mail[]): ResultBatchPlan {
       if (!failureOnly(batch)) return { kind: 'run' };
       const open = batch.filter((mail) => {
@@ -409,6 +451,44 @@ export function createEngagementOutcomes() {
       anyFailureTold = true;
     },
   });
+}
+
+/** Entry output that means "nothing to add" for a result arriving after the request was answered. */
+export const NO_REPLY_MARKER = '[[no_reply]]';
+
+const SUPPLEMENT_ANSWER_MAX_CHARS = 1_200;
+
+/**
+ * Model-facing lines before a delegated result that arrived after the request was answered (#1250
+ * delegate-result-double-reply). The earlier reply is the entry agent's own words.
+ */
+export function supplementPreface(earlier: string): string {
+  const said = earlier.length > SUPPLEMENT_ANSWER_MAX_CHARS ? `${earlier.slice(0, SUPPLEMENT_ANSWER_MAX_CHARS)}…` : earlier;
+  return [
+    '[Already answered] For this request you already sent the human this reply:',
+    `«${said}»`,
+    'The delegated result below arrived after that reply. Do not repeat or restate what you already said.',
+    `- When it adds nothing the human needs (the same answer, or a failure of work your reply already covered), reply with exactly ${NO_REPLY_MARKER} and nothing else.`,
+    '- Only when it adds something new and important (a correction, or the result your reply promised), reply with just that addition, in the human\'s language. It is sent as a supplement to your earlier reply.',
+  ].join('\n');
+}
+
+const SUPPLEMENT_LEAD = /^\s*(?:补充|更正|update\b|addendum\b|correction\b)/iu;
+
+/**
+ * The entry turn's outcome after an answered request, as the supplement the human may see; `undefined`
+ * when there is nothing to send (the model declined with {@link NO_REPLY_MARKER}, or said nothing).
+ * A failed entry turn keeps its outcome: the human hears that the follow-up could not be put together.
+ */
+export function asSupplement(result: ActorTurnOutcome, locale: string | undefined): ActorTurnOutcome | undefined {
+  if (result.status === 'cancelled') return undefined;
+  if (result.status === 'failed') return result;
+  const reply = result.reply?.trim() ?? '';
+  if (!reply || reply.startsWith(NO_REPLY_MARKER)) return undefined;
+  const text = reply.split(NO_REPLY_MARKER).join('').trim();
+  if (!text) return undefined;
+  const lead = locale?.toLowerCase().startsWith('en') ? 'Update: ' : '补充：';
+  return Object.freeze({ ...result, reply: SUPPLEMENT_LEAD.test(text) ? text : `${lead}${text}` });
 }
 
 /** One line for further failures of a request whose first failure was already told. */

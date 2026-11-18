@@ -304,6 +304,17 @@ describe('ambient judge visibility (#1250)', () => {
     expect(ambientLanguageSource(value, 'accounts:2', 'gpt-mini')).toBe('language:gpt-mini');
     expect(ambientLanguageSource(value, 'accounts:missing', 'gpt-mini')).toBe('language:gpt-mini');
   });
+
+  it('shows the driver name instead of a generic service label (#1250 account-add-service-label-generic)', () => {
+    const value = normalizeProviderGraph({ rootId: 'root', revision: 1,
+      services: { 'services:1': { ...base, id: 'services:1', label: 'service', driver: { id: 'anthropic', owner: 'root/providers', contractVersion: '1' }, options: {}, models: {} },
+        'services:2': { ...base, id: 'services:2', label: 'Anthropic', driver: { id: 'anthropic', owner: 'root/providers', contractVersion: '1' }, options: {}, models: {} } },
+      accounts: { 'accounts:1': { ...base, id: 'accounts:1', serviceId: 'services:1', incarnation: 'a', authentication: { method: 'none' } },
+        'accounts:2': { ...base, id: 'accounts:2', serviceId: 'services:2', incarnation: 'b', authentication: { method: 'none' } } },
+      profiles: {}, purposes: { defaults: {} } });
+    expect(ambientLanguageSource(value, 'accounts:1', 'claude-haiku-5-5')).toBe('language:anthropic/claude-haiku-5-5');
+    expect(ambientLanguageSource(value, 'accounts:2', 'claude-haiku-5-5')).toBe('language:Anthropic/claude-haiku-5-5');
+  });
 });
 
 describe('ambient judge failure classes (#1250)', () => {

@@ -332,6 +332,14 @@ export function isOpaqueJudgeProviderId(value: string): boolean {
   return /^(services|accounts|profiles):/u.test(value);
 }
 
+/**
+ * A label that names nothing (#1250 account-add-service-label-generic): `zhin ai account add` used to
+ * store its plan alias `service` as the new service's label. Shown as the driver name instead.
+ */
+function isGenericServiceLabel(value: string): boolean {
+  return /^(service|account)$/iu.test(value.trim());
+}
+
 function readableProviderName(value: unknown): string | undefined {
   const text = typeof value === 'string' ? value.trim() : '';
   return text && !isOpaqueJudgeProviderId(text) ? text : undefined;
@@ -758,8 +766,8 @@ export class DecisionEngagementJudge implements EngagementJudge {
 
 /**
  * `language:<service display name>/<model>` for a language model on `accountId` (#1250). A display
- * string for logs: an opaque graph id (`services:<uuid>` …) is never shown, the driver name or the
- * model alone (`language:<model>`) stands in for it. Statistics group by {@link EngagementJudgeRef}.
+ * string for logs: an opaque graph id (`services:<uuid>` …) or a generic label ({@link isGenericServiceLabel})
+ * is never shown, the driver name or the model alone (`language:<model>`) stands in for it. Statistics group by {@link EngagementJudgeRef}.
  */
 export function ambientLanguageSource(graph: InferenceOperationScope['graph'], accountId: string, model: string): string {
   const account = graph.accounts[accountId];
@@ -768,7 +776,12 @@ export function ambientLanguageSource(graph: InferenceOperationScope['graph'], a
     const trimmed = typeof value === 'string' ? value.trim() : '';
     return trimmed && !isOpaqueJudgeProviderId(trimmed) ? trimmed : undefined;
   };
-  const label = service ? text(service.label) ?? text(service.driver?.id) ?? text(service.id) : undefined;
+  // A generic label (the literal `service` of an older `zhin ai account add`) says less than the driver.
+  const named = (value: unknown) => {
+    const readable = text(value);
+    return readable && !isGenericServiceLabel(readable) ? readable : undefined;
+  };
+  const label = service ? named(service.label) ?? text(service.driver?.id) ?? text(service.id) : undefined;
   return `language:${label ? `${label}/` : ''}${model}`;
 }
 

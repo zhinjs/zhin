@@ -15,7 +15,7 @@ export default defineEvalCase({
     { name: 'bob', description: 'Backend.', tools: [] },
   ],
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'alice', brief: 'Agree on the plan with bob.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'alice', brief: 'Agree on the plan with bob.', wait: false } }] },
     { text: '已经交给 alice 和 bob 去商量了。' },
     // alice keeps asking bob; the fourth ask trips the pair round-trip guard while no entry turn runs.
     { actor: 'alice', toolCalls: [{ name: 'ask', args: { agent: 'bob', question: 'Which API style?' } }] },

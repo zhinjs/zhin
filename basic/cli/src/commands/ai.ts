@@ -437,7 +437,7 @@ accountCommand.command('add')
   .description('新增 Host API Key 账号，从 Host 环境变量读取密钥（不回显值）')
   .requiredOption('--service <service>', '已有服务的 id 或名称，或内置服务类型（如 openai、deepseek，使用官方地址）')
   .requiredOption('--env <NAME>', '环境变量名（如 OPENAI_API_KEY）')
-  .option('--name <label>', '账号名称')
+  .option('--name <label>', '名称：用于账号；新建服务时也用作服务名称（不写时服务名用驱动名，如 Anthropic）')
   .option('--test', '添加后立即做一次连接测试')
   .option('--cwd <dir>', '项目根目录（默认当前目录）')
   .action(async (options: { service: string; env: string; name?: string; test?: boolean; cwd?: string }) => {

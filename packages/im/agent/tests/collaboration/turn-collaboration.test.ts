@@ -4,7 +4,7 @@
  * guard stop must be told.
  */
 import type { Mail } from '@zhin.js/harness';
-import { createEngagementOutcomes } from '../../src/collaboration/turn-collaboration.js';
+import { NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, supplementPreface } from '../../src/collaboration/turn-collaboration.js';
 
 type Status = 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'denied';
 
@@ -126,5 +126,44 @@ describe('engagement outcomes: guard stops', () => {
     expect(outcomes.stopped()).toBe(true);
     outcomes.stopAnnounced();
     expect(outcomes.plan([result('m3', 'alice', 'cancelled')])).toEqual({ kind: 'withhold', reason: 'collaboration_stopped' });
+  });
+});
+
+describe('engagement outcomes: a result after the request was answered (#1250 delegate-result-double-reply)', () => {
+  it('remembers what the human was told for the request', () => {
+    const outcomes = createEngagementOutcomes();
+    expect(outcomes.answered()).toBeUndefined();
+    outcomes.replied('  ');
+    expect(outcomes.answered()).toBeUndefined();
+    outcomes.replied('这是一只橘猫。');
+    outcomes.replied('补充：它戴着铃铛。');
+    expect(outcomes.answered()).toBe('这是一只橘猫。\n补充：它戴着铃铛。');
+  });
+
+  it('shows the entry model its earlier reply and the structured no-reply exit', () => {
+    const preface = supplementPreface('这是一只橘猫。');
+    expect(preface).toContain('«这是一只橘猫。»');
+    expect(preface).toContain(NO_REPLY_MARKER);
+    expect(preface).toMatch(/Do not repeat or restate/);
+    expect(supplementPreface('x'.repeat(5_000)).length).toBeLessThan(2_000);
+  });
+
+  it('sends nothing when the model declines or says nothing', () => {
+    expect(asSupplement({ status: 'completed', content: NO_REPLY_MARKER, reply: NO_REPLY_MARKER }, 'zh-CN')).toBeUndefined();
+    expect(asSupplement({ status: 'completed', content: '', reply: ` ${NO_REPLY_MARKER}\n（无需补充）` }, 'zh-CN')).toBeUndefined();
+    expect(asSupplement({ status: 'completed', content: '(the agent finished without a reply)' }, 'zh-CN')).toBeUndefined();
+    expect(asSupplement({ status: 'cancelled', content: 'stopped' }, 'zh-CN')).toBeUndefined();
+  });
+
+  it('marks new content as a supplement, in the human\'s language, without doubling an existing lead', () => {
+    expect(asSupplement({ status: 'completed', content: 'x', reply: '它脖子上还有一个铃铛。' }, 'zh-CN')?.reply).toBe('补充：它脖子上还有一个铃铛。');
+    expect(asSupplement({ status: 'completed', content: 'x', reply: '补充：它还有铃铛。' }, 'zh-CN')?.reply).toBe('补充：它还有铃铛。');
+    expect(asSupplement({ status: 'completed', content: 'x', reply: 'It also wears a bell.' }, 'en-US')?.reply).toBe('Update: It also wears a bell.');
+    expect(asSupplement({ status: 'budget_exceeded', content: 'x', reply: '部分结果' }, 'zh-CN')).toMatchObject({ status: 'budget_exceeded', reply: '补充：部分结果' });
+  });
+
+  it('keeps a failed entry turn so the human hears once that the follow-up could not be put together', () => {
+    const failed = { status: 'failed' as const, content: 'boom' };
+    expect(asSupplement(failed, 'zh-CN')).toBe(failed);
   });
 });

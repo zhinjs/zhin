@@ -29,12 +29,13 @@ const localCli: ConsoleUserPrincipal = Object.freeze({
   roles: Object.freeze(['owner']),
 });
 
-async function setup(input: Readonly<{ probe?: (profileId: string) => InferenceProbeResult; now?: () => number }> = {}) {
+async function setup(input: Readonly<{ probe?: (profileId: string) => InferenceProbeResult; now?: () => number;
+  drivers?: readonly Readonly<{ id: string; label: string }>[] }> = {}) {
   const fixture = await setupInferenceManagement({ method: 'api-key' });
   // The built-in Driver's official address is its schema default; a plan may omit it.
   const management = new InferenceManagementService({ rootId: '/root', hostOwnerId: 'host', directory: join(fixture.directory, 'private'),
     repository: fixture.repository, accounts: fixture.accounts, authenticationContract: () => '1',
-    profileSchema: () => undefined, discover: async () => [], drivers: () => [],
+    profileSchema: () => undefined, discover: async () => [], drivers: () => (input.drivers ?? []) as never,
     resolveService: value => ({ driver: fixture.graph.services.service!.driver,
       options: { baseUrl: OFFICIAL, ...(value.options as object) } as never,
       models: Object.keys(value.models).length ? value.models : fixture.graph.services.service!.models }) });
@@ -144,6 +145,25 @@ it('adds a Host env account only over the local CLI channel, audits it and never
         target: added.payload.data.accountId, detail: expect.objectContaining({ env: 'OPENAI_API_KEY' }) }),
     ]);
     expect(JSON.stringify(f.audits) + JSON.stringify(added.payload)).not.toContain(SECRET);
+  } finally { await f.close(); }
+});
+
+it('names a service the CLI creates after its Driver, or by --label for account and service alike (#1250 account-add-service-label-generic)', async () => {
+  const f = await setup({ drivers: [{ id: 'anthropic', label: 'Anthropic' }] });
+  try {
+    const plain = await f.call('/cli/account/add', { service: 'anthropic', env: 'OPENAI_API_KEY' }, 'local');
+    expect(plain.payload).toMatchObject({ success: true, data: { createdService: true, result: { status: 'committed' } } });
+    let graph = (await f.repository.readGraph({ rootId: '/root' }))!;
+    expect(graph.services[plain.payload.data.serviceId]!.label).toBe('Anthropic');
+    const labelled = await f.call('/cli/account/add', { service: 'anthropic', env: 'OPENAI_API_KEY', label: '主力' }, 'local');
+    graph = (await f.repository.readGraph({ rootId: '/root' }))!;
+    expect(graph.services[labelled.payload.data.serviceId]!.label).toBe('主力');
+    expect(graph.accounts[labelled.payload.data.accountId]!.label).toBe('主力');
+    // An unknown Driver id stands for itself, never the plan alias `service`.
+    const unknown = await f.call('/cli/account/add', { service: 'fixture', env: 'OPENAI_API_KEY' }, 'local');
+    graph = (await f.repository.readGraph({ rootId: '/root' }))!;
+    expect(graph.services[unknown.payload.data.serviceId]!.label).toBe('fixture');
+    expect(Object.values(graph.services).map(service => service.label)).not.toContain('service');
   } finally { await f.close(); }
 });
 

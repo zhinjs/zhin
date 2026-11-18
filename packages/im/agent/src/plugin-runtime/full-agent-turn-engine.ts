@@ -403,6 +403,7 @@ async function* runInteractiveTurn(
     const told = renderAgentOutput(confirmedOutput);
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
+    if (told.trim()) collaboration?.replied(told);
     return facts;
   };
   const cancelReplyStreams = async () => { await Promise.all([...replyStreams.values()].map(stream => stream.cancel())); };
@@ -538,6 +539,8 @@ async function* runInteractiveTurn(
             }
             const told = confirmedOutput ? renderAgentOutput(confirmedOutput) : delivery.status === 'sent' ? completion.result.reply : '';
             if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
+            // #1250 delegate-result-double-reply: later delegated results only supplement this answer.
+            if (told.trim() && !phaseFacts.size) collaboration?.replied(told);
             if (progressive || phaseFacts.size) {
               const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
               deliveredMessageIds = messages.map(message => message?.id ?? null);

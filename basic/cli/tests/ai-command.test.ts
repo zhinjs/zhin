@@ -48,6 +48,11 @@ it('adds a Host env account over the local socket with names only, then tests it
   expect(process.exitCode).toBeUndefined();
 });
 
+it('documents that the name (label) applies to the account and a new service (#1250 account-add-service-label-generic)', () => {
+  const add = aiCommand.commands.find(command => command.name() === 'account')!.commands.find(command => command.name() === 'add')!;
+  expect(add.options.find(option => option.long === '--name')!.description).toMatch(/账号.*新建服务.*驱动名/u);
+});
+
 it('rejects an invalid variable name before calling the instance', async () => {
   const { config, requests } = client(() => ({ status: 500, body: {} }));
   const out = output();

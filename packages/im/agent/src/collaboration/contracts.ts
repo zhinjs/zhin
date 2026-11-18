@@ -104,6 +104,8 @@ export type CreateCollaborationTools = (
     onVenueTell?: (venue: string, content: string) => Promise<void>;
     /** Called when a send of this actor is refused because the guard stopped the engagement (#1250). */
     onStopped?: () => void;
+    /** How long `delegate` waits for the result within the turn (default {@link DEFAULT_DELEGATE_WAIT_MS}). */
+    delegateWaitMs?: number;
   }>,
 ) => readonly ToolCapability[];
 
@@ -120,4 +122,15 @@ export interface ActorTurnOutcome extends ActorTurnResult {
 }
 
 /** {@link ActorTurnRunner} that reports the user-facing {@link ActorTurnOutcome.reply}. */
-export type AgentActorTurnRunner = (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => Promise<ActorTurnOutcome>;
+export type AgentActorTurnRunner = (
+  actor: ActorId,
+  batch: readonly Mail[],
+  signal: AbortSignal,
+  options?: ActorTurnRunOptions,
+) => Promise<ActorTurnOutcome>;
+
+/** Per-turn additions of the agent host to an actor turn. */
+export interface ActorTurnRunOptions {
+  /** Framework-written lines placed before the rendered mail batch (never from another actor). */
+  readonly preface?: string;
+}

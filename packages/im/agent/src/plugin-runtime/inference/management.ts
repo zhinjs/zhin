@@ -613,9 +613,12 @@ export class InferenceManagementService {
       && (service.id === reference || service.label === reference));
     if (matches.length > 1) throw new InferenceManagementError('conflict');
     const existing = matches[0];
+    // #1250 account-add-service-label-generic: a new service is named by `--label`, else by its Driver's
+    // display name ("Anthropic"), never by the plan alias `service`.
+    const serviceLabel = existing ? undefined : label || this.#driverLabel(reference);
     const plan = {
       version: 1,
-      ...(existing ? {} : { services: { service: { driver: reference, options: {}, models: {} } } }),
+      ...(existing ? {} : { services: { service: { driver: reference, ...(serviceLabel ? { label: serviceLabel } : {}), options: {}, models: {} } } }),
       accounts: { account: { service: 'service', ...(label ? { label } : {}), auth: { method: 'api-key', source: `env://${variable}` } } },
     };
     const prepared = await this.#review(principal, { plan, ...(existing ? { bindings: { services: { service: existing.id } } } : {}) });
@@ -626,6 +629,11 @@ export class InferenceManagementService {
       createdService: !existing,
       result,
     };
+  }
+  /** Display name of a Driver by id (the first holder when several plugins declare it); the id itself otherwise. */
+  #driverLabel(id: string): string {
+    const driver = this.options.drivers().find((candidate) => candidate.id === id);
+    return driver?.label?.trim() || id;
   }
   /** `zhin ai account rename-env` (#1250 account-env-ref-immutable): same account identity, new `env://` variable. */
   async renameEnvironmentReference(

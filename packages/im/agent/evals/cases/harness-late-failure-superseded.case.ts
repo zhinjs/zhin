@@ -14,7 +14,7 @@ export default defineEvalCase({
   agents: [{ name: 'planner', description: 'Plans schedules.', tools: ['lookup_calendar'],
     collaboration: { budget: { modelCalls: 1 } } }],
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'planner', brief: 'Plan tomorrow.' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'planner', brief: 'Plan tomorrow.', wait: false } }] },
     // planner's first sub-turn spends its one model call on a tool call; it stops before a second request.
     { actor: 'planner', toolCalls: [{ name: 'lookup_calendar', args: { day: 'tomorrow' } }] },
     { toolCalls: [{ name: 'follow_up', args: { mail_id: 'm-eval-3', content: 'Just list tomorrow\'s meetings.' } }] },
