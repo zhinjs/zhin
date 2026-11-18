@@ -1,5 +1,16 @@
 # @zhin.js/plugin-game-hub
 
+## 1.1.33
+
+### Patch Changes
+
+- Updated dependencies [3cf5a4f]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/page@1.2.2
+  - @zhin.js/game-kit@1.1.33
+  - @zhin.js/skill@1.1.21
+  - @zhin.js/tool@1.1.24
+
 ## 1.1.32
 
 ### Patch Changes

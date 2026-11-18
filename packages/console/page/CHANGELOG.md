@@ -1,5 +1,16 @@
 # @zhin.js/page
 
+## 1.2.2
+
+### Patch Changes
+
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [c2cc4ba]
+- Updated dependencies [1dc5324]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/plugin-runtime@1.4.1
+  - @zhin.js/feature-kit@1.1.20
+
 ## 1.2.1
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @zhin.js/plugin-reminder
 
+## 1.0.21
+
+### Patch Changes
+
+- 1dc5324: `remind create` 的预览与确认合并为一条消息，并改用 Core 的 `confirm` 交互（#1250 第 38 批）：支持按钮的平台显示「确认 / 取消」按钮，其他平台显示编号选项；只有发起人能回答。正文、会话与账号以代码形式显示，不会被 Markdown 解释。
+- Updated dependencies [3cf5a4f]
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/page@1.2.2
+  - @zhin.js/skill@1.1.21
+  - @zhin.js/tool@1.1.24
+
 ## 1.0.20
 
 ### Patch Changes

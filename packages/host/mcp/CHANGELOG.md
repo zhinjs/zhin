@@ -1,5 +1,11 @@
 # @zhin.js/mcp
 
+## 1.1.32
+
+### Patch Changes
+
+- @zhin.js/tool@1.1.24
+
 ## 1.1.31
 
 ### Patch Changes

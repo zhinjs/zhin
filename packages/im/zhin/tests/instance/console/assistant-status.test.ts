@@ -112,6 +112,63 @@ it('drops ambient judge days older than 7 days, on write and on read, after a lo
   expect(status.ambient().judgeDaily).toEqual([expect.objectContaining({ day: '2026-12-25', calls: 1, byKind: { language: 0, decision: 1 } })]);
 });
 
+it('reports judgeToday by the instance clock in the judge time zone, with or without calls (#1250)', () => {
+  // 2026-11-17 23:30 UTC = 2026-11-18 07:30 in Asia/Shanghai: the instance's today is already the next day.
+  const time = clock(Date.UTC(2026, 10, 17, 23, 30));
+  const status = new AssistantStatus({ now: time.now, timeZone: 'Asia/Shanghai' });
+  // No calls at all: judgeToday is still reported, and judgeDaily is empty.
+  expect(status.ambient()).toMatchObject({ judgeTimeZone: 'Asia/Shanghai', judgeToday: '2026-11-18', judgeDaily: [] });
+  expect(new AssistantStatus({ now: time.now, timeZone: 'UTC' }).ambient().judgeToday).toBe('2026-11-17');
+
+  // Across local midnight (23:59:59.999 → 00:00 Asia/Shanghai), judgeToday follows the same cut as judgeDaily.
+  time.advance(16 * HOUR + 30 * 60 * 1000 - 1); // 2026-11-18 23:59:59.999 Asia/Shanghai
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  expect(status.ambient().judgeToday).toBe('2026-11-18');
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-18']);
+  time.advance(1);
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  const snapshot = status.ambient();
+  expect(snapshot.judgeToday).toBe('2026-11-19');
+  expect(snapshot.judgeDaily.map(day => day.day)).toEqual(['2026-11-18', '2026-11-19']);
+  expect(snapshot.judgeDaily.at(-1)!.day).toBe(snapshot.judgeToday);
+});
+
+it('cuts the 7-day judge window on calendar days across the November DST change (#1250)', () => {
+  // 2026-10-31 12:00 EDT: one call on the day that must still be the window's first day.
+  const time = clock(Date.UTC(2026, 9, 31, 16, 0));
+  const status = new AssistantStatus({ now: time.now, timeZone: 'America/New_York' });
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  // 2026-11-07 04:30 UTC = 2026-11-06 23:30 EST; 2026-11-01 had 25 hours, so now − 6 × 24 h would be 11-01.
+  time.advance(Date.UTC(2026, 10, 7, 4, 30) - time.now());
+  expect(status.ambient()).toMatchObject({ judgeToday: '2026-11-06', judgeDaily: [expect.objectContaining({ day: '2026-10-31' })] });
+  // A write prunes with the same cutoff: 10-31 survives it.
+  status.recordAmbientJudgeCall({ kind: 'decision', source: 'decision:jev', status: 'completed', durationMs: 10 });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-10-31', '2026-11-06']);
+  // One local midnight later (00:00 EST 11-07) 10-31 leaves the window.
+  time.advance(30 * 60 * 1000);
+  expect(status.ambient()).toMatchObject({ judgeToday: '2026-11-07' });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-11-06']);
+});
+
+it('cuts the 7-day judge window on calendar days across the March DST change (#1250)', () => {
+  // 2026-03-07 12:00 EST and 2026-03-08 12:00 EDT (03-08 has 23 hours).
+  const time = clock(Date.UTC(2026, 2, 7, 17, 0));
+  const status = new AssistantStatus({ now: time.now, timeZone: 'America/New_York' });
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  time.advance(Date.UTC(2026, 2, 8, 16, 0) - time.now());
+  status.recordAmbientJudgeCall({ kind: 'language', source: 'language:主站/chat-a', status: 'completed', durationMs: 10 });
+  // 2026-03-13 23:30 EDT: window 03-07 … 03-13.
+  time.advance(Date.UTC(2026, 2, 14, 3, 30) - time.now());
+  expect(status.ambient()).toMatchObject({ judgeToday: '2026-03-13' });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-03-07', '2026-03-08']);
+  // 2026-03-14 00:30 EDT: now − 6 × 24 h would be 03-07 23:30 EST (8 days kept); the window is 03-08 … 03-14.
+  time.advance(HOUR);
+  expect(status.ambient()).toMatchObject({ judgeToday: '2026-03-14' });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-03-08']);
+  status.recordAmbientJudgeCall({ kind: 'decision', source: 'decision:jev', status: 'completed', durationMs: 10 });
+  expect(status.ambient().judgeDaily.map(day => day.day)).toEqual(['2026-03-08', '2026-03-14']);
+});
+
 it('aggregates structured decision calls per task for 技能助手', () => {
   const time = clock();
   const status = new AssistantStatus({ now: time.now });

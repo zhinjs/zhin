@@ -163,6 +163,79 @@ describe('fetchOutboundMedia (#1250 第 46 批 outbound-media-ssrf)', () => {
   });
 });
 
+describe('fetchOutboundMedia — port rule (#1250 第 48 批)', () => {
+  it.each([22, 8443, 0, 65535])('refuses https port %i as outbound_media_url_blocked, reason port, without resolving', async (port) => {
+    const warn = vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'public-host.example': '93.184.216.34' }, {});
+    const error = await refusal(net.fetchMedia(`https://public-host.example:${port}/a.png?token=hunter2`, { source: 'test' }));
+    expect(error.code).toBe('outbound_media_url_blocked');
+    expect(error.reason).toBe('port');
+    expect(error.host).toBe('public-host.example');
+    expect(isOutboundMediaRefused(error)).toBe(true);
+    expect(net.lookup).not.toHaveBeenCalled();
+    expect(net.connect).not.toHaveBeenCalled();
+    // Neither the error text nor the log line carries the URL (path, query or port).
+    expect(error.message).toBe('outbound_media_url_blocked (public-host.example) reason=port');
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line).toContain('outbound_media_url_blocked');
+    expect(line).toContain('public-host.example');
+    expect(line).toContain('port');
+    expect(line).not.toContain('a.png');
+    expect(line).not.toContain('hunter2');
+    expect(line).not.toContain(`:${port}`);
+  });
+
+  it('accepts 443 written out or not', async () => {
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34' }, {
+      'https://cdn.example/a.png': { status: 200, body: PNG },
+    });
+    await expect(net.fetchMedia('https://cdn.example/a.png')).resolves.toMatchObject({ url: 'https://cdn.example/a.png' });
+    await expect(net.fetchMedia('https://cdn.example:443/a.png')).resolves.toMatchObject({ url: 'https://cdn.example/a.png' });
+    expect(net.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a redirect to a non-default port', async () => {
+    vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34', 'other.example': '93.184.216.35' }, {
+      'https://cdn.example/a.png': { status: 302, headers: { location: 'https://other.example:8443/b.png' } },
+    });
+    const error = await refusal(net.fetchMedia('https://cdn.example/a.png'));
+    expect(error.code).toBe('outbound_media_url_blocked');
+    expect(error.reason).toBe('port');
+    expect(error.host).toBe('other.example');
+    expect(net.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts the ports a caller lists in allowedPorts, and only those', async () => {
+    vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34' }, {
+      'https://cdn.example:8443/a.png': { status: 200, body: PNG },
+    });
+    await expect(net.fetchMedia('https://cdn.example:8443/a.png', { allowedPorts: [8443] }))
+      .resolves.toMatchObject({ url: 'https://cdn.example:8443/a.png' });
+    expect((await refusal(net.fetchMedia('https://cdn.example:9443/a.png', { allowedPorts: [8443] }))).reason).toBe('port');
+    expect((await refusal(net.fetchMedia('https://cdn.example:8443/a.png'))).reason).toBe('port');
+  });
+
+  it('applies allowedPorts to the first origin only: a redirect from :8443 to another host on :8443 is refused', async () => {
+    vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({ 'cdn.example': '93.184.216.34', 'other.example': '93.184.216.35' }, {
+      'https://cdn.example:8443/a.png': { status: 302, headers: { location: 'https://other.example:8443/b.png' } },
+    });
+    const error = await refusal(net.fetchMedia('https://cdn.example:8443/a.png', { allowedPorts: [8443] }));
+    expect(error.code).toBe('outbound_media_url_blocked');
+    expect(error.reason).toBe('port');
+    expect(error.host).toBe('other.example');
+    expect(net.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps other refusals without a port reason', async () => {
+    vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    const net = fakeNetwork({}, {});
+    expect((await refusal(net.fetchMedia('https://10.0.0.8/a.png'))).reason).toBeUndefined();
+  });
+});
+
 describe('fetchOutboundMedia — deadline, concurrency and probes (#1250 第 46 批 L1 / L7)', () => {
   it('fails within the deadline when the resolver hangs', async () => {
     const lookup = vi.fn(() => new Promise<never>(() => undefined));

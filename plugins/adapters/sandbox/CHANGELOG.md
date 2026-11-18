@@ -1,5 +1,100 @@
 # @zhin.js/adapter-process
 
+## 1.3.0
+
+### Minor Changes
+
+- 661cc7c: ADR 0064 P1：Sandbox 全能力渲染与回归守卫（含 P1b 非段能力）。
+
+  - `@zhin.js/core`：新增出站段目录 `OUTBOUND_SEGMENT_CATALOG`（类型名、所属 `messaging.segments.*` 能力、最小合法示例、归一后的类型），canonical 校验的 Core 扩展类型与 IM 投递过滤 `segmentsForImDelivery` 改为从目录派生，三处名单不再漂移；`card` 因此成为 IM 可见段（AI 出站段中的 `card` 不再被过滤）。`html: 'direct'` 的端点收到的 HTML 段没有 `width` 时，Core 盖章设计宽度 540（与 `image` 端点渲染图片的宽度一致，D5）。
+  - `@zhin.js/adapter`：能力画像 `messaging` 新增 `streaming: { mode, formats? } | false`（`mode` 与端点 `EndpointStreaming.mode` 同名：native / draft / card / edit，`none` 表示不流式；`formats` 为 text / markdown），可按会话类型声明，运行期只能收窄。装配期比较画像与端点 spec 的流式声明，不一致时记 `profile_streaming_mismatch` 警告（D11：先告警，P4 后改为装配失败）。新增导出 `profileStreamingMismatch()` 与类型 `ProfileStreamingMode`。
+  - `@zhin.js/client`：Markdown 解析器补齐行内图片 `![alt](src)`、嵌套行内格式（链接里的粗体、强调里的链接、`***粗斜体***`、徽章 `[![]()]()`）与嵌套列表；行内扫描改为不回溯的单遍扫描，未闭合的定界符保持线性。图片只接受 http(s) / blob 与栅格图片 base64 data URL（与媒体段同一白名单，拒绝 SVG 与脚本类型），不安全的链接与图片地址原样显示为文字，仍不注入任何原始 HTML。`MarkdownInline` 新增 `image` 与可选 `children`（`value` 始终是纯文本，忽略 `children` 的调用方仍可读），列表项新增可选 `children`；新增导出 `safeMarkdownImageSrc` 与类型 `MarkdownListItem`。IM 可见段补 `card`。
+  - `@zhin.js/adapter-sandbox`：页面的段渲染拆到 `pages/index/segments/`，导出覆盖整个出站段目录的 `SANDBOX_SEGMENT_RENDERERS`；新增文件卡片（名称、大小、下载链接；base64 以 `application/octet-stream` 下载，不渲染）、链接卡片、本地生成的二维码（与 Core 同一库，SVG，不联网）、TTS（浏览器朗读）；音乐卡片的 `audio` 可直接播放；HTML 卡片没有宽度时按 540 设计宽度排版再等比缩放；合并转发里的段用同一套渲染器显示。兜底渲染只用于历史数据与第三方命名空间段，开发构建中每种类型告警一次。画像声明 `messaging.streaming`（native，text / markdown）、`mention: { user, all }`、`quote`。P1b：端点 control 端口以 `recall` / `edit` / `reaction` 帧实现撤回（含他人消息）、编辑与表情回应（可取消），画像与 `actions` 同步声明，页面就地应用并持久化表情回应；没有在线页面时与发送一样返回未执行。新增依赖 `qrcode`（Core 已依赖，不增加安装体积）。朗读一条 TTS 消息时不会再被另一条消息的清理停掉；畸形的 card / keyboard 数据（`null` 条目、非数组的 rows）跳过该条目，不再让整个页面渲染失败。有设计宽度的 HTML 卡片（如 1080px 的指令菜单）按消息栏可用宽度缩放：iframe 改为绝对定位，不再参与外层宽度计算，所在气泡占满消息栏，页面不再被撑宽（#1250 `command-menu-unreadable-in-sandbox`）。
+  - `@zhin.js/adapter-lark` / `-qq` / `-slack` / `-telegram`：画像声明 `messaging.streaming`，与端点已有的流式实现一致（飞书 card、QQ 单聊 native、Slack native、Telegram 私聊 draft），避免新的装配期不一致告警。
+  - Sandbox 交互与真实平台一致（#1250 评论 6910730259）：
+    - `sandbox-action-button-id-dropped`：点击按钮发出的 action 段原先用 payload 顶替了按钮自己的 `id`，按按钮 id 识别按钮的插件（如 `activity:<id>:<n>`）在 Sandbox 里失效。现在与平台回调一致，`id` 是按钮 id、`payload` 是 payload（按钮没有 id 时才退回 payload）。
+    - `sandbox-submitted-without-feedback`：「已提交本次选择」只表示已送达。网关处理入站失败（`sandbox_gateway_receive_failed`）时端点把错误推回页面，显示在被点击的卡片旁；页面按消息结局（`/api/conversations/outcomes`）跟踪这次点击，`internal_error` 等失败显示为错误，一段时间内机器人既没有回复也没有结局时提示「没有收到机器人的处理结果」。同一张卡片上的多个按钮点一次后不再全部置灰（只有审批提示仍是单选），已点过的按钮带勾号。
+
+- 4760a96: Sandbox 支持上传本地文件（ADR 0064 增补 I1，#1250 第 43 批）：图片、语音、任意文件可以拖放、粘贴或用按钮选择，上传后以签名地址发进会话，入站段与其他平台一致（`media.kind: 'url'`）。
+
+  - **存储**：文件存于项目的 `.zhin/sandbox/media/<端点目录键>/`，只按 128 位随机 id 命名，上传者给的文件名只进元数据，读取只认 id，不接受任何路径。元数据记录上传时的会话（端点 + 会话）、上传者、按内容嗅探的 MIME、大小与过期时间。重启后历史里的文件在有效期内仍可用。
+  - **上传**：`POST /api/sandbox/media/<endpoint>?type=&id=`，原始字节，必须带 `Content-Length`，需要 `endpoint.operate`。按类型限制大小（默认图片 10 MiB、语音 20 MiB、视频与其他文件 32 MiB，单文件硬顶 64 MiB，即网关的请求体上限，要更大需要同时调大网关），配额按上传者计（默认 200 MiB）并另有端点总配额（默认 500 MiB），超额直接拒绝，不删别人的文件；另限对象个数（每个上传者 1000 个、每个端点 10000 个）。
+  - **签名地址**：`/pub/sandbox-media/<dir>/<id>?exp=&sig=`，HMAC-SHA256、常量时间比较；密钥在 `.zhin/sandbox/media/secret`（0600），保留 current / previous 两把，签发只用 current。有效期默认 24 小时，最长 168 小时；删除文件立即作废它的所有链接，所有者可轮换密钥或「全部作废」。
+  - **下载**：Console 页面经 `GET /api/sandbox/media/<endpoint>/<id>`（`endpoint.view`，且必须是文件所属的会话）显示文件；`/pub/sandbox-media` 默认关闭（`media.publicDownload: false`），开启后仍需有效、未过期的签名，来源地址从不作为授权依据。SVG、HTML 等非图片 / 音视频文件一律以附件下载，带 `X-Content-Type-Options: nosniff`。
+  - **会话绑定**：带着其他会话或他人上传的托管地址发消息会被拒绝（错误帧 `sandbox_media_rejected`）并记日志；地址只认签发时的原样（`?exp=&sig=`、规范的签名拼写）。指向本机路径的入站媒体（`media.kind: 'path'` 或 `path` / `file_path` 等旧字段）同样整条拒绝。
+  - `@zhin.js/console-protocol`：`CONSOLE_HTTP_PERMISSIONS` 登记 `POST` / `DELETE /sandbox/media/*` 为 `endpoint.operate`、`GET /sandbox/media/*` 为 `endpoint.view`（只在已有常量里加条目）。
+  - `@zhin.js/agent`：文件策略与 Shell 命令检查显式拒绝 `.zhin/sandbox/`（托管文件与签名密钥；`.zhin/` 原本已整体拒绝）；敏感目录名改为不区分大小写比较（macOS / Windows 上 `.ZHIN/…` 是同一目录）。
+  - 本阶段插件与 Agent 还不能在进程内读取上传的文件，要等 I2（`LocalMediaSource`）；在此之前插件按网络地址下载时仍受它自己的域名白名单约束，Agent 暂时看不到上传的图片。
+
+### Patch Changes
+
+- 3cf5a4f: ADR 0063 P4：删除弃用期已满（至少一个 minor）的接口。按 ADR 0063 D11（所有者决定），删除走 minor，不等 major。
+
+  `@zhin.js/client`（1.3.0 弃用）：
+
+  - 删除 `@zhin.js/client/ui` 子路径（`exports["./ui"]`）及其 `zk-` 组件（`PluginPage`、`PageHeader`、`Button`、`Select`、`Modal`、`ConfirmButton` 等）和 `pluginUiStyles`。数据、语言、插件 ID 工具、声明式渲染器与会话选择工具从 `@zhin.js/client` 根入口导入（名字不变）；组件改用 `@zhin.js/console-ui`；页头交给页面外壳（`usePageChrome`）。
+  - 删除 `adapterConsoleStyles`、`conversationPickerStyles`（弃用期内为空字符串）：删掉导入和注入它们的 `<style>`。
+  - 删除 `zk-` 类名：适配器页账号编辑器不再带 `zk-account-editor-host`，宿主改用 `[data-adapter-account-editor]` 定位。
+  - 蓝图与评论审批 spec 不再读取 `mark`，也不再为它告警。
+
+  `@zhin.js/console-contract`（1.3.1 标注、随 client 1.3.0 这一轮宣布弃用）：删除 `DeclarativePageSpec.mark` 与 `CommentReviewBlueprintSpec.mark`，写了会报类型错误，删掉即可。
+
+  `@zhin.js/console-ui`（1.1.0 弃用）：
+
+  - 删除旧令牌别名 `--console-radius-sm/md/lg/xl/2xl`、`--console-shadow-xs/sm/md/lg/xl/panel/hover/button`、`--console-space-page-x/-y`、`--console-space-section/-stack/-card/-card-sm`、`--console-control-height-sm/-lg`、`--console-border-width`、`--console-focus-width`、`--console-duration-fast/-page`、`--console-text-caption/-code/-body-sm/-section-sm/-title-compact`、`--radius`，以及无后继的 `--console-shadow-ring`。对照：`radius-sm/md/lg/xl/2xl` → `radius-1/2/3/4/4`；`shadow-xs/button` → `elevation-0`，`shadow-sm/panel` → `card-elevation`，`shadow-md` → `elevation-2`，`shadow-lg/xl` → `elevation-3`，`shadow-hover` → `card-hover-elevation`；`space-page-x/-y` → `page-padding-inline/-block`，`space-section` → `section-gap`，`space-stack` → `stack-gap`，`space-card(-sm)` → `card-padding`；`control-height-sm/-lg` → `control-height-compact` / `control-height`；`border-width` / `focus-width` → `border-hairline` / `border-focus`；`duration-fast/-page` → `motion-fast` / `motion-base`；`text-caption/-code/-body-sm` → `text-label`，`text-section-sm` → `text-section`，`text-title-compact` → `text-title`；`--radius` → `--console-control-radius`（均带 `--console-` 前缀）。`scale.json` 的 `css.aliasTokens` 改为 `css.removedTokens`（旧名 → 新名）。
+  - stylelint 规则 `console/no-deprecated-tokens` 改为报出这些已删除的名字并给出新名；`createConsoleStylelintConfig({ deprecatedTokens })` 不变。
+  - 删除 `Button` 的 `variant="default"`（1.1.0 起是 `soft` 的弃用别名）：改写 `variant="soft"`，或不写 `variant`（默认就是 `soft`）。
+
+  `@zhin.js/pagemanager`：独立页外壳的样式不再覆盖 `.zk-root` / `--zk-*`，构建时注入的 `defineCommentReviewPage` 不再把 `mark` 写进蓝图。`@zhin.js/cli`：`zhin plugin check` 第 2 条在从 `@zhin.js/client/ui` 引入 `PageHeader` / `PluginPage` 的提示中注明该子路径已在 `@zhin.js/client` 1.4.0 删除。`@zhin.js/adapter-sandbox`：按钮由已删除的 `variant="default"` 改为 `soft`，外观不变。
+
+  第三方插件：已经构建好的插件把自己用的 `@zhin.js/client` 打进了包里，子路径和 `zk-` 的删除不会让它们失效，升级依赖重新构建时按 docs/authoring/console-pages.md「从 @zhin.js/client/ui 升级」与「ADR 0063 P4 删除的其他接口」迁移。`@zhin.js/console-ui` 由 Console 作为共享单例提供，Console 升级到 1.2 后，还在用 `variant="default"` 的按钮会退回基础样式，读旧令牌名的样式取不到组件库的值，请改成新名。
+
+- 4ff83f3: 命名空间下的参数指令、超过 10 项的选择、猜谜与地牢远征的入口（#1250 第 37 批）。
+
+  - `command-namespace-param-commands-swallowed`：路由顺序原先是「所有静态路由先于所有带参数段的路由」，于是只要有一条更短的静态路由（例如另一个插件或根项目里的 `60s`）能匹配开头，`60s fanyi 你好`、`60s douyin`、`60s fuel 四川` 就会被它吃掉，无参数的指令又会忽略多出来的词，日志照样是 `command_replied | executed`。现在按字面路径长度优先：字面词更多的路由先匹配，字面长度相同时静态路由仍先于参数路由。`<命名空间>` 与 `<命名空间> --help`（以及任意指令组的 `<组> --help`）列出该组下发送者能用的全部指令；某条指令的 `--help` 也列出它下面（至少多一个字面词）的子指令，参数指令不会把自己列进去。插件的 `commandNamespace` 与它自己的指令同名（命名空间 `60s` + 指令 `60s` → `60s 60s`）时，实例启动时记一条 `command_namespace_collision` 警告。
+  - `select-over-10-options-no-buttons`：core 不再只给 ≤10 项的 `select` 生成按钮，所有选项都交给端点；选择提示改为「回复序号或选项名称。」，不再声称「可以点击按钮」。适配器能力画像新增可选的 `segments.interactiveLimits.maxButtons`（`@zhin.js/adapter` 新增类型 `AdapterInteractiveLimits`）：原生按钮的端点超过上限时，前 N 项保留按钮，其余选项改成紧挨按钮的序号列表（回复序号或名称照常生效；整块键盘一起登记序号，列出的序号接在按钮之后，回复「1」仍是第一个按钮）；纯文本端点照旧降级为序号列表。QQ 官方、Discord、Slack 声明 25，Telegram 声明 100；Sandbox 不设上限，按钮较多时在气泡内滚动。`@zhin.js/core` 新增导出 `resolveOutboundMaxButtons()` / `applyOutboundButtonLimit()`。该字段与 Sandbox 全能力 ADR 草案 P3 的 `interactive` 对象形式（`{ buttons: { maxTotal } }`）对应：`maxButtons` 将折进 `maxTotal`，字符串形式的 `interactive` 继续作为简写有效；本批不新增 `select` 段。
+  - 猜谜（字谜 / 猜成语）：直接回复「提示」「跳过」「结束」（以及 hint / skip / end）按对应操作处理，卡片上写明可以这样回复。提示给出真实信息：成语给第 1 个字，字谜给包含答案的 4 个候选字；提示扣 3 分（分数不会低于 0）、不再清零连击，每局最多 3 次（分数为 0 时提示也不是无限免费）。「结束」（按钮或 `猜谜 quit`）公布当前题的答案并结算本局（已答题数、得分、最佳连击）。题库去掉重复的标点（「……活下去。。」）。
+  - `dungeon-entry-unhelpful`：`dungeon` / `地牢远征` / `地牢` 不带参数且当前频道没有队伍时显示帮助与开局方式（`dungeon start`）；指令新增别名「地牢」。群里的卡片是整个频道共用的，所以所有人看到同一套按钮、同样的序号（大厅：加入队伍 / 准备 / 开始远征 / 解散队伍），非队长点「开始」或「解散」会收到明确的拒绝；大厅里提示其他人回复「加入队伍」入队。结束远征先要求队长确认：确认请求记录在新的会话版本上，只有这张确认卡（或队长在它仍是最新状态时回复「确认结束」/ 序号）能结束远征，队伍之后有任何动作或选择「继续远征」都会让它失效；结束后给出结算（到达层数、清理房间数、队伍金币）。「你是不是想用」在指令名都不相近时也和插件显示名比对（带指令前缀时 `地牢探险` → 显示名为「地牢远征」的插件）；没有前缀（私聊、@机器人）时只按前一半逐字相同放宽的匹配要求这一半至少 4 个字，`天气不错`、`天气` 这类聊天不会被显示名「天气预报」截走。
+  - `60s-gold-currency-mixed`：金价按接口返回的单位写货币符号（美元用 `$`、人民币用 `¥`，其他币种不加符号）。
+
+- 74009ef: Sandbox 输入框里手打的 `[image:URL]` 等写法发送时解析成对应的消息段，与按钮插入的结果相同（#1250 第 42 批，`sandbox-typed-media-syntax-sent-as-text`）。
+
+  - 原因：只有按钮插入的媒体节点会变成 `image` 段，手打的 `[image:URL]` 在编辑器里是普通文本，发送时原样成为一个 `text` 段；端点也只展开 `[@名称]`。所以消息里没有图片段，Agent 没有识图，只能凭链接名猜内容。而「快捷操作与语法」却把 `[image:URL]` 列成了可用写法。
+  - 写法表与解析器合并为 `src/inbound-syntax.ts`：`[@名称]`、`[face:ID]`、`[image:URL]`、`[video:URL]`、`[audio:URL]`、`[file:URL]`。页面发送前、页面预览、端点收到文本段时都用它展开；编辑器按钮插入的段也由同一组函数构造，所以手打与按钮插入完全一致。端点对直接连 WebSocket 的客户端同样生效。
+  - `URL` 须是 `http(s)` 链接；图片、视频、音频也接受同类型的 base64 `data:` URL。链接不合法（例如 `javascript:`、本地路径、`file://`、类型不符的 `data:`）的写法保留为文本，页面提示「…不是可用的链接…已按文本发送」。
+  - 「快捷操作与语法」改为直接渲染这张表：只保留 Enter / Shift+Enter 两个快捷键，删去发送时不会解析成消息段的 `**文本**` 与 ` ``` ` 两项；新增守卫测试，表里多一项而解析器不支持、或解析器支持而表里没列时测试失败。
+  - 粘贴的图片（`data:` URL）改为 `base64` 媒体引用：之前作为 `kind: 'url'` 发出，Agent 的入站媒体按网络地址处理会拒绝 `data:`，粘贴的图片同样到不了识图。
+  - 只含媒体的消息，纯文本不再回退成原始 WebSocket 帧（之前按钮插入一张图、不写文字时，消息文本是整段 JSON），现在为空字符串；媒体写法本身也不出现在纯文本里。
+  - 手打的 `data:` 写法只接受 Console 能内联显示的类型（图片 png / jpeg / gif / webp / avif，视频 mp4 / ogg / webm，音频 mpeg / mp4 / ogg / wav / webm）；`image/svg+xml` 等保留为文本，入站段里声明的 `mime_type` 不会是可执行的类型。值统一成小写头、去掉空白的规范形式。
+  - 链接里含控制字符（例如 `\t`、`\r`，URL 解析会悄悄丢掉它们）或带用户名 / 密码的写法保留为文本；接受的链接按 `URL.href` 存储，保存、显示、下载的是同一个可见地址。
+  - `[file:URL]` 的文件名取自链接最后一段，解码后含 `/`、`\`、`.` / `..` 或控制字符时不带文件名，避免插件按 `data.name` 保存附件时写到别的目录。
+
+- 4bd5b64: 入站消息里的本机路径不再绕过文件策略被 Agent 读盘（#1250 第 44 批）。
+
+  - Agent 只读一种入站本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）：产出这条消息的端点在 specification 里声明了入站媒体目录（新增可选钩子 `inboundMedia: { roots() }`，`@zhin.js/adapter` 导出 `EndpointInboundMediaPort`、`endpointInboundMediaOf`、`endpointInboundMediaRoots`，`AdapterIndex.inboundMediaRoots`，`ImRuntime.inboundMediaRoots`），且解析符号链接和 `..` 后的真实路径落在目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。可信入口把目录写进 `TurnInput.inboundMediaRoots`。
+  - 其他路径一律不读：记录 `op=inbound_media_rejected`（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，回合照常进行。
+  - weixin-ilink 声明 `<dataDir>/<端点>/media/inbound`，email 在开启附件时声明 `attachments.downloadPath`，它们原有的入站媒体照常可读。其他适配器入站不产出本机路径。
+  - core 的旧字段兼容不再把 `data.file` 以 `/`、`./`、`~/` 开头的值猜成本机路径，统一视为平台不透明引用（`kind: 'file'`）；`data.path`、`data.file_path` 和 `media.kind: 'path'` 不变。可信插件代码若用 `data.file` 写本地文件，请改用 `data.path`。icqq 的 CQ 文本解析（如频道消息里用户写的 `[image:/root/.env]`）同样不再产出本机路径。Sandbox 端点继续拒绝形如本机路径的 `data.file`（`sandbox_media_rejected`），它本身不会签发这种标识。
+  - `normalizeMediaRefsToPayloads()`、`publishOutboundElements()`、`authorizeOutboundMediaPath()` 不传 authority 时改为不读任何本地路径（与 `NO_MEDIA_AUTHORITY` 相同，URL 抓取规则不变）；仓内调用点都已显式传入。第三方插件直接调用它们读工作区文件时，需要显式传 `{ filesystem: { workspaceRoot }, fileRole }`。
+  - 行为变化：NapCat / OneBot 实现给出的 `data.path`（实现端本机路径）不再被读取，没有 URL 的语音、文件在 Agent 里显示为无法读取的占位。
+
+- 6b21148: Sandbox 媒体：内容嗅探对大写的 `<SCRIPT>` / `<SVG>` 同样识别为不可内联（此前已先转小写，现在正则本身也不区分大小写）；签名地址去掉 origin 结尾的 `/` 时不再用可回溯的正则。
+- Updated dependencies [3cf5a4f]
+- Updated dependencies [9ce43fe]
+- Updated dependencies [661cc7c]
+- Updated dependencies [4ff83f3]
+- Updated dependencies [1dc5324]
+- Updated dependencies [000bec6]
+- Updated dependencies [4bd5b64]
+- Updated dependencies [2534b1d]
+  - @zhin.js/client@1.4.0
+  - @zhin.js/console-contract@1.4.0
+  - @zhin.js/core@1.12.0
+  - @zhin.js/adapter@1.4.0
+  - @zhin.js/feature-kit@1.1.20
+  - @zhin.js/host-http@1.6.1
+  - @zhin.js/page@1.2.2
+
 ## 1.2.1
 
 ### Patch Changes

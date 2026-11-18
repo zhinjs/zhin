@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-weixin-ilink",
-  "version": "1.1.33",
+  "version": "1.1.34",
   "type": "module",
   "description": "Weixin iLink adapter: personal WeChat through the iLink API (ClawBot), long-polling text and media messages.",
   "keywords": [

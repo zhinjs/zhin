@@ -1,5 +1,12 @@
 # @zhin.js/plugin-nettools
 
+## 0.1.17
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.21
+- @zhin.js/tool@1.1.24
+
 ## 0.1.16
 
 ### Patch Changes
