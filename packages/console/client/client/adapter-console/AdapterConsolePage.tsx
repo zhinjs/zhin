@@ -1339,7 +1339,9 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     </Grid>
   ) : null;
 
-  const accountsSection = runtime ? (
+  // With `hostAccounts` the host lists and edits the accounts: every child below is gated on
+  // `showAccounts`, so the section would be an empty box that still takes a section gap.
+  const accountsSection = runtime && showAccounts ? (
     <Section id="adapter-accounts" aria-label={t(locale, '账号')}>
       {showAccounts && runtime.needsMigration && (
         <NoticeBlock
@@ -1592,7 +1594,7 @@ function renderAdapterConsoleView(m: AdapterConsoleModel, { embedded = false, to
     >
       {embeddedToolbar}
 
-      {status && (
+      {status && (showAccounts || visibleLogins.length > 0 || sidebarActions.length > 0) && (
         <nav aria-label={t(locale, '页面导航')}>
           <ContentStack direction="row" gap="tight">
             {showAccounts && (
