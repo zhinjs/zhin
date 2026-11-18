@@ -203,6 +203,17 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
 });
 
 /**
+ * Reasons whose wording the outcome's template would misstate (#1250): a prompt replaced by a newer
+ * prompt in the same conversation was not left by the sender.
+ */
+const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<string, MessageOutcomeTemplate>>>>> = Object.freeze({
+  interaction_cancelled: Object.freeze({
+    superseded: tpl('这个提问被之后的新提问替代了，没有继续。', 'A newer question replaced this one; nothing more was done.',
+      '提问被同一会话中更新的提问替代，提问方 {owner}（{stage}）。', 'Prompt replaced by a newer prompt in the conversation, asked by {owner} ({stage}).'),
+  }),
+});
+
+/**
  * Renders the human-readable reason of a record for one audience. Missing placeholders read as
  * `—`; `detail` and `errorId` are only filled for the `admin` audience with `includeDetail`.
  * @public
@@ -211,7 +222,8 @@ export function formatMessageOutcome(
   record: Pick<MessageOutcomeRecord, 'outcome'> & Partial<MessageOutcomeRecord>,
   options: Readonly<{ audience: 'sender' | 'admin'; locale?: Locale; includeDetail?: boolean }>,
 ): string {
-  const template = MESSAGE_OUTCOME_TEMPLATES[record.outcome] ?? MESSAGE_OUTCOME_TEMPLATES.unrecorded;
+  const template = (record.reason ? REASON_TEMPLATES[record.outcome]?.[record.reason] : undefined)
+    ?? MESSAGE_OUTCOME_TEMPLATES[record.outcome] ?? MESSAGE_OUTCOME_TEMPLATES.unrecorded;
   const locale: Locale = options.locale === 'en' ? 'en' : 'zh-CN';
   const text = template[options.audience][locale];
   return text.replace(/\{(\w+)\}/gu, (_match, name: string) => {

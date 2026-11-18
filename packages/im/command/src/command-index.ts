@@ -494,9 +494,10 @@ export class CommandIndex {
    * @internal Whether `input` (prefix already removed) routes to a command: the menu keyword, a
    * shortcut, a route (also one with invalid arguments, which answers with its usage) or a `match`
    * pattern. Nothing runs and no permission is checked (#1250: a pending prompt ends when its
-   * sender sends a command meanwhile).
+   * sender sends a command meanwhile). With `source`, a command restricted to another adapter does
+   * not route, exactly as {@link dispatch} treats it.
    */
-  routes(input: CommandMatchInput, locale: Locale = 'zh-CN'): boolean {
+  routes(input: CommandMatchInput, locale: Locale = 'zh-CN', source?: unknown): boolean {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (this.#menu && text !== undefined) {
       const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
@@ -505,8 +506,13 @@ export class CommandIndex {
         || (this.#menu.keyword === undefined && DEFAULT_MENU_KEYWORDS.has(first))) return true;
     }
     try {
-      return this.#matchShortcut(input) !== undefined || this.#match(input, false) !== undefined
-        || this.#matchPattern(input) !== undefined || this.#invalidRoute(input) !== undefined;
+      // Same resolution order as `dispatch`: the routed command (or the invalid-argument candidate)
+      // decides, and its adapter restriction applies when the source is known.
+      const shortcut = this.#matchShortcut(input);
+      const command = shortcut?.record ?? this.#match(input, false)?.command ?? this.#matchPattern(input)?.command
+        ?? this.#invalidRoute(input);
+      if (!command) return false;
+      return source === undefined || commandAdapterMatches(command, source);
     } catch (error) {
       if (error instanceof CommandParameterValueError) return false;
       throw error;

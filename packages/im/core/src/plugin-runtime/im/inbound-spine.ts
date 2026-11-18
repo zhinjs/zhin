@@ -380,8 +380,11 @@ export async function executeInboundTurnSpine(
       const end = interactionEndOf(error);
       if (!end) throw error;
       interactionEnded = true;
-      reportInboundOutcome(message, interactionEndCandidate(end, 'command'));
-      return { dispatch: Object.freeze({ matched: true, status: 'executed', command: 'interaction' }) };
+      reportInboundOutcome(message, interactionEndCandidate(end, 'command', end.owner));
+      // The message was handled (by the command's prompt ending), but this is no command execution:
+      // the diagnostics record keeps route `interaction` and carries no `executed` dispatch status.
+      diagnostics?.route('interaction');
+      return { dispatch: Object.freeze({ matched: true, command: 'interaction', ...(end.owner ? { owner: end.owner as PluginId } : {}) }) };
     });
   if (dispatched && !interactionEnded) reportCommandOutcome(message, dispatched.dispatch);
   let result: MessageDispatchResult = interactive ?? dispatched!.dispatch;

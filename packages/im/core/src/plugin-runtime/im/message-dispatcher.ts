@@ -110,7 +110,7 @@ export class MessageDispatcher {
     if (!commands || typeof commands.routes !== 'function') return false;
     const structuredInput = message.segments ? stripCommandPrefix(message.segments, prefix) : undefined;
     try {
-      return commands.routes(structuredInput ?? input, message.locale);
+      return commands.routes(structuredInput ?? input, message.locale, message);
     } catch (error) {
       logger.debug(formatCompact({ op: 'command_route_probe_failed', error: error instanceof Error ? error.message : String(error) }));
       return false;

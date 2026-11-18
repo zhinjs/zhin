@@ -124,7 +124,7 @@ sidebar: false
 | `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 沿用 `chatFailureLine` 现有话术（“刚卡了一下……” 等）。 / Existing `chatFailureLine` lines. | 沿用 `chatFailureLine` 的原因括注 + `{provider}/{model}`。 / Same cause as `chatFailureLine` + `{provider}/{model}`. |
 | `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{budget}`。 / Budget `{budget}` exceeded. |
 | `interaction_timeout` | `timeout`（指令 / Handler / 中间件的 `ask()` 超时，框架已回复「输入超时」；#1250）| 发起人 | 等你回答超时了，这次没有继续。 / The question timed out; nothing more was done. | 提问超时，提问方 `{owner}`（{stage}）。 / Prompt timed out, asked by `{owner}` ({stage}). |
-| `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done. | 提问结束（`{reason}`），提问方 `{owner}`（{stage}）。 / Prompt ended (`{reason}`), asked by `{owner}` ({stage}). |
+| `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done.（`superseded`：这个提问被之后的新提问替代了，没有继续。 / A newer question replaced this one; nothing more was done.）| 提问结束（`{reason}`），提问方 `{owner}`（{stage}）。 / Prompt ended (`{reason}`), asked by `{owner}` ({stage}).（`superseded`：提问被同一会话中更新的提问替代，提问方 `{owner}`（{stage}）。）|
 
 `interaction_timeout` / `interaction_cancelled` 是提问方（指令、Handler、中间件）的正常结局：超时、取消、被打断、被顶替不再作为异常冒泡成 `internal_error | command_threw`，日志为 INFO，不触发故障横幅，不计入失败统计；优先级与 `refused` 同档（见决定 11 修订）。
 
@@ -401,14 +401,14 @@ sidebar: false
 
 **修订后的规则。**
 
-1. **取消词。** `select`、`multiselect`、`number`、`list` 都认取消词「取消」「退出」「cancel」「exit」「quit」，中英文共用（`confirm` 也额外接受这几个词，仍回答 `false`）。有效回答优先：选项本身叫「取消」时按选项处理；`text` 把任何文字当回答，不认取消词。提示文案写明「回复『取消』退出」/ `reply "cancel" to exit`。取消后 `ask()` 以 `UserInteractionCancelledError`（`reason: 'cancelled'`）结束，框架回复「已取消。」，语义与 `confirm` 取消一致：这次操作不继续；它不是错误。
+1. **取消词。** `select`、`multiselect`、`number`、`list` 都认取消词「取消」「退出」「cancel」「exit」「quit」，中英文共用（`confirm` 也额外接受这几个词，仍回答 `false`）。有效回答优先：选项本身叫「取消」时按选项处理。例外是 `list`：整条回复恰好是一个取消词时先按取消处理（否则「取消」会被当成单项列表 `['取消']`，布尔列表会被当成 `[false]`），多项回复里的「取消」仍是数据。`text` 也认取消词，但只在回答本身没通过校验（`minLength`、`pattern` 等）之后才检查，所以没有校验规则的 `text` 仍把任何文字当回答。提示文案写明「回复『取消』退出」/ `reply "cancel" to exit`。取消后 `ask()` 以 `UserInteractionCancelledError`（`reason: 'cancelled'`）结束，框架回复「已取消。」，语义与 `confirm` 取消一致：这次操作不继续；它不是错误。
 2. **发别的就退出。** 等待期间，被问者（`answeredBy: 'target'` 时的那个人）发来的消息满足以下任一条件时，先结束当前提问，再把这条消息交回正常入站流程：
    - 能匹配到指令（用 CommandIndex 实际匹配：菜单关键字、快捷方式、路由（含参数不对的路由）、`match` 正则；不跑指令、不查权限）；
    - 带媒体（图片、文件、语音、视频段）；
-   - @ 了机器人。
-   带媒体的消息一律退出；匹配指令或 @ 机器人但内容本身是有效回答（如「@机器人 2」）时仍按回答处理。结束时回复一次「已退出上一个选择」，同一会话同一人每分钟最多一次。被打断的那次 `ask()` 以 `UserInteractionCancelledError`（`reason: 'interrupted'`）结束，按取消处理。`answeredBy: 'anyone'` 的提问不属于某个人，这类消息直接放行、提问保留；群里其他人的消息与原来一样不受影响。
-3. **限频提醒取代静默等待。** 第一次无效回答仍重发一次完整提问；之后的无效纯文本限频回复「正在等你选择，回复序号，或回复『取消』退出」（非选择类为「正在等你回答……」），每次提问最多 2 次，两次至少间隔 20 秒。
-4. **超时、取消、被打断都是正常结局。** 入站层新增结局 `interaction_timeout`（`timeout`）与 `interaction_cancelled`（`cancelled` / `interrupted` / `superseded`），见 §1.2。指令、Handler、中间件里的这几种结束按错误名识别，记 INFO（`interaction_ended`、`inbound_outcome`），不显示故障横幅，不计入失败统计，不再记 `internal_error`。Agent 工具审批的提问被取消或打断时按用户拒绝处理（`denied`）。
+   - @ 了机器人。只认适配器上报的真实 @（`IncomingMessage.mentioned`，含由 mention 段提升的）；房间路由为了「点名」处理而给路由目标合成的 `mentioned` 不算，否则房间里手误一次就会退出提问。
+   指令匹配会检查指令的 `adapter` 限制（与实际分发一致），不检查权限：没有权限的指令也会回复拒绝，同样是换了话题。提问还在发送、已经收下一个有效回答时，后面的消息不再打断它。带媒体的消息一律退出；匹配指令或 @ 机器人但内容本身是有效回答（如「@机器人 2」）时仍按回答处理。结束时回复一次「已退出上一个选择」，同一会话同一人每分钟最多一次。被打断的那次 `ask()` 以 `UserInteractionCancelledError`（`reason: 'interrupted'`）结束，按取消处理。`answeredBy: 'anyone'` 的提问不属于某个人，这类消息直接放行、提问保留；群里其他人的消息与原来一样不受影响。
+3. **限频提醒取代静默等待。** 第一次无效回答仍重发一次完整提问；之后的无效纯文本限频回复「正在等你选择，回复序号，或回复『取消』退出」（非选择类为「正在等你回答……」；带校验的 `text` 为「正在等你回答，按提示回复；回复『取消』或发送图片、文件即可退出」——不承诺发指令就退出，因为满足校验的指令文本会被当成回答收下），每次提问最多 2 次，两次至少间隔 20 秒。
+4. **超时、取消、被打断都是正常结局。** 入站层新增结局 `interaction_timeout`（`timeout`）与 `interaction_cancelled`（`cancelled` / `interrupted` / `superseded`），见 §1.2。指令、Handler、中间件里的这几种结束按错误名识别，并记下发起提问的插件（`owner`；指令阶段由 `ask()` 在抛出前给错误标上提问方）；指令阶段的这种结束在诊断时间线里记为 `interaction` 路由，不算一次指令执行，记 INFO（`interaction_ended`、`inbound_outcome`），不显示故障横幅，不计入失败统计，不再记 `internal_error`。Agent 工具审批的提问被取消或打断时按用户拒绝处理（`denied`）。
 
 **原因。** 静默等待让一个答错两次的提问在 3 分钟里独占发问者的全部输入，代价远大于“少回一句”；用户在等待中改发指令、图片或 @ 机器人，几乎都是换了话题，而不是在回答。限频提醒保留了原决定“不刷屏”的目的，同时让用户知道机器人在等什么、怎么退出。超时与取消是用户可预期的结束，把它们记成内部错误会让 Console 与 Sandbox 误报故障。
 

@@ -15,11 +15,39 @@ export type InteractionEndReason = 'timeout' | 'cancelled' | 'interrupted' | 'su
 export interface InteractionEnd {
   readonly outcome: 'interaction_timeout' | 'interaction_cancelled';
   readonly reason: InteractionEndReason;
+  /** The plugin whose prompt ended, when the asking operation is known (see {@link tagInteractionOwner}). */
+  readonly owner?: string;
+}
+
+const INTERACTION_OWNER = Symbol.for('zhin.im.interactionOwner');
+
+/**
+ * Records which plugin asked on an interaction error before `ask()` rethrows it, so a command's
+ * ended prompt names its owner like a middleware's or handler's does. A registered symbol, so a
+ * second copy of the module still reads it; an owner already recorded is kept.
+ */
+export function tagInteractionOwner(error: unknown, owner: string | undefined): void {
+  if (!owner || !(error instanceof Error) || Object.prototype.hasOwnProperty.call(error, INTERACTION_OWNER)) return;
+  try {
+    Object.defineProperty(error, INTERACTION_OWNER, { value: owner, enumerable: false, configurable: true });
+  } catch { /* A frozen error just stays without an owner. */ }
+}
+
+function interactionOwnerOf(error: Error): string | undefined {
+  const owner = (error as unknown as Record<symbol, unknown>)[INTERACTION_OWNER];
+  return typeof owner === 'string' && owner ? owner : undefined;
 }
 
 /** The expected end an interaction error stands for, or `undefined` for any other error. */
 export function interactionEndOf(error: unknown): InteractionEnd | undefined {
   if (!(error instanceof Error)) return undefined;
+  const end = interactionEndKind(error);
+  if (!end) return undefined;
+  const owner = interactionOwnerOf(error);
+  return owner ? { ...end, owner } : end;
+}
+
+function interactionEndKind(error: Error): InteractionEnd | undefined {
   switch (error.name) {
     case 'UserInteractionTimeoutError':
       return { outcome: 'interaction_timeout', reason: 'timeout' };

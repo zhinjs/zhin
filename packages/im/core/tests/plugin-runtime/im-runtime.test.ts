@@ -5007,6 +5007,39 @@ describe('IM Runtime inbound origin routing', () => {
       } finally { await close(f); }
     });
 
+    it('keeps a routed prompt open on an invalid answer: the mention Room routing adds never ends it (#1250)', async () => {
+      const { f, ids, seen } = await roomFixture((ids) => (i) =>
+        i.pending(ids[1]) ? { endpointId: ids[1], reason: 'pending' } : { endpointId: ids[0], reason: 'coordinator' });
+      try {
+        const [a, b] = ids;
+        const reply = vi.fn(async (_content: unknown) => ({ status: 'sent' as const }));
+        const source = {
+          conversation: { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+          generation: f.store.current.generation,
+          sender: { id: 'alice' },
+          $reply: reply,
+        };
+        const answer = f.im.createInteraction(source as never)!.ask({ type: 'select', title: '选一个', timeout: 5000,
+          options: [{ label: '甲', value: 'a' }, { label: '乙', value: 'b' }] });
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
+        // A typo routed to B is marked mentioned for addressing, but it is no real @: the prompt is sent again.
+        await Promise.all([dedupInput(f, a, 'rt-esc-1', 'group', 'alice', '随便'), dedupInput(f, b, 'rt-esc-1', 'group', 'alice', '随便')]
+          .map((copy) => receive(f.im, copy)));
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(2));
+        expect(JSON.stringify(reply.mock.calls[1]![0])).toContain('选一个');
+        // A second typo gets the throttled reminder, still no exit.
+        await Promise.all([dedupInput(f, a, 'rt-esc-2', 'group', 'alice', '还是随便'), dedupInput(f, b, 'rt-esc-2', 'group', 'alice', '还是随便')]
+          .map((copy) => receive(f.im, copy)));
+        await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(3));
+        expect(String(reply.mock.calls[2]![0])).toContain('正在等你选择');
+        expect(f.im.messageOutcomes.list().some(row => row.outcome === 'interaction_cancelled')).toBe(false);
+        await Promise.all([dedupInput(f, a, 'rt-esc-3', 'group', 'alice', '2'), dedupInput(f, b, 'rt-esc-3', 'group', 'alice', '2')]
+          .map((copy) => receive(f.im, copy)));
+        await expect(answer).resolves.toBe('b');
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
     it('probes inboundClaimPending and runs inboundClaim once on that Endpoint', async () => {
       const claimedBy: string[] = [];
       const { f, ids, seen } = await roomFixture((ids) => (i) =>
@@ -5625,6 +5658,15 @@ describe('pending prompts end on commands, media and mentions (#1250 interaction
       expect(outcomes).toContain('interaction_cancelled:cancelled');
       expect(outcomes).toContain('interaction_answered:prompt');
       expect(outcomes.some(row => row.startsWith('internal_error'))).toBe(false);
+      // The command stage names the plugin that asked, like middleware and handler stages do.
+      const endedRow = fixture.im.messageOutcomes.list().find(row => row.outcome === 'interaction_cancelled');
+      expect(endedRow).toMatchObject({ stage: 'command' });
+      expect(typeof endedRow?.owner).toBe('string');
+      expect(endedRow?.owner).toBeTruthy();
+      // The ended prompt is no command execution in the diagnostics timeline.
+      const record = fixture.im.messageDiagnostics.list().find(row => row.outcome?.outcome === 'interaction_cancelled');
+      expect(record).toMatchObject({ route: 'interaction' });
+      expect(record?.dispatchStatus).toBeUndefined();
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 

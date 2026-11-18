@@ -21,7 +21,8 @@ import {
   type UserInteractionProgress,
   type UserInteractionView,
 } from '../../built/user-interaction.js';
-import { isInteractionCancelReply } from '../../built/interaction-cancel.js';
+import { tagInteractionOwner } from './interaction-end.js';
+import { isInteractionCancelFirst, isInteractionCancelReply } from '../../built/interaction-cancel.js';
 import { randomUUID } from 'node:crypto';
 import {
   RuntimeMessage,
@@ -81,6 +82,8 @@ interface UserInteractionClaim {
   readonly classify?: (raw: string, action: boolean) => boolean;
   readonly owner?: string;
   readonly accept: (raw: string, action?: boolean) => boolean;
+  /** An answer was accepted and waits for the prompt's delivery; later messages never end the prompt. */
+  readonly hasBuffered: () => boolean;
   readonly reject: (error: Error) => void;
   readonly delivered: () => void;
   readonly answer: Promise<InteractionAnswer>;
@@ -121,6 +124,13 @@ export interface InteractionClaimResolution {
 export interface InteractionClaimOptions {
   /** Whether the message routes to a command (CommandIndex match); such a message ends the prompt. */
   readonly matchesCommand?: () => boolean;
+  /**
+   * The mention of the bot as the adapter reported it (`IncomingMessage.mentioned`, which already
+   * covers promoted mention segments). Room routing marks a routed message as mentioned so that it
+   * is handled as addressed; that synthesized mention never ends a prompt, so a typo in a routed
+   * room still gets the prompt again. Absent, `message.mentioned` is used.
+   */
+  readonly mentioned?: boolean;
 }
 
 /** Segment types that make a message "media" for prompt escape (images, files, voice, video). */
@@ -163,7 +173,7 @@ class UserInteractionCancelledError extends Error {
 
 class UserInteractionSupersededError extends Error {
   constructor() {
-    super('User interaction superseded');
+    super('User interaction replaced by a newer prompt in this conversation');
     this.name = 'UserInteractionSupersededError';
   }
 }
@@ -297,7 +307,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     // "@bot 2" in a group answers the prompt: the mention itself is not part of the answer.
     const plain = payload ?? message.content;
     const text = message.mentioned === true && !classify(plain, false) ? textWithoutMentions(message) ?? plain : plain;
-    if (!askAction && this.#escapes(message, text, classify, options)) {
+    // An answer already taken (waiting for the prompt's delivery) is never displaced by a later message.
+    if (!askAction && !claim.hasBuffered() && this.#escapes(message, text, classify, options)) {
       // An `anyone` prompt is not the sender's own: the message passes through and the prompt stays.
       if (claim !== own) return false;
       claim.reject(new UserInteractionCancelledError('interrupted'));
@@ -323,7 +334,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   ): boolean {
     if (message.segments?.some(segment => ESCAPE_MEDIA_SEGMENTS.has(segment.type))) return true;
     if (classify(raw, false)) return false;
-    if (message.mentioned === true) return true;
+    const mentioned = options && 'mentioned' in options ? options.mentioned === true : message.mentioned === true;
+    if (mentioned) return true;
     if (!options?.matchesCommand) return false;
     try { return options.matchesCommand(); } catch { return false; }
   }
@@ -454,6 +466,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
           claim.delivered();
           const raw = await claim.answer;
           claim.check();
+          // A list would read a lone `取消` as the item `['取消']`: the prompt said it cancels (#1250).
+          if (isInteractionCancelFirst(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
           const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
           if (result.ok) return result.value as UserInteractionValue<Request>;
           if (isInteractionCancelReply(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
@@ -478,7 +492,9 @@ export class RuntimeInteractionCoordinator<Admission = never> {
           // An interrupted prompt is announced by the inbound runtime before the new message runs.
           if (error instanceof UserInteractionCancelledError && error.reason === 'cancelled') await reply(t(locale, 'cancelled'));
           // Timeout and cancellation are expected ends: the inbound runtime records them as
-          // `interaction_timeout` / `interaction_cancelled`, never as `internal_error` (#1250).
+          // `interaction_timeout` / `interaction_cancelled`, never as `internal_error` (#1250),
+          // naming the plugin that asked.
+          tagInteractionOwner(error, operation?.owner !== undefined ? String(operation.owner) : undefined);
           throw error;
         } finally {
           claim.dispose();
@@ -594,6 +610,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
         if (delivered) resolve(buffered);
         return true;
       },
+      hasBuffered: () => buffered !== undefined,
       delivered: () => { if (!failure) { delivered = true; if (buffered !== undefined) resolve(buffered); } },
       reject: fail,
       check: () => {
