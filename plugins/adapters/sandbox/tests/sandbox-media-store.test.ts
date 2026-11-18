@@ -139,6 +139,9 @@ describe('Sandbox media store (ADR 0064 D12, I1)', () => {
     media.revokeAll();
     expect(media.verifyUrl(after)).toEqual({ ok: false, reason: 'signature' });
     expect(media.verifyUrl(media.signedUrl(meta, 'http://h'))).toMatchObject({ ok: true });
+    // Trailing slashes on the origin are trimmed without a backtracking regex.
+    expect(media.signedUrl(meta, 'http://h///')).toBe(media.signedUrl(meta, 'http://h'));
+    expect(media.signedUrl(meta, `http://h${'/'.repeat(50_000)}x`).startsWith(`http://h${'/'.repeat(50_000)}x/`)).toBe(true);
   });
 
   it('keeps the key in .zhin/sandbox/media/secret with mode 0600', async () => {
@@ -261,6 +264,9 @@ describe('Sandbox media store (ADR 0064 D12, I1)', () => {
     expect(sniffSandboxMedia(Buffer.from('<svg onload="alert(1)"></svg>'))).toEqual({ kind: 'file', mime: 'image/svg+xml' });
     expect(sniffSandboxMedia(Buffer.from('<!DOCTYPE html><html><script>x</script>'))).toEqual({ kind: 'file', mime: 'text/html' });
     expect(sniffSandboxMedia(Buffer.from([0, 1, 2, 3]))).toEqual({ kind: 'file', mime: 'application/octet-stream' });
+    // Upper-case markup is refused just the same (CodeQL js/bad-tag-filter).
+    expect(sniffSandboxMedia(Buffer.from('hello<SCRIPT>x</SCRIPT>'))).toEqual({ kind: 'file', mime: 'text/html' });
+    expect(sniffSandboxMedia(Buffer.from('<SVG onload="alert(1)"></SVG>'))).toEqual({ kind: 'file', mime: 'image/svg+xml' });
     const { media } = await store();
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
     const meta = await media.put({ body: body(svg), declaredLength: svg.byteLength, declaredType: 'image/svg+xml', conversation: room, uploader: 'u' });
