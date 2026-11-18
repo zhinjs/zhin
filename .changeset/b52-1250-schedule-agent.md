@@ -1,9 +1,9 @@
 ---
-"@zhin.js/agent": patch
-"@zhin.js/host-http": patch
-"@zhin.js/console-protocol": patch
-"zhin.js": patch
-"@zhin.js/cli": patch
+"@zhin.js/agent": minor
+"@zhin.js/host-http": minor
+"@zhin.js/console-protocol": minor
+"zhin.js": minor
+"@zhin.js/cli": minor
 ---
 
 定时任务可以指定由哪个 Agent 执行（#1250 第 52 批 `schedule-agent-no-creation-path`）。运行时早已支持 `action.agent`，但没有任何入口能设置它，只能停服改数据库 `agent_schedule_jobs.agent`。不指定 Agent 时行为不变（默认 `zhin`）。
