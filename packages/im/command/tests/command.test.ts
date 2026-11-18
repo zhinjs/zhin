@@ -258,6 +258,22 @@ describe('Command Feature', () => {
     expect(reads).toBe(1);
   });
 
+  it('routes() applies the adapter restriction like dispatch, and ignores permissions (#1250)', () => {
+    const owner = rootPluginId();
+    const bound = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'client-id', source: '/commands/client-id/index.ts',
+      definition: defineCommand({ adapter: 'command-test', execute: () => 'ok' }) });
+    const free = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'status', source: '/commands/status/index.ts',
+      definition: defineCommand({ permit: ['owner'], execute: () => 'ok' }) });
+    const index = new CommandIndex([bound, free], snapshotWithOwners([owner], [bound, free]));
+    // Without a source the probe stays a pure route match.
+    expect(index.routes('client-id')).toBe(true);
+    expect(index.routes('client-id', 'zh-CN', { clientAdapter: 'command-test' })).toBe(true);
+    expect(index.routes('client-id', 'zh-CN', { clientAdapter: 'other' })).toBe(false);
+    expect(index.routes('nothing-here', 'zh-CN', { clientAdapter: 'command-test' })).toBe(false);
+    // Permits are not checked by the probe (a denied command still answers, so it still ends a prompt).
+    expect(index.routes('status', 'zh-CN', { clientAdapter: 'other' })).toBe(true);
+  });
+
   it('passes the same bound operation Session and preserves optional direct execution', async () => {
     const owner = rootPluginId();
     class NativeEvent { text() { return 'sdk'; } }

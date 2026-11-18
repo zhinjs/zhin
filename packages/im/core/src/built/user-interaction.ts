@@ -1,5 +1,6 @@
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from './interaction-messages.js';
+import { SHARED_CANCEL_VALUES } from './interaction-cancel.js';
 import type {
   UserInteractionContent,
   UserInteractionOption,
@@ -171,7 +172,8 @@ export function parseUserInteractionAnswer(
       const confirmLabel = request.confirmLabel?.trim().toLocaleLowerCase();
       const cancelLabel = request.cancelLabel?.trim().toLocaleLowerCase();
       if (CONFIRM_VALUES[locale].has(normalized) || (confirmLabel && normalized === confirmLabel)) return valid(true);
-      if (CANCEL_VALUES[locale].has(normalized) || (cancelLabel && normalized === cancelLabel)) return valid(false);
+      if (CANCEL_VALUES[locale].has(normalized) || SHARED_CANCEL_VALUES.has(normalized)
+        || (cancelLabel && normalized === cancelLabel)) return valid(false);
       return invalid(t(locale, 'confirmOrCancel'));
     }
     case 'select': {
@@ -227,6 +229,7 @@ function actionsFor(request: UserInteractionRequest, locale: Locale): UserIntera
 function instructionFor(request: UserInteractionRequest, locale: Locale): string | undefined {
   switch (request.type) {
     case 'confirm': return t(locale, 'confirmation');
+    case 'number': return t(locale, 'numberInstruction');
     case 'select': return t(locale, 'selection');
     case 'multiselect': return t(locale, 'multiple', { separator: request.separator ?? ',' });
     case 'list': return t(locale, 'list', { separator: request.separator ?? ',' });

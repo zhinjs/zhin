@@ -44,6 +44,8 @@ const FIXTURES = {
   model_timeout: { visibility: 'sender', reply: 'yes' },
   model_error: { visibility: 'sender', reply: 'yes' },
   budget_exhausted: { visibility: 'sender', reply: 'yes' },
+  interaction_timeout: { visibility: 'sender', reply: 'yes' },
+  interaction_cancelled: { visibility: 'sender', reply: 'yes' },
   not_addressed: { visibility: 'sender', reply: 'no' },
   feature_disabled: { visibility: 'admin', reply: 'no' },
   ambient_silent: { visibility: 'sender', reply: 'no' },
@@ -234,7 +236,7 @@ describe('interaction answers (ADR 0061 P5)', () => {
     } finally { abort.abort(); }
   });
 
-  it('re-sends the prompt at most once after invalid answers', async () => {
+  it('re-sends the prompt once after an invalid answer, then reminds at most every 20 s (decision 11, revised)', async () => {
     const interactions = new RuntimeInteractionCoordinator(new RuntimeInteractiveRouter(100));
     const reply = vi.fn(async () => ({ status: 'sent' as const }));
     const abort = new AbortController();
@@ -246,7 +248,9 @@ describe('interaction answers (ADR 0061 P5)', () => {
       }
       await vi.waitFor(() => expect(interactions.resolveClaim(message('alice', '3'))).toBe(true));
       await expect(answer).resolves.toBe(3);
-      expect(reply).toHaveBeenCalledTimes(2);
+      // prompt, re-sent prompt after `a`, one reminder after `b`; `c` came within 20 s.
+      expect(reply).toHaveBeenCalledTimes(3);
+      expect(reply.mock.calls[2]).toEqual(['正在等你回答，按提示回复，或回复「取消」退出。']);
     } finally { abort.abort(); }
   });
 });

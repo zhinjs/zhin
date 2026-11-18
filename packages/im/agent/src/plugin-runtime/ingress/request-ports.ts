@@ -465,6 +465,9 @@ function approvalOutcomeFromInteractionError(error: unknown): ApprovalOutcome {
       return { status: 'unavailable', reason: 'the approval prompt could not be delivered' };
     case 'UserInteractionSupersededError':
       return { status: 'unavailable', reason: 'the approval prompt was superseded by another question' };
+    // #1250: the asked person replied a cancel word or sent a command / media / mention meanwhile.
+    case 'UserInteractionCancelledError':
+      return { status: 'denied', by: 'user' };
     default:
       return { status: 'unavailable', reason: 'the approval prompt failed' };
   }
