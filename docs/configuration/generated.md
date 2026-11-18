@@ -164,7 +164,7 @@ outline: [2, 3]
 | `ai.agent.toolBudget.progressMinIntervalMs` | integer | 否 | `45000` | 两次进度更新的最小间隔（毫秒）。 |
 | `ai.agent.toolBudget.progressMaxUpdates` | integer | 否 | `3` | 0 关闭进度。正数仅限制有界任务的更新次数；持续交互任务按配置的间隔报告，不限次数。 |
 | `ai.agent.injectionGuard` | object | 否 | — | 注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。 |
-| `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | 否 | `"external_content"` | external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。 |
+| `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"always"`, `"off"` \| object | 否 | — | 读取外部内容后的高危动作确认（ADR 0067）。级别：off；untrusted_content（读过外部内容后确认，第一方只读工具的结果不算）；any_content（读过任何内容后确认）；always（每次确认）。无人值守回合需要确认时直接拒绝。不写时：定时任务 untrusted_content，执行命令 / 写文件 / 外发 / 改配置 any_content。 |
 | `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | 否 | `"redact"` | redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。 |
 | `ai.agent.injectionGuard.trustedOutputTools` | array&lt;string&gt; | 否 | `[]` | 结果不算外部内容的工具。 |
 | `ai.agent.toolHardGate` | object | 否 | — | 危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具），以及写宿主自身配置 / 依赖 / git 钩子的调用（zhin.config.*、.env*、package.json、锁文件、node_modules/、.git/ 等）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。 |

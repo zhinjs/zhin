@@ -8,6 +8,8 @@ export default defineAgentTool({
   scopes: ['group'],
   requiresApproval: 'never',
   readOnly: true,
+  // ADR 0067 D1: returns text other people can write, so it is external content, not trusted output.
+  tags: ['external_content'],
   inputSchema: z.object({}),
   async execute(_input, context) {
     const setting = await context.$client.groupService.getMuteSetting(currentGroup(context));

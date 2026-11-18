@@ -1,6 +1,7 @@
 import type { AmbientEngagementConfig, SceneEventWakeConfig, ModelHarnessConfig, ProviderResilienceConfig } from '@zhin.js/ai';
 import type { VenueDefinition } from '@zhin.js/core';
 import type { AgentBindingConfig } from './types.js';
+import type { HighRiskConfirmLevel } from '../security/provenance.js';
 
 /** Agent startup policies only. Provider resources and selections belong to the Host runtime graph. */
 export interface AgentStartupConfig {
@@ -209,9 +210,16 @@ export interface AgentStartupConfig {
     modelHarness?: ModelHarnessConfig;
     /** Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守） */
     providerResilience?: ProviderResilienceConfig;
-    /** 注入防护：读取外部内容后的高危动作需确认；出站回复屏蔽系统提示 / 密钥 / 其他会话记忆泄露 */
+    /** 注入防护：读取外部内容后的高危动作需确认（ADR 0067 按类别分级）；出站回复屏蔽系统提示 / 密钥 / 其他会话记忆泄露 */
     injectionGuard?: {
-      confirmHighRisk?: 'external_content' | 'off';
+      /** 字符串作用于所有类别（`external_content` = 所有类别 `any_content`）；对象按类别设置，没写的类别用默认级别。 */
+      confirmHighRisk?: 'external_content' | 'always' | 'off' | {
+        shell?: HighRiskConfirmLevel;
+        fileWrite?: HighRiskConfirmLevel;
+        outbound?: HighRiskConfirmLevel;
+        config?: HighRiskConfirmLevel;
+        schedule?: HighRiskConfirmLevel;
+      };
       outboundCheck?: 'redact' | 'off';
       trustedOutputTools?: string[];
     };

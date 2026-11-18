@@ -126,6 +126,7 @@ export default defineAgentTool({
 - 显式写了 `requiresApproval: 'always' | 'once' | 'human'` 时，以它为准，只读不生效。
 - 下列工具声明只读也不生效，仍按原规则审批：写文件、执行命令、向其他会话发消息的内置工具（`write_file`、`edit_file`、`bash`、`send_*` 等，也包括插件里同名的工具），写记忆、改配置的内置工具，带 `shell` / `outbound` / `config` / `schedule` 标签或名字属于这些类别的工具，以及 `risk: 'dangerous'` 的工具。
 - 只读还用于判断失败是否可以安全重试、受限回合能用哪些工具。只有确实不改任何东西的工具才能声明。
+- 官方插件（`@zhin.js/` 作用域）的只读工具，结果算受信输出：之后建定时任务 / 提醒不再因「读过外部内容」要求确认（执行命令、写文件、外发、改配置仍要确认，见 [ADR 0067](../adr/0067-high-risk-confirm-tiers.md)）。工具会返回别人能写的文本（群成员昵称、入群申请留言、网页）时，加 `tags: ['external_content']`，结果仍算外部内容。
 
 ### 声明危险工具（硬闸）
 

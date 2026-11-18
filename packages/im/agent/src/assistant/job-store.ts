@@ -10,6 +10,7 @@ import { type ScheduleJob, type ScheduleJobFile, type JobAction, type JobNotify,
 import { parseScheduleJobCreator } from './job-creator.js';
 import { parseScheduleJobExecutionPlan } from './schedule-execution.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
+import { parseScheduledPromptProvenance } from '../security/provenance.js';
 const logger = getLogger('schedule-job-store');
 
 export interface ScheduleJobStoreOptions {
@@ -246,6 +247,7 @@ function scheduleJobBusiness(job: ScheduleJob): unknown {
     activityFeedback: job.activityFeedback,
     budget: job.budget,
     eventPayload: job.eventPayload,
+    provenance: job.provenance,
   };
 }
 
@@ -278,6 +280,9 @@ function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): 
       ? raw.budget as ScheduleJob['budget']
       : undefined,
     eventPayload: raw.eventPayload,
+    ...(raw.provenance !== undefined && raw.provenance !== null
+      ? { provenance: parseScheduledPromptProvenance(raw.provenance) }
+      : {}),
   };
 }
 

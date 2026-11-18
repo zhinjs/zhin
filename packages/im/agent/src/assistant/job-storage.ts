@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 import { resolveLocale, encodeStorageIdentity, decodeStorageIdentity, retryRelationalOperation } from '@zhin.js/plugin-runtime';
 import type { ScheduleJob, ScheduleJobFile } from './types.js';
+import { parseScheduledPromptProvenance } from '../security/provenance.js';
 
 const text = { type: 'text', nullable: true } as const;
 const time = { type: 'bigint', nullable: true } as const;
@@ -19,7 +20,11 @@ export const SCHEDULE_JOB_MODEL = {
   last_executed_at: time, last_status: text, last_error: text, next_run_at: time, retry_count: { type: 'integer', nullable: true },
   plan_prompt: text, plan_tools_json: text, plan_skills_json: text, plan_preview: text, plan_previewed_at: time, plan_confirmed: flag,
   budget_json: text, event_payload_json: text,
+  /** ADR 0067 D2.1: `ScheduleJob.provenance`; added to older tables on start (null = none). */
+  provenance_json: text,
 };
+/** Columns added after the table was first created (`database.define(..., { addColumns })`). */
+export const SCHEDULE_JOB_ADDED_COLUMNS = ['locale', 'provenance_json'] as const;
 export const SCHEDULE_JOB_MIGRATION_MODEL = { id: { type: 'integer', primary: true }, version: { type: 'integer', nullable: false } };
 const jobKey = (id: string) => createHash('sha256').update(id).digest('hex');
 const json = (value: unknown) => value === undefined ? null : JSON.stringify(value);
@@ -52,7 +57,18 @@ export function encodeScheduleJob(job: ScheduleJob, position: number): Record<st
     plan_prompt: encode(job.executionPlan?.prompt), plan_tools_json: json(job.executionPlan?.tools), plan_skills_json: json(job.executionPlan?.skills),
     plan_preview: encode(job.executionPlan?.previewSample), plan_previewed_at: job.executionPlan?.previewedAt ?? null, plan_confirmed: job.executionPlan?.confirmed ?? null,
     budget_json: json(job.budget), event_payload_json: json(job.eventPayload),
+    provenance_json: job.provenance ? JSON.stringify(job.provenance) : null,
   };
+}
+
+/** A stored value that does not parse still marks the job (fail closed, ADR 0067 D2.1). */
+function decodeProvenance(value: unknown): ScheduleJob['provenance'] {
+  if (value == null) return undefined;
+  try {
+    return parseScheduledPromptProvenance(JSON.parse(String(value)));
+  } catch {
+    return parseScheduledPromptProvenance({});
+  }
 }
 
 export function decodeScheduleJob(row: Record<string, unknown>): ScheduleJob {
@@ -80,6 +96,7 @@ export function decodeScheduleJob(row: Record<string, unknown>): ScheduleJob {
     ...(row.plan_prompt == null ? {} : { executionPlan: { prompt: decode(row.plan_prompt), ...optional('tools', parse(row.plan_tools_json)), ...optional('skills', parse(row.plan_skills_json)),
       ...optional('previewSample', decode(row.plan_preview)), ...optional('previewedAt', number(row.plan_previewed_at)), ...optional('confirmed', boolean(row.plan_confirmed)) } }),
     ...optional('budget', parse(row.budget_json)), ...optional('eventPayload', parse(row.event_payload_json)),
+    ...optional('provenance', decodeProvenance(row.provenance_json)),
   } as ScheduleJob;
 }
 

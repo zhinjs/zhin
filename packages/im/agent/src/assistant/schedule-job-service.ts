@@ -11,6 +11,7 @@ import type {
   ScheduleJob,
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
+  ScheduleJobProvenance,
 } from './types.js';
 export function generateScheduleJobId(): string {
   return `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -31,6 +32,8 @@ export interface ScheduleAddInput {
   enabled?: boolean;
   /** Agent the job runs on (`ai.agents` binding name); absent: the default `zhin` (#1250 b52). */
   agent?: string;
+  /** ADR 0067 D2.1: set by `schedule_add` from the creating turn; never parsed from tool or RPC input. */
+  provenance?: ScheduleJobProvenance;
 }
 
 export type ScheduleInvocationContext = Pick<
@@ -56,6 +59,7 @@ export async function addScheduleJob(
     executionPlan: input.executionPlan,
     activityFeedback: input.activityFeedback || undefined,
     budget: input.budget,
+    ...(input.provenance ? { provenance: input.provenance } : {}),
   });
 }
 

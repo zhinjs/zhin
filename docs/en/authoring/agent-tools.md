@@ -118,6 +118,7 @@ export default defineAgentTool({
 - An explicit `requiresApproval: 'always' | 'once' | 'human'` wins; read-only has no effect then.
 - The declaration is ignored, and the usual approval applies, for: built-in tools that write files, run commands or message other conversations (`write_file`, `edit_file`, `bash`, `send_*` and so on, including plugin tools with those names), built-in tools that write memory or change configuration, tools tagged or named `shell` / `outbound` / `config` / `schedule`, and tools declared `risk: 'dangerous'`.
 - Read-only also decides whether a failed run may be retried safely and which tools restricted turns get. Declare it only for tools that really change nothing.
+- A read-only tool of an official plugin (`@zhin.js/` scope) produces trusted output: a schedule or reminder created afterwards no longer asks for confirmation because of external content (commands, file writes, outbound messages and configuration changes still ask, see [ADR 0067](../../adr/0067-high-risk-confirm-tiers.md)). When the tool returns text other people can write (member nicknames, join-request messages, web pages), add `tags: ['external_content']` so its result stays external content.
 
 ### Declare a dangerous tool (hard gate)
 

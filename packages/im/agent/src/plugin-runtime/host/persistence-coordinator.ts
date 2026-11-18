@@ -15,7 +15,7 @@ import {
 } from '@zhin.js/harness';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
-  DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
+  DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_ADDED_COLUMNS, SCHEDULE_JOB_MIGRATION_MODEL,
   DatabaseScheduleHistoryRepository, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   AI_DECISION_EVENTS_TABLE, AI_SCENE_MEMBERS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '../index.js';
 import {
@@ -98,7 +98,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   const pruneSceneFacts = async () => { await sceneFacts()?.prune(); };
   let stopSceneFactPruning = () => {};
   if (sql) {
-    database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
+    database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: [...SCHEDULE_JOB_ADDED_COLUMNS] });
     database.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
     database.define('agent_schedule_runs', SCHEDULE_RUN_MODEL);
     database.define('agent_schedule_attempts', SCHEDULE_ATTEMPT_MODEL);

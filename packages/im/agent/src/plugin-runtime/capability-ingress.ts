@@ -54,6 +54,11 @@ export interface ToolCapability extends ToolDescriptor {
    * `readOnly` and never relax approval.
    */
   readonly mcpHints?: McpToolHints;
+  /**
+   * ADR 0067 D1: the owning plugin package is first-party (`zhin.js` or the `@zhin.js/` scope). Together with
+   * an effective `readOnly: true` its results count as trusted output; never set on MCP or seam tools.
+   */
+  readonly firstParty?: boolean;
   execute<TInput = unknown, TResult = unknown>(
     input: TInput,
     invocation: ToolInvocationContext,
@@ -155,6 +160,11 @@ export class CapabilityIngress {
 const TRUSTED_ADAPTER_SCOPE = '@zhin.js/';
 export function isTrustedOfficialAdapterPackage(packageName: string | undefined): boolean {
   return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
+}
+
+/** ADR 0067 D1.3: a first-party plugin package (same scope rule as ADR 0044, plus the `zhin.js` package itself). */
+export function isFirstPartyPluginPackage(packageName: string | undefined): boolean {
+  return packageName === 'zhin.js' || isTrustedOfficialAdapterPackage(packageName);
 }
 
 /** Owner predicate for the turn's conversation / endpoint; non-IM turns and unknown endpoints see every owner. */
@@ -364,6 +374,7 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
       }))
     .map((r) => Object.freeze({
       ...r.descriptor,
+      ...(isFirstPartyPluginPackage(operationSnapshot?.tree.get(r.descriptor.owner)?.packageName) ? { firstParty: true } : {}),
       hidden: isSelectedAgentTool(r.descriptor.placement, selectedAgent)
         ? false
         : r.descriptor.hidden,

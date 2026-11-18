@@ -8,7 +8,7 @@ import type {
   ToolInvocationOrigin,
   ToolQuestionPort,
 } from '@zhin.js/tool';
-import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
+import type { ScheduleJobCreator, ScheduleJobExecutionPlan, ScheduleJobProvenance } from '../assistant/types.js';
 import type { ConversationContextBlock, MessageRef } from '@zhin.js/im-contract';
 import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { CoreReplyStream } from '@zhin.js/core/runtime';
@@ -251,6 +251,8 @@ export type TurnExecutionProfile =
       kind: 'schedule';
       executionPlan?: Readonly<ScheduleJobExecutionPlan>;
       createdBy?: Readonly<ScheduleJobCreator>;
+      /** ADR 0067 D2.1: the job was created after recorded content; the run starts tainted. */
+      provenance?: Readonly<ScheduleJobProvenance>;
       security: Readonly<{
         execPreset: 'readonly' | 'network';
         allowedDomains: readonly string[];

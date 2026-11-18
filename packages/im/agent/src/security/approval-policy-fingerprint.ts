@@ -9,14 +9,15 @@
  * still wants it.
  *
  * The fingerprint covers the approval-relevant configuration plus {@link APPROVAL_POLICY_REVISION},
- * which is bumped when the framework's own approval rules change (#1250 memory tier = revision 2).
+ * which is bumped when the framework's own approval rules change (#1250 memory tier = revision 2;
+ * ADR 0067 per-category provenance levels and trusted first-party output = revision 3).
  * Detection reads only the history, so it survives restarts and config reloads.
  */
 import { createHash } from 'node:crypto';
 import type { AgentMessage } from '@zhin.js/ai';
 
 /** Bump when built-in approval rules change in a way that can turn an earlier denial into an allow. */
-export const APPROVAL_POLICY_REVISION = 2;
+export const APPROVAL_POLICY_REVISION = 3;
 
 /** Configuration keys that decide whether a tool call is approved, asked or refused. */
 const APPROVAL_KEYS = [
@@ -51,10 +52,18 @@ export function approvalPolicySnapshot(config: object | undefined): ApprovalPoli
   const guard = source.injectionGuard as { confirmHighRisk?: unknown } | undefined;
   const summary = [
     `execApprovalMode=${String(source.execApprovalMode ?? 'auto')}`,
-    `confirmHighRisk=${String(guard?.confirmHighRisk ?? 'external_content')}`,
+    `confirmHighRisk=${describeConfirmHighRisk(guard?.confirmHighRisk)}`,
     `rules=r${APPROVAL_POLICY_REVISION}`,
   ].join(', ');
   return Object.freeze({ fingerprint, summary });
+}
+
+/** ADR 0067: `default` when unset, the string as written, or `key:level` pairs of the per-category form. */
+function describeConfirmHighRisk(value: unknown): string {
+  if (value === undefined || value === null) return 'default';
+  if (typeof value !== 'object' || Array.isArray(value)) return String(value);
+  const entries = Object.entries(value as Record<string, unknown>).map(([key, level]) => `${key}:${String(level)}`);
+  return entries.length ? entries.join('/') : 'default';
 }
 
 /** Appended to every denial the model sees: which policy made that decision. */

@@ -163,6 +163,14 @@ export interface EvalTool {
   readonly risk?: 'dangerous' | 'safe';
   /** Keep the tool out of the always-loaded set (reachable via the deferred catalog only). */
   readonly deferred?: boolean;
+  /** Author's `readOnly: true` declaration. */
+  readonly readOnly?: boolean;
+  /** Tool tags (e.g. `schedule`, `external_content`). */
+  readonly tags?: readonly string[];
+  /** ADR 0067 D1: owned by a first-party (`@zhin.js/*`) plugin package; read-only results count as trusted output. */
+  readonly firstParty?: boolean;
+  /** Present the tool as coming from this MCP server (ADR 0065); its results are always external content. */
+  readonly mcpServer?: string;
 }
 
 /**
