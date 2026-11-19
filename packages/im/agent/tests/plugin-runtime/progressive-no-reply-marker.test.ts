@@ -52,7 +52,8 @@ function realCoreStream() {
   return { stream, frames };
 }
 
-async function runRootTurn(mode: Mode, real = mode === 'real-stream' ? realCoreStream() : undefined) {
+async function runRootTurn(mode: Mode, answer: Readonly<{ marked: string; partial: string }> = { marked: MARKED, partial: '这是一只橘猫。 `[[no_' },
+  real = mode === 'real-stream' ? realCoreStream() : undefined) {
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
   const message = { conversation, id: 'physical' };
   const receipt = { status: 'sent' as const, parts: [{ message }], message };
@@ -71,25 +72,28 @@ async function runRootTurn(mode: Mode, real = mode === 'real-stream' ? realCoreS
     contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }), setDeferredToolSnapshot: async () => undefined },
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'), activeBinding: { providerAlias: 'provider', model: 'model' },
     toldLedger: { record: vi.fn(), renderBlocks: () => [] }, finalizeActiveTurn: vi.fn() };
-  const output = [{ type: 'message' as const, segments: [text(MARKED)] }];
+  const marked = answer.marked;
+  const output = [{ type: 'message' as const, segments: [text(marked)] }];
   const engine = createFullAgentTurnEngine({ host: host as never,
     core: { runText(input: AgentLoopTurnInput) { return (async function* () {
       let phaseId: string | undefined;
       if (mode === 'real-stream') {
         // The model is still writing: an intermediate update reaches the platform before the marker is complete.
-        input.replyStream!.update(snapshotOf('这是一只橘猫。 `[[no_', false));
-        await vi.waitFor(() => expect(real!.frames.length, JSON.stringify(input.replyStream!.receipt)).toBeGreaterThan(0));
+        input.replyStream!.update(snapshotOf(answer.partial, false));
+        if (answer.partial.trim() !== '[[no_') {
+          await vi.waitFor(() => expect(real!.frames.length, JSON.stringify(input.replyStream!.receipt)).toBeGreaterThan(0));
+        }
       }
       if ((mode === 'phase-stream' || mode === 'phase-send') && input.replyPhases) {
         const phase = input.replyPhases.open(); phaseId = phase.id;
-        await input.replyPhases.settle({ id: phase.id, reply: MARKED, output,
-          ...(mode === 'phase-stream' ? { run: new ReplyStreamRun(phase.stream!), snapshot: snapshotOf(MARKED) } : {}) });
+        await input.replyPhases.settle({ id: phase.id, reply: marked, output,
+          ...(mode === 'phase-stream' ? { run: new ReplyStreamRun(phase.stream!), snapshot: snapshotOf(marked) } : {}) });
       }
       yield { type: 'turn_end' as const, output, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
-      return { reply: MARKED, output, usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      return { reply: marked, output, usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
         path: 'chat' as const, iterations: 1, model: 'model', toolCalls: [], projectConversation: async () => undefined,
         ...(phaseId ? { replyPhaseId: phaseId } : {}),
-        ...(mode === 'progressive' || mode === 'real-stream' ? { progressive: { run: new ReplyStreamRun(input.replyStream!), snapshot: snapshotOf(MARKED) } } : {}) };
+        ...(mode === 'progressive' || mode === 'real-stream' ? { progressive: { run: new ReplyStreamRun(input.replyStream!), snapshot: snapshotOf(marked) } } : {}) };
     })(); } } as never,
     sessionSystem: { prepareIngressTurn: async () => ({ sessionKey: turn.session.key, userId: 'user', sessionId: 'session', isNewSession: false,
       turnUser: { rawContent: 'hello', promptMessages: [createUserMessage('hello')] } }), touchAfterTurn: async () => undefined } as never,
@@ -102,7 +106,7 @@ async function runRootTurn(mode: Mode, real = mode === 'real-stream' ? realCoreS
     const step = await stream.next();
     if (step.done) { await step.value.project(); break; }
   }
-  return { native, send, frames: real?.frames ?? [] };
+  return { native, send, frames: real?.frames ?? [], toldLedger: host.toldLedger };
 }
 
 describe('root turn answers drop [[no_reply]] (#1250 第 56 批)', () => {
@@ -121,7 +125,17 @@ describe('root turn answers drop [[no_reply]] (#1250 第 56 批)', () => {
     expect(frames.at(-1)).toBe('这是一只橘猫。 ');
     // The finish appends to what the update published: no stream_prefix_changed, the answer counts as told.
     expect(native.receipt).toMatchObject({ status: 'sent' });
-    expect(replied).toHaveBeenCalledWith('这是一只橘猫。 ');
+    // What the human was told is recorded without the space the stripped marker left behind.
+    expect(replied).toHaveBeenCalledWith('这是一只橘猫。');
+  });
+
+  it('sends nothing through a real core stream for whitespace and a marker alone', async () => {
+    const { native, frames, toldLedger } = await runRootTurn('real-stream', { marked: '\n[[no_reply]]', partial: '\n[[no_' });
+    // No whitespace-only message: the update holds the leading newline, the finish drops it.
+    expect(frames).toEqual([]);
+    expect(native.receipt).toMatchObject({ status: 'suppressed' });
+    expect(replied).not.toHaveBeenCalled();
+    expect(toldLedger.record).not.toHaveBeenCalled();
   });
 
   it('passes the finish on unchanged when a marker was already published, so the delivery does not fail', async () => {

@@ -406,7 +406,9 @@ async function* runInteractiveTurn(
       ...(stopped ? { stopped: true } : {}),
     };
     phaseFacts.set(phase.id, facts);
-    const told = renderAgentOutput(confirmedOutput);
+    // A collaborating root turn's stream keeps the space a stripped marker leaves; what it told does not.
+    const rendered = renderAgentOutput(confirmedOutput);
+    const told = collaboration ? rendered.trim() : rendered;
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
     if (told.trim()) collaboration?.replied(told);
@@ -546,8 +548,9 @@ async function* runInteractiveTurn(
               if (!progressive && !phaseFacts.size) throw error;
               projectionError = error;
             }
-            const told = confirmedOutput ? renderAgentOutput(confirmedOutput)
+            const rendered = confirmedOutput ? renderAgentOutput(confirmedOutput)
               : delivery.status === 'sent' ? (collaboration ? stripNoReplyMarker(completion.result.reply) : completion.result.reply) : '';
+            const told = collaboration ? rendered.trim() : rendered;
             if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
             // #1250 delegate-result-double-reply: later delegated results only supplement this answer.
             // A failure line (the model request failed) is no answer: delegated results read in the turn
