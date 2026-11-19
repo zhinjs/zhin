@@ -1066,6 +1066,67 @@ describe('schedule (running Host)', () => {
     expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('zhin schedule set-agent j1 <名称>');
   });
 
+  it('describeScheduleRefusal：账号含 undefined 视为未提取；data.available 无可用名称时退回文案 (#1250 b61)', () => {
+    const refused = (status: number, body: { code?: string; error: string; data?: unknown }) =>
+      ({ ok: false as const, status, code: body.code, error: body.error, ...(body.data !== undefined ? { detail: body.data } : {}) });
+    const legacy = refused(403, { code: 'schedule_target_forbidden', error: '没有向该账号投递的权限：需要 undefined / undefined 上的 endpoint.operate' });
+    expect(describeScheduleRefusal(legacy, { kind: 'resume', id: 'j1' })?.[0]).toBe('无法恢复任务 j1：你没有权限向它的投递目标发消息');
+    expect(describeScheduleRefusal(legacy, { kind: 'add' })?.join('\n')).not.toContain('undefined');
+    const half = refused(403, { code: 'schedule_target_forbidden', error: '没有向该账号投递的权限：需要 icqq / undefined 上的 endpoint.operate' });
+    expect(describeScheduleRefusal(half, { kind: 'set-agent', id: 'j1' })?.[0]).toBe('无法修改任务 j1 的 Agent：你没有权限向它的投递目标发消息');
+    for (const available of [[], [1, null, '  ']]) {
+      expect(describeScheduleRefusal(refused(400, { code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news',
+        data: { code: 'schedule_agent_not_found', agent: 'ghost', available } }), { kind: 'add' })?.[0]).toBe('Agent 不存在：ghost。可用的 Agent：zhin、news');
+    }
+    // detail.code wins over the envelope code.
+    expect(describeScheduleRefusal(refused(403, { code: 'forbidden', error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate',
+      data: { code: 'schedule_target_forbidden' } }), { kind: 'add' })?.[0]).toBe('无法创建任务：你没有权限向投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(describeScheduleRefusal(refused(400, { code: 'schedule_agent_not_found', error: 'x', data: { code: 'invalid_argument' } }), { kind: 'add' }))
+      .toBeUndefined();
+  });
+
+  it('add 被投递目标拒绝（403）或 Agent 不存在（400）时说明原因并以 1 退出 (#1250 b61)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    stubHost(() => ({ status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '1h', '--prompt', '早报', '--target', 'icqq:bot-1:group:g1']))
+      .rejects.toThrow('process.exit:1');
+    expect(requests.map(request => new URL(request.url).pathname)).toEqual(['/api/assistant/jobs']);
+    expect(error).toHaveBeenLastCalledWith('无法创建任务：你没有权限向投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--target');
+    info.mockClear();
+    stubHost(() => ({ status: 400, body: { success: false, code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news',
+      data: { code: 'schedule_agent_not_found', agent: 'ghost', available: ['zhin', 'news'] } } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '1h', '--prompt', '早报', '--agent', 'ghost']))
+      .rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('Agent 不存在：ghost。可用的 Agent：zhin、news');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--agent <名称>');
+  });
+
+  it('set-agent 被投递目标拒绝时说明原因；--debug 额外输出错误码行 (#1250 b61)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const { setCliFlags } = await import('../src/utils/cli-flags.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    stubHost(() => ({ status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'set-agent', 'j1', 'news'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 j1 的 Agent：你没有权限向它的投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).not.toContain('错误码');
+    info.mockClear();
+    setCliFlags({ debug: true });
+    try {
+      await expect(scheduleCommand.parseAsync(['node', 'zhin', 'set-agent', 'j1', 'news'])).rejects.toThrow('process.exit:1');
+    } finally {
+      setCliFlags({ debug: false });
+    }
+    expect(info).toHaveBeenLastCalledWith('  错误码: schedule_target_forbidden（HTTP 403）');
+  });
+
   it('list 显示每个任务用的 Agent，未指定时为默认 (#1250 b52)', async () => {
     stubHost(() => ({ status: 200, body: { success: true, data: { jobs: [
       { id: 'news', enabled: false, schedule: { kind: 'solar', cron: '0 0 8 * * *' },

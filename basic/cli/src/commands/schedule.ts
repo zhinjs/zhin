@@ -62,7 +62,9 @@ export function describeScheduleRefusal(result: HostFetchResult<unknown>, action
   const code = typeof detail.code === 'string' ? detail.code : result.code;
   const message = result.error ?? '';
   if (code === 'schedule_target_forbidden') {
-    const account = /需要 (.+?) 上的 endpoint\.operate/u.exec(message)?.[1];
+    // An older Host spelled a target without an account as `undefined / undefined`: not an account.
+    const extracted = /需要 (.+?) 上的 endpoint\.operate/u.exec(message)?.[1];
+    const account = extracted && !/\bundefined\b/u.test(extracted) ? extracted : undefined;
     const need = account ? `（需要 ${account} 上的 endpoint.operate）` : '';
     if (action.kind === 'resume') {
       return [
@@ -84,7 +86,9 @@ export function describeScheduleRefusal(result: HostFetchResult<unknown>, action
   const parsed = AGENT_NOT_FOUND.exec(message);
   if (code !== 'schedule_agent_not_found' && !parsed) return undefined;
   const agent = typeof detail.agent === 'string' && detail.agent.trim() ? detail.agent.trim() : parsed?.[1];
-  const available = Array.isArray(detail.available) ? names(detail.available) : names(parsed?.[2]?.split('、'));
+  // `data.available` with no usable name (empty or not strings): fall back to the message.
+  const fromDetail = names(detail.available);
+  const available = fromDetail.length > 0 ? fromDetail : names(parsed?.[2]?.split('、'));
   const head = agent ? `Agent 不存在：${agent}` : 'Agent 不存在';
   if (available.length === 0) {
     return [
@@ -109,7 +113,9 @@ async function requireOk<T>(result: HostFetchResult<T>, action?: ScheduleWriteAc
     const [first, ...hints] = refusal;
     logger.error(first!);
     for (const hint of hints) logger.info(`  ${hint}`);
-    if (isCliDebug() && result.code) logger.info(`  错误码: ${result.code}（HTTP ${result.status}）`);
+    const detail = result.detail && typeof result.detail === 'object' ? result.detail as Record<string, unknown> : {};
+    const code = typeof detail.code === 'string' ? detail.code : result.code;
+    if (isCliDebug() && code) logger.info(`  错误码: ${code}（HTTP ${result.status}）`);
   } else if (result.status === 404 && result.error === 'assistant.enabled is false') {
     // Newer instances name the reason in `data` (ConsoleFeatureDisabled, #1250).
     const disabled = result.detail;

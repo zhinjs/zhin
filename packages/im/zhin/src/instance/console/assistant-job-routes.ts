@@ -165,8 +165,13 @@ function agentErrorBody(error: AssistantJobInputError): Record<string, unknown> 
 
 function targetForbiddenBody(target: unknown): Record<string, unknown> {
   const scene = record(record(target).scene);
+  const adapter = typeof scene.platform === 'string' ? scene.platform : '';
+  const endpoint = typeof scene.endpointKey === 'string' ? scene.endpointKey : '';
+  // Same wording as the Console RPC side (`deliveryForbidden`): a target without an account names none.
   return { success: false, code: 'schedule_target_forbidden',
-    error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` };
+    error: adapter && endpoint
+      ? `没有向该账号投递的权限：需要 ${adapter} / ${endpoint} 上的 endpoint.operate`
+      : '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' };
 }
 
 /** Write side of `/assistant/jobs`, used by `zhin schedule`; the live scheduler owns persistence. */
