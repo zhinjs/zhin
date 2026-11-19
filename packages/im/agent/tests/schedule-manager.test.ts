@@ -190,6 +190,18 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
       expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: 'deleted', agent_missing: true });
       expect(result.persistent[1]).not.toHaveProperty('agent_missing');
     });
+
+    it('schedule_list does not name a removed Agent to anyone but an owner', async () => {
+      const value = { ...manager(async () => [
+        { id: 'gone', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'deleted' },
+          notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'qq', endpointKey: 'bot', sceneId: 'u1', kind: 'private' } } },
+          createdAt: 1, updatedAt: 1, state: {} },
+      ]), agents: () => ['zhin', 'news'] };
+      const member = { ...context, principal: { subjectId: 'u2', roles: ['user'] } } as ToolExecutionContext;
+      const result = await tool(value, 'schedule_list').execute({}, member) as { persistent: Record<string, unknown>[] };
+      expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: '其他 Agent', agent_missing: true });
+      expect(JSON.stringify(result.persistent[0])).not.toContain('deleted');
+    });
   });
 });
 
@@ -278,12 +290,14 @@ describe('schedule job ownership in chat (#1250 b55)', () => {
       expect(await run('mine', alice)).toEqual({ success: true });
       expect(await run('bobs', owner)).toEqual({ success: true });
       const refused = await run('bobs', alice);
-      expect(refused).toEqual({ error: '这不是你创建的任务，只有任务的创建者或所有者可以管理它' });
+      expect(refused).toEqual({ error: '未找到你能管理的任务：bobs' });
       expect(JSON.stringify(refused)).not.toContain('secret');
-      expect((await run('mine', aliceElsewhere)).error).toContain('不是你创建的任务');
-      expect((await run('bobs', groupAdmin)).error).toContain('不是你创建的任务');
+      // A missing job and someone else's read the same to a non-owner.
+      expect(await run('ghost', alice)).toEqual({ error: '未找到你能管理的任务：ghost' });
+      expect((await run('mine', aliceElsewhere)).error).toBe('未找到你能管理的任务：mine');
+      expect((await run('bobs', groupAdmin)).error).toBe('未找到你能管理的任务：bobs');
       // Jobs created outside chat (Console, CLI) belong to the owner only.
-      expect((await run('console', alice)).error).toContain('不是你创建的任务');
+      expect((await run('console', alice)).error).toBe('未找到你能管理的任务：console');
       expect(await run('console', owner)).toEqual({ success: true });
       expect(await run('ghost', owner)).toEqual({ error: '未找到' });
       expect(engine[engineMethod].mock.calls.map(call => call[0])).toEqual(['mine', 'bobs', 'console']);
@@ -296,7 +310,7 @@ describe('schedule job ownership in chat (#1250 b55)', () => {
       expect(result.error).toContain('assistant.profile.file');
       // Someone else is only told it is not theirs.
       const other = await tool(value, `schedule_${operation}`).execute({ id: 'assistant-profile-morning-brief' }, bob) as Record<string, unknown>;
-      expect(other.error).toContain('不是你创建的任务');
+      expect(other.error).toBe('未找到你能管理的任务：assistant-profile-morning-brief');
       expect(engine[engineMethod]).not.toHaveBeenCalled();
     });
   }
@@ -313,7 +327,66 @@ describe('schedule job ownership in chat (#1250 b55)', () => {
     expect(await listIds(value, alice)).toEqual([added.id]);
     expect(await listIds(value, bob)).toEqual([]);
     expect(await tool(value, 'schedule_pause').execute({ id: added.id }, alice)).toEqual({ success: true });
-    expect((await tool(value, 'schedule_pause').execute({ id: added.id }, bob) as Record<string, unknown>).error).toContain('不是你创建的任务');
+    expect((await tool(value, 'schedule_pause').execute({ id: added.id }, bob) as Record<string, unknown>).error).toBe(`未找到你能管理的任务：${added.id}`);
+  });
+
+  describe('creators outside IM are identified by nobody but an owner', () => {
+    // Shared or self-reported subject ids: every A2A caller is `a2a-client`, every MCP caller
+    // `mcp-client`, a due run `schedule`; a remote mail peer reports its own id.
+    const nonIm = (kind: string, subjectId: string) => ({
+      ...context, origin: { kind }, principal: { subjectId, roles: ['user'] },
+    }) as unknown as ToolExecutionContext;
+    const a2a = nonIm('a2a', 'a2a-client');
+    const mcp = nonIm('mcp', 'mcp-client');
+    const due = nonIm('schedule', 'schedule');
+    const offIm = (id: string, userId: string) => job(id, { createdBy: { userId, roles: ['user'] } });
+    const value = {
+      scheduleFeature: { getStatus: () => [] },
+      engine: {
+        listJobs: async () => [offIm('by-a2a', 'a2a-client'), offIm('by-mcp', 'mcp-client'), offIm('by-run', 'schedule')],
+        removeJob: vi.fn(async () => true), pauseJob: vi.fn(async () => true), resumeJob: vi.fn(async () => true),
+      },
+    } as unknown as ScheduleManager;
+
+    it('lists them to an owner only', async () => {
+      expect(await listIds(value, owner)).toEqual(['by-a2a', 'by-mcp', 'by-run']);
+      for (const who of [a2a, mcp, due]) expect(await listIds(value, who)).toEqual([]);
+      // An IM user whose id happens to match is not their creator either.
+      expect(await listIds(value, caller('a2a-client', ['user']))).toEqual([]);
+    });
+
+    it('lets nobody but an owner change them, not even the same non-IM subject', async () => {
+      for (const [id, who] of [['by-a2a', a2a], ['by-a2a', mcp], ['by-mcp', mcp], ['by-mcp', a2a], ['by-run', due], ['by-run', a2a]] as const) {
+        expect(await tool(value, 'schedule_pause').execute({ id }, who)).toEqual({ error: `未找到你能管理的任务：${id}` });
+      }
+      expect(await tool(value, 'schedule_pause').execute({ id: 'by-a2a' }, caller('a2a-client', ['user'])))
+        .toEqual({ error: '未找到你能管理的任务：by-a2a' });
+      expect(await tool(value, 'schedule_pause').execute({ id: 'by-a2a' }, owner)).toEqual({ success: true });
+    });
+
+    it('an IM creator is not matched from a non-IM origin with the same subject id', async () => {
+      const imJob = { ...value, engine: { ...(value.engine as object), listJobs: async () => [job('im', { createdBy: createdBy('alice') })] } } as unknown as ScheduleManager;
+      expect(await listIds(imJob, nonIm('a2a', 'alice'))).toEqual([]);
+      expect(await tool(imJob, 'schedule_remove').execute({ id: 'im' }, nonIm('mcp', 'alice'))).toEqual({ error: '未找到你能管理的任务：im' });
+    });
+  });
+
+  it('the same user id on another platform, or another endpoint of the same platform, is not the creator', async () => {
+    const onPlatform = (adapter: string, endpoint: string) => ({
+      ...context,
+      origin: { kind: 'im', platform: adapter, endpoint, scope: 'group', sceneId: 'g1', conversation: conversation(adapter, endpoint, 'g1') },
+      principal: { subjectId: 'alice', roles: ['user'] },
+    }) as ToolExecutionContext;
+    const value = {
+      scheduleFeature: { getStatus: () => [] },
+      engine: { listJobs: async () => [job('mine', { createdBy: createdBy('alice') })], pauseJob: vi.fn(async () => true) },
+    } as unknown as ScheduleManager;
+    expect(await listIds(value, onPlatform('qq', 'bot'))).toEqual(['mine']);
+    for (const who of [onPlatform('telegram', 'bot'), onPlatform('qq', 'other-bot')]) {
+      expect(await listIds(value, who)).toEqual([]);
+      expect(await tool(value, 'schedule_pause').execute({ id: 'mine' }, who)).toEqual({ error: '未找到你能管理的任务：mine' });
+    }
+    expect(await tool(value, 'schedule_pause').execute({ id: 'mine' }, onPlatform('qq', 'bot'))).toEqual({ success: true });
   });
 });
 

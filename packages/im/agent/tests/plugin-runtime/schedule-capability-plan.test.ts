@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
-import { createScheduleCapabilityPlan, isEmptyExecutionPlan } from '../../src/plugin-runtime/schedule-capability-plan.js';
+import { createScheduleCapabilityPlan, isEmptyExecutionPlan, isScheduleManagementTool } from '../../src/plugin-runtime/schedule-capability-plan.js';
 import { describeUnattendedApproval } from '../../src/plugin-runtime/turn-engine-helpers.js';
 import { createAutoApprovalPort, ApprovalReviewAgent } from '../../src/session/approval-review-agent.js';
 
@@ -100,5 +100,17 @@ describe('schedule_preview runs offer no schedule_* tool (#1250 b55)', () => {
     const qualified = tool('agent__tools__schedule_add', '添加调度任务 提醒', { keywords: ['提醒'] });
     const plan = createScheduleCapabilityPlan({ prompt: request, tools: [qualified, reminder], skills: [], preview: true });
     expect(plan.allTools.map(t => t.name)).toEqual(['send_reminder']);
+  });
+
+  it('keeps third-party tools that merely start with schedule_', () => {
+    const meeting = tool('mcp__srv__schedule_meeting', '安排会议 提醒 定时', { keywords: ['提醒', '会议'] });
+    const plan = createScheduleCapabilityPlan({ prompt: request, tools: [meeting, scheduleAdd, reminder], skills: [], preview: true });
+    expect(plan.allTools.map(t => t.name)).toEqual(['mcp__srv__schedule_meeting', 'send_reminder']);
+    expect(isScheduleManagementTool('mcp__srv__schedule_meeting')).toBe(false);
+    expect(isScheduleManagementTool('schedule_meeting')).toBe(false);
+    for (const name of ['schedule_list', 'schedule_add', 'schedule_preview', 'schedule_remove', 'schedule_pause', 'schedule_resume']) {
+      expect(isScheduleManagementTool(name)).toBe(true);
+      expect(isScheduleManagementTool(`plugin__tools__${name}`)).toBe(true);
+    }
   });
 });

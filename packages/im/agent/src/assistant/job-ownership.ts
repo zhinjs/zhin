@@ -3,6 +3,11 @@
  * `schedule_remove` / `schedule_pause` / `schedule_resume`). An owner sees and manages every job;
  * anyone else only the jobs they created themselves, and sees, but does not manage, the jobs that
  * deliver to the conversation they are speaking in. Group admins get no wider access.
+ *
+ * Creatorship is only recognised between IM accounts: a creator or a caller without a recorded
+ * chat (A2A, MCP, a due run, remote mail) is identified by a shared or self-reported `subjectId`
+ * (`a2a-client`, `mcp-client`, `schedule`, a peer id), so such jobs belong to nobody here and only
+ * an owner manages them.
  */
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import { scheduleJobCreatorFromPrincipal } from './job-creator.js';
@@ -15,20 +20,20 @@ export function isScheduleOwner(caller: Caller): boolean {
   return caller.principal.roles.includes('owner');
 }
 
-function sameChat(a: ScheduleJobCreator['chat'], b: ScheduleJobCreator['chat']): boolean {
-  if (!a || !b) return !a && !b;
+function sameChat(a: NonNullable<ScheduleJobCreator['chat']>, b: NonNullable<ScheduleJobCreator['chat']>): boolean {
   return a.endpointId === b.endpointId && a.conversation.endpoint.adapter === b.conversation.endpoint.adapter;
 }
 
 /**
- * The job was created by the caller: the same `userId` and, as `scheduleJobCreatorFromPrincipal`
- * records it, the same account (platform and endpoint) — or, on both sides, none recorded. A job
- * without `createdBy` (Console, CLI, Profile) belongs to nobody here.
+ * The job was created by the caller: the same `userId` on the same IM account (platform and
+ * endpoint), as `scheduleJobCreatorFromPrincipal` records it. A job without `createdBy` (Console,
+ * CLI, Profile) or without a recorded chat (non-IM origin), and a caller outside IM, match nobody.
  */
 export function isScheduleJobCreator(job: Pick<ScheduleJob, 'createdBy'>, caller: Caller): boolean {
   const creator = job.createdBy;
-  if (!creator) return false;
+  if (!creator?.chat) return false;
   const current = scheduleJobCreatorFromPrincipal(caller.principal, caller.origin);
+  if (!current.chat) return false;
   return creator.userId === current.userId && sameChat(creator.chat, current.chat);
 }
 
@@ -48,8 +53,13 @@ export function scheduleJobVisibleTo(job: ScheduleJob, caller: Caller): boolean 
   return isScheduleOwner(caller) || isScheduleJobCreator(job, caller) || deliversToCurrentConversation(job, caller);
 }
 
-/** Refusal of a chat job change, without revealing anything about the job. */
-export const SCHEDULE_JOB_NOT_YOURS = '这不是你创建的任务，只有任务的创建者或所有者可以管理它';
+/**
+ * Refusal of a chat job change to a non-owner: the same words whether the job does not exist or
+ * is someone else's, so the reply reveals nothing about the job (not even that it exists).
+ */
+export function scheduleJobNotManageable(id: string): string {
+  return `未找到你能管理的任务：${id}`;
+}
 
 /** A profile routine is re-declared from the Assistant Profile on every start. */
 export function profileJobChatMessage(id: string): string {
@@ -62,7 +72,7 @@ export function profileJobChatMessage(id: string): string {
  * routine; anyone else only a job they created. `undefined`: allowed.
  */
 export function scheduleJobChangeRefusal(job: ScheduleJob, caller: Caller): string | undefined {
-  if (!isScheduleOwner(caller) && !isScheduleJobCreator(job, caller)) return SCHEDULE_JOB_NOT_YOURS;
+  if (!isScheduleOwner(caller) && !isScheduleJobCreator(job, caller)) return scheduleJobNotManageable(job.id);
   if (job.source === 'profile') return profileJobChatMessage(job.id);
   return undefined;
 }

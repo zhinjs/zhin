@@ -3,6 +3,7 @@ import type { SkillDescriptor } from '@zhin.js/skill';
 import type { ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ToolCapability } from './capability-ingress.js';
 import { capabilityAsAgentTool } from './deferred-capability-plan.js';
+import { RESERVED_TOOL_NAMES } from '../reserved-tools.js';
 
 const UNATTENDED_FORBIDDEN_TOOLS = new Set([
   'discover', 'load_tool', 'load_skill', 'ask_user',
@@ -30,6 +31,11 @@ export function isEmptyExecutionPlan(plan: Readonly<ScheduleJobExecutionPlan> | 
   return plan !== undefined && !(plan.tools?.length) && !(plan.skills?.length);
 }
 
+/** The built-in schedule tools (`reserved-tools.ts`); a third-party `schedule_meeting` is not one. */
+const SCHEDULE_MANAGEMENT_TOOLS: ReadonlySet<string> = new Set(
+  RESERVED_TOOL_NAMES.filter((name) => name.startsWith('schedule_')),
+);
+
 /**
  * #1250 b55: a `schedule_preview` run gets no `schedule_*` tool. A model that passes a whole
  * request ("remind me at 8 tomorrow to drink water") to the preview would otherwise call
@@ -37,8 +43,9 @@ export function isEmptyExecutionPlan(plan: Readonly<ScheduleJobExecutionPlan> | 
  * was not created although they allowed it. The preview only tries out what runs when the job is due.
  */
 export function isScheduleManagementTool(name: string): boolean {
-  return localName(name).startsWith('schedule_');
+  return SCHEDULE_MANAGEMENT_TOOLS.has(localName(name));
 }
+
 
 export function createScheduleCapabilityPlan(input: {
   readonly prompt: string;
