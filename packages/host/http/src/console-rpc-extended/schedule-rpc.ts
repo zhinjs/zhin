@@ -171,7 +171,7 @@ export async function addCron(
   }
   const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
   const agent = scheduleAgentField(d.agent, engine);
-  if ('error' in agent) return { error: agent.error };
+  if ('error' in agent) return agent;
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
   const forbidden = deliveryForbidden(target, ctx);
@@ -199,17 +199,25 @@ const DEFAULT_AGENT = 'zhin';
 
 /**
  * `agent` of a job (#1250 b52): absent / `null` / empty = the default Agent; otherwise one of the
- * engine's configured Agents, else an error naming them. An engine without `listAgents` (older
- * Agent package) only accepts the default.
+ * engine's configured Agents, else an error naming them, with
+ * `data: { code: 'schedule_agent_not_found', agent, available }` (#1250 b55). An engine without
+ * `listAgents` (older Agent package) only accepts the default.
  */
-function scheduleAgentField(value: unknown, engine: ConsoleScheduleEngine): { agent?: string } | { error: string } {
+function scheduleAgentField(
+  value: unknown,
+  engine: ConsoleScheduleEngine,
+): { agent?: string } | { error: string; data?: Record<string, unknown> } {
   if (value === undefined || value === null) return {};
   if (typeof value !== 'string') return { error: 'agent 必须是 Agent 名称' };
   const name = value.trim();
   if (!name) return {};
   const available = engine.listAgents?.() ?? [DEFAULT_AGENT];
   if (available.includes(name)) return { agent: name };
-  return { error: `Agent 不存在：${name}。可用的 Agent：${(available.length ? available : [DEFAULT_AGENT]).join('、')}` };
+  const listed = available.length ? [...available] : [DEFAULT_AGENT];
+  return {
+    error: `Agent 不存在：${name}。可用的 Agent：${listed.join('、')}`,
+    data: { code: 'schedule_agent_not_found', agent: name, available: listed },
+  };
 }
 
 /** `cron:set-agent` (#1250 b52): `{ id, agent }`, `agent: null` = back to the default Agent. */
@@ -224,7 +232,7 @@ export async function setCronAgent(
   if (!id) return { error: 'id is required' };
   if (!('agent' in d)) return { error: 'agent is required (null clears it)' };
   const agent = scheduleAgentField(d.agent, engine);
-  if ('error' in agent) return { error: agent.error };
+  if ('error' in agent) return agent;
   try {
     const existing = (await engine.listJobs()).find(job => job.id === id);
     if (!existing) return { error: `任务不存在: ${id}` };
@@ -255,6 +263,16 @@ export async function mutateCron(
   const id = String(d.id ?? '').trim();
   if (!id) return { error: 'id is required' };
   try {
+    if (type === 'cron:resume') {
+      // #1250 b55: a resumed job delivers to its target again on every run: the same
+      // `endpoint.operate` `cron:add` / `cron:set-agent` require for that target. Pause and remove
+      // stop deliveries and need `ops.schedule.write` only.
+      const existing = (await engine.listJobs()).find(job => job.id === id);
+      if (!existing) return { error: `任务不存在: ${id}` };
+      const notify = existing.notify as { channel?: unknown; target?: unknown } | undefined;
+      const forbidden = deliveryForbidden(notify?.channel === 'im' ? notify.target : undefined, ctx);
+      if (forbidden) return forbidden;
+    }
     const ok = type === 'cron:remove'
       ? await engine.removeJob(id)
       : type === 'cron:pause'

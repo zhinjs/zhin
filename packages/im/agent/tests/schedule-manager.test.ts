@@ -175,7 +175,7 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
         { id: 'a', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'news' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
         { id: 'b', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
       ]);
-      const result = await tool(value, 'schedule_list').execute({}, context) as { persistent: Record<string, unknown>[] };
+      const result = await inTurn(['news'], () => tool(value, 'schedule_list').execute({}, context)) as { persistent: Record<string, unknown>[] };
       expect(result.persistent[0]).toMatchObject({ id: 'a', agent: 'news' });
       expect(result.persistent[1]).not.toHaveProperty('agent');
       expect(result.persistent[0]).not.toHaveProperty('agent_missing');
@@ -190,5 +190,215 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
       expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: 'deleted', agent_missing: true });
       expect(result.persistent[1]).not.toHaveProperty('agent_missing');
     });
+
+    it('schedule_list does not name a removed Agent to anyone but an owner', async () => {
+      const value = { ...manager(async () => [
+        { id: 'gone', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'deleted' },
+          notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'qq', endpointKey: 'bot', sceneId: 'u1', kind: 'private' } } },
+          createdAt: 1, updatedAt: 1, state: {} },
+      ]), agents: () => ['zhin', 'news'] };
+      const member = { ...context, principal: { subjectId: 'u2', roles: ['user'] } } as ToolExecutionContext;
+      const result = await tool(value, 'schedule_list').execute({}, member) as { persistent: Record<string, unknown>[] };
+      expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: '其他 Agent', agent_missing: true });
+      expect(JSON.stringify(result.persistent[0])).not.toContain('deleted');
+    });
+  });
+});
+
+describe('schedule job ownership in chat (#1250 b55)', () => {
+  const conversation = (adapter: string, endpoint: string, id: string, kind: 'private' | 'group' = 'group') =>
+    ({ endpoint: { adapter, id: endpoint }, kind, id });
+  const caller = (subjectId: string, roles: string[], sceneId = 'g1', endpoint = 'bot') => ({
+    ...context,
+    origin: { kind: 'im', platform: 'qq', endpoint, scope: 'group', sceneId, conversation: conversation('qq', endpoint, sceneId) },
+    principal: { subjectId, roles },
+  }) as ToolExecutionContext;
+  const owner = caller('boss', ['owner', 'admin', 'trusted']);
+  const alice = caller('alice', ['user']);
+  const aliceElsewhere = caller('alice', ['user'], 'g1', 'other-bot');
+  const bob = caller('bob', ['user'], 'g2');
+  const groupAdmin = caller('carol', ['admin', 'trusted'], 'g2');
+  const imNotify = (sceneId: string) => ({ channel: 'im', target: { channel: 'im', scene: { platform: 'qq', endpointKey: 'bot', sceneId, kind: 'group' } } });
+  const createdBy = (userId: string, endpoint = 'bot', sceneId = 'g1') => ({ userId, roles: ['user'], chat: { conversation: conversation('qq', endpoint, sceneId), endpointId: endpoint } });
+  const job = (id: string, extra: Record<string, unknown>) => ({
+    id, enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: `secret ${id}` },
+    notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {}, ...extra,
+  });
+  const rows = () => [
+    job('mine', { createdBy: createdBy('alice'), notify: imNotify('g1') }),
+    job('bobs', { createdBy: createdBy('bob', 'bot', 'g2'), notify: imNotify('g1') }),
+    job('bobs-quiet', { createdBy: createdBy('bob', 'bot', 'g2') }),
+    job('console', {}),
+    job('cli-to-g2', { notify: imNotify('g2') }),
+    job('assistant-profile-morning-brief', { source: 'profile', notify: imNotify('g2') }),
+  ];
+  function engineManager() {
+    const engine = {
+      listJobs: vi.fn(async () => rows()),
+      removeJob: vi.fn(async () => true),
+      pauseJob: vi.fn(async () => true),
+      resumeJob: vi.fn(async () => true),
+    };
+    const value = { scheduleFeature: { getStatus: () => [] }, engine } as unknown as ScheduleManager;
+    return { engine, value };
+  }
+  const listIds = async (value: ScheduleManager, who: ToolExecutionContext) =>
+    ((await tool(value, 'schedule_list').execute({}, who)) as { persistent: Array<{ id: string }> }).persistent.map(row => row.id);
+
+  it('schedule_list: an owner sees every job', async () => {
+    const { value } = engineManager();
+    expect(await listIds(value, owner)).toEqual(rows().map(row => row.id));
+  });
+
+  it('schedule_list: anyone else sees their own jobs and those delivering to this conversation', async () => {
+    const { value } = engineManager();
+    // alice in g1: her own job, and bob's job that delivers to g1; not bob's quiet job, not Console / CLI / profile jobs elsewhere.
+    expect(await listIds(value, alice)).toEqual(['mine', 'bobs']);
+    // bob in g2: his own jobs (wherever they deliver), and the CLI job and profile routine delivering to g2.
+    expect(await listIds(value, bob)).toEqual(['bobs', 'bobs-quiet', 'cli-to-g2', 'assistant-profile-morning-brief']);
+    // The same user id on another account is somebody else.
+    expect(await listIds(value, aliceElsewhere)).toEqual([]);
+    // Group admins get no wider view.
+    expect(await listIds(value, groupAdmin)).toEqual(['cli-to-g2', 'assistant-profile-morning-brief']);
+  });
+
+  it('schedule_list names only Agents visible in this turn (plus the default), others as 其他 Agent', async () => {
+    const value = {
+      scheduleFeature: { getStatus: () => [] },
+      engine: { listJobs: async () => [
+        job('news', { action: { kind: 'agent', prompt: 'p', agent: 'news' } }),
+        job('hidden', { action: { kind: 'agent', prompt: 'p', agent: 'secret' } }),
+        job('zhin', { action: { kind: 'agent', prompt: 'p', agent: 'zhin' } }),
+      ] },
+      agents: () => ['zhin', 'news', 'secret'],
+    } as unknown as ScheduleManager;
+    const result = await runWithAgentTurnConfiguration({ availableAgents: ['news'] },
+      () => tool(value, 'schedule_list').execute({}, owner)) as { persistent: Record<string, unknown>[] };
+    expect(result.persistent[0]).toMatchObject({ id: 'news', agent: 'news' });
+    expect(result.persistent[1]).toMatchObject({ id: 'hidden', agent: '其他 Agent', agent_hidden: true });
+    expect(JSON.stringify(result.persistent[1])).not.toContain('secret');
+    expect(result.persistent[2]).toMatchObject({ id: 'zhin', agent: 'zhin' });
+    expect(result.persistent[2]).not.toHaveProperty('agent_hidden');
+  });
+
+  for (const operation of ['remove', 'pause', 'resume'] as const) {
+    const engineMethod = `${operation}Job` as 'removeJob' | 'pauseJob' | 'resumeJob';
+
+    it(`schedule_${operation}: the creator and an owner may; others, group admins included, may not`, async () => {
+      const { engine, value } = engineManager();
+      const run = (id: string, who: ToolExecutionContext) => tool(value, `schedule_${operation}`).execute({ id }, who) as Promise<Record<string, unknown>>;
+      expect(await run('mine', alice)).toEqual({ success: true });
+      expect(await run('bobs', owner)).toEqual({ success: true });
+      const refused = await run('bobs', alice);
+      expect(refused).toEqual({ error: '未找到你能管理的任务：bobs' });
+      expect(JSON.stringify(refused)).not.toContain('secret');
+      // A missing job and someone else's read the same to a non-owner.
+      expect(await run('ghost', alice)).toEqual({ error: '未找到你能管理的任务：ghost' });
+      expect((await run('mine', aliceElsewhere)).error).toBe('未找到你能管理的任务：mine');
+      expect((await run('bobs', groupAdmin)).error).toBe('未找到你能管理的任务：bobs');
+      // Jobs created outside chat (Console, CLI) belong to the owner only.
+      expect((await run('console', alice)).error).toBe('未找到你能管理的任务：console');
+      expect(await run('console', owner)).toEqual({ success: true });
+      expect(await run('ghost', owner)).toEqual({ error: '未找到' });
+      expect(engine[engineMethod].mock.calls.map(call => call[0])).toEqual(['mine', 'bobs', 'console']);
+    });
+
+    it(`schedule_${operation}: a profile routine is changed in the Profile file, even by an owner`, async () => {
+      const { engine, value } = engineManager();
+      const result = await tool(value, `schedule_${operation}`).execute({ id: 'assistant-profile-morning-brief' }, owner) as Record<string, unknown>;
+      expect(result.error).toContain('assistant.profile.yml');
+      expect(result.error).toContain('assistant.profile.file');
+      // Someone else is only told it is not theirs.
+      const other = await tool(value, `schedule_${operation}`).execute({ id: 'assistant-profile-morning-brief' }, bob) as Record<string, unknown>;
+      expect(other.error).toBe('未找到你能管理的任务：assistant-profile-morning-brief');
+      expect(engine[engineMethod]).not.toHaveBeenCalled();
+    });
+  }
+
+  it('a job created through schedule_add is managed by its creator afterwards', async () => {
+    const stored: Record<string, unknown>[] = [];
+    const engine = {
+      addJob: vi.fn(async (input: Record<string, unknown>) => { const full = { ...input, createdAt: 1, updatedAt: 1, state: {} }; stored.push(full); return full; }),
+      listJobs: vi.fn(async () => stored),
+      pauseJob: vi.fn(async () => true),
+    };
+    const value = { scheduleFeature: { getStatus: () => [] }, engine } as unknown as ScheduleManager;
+    const added = await tool(value, 'schedule_add').execute({ delay_minutes: 5, prompt: 'p', notify_channel: 'silent' }, alice) as { id: string };
+    expect(await listIds(value, alice)).toEqual([added.id]);
+    expect(await listIds(value, bob)).toEqual([]);
+    expect(await tool(value, 'schedule_pause').execute({ id: added.id }, alice)).toEqual({ success: true });
+    expect((await tool(value, 'schedule_pause').execute({ id: added.id }, bob) as Record<string, unknown>).error).toBe(`未找到你能管理的任务：${added.id}`);
+  });
+
+  describe('creators outside IM are identified by nobody but an owner', () => {
+    // Shared or self-reported subject ids: every A2A caller is `a2a-client`, every MCP caller
+    // `mcp-client`, a due run `schedule`; a remote mail peer reports its own id.
+    const nonIm = (kind: string, subjectId: string) => ({
+      ...context, origin: { kind }, principal: { subjectId, roles: ['user'] },
+    }) as unknown as ToolExecutionContext;
+    const a2a = nonIm('a2a', 'a2a-client');
+    const mcp = nonIm('mcp', 'mcp-client');
+    const due = nonIm('schedule', 'schedule');
+    const offIm = (id: string, userId: string) => job(id, { createdBy: { userId, roles: ['user'] } });
+    const value = {
+      scheduleFeature: { getStatus: () => [] },
+      engine: {
+        listJobs: async () => [offIm('by-a2a', 'a2a-client'), offIm('by-mcp', 'mcp-client'), offIm('by-run', 'schedule')],
+        removeJob: vi.fn(async () => true), pauseJob: vi.fn(async () => true), resumeJob: vi.fn(async () => true),
+      },
+    } as unknown as ScheduleManager;
+
+    it('lists them to an owner only', async () => {
+      expect(await listIds(value, owner)).toEqual(['by-a2a', 'by-mcp', 'by-run']);
+      for (const who of [a2a, mcp, due]) expect(await listIds(value, who)).toEqual([]);
+      // An IM user whose id happens to match is not their creator either.
+      expect(await listIds(value, caller('a2a-client', ['user']))).toEqual([]);
+    });
+
+    it('lets nobody but an owner change them, not even the same non-IM subject', async () => {
+      for (const [id, who] of [['by-a2a', a2a], ['by-a2a', mcp], ['by-mcp', mcp], ['by-mcp', a2a], ['by-run', due], ['by-run', a2a]] as const) {
+        expect(await tool(value, 'schedule_pause').execute({ id }, who)).toEqual({ error: `未找到你能管理的任务：${id}` });
+      }
+      expect(await tool(value, 'schedule_pause').execute({ id: 'by-a2a' }, caller('a2a-client', ['user'])))
+        .toEqual({ error: '未找到你能管理的任务：by-a2a' });
+      expect(await tool(value, 'schedule_pause').execute({ id: 'by-a2a' }, owner)).toEqual({ success: true });
+    });
+
+    it('an IM creator is not matched from a non-IM origin with the same subject id', async () => {
+      const imJob = { ...value, engine: { ...(value.engine as object), listJobs: async () => [job('im', { createdBy: createdBy('alice') })] } } as unknown as ScheduleManager;
+      expect(await listIds(imJob, nonIm('a2a', 'alice'))).toEqual([]);
+      expect(await tool(imJob, 'schedule_remove').execute({ id: 'im' }, nonIm('mcp', 'alice'))).toEqual({ error: '未找到你能管理的任务：im' });
+    });
+  });
+
+  it('the same user id on another platform, or another endpoint of the same platform, is not the creator', async () => {
+    const onPlatform = (adapter: string, endpoint: string) => ({
+      ...context,
+      origin: { kind: 'im', platform: adapter, endpoint, scope: 'group', sceneId: 'g1', conversation: conversation(adapter, endpoint, 'g1') },
+      principal: { subjectId: 'alice', roles: ['user'] },
+    }) as ToolExecutionContext;
+    const value = {
+      scheduleFeature: { getStatus: () => [] },
+      engine: { listJobs: async () => [job('mine', { createdBy: createdBy('alice') })], pauseJob: vi.fn(async () => true) },
+    } as unknown as ScheduleManager;
+    expect(await listIds(value, onPlatform('qq', 'bot'))).toEqual(['mine']);
+    for (const who of [onPlatform('telegram', 'bot'), onPlatform('qq', 'other-bot')]) {
+      expect(await listIds(value, who)).toEqual([]);
+      expect(await tool(value, 'schedule_pause').execute({ id: 'mine' }, who)).toEqual({ error: '未找到你能管理的任务：mine' });
+    }
+    expect(await tool(value, 'schedule_pause').execute({ id: 'mine' }, onPlatform('qq', 'bot'))).toEqual({ success: true });
+  });
+});
+
+describe('schedule prompt argument (#1250 b55)', () => {
+  it('tells the model that prompt is what runs when due, not the request to create the job', () => {
+    const value = { scheduleFeature: { getStatus: () => [] }, engine: null } as unknown as ScheduleManager;
+    for (const name of ['schedule_add', 'schedule_preview']) {
+      const prompt = (tool(value, name).inputSchema.properties as Record<string, { description?: string }>).prompt!;
+      expect(prompt.description, name).toContain('到点要执行的内容');
+      expect(prompt.description, name).toContain('不是建任务的请求');
+      expect(prompt.description, name).toContain('不要包含时间安排');
+    }
+    expect(tool(value, 'schedule_preview').description).toContain('不会创建任务');
   });
 });
