@@ -24,14 +24,14 @@ const graph = {
 describe('provider display index (#1250)', () => {
   it('maps services, accounts and profiles to one service and names the effective agent profile', () => {
     const index = createProviderDisplayIndex(graph);
-    expect(index.resolveProvider(SVC)).toEqual({ key: SVC, label: 'AG 中转' });
-    expect(index.resolveProvider(ACC)).toEqual({ key: SVC, label: 'AG 中转' });
-    expect(index.resolveProvider('profiles:chat')).toEqual({ key: SVC, label: 'AG 中转' });
+    expect(index.resolveProvider(SVC)).toEqual({ key: SVC, label: 'AG 中转', driverId: 'openai-compatible', driverLabel: 'openai-compatible' });
+    expect(index.resolveProvider(ACC)).toEqual({ key: SVC, label: 'AG 中转', driverId: 'openai-compatible', driverLabel: 'openai-compatible' });
+    expect(index.resolveProvider('profiles:chat')).toEqual({ key: SVC, label: 'AG 中转', driverId: 'openai-compatible', driverLabel: 'openai-compatible' });
     expect(index.resolveProvider('openai')).toBeUndefined();
     expect(index.agentProfile('zhin')).toMatchObject({ purpose: 'chat', model: 'ag/gemini-3.8-flash', displayName: 'AG 中转 · ag/gemini-3.8-flash' });
     expect(index.agentProfile('writer')).toMatchObject({ purpose: 'agent', model: 'ag/claude-x', profileLabel: '写手' });
     const unlabeled = createProviderDisplayIndex({ ...(graph as object), services: { [SVC]: { ...(graph as any).services[SVC], label: undefined } } } as never);
-    expect(unlabeled.resolveProvider(ACC)).toEqual({ key: SVC, label: 'openai-compatible' });
+    expect(unlabeled.resolveProvider(ACC)).toEqual({ key: SVC, label: 'openai-compatible', driverId: 'openai-compatible', driverLabel: 'openai-compatible' });
   });
 });
 
