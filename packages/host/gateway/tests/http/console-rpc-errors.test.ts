@@ -18,6 +18,32 @@ describe('gateway Console RPC error envelope', () => {
     });
   });
 
+  it('does not audit a successful version check as a write', async () => {
+    const audits: Array<{ action: string; outcome: string }> = [];
+    const registry = {
+      accessProvider: { audit: (event: { action: string; outcome: string }) => { audits.push(event); } },
+    } as unknown as TokenRegistry;
+    const rpc = createGatewayConsoleRpc(async (request): Promise<GatewayRpcResponse> => (
+      request.type === GATEWAY_RPC.CHECK
+        ? { ok: true, data: { packages: [] } }
+        : { ok: true, data: {} }
+    ));
+    const response = await rpc.handle({ type: GATEWAY_RPC.CHECK, requestId: 'v1' }, context, registry);
+    expect(response.status).toBe(200);
+    expect(audits).toEqual([]);
+    await rpc.handle({ type: GATEWAY_RPC.INSTALL, requestId: 'w1' }, context, registry);
+    expect(audits).toEqual([expect.objectContaining({ action: 'rpc:gateway.packages.install', outcome: 'ok' })]);
+
+    const denying = createGatewayConsoleRpc(async (): Promise<GatewayRpcResponse> => ({
+      ok: false, error: { code: 'forbidden', message: '缺少权限 status.view', status: 403 },
+    }));
+    await denying.handle({ type: GATEWAY_RPC.CHECK }, context, registry);
+    expect(audits.map(event => `${event.action}:${event.outcome}`)).toEqual([
+      'rpc:gateway.packages.install:ok',
+      'rpc:gateway.version.check:denied',
+    ]);
+  });
+
   it('keeps the plain error reply when there are no details', async () => {
     const rpc = createGatewayConsoleRpc(async (): Promise<GatewayRpcResponse> => ({ ok: false,
       error: { code: 'conflict', message: 'busy', status: 409 } }));

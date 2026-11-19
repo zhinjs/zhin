@@ -28,6 +28,7 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 - **操作**：启动、停止、重启（`gateway.instance.start|stop|restart`，需要 `ops.restart`，先确认）。停止后机器人离线，直到再次启动；重启时机器人短暂离线，正在进行的对话可能中断。重启只影响实例，网关与 Console 不中断；实例回到 `running` 前，依赖实例的页面返回 `503 instance_unavailable`，由横幅倒计时并自动重试。
 - **实例日志**：网关采集的实例标准输出与标准错误（`gateway.instance.logs`，需要 `status.view`），实例离线时也能看；可「只看错误输出」、暂停或跟随最新。完整日志在服务器的 `.zhin/logs/instance.log`。
 - **项目依赖**：`package.json` 里声明的依赖、声明的版本与已安装版本。「安装依赖」可填多个包（`name@版本范围`，空格或逗号分隔），可勾选安装后在配置中启用插件；每行可「更新」「卸载」，也可「全部更新」。非白名单的包只有所有者能安装。
+- **版本**：Zhin（`zhin.js`）、网关、`@zhin.js/console-*` 与已安装的 `@zhin.js/*` 插件的当前版本与 npm 上的最新版本（`gateway.version.check`，需要 `status.view`）。由网关查询项目 npm 配置（`.npmrc`，镜像同样生效）指向的 registry，结果在内存里缓存约 6 小时，实例停止时也能看；离线或查询超时显示「无法检查新版本」，不会报错。新版本在 `package.json` 声明的范围内时，用「项目依赖」那一行的「更新」即可；超出范围（跨大版本、需要改版本范围或运行迁移）时 Console 只显示命令 `npx zhin migrate --dry-run`——框架升级只走 CLI 的 [`zhin migrate`](../cli/index.md#migrate)（[ADR 0062](../adr/0062-one-path-per-task.md)），Console 不改版本范围。
 
 同样的信息在命令行里是 `zhin status` 与 `zhin logs`，见 [zhin start](../cli/runtime.md#管理命令)。
 

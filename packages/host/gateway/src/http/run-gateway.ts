@@ -21,6 +21,7 @@ import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requi
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
 import { captureTerminalState, isForegroundProcessGroup } from '../supervisor/terminal-state.js';
+import { gatewayVersion } from './gateway-version.js';
 import { loadGatewayHttpConfig, startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
@@ -48,16 +49,7 @@ export interface RunningGatewayProcess {
   shutdown(exitCode?: number): void;
 }
 
-let cachedVersion: string | undefined;
-/** `@zhin.js/gateway` version. */
-export function gatewayVersion(): string {
-  if (cachedVersion) return cachedVersion;
-  try {
-    const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: unknown };
-    cachedVersion = typeof manifest.version === 'string' ? manifest.version : '0.0.0';
-  } catch { cachedVersion = '0.0.0'; }
-  return cachedVersion;
-}
+export { gatewayVersion };
 
 /** Console link in the ADR 0053 format: `?apiBaseUrl=`, the token only after `#`. */
 export function consoleLink(origin: string, token?: string): string {

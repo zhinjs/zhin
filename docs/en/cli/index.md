@@ -275,7 +275,7 @@ zhin onboard [--quick] [--flow quickstart|full]
 
 Reuses existing config, environment variables and data in a project, letting you keep or reconfigure them. `--quick` (`-q`) only shows the quick-start hints without the wizard; `--flow` defaults to `full`, and `quickstart` asks fewer questions.
 
-### migrate: Project Upgrade
+### migrate: Project Upgrade {#migrate}
 
 ```bash
 zhin migrate [--dry-run] [--no-install] [--include-pinned]

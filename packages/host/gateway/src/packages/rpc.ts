@@ -20,6 +20,7 @@ import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { gatewayPrincipalAllows, type GatewayPrincipal } from './authorization.js';
 import { GatewayError } from './errors.js';
 import type { GatewayPackageService } from './service.js';
+import type { GatewayVersionChecker } from './version-check.js';
 
 /** The part of `InstanceSupervisor` the lifecycle RPC uses. */
 export interface GatewayRpcInstance {
@@ -33,6 +34,8 @@ export interface GatewayRpcInstance {
 export interface GatewayRpcDependencies {
   readonly packages?: GatewayPackageService;
   readonly instance?: GatewayRpcInstance;
+  /** Read-only version check (`gateway.version.check`, zhinjs/console#64). */
+  readonly version?: Pick<GatewayVersionChecker, 'check'>;
 }
 
 export type GatewayRpcDispatcher = (request: GatewayRpcRequest, principal: GatewayPrincipal | undefined) => Promise<GatewayRpcResponse>;
@@ -104,6 +107,9 @@ async function handle(type: GatewayRpcType, data: Readonly<Record<string, unknow
       return packagesOf(deps).setEnabled({ plugin: data.plugin }, type === 'gateway.plugins.enable', {
         principal, ...optionalBoolean(data, 'startInstance'),
       });
+    case 'gateway.version.check':
+      if (!deps.version) throw new GatewayError('unavailable', '版本检查不可用');
+      return deps.version.check();
     case 'gateway.instance.status': {
       const gateway = sampleGatewayProcess();
       return Object.freeze({ ...instanceStatus(instanceOf(deps).status()), ...(gateway ? { gateway } : {}) });

@@ -96,6 +96,7 @@
     "@zhin.js/scaffold-wizard": "workspace:*",
     "dotenv": "^17.4.2",
     "fs-extra": "^11.4.0",
+    "semver": "^7.8.5",
     "tsx": "^4.23.1",
     "yaml": "^2.9.0"
   },
