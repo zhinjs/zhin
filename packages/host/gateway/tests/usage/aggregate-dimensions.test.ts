@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   USAGE_MAIN_AGENT_KEY, USAGE_STATS_SCHEMA_VERSION, USAGE_STATS_SESSION_LIMIT, USAGE_UNRECORDED_KEY,
-  buildUsageStats, usagePurposeLabel,
+  buildUsageStats, sessionDisplayNameOf, sessionPartsOf, usagePurposeLabel,
 } from '../../src/usage/aggregate.js';
 
 const dirs: string[] = [];
@@ -140,6 +140,40 @@ describe('usage stats dimensions (#1250 第 58 批)', () => {
     expect(Object.keys(s.previous!)).toEqual(['since', 'until', 'truncated', 'totals']);
     const empty = await buildUsageStats(dir, { ...range, previous: { since: NOON - DAY, until: NOON - DAY, truncated: true } });
     expect(empty.previous).toMatchObject({ truncated: true, totals: { turns: 0, calls: 0, inputTokens: 0 } });
+  });
+
+  it('gives each session structured scope / scene / short key next to the unchanged displayName', async () => {
+    const hashed = 'personal-session:v1:' + 'e'.repeat(64);
+    const other = 'personal-session:v1:' + 'f'.repeat(64);
+    const im = (key: string, extra: Record<string, unknown>) => ({ version: 1, session_key: key, started_at: NOON, model_calls: [call('gemini', 'flash', 5)], ...extra });
+    const dir = fixture([
+      im(hashed, { origin: { kind: 'im', platform: 'qq', endpoint: 'ep', scope: 'group', sceneId: '42', conversation: { name: '测试群' } } }),
+      im(other, { origin: { kind: 'im', platform: 'qq', endpoint: 'ep', scope: 'group', sceneId: '43', conversation: { name: '测试群' } } }),
+      im('dm', { origin: { kind: 'im', platform: 'qq', endpoint: 'ep', scope: 'direct', sceneId: 'u1' }, principal: { display_name: 'Alice' } }),
+      im('job', { origin: { kind: 'schedule', jobId: 'daily' } }),
+      im('int', { origin: { kind: 'internal', source: 'heartbeat' } }),
+      im('web', { origin: { kind: 'http', sessionId: 'h' } }),
+      im('old', {}),
+    ]);
+    const s = await buildUsageStats(dir, range);
+    const row = (key: string) => s.bySession.find(r => r.sessionKey === key)!;
+    expect(row(hashed)).toMatchObject({ displayName: 'qq · 群 测试群', scopeKind: 'group', sceneLabel: '测试群', shortKey: 'personal-session:eeeeeeee' });
+    expect(row(other)).toMatchObject({ displayName: 'qq · 群 测试群', shortKey: 'personal-session:ffffffff' });
+    expect(row('dm')).toMatchObject({ displayName: 'qq · 私聊 Alice', scopeKind: 'private', sceneLabel: 'Alice', shortKey: 'dm' });
+    expect(row('job')).toMatchObject({ displayName: '定时任务 daily', scopeKind: 'schedule', sceneLabel: 'daily' });
+    expect(row('int')).toMatchObject({ displayName: '内部 heartbeat', scopeKind: 'internal', sceneLabel: 'heartbeat' });
+    expect(row('web')).toMatchObject({ displayName: 'HTTP', scopeKind: 'http' });
+    expect(row('web')).not.toHaveProperty('sceneLabel');
+    expect(row('old')).toMatchObject({ shortKey: 'old' });
+    expect(row('old')).not.toHaveProperty('scopeKind');
+    expect(row('old')).not.toHaveProperty('displayName');
+    // The helpers agree with each other for every origin kind.
+    for (const kind of ['a2a', 'mcp']) {
+      const trace = { origin: { kind } };
+      expect(sessionPartsOf(trace)).toEqual({ scopeKind: kind });
+      expect(sessionDisplayNameOf(trace)).toBe(kind.toUpperCase());
+    }
+    expect(sessionPartsOf({ origin: { kind: 'im', scope: 'guild', conversation: { id: 'c9' } } })).toEqual({ scopeKind: 'channel', sceneLabel: 'c9' });
   });
 
   it('labels known purposes and passes unknown ones through', () => {

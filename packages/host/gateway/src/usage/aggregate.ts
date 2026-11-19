@@ -243,6 +243,11 @@ export interface UsageStats {
     readonly sceneId?: string;
     /** Readable conversation label from the trace origin (`平台 · 群 名称`), when recorded. */
     readonly displayName?: string;
+    /** Structured parts of `displayName` (see {@link UsageSessionParts}), for localized labels. */
+    readonly scopeKind?: string;
+    readonly sceneLabel?: string;
+    /** Short session key, as `zhin usage report` shows it ({@link shortSessionKey}), to tell same-named sessions apart. */
+    readonly shortKey: string;
     /** Recorded IM endpoint (account) of the conversation. */
     readonly endpoint?: string;
     /** The account's readable name, when the endpoint is still known. */
@@ -401,6 +406,38 @@ export function sessionDisplayNameOf(trace: any): string | undefined {
   return undefined;
 }
 
+/** Structured parts of {@link sessionDisplayNameOf}, for a Console that localizes the label itself. */
+export interface UsageSessionParts {
+  /**
+   * IM: `group` / `private` / `channel` (or the recorded scope as-is); otherwise the origin kind:
+   * `http`, `schedule`, `a2a`, `mcp`, `internal`.
+   */
+  readonly scopeKind?: string;
+  /** Group / user / channel name, schedule job id or internal source — without a type word. */
+  readonly sceneLabel?: string;
+}
+
+const SCOPE_KINDS: Readonly<Record<string, string>> = { private: 'private', direct: 'private', group: 'group', channel: 'channel', guild: 'channel' };
+
+/** `scopeKind` + `sceneLabel` of a trace's recorded origin; empty without one. */
+export function sessionPartsOf(trace: any): UsageSessionParts {
+  const origin = trace?.origin;
+  if (!origin || typeof origin !== 'object') return {};
+  const label = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+  if (origin.kind === 'im') {
+    const scope = typeof origin.scope === 'string' ? origin.scope : typeof origin.conversation?.kind === 'string' ? origin.conversation.kind : '';
+    const kind = scope ? SCOPE_KINDS[scope] ?? scope : undefined;
+    const name = label(origin.conversation?.name)
+      ?? (kind === 'private' ? label(trace?.principal?.display_name) : undefined)
+      ?? label(origin.sceneId) ?? label(origin.conversation?.id);
+    return { ...(kind ? { scopeKind: kind } : {}), ...(name ? { sceneLabel: name } : {}) };
+  }
+  if (origin.kind === 'schedule') { const name = label(origin.jobId); return { scopeKind: 'schedule', ...(name ? { sceneLabel: name } : {}) }; }
+  if (origin.kind === 'internal') { const name = label(origin.source); return { scopeKind: 'internal', ...(name ? { sceneLabel: name } : {}) }; }
+  if (origin.kind === 'http' || origin.kind === 'a2a' || origin.kind === 'mcp') return { scopeKind: origin.kind };
+  return {};
+}
+
 /** Hashed session keys (`personal-session:v1:<sha>`) shortened to `personal-session:<8 hex>`; others unchanged. */
 export function shortSessionKey(key: string): string {
   const hashed = /^([a-z-]+):v\d+:([0-9a-f]{16,})$/u.exec(key);
@@ -548,7 +585,7 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
   const breakdown = { turns: 0, other: 0, firstRequestInputTokens: 0 };
   const models = new Map<string, Tally & { provider: string; model: string; label?: string; driverLabel?: string; providerIds: Set<string>; profiles: Set<string>; unprofiled: number }>();
   const resolved = new Map<string, UsageResolvedService | undefined>();
-  const sessions = new Map<string, Tally & { turns: number; displayName?: string; platform?: string; endpoint?: string }>();
+  const sessions = new Map<string, Tally & { turns: number; displayName?: string; parts?: UsageSessionParts; platform?: string; endpoint?: string }>();
   const agents = new Map<string, Tally & { turns: number; kind: UsageAgentRow['kind'] }>();
   const purposes = new Map<string, Tally & { turns: number }>();
   const buckets = new Map<number, Tally & { byModel: Record<string, number> }>();
@@ -604,6 +641,7 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
     const session = sessions.get(trace.session_key) ?? { ...tally(), turns: 0 };
     session.turns++;
     session.displayName ??= sessionDisplayNameOf(trace);
+    if (!session.parts?.scopeKind) session.parts = sessionPartsOf(trace);
     if (trace.origin?.kind === 'im') {
       session.platform ??= text(trace.origin.platform);
       session.endpoint ??= text(trace.origin.endpoint);
@@ -741,6 +779,9 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
         return {
           sessionKey, ...parseSessionKey(sessionKey),
           ...(s.displayName ? { displayName: s.displayName } : {}),
+          ...(s.parts?.scopeKind ? { scopeKind: s.parts.scopeKind } : {}),
+          ...(s.parts?.sceneLabel ? { sceneLabel: s.parts.sceneLabel } : {}),
+          shortKey: shortSessionKey(sessionKey),
           ...(s.endpoint ? { endpoint: s.endpoint } : {}),
           ...(label ? { accountLabel: label } : {}),
           turns: s.turns, ...tokens(s),

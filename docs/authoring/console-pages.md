@@ -371,6 +371,7 @@ interface SkillsStatus {
   - `byModel[]` 另带 `driverLabel`（服务所用驱动的显示名，如「OpenAI 兼容」）、`profileId` / `profileName`（这一行的调用都落在同一个模型 Profile 上时才给；`profileName` 是 Profile 的名称，没起名就不给）。两个服务同名时可以用它们区分。
   - `byAgent[]`：按 Agent 汇总，字段 `agent`、`label`、`kind`（`main` 主助手 / `agent` 子 Agent / `unrecorded`）、`turns`、`calls`、`inputTokens`、`outputTokens`、`cacheReadTokens`、`cacheWriteTokens`、`cacheShare`。每个（子）回合的调用记在它自己的 `model_selection` 上；没有记录模型选择的旧 trace 归入 `agent: '@unrecorded'`（「未记录」），主助手是 `agent: '@main'`。
   - `byPurpose[]`：按用途汇总，`purpose`（`chat`、`agent`、`summary`、`ambient`、`perception` 等；`agent:<名称>` 记为 `agent`）和可读的 `label`，其余字段同 `byAgent`。没有记录时是 `@unrecorded`。
+  - `bySession[]` 另带结构化的会话名字段：`scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（群名、用户名、定时任务 id 等，不含「群」「私聊」这类类型词）和 `shortKey`（与 `zhin usage report` 相同规则的短会话键）。`displayName` 保持原样（中文拼好的名字）；Console 应按界面语言用 `scopeKind` + `sceneLabel` 自己拼名，重名时追加 `shortKey`。
   - `bySession[]` 另带 `endpoint`（trace 里记录的账号）和 `accountLabel`（该账号现在的名称，账号已删除时不给）；顶层 `sessionsTotal` 是范围内的会话总数，`othersTotals` 是前 50 之外的会话合计（`sessions`、`turns` 和各项 token）。
   - 参数 `compare: 'previous'`：另算紧挨在前、等长的上一周期，返回 `previous: { since, until, truncated, totals }`（只有 `totals`，不含明细）。两段合计不超过 31 天：超过时上一周期从 `until` 往前 31 天起算，并标 `truncated: true`，Console 应注明「上一周期不完整」。`compare` 写别的值返回 `invalid_input`。
 - 权限仍是 `control:read`，新增字段只是已有数据的显示名与分组，不含提示词或消息内容。
