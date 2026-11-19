@@ -270,10 +270,10 @@ function stripCqCodes(input: string): string {
 }
 
 /**
- * #1250（ADR 0067 D8）：CQ 字符串上报格式下，at / face 是唯一可信为"发送者亲手输入"的码
- * （它们不进文本视图，也不携带第三方内容）。参数值按 CQ 规范转义，不含 `,` `[` `]`。
+ * #1250（ADR 0067 D8）：CQ 字符串上报格式下，只有带合规 id 的 reply 码会被解析（成为 replyTo，
+ * 本身就不写证据）；其余任何 CQ 码（含 at / face，与数组格式里非文本段一律计来源保持一致）
+ * 都使这条消息失败关闭。参数值按 CQ 规范转义，不含 `,` `[` `]`。
  */
-const CQ_SAFE_CODE_RE = /\[CQ:(?:at|face)(?:,[A-Za-z_][\w.-]*=[^,[\]]*)*\]/y;
 const CQ_REPLY_CODE_RE = /\[CQ:reply((?:,[A-Za-z_][\w.-]*=[^,[\]]*)*)\]/y;
 
 /** CQ 字符串的入站来源判定结果。 */
@@ -281,14 +281,14 @@ export interface CqStringProvenance {
   /** 形如 `[CQ:reply,id=…]` 的引用 id。 */
   readonly replyToId?: string;
   /**
-   * 含 at / face / reply 以外的 CQ 码（json / xml / forward / markdown / image …），或出现
+   * 含 reply 以外的任何 CQ 码（at / face / json / xml / forward / markdown / image …），或出现
    * 不属于任何合规 CQ 码的方括号（不合规实现把卡片 JSON 原样塞进串里时就是这样）：
    * 文本视图无法证明只是发送者亲手输入，失败关闭。
    */
   readonly foreign: boolean;
 }
 
-/** 扫描 CQ 字符串：取 reply 引用 id，并判定是否含 at / face 以外的内容。 */
+/** 扫描 CQ 字符串：取 reply 引用 id，并判定是否含纯文本与 reply 以外的内容。 */
 export function inspectCqString(input: string): CqStringProvenance {
   let replyToId: string | undefined;
   let foreign = false;
@@ -299,12 +299,6 @@ export function inspectCqString(input: string): CqStringProvenance {
       continue;
     }
     if (ch !== '[') continue;
-    CQ_SAFE_CODE_RE.lastIndex = i;
-    const safe = CQ_SAFE_CODE_RE.exec(input);
-    if (safe) {
-      i += safe[0].length - 1;
-      continue;
-    }
     CQ_REPLY_CODE_RE.lastIndex = i;
     const reply = CQ_REPLY_CODE_RE.exec(input);
     const id = reply ? /,id=([^,]+)/.exec(reply[1] ?? '')?.[1] : undefined;
@@ -326,12 +320,15 @@ function cqStringSource(ev: NapCatEvent): string | undefined {
 }
 
 /**
- * #1250（ADR 0067 D8）：字符串上报格式且串里有 at / face / reply 以外的 CQ 码时为 true。
+ * #1250（ADR 0067 D8）：字符串上报格式且串里有 reply 以外的 CQ 码时为 true；`message` 与
+ * `raw_message` 同为字符串却不一致时也为 true（无法确定文本视图读的是哪一个，失败关闭）。
  * 入站按 `forwarded` 投递，IM 运行时不为它保留"本人原文"证据（失败关闭）。
  */
 export function isCqStringRelayed(ev: NapCatEvent): boolean {
   const source = cqStringSource(ev);
-  return source !== undefined && inspectCqString(source).foreign;
+  if (source === undefined) return false;
+  if (typeof ev.raw_message === 'string' && ev.raw_message !== source) return true;
+  return inspectCqString(source).foreign;
 }
 
 /**

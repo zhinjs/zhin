@@ -180,7 +180,7 @@ SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 
 
 1. **文本段只来自发送者亲手输入**：`text` 段只取平台上「本人输入框里打的字」（如 Telegram 的 `text` / `caption`、Discord 的 `content`）；卡片标题、embed、贴纸名、文件名、按钮文字、语音转写、系统提示都不进文本段，也不拼进纯文本视图 `content`（`content` 必须等于文本段拼接）。
 2. **转发、引用、卡片、嵌入、机器人代发都要显式表示**：平台能标出的转发（含合并转发、自动转发、inline bot 结果、跨会话引用）在入站消息上加 `forwarded: true`；引用 / 回复带 `replyTo`；卡片（`json` / `xml` / `markdown`）、合并转发、媒体保留为非文本段，绝不展开成 `text` 段；机器人 / webhook 代发的消息要么不入站，要么带 `forwarded`。
-3. **字符串协议格式失败关闭**：平台还能以字符串协议上报（如 OneBot / NapCat 的 CQ 字符串格式）时，不要把原串包成一个 `text` 段；纯文本视图剥掉控制码，引用解析为 `replyTo`，只要出现无法证明是本人输入的码（at / face 等纯装饰码以外的一切，或语法不合规的串）就加 `forwarded: true`。
+3. **字符串协议格式失败关闭**：平台还能以字符串协议上报（如 OneBot / NapCat 的 CQ 字符串格式）时，不要把原串包成一个 `text` 段；纯文本视图剥掉控制码，引用解析为 `replyTo`，只要出现引用以外的任何码（含 at / face）、语法不合规的串，或多个文本字段互不一致，就加 `forwarded: true`；文本视图与来源判定必须读同一个字段。
 4. **有适配器级测试**：用 `plugins/adapters/test-utils/inbound-evidence.ts` 的 `recordsInboundTextEvidence` 把 `receive` 收到的载荷送进真实的 `ConversationRuntime`，断言卡片、转发、引用不写证据，普通私聊纯文本写证据。
 5. **平台变更后重新核实**：平台新增「以文本形式到达的转发」或新消息类型时，先核实再保留声明。
 
