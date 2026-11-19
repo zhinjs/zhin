@@ -64,6 +64,9 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
     return since === null || until === null ? null : { since, until };
   };
 
+  // Each session is named after its chat (#1250 b63) — for a scheduled job's session the job's
+  // `label`, which `/assistant/jobs` otherwise gates behind `ops:schedule:read`. Intended: this
+  // route's `agent.view` already shows that job's turns in full (prompt, replies, tool calls).
   http.route('GET', `${base}/agent/trace-archive/sessions`, guarded(async (url) => {
     const window = range(url);
     if (!window) return jsonResponse(400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
