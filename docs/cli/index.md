@@ -275,7 +275,7 @@ zhin onboard [--quick] [--flow quickstart|full]
 
 在已有项目里复用现有配置、环境变量和数据，选择保留或重新配置。`--quick`（`-q`）只显示快速开始提示，不进入向导；`--flow` 默认 `full`，`quickstart` 问得更少。
 
-### migrate：项目升级
+### migrate：项目升级 {#migrate}
 
 ```bash
 zhin migrate [--dry-run] [--no-install] [--include-pinned]

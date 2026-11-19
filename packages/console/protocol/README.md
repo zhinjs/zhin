@@ -17,7 +17,7 @@ Zhin Console 的零依赖 wire contract：规范 RPC 名称、payload 字段，�
 | `bindingScopeCovers()`、`grantsAllow()`、`featureScopeTarget()` | 全局 / 适配器 / 账号绑定的作用域判断；会话键按所属账号计 |
 | `CONSOLE_PLUGIN_PERMISSION_LEVELS`、`inferConsolePluginPermissionLevel()` 等 | 插件权限（`<插件>:<动作>`）的级别 `read` / `operate` / `manage`，内置角色经 `plugin.perms.*` 按级别授予 |
 | `IAM_RPC`、`ONBOARDING_RPC`、`CONSOLE_AUTH_ROUTES` | 账号、角色、令牌、审计 RPC，引导 RPC，`/auth/*` 路由 |
-| `GATEWAY_RPC`（`GATEWAY_PACKAGES_RPC`、`GATEWAY_INSTANCE_RPC`、`GATEWAY_PLUGINS_RPC`）、`GATEWAY_RPC_PERMISSIONS` | 管理网关自己处理的 `gateway.*` RPC：依赖事务、实例起停与日志、插件声明 |
+| `GATEWAY_RPC`（`GATEWAY_PACKAGES_RPC`、`GATEWAY_INSTANCE_RPC`、`GATEWAY_PLUGINS_RPC`、`GATEWAY_VERSION_RPC`）、`GATEWAY_RPC_PERMISSIONS` | 管理网关自己处理的 `gateway.*` RPC：依赖事务、实例起停与日志、插件声明、只读版本检查（`gateway.version.check`） |
 | `FEATURE_RPC`、`FEATURE_RPC_PERMISSIONS` | 分层功能配置 `feature.*`（全局 / 适配器 / 账号 / 会话，ADR 0050 / 0055） |
 | `CHAT_ROLES_RPC`、`CONSOLE_CHAT_ROLES` | 聊天角色 `chat-roles.list` / `grant` / `revoke`（`iam.manage`，ADR 0056） |
 | `CONSOLE_PAGE_SECTIONS` | Console 导航分区（ADR 0052） |
