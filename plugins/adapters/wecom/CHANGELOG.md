@@ -1,5 +1,17 @@
 # @zhin.js/adapter-wecom
 
+## 1.1.35
+
+### Patch Changes
+
+- Updated dependencies [7131501]
+- Updated dependencies [1414572]
+- Updated dependencies [c7f6285]
+- Updated dependencies [257d289]
+  - @zhin.js/core@1.13.0
+  - @zhin.js/adapter@1.5.0
+  - @zhin.js/host-http@1.7.0
+
 ## 1.1.34
 
 ### Patch Changes
