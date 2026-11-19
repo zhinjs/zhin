@@ -346,6 +346,17 @@ export interface GatewayVersionReport {
   readonly checkedAt: number;
   /** False when no registry query succeeded (offline, timeout): every `latest` is then null. */
   readonly registryReachable: boolean;
+  /**
+   * True when installed plugins were left out of {@link packages}. `zhin.js`, `@zhin.js/gateway`
+   * and `@zhin.js/console-*` are kept.
+   */
+  readonly truncated: boolean;
+  /**
+   * True when the check reached its deadline before every package was looked up: those rows have
+   * `latest: null` although the registry answered (distinct from {@link registryReachable} false).
+   * Optional: gateways before this field omit it.
+   */
+  readonly incomplete?: boolean;
 }
 
 /** The command the Console shows for upgrades that need a range change or migrations (ADR 0062). */

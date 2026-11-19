@@ -83,7 +83,9 @@ describe('gateway version check (zhinjs/console#64)', () => {
     const checker = new GatewayVersionChecker({ projectRoot: '/project', inventory: async () => INVENTORY, gatewayVersion: () => '1.6.1', fetcher, now: () => now });
     const report = await checker.check();
     expect(report).toMatchObject({ gateway: '1.6.1', checkedAt: 1_000, registryReachable: true });
-    expect(report.packages.map(row => row.name)).toEqual(['zhin.js', '@zhin.js/console-ui', '@zhin.js/adapter-sandbox', '@zhin.js/gateway']);
+    expect(report.packages.map(row => row.name)).toEqual(['zhin.js', '@zhin.js/gateway', '@zhin.js/console-ui', '@zhin.js/adapter-sandbox']);
+    expect(report.incomplete).toBe(false);
+    expect(report.truncated).toBe(false);
     expect(report.packages.find(row => row.name === '@zhin.js/gateway')).toMatchObject({ range: null, installed: '1.6.1', latest: '1.7.0', needsMigrate: true });
     expect(report.packages.find(row => row.name === '@zhin.js/adapter-sandbox')).toMatchObject({ latestInRange: true, updateAvailable: true, needsMigrate: false });
     expect(calls.sort()).toEqual(['@zhin.js/adapter-sandbox', '@zhin.js/console-ui', '@zhin.js/gateway', 'zhin.js']);
@@ -149,6 +151,113 @@ describe('gateway version check (zhinjs/console#64)', () => {
     expect(report.registryReachable).toBe(true);
     expect(report.packages.find(row => row.name === 'zhin.js')!.latest).toBeNull();
     expect(report.packages.find(row => row.name === '@zhin.js/console-ui')!.latest).toBe('1.2.0');
+  });
+
+  it('keeps zhin.js when a name sort would drop it past the package cap', async () => {
+    const plugins = Array.from({ length: 70 }, (_, index) => installed(
+      `@zhin.js/adapter-${String(index).padStart(2, '0')}`, '^1.0.0', '1.0.0', 'plugin',
+    ));
+    const { fetcher } = fakeFetcher();
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => [...plugins, installed('zhin.js', '^1.6.0', '1.6.0'), installed('@zhin.js/console-ui', '^1.2.0', '1.2.0', 'library')],
+      fetcher,
+    });
+    const report = await checker.check();
+    expect(report.truncated).toBe(true);
+    expect(report.packages.map(row => row.name)).toContain('zhin.js');
+    expect(report.packages.map(row => row.name)).toContain('@zhin.js/console-ui');
+    expect(report.packages.some(row => row.name === '@zhin.js/adapter-69')).toBe(false);
+    expect(report.packages).toHaveLength(64);
+  });
+
+  it('returns answers already in hand when the overall deadline passes', async () => {
+    let now = 0;
+    const calls: string[] = [];
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => INVENTORY,
+      gatewayVersion: () => '1.6.1',
+      timeoutMs: 5_000,
+      deadlineMs: 1_000,
+      concurrency: 1,
+      now: () => now,
+      fetcher: async name => {
+        calls.push(name);
+        now += 5_000;
+        return REGISTRY[name];
+      },
+    });
+    const started = Date.now();
+    const report = await checker.check();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // zhin.js leads the fixed core order, so it is the probe.
+    expect(calls).toEqual(['zhin.js']);
+    expect(report.registryReachable).toBe(true);
+    expect(report.packages.find(row => row.name === 'zhin.js')!.latest).toBe('2.0.0');
+    expect(report.packages.find(row => row.name === '@zhin.js/console-ui')!.latest).toBeNull();
+    expect(report.truncated).toBe(false);
+    expect(report.incomplete).toBe(true);
+  });
+
+  it('keeps starting lookups until the deadline, each cut to the time left, then reports incomplete', async () => {
+    let now = 0;
+    const timeouts: Record<string, number> = {};
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => INVENTORY,
+      gatewayVersion: () => '1.6.1',
+      timeoutMs: 5_000,
+      deadlineMs: 8_000,
+      concurrency: 1,
+      now: () => now,
+      fetcher: async (name, options) => {
+        timeouts[name] = options.timeoutMs;
+        // A cold probe takes 4 s; every later lookup 3 s.
+        now += name === 'zhin.js' ? 4_000 : 3_000;
+        return REGISTRY[name];
+      },
+    });
+    const report = await checker.check();
+    // Probe at 0 (5 s), gateway at 4 s (4 s left), console-ui at 7 s (1 s left); adapter-sandbox never starts.
+    expect(timeouts).toEqual({ 'zhin.js': 5_000, '@zhin.js/gateway': 4_000, '@zhin.js/console-ui': 1_000 });
+    expect(report.registryReachable).toBe(true);
+    expect(report.incomplete).toBe(true);
+    expect(report.packages.find(row => row.name === '@zhin.js/adapter-sandbox')!.latest).toBeNull();
+    expect(report.packages.find(row => row.name === '@zhin.js/gateway')!.latest).toBe('1.7.0');
+  });
+
+  it('cuts the probe itself to the deadline when the per-lookup timeout is longer', async () => {
+    const timeouts: number[] = [];
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => INVENTORY,
+      timeoutMs: 10_000,
+      deadlineMs: 2_000,
+      fetcher: async (name, options) => { timeouts.push(options.timeoutMs); return REGISTRY[name]; },
+    });
+    const report = await checker.check();
+    expect(Math.max(...timeouts)).toBeLessThanOrEqual(2_000);
+    expect(report.incomplete).toBe(false);
+  });
+
+  it('lists the core rows as zhin.js, the gateway, then the Console packages', async () => {
+    const { fetcher } = fakeFetcher();
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => [
+        installed('@zhin.js/console-ui', '^1.2.0', '1.2.0', 'library'),
+        installed('@zhin.js/adapter-sandbox', '^1.0.0', '1.0.0', 'plugin'),
+        installed('@zhin.js/console-client', '^1.4.0', '1.4.0', 'library'),
+        installed('zhin.js', '^1.6.0', '1.6.0'),
+      ],
+      gatewayVersion: () => '1.6.1',
+      fetcher,
+    });
+    const report = await checker.check();
+    expect(report.packages.map(row => row.name)).toEqual([
+      'zhin.js', '@zhin.js/gateway', '@zhin.js/console-client', '@zhin.js/console-ui', '@zhin.js/adapter-sandbox',
+    ]);
   });
 
   it('parses npm view output', () => {

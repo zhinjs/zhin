@@ -61,6 +61,12 @@ export interface GatewayVersionCheckerOptions {
   readonly failureTtlMs?: number;
   /** Per-lookup timeout. Default 5 s. */
   readonly timeoutMs?: number;
+  /**
+   * The whole check, registry probe included, ends this long after it began: every lookup's
+   * timeout is cut to the time left, lookups not started by then are reported as not checked
+   * (`incomplete`). Default {@link DEFAULT_VERSION_CHECK_DEADLINE_MS}.
+   */
+  readonly deadlineMs?: number;
   /** Parallel lookups. Default 4. */
   readonly concurrency?: number;
   readonly now?: () => number;
@@ -69,14 +75,44 @@ export interface GatewayVersionCheckerOptions {
 export const DEFAULT_VERSION_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
 export const DEFAULT_VERSION_CHECK_FAILURE_TTL_MS = 10 * 60 * 1000;
 export const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 5_000;
+/**
+ * Whole lookup, including the registry probe. The Console transport's default request timeout is
+ * 10s (`console-transport`); this leaves room for the inventory read and the reply. Each lookup's
+ * timeout is cut to the time left before it; lookups not started by then are not checked.
+ */
+export const DEFAULT_VERSION_CHECK_DEADLINE_MS = 8_000;
 const GATEWAY_PACKAGE = '@zhin.js/gateway';
 const MAX_PACKAGES = 64;
+
+function isCoreVersionPackage(name: string): boolean {
+  return name === 'zhin.js' || name === GATEWAY_PACKAGE || name.startsWith('@zhin.js/console-');
+}
 
 interface CacheEntry {
   readonly at: number;
   readonly result: Promise<LookupResult>;
   /** Set once {@link result} settled. */
   settled?: LookupResult;
+}
+
+/**
+ * `zhin.js`, `@zhin.js/gateway` and `@zhin.js/console-*` stay in the report. Extra plugins past
+ * the lookup cap are dropped and the report is marked `truncated` (a name sort would otherwise
+ * omit `zhin.js`, which sorts after every `@zhin.js/*`).
+ */
+function corePackageRank(name: string): number {
+  return name === 'zhin.js' ? 0 : name === GATEWAY_PACKAGE ? 1 : 2;
+}
+
+function selectVersionPackages(packages: readonly GatewayInstalledPackage[]): { selected: GatewayInstalledPackage[]; truncated: boolean } {
+  const checked = packages.filter(isVersionCheckedPackage);
+  const byName = (left: GatewayInstalledPackage, right: GatewayInstalledPackage) => left.name.localeCompare(right.name);
+  // Fixed order for the core rows: zhin.js, the gateway, then the Console packages by name.
+  const core = checked.filter(pkg => isCoreVersionPackage(pkg.name))
+    .sort((left, right) => corePackageRank(left.name) - corePackageRank(right.name) || byName(left, right));
+  const plugins = checked.filter(pkg => !isCoreVersionPackage(pkg.name)).sort(byName);
+  const selected = [...core, ...plugins.slice(0, Math.max(0, MAX_PACKAGES - core.length))];
+  return { selected, truncated: selected.length < checked.length };
 }
 
 /**
@@ -128,14 +164,16 @@ export class GatewayVersionChecker {
   /** Builds the report; never throws for registry problems (a failed inventory still rejects). */
   async check(): Promise<GatewayVersionReport> {
     const gateway = this.#options.gatewayVersion?.() ?? null;
-    const dependencies = (await this.#options.inventory()).filter(isVersionCheckedPackage).slice(0, MAX_PACKAGES);
-    const rows: { name: string; range: string | null; installed: string | null }[] = dependencies.map(pkg => ({
+    const { selected, truncated } = selectVersionPackages(await this.#options.inventory());
+    const rows: { name: string; range: string | null; installed: string | null }[] = selected.map(pkg => ({
       name: pkg.name, range: pkg.range, installed: pkg.installedVersion,
     }));
     // The running gateway is reported even when the project does not declare it (installed globally / via the CLI).
-    if (!rows.some(row => row.name === GATEWAY_PACKAGE) && gateway) rows.push({ name: GATEWAY_PACKAGE, range: null, installed: gateway });
+    if (!rows.some(row => row.name === GATEWAY_PACKAGE) && gateway) {
+      rows.splice(rows[0]?.name === 'zhin.js' ? 1 : 0, 0, { name: GATEWAY_PACKAGE, range: null, installed: gateway });
+    }
     const names = [...new Set(rows.map(row => row.name))];
-    const results = await this.#lookupAll(names);
+    const { results, unchecked } = await this.#lookupAll(names);
     let checkedAt = 0;
     for (const name of names) checkedAt = Math.max(checkedAt, this.#cache.get(name)?.at ?? 0);
     const packages = rows.map(row => {
@@ -145,6 +183,8 @@ export class GatewayVersionChecker {
     return Object.freeze({
       gateway,
       packages: Object.freeze(packages),
+      truncated,
+      incomplete: unchecked > 0,
       checkedAt: checkedAt || this.#now(),
       registryReachable: names.length === 0 || [...results.values()].some(result => result !== 'failed'),
     });
@@ -154,34 +194,46 @@ export class GatewayVersionChecker {
    * Looks names up (cache first). One uncached name is probed first: when the registry is
    * unreachable the others are skipped instead of each waiting for its timeout.
    */
-  async #lookupAll(names: readonly string[]): Promise<Map<string, LookupResult>> {
+  async #lookupAll(names: readonly string[]): Promise<{ results: Map<string, LookupResult>; unchecked: number }> {
     const result = new Map<string, LookupResult>();
     const pending = names.filter(name => {
       const settled = this.#fresh(name)?.settled;
       if (settled !== undefined) { result.set(name, settled); return false; }
       return true;
     });
-    if (!pending.length) return result;
+    if (!pending.length) return { results: result, unchecked: 0 };
     const failureTtl = this.#options.failureTtlMs ?? DEFAULT_VERSION_CHECK_FAILURE_TTL_MS;
     if (this.#unreachableAt !== undefined && this.#now() - this.#unreachableAt < failureTtl) {
       for (const name of pending) result.set(name, 'failed');
-      return result;
+      return { results: result, unchecked: 0 };
     }
+    const deadline = this.#now() + (this.#options.deadlineMs ?? DEFAULT_VERSION_CHECK_DEADLINE_MS);
+    const timeoutMs = this.#options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS;
+    // Every lookup, the probe included, gets at most the time left before the deadline.
+    const budget = () => Math.min(timeoutMs, deadline - this.#now());
     const [probe, ...rest] = pending as [string, ...string[]];
-    const probed = await this.#lookup(probe);
+    const probed = await this.#lookup(probe, Math.max(1, budget()));
     result.set(probe, probed);
     if (probed === 'failed') {
       this.#unreachableAt = this.#now();
       for (const name of rest) result.set(name, 'failed');
-      return result;
+      return { results: result, unchecked: 0 };
     }
     this.#unreachableAt = undefined;
     const queue = [...rest];
     const workers = Array.from({ length: Math.max(1, Math.min(this.#options.concurrency ?? 4, queue.length)) }, async () => {
-      for (let name = queue.shift(); name !== undefined; name = queue.shift()) result.set(name, await this.#lookup(name));
+      for (;;) {
+        const name = queue[0];
+        const left = budget();
+        if (name === undefined || left <= 0) break;
+        queue.shift();
+        result.set(name, await this.#lookup(name, left));
+      }
     });
     await Promise.all(workers);
-    return result;
+    // Not started before the deadline: no answer, but the registry was reachable (`incomplete`).
+    for (const name of queue) result.set(name, 'failed');
+    return { results: result, unchecked: queue.length };
   }
 
   #fresh(name: string): CacheEntry | undefined {
@@ -199,10 +251,11 @@ export class GatewayVersionChecker {
     return entry;
   }
 
-  #lookup(name: string): Promise<LookupResult> {
+  #lookup(name: string, timeoutMs: number): Promise<LookupResult> {
     const existing = this.#fresh(name);
     if (existing) return existing.result;
-    const timeoutMs = this.#options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS;
+    // A lookup cut short by the deadline is not remembered as a registry failure.
+    const shortened = timeoutMs < (this.#options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS);
     const fetched = Promise.resolve()
       .then(() => this.#fetcher(name, { cwd: this.#options.projectRoot, timeoutMs }))
       .then((info): LookupResult => info === undefined ? 'failed' : info, (): LookupResult => 'failed');
@@ -210,6 +263,7 @@ export class GatewayVersionChecker {
       at: this.#now(),
       result: withTimeout(fetched, timeoutMs, 'failed' as const).then(result => {
         entry.settled = result;
+        if (result === 'failed' && shortened && this.#cache.get(name) === entry) this.#cache.delete(name);
         return result;
       }),
     };

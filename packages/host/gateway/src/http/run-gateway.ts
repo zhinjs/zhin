@@ -21,6 +21,7 @@ import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requi
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
 import { captureTerminalState, isForegroundProcessGroup } from '../supervisor/terminal-state.js';
+import { gatewayVersion } from './gateway-version.js';
 import { loadGatewayHttpConfig, startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
@@ -47,8 +48,6 @@ export interface RunningGatewayProcess {
   /** Ends the run (as `gateway.shutdown` does). */
   shutdown(exitCode?: number): void;
 }
-
-import { gatewayVersion } from './gateway-version.js';
 
 export { gatewayVersion };
 

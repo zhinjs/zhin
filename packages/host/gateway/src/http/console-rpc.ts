@@ -40,6 +40,7 @@ const READ_ONLY_TYPES: ReadonlySet<string> = new Set([
   GATEWAY_RPC.PLAN,
   GATEWAY_RPC.STATUS,
   GATEWAY_RPC.LOGS,
+  GATEWAY_RPC.CHECK,
 ]);
 
 export interface GatewayConsoleRpc {
