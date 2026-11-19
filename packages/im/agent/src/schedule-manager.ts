@@ -24,6 +24,14 @@ import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import { scheduleJobChangeRefusal, scheduleJobVisibleTo } from './assistant/job-ownership.js';
 import type { ScheduleJob } from './assistant/types.js';
 
+/**
+ * #1250 b55: `prompt` of `schedule_add` / `schedule_preview` is what runs when the job is due, not the
+ * request to create the job: a preview given "remind me at 8 tomorrow to drink water" used to try to
+ * create the job itself (and could not, being unattended).
+ */
+export const SCHEDULE_PROMPT_DESCRIPTION = '到点要执行的内容（例如「提醒我喝水」），不是建任务的请求，不要包含时间安排'
+  + '（时间放在 cron / delay_minutes 里）';
+
 /** #1250 b55: `schedule_list` shows an Agent the caller cannot see in this turn as this, unnamed. */
 export const HIDDEN_SCHEDULE_AGENT = '其他 Agent';
 
@@ -124,7 +132,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday，默认 solar' },
         cron: { type: 'string', description: '6 段 cron（秒 分 时 日 月 周）' },
         delay_minutes: { type: 'number', description: '一次性延迟（分钟）' },
-        prompt: { type: 'string', description: '到点 prompt' },
+        prompt: { type: 'string', description: SCHEDULE_PROMPT_DESCRIPTION },
         label: { type: 'string', description: '标签' },
         notify_channel: { type: 'string', description: 'im | silent | log' },
         activity_feedback: { type: 'boolean', description: '是否发布 activity feedback' },
@@ -166,9 +174,10 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
     ),
     registration(
       'schedule_preview',
-      '预演调度任务；返回建议执行计划，确认后用 schedule_add 创建正式任务。',
+      '预演调度任务：现在试运行一次到点要执行的内容，返回建议执行计划；不会创建任务，确认后用 schedule_add 创建正式任务。'
+        + '预演里没有 schedule_* 工具。',
       schema({
-        prompt: { type: 'string', description: '任务 prompt' },
+        prompt: { type: 'string', description: SCHEDULE_PROMPT_DESCRIPTION },
         activity_feedback: { type: 'boolean', description: '是否发布 activity feedback' },
       }, ['prompt']),
       async (input, context) => {

@@ -100,6 +100,7 @@ export async function* runScheduleTurn(
     executionPlan: profile.executionPlan,
     tools: context.toolCapabilities,
     skills: context.capabilities.skills,
+    ...(profile.preview ? { preview: true } : {}),
   });
   const unattendedApproval = describeUnattendedApproval(plan.capabilities, context.turn);
   if (plan.warnings.length > 0) {

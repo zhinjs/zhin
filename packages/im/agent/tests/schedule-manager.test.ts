@@ -316,3 +316,16 @@ describe('schedule job ownership in chat (#1250 b55)', () => {
     expect((await tool(value, 'schedule_pause').execute({ id: added.id }, bob) as Record<string, unknown>).error).toContain('不是你创建的任务');
   });
 });
+
+describe('schedule prompt argument (#1250 b55)', () => {
+  it('tells the model that prompt is what runs when due, not the request to create the job', () => {
+    const value = { scheduleFeature: { getStatus: () => [] }, engine: null } as unknown as ScheduleManager;
+    for (const name of ['schedule_add', 'schedule_preview']) {
+      const prompt = (tool(value, name).inputSchema.properties as Record<string, { description?: string }>).prompt!;
+      expect(prompt.description, name).toContain('到点要执行的内容');
+      expect(prompt.description, name).toContain('不是建任务的请求');
+      expect(prompt.description, name).toContain('不要包含时间安排');
+    }
+    expect(tool(value, 'schedule_preview').description).toContain('不会创建任务');
+  });
+});
