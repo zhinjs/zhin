@@ -210,6 +210,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
       endpointId: inbound.endpointId,
       ...(inbound.mentioned ? { mentioned: true } : {}),
       ...(inbound.replyTo ? { replyTo: inbound.replyTo } : {}),
+      ...(inbound.forwarded ? { forwarded: true } : {}),
       ...(inbound.segments?.length ? { segments: inbound.segments } : {}),
       metadata: inbound.metadata,
     }).catch((err) => {

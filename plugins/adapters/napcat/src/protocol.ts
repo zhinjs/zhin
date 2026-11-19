@@ -270,6 +270,71 @@ function stripCqCodes(input: string): string {
 }
 
 /**
+ * #1250（ADR 0067 D8）：CQ 字符串上报格式下，at / face 是唯一可信为"发送者亲手输入"的码
+ * （它们不进文本视图，也不携带第三方内容）。参数值按 CQ 规范转义，不含 `,` `[` `]`。
+ */
+const CQ_SAFE_CODE_RE = /\[CQ:(?:at|face)(?:,[A-Za-z_][\w.-]*=[^,[\]]*)*\]/y;
+const CQ_REPLY_CODE_RE = /\[CQ:reply((?:,[A-Za-z_][\w.-]*=[^,[\]]*)*)\]/y;
+
+/** CQ 字符串的入站来源判定结果。 */
+export interface CqStringProvenance {
+  /** 形如 `[CQ:reply,id=…]` 的引用 id。 */
+  readonly replyToId?: string;
+  /**
+   * 含 at / face / reply 以外的 CQ 码（json / xml / forward / markdown / image …），或出现
+   * 不属于任何合规 CQ 码的方括号（不合规实现把卡片 JSON 原样塞进串里时就是这样）：
+   * 文本视图无法证明只是发送者亲手输入，失败关闭。
+   */
+  readonly foreign: boolean;
+}
+
+/** 扫描 CQ 字符串：取 reply 引用 id，并判定是否含 at / face 以外的内容。 */
+export function inspectCqString(input: string): CqStringProvenance {
+  let replyToId: string | undefined;
+  let foreign = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === ']') {
+      foreign = true;
+      continue;
+    }
+    if (ch !== '[') continue;
+    CQ_SAFE_CODE_RE.lastIndex = i;
+    const safe = CQ_SAFE_CODE_RE.exec(input);
+    if (safe) {
+      i += safe[0].length - 1;
+      continue;
+    }
+    CQ_REPLY_CODE_RE.lastIndex = i;
+    const reply = CQ_REPLY_CODE_RE.exec(input);
+    const id = reply ? /,id=([^,]+)/.exec(reply[1] ?? '')?.[1] : undefined;
+    if (!reply || !id) {
+      foreign = true;
+      continue;
+    }
+    replyToId ??= id;
+    i += reply[0].length - 1;
+  }
+  return { ...(replyToId ? { replyToId } : {}), foreign };
+}
+
+/** 字符串上报格式下的原始 CQ 串；数组格式返回 undefined。 */
+function cqStringSource(ev: NapCatEvent): string | undefined {
+  if (Array.isArray(ev.message)) return undefined;
+  if (typeof ev.message === 'string') return ev.message;
+  return typeof ev.raw_message === 'string' ? ev.raw_message : undefined;
+}
+
+/**
+ * #1250（ADR 0067 D8）：字符串上报格式且串里有 at / face / reply 以外的 CQ 码时为 true。
+ * 入站按 `forwarded` 投递，IM 运行时不为它保留"本人原文"证据（失败关闭）。
+ */
+export function isCqStringRelayed(ev: NapCatEvent): boolean {
+  const source = cqStringSource(ev);
+  return source !== undefined && inspectCqString(source).foreign;
+}
+
+/**
  * 入站 sender 语义：必须是用户 ID（Runtime Message contract）。
  * 显示名走 metadata.nickname，见 senderNickname。
  */
@@ -294,7 +359,7 @@ export function senderNickname(ev: NapCatEvent): string | undefined {
 }
 
 /**
- * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段；
+ * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段，字符串上报格式取 `[CQ:reply,id=…]`；
  * 兼容部分实现把 reply 放在事件顶层（标量或带 message_id 的对象）。
  */
 export function extractQuoteId(ev: NapCatEvent): string | undefined {
@@ -303,6 +368,9 @@ export function extractQuoteId(ev: NapCatEvent): string | undefined {
       if (seg?.type === 'reply' && seg.data?.id != null) return String(seg.data.id);
     }
   }
+  const source = cqStringSource(ev);
+  const cqReply = source !== undefined ? inspectCqString(source).replyToId : undefined;
+  if (cqReply) return cqReply;
   const reply = ev.reply;
   if (typeof reply === 'number' || typeof reply === 'string') return String(reply);
   if (reply && typeof reply === 'object' && 'message_id' in reply) {
